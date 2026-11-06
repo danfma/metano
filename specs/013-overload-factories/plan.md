@@ -235,8 +235,9 @@ emitted class (not `[External]`, not the BCL), and inherited signatures of expli
 are declared under the interface member's name. Still failing `tsgo`, as before 013d (the
 DECIDED-29 family): a class overloading an inherited single virtual (`B : G` adding `M(int)` /
 `M(string)` beside `G.M(bool)`, or `Bi : A, I` whose dispatcher shadows `A.n`) emits a dispatcher
-that redeclares the base's single method; `base.Equals(obj)` on a class with no emitted base still
-emits `super.equals`. `MS0069` is reported by the TypeScript class emitter only; Dart reports it
+that redeclares the base's single method. (`base.Equals(obj)` on a class with no emitted base still
+emitted `super.equals` at 013d; #506 lowered it to `object`'s defaults.)
+`MS0069` is reported by the TypeScript class emitter only; Dart reports it
 when it emits overloads (013g).
 A multiply-constructed root's name is the one its interface declares (computed on the interface
 definition, `convX`), not a constructed spelling: implementers must match the interface's member

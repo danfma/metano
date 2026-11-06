@@ -77,6 +77,9 @@ public static class IrBodyCoverageProbe
                 && IsCoveredExpression(sequence.Result),
             IrCallExpression call => IsCoveredExpression(call.Target)
                 && call.Arguments.All(a => IsCoveredExpression(a.Value)),
+            IrBaseObjectMemberCall baseCall => baseCall.Arguments.All(a =>
+                IsCoveredExpression(a.Value)
+            ),
             IrNewExpression ne => ne.Arguments.All(a => IsCoveredExpression(a.Value)),
             IrBinaryExpression bin => IsCoveredExpression(bin.Left)
                 && IsCoveredExpression(bin.Right),

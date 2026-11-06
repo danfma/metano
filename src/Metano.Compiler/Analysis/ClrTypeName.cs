@@ -1,16 +1,17 @@
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Compiler.TypeScript.Transformation.Json;
+namespace Metano.Compiler.Analysis;
 
 /// <summary>
-/// The name System.Text.Json prints for a type in its conversion errors:
-/// <c>Type.ToString()</c> of the runtime type. A namespace-qualified
-/// metadata name, <c>+</c> between a nested type and its container, and the
-/// type arguments of the whole chain in brackets at the end:
-/// <c>System.Int32</c>, <c>MyApp.Outer+Inner</c>,
-/// <c>MyApp.Pair`1[System.Int32]</c> (measured on .NET 10).
+/// The name .NET's <c>Type.ToString()</c> prints for a runtime type: a
+/// namespace-qualified metadata name, <c>+</c> between a nested type and its
+/// container, and the type arguments of the whole chain in brackets at the
+/// end: <c>System.Int32</c>, <c>MyApp.Outer+Inner</c>,
+/// <c>MyApp.Pair`1[System.Int32]</c> (measured on .NET 10). The
+/// <c>base.ToString()</c> default (#506) and System.Text.Json's conversion
+/// errors print this text.
 /// </summary>
-internal static class JsonClrTypeName
+public static class ClrTypeName
 {
     public static string Of(ITypeSymbol type) =>
         type switch

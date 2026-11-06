@@ -2635,6 +2635,9 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractBaseOverloadCall(inv, symbol) is { } baseOverloadCall)
             return baseOverloadCall;
 
+        if (TryExtractBaseObjectMemberCall(inv, symbol) is { } baseObjectMemberCall)
+            return baseObjectMemberCall;
+
         // LINQ chain detection (#20 pipe lowering). When this invocation
         // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
         // call chain whose every step has a pipe-runtime counterpart,
@@ -2768,6 +2771,71 @@ public sealed partial class IrExpressionExtractor
 
     private static bool IsBaseMemberCall(InvocationExpressionSyntax inv) =>
         inv.Expression is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax };
+
+    /// <summary>
+    /// A <c>base.M(...)</c> whose member no emitted base class declares (#506):
+    /// bound to <c>object</c>'s <c>Equals</c> / <c>GetHashCode</c> /
+    /// <c>ToString</c>, or to the same member of a base the toolchain does not
+    /// emit. The IR carries <c>object</c>'s default semantics and the target's
+    /// <c>super</c> never names them. <c>null</c> for any other call: an
+    /// emitted base declaring the member keeps the ordinary <c>base</c> call
+    /// (the target's <c>super.<member></c>), and a struct stays untouched —
+    /// its base members bind to <c>System.ValueType</c>, whose field-based
+    /// value semantics the object defaults do not model.
+    /// </summary>
+    private IrExpression? TryExtractBaseObjectMemberCall(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? symbol
+    )
+    {
+        if (!IsBaseMemberCall(inv) || symbol is null || !IsObjectDefaultMember(symbol))
+            return null;
+
+        // The <c>base.ToString()</c> default prints the enclosing type, read
+        // from the member the call sits in.
+        if (
+            _semantic.GetEnclosingSymbol(inv.SpanStart)?.ContainingType
+            is not { TypeKind: TypeKind.Class } enclosing
+        )
+            return null;
+
+        return new IrBaseObjectMemberCall(
+            ObjectMemberOf(symbol.Name),
+            ClrTypeName.Of(enclosing),
+            inv.ArgumentList.Arguments.Select(ExtractArgument).ToList()
+        );
+    }
+
+    /// <summary>
+    /// The bound member is one of <c>object</c>'s three defaults, either on
+    /// <c>System.Object</c> itself or redeclared with its shape by a base the
+    /// toolchain does not emit (<c>Equals(object?)</c>'s single
+    /// <c>object</c>-typed parameter, parameterless <c>GetHashCode()</c> and
+    /// <c>ToString()</c>).
+    /// </summary>
+    private bool IsObjectDefaultMember(IMethodSymbol symbol) =>
+        symbol is { IsStatic: false }
+        && (
+            symbol.ContainingType.SpecialType == SpecialType.System_Object
+            || !MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
+        )
+        && symbol.Name switch
+        {
+            nameof(object.Equals) => symbol.Parameters is [{ Type: { } parameterType }]
+                && parameterType.OriginalDefinition.SpecialType == SpecialType.System_Object,
+            nameof(object.GetHashCode) => symbol.Parameters.Length == 0,
+            nameof(object.ToString) => symbol.Parameters.Length == 0
+                && symbol.ReturnType.OriginalDefinition.SpecialType == SpecialType.System_String,
+            _ => false,
+        };
+
+    private static IrObjectMember ObjectMemberOf(string memberName) =>
+        memberName switch
+        {
+            nameof(object.Equals) => IrObjectMember.Equals,
+            nameof(object.GetHashCode) => IrObjectMember.GetHashCode,
+            _ => IrObjectMember.ToString,
+        };
 
     private bool IsDispatchedOnEmittedBase(IMethodSymbol symbol) =>
         MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)

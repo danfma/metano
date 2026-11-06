@@ -25,6 +25,7 @@ public static class IrNodeChildren
             }.OfType<IrExpression>(),
             IrNullConditionalAccess access => [access.Receiver, access.WhenNotNull],
             IrCallExpression call => [call.Target, .. call.Arguments.Select(a => a.Value)],
+            IrBaseObjectMemberCall baseCall => [.. baseCall.Arguments.Select(a => a.Value)],
             IrNewExpression creation =>
             [
                 .. creation.Arguments.Select(a => a.Value),

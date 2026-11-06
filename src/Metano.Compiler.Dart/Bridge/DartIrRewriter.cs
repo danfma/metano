@@ -125,6 +125,10 @@ public sealed class DartIrRewriter
         expr switch
         {
             IrCallExpression call => RewriteCall(call),
+            IrBaseObjectMemberCall baseCall => baseCall with
+            {
+                Arguments = baseCall.Arguments.Select(RewriteArgument).ToList(),
+            },
             IrMemberAccess access => RewriteMemberAccess(access),
             IrBinaryExpression b => b with
             {
