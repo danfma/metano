@@ -15,7 +15,7 @@ namespace Metano.Compiler.TypeScript.AST;
 /// operators live in the tree-shakable subpath (<see cref="LinqPipeModule"/>),
 /// everything else in the root barrel (<see cref="RootModule"/>).
 /// </param>
-public sealed record TsRuntimeHelperReference(string Name, string Module = RootModule)
+public sealed record TsRuntimeHelperReference(string Name, string Module = "metano-runtime")
     : TsExpression
 {
     public const string RootModule = "metano-runtime";
