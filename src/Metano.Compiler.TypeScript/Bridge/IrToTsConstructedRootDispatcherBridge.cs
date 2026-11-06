@@ -98,6 +98,8 @@ internal static class IrToTsConstructedRootDispatcherBridge
                             IrToTsNamingPolicy.ToParameterName(parameter.Name),
                             new TsCastExpression(
                                 BindArgument(arguments, parameter, index, context),
+                                // Same shape as the shared dispatcher argument casts; #547
+                                // covers this site and the BCL-constrained import gap.
                                 IrToTsTypeMapper.MapParameterType(parameter, context.TypeOverrides)
                             )
                         )

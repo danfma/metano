@@ -343,7 +343,7 @@ public static class IrToTsOverloadDispatcherBridge
             .Select(m => IrToTsTypeMapper.Map(m.ReturnType, typeOverrides))
             .ToList();
 
-        var isGeneric = sorted.Any(IsGeneric);
+        var isGeneric = sorted.Any(method => IsGeneric(method.TypeParameters));
 
         if (!isGeneric && returns.All(t => t.Equals(returns[0])))
             return returns[0];
@@ -353,8 +353,13 @@ public static class IrToTsOverloadDispatcherBridge
             : (TsType)new TsAnyType();
     }
 
-    private static bool IsGeneric(IrMethodDeclaration method) =>
-        method.TypeParameters is { Count: > 0 };
+    /// <summary>
+    /// Whether the member declares method type parameters: the dispatcher
+    /// body can't name them, so a generic overload erases its return type
+    /// and casts its delegated arguments to <c>any</c>.
+    /// </summary>
+    private static bool IsGeneric(IReadOnlyList<IrTypeParameter>? typeParameters) =>
+        typeParameters is { Count: > 0 };
 
     private static TsMethodOverload BuildOverloadSignature(
         IrMethodDeclaration method,
@@ -698,7 +703,7 @@ public static class IrToTsOverloadDispatcherBridge
         IrParameter parameter,
         IrToTsTypeOverrides? typeOverrides
     ) =>
-        typeParameters is { Count: > 0 }
+        IsGeneric(typeParameters)
             ? new TsAnyType()
             : IrToTsTypeMapper.MapParameterType(parameter, typeOverrides);
 
