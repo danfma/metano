@@ -1,3 +1,6 @@
+using Metano.Compiler.Diagnostics;
+using Metano.Compiler.TypeScript;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -307,4 +310,59 @@ public class CollectionConstructionTests
         var output = result["caller.ts"];
         await Assert.That(output).Contains("takeNumber(1) + takeText(\"a\")");
     }
+
+    /// <summary>
+    /// A dictionary collection expression (<c>Dictionary&lt;K, V&gt; map = []</c>)
+    /// is a new, empty map on the JS side — an array literal would type-check
+    /// as a <c>Map</c> field only to fail at the first lookup, the way the
+    /// issue-tracker activity feed's <c>Dictionary&lt;long, …&gt;</c> field did
+    /// (spec 012 FR-068).
+    /// </summary>
+    [Test]
+    public async Task DictionaryCollectionExpression_IsANewEmptyMap()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Holder
+            {
+                private readonly Dictionary<string, int> _byName = [];
+            }
+            """
+        );
+
+        await Assert
+            .That(result["holder.ts"])
+            .Contains("private readonly _byName: Map<string, number> = new Map();");
+    }
+
+    /// <summary>The same construction over 64-bit keys, in the BigInt mode.</summary>
+    [Test]
+    public async Task DictionaryCollectionExpression_WithLongKeys_IsANewEmptyMap()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            public class Holder
+            {
+                private readonly Dictionary<long, int> _byId = [];
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+        await Assert
+            .That(result["holder.ts"])
+            .Contains("private readonly _byId: Map<bigint, number> = new Map();");
+    }
 }
+// (appended below)

@@ -746,6 +746,32 @@ public sealed partial class IrExpressionExtractor
                     elements.Select(e => new IrArgument(e)).ToList()
                 );
             }
+
+            // A dictionary collection expression (`Dictionary<K, V> map = []`)
+            // is a new, empty map — an array literal would type-check as a
+            // `Map` field only to fail at the first lookup. C# collection
+            // expressions allow no dictionary elements, so only a spread of
+            // key-value pairs can appear here.
+            if (
+                fullName.StartsWith("System.Collections.Generic.Dictionary")
+                || fullName.StartsWith("System.Collections.Generic.IDictionary")
+                || fullName.StartsWith("System.Collections.Generic.IReadOnlyDictionary")
+                || fullName.StartsWith("System.Collections.Generic.SortedDictionary")
+                || fullName.StartsWith("System.Collections.Generic.SortedList")
+            )
+            {
+                IrTypeRef mapType =
+                    named.TypeArguments.Length == 2
+                        ? new IrMapTypeRef(
+                            IrTypeRefMapper.Map(named.TypeArguments[0], _originResolver, _target),
+                            IrTypeRefMapper.Map(named.TypeArguments[1], _originResolver, _target)
+                        )
+                        : new IrUnknownTypeRef();
+                return new IrNewExpression(
+                    mapType,
+                    elements.Select(e => new IrArgument(e)).ToList()
+                );
+            }
         }
         return new IrArrayLiteral(elements);
     }
