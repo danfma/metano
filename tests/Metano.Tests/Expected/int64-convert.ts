@@ -1,5 +1,5 @@
 import { convertDecimalToInt64, convertDoubleToInt64, convertDoubleToUInt64, convertNarrow, convertObjectToInt64, convertStringToInt64, convertStringToUInt64, int64ToSingle } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import type { Decimal } from "decimal.js";
 
 export class Converts {
   constructor() { }
