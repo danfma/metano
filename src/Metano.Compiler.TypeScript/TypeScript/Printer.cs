@@ -1329,7 +1329,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsRuntimeHelperReference helper:
-                _sb.Write(DeferredHelperNames.Wrap(helper.Name));
+                _sb.Write(HelperName(helper.Name));
                 break;
 
             case TsLiteral lit:
