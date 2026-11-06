@@ -377,6 +377,45 @@ public class OverloadCallMethodSiteGoldenTests
     }
 
     /// <summary>
+    /// The exported-module-function predicate is one definition for the
+    /// whole barrel: on an extension container — a static class that keeps
+    /// its namespace — a dispatched group of plain public statics claims
+    /// fast paths exactly like the classic extensions beside it. Both
+    /// halves judge the declaration (a reduced call-site form resolves
+    /// through the same declaration keys), and a non-public overload never
+    /// joins the barrel (spec 013 FR-032).
+    /// </summary>
+    [Test]
+    public async Task ExtensionContainer_DispatchedPlainStatics_ClaimFastPathsToo()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Mixed
+            {
+                public static int Twice(this int x) => x * 2;
+
+                public static int Fold(int x) => x + 1;
+
+                public static int Fold(string s) => s.Length + 1;
+            }
+            """
+        );
+
+        var module = result["mixed.ts"];
+
+        // The plain statics dispatch like the extension beside them: one
+        // fast path per overload, named off the parameter spellings, under
+        // one dispatcher.
+        await Assert.That(module).Contains("export function foldX(");
+        await Assert.That(module).Contains("export function foldS(");
+        await Assert.That(module).Contains("export function fold(");
+
+        // The single extension stays a plain module function of its own.
+        await Assert.That(module).Contains("export function twice(");
+    }
+
+    /// <summary>
     /// Two containerless classes claiming the same dispatcher name keep the
     /// cross-type clash report (MS0020) the single-function path has always
     /// raised, and the barrel's fast-path claim reports MS0067 (warning, at

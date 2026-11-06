@@ -13,15 +13,20 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// extension container one transform emits contributes its exported
 /// functions to one namespace — the barrel — so two modules exporting a
 /// <c>twiceX</c> fast path would clash on the re-export (TS2300). The pass
-/// claims, in one fixed order, the dispatcher names (the C# member names)
-/// and the module variables first, then each dispatched group's fast paths
-/// in declaration order, appending <c>$</c> until free and reporting
-/// <c>MS0067</c> for every rename. Call sites, the module emission and the
-/// export registry all resolve names through the same instance, so a call in
-/// any file spells the fast path its module declared.
+/// reads the extracted IR (<see cref="DispatchedModuleFunctions"/>), not the
+/// core's Roslyn grouping, and claims, in one fixed order, the dispatcher
+/// names (the C# member names) and the module variables first, then each
+/// dispatched group's fast paths in declaration order, appending <c>$</c>
+/// until free and reporting <c>MS0067</c> for every rename. Call sites, the
+/// module emission, both registries and every consumer of <see
+/// cref="ClaimedNamesOf"/> resolve names through the same instance, so a
+/// call in any file spells the fast path its module declared.
 /// </summary>
 public sealed class TsModuleFunctionClaims
 {
+    private static readonly IReadOnlyDictionary<IMethodSymbol, ClaimedNames> NoClaims =
+        new Dictionary<IMethodSymbol, ClaimedNames>(SymbolEqualityComparer.Default);
+
     private readonly Compilation _compilation;
     private readonly IReadOnlyList<INamedTypeSymbol> _moduleTypes;
     private readonly HashSet<string> _taken = new(StringComparer.Ordinal);
@@ -29,6 +34,10 @@ public sealed class TsModuleFunctionClaims
         (INamedTypeSymbol Type, string MemberName, int Ordinal),
         (string Dispatcher, string FastPath)
     > _claimed = [];
+    private readonly IReadOnlyDictionary<
+        INamedTypeSymbol,
+        IReadOnlyDictionary<IMethodSymbol, ClaimedNames>
+    > _claimsByType;
     private readonly List<MetanoDiagnostic> _findings = [];
 
     private TsModuleFunctionClaims(Compilation compilation, IAssemblySymbol? assembly)
@@ -37,9 +46,11 @@ public sealed class TsModuleFunctionClaims
         _moduleTypes = assembly is { } assemblySymbol
             ? TypeScriptTransformContext
                 .EnumerateTopLevelStaticTypes(assemblySymbol.GlobalNamespace)
-                .Where(type => SymbolHelper.IsContainerless(type) || HoldsExportedExtension(type))
+                .Where(IsModuleFunctionType)
                 .ToList()
             : [];
+
+        _claimsByType = Claim();
     }
 
     /// <summary>
@@ -49,27 +60,17 @@ public sealed class TsModuleFunctionClaims
     /// top-level functions the barrel re-exports.
     /// </summary>
     public static bool IsModuleFunctionType(INamedTypeSymbol type) =>
-        SymbolHelper.IsContainerless(type)
-        || type.GetMembers()
-            .OfType<IMethodSymbol>()
-            .Any(member =>
-                member.IsExtensionMethod && member.DeclaredAccessibility == Accessibility.Public
-            );
+        SymbolHelper.IsContainerless(type) || HoldsExportedExtension(type);
 
     /// <summary>
     /// One pass per transform: <paramref name="compilation"/> resolves an
     /// overload's declaring type and <paramref name="assembly"/> enumerates
     /// the module-function types in barrel order.
     /// </summary>
-    public static TsModuleFunctionClaims Compute(Compilation compilation, IAssemblySymbol? assembly)
-    {
-        var claims = new TsModuleFunctionClaims(compilation, assembly);
-
-        claims.ClaimDispatchers();
-        claims.ClaimFastPaths();
-
-        return claims;
-    }
+    public static TsModuleFunctionClaims Compute(
+        Compilation compilation,
+        IAssemblySymbol? assembly
+    ) => new(compilation, assembly);
 
     /// <summary>The barrel names the claim pass found taken and renamed.</summary>
     public IReadOnlyList<MetanoDiagnostic> Findings => _findings;
@@ -93,109 +94,147 @@ public sealed class TsModuleFunctionClaims
     }
 
     /// <summary>
+    /// The barrel names each exported module function of <paramref
+    /// name="type"/> claimed, per member: the dispatcher and, on a
+    /// dispatched group, the fast path beside it (the two equal when the
+    /// function stands alone). The export registry and the extension-helper
+    /// registry read this table instead of re-deriving the overload
+    /// identity.
+    /// </summary>
+    public IReadOnlyDictionary<IMethodSymbol, ClaimedNames> ClaimedNamesOf(INamedTypeSymbol type) =>
+        _claimsByType.TryGetValue(type.OriginalDefinition, out var claims) ? claims : NoClaims;
+
+    /// <summary>
+    /// The claims of every module type, in two passes so the order a name is
+    /// taken in stays the one the barrel has always used: pass 1 reserves
+    /// every dispatcher and module variable of every type, pass 2 claims
+    /// each dispatched group's fast paths against them, and the per-member
+    /// table <see cref="ClaimedNamesOf"/> publishes records what each member
+    /// ended up with.
+    /// </summary>
+    private IReadOnlyDictionary<
+        INamedTypeSymbol,
+        IReadOnlyDictionary<IMethodSymbol, ClaimedNames>
+    > Claim()
+    {
+        var dispatchedByType = _moduleTypes
+            .Select(type =>
+                (
+                    Type: type,
+                    Overloads: DispatchedModuleFunctions.Of(type, TargetLanguage.TypeScript)
+                )
+            )
+            .ToList();
+
+        foreach (var (type, overloads) in dispatchedByType)
+        {
+            ClaimDispatchers(type, OrdinalsOf(overloads));
+        }
+
+        var claimsByType = new Dictionary<
+            INamedTypeSymbol,
+            IReadOnlyDictionary<IMethodSymbol, ClaimedNames>
+        >(SymbolEqualityComparer.Default);
+
+        foreach (var (type, overloads) in dispatchedByType)
+        {
+            claimsByType[type.OriginalDefinition] = ClaimFastPaths(type, overloads);
+        }
+
+        return claimsByType;
+    }
+
+    /// <summary>
     /// Pass 1: every exported function's dispatcher name joins the barrel
     /// table, and every overload of a group records the same dispatcher. A
     /// cross-class dispatcher clash stays where it is handled today (the
     /// export registry reports MS0020); the claim table only reserves the
     /// name.
     /// </summary>
-    private void ClaimDispatchers()
+    private void ClaimDispatchers(
+        INamedTypeSymbol type,
+        IReadOnlyDictionary<IMethodSymbol, int> ordinals
+    )
     {
-        foreach (var type in _moduleTypes)
+        foreach (var member in type.GetMembers())
         {
-            foreach (var member in type.GetMembers())
+            switch (member)
             {
-                switch (member)
+                case IMethodSymbol method when SymbolHelper.IsExportedModuleFunction(method):
+                    ClaimDispatcher(
+                        type,
+                        method,
+                        ordinals.TryGetValue(method, out var ordinal) ? ordinal : 0
+                    );
+                    break;
+
+                case IFieldSymbol { DeclaredAccessibility: Accessibility.Public } field:
+                    ClaimVariable(type, field.Name);
+                    break;
+
+                case IPropertySymbol
                 {
-                    case IMethodSymbol method
-                        when IsExportableFunction(method) || IsExportableExtension(method):
-                        ClaimDispatcher(type, method);
-                        break;
-
-                    case IFieldSymbol { DeclaredAccessibility: Accessibility.Public } field:
-                        ClaimVariable(type, field.Name);
-                        break;
-
-                    case IPropertySymbol
-                    {
-                        DeclaredAccessibility: Accessibility.Public,
-                        IsIndexer: false,
-                    } property:
-                        ClaimVariable(type, property.Name);
-                        break;
-                }
+                    DeclaredAccessibility: Accessibility.Public,
+                    IsIndexer: false,
+                } property:
+                    ClaimVariable(type, property.Name);
+                    break;
             }
         }
     }
 
     /// <summary>
     /// Pass 2: one fast path per dispatched group, in declaration order,
-    /// claimed against everything pass 1 reserved.
+    /// claimed against everything pass 1 reserved. Returns, per member, the
+    /// names it ended up with — the table the export registry and the
+    /// extension-helper registry read.
     /// </summary>
-    private void ClaimFastPaths()
+    private IReadOnlyDictionary<IMethodSymbol, ClaimedNames> ClaimFastPaths(
+        INamedTypeSymbol type,
+        IReadOnlyList<DispatchedModuleOverload> overloads
+    )
     {
-        foreach (var type in _moduleTypes)
+        var claims = new Dictionary<IMethodSymbol, ClaimedNames>(SymbolEqualityComparer.Default);
+
+        foreach (var overload in overloads)
         {
-            foreach (var group in MethodOverloadGroups.Of(type, TargetLanguage.TypeScript))
-            {
-                if (!group.IsDispatched)
-                    continue;
+            var key = (type, overload.Member.Name, overload.Ref.Ordinal);
 
-                var suffixes = MethodOverloadGroups.SuffixesOf(
-                    type,
-                    group,
-                    TargetLanguage.TypeScript
-                );
+            if (!_claimed.TryGetValue(key, out var claimed))
+                continue;
 
-                foreach (var member in group.Members)
-                {
-                    if (
-                        !IsExportableFunction(member.Symbol)
-                        && !IsExportableExtension(member.Symbol)
-                    )
-                        continue;
+            var candidate = claimed.Dispatcher + overload.Name.Suffix;
+            var claimedFastPath = ClaimName(candidate);
 
-                    ClaimFastPath(type, member.Symbol, suffixes[member.Symbol]);
-                }
-            }
+            _claimed[key] = (claimed.Dispatcher, claimedFastPath);
+            claims[overload.Member] = new ClaimedNames(claimed.Dispatcher, claimedFastPath);
+
+            if (claimedFastPath == candidate)
+                continue;
+
+            Report(
+                DiagnosticCodes.OverloadNameShadowed,
+                MetanoDiagnosticSeverity.Warning,
+                $"Fast path '{type.Name}.{candidate}' of '{overload.Member.Name}' is already taken in "
+                    + $"the barrel; it is emitted as '{claimedFastPath}' (spec 013 FR-032).",
+                overload.Member.Locations.FirstOrDefault()
+            );
         }
+
+        return claims;
     }
 
-    private void ClaimDispatcher(INamedTypeSymbol type, IMethodSymbol method)
+    private void ClaimDispatcher(INamedTypeSymbol type, IMethodSymbol method, int ordinal)
     {
         var dispatcher = FunctionNameOf(method);
 
         _taken.Add(dispatcher);
-        _claimed[(type, method.Name, OrdinalOf(method))] = (dispatcher, dispatcher);
+        _claimed[(type, method.Name, ordinal)] = (dispatcher, dispatcher);
     }
 
     private void ClaimVariable(INamedTypeSymbol type, string name)
     {
         _taken.Add(TypeScriptNaming.ToCamelCase(name));
-    }
-
-    private void ClaimFastPath(INamedTypeSymbol type, IMethodSymbol method, string suffix)
-    {
-        var key = (type, method.Name, OrdinalOf(method));
-
-        if (!_claimed.TryGetValue(key, out var claimed))
-            return;
-
-        var candidate = claimed.Dispatcher + suffix;
-        var claimedFastPath = ClaimName(candidate);
-
-        _claimed[key] = (claimed.Dispatcher, claimedFastPath);
-
-        if (claimedFastPath == candidate)
-            return;
-
-        Report(
-            DiagnosticCodes.OverloadNameShadowed,
-            MetanoDiagnosticSeverity.Warning,
-            $"Fast path '{type.Name}.{candidate}' of '{method.Name}' is already taken in "
-                + $"the barrel; it is emitted as '{claimedFastPath}' (spec 013 FR-032).",
-            method.Locations.FirstOrDefault()
-        );
     }
 
     private string ClaimName(string candidate)
@@ -208,20 +247,19 @@ public sealed class TsModuleFunctionClaims
         return name;
     }
 
+    /// <summary>
+    /// Whether the static class exports classic extension methods — its
+    /// exported statics flatten to top-level functions the barrel
+    /// re-exports, so its dispatched extension groups claim fast paths even
+    /// though the class itself keeps its namespace. A declaration view:
+    /// reduced extension symbols never appear in a member list.
+    /// </summary>
     private static bool HoldsExportedExtension(INamedTypeSymbol type) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
-            .Any(member => member.IsExtensionMethod && IsExportableExtension(member));
-
-    private static bool IsExportableFunction(IMethodSymbol method) =>
-        method.IsStatic
-        && method.MethodKind == MethodKind.Ordinary
-        && method.DeclaredAccessibility == Accessibility.Public
-        && !method.IsExtensionMethod;
-
-    private static bool IsExportableExtension(IMethodSymbol method) =>
-        method.ReducedFrom is not null
-        || (method.IsExtensionMethod && method.DeclaredAccessibility == Accessibility.Public);
+            .Any(member =>
+                member.IsExtensionMethod && SymbolHelper.IsExportedModuleFunction(member)
+            );
 
     private static string FunctionNameOf(IMethodSymbol method) =>
         SymbolHelper.GetNameOverride(method, TargetLanguage.TypeScript)
@@ -229,13 +267,22 @@ public sealed class TsModuleFunctionClaims
 
     /// <summary>
     /// The overload's declaration ordinal in its dispatched group, the same
-    /// identity a call site's <see cref="IrOverloadRef"/> carries.
+    /// identity a call site's <see cref="IrOverloadRef"/> carries; the
+    /// extracted IR records it, so a member the IR did not dispatch stands
+    /// alone at ordinal 0.
     /// </summary>
-    private static int OrdinalOf(IMethodSymbol method)
+    private static IReadOnlyDictionary<IMethodSymbol, int> OrdinalsOf(
+        IReadOnlyList<DispatchedModuleOverload> overloads
+    )
     {
-        var group = MethodOverloadGroups.GroupOf(method, TargetLanguage.TypeScript);
+        var ordinals = new Dictionary<IMethodSymbol, int>(SymbolEqualityComparer.Default);
 
-        return group?.MemberOf(method)?.Ordinal ?? 0;
+        foreach (var overload in overloads)
+        {
+            ordinals[overload.Member] = overload.Ref.Ordinal;
+        }
+
+        return ordinals;
     }
 
     private void Report(
@@ -245,3 +292,9 @@ public sealed class TsModuleFunctionClaims
         Location? location
     ) => _findings.Add(new MetanoDiagnostic(severity, code, message, location));
 }
+
+/// <summary>
+/// The barrel names one exported module function claimed: its dispatcher
+/// and its fast path, equal when the function stands alone.
+/// </summary>
+public sealed record ClaimedNames(string Dispatcher, string FastPath);
