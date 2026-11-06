@@ -769,11 +769,14 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             // A BCL-exported class (decimal → decimal.js `Decimal`) is a
             // runtime constructor the compilation imports, not a project type
             // with its own guard: test the constructor. A bare presence check
-            // would accept plain JS numbers no C# decimal ever produces.
-            TsNamedType { Name: var n } when IsBclExportedClass(n) => Required(
-                InstanceofCheck(fieldAccess, n),
-                GuardTestKind.Object
-            ),
+            // would accept plain JS numbers no C# decimal ever produces. The
+            // node's own origin (#477) is the test — a project type named
+            // Decimal has none and falls to its guard below.
+            TsNamedType { Name: var n, Origin: not null } named when IsBclExportedClass(n) =>
+                Required(
+                    InstanceofCheck(fieldAccess, named.Name, named.Origin),
+                    GuardTestKind.Object
+                ),
 
             // Transpilable named type with its own guard → call it. The guard
             // may test an enum value or an object, so its kind is presence only.
@@ -881,6 +884,22 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
     private static TsBinaryExpression InstanceofCheck(TsExpression fieldAccess, string typeName) =>
         new(fieldAccess, "instanceof", new TsIdentifier(typeName));
+
+    /// <summary>
+    /// The constructor test against an origin-carrying class reference
+    /// (#477): the import binds to the export's package, never to a
+    /// same-named project type.
+    /// </summary>
+    private static TsBinaryExpression InstanceofCheck(
+        TsExpression fieldAccess,
+        string typeName,
+        TsTypeOrigin? origin
+    ) =>
+        new(
+            fieldAccess,
+            "instanceof",
+            origin is not null ? new TsTypeReference(typeName, origin) : new TsIdentifier(typeName)
+        );
 
     /// <summary>
     /// <c>field == null || innerCheck</c>: the member may be absent, and its

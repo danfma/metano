@@ -251,10 +251,17 @@ internal static class IrTypeCheckBuilder
     /// The runtime test for a <c>decimal</c> value: an <c>instanceof Decimal</c>
     /// against the decimal.js class the type lowers to. Every other numeric
     /// check (<c>typeof === "number"</c>) would match plain JS numbers no C#
-    /// decimal ever produces and reject every real decimal.
+    /// decimal ever produces and reject every real decimal. The right-hand
+    /// side carries the export's origin (#477): the collector imports
+    /// decimal.js for exactly this node, and a project type named Decimal
+    /// cannot capture the test.
     /// </summary>
     internal static TsExpression DecimalInstanceof(TsExpression value) =>
-        new TsBinaryExpression(value, "instanceof", new TsIdentifier("Decimal"));
+        new TsBinaryExpression(
+            value,
+            "instanceof",
+            IrToTsExpressionBridge.BclDecimalValueReference()
+        );
 
     /// <summary>
     /// Maps a semantic <see cref="IrPrimitive"/> to the same <c>metano-runtime</c>
