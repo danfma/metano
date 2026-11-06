@@ -364,7 +364,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // The barrel-scope claims of the module-function fast paths (spec 013
         // FR-032) run once per transform, before the export registry, so the
         // registry, the emission and every call site spell the same names.
-        var moduleFunctionClaims = TsModuleFunctionClaims.Compute(compilation, _currentAssembly);
+        // The claims read shape-only extracted IR, whose type mapping stages
+        // no cross-package dependency.
+        var moduleFunctionClaims = TsModuleFunctionClaims.Compute(
+            compilation,
+            _currentAssembly,
+            IrTypeOriginResolverFactory.CreateUnrecorded(typeMappingContext)
+        );
 
         foreach (var finding in moduleFunctionClaims.Findings)
             ReportDiagnostic(finding);
@@ -2519,9 +2525,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;
 
+            var barrelClaims = moduleFunctionClaims.ClaimedNamesOf(type);
+
             foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!IsExportableNoContainerMethod(member))
+                if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                     continue;
 
                 var fnName = ResolveNoContainerFunctionName(member);
@@ -2544,12 +2552,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 // cross-type clash report as a single function's, so a
                 // same-name member of another type still reports MS0020; a
                 // name the type itself already claimed (the second overload
-                // of the group) just adds nothing.
-                if (DispatchedMethodCalls.RefOf(member, TargetLanguage.TypeScript) is { } reference)
+                // of the group) just adds nothing. The barrel claim pass
+                // already decided which names each member claimed.
+                if (barrelClaims.TryGetValue(member, out var claim))
                 {
-                    if (moduleFunctionClaims.ClaimOf(reference) is not { } claim)
-                        continue;
-
                     var claimedNames =
                         claim.FastPath == claim.Dispatcher
                             ? [claim.Dispatcher]
@@ -2725,7 +2731,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 );
                 foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
                 {
-                    if (!IsExportableNoContainerMethod(member))
+                    if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                         continue;
                     var fnName = ResolveNoContainerFunctionName(member);
                     // First-wins: own-assembly entries already registered take priority.
@@ -2853,11 +2859,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string Description,
         IrTranspilableTypeRef? OwnerRef = null
     );
-
-    private static bool IsExportableNoContainerMethod(IMethodSymbol member) =>
-        member.IsStatic
-        && member.MethodKind == MethodKind.Ordinary
-        && member.DeclaredAccessibility == Accessibility.Public;
 
     private static string ResolveNoContainerFunctionName(IMethodSymbol member) =>
         SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)

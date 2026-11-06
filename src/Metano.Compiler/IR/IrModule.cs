@@ -51,4 +51,18 @@ public sealed record IrModuleFunction(
     /// ref. <c>null</c> when the function stands alone.
     /// </summary>
     public IrOverloadRef? OverloadRef { get; init; }
+
+    /// <summary>
+    /// The overload's name in its dispatched group (spec 013 FR-001), the
+    /// suffix a target's barrel claim pass appends to the dispatcher;
+    /// <c>null</c> when the function stands alone.
+    /// </summary>
+    public IrOverloadName? OverloadName { get; init; }
+
+    /// <summary>
+    /// The overload's C# signature (<c>From(decimal amount)</c>), which a
+    /// target's diagnostics name it by; <c>null</c> outside a dispatched
+    /// group.
+    /// </summary>
+    public string? SignatureText { get; init; }
 }

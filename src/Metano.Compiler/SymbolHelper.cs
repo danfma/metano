@@ -785,6 +785,64 @@ public static class SymbolHelper
         HasNoContainer(symbol) || HasExportedAsModule(symbol);
 
     /// <summary>
+    /// Whether the method flattens to an exported module function: an
+    /// ordinary public static — classic extensions included, whose receiver
+    /// Roslyn already exposes as the first parameter.
+    /// </summary>
+    public static bool IsExportedModuleFunction(this IMethodSymbol method) =>
+        method.IsStatic
+        && method.MethodKind == MethodKind.Ordinary
+        && method.DeclaredAccessibility == Accessibility.Public;
+
+    /// <summary>
+    /// Whether the method is one exported module function a target emits
+    /// (spec 013 FR-032): an ordinary public static (<see
+    /// cref="IsExportedModuleFunction"/>) that none of the exclusions
+    /// drops — <c>[Ignore]</c>, a call-site lowering (<see
+    /// cref="IsInlinedAtCallSite"/>), a member declared inside a C# 14
+    /// <c>extension</c> block (emitted from the block instead), a property
+    /// accessor or a <c>get_</c>/<c>set_</c>-named helper. The one
+    /// definition the module-function extractor, the barrel claim pass and
+    /// the export registry share.
+    /// </summary>
+    public static bool IsEmittedModuleFunction(
+        this IMethodSymbol method,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        method.IsExportedModuleFunction()
+        && !HasIgnore(method, target)
+        && !method.IsInlinedAtCallSite()
+        && !method.IsDeclaredInsideExtensionBlock()
+        && method.AssociatedSymbol is not IPropertySymbol
+        && !method.Name.StartsWith("get_", StringComparison.Ordinal)
+        && !method.Name.StartsWith("set_", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether the method's declaring syntax sits inside a C# 14
+    /// <c>extension(R r) { … }</c> block: Roslyn surfaces block members both
+    /// lifted onto the static class and on the block's synthetic type, and
+    /// the lifted view walks up to the block's declaration.
+    /// </summary>
+    public static bool IsDeclaredInsideExtensionBlock(this IMethodSymbol method)
+    {
+        foreach (var syntaxRef in method.DeclaringSyntaxReferences)
+        {
+            for (var node = syntaxRef.GetSyntax().Parent; node is not null; node = node.Parent)
+            {
+                // No SyntaxKind member in Roslyn 5.3 — the extension block
+                // declares itself only as a node kind string.
+                if (
+                    Microsoft.CodeAnalysis.CSharp.CSharpExtensions.Kind(node).ToString()
+                    == "ExtensionBlockDeclaration"
+                )
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// A member of a C# 14 <c>extension(R r) { … }</c> block: Roslyn declares it
     /// on the block's unnamed type, nested in the static class that holds it.
     /// </summary>
