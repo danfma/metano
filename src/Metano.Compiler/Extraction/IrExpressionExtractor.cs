@@ -1759,7 +1759,8 @@ public sealed partial class IrExpressionExtractor
 
         var op = NarrowBuiltinOperator(mappedOp, bin);
 
-        return TryExtractValueEquality(bin)
+        return TryExtractUserOperatorCall(bin)
+            ?? TryExtractValueEquality(bin)
             ?? TryExtractNullableBooleanLogic(bin, op)
             ?? TryExtractLiftedBinary(bin, op)
             ?? TryExtractStringConcatenation(bin)
@@ -1767,6 +1768,53 @@ public sealed partial class IrExpressionExtractor
                 _semantic.GetOperation(bin),
                 BuildBinary(bin, op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
             );
+    }
+
+    /// <summary>
+    /// A binary expression whose operator resolves to a user-defined
+    /// overload of a dispatched operator group (spec 013 FR-018): the fast
+    /// path the claim pass names, <c>T.__addMoneyInt32(a, b)</c>, with
+    /// Roslyn's bound operands. The declaring type is the static operand
+    /// type's, so the call targets the fast path directly and no runtime
+    /// check runs. <c>null</c> for any other operator: the synthesized
+    /// equality of a record keeps its value lowering, and a single operator
+    /// or a metadata-only one keeps today's shape (DECIDED-11,
+    /// DECIDED-24).
+    /// </summary>
+    private IrExpression? TryExtractUserOperatorCall(BinaryExpressionSyntax bin)
+    {
+        if (
+            _semantic.GetSymbolInfo(bin).Symbol
+            is not IMethodSymbol
+            {
+                MethodKind: MethodKind.UserDefinedOperator,
+                Parameters.Length: 2,
+            } operatorMethod
+        )
+            return null;
+
+        var overloadRef = DispatchedMethodCalls.RefOf(operatorMethod, _target);
+
+        if (overloadRef is null)
+            return null;
+
+        var bound = ExtractBoundOperatorCall(
+            _semantic.GetOperation(bin),
+            operatorMethod,
+            overloadRef
+        );
+
+        if (bound is null)
+            return null;
+
+        return new IrCallExpression(
+            new IrMemberAccess(TypeReferenceTo(operatorMethod.ContainingType), operatorMethod.Name),
+            bound.Arguments,
+            Origin: BuildOrigin(operatorMethod)
+        )
+        {
+            Overload = bound.Overload,
+        };
     }
 
     /// <summary>
@@ -2409,6 +2457,8 @@ public sealed partial class IrExpressionExtractor
         if (symbol is not IMethodSymbol method)
             return reference;
 
+        reference = WithDispatchedFastPath(method, reference);
+
         if (
             _semantic.GetTypeInfo(expression).ConvertedType
             is not INamedTypeSymbol
@@ -2504,6 +2554,30 @@ public sealed partial class IrExpressionExtractor
             ]
         );
         return new IrCallExpression(lambda, [new IrArgument(receiver)]);
+    }
+
+    /// <summary>
+    /// The member access of a method-group reference that belongs to a
+    /// dispatched group (spec 013 FR-018), carrying the resolved overload so
+    /// a target renames the access to the claimed fast path and keeps the
+    /// receiver binding. The reference itself for any other symbol —
+    /// including every call that stays on the dispatcher (DECIDED-11,
+    /// DECIDED-24) and Dart, which renders source member names until it
+    /// claims names (013g).
+    /// </summary>
+    private IrExpression WithDispatchedFastPath(IMethodSymbol method, IrExpression reference)
+    {
+        if (reference is not IrMemberAccess access || IsDartTarget)
+            return reference;
+
+        var overloadRef = DispatchedMethodCalls.RefOf(method, _target);
+
+        return overloadRef is null
+            ? reference
+            : access with
+            {
+                Overload = new IrSelectedOverload(overloadRef),
+            };
     }
 
     /// <summary>
@@ -2664,6 +2738,9 @@ public sealed partial class IrExpressionExtractor
 
         if (TryExtractBaseObjectMemberCall(inv, symbol) is { } baseObjectMemberCall)
             return baseObjectMemberCall;
+
+        if (TryExtractDirectOverloadCall(inv, symbol) is { } directOverloadCall)
+            return directOverloadCall;
 
         // LINQ chain detection (#20 pipe lowering). When this invocation
         // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
@@ -2863,6 +2940,46 @@ public sealed partial class IrExpressionExtractor
             nameof(object.GetHashCode) => IrObjectMember.GetHashCode,
             _ => IrObjectMember.ToString,
         };
+
+    /// <summary>
+    /// A call Roslyn resolved into a dispatched method group of a type whose
+    /// claims the target can read (spec 013 FR-018): bound to its overload,
+    /// so a target calls the claimed fast path with Roslyn's bound arguments
+    /// — an omitted optional parameter passes the static overload's default
+    /// explicitly (DECIDED-32), an expanded <c>params</c> call its elements
+    /// and a normal-form one the spread array (DECIDED-21), and a generic
+    /// call keeps its type arguments. <c>null</c> for any call that keeps
+    /// the dispatcher (DECIDED-11, DECIDED-24), and on Dart, which renders
+    /// source arguments until it claims names (013g).
+    /// </summary>
+    private IrCallExpression? TryExtractDirectOverloadCall(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? symbol
+    )
+    {
+        if (symbol is null or { MethodKind: MethodKind.ReducedExtension })
+            return null;
+
+        var overloadRef = DispatchedMethodCalls.RefOf(symbol, _target);
+
+        if (overloadRef is null)
+            return null;
+
+        var bound = ExtractBoundCall(_semantic.GetOperation(inv), overloadRef);
+
+        if (bound is null)
+            return null;
+
+        return new IrCallExpression(
+            Extract(inv.Expression),
+            bound.Arguments,
+            MethodTypeArgumentsOf(symbol),
+            BuildOrigin(symbol)
+        )
+        {
+            Overload = bound.Overload,
+        };
+    }
 
     private bool IsDispatchedOnEmittedBase(IMethodSymbol symbol) =>
         MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
@@ -3543,6 +3660,32 @@ public sealed partial class IrExpressionExtractor
             extensionTypeArgs = extensionCallee
                 .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
                 .ToList();
+
+        // A resolved overload of a dispatched extension group calls its
+        // claimed fast path with Roslyn's bound arguments — the receiver is
+        // the group's first parameter, bound first like any other (spec 013
+        // FR-018). Any other extension call keeps the helper rewrite.
+        var extensionOverloadRef = DispatchedMethodCalls.RefOf(
+            extensionCallee.ReducedFrom ?? extensionCallee,
+            _target
+        );
+
+        if (
+            extensionOverloadRef is { } overloadRef
+            && ExtractBoundCall(_semantic.GetOperation(inv), overloadRef) is { } bound
+        )
+        {
+            return BuildExtensionHelperCall(
+                extLowering.HelperContainer,
+                extLowering.HelperName,
+                extLowering.EmittedName,
+                bound.Arguments,
+                extensionTypeArgs
+            ) with
+            {
+                Overload = bound.Overload,
+            };
+        }
 
         if (extLowering.IsStatic)
         {

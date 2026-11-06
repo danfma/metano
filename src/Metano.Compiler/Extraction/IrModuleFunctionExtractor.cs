@@ -492,7 +492,10 @@ public static class IrModuleFunctionExtractor
             Semantics: semantics,
             TypeParameters: typeParameters,
             Attributes: IrAttributeExtractor.Extract(method)
-        );
+        )
+        {
+            OverloadRef = DispatchedMethodCalls.RefOf(method, context.Target),
+        };
     }
 
     private static IrModuleFunction? ConvertExtensionProperty(
@@ -787,7 +790,10 @@ public static class IrModuleFunctionExtractor
             Semantics: semantics,
             TypeParameters: typeParameters,
             Attributes: IrAttributeExtractor.Extract(method)
-        );
+        )
+        {
+            OverloadRef = DispatchedMethodCalls.RefOf(method, context.Target),
+        };
     }
 
     private static bool IsDeclaredInsideExtensionBlock(IMethodSymbol method)

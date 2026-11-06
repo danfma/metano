@@ -92,7 +92,7 @@ export class Issue {
   }
 
   addCommentAuthorIdMessage(authorId: UserId, message: string): void {
-    this.addComment(authorId, message, Temporal.Now.zonedDateTimeISO());
+    this.addCommentAuthorIdMessageCreatedAt(authorId, message, Temporal.Now.zonedDateTimeISO());
   }
 
   addComment(authorId: UserId, message: string, createdAt: Temporal.ZonedDateTime): void;
@@ -144,7 +144,11 @@ export class Issue {
   }
 
   transitionToNextStatusActorId(nextStatus: IssueStatus, actorId: UserId): void {
-    this.transitionTo(nextStatus, actorId, Temporal.Now.zonedDateTimeISO());
+    this.transitionToNextStatusActorIdChangedAt(
+      nextStatus,
+      actorId,
+      Temporal.Now.zonedDateTimeISO(),
+    );
   }
 
   transitionTo(nextStatus: IssueStatus, actorId: UserId, changedAt: Temporal.ZonedDateTime): void;

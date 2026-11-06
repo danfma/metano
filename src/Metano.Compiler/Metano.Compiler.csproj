@@ -23,5 +23,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Metano.Tests" />
+    <InternalsVisibleTo Include="Metano.Compiler.TypeScript" />
   </ItemGroup>
 </Project>

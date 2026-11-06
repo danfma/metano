@@ -521,6 +521,17 @@ public static partial class IrToTsExpressionBridge
         if (IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma) is { } keptBaseMessage)
             return keptBaseMessage;
 
+        // A method-group reference into a dispatched group renames the access
+        // to the claimed fast path, keeping the receiver binding
+        // (`b.addX.bind(b)`, spec 013 FR-018); a static one renames through
+        // the same variable the containerless flatten reads, so a module
+        // function stays bare.
+        var accessedName =
+            ma.Overload is { } groupOverload
+            && TsOverloadCallSites.MethodFastPathOf(groupOverload.Target) is { } groupFastPath
+                ? groupFastPath
+                : AccessedMemberName(ma);
+
         // `[Branded]` value read: the companion lowers the wrapper to
         // `T = primitive & { __brand }`, so the receiver already IS the
         // wrapped value — `id.Value` → `id`, `id.Value.Length` → `id.length`
@@ -553,7 +564,7 @@ public static partial class IrToTsExpressionBridge
                 ReportUnmappedForeignStaticRead(ma.Origin);
         }
 
-        var memberName = AccessedMemberName(ma);
+        var memberName = accessedName;
 
         // `[External]` and `[NoContainer]` declaring types: the class
         // vanishes at the call site. `[External]` groups runtime
@@ -716,6 +727,9 @@ public static partial class IrToTsExpressionBridge
 
         if (BaseFastPathCallOf(call, loweredArgs, context) is { } baseFastPathCall)
             return baseFastPathCall;
+
+        if (DispatchedFastPathCallOf(call, loweredArgs, context) is { } dispatchedFastPathCall)
+            return dispatchedFastPathCall;
 
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
@@ -1779,6 +1793,89 @@ public static partial class IrToTsExpressionBridge
             [new TsReturnStatement(superCall)],
             isAsync: false
         );
+    }
+
+    /// <summary>
+    /// A call Roslyn resolved into a dispatched group (spec 013 FR-018): the
+    /// claimed fast path of its overload — the receiver evaluated once in
+    /// place, the type for a static, the imported bare name for a module
+    /// function or extension, <c>T.__addMoneyInt32(a, 5)</c> for an operator
+    /// — with Roslyn's bound arguments in C#'s evaluation order. A bound
+    /// call whose declaring type's claims this transform cannot resolve (a
+    /// metadata-only reference, DECIDED-24) keeps the dispatcher form, still
+    /// with the bound arguments, which are correct for the resolved
+    /// overload: explicit defaults, expanded or spread <c>params</c>.
+    /// </summary>
+    private static TsExpression? DispatchedFastPathCallOf(
+        IrCallExpression call,
+        IReadOnlyList<TsExpression> loweredArgs,
+        IrToTsBridgeContext context
+    )
+    {
+        if (call.Overload is not { } overload || BaseOverloadOf(call) is not null)
+            return null;
+
+        var ordered = TsEvaluationOrder.Bind(
+            WithoutNullRestArray(call.Arguments, loweredArgs),
+            overload.EvaluationOrder,
+            ConstructionArgumentPrefix
+        );
+
+        var fastPath = TsOverloadCallSites.MethodFastPathOf(overload.Target);
+
+        var fastPathCall = new TsCallExpression(
+            fastPath is null
+                ? MapNullTolerant(call.Target, context)
+                : DispatchedCalleeOf(call, fastPath, context),
+            ordered.Arguments,
+            TypeArguments: call.TypeArguments?.Select(argument =>
+                    IrToTsTypeMapper.Map(argument, context.TypeOverrides)
+                )
+                .ToList()
+        );
+
+        if (ordered.Bindings.Count == 0)
+            return fastPathCall;
+
+        return TsImmediateInvocation.Of(
+            ordered.Bindings,
+            [new TsReturnStatement(fastPathCall)],
+            isAsync: false
+        );
+    }
+
+    /// <summary>
+    /// The callee of a dispatched fast-path call: the fast path on the
+    /// receiver the access evaluates, or the bare fast-path name when the
+    /// access lowered to anything else (a module export reference or the
+    /// bare identifier of a flattened containerless call).
+    /// </summary>
+    private static TsExpression DispatchedCalleeOf(
+        IrCallExpression call,
+        string fastPath,
+        IrToTsBridgeContext context
+    )
+    {
+        if (call.Target is not IrMemberAccess access)
+            return new TsIdentifier(fastPath);
+
+        // The access maps first, so its own lowerings — the containerless
+        // flatten that turns `Greets.Twice` into the bare imported helper —
+        // still apply; only the member name swaps for the claimed fast path.
+        return MapNullTolerant(access, context) switch
+        {
+            TsPropertyAccess property => new TsPropertyAccess(
+                property.Object,
+                fastPath,
+                property.Optional,
+                property.ContinuesChain
+            ),
+            TsModuleExportReference moduleExport => new TsModuleExportReference(
+                fastPath,
+                moduleExport.OwnerTypeName
+            ),
+            _ => new TsIdentifier(fastPath),
+        };
     }
 
     /// <summary>

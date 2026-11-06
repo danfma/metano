@@ -314,7 +314,9 @@ public sealed class TypeScriptTransformContext(
         return SymbolEqualityComparer.Default.Equals(aLogical, bLogical);
     }
 
-    private static IEnumerable<INamedTypeSymbol> EnumerateTopLevelStaticTypes(INamespaceSymbol root)
+    internal static IEnumerable<INamedTypeSymbol> EnumerateTopLevelStaticTypes(
+        INamespaceSymbol root
+    )
     {
         foreach (var member in root.GetMembers())
         {
@@ -390,6 +392,14 @@ public sealed class TypeScriptTransformContext(
         );
 
     private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? _importAliasOverrides;
+
+    /// <summary>
+    /// The barrel-scope claims of the module-function fast paths (spec 013
+    /// FR-032), computed once per transform and shared by the module
+    /// emission, the export registry and the call sites, so a dispatched
+    /// module group spells the same names everywhere.
+    /// </summary>
+    public Bridge.TsModuleFunctionClaims ModuleFunctionClaims { get; init; } = null!;
 
     /// <summary>
     /// Recognizes a referenced identifier as the TypeScript guard

@@ -38,7 +38,7 @@ export class Partial extends Base {
   }
 
   twice(x: number): number {
-    return super.addX(x) + this.add(x);
+    return super.addX(x) + this.addX(x);
   }
 }
 
@@ -110,7 +110,7 @@ export class Ledger {
   }
 
   count(s: string): number {
-    return this.add(s);
+    return this.addS(s);
   }
 }
 
