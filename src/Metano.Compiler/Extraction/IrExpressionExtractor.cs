@@ -554,8 +554,9 @@ public sealed partial class IrExpressionExtractor
         }
         else
         {
-            newValue = CompoundValue(
+            newValue = ExtensionCompoundValue(
                 assign,
+                prop,
                 BuildExtensionHelperCall(
                     setterLowering.Value.HelperContainer,
                     getterName,
@@ -3515,7 +3516,9 @@ public sealed partial class IrExpressionExtractor
     /// let-binding (IIFE in TS) so impure receivers — method results,
     /// chained property reads — evaluate exactly once, matching the
     /// observable behavior of the source. Simple identifiers / <c>this</c>
-    /// receivers skip the binding to keep the emitted code compact.
+    /// receivers skip the binding to keep the emitted code compact. A
+    /// <c>Nullable&lt;T&gt;</c> property stores its compound value behind
+    /// the lifted null guard (see <see cref="ExtensionCompoundValue"/>, #497).
     /// </summary>
     private IrExpression BuildExtensionPropertyAssignment(
         MemberAccessExpressionSyntax targetSyntax,
@@ -3559,7 +3562,17 @@ public sealed partial class IrExpressionExtractor
                 setterLowering.HelperContainer,
                 setterName,
                 emittedSetterName,
-                [new IrArgument(CompoundValue(assign, currentValue, compoundOp.Value, rhs))],
+                [
+                    new IrArgument(
+                        ExtensionCompoundValue(
+                            assign,
+                            property,
+                            currentValue,
+                            compoundOp.Value,
+                            rhs
+                        )
+                    ),
+                ],
                 typeArguments: null
             );
         }
@@ -3585,8 +3598,9 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             recv =>
-                CompoundValue(
+                ExtensionCompoundValue(
                     assign,
+                    property,
                     BuildExtensionHelperCall(
                         setterLowering.HelperContainer,
                         getterName,
@@ -3605,7 +3619,9 @@ public sealed partial class IrExpressionExtractor
     /// extension property to a let-bound setter-call shape so the
     /// receiver evaluates exactly once. The new value is computed as
     /// <c>prop$get(r) ± 1</c>, matching C# increment semantics for the
-    /// numeric extension properties the MVP covers.
+    /// numeric extension properties the MVP covers; a
+    /// <c>Nullable&lt;T&gt;</c> property stores its value behind the lifted
+    /// null guard (see <see cref="ExtensionIncrementValue"/>, #497).
     /// </summary>
     private IrExpression BuildExtensionPropertyIncrement(
         ExpressionSyntax node,
@@ -3624,7 +3640,6 @@ public sealed partial class IrExpressionExtractor
         var emittedGetterName = propLowering.EmittedName;
         var binaryOp = StepOperatorOf(op);
         var one = ExtensionIncrementStepOf(targetSyntax);
-        var operation = _semantic.GetOperation(node);
 
         // Static increment: no receiver to capture — emit
         // `prop$set(prop$get() ± 1)` directly.
@@ -3643,10 +3658,7 @@ public sealed partial class IrExpressionExtractor
                 emittedSetterName,
                 [
                     new IrArgument(
-                        ReduceOverflow(
-                            operation,
-                            new IrBinaryExpression(currentValue, binaryOp, one)
-                        )
+                        ExtensionIncrementValue(node, property, currentValue, binaryOp, one)
                     ),
                 ],
                 typeArguments: null
@@ -3663,19 +3675,18 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             recv =>
-                ReduceOverflow(
-                    operation,
-                    new IrBinaryExpression(
-                        BuildExtensionHelperCall(
-                            propLowering.HelperContainer,
-                            getterName,
-                            emittedGetterName,
-                            [new IrArgument(recv)],
-                            typeArguments: null
-                        ),
-                        binaryOp,
-                        one
-                    )
+                ExtensionIncrementValue(
+                    node,
+                    property,
+                    BuildExtensionHelperCall(
+                        propLowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        [new IrArgument(recv)],
+                        typeArguments: null
+                    ),
+                    binaryOp,
+                    one
                 )
         );
     }
