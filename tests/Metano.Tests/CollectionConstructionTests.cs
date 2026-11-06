@@ -365,4 +365,3 @@ public class CollectionConstructionTests
             .Contains("private readonly _byId: Map<bigint, number> = new Map();");
     }
 }
-// (appended below)
