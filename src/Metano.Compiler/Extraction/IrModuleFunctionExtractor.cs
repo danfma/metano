@@ -483,6 +483,7 @@ public static class IrModuleFunctionExtractor
         );
 
         var body = TryExtractBody(method, context, localNames);
+        var claim = DispatchedMethodCalls.ClaimOf(method, context.Target);
 
         return new IrModuleFunction(
             Name: method.Name,
@@ -494,7 +495,9 @@ public static class IrModuleFunctionExtractor
             Attributes: IrAttributeExtractor.Extract(method)
         )
         {
-            OverloadRef = DispatchedMethodCalls.RefOf(method, context.Target),
+            OverloadRef = claim?.Ref,
+            OverloadName = claim?.Name,
+            SignatureText = claim?.SignatureText,
         };
     }
 
@@ -781,6 +784,7 @@ public static class IrModuleFunctionExtractor
         var body = context.Compilation is { } compilation
             ? TryExtractBody(method, context, localNames)
             : null;
+        var claim = DispatchedMethodCalls.ClaimOf(method, context.Target);
 
         return new IrModuleFunction(
             Name: method.Name,
@@ -792,7 +796,9 @@ public static class IrModuleFunctionExtractor
             Attributes: IrAttributeExtractor.Extract(method)
         )
         {
-            OverloadRef = DispatchedMethodCalls.RefOf(method, context.Target),
+            OverloadRef = claim?.Ref,
+            OverloadName = claim?.Name,
+            SignatureText = claim?.SignatureText,
         };
     }
 
