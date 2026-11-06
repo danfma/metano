@@ -165,6 +165,12 @@ public static partial class IrToTsExpressionBridge
             return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
         }
 
+        if (
+            IrToTsInt64OperatorBridge.TryMap(bin, operand => Map(operand, context)) is
+            { } int64Operator
+        )
+            return int64Operator;
+
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
@@ -645,6 +651,9 @@ public static partial class IrToTsExpressionBridge
 
         if (IsBaseIdentityHash(call))
             return new TsLiteral("0");
+
+        if (BaseFastPathCallOf(call, loweredArgs, context) is { } baseFastPathCall)
+            return baseFastPathCall;
 
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
@@ -1486,8 +1495,10 @@ public static partial class IrToTsExpressionBridge
         {
             // The runtime class for Decimal is the decimal.js `Decimal`
             // constructor — the type mapper flattens it to `number` for
-            // signature purposes, but `new` must reach the real class.
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } => new TsIdentifier("Decimal"),
+            // signature purposes, but `new` must reach the real class. The
+            // origin carries the decimal.js import to the collector (issue
+            // #477); without an [ExportFromBcl] the bare name stays.
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } => BclDecimalValueReference(),
             // Dictionary / IDictionary / HashSet / ISet / List / IList lower
             // to their JS runtime equivalents; the type mapper collapses them
             // into IrMap/IrSet/IrArray refs, so we reconstruct the JS class
@@ -1500,6 +1511,17 @@ public static partial class IrToTsExpressionBridge
                 _ => new TsIdentifier("Object"),
             },
         };
+
+    /// <summary>
+    /// The value-position reference to the decimal.js <c>Decimal</c> class,
+    /// carrying the export's origin when the compilation declares the
+    /// <c>[ExportFromBcl]</c> mapping (issue #477): the collector imports
+    /// decimal.js only for this node.
+    /// </summary>
+    internal static TsExpression BclDecimalValueReference() =>
+        IrToTsTypeMapper.BclOverrides?.OriginOf(IrPrimitive.Decimal) is { } origin
+            ? new TsTypeReference("Decimal", origin)
+            : new TsIdentifier("Decimal");
 
     /// <summary>
     /// Lowers <c>new T(a, b, …)</c>. For <c>[PlainObject]</c> targets the
@@ -1612,6 +1634,53 @@ public static partial class IrToTsExpressionBridge
             ne,
             args,
             ordered => new TsNewExpression(MapNewTarget(ne.Type), ordered)
+        );
+    }
+
+    /// <summary>The overload a <c>base.M(...)</c> call was bound to; <c>null</c> for any other call.</summary>
+    private static IrSelectedOverload? BaseOverloadOf(IrCallExpression call) =>
+        call.Target is IrMemberAccess { Target: IrBaseExpression } ? call.Overload : null;
+
+    /// <summary>
+    /// <c>base.M(...)</c> resolved into a dispatched group (spec 013 FR-018):
+    /// <c>super.addX(x)</c>, the base overload's fast path, with Roslyn's
+    /// bound arguments in C#'s evaluation order. <c>null</c> when the call
+    /// has no resolved overload or its declaring type is not visible.
+    /// </summary>
+    private static TsExpression? BaseFastPathCallOf(
+        IrCallExpression call,
+        IReadOnlyList<TsExpression> loweredArgs,
+        IrToTsBridgeContext context
+    )
+    {
+        if (BaseOverloadOf(call) is not { } overload)
+            return null;
+
+        if (TsOverloadCallSites.MethodFastPathOf(overload.Target) is not { } fastPath)
+            return null;
+
+        var ordered = TsEvaluationOrder.Bind(
+            WithoutNullRestArray(call.Arguments, loweredArgs),
+            overload.EvaluationOrder,
+            ConstructionArgumentPrefix
+        );
+
+        var superCall = new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("super"), fastPath),
+            ordered.Arguments,
+            TypeArguments: call.TypeArguments?.Select(argument =>
+                    IrToTsTypeMapper.Map(argument, context.TypeOverrides)
+                )
+                .ToList()
+        );
+
+        if (ordered.Bindings.Count == 0)
+            return superCall;
+
+        return TsImmediateInvocation.Of(
+            ordered.Bindings,
+            [new TsReturnStatement(superCall)],
+            isAsync: false
         );
     }
 
@@ -1781,9 +1850,10 @@ public static partial class IrToTsExpressionBridge
             // wrap as decimal.js Decimal instances so downstream arithmetic
             // (already method-call shaped by the extractor) has the correct
             // receiver type. The extractor passes through the raw source
-            // token text so precision is preserved.
+            // token text so precision is preserved. The origin carries the
+            // decimal.js import to the collector (issue #477).
             IrLiteralKind.Decimal => new TsNewExpression(
-                new TsIdentifier("Decimal"),
+                BclDecimalValueReference(),
                 [new TsStringLiteral(FormatNumericValue(lit.Value))]
             ),
             // BigInteger literals use the native bigint suffix `n`, and so do

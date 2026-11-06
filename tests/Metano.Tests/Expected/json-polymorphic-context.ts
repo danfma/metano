@@ -105,7 +105,7 @@ export class JsonContext extends SerializerContext {
   get intBase(): TypeSpec<IntBase> {
     return this._intBase ??= this.createSpec({
       type: IntBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'IntBase' directly; deserialize it through a polymorphic spec.");
       },
       properties: [],
@@ -156,7 +156,7 @@ export class JsonContext extends SerializerContext {
   get gBaseInt32(): TypeSpec<GBase<number>> {
     return this._gBaseInt32 ??= this.createSpec<GBase<number>>({
       type: GBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'GBase' directly; deserialize it through a polymorphic spec.");
       },
       properties: [
@@ -182,7 +182,7 @@ export class JsonContext extends SerializerContext {
   get aB(): TypeSpec<AB> {
     return this._aB ??= this.createSpec({
       type: AB,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'AB' directly; deserialize it through a polymorphic spec.");
       },
       properties: [
@@ -239,7 +239,7 @@ export class JsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return this._clip ??= this.createSpec({
       type: Clip,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.");
       },
       properties: [
@@ -330,8 +330,8 @@ export class JsonContext extends SerializerContext {
     return this._aMid ??= this.createSpec({
       type: AMid,
       base: this.aB,
-      factory: (p: Record<string, unknown>) => {
-        throw new Error("Cannot deserialize abstract type 'AMid': polymorphic JSON deserialization is not supported yet.");
+      factory: () => {
+        throw new Error("Cannot construct abstract type 'AMid'.");
       },
       properties: [
         {

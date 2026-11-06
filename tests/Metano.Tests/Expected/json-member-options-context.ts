@@ -67,7 +67,7 @@ export class JsonContext extends SerializerContext {
   get account(): TypeSpec<Account> {
     return this._account ??= this.createSpec({
       type: Account,
-      factory: (p: Record<string, unknown>) => new Account(),
+      factory: () => new Account(),
       properties: [
         {
           ts: "name",
@@ -130,7 +130,7 @@ export class JsonContext extends SerializerContext {
   get init(): TypeSpec<Init> {
     return this._init ??= this.createSpec({
       type: Init,
-      factory: (p: Record<string, unknown>) => new Init(),
+      factory: () => new Init(),
       properties: [
         {
           ts: "note",
@@ -204,7 +204,7 @@ export class JsonContext extends SerializerContext {
     return this._dX ??= this.createSpec({
       type: DX,
       base: this.bX,
-      factory: (p: Record<string, unknown>) => new DX(),
+      factory: () => new DX(),
       properties: [
         {
           ts: "y",

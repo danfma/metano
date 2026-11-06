@@ -445,12 +445,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
         var previousInt64Representation = Int64RepresentationScope.Current;
         var previousOverloadClaims = TsOverloadCallSites.Claims;
+        var previousBclOverrides = IrToTsTypeMapper.BclOverrides;
         try
         {
             // STAGING(012k): the scope goes with the switch.
             Int64RepresentationScope.Current = Int64Representation;
             TsOverloadCallSites.Claims = OverloadClaims;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
+            IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
                 || Context.OriginResolver?.Invoke(sym) is not null;
@@ -533,6 +535,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrTypeRefMapper.NamedDelegatePredicate = previousDelegatePredicate;
             Int64RepresentationScope.Current = previousInt64Representation;
             TsOverloadCallSites.Claims = previousOverloadClaims;
+            IrToTsTypeMapper.BclOverrides = previousBclOverrides;
         }
 
         // Generate index.ts barrel files per namespace folder
@@ -810,7 +813,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (type.TypeKind != TypeKind.Interface)
             return false;
         var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
-        IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type));
+        var fastPaths = OverloadClaims.InterfaceFastPathsOf(type);
+
+        TsOverloadClaims.Report(fastPaths.Findings, type, ReportDiagnostic);
+
+        IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type), fastPaths);
         return true;
     }
 

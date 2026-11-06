@@ -66,9 +66,25 @@ internal sealed class TsClassMemberTable
                 break;
 
             case IrMethodDeclaration method:
-                Declare(method.IsStatic, MethodNameOf(method), method.Name);
+                DeclareMethod(method);
                 break;
         }
+    }
+
+    /// <summary>
+    /// A method declares its name, or a dispatched group the name of its
+    /// dispatcher; a group that emits none (overrides only, spec 013 FR-030)
+    /// declares nothing here: its fast paths are claimed by the claim pass.
+    /// </summary>
+    private void DeclareMethod(IrMethodDeclaration method)
+    {
+        if (
+            method.OverloadName is not null
+            && IrMethodGroup.Of(method).DispatcherKind is IrDispatcherKind.None
+        )
+            return;
+
+        Declare(method.IsStatic, MethodNameOf(method), method.Name);
     }
 
     private void DeclareDataMember(
@@ -111,11 +127,12 @@ internal sealed class TsClassMemberTable
     }
 
     /// <summary>
-    /// The name a method declares: an overloaded group's dispatcher keeps the
-    /// camelCased C# name; a single method takes its own naming policy.
+    /// The name a method declares: a dispatched group's dispatcher keeps the
+    /// camelCased C# name, which its fast paths extend; a single method takes
+    /// its own naming policy.
     /// </summary>
     public static string MethodNameOf(IrMethodDeclaration method) =>
-        method.Overloads is { Count: > 0 }
+        method.OverloadName is not null
             ? TypeScriptNaming.ToCamelCaseMember(method.Name)
             : IrToTsNamingPolicy.ToMethodName(method);
 

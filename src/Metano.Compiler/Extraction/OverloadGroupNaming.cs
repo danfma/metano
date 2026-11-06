@@ -14,40 +14,50 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class OverloadGroupNaming
 {
+    /// <summary>
+    /// Records a method group's suffixes on its declarations: each parameter's
+    /// spelling, the overload name and the signature text.
+    /// </summary>
     /// <param name="overloads">The group's methods and their extracted
-    /// declarations, in declaration order.</param>
-    /// <returns>Each method's declaration carrying its parameters' spellings and
-    /// its overload name.</returns>
+    /// declarations.</param>
+    /// <param name="suffixOf">Each method's suffix, as
+    /// <see cref="MethodOverloadGroups"/> computed it (root-anchored).</param>
     public static IReadOnlyDictionary<IMethodSymbol, IrMethodDeclaration> Apply(
-        IReadOnlyList<(IMethodSymbol Symbol, IrMethodDeclaration Declaration)> overloads
-    )
-    {
-        var symbols = overloads.Select(overload => overload.Symbol).ToList();
+        IReadOnlyList<(IMethodSymbol Symbol, IrMethodDeclaration Declaration)> overloads,
+        Func<IMethodSymbol, string> suffixOf
+    ) =>
+        overloads.ToDictionary(
+            overload => overload.Symbol,
+            overload =>
+                overload.Declaration with
+                {
+                    Parameters = WithNamingSpellings(
+                        overload.Symbol,
+                        overload.Declaration.Parameters
+                    ),
+                    OverloadName = new IrOverloadName(suffixOf(overload.Symbol)),
+                    SignatureText = OverloadSignatureText.Of(overload.Symbol),
+                },
+            (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
+        );
 
-        var named = Name(
-            symbols,
-            overloads.Select(overload => overload.Declaration.Parameters).ToList(),
+    /// <summary>
+    /// The suffixes of a group of methods, in the group's order (spec 013
+    /// FR-001), read from the Roslyn symbols: each parameter's C# name and its
+    /// <see cref="IrNamingSpelling"/>. A set the climb cannot separate reports
+    /// <c>MS0003</c> at its later overload (FR-024).
+    /// </summary>
+    public static IReadOnlyList<string> SuffixesOf(IReadOnlyList<IMethodSymbol> symbols)
+    {
+        var suffixes = OverloadNamePolicy.Compute(
+            symbols.Select(SignatureOf).ToList(),
             KindOf(symbols)
         );
 
-        return symbols
-            .Select(
-                (symbol, index) =>
-                    (
-                        Symbol: symbol,
-                        Declaration: overloads[index].Declaration with
-                        {
-                            Parameters = named.Parameters[index],
-                            OverloadName = new IrOverloadName(named.Suffixes[index]),
-                            SignatureText = OverloadSignatureText.Of(symbol),
-                        }
-                    )
-            )
-            .ToDictionary(
-                pair => pair.Symbol,
-                pair => pair.Declaration,
-                (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
-            );
+        foreach (var deadEnd in suffixes.DeadEnds)
+            ReportDeadEnd(deadEnd, symbols, suffixes.Suffixes);
+
+        return suffixes.Suffixes;
     }
 
     /// <summary>
@@ -63,13 +73,7 @@ internal static class OverloadGroupNaming
         IReadOnlyList<(IMethodSymbol Symbol, IrConstructorDeclaration Declaration)> constructors
     )
     {
-        var symbols = constructors.Select(constructor => constructor.Symbol).ToList();
-
-        var named = Name(
-            symbols,
-            constructors.Select(constructor => constructor.Declaration.PlainParameters).ToList(),
-            OverloadGroupKind.Method
-        );
+        var suffixes = SuffixesOf(constructors.Select(constructor => constructor.Symbol).ToList());
 
         return constructors
             .Select(
@@ -78,41 +82,19 @@ internal static class OverloadGroupNaming
                     {
                         Parameters = constructor
                             .Declaration.Parameters.Zip(
-                                named.Parameters[index],
+                                WithNamingSpellings(
+                                    constructor.Symbol,
+                                    constructor.Declaration.PlainParameters
+                                ),
                                 (parameter, spelled) => parameter with { Parameter = spelled }
                             )
                             .ToList(),
-                        OverloadName = new IrOverloadName(named.Suffixes[index]),
+                        OverloadName = new IrOverloadName(suffixes[index]),
                         SignatureText = OverloadSignatureText.Of(constructor.Symbol),
                         DeclarationOrdinal = index,
                     }
             )
             .ToList();
-    }
-
-    /// <summary>
-    /// Spells every overload's parameters and computes the group's suffixes,
-    /// reporting each dead end.
-    /// </summary>
-    private static NamedGroup Name(
-        IReadOnlyList<IMethodSymbol> symbols,
-        IReadOnlyList<IReadOnlyList<IrParameter>> parameters,
-        OverloadGroupKind kind
-    )
-    {
-        var spelled = symbols
-            .Select((symbol, index) => WithNamingSpellings(symbol, parameters[index]))
-            .ToList();
-
-        var suffixes = OverloadNamePolicy.Compute(
-            spelled.Select((overload, index) => SignatureOf(symbols[index], overload)).ToList(),
-            kind
-        );
-
-        foreach (var deadEnd in suffixes.DeadEnds)
-            ReportDeadEnd(deadEnd, symbols, suffixes.Suffixes);
-
-        return new NamedGroup(spelled, suffixes.Suffixes);
     }
 
     private static IReadOnlyList<IrParameter> WithNamingSpellings(
@@ -138,12 +120,14 @@ internal static class OverloadGroupNaming
             .ToList();
     }
 
-    private static OverloadSignature SignatureOf(
-        IMethodSymbol symbol,
-        IReadOnlyList<IrParameter> parameters
-    ) =>
+    private static OverloadSignature SignatureOf(IMethodSymbol symbol) =>
         new(
-            parameters,
+            symbol
+                .Parameters.Select(parameter => new OverloadParameter(
+                    parameter.Name,
+                    IrNamingSpellingExtractor.Extract(parameter)
+                ))
+                .ToList(),
             symbol.MethodKind == MethodKind.Conversion
                 ? IrNamingSpellingExtractor.Extract(symbol.ReturnType)
                 : null
@@ -195,10 +179,4 @@ internal static class OverloadGroupNaming
 
         return string.Join(", ", quoted.Take(quoted.Count - 1)) + $" and {quoted[^1]}";
     }
-
-    /// <summary>The spelled parameters and the suffix of each overload of a group.</summary>
-    private sealed record NamedGroup(
-        IReadOnlyList<IReadOnlyList<IrParameter>> Parameters,
-        IReadOnlyList<string> Suffixes
-    );
 }

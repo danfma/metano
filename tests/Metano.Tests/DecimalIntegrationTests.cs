@@ -18,7 +18,7 @@ public class DecimalIntegrationTests
         );
 
         var output = result["price.ts"];
-        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\"");
+        await Assert.That(output).Contains("import type { Decimal } from \"decimal.js\"");
         await Assert.That(output).Contains("amount: Decimal");
     }
 

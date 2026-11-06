@@ -47,6 +47,10 @@ public sealed class TsOverloadClaimsRegistry(
     private readonly ConcurrentDictionary<INamedTypeSymbol, Lazy<TsOverloadClaims>> _claims = new(
         SymbolEqualityComparer.Default
     );
+    private readonly ConcurrentDictionary<
+        INamedTypeSymbol,
+        Lazy<TsInterfaceFastPaths>
+    > _interfaceClaims = new(SymbolEqualityComparer.Default);
 
     /// <summary>
     /// Whether a class needs a claim pass: it declares an overload group, or
@@ -54,6 +58,33 @@ public sealed class TsOverloadClaimsRegistry(
     /// </summary>
     internal static bool AppliesTo(IrClassDeclaration ir) =>
         HasOverloadGroup(ir) || IrToTsClassBridge.BuildExtends(ir) is TsNamedType;
+
+    /// <summary>
+    /// The emitted fast-path name of a root overload (spec 013 FR-025): a
+    /// class method's as its class claimed it, an interface member's as its
+    /// interface declares it; <c>null</c> when this compilation cannot see
+    /// the declaring type.
+    /// </summary>
+    internal string? RootFastPathOf(IrOverloadRef root)
+    {
+        if (IrTypeKeys.Find(root.DeclaringType, _context.Compilation) is not { } type)
+            return null;
+
+        return type.TypeKind == TypeKind.Interface
+            ? InterfaceFastPathsOf(type).NameAt(root.MemberName, root.Ordinal)
+            : For(type).FastPathNameAt(root.MemberName, root.Ordinal);
+    }
+
+    /// <summary>The fast-path names of an interface, computed on first use.</summary>
+    internal TsInterfaceFastPaths InterfaceFastPathsOf(INamedTypeSymbol type) =>
+        _interfaceClaims
+            .GetOrAdd(
+                type.OriginalDefinition,
+                declaration => new Lazy<TsInterfaceFastPaths>(() =>
+                    TsInterfaceFastPaths.Of(InterfaceShapeOf(declaration))
+                )
+            )
+            .Value;
 
     /// <summary>
     /// The selector and factory names of the constructor overload a call site
@@ -83,13 +114,15 @@ public sealed class TsOverloadClaimsRegistry(
                 ir,
                 _context.ResolveTsName(type),
                 InheritedStaticsOf(type, ir),
+                InheritedInstancesOf(type, ir),
                 constructor =>
                     IrToTsConstructorFactoryBridge.SignatureOf(
                         ir,
                         constructor,
                         IsWidened(type, constructor),
                         _typeOverrides
-                    )
+                    ),
+                RootFastPathOf
             )
         );
     }
@@ -111,6 +144,26 @@ public sealed class TsOverloadClaimsRegistry(
 
         return IrEmissionNormalizer.Normalize(IrClassExtractor.Extract(type, extraction), type);
     }
+
+    private IrInterfaceDeclaration InterfaceShapeOf(INamedTypeSymbol type)
+    {
+        using var _ = ExtractionDiagnostics.Suppress();
+
+        return IrInterfaceExtractor.Extract(type, _context.Extraction with { Compilation = null });
+    }
+
+    /// <summary>
+    /// The instance side the class inherits from its emitted base, of every
+    /// visibility (claim step 7); nothing when the base is not an emitted
+    /// class.
+    /// </summary>
+    private IReadOnlyDictionary<string, TsClaimedMember> InheritedInstancesOf(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir
+    ) =>
+        IrToTsClassBridge.BuildExtends(ir) is TsNamedType && EmittedBaseOf(type, ir) is { } baseType
+            ? For(baseType).Instances
+            : NothingInherited;
 
     /// <summary>
     /// The static side the class inherits from its emitted base, rewritten
@@ -175,5 +228,7 @@ public sealed class TsOverloadClaimsRegistry(
 
     private static bool HasOverloadGroup(IrClassDeclaration ir) =>
         ir.Constructor is { Overloads.Count: > 0 }
-        || (ir.Members ?? []).Any(member => member is IrMethodDeclaration { Overloads.Count: > 0 });
+        || (ir.Members ?? []).Any(member =>
+            member is IrMethodDeclaration { OverloadName: not null }
+        );
 }

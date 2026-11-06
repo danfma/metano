@@ -39,6 +39,14 @@ public static class IrBinaryOpExtensions
     public static bool IsBitwise(this IrBinaryOp op) =>
         op is IrBinaryOp.BitwiseAnd or IrBinaryOp.BitwiseOr or IrBinaryOp.BitwiseXor;
 
+    /// <summary>Whether the operator is an integer <c>/</c> or a <c>%</c>.</summary>
+    public static bool IsDivisionOrRemainder(this IrBinaryOp op) =>
+        op is IrBinaryOp.IntegerDivide or IrBinaryOp.Modulo;
+
+    /// <summary>Whether the operator is <c>&lt;&lt;</c>, <c>&gt;&gt;</c> or <c>&gt;&gt;&gt;</c>.</summary>
+    public static bool IsShift(this IrBinaryOp op) =>
+        op is IrBinaryOp.LeftShift or IrBinaryOp.RightShift or IrBinaryOp.UnsignedRightShift;
+
     /// <summary>
     /// Whether the operator is <see cref="IrBinaryOp.BooleanAnd"/>,
     /// <see cref="IrBinaryOp.BooleanOr"/> or <see cref="IrBinaryOp.BooleanXor"/>.

@@ -197,8 +197,29 @@ public static class ExplicitImplementationLowering
             .Where(other => IsDeclaredMember(other, target))
             .FirstOrDefault(other =>
                 ClaimsNameOutsideInterface(other, name, interfaceMember.ContainingType, target)
+                && !IsDistinctOverloadOfGroup(other, interfaceMember, target)
             );
     }
+
+    /// <summary>
+    /// A class method beside an explicit implementation of an interface
+    /// overload group, with another signature: both are overloads of one
+    /// dispatched group, each under its own fast path, behind one dispatcher
+    /// that covers them all (spec 013 DECIDED-31), so it claims nothing. A
+    /// method with the explicit member's signature still does.
+    /// </summary>
+    private static bool IsDistinctOverloadOfGroup(
+        ISymbol other,
+        ISymbol interfaceMember,
+        TargetLanguage? target
+    ) =>
+        other is IMethodSymbol { MethodKind: MethodKind.Ordinary } method
+        && interfaceMember is IMethodSymbol interfaceMethod
+        && IsInOverloadGroup(interfaceMethod, target)
+        && !SymbolHelper.HasSameParameters(method, interfaceMethod);
+
+    private static bool IsInOverloadGroup(IMethodSymbol interfaceMethod, TargetLanguage? target) =>
+        InterfaceOverloadGroup.IsDispatched(interfaceMethod, target);
 
     private static bool ClaimsNameOutsideInterface(
         ISymbol other,

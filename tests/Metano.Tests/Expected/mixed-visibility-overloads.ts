@@ -48,11 +48,12 @@ export class Ledger {
     return new Ledger(Ledger.byLedgerName, name);
   }
 
-  private postAmountMemo(amount: number, memo: string): number {
+  /** @internal */
+  postAmountMemo(amount: number, memo: string): number {
     return amount + memo.length;
   }
 
-  private postAmount(amount: number): number {
+  postAmount(amount: number): number {
     return amount;
   }
 
@@ -71,11 +72,11 @@ export class Ledger {
     throw new Error("No matching overload for post");
   }
 
-  private auditAmount(amount: number): number {
+  auditAmount(amount: number): number {
     return amount;
   }
 
-  private auditMemo(memo: string): number {
+  protected auditMemo(memo: string): number {
     return memo.length;
   }
 

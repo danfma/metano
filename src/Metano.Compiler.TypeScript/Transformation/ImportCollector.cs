@@ -36,6 +36,15 @@ public sealed class ImportCollector(
         irRuntimeRequirements;
 
     /// <summary>
+    /// The emitted file being collected for, set at the start of
+    /// <see cref="Collect"/> so the origin-clash diagnostics name it.
+    /// </summary>
+    private string _currentFileName = "";
+
+    /// <summary>Names whose import clash MS0070 already reported, one per file.</summary>
+    private readonly HashSet<string> _namesWithReportedClash = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Identifiers that surface in generated TS but never need an
     /// <c>import</c> line: TypeScript built-ins (<c>Map</c>, <c>Set</c>,
     /// <c>unknown</c>, …), JavaScript globals (<c>console</c>,
@@ -100,6 +109,7 @@ public sealed class ImportCollector(
             linqPipeHelpers,
             ownersByModuleExport
         );
+        _currentFileName = GetFileName(currentType);
         CollectReferencedTypeNames(statements, sink);
 
         // C# `using X = Y;` aliases substitute the canonical type name with
@@ -327,22 +337,6 @@ public sealed class ImportCollector(
             )
                 continue;
 
-            // BCL export mapping (e.g., decimal → Decimal from "decimal.js").
-            // Not bucketed: each BCL mapping can land on a distinct external package,
-            // and the cross-package merge strategy doesn't apply here.
-            var bclEntry = _context.BclExportMap.Values.FirstOrDefault(e =>
-                e.ExportedName == typeName
-            );
-            if (
-                bclEntry is not null
-                && bclEntry.FromPackage.Length > 0
-                && importedNames.Add(typeName)
-            )
-            {
-                imports.Add(new TsImport([bclEntry.ExportedName], bclEntry.FromPackage));
-                continue;
-            }
-
             // External import mapping ([Import] attribute, with optional AsDefault).
             // Not bucketed: default imports never merge (`import Foo from "..."` is
             // one-name-only) and named externals come from arbitrary modules.
@@ -488,6 +482,23 @@ public sealed class ImportCollector(
             if (!_context.TranspilableTypes.TryGetValue(typeName, out var referencedRef))
                 continue;
 
+            // An origin-carrying import (a BCL export or a cross-package
+            // type) and a project type of the same emitted name collide on
+            // the one identifier: both import lines bind it, and every bare
+            // reference is ambiguous. Loud diagnostic instead of the silent
+            // single-module binding the name match produced (issue #477).
+            // Even a co-located [EmitInFile] type collides — the bare name
+            // binds the local declaration too.
+            if (
+                crossPackageOrigins.TryGetValue(typeName, out var collidingOrigin)
+                && _namesWithReportedClash.Add(typeName)
+            )
+                ReportImportedNameClash(
+                    typeName,
+                    $"an import from '{collidingOrigin.PackageName}'",
+                    "a project type"
+                );
+
             // Skip types co-located in the same file via [EmitInFile] — they're
             // declared locally in the merged source, no import needed.
             if (referencedRef.Namespace == currentNs && referencedRef.FileName == currentFileName)
@@ -622,6 +633,54 @@ public sealed class ImportCollector(
                     + "override on one of the members so both can be imported."
             )
         );
+
+    /// <summary>
+    /// MS0070: one emitted name binds two different imports — two origins
+    /// staged for the same identifier, or an origin and a project type of
+    /// the same name. The bare references cannot tell the two bindings
+    /// apart and one of them is wrong at runtime. Rename one of the two
+    /// with <c>[Name]</c> (or the BCL export's <c>ExportedName</c>); the
+    /// alias emission for both cases is #504 (issue #477).
+    /// </summary>
+    private void ReportImportedNameClash(string name, string firstBinding, string secondBinding) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.ImportedNameClash,
+                $"'{name}' names both {firstBinding} and {secondBinding} in '{_currentFileName}'; "
+                    + "the bare name is ambiguous. Rename one of the two with [Name(\"...\")]."
+            )
+        );
+
+    /// <summary>
+    /// Stages <paramref name="origin"/> for <paramref name="name"/>, reporting
+    /// MS0070 when the name already stages a different package or sub-path:
+    /// both import lines would bind the one identifier. The first origin
+    /// staged keeps the binding (issue #477).
+    /// </summary>
+    private void StageOrigin(
+        Dictionary<string, TsTypeOrigin> crossPackageOrigins,
+        string name,
+        TsTypeOrigin origin
+    )
+    {
+        if (crossPackageOrigins.TryGetValue(name, out var existing))
+        {
+            if (
+                (existing.PackageName != origin.PackageName || existing.SubPath != origin.SubPath)
+                && _namesWithReportedClash.Add(name)
+            )
+                ReportImportedNameClash(
+                    name,
+                    $"an import from '{existing.PackageName}'",
+                    $"an import from '{origin.PackageName}'"
+                );
+
+            return;
+        }
+
+        crossPackageOrigins[name] = origin;
+    }
 
     private static IReadOnlyDictionary<string, string>? BuildExternalImportAliases(
         IrExternalImport ext
@@ -939,7 +998,7 @@ public sealed class ImportCollector(
                 // resolution loop to try (and fail) to find a local type by that name.
                 if (named.Origin is not null)
                 {
-                    crossPackageOrigins[RootSegment(named.Name)] = named.Origin;
+                    StageOrigin(crossPackageOrigins, RootSegment(named.Name), named.Origin);
                 }
                 else
                 {
@@ -1080,7 +1139,7 @@ public sealed class ImportCollector(
                 // resolution. A value position needs the runtime binding, never a
                 // type-only import.
                 var typeRefRoot = RootSegment(typeRef.Name);
-                crossPackageOrigins[typeRefRoot] = typeRef.Origin;
+                StageOrigin(crossPackageOrigins, typeRefRoot, typeRef.Origin);
                 valueNames.Add(typeRefRoot);
                 break;
             case TsModuleExportReference exportReference:

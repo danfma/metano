@@ -7,16 +7,18 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// The TypeScript claim pass of spec 013 (FR-004, DECIDED-18, contracts/naming.md
 /// § Claim pass) over one class: resolves the candidate names the core's
 /// naming policy derived from each overload's suffix against the class's own
-/// static and instance tables and the static side it inherits, in one order —
-/// user members and dispatchers (<see cref="TsClassMemberTable"/>), selectors,
-/// factories, method fast paths, operator fast paths, then the inherited
-/// statics. A taken name takes <c>$</c> until free and reports <c>MS0067</c>;
+/// static and instance tables and the sides it inherits, in one order — user
+/// members and dispatchers (<see cref="TsClassMemberTable"/>), selectors,
+/// factories, method fast paths, operator fast paths, the inherited instance
+/// members, then the inherited statics. An anchored overload takes its root's
+/// name (FR-025) and claims nothing. A taken name takes <c>$</c> until free
+/// and reports <c>MS0067</c>;
 /// a constructor overload's selector and factory are claimed per suffix, so
 /// they stay aligned (<c>fromCents$</c> / <c>byMoneyCents$</c>). A factory that
 /// meets an inherited factory keeps its name when FR-026 allows it
 /// (<see cref="TsFactoryInheritance"/>), otherwise it is qualified with the
-/// type name. A user static that meets an inherited factory reports
-/// <c>MS0068</c> (FR-034).
+/// type name. A user static that meets an inherited factory, and a user
+/// member that meets an inherited fast path, report <c>MS0068</c> (FR-034).
 /// </summary>
 internal sealed class TsOverloadClaimPass
 {
@@ -28,7 +30,7 @@ internal sealed class TsOverloadClaimPass
     private readonly Dictionary<string, TsClaimedMember> _statics;
     private readonly Dictionary<string, TsClaimedMember> _instances;
     private readonly Dictionary<int, TsConstructorOverloadNames> _constructors = [];
-    private readonly Dictionary<TsFastPathKey, string> _fastPaths = [];
+    private readonly Dictionary<TsMethodOverloadKey, TsMethodOverloadNames> _methods = [];
     private readonly List<TsClaimFinding> _findings = [];
 
     private TsOverloadClaimPass(TsClaimPassInput input)
@@ -41,6 +43,9 @@ internal sealed class TsOverloadClaimPass
 
     private IReadOnlyDictionary<string, TsClaimedMember> Inherited => _input.InheritedStatics;
 
+    private IReadOnlyDictionary<string, TsClaimedMember> InheritedInstances =>
+        _input.InheritedInstances;
+
     private string TypeName => _input.TypeName;
 
     public static TsOverloadClaims Run(TsClaimPassInput input) =>
@@ -49,12 +54,51 @@ internal sealed class TsOverloadClaimPass
     private TsOverloadClaims Claim()
     {
         ReportRedeclaredFactories();
+        ReportHijackedFastPaths();
         ClaimConstructors();
         ClaimMethodFastPaths();
         ClaimOperatorFastPaths();
 
-        return new TsOverloadClaims(_constructors, _fastPaths, StaticSide(), _findings);
+        return new TsOverloadClaims(
+            _constructors,
+            _methods,
+            new TsClaimSides(SideOf(Inherited, _statics), SideOf(InheritedInstances, _instances)),
+            _findings
+        );
     }
+
+    /// <summary>
+    /// <c>MS0068</c> reason 1: a user member whose name is an inherited fast
+    /// path would override it, and the inherited dispatcher, which calls
+    /// <c>this.&lt;fastPath&gt;</c>, would run the user member.
+    /// </summary>
+    private void ReportHijackedFastPaths()
+    {
+        foreach (var (name, declaredBy) in _userMembers.Instances)
+        {
+            if (InheritedFastPathAt(name) is { } fastPath)
+                ReportHijack(declaredBy, name, fastPath);
+        }
+    }
+
+    private TsClaimedMember? InheritedFastPathAt(string name) =>
+        InheritedInstances.GetValueOrDefault(name)
+            is { Kind: TsClaimedMemberKind.FastPath } fastPath
+            ? fastPath
+            : null;
+
+    private void ReportHijack(string declaredBy, string name, TsClaimedMember fastPath) =>
+        _findings.Add(
+            new TsClaimFinding(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.OverloadFastPathHijacked,
+                $"'{_input.Ir.Name}.{declaredBy}' would override the generated fast path "
+                    + $"'{name}' of '{fastPath.DeclaredBy}.{fastPath.Declaration}'; rename the "
+                    + "member, or rename the root overload's parameter or pin it with [Name] "
+                    + "(spec 013 FR-034).",
+                new TsClaimSite(declaredBy)
+            )
+        );
 
     /// <summary>
     /// <c>MS0068</c> reason 2: a user static whose name is an inherited
@@ -244,11 +288,11 @@ internal sealed class TsOverloadClaimPass
         );
     }
 
-    /// <summary>Step 5: the fast paths of each overloaded method group.</summary>
+    /// <summary>Step 5: the fast paths of each dispatched method group.</summary>
     private void ClaimMethodFastPaths()
     {
         foreach (var group in OverloadGroups(isOperator: false))
-            ClaimFastPaths(group, TsClassMemberTable.MethodNameOf(group));
+            ClaimFastPaths(group, TsClassMemberTable.MethodNameOf(group.Primary));
     }
 
     /// <summary>Step 6: the fast paths of each overloaded operator group.</summary>
@@ -256,50 +300,184 @@ internal sealed class TsOverloadClaimPass
     {
         foreach (var group in OverloadGroups(isOperator: true))
         {
-            if (TsClassMemberTable.OperatorNameOf(group) is { } operatorName)
+            if (TsClassMemberTable.OperatorNameOf(group.Primary) is { } operatorName)
                 ClaimFastPaths(group, TsClassMemberTable.OperatorDispatcherName(operatorName));
         }
     }
 
-    private IEnumerable<IrMethodDeclaration> OverloadGroups(bool isOperator) =>
+    private IEnumerable<IrMethodGroup> OverloadGroups(bool isOperator) =>
         (_input.Ir.Members ?? [])
             .OfType<IrMethodDeclaration>()
             .Where(method =>
-                method.Overloads is { Count: > 0 } && method.Semantics.IsOperator == isOperator
-            );
+                method.OverloadName is not null && method.Semantics.IsOperator == isOperator
+            )
+            .Select(IrMethodGroup.Of);
 
     /// <summary>
-    /// Claims one fast path per overload in its group's table; a static fast
-    /// path also against the inherited static side, which TypeScript checks
-    /// (TS2417).
+    /// Names one fast path per overload of a group: an anchored overload its
+    /// root's, the others claimed in its group's table — a static fast path
+    /// also against the inherited static side (TS2417), an instance one
+    /// against the inherited instance members of every visibility (step 7,
+    /// TS2416).
     /// </summary>
-    private void ClaimFastPaths(IrMethodDeclaration group, string baseName)
+    private void ClaimFastPaths(IrMethodGroup group, string baseName)
     {
-        var isStatic = group.IsStatic;
-
-        foreach (var overload in new[] { group }.Concat(group.Overloads ?? []))
+        // The root names first: an own candidate never takes a name an
+        // anchored overload must keep.
+        foreach (var overload in group.Members)
         {
-            var suffix = DispatchedOverload.SuffixOf(overload);
-            var candidate = baseName + suffix;
-            var firstCollision = FastPathCollisionOf(candidate, isStatic);
+            if (overload.Anchor is not { } anchor)
+                continue;
 
-            var claimed = TsFreeName.FirstFree(
-                candidate,
-                name => HolderOfFastPath(name, isStatic) is not null
-            );
+            var fastPath = AnchoredNameOf(overload, anchor, baseName);
 
-            TableOf(isStatic)[claimed] = new TsClaimedMember(
-                TsClaimedMemberKind.FastPath,
-                $"the fast path of '{DispatchedOverload.SignatureOf(overload)}'",
-                TypeName
-            );
-
-            _fastPaths[new TsFastPathKey(isStatic, baseName, suffix)] = claimed;
-
-            if (firstCollision is not null)
-                ReportRenamedFastPath(overload, firstCollision, claimed);
+            RecordFastPath(overload, fastPath, RootNamesOf(anchor, fastPath));
         }
+
+        foreach (var overload in group.Members.Where(member => member.Anchor is null))
+            RecordFastPath(overload, ClaimOwnFastPath(overload, baseName), []);
     }
+
+    /// <summary>
+    /// The root's emitted name (FR-025): it is meant to override or
+    /// implement, so it claims nothing. A user member of the class that holds
+    /// it reports <c>MS0068</c>.
+    /// </summary>
+    private string AnchoredNameOf(
+        IrMethodDeclaration overload,
+        IrOverloadAnchor anchor,
+        string baseName
+    )
+    {
+        var name =
+            _input.RootFastPathOf(anchor.Root) ?? baseName + DispatchedOverload.SuffixOf(overload);
+
+        if (_userMembers.Instances.GetValueOrDefault(name) is { } declaredBy)
+        {
+            ReportHijack(
+                declaredBy,
+                name,
+                new TsClaimedMember(
+                    TsClaimedMemberKind.FastPath,
+                    $"the fast path of '{DispatchedOverload.SignatureOf(overload)}'",
+                    TypeName,
+                    Declaration: DispatchedOverload.SignatureOf(overload)
+                )
+            );
+        }
+
+        return name;
+    }
+
+    private string ClaimOwnFastPath(IrMethodDeclaration overload, string baseName)
+    {
+        var isStatic = overload.IsStatic;
+        var candidate = baseName + DispatchedOverload.SuffixOf(overload);
+        var firstCollision = FastPathCollisionOf(candidate, isStatic);
+
+        var claimed = TsFreeName.FirstFree(
+            candidate,
+            name => HolderOfFastPath(name, isStatic) is not null
+        );
+
+        if (firstCollision is not null)
+            ReportRenamedFastPath(overload, firstCollision, claimed);
+
+        return claimed;
+    }
+
+    /// <summary>
+    /// The name an anchored overload declares for each of its roots: the fast
+    /// path for its root, the further roots' names (forwarders when they
+    /// differ), every root kept, so a name two roots share is judged against
+    /// both.
+    /// </summary>
+    private IReadOnlyList<TsRootName> RootNamesOf(IrOverloadAnchor anchor, string fastPath) =>
+        (anchor.FurtherRoots ?? [])
+            .Select(root => (Root: root, Name: _input.RootFastPathOf(root)))
+            .Where(entry => entry.Name is not null)
+            .Select(entry => new TsRootName(entry.Root, entry.Name!))
+            .Prepend(new TsRootName(anchor.Root, fastPath))
+            .ToList();
+
+    private void RecordFastPath(
+        IrMethodDeclaration overload,
+        string fastPath,
+        IReadOnlyList<TsRootName> rootNames
+    )
+    {
+        var signature = DispatchedOverload.SignatureOf(overload);
+        var table = TableOf(overload.IsStatic);
+
+        // An own root's fast path has no root names; an anchored one's is
+        // also the first of them. Either way it comes first.
+        var names = rootNames
+            .Select(rootName => rootName.Name)
+            .Prepend(fastPath)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var overriddenNames = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var name in names)
+        {
+            if (InheritedFastPathMetBy(overload, name) is not { } inherited)
+                continue;
+
+            if (ReimplementsAnyRootNamed(overload, rootNames, name))
+                overriddenNames.Add(name);
+            else
+                ReportHijack(overload.Name, name, inherited);
+        }
+
+        foreach (var name in names)
+        {
+            table[name] = new TsClaimedMember(
+                TsClaimedMemberKind.FastPath,
+                $"the fast path of '{signature}'",
+                TypeName,
+                Declaration: signature
+            );
+        }
+
+        _methods[new TsMethodOverloadKey(overload.Name, overload.DeclarationOrdinal)] =
+            new TsMethodOverloadNames(fastPath, names.Skip(1).ToList(), overriddenNames);
+    }
+
+    /// <summary>
+    /// The inherited fast path an interface implementation's name for one of
+    /// its roots meets; <c>null</c> when it meets none. A re-implementation of
+    /// that root (a <c>new</c> method, an explicit re-implementation,
+    /// <see cref="IrOverloadAnchor.ReimplementedRoots"/>) overrides it in
+    /// TypeScript; any other overload of that name is one the
+    /// anchored name cannot move from, <c>MS0068</c>. A constructed root's
+    /// runtime dispatcher overrides the inherited name itself (FR-036).
+    /// </summary>
+    private TsClaimedMember? InheritedFastPathMetBy(IrMethodDeclaration overload, string name)
+    {
+        if (overload is not { Anchor.Kind: IrOverloadAnchorKind.Implementation, IsStatic: false })
+            return null;
+
+        if (_input.Ir.ConstructedRootOf(overload) is not null)
+            return null;
+
+        return InheritedFastPathAt(name);
+    }
+
+    /// <summary>
+    /// Whether the base already implements one of the roots that produce
+    /// <paramref name="name"/>: its member under that name is then the base's
+    /// fast path for that root, which the overload overrides.
+    /// </summary>
+    private static bool ReimplementsAnyRootNamed(
+        IrMethodDeclaration overload,
+        IReadOnlyList<TsRootName> rootNames,
+        string name
+    ) =>
+        rootNames.Any(rootName =>
+            rootName.Name == name
+            && (overload.Anchor?.ReimplementedRoots ?? []).Contains(rootName.Root)
+        );
 
     private TsCollision? FastPathCollisionOf(string name, bool isStatic) =>
         HolderOfFastPath(name, isStatic) is { } holder
@@ -321,8 +499,8 @@ internal sealed class TsOverloadClaimPass
 
     /// <summary>
     /// <c>MS0067</c>. Its reason — 1 for a user member, 2 for an earlier
-    /// synthesized name — is the holder the message names, not a separate
-    /// field.
+    /// synthesized name, 3 for an inherited instance member — is the holder
+    /// the message names, not a separate field.
     /// </summary>
     private void ReportRename(string message, TsClaimSite site) =>
         _findings.Add(
@@ -337,7 +515,7 @@ internal sealed class TsOverloadClaimPass
     private TsClaimedMember? HolderOfFastPath(string name, bool isStatic) =>
         isStatic
             ? HolderOfStatic(name, includeInherited: true)
-            : _instances.GetValueOrDefault(name);
+            : _instances.GetValueOrDefault(name) ?? InheritedInstances.GetValueOrDefault(name);
 
     private TsClaimedMember? HolderOfStatic(string name, bool includeInherited) =>
         _statics.GetValueOrDefault(name)
@@ -357,12 +535,15 @@ internal sealed class TsOverloadClaimPass
             ? holder.Description
             : $"{holder.Description} inherited from '{holder.DeclaredBy}'";
 
-    /// <summary>The inherited static side under the class's own statics.</summary>
-    private Dictionary<string, TsClaimedMember> StaticSide()
+    /// <summary>An inherited side under the class's own members.</summary>
+    private static Dictionary<string, TsClaimedMember> SideOf(
+        IReadOnlyDictionary<string, TsClaimedMember> inherited,
+        Dictionary<string, TsClaimedMember> own
+    )
     {
-        var side = new Dictionary<string, TsClaimedMember>(Inherited, StringComparer.Ordinal);
+        var side = new Dictionary<string, TsClaimedMember>(inherited, StringComparer.Ordinal);
 
-        foreach (var (name, member) in _statics)
+        foreach (var (name, member) in own)
             side[name] = member;
 
         return side;
@@ -397,12 +578,19 @@ internal sealed class TsOverloadClaimPass
 /// <summary>
 /// What the claim pass of one class reads: its IR, its emitted name, the
 /// static side it inherits (already rewritten into its own type parameters,
-/// <see cref="TsFactoryInheritance.Inherit"/>) and the factory signature of
-/// each constructor overload.
+/// <see cref="TsFactoryInheritance.Inherit"/>), the instance side it inherits,
+/// the factory signature of each constructor overload and the emitted
+/// fast-path name of a root overload (<c>null</c> when this compilation
+/// cannot see its declaring type).
 /// </summary>
 internal sealed record TsClaimPassInput(
     IrClassDeclaration Ir,
     string TypeName,
     IReadOnlyDictionary<string, TsClaimedMember> InheritedStatics,
-    Func<IrConstructorDeclaration, TsFactorySignature> FactorySignatureOf
+    IReadOnlyDictionary<string, TsClaimedMember> InheritedInstances,
+    Func<IrConstructorDeclaration, TsFactorySignature> FactorySignatureOf,
+    Func<IrOverloadRef, string?> RootFastPathOf
 );
+
+/// <summary>The name an overload declares for one of its roots.</summary>
+internal sealed record TsRootName(IrOverloadRef Root, string Name);

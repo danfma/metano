@@ -126,7 +126,10 @@ public static class IrClassExtractor
             TypeParameters: typeParameters,
             Attributes: IrAttributeExtractor.Extract(type),
             EqualityMembers: IrRecordEqualityMemberExtractor.Extract(type, originResolver, target)
-        );
+        )
+        {
+            ConstructedRoots = MultiplyConstructedInterfaces.RootsOf(type, context),
+        };
     }
 
     private static T ExtractWithCaptureContext<T>(
@@ -382,7 +385,6 @@ public static class IrClassExtractor
         // a diagnostic; if each sibling shows up as a separate member the
         // warning never fires and the output emits duplicate methods.
         var result = new List<IrMemberDeclaration>();
-        var methodGroups = new Dictionary<string, List<IMethodSymbol>>(StringComparer.Ordinal);
 
         foreach (var member in type.GetMembers())
         {
@@ -410,19 +412,6 @@ public static class IrClassExtractor
                     result.Add(DeclareUnderInterfaceName(property, prop));
                     break;
 
-                case IMethodSymbol method when IsUserMethod(method):
-                    if (SymbolHelper.IsInlinedAtCallSite(method))
-                        break;
-
-                    var groupKey = OverloadGroupKey(method);
-                    if (!methodGroups.TryGetValue(groupKey, out var list))
-                    {
-                        list = new List<IMethodSymbol>();
-                        methodGroups[groupKey] = list;
-                    }
-                    list.Add(method);
-                    break;
-
                 case IEventSymbol evt:
                     result.Add(
                         DeclareUnderInterfaceName(ExtractEvent(evt, context.OriginResolver), evt)
@@ -431,67 +420,109 @@ public static class IrClassExtractor
             }
         }
 
-        foreach (var group in methodGroups.Values)
-        {
-            // Pick the widest overload as the primary to match the dispatcher
-            // convention (most specific arity first); siblings become the
-            // Overloads payload.
-            var widestFirst = group.OrderByDescending(m => m.Parameters.Length).ToList();
-
-            if (widestFirst.Count == 1)
-            {
-                result.Add(ExtractMethod(widestFirst[0], context));
-                continue;
-            }
-
-            var named = ExtractNamedOverloads(group, widestFirst, context);
-            result.Add(named[0] with { Overloads = named.Skip(1).ToList() });
-        }
+        // Methods fold onto one primary IrMethodDeclaration per group, its
+        // siblings in Overloads: backends that don't support overloading
+        // (Dart) rely on the Overloads slot to drive a diagnostic.
+        foreach (var group in MethodOverloadGroups.Of(type, target))
+            result.Add(ExtractGroup(type, group, context));
 
         return result;
     }
 
     /// <summary>
-    /// Extracts an overload group widest overload first, as before, and names
-    /// it in declaration order (<see cref="OverloadGroupNaming"/>, spec 013
-    /// FR-006), returning the named declarations widest first.
+    /// Extracts one method group. A single method that is its own root is an
+    /// ordinary method. A dispatched group is named (spec 013 FR-001, FR-025)
+    /// and returned widest overload first, the primary carrying the others and
+    /// the overloads of the dispatcher it inherits.
     /// </summary>
-    private static List<IrMethodDeclaration> ExtractNamedOverloads(
-        List<IMethodSymbol> declarationOrder,
-        List<IMethodSymbol> widestFirst,
+    private static IrMethodDeclaration ExtractGroup(
+        INamedTypeSymbol type,
+        MethodOverloadGroup group,
         IrExtractionContext context
     )
     {
-        var extracted = widestFirst.ToDictionary(
-            method => method,
-            method => ExtractMethod(method, context),
-            (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
-        );
+        if (!group.IsDispatched)
+            return ExtractMethod(group.Members[0].Symbol, context);
 
-        var named = OverloadGroupNaming.Apply(
-            declarationOrder.Select(method => (method, extracted[method])).ToList()
-        );
+        var named = ExtractNamedOverloads(type, group, context);
 
-        return widestFirst.Select(method => named[method]).ToList();
+        var widestFirst = group
+            .Members.OrderByDescending(member => member.Symbol.Parameters.Length)
+            .Select(member => named[member.Symbol])
+            .ToList();
+
+        return widestFirst[0] with
+        {
+            Overloads = widestFirst.Count > 1 ? widestFirst.Skip(1).ToList() : null,
+            InheritedOverloads = group
+                .InheritedOverloads?.Select(overload =>
+                    DeclareUnderInterfaceName(
+                        IrMethodExtractor.ExtractForeignSignature(overload, context),
+                        overload
+                    )
+                )
+                .ToList(),
+        };
     }
 
-    private static bool IsUserMethod(IMethodSymbol method) =>
-        method.MethodKind
-            is MethodKind.Ordinary
-                or MethodKind.UserDefinedOperator
-                or MethodKind.Conversion
-                or MethodKind.ExplicitInterfaceImplementation;
-
     /// <summary>
-    /// Overloads share a group by C# name; an explicit implementation groups under
-    /// its interface member's name, the name it is declared with.
+    /// Extracts a group's overloads and records, on each, its suffix, its
+    /// declaration ordinal and the root it is anchored on.
     /// </summary>
-    private static string OverloadGroupKey(IMethodSymbol method)
+    private static IReadOnlyDictionary<IMethodSymbol, IrMethodDeclaration> ExtractNamedOverloads(
+        INamedTypeSymbol type,
+        MethodOverloadGroup group,
+        IrExtractionContext context
+    )
     {
-        var name =
-            ExplicitImplementationLowering.ImplementedInterfaceMember(method)?.Name ?? method.Name;
+        var suffixes = MethodOverloadGroups.SuffixesOf(type, group, context.Target);
 
-        return method.IsOverride ? name + "$override" : name;
+        var named = OverloadGroupNaming.Apply(
+            group
+                .Members.Select(member => (member.Symbol, ExtractMethod(member.Symbol, context)))
+                .ToList(),
+            method => suffixes[method]
+        );
+
+        return group.Members.ToDictionary(
+            member => member.Symbol,
+            member =>
+                named[member.Symbol] with
+                {
+                    DeclarationOrdinal = member.Ordinal,
+                    Anchor = AnchorOf(member, context),
+                },
+            (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
+        );
+    }
+
+    private static IrOverloadAnchor? AnchorOf(MethodGroupMember member, IrExtractionContext context)
+    {
+        if (member.Anchor is not { } anchor)
+            return null;
+
+        var furtherRoots = anchor
+            .FurtherRoots.Select(root => MethodOverloadGroups.RefOf(root, context.Target))
+            .ToList();
+
+        return new IrOverloadAnchor(
+            MethodOverloadGroups.RefOf(anchor.Root, context.Target),
+            anchor.Kind,
+            furtherRoots.Count > 0 ? furtherRoots : null,
+            ReimplementedRootsOf(anchor, context)
+        );
+    }
+
+    private static IReadOnlyList<IrOverloadRef>? ReimplementedRootsOf(
+        MethodAnchor anchor,
+        IrExtractionContext context
+    )
+    {
+        var roots = (anchor.ReimplementedRoots ?? [])
+            .Select(root => MethodOverloadGroups.RefOf(root, context.Target))
+            .ToList();
+
+        return roots.Count > 0 ? roots : null;
     }
 
     /// <summary>

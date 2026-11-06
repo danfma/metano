@@ -1,11 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { Decimal } from "decimal.js";
 import {
   SerializerContext,
   type JsonReadOptions,
   type TypeSpec,
   type ValueSpec,
 } from "metano-runtime/system/json";
-import { Decimal } from "decimal.js";
 import { Clip } from "./clip";
 import { Color } from "./color";
 import { Group } from "./group";
@@ -51,7 +51,7 @@ export class WebJsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec({
       type: Clip,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
         );
@@ -102,7 +102,7 @@ export class WebJsonContext extends SerializerContext {
   get iBase(): TypeSpec<IBase> {
     return (this._iBase ??= this.createSpec({
       type: IBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'IBase' directly; deserialize it through a polymorphic spec.",
         );

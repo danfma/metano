@@ -551,19 +551,17 @@ public sealed partial class IrExpressionExtractor
         }
         else
         {
-            newValue = ReduceOverflow(
-                _semantic.GetOperation(assign),
-                new IrBinaryExpression(
-                    BuildExtensionHelperCall(
-                        setterLowering.Value.HelperContainer,
-                        getterName,
-                        emittedGetterName,
-                        [new IrArgument(receiver)],
-                        typeArguments: null
-                    ),
-                    compoundOp.Value,
-                    rhs
-                )
+            newValue = CompoundValue(
+                assign,
+                BuildExtensionHelperCall(
+                    setterLowering.Value.HelperContainer,
+                    getterName,
+                    emittedGetterName,
+                    [new IrArgument(receiver)],
+                    typeArguments: null
+                ),
+                compoundOp.Value,
+                rhs
             );
         }
 
@@ -1733,19 +1731,22 @@ public sealed partial class IrExpressionExtractor
             ?? TryExtractStringConcatenation(bin)
             ?? ReduceOverflow(
                 _semantic.GetOperation(bin),
-                BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
+                BuildBinary(bin, op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
             );
     }
 
     /// <summary>
     /// The ordinary lowering of <c>left op right</c> over already extracted
-    /// operands, whose syntax gives their types. A lifted operator reuses it
+    /// operands, whose syntax gives their types; <paramref name="operatorSyntax"/>
+    /// (the binary expression or compound assignment) gives the operator a
+    /// numeric node carries. A lifted operator reuses it
     /// for its non-null case: <paramref name="isLifted"/> peels
     /// <c>Nullable&lt;T&gt;</c> from the operand types. It stays false for
     /// an unlifted operator such as <c>a == null</c> on a <c>decimal?</c>,
     /// which is not a Decimal method call.
     /// </summary>
     private IrExpression BuildBinary(
+        ExpressionSyntax operatorSyntax,
         IrBinaryOp op,
         OperatorOperand left,
         OperatorOperand right,
@@ -1787,7 +1788,7 @@ public sealed partial class IrExpressionExtractor
             return BuildTemporalCompareCall(left.Value, right.Value, op, temporalTypeName);
         }
 
-        return new IrBinaryExpression(left.Value, op, right.Value);
+        return BuildNumericBinary(operatorSyntax, op, left.Value, right);
     }
 
     private bool AreDecimalOperands(OperatorOperand left, OperatorOperand right, bool isLifted) =>
@@ -2194,16 +2195,18 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Resolves a C# keyword type (<c>string</c>, <c>int</c>, etc.) used as an
     /// expression — typically the receiver of a static call like
-    /// <c>string.Concat(…)</c> — to the underlying BCL type name. The semantic
-    /// model knows what the keyword aliases to; we surface that as an
-    /// <see cref="IrTypeReference"/> so the bridge can apply BCL mappings or
-    /// fall back to the literal name.
+    /// <c>string.Concat(…)</c> or <c>decimal.Round(…)</c> — to the underlying
+    /// BCL type name. The semantic model knows what the keyword aliases to;
+    /// we surface that as an <see cref="IrTypeReference"/> so the bridge can
+    /// apply BCL mappings or fall back to the literal name, carrying the
+    /// reference's package origin so the collector imports the BCL export the
+    /// keyword resolves to, not a project type of the same name (issue #477).
     /// </summary>
     private IrExpression ExtractPredefinedType(PredefinedTypeSyntax pred)
     {
         var typeSymbol = _semantic.GetTypeInfo(pred).Type;
         if (typeSymbol is not null)
-            return new IrTypeReference(typeSymbol.Name);
+            return TypeReferenceFromIdentifier(typeSymbol, typeSymbol.Name);
         // The semantic model failed to resolve the keyword — fall back to the
         // raw token text so downstream code at least sees something useful.
         return new IrTypeReference(pred.Keyword.ValueText);
@@ -2622,6 +2625,9 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractNullableGetValueOrDefault(inv, symbol) is { } valueOrDefault)
             return valueOrDefault;
 
+        if (TryExtractBaseOverloadCall(inv, symbol) is { } baseOverloadCall)
+            return baseOverloadCall;
+
         // LINQ chain detection (#20 pipe lowering). When this invocation
         // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
         // call chain whose every step has a pipe-runtime counterpart,
@@ -2714,6 +2720,59 @@ public sealed partial class IrExpressionExtractor
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
     }
+
+    /// <summary>
+    /// A <c>base.M(...)</c> call Roslyn resolved into a dispatched method
+    /// group (spec 013 FR-018): bound to its overload, so a target calls the
+    /// overload's fast path (<c>super.addX(x)</c>). The base dispatcher
+    /// branches through <c>this.addX</c>, which an override of the calling
+    /// type would reach again. <c>null</c> for any other call, and on Dart,
+    /// which renders source arguments until it claims names (013g).
+    /// </summary>
+    private IrCallExpression? TryExtractBaseOverloadCall(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? symbol
+    )
+    {
+        if (IsDartTarget || symbol is null)
+            return null;
+
+        if (!IsBaseMemberCall(inv) || !IsDispatchedOnEmittedBase(symbol))
+            return null;
+
+        var bound = ExtractBoundCall(
+            _semantic.GetOperation(inv),
+            MethodOverloadGroups.RefOf(symbol, _target)
+        );
+
+        if (bound is null)
+            return null;
+
+        return new IrCallExpression(
+            Extract(inv.Expression),
+            bound.Arguments,
+            MethodTypeArgumentsOf(symbol),
+            BuildOrigin(symbol)
+        )
+        {
+            Overload = bound.Overload,
+        };
+    }
+
+    private static bool IsBaseMemberCall(InvocationExpressionSyntax inv) =>
+        inv.Expression is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax };
+
+    private bool IsDispatchedOnEmittedBase(IMethodSymbol symbol) =>
+        MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
+        && MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _target)
+            is { IsDispatched: true };
+
+    private IReadOnlyList<IrTypeRef>? MethodTypeArgumentsOf(IMethodSymbol symbol) =>
+        symbol.TypeArguments.Length > 0
+            ? symbol
+                .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
+                .ToList()
+            : null;
 
     /// <summary>
     /// Builds the <c>[ObjectArgs]</c> object-literal payload from the
@@ -3433,14 +3492,7 @@ public sealed partial class IrExpressionExtractor
                 setterLowering.HelperContainer,
                 setterName,
                 emittedSetterName,
-                [
-                    new IrArgument(
-                        ReduceOverflow(
-                            _semantic.GetOperation(assign),
-                            new IrBinaryExpression(currentValue, compoundOp.Value, rhs)
-                        )
-                    ),
-                ],
+                [new IrArgument(CompoundValue(assign, currentValue, compoundOp.Value, rhs))],
                 typeArguments: null
             );
         }
@@ -3466,19 +3518,17 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             recv =>
-                ReduceOverflow(
-                    _semantic.GetOperation(assign),
-                    new IrBinaryExpression(
-                        BuildExtensionHelperCall(
-                            setterLowering.HelperContainer,
-                            getterName,
-                            emittedGetterName,
-                            [new IrArgument(recv)],
-                            typeArguments: null
-                        ),
-                        compoundOp.Value,
-                        rhs
-                    )
+                CompoundValue(
+                    assign,
+                    BuildExtensionHelperCall(
+                        setterLowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        [new IrArgument(recv)],
+                        typeArguments: null
+                    ),
+                    compoundOp.Value,
+                    rhs
                 )
         );
     }
@@ -3650,19 +3700,17 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             (recv, idxRefs) =>
-                ReduceOverflow(
-                    _semantic.GetOperation(assign),
-                    new IrBinaryExpression(
-                        BuildExtensionIndexerHelperCall(
-                            getterLowering.HelperContainer,
-                            getterName,
-                            emittedGetterName,
-                            recv,
-                            idxRefs
-                        ),
-                        compoundOp.Value,
-                        rhs
-                    )
+                CompoundValue(
+                    assign,
+                    BuildExtensionIndexerHelperCall(
+                        getterLowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        recv,
+                        idxRefs
+                    ),
+                    compoundOp.Value,
+                    rhs
                 )
         );
     }
@@ -4658,7 +4706,7 @@ public sealed partial class IrExpressionExtractor
         if (unwrapsNullable)
         {
             inner = ValueOrThrowWhenMissing(cast.Expression, inner);
-            sourceType = UnwrapNullable(sourceType);
+            sourceType = sourceType.UnwrapNullableValueType();
         }
 
         if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)

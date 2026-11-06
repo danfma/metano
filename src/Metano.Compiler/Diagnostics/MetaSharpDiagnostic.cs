@@ -435,15 +435,35 @@ public static class DiagnosticCodes
 
     /// <summary>MS0067 — the spec 013 claim pass renamed a generated factory, selector
     /// or fast path (per suffix, <c>$</c> appended until free) because its candidate was
-    /// already taken: by a user-written member (reason 1) or by an earlier synthesized
-    /// name (reason 2). The message names the candidate, the claimant and the emitted
-    /// name. A warning at the renamed overload (spec 013 FR-004).</summary>
+    /// already taken: by a user-written member (reason 1), by an earlier synthesized
+    /// name (reason 2) or, for a <c>new</c> method or a derived type's new overload, by
+    /// an inherited instance member of any visibility (reason 3). The message names the
+    /// candidate, the claimant and the emitted name. A warning at the renamed overload
+    /// (spec 013 FR-004).</summary>
     public const string OverloadNameShadowed = "MS0067";
 
-    /// <summary>MS0068 — a user-written member takes a generated name it does not own,
-    /// such as a derived user static named like an inherited generated factory. User
-    /// names are never renamed, so the build fails and the message points at
-    /// <c>[Name]</c>; the target's message says what the clash breaks. An error at the
-    /// user member (spec 013 FR-034).</summary>
+    /// <summary>MS0068 — a user-written member takes a generated name it does not own:
+    /// the name of an inherited fast path it does not override (reason 1), or a derived
+    /// user static named like an inherited generated factory (reason 2). User names are
+    /// never renamed, so the build fails and the message points at <c>[Name]</c>; the
+    /// target's message says what the clash breaks. An error at the user member (spec
+    /// 013 FR-034).</summary>
     public const string OverloadFastPathHijacked = "MS0068";
+
+    /// <summary>MS0069 — a type implements one generic interface with overload groups
+    /// more than once (<c>C : IConv&lt;int&gt;, IConv&lt;string&gt;</c>): each root
+    /// fast-path name would need two implementations, so the type keeps runtime dispatch
+    /// for those names and emits no per-implementation fast paths. The message adds the
+    /// constructions a target cannot tell apart at run time. A warning at the type
+    /// (spec 013 FR-036).</summary>
+    public const string MultiplyConstructedOverloadGroup = "MS0069";
+
+    /// <summary>MS0070 — one emitted name binds two different imports in one
+    /// file: two origin-carrying references staging different packages or
+    /// sub-paths (a BCL export and a cross-package type, or two cross-package
+    /// types), or an origin-carrying reference and a project type of the same
+    /// name. The bare references cannot tell the bindings apart and one of
+    /// them is wrong at runtime. An error; rename one of the two with
+    /// <c>[Name]</c> (or change the BCL export's <c>ExportedName</c>).</summary>
+    public const string ImportedNameClash = "MS0070";
 }

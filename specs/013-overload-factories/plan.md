@@ -180,6 +180,76 @@ a derived factory it could have kept. The evaluation-order binding follows
 `IrEvaluationTraits.IsSideEffectFree`, which counts a property read as free, so named arguments
 reading a mutating getter are reordered unbound, as elsewhere in the pipeline.
 
+As landed in 013d: the core groups a type's methods in `MethodOverloadGroups` (`Extraction/`):
+an `override` of a dispatched root (the first declaration of its override chain, declared by an
+emitted class) and an implementation of a member of a dispatched interface group are **anchored**
+(`IrMethodDeclaration.Anchor`: root `IrOverloadRef`, `Override` / `Implementation`, further
+interface roots) and reuse the root's suffix; an override of a single virtual keeps its own group
+(DECIDED-29, the `$override` segregation of #159); every other method is its own root, named over
+the visible group — the inherited dispatcher's overloads the type can see plus the methods it
+declares. Methods now carry `DeclarationOrdinal` (their position among the type's methods of that
+C# name), so method fast paths are keyed by `IrOverloadRef` (`TsOverloadClaims.FastPathNameAt`,
+`TsOverloadClaimsRegistry.RootFastPathOf`), which **013e** resolves call sites through. The primary
+of a group an emitted base already dispatches carries `InheritedOverloads` (the base dispatcher's
+overloads, constructed through the base chain, invisible ones included), and `IrMethodGroup`
+decides the dispatcher once for every consumer (`None` / `Declared` / `OverridesInherited`, and the
+branches the runtime scanner collects type checks for). The TypeScript claim pass gained the
+instance side (`TsOverloadClaims.Instances`, every visibility, inherited included): own fast paths
+claim against it (step 7, `MS0067` reason 3), anchored ones take the root's emitted name
+(`RootFastPathOf`, which reads a metadata-only root's class through the same shape extraction,
+DECIDED-28), and a user instance member meeting an inherited fast path, or an anchored name held by
+a user member, reports `MS0068` reason 1. Interfaces name their groups in `IrInterfaceExtractor` and
+claim fast paths in `TsInterfaceFastPaths` (one table per interface, `MS0067` on a rename);
+`ExplicitImplementationLowering` no longer drops an explicit overload of a dispatched interface group
+beside a class method of another signature (DECIDED-31). Multiply-constructed interfaces are found
+by `MultiplyConstructedInterfaces` (core): the class IR carries `ConstructedRoots`, every
+implementation (an override of a base's included) anchors on the interface root, and
+`IrToTsConstructedRootDispatcherBridge` emits the root-name runtime dispatcher with the bodies inlined
+in its branches; `MS0069` is reported by the class emitter, once, at the type that adds the second
+construction. One call-site shape lands here rather than in 013e: `base.M(...)` resolved into a
+dispatched group is bound (`IrCallExpression.Overload`, Roslyn's bound arguments) and emitted as
+`super.<fastPath>(...)`, because the base dispatcher now branches through `this.<fastPath>` and an
+override calling `base.M` would recurse; this holds for metadata-only bases too (their names come from
+metadata, DECIDED-28), and Dart keeps its source call. Every other call site stays on the dispatcher
+until 013e — so a call through a base-typed receiver to a type with a `new` method still reaches the
+hiding type's dispatcher (spec § Divergences). Known gaps: Roslyn imports no private (or, across
+assemblies, internal) member of a metadata reference (`MetadataImportOptions.Public` by default),
+so DECIDED-28's blind spot covers implementation DLLs as well as reference assemblies — a private
+claimant that renamed the producer's fast path is missed and the consumer's `override` fails with
+TS4117 (pinned by `MetadataBase_OverridesTheUnrenamedFastPath_WhenTheClaimantIsPrivate`); a group whose base's dispatcher signatures
+all take a `params` rest parameter forwards `...(args as never[])`; an abstract implementation of a
+multiply-constructed root is not branched (no body); a class that implements only part of an
+interface group, the rest inherited from a base that does not implement the interface, gets no
+dispatcher for it; DECIDED-29's pinned output still fails `tsgo` (TS2416/TS2385), as before.
+An interface root is always *implemented*: a `new` method, an explicit re-implementation
+(`X3 : X, IR`) or an override of an undispatched base virtual that also implements a root anchors
+on the interface member (`Implementation`), and the claim pass emits it `override` when an emitted
+base already implements the root (the base's interface mapping, recorded as
+`IrOverloadAnchor.ReimplementedRoots`, judged per root so each forwarder follows its own root) (`TsMethodOverloadNames.OverriddenNames`);
+a base fast path of that name the base does not implement the root with is a different overload the
+anchored name cannot move from, reported `MS0068` reason 1 — naming.md's
+"a `new` method is its own root" holds for class groups only. The interface group is one definition,
+`Frontend/Roslyn/InterfaceOverloadGroup`, shared by the method groups, the multiply-constructed
+interfaces, the interface extractor and the explicit-implementation lowering. `base.M(...)` is bound only into an
+emitted class (not `[External]`, not the BCL), and inherited signatures of explicit implementations
+are declared under the interface member's name. Still failing `tsgo`, as before 013d (the
+DECIDED-29 family): a class overloading an inherited single virtual (`B : G` adding `M(int)` /
+`M(string)` beside `G.M(bool)`, or `Bi : A, I` whose dispatcher shadows `A.n`) emits a dispatcher
+that redeclares the base's single method; `base.Equals(obj)` on a class with no emitted base still
+emits `super.equals`. `MS0069` is reported by the TypeScript class emitter only; Dart reports it
+when it emits overloads (013g).
+A multiply-constructed root's name is the one its interface declares (computed on the interface
+definition, `convX`), not a constructed spelling: implementers must match the interface's member
+name, and a constructed spelling differs from it whenever the group needs type spellings.
+
+Deferred from the 013d reviews (design, no behavior): a target capability port instead of
+`IsDartTarget` for binding `base.M(...)`; reporting `MS0069` from the core so every target gets it;
+splitting `MethodOverloadGroups` into grouping, anchoring and inherited-dispatcher modules; a shared
+`TsDispatcherShape` for the two dispatcher bridges; passing the diagnostics sink and the claim
+registry through the contexts instead of ambient state; moving the pure lookups on IR records
+(`IrMethodGroup`, `IrClassDeclaration.ConstructedRootOf`) to `Analysis/` or recording the exception
+in ADR-0019.
+
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an
 inherited single virtual, today's emission pinned) and DECIDED-30 (full support for

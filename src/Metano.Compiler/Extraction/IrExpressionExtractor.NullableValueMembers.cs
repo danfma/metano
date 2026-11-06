@@ -63,14 +63,21 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ValueOrThrowWhenMissing(
         ExpressionSyntax receiverSyntax,
         IrExpression receiver
-    ) =>
-        IsProvenNonNull(receiverSyntax)
-            ? receiver
-            : new IrBinaryExpression(
-                receiver,
-                IrBinaryOp.NullCoalescing,
-                new IrThrowExpression(BuildNullableValueMissingException())
-            );
+    ) => IsProvenNonNull(receiverSyntax) ? receiver : GuardedValueOrThrow(receiver);
+
+    /// <summary>
+    /// The value itself, or the .NET throw when it is missing, always
+    /// guarded: the runtime shape of an explicit nullable unwrap whose
+    /// syntax cannot prove the value present — a <c>foreach</c> element
+    /// read into a non-nullable loop variable (issue #488) has no flow
+    /// state to consult.
+    /// </summary>
+    internal IrExpression GuardedValueOrThrow(IrExpression value) =>
+        new IrBinaryExpression(
+            value,
+            IrBinaryOp.NullCoalescing,
+            new IrThrowExpression(BuildNullableValueMissingException())
+        );
 
     /// <summary>
     /// <c>x.GetValueOrDefault()</c> / <c>x.GetValueOrDefault(d)</c> on a

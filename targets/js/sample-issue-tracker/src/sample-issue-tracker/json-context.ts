@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
-import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Decimal } from "decimal.js";
+import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Comment } from "#/sample-issue-tracker/issues/domain/comment";
 import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";

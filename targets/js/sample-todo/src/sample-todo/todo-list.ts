@@ -24,15 +24,15 @@ export class TodoList {
     );
   }
 
-  private addTitlePriority(title: string, priority: Priority): void {
+  addTitlePriority(title: string, priority: Priority): void {
     this._items.push(new TodoItem(title, false, priority));
   }
 
-  private addItem(item: TodoItem): void {
+  addItem(item: TodoItem): void {
     this._items.push(item);
   }
 
-  private addTitle(title: string): void {
+  addTitle(title: string): void {
     this._items.push(new TodoItem(title));
   }
 

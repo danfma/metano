@@ -34,16 +34,7 @@ public sealed partial class IrExpressionExtractor
     private bool IsIntegerDivision(ExpressionSyntax operation) =>
         _semantic.GetSymbolInfo(operation).Symbol
             is IMethodSymbol { MethodKind: MethodKind.BuiltinOperator } divide
-        && IsIntegralNumber(UnwrapNullable(divide.ReturnType));
-
-    private static ITypeSymbol UnwrapNullable(ITypeSymbol type) =>
-        type
-            is INamedTypeSymbol
-            {
-                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
-            } nullable
-            ? nullable.TypeArguments[0]
-            : type;
+        && IsIntegralNumber(divide.ReturnType.UnwrapNullableValueType());
 
     private static bool IsIntegralNumber(ITypeSymbol type) =>
         type.SpecialType

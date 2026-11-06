@@ -153,4 +153,252 @@ public class ForEachTranspileTests
         var output = result["app/repo.ts"];
         await Assert.That(output).Contains("for (const x of this.getItems())");
     }
+
+    /// <summary>
+    /// <c>foreach (int x in double?[])</c> throws like .NET when an element is
+    /// missing (<c>InvalidOperationException</c> — "Nullable object must have
+    /// a value.", issue #488) instead of lifting the <c>null</c> into the
+    /// non-nullable variable: the loop reads through the same
+    /// unwrap-or-throw the explicit cast (<c>(int)d</c>) lowers to.
+    /// </summary>
+    [Test]
+    public async Task ForEach_NullableElementIntoNonNullableVariable_ThrowsWhenMissing()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(double?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var output = result["app/sum.ts"];
+
+        await Assert.That(output).Contains("const x = int32FromDouble(x$element ?? (() => {");
+        await Assert.That(output).Contains("Nullable object must have a value.");
+        await Assert.That(output).DoesNotContain("x$element == null ? null :");
+    }
+
+    /// <summary>
+    /// <c>foreach (int x in int?[])</c> unwraps the element with the same
+    /// throw even though the kinds match, so a missing value never flows into
+    /// the variable unconverted.
+    /// </summary>
+    [Test]
+    public async Task ForEach_NullableElementOfTheSameKind_StillThrowsWhenMissing()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(int?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var output = result["app/sum.ts"];
+
+        await Assert.That(output).Contains("const x = x$element ?? (() => {");
+        await Assert.That(output).Contains("Nullable object must have a value.");
+    }
+
+    /// <summary>
+    /// <c>foreach (int? x in double?[])</c> keeps the lifted conversion: a
+    /// missing element holds the variable as <c>null</c>, exactly .NET's
+    /// lifted behavior.
+    /// </summary>
+    [Test]
+    public async Task ForEach_NullableElementIntoNullableVariable_Lifts()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Sum
+            {
+                public int? Total(double?[] values)
+                {
+                    int? total = 0;
+
+                    foreach (int? x in values)
+                        total += x;
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var output = result["app/sum.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("const x = x$element == null ? null : int32FromDouble(x$element);");
+    }
+
+    /// <summary>
+    /// Dart keeps the same runtime shape the TypeScript loop has: the loop
+    /// variable is declared from the unwrap-or-throw of the raw element,
+    /// read through the underlying type and truncated there.
+    /// </summary>
+    [Test]
+    public async Task Dart_ForEach_NullableElementIntoNonNullableVariable_ThrowsWhenMissing()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(double?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var dart = files["sum.dart"];
+
+        await Assert
+            .That(dart)
+            .Contains(
+                "int x = ((x$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as double).toInt().toSigned(32);"
+            );
+        await Assert.That(dart).DoesNotContain("? null :");
+    }
+
+    /// <summary>
+    /// With the kinds already equal there is no conversion to run after the
+    /// unwrap, so Dart declares the variable from the throw alone.
+    /// </summary>
+    [Test]
+    public async Task Dart_ForEach_NullableElementOfTheSameKind_StillThrowsWhenMissing()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(int?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var dart = files["sum.dart"];
+
+        await Assert
+            .That(dart)
+            .Contains(
+                "int x = (x$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as int;"
+            );
+        await Assert.That(dart).DoesNotContain("? null :");
+    }
+
+    [Test]
+    public async Task Dart_ForEach_NullableElementIntoNullableVariable_Lifts()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sum
+            {
+                public int? Total(double?[] values)
+                {
+                    int? total = 0;
+
+                    foreach (int? x in values)
+                        total += x;
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var dart = files["sum.dart"];
+
+        // Dart reads the lifted conversion through the nullable-aware `?.`
+        // member chain: a missing element holds the variable as `null`.
+        await Assert.That(dart).Contains("int? x = x$element?.toInt().toSigned(32);");
+    }
+
+    /// <summary>
+    /// With the kinds already matching there is no conversion to run after
+    /// the unwrap, so the unwrap itself is the variable's cast — an enum
+    /// loop variable reads `as Color`, not the underlying `as int`.
+    /// </summary>
+    [Test]
+    public async Task Dart_ForEach_NullableEnumElement_CastsToTheVariableType()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            public enum Color { Red, Green }
+
+            [Transpile]
+            public sealed class Picker
+            {
+                public Color First(Color?[] values)
+                {
+                    #pragma warning disable CS8629
+                    foreach (Color c in values)
+                        return c;
+                    #pragma warning restore CS8629
+
+                    return Color.Red;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["picker.dart"])
+            .Contains(
+                "Color c = (c$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as Color;"
+            );
+    }
 }

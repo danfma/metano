@@ -5,7 +5,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Converts an <see cref="IrInterfaceDeclaration"/> to a TypeScript
-/// <see cref="TsInterface"/> declaration.
+/// <see cref="TsInterface"/> declaration. An overload group declares its
+/// dispatcher signatures and, after the interface's methods, one fast-path
+/// signature per overload (spec 013 FR-031), which implementers emit under
+/// the same names.
 /// </summary>
 public static class IrToTsInterfaceBridge
 {
@@ -13,6 +16,13 @@ public static class IrToTsInterfaceBridge
         IrInterfaceDeclaration ir,
         List<TsTopLevel> statements,
         string? nameOverride = null
+    ) => Convert(ir, statements, nameOverride, TsInterfaceFastPaths.Of(ir));
+
+    internal static void Convert(
+        IrInterfaceDeclaration ir,
+        List<TsTopLevel> statements,
+        string? nameOverride,
+        TsInterfaceFastPaths fastPaths
     )
     {
         var properties = new List<TsProperty>();
@@ -36,6 +46,17 @@ public static class IrToTsInterfaceBridge
                     // transformer; skip them for output parity.
                 }
             }
+
+            methods.AddRange(
+                ir.Members.OfType<IrMethodDeclaration>()
+                    .Where(method => method.OverloadName is not null)
+                    .Select(method =>
+                        ConvertMethod(method) with
+                        {
+                            Name = fastPaths.NameOf(method),
+                        }
+                    )
+            );
         }
 
         // A transformer-provided override (e.g.,

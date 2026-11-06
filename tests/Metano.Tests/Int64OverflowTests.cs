@@ -376,8 +376,12 @@ public class Int64OverflowTests
             {
                 h.Bonus++;
                 h.Bonus += 5;
+                h.Bonus <<= 3;
+                h.Bonus /= 2;
+                h.Bonus >>>= 70;
                 Holder.Shared--;
                 Holder.Shared *= 3;
+                Holder.Shared %= 7;
                 checked
                 {
                     h.Bonus *= 2;
@@ -388,7 +392,8 @@ public class Int64OverflowTests
 
     /// <summary>
     /// An extension property increment and compound assignment, instance or
-    /// static, store the reduced value through the setter helper (FR-024),
+    /// static, store the reduced value (or the 64-bit division or shift,
+    /// FR-027–FR-029) through the setter helper (FR-024),
     /// stepping by <c>1n</c>, so no <c>bigint</c> / <c>number</c> mix reaches
     /// the output. Extension indexers take the same lowering but do not
     /// compile on the current Roslyn (see <c>ExtensionIndexerTests</c>).

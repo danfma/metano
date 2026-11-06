@@ -1,5 +1,5 @@
-import { SerializerContext, type JsonReadOptions, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Decimal } from "decimal.js";
+import { SerializerContext, type JsonReadOptions, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
 import { ImageClip } from "./image-clip";
 import { Level } from "./level";
@@ -41,7 +41,7 @@ export class JsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return this._clip ??= this.createSpec({
       type: Clip,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.");
       },
       properties: [
@@ -71,7 +71,7 @@ export class JsonContext extends SerializerContext {
   get shape(): TypeSpec<Shape> {
     return this._shape ??= this.createSpec({
       type: Shape,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'Shape' directly; deserialize it through a polymorphic spec.");
       },
       properties: [

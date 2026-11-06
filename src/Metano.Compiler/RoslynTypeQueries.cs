@@ -40,6 +40,15 @@ public static class RoslynTypeQueries
     public static bool IsNullableValueType(this ITypeSymbol? type) =>
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
 
+    /// <summary>
+    /// <c>T</c> for <c>Nullable&lt;T&gt;</c>, <paramref name="type"/> itself
+    /// otherwise. The non-nullable view of <see cref="UnderlyingValueType"/>:
+    /// a <c>Nullable&lt;T&gt;</c> always carries its argument, so a non-null
+    /// input never yields null and the assertion below cannot fire.
+    /// </summary>
+    public static ITypeSymbol UnwrapNullableValueType(this ITypeSymbol type) =>
+        type.UnderlyingValueType()!;
+
     /// <summary><c>T</c> for <c>Nullable&lt;T&gt;</c>, the type itself otherwise.</summary>
     public static ITypeSymbol? UnderlyingValueType(this ITypeSymbol? type) =>
         type

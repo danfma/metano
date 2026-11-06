@@ -419,11 +419,18 @@ public class JsonSerializerContextTests
         var ts = TranspileHelper.Transpile(ClipContextSource)["test-app/json-context.ts"];
 
         await Assert.That(ts).DoesNotContain("new Clip(");
+
+        // A throwing factory never reads the payload, so its arrow declares
+        // no parameter: an unused `p` trips biome's noUnusedFunctionParameters
+        // in every consumer project (#480).
+        await Assert.That(ts).DoesNotContain("factory: (p: Record<string, unknown>) => {");
+        await Assert.That(ts).Contains("factory: () => {");
+
+        // The reason is the abstractness itself, not polymorphism (#489);
+        // System.Text.Json rejects the type the same way.
         await Assert
             .That(ts)
-            .Contains(
-                "throw new Error(\"Cannot deserialize abstract type 'Clip': polymorphic JSON deserialization is not supported yet.\");"
-            );
+            .Contains("throw new Error(\"Cannot construct abstract type 'Clip'.\");");
     }
 
     [Test]
@@ -433,6 +440,107 @@ public class JsonSerializerContextTests
 
         // `Seconds` is inherited but still a constructor slot, after `Path`.
         await Assert.That(ts).Contains("new ImageClip(p.path as string, p.seconds as number)");
+    }
+
+    [Test]
+    public async Task ParameterlessConstructor_FactoryDeclaresNoPayloadParameter()
+    {
+        var ts = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public record Counter
+            {
+                public int Count { get; set; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Counter))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        )["test-app/json-context.ts"];
+
+        // The factory binds no constructor slot and assigns nothing eagerly,
+        // so the payload parameter would go unused (#480).
+        await Assert.That(ts).Contains("factory: () => new Counter()");
+    }
+
+    [Test]
+    public async Task ParameterlessConstructorWithInitMembers_FactoryKeepsPayloadParameter()
+    {
+        var ts = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public sealed class Stamp
+            {
+                public int Mark { get; init; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Stamp))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        )["test-app/json-context.ts"];
+
+        // `init` members are always assigned after construction, so the
+        // factory reads the payload even though the constructor is
+        // parameterless (#480).
+        await Assert
+            .That(ts)
+            .Contains("factory: (p: Record<string, unknown>) => Object.assign(new Stamp(), {");
+    }
+
+    [Test]
+    public async Task NonPolymorphicInterfaceMember_NeverReadsAsAnAbstractType()
+    {
+        var ts = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public interface ISensor
+            {
+                int Level { get; }
+            }
+
+            [Transpile]
+            public sealed record Hub(string Title, ISensor Sensor);
+
+            [Transpile]
+            [JsonSerializable(typeof(Hub))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        )["test-app/json-context.ts"];
+
+        // Regression guard while #502 is open: the Hub context is emitted,
+        // but no non-polymorphic interface entry exists yet for the
+        // non-constructible branch to label abstract (#489).
+        await Assert.That(ts).Contains("new Hub(p.title as string, p.sensor as ISensor)");
+        await Assert.That(ts).DoesNotContain("Cannot construct abstract type 'ISensor'");
     }
 
     private const string ContextBoilerplate = """

@@ -36,6 +36,63 @@ public sealed record IrMethodDeclaration(
     /// target's diagnostics name it by; <c>null</c> outside a dispatched group.
     /// </summary>
     public string? SignatureText { get; init; }
+
+    /// <summary>
+    /// The overload's position among the methods its declaring type declares
+    /// under its C# name (<see cref="IrOverloadRef.Ordinal"/>, spec 013
+    /// DECIDED-18); <c>0</c> outside a dispatched group.
+    /// </summary>
+    public int DeclarationOrdinal { get; init; }
+
+    /// <summary>
+    /// The root declaration whose names the overload reuses (spec 013 FR-025):
+    /// the overridden method or the implemented interface member; <c>null</c>
+    /// when the overload is its own root.
+    /// </summary>
+    public IrOverloadAnchor? Anchor { get; init; }
+
+    /// <summary>
+    /// On the primary of a group that an emitted base class already
+    /// dispatches: the overloads of the inherited dispatcher, as the deriving
+    /// type sees them (type arguments substituted), the ones it cannot see
+    /// included (spec 013 FR-030). Signatures only. <c>null</c> when no base
+    /// dispatches the group.
+    /// </summary>
+    public IReadOnlyList<IrMethodDeclaration>? InheritedOverloads { get; init; }
+}
+
+/// <summary>
+/// How a method overload is anchored on a root declaration it does not
+/// declare (spec 013 DECIDED-15, FR-025): its emitted names are the root's.
+/// </summary>
+/// <param name="Root">The root overload: for an override the first
+/// declaration of its override chain, for an implementation the interface
+/// member's definition.</param>
+/// <param name="Kind">Whether the overload overrides a class member or
+/// implements an interface member.</param>
+/// <param name="FurtherRoots">Other interface members the same method
+/// implements, whose names a target emits as forwarding members
+/// (naming.md § Root anchoring); <c>null</c> when there are none.</param>
+/// <param name="ReimplementedRoots">For an implementation, the roots
+/// (<see cref="Root"/> and further ones) an emitted base class already
+/// implements: a <c>new</c> method or an explicit re-implementation, whose
+/// names for those roots override the base's; <c>null</c> when there are
+/// none.</param>
+public sealed record IrOverloadAnchor(
+    IrOverloadRef Root,
+    IrOverloadAnchorKind Kind,
+    IReadOnlyList<IrOverloadRef>? FurtherRoots = null,
+    IReadOnlyList<IrOverloadRef>? ReimplementedRoots = null
+);
+
+/// <summary>What an anchored overload does to its root.</summary>
+public enum IrOverloadAnchorKind
+{
+    /// <summary>It overrides a class member (<c>override</c>).</summary>
+    Override,
+
+    /// <summary>It implements an interface member, implicitly or explicitly.</summary>
+    Implementation,
 }
 
 /// <summary>

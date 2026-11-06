@@ -251,7 +251,17 @@ public sealed record IrCallExpression(
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IrMemberOrigin? Origin = null,
     bool IsOptional = false
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The overload a <c>base.M(...)</c> call into a dispatched group resolved
+    /// to (spec 013 FR-018): <see cref="Arguments"/> are then Roslyn's bound
+    /// arguments, and a target calls the base overload's fast path, since the
+    /// base dispatcher would dispatch virtually again. <c>null</c> for every
+    /// other call.
+    /// </summary>
+    public IrSelectedOverload? Overload { get; init; }
+}
 
 /// <summary>
 /// A single argument in a call or object-creation expression.
@@ -379,8 +389,19 @@ public sealed record IrMemberInit(
 /// <summary>
 /// Binary expression: <c>left op right</c>.
 /// </summary>
-public sealed record IrBinaryExpression(IrExpression Left, IrBinaryOp Operator, IrExpression Right)
-    : IrExpression;
+/// <param name="NumericKind">
+/// The operand kind of a built-in numeric operator (spec 012 FR-027,
+/// FR-028), so a target picks the division helper or converts a shift count
+/// without re-deriving types: the promoted left operand's kind (a shift's
+/// count stays <c>int</c>); <c>null</c> for any other operator, including
+/// enum and user-defined ones.
+/// </param>
+public sealed record IrBinaryExpression(
+    IrExpression Left,
+    IrBinaryOp Operator,
+    IrExpression Right,
+    IrNumericKind? NumericKind = null
+) : IrExpression;
 
 /// <summary>
 /// Unary expression: <c>op operand</c> or <c>operand op</c>.

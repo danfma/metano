@@ -82,7 +82,7 @@ export class JsonContext extends SerializerContext {
 
   get shape(): TypeSpec<Shape> {
     return this._shape ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'Shape' directly; deserialize it through a polymorphic spec.");
       },
       properties: [],
@@ -170,7 +170,7 @@ export class JsonContext extends SerializerContext {
   get mixed(): TypeSpec<Mixed> {
     return this._mixed ??= this.createSpec({
       type: Mixed,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize abstract type 'Mixed' directly; deserialize it through a polymorphic spec.");
       },
       properties: [],
@@ -194,7 +194,7 @@ export class JsonContext extends SerializerContext {
 
   get iShape(): TypeSpec<IShape> {
     return this._iShape ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error("Cannot deserialize interface type 'IShape' directly; deserialize it through a polymorphic spec.");
       },
       properties: [

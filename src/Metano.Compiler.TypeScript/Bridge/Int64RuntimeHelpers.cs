@@ -25,6 +25,10 @@ internal static class Int64RuntimeHelpers
     public const string UInt64FromDecimal = "uint64FromDecimal";
     public const string Int64FromBigInteger = "int64FromBigInteger";
     public const string UInt64FromBigInteger = "uint64FromBigInteger";
+    public const string DivInt64 = "divInt64";
+    public const string RemInt64 = "remInt64";
+    public const string DivUInt64 = "divUInt64";
+    public const string RemUInt64 = "remUInt64";
 
     /// <summary>The range check of <c>long</c> (signed) or <c>ulong</c>.</summary>
     public static string CheckedRange(bool isSigned) => isSigned ? CheckedInt64 : CheckedUInt64;
@@ -54,4 +58,10 @@ internal static class Int64RuntimeHelpers
     /// <summary><c>(long)b</c> / <c>(ulong)b</c>, checked in every context.</summary>
     public static string FromBigInteger(bool isSigned) =>
         isSigned ? Int64FromBigInteger : UInt64FromBigInteger;
+
+    /// <summary><c>l / m</c> (signed) or <c>u / v</c>, throwing as .NET does.</summary>
+    public static string Quotient(bool isSigned) => isSigned ? DivInt64 : DivUInt64;
+
+    /// <summary><c>l % m</c> (signed) or <c>u % v</c>, throwing as .NET does.</summary>
+    public static string Remainder(bool isSigned) => isSigned ? RemInt64 : RemUInt64;
 }

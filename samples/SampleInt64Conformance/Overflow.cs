@@ -226,5 +226,9 @@ public static class Overflow
 
     public static long ElementPostfix(long a) => new Counter(a).IncrementSlot();
 
+    public static long ElementRemainder(long a, long b) => new Counter(a).RemainderSlot(b);
+
+    public static long PropertyShiftLeft(long a, int n) => new Counter(a).ShiftTotal(n);
+
     public static long HashMix(long seed, long value) => (seed ^ value) * FnvPrime;
 }

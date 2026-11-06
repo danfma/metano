@@ -238,7 +238,7 @@ public class JsonMemberOptionsTests
             .That(TsNamesOf(ts))
             .IsEqualTo("pub, internal, protectedInternal, publicField, readOnlyField");
 
-        await Assert.That(ts).Contains("factory: (p: Record<string, unknown>) => new Inc(),");
+        await Assert.That(ts).Contains("factory: () => new Inc(),");
 
         await Assert
             .That(AssignedIfPresentOf(ts))
@@ -290,7 +290,7 @@ public class JsonMemberOptionsTests
 
         await Assert.That(TsNamesOf(ts)).IsEqualTo("count, step, limit");
 
-        await Assert.That(ts).Contains("factory: (p: Record<string, unknown>) => new Counter(),");
+        await Assert.That(ts).Contains("factory: () => new Counter(),");
         await Assert.That(AssignedIfPresentOf(ts)).IsEqualTo("limit");
 
         await Assert

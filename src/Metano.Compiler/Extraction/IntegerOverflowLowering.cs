@@ -12,7 +12,7 @@ namespace Metano.Compiler.Extraction;
 /// <c>checked</c> / <c>unchecked</c> context and the compilation's
 /// <c>CheckOverflow</c> option, lambdas included
 /// (DECIDED-4). Operators that cannot leave the domain are never reduced
-/// (DECIDED-7).
+/// (DECIDED-7), and shifts wrap in either context (FR-022, FR-028).
 /// </summary>
 internal static class IntegerOverflowLowering
 {
@@ -20,15 +20,22 @@ internal static class IntegerOverflowLowering
     /// The reduction <paramref name="operation"/> needs: <c>+</c>, <c>-</c>,
     /// <c>*</c>, unary <c>-</c>, <c>++</c>, <c>--</c> and the compound
     /// <c>+=</c>, <c>-=</c>, <c>*=</c> on a 64-bit integer (lifted forms
-    /// included), and <c>~</c> on <c>ulong</c>, which always wraps;
-    /// <c>null</c> for any other operation, a user-defined operator, or one
-    /// narrower than 64 bits (OQ-4).
+    /// included); <c>~</c> on <c>ulong</c> and <c>&lt;&lt;</c> (and
+    /// <c>&lt;&lt;=</c>), which always wrap; <c>null</c> for any other
+    /// operation, a user-defined operator, or one narrower than 64 bits
+    /// (OQ-4).
     /// </summary>
     public static IntegerOverflowReduction? ReductionOf(IOperation? operation) =>
         operation switch
         {
-            IBinaryOperation binary => BinaryReduction(binary),
-            ICompoundAssignmentOperation compound => CompoundReduction(compound),
+            IBinaryOperation { OperatorMethod: null } binary => BinaryReduction(
+                binary.OperatorKind,
+                binary.Type,
+                binary.IsChecked
+            ),
+            ICompoundAssignmentOperation { OperatorMethod: null } compound => CompoundReduction(
+                compound
+            ),
             IIncrementOrDecrementOperation { OperatorMethod: null } increment => ReductionIn(
                 increment.Type,
                 increment.IsChecked
@@ -36,11 +43,6 @@ internal static class IntegerOverflowLowering
             IUnaryOperation { OperatorMethod: null } unary => UnaryReduction(unary),
             _ => null,
         };
-
-    private static IntegerOverflowReduction? BinaryReduction(IBinaryOperation binary) =>
-        IsBuiltInArithmetic(binary.OperatorMethod, binary.OperatorKind)
-            ? ReductionIn(binary.Type, binary.IsChecked)
-            : null;
 
     /// <summary>
     /// A compound assignment stores its operator's result in the target's
@@ -50,10 +52,27 @@ internal static class IntegerOverflowLowering
     private static IntegerOverflowReduction? CompoundReduction(
         ICompoundAssignmentOperation compound
     ) =>
-        IsBuiltInArithmetic(compound.OperatorMethod, compound.OperatorKind)
-        && compound.OutConversion.IsIdentity
-            ? ReductionIn(compound.Type, compound.IsChecked)
+        compound.OutConversion.IsIdentity
+            ? BinaryReduction(compound.OperatorKind, compound.Type, compound.IsChecked)
             : null;
+
+    /// <summary>
+    /// <c>&lt;&lt;</c> drops the bits shifted past bit 63 in either context
+    /// (shifts never check, FR-022). <c>&gt;&gt;</c> and <c>&gt;&gt;&gt;</c>
+    /// cannot leave the domain, so they are never reduced.
+    /// </summary>
+    private static IntegerOverflowReduction? BinaryReduction(
+        BinaryOperatorKind kind,
+        ITypeSymbol? type,
+        bool isChecked
+    ) =>
+        kind switch
+        {
+            BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply =>
+                ReductionIn(type, isChecked),
+            BinaryOperatorKind.LeftShift => ReductionIn(type, isChecked: false),
+            _ => null,
+        };
 
     private static IntegerOverflowReduction? UnaryReduction(IUnaryOperation unary) =>
         unary.OperatorKind switch
@@ -62,17 +81,6 @@ internal static class IntegerOverflowLowering
             UnaryOperatorKind.BitwiseNegation => UnsignedComplementReduction(unary.Type),
             _ => null,
         };
-
-    private static bool IsBuiltInArithmetic(
-        IMethodSymbol? operatorMethod,
-        BinaryOperatorKind kind
-    ) => operatorMethod is null && IsArithmetic(kind);
-
-    private static bool IsArithmetic(BinaryOperatorKind kind) =>
-        kind
-            is BinaryOperatorKind.Add
-                or BinaryOperatorKind.Subtract
-                or BinaryOperatorKind.Multiply;
 
     private static IntegerOverflowReduction? ReductionIn(ITypeSymbol? type, bool isChecked)
     {

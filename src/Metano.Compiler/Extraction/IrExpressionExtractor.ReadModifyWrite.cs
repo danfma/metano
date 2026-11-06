@@ -22,10 +22,12 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Builds <paramref name="target"/> <c>op=</c> <c>right</c>. An integer
-    /// <c>/=</c> and a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c> have no
-    /// compound operator in the targets that keeps C# semantics, so each
-    /// becomes the read-modify-write <c>target = target op right</c> (see
-    /// <see cref="BuildReadModifyWrite"/>).
+    /// <c>/=</c>, a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c> and, under
+    /// the exact 64-bit lowering, a 64-bit compound operator that wraps,
+    /// checks, divides or shifts have no compound operator in the targets
+    /// that keeps C# semantics, so each becomes the read-modify-write
+    /// <c>target = target op right</c> (see <see cref="BuildReadModifyWrite"/>)
+    /// storing the value <see cref="CompoundValue"/> computes.
     /// </summary>
     private IrExpression BuildCompoundAssignment(
         IrExpression target,
@@ -34,25 +36,50 @@ public sealed partial class IrExpressionExtractor
     {
         var right = Extract(assign.Right);
 
-        if (TryExtractReducedCompoundAssignment(target, assign, right) is { } reduced)
-            return reduced;
-
-        if (MapCompoundAssignmentOperator(assign) is { } op && RequiresReadModifyWrite(op))
+        if (MapCompoundAssignmentOperator(assign) is { } op && RequiresReadModifyWrite(op, assign))
             return BuildReadModifyWrite(
                 target,
                 assign,
-                readTarget => new IrBinaryExpression(readTarget, op, right)
+                readTarget => CompoundValue(assign, readTarget, op, right)
             );
 
         return new IrBinaryExpression(target, MapAssignmentOp(assign.Kind()), right);
     }
 
-    private static bool RequiresReadModifyWrite(IrBinaryOp op) =>
+    private bool RequiresReadModifyWrite(IrBinaryOp op, AssignmentExpressionSyntax assign) =>
+        HasNoTargetCompoundOperator(op)
+        || NeedsOverflowReduction(assign)
+        || NeedsSixtyFourBitReadModifyWrite(op, assign);
+
+    private static bool HasNoTargetCompoundOperator(IrBinaryOp op) =>
         op
             is IrBinaryOp.IntegerDivide
                 or IrBinaryOp.BooleanAnd
                 or IrBinaryOp.BooleanOr
                 or IrBinaryOp.BooleanXor;
+
+    private bool NeedsOverflowReduction(AssignmentExpressionSyntax assign) =>
+        OverflowReductionOf(_semantic.GetOperation(assign)) is not null;
+
+    /// <summary>
+    /// The value <c>target op= right</c> stores: the binary form over the
+    /// current value, reduced as the compound operation needs (FR-024).
+    /// </summary>
+    private IrExpression CompoundValue(
+        AssignmentExpressionSyntax assign,
+        IrExpression current,
+        IrBinaryOp op,
+        IrExpression right
+    ) =>
+        ReduceOverflow(
+            _semantic.GetOperation(assign),
+            BuildNumericBinary(
+                assign,
+                op,
+                current,
+                new OperatorOperand(right, MayBeNull: false, assign.Right)
+            )
+        );
 
     /// <summary>
     /// <c>target = compute(target)</c>, reading the target twice (see

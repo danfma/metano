@@ -3,11 +3,11 @@ import { isInt32, isString } from "metano-runtime";
 export class Holder<T> {
   constructor() { }
 
-  private putString(x: string): string {
+  putString(x: string): string {
     return "string";
   }
 
-  private putT(x: T): string {
+  putT(x: T): string {
     return "T";
   }
 
@@ -25,11 +25,11 @@ export class Holder<T> {
     throw new Error("No matching overload for put");
   }
 
-  private refN(n: number): string {
+  refN(n: number): string {
     return "int";
   }
 
-  private refU<U>(u: U): string {
+  refU<U>(u: U): string {
     return "U";
   }
 
@@ -47,11 +47,11 @@ export class Holder<T> {
     throw new Error("No matching overload for ref");
   }
 
-  private optAB(a: number, b: number): string {
+  optAB(a: number, b: number): string {
     return "ab";
   }
 
-  private optX(x: T | null = null): string {
+  optX(x: T | null = null): string {
     return "opt";
   }
 

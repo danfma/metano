@@ -1,16 +1,16 @@
 import { isInt32 } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "#/other/decimal";
 import type { A } from "./a";
 import type { B } from "./b";
 
 export class Climbs {
   constructor() { }
 
-  private kNumericsDecimal(d: Decimal): number {
+  kNumericsDecimal(d: Decimal): number {
     return 1;
   }
 
-  private kOtherDecimal(d: Decimal): number {
+  kOtherDecimal(d: Decimal): number {
     return 2;
   }
 
@@ -28,11 +28,11 @@ export class Climbs {
     throw new Error("No matching overload for k");
   }
 
-  private jNumericsDecimalInt32(d: Decimal, n: number): number {
+  jNumericsDecimalInt32(d: Decimal, n: number): number {
     return 1;
   }
 
-  private jOtherDecimalInt32(d: Decimal, n: number): number {
+  jOtherDecimalInt32(d: Decimal, n: number): number {
     return 2;
   }
 
@@ -50,11 +50,11 @@ export class Climbs {
     throw new Error("No matching overload for j");
   }
 
-  private mListOfAId(ids: A.Id[]): number {
+  mListOfAId(ids: A.Id[]): number {
     return 1;
   }
 
-  private mListOfBId(ids: B.Id[]): number {
+  mListOfBId(ids: B.Id[]): number {
     return 2;
   }
 

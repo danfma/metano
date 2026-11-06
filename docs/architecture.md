@@ -276,6 +276,14 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   `with` for records that aren't `[PlainObject]`.
 - **`IrToTsConstructorDispatcherBridge`** / **`IrToTsOverloadDispatcherBridge`** —
   multi-arity dispatchers with runtime type guards via `IrTypeCheckBuilder`.
+  Method fast paths are addressable members named on their root declaration
+  (spec 013 FR-025): the core's `MethodOverloadGroups` anchors an override or an
+  interface implementation on its root, and the TypeScript claim pass
+  (`TsOverloadClaimPass`, `TsInterfaceFastPaths`) resolves the root's emitted
+  name; an override emits `override` fast paths and inherits the dispatcher, a
+  type adding overloads overrides it and forwards the rest to `super`
+  (`IrMethodGroup`). A root name of an interface the class implements more than
+  once is a runtime dispatcher (`IrToTsConstructedRootDispatcherBridge`, `MS0069`).
 - **`ConstructorAccessPolicy`** — the constructor's `private` / `protected`
   modifier (FR-049): the most permissive one when overloads mix accessibility
   (`MS0060`), public when code outside the class body constructs the type — a

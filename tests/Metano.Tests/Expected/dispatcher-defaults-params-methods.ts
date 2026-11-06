@@ -3,11 +3,11 @@ import { isBool, isInt32, isString } from "metano-runtime";
 export class Ops {
   constructor() { }
 
-  private mA(a: number = 5): string {
+  mA(a: number = 5): string {
     return "int:" + a;
   }
 
-  private mSRest(s: string, ...rest: number[]): string {
+  mSRest(s: string, ...rest: number[]): string {
     return "params:" + s + ":" + rest.length;
   }
 
@@ -25,11 +25,11 @@ export class Ops {
     throw new Error("No matching overload for m");
   }
 
-  private static sFlag(flag: boolean): string {
+  static sFlag(flag: boolean): string {
     return "bool";
   }
 
-  private static sAB(a: number = 5, b: string = "x"): string {
+  static sAB(a: number = 5, b: string = "x"): string {
     return "S:" + a + b;
   }
 

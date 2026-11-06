@@ -58,7 +58,7 @@ export class MembersJsonContext extends SerializerContext {
   get account(): TypeSpec<Account> {
     return (this._account ??= this.createSpec({
       type: Account,
-      factory: (p: Record<string, unknown>) => new Account(),
+      factory: () => new Account(),
       properties: [
         {
           ts: "name",

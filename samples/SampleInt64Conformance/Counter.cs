@@ -3,9 +3,10 @@ using Metano.Annotations;
 namespace SampleInt64Conformance;
 
 /// <summary>
-/// 64-bit increments and compound assignments on a field, a property and an
-/// array element whose index has a side effect, which the read-modify-write
-/// lowering must evaluate once (spec 012 FR-024). Emitted beside
+/// 64-bit increments and compound assignments (division and shifts
+/// included) on a field, a property and an array element whose index has a
+/// side effect, which the read-modify-write lowering must evaluate once
+/// (spec 012 FR-024, FR-027, FR-028). Emitted beside
 /// <see cref="Overflow"/>, so the generated module has no relative import and
 /// runs under Node's type stripping as it is.
 /// </summary>
@@ -55,6 +56,21 @@ public class Counter
         var previous = _slots[NextSlot()]++;
 
         return _slotReads == 1 ? previous : -1;
+    }
+
+    /// <summary>The remainder stored in the slot, or <c>-1</c> when the index was not read exactly once.</summary>
+    public long RemainderSlot(long divisor)
+    {
+        _slots[NextSlot()] %= divisor;
+
+        return _slotReads == 1 ? _slots[1] : -1;
+    }
+
+    public long ShiftTotal(int count)
+    {
+        Total <<= count;
+
+        return Total;
     }
 
     private int NextSlot()

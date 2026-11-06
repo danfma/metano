@@ -384,48 +384,108 @@ public sealed class IrStatementExtractor(
         // cannot collide with a user binding.
         var element = variable + "$element";
 
-        if (ElementConversion(fe, new IrIdentifier(element)) is not { } converted)
+        if (LoopVariableInitializer(fe, new IrIdentifier(element)) is not { } initializer)
             return new IrForEachStatement(variable, variableType, collection, body);
 
         // `foreach (long x in ints)`, `foreach (int x in doubles)`: iterate the
         // raw element and declare the C# variable as its conversion (spec 012
         // FR-010, FR-070).
-        var declaration = new IrVariableDeclaration(variable, variableType, converted);
+        var declaration = new IrVariableDeclaration(variable, variableType, initializer);
 
         return new IrForEachStatement(element, null, collection, [declaration, .. body]);
     }
 
     /// <summary>
-    /// The numeric conversion of <paramref name="element"/> to the declared
-    /// loop variable, when Roslyn's element conversion lowers explicitly: a
-    /// floating-point truncation in every mode, a 64-bit one under the exact
-    /// lowering. A <c>foreach</c> conversion is explicit, so it checks in a
+    /// The value the loop variable is declared from: the numeric conversion
+    /// of <paramref name="element"/> when Roslyn's element conversion lowers
+    /// explicitly (a floating-point truncation in every mode, a 64-bit one
+    /// under the exact lowering), or null when the variable binds the raw
+    /// element. A <c>foreach</c> conversion is explicit, so it checks in a
     /// checked context; no operation carries that flag, so it comes from the
     /// enclosing context and the compilation options.
+    /// <para>
+    /// An element the variable cannot hold — a nullable element into a
+    /// non-nullable variable — unwraps with the .NET throw first, the same
+    /// runtime shape the explicit cast lowers to, instead of lifting
+    /// <c>null</c> into the variable (issue #488). The conversion lifts only
+    /// when the variable is nullable too.
+    /// </para>
     /// </summary>
-    private IrNumericConversion? ElementConversion(ForEachStatementSyntax fe, IrExpression element)
+    private IrExpression? LoopVariableInitializer(ForEachStatementSyntax fe, IrExpression element)
     {
         var info = _semantic.GetForEachStatementInfo(fe);
         var variableType = (_semantic.GetDeclaredSymbol(fe) as ILocalSymbol)?.Type;
 
         if (
             !IsNumericElementConversion(info)
-            || NumericEndpoints.Of(info.ElementType) is not { } from
+            || info.ElementType is not { } elementType
+            || NumericEndpoints.Of(elementType) is not { } from
+            || variableType is null
             || NumericEndpoints.Of(variableType) is not { } to
         )
             return null;
 
+        var elementNullable = elementType.IsNullableValueType();
+        var variableNullable = variableType.IsNullableValueType();
+
+        if (elementNullable && !variableNullable)
+            return UnwrappedElementValue(fe, element, elementType, variableType, from, to);
+
         if (!NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering))
             return null;
 
+        var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
+
+        return new IrNumericConversion(element, from, to, isChecked, IsLifted: elementNullable);
+    }
+
+    /// <summary>
+    /// The unwrap-or-throw first stage of a nullable element read into a
+    /// non-nullable loop variable, then the numeric conversion Roslyn's
+    /// explicit element conversion performs — mirroring the explicit cast
+    /// (<c>(int)d</c>). With a conversion to run, the unwrap reads the raw
+    /// element through its underlying type (Dart's
+    /// <c>(… as double).toInt()</c>) and the conversion carries the
+    /// variable's type as its <see cref="IrNumericConversion.CastType"/>
+    /// (<c>as Color</c> for an enum loop variable); with none — the kinds
+    /// already match, or the lowering keeps no node — the unwrap itself is
+    /// the variable's cast (<c>as Color</c>). The checked context is the
+    /// loop's, like any element conversion.
+    /// </summary>
+    private IrExpression UnwrappedElementValue(
+        ForEachStatementSyntax fe,
+        IrExpression element,
+        ITypeSymbol elementType,
+        ITypeSymbol variableType,
+        IrNumericEndpoint from,
+        IrNumericEndpoint to
+    )
+    {
+        var guarded = _expressions.GuardedValueOrThrow(element);
+
+        if (
+            from == to
+            || !NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering)
+        )
+            return new IrCastExpression(guarded, MapType(variableType));
+
+        var unwrapped = new IrCastExpression(
+            guarded,
+            MapType(elementType.UnwrapNullableValueType())
+        );
+
         return new IrNumericConversion(
-            element,
+            unwrapped,
             from,
             to,
-            IsChecked: CheckedContexts.IsChecked(fe, _semantic.Compilation),
-            IsLifted: info.ElementType.IsNullableValueType()
+            CheckedContexts.IsChecked(fe, _semantic.Compilation),
+            IsLifted: false,
+            CastType: MapType(variableType)
         );
     }
+
+    private IrTypeRef MapType(ITypeSymbol type) =>
+        IrTypeRefMapper.Map(type, _originResolver, _context.Target);
 
     private static bool IsNumericElementConversion(ForEachStatementInfo info) =>
         info.ElementConversion.IsNumeric || info.ElementConversion.IsNullable;

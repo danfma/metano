@@ -1,10 +1,11 @@
 /**
  * Runtime helpers for C#'s 64-bit integers, which the compiler maps to `bigint`:
- * range checks, checked narrowing, lifted conversions, and the conversions from
- * `double`, `decimal` and `BigInteger` with .NET 9+ semantics. Every export is a
- * function or a constant, so generated code imports only what it calls.
+ * range checks, checked narrowing, lifted conversions, the conversions from
+ * `double`, `decimal` and `BigInteger` with .NET 9+ semantics, and division and
+ * remainder with .NET's exceptions. Every export is a function or a constant,
+ * so generated code imports only what it calls.
  */
-import { OverflowException } from "./exceptions/index.ts";
+import { DivideByZeroException, OverflowException } from "./exceptions/index.ts";
 
 /** `long.MinValue`. */
 export const INT64_MIN = -9223372036854775808n;
@@ -182,6 +183,118 @@ export function uint64FromBigInteger(value: bigint): bigint {
   }
 
   return requireRange(value, 0n, UINT64_MAX, UINT64_RANGE_MESSAGE);
+}
+
+/**
+ * `l / m` on `long`: the quotient truncated toward zero; a `null` (or `undefined`)
+ * operand gives `null`, as C#'s lifted `long?` division.
+ *
+ * @throws DivideByZeroException when `divisor` is zero.
+ * @throws OverflowException for `long.MinValue / -1`, in every context, as .NET does.
+ */
+export function divInt64(dividend: bigint, divisor: bigint): bigint;
+export function divInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null;
+export function divInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null {
+  if (dividend == null || divisor == null) {
+    return null;
+  }
+
+  requireSignedDivision(dividend, divisor);
+
+  return dividend / divisor;
+}
+
+/**
+ * `l % m` on `long`: the remainder with the dividend's sign; a `null` (or `undefined`)
+ * operand gives `null`.
+ *
+ * @throws DivideByZeroException when `divisor` is zero.
+ * @throws OverflowException for `long.MinValue % -1`, in every context, as .NET does.
+ */
+export function remInt64(dividend: bigint, divisor: bigint): bigint;
+export function remInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null;
+export function remInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null {
+  if (dividend == null || divisor == null) {
+    return null;
+  }
+
+  requireSignedDivision(dividend, divisor);
+
+  return dividend % divisor;
+}
+
+/**
+ * `u / v` on `ulong`: the truncated quotient; a `null` (or `undefined`) operand gives `null`.
+ *
+ * @throws DivideByZeroException when `divisor` is zero.
+ */
+export function divUInt64(dividend: bigint, divisor: bigint): bigint;
+export function divUInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null;
+export function divUInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null {
+  if (dividend == null || divisor == null) {
+    return null;
+  }
+
+  requireNonZeroDivisor(divisor);
+
+  return dividend / divisor;
+}
+
+/**
+ * `u % v` on `ulong`: the remainder; a `null` (or `undefined`) operand gives `null`.
+ *
+ * @throws DivideByZeroException when `divisor` is zero.
+ */
+export function remUInt64(dividend: bigint, divisor: bigint): bigint;
+export function remUInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null;
+export function remUInt64(
+  dividend: bigint | null | undefined,
+  divisor: bigint | null | undefined,
+): bigint | null {
+  if (dividend == null || divisor == null) {
+    return null;
+  }
+
+  requireNonZeroDivisor(divisor);
+
+  return dividend % divisor;
+}
+
+/** Throws what .NET throws for a signed 64-bit `/` or `%`: a zero divisor, or `long.MinValue` by `-1`. */
+function requireSignedDivision(dividend: bigint, divisor: bigint): void {
+  requireNonZeroDivisor(divisor);
+
+  if (dividend === INT64_MIN && divisor === -1n) {
+    throw new OverflowException();
+  }
+}
+
+/** Throws DivideByZeroException, as every .NET integer `/` and `%` does, when `divisor` is zero. */
+function requireNonZeroDivisor(divisor: bigint): void {
+  if (divisor === 0n) {
+    throw new DivideByZeroException();
+  }
 }
 
 function requireRange(value: bigint, min: bigint, max: bigint, message?: string): bigint {

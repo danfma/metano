@@ -26,7 +26,7 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix
     )
     {
-        var lifted = LiftedOperatorFor(StepOperatorOf(op), _semantic.GetOperation(node));
+        var lifted = LiftedOperatorFor(StepOperatorOf(op), node);
 
         IrExpression Increment(IrExpression current) =>
             LiftBinary(

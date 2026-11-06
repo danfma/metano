@@ -4,11 +4,11 @@ import { Point } from "./point";
 export class Names {
   constructor() { }
 
-  private addXY(x: number, y: number): number {
+  addXY(x: number, y: number): number {
     return x + y;
   }
 
-  private addP(p: Point): number {
+  addP(p: Point): number {
     return p.x;
   }
 
@@ -26,11 +26,11 @@ export class Names {
     throw new Error("No matching overload for add");
   }
 
-  private fInt32(a: number): string {
+  fInt32(a: number): string {
     return "int";
   }
 
-  private fString(a: string): string {
+  fString(a: string): string {
     return "string";
   }
 
@@ -48,11 +48,11 @@ export class Names {
     throw new Error("No matching overload for f");
   }
 
-  private gInt32(v: number): string {
+  gInt32(v: number): string {
     return "int";
   }
 
-  private gInt64(v: number): string {
+  gInt64(v: number): string {
     return "long";
   }
 
@@ -70,11 +70,11 @@ export class Names {
     throw new Error("No matching overload for g");
   }
 
-  private uInt32(a: number): string {
+  uInt32(a: number): string {
     return "int";
   }
 
-  private uUInt32(a: number): string {
+  uUInt32(a: number): string {
     return "uint";
   }
 
@@ -92,11 +92,11 @@ export class Names {
     throw new Error("No matching overload for u");
   }
 
-  private wInt64(a: number): string {
+  wInt64(a: number): string {
     return "long";
   }
 
-  private wUInt64(a: number): string {
+  wUInt64(a: number): string {
     return "ulong";
   }
 
@@ -114,11 +114,11 @@ export class Names {
     throw new Error("No matching overload for w");
   }
 
-  private lListOfInt32(xs: number[]): number {
+  lListOfInt32(xs: number[]): number {
     return 1;
   }
 
-  private lInt32Array(xs: number[]): number {
+  lInt32Array(xs: number[]): number {
     return 2;
   }
 
@@ -136,11 +136,11 @@ export class Names {
     throw new Error("No matching overload for l");
   }
 
-  private sumInt32Array(xs: number[]): number {
+  sumInt32Array(xs: number[]): number {
     return 1;
   }
 
-  private sumDoubleArray(xs: number[]): number {
+  sumDoubleArray(xs: number[]): number {
     return 2;
   }
 
@@ -158,11 +158,11 @@ export class Names {
     throw new Error("No matching overload for sum");
   }
 
-  private hInt32OrNull(maybe: number | null): string {
+  hInt32OrNull(maybe: number | null): string {
     return "int";
   }
 
-  private hStringOrNull(maybe: string | null): string {
+  hStringOrNull(maybe: string | null): string {
     return "string";
   }
 
@@ -180,11 +180,11 @@ export class Names {
     throw new Error("No matching overload for h");
   }
 
-  private formatFmtCount(fmt: string, count: number): string {
+  formatFmtCount(fmt: string, count: number): string {
     return fmt;
   }
 
-  private formatFmtArgs(fmt: string, ...args: Object[]): string {
+  formatFmtArgs(fmt: string, ...args: Object[]): string {
     return fmt;
   }
 
@@ -202,11 +202,11 @@ export class Names {
     throw new Error("No matching overload for format");
   }
 
-  private identityString(value: string): string {
+  identityString(value: string): string {
     return value;
   }
 
-  private identityT<T>(value: T): T {
+  identityT<T>(value: T): T {
     return value;
   }
 

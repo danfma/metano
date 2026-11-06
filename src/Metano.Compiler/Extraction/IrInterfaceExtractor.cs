@@ -1,3 +1,4 @@
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -17,6 +18,7 @@ public static class IrInterfaceExtractor
         var originResolver = context?.OriginResolver;
         var target = context?.Target;
         var members = new List<IrMemberDeclaration>();
+        var groupSuffixes = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
 
         foreach (var member in type.GetMembers())
         {
@@ -34,7 +36,15 @@ public static class IrInterfaceExtractor
                     break;
 
                 case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
-                    members.Add(ExtractMethod(method, originResolver, target));
+                    members.Add(
+                        NamedInGroup(
+                            type,
+                            method,
+                            target,
+                            ExtractMethod(method, originResolver, target),
+                            groupSuffixes
+                        )
+                    );
                     break;
 
                 case IEventSymbol evt:
@@ -69,6 +79,58 @@ public static class IrInterfaceExtractor
             typeParameters,
             Attributes: IrAttributeExtractor.Extract(type)
         );
+    }
+
+    /// <summary>
+    /// A method of an overload group of the interface (spec 013 FR-031) is
+    /// named over its group, which every implementer anchors on: its suffix,
+    /// its signature text and its declaration ordinal. Any other method is
+    /// returned unchanged.
+    /// </summary>
+    private static IrMethodDeclaration NamedInGroup(
+        INamedTypeSymbol type,
+        IMethodSymbol method,
+        Metano.Annotations.TargetLanguage? target,
+        IrMethodDeclaration declaration,
+        Dictionary<string, IReadOnlyList<string>> groupSuffixes
+    )
+    {
+        var group = InterfaceOverloadGroup.Of(type, method.Name, target);
+        var ordinal = group.IndexOf(method);
+
+        if (group.Count < 2 || ordinal < 0)
+            return declaration;
+
+        var suffixes = GroupSuffixesOf(method.Name, group, groupSuffixes);
+
+        var named = OverloadGroupNaming.Apply([(method, declaration)], _ => suffixes[ordinal])[
+            method
+        ];
+
+        return named with
+        {
+            DeclarationOrdinal = ordinal,
+        };
+    }
+
+    /// <summary>
+    /// A group's suffixes, computed once per interface, so a dead end is
+    /// reported once.
+    /// </summary>
+    private static IReadOnlyList<string> GroupSuffixesOf(
+        string name,
+        IReadOnlyList<IMethodSymbol> group,
+        Dictionary<string, IReadOnlyList<string>> groupSuffixes
+    )
+    {
+        if (groupSuffixes.TryGetValue(name, out var cached))
+            return cached;
+
+        var suffixes = OverloadGroupNaming.SuffixesOf(group);
+
+        groupSuffixes[name] = suffixes;
+
+        return suffixes;
     }
 
     private static IrPropertyDeclaration ExtractProperty(

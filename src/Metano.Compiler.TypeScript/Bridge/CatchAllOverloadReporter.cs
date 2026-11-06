@@ -52,7 +52,7 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         var symbols = type.GetMembers(primary.Name).OfType<IMethodSymbol>().ToList();
 
         var found = CatchAllOverloads.Find(
-            [primary, .. primary.Overloads ?? []],
+            IrMethodGroup.Of(primary).Branches,
             method => method.Parameters,
             method =>
                 TypeCheckScope.ForMethod(

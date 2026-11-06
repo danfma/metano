@@ -1,7 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { UUID } from "metano-runtime";
-import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Decimal } from "decimal.js";
+import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Keys } from "./keys";
 import { Level } from "./level";
 import { Mood } from "./mood";
@@ -12,8 +12,6 @@ export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
 
   private _keys?: TypeSpec<Keys>;
-
-  private _dateOnly?: ValueSpec<Temporal.PlainDate>;
 
   static get default(): JsonContext {
     return this._default;
@@ -95,8 +93,8 @@ export class JsonContext extends SerializerContext {
             key: {
               kind: "numericEnum",
               values: Level,
-              typeName: "TestApp.Level",
               numberType: "System.Int32",
+              typeName: "TestApp.Level",
             },
             value: { kind: "primitive" },
           },
@@ -109,8 +107,8 @@ export class JsonContext extends SerializerContext {
             key: {
               kind: "numericEnum",
               values: Shade,
-              typeName: "TestApp.Shade",
               numberType: "System.Byte",
+              typeName: "TestApp.Shade",
             },
             value: { kind: "primitive" },
           },
@@ -147,7 +145,7 @@ export class JsonContext extends SerializerContext {
           json: "ByPrice",
           type: {
             kind: "map",
-            key: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
+            key: { kind: "decimal", type: Decimal },
             value: { kind: "primitive" },
           },
         },
@@ -165,19 +163,11 @@ export class JsonContext extends SerializerContext {
           json: "ByTag",
           type: {
             kind: "map",
-            key: { kind: "branded", create: Tag.create, typeName: "TestApp.Tag" },
+            key: { kind: "branded", create: Tag.create },
             value: { kind: "primitive" },
           },
         },
       ],
-    });
-  }
-
-  get dateOnly(): ValueSpec<Temporal.PlainDate> {
-    return this._dateOnly ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
-      valueType: true,
-      typeName: "System.DateOnly",
     });
   }
 }

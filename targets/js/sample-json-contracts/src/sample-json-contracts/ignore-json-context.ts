@@ -47,7 +47,7 @@ export class IgnoreJsonContext extends SerializerContext {
   get ignAbs(): TypeSpec<IgnAbs> {
     return (this._ignAbs ??= this.createSpec({
       type: IgnAbs,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'IgnAbs' directly; deserialize it through a polymorphic spec.",
         );

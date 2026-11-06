@@ -32,7 +32,43 @@ public sealed record IrClassDeclaration(
     IReadOnlyList<IrTypeParameter>? TypeParameters = null,
     IReadOnlyList<IrAttribute>? Attributes = null,
     IReadOnlyList<IrRecordEqualityMember>? EqualityMembers = null
-) : IrTypeDeclaration(Name, Visibility, TypeParameters, Attributes);
+) : IrTypeDeclaration(Name, Visibility, TypeParameters, Attributes)
+{
+    /// <summary>
+    /// The root members of the interfaces the type implements more than once
+    /// (<c>C : IConv&lt;int&gt;, IConv&lt;string&gt;</c>, spec 013 DECIDED-30): each
+    /// root name keeps runtime dispatch over the type's implementations of it.
+    /// <c>null</c> when the type implements no interface more than once.
+    /// </summary>
+    public IReadOnlyList<IrConstructedRoot>? ConstructedRoots { get; init; }
+
+    /// <summary>
+    /// The constructed root <paramref name="method"/> is anchored on: a branch
+    /// of that root's runtime dispatcher, not a fast path; <c>null</c> otherwise.
+    /// </summary>
+    public IrConstructedRoot? ConstructedRootOf(IrMethodDeclaration method) =>
+        method.Anchor?.Root is { } root
+            ? ConstructedRoots?.FirstOrDefault(constructed => constructed.Root == root)
+            : null;
+}
+
+/// <summary>
+/// A member of a dispatched group of an interface a type implements more than
+/// once (spec 013 FR-036), as that type sees it.
+/// </summary>
+/// <param name="Root">The interface member's definition, which every
+/// implementation is anchored on.</param>
+/// <param name="Constructions">Its signature in each construction the type
+/// implements (<c>Conv(int x)</c>, <c>Conv(string x)</c>), in the order of the
+/// type's interfaces.</param>
+/// <param name="IsInherited">Whether an emitted base class already declares the
+/// root's name, so the type's runtime dispatcher overrides it and forwards the
+/// constructions it does not implement.</param>
+public sealed record IrConstructedRoot(
+    IrOverloadRef Root,
+    IReadOnlyList<IrMethodDeclaration> Constructions,
+    bool IsInherited
+);
 
 /// <summary>
 /// One member that takes part in a record's value equality.

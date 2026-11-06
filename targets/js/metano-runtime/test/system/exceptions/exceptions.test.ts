@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   ArithmeticException,
+  DivideByZeroException,
   Exception,
   OverflowException,
   SystemException,
@@ -17,6 +18,7 @@ describe("exceptions", () => {
       "Overflow or underflow in the arithmetic operation.",
     ],
     ["OverflowException", () => new OverflowException(), "Arithmetic operation resulted in an overflow."],
+    ["DivideByZeroException", () => new DivideByZeroException(), "Attempted to divide by zero."],
   ];
 
   test.each(defaults)("%s carries .NET's default message and its class name", (name, create, message) => {
