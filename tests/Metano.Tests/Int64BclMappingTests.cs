@@ -156,6 +156,7 @@ public class Int64BclMappingTests
             public Item[] Items(int n) => new Item[n];
             public long Count(List<int> xs) => xs.LongCount() + xs.LongCount(x => x > 1);
             public int IntCount(List<int> xs) => xs.Count();
+
             public long Sum(long[] ids, List<Item> items) => ids.Sum() + items.Sum(x => x.Size);
             public long? NullableSum(List<Item> items) => items.Sum(x => x.Optional);
 
@@ -250,6 +251,46 @@ public class Int64BclMappingTests
             .That(files["statics.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("int64-math.ts"));
 
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// The <c>nint</c> / <c>nuint</c> statics (DECIDED-2: nint follows every
+    /// rule of the spec) bind the <c>IntPtr</c> / <c>UIntPtr</c> overloads,
+    /// whose stable type names never match the <c>long</c> templates; the
+    /// pointer-width variants route them to the same runtime helpers.
+    /// </summary>
+    [Test]
+    public async Task BigIntMode_NativeIntegerMathStatics_CallTheInt64Helpers()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile]
+            public static class NativeMath
+            {
+                public static nint Abs(nint v) => Math.Abs(v);
+                public static nint Max(nint a, nint b) => Math.Max(a, b);
+                public static nint Min(nint a, nint b) => Math.Min(a, b);
+                public static int Sign(nint v) => Math.Sign(v);
+                public static nint Clamp(nint v, nint lo, nint hi) => Math.Clamp(v, lo, hi);
+                public static nuint MaxU(nuint a, nuint b) => Math.Max(a, b);
+                public static nuint ClampU(nuint v, nuint lo, nuint hi) => Math.Clamp(v, lo, hi);
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        var native = files["native-math.ts"];
+
+        await Assert.That(native).Contains("return absInt64(v);");
+        await Assert.That(native).Contains("return maxInt64(a, b);");
+        await Assert.That(native).Contains("return minInt64(a, b);");
+        await Assert.That(native).Contains("return signInt64(v);");
+        await Assert.That(native).Contains("return clampInt64(v, lo, hi);");
+        await Assert.That(native).Contains("return maxUInt64(a, b);");
+        await Assert.That(native).Contains("return clampUInt64(v, lo, hi);");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
