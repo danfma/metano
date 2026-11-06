@@ -276,15 +276,18 @@ public static class IrToTsStatementBridge
             IrReturnStatement ret => new TsReturnStatement(
                 ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, context) : null
             ),
-            // Declared ahead of its first assignment (an `out var` local, or
-            // `T x;`): a typed, uninitialized `let x: T;` keeps TypeScript's
-            // definite-assignment analysis in charge instead of `undefined`.
+            // Declared ahead of its first assignment (an `out var` local, a
+            // pattern designator, or `T x;`): a typed, uninitialized
+            // `let x: T;` keeps TypeScript's definite-assignment analysis in
+            // charge instead of `undefined`. The [ExportFromBcl] overrides
+            // ride along so a decimal designator narrows to `Decimal` — the
+            // type the `instanceof` test just established for its subject.
             IrVariableDeclaration { Initializer: null, Type: { } type } vd =>
                 new TsVariableDeclaration(
                     IrToTsNamingPolicy.ToLocalName(vd.Name),
                     Initializer: null,
                     Const: false,
-                    Type: IrToTsTypeMapper.Map(type),
+                    Type: IrToTsTypeMapper.Map(type, context.TypeOverrides),
                     DefinitelyAssigned: vd.AssignedInWhenGuard
                 ),
             // Declared ahead of its first assignment with no known type (a `var`

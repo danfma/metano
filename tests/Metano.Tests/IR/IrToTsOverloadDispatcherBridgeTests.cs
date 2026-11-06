@@ -90,12 +90,13 @@ public class IrToTsOverloadDispatcherBridgeTests
     }
 
     [Test]
-    public async Task DecimalOverload_WithoutBclOverride_ChecksANumber()
+    public async Task DecimalOverload_WithoutBclOverride_ChecksInstanceofDecimal()
     {
-        // Without the [ExportFromBcl] override IrToTsTypeMapper lowers
-        // `decimal` to `number`, so the guard must accept plain numbers; with
-        // it the parameter is a `Decimal` and the guard tests `instanceof
-        // Decimal` (covered by the dispatcher-defaults-imports golden).
+        // A decimal is a decimal.js `Decimal` instance at runtime even where
+        // the scope carries no [ExportFromBcl] overrides (companion
+        // namespaces build their guards from an empty scope): the guard tests
+        // `instanceof Decimal`, because `typeof === "number"` would accept
+        // plain JS numbers no C# decimal produces (#505).
         var (primary, containingTypeName) = ExtractOverloadGroup(
             """
             public class MoneyDispatch
@@ -117,8 +118,8 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
-        await Assert.That(printed).Contains("typeof args[0] === \"number\"");
-        await Assert.That(printed).DoesNotContain("instanceof Decimal");
+        await Assert.That(printed).Contains("args[0] instanceof Decimal");
+        await Assert.That(printed).DoesNotContain("typeof args[0] === \"number\"");
     }
 
     [Test]

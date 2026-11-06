@@ -220,24 +220,27 @@ public static partial class IrToTsExpressionBridge
     /// generated <c>[GenerateGuard]</c> guard (erased interfaces and
     /// <c>[PlainObject]</c>s), the array shape and length of a
     /// <c>[JsTuple]</c> (a type alias with no runtime value to reference), or
-    /// <c>instanceof</c> its class. Extraction reports MS0001 for a type with
-    /// no test, so none reaches this point.
+    /// <c>instanceof</c> its class. A <c>decimal</c> precedes the
+    /// classification: it lowers to a decimal.js <c>Decimal</c> instance, so
+    /// its test is <c>instanceof Decimal</c> — <c>typeof === "number"</c>
+    /// would match plain JS numbers C# rejects. Extraction reports MS0001 for
+    /// a type with no test, so none reaches this point.
     /// </summary>
     private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
-        IrRuntimeTypeTest.Of(targetType) switch
-        {
-            IrRuntimeTypeTest.Typeof { Primitive: var primitive } => IrTypeCheckBuilder.TypeofTest(
-                value,
-                IrTypeCheckBuilder.TypeofKind(primitive)
-            ),
-            IrRuntimeTypeTest.Guard => new TsCallExpression(
-                new TsIdentifier($"is{RuntimeNamedType(targetType).Name}"),
-                [value]
-            ),
-            IrRuntimeTypeTest.ArrayTuple { Arity: var arity } => ArrayTupleTest(value, arity),
-            IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
-            _ => throw NoRuntimeTypeTest(targetType),
-        };
+        targetType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal }
+            ? IrTypeCheckBuilder.DecimalInstanceof(value)
+            : IrRuntimeTypeTest.Of(targetType) switch
+            {
+                IrRuntimeTypeTest.Typeof { Primitive: var primitive } =>
+                    IrTypeCheckBuilder.TypeofTest(value, IrTypeCheckBuilder.TypeofKind(primitive)),
+                IrRuntimeTypeTest.Guard => new TsCallExpression(
+                    new TsIdentifier($"is{RuntimeNamedType(targetType).Name}"),
+                    [value]
+                ),
+                IrRuntimeTypeTest.ArrayTuple { Arity: var arity } => ArrayTupleTest(value, arity),
+                IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
+                _ => throw NoRuntimeTypeTest(targetType),
+            };
 
     /// <summary>
     /// The structural <see cref="IrRuntimeTypeTest.ArrayTuple"/> test: an
