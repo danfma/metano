@@ -1527,6 +1527,16 @@ Both are valid ways to handle JSON data:
 - **Simple DTO** with only primitives and arrays of primitives? → `[PlainObject]`
 - **Rich domain type** with dates, decimals, branded IDs, maps? → `JsonSerializerContext`
 
+**64-bit fields.** From spec 012 (3.0.0) a `long` / `ulong` field of a
+`[PlainObject]` type is a TS `bigint` (`ticks?: bigint`, FR-060), and
+`JSON.stringify` throws on such an object — JavaScript has no JSON form for a
+`bigint` (`TypeError: Do not know how to serialize a BigInt`). The supported
+writer is the generated `JsonSerializerContext`, whose `int64` descriptor
+writes the exact digits; use `JSON.stringify(serializer.serialize(dto, spec))`
+when a framework helper calls `JSON.stringify` for you. Keep such DTOs
+`number`-only (use `int` / `double`) when they must survive plain
+`JSON.stringify`.
+
 ## See also
 
 - [Attribute Reference](attributes.md#plainobject--record--interface) — `[PlainObject]` details

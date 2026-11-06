@@ -433,6 +433,16 @@ public static class DiagnosticCodes
     /// the member (spec 012 FR-058).</summary>
     public const string Int64EnumValuePrecision = "MS0064";
 
+    /// <summary>MS0065 — a 64-bit integer (<c>long</c>, <c>ulong</c>, <c>nint</c>,
+    /// <c>nuint</c>; also nullable, array, generic argument or delegate signature)
+    /// appears in the signature of an <c>[Import]</c>, <c>[Emit]</c> or
+    /// <c>[External]</c> declaration, or of a member a user assembly maps with
+    /// <c>[MapMethod]</c> / <c>[MapProperty]</c> (Metano's own
+    /// <c>src/Metano/Runtime</c> mappings excluded). The JavaScript side now
+    /// exchanges a <c>bigint</c>, and no coercion is inserted. A warning at the
+    /// declaration, or at the mapping attribute (spec 012 FR-059).</summary>
+    public const string BigIntAtInteropBoundary = "MS0065";
+
     /// <summary>MS0066 — a constant format passed to <c>ToString</c> on a 64-bit
     /// integer or used in an interpolation hole over one (<c>C</c>, <c>P</c>,
     /// <c>E</c>, <c>B</c>, a custom format), or a constant <c>NumberStyles</c> passed
@@ -441,6 +451,7 @@ public static class DiagnosticCodes
     /// <c>NotSupportedException</c> at run time. A warning (spec 012 FR-037,
     /// FR-038).</summary>
     public const string UnsupportedInt64Format = "MS0066";
+
 
     /// <summary>MS0067 — the spec 013 claim pass renamed a generated factory, selector
     /// or fast path (per suffix, <c>$</c> appended until free) because its candidate was
