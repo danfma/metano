@@ -155,8 +155,14 @@ js/sample-issue-tracker/src/
 
 ## How to build
 
+The sample keeps no MSBuild transpile wiring: the BigInt staging mode has
+no MSBuild surface yet (DECIDED-22), so the generated TypeScript under
+`targets/js/sample-issue-tracker/src` is produced by the drift test
+(`METANO_UPDATE_INT64_ISSUE_TRACKER=1` rewrites it) or by:
+
 ```bash
-dotnet build samples/SampleIssueTracker/SampleIssueTracker.csproj
+cd targets/js/sample-issue-tracker
+bun run generate
 ```
 
 ## How to test
@@ -168,7 +174,7 @@ bun run build
 bun test
 ```
 
-You should see **51 passing tests** that cover:
+You should see **174 passing tests** that cover:
 
 - `Issue` lifecycle: create, rename, describe, assign, unassign, plan/unplan for
   sprint, add comments
