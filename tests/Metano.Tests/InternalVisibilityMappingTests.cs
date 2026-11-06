@@ -182,7 +182,12 @@ public class InternalVisibilityMappingTests
             .That(output)
             .Contains("/** @internal */\n  add(a: number, b: number): number;");
 
-        await Assert.That(files["app/caller.ts"]).Contains("new Engine().add(1, 2)");
+        // Spec 013 FR-018: the caller of a dispatched group calls the
+        // resolved overload's fast path, not the runtime dispatcher; both
+        // stay public and tagged (DECIDED-17).
+        await Assert
+            .That(files["app/caller.ts"])
+            .Contains("new Engine().addAB(1, 2) + new Engine().addText(\"x\")");
     }
 
     [Test]
@@ -820,7 +825,10 @@ public class InternalVisibilityMappingTests
         var derived = TranspileHelper.TranspileWithLibrary(library, consumer)["app/derived.ts"];
 
         await Assert.That(derived).Contains("super(Base.byBaseDefault);");
-        await Assert.That(derived).Contains("this.q(\"x\") + this.q(1)");
+        // Spec 013 FR-018: the calls resolve to the producer's claimed fast
+        // paths (both overloads share the parameter name `a`, so the group
+        // spells them by type).
+        await Assert.That(derived).Contains("this.qString(\"x\") + this.qInt32(1)");
 
         var baseOutput = TranspileHelper.Transpile(library)["lib/base.ts"];
 

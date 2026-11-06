@@ -41,4 +41,14 @@ public sealed record IrModuleFunction(
     IrMethodSemantics Semantics,
     IReadOnlyList<IrTypeParameter>? TypeParameters = null,
     IReadOnlyList<IrAttribute>? Attributes = null
-);
+)
+{
+    /// <summary>
+    /// The dispatched overload the function belongs to (spec 013 FR-032),
+    /// set by the extractor when its group dispatches: a target emits the
+    /// group as one exported dispatcher plus one exported fast path per
+    /// overload, and call sites resolve their claimed names through the
+    /// ref. <c>null</c> when the function stands alone.
+    /// </summary>
+    public IrOverloadRef? OverloadRef { get; init; }
+}

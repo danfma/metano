@@ -290,7 +290,7 @@ public static class IrToTsOverloadDispatcherBridge
     /// implementation return type, the overload signatures and the
     /// accessibility they share: the most permissive of the group.
     /// </summary>
-    private sealed record OverloadGroupPlan(
+    internal sealed record OverloadGroupPlan(
         IReadOnlyList<IrMethodDeclaration> Sorted,
         bool IsAsync,
         TsType CommonReturn,
@@ -303,7 +303,7 @@ public static class IrToTsOverloadDispatcherBridge
     /// dispatch order unless <paramref name="sort"/> is off (the caller
     /// ordered them already).
     /// </summary>
-    private static OverloadGroupPlan PlanOverloadGroup(
+    internal static OverloadGroupPlan PlanOverloadGroup(
         IReadOnlyList<IrMethodDeclaration> overloads,
         IrToTsTypeOverrides? typeOverrides,
         bool sort
@@ -550,7 +550,7 @@ public static class IrToTsOverloadDispatcherBridge
         IReadOnlyList<IrTypeParameter>? typeParameters
     ) => IrToTsTypeParameterMapper.Convert(typeParameters);
 
-    private static List<TsStatement> BuildDispatcherBody(
+    internal static List<TsStatement> BuildDispatcherBody(
         IReadOnlyList<IrMethodDeclaration> sorted,
         IReadOnlyList<string> fastPathNames,
         TsExpression? receiver,

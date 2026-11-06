@@ -24,6 +24,42 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
+    /// A user-defined operator application bound to <paramref name="target"/>:
+    /// its operands one value per parameter, in parameter order (spec 013
+    /// FR-018). <c>null</c> when <paramref name="call"/> is no operator
+    /// application of that overload, so the caller keeps today's lowering.
+    /// </summary>
+    internal BoundOverloadCall? ExtractBoundOperatorCall(
+        IOperation? call,
+        IMethodSymbol operatorMethod,
+        IrOverloadRef target
+    )
+    {
+        IReadOnlyList<IOperation>? operands = call switch
+        {
+            IBinaryOperation binary
+                when SymbolEqualityComparer.Default.Equals(binary.OperatorMethod, operatorMethod) =>
+                [binary.LeftOperand, binary.RightOperand],
+            IUnaryOperation unary
+                when SymbolEqualityComparer.Default.Equals(unary.OperatorMethod, operatorMethod) =>
+            [
+                unary.Operand,
+            ],
+            _ => null,
+        };
+
+        if (operands is null)
+            return null;
+
+        return new BoundOverloadCall(
+            operands
+                .Select(operand => new IrArgument(Extract((ExpressionSyntax)operand.Syntax)))
+                .ToList(),
+            new IrSelectedOverload(target)
+        );
+    }
+
+    /// <summary>
     /// <paramref name="call"/> — a <c>new</c> or a constructor initializer,
     /// explicit or implicit — bound to <paramref name="target"/>, or
     /// <c>null</c> when it is no call or an argument has no form this
@@ -64,7 +100,10 @@ public sealed partial class IrExpressionExtractor
         argument.Parameter is not null
         && argument.ArgumentKind switch
         {
-            ArgumentKind.Explicit => argument.Syntax is ArgumentSyntax,
+            // An extension call binds its receiver as the first argument,
+            // handing over the receiver expression instead of an argument
+            // syntax node.
+            ArgumentKind.Explicit => argument.Syntax is ArgumentSyntax or ExpressionSyntax,
             ArgumentKind.ParamArray => argument.Value is IArrayCreationOperation,
             ArgumentKind.DefaultValue => true,
             _ => false,
@@ -110,9 +149,27 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrArgument ExplicitBoundArgumentOf(IArgumentOperation argument)
     {
-        var syntax = (ArgumentSyntax)argument.Syntax;
-        var extracted = ExtractArgument(syntax) with { Name = null };
+        // An extension call's receiver binds as the first argument and hands
+        // over the receiver expression, not an argument syntax node.
+        SyntaxNode syntax = argument.Syntax switch
+        {
+            ArgumentSyntax argumentSyntax => argumentSyntax,
+            ExpressionSyntax expression => expression,
+            _ => throw new InvalidCastException(
+                $"An explicit argument has unexpected syntax '{argument.Syntax?.Kind()}'."
+            ),
+        };
+        var extracted = syntax switch
+        {
+            ArgumentSyntax argumentSyntax => ExtractArgument(argumentSyntax) with { Name = null },
+            _ => new IrArgument(Extract((ExpressionSyntax)syntax)),
+        };
         var parameter = argument.Parameter!;
+        var argumentExpression = syntax switch
+        {
+            ArgumentSyntax argumentSyntax => argumentSyntax.Expression,
+            _ => (ExpressionSyntax)syntax,
+        };
 
         if (!parameter.IsParams)
             return extracted;
@@ -122,7 +179,7 @@ public sealed partial class IrExpressionExtractor
             {
                 IsSpread = true,
             },
-            syntax.Expression,
+            argumentExpression,
             (IMethodSymbol)parameter.ContainingSymbol
         );
     }

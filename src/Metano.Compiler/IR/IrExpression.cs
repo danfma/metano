@@ -176,7 +176,18 @@ public sealed record IrMemberAccess(
     IrExpression Target,
     string MemberName,
     IrMemberOrigin? Origin = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The dispatched overload a method-group reference resolved to (spec 013
+    /// FR-018): a target renames the access to the overload's claimed fast
+    /// path, keeping the receiver binding (<c>b.addX.bind(b)</c>). The
+    /// access inside a call target carries it the same way, so the call and
+    /// its method group spell one name. <c>null</c> when the access is not a
+    /// dispatched group member.
+    /// </summary>
+    public IrSelectedOverload? Overload { get; init; }
+}
 
 /// <summary>
 /// Element/index access: <c>target[index]</c>. <see cref="IndexKind"/> is the

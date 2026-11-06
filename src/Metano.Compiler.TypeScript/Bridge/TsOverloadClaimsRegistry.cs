@@ -70,6 +70,13 @@ public sealed class TsOverloadClaimsRegistry(
         if (IrTypeKeys.Find(root.DeclaringType, _context.Compilation) is not { } type)
             return null;
 
+        // A containerless class or an extension container emits its
+        // dispatched groups as module functions, whose fast paths the
+        // barrel-scope claim pass names (spec 013 FR-032) — not as class
+        // members.
+        if (TsModuleFunctionClaims.IsModuleFunctionType(type))
+            return _context.ModuleFunctionClaims.FastPathOf(root);
+
         return type.TypeKind == TypeKind.Interface
             ? InterfaceFastPathsOf(type).NameAt(root.MemberName, root.Ordinal)
             : For(type).FastPathNameAt(root.MemberName, root.Ordinal);

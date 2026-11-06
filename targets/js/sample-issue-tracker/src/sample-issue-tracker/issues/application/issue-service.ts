@@ -36,7 +36,12 @@ export class IssueService {
     description: string,
     type: IssueType,
   ): Promise<OperationResult<Issue>> {
-    return this.createAsync(title, description, type, IssuePriority.Medium);
+    return this.createAsyncTitleDescriptionTypePriority(
+      title,
+      description,
+      type,
+      IssuePriority.Medium,
+    );
   }
 
   createAsync(
@@ -123,7 +128,7 @@ export class IssueService {
       return loadResult;
     }
 
-    return await this.addCommentAsync(loadResult.value, authorId, message);
+    return await this.addCommentAsyncIssueAuthorIdMessage(loadResult.value, authorId, message);
   }
 
   async addCommentAsyncIssueAuthorIdMessage(
@@ -131,7 +136,7 @@ export class IssueService {
     authorId: UserId,
     message: string,
   ): Promise<OperationResult<Issue>> {
-    issue.addComment(authorId, message);
+    issue.addCommentAuthorIdMessage(authorId, message);
     await this._repository.saveAsync(issue);
 
     return OperationResult.ok(issue);
@@ -184,7 +189,7 @@ export class IssueService {
       return loadResult;
     }
 
-    loadResult.value.transitionTo(nextStatus, actorId);
+    loadResult.value.transitionToNextStatusActorId(nextStatus, actorId);
     await this._repository.saveAsync(loadResult.value);
 
     return loadResult;

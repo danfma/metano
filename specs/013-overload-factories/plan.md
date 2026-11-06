@@ -243,6 +243,36 @@ A multiply-constructed root's name is the one its interface declares (computed o
 definition, `convX`), not a constructed spelling: implementers must match the interface's member
 name, and a constructed spelling differs from it whenever the group needs type spellings.
 
+As landed in 013e: the core binds a call resolved into a dispatched method group
+(`DispatchedMethodCalls`, `IrExpressionExtractor`): an instance or static call keeps its receiver
+and carries `IrCallExpression.Overload` with Roslyn's bound arguments — an omitted optional passes
+the static overload's default explicitly (DECIDED-32; the runtime probe pins the static type's
+default winning over a hiding derived one, and the emitted output returns .NET's exact results
+under Node), an expanded `params` call its elements and a normal-form one the spread array
+(DECIDED-21), and a generic call keeps its type arguments. An extension call binds through the
+same extractor hook (`TryRewriteExtensionCall`, the reduced extension's original carrying the
+overload; the receiver binds as the group's first argument, whose syntax node is an expression, so
+`IsBindable` accepts the receiver form), an operator application binds its two operands
+(`ExtractBoundOperatorCall`), and a method group renames through `IrMemberAccess.Overload`
+(`b.addX.bind(b)`). The TypeScript bridge resolves every bound call through the claims registry —
+instance receivers in place, statics on the type, extensions through the containerless flatten,
+operators on the type's fast path — and keeps the dispatcher call (with the bound arguments,
+which are correct for the resolved overload) when a metadata-only reference leaves the claims
+unreadable (DECIDED-24, `overload-cross-package-metadata-methods`). Overloaded module groups
+landed: the barrel-scope claim pass (`TsModuleFunctionClaims`) names one exported fast path per
+overload of every dispatched module-function group — containerless classes and extension
+containers — claiming dispatchers and module variables first and reporting `MS0067` for each
+`$`-rename; `IrToTsModuleBridge.ConvertDispatchedGroup` emits the exported fast paths plus the
+exported dispatcher (its own branch builder over `IrModuleFunction`s, until the deferred
+`TsDispatcherShape` unification), the export registry registers the dispatcher with its fast
+paths (replacing MS0020 for same-class overloads), and call sites — static or extension syntax —
+import and call the claimed names. Direct calls stay target-side: Dart renders source calls and
+arguments until it claims names (013g), and a C# 14 extension block's member, whose synthetic
+type the groups do not cover, keeps the dispatcher. Regenerated in this slice: the
+`overload-virtual` and `overload-abstract-methods` goldens (bodies calling dispatched groups now
+bind), the cross-package `q`-call assertion, the internal-tagged caller assertion, and the
+sample-issue-tracker output (`addCommentAsyncIssueAuthorIdMessage` and friends).
+
 Deferred from the 013d reviews (design, no behavior): a target capability port instead of
 `IsDartTarget` for binding `base.M(...)`; reporting `MS0069` from the core so every target gets it;
 splitting `MethodOverloadGroups` into grouping, anchoring and inherited-dispatcher modules; a shared

@@ -361,6 +361,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
+        // The barrel-scope claims of the module-function fast paths (spec 013
+        // FR-032) run once per transform, before the export registry, so the
+        // registry, the emission and every call site spell the same names.
+        var moduleFunctionClaims = new TsModuleFunctionClaims(compilation, _currentAssembly);
+
+        foreach (var finding in moduleFunctionClaims.Findings)
+            ReportDiagnostic(finding);
+
         var (erasableFunctionExports, synthesizedAliasesByFile) = BuildNoContainerFunctionExports(
             transpilableTypes,
             transpilableTypesDict,
@@ -369,7 +377,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.CrossAssemblyOrigins,
             compilation,
             ReportDiagnostic,
-            typeMappingContext
+            typeMappingContext,
+            moduleFunctionClaims
         );
 
         // [PlainObject] types a polymorphic JSON hierarchy tests with a
@@ -401,6 +410,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
             StructuralGuardTypes = structuralGuards.Types,
+            ModuleFunctionClaims = moduleFunctionClaims,
         };
 
         // Module state of containerless classes (#314): reject the uses the
@@ -1886,7 +1896,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             Context.DeclarativeMappings
         );
 
-        IrToTsModuleBridge.Convert(functions, sink, Context.DeclarativeMappings);
+        EmitModuleFunctions(functions, sink, Context.DeclarativeMappings);
 
         // Entry point body flows as top-level module statements after the
         // ordinary functions, so it can reference them.
@@ -2044,6 +2054,50 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     ?.Locations.FirstOrDefault()
             )
         );
+
+    /// <summary>
+    /// Emits a module file's functions, grouping each dispatched overload
+    /// group (spec 013 FR-032) into one exported dispatcher plus one
+    /// exported fast path per overload, and the single functions today's
+    /// shape. The group key is the overload identity the extractor recorded
+    /// on every member (<see cref="IrOverloadRef"/>), so the group and its
+    /// claimed names are decided once for the whole module.
+    /// </summary>
+    private void EmitModuleFunctions(
+        IReadOnlyList<IrModuleFunction> functions,
+        List<TsTopLevel> sink,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var singles = new List<IrModuleFunction>();
+        var groups = new Dictionary<(IrTypeKey Type, string Member), List<IrModuleFunction>>();
+
+        foreach (var fn in functions)
+        {
+            if (fn.OverloadRef is not { } overload)
+            {
+                singles.Add(fn);
+                continue;
+            }
+
+            var key = (overload.DeclaringType, overload.MemberName);
+
+            if (!groups.TryGetValue(key, out var group))
+                groups[key] = group = [];
+
+            group.Add(fn);
+        }
+
+        IrToTsModuleBridge.Convert(singles, sink, bclRegistry);
+
+        foreach (var group in groups.Values)
+            IrToTsModuleBridge.ConvertDispatchedGroup(
+                group,
+                Context.ModuleFunctionClaims,
+                sink,
+                bclRegistry
+            );
+    }
 
     /// <summary>
     /// A module variable and a module function share the module's one value
@@ -2418,7 +2472,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
         Compilation compilation,
         Action<MetanoDiagnostic> reportDiagnostic,
-        TypeMappingContext typeMappingContext
+        TypeMappingContext typeMappingContext,
+        TsModuleFunctionClaims moduleFunctionClaims
     )
     {
         var reservedNames = BuildReservedImportNames(
@@ -2459,6 +2514,27 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     )
                 )
                     continue;
+
+                // A dispatched group's members share the dispatcher name, so
+                // the registry exports it once with every claimed fast path
+                // (spec 013 FR-032); a same-name member of another type still
+                // reports MS0020.
+                var overloadRef = DispatchedMethodCalls.RefOf(member, TargetLanguage.TypeScript);
+
+                if (overloadRef is { } reference)
+                {
+                    var dispatcherName = moduleFunctionClaims.DispatcherNameOf(reference) ?? fnName;
+
+                    exports.TryAdd(dispatcherName, new NoContainerExport(typeRef));
+
+                    var fastPath = moduleFunctionClaims.FastPathOf(reference);
+
+                    if (fastPath is not null && fastPath != dispatcherName)
+                        exports.TryAdd(fastPath, new NoContainerExport(typeRef));
+
+                    continue;
+                }
+
                 if (
                     TryReportFactoryCollision(member, fnName, claimedFactoryNames, reportDiagnostic)
                 )

@@ -8,7 +8,7 @@ export abstract class Op {
   abstract runS(s: string): number;
 
   runFlag(flag: boolean): number {
-    return flag ? this.run(1) : this.run("ab");
+    return flag ? this.runX(1) : this.runS("ab");
   }
 
   run(x: number): number;
