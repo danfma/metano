@@ -1,14 +1,29 @@
-import type { DecimalDescriptor, JsonReadOptions, PrimitiveDescriptor } from "./types.ts";
+import type {
+  DecimalDescriptor,
+  Int64Descriptor,
+  JsonReadOptions,
+  PrimitiveDescriptor,
+} from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
 import { JsonException } from "./errors.ts";
 import { isDecimalText, readDecimalText } from "./decimal-text.ts";
-import { exactNumberTextOf, numberOfTreeValue, writeExactNumber } from "./exact-json-number.ts";
-import { readNumberText } from "./number-from-string.ts";
+import {
+  exactBigIntLeafOf,
+  exactNumberTextOf,
+  numberOfTreeValue,
+  writeExactNumber,
+} from "./exact-json-number.ts";
+import {
+  integerRangeOf,
+  readIntegerToken,
+  readNumberText,
+  readNumberValue,
+} from "./number-from-string.ts";
 
 /**
  * The built-in converters of numeric descriptors: `primitive` (numbers read
  * from JSON strings when the context allows it and the descriptor names its
- * `numberType`) and `decimal` (FR-048).
+ * `numberType`), `decimal` (FR-048) and `int64` (spec 012 FR-051–FR-052).
  */
 
 /** How a rejected value names its CLR type in the conversion error. */
@@ -38,7 +53,7 @@ const DECIMAL_MAX_AS_DOUBLE = Number("79228162514264337593543950335");
 const SMALLEST_UNROUNDED_DOUBLE = 1e-11;
 
 const passthroughConverter: ValueConverter = {
-  serialize: (value: unknown) => value,
+  serialize: exactBigIntLeafOf,
   deserialize: (value: unknown) => value,
 };
 
@@ -74,7 +89,7 @@ export function primitiveConverterOf(
         return value;
       }
 
-      const number = readNumberText(value, numberType);
+      const number = readNumberValue(value, numberType);
 
       if (number === undefined) {
         throw cannotConvert(numberType, errorTypeName);
@@ -83,6 +98,117 @@ export function primitiveConverterOf(
       return number;
     },
   };
+}
+
+/**
+ * A `long` / `ulong` — the `int64` descriptor (spec 012 FR-050), whatever
+ * the read options:
+ *
+ * - Written through the shared exact-number writer, so `JSON.stringify`
+ *   prints the digits unquoted (`{"id":1152921504606846977}`); a
+ *   safe-integer `number` from untyped code writes its digits too, and any
+ *   other value throws `JsonException` (FR-051).
+ * - Read as a `bigint` in range from: a `bigint`; a `rawJSON` leaf whose
+ *   text is a JSON integer token (`-0` reads `0`, `1.0` / `1e3` are not
+ *   tokens, R7); a safe-integer `number`; and — when the context reads
+ *   numbers from strings — a string in the FR-048 grammar. A `number`
+ *   beyond the safe integers throws naming the exact read path (OQ-3 d):
+ *   the tree has already lost its digits. Anything else throws System.Text
+ *   .Json's conversion error (FR-052).
+ */
+export function int64ConverterOf(
+  descriptor: Int64Descriptor,
+  readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName = declaredTypeName,
+): ValueConverter {
+  const { numberType } = descriptor;
+  const notAnInt64 = () => cannotConvert(numberType, errorTypeName);
+
+  return {
+    serialize: (value: unknown) => {
+      if (value == null) return null;
+
+      if (typeof value === "bigint") {
+        return writeExactNumber(value.toString(), () => Number(value));
+      }
+
+      if (typeof value === "number" && Number.isSafeInteger(value)) {
+        return writeExactNumber(value.toString(), () => value);
+      }
+
+      throw new JsonException(
+        `The JSON value ${errorValueTextOf(value)} cannot be written as ${numberType}: ` +
+          "only an exact integer can be written.",
+      );
+    },
+    deserialize: (value: unknown) => {
+      if (typeof value === "bigint") {
+        const read = int64OfBigint(value, numberType);
+
+        if (read === undefined) throw notAnInt64();
+
+        return read;
+      }
+
+      if (typeof value === "number") {
+        if (Number.isSafeInteger(value)) return BigInt(value);
+
+        if (Number.isInteger(value)) throw beyondExactNumber(value, numberType, errorTypeName);
+
+        throw notAnInt64();
+      }
+
+      if (typeof value === "string" && readsNumbersFromStrings(readOptions)) {
+        const read = readNumberText(value, numberType);
+
+        if (read === undefined) throw notAnInt64();
+
+        return read;
+      }
+
+      const token = exactNumberTextOf(value);
+      const read = token === undefined ? undefined : readIntegerToken(token, numberType);
+
+      if (read === undefined) throw notAnInt64();
+
+      return read;
+    },
+  };
+}
+
+/** The `bigint` when it fits `numberType`'s 64-bit range, `undefined` otherwise. */
+function int64OfBigint(
+  value: bigint,
+  numberType: Int64Descriptor["numberType"],
+): bigint | undefined {
+  const [min, max] = integerRangeOf(numberType);
+
+  return value >= min && value <= max ? value : undefined;
+}
+
+/**
+ * The error for a `number` that is an integer past `Number.MAX_SAFE_INTEGER`
+ * (OQ-3 d): the digits were lost before the converter ran, so the value
+ * points at the exact read path (#457, slice 012h). The digits print through
+ * `BigInt`, which is exact and prints the same on every engine (`String` of
+ * a large double does not: Bun prints `1152921504606847000` where Node
+ * prints `1152921504606846976`).
+ */
+function beyondExactNumber(
+  value: number,
+  numberType: string,
+  errorTypeName: ErrorTypeName,
+): JsonException {
+  return new JsonException(
+    `The JSON value ${BigInt(value).toString()} could not be converted to ` +
+      `${errorTypeName(numberType)}: it is beyond the integers a JS number holds exactly. ` +
+      "Read the JSON text with JsonSerializer.deserializeText, which keeps every digit.",
+  );
+}
+
+/** The rejected value as it is written in a JsonException: quoted when a string. */
+function errorValueTextOf(value: unknown): string {
+  return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
 /**

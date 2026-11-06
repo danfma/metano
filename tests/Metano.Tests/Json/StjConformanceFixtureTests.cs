@@ -1088,6 +1088,38 @@ public class StjConformanceFixtureTests
             ["OK4"] = ReadOnly(async value =>
                 await Assert.That(((HolderChar)value!).C).IsEqualTo('a')
             ),
+            // The 64-bit rows of spec 012 (slice 012e): every row runs on the
+            // System.Text.Json side; the TypeScript side runs I2 (wire
+            // compatible within the safe integers) until the bigint flip.
+            ["I1"] = WriteOnly(() => new Int64Box(1152921504606846977, ulong.MaxValue, null)),
+            ["I2"] = Roundtrip(
+                () => new Int64Box(42, 7, null),
+                async value =>
+                {
+                    var box = (Int64Box)value!;
+
+                    await Assert.That(box.Id).IsEqualTo(42);
+
+                    await Assert.That(box.Mask).IsEqualTo(7UL);
+
+                    await Assert.That(box.Parent).IsNull();
+                }
+            ),
+            ["I3"] = WriteOnly(() =>
+                new Int64Containers(
+                    [long.MinValue, long.MaxValue],
+                    new Dictionary<long, string> { [long.MaxValue] = "a", [-3] = "b" },
+                    new Dictionary<ulong, string> { [ulong.MaxValue] = "u" }
+                )
+            ),
+            ["I12"] = ReadOnly(async value =>
+            {
+                var containers = (Int64Containers)value!;
+
+                await Assert.That(containers.ByName[5]).IsEqualTo("b");
+
+                await Assert.That(containers.ByName[0]).IsEqualTo("c");
+            }),
         };
 
     private static async Task AssertDecimal(object? value, string text) =>

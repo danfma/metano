@@ -58,6 +58,19 @@ export function rawJsonTextOf(value: unknown): string | undefined {
 }
 
 /**
+ * `value` as the exact JSON number leaf when it is a `bigint`, else the
+ * value itself (spec 012 FR-056): a `bigint` that reaches a passthrough
+ * converter — an `object` slot, a branded or enum value — must not reach
+ * `JSON.stringify`, which throws on one (R4). An engine without
+ * `JSON.rawJSON` writes the approximate double, as `writeExactNumber` does.
+ */
+export function exactBigIntLeafOf(value: unknown): unknown {
+  return typeof value === "bigint"
+    ? writeExactNumber(value.toString(), () => Number(value))
+    : value;
+}
+
+/**
  * A JSON number read with more significant digits than a double holds
  * exactly (#457), kept as its source text. Only the trees
  * `JsonSerializer.deserializeText` builds hold one; the converters that do not

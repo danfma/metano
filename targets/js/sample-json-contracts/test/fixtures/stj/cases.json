@@ -1974,5 +1974,148 @@
     "getter": "holderChar",
     "direction": "read",
     "json": "{\"C\":\"a\"}"
+  },
+  {
+    "id": "I1",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "write",
+    "sides": ["stj"],
+    "json": "{\"Id\":1152921504606846977,\"Mask\":18446744073709551615,\"Parent\":null}",
+    "divergence": "spec 012 012e: the exact 64-bit digits need the bigint flip (012k) on the TypeScript side, whose contexts still carry the 2.x number descriptors"
+  },
+  {
+    "id": "I2",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "roundtrip",
+    "expectedClass": "Int64Box",
+    "json": "{\"Id\":42,\"Mask\":7,\"Parent\":null}",
+    "divergence": "wire-compatible within the safe integers; the TypeScript builder passes numbers until 012k turns its fields into bigint"
+  },
+  {
+    "id": "I3",
+    "context": "StudioJsonContext",
+    "getter": "int64Containers",
+    "direction": "write",
+    "sides": ["stj"],
+    "json": "{\"Values\":[-9223372036854775808,9223372036854775807],\"ByName\":{\"9223372036854775807\":\"a\",\"-3\":\"b\"},\"ByMask\":{\"18446744073709551615\":\"u\"}}",
+    "divergence": "spec 012 012e: exact 64-bit digits and bigint dictionary keys, TypeScript side at 012k"
+  },
+  {
+    "id": "I4",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Id\":\"x\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Int64Box.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
+    },
+    "divergence": "spec 012 012e: the TypeScript side names the property in the error only once its descriptor reads strings (012k flip)"
+  },
+  {
+    "id": "I5",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Id\":1.0}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Int64Box.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
+    },
+    "divergence": "spec 012 012e: the int64 descriptor rejects 1.0 (not an integer token); the 2.x number descriptor passes it through"
+  },
+  {
+    "id": "I6",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Parent\":\"x\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Int64Box.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
+    },
+    "divergence": "spec 012 012e: STJ names the declaring contract for a nullable member's error too"
+  },
+  {
+    "id": "I7",
+    "context": "StudioJsonContext",
+    "getter": "int64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "9223372036854775808",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int64."
+    },
+    "divergence": "spec 012 012e: one past long.MaxValue; the TypeScript side at 012k names System.Int64 from the int64 descriptor"
+  },
+  {
+    "id": "I8",
+    "context": "StudioJsonContext",
+    "getter": "uInt64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "-0",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.UInt64."
+    },
+    "divergence": "spec 012 012e: a ulong takes no sign, not even -0 (measured); the runtime int64 key and value readers reproduce it"
+  },
+  {
+    "id": "I9",
+    "context": "StudioJsonContext",
+    "getter": "int64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "\"05\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int64."
+    },
+    "divergence": "spec 012 012e: strings need AllowReadingFromString; the int64 descriptor reads \"05\" only on that option (FR-054)"
+  },
+  {
+    "id": "I10",
+    "context": "StudioJsonContext",
+    "getter": "int64Containers",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"ByMask\":{\"-0\":\"a\"}}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.UInt64."
+    },
+    "divergence": "spec 012 012e: a rejected ulong dictionary key names the key type (measured)"
+  },
+  {
+    "id": "I11",
+    "context": "StudioJsonContext",
+    "getter": "int64Containers",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"ByName\":{\" 5\":\"a\"}}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int64."
+    },
+    "divergence": "spec 012 012e: a rejected long dictionary key names the key type (measured)"
+  },
+  {
+    "id": "I12",
+    "context": "StudioJsonContext",
+    "getter": "int64Containers",
+    "direction": "read",
+    "json": "{\"ByName\":{\"05\":\"a\",\"+5\":\"b\",\"-0\":\"c\"}}",
+    "sides": ["stj"],
+    "divergence": "spec 012 012e: signed key grammar (05, +5, -0 read; the duplicate 5 keeps the last, as a dictionary write does); TypeScript side at 012k"
   }
 ]

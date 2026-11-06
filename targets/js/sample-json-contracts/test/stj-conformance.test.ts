@@ -32,6 +32,7 @@ import { IgnBase } from "#/sample-json-contracts/ign-base";
 import { IgnoreJsonContext } from "#/sample-json-contracts/ignore-json-context";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
+import { Int64Box } from "#/sample-json-contracts/int64-box";
 import { IntMapHolder } from "#/sample-json-contracts/int-map-holder";
 import { IS } from "#/sample-json-contracts/is";
 import { KebabCaseJsonContext } from "#/sample-json-contracts/kebab-case-json-context";
@@ -116,6 +117,7 @@ const expectedClasses: Record<string, new (...args: never[]) => object> = {
   IgnBase,
   ImageClip,
   InitRec,
+  Int64Box,
   IntMapHolder,
   IS,
   MixedClass,

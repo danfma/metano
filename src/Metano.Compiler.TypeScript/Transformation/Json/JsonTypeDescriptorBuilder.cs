@@ -54,6 +54,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             ),
             JsonPropertyKind.Ref => BuildRefDescriptor(type),
             JsonPropertyKind.Primitive => BuildPrimitiveDescriptor(type),
+            JsonPropertyKind.Int64 => BuildInt64Descriptor(type),
             JsonPropertyKind.Decimal => BuildDecimalDescriptor((INamedTypeSymbol)type),
             JsonPropertyKind.Bytes => BuildBareKindDescriptor(JsonPropertyKind.Bytes),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
@@ -83,6 +84,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         kind switch
         {
             JsonPropertyKind.Primitive => "primitive",
+            JsonPropertyKind.Int64 => "int64",
             JsonPropertyKind.Nullable => "nullable",
             JsonPropertyKind.Branded => "branded",
             JsonPropertyKind.Decimal => "decimal",
@@ -131,14 +133,52 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// </summary>
     private TsObjectLiteral BuildKeyDescriptor(ITypeSymbol keyType)
     {
+        var kind = JsonTypeClassifier.Classify(keyType);
+
+        if (kind is JsonPropertyKind.Int64)
+            return BuildInt64Descriptor(keyType);
+
         var numberType = JsonTypeClassifier.NumberTypeNameOf(keyType);
 
         if (numberType is not null)
             return BuildNumberDescriptor(numberType);
 
-        var kind = JsonTypeClassifier.Classify(keyType);
-
         return WithEnumUnderlyingType(Build(keyType, kind), keyType, kind);
+    }
+
+    /// <summary>
+    /// The <c>int64</c> descriptor of a <c>long</c> / <c>ulong</c>, or of a
+    /// <c>[Branded]</c> type over one (which unwraps to it):
+    /// <c>{ kind: "int64", numberType: … }</c> (spec 012 FR-050), whatever the
+    /// context's read options. A dictionary key of a 64-bit type uses it too
+    /// (FR-055). <c>Number</c> mode never classifies a type as
+    /// <see cref="JsonPropertyKind.Int64"/>, so the shipped
+    /// <c>primitive</c> descriptors stay.
+    /// </summary>
+    private static TsObjectLiteral BuildInt64Descriptor(ITypeSymbol type) =>
+        WithStringProperty(
+            BuildBareKindDescriptor(JsonPropertyKind.Int64),
+            "numberType",
+            SixtyFourBitTypeNameOf(type)
+        );
+
+    /// <summary>
+    /// <c>System.UInt64</c> for a <c>ulong</c> — branded over one included —
+    /// and <c>System.Int64</c> for any other 64-bit type this builder classifies.
+    /// </summary>
+    private static string SixtyFourBitTypeNameOf(ITypeSymbol type)
+    {
+        if (type.SpecialType == SpecialType.System_UInt64)
+            return "System.UInt64";
+
+        if (
+            type.SpecialType is not (SpecialType.System_Int64 or SpecialType.System_UInt64)
+            && type is INamedTypeSymbol branded
+            && SymbolHelper.GetBrandedValueType(branded) is { } wrapped
+        )
+            return SixtyFourBitTypeNameOf(wrapped);
+
+        return "System.Int64";
     }
 
     /// <summary>

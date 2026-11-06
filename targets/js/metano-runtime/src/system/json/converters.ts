@@ -34,11 +34,12 @@ import { dictionaryKeyConverterOf } from "./dictionary-keys.ts";
 import { readNull, valueTypeNameOf } from "./null-reads.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
-import { numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
+import { exactBigIntLeafOf, numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
 import { forwardsNumberTexts } from "./exact-number-reads.ts";
 import {
   decimalConverterOf,
   type ErrorTypeName,
+  int64ConverterOf,
   nullableTypeName,
   declaredTypeName,
   primitiveConverterOf,
@@ -135,6 +136,8 @@ function getBuiltinConverter(
   switch (descriptor.kind) {
     case "primitive":
       return primitiveConverterOf(descriptor, readOptions, errorTypeName);
+    case "int64":
+      return int64ConverterOf(descriptor, readOptions, errorTypeName);
     case "temporal":
       return temporalConverterOf(descriptor, errorTypeName);
     case "decimal":
@@ -320,7 +323,7 @@ function hashSetConverter(
 
 function brandedConverter(descriptor: BrandedDescriptor) {
   return {
-    serialize: (value: unknown) => value, // brand erases at runtime
+    serialize: exactBigIntLeafOf, // brand erases at runtime; a bigint writes its digits (FR-056)
     // A branded value is a value type: JSON `null` throws, as System.Text.Json
     // throws (#471).
     deserialize: (value: unknown) => {
@@ -339,7 +342,7 @@ function enumConverter(descriptor: EnumDescriptor) {
   const validValues = new Set(Object.values(descriptor.values));
 
   return {
-    serialize: (value: unknown) => value, // already a string
+    serialize: exactBigIntLeafOf, // already a string
     deserialize: (value: unknown) => {
       // An enum is a value type: JSON `null` throws its conversion error,
       // as System.Text.Json throws (#471), before the enum-value error.
@@ -366,7 +369,7 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
   );
 
   return {
-    serialize: (value: unknown) => value, // already a number
+    serialize: exactBigIntLeafOf, // already a number
     deserialize: (value: unknown) => {
       // A value type: JSON `null` throws its conversion error (#471).
       if (value === null) {
@@ -426,6 +429,8 @@ function builtinNullableInnerConverter(
   switch (inner.kind) {
     case "primitive":
       return primitiveConverterOf(inner, readOptions, nullableTypeName);
+    case "int64":
+      return int64ConverterOf(inner, readOptions, nullableTypeName);
     case "decimal":
       return decimalConverterOf(inner, readOptions, nullableTypeName);
     default:

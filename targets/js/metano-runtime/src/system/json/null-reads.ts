@@ -32,6 +32,8 @@ export function valueTypeNameOf(descriptor: TypeDescriptor): string | undefined 
   switch (descriptor.kind) {
     case "primitive":
       return descriptor.typeName ?? descriptor.numberType;
+    case "int64":
+      return descriptor.numberType;
     case "decimal":
       return descriptor.typeName ?? "System.Decimal";
     case "temporal":

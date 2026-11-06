@@ -21,6 +21,9 @@ internal static class JsonTypeClassifier
         if (IsNullable(type))
             return JsonPropertyKind.Nullable;
 
+        if (Is64BitInteger(type))
+            return JsonPropertyKind.Int64;
+
         if (IsPrimitive(type))
             return JsonPropertyKind.Primitive;
 
@@ -122,6 +125,16 @@ internal static class JsonTypeClassifier
                 or SpecialType.System_Boolean
                 or SpecialType.System_Char;
 
+    /// <summary>
+    /// A <c>long</c> / <c>ulong</c> in the staging <c>BigInt</c> mode (spec 012
+    /// DECIDED-22, <c>STAGING(012k)</c>): its descriptor is <c>int64</c>
+    /// (FR-050). <c>Number</c> mode classifies it as a <c>primitive</c> with a
+    /// <c>numberType</c>, the shipped 2.x shape.
+    /// </summary>
+    private static bool Is64BitInteger(ITypeSymbol type) =>
+        Int64RepresentationScope.IsBigInt
+        && type.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
+
     /// <summary>The C# numeric types that map to a TS <c>number</c>.</summary>
     private static bool IsNumber(ITypeSymbol type) =>
         type.SpecialType
@@ -169,12 +182,24 @@ internal static class JsonTypeClassifier
                 ? JsonPropertyKind.Enum
                 : JsonPropertyKind.NumericEnum;
 
-        // [Branded] (and its predecessor [InlineWrapper]) → branded
+        // [Branded] (and its predecessor [InlineWrapper]) over a 64-bit
+        // integer unwraps to the int64 descriptor (FR-050); any other branded
+        // type keeps the branded descriptor.
         if (SymbolHelper.HasBranded(named))
-            return JsonPropertyKind.Branded;
+            return Wraps64BitInteger(named) ? JsonPropertyKind.Int64 : JsonPropertyKind.Branded;
 
         return JsonPropertyKind.Ref;
     }
+
+    /// <summary>
+    /// Whether a <c>[Branded]</c> type's wrapped value is a <c>long</c> /
+    /// <c>ulong</c> in the staging <c>BigInt</c> mode, so its descriptor is
+    /// <c>int64</c> (FR-050).
+    /// </summary>
+    private static bool Wraps64BitInteger(INamedTypeSymbol type) =>
+        Int64RepresentationScope.IsBigInt
+        && SymbolHelper.GetBrandedValueType(type) is { } wrapped
+        && wrapped.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
 
     private static bool IsTemporal(string fullName) =>
         fullName

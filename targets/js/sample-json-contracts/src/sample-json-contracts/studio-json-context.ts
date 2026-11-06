@@ -28,6 +28,8 @@ import type { IShapeB } from "./i-shape-b";
 import { IA } from "./ia";
 import { ImageClip } from "./image-clip";
 import { IntMapHolder } from "./int-map-holder";
+import { Int64Box } from "./int64-box";
+import { Int64Containers } from "./int64-containers";
 import { IS } from "./is";
 import { Level } from "./level";
 import { LevelMapHolder } from "./level-map-holder";
@@ -194,6 +196,14 @@ export class StudioJsonContext extends SerializerContext {
   private _title?: ValueSpec<Title>;
 
   private _episodeRec?: TypeSpec<EpisodeRec>;
+
+  private _int64Box?: TypeSpec<Int64Box>;
+
+  private _int64Containers?: TypeSpec<Int64Containers>;
+
+  private _int64?: ValueSpec<number>;
+
+  private _uInt64?: ValueSpec<number>;
 
   private _imageClip?: TypeSpec<ImageClip>;
 
@@ -1337,6 +1347,91 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "branded", create: Title.from, typeName: "SampleJsonContracts.Title" },
         },
       ],
+    }));
+  }
+
+  get int64Box(): TypeSpec<Int64Box> {
+    return (this._int64Box ??= this.createSpec({
+      type: Int64Box,
+      factory: (p: Record<string, unknown>) =>
+        new Int64Box(p.id as number, p.mask as number, p.parent as number | null),
+      properties: [
+        {
+          ts: "id",
+          json: "Id",
+          type: { kind: "primitive", numberType: "System.Int64" },
+        },
+        {
+          ts: "mask",
+          json: "Mask",
+          type: { kind: "primitive", numberType: "System.UInt64" },
+        },
+        {
+          ts: "parent",
+          json: "Parent",
+          type: {
+            kind: "nullable",
+            inner: { kind: "primitive", numberType: "System.Int64" },
+          },
+          optional: true,
+        },
+      ],
+    }));
+  }
+
+  get int64Containers(): TypeSpec<Int64Containers> {
+    return (this._int64Containers ??= this.createSpec({
+      type: Int64Containers,
+      factory: (p: Record<string, unknown>) =>
+        new Int64Containers(
+          p.values as number[],
+          p.byName as Map<number, string>,
+          p.byMask as Map<number, string>,
+        ),
+      properties: [
+        {
+          ts: "values",
+          json: "Values",
+          type: {
+            kind: "array",
+            element: { kind: "primitive", numberType: "System.Int64" },
+          },
+        },
+        {
+          ts: "byName",
+          json: "ByName",
+          type: {
+            kind: "map",
+            key: { kind: "primitive", numberType: "System.Int64" },
+            value: { kind: "primitive" },
+          },
+        },
+        {
+          ts: "byMask",
+          json: "ByMask",
+          type: {
+            kind: "map",
+            key: { kind: "primitive", numberType: "System.UInt64" },
+            value: { kind: "primitive" },
+          },
+        },
+      ],
+    }));
+  }
+
+  get int64(): ValueSpec<number> {
+    return (this._int64 ??= this.createValueSpec({
+      descriptor: { kind: "primitive", numberType: "System.Int64" },
+      valueType: true,
+      typeName: "System.Int64",
+    }));
+  }
+
+  get uInt64(): ValueSpec<number> {
+    return (this._uInt64 ??= this.createValueSpec({
+      descriptor: { kind: "primitive", numberType: "System.UInt64" },
+      valueType: true,
+      typeName: "System.UInt64",
     }));
   }
 

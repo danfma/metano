@@ -8,6 +8,9 @@ import type { IntegerTypeName, NumberTypeName } from "./types.ts";
  *   `-`, then ASCII digits, leading zeros allowed, within the type's range;
  * - unsigned integers (`Byte`, `UInt16`, `UInt32`, `UInt64`): ASCII digits
  *   only, so `"+5"` and `"-0"` are rejected;
+ * - the 64-bit integers (`Int64`, `UInt64`) read exactly (spec 012 FR-054):
+ *   `readNumberText` answers a `bigint` within the type's range, where the
+ *   other integers answer a `number`;
  * - `Single` / `Double`: the exact texts `NaN`, `Infinity` and `-Infinity`,
  *   or an optional sign, digits with an optional `.` (`"1."`, `".5"` and
  *   `"01.5"` included) and an optional exponent; a value that overflows the
@@ -70,15 +73,53 @@ export interface SignificandParts {
 /** Reads a JSON string as a number, or `undefined` when the grammar rejects it. */
 type NumberTextReader = (text: string) => number | undefined;
 
+/**
+ * A reader whose value may be a `bigint`: the 64-bit integers read exactly
+ * (spec 012 FR-054), the rest read a `number`.
+ */
+type WideNumberTextReader = (text: string) => number | bigint | undefined;
+
 /** Whether the matched text, parsed as `value`, stays finite in the target type. */
 type FiniteCheck = (parts: RegExpExecArray, value: number) => boolean;
 
 /**
- * Reads the integer grammar within `[min, max]`. The value is a JS `number`,
- * so an `Int64` / `UInt64` beyond 2^53 loses precision exactly as the same
- * JSON number does through `JSON.parse`.
+ * The JSON integer token a number leaf holds (`JSON.rawJSON`'s text, the
+ * exact-digit leaf `serialize` writes): `-?(0|[1-9][0-9]*)` — no sign, no
+ * leading zero and no fraction or exponent, so `"-0"` reads `0` and `1.0`,
+ * `1e3` and `05` are not tokens — within `numberType`'s range, per its
+ * signedness (spec 012 FR-052). Answers a `bigint`, or `undefined` when the
+ * text is not a token of the type.
  */
-function integerReader(pattern: RegExp, min: bigint, max: bigint): NumberTextReader {
+const SIGNED_INTEGER_TOKEN = /^-?(0|[1-9][0-9]*)$/;
+
+const UNSIGNED_INTEGER_TOKEN = /^(0|[1-9][0-9]*)$/;
+
+export function readIntegerToken(text: string, numberType: IntegerTypeName): bigint | undefined {
+  const token = UNSIGNED_INTEGER_TYPES.has(numberType)
+    ? UNSIGNED_INTEGER_TOKEN
+    : SIGNED_INTEGER_TOKEN;
+
+  if (!token.test(text)) {
+    return undefined;
+  }
+
+  const [min, max] = INTEGER_RANGES[numberType];
+  const value = BigInt(text);
+
+  return isWithinRange(value, min, max) ? value : undefined;
+}
+
+/**
+ * Reads the integer grammar within `[min, max]`; `ofValue` converts the
+ * exact `bigint` into the value the reader answers (the `bigint` itself for
+ * the 64-bit types, a `number` elsewhere).
+ */
+function integerReader<T extends number | bigint>(
+  pattern: RegExp,
+  min: bigint,
+  max: bigint,
+  ofValue: (value: bigint) => T,
+): (text: string) => T | undefined {
   return (text) => {
     if (!pattern.test(text)) {
       return undefined;
@@ -87,7 +128,7 @@ function integerReader(pattern: RegExp, min: bigint, max: bigint): NumberTextRea
     const value = BigInt(text);
 
     // The bigint has no negative zero, so `"-0"` reads as `0`.
-    return isWithinRange(value, min, max) ? Number(value) : undefined;
+    return isWithinRange(value, min, max) ? ofValue(value) : undefined;
   };
 }
 
@@ -151,6 +192,11 @@ const INTEGER_RANGES: Readonly<Record<IntegerTypeName, readonly [min: bigint, ma
   "System.UInt64": [0n, 18_446_744_073_709_551_615n],
 };
 
+/** The `[min, max]` of an integer type's range, shared with the `int64` converter. */
+export function integerRangeOf(numberType: IntegerTypeName): readonly [min: bigint, max: bigint] {
+  return INTEGER_RANGES[numberType];
+}
+
 /** The unsigned integer types, read from digits only. */
 const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
   "System.Byte",
@@ -159,36 +205,60 @@ const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
   "System.UInt64",
 ]);
 
-/** A reader of the integers in `numberType`'s range, spelled as `pattern` allows. */
-function integerTextReader(numberType: IntegerTypeName, pattern: RegExp): NumberTextReader {
-  const [min, max] = INTEGER_RANGES[numberType];
+/** The integers that read exactly, as the `bigint` they compute (spec 012 FR-054). */
+const EXACT_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
+  "System.Int64",
+  "System.UInt64",
+]);
 
-  return integerReader(pattern, min, max);
+/** The value of a strict read: the `bigint` for a 64-bit type, its `number` elsewhere. */
+function strictValueOf(numberType: IntegerTypeName): (value: bigint) => number | bigint {
+  return EXACT_INTEGER_TYPES.has(numberType) ? (value) => value : (value) => Number(value);
 }
 
-/** Every integer type read by `patternOf` its type (`integerTextReader`). */
-function integerReadersOf(
+/**
+ * A reader of the integers in `numberType`'s range, spelled as `pattern`
+ * allows.
+ */
+function integerTextReader<T extends number | bigint>(
+  numberType: IntegerTypeName,
+  pattern: RegExp,
+  ofValue: (value: bigint) => T,
+): (text: string) => T | undefined {
+  const [min, max] = INTEGER_RANGES[numberType];
+
+  return integerReader(pattern, min, max, ofValue);
+}
+
+/** Every integer type read by `patternOf` its type and `ofValue` its value. */
+function integerReadersOf<T extends number | bigint>(
   patternOf: (numberType: IntegerTypeName) => RegExp,
-): Readonly<Record<IntegerTypeName, NumberTextReader>> {
+  ofValue: (numberType: IntegerTypeName) => (value: bigint) => T,
+): Readonly<Record<IntegerTypeName, (text: string) => T | undefined>> {
   const numberTypes = Object.keys(INTEGER_RANGES) as IntegerTypeName[];
 
   return Object.fromEntries(
     numberTypes.map((numberType) => [
       numberType,
-      integerTextReader(numberType, patternOf(numberType)),
+      integerTextReader(numberType, patternOf(numberType), ofValue(numberType)),
     ]),
-  ) as Record<IntegerTypeName, NumberTextReader>;
+  ) as Readonly<Record<IntegerTypeName, (text: string) => T | undefined>>;
 }
 
 /** Signed integer types take an optional sign; unsigned ones digits only. */
-const STRICT_INTEGER_READERS = integerReadersOf((numberType) =>
-  UNSIGNED_INTEGER_TYPES.has(numberType) ? UNSIGNED_INTEGER_PATTERN : SIGNED_INTEGER_PATTERN,
+const STRICT_INTEGER_READERS = integerReadersOf(
+  (numberType) =>
+    UNSIGNED_INTEGER_TYPES.has(numberType) ? UNSIGNED_INTEGER_PATTERN : SIGNED_INTEGER_PATTERN,
+  strictValueOf,
 );
 
 /** Every integer type with an optional sign, as `Enum.TryParse` reads one (`readEnumIntegerText`). */
-const ENUM_INTEGER_READERS = integerReadersOf(() => SIGNED_INTEGER_PATTERN);
+const ENUM_INTEGER_READERS = integerReadersOf(
+  () => SIGNED_INTEGER_PATTERN,
+  () => (value) => Number(value),
+);
 
-const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = {
+const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, WideNumberTextReader>> = {
   ...STRICT_INTEGER_READERS,
   "System.Single": floatingPointReader(fitsSingle),
   "System.Double": floatingPointReader(fitsDouble),
@@ -196,10 +266,26 @@ const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = 
 
 /**
  * The number `text` spells as a `numberType`, or `undefined` when System.Text.Json
- * rejects it.
+ * rejects it. The 64-bit types answer a `bigint` in range (spec 012 FR-054);
+ * the rest answer a `number`.
  */
-export function readNumberText(text: string, numberType: NumberTypeName): number | undefined {
+export function readNumberText(
+  text: string,
+  numberType: NumberTypeName,
+): number | bigint | undefined {
   return NUMBER_TEXT_READERS[numberType](text);
+}
+
+/**
+ * The number `text` spells as a `numberType`, as the `number` a `primitive`
+ * descriptor's slot holds: the 64-bit answer of `readNumberText` is read as
+ * a `number` there (spec 012 FR-054), which is exact only up to 2^53 — the
+ * exact digits of a `long` / `ulong` need the `int64` descriptor.
+ */
+export function readNumberValue(text: string, numberType: NumberTypeName): number | undefined {
+  const value = readNumberText(text, numberType);
+
+  return typeof value === "bigint" ? Number(value) : value;
 }
 
 /**
@@ -208,7 +294,7 @@ export function readNumberText(text: string, numberType: NumberTypeName): number
  * reads it (`"+5"` and `"-0"` read for a `byte` enum); `undefined` otherwise.
  */
 export function readEnumIntegerText(text: string, numberType: IntegerTypeName): number | undefined {
-  return ENUM_INTEGER_READERS[numberType](text);
+  return ENUM_INTEGER_READERS[numberType](text) as number | undefined;
 }
 
 /** The digits of a matched number text as `significand × 10^exponent`, without its sign. */
