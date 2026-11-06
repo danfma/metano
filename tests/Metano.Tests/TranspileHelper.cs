@@ -664,6 +664,15 @@ public static class TranspileHelper
     }
 
     /// <summary>
+    /// The shared local-regeneration switch of the golden tests
+    /// (<c>METANO_UPDATE_GOLDENS=1</c> rewrites the expected files; CI never
+    /// sets it). A test that sets it writes its golden and skips the assert,
+    /// which would read the stale output-directory copy.
+    /// </summary>
+    internal static bool UpdateGoldensRequested =>
+        Environment.GetEnvironmentVariable("METANO_UPDATE_GOLDENS") == "1";
+
+    /// <summary>
     /// Reads an expected .ts file from the Expected/ directory.
     /// </summary>
     public static string ReadExpected(string filename)
@@ -677,8 +686,8 @@ public static class TranspileHelper
     /// <summary>
     /// Writes an expected .ts file into the source tree's
     /// <c>tests/Metano.Tests/Expected/</c> — the local regeneration path of
-    /// the golden tests that expose an environment variable for it (CI never
-    /// sets one). The copy in the output directory is build output.
+    /// the golden tests that expose <see cref="UpdateGoldensRequested"/>. The
+    /// copy in the output directory is build output.
     /// </summary>
     public static void WriteExpected(string filename, string content)
     {
@@ -690,12 +699,16 @@ public static class TranspileHelper
                 Path.Combine(current.FullName, "tests", "Metano.Tests", "Expected")
             )
         )
+        {
             current = current.Parent;
+        }
 
         if (current is null)
+        {
             throw new InvalidOperationException(
                 "tests/Metano.Tests/Expected not found above the test output directory"
             );
+        }
 
         var path = Path.Combine(current.FullName, "tests", "Metano.Tests", "Expected", filename);
 

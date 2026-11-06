@@ -3,6 +3,7 @@ import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime
 import { Boxes } from "./boxes";
 import { EntityId } from "./entity-id";
 import { Snowflake } from "./snowflake";
+import { TokenId } from "./token-id";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
@@ -12,6 +13,8 @@ export class JsonContext extends SerializerContext {
   private _boxes?: TypeSpec<Boxes>;
 
   private _entityId?: ValueSpec<EntityId>;
+
+  private _tokenId?: ValueSpec<TokenId>;
 
   private _int64?: ValueSpec<number>;
 
@@ -24,7 +27,7 @@ export class JsonContext extends SerializerContext {
   get snowflake(): TypeSpec<Snowflake> {
     return this._snowflake ??= this.createSpec({
       type: Snowflake,
-      factory: (p: Record<string, unknown>) => new Snowflake(p.id as number, p.mask as number, p.parent as number | null),
+      factory: (p: Record<string, unknown>) => new Snowflake(p.id as number, p.mask as number, p.parent as number | null, p.origin as EntityId | null),
       properties: [
         {
           ts: "id",
@@ -45,6 +48,15 @@ export class JsonContext extends SerializerContext {
           },
           optional: true,
         },
+        {
+          ts: "origin",
+          json: "Origin",
+          type: {
+            kind: "nullable",
+            inner: { kind: "branded", create: EntityId.create, typeName: "TestApp.EntityId" },
+          },
+          optional: true,
+        },
       ],
     });
   }
@@ -52,7 +64,7 @@ export class JsonContext extends SerializerContext {
   get boxes(): TypeSpec<Boxes> {
     return this._boxes ??= this.createSpec({
       type: Boxes,
-      factory: (p: Record<string, unknown>) => new Boxes(p.values as number[], p.more as number[], p.byName as Map<number, string>, p.counts as Map<string, number>, p.set as HashSet<number>, p.id as EntityId),
+      factory: (p: Record<string, unknown>) => new Boxes(p.values as number[], p.more as number[], p.byName as Map<number, string>, p.counts as Map<string, number>, p.set as HashSet<number>, p.id as EntityId, p.byToken as Map<EntityId, string>, p.token as TokenId),
       properties: [
         {
           ts: "values",
@@ -101,6 +113,20 @@ export class JsonContext extends SerializerContext {
           json: "Id",
           type: { kind: "branded", create: EntityId.create, typeName: "TestApp.EntityId" },
         },
+        {
+          ts: "byToken",
+          json: "ByToken",
+          type: {
+            kind: "map",
+            key: { kind: "branded", create: EntityId.create, typeName: "TestApp.EntityId" },
+            value: { kind: "primitive" },
+          },
+        },
+        {
+          ts: "token",
+          json: "Token",
+          type: { kind: "branded", create: TokenId.from, typeName: "TestApp.TokenId" },
+        },
       ],
     });
   }
@@ -110,6 +136,14 @@ export class JsonContext extends SerializerContext {
       descriptor: { kind: "branded", create: EntityId.create, typeName: "TestApp.EntityId" },
       valueType: true,
       typeName: "TestApp.EntityId",
+    });
+  }
+
+  get tokenId(): ValueSpec<TokenId> {
+    return this._tokenId ??= this.createValueSpec({
+      descriptor: { kind: "branded", create: TokenId.from, typeName: "TestApp.TokenId" },
+      valueType: true,
+      typeName: "TestApp.TokenId",
     });
   }
 

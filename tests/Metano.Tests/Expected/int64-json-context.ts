@@ -1,8 +1,9 @@
 import { HashSet } from "metano-runtime";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Boxes } from "./boxes";
-import type { EntityId } from "./entity-id";
+import { EntityId } from "./entity-id";
 import { Snowflake } from "./snowflake";
+import { TokenId } from "./token-id";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
@@ -12,6 +13,8 @@ export class JsonContext extends SerializerContext {
   private _boxes?: TypeSpec<Boxes>;
 
   private _entityId?: ValueSpec<EntityId>;
+
+  private _tokenId?: ValueSpec<TokenId>;
 
   private _int64?: ValueSpec<bigint>;
 
@@ -24,7 +27,7 @@ export class JsonContext extends SerializerContext {
   get snowflake(): TypeSpec<Snowflake> {
     return this._snowflake ??= this.createSpec({
       type: Snowflake,
-      factory: (p: Record<string, unknown>) => new Snowflake(p.id as bigint, p.mask as bigint, p.parent as bigint | null),
+      factory: (p: Record<string, unknown>) => new Snowflake(p.id as bigint, p.mask as bigint, p.parent as bigint | null, p.origin as EntityId | null),
       properties: [
         {
           ts: "id",
@@ -45,6 +48,20 @@ export class JsonContext extends SerializerContext {
           },
           optional: true,
         },
+        {
+          ts: "origin",
+          json: "Origin",
+          type: {
+            kind: "nullable",
+            inner: {
+              kind: "int64",
+              numberType: "System.Int64",
+              typeName: "TestApp.EntityId",
+              create: EntityId.create,
+            },
+          },
+          optional: true,
+        },
       ],
     });
   }
@@ -52,7 +69,7 @@ export class JsonContext extends SerializerContext {
   get boxes(): TypeSpec<Boxes> {
     return this._boxes ??= this.createSpec({
       type: Boxes,
-      factory: (p: Record<string, unknown>) => new Boxes(p.values as bigint[], p.more as bigint[], p.byName as Map<bigint, string>, p.counts as Map<string, bigint>, p.set as HashSet<bigint>, p.id as EntityId),
+      factory: (p: Record<string, unknown>) => new Boxes(p.values as bigint[], p.more as bigint[], p.byName as Map<bigint, string>, p.counts as Map<string, bigint>, p.set as HashSet<bigint>, p.id as EntityId, p.byToken as Map<EntityId, string>, p.token as TokenId),
       properties: [
         {
           ts: "values",
@@ -99,7 +116,36 @@ export class JsonContext extends SerializerContext {
         {
           ts: "id",
           json: "Id",
-          type: { kind: "int64", numberType: "System.Int64" },
+          type: {
+            kind: "int64",
+            numberType: "System.Int64",
+            typeName: "TestApp.EntityId",
+            create: EntityId.create,
+          },
+        },
+        {
+          ts: "byToken",
+          json: "ByToken",
+          type: {
+            kind: "map",
+            key: {
+              kind: "int64",
+              numberType: "System.Int64",
+              typeName: "TestApp.EntityId",
+              create: EntityId.create,
+            },
+            value: { kind: "primitive" },
+          },
+        },
+        {
+          ts: "token",
+          json: "Token",
+          type: {
+            kind: "int64",
+            numberType: "System.Int64",
+            typeName: "TestApp.TokenId",
+            create: TokenId.from,
+          },
         },
       ],
     });
@@ -107,9 +153,27 @@ export class JsonContext extends SerializerContext {
 
   get entityId(): ValueSpec<EntityId> {
     return this._entityId ??= this.createValueSpec({
-      descriptor: { kind: "int64", numberType: "System.Int64" },
+      descriptor: {
+        kind: "int64",
+        numberType: "System.Int64",
+        typeName: "TestApp.EntityId",
+        create: EntityId.create,
+      },
       valueType: true,
       typeName: "TestApp.EntityId",
+    });
+  }
+
+  get tokenId(): ValueSpec<TokenId> {
+    return this._tokenId ??= this.createValueSpec({
+      descriptor: {
+        kind: "int64",
+        numberType: "System.Int64",
+        typeName: "TestApp.TokenId",
+        create: TokenId.from,
+      },
+      valueType: true,
+      typeName: "TestApp.TokenId",
     });
   }
 

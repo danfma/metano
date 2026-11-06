@@ -10,7 +10,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
-import { readNumberText } from "#/system/json/number-from-string.ts";
+import { readExactNumberText } from "#/system/json/number-from-string.ts";
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
 /**
@@ -23,10 +23,17 @@ import { cannotConvertMessage, expectJsonException } from "./json-exception-asse
  * 2026-11-06):
  *
  * - Writes print the exact digits, unquoted (`{"id":1152921504606846977}`),
- *   and dictionary keys are plain digit strings.
+ *   and dictionary keys are plain digit strings. A write range-checks: only
+ *   an exact integer within the 64-bit range can be written.
  * - Root reads: `-0` reads `0`; `1.0` and `1e3` throw; out of range throws
  *   the same conversion error; `null` throws for the value type and reads
  *   `null` through the nullable wrapper.
+ * - Divergences from the STJ probe, all of them tree-shaped: `1.0` and
+ *   `1e3` throw only as rawJSON leaves or through `deserializeText` — a
+ *   parsed tree cannot tell `1.0` from `1`, and `JSON.parse` of a 19-digit
+ *   integer has already lost the digits (the beyond-safe-integer error,
+ *   OQ-3 d). `deserializeText` reads the exact digits, so its errors match
+ *   STJ's.
  * - Errors name the position: a root or an element names the 64-bit type
  *   (`System.Int64`, `System.UInt64`), a nullable root or element names
  *   ``System.Nullable`1[System.Int64]``, a property names the declaring
@@ -258,13 +265,13 @@ describe("int64 — tree reads (FR-052)", () => {
 });
 
 describe("int64 — numbers from strings (FR-054)", () => {
-  test("readNumberText answers the bigint it computes for the 64-bit types", () => {
-    expect(readNumberText("9223372036854775807", "System.Int64")).toBe(LONG_MAX);
-    expect(readNumberText("-9223372036854775808", "System.Int64")).toBe(LONG_MIN);
-    expect(readNumberText("18446744073709551615", "System.UInt64")).toBe(ULONG_MAX);
-    expect(readNumberText("9007199254740993", "System.Int64")).toBe(9007199254740993n);
-    expect(readNumberText("05", "System.UInt64")).toBe(5n);
-    expect(readNumberText("5", "System.Int32")).toBe(5);
+  test("readExactNumberText answers the bigint it computes for the 64-bit types", () => {
+    expect(readExactNumberText("9223372036854775807", "System.Int64")).toBe(LONG_MAX);
+    expect(readExactNumberText("-9223372036854775808", "System.Int64")).toBe(LONG_MIN);
+    expect(readExactNumberText("18446744073709551615", "System.UInt64")).toBe(ULONG_MAX);
+    expect(readExactNumberText("9007199254740993", "System.Int64")).toBe(9007199254740993n);
+    expect(readExactNumberText("05", "System.UInt64")).toBe(5n);
+    expect(readExactNumberText("5", "System.Int32")).toBe(5);
   });
 
   test("the 64-bit string grammar is the FR-048 one, signed and unsigned", () => {
@@ -409,5 +416,185 @@ describe("int64 — object slots (FR-056)", () => {
     const tree = JsonSerializer.serialize([1152921504606846977n], { descriptor: array });
 
     expect(JSON.stringify(tree)).toBe("[1152921504606846977]");
+  });
+});
+
+describe("int64 — signedness on the number path (review round 1)", () => {
+  test("a ulong accepts no negative number, not even -0 (measured: STJ throws)", () => {
+    expectJsonException(() => readRoot(-5, "System.UInt64"), cannotConvertMessage("System.UInt64"));
+    expectJsonException(() => readRoot(-1, "System.UInt64"), cannotConvertMessage("System.UInt64"));
+    expectJsonException(() => readRoot(-0, "System.UInt64"), cannotConvertMessage("System.UInt64"));
+  });
+
+  test("a long reads every safe integer, negative included (measured: STJ reads them)", () => {
+    expect(readRoot(9007199254740991, "System.Int64")).toBe(9007199254740991n);
+    expect(readRoot(-9007199254740991, "System.Int64")).toBe(-9007199254740991n);
+    expect(readRoot(-0, "System.Int64")).toBe(0n);
+  });
+});
+
+describe("int64 — writes range-check (review round 1)", () => {
+  test("a bigint outside the slot's range cannot be written", () => {
+    expectJsonException(
+      () => writtenText(2n ** 64n, "System.Int64"),
+      "The value 18446744073709551616 cannot be written as System.Int64: only an exact integer "
+        + "within the System.Int64 range can be written.",
+    );
+    expectJsonException(
+      () => writtenText(-1n, "System.UInt64"),
+      "The value -1 cannot be written as System.UInt64: only an exact integer within the "
+        + "System.UInt64 range can be written.",
+    );
+  });
+
+  test("a negative or fractional number cannot be written, a ulong's -0 included", () => {
+    expectJsonException(
+      () => writtenText(-5, "System.UInt64"),
+      "The value -5 cannot be written as System.UInt64: only an exact integer within the "
+        + "System.UInt64 range can be written.",
+    );
+    expectJsonException(
+      () => writtenText(-0, "System.UInt64"),
+      "The value 0 cannot be written as System.UInt64: only an exact integer within the "
+        + "System.UInt64 range can be written.",
+    );
+    expectJsonException(
+      () => writtenText(1.5, "System.Int64"),
+      "The value 1.5 cannot be written as System.Int64: only an exact integer within the "
+        + "System.Int64 range can be written.",
+    );
+    expect(writtenText(-5, "System.Int64")).toBe("-5");
+    expect(writtenText(-0, "System.Int64")).toBe("0");
+  });
+});
+
+describe("int64 — the branded factory on reads (review round 1)", () => {
+  /** Stands in for a generated `[Branded]` companion's `create` (an identity at runtime). */
+  const brandedInt64: TypeDescriptor = {
+    kind: "int64",
+    numberType: "System.Int64",
+    create: (value) => ({ int64: value }),
+    typeName: "MyApp.EntityId",
+  };
+
+  function readBranded(data: unknown, readOptions?: JsonReadOptions): unknown {
+    return JsonSerializer.deserialize(data, { descriptor: brandedInt64, readOptions });
+  }
+
+  test("create builds the value after the exact read, on every accepted leaf", () => {
+    expect(readBranded(5)).toEqual({ int64: 5n });
+    expect(readBranded(9007199254740991n)).toEqual({ int64: 9007199254740991n });
+    expect(readBranded(JSON.rawJSON("1152921504606846977"))).toEqual({
+      int64: 1152921504606846977n,
+    });
+    expect(readBranded("5", READS_NUMBERS)).toEqual({ int64: 5n });
+    expect(readBranded(null)).toBeNull();
+  });
+
+  test("a rejected leaf throws before the factory runs", () => {
+    let builds = 0;
+
+    const counting: TypeDescriptor = {
+      kind: "int64",
+      numberType: "System.Int64",
+      create: (value) => {
+        builds++;
+
+        return value;
+      },
+    };
+
+    expectJsonException(
+      () => JsonSerializer.deserialize("x", { descriptor: counting, readOptions: READS_NUMBERS }),
+      cannotConvertMessage("System.Int64"),
+    );
+
+    expect(builds).toBe(0);
+  });
+
+  test("a null element names the branded typeName, as a branded descriptor does", () => {
+    const array: TypeDescriptor = { kind: "array", element: brandedInt64 };
+
+    expectJsonException(
+      () => JsonSerializer.deserialize([1, null], { descriptor: array }),
+      cannotConvertMessage("MyApp.EntityId"),
+    );
+  });
+});
+
+describe("int64 — exact reads through deserializeText (review round 1)", () => {
+  test("deserializeText reads a 64-bit root from its exact digits", () => {
+    expect(JsonSerializer.deserializeText("1152921504606846977", int64Root("System.Int64"))).toBe(
+      1152921504606846977n,
+    );
+    expect(JsonSerializer.deserializeText("-9223372036854775808", int64Root("System.Int64"))).toBe(
+      LONG_MIN,
+    );
+    expect(
+      JsonSerializer.deserializeText("18446744073709551615", int64Root("System.UInt64")),
+    ).toBe(ULONG_MAX);
+  });
+
+  test("its errors are STJ's: one past the range, a fractional 19-digit leaf and strings throw", () => {
+    expectJsonException(
+      () => JsonSerializer.deserializeText("9223372036854775808", int64Root("System.Int64")),
+      cannotConvertMessage("System.Int64"),
+    );
+    expectJsonException(
+      () => JsonSerializer.deserializeText("1152921504606846977.0", int64Root("System.Int64")),
+      cannotConvertMessage("System.Int64"),
+    );
+    expectJsonException(
+      () => JsonSerializer.deserializeText("1152921504606846977e3", int64Root("System.Int64")),
+      cannotConvertMessage("System.Int64"),
+    );
+    expectJsonException(
+      () => JsonSerializer.deserializeText("-0", int64Root("System.UInt64")),
+      cannotConvertMessage("System.UInt64"),
+    );
+    expectJsonException(
+      () => JsonSerializer.deserializeText('"5"', int64Root("System.Int64")),
+      cannotConvertMessage("System.Int64"),
+    );
+  });
+
+  // The `mayHoldInexactNumber` gate reads a text of at most 15 significant
+  // digits with `JSON.parse`, which folds `1.0` into `1` and `1e3` into
+  // `1000`; the token shape is gone, so the short-text read accepts them.
+  // STJ rejects both (measured). A 16+-digit text takes the exact tree,
+  // whose integer-token rules reject the fraction — the row above.
+  test("a short-text fraction or exponent reads as JSON.parse folded it", () => {
+    expect(JsonSerializer.deserializeText("1.0", int64Root("System.Int64"))).toBe(1n);
+    expect(JsonSerializer.deserializeText("1e3", int64Root("System.Int64"))).toBe(1000n);
+  });
+
+  test("a contract property reads its exact digits too", () => {
+    class Snowflake {}
+
+    const spec: TypeSpec = {
+      type: Snowflake,
+      factory: (props) => Object.assign(new Snowflake(), props),
+      properties: [
+        {
+          ts: "id",
+          json: "Id",
+          type: { kind: "int64", numberType: "System.Int64" },
+        } as PropertySpec,
+      ],
+    };
+
+    const snowflake = JsonSerializer.deserializeText(
+      '{"Id":1152921504606846977}',
+      spec,
+    ) as { id: bigint };
+
+    expect(snowflake.id).toBe(1152921504606846977n);
+
+    // The 19-digit fraction takes the exact tree, whose token rules reject
+    // it naming the declaring contract.
+    expectJsonException(
+      () => JsonSerializer.deserializeText('{"Id":1152921504606846977.5}', spec),
+      cannotConvertMessage("Snowflake"),
+    );
   });
 });

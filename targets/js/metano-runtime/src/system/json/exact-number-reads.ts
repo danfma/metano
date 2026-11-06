@@ -3,14 +3,14 @@ import type { JsonTypeInfo, TypeDescriptor, TypeSpec } from "./types.ts";
 /**
  * Which reads need a number's exact digits (#457). `deserializeText` reads a
  * spec through the exact tree only when its closure holds such a
- * descriptor, so every other spec keeps plain `JSON.parse`. A `decimal` is
- * the only one today; `long` / `ulong` as `bigint` (#450) join it by
- * answering `true` in `readsNumberText`.
+ * descriptor, so every other spec keeps plain `JSON.parse`. A `decimal` and
+ * a `long` / `ulong` as `bigint` (#450, FR-052's integer-token rules) read
+ * their exact text.
  */
 
 /** Whether the built-in converter of `descriptor` reads a JSON number from its exact text. */
 export function readsNumberText(descriptor: TypeDescriptor): boolean {
-  return descriptor.kind === "decimal";
+  return descriptor.kind === "decimal" || descriptor.kind === "int64";
 }
 
 /**

@@ -9,15 +9,20 @@ namespace Metano.Tests;
 /// <c>int64</c> descriptor <c>{ kind: "int64", numberType: … }</c> — a
 /// <c>[Branded]</c> type over one included — instead of the 2.x
 /// <c>primitive</c> descriptor with a <c>numberType</c>, whatever the read
-/// options (FR-057). <see cref="Int64Representation.Number"/> keeps the
-/// shipped descriptors byte for byte (FR-071, NFR-001).
+/// options (FR-057). A branded type keeps its companion factory
+/// (<c>create</c>, the valid <c>[JsonFactory]</c> member) and its CLR
+/// <c>typeName</c> on the descriptor, which the runtime applies after the
+/// exact read — the factory case FR-050 does not describe.
+/// <see cref="Int64Representation.Number"/> keeps the shipped descriptors
+/// byte for byte (FR-071, NFR-001).
 /// </summary>
 public class Int64JsonContextTests
 {
     private const string ContextPath = "test-app/json-context.ts";
 
-    private static readonly bool UpdateGoldens =
-        Environment.GetEnvironmentVariable("METANO_UPDATE_INT64_JSON_GOLDENS") == "1";
+    private const string BigIntGolden = "int64-json-context.ts";
+
+    private const string NumberGolden = "int64-json-context-number.ts";
 
     private const string ContextBoilerplate = """
         public partial class JsonContext : JsonSerializerContext
@@ -31,12 +36,14 @@ public class Int64JsonContextTests
     /// <summary>
     /// One 64-bit position of each kind: properties (signed, unsigned,
     /// nullable), array and list elements, a dictionary keyed by <c>long</c>,
-    /// one keyed by <c>string</c> with a <c>ulong</c> value, a set, a
-    /// <c>[Branded]</c> over <c>long</c>, and the value roots.
+    /// one keyed by <c>string</c> with a <c>ulong</c> value, a set, a plain
+    /// <c>[Branded]</c> over <c>long</c> (as a member, a nullable member and
+    /// a dictionary key), one with a valid <c>[JsonFactory]</c>, and the
+    /// value roots.
     /// </summary>
     private const string Declarations = """
         [Transpile]
-        public sealed record Snowflake(long Id, ulong Mask, long? Parent);
+        public sealed record Snowflake(long Id, ulong Mask, long? Parent, EntityId? Origin);
 
         [Transpile]
         public sealed record Boxes(
@@ -45,53 +52,29 @@ public class Int64JsonContextTests
             Dictionary<long, string> ByName,
             Dictionary<string, ulong> Counts,
             HashSet<long> Set,
-            EntityId Id
+            EntityId Id,
+            Dictionary<EntityId, string> ByToken,
+            TokenId Token
         );
 
         [Transpile, Branded]
         public readonly record struct EntityId(long Value);
 
+        [Transpile, Branded]
+        public readonly record struct TokenId(long Value)
+        {
+            [JsonFactory]
+            public static TokenId From(long value) => new TokenId(value);
+        }
+
         [Transpile]
         [JsonSerializable(typeof(Snowflake))]
         [JsonSerializable(typeof(Boxes))]
         [JsonSerializable(typeof(EntityId))]
+        [JsonSerializable(typeof(TokenId))]
         [JsonSerializable(typeof(long))]
         [JsonSerializable(typeof(ulong?))]
         """;
-
-    [Test]
-    public async Task BigIntMode_EmitsTheInt64Descriptors()
-    {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ContextSource(),
-            Int64Representation.BigInt
-        );
-
-        if (UpdateGoldens)
-            TranspileHelper.WriteExpected("int64-json-context.ts", files[ContextPath]);
-
-        await Assert
-            .That(files[ContextPath])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-json-context.ts"));
-
-        await Assert.That(diagnostics).IsEmpty();
-    }
-
-    [Test]
-    public async Task NumberMode_KeepsTheShippedPrimitiveDescriptors()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            ContextSource(),
-            Int64Representation.Number
-        );
-
-        if (UpdateGoldens)
-            TranspileHelper.WriteExpected("int64-json-context-number.ts", files[ContextPath]);
-
-        await Assert
-            .That(files[ContextPath])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-json-context-number.ts"));
-    }
 
     private static string ContextSource() =>
         $$"""
@@ -104,4 +87,42 @@ public class Int64JsonContextTests
             {{Declarations}}
             {{ContextBoilerplate}}
             """;
+
+    [Test]
+    public async Task BigIntMode_EmitsTheInt64Descriptors()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            ContextSource(),
+            Int64Representation.BigInt
+        );
+
+        if (TranspileHelper.UpdateGoldensRequested)
+        {
+            TranspileHelper.WriteExpected(BigIntGolden, files[ContextPath]);
+
+            return;
+        }
+
+        await Assert.That(files[ContextPath]).IsEqualTo(TranspileHelper.ReadExpected(BigIntGolden));
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task NumberMode_KeepsTheShippedPrimitiveDescriptors()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            ContextSource(),
+            Int64Representation.Number
+        );
+
+        if (TranspileHelper.UpdateGoldensRequested)
+        {
+            TranspileHelper.WriteExpected(NumberGolden, files[ContextPath]);
+
+            return;
+        }
+
+        await Assert.That(files[ContextPath]).IsEqualTo(TranspileHelper.ReadExpected(NumberGolden));
+    }
 }
