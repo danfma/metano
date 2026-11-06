@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { hashInt64 } from "#/system/int64.ts";
 import { HashCode } from "#/system/hash-code.ts";
+import { hashCode, valueHashCode } from "#/system/equality.ts";
 
 describe("HashCode", () => {
   test("same values produce same hash", () => {
@@ -77,5 +79,38 @@ describe("HashCode", () => {
   test("deterministic across calls", () => {
     const results = Array.from({ length: 100 }, () => HashCode.combine2("test", 42));
     expect(new Set(results).size).toBe(1);
+  });
+});
+
+// The values .NET 10 reports for long.GetHashCode() / ulong.GetHashCode(),
+// probed with `dotnet run` (FR-046, DECIDED-13): the low and high 32-bit
+// words folded with xor, so ids that differ in the high word spread.
+describe("bigint hashing", () => {
+  test("hashInt64 reproduces .NET's 64-bit hash codes", () => {
+    expect(hashInt64(5n)).toBe(5);
+    expect(hashInt64(-1n)).toBe(0);
+    expect(hashInt64(1n << 32n)).toBe(1);
+    expect(hashInt64(18446744073709551615n)).toBe(0);
+    expect(hashInt64(-9223372036854775808n)).toBe(-2147483648);
+    expect(hashInt64(1n << 40n)).toBe(256);
+  });
+
+  test("the high word spreads: values the low-word formula collided now differ", () => {
+    expect(hashInt64(1n << 32n)).not.toBe(hashInt64(0n));
+  });
+
+  test("HashCode.add and the combine helpers hash a bigint through hashInt64", () => {
+    expect(HashCode.combine(5n)).not.toBe(HashCode.combine(-1n));
+
+    const hc = new HashCode();
+    hc.add(5n);
+    expect(hc.toHashCode()).toBe(HashCode.combine(5n));
+  });
+
+  test("hashCode and valueHashCode hash a bigint through hashInt64", () => {
+    expect(hashCode(5n)).toBe(HashCode.combine(5n));
+    expect(valueHashCode(1n << 32n)).toBe(hashCode(1n << 32n));
+    // 5 and -1 enter the accumulator with the distinct .NET word hashes.
+    expect(hashCode(-1n)).not.toBe(hashCode(5n));
   });
 });

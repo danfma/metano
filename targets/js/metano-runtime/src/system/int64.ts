@@ -186,6 +186,17 @@ export function uint64FromBigInteger(value: bigint): bigint {
 }
 
 /**
+ * `long.GetHashCode()` / `ulong.GetHashCode()`: the low and high 32-bit words,
+ * each read as a signed int, folded with xor. Spreading the high word keeps ids
+ * and ticks that differ only there from colliding, as .NET does (`(int)v ^
+ * (int)(v >> 32)`); the old low-word-only formula sent `1L << 32` and `0L` to
+ * the same bucket. `system/hash-code.ts` routes every `bigint` through here.
+ */
+export function hashInt64(value: bigint): number {
+  return Number(BigInt.asIntN(32, value)) ^ Number(BigInt.asIntN(32, value >> 32n));
+}
+
+/**
  * `l / m` on `long`: the quotient truncated toward zero; a `null` (or `undefined`)
  * operand gives `null`, as C#'s lifted `long?` division.
  *
