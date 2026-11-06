@@ -220,16 +220,34 @@ public static partial class IrToTsExpressionBridge
     /// generated <c>[GenerateGuard]</c> guard (erased interfaces and
     /// <c>[PlainObject]</c>s), the array shape and length of a
     /// <c>[JsTuple]</c> (a type alias with no runtime value to reference), or
-    /// <c>instanceof</c> its class. A <c>decimal</c> precedes the
-    /// classification: it lowers to a decimal.js <c>Decimal</c> instance, so
-    /// its test is <c>instanceof Decimal</c> — <c>typeof === "number"</c>
-    /// would match plain JS numbers C# rejects. Extraction reports MS0001 for
-    /// a type with no test, so none reaches this point.
+    /// <c>instanceof</c> its class. Two kinds precede the classification, where
+    /// a bare <c>typeof</c> would over-accept: a <c>decimal</c> lowers to a
+    /// decimal.js <c>Decimal</c> instance, so its test is
+    /// <c>instanceof Decimal</c>, and a 64-bit integer in the staging BigInt
+    /// mode (spec 012 DECIDED-22, FR-048) lowers to a <c>bigint</c> that the
+    /// <c>typeof</c> test alone cannot range — <c>o is long</c> and
+    /// <c>o is ulong</c> read the runtime range checks
+    /// (<see cref="IrTypeCheckBuilder"/> DECIDED-14), which also tells a
+    /// <c>switch</c> over <c>long</c> / <c>ulong</c> /
+    /// <c>BigInteger</c> arms apart. Extraction reports MS0001 for a type with
+    /// no test, so none reaches this point.
     /// </summary>
     private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
-        targetType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal }
-            ? IrTypeCheckBuilder.DecimalInstanceof(value)
-            : IrRuntimeTypeTest.Of(targetType) switch
+        targetType switch
+        {
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } =>
+                IrTypeCheckBuilder.DecimalInstanceof(value),
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 }
+                when Int64RepresentationScope.IsBigInt => SixtyFourBitRangeTest(
+                value,
+                Int64TypeCheckName.OfInt64
+            ),
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 }
+                when Int64RepresentationScope.IsBigInt => SixtyFourBitRangeTest(
+                value,
+                Int64TypeCheckName.OfUInt64
+            ),
+            _ => IrRuntimeTypeTest.Of(targetType) switch
             {
                 IrRuntimeTypeTest.Typeof { Primitive: var primitive } =>
                     IrTypeCheckBuilder.TypeofTest(value, IrTypeCheckBuilder.TypeofKind(primitive)),
@@ -240,7 +258,16 @@ public static partial class IrToTsExpressionBridge
                 IrRuntimeTypeTest.ArrayTuple { Arity: var arity } => ArrayTupleTest(value, arity),
                 IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
                 _ => throw NoRuntimeTypeTest(targetType),
-            };
+            },
+        };
+
+    /// <summary>
+    /// A 64-bit range test over a pattern value. The call goes through
+    /// <see cref="TsRuntimeHelperReference"/>, so the import collector brings
+    /// the helper in wherever a type pattern is the only use.
+    /// </summary>
+    private static TsExpression SixtyFourBitRangeTest(TsExpression value, string helper) =>
+        new TsCallExpression(new TsRuntimeHelperReference(helper), [value]);
 
     /// <summary>
     /// The structural <see cref="IrRuntimeTypeTest.ArrayTuple"/> test: an

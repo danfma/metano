@@ -22,17 +22,24 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Within the same tier and parameter count, an overload with fewer
 /// type-parameter-typed parameters comes first, since C# prefers the less
 /// generic overload (<c>F(int)</c> over <c>F&lt;T&gt;(T)</c>) and a type
-/// parameter's guard is the loosest. In the staging BigInt mode (spec 012
-/// DECIDED-22), same-arity overloads that differ only among <c>long</c>,
-/// <c>ulong</c> and <c>BigInteger</c> then follow that order (FR-048, OQ-6):
-/// their guards all accept an in-range <c>bigint</c>, so C#'s static choice is
-/// unobservable and the documented dispatch order is the only rule. The sort
-/// is stable, so remaining ties keep declaration order.
+/// parameter's guard is the loosest. The sort is stable, so remaining ties
+/// keep declaration order — with one gated exception: in the staging BigInt
+/// mode (spec 012 DECIDED-22), <see cref="SixtyFourBitDispatchOrder"/>
+/// reorders the sibling sets whose members differ only among
+/// <c>long</c>, <c>ulong</c> and <c>BigInteger</c> into the documented
+/// dispatch order of OQ-6 (their guards all accept an in-range
+/// <c>bigint</c>, so C#'s static choice is unobservable there). Overloads
+/// that are not such siblings never move.
 /// <para>
 /// No order matches C# when a catch-all overload (no parameter checked) shares
 /// argument counts with a concrete optional or <c>params</c> one, since C#
 /// can rank such sets cyclically; <see cref="CatchAllOverloads"/> reports
 /// them as <c>MS0063</c> until static call-site dispatch (#25) lands.
+/// </para>
+/// <para>
+/// Like the other bridges, the sort reads the staging mode from the ambient
+/// <see cref="Int64RepresentationScope"/> the transformer holds for the
+/// module being bridged; the Number mode keeps declaration order throughout.
 /// </para>
 /// </summary>
 internal static class OverloadDispatchOrder
@@ -40,15 +47,20 @@ internal static class OverloadDispatchOrder
     public static List<TOverload> Sort<TOverload>(
         IEnumerable<TOverload> overloads,
         Func<TOverload, IReadOnlyList<IrParameter>> parametersOf
-    ) =>
-        overloads
+    )
+    {
+        var sorted = overloads
             .Select(overload => (Overload: overload, Rank: OverloadRank.Of(parametersOf(overload))))
             .OrderBy(entry => entry.Rank.Tier)
             .ThenBy(entry => entry.Rank.ParameterCountOrder)
             .ThenBy(entry => entry.Rank.TypeParameterArguments)
-            .ThenBy(entry => entry.Rank.SixtyFourBitOrder)
             .Select(entry => entry.Overload)
             .ToList();
+
+        return Int64RepresentationScope.IsBigInt
+            ? SixtyFourBitDispatchOrder.Reordered(sorted, parametersOf)
+            : sorted;
+    }
 
     /// <summary>The tiers, in dispatch order.</summary>
     private enum DispatchTier
@@ -72,14 +84,10 @@ internal static class OverloadDispatchOrder
     /// there and the fewest first in the optional tier.</param>
     /// <param name="TypeParameterArguments">Its type-parameter-typed
     /// parameters.</param>
-    /// <param name="SixtyFourBitOrder">Its 64-bit dispatch rank
-    /// (<see cref="SixtyFourBitRankOf(IReadOnlyList{IrParameter})"/>); always
-    /// <c>0</c> in Number mode, so the sort keeps declaration order.</param>
     private sealed record OverloadRank(
         DispatchTier Tier,
         int ParameterCountOrder,
-        int TypeParameterArguments,
-        int SixtyFourBitOrder
+        int TypeParameterArguments
     )
     {
         public static OverloadRank Of(IReadOnlyList<IrParameter> parameters)
@@ -90,8 +98,7 @@ internal static class OverloadDispatchOrder
             return new OverloadRank(
                 tier,
                 countOrder,
-                parameters.Count(p => IsTypeParameter(p.Type)),
-                Int64RepresentationScope.IsBigInt ? SixtyFourBitRankOf(parameters) : 0
+                parameters.Count(p => IsTypeParameter(p.Type))
             );
         }
 
@@ -102,31 +109,6 @@ internal static class OverloadDispatchOrder
 
             return arguments.HasOptionalArguments ? DispatchTier.Optional : DispatchTier.Required;
         }
-
-        /// <summary>
-        /// The lowest rank of the overload's parameters: <c>long</c> dispatches
-        /// before <c>ulong</c>, before <c>BigInteger</c> (OQ-6). A parameter of
-        /// any other type ranks <c>0</c>, so it never delays a 64-bit one.
-        /// </summary>
-        private static int SixtyFourBitRankOf(IReadOnlyList<IrParameter> parameters) =>
-            parameters.Select(PrimitiveRankOf).DefaultIfEmpty(0).Min();
-
-        private static int PrimitiveRankOf(IrParameter parameter) =>
-            PrimitiveOf(parameter.Type) switch
-            {
-                IrPrimitive.Int64 => 1,
-                IrPrimitive.UInt64 => 2,
-                IrPrimitive.BigInteger => 3,
-                _ => 0,
-            };
-
-        private static IrPrimitive? PrimitiveOf(IrTypeRef type) =>
-            type switch
-            {
-                IrPrimitiveTypeRef primitive => primitive.Primitive,
-                IrNullableTypeRef nullable => PrimitiveOf(nullable.Inner),
-                _ => null,
-            };
 
         private static bool IsTypeParameter(IrTypeRef type) =>
             type switch
