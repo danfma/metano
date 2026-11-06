@@ -24,13 +24,14 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// A user-defined operator application bound to <paramref name="target"/>:
-    /// its operands one value per parameter, in parameter order (spec 013
-    /// FR-018). <c>null</c> when <paramref name="call"/> is no operator
-    /// application of that overload, or the application is a lifted one —
-    /// a nullable operand that C# null-propagates, whose lowering keeps the
-    /// lifted guard (<see cref="IrExpressionExtractor.TryExtractLiftedBinary"/>
-    /// and the nullable-equality paths) — so the caller keeps today's shape.
+    /// A user-defined binary operator application bound to
+    /// <paramref name="target"/>: its operands one value per parameter, in
+    /// parameter order (spec 013 FR-018). <c>null</c> when
+    /// <paramref name="call"/> is no binary application of that overload, or
+    /// the application is a lifted one — a nullable operand that C#
+    /// null-propagates, whose lowering keeps the lifted guard — so the
+    /// caller keeps today's shape. A dispatched unary operator group keeps
+    /// today's shape too: its call sites are not bound.
     /// </summary>
     internal BoundOverloadCall? ExtractBoundOperatorCall(
         IOperation? call,
@@ -38,21 +39,13 @@ public sealed partial class IrExpressionExtractor
         IrOverloadRef target
     )
     {
-        IReadOnlyList<IOperation>? operands = call switch
-        {
-            IBinaryOperation { IsLifted: false } binary
-                when SymbolEqualityComparer.Default.Equals(binary.OperatorMethod, operatorMethod) =>
-                [binary.LeftOperand, binary.RightOperand],
-            IUnaryOperation { IsLifted: false } unary
-                when SymbolEqualityComparer.Default.Equals(unary.OperatorMethod, operatorMethod) =>
-            [
-                unary.Operand,
-            ],
-            _ => null,
-        };
-
-        if (operands is null)
+        if (
+            call is not IBinaryOperation { IsLifted: false } binary
+            || !SymbolEqualityComparer.Default.Equals(binary.OperatorMethod, operatorMethod)
+        )
             return null;
+
+        var operands = new[] { binary.LeftOperand, binary.RightOperand };
 
         return new BoundOverloadCall(
             operands

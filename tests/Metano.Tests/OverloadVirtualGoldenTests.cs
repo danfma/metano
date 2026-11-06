@@ -309,11 +309,19 @@ public class OverloadVirtualGoldenTests
 
                 public int G(bool f) => f ? 10 : 20;
             }
+
+            [Transpile]
+            public class Use
+            {
+                public int ThroughInterface(IShape shape) => shape.Area(2);
+
+                public int ThroughBoth(IA g) => g.G("ab");
+            }
             """
         );
 
         await Assert
-            .That(Joined(result, "i-shape", "sq", "plot", "ia", "ib", "both"))
+            .That(Joined(result, "i-shape", "sq", "plot", "ia", "ib", "both", "use"))
             .IsEqualTo(TranspileHelper.ReadExpected("overload-interface.ts"));
     }
 

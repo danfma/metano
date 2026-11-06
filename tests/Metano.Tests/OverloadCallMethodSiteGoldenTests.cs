@@ -379,13 +379,14 @@ public class OverloadCallMethodSiteGoldenTests
     /// <summary>
     /// Two containerless classes claiming the same dispatcher name keep the
     /// cross-type clash report (MS0020) the single-function path has always
-    /// raised: the dispatched-group branch of the export registry goes
-    /// through the same collision check for its dispatcher and fast paths.
+    /// raised, and the barrel's fast-path claim reports MS0067 (warning, at
+    /// the member) while the losing module still emits its renamed fast
+    /// paths and its callers call them (spec 013 FR-004, FR-032).
     /// </summary>
     [Test]
-    public async Task ModuleGroupClash_ReportsTheCrossTypeCollision()
+    public async Task ModuleGroupClash_ReportsTheCollisionAndTheRenamedFastPaths()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
 
@@ -406,16 +407,42 @@ public class OverloadCallMethodSiteGoldenTests
 
                 public static int Twice(string s) => s.Length * 3;
             }
+
+            [Transpile]
+            public class Caller
+            {
+                public static int Direct() => Second.Twice(21);
+
+                public static int OfString() => Second.Twice("abcd");
+            }
             """
         );
 
         var clashes = diagnostics
             .Where(diagnostic => diagnostic.Code == DiagnosticCodes.NoContainerFactoryNameClash)
-            .Select(diagnostic => diagnostic.Message)
             .ToList();
 
         await Assert.That(clashes.Count).IsGreaterThan(0);
-        await Assert.That(clashes[0]).Contains("'Second.Twice'");
+        await Assert.That(clashes[0].Message).Contains("'Second.Twice'");
+
+        var renames = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
+            .ToList();
+
+        await Assert.That(renames.Count).IsGreaterThanOrEqualTo(2);
+
+        foreach (var rename in renames)
+        {
+            await Assert.That(rename.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+            await Assert.That(rename.Location).IsNotNull();
+            await Assert.That(rename.Message).Contains("'Second.");
+        }
+
+        // The losing module still emits its claimed fast paths, renamed;
+        // its caller calls the claimed names.
+        await Assert.That(result["second.ts"]).Contains("twiceX$");
+        await Assert.That(result["second.ts"]).Contains("twiceS$");
+        await Assert.That(result["caller.ts"]).Contains("twiceX$(");
     }
 
     [Test]
