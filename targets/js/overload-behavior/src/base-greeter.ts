@@ -1,7 +1,10 @@
+/** biome-ignore-all lint/complexity/noBannedTypes: explicit shape preserved by transpiler */
+/** biome-ignore-all lint/correctness/noUnusedFunctionParameters: explicit shape preserved by transpiler */
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { isInt32, isString } from "metano-runtime";
 
 export class BaseGreeter {
-  constructor() { }
+  constructor() {}
 
   greetOther(other: Object): number {
     return -1;
@@ -18,7 +21,12 @@ export class BaseGreeter {
       return this.greetOther(args[0] as Object);
     }
 
-    if (args.length >= 1 && args.length <= 2 && isString(args[0]) && (args[1] === undefined || isInt32(args[1]))) {
+    if (
+      args.length >= 1 &&
+      args.length <= 2 &&
+      isString(args[0]) &&
+      (args[1] === undefined || isInt32(args[1]))
+    ) {
       return this.greetNameTimes(args[0] as string, args[1] as number);
     }
 
