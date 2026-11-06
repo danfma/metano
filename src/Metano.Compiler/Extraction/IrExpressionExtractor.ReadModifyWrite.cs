@@ -1,5 +1,6 @@
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -80,6 +81,76 @@ public sealed partial class IrExpressionExtractor
                 new OperatorOperand(right, MayBeNull: false, assign.Right)
             )
         );
+
+    /// <summary>
+    /// The value an extension property's <c>target op= right</c> stores: the
+    /// same compound value a field stores, lifted when the property's type is
+    /// <c>Nullable&lt;T&gt;</c> (#497) — there the getter's value takes the
+    /// null guard a nullable field takes, since the JS operator would coerce
+    /// <c>null</c> into a number (or throw on <c>null + 1n</c>).
+    /// </summary>
+    private IrExpression ExtensionCompoundValue(
+        AssignmentExpressionSyntax assign,
+        IPropertySymbol property,
+        IrExpression current,
+        IrBinaryOp op,
+        IrExpression right
+    ) =>
+        StoredUnderNullGuard(
+            property,
+            current,
+            CompoundValue(assign, GuardedRead(property, current), op, right)
+        );
+
+    /// <summary>
+    /// The value an extension property's <c>++</c> / <c>--</c> stores: the
+    /// stepped current value, lifted when the property's type is
+    /// <c>Nullable&lt;T&gt;</c> (#497), like <see cref="ExtensionCompoundValue"/>.
+    /// </summary>
+    private IrExpression ExtensionIncrementValue(
+        ExpressionSyntax node,
+        IPropertySymbol property,
+        IrExpression current,
+        IrBinaryOp stepOperator,
+        IrExpression one
+    ) =>
+        StoredUnderNullGuard(
+            property,
+            current,
+            ReduceOverflow(
+                _semantic.GetOperation(node),
+                new IrBinaryExpression(GuardedRead(property, current), stepOperator, one)
+            )
+        );
+
+    /// <summary>
+    /// The operand a lifted extension-property read-modify-write applies its
+    /// operator to: the null-asserted getter call. TypeScript narrows a
+    /// repeated property read after a <c>== null</c> test, but not a repeated
+    /// function result, so without the assertion the stored form keeps a
+    /// <c>bigint | null</c> operand and fails <c>tsc --strict</c> (#497).
+    /// </summary>
+    private static IrExpression GuardedRead(IPropertySymbol property, IrExpression current) =>
+        property.Type.IsNullableValueType()
+            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, current, IsPrefix: false)
+            : current;
+
+    /// <summary>
+    /// <paramref name="stored"/> under the lifted null guard a
+    /// <c>Nullable&lt;T&gt;</c> extension property's read-modify-write keeps
+    /// its value behind (#497): <c>current == null ? null : stored</c>, the
+    /// shape a nullable field stores. The getter call is repeated, as a
+    /// property read is assumed side-effect free
+    /// (see <see cref="IrEvaluationTraits.IsReusableReceiver"/>).
+    /// </summary>
+    private static IrExpression StoredUnderNullGuard(
+        IPropertySymbol property,
+        IrExpression current,
+        IrExpression stored
+    ) =>
+        property.Type.IsNullableValueType()
+            ? new IrConditionalExpression(IsNull(current), NullLiteral, stored)
+            : stored;
 
     /// <summary>
     /// <c>target = compute(target)</c>, reading the target twice (see

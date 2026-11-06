@@ -339,7 +339,7 @@ public class Int64OverflowTests
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
-    private const string ExtensionSource = """
+    internal const string ExtensionSource = """
         [Transpile]
         public class Holder
         {
@@ -357,6 +357,11 @@ public class Int64OverflowTests
                     set => h.Raw = value;
                 }
 
+                public long? NBonus
+                {
+                    get => h.Raw;
+                    set => h.Raw = value ?? 0;
+                }
             }
 
             extension(Holder)
@@ -364,6 +369,12 @@ public class Int64OverflowTests
                 public static long Shared
                 {
                     get => 0;
+                    set { }
+                }
+
+                public static long? NShared
+                {
+                    get => null;
                     set { }
                 }
             }
@@ -379,13 +390,28 @@ public class Int64OverflowTests
                 h.Bonus <<= 3;
                 h.Bonus /= 2;
                 h.Bonus >>>= 70;
+                h.NBonus++;
+                h.NBonus += 2;
+                h.NBonus--;
+                h.NBonus *= 2;
+                h.NBonus <<= 3;
+                h.NBonus %= 4;
                 Holder.Shared--;
                 Holder.Shared *= 3;
                 Holder.Shared %= 7;
+                Holder.NShared++;
+                Holder.NShared -= 4;
                 checked
                 {
                     h.Bonus *= 2;
+                    h.NBonus += 5;
+                    h.NBonus++;
                 }
+            }
+
+            public void BumpMaybe(Holder? h)
+            {
+                h?.NBonus += 2;
             }
         }
         """;
@@ -409,6 +435,26 @@ public class Int64OverflowTests
         await Assert
             .That(files["uses.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("int64-extension-members.ts"));
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// The shipped <c>Number</c> mode keeps no wrap (DECIDED-22) but still
+    /// lifts a nullable extension property's read-modify-write: <c>null</c>
+    /// stays <c>null</c> instead of turning into a number.
+    /// </summary>
+    [Test]
+    public async Task NumberMode_ExtensionMembers_LiftTheNullableOnes()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            ExtensionSource,
+            Int64Representation.Number
+        );
+
+        await Assert
+            .That(files["uses.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("int64-extension-members-number.ts"));
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
