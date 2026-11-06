@@ -1,3 +1,6 @@
+/** biome-ignore-all lint/complexity/noBannedTypes: explicit shape preserved by transpiler */
+/** biome-ignore-all lint/correctness/noUnusedFunctionParameters: explicit shape preserved by transpiler */
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { isInt32, isString } from "metano-runtime";
 import { BaseGreeter } from "./base-greeter";
 
@@ -13,10 +16,15 @@ export class LoudGreeter extends BaseGreeter {
   override greet(other: Object): number;
   override greet(name: string, times?: number): number;
   override greet(...args: unknown[]): number {
-    if (args.length >= 1 && args.length <= 2 && isString(args[0]) && (args[1] === undefined || isInt32(args[1]))) {
+    if (
+      args.length >= 1 &&
+      args.length <= 2 &&
+      isString(args[0]) &&
+      (args[1] === undefined || isInt32(args[1]))
+    ) {
       return this.greetNameTimes$(args[0] as string, args[1] as number);
     }
 
-    return super.greet(...args as [never]);
+    return super.greet(...(args as [never]));
   }
 }
