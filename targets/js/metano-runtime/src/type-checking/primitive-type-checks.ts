@@ -3,6 +3,7 @@
  * Used by Metano-generated overload dispatchers to differentiate
  * types that map to the same JS primitive (e.g., int vs long → both number).
  */
+import { INT64_MAX, INT64_MIN, UINT64_MAX } from "../system/int64.ts";
 
 // ─── String types ───────────────────────────────────────
 
@@ -71,6 +72,30 @@ export function isUInt64(value: unknown): value is number {
     value >= 0 &&
     value <= Number.MAX_SAFE_INTEGER
   );
+}
+
+// ─── 64-bit integer checks (bigint) ──────────────────────
+
+/**
+ * C# `long` / `Int64` held as a `bigint`: the whole `long` range, so values
+ * beyond 2^53 keep every digit.
+ *
+ * Staging name (spec 012 DECIDED-22, FR-048): this check ships beside the
+ * `number`-based `isInt64` above while the compiler's default mode still
+ * lowers `long` to `number`; slice 012k replaces the `number` checks with
+ * these.
+ */
+export function isInt64Value(value: unknown): value is bigint {
+  return typeof value === "bigint" && value >= INT64_MIN && value <= INT64_MAX;
+}
+
+/**
+ * C# `ulong` / `UInt64` held as a `bigint`: the whole `ulong` range.
+ *
+ * Staging name (spec 012 DECIDED-22, FR-048): see {@link isInt64Value}.
+ */
+export function isUInt64Value(value: unknown): value is bigint {
+  return typeof value === "bigint" && value >= 0n && value <= UINT64_MAX;
 }
 
 // ─── Floating-point types ───────────────────────────────

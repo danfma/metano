@@ -295,6 +295,37 @@ describe("valueEquals / valueHashCode (the names generated code calls)", () => {
   });
 });
 
+describe("64-bit integers (bigint)", () => {
+  test("valueEquals compares bigints by value", () => {
+    expect(valueEquals(5n, 5n)).toBe(true);
+    expect(valueEquals(5n, 6n)).toBe(false);
+    expect(valueEquals(-1n, 18446744073709551615n)).toBe(false);
+    expect(valueEquals(9007199254740993n, 9007199254740993n)).toBe(true);
+  });
+
+  // A boxed long is not equal to a boxed int in .NET ((object)5L).Equals(5) is
+  // False), and bigint and number are different typeofs here (FR-047).
+  test("valueEquals keeps 5n unequal to 5", () => {
+    expect(valueEquals(5n, 5)).toBe(false);
+    expect(valueEquals(5, 5n)).toBe(false);
+  });
+
+  test("objectEquals compares bigints by value and keeps 5n unequal to 5", () => {
+    expect(objectEquals(5n, 5n)).toBe(true);
+    expect(objectEquals(5n, 6n)).toBe(false);
+    expect(objectEquals(5n, 5)).toBe(false);
+    expect(objectEquals(5, 5n)).toBe(false);
+  });
+
+  test("hashCode is consistent with value equality", () => {
+    expect(hashCode(5n)).toBe(hashCode(5n));
+    // The full System.HashCode mixing differs from the raw .NET GetHashCode
+    // value; the .NET pins live on hashInt64 (hash-code.test.ts).
+    expect(hashCode(5n)).not.toBe(5);
+    expect(hashCode(-1n)).not.toBe(hashCode(5n));
+  });
+});
+
 describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", () => {
   // A transpiled C# class that does not override Equals: an instance with its own
   // prototype and no `equals` method. It has to be a class — an object literal is a

@@ -5,6 +5,7 @@
  * Reference: https://github.com/dotnet/corert/blob/master/src/System.Private.CoreLib/shared/System/HashCode.cs
  * Algorithm: xxHash32 by Yann Collet (BSD 2-Clause)
  */
+import { hashInt64 } from "./int64.ts";
 
 const Prime1 = 0x9e3779b1;
 const Prime2 = 0x85ebca77;
@@ -78,7 +79,8 @@ function hashValue(value: unknown): number {
 
   if (typeof value === "boolean") return value ? 1 : 0;
 
-  if (typeof value === "bigint") return Number(value & 0xffffffffn) | 0;
+  // 64-bit integers (and BigInteger): .NET folds both 32-bit words (FR-046).
+  if (typeof value === "bigint") return hashInt64(value);
 
   // Objects with hashCode method (other Metano records)
   if (
