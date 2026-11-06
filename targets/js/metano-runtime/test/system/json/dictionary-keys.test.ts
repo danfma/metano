@@ -344,7 +344,7 @@ describe("dictionary keys — reads", () => {
     expect(String(key)).toBe("100");
   });
 
-  test("a DateOnly key reads through the descriptor's parse", () => {
+  test("a DateOnly key reads through the System.Text.Json grammar", () => {
     const spec = mapSpec({
       kind: "temporal",
       parse: Temporal.PlainDate.from,
