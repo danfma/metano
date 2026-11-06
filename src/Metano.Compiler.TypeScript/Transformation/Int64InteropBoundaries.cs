@@ -218,8 +218,7 @@ internal sealed class Int64InteropBoundaries(
             if (
                 member is IMethodSymbol
                 {
-                    MethodKind: MethodKind.Constructor
-                        or MethodKind.PropertyGet
+                    MethodKind: MethodKind.PropertyGet
                         or MethodKind.PropertySet
                         or MethodKind.EventAdd
                         or MethodKind.EventRemove
@@ -227,6 +226,10 @@ internal sealed class Int64InteropBoundaries(
             )
                 continue;
 
+            // Constructors stay on the surface (FR-059 "member or type"):
+            // wherever Metano emits `new ImportedType(longArg)`, a bigint
+            // crosses into JS-written code just as it does into an imported
+            // method. Accessor pairs are noise; the property reports.
             if (member is IFieldSymbol or IPropertySymbol or IMethodSymbol)
                 yield return member;
         }
