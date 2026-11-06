@@ -1564,7 +1564,7 @@ public sealed class ImportCollector(
                 }
 
                 foreach (var typeArgument in newExpr.TypeArguments ?? [])
-                    CollectFromType(typeArgument, names, crossPackageOrigins);
+                    CollectFromType(typeArgument, sink);
 
                 foreach (var arg in newExpr.Arguments)
                     CollectFromExpression(arg, sink);
