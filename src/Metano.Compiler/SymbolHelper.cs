@@ -785,6 +785,19 @@ public static class SymbolHelper
         HasNoContainer(symbol) || HasExportedAsModule(symbol);
 
     /// <summary>
+    /// Whether the method flattens to an exported module function: an
+    /// ordinary public static — classic extensions included, whose receiver
+    /// Roslyn already exposes as the first parameter. Everything else a
+    /// containerless class declares (<c>[Emit]</c> templates, <c>[Import]</c>
+    /// facades, inlined members, operators, non-public helpers) lowers at
+    /// its own call site and exports nothing.
+    /// </summary>
+    public static bool IsExportedModuleFunction(this IMethodSymbol method) =>
+        method.IsStatic
+        && method.MethodKind == MethodKind.Ordinary
+        && method.DeclaredAccessibility == Accessibility.Public;
+
+    /// <summary>
     /// A member of a C# 14 <c>extension(R r) { … }</c> block: Roslyn declares it
     /// on the block's unnamed type, nested in the static class that holds it.
     /// </summary>
