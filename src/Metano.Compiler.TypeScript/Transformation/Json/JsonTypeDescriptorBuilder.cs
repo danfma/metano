@@ -155,7 +155,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Temporal),
             new TsObjectProperty("parse", new TsPropertyAccess(new TsIdentifier(typeName), "from")),
-            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
+            new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
     }
 
@@ -184,7 +184,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Branded),
             new TsObjectProperty("create", new TsPropertyAccess(factoryTarget, member)),
-            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
+            new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
     }
 
@@ -245,7 +245,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         return new TsObjectLiteral([
             KindProperty(kind),
             new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
-            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
+            new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
     }
 
@@ -266,7 +266,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         new([
             KindProperty(JsonPropertyKind.Decimal),
             new TsObjectProperty("type", QualifiedReference(TypeReferenceName(type))),
-            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
+            new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
 
     /// <summary>
@@ -289,7 +289,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             ? WithStringProperty(
                 BuildBareKindDescriptor(JsonPropertyKind.Primitive),
                 "typeName",
-                JsonClrTypeName.Of(type)
+                ClrTypeName.Of(type)
             )
             : BuildBareKindDescriptor(JsonPropertyKind.Primitive);
     }
