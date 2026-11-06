@@ -50,6 +50,13 @@ public static partial class IrToTsExpressionBridge
     private const string ConstructionArgumentPrefix = "$arg";
 
     /// <summary>
+    /// The parameter an out-of-order argument list binds a side-effecting
+    /// receiver to: not a valid C# identifier, so it cannot collide with a
+    /// lowered binding.
+    /// </summary>
+    private const string ReceiverArgumentPrefix = "$recv";
+
+    /// <summary>
     /// Maps an IR expression to TS. When <paramref name="bclRegistry"/> is provided,
     /// member accesses and calls consult <see cref="IrToTsBclMapper"/> first and
     /// fall back to the raw lowering when no entry matches. Without a registry the
@@ -526,7 +533,7 @@ public static partial class IrToTsExpressionBridge
         // (`b.addX.bind(b)`, spec 013 FR-018); a static one renames through
         // the same variable the containerless flatten reads, so a module
         // function stays bare.
-        var accessedName =
+        var memberName =
             ma.Overload is { } groupOverload
             && TsOverloadCallSites.MethodFastPathOf(groupOverload.Target) is { } groupFastPath
                 ? groupFastPath
@@ -563,8 +570,6 @@ public static partial class IrToTsExpressionBridge
             if (IsForeignStaticData(ma.Origin))
                 ReportUnmappedForeignStaticRead(ma.Origin);
         }
-
-        var memberName = accessedName;
 
         // `[External]` and `[NoContainer]` declaring types: the class
         // vanishes at the call site. `[External]` groups runtime
@@ -1823,16 +1828,40 @@ public static partial class IrToTsExpressionBridge
 
         var fastPath = TsOverloadCallSites.MethodFastPathOf(overload.Target);
 
+        // The argument bindings evaluate first, in the source's order — an
+        // instance receiver with a side effect must evaluate before them, as
+        // C# reads it, so it binds first too. Without out-of-order arguments
+        // the receiver stays inline, evaluated before them in place. A
+        // receiver that reads a plain value (this, a local, base, the
+        // conditional receiver placeholder, a type) never binds: mapping it
+        // again is pure.
+        var boundReceiver = ordered.Bindings.Count > 0 ? BoundReceiverOf(call, context) : null;
+
+        var callee = fastPath is null
+            ? DispatcherCalleeOf(call, context, boundReceiver?.Reference)
+            : DispatchedCalleeOf(call, fastPath, context, boundReceiver?.Reference);
+
         var fastPathCall = new TsCallExpression(
-            fastPath is null
-                ? MapNullTolerant(call.Target, context)
-                : DispatchedCalleeOf(call, fastPath, context),
+            callee,
             ordered.Arguments,
             TypeArguments: call.TypeArguments?.Select(argument =>
                     IrToTsTypeMapper.Map(argument, context.TypeOverrides)
                 )
                 .ToList()
         );
+
+        if (boundReceiver is { } receiver)
+        {
+            var bindings = new List<TsImmediateBinding> { receiver.Binding };
+
+            bindings.AddRange(ordered.Bindings);
+
+            return TsImmediateInvocation.Of(
+                bindings,
+                [new TsReturnStatement(fastPathCall)],
+                isAsync: false
+            );
+        }
 
         if (ordered.Bindings.Count == 0)
             return fastPathCall;
@@ -1845,15 +1874,69 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
+    /// The receiver binding an out-of-order argument list needs: C# evaluates
+    /// the receiver before every argument, so a receiver whose lowering is
+    /// more than a plain value read — a call, a <c>new</c>, a member chain —
+    /// binds first. <c>null</c> for a static or module callee, whose target
+    /// is a type, and for a receiver that re-maps purely.
+    /// </summary>
+    private static (TsImmediateBinding Binding, TsIdentifier Reference)? BoundReceiverOf(
+        IrCallExpression call,
+        IrToTsBridgeContext context
+    )
+    {
+        if (call.Target is not IrMemberAccess { Target: { } receiver })
+            return null;
+
+        if (
+            receiver
+            is IrThisExpression
+                or IrBaseExpression
+                or IrIdentifier
+                or IrConditionalReceiver
+                or IrTypeReference
+                or IrLiteral
+        )
+            return null;
+
+        var reference = new TsIdentifier(ReceiverArgumentPrefix);
+
+        return (
+            new TsImmediateBinding(ReceiverArgumentPrefix, MapNullTolerant(receiver, context)),
+            reference
+        );
+    }
+
+    /// <summary>
+    /// The dispatcher-form callee of a bound call whose claims are missing:
+    /// the access maps whole, so its flatten and rename lowerings still
+    /// apply; with a bound receiver, the plain property access swaps its
+    /// object for the receiver reference.
+    /// </summary>
+    private static TsExpression DispatcherCalleeOf(
+        IrCallExpression call,
+        IrToTsBridgeContext context,
+        TsIdentifier? boundReceiver
+    )
+    {
+        if (boundReceiver is null || call.Target is not IrMemberAccess access)
+            return MapNullTolerant(call.Target, context);
+
+        return new TsPropertyAccess(boundReceiver, AccessedMemberName(access));
+    }
+
+    /// <summary>
     /// The callee of a dispatched fast-path call: the fast path on the
-    /// receiver the access evaluates, or the bare fast-path name when the
+    /// receiver the access evaluates — bound first when an out-of-order
+    /// argument list captured it — or the bare fast-path name when the
     /// access lowered to anything else (a module export reference or the
     /// bare identifier of a flattened containerless call).
     /// </summary>
     private static TsExpression DispatchedCalleeOf(
         IrCallExpression call,
         string fastPath,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        TsIdentifier? boundReceiver = null
     )
     {
         if (call.Target is not IrMemberAccess access)
@@ -1865,7 +1948,7 @@ public static partial class IrToTsExpressionBridge
         return MapNullTolerant(access, context) switch
         {
             TsPropertyAccess property => new TsPropertyAccess(
-                property.Object,
+                boundReceiver ?? property.Object,
                 fastPath,
                 property.Optional,
                 property.ContinuesChain

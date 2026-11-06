@@ -273,6 +273,23 @@ type the groups do not cover, keeps the dispatcher. Regenerated in this slice: t
 bind), the cross-package `q`-call assertion, the internal-tagged caller assertion, and the
 sample-issue-tracker output (`addCommentAsyncIssueAuthorIdMessage` and friends).
 
+The 013e review added four pins: a dispatched extension group on a plain `[Transpile] static
+class` registers its fast paths in the extension-helper registry, so the importing file imports
+them (`overload-extension-helper`); a call whose named arguments evaluate out of parameter order
+binds an impure receiver first (`$recv` before the argument bindings), keeping C#'s
+receiver-before-arguments order (`overload-calls-receiver-order`); a lifted operator application
+— a nullable operand C# null-propagates — keeps the lifted guard, since the fast path would
+throw on the value read (`ExtractBoundOperatorCall` rejects `IsLifted`); and a generic call
+whose type arguments are error or anonymous types keeps the dispatcher, since no emitted
+declaration spells them (`DispatchedMethodCalls.HasUnresolvedTypeArguments`). The export
+registry's dispatched branch reports MS0020 for a dispatcher or fast path another type claimed,
+the single-function clash unchanged; a member whose barrel claim is missing (a type the barrel
+enumeration does not cover) stays single and reports MS0001. Module functions and extensions of
+a project-referenced producer keep the dispatcher — the barrel claims enumerate the current
+assembly only — correct, only slower (DECIDED-24); closing that gap is a follow-up. The module
+dispatcher's branch builder copies the class one over `IrModuleFunction`s until
+`TsDispatcherShape` lands: follow-up issue to file.
+
 Deferred from the 013d reviews (design, no behavior): a target capability port instead of
 `IsDartTarget` for binding `base.M(...)`; reporting `MS0069` from the core so every target gets it;
 splitting `MethodOverloadGroups` into grouping, anchoring and inherited-dispatcher modules; a shared

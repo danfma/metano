@@ -75,7 +75,7 @@ public sealed class TsOverloadClaimsRegistry(
         // barrel-scope claim pass names (spec 013 FR-032) — not as class
         // members.
         if (TsModuleFunctionClaims.IsModuleFunctionType(type))
-            return _context.ModuleFunctionClaims.FastPathOf(root);
+            return _context.ModuleFunctionClaims.ClaimOf(root)?.FastPath;
 
         return type.TypeKind == TypeKind.Interface
             ? InterfaceFastPathsOf(type).NameAt(root.MemberName, root.Ordinal)

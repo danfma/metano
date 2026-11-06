@@ -106,41 +106,61 @@ public class OverloadCallMethodSiteGoldenTests
             .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-defaults.ts"));
     }
 
+    /// <summary>
+    /// DECIDED-21 on a dispatched group: an expanded <c>params</c> call
+    /// passes its elements, a normal-form one the spread array, an omitted
+    /// optional + <c>params</c> call the bound default and nothing for the
+    /// empty rest, and the other overload of each group keeps its own fast
+    /// path. Also pins the null-conditional receiver on a dispatched group
+    /// and the unqualified call inside the declaring class.
+    /// </summary>
     [Test]
     public async Task ParamsForms_PassTheBoundArguments()
     {
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
-            public static class Extra
+            public class Extra
             {
-                public static int P(int a, params int[] parts) => a + parts.Length;
+                public int P(int a, params int[] rest) => a + rest.Length;
 
-                public static int Parts(params int[] parts) => parts.Length;
+                public int P(string s) => s.Length;
+
+                public int M(int a, int b = 2, params int[] rest) => a + b + rest.Length;
+
+                public int M(string s) => s.Length;
+
+                public int Unqualified(int a) => P(a, 8, 9);
+
+                public int Conditional(Extra? other) => other?.P(1, 2) ?? -1;
             }
 
             [Transpile]
             public class Use
             {
-                public int Expanded() => Extra.P(1, 2, 3);
+                public int Expanded(Extra e) => e.P(1, 2, 3);
 
-                public int Pair() => Extra.P(5, 6);
+                public int Pair(Extra e) => e.P(5, 6);
 
-                public int Alone() => Extra.P(5);
+                public int Alone(Extra e) => e.P(7);
 
-                public int Spread(int[] items) => Extra.P(1, items);
+                public int Spread(Extra e, int[] items) => e.P(1, items);
 
-                public int Empty() => Extra.Parts();
+                public int OfString(Extra e) => e.P("abcd");
 
-                public int Several() => Extra.Parts(1, 2, 3);
+                public int Defaults(Extra e) => e.M(1);
 
-                public int Arr(int[] xs) => Extra.Parts(xs);
+                public int OneRest(Extra e) => e.M(1, 3, 4);
+
+                public int OfStringM(Extra e) => e.M("ab");
             }
             """
         );
 
+        var outputs = string.Join("\n", result["extra.ts"], result["use.ts"]);
+
         await Assert
-            .That(result["use.ts"])
+            .That(outputs)
             .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-params.ts"));
     }
 
@@ -233,6 +253,169 @@ public class OverloadCallMethodSiteGoldenTests
         await Assert
             .That(result["ledger.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-operators.ts"));
+    }
+
+    /// <summary>
+    /// A lifted operator application — a nullable operand C# null-propagates
+    /// — keeps the lifted lowering (spec 013 FR-018): the fast path only
+    /// binds the resolved, non-lifted form, since the fast path would throw
+    /// on the nullable's value read where C# returns null.
+    /// </summary>
+    [Test]
+    public async Task LiftedOperator_KeepsTheLiftedGuard()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public readonly record struct Money(int Cents)
+            {
+                public static Money operator +(Money a, int cents) => new(a.Cents + cents);
+
+                public static Money operator +(Money a, Money b) => new(a.Cents + b.Cents);
+            }
+
+            [Transpile]
+            public static class Wallet
+            {
+                public static Money? Add(Money? left, Money right) => left + right;
+
+                public static bool Equal(Money? left, Money? right) => left == right;
+            }
+            """
+        );
+
+        await Assert.That(result["wallet.ts"]).Contains("== null");
+    }
+
+    /// <summary>
+    /// C# evaluates the receiver before every argument, so a call whose
+    /// named arguments evaluate out of parameter order binds an impure
+    /// receiver first: <c>((($recv, $arg1, $arg0) => …))(get(), g(), f())</c>
+    /// runs get() before f() and g(), exactly as the source reads.
+    /// </summary>
+    [Test]
+    public async Task ReceiverOrder_BindsAnImpureReceiverFirst()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Log
+            {
+                public static int F() => 1;
+
+                public static int G() => 2;
+            }
+
+            [Transpile]
+            public class Engine
+            {
+                public int Apply(int f, int d) => f * 10 + d;
+
+                public int Apply(string mode) => mode.Length;
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public Engine Get() => new Engine();
+
+                public int Ordered() => Get().Apply(d: Log.G(), f: Log.F());
+
+                public int Plain() => Get().Apply(1, 2);
+            }
+            """
+        );
+
+        await Assert
+            .That(result["caller.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-receiver-order.ts"));
+    }
+
+    /// <summary>
+    /// A dispatched extension group on a plain <c>[Transpile] static class</c>
+    /// — no module attribute — lowers its call sites to the claimed fast
+    /// paths, which the importing file must resolve: the extension-helper
+    /// registry carries the dispatcher and every fast path of the group
+    /// (spec 013 FR-032).
+    /// </summary>
+    [Test]
+    public async Task ExtensionHelpers_InPlainStaticClass_ImportTheFastPaths()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Item
+            {
+                public string Label { get; set; } = "";
+            }
+
+            [Transpile]
+            public static class Ext
+            {
+                public static int Twice(this Item item, int x) => x * 2;
+
+                public static int Twice(this Item item, string x) => x.Length * 2;
+            }
+
+            [Transpile]
+            public class Use
+            {
+                public int A(Item item) => item.Twice(1);
+
+                public int B(Item item) => item.Twice("ab");
+
+                public int C(Item? item) => item?.Twice(1) ?? 0;
+            }
+            """
+        );
+
+        var outputs = string.Join("\n", result["ext.ts"], result["use.ts"]);
+
+        await Assert
+            .That(outputs)
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-extension-helper.ts"));
+    }
+
+    /// <summary>
+    /// Two containerless classes claiming the same dispatcher name keep the
+    /// cross-type clash report (MS0020) the single-function path has always
+    /// raised: the dispatched-group branch of the export registry goes
+    /// through the same collision check for its dispatcher and fast paths.
+    /// </summary>
+    [Test]
+    public async Task ModuleGroupClash_ReportsTheCrossTypeCollision()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            [ExportedAsModule]
+            public static class First
+            {
+                public static int Twice(int x) => x * 2;
+
+                public static int Twice(string s) => s.Length * 2;
+            }
+
+            [ExportedAsModule]
+            public static class Second
+            {
+                public static int Twice(int x) => x * 3;
+
+                public static int Twice(string s) => s.Length * 3;
+            }
+            """
+        );
+
+        var clashes = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.NoContainerFactoryNameClash)
+            .Select(diagnostic => diagnostic.Message)
+            .ToList();
+
+        await Assert.That(clashes.Count).IsGreaterThan(0);
+        await Assert.That(clashes[0]).Contains("'Second.Twice'");
     }
 
     [Test]
