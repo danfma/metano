@@ -79,6 +79,7 @@ public static partial class IrToTsExpressionBridge
             // delegate; read as a value it becomes the C# `null`.
             IrCallExpression { IsOptional: true } call => NormalizedToNull(MapCall(call, context)),
             IrCallExpression call => MapCall(call, context),
+            IrBaseObjectMemberCall baseCall => MapBaseObjectMemberCall(baseCall, context),
             IrNewExpression ne => MapNewExpression(ne, context),
             IrBinaryExpression bin => MapBinary(bin, context),
             IrUnaryExpression un when un.IsPrefix => new TsUnaryExpression(
@@ -680,15 +681,29 @@ public static partial class IrToTsExpressionBridge
         origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin);
 
     /// <summary>
-    /// <c>base.GetHashCode()</c> bound to <c>object</c>'s (or
-    /// <c>ValueType</c>'s) identity hash: JS has no identity hash, and the
-    /// base of an emitted class has no <c>hashCode</c> method to call, so it
-    /// is a constant every instance shares — which keeps the hash consistent
-    /// with whatever equality the derived class defines.
+    /// A <c>base.M(...)</c> whose member no emitted base declares (#506):
+    /// <c>object</c>'s defaults, each in the shape TS can honor. Equals is
+    /// reference equality (<c>this === other</c> — <c>objectEquals</c> would
+    /// dispatch back into the overriding <c>equals</c> and recurse);
+    /// GetHashCode is the constant <c>0</c> — JS has no identity hash, and a
+    /// shared constant keeps the hash consistent with whatever equality the
+    /// derived class defines; ToString is .NET's <c>Type.ToString()</c> text
+    /// the extraction recorded.
     /// </summary>
-    private static bool IsBaseIdentityHash(IrCallExpression call) =>
-        call is { Target: IrMemberAccess { Target: IrBaseExpression }, Origin: { } origin }
-        && IrObjectContract.IsObjectGetHashCode(origin);
+    private static TsExpression MapBaseObjectMemberCall(
+        IrBaseObjectMemberCall baseCall,
+        IrToTsBridgeContext context
+    ) =>
+        baseCall.Member switch
+        {
+            IrObjectMember.Equals => new TsBinaryExpression(
+                new TsIdentifier("this"),
+                "===",
+                Map(baseCall.Arguments.Single().Value, context)
+            ),
+            IrObjectMember.GetHashCode => new TsLiteral("0"),
+            _ => new TsStringLiteral(baseCall.TypeName),
+        };
 
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
     {
@@ -698,9 +713,6 @@ public static partial class IrToTsExpressionBridge
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
         var loweredArgs = call.Arguments.Select(a => MapArgument(a, context)).ToList();
-
-        if (IsBaseIdentityHash(call))
-            return new TsLiteral("0");
 
         if (BaseFastPathCallOf(call, loweredArgs, context) is { } baseFastPathCall)
             return baseFastPathCall;

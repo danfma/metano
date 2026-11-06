@@ -1,6 +1,7 @@
 using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
@@ -105,7 +106,7 @@ internal sealed class JsonSpecBuilder
     /// <summary>
     /// <c>valueType: true, typeName: "MyApp.SPoint"</c> for a C# value type,
     /// whose JSON <c>null</c> throws <c>JsonException</c> naming that type as
-    /// System.Text.Json does (FR-037, <see cref="JsonClrTypeName"/>); nothing
+    /// System.Text.Json does (FR-037, <see cref="Analysis.ClrTypeName"/>); nothing
     /// for a reference type and for <c>Nullable&lt;T&gt;</c>, which read
     /// <c>null</c> as <c>null</c>.
     /// </summary>
@@ -115,10 +116,7 @@ internal sealed class JsonSpecBuilder
             yield break;
 
         yield return new TsObjectProperty("valueType", new TsLiteral("true"));
-        yield return new TsObjectProperty(
-            "typeName",
-            new TsStringLiteral(JsonClrTypeName.Of(type))
-        );
+        yield return new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type)));
     }
 
     private static bool RejectsNull(ITypeSymbol type) =>

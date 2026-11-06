@@ -281,6 +281,9 @@ public static class IrBodyPrinter
                 PrintClosureBody(sb, sequence);
                 sb.Append(")()");
                 break;
+            case IrBaseObjectMemberCall baseCall:
+                PrintBaseObjectMemberCall(sb, baseCall);
+                break;
             case IrCallExpression
             {
                 Target: IrMemberAccess hashed,
@@ -1139,6 +1142,34 @@ public static class IrBodyPrinter
     private static bool IsHashCodeCall(IrMemberOrigin origin) =>
         IrObjectContract.IsObjectGetHashCode(origin)
         || IrObjectContract.IsHashCodeOverrideAccess(origin);
+
+    /// <summary>
+    /// A <c>base.M(...)</c> whose member no emitted base declares (#506):
+    /// Dart's own <c>Object</c> provides the contract, so Equals reads
+    /// <c>identical(this, other)</c> (Dart's equality operator cannot take a
+    /// <c>super</c> receiver) and GetHashCode keeps <c>super.hashCode</c> —
+    /// Dart's <c>Object</c> hash is the identity hash .NET's default models.
+    /// ToString prints the <c>Type.ToString()</c> text the extraction recorded.
+    /// </summary>
+    private static void PrintBaseObjectMemberCall(StringBuilder sb, IrBaseObjectMemberCall baseCall)
+    {
+        switch (baseCall.Member)
+        {
+            case IrObjectMember.Equals:
+                sb.Append("identical(this, ");
+                PrintExpression(sb, baseCall.Arguments.Single().Value);
+                sb.Append(')');
+                break;
+
+            case IrObjectMember.GetHashCode:
+                sb.Append("super.hashCode");
+                break;
+
+            default:
+                sb.Append('\'').Append(EscapeString(baseCall.TypeName)).Append('\'');
+                break;
+        }
+    }
 
     /// <summary>
     /// A C# tuple literal as a Dart 3 record literal, <c>(a, b)</c>; a

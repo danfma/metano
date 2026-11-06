@@ -285,6 +285,50 @@ public sealed record IrCallExpression(
 public sealed record IrArgument(IrExpression Value, string? Name = null, bool IsSpread = false);
 
 /// <summary>
+/// Which <c>System.Object</c> member a <see cref="IrBaseObjectMemberCall"/>
+/// lowers to the default semantics of.
+/// </summary>
+public enum IrObjectMember
+{
+    /// <summary><c>object.Equals(object?)</c>: reference equality.</summary>
+    Equals,
+
+    /// <summary><c>object.GetHashCode()</c>: the identity hash.</summary>
+    GetHashCode,
+
+    /// <summary><c>object.ToString()</c>: the runtime type name (<see cref="IrBaseObjectMemberCall.TypeName"/>).</summary>
+    ToString,
+}
+
+/// <summary>
+/// A <c>base.M(...)</c> call whose member no emitted base class declares
+/// (#506): bound to <c>System.Object</c>'s member, or to a member of a base
+/// the toolchain does not emit — so the emitted class has no <c>extends</c>
+/// and the target's <c>super</c> has no such member. <see cref="Member"/>
+/// carries <c>object</c>'s default semantics and every backend lowers it to
+/// its own spelling: TypeScript compares references (<c>this === other</c>),
+/// hashes the identity default (<c>0</c>, the constant the runtime's
+/// <c>valueHashCode(null)</c> answers) and prints <see cref="TypeName"/>;
+/// Dart reads its own <c>Object</c> contract (<c>identical(this, other)</c>,
+/// <c>super.hashCode</c>) and prints <see cref="TypeName"/> for ToString.
+/// For a non-emitted base the base's own override is unreachable — lowering
+/// the <c>object</c> default is a documented divergence from .NET, the only
+/// semantics every target can honor.
+/// </summary>
+/// <param name="TypeName">
+/// The text .NET's <c>base.ToString()</c> prints: the enclosing type's
+/// namespace-qualified metadata name (<see cref="Analysis.ClrTypeName"/>),
+/// resolved at extraction. Deterministic spelling; a generic class prints
+/// its open form (<c>Ns.Box`1[T]</c>) where the runtime would print the
+/// closed construction.
+/// </param>
+public sealed record IrBaseObjectMemberCall(
+    IrObjectMember Member,
+    string TypeName,
+    IReadOnlyList<IrArgument> Arguments
+) : IrExpression;
+
+/// <summary>
 /// Object creation: <c>new T(args)</c>.
 /// <para>
 /// <paramref name="IsPlainObject"/> flags constructions where the target

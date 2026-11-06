@@ -84,7 +84,11 @@ public sealed partial class IrExpressionExtractor
     {
         var value = Extract(operand);
 
-        return MayFormatAsNull(operand)
+        // A base-object member call lowers to `object`'s defaults (#506), and
+        // none of them is null — `object.ToString`'s `string?` annotation
+        // notwithstanding — so the coalesce would be unreachable code tsgo
+        // rejects (TS2869) over a string literal.
+        return MayFormatAsNull(operand) && value is not IrBaseObjectMemberCall
             ? new IrBinaryExpression(value, IrBinaryOp.NullCoalescing, EmptyStringLiteral)
             : value;
     }
