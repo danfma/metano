@@ -16,6 +16,8 @@ internal static class ValueText
         value switch
         {
             null => null,
+            BoundaryOperands.BoxedValue boxed => $"{boxed.TypeName}:{Of(boxed.Value) ?? "null"}",
+            Array array => ArrayText(array),
             string text => text,
             bool flag => flag ? "true" : "false",
             char character => ((int)character).ToString(CultureInfo.InvariantCulture),
@@ -29,5 +31,10 @@ internal static class ValueText
     public static string NameOf(Type type) =>
         Nullable.GetUnderlyingType(type) is { } underlying ? NameOf(underlying) + "?"
         : type == typeof(BigInteger) ? nameof(BigInteger)
+        : type.IsArray ? NameOf(type.GetElementType()!) + "[]"
         : type.Name;
+
+    /// <summary>An array as its comma-joined element texts inside brackets.</summary>
+    private static string ArrayText(Array array) =>
+        $"[{string.Join(",", array.Cast<object?>().Select(Of))}]";
 }

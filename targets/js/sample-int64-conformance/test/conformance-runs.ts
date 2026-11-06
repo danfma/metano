@@ -8,12 +8,14 @@
 import * as aggregates from "../src/sample-int64-conformance/aggregates.ts";
 import * as bigIntegerConversions from "../src/sample-int64-conformance/big-integer-conversions.ts";
 import { DecimalBigIntegerConversions } from "../src/sample-int64-conformance/big-integer-conversions.ts";
+import * as comparisons from "../src/sample-int64-conformance/comparisons.ts";
 import * as convertCalls from "../src/sample-int64-conformance/convert-calls.ts";
 import { DecimalConvertCalls } from "../src/sample-int64-conformance/convert-calls.ts";
 import * as conversions from "../src/sample-int64-conformance/conversions.ts";
 import { DecimalConversions } from "../src/sample-int64-conformance/conversions.ts";
 import * as division from "../src/sample-int64-conformance/division.ts";
 import * as formatting from "../src/sample-int64-conformance/formatting.ts";
+import * as indexing from "../src/sample-int64-conformance/indexing.ts";
 import * as mathStatics from "../src/sample-int64-conformance/math-statics.ts";
 import * as overflow from "../src/sample-int64-conformance/overflow.ts";
 import * as parsing from "../src/sample-int64-conformance/parsing.ts";
@@ -38,4 +40,6 @@ export const FIXTURE_RUNS: readonly FixtureRun[] = [
     name: "formatting.json",
     twin: [formatting, parsing, convertCalls, DecimalConvertCalls],
   },
+  { name: "comparisons.json", twin: [comparisons] },
+  { name: "indexing.json", twin: [indexing] },
 ];

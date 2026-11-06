@@ -252,9 +252,58 @@ internal static class BoundaryOperands
     private static readonly object?[] BaseValues = [2, 8, 10, 16, 3];
 
     /// <summary>
+    /// In-range indices for the array rows: an out-of-range index reads
+    /// <c>undefined</c> in the generated arrays (011 OD-4, documented), where
+    /// .NET throws, so the fixture keeps to the 3-element arrays below.
+    /// </summary>
+    private static readonly object?[] IndexValues = [0L, 1L, 2L];
+
+    /// <summary>
+    /// Array-creation lengths: sizes whose result text stays readable. A
+    /// negative length is left out on purpose: the generated
+    /// <c>new Array</c> throws <c>RangeError</c> where .NET throws
+    /// <c>OverflowException</c> (012g, a documented divergence).
+    /// </summary>
+    private static readonly object?[] LengthValues = [0, 1, 3, 10];
+
+    /// <summary>
+    /// The arrays the indexing rows read from: three elements so every
+    /// <see cref="IndexValues"/> operand is in range.
+    /// </summary>
+    private static readonly object?[] LongArrayValues =
+    [
+        new long[] { 5, -6, (1L << 53) + 1 },
+        new long[] { 0, 0, long.MinValue },
+    ];
+
+    private static readonly object?[] IntArrayValues = [new int[] { 7, -8, int.MaxValue }];
+
+    /// <summary>
+    /// The boxed operands of <c>Equals(object)</c>: a <c>long</c> next to an
+    /// <c>int</c>, a <c>ulong</c>, a <c>double</c>, a string and
+    /// <c>null</c>, so the equality rows pin that a boxed <c>long</c> is
+    /// equal only to another boxed <c>long</c> (R2, FR-047).
+    /// </summary>
+    private static readonly object?[] BoxedValues =
+    [
+        new BoxedValue("Int64", 5L),
+        new BoxedValue("Int64", 7L),
+        new BoxedValue("Int32", 5),
+        new BoxedValue("Int64", (1L << 53) + 1),
+        new BoxedValue("UInt64", ulong.MaxValue),
+        new BoxedValue("Double", 5.0),
+        new BoxedValue("String", "5"),
+        null,
+    ];
+
+    /// <summary>A boxed value and the .NET type name it is boxed as.</summary>
+    internal readonly record struct BoxedValue(string TypeName, object Value);
+
+    /// <summary>
     /// The operands of <paramref name="parameter"/>: its name picks the
-    /// <c>string</c> and base operands (<c>format</c>, <c>text</c>,
-    /// <c>fromBase</c>), its type the others.
+    /// <c>string</c>, base, index, length, array and boxed operands
+    /// (<c>format</c>, <c>text</c>, <c>fromBase</c>, <c>index</c>,
+    /// <c>length</c>, <c>values</c>, <c>boxed</c>), its type the others.
     /// </summary>
     public static IReadOnlyList<object?> For(ParameterInfo parameter) =>
         parameter.Name switch
@@ -262,8 +311,16 @@ internal static class BoundaryOperands
             "format" => FormatValues,
             "text" => TextValues,
             "fromBase" => BaseValues,
+            "index" => IndexValues,
+            "length" => LengthValues,
+            "values" => ValuesArrayFor(parameter.ParameterType),
+            "boxed" => BoxedValues,
             _ => For(parameter.ParameterType),
         };
+
+    /// <summary>The operand arrays of an array parameter of element <paramref name="type"/>.</summary>
+    private static IReadOnlyList<object?> ValuesArrayFor(Type type) =>
+        type.GetElementType() == typeof(int) ? IntArrayValues : LongArrayValues;
 
     /// <summary>The operands of a parameter of type <paramref name="type"/>.</summary>
     public static IReadOnlyList<object?> For(Type type) =>

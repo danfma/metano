@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+/** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { contains, linq } from "metano-runtime/system/linq";
 import type { Issue } from "./issue";
 import { IssuePriority } from "./issue-priority";
