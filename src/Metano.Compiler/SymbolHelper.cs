@@ -1602,6 +1602,33 @@ public static class SymbolHelper
         string? Version = null
     );
 
+    /// <summary>
+    /// The local name an <c>[Import]</c> facade's call site spells and
+    /// binds: its <c>[Name]</c> or camelCased C# name, which aliases the
+    /// imported name when the two differ (<c>import { other as fooX }</c>).
+    /// </summary>
+    public static string ImportFacadeLocalName(this IMethodSymbol method, TargetLanguage? target) =>
+        GetNameOverride(method, target) ?? ToCamelCase(method.Name);
+
+    /// <summary>
+    /// The name a static <c>[Import]</c> method binds in every file that
+    /// calls it: under an <c>[Emit]</c> template the imported name itself,
+    /// which the template spells; otherwise the facade's local name (<see
+    /// cref="ImportFacadeLocalName"/>). <c>null</c> for a method without
+    /// <c>[Import]</c>, an instance or non-ordinary method, or one
+    /// <c>[Ignore]</c>d for <paramref name="target"/>.
+    /// </summary>
+    public static string? ImportBindingOf(this IMethodSymbol method, TargetLanguage? target)
+    {
+        if (method is not { IsStatic: true, MethodKind: MethodKind.Ordinary })
+            return null;
+
+        if (HasIgnore(method, target) || method.GetImport() is not { } import)
+            return null;
+
+        return method.HasEmit() ? import.Name : method.ImportFacadeLocalName(target);
+    }
+
     public static string ToCamelCase(string name)
     {
         if (string.IsNullOrEmpty(name))

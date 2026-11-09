@@ -85,11 +85,17 @@ internal static class DispatchedMethodCalls
         if (type.TypeKind == TypeKind.Interface)
             return null;
 
+        // RefOf only answers for a member of a dispatched group, so the
+        // group and the member always resolve here.
         if (
             MethodOverloadGroups.GroupOf(definition, target) is not { } group
             || group.MemberOf(definition) is not { } member
         )
-            return null;
+        {
+            throw new InvalidOperationException(
+                $"'{definition.Name}' has an overload ref but no dispatched group member."
+            );
+        }
 
         var suffix = MethodOverloadGroups.SuffixesOf(type, group, target)[member.Symbol];
 

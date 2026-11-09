@@ -219,7 +219,11 @@ public sealed class ModuleVariableValidator(
         && SymbolHelper.IsToolchainDeclared(owner, compilation.Assembly)
         && IsModuleState(symbol.OriginalDefinition);
 
-    private static string EmittedName(ISymbol member) =>
+    /// <summary>
+    /// The name a module variable is declared under, read off its symbol
+    /// through the same policy the module bridge declares it with.
+    /// </summary>
+    internal static string EmittedName(ISymbol member) =>
         IrToTsNamingPolicy.ToDeclaredModuleVariableName(
             member.Name,
             member.GetNameOverride(TargetLanguage.TypeScript),
