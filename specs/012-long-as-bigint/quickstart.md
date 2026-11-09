@@ -72,7 +72,7 @@ JSON.stringify(tree);
 // {"id":1152921504606846977,"mask":18446744073709551615,"parent":null}   (byte-identical to STJ)
 ```
 
-Reading that text back is exact through #457's exact path (FR-053). A tree produced by a plain
+Reading that text back is exact through #457's exact path, `deserializeText` (FR-053, slice 012h). A tree produced by a plain
 `JSON.parse` already rounded `1152921504606846977` to `1152921504606846976`.
 
 ## 4. Run the checks

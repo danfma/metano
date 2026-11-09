@@ -21,8 +21,9 @@ released sections, and these notes carry forward the migration list.
 - JSON: 64-bit values serialize through the generated context as exact
   digits (`rawJSON` leaves in the tree); plain `JSON.stringify` on a
   transpiled object with a 64-bit field throws. A tree holding a `number`
-  beyond the safe integers throws and points at `deserializeText`; 64-bit
-  dictionary keys read back as `bigint` keys.
+  beyond the safe integers throws and points at `deserializeText`, which
+  reads every 64-bit value from its exact token (`1.0` and `1e3` throw, as
+  .NET throws); 64-bit dictionary keys read back as `bigint` keys.
 - Runtime helpers, staged names until the flip renames them: `hashInt64`
   (the .NET word fold every `bigint` hash goes through — `BigInteger` hash
   values computed in 2.x no longer match), `isInt64Value` /

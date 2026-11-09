@@ -64,10 +64,29 @@ The error is `The JSON value could not be converted to System.Int64.` (or `Syste
 
 ## Exact text path (#457, FR-053)
 
-When #457 lands, a root spec whose transitive closure contains an `int64` descriptor is read from the JSON
-text by #457's exact path. The `int64` converter reads the exact token text that path hands it with the
-`rawJSON` rules above. OQ-3 asks #457 to hand it as a `JSON.rawJSON`-compatible leaf, so that
-`rawJsonTextOf` stays the one read path for `decimal` and 64-bit values.
+A root spec whose transitive closure contains an `int64` descriptor is read from the JSON text by #457's
+exact path, `deserializeText` (slice 012h). The `int64` converter reads the exact token text that path hands
+it with the `rawJSON` rules above. #457 shipped its own leaf (OQ-3): `JsonNumberText`, read by
+`exactNumberTextOf` beside `rawJsonTextOf`. The tree keeps a number as that leaf by the closure's needs
+(`specNumberTextLeaves`, `exact-number-reads.ts`):
+
+| Closure reaches | Leaves (`NumberTextLeaves`) | Kept as `JsonNumberText` | Tokenizer gate (else `JSON.parse`) |
+|---|---|---|---|
+| no `decimal`, no `int64` | — | nothing | never |
+| `decimal` only | `inexact` | more than 15 significant digits | a run of 16 `[0-9.]` characters |
+| an `int64` | `inexactOrNonInteger` | that, and any fraction or exponent | that, or a digit followed by `.` / `e` / `E` |
+
+| Text (`deserializeText`) | `long` | `ulong` | STJ (.NET 10) |
+|---|---|---|---|
+| `9007199254740993` | `9007199254740993n` | `9007199254740993n` | same |
+| `-9223372036854775808` | `-9223372036854775808n` | `JsonException` | same |
+| `1.0`, `1e3`, `1E0`, `-0.0` | `JsonException` | `JsonException` | `JsonException` |
+| `-0` | `0n` | `JsonException` | same |
+| `{"$type":1.0,…}` (int tag, polymorphic base with an `int64` in its closure) | `JsonException` | — | `JsonException` |
+
+The other converters of an exact tree read a leaf as the `number` `JSON.parse` gives (`numberOfTreeValue`;
+a custom converter gets its whole subtree with doubles), so a `double` member of the same contract still
+reads `1.5`.
 
 ## Numbers from strings (009 FR-048 item 4)
 
