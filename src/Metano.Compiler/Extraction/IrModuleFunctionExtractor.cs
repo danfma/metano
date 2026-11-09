@@ -97,12 +97,27 @@ public static class IrModuleFunctionExtractor
     /// cref="SymbolHelper.IsEmittedModuleFunction"/>) becomes — the function
     /// <see cref="Extract"/> produces for that member. A caller that needs
     /// each function beside the member it came from extracts member by
-    /// member instead of joining two lists by position.
+    /// member instead of joining two lists by position. A method the
+    /// context's target does not emit as a module function is a caller bug
+    /// and throws <see cref="ArgumentException"/>.
     /// </summary>
     public static IrModuleFunction ExtractFunction(
         IMethodSymbol method,
         IrExtractionContext? context = null
-    ) => ConvertMethod(method, context ?? IrExtractionContext.Empty);
+    )
+    {
+        var extraction = context ?? IrExtractionContext.Empty;
+
+        if (!method.IsEmittedModuleFunction(extraction.Target))
+        {
+            throw new ArgumentException(
+                $"'{method.Name}' is not an emitted module function.",
+                nameof(method)
+            );
+        }
+
+        return ConvertMethod(method, extraction);
+    }
 
     /// <summary>
     /// Classic-style extension property — <c>public static T Foo(this X x) {…}</c>

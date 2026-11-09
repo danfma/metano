@@ -105,45 +105,35 @@ public sealed class TsModuleFunctionClaims
             Target = TargetLanguage.TypeScript,
         };
 
-        var shapes = assembly is { } assemblySymbol
+        var staticTypes = assembly is { } assemblySymbol
             ? TypeScriptTransformContext
                 .EnumerateTopLevelStaticTypes(assemblySymbol.GlobalNamespace)
-                .Where(IsModuleFunctionType)
-                .Select(type => ClaimPass.TypeFunctions.Extract(type, extraction))
                 .ToList()
             : [];
 
-        var pass = new ClaimPass(shapes);
+        var shapes = staticTypes
+            .Where(IsModuleFunctionType)
+            .Select(type => ClaimPass.TypeFunctions.Extract(type, extraction))
+            .ToList();
+
+        var pass = new ClaimPass(staticTypes, shapes);
         pass.Run();
 
         return pass.Seal(compilation);
     }
 
     /// <summary>
-    /// Whether <paramref name="type"/> emits module functions: a
-    /// containerless class, or a static class holding exported classic
-    /// extension methods — either way its exported statics flatten to
-    /// top-level functions the barrel re-exports.
+    /// Whether <paramref name="type"/> emits module functions: exactly the
+    /// static classes the transformer flattens (<see
+    /// cref="TypeTransformer.IsModuleShapedStaticClass"/>) — a containerless
+    /// class or one holding any extension member, classic or in a C# 14
+    /// block, whatever that member's accessibility or attributes. Which of
+    /// its members claim names is decided per member (<see
+    /// cref="SymbolHelper.IsEmittedModuleFunction"/>), never here, so every
+    /// flattened group has a claim.
     /// </summary>
     public static bool IsModuleFunctionType(INamedTypeSymbol type) =>
-        SymbolHelper.IsContainerless(type) || HoldsExportedExtension(type);
-
-    /// <summary>
-    /// Whether the static class exports classic extension methods — its
-    /// exported statics flatten to top-level functions the barrel
-    /// re-exports, so its dispatched extension groups claim fast paths even
-    /// though the class itself keeps its namespace. A declaration view:
-    /// reduced extension symbols never appear in a member list. An
-    /// <c>[Ignore]</c>, <c>[Emit]</c> or <c>[Import]</c> extension emits no
-    /// function, so it does not make the class one.
-    /// </summary>
-    private static bool HoldsExportedExtension(INamedTypeSymbol type) =>
-        type.GetMembers()
-            .OfType<IMethodSymbol>()
-            .Any(member =>
-                member.IsExtensionMethod
-                && member.IsEmittedModuleFunction(TargetLanguage.TypeScript)
-            );
+        TypeTransformer.IsModuleShapedStaticClass(type);
 
     /// <summary>
     /// The identity a call site's <see cref="IrOverloadRef"/> names an
@@ -162,6 +152,7 @@ public sealed class TsModuleFunctionClaims
     /// </summary>
     private sealed class ClaimPass
     {
+        private readonly IReadOnlyList<INamedTypeSymbol> _staticTypes;
         private readonly IReadOnlyList<TypeFunctions> _shapes;
         private readonly HashSet<string> _taken = new(StringComparer.Ordinal);
         private readonly Dictionary<IMethodSymbol, MemberClaim> _claims = new(
@@ -169,19 +160,32 @@ public sealed class TsModuleFunctionClaims
         );
         private readonly List<MetanoDiagnostic> _findings = [];
 
-        public ClaimPass(IReadOnlyList<TypeFunctions> shapes) => _shapes = shapes;
+        public ClaimPass(
+            IReadOnlyList<INamedTypeSymbol> staticTypes,
+            IReadOnlyList<TypeFunctions> shapes
+        )
+        {
+            _staticTypes = staticTypes;
+            _shapes = shapes;
+        }
 
         /// <summary>
         /// Two passes so the order a name is taken in stays the one the
-        /// barrel has always used: pass 1 reserves every dispatcher, module
-        /// variable and <c>[Import]</c> binding of every type, pass 2 claims
-        /// each dispatched group's fast paths against them.
+        /// barrel has always used: pass 1 reserves every dispatcher and
+        /// module variable of every module type and the <c>[Import]</c>
+        /// binding of every static type, pass 2 claims each dispatched
+        /// group's fast paths against them.
         /// </summary>
         public void Run()
         {
             foreach (var shape in _shapes)
             {
                 ReserveNames(shape);
+            }
+
+            foreach (var type in _staticTypes)
+            {
+                ReserveImportBindings(type);
             }
 
             foreach (var shape in _shapes)
@@ -227,7 +231,7 @@ public sealed class TsModuleFunctionClaims
                 compilation,
                 byOverload.ToFrozenDictionary(),
                 frozenByType,
-                _findings
+                _findings.ToList().AsReadOnly()
             );
         }
 
@@ -236,10 +240,11 @@ public sealed class TsModuleFunctionClaims
         /// table and records the member's claim — the dispatcher on both
         /// sides until pass 2 claims a fast path. A cross-class dispatcher
         /// clash stays where it is handled today (the export registry
-        /// reports MS0020); the claim table only reserves the name. The
-        /// module variables and the local name every <c>[Import]</c> facade
-        /// binds in its callers are reserved too, so no fast path shadows
-        /// them.
+        /// reports MS0020); the claim table only reserves the name. A
+        /// containerless class also declares its module state as top-level
+        /// variables (<see cref="IrModuleVariableExtractor.IsModuleState"/>),
+        /// private ones included, so each declared variable name is reserved
+        /// too and no fast path shadows it.
         /// </summary>
         private void ReserveNames(TypeFunctions shape)
         {
@@ -248,25 +253,33 @@ public sealed class TsModuleFunctionClaims
                 ClaimDispatcher(shape.Type, function);
             }
 
+            if (!shape.Type.IsContainerless())
+                return;
+
             foreach (var member in shape.Type.GetMembers())
             {
-                switch (member)
+                if (IrModuleVariableExtractor.IsModuleState(member, TargetLanguage.TypeScript))
                 {
-                    case IMethodSymbol method when ImportedBindingOf(method) is { } binding:
-                        Reserve(binding);
-                        break;
+                    Reserve(ModuleVariableValidator.EmittedName(member));
+                }
+            }
+        }
 
-                    case IFieldSymbol { DeclaredAccessibility: Accessibility.Public } field:
-                        Reserve(TypeScriptNaming.ToCamelCase(field.Name));
-                        break;
-
-                    case IPropertySymbol
-                    {
-                        DeclaredAccessibility: Accessibility.Public,
-                        IsIndexer: false,
-                    } property:
-                        Reserve(TypeScriptNaming.ToCamelCase(property.Name));
-                        break;
+        /// <summary>
+        /// Pass 1, every static type: the name each static <c>[Import]</c>
+        /// method binds in the files that call it (<see
+        /// cref="SymbolHelper.ImportBindingOf"/>). A facade emits no function,
+        /// so it binds its name wherever it is called — a class that keeps
+        /// its container included — and a fast path of the same name would
+        /// silently take the import's place.
+        /// </summary>
+        private void ReserveImportBindings(INamedTypeSymbol type)
+        {
+            foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+            {
+                if (method.ImportBindingOf(TargetLanguage.TypeScript) is { } binding)
+                {
+                    Reserve(binding);
                 }
             }
         }
@@ -354,28 +367,6 @@ public sealed class TsModuleFunctionClaims
             ?? TypeScriptNaming.ToCamelCase(method.Name);
 
         /// <summary>
-        /// The local name an <c>[Import]</c> facade binds in every file that
-        /// calls it: the facade's own emitted name (<c>[Name]</c> or the
-        /// camelCased C# name), which aliases the imported one (<c>import {
-        /// other as fooX }</c>) — or, under an <c>[Emit]</c> template, the
-        /// imported name itself, which the template spells. <c>null</c> for
-        /// any other method.
-        /// </summary>
-        private static string? ImportedBindingOf(IMethodSymbol method)
-        {
-            if (method is not { IsStatic: true, MethodKind: MethodKind.Ordinary })
-                return null;
-
-            if (method.HasIgnore(TargetLanguage.TypeScript))
-                return null;
-
-            if (method.GetImport() is not { } import)
-                return null;
-
-            return method.HasEmit() ? import.Name : FunctionNameOf(method);
-        }
-
-        /// <summary>
         /// A type's emitted module functions, each extracted from its own
         /// member, so a function never needs matching back to its member.
         /// </summary>
@@ -411,7 +402,7 @@ public sealed class TsModuleFunctionClaims
 
                 var functions = type.GetMembers()
                     .OfType<IMethodSymbol>()
-                    .Where(member => member.IsEmittedModuleFunction(TargetLanguage.TypeScript))
+                    .Where(member => member.IsEmittedModuleFunction(extraction.Target))
                     .Select(member => new MemberFunction(
                         member,
                         IrModuleFunctionExtractor.ExtractFunction(member, extraction)

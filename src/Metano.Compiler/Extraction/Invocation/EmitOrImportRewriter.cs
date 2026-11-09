@@ -105,9 +105,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
         PrependReceiverIfInstance(templateArgs, context, symbol);
         templateArgs.AddRange(args.Select(a => a.Value));
 
-        var emittedName =
-            SymbolHelper.GetNameOverride(symbol, _helpers.Target)
-            ?? SymbolHelper.ToCamelCase(symbol.Name);
+        var emittedName = symbol.ImportFacadeLocalName(_helpers.Target);
         var template = $"{emittedName}({BuildPositionalPlaceholders(templateArgs.Count)})";
 
         return new IrTemplateExpression(

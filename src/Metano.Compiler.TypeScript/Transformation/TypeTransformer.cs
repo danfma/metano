@@ -936,9 +936,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// The single source of truth for "which static classes emit no class
-    /// declaration of their own": static classes shaped as a module.
+    /// declaration of their own": static classes shaped as a module. The
+    /// barrel claim pass walks exactly these types (spec 013 FR-032).
     /// </summary>
-    private static bool IsModuleShapedStaticClass(INamedTypeSymbol type) =>
+    internal static bool IsModuleShapedStaticClass(INamedTypeSymbol type) =>
         type.IsStatic
         && (
             SymbolHelper.HasExportedAsModule(type)
