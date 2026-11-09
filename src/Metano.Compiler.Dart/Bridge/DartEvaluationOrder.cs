@@ -1,4 +1,3 @@
-using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 
 namespace Metano.Compiler.Dart.Bridge;
@@ -7,12 +6,14 @@ namespace Metano.Compiler.Dart.Bridge;
 /// Keeps C#'s evaluation order for a call or construction whose bound
 /// arguments are passed in parameter order (spec 013 FR-017,
 /// <see cref="IrSelectedOverload.EvaluationOrder"/>): when named arguments put
-/// a side effect out of parameter order, each argument is bound to a name in
-/// the order the source evaluates it — a receiver that is not a plain value
-/// first, as C# reads it before the arguments — and the call passes the names
-/// in parameter order. The bindings are nested <see cref="IrLetExpression"/>s,
-/// which Dart prints as immediately invoked closures, so the rewrite holds in
-/// any expression position.
+/// a side effect out of parameter order, the arguments are passed, in the
+/// order the source evaluates them, to one immediately invoked closure whose
+/// parameters the call then passes in parameter order —
+/// <c>(($recv, $arg1, $arg0) => $recv.subXY($arg0, $arg1))(c.inner, next(), next())</c>.
+/// Dart evaluates a call's arguments left to right, so the receiver, unless it
+/// is a plain value, evaluates first, as C# reads it before the arguments. The
+/// arguments stay outside the closure, so an <c>await</c> among them keeps the
+/// enclosing function's context.
 /// </summary>
 internal static class DartEvaluationOrder
 {
@@ -21,7 +22,7 @@ internal static class DartEvaluationOrder
 
     /// <summary>
     /// The call <paramref name="build"/> makes of <paramref name="callee"/> and
-    /// <paramref name="arguments"/>, bound in <paramref name="order"/>; the
+    /// <paramref name="arguments"/>, evaluated in <paramref name="order"/>; the
     /// call itself when <paramref name="order"/> is <c>null</c>.
     /// </summary>
     public static IrExpression Bind(
@@ -35,12 +36,7 @@ internal static class DartEvaluationOrder
             return build(callee, arguments);
 
         var receiver = BoundReceiverOf(callee);
-        var boundCallee = receiver is null
-            ? callee
-            : ((IrMemberAccess)callee) with
-            {
-                Target = new IrIdentifier(ReceiverName),
-            };
+        var boundCallee = receiver is null ? callee : WithReceiver(callee, ReceiverName);
 
         var passed = arguments
             .Select(
@@ -54,26 +50,53 @@ internal static class DartEvaluationOrder
             )
             .ToList();
 
-        var bound = build(boundCallee, passed);
+        var bindings = order
+            .Select(position => (Name: ArgumentPrefix + position, arguments[position].Value))
+            .ToList();
 
-        foreach (var position in order.Reverse())
-            bound = new IrLetExpression(
-                ArgumentPrefix + position,
-                arguments[position].Value,
-                bound
-            );
+        if (receiver is not null)
+            bindings.Insert(0, (ReceiverName, receiver));
 
-        return receiver is null ? bound : new IrLetExpression(ReceiverName, receiver, bound);
+        var closure = new IrLambdaExpression(
+            bindings
+                .Select(binding => new IrParameter(
+                    binding.Name,
+                    new IrUnknownTypeRef(),
+                    HasExplicitType: false
+                ))
+                .ToList(),
+            ReturnType: null,
+            Body: [new IrReturnStatement(build(boundCallee, passed))]
+        );
+
+        return new IrCallExpression(
+            closure,
+            bindings.Select(binding => new IrArgument(binding.Value)).ToList()
+        );
     }
 
     /// <summary>
     /// The receiver of an instance call that must evaluate once, before the
     /// arguments; <c>null</c> for a plain value (a local, <c>this</c>,
-    /// <c>super</c>, a type), which reads the same inside the bindings.
+    /// <c>super</c>, a type), which no argument can change. A member access
+    /// chain (<c>o.inner</c>) is bound: an argument may reassign it.
     /// </summary>
     private static IrExpression? BoundReceiverOf(IrExpression callee) =>
-        callee is IrMemberAccess { Target: var receiver }
-        && !IrEvaluationTraits.IsReusableReceiver(receiver)
+        callee is IrMemberAccess { Target: var receiver } && !IsPlainValue(receiver)
             ? receiver
             : null;
+
+    private static bool IsPlainValue(IrExpression expression) =>
+        expression
+            is IrIdentifier
+                or IrThisExpression
+                or IrBaseExpression
+                or IrTypeReference
+                or IrConditionalReceiver;
+
+    private static IrExpression WithReceiver(IrExpression callee, string name) =>
+        ((IrMemberAccess)callee) with
+        {
+            Target = new IrIdentifier(name),
+        };
 }

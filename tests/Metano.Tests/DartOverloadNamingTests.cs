@@ -33,6 +33,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "dimension.dart",
@@ -89,6 +90,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "point.dart",
@@ -121,6 +123,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "dim.dart",
@@ -164,6 +167,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "opt.dart",
@@ -209,7 +213,8 @@ public class DartOverloadNamingTests
         var unsupported = diagnostics.Single();
 
         await Assert.That(unsupported.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
-        await Assert.That(SourceTextOf(unsupported)).StartsWith("public Box(string s)");
+        await Assert.That(FirstLineOf(unsupported)).StartsWith("public Box(string s)");
+
         await AssertFile(
             files,
             "box.dart",
@@ -270,6 +275,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "use.dart",
@@ -280,9 +286,9 @@ public class DartOverloadNamingTests
             class Use {
               static int next() => 1;
 
-              static int make() => (($arg1) => (($arg0) => Opt.fromAB($arg0, $arg1))(Use.next()))(Use.next()).v;
+              static int make() => (($arg1, $arg0) => Opt.fromAB($arg0, $arg1))(Use.next(), Use.next()).v;
 
-              static int run(Calc c) => (($arg1) => (($arg0) => c.subXY($arg0, $arg1))(Use.next()))(Use.next());
+              static int run(Calc c) => (($arg1, $arg0) => c.subXY($arg0, $arg1))(Use.next(), Use.next());
             }
 
             """
@@ -318,6 +324,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "use.dart",
@@ -357,6 +364,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "calc.dart",
@@ -406,6 +414,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "cat.dart",
@@ -418,6 +427,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "zoo.dart",
@@ -456,6 +466,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "i_shape.dart",
@@ -468,6 +479,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "rect.dart",
@@ -557,6 +569,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "taken.dart",
@@ -577,6 +590,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "dog.dart",
@@ -589,6 +603,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await Assert
             .That(diagnostics.Select(d => (d.Code, d.Severity, FirstLineOf(d))))
             .IsEquivalentTo([
@@ -669,6 +684,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "text.dart",
@@ -679,6 +695,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "ext.dart",
@@ -691,6 +708,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "use.dart",
@@ -731,6 +749,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics.Single().Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+
         await AssertFile(
             files,
             "money.dart",
@@ -791,6 +810,7 @@ public class DartOverloadNamingTests
                 DiagnosticCodes.UnsupportedFeature,
                 DiagnosticCodes.UnsupportedFeature,
             ]);
+
         await AssertFile(
             files,
             "cents.dart",
@@ -813,6 +833,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "dto.dart",
@@ -827,6 +848,7 @@ public class DartOverloadNamingTests
 
             """
         );
+
         await AssertFile(
             files,
             "use.dart",
@@ -865,6 +887,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertFile(
             files,
             "logger.dart",
@@ -873,6 +896,203 @@ public class DartOverloadNamingTests
             }
 
             void use(String log$) => log(log$);
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// The receiver of an out-of-order call is read before the arguments, as
+    /// C# reads it, even when it is a member access an argument reassigns,
+    /// and an <c>await</c> among the arguments stays in the enclosing async
+    /// function: one closure takes the receiver and the arguments in source
+    /// order (Dart evaluates them left to right).
+    /// </summary>
+    [Test]
+    public async Task OutOfOrderArguments_BindTheReceiverFirst_AndKeepAwaitOutside()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using System.Threading.Tasks;
+
+            [Transpile]
+            public class Inner
+            {
+                public int Tag;
+
+                public Inner(int tag) => Tag = tag;
+
+                public int M(int a, int b) => Tag * 100 + a * 10 + b;
+
+                public int M(string s) => 0;
+            }
+
+            [Transpile]
+            public class Outer
+            {
+                public Inner Inner = new Inner(1);
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Swap(Outer o) => 5;
+
+                public static Task<int> NextAsync() => Task.FromResult(1);
+
+                public static int Chain(Outer o) => o.Inner.M(b: Swap(o), a: 3);
+
+                public static async Task<int> Awaited(Inner i) => i.M(b: Swap(new Outer()), a: await NextAsync());
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'inner.dart';
+            import 'outer.dart';
+
+            class Use {
+              static int swap(Outer o) => 5;
+
+              static Future<int> nextAsync() => Task.fromResult(1);
+
+              static int chain(Outer o) => (($recv, $arg1, $arg0) => $recv.mAB($arg0, $arg1))(o.inner, Use.swap(o), 3);
+
+              static Future<int> awaited(Inner i) async => (($arg1, $arg0) => i.mAB($arg0, $arg1))(Use.swap(Outer()), await Use.nextAsync());
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// An overloaded conversion operator group keeps its primary under the
+    /// name its <c>[Name]</c> gives it (a conversion operator has no C#
+    /// name to pin a suffix on), as before 013g.
+    /// </summary>
+    [Test]
+    public async Task ConversionOperatorGroup_KeepsItsNamedPrimary()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Money
+            {
+                public int Cents;
+
+                public Money(int cents) => Cents = cents;
+
+                [Name("toInt")]
+                public static explicit operator int(Money m) => m.Cents;
+
+                [Name("toLong")]
+                public static explicit operator long(Money m) => m.Cents;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Single().Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+
+        await AssertFile(
+            files,
+            "money.dart",
+            """
+            class Money {
+              Money(int cents) {
+                this.cents = cents;
+              }
+
+              late int cents;
+
+              static int toInt(Money m) => m.cents;
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// An <c>[Import]</c> class Dart emits as a class gets named constructors
+    /// and fast paths, and its constructions call them; an <c>[External]</c>
+    /// one, which Dart does not emit, keeps the source construction. One shape
+    /// per symbol decides both the declaration and the call site.
+    /// </summary>
+    [Test]
+    public async Task ImportAndExternalTypes_DeclareAndConstructAlike()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, Import("Ext", "ext-lib")]
+            public class Ext
+            {
+                public Ext(int a) { }
+
+                public Ext(string s) { }
+
+                public int Add(int a) => a;
+
+                public int Add(string s) => 1;
+            }
+
+            [External]
+            public class Host
+            {
+                public Host(int a) { }
+
+                public Host(string s) { }
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static Ext Make() => new Ext(2);
+
+                public static int Count(Ext e) => e.Add(1) + e.Add("x");
+
+                public static Host Open() => new Host(3);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await AssertFile(
+            files,
+            "ext.dart",
+            """
+            class Ext {
+              Ext.fromA(int a);
+
+              Ext.fromS(String s);
+
+              int addA(int a) => a;
+
+              int addS(String s) => 1;
+            }
+
+            """
+        );
+
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'ext.dart';
+
+            class Use {
+              static Ext make() => Ext.fromA(2);
+
+              static int count(Ext e) => e.addA(1) + e.addS('x');
+
+              static Host open() => Host(3);
+            }
 
             """
         );

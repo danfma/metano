@@ -223,8 +223,10 @@ public sealed class Printer
         if (ctor.IsConst)
             sb.Append("const ");
         sb.Append(ctor.ClassName);
+
         if (ctor.Name is not null)
             sb.Append('.').Append(ctor.Name);
+
         sb.Append('(');
 
         // Dart splits ctor parameters into two regions: required positional, then an
@@ -266,14 +268,17 @@ public sealed class Printer
     private static void PrintRedirect(StringBuilder sb, DartConstructorRedirect redirect)
     {
         sb.Append(" : this");
+
         if (redirect.ConstructorName is not null)
             sb.Append('.').Append(redirect.ConstructorName);
+
         sb.Append('(');
 
         for (var i = 0; i < redirect.Arguments.Count; i++)
         {
             if (i > 0)
                 sb.Append(", ");
+
             IrBodyPrinter.PrintExpression(sb, redirect.Arguments[i].Value);
         }
 
