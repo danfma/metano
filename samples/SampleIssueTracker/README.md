@@ -118,6 +118,21 @@ exposing:
 - `List()` → `IReadOnlyList<Issue>`
 - Pagination via `PageResult<T>` and `PageRequest`
 
+### Overload factories and fast paths
+
+`Planning/Domain/Estimate.cs` is the spec 013 overload scenario. Its three
+constructors become one factory each (`Estimate.fromPoints`,
+`Estimate.fromPointsNote`, `Estimate.fromFirstSecond`) behind type-qualified
+selector symbols, and the static field `None` is initialized through
+`Estimate.fromPoints(0)` before the constructors are declared. The virtual
+`Add` group becomes the fast paths `addPoints` / `addOther`;
+`BufferedEstimate` overrides `addPoints` and calls `super.addPoints`. The
+extension group `Scale` becomes the exported module fast paths
+`scaleFactor` / `scaleNote`. Every generated call binds the overload C#
+selected (`total.addOther(estimate)`, `scaleNote(scaleFactor(...), ...)`);
+hand-written TypeScript can call the factories and fast paths, or keep
+`new Estimate(3)` and `estimate.add(2)`, which still dispatch at run time.
+
 ## What gets transpiled
 
 20+ generated TypeScript files, organized by namespace:
@@ -172,9 +187,10 @@ cd targets/js/sample-issue-tracker
 bun install
 bun run build
 bun test
+bun run test:node   # the overload scenario on the built output, under Node
 ```
 
-You should see **174 passing tests** that cover:
+You should see **186 passing tests** that cover:
 
 - `Issue` lifecycle: create, rename, describe, assign, unassign, plan/unplan for
   sprint, add comments
@@ -185,6 +201,8 @@ You should see **174 passing tests** that cover:
 - `OperationResult<T>` success/failure branching
 - String enum equality checks
 - Branded type roundtrips (`UserId.New()`, `UserId.System()`)
+- `Estimate` factories, fast paths and extension fast paths against the
+  runtime dispatchers (spec 013)
 
 ## Known issue
 

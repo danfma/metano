@@ -29,7 +29,8 @@
   "scripts": {
     "generate": "cd ../../.. && METANO_UPDATE_INT64_ISSUE_TRACKER=1 dotnet run --project tests/Metano.Tests/ -- --treenode-filter '/*/*/Int64IssueTrackerSampleTests/*'",
     "build": "tsgo -b .",
-    "test": "bun test"
+    "test": "bun test",
+    "test:node": "node --import ./dist/test/node/extensionless-imports.js dist/test/node/overload-run.js"
   },
   "exports": {
     "./sample-issue-tracker": {
