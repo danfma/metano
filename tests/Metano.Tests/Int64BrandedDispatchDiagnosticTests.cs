@@ -55,6 +55,17 @@ public class Int64BrandedDispatchDiagnosticTests
             .Diagnostics.Where(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch)
             .ToList();
 
+    private static async Task AssertAnchoredAt(MetanoDiagnostic warning, string declarationText)
+    {
+        var location = warning.Location!;
+
+        var line = location.SourceTree!.GetText().Lines[
+            location.GetLineSpan().StartLinePosition.Line
+        ];
+
+        await Assert.That(line.ToString()).Contains(declarationText);
+    }
+
     private static async Task AssertReportsOnly(string source, string members)
     {
         var warning = Ambiguity(source).Single();
@@ -65,7 +76,7 @@ public class Int64BrandedDispatchDiagnosticTests
     }
 
     [Test]
-    public async Task BrandedBesideLongAndUlong_WarnsOnceAtTheFirstDeclaredMember()
+    public async Task BrandedBesideLongAndUlong_WarnsOnceAtTheBrandedMember()
     {
         var warning = Ambiguity(
                 """
@@ -81,12 +92,12 @@ public class Int64BrandedDispatchDiagnosticTests
             .Single();
 
         await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
         await Assert
             .That(warning.Message)
             .IsEqualTo(MessageFor("'Calls.H2(ulong)', 'Calls.H2(UId)', 'Calls.H2(long)'"));
-        await Assert
-            .That(warning.Location!.SourceTree!.GetText().ToString(warning.Location.SourceSpan))
-            .IsEqualTo("H2");
+
+        await AssertAnchoredAt(warning, "public string H2(UId u)");
     }
 
     [Test]
@@ -238,18 +249,11 @@ public class Int64BrandedDispatchDiagnosticTests
             )
             .Single();
 
-        await Assert.That(warning.Message).Contains("'Derived.H(UId)'");
         await Assert
-            .That(warning.Location!.SourceTree!.GetText().ToString(warning.Location.SourceSpan))
-            .IsEqualTo("H");
-        await Assert
-            .That(warning.Location.GetLineSpan().StartLinePosition.Line)
-            .IsEqualTo(
-                warning
-                    .Location.SourceTree!.GetText()
-                    .Lines.First(line => line.ToString().Contains("public string H(UId u)"))
-                    .LineNumber
-            );
+            .That(warning.Message)
+            .IsEqualTo(MessageFor("'Derived.H(long)', 'Derived.H(UId)'"));
+
+        await AssertAnchoredAt(warning, "public string H(UId u)");
     }
 
     [Test]
@@ -275,7 +279,9 @@ public class Int64BrandedDispatchDiagnosticTests
             )
             .Single();
 
-        await Assert.That(warning.Message).Contains("'Pick.H(UId)'");
+        await Assert.That(warning.Message).IsEqualTo(MessageFor("'Pick.H(long)', 'Pick.H(UId)'"));
+
+        await AssertAnchoredAt(warning, "public string H(UId u)");
     }
 
     [Test]

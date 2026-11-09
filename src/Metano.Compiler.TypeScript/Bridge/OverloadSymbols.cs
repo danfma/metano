@@ -26,13 +26,11 @@ internal static class OverloadSymbols
     /// and everything it inherits or implements, which an inherited dispatcher's
     /// overloads are declared on.
     /// </summary>
-    internal static List<IMethodSymbol> NamedInHierarchy(INamedTypeSymbol type, string name)
-    {
-        return BaseChain(type)
+    internal static List<IMethodSymbol> NamedInHierarchy(INamedTypeSymbol type, string name) =>
+        BaseChain(type)
             .Concat(type.AllInterfaces)
             .SelectMany(declaring => declaring.GetMembers(name).OfType<IMethodSymbol>())
             .ToList();
-    }
 
     private static IEnumerable<INamedTypeSymbol> BaseChain(INamedTypeSymbol type)
     {
