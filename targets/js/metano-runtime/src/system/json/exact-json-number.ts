@@ -10,9 +10,11 @@
  * function yet, hence the local types.
  *
  * On read (#457), `JsonSerializer.deserializeText` keeps a number with more
- * significant digits than a double holds as a `JsonNumberText` leaf, which
- * the converters that read exact digits take from its text and every other
- * converter reads as the `number` `JSON.parse` gives.
+ * significant digits than a double holds — and, for a spec that reads a
+ * `long` / `ulong`, one with a fraction or an exponent — as a
+ * `JsonNumberText` leaf, which the converters that read exact digits take
+ * from its text and every other converter reads as the `number`
+ * `JSON.parse` gives.
  */
 
 /** Builds the JSON leaf of a number from its exact text. */
@@ -84,6 +86,17 @@ export function exactBigIntLeafOf(value: unknown): unknown {
 export class JsonNumberText {
   constructor(readonly text: string) {}
 }
+
+/**
+ * Which numbers an exact tree keeps as `JsonNumberText` leaves:
+ *
+ * - `inexact`: those with more significant digits than a double holds, which
+ *   a `decimal` reads from its source digits (#457);
+ * - `inexactOrNonInteger`: those, and every number with a fraction or an
+ *   exponent, whose shape a `long` / `ulong` rejects (spec 012 FR-052,
+ *   FR-053) but a double erases (`1.0` reads as `1`, `1e3` as `1000`).
+ */
+export type NumberTextLeaves = "inexact" | "inexactOrNonInteger";
 
 /**
  * The exact text of a number leaf: a `JsonNumberText` read from JSON text, or

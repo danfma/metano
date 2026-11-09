@@ -571,9 +571,10 @@ interface PropertyPlan {
 
 /**
  * How the tree being read holds its numbers: `parsed`, each a `number`, as
- * `JSON.parse` builds it; `exact`, those with more significant digits than a
- * double holds as `JsonNumberText` leaves, as `readJsonText` builds it
- * (#457).
+ * `JSON.parse` builds it; `exact`, some as `JsonNumberText` leaves, as
+ * `readJsonText` builds it (#457): those with more significant digits than a
+ * double holds and, for a spec that reads a 64-bit integer, those with a
+ * fraction or an exponent (`NumberTextLeaves`).
  */
 export type TreeNumbers = "parsed" | "exact";
 

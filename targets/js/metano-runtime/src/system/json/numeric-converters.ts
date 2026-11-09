@@ -114,7 +114,8 @@ export function primitiveConverterOf(
  * - Read as a `bigint` in range from: a `bigint`; a `rawJSON` leaf or
  *   `JsonNumberText` whose text is a JSON integer token (`-0` reads `0`,
  *   `1.0` / `1e3` are not tokens, R7 — the exact text the
- *   `deserializeText` tree hands over); a safe-integer `number`; and — when
+ *   `deserializeText` tree hands over for every number that is not a short
+ *   integer token, FR-053); a safe-integer `number`; and — when
  *   the context reads numbers from strings — a string in the FR-048
  *   grammar. A `number` beyond the safe integers throws naming the exact
  *   read path (OQ-3 d): the parsed tree has already lost its digits.

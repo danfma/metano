@@ -10,6 +10,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+import { specNumberTextLeaves } from "#/system/json/exact-number-reads.ts";
 import { readExactNumberText } from "#/system/json/number-from-string.ts";
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
@@ -28,14 +29,12 @@ import { cannotConvertMessage, expectJsonException } from "./json-exception-asse
  * - Root reads: `-0` reads `0`; `1.0` and `1e3` throw; out of range throws
  *   the same conversion error; `null` throws for the value type and reads
  *   `null` through the nullable wrapper.
- * - Divergences from the STJ probe (divergence I5 of the manifest test):
- *   `1.0` and `1e3` throw only as rawJSON leaves. `deserializeText` reads
- *   them: a text of at most 15 significant digits goes through
- *   `JSON.parse`, which folds `1.0` into `1n` and `1e3` into `1000n`. A
- *   parsed tree cannot tell `1.0` from `1`, and `JSON.parse` of a 19-digit
- *   integer has already lost the digits (the beyond-safe-integer error,
- *   OQ-3 d). Only 16+-digit texts take the exact path, whose errors match
- *   STJ's.
+ * - `deserializeText` reads every number that is not a short integer token
+ *   from its exact text (FR-053, slice 012h): `1.0`, `1e3` and a 19-digit
+ *   integer reach the converter with their shape and digits, so its errors
+ *   match STJ's. A parsed tree cannot: `JSON.parse` folds `1.0` into `1`
+ *   (read as `1n`) and has already lost a 19-digit integer's digits (the
+ *   beyond-safe-integer error, OQ-3 d).
  * - Errors name the position: a root or an element names the 64-bit type
  *   (`System.Int64`, `System.UInt64`), a nullable root or element names
  *   ``System.Nullable`1[System.Int64]``, a property names the declaring
@@ -600,16 +599,27 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
     );
   });
 
-  // The `mayHoldInexactNumber` gate reads a text of at most 15 significant
-  // digits with `JSON.parse`, which folds `1.0` into `1` and `1e3` into
-  // `1000`; the token shape is gone, so the short-text read accepts them.
-  // STJ rejects both (measured). A 16+-digit text takes the exact tree,
-  // whose integer-token rules reject the fraction — the row above.
-  test("a short-text fraction or exponent reads as JSON.parse folded it", () => {
-    expect(JsonSerializer.deserializeText("1.0", int64Root("System.Int64"))).toBe(1n);
-    expect(JsonSerializer.deserializeText("1e3", int64Root("System.Int64"))).toBe(1000n);
-    expect(JsonSerializer.deserializeText("1.0", int64Root("System.UInt64"))).toBe(1n);
-    expect(JsonSerializer.deserializeText("1e3", int64Root("System.UInt64"))).toBe(1000n);
+  // Before slice 012h a text of at most 15 significant digits went through
+  // `JSON.parse`, which folds `1.0` into `1` and `1e3` into `1000`, so both
+  // read (divergence I5). The exact tree now keeps their shape, and the
+  // integer-token rules reject them, as STJ does (measured).
+  test("a short fraction or exponent throws, as STJ throws (FR-053)", () => {
+    for (const text of ["1.0", "1e3", "1E0", "-0.0", "1.5", "0e0"]) {
+      expectJsonException(
+        () => JsonSerializer.deserializeText(text, int64Root("System.Int64")),
+        cannotConvertMessage("System.Int64"),
+      );
+      expectJsonException(
+        () => JsonSerializer.deserializeText(text, int64Root("System.UInt64")),
+        cannotConvertMessage("System.UInt64"),
+      );
+    }
+  });
+
+  test("a short integer token still reads, -0 as 0 for a long", () => {
+    expect(JsonSerializer.deserializeText("42", int64Root("System.Int64"))).toBe(42n);
+    expect(JsonSerializer.deserializeText("-0", int64Root("System.Int64"))).toBe(0n);
+    expect(JsonSerializer.deserializeText(" 7 ", int64Root("System.UInt64"))).toBe(7n);
   });
 
   test("a contract property reads its exact digits too", () => {
@@ -640,5 +650,192 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
       () => JsonSerializer.deserializeText('{"Id":1152921504606846977.5}', spec),
       cannotConvertMessage("Snowflake"),
     );
+  });
+});
+
+describe("int64 — exact reads in every position (FR-053)", () => {
+  const LONG: TypeDescriptor = { kind: "int64", numberType: "System.Int64" };
+
+  class Holder {}
+
+  /** A contract of `properties`, every one optional, so a partial payload pins one error. */
+  function holderSpec(properties: readonly Omit<PropertySpec, "optional">[]): TypeSpec {
+    return {
+      type: Holder,
+      factory: (props) => Object.assign(new Holder(), props),
+      properties: properties.map((property) => ({ ...property, optional: true })),
+    };
+  }
+
+  const positions = holderSpec([
+    { ts: "nullable", json: "Nullable", type: { kind: "nullable", inner: LONG } },
+    { ts: "values", json: "Values", type: { kind: "array", element: LONG } },
+    {
+      ts: "byName",
+      json: "ByName",
+      type: { kind: "map", key: { kind: "primitive" }, value: LONG },
+    },
+    { ts: "ratio", json: "Ratio", type: { kind: "primitive", numberType: "System.Double" } },
+    {
+      ts: "child",
+      json: "Child",
+      type: { kind: "ref", spec: () => holderSpec([{ ts: "id", json: "Id", type: LONG }]) },
+    },
+  ]);
+
+  test("every position reads digits beyond 2^53 from the text", () => {
+    const read = JsonSerializer.deserializeText(
+      '{"Nullable":9007199254740993,"Values":[-9223372036854775808,9223372036854775807],' +
+        '"ByName":{"a":18014398509481985},"Child":{"Id":1152921504606846977}}',
+      positions,
+    ) as {
+      nullable: bigint;
+      values: bigint[];
+      byName: Map<string, bigint>;
+      child: { id: bigint };
+    };
+
+    expect(read.nullable).toBe(9007199254740993n);
+    expect(read.values).toEqual([LONG_MIN, LONG_MAX]);
+    expect(read.byName.get("a")).toBe(18014398509481985n);
+    expect(read.child.id).toBe(1152921504606846977n);
+  });
+
+  // Each error names its position as the tree reads name it; a nullable
+  // member names the nullable, where STJ names the contract (manifest I6).
+  test("a short fraction or exponent throws in every position", () => {
+    const rows: readonly [string, string][] = [
+      ['{"Nullable":1.0}', "System.Nullable`1[System.Int64]"],
+      ['{"Values":[1,2.0]}', "System.Int64"],
+      ['{"ByName":{"a":1e3}}', "System.Int64"],
+      ['{"Child":{"Id":5E0}}', "Holder"],
+    ];
+
+    for (const [text, typeName] of rows) {
+      expectJsonException(
+        () => JsonSerializer.deserializeText(text, positions),
+        cannotConvertMessage(typeName),
+      );
+    }
+  });
+
+  test("a double member of the same contract still reads its fraction", () => {
+    const read = JsonSerializer.deserializeText('{"Ratio":1.5,"Values":[2]}', positions) as {
+      ratio: number;
+      values: bigint[];
+    };
+
+    expect(read.ratio).toBe(1.5);
+    expect(read.values).toEqual([2n]);
+  });
+
+  test("a nullable root reads null and rejects a fraction naming the nullable", () => {
+    const nullableRoot: ValueSpec = {
+      descriptor: { kind: "nullable", inner: LONG },
+      typeName: "System.Nullable`1[System.Int64]",
+    };
+
+    expect(JsonSerializer.deserializeText("null", nullableRoot)).toBeNull();
+    expect(JsonSerializer.deserializeText("9007199254740993", nullableRoot)).toBe(
+      9007199254740993n,
+    );
+
+    expectJsonException(
+      () => JsonSerializer.deserializeText("1.0", nullableRoot),
+      cannotConvertMessage("System.Nullable`1[System.Int64]"),
+    );
+  });
+
+  test("a branded root applies its factory to the exact read and rejects a fraction", () => {
+    const branded: ValueSpec = {
+      descriptor: {
+        kind: "int64",
+        numberType: "System.Int64",
+        create: (value) => ({ int64: value }),
+        typeName: "MyApp.EntityId",
+      },
+    };
+
+    expect(JsonSerializer.deserializeText("1152921504606846977", branded)).toEqual({
+      int64: 1152921504606846977n,
+    });
+
+    expect(() => JsonSerializer.deserializeText("1.0", branded)).toThrow(JsonException);
+  });
+
+  // A custom converter gets the whole subtree with doubles, as for decimals:
+  // the exact leaves are an internal detail of the built-in readers.
+  test("a custom converter of a sibling kind sees doubles, not number texts", () => {
+    const doubling: JsonConverter = {
+      kind: "array",
+      serialize: (value) => value,
+      deserialize: (value) => (value as number[]).map((item) => item * 2),
+    };
+
+    const spec = holderSpec([
+      { ts: "id", json: "Id", type: LONG },
+      { ts: "list", json: "List", type: { kind: "array", element: { kind: "primitive" } } },
+    ]);
+
+    const read = JsonSerializer.deserializeText('{"Id":3,"List":[1.5,2e0]}', spec, [doubling]) as {
+      id: bigint;
+      list: number[];
+    };
+
+    expect(read.id).toBe(3n);
+    expect(read.list).toEqual([3, 4]);
+  });
+});
+
+describe("int64 — the exact tree of a 64-bit closure (FR-053)", () => {
+  const LONG: TypeDescriptor = { kind: "int64", numberType: "System.Int64" };
+
+  class Shape {}
+
+  class Circle {}
+
+  const circle: TypeSpec = {
+    type: Circle,
+    factory: (props) => Object.assign(new Circle(), props),
+    properties: [{ ts: "id", json: "Id", type: LONG } as PropertySpec],
+  };
+
+  const shape: TypeSpec = {
+    type: Shape,
+    factory: (props) => Object.assign(new Shape(), props),
+    properties: [],
+    polymorphism: { discriminator: "$type", derived: [{ tag: 1, spec: () => circle }] },
+  };
+
+  test("a 64-bit integer anywhere in the closure asks for non-integer leaves too", () => {
+    const decimalOnly: ValueSpec = { descriptor: { kind: "decimal" } };
+
+    const mixed: ValueSpec = {
+      descriptor: {
+        kind: "map",
+        key: { kind: "primitive" },
+        value: { kind: "array", element: { kind: "nullable", inner: LONG } },
+      },
+    };
+
+    expect(specNumberTextLeaves(decimalOnly)).toBe("inexact");
+    expect(specNumberTextLeaves(mixed)).toBe("inexactOrNonInteger");
+    expect(specNumberTextLeaves(shape)).toBe("inexactOrNonInteger");
+  });
+
+  // STJ rejects an int tag written `1.0` or `1e0` (measured, .NET 10); a
+  // parsed tree cannot tell it from `1`, so `deserialize` still accepts it.
+  test("an int tag with a fraction or an exponent throws through the exact tree", () => {
+    for (const text of ['{"$type":1.0,"Id":5}', '{"$type":1e0,"Id":5}']) {
+      expectJsonException(
+        () => JsonSerializer.deserializeText(text, shape),
+        cannotConvertMessage("Shape"),
+      );
+    }
+
+    const read = JsonSerializer.deserializeText('{"$type":1,"Id":5}', shape) as { id: bigint };
+
+    expect(read).toBeInstanceOf(Circle);
+    expect(read.id).toBe(5n);
   });
 });
