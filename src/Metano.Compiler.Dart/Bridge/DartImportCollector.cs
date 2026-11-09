@@ -116,14 +116,12 @@ public static class DartImportCollector
             foreach (var m in cls.Members)
                 WalkMember(m, ctx);
 
-        WalkConstructor(cls.Constructor, ctx);
+        foreach (var constructor in cls.Constructors ?? [])
+            WalkConstructor(constructor, ctx);
     }
 
-    private static void WalkConstructor(DartConstructor? constructor, WalkContext ctx)
+    private static void WalkConstructor(DartConstructor constructor, WalkContext ctx)
     {
-        if (constructor is null)
-            return;
-
         foreach (var p in constructor.Parameters)
         {
             if (p.Type is not null)
@@ -133,6 +131,9 @@ public static class DartImportCollector
         }
 
         WalkBody(constructor.Body, ctx);
+
+        foreach (var argument in constructor.Redirect?.Arguments ?? [])
+            WalkExpression(argument.Value, ctx);
     }
 
     private static void WalkMember(DartClassMember member, WalkContext ctx)

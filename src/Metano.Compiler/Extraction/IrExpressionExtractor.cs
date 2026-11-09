@@ -1462,7 +1462,7 @@ public sealed partial class IrExpressionExtractor
             return renamed;
 
         return symbol is IParameterSymbol parameter
-            ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation)
+            ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation, _target)
             : id.Identifier.ValueText;
     }
 
@@ -1711,10 +1711,14 @@ public sealed partial class IrExpressionExtractor
     /// check runs. <c>null</c> for any other operator: the synthesized
     /// equality of a record keeps its value lowering, and a single operator
     /// or a metadata-only one keeps today's shape (DECIDED-11,
-    /// DECIDED-24).
+    /// DECIDED-24), and so does every operator on a target that emits no
+    /// operator fast paths (<see cref="IrExtractionContext.EmitsOperatorFastPaths"/>).
     /// </summary>
     private IrExpression? TryExtractUserOperatorCall(BinaryExpressionSyntax bin)
     {
+        if (!_context.EmitsOperatorFastPaths)
+            return null;
+
         if (
             _semantic.GetSymbolInfo(bin).Symbol
             is not IMethodSymbol
@@ -2494,14 +2498,11 @@ public sealed partial class IrExpressionExtractor
     /// a target renames the access to the claimed fast path and keeps the
     /// receiver binding. The reference itself for any other symbol —
     /// including every call that stays on the dispatcher (DECIDED-11,
-    /// DECIDED-24) and Dart, which renders source member names until it
-    /// claims names (013g).
+    /// DECIDED-24).
     /// </summary>
     private IrExpression WithDispatchedFastPath(IMethodSymbol method, IrExpression reference)
     {
-        // Dart claims no fast-path names yet (013g) and renders source member
-        // names, so a method group keeps its plain access there. #549
-        if (reference is not IrMemberAccess access || IsDartTarget)
+        if (reference is not IrMemberAccess access)
             return reference;
 
         var overloadRef = DispatchedMethodCalls.RefOf(method, _target);
@@ -2774,18 +2775,14 @@ public sealed partial class IrExpressionExtractor
     /// group (spec 013 FR-018): bound to its overload, so a target calls the
     /// overload's fast path (<c>super.addX(x)</c>). The base dispatcher
     /// branches through <c>this.addX</c>, which an override of the calling
-    /// type would reach again. <c>null</c> for any other call, and on Dart,
-    /// which renders source arguments until it claims names (013g).
+    /// type would reach again. <c>null</c> for any other call.
     /// </summary>
     private IrCallExpression? TryExtractBaseOverloadCall(
         InvocationExpressionSyntax inv,
         IMethodSymbol? symbol
     )
     {
-        // TODO(#549): gate on a target capability instead of Dart; Dart
-        // claims no fast-path names yet (013g), so a base call keeps its
-        // dispatcher there.
-        if (IsDartTarget || symbol is null)
+        if (symbol is null)
             return null;
 
         if (!IsBaseMemberCall(inv) || !IsDispatchedOnEmittedBase(symbol))
@@ -2886,17 +2883,13 @@ public sealed partial class IrExpressionExtractor
     /// explicitly (DECIDED-32), an expanded <c>params</c> call its elements
     /// and a normal-form one the spread array (DECIDED-21), and a generic
     /// call keeps its type arguments. <c>null</c> for any call that keeps
-    /// the dispatcher (DECIDED-11, DECIDED-24), and on Dart, which renders
-    /// source arguments until it claims names (013g).
+    /// the dispatcher (DECIDED-11, DECIDED-24).
     /// </summary>
     private IrCallExpression? TryExtractDirectOverloadCall(
         InvocationExpressionSyntax inv,
         IMethodSymbol? symbol
     )
     {
-        // Dart opts out through DispatchedMethodCalls.RefOf, which claims no
-        // fast-path names on that target (013g) — every call keeps its
-        // dispatcher. #549
         if (symbol is null or { MethodKind: MethodKind.ReducedExtension })
             return null;
 
@@ -3366,7 +3359,10 @@ public sealed partial class IrExpressionExtractor
     private IrParameter BuildLambdaParameter(ParameterSyntax parameter) =>
         new(
             _semantic.GetDeclaredSymbol(parameter) is { } symbol
-                ? LocalIrNameOf(symbol, IrParameterNaming.IrNameOf(symbol, _semantic.Compilation))
+                ? LocalIrNameOf(
+                    symbol,
+                    IrParameterNaming.IrNameOf(symbol, _semantic.Compilation, _target)
+                )
                 : parameter.Identifier.ValueText,
             ResolveParameterType(parameter),
             HasExplicitType: parameter.Type is not null

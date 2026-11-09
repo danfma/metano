@@ -15,24 +15,38 @@ namespace Metano.Compiler.Dart.Bridge;
 /// <see cref="AST.DartGetter"/>, etc., and the printer renders the rewritten IR
 /// without needing any mapper context of its own.
 /// </para>
+/// <para>
+/// It also spells the direct overload call sites of spec 013 (FR-017, FR-018,
+/// FR-022) with the names the declaring type's Dart claim pass gave them: a
+/// construction that selected a constructor overload calls its named
+/// constructor (<c>Dimension.fromSize(3)</c>), and a call or method group
+/// that selected a method overload names its fast path (<c>d.addX(1)</c>).
+/// An overload whose declaring type the transform cannot see keeps its
+/// source spelling.
+/// </para>
 /// </summary>
 public sealed class DartIrRewriter
 {
     private readonly DeclarativeMappingRegistry _registry;
     private readonly IReadOnlySet<string> _flattenedStaticClassNames;
+    private readonly DartOverloadClaimsRegistry? _overloads;
 
     /// <param name="registry">Declarative BCL mappings.</param>
     /// <param name="flattenedStaticClassNames">Stable full names of the static classes this target
     /// flattens into top-level functions. IR origins mark every extension helper as
     /// containerless, but Dart keeps a plain static class as a class, so the call site only
     /// loses its qualifier for the types listed here.</param>
+    /// <param name="overloads">The claim results overload call sites resolve through;
+    /// <c>null</c> keeps every call site's source spelling.</param>
     public DartIrRewriter(
         DeclarativeMappingRegistry registry,
-        IReadOnlySet<string>? flattenedStaticClassNames = null
+        IReadOnlySet<string>? flattenedStaticClassNames = null,
+        DartOverloadClaimsRegistry? overloads = null
     )
     {
         _registry = registry;
         _flattenedStaticClassNames = flattenedStaticClassNames ?? new HashSet<string>();
+        _overloads = overloads;
     }
 
     public IrExpression? Rewrite(IrExpression? expression) =>
@@ -153,10 +167,7 @@ public sealed class DartIrRewriter
                 {
                     Value = RewriteExpression(y.Value),
                 },
-            IrNewExpression n => n with
-            {
-                Arguments = n.Arguments.Select(RewriteArgument).ToList(),
-            },
+            IrNewExpression n => RewriteNew(n),
             IrElementAccess e => e with
             {
                 Target = RewriteExpression(e.Target),
@@ -253,7 +264,7 @@ public sealed class DartIrRewriter
 
     private IrExpression RewriteCall(IrCallExpression call)
     {
-        var rewrittenTarget = RewriteExpression(call.Target);
+        var rewrittenTarget = WithFastPath(RewriteExpression(call.Target), call.Overload);
         var rewrittenArgs = call.Arguments.Select(RewriteArgument).ToList();
         var rewrittenCall = call with { Target = rewrittenTarget, Arguments = rewrittenArgs };
 
@@ -272,7 +283,51 @@ public sealed class DartIrRewriter
         };
 
         var mapped = IrToDartBclMapper.TryMapMemberAccess(rewritten, _registry);
-        return mapped ?? rewritten;
+        return mapped ?? WithFastPath(rewritten, access.Overload);
+    }
+
+    /// <summary>
+    /// The callee of a call or a method group that selected a dispatched
+    /// method overload, renamed to the overload's claimed fast path. The
+    /// fast path is the member's whole name, so a <c>[Name]</c> the origin
+    /// carries no longer applies.
+    /// </summary>
+    private IrExpression WithFastPath(IrExpression callee, IrSelectedOverload? overload)
+    {
+        if (overload is null || _overloads?.FastPathOf(overload.Target) is not { } fastPath)
+            return callee;
+
+        return callee switch
+        {
+            IrMemberAccess access => access with
+            {
+                MemberName = fastPath,
+                Origin = access.Origin is { } origin ? origin with { EmittedName = null } : null,
+            },
+            IrIdentifier identifier => identifier with { Name = fastPath },
+            _ => callee,
+        };
+    }
+
+    /// <summary>
+    /// A construction that selected a constructor overload calls its named
+    /// constructor, <c>T.fromSize(args)</c>, with the bound arguments. Dart
+    /// infers the type arguments of a generic class from them.
+    /// </summary>
+    private IrExpression RewriteNew(IrNewExpression construction)
+    {
+        var arguments = construction.Arguments.Select(RewriteArgument).ToList();
+
+        if (
+            construction is not { Overload: { } overload, Type: IrNamedTypeRef type }
+            || _overloads?.ConstructorNameOf(overload.Target) is not { } constructorName
+        )
+            return construction with { Arguments = arguments };
+
+        return new IrCallExpression(
+            new IrMemberAccess(new IrTypeReference(type.Name, type.Origin), constructorName),
+            arguments
+        );
     }
 
     private IrMemberOrigin? ClearNoContainerUnlessFlattened(IrMemberOrigin? origin) =>

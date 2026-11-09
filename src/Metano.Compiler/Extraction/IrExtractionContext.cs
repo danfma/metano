@@ -33,14 +33,27 @@ public sealed record IrExtractionContext(
 
     /// <summary>
     /// The port through which a target says which types it emits with an
-    /// addressable form per constructor overload — a selector and, for a
-    /// concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10) — so
-    /// the extractor lowers calls into them to the overload Roslyn resolved
+    /// addressable form per constructor overload — TypeScript a selector and,
+    /// for a concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10),
+    /// Dart a named constructor (FR-022, DECIDED-14) — so the extractor
+    /// lowers calls into them to the overload Roslyn resolved
     /// (<see cref="DispatchedConstructorCalls"/>). <c>null</c>, the default,
     /// for a target that emits none: every construction and base call then
     /// keeps its source arguments and the target's dispatcher.
     /// </summary>
     public Func<INamedTypeSymbol, bool>? EmitsConstructorSelectors { get; init; }
+
+    /// <summary>
+    /// Whether the target emits an addressable fast path per overload of a
+    /// dispatched operator group (spec 013 FR-033), so the extractor binds an
+    /// operator application to the overload Roslyn resolved. TypeScript does
+    /// (<c>Money.__addMoneyInt32(a, b)</c>); Dart declares one
+    /// <c>operator +</c> per class and keeps the source operator, so it
+    /// clears it. Method, <c>base.M</c>, method-group and module-function
+    /// call sites bind on every target: each names the fast paths of those
+    /// groups (#549).
+    /// </summary>
+    public bool EmitsOperatorFastPaths { get; init; } = true;
 
     /// <summary>
     /// The context of a constant parameter default: the origin resolver and

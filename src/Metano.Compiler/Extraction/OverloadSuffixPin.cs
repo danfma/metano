@@ -48,7 +48,7 @@ internal sealed partial class OverloadSuffixPin
     /// </summary>
     public static OverloadSuffixPin? Of(IMethodSymbol overload, TargetLanguage? target)
     {
-        if (!Applies(overload, target))
+        if (!Applies(overload))
             return null;
 
         if (overload.FindNameOverrideAttribute(target) is not { } attribute)
@@ -61,15 +61,13 @@ internal sealed partial class OverloadSuffixPin
 
     /// <summary>
     /// Whether a <c>[Name]</c> on <paramref name="overload"/> pins a suffix
-    /// for <paramref name="target"/> instead of renaming the whole member:
-    /// not for a conversion operator, which has no C# name, so its
-    /// <c>[Name]</c> names its group; not for Dart, which names no fast paths
-    /// before 013g and renames the member as it always did.
+    /// instead of renaming the whole member: not for a conversion operator,
+    /// which has no C# name, so its <c>[Name]</c> names its group. Every
+    /// target names the fast paths of a dispatched group (TypeScript since
+    /// 013b, Dart since 013g), so the rule is the same on each.
     /// </summary>
-    public static bool Applies(IMethodSymbol overload, TargetLanguage? target) =>
-        // TODO(#549): the same target capability as the direct-call fast paths.
-        target != TargetLanguage.Dart
-        && overload.MethodKind != MethodKind.Conversion;
+    public static bool Applies(IMethodSymbol overload) =>
+        overload.MethodKind != MethodKind.Conversion;
 
     /// <summary>
     /// An invalid value pins nothing: the overload keeps its generated suffix
