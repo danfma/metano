@@ -333,8 +333,11 @@ properties so a single `BclExportTypeOverrides` and a single
   `DartIrRewriter` resolves every bound call site (`IrNewExpression.Overload`,
   `IrCallExpression.Overload`, `IrMemberAccess.Overload`) through it.
   `DartTypeShapes` answers the core's `EmitsConstructorSelectors` port with the
-  types that get named constructors; Dart clears `EmitsOperatorFastPaths`, so an
-  overloaded operator keeps its source operator.
+  types that get named constructors and leaves the opt-in
+  `EmitsOperatorFastPaths` unset, so an overloaded operator keeps its source
+  operator. A construction through a named constructor is the Dart-only
+  expression `DartNamedConstruction` (`Box<Object>.fromValue(5)`), and
+  `DartEvaluationOrder` binds out-of-order named arguments in source order.
 - **`Transformation/`** — `DartTransformer` orchestrates discovery and
   file grouping; skips types flagged with `[Ignore(TargetLanguage.Dart)]`.
 - **`Dart/`** — Dart AST records and `IrBodyPrinter`, which renders IR
