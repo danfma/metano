@@ -14,7 +14,9 @@ public sealed partial class IrExpressionExtractor
     /// The <see cref="IrArrayCreation"/> of a sized one-dimensional array
     /// whose element default is a value every slot can share (a literal,
     /// an enum member, <c>Guid.Empty</c>); <c>null</c> for any other shape,
-    /// which stays unsupported.
+    /// which stays unsupported — a type-parameter element included, unless
+    /// it is constrained to a reference type: <c>default(T)</c> is <c>0</c>
+    /// for <c>T = int</c>, which no shared literal spells.
     /// Dart prints <c>List&lt;T&gt;.filled</c>, which has no <c>null</c> slots.
     /// </summary>
     private IrArrayCreation? TryExtractSizedArray(ArrayCreationExpressionSyntax creation)
@@ -26,6 +28,9 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         if (_semantic.GetTypeInfo(creation).Type is not IArrayTypeSymbol { Rank: 1 } array)
+            return null;
+
+        if (array.ElementType is ITypeParameterSymbol { IsReferenceType: false })
             return null;
 
         var elementDefault = DefaultValueLiterals.For(array.ElementType, BuildOrigin);
