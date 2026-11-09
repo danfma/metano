@@ -220,8 +220,10 @@ public sealed class Printer
     private static void PrintConstructor(StringBuilder sb, DartConstructor ctor)
     {
         sb.Append(Indent);
+
         if (ctor.IsConst)
             sb.Append("const ");
+
         sb.Append(ctor.ClassName);
 
         if (ctor.Name is not null)

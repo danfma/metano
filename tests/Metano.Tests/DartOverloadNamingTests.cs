@@ -961,9 +961,91 @@ public class DartOverloadNamingTests
 
               static Future<int> nextAsync() => Task.fromResult(1);
 
-              static int chain(Outer o) => (($recv, $arg1, $arg0) => $recv.mAB($arg0, $arg1))(o.inner, Use.swap(o), 3);
+              static int chain(Outer o) => (($recv, $arg1) => $recv.mAB(3, $arg1))(o.inner, Use.swap(o));
 
               static Future<int> awaited(Inner i) async => (($arg1, $arg0) => i.mAB($arg0, $arg1))(Use.swap(Outer()), await Use.nextAsync());
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// Only the arguments whose evaluation can be observed are bound: a
+    /// literal or an empty collection stays inline, typed by its parameter
+    /// (<c>2</c> as a <c>double</c>, <c>[]</c> as a <c>List&lt;int&gt;</c>), and
+    /// a single observable argument needs no closure. A local an argument
+    /// reassigns is bound as the receiver first, as C# reads it.
+    /// </summary>
+    [Test]
+    public async Task OutOfOrderArguments_BindOnlyObservableEvaluations()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class K
+            {
+                public double Scale(double d, int n) => d * n;
+
+                public double Scale(string s) => 0;
+
+                public int Count(int n, List<int> items) => n + items.Count;
+
+                public int Count(string s) => 0;
+            }
+
+            [Transpile]
+            public class Inner
+            {
+                public int Tag;
+
+                public Inner(int tag) => Tag = tag;
+
+                public int M(int a, int b) => Tag * 100 + a * 10 + b;
+
+                public int M(string s) => 0;
+            }
+
+            [Transpile]
+            public static class Run
+            {
+                public static int Next() => 1;
+
+                public static double A(K k) => k.Scale(n: Next(), d: 2);
+
+                public static int B(K k) => k.Count(n: Next(), items: []);
+
+                public static int C()
+                {
+                    var c = new Inner(1);
+                    return c.M(b: (c = new Inner(2)).Tag, a: 3);
+                }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await AssertFile(
+            files,
+            "run.dart",
+            """
+            import 'inner.dart';
+            import 'k.dart';
+
+            class Run {
+              static int next() => 1;
+
+              static double a(K k) => k.scaleDN(2, Run.next());
+
+              static int b(K k) => k.countNItems(Run.next(), []);
+
+              static int c() {
+                var c = Inner(1);
+                return (($recv, $arg1) => $recv.mAB(3, $arg1))(c, (c = Inner(2)).tag);
+              }
             }
 
             """
@@ -996,7 +1078,18 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(diagnostics.Single().Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        var unsupported = diagnostics.Single();
+
+        await Assert.That(unsupported.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+
+        await Assert
+            .That(unsupported.Message)
+            .IsEqualTo(
+                "Dart target: 'Money.op_Explicit' has 2 overloads but Dart doesn't support "
+                    + "overloading it. Emitting the primary signature only; rename the other "
+                    + "overloads via [Name(\"...\")] or merge them into a single method with "
+                    + "optional parameters."
+            );
 
         await AssertFile(
             files,
@@ -1097,9 +1190,6 @@ public class DartOverloadNamingTests
             """
         );
     }
-
-    private static string SourceTextOf(MetanoDiagnostic diagnostic) =>
-        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
 
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>
         diagnostic

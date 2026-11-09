@@ -42,7 +42,7 @@ internal static class DartTypeShapes
     public static bool EmitsNamedConstructors(INamedTypeSymbol type) =>
         SymbolHelper.IsTranspiledByItsAssembly(type)
         && !SymbolHelper.HasIgnore(type, TargetLanguage.Dart)
-        && ShapeOf(type).NamesMembers;
+        && NamesOverloadMembers(type);
 
     /// <summary>
     /// Whether the class emits its dispatched overloads as addressable members
