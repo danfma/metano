@@ -1036,7 +1036,7 @@ writes or accepts, so a payload exchanged with a 2.x build can differ:
   parsed with `JSON.parse` already lost the digits, and a `number` leaf beyond
   the safe integers throws pointing at `deserializeText`.
 - A 64-bit dictionary key is written as its digits and read back as a
-  `bigint` key (2.x read the strings).
+  `bigint` key (2.x kept the key strings, as for every numeric key).
 - `JSON.stringify` on a transpiled object with a 64-bit field throws; the
   generated context is the writer (`c.json(dto)` in Hono needs
   `JSON.stringify(serializer.serialize(dto, spec))`).

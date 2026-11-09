@@ -149,7 +149,7 @@ export const INT64_CASES: readonly Int64Case[] = [
     },
   },
   {
-    name: "division 1e6 (helper / constant / number)",
+    name: "division 1e6 (helper + constant vs number)",
     withInt64: () => {
       let acc = 0n;
 
@@ -174,7 +174,7 @@ export const INT64_CASES: readonly Int64Case[] = [
     },
   },
   {
-    name: 'formatInt64 "N0" 1e5 vs toLocaleString',
+    name: 'formatInt64("N0") 1e5 vs toLocaleString',
     withInt64: () => {
       let acc = 0;
 
