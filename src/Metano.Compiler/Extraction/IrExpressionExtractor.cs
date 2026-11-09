@@ -2850,6 +2850,8 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? symbol
     )
     {
+        // Dart claims no fast-path names yet (013g), so a base call keeps
+        // its dispatcher there. #549
         if (IsDartTarget || symbol is null)
             return null;
 
