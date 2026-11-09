@@ -3,9 +3,9 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Int64Box {
   constructor(
-    readonly id: number,
-    readonly mask: number,
-    readonly parent: number | null,
+    readonly id: bigint,
+    readonly mask: bigint,
+    readonly parent: bigint | null,
   ) {}
 
   equals(other: any): boolean {

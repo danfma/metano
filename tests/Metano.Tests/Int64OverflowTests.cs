@@ -4,8 +4,7 @@ using Metano.Compiler.TypeScript;
 namespace Metano.Tests;
 
 /// <summary>
-/// The 64-bit overflow reduction of spec 012 slice 012c (FR-021–FR-026) in
-/// the staging <see cref="Int64Representation.BigInt"/> mode: unchecked
+/// The 64-bit overflow reduction of spec 012 slice 012c (FR-021–FR-026): unchecked
 /// results wrap with <c>BigInt.asIntN</c> / <c>asUintN</c>, checked ones go
 /// through <c>checkedInt64</c> / <c>checkedUInt64</c>, increments and compound
 /// assignments store the reduced value, lifted operators reduce their non-null
@@ -231,7 +230,7 @@ public class Int64OverflowTests
         """;
 
     [Test]
-    public async Task BigIntMode_UncheckedArithmetic_Wraps()
+    public async Task UncheckedArithmetic_Wraps()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(UncheckedSource);
 
@@ -243,7 +242,7 @@ public class Int64OverflowTests
     }
 
     [Test]
-    public async Task BigIntMode_CheckedArithmetic_CallsTheRangeChecks()
+    public async Task CheckedArithmetic_CallsTheRangeChecks()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CheckedSource);
 
@@ -259,7 +258,7 @@ public class Int64OverflowTests
     /// 64-bit operation outside an <c>unchecked</c> context (DECIDED-4).
     /// </summary>
     [Test]
-    public async Task BigIntMode_ProjectWideOverflowChecks_CheckEveryOperation()
+    public async Task ProjectWideOverflowChecks_CheckEveryOperation()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithOverflowChecks(
             ProjectCheckedSource
@@ -273,7 +272,7 @@ public class Int64OverflowTests
     }
 
     [Test]
-    public async Task BigIntMode_IncrementsAndCompoundAssignments_StoreTheReducedValue()
+    public async Task IncrementsAndCompoundAssignments_StoreTheReducedValue()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(IncrementsSource);
 
@@ -282,28 +281,6 @@ public class Int64OverflowTests
             .IsEqualTo(TranspileHelper.ReadExpected("int64-increments-compound.ts"));
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-    }
-
-    /// <summary>
-    /// The shipped <c>Number</c> mode keeps the 2.x output (DECIDED-22): no
-    /// wrap, no check, native increments and compound operators.
-    /// </summary>
-    [Test]
-    public async Task NumberMode_KeepsTheShippedArithmetic()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            IncrementsSource + CheckedSource.Replace("using System;", "")
-        );
-
-        var counter = files["counter.ts"];
-        var check = files["check.ts"];
-
-        await Assert.That(counter).Contains("l++;");
-        await Assert.That(counter).Contains("this.total += i;");
-        await Assert.That(counter).Contains("const old = l++;");
-        await Assert.That(check).Contains("return l + m;");
-        await Assert.That(counter + check).DoesNotContain("asIntN");
-        await Assert.That(counter + check).DoesNotContain("checkedInt64");
     }
 
     /// <summary>
@@ -414,30 +391,13 @@ public class Int64OverflowTests
     /// compile on the current Roslyn (see <c>ExtensionIndexerTests</c>).
     /// </summary>
     [Test]
-    public async Task BigIntMode_ExtensionMembers_StoreTheReducedValue()
+    public async Task ExtensionMembers_StoreTheReducedValue()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExtensionSource);
 
         await Assert
             .That(files["uses.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("int64-extension-members.ts"));
-
-        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-    }
-
-    /// <summary>
-    /// The shipped <c>Number</c> mode keeps no wrap (DECIDED-22) but still
-    /// lifts a nullable extension property's read-modify-write: <c>null</c>
-    /// stays <c>null</c> instead of turning into a number.
-    /// </summary>
-    [Test]
-    public async Task NumberMode_ExtensionMembers_LiftTheNullableOnes()
-    {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExtensionSource);
-
-        await Assert
-            .That(files["uses.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-extension-members-number.ts"));
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }

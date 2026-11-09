@@ -7,8 +7,8 @@ export class Quotients {
     return intDiv(total, count);
   }
 
-  static halve(value: number): number {
-    return intDiv(value, 2);
+  static halve(value: bigint): bigint {
+    return value / 2n;
   }
 
   static split(value: number, parts: number): number {

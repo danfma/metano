@@ -78,7 +78,7 @@ export class Shelf {
     return new Map<string, number>([...left, ["k", 0] as [string, number], ...right, ...this._defaults]);
   }
 
-  byIds(pairs: [number, string][]): Map<number, string> {
-    return new Map<number, string>([...pairs]);
+  byIds(pairs: [bigint, string][]): Map<bigint, string> {
+    return new Map<bigint, string>([...pairs]);
   }
 }

@@ -3,26 +3,21 @@ using Metano.Compiler.TypeScript;
 namespace Metano.Tests;
 
 /// <summary>
-/// The JSON context of 64-bit integers (spec 012 FR-050, slice 012e): in the
-/// staging <see cref="Int64Representation.BigInt"/> mode every 64-bit
+/// The JSON context of 64-bit integers (spec 012 FR-050, slice 012e): every 64-bit
 /// property, element, dictionary key / value and root emits the
 /// <c>int64</c> descriptor <c>{ kind: "int64", numberType: … }</c> — a
-/// <c>[Branded]</c> type over one included — instead of the 2.x
+/// <c>[Branded]</c> type over one included — instead of a
 /// <c>primitive</c> descriptor with a <c>numberType</c>, whatever the read
 /// options (FR-050). A branded type keeps its companion factory
 /// (<c>create</c>, the valid <c>[JsonFactory]</c> member) and its CLR
 /// <c>typeName</c> on the descriptor, which the runtime applies after the
 /// exact read — the factory case FR-050 does not describe.
-/// <see cref="Int64Representation.Number"/> keeps the shipped descriptors
-/// byte for byte (FR-071, NFR-001).
 /// </summary>
 public class Int64JsonContextTests
 {
     private const string ContextPath = "test-app/json-context.ts";
 
     private const string BigIntGolden = "int64-json-context.ts";
-
-    private const string NumberGolden = "int64-json-context-number.ts";
 
     private const string ContextBoilerplate = """
         public partial class JsonContext : JsonSerializerContext
@@ -93,7 +88,7 @@ public class Int64JsonContextTests
             """;
 
     [Test]
-    public async Task BigIntMode_EmitsTheInt64Descriptors()
+    public async Task EmitsTheInt64Descriptors()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ContextSource());
 
@@ -107,20 +102,5 @@ public class Int64JsonContextTests
         await Assert.That(files[ContextPath]).IsEqualTo(TranspileHelper.ReadExpected(BigIntGolden));
 
         await Assert.That(diagnostics).IsEmpty();
-    }
-
-    [Test]
-    public async Task NumberMode_KeepsTheShippedPrimitiveDescriptors()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ContextSource());
-
-        if (TranspileHelper.UpdateGoldensRequested)
-        {
-            TranspileHelper.WriteExpected(NumberGolden, files[ContextPath]);
-
-            return;
-        }
-
-        await Assert.That(files[ContextPath]).IsEqualTo(TranspileHelper.ReadExpected(NumberGolden));
     }
 }

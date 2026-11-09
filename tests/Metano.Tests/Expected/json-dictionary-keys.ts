@@ -20,7 +20,7 @@ export class JsonContext extends SerializerContext {
   get keys(): TypeSpec<Keys> {
     return this._keys ??= this.createSpec({
       type: Keys,
-      factory: (p: Record<string, unknown>) => new Keys(p.byInt as Map<number, string>, p.byLong as Map<number, string>, p.byShort as Map<number, string>, p.byByte as Map<number, string>, p.byUInt as Map<number, string>, p.byDouble as Map<number, string>, p.byFlag as Map<boolean, string>, p.byLevel as Map<Level, string>, p.byShade as Map<Shade, string>, p.byMood as Map<Mood, string>, p.byId as Map<UUID, string>, p.byDay as Map<Temporal.PlainDate, string>, p.byPrice as Map<Decimal, string>, p.byName as Map<string, string>, p.byTag as Map<Tag, string>),
+      factory: (p: Record<string, unknown>) => new Keys(p.byInt as Map<number, string>, p.byLong as Map<bigint, string>, p.byShort as Map<number, string>, p.byByte as Map<number, string>, p.byUInt as Map<number, string>, p.byDouble as Map<number, string>, p.byFlag as Map<boolean, string>, p.byLevel as Map<Level, string>, p.byShade as Map<Shade, string>, p.byMood as Map<Mood, string>, p.byId as Map<UUID, string>, p.byDay as Map<Temporal.PlainDate, string>, p.byPrice as Map<Decimal, string>, p.byName as Map<string, string>, p.byTag as Map<Tag, string>),
       properties: [
         {
           ts: "byInt",
@@ -36,7 +36,7 @@ export class JsonContext extends SerializerContext {
           json: "ByLong",
           type: {
             kind: "map",
-            key: { kind: "primitive", numberType: "System.Int64" },
+            key: { kind: "int64", numberType: "System.Int64" },
             value: { kind: "primitive" },
           },
         },

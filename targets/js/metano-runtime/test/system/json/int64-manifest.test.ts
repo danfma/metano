@@ -13,8 +13,8 @@ import manifest from "../../../../sample-json-contracts/test/fixtures/stj/cases.
  * The 64-bit manifest rows (`I*` in the shared STJ conformance fixture,
  * spec 012 slice 012e) run against hand-written `int64` specs mirroring the
  * sample's `Int64Box` / `Int64Containers` — the TypeScript runtime side of
- * rows whose generated contexts still carry the 2.x number descriptors
- * until the bigint flip (012k).
+ * the rows the sample's own harness does not run against its generated
+ * contexts yet.
  *
  * Reads go through `deserializeText`, exactly as System.Text.Json reads its
  * text: the exact tree hands every 64-bit leaf that is not a short integer

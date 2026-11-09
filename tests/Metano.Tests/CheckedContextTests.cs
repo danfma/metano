@@ -75,40 +75,6 @@ public class CheckedContextTests
     }
 
     [Test]
-    public async Task Int32Context_IsTheSameInBothRepresentations()
-    {
-        var (numberFiles, _) = TranspileHelper.TranspileWithDiagnostics(Int32Source);
-
-        var (bigIntFiles, _) = TranspileHelper.TranspileWithDiagnostics(Int32Source);
-
-        await Assert.That(numberFiles).IsEquivalentTo(bigIntFiles);
-    }
-
-    [Test]
-    public async Task Int64Expressions_LowerToTheirOperand_InNumberMode()
-    {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
-            [Transpile]
-            public class Ops
-            {
-                public long Wrap(long a) => unchecked(a + 1);
-                public long Check(long a) => checked(a * 2);
-                public long Nested(long a, long b) => unchecked(checked(a + b) * 2);
-            }
-            """
-        );
-
-        var ops = files["ops.ts"];
-
-        await Assert.That(ops).Contains("return a + 1;");
-        await Assert.That(ops).Contains("return a * 2;");
-        await Assert.That(ops).Contains("return (a + b) * 2;");
-        await Assert.That(ops).DoesNotContain("Unsupported expression");
-        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-    }
-
-    [Test]
     public async Task CheckedBlock_LowersToABlock_WithItsLambdaInside()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
@@ -133,7 +99,7 @@ public class CheckedContextTests
             .Contains(
                 """
                     {
-                      const f = () => l + 1;
+                      const f = () => checkedInt64(l + 1n);
 
                       return f();
                     }
@@ -169,9 +135,9 @@ public class CheckedContextTests
 
         var ops = files["ops.ts"];
 
-        await Assert.That(ops).Contains("const r = l <<= 1;");
-        await Assert.That(ops).Contains("return this.field <<= 1;");
-        await Assert.That(ops).Contains("{\n      l <<= 1;\n    }");
+        await Assert.That(ops).Contains("const r = l = BigInt.asIntN(64, l << 1n);");
+        await Assert.That(ops).Contains("return this.field = BigInt.asIntN(64, this.field << 1n);");
+        await Assert.That(ops).Contains("{\n      l = BigInt.asIntN(64, l << 1n);\n    }");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
@@ -249,13 +215,13 @@ public class CheckedContextTests
     [Test]
     [Arguments("static readonly offset: number = -2128831035;")]
     [Arguments("static readonly minBit: number = -2147483648;")]
-    [Arguments("static readonly allOnes: number = 18446744073709551615;")]
+    [Arguments("static readonly allOnes: bigint = 18446744073709551615n;")]
     [Arguments("static readonly u: number = 4294967295;")]
     [Arguments("static readonly b: number = 44;")]
     [Arguments("let h = -2128831035;")]
     [Arguments("h = (h ^ c) * 16777619;")]
     [Arguments("return a * -2128831035;")]
-    [Arguments("return 18446744073709551615;")]
+    [Arguments("return 18446744073709551615n;")]
     [Arguments("return -2147483648;")]
     [Arguments("return new Decimal(\"-2128831035\");")]
     [Arguments("return Hashing.offset;")]

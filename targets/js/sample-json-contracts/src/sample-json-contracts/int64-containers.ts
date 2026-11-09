@@ -3,9 +3,9 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Int64Containers {
   constructor(
-    readonly values: number[],
-    readonly byName: Map<number, string>,
-    readonly byMask: Map<number, string>,
+    readonly values: bigint[],
+    readonly byName: Map<bigint, string>,
+    readonly byMask: Map<bigint, string>,
   ) {}
 
   equals(other: any): boolean {

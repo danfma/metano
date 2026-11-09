@@ -280,7 +280,7 @@ public class QueryableExpressionTreeTests
             public static class UserExt
             {
                 public static IEnumerable<User> Adults(IQueryable<User> users) =>
-                    users.Where(u => (long)u.Age >= 18L);
+                    users.Where(u => (double)u.Age >= 18.0);
             }
 
             [Transpile]
@@ -314,7 +314,7 @@ public class QueryableExpressionTreeTests
             public static class Probe
             {
                 public static System.Linq.Expressions.Expression<System.Func<Bag, bool>> Lambda() =>
-                    b => (long)b.Value >= 1L;
+                    b => (double)b.Value >= 1.0;
             }
             """;
 
@@ -468,7 +468,7 @@ public class QueryableExpressionTreeTests
                 public static Bag Run([Queryable] Func<Bag, Bag> f, Bag b) => f(b);
 
                 public static Bag Call(Bag input) =>
-                    Run(b => new Bag { Value = (int)(long)b.Value + 1 }, input);
+                    Run(b => new Bag { Value = (int)(double)b.Value + 1 }, input);
             }
             """
         );
@@ -496,7 +496,7 @@ public class QueryableExpressionTreeTests
                 public static Bag Run(Expression<Func<Bag, Bag>> f, Bag b) => f.Compile()(b);
 
                 public static Bag Call(Bag input) =>
-                    Run(b => new Bag { Value = (int)(long)b.Value + 1 }, input);
+                    Run(b => new Bag { Value = (int)(double)b.Value + 1 }, input);
             }
             """
         );
@@ -550,7 +550,7 @@ public class QueryableExpressionTreeTests
                 public static Bag Run(Func<Bag, Bag> f, Bag b) => f(b);
 
                 public static Bag Call(Bag input) =>
-                    Run(b => new Bag { Value = (int)(long)b.Value + 1 }, input);
+                    Run(b => new Bag { Value = (int)(double)b.Value + 1 }, input);
             }
             """
         );
@@ -572,7 +572,7 @@ public class QueryableExpressionTreeTests
             public static class Probe
             {
                 public static System.Linq.Expressions.Expression<System.Func<Bag, bool>> Lambda() =>
-                    b => (long)b.Value >= 1L;
+                    b => (double)b.Value >= 1.0;
             }
             """;
 

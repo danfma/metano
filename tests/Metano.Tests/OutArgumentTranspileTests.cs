@@ -830,7 +830,7 @@ public class OutArgumentTranspileTests
         await Assert.That(output).Contains("tryGetValue(d, \"k\", false)");
         await Assert.That(output).Contains("tryGetValue(d, \"k\", \"\\u0000\")");
         await Assert.That(output).Contains("tryGetValue(d, \"k\", Level.Low)");
-        await Assert.That(output).Contains("tryGetValue(d, \"k\", 0)");
+        await Assert.That(output).Contains("tryGetValue(d, \"k\", 0n)");
     }
 
     [Test]

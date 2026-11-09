@@ -128,15 +128,15 @@ public class NullableIncrementTests
 
         await Assert.That(output).Contains("return (a == null ? null : a + 1) ?? (() => {");
         await Assert.That(output).Contains("Nullable object must have a value.");
-        await Assert.That(output).Contains("return a ?? (() => {");
+        await Assert.That(output).Contains("return BigInt(a ?? (() => {");
     }
 
     [Test]
-    public async Task ExplicitConversion_BetweenNonNullableValues_StaysTransparent()
+    public async Task ExplicitConversion_BetweenNonNullableValues_ConvertsWithoutAGuard()
     {
         var output = Transpile("public static long Widen(int a) => (long)a;");
 
-        await Assert.That(output).Contains("return a;");
+        await Assert.That(output).Contains("return BigInt(a);");
     }
 
     [Test]

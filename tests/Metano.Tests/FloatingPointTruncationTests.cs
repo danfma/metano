@@ -10,12 +10,12 @@ namespace Metano.Tests;
 public class FloatingPointTruncationTests
 {
     /// <summary>
-    /// FR-070 lands outside the staging switch: the shipped <c>Number</c>
-    /// mode truncates a floating-point cast to a narrow integer too, and
-    /// folds a constant one, while a cast to <c>long</c> keeps its 2.x form.
+    /// FR-070: a floating-point cast to a narrow integer truncates, and a
+    /// constant one folds; a cast to <c>long</c> truncates into a
+    /// <c>bigint</c> (FR-015).
     /// </summary>
     [Test]
-    public async Task NumberMode_FloatingPointToNarrowInteger_Truncates()
+    public async Task FloatingPointToNarrowInteger_Truncates()
     {
         const string source = """
             [Transpile]
@@ -42,13 +42,20 @@ public class FloatingPointTruncationTests
             .That(output)
             .Contains("return Number(checkedNarrow(BigInt(int32FromDoubleChecked(d)), 16, true));");
         await Assert.That(output).Contains("return 3;");
-        await Assert.That(output).Contains("toLong(d: number): number {\n    return d;");
-        await Assert.That(output).Contains("narrow(l: number): number {\n    return l;");
+
+        await Assert
+            .That(output)
+            .Contains("toLong(d: number): bigint {\n    return int64FromDouble(d);");
+
+        await Assert
+            .That(output)
+            .Contains("narrow(l: bigint): number {\n    return Number(BigInt.asIntN(32, l));");
+
         await Assert
             .That(output)
             .Contains(
                 "import { checkedNarrow, int32FromDouble, int32FromDoubleChecked, "
-                    + "uint32FromDouble } from \"metano-runtime\";"
+                    + "int64FromDouble, uint32FromDouble } from \"metano-runtime\";"
             );
     }
 

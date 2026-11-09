@@ -16,12 +16,12 @@ export class Money {
   constructor(overload: typeof Money.byMoneyCents, cents: number);
   /** @internal */
   constructor(overload: typeof Money.byMoneyCode, code: string);
-  constructor(overload: typeof Money.byMoneyId, id: number);
+  constructor(overload: typeof Money.byMoneyId, id: bigint);
   constructor(amount: Decimal);
   constructor(cents: number);
   /** @internal */
   constructor(code: string);
-  constructor(id: number);
+  constructor(id: bigint);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyAmount) {
       const amount = args[1] as Decimal;
@@ -45,7 +45,7 @@ export class Money {
     }
 
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyId) {
-      const id = args[1] as number;
+      const id = args[1] as bigint;
       this.how = "id";
 
       return;
@@ -73,7 +73,7 @@ export class Money {
     }
 
     if (args.length === 1 && isInt64(args[0])) {
-      const id = args[0] as number;
+      const id = args[0] as bigint;
       this.how = "id";
 
       return;
@@ -94,7 +94,7 @@ export class Money {
     return new Money(Money.byMoneyCode, code);
   }
 
-  static fromId(id: number): Money {
+  static fromId(id: bigint): Money {
     return new Money(Money.byMoneyId, id);
   }
 }
@@ -115,11 +115,11 @@ export class Receipt extends Money {
   constructor(overload: typeof Receipt.byReceiptAmount, amount: Decimal);
   constructor(overload: typeof Receipt.byReceiptCents, cents: number);
   constructor(overload: typeof Receipt.byReceiptCode, code: string);
-  constructor(overload: typeof Receipt.byReceiptId, id: number);
+  constructor(overload: typeof Receipt.byReceiptId, id: bigint);
   constructor(amount: Decimal);
   constructor(cents: number);
   constructor(code: string);
-  constructor(id: number);
+  constructor(id: bigint);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptAmount) {
       const amount = args[1] as Decimal;
@@ -143,7 +143,7 @@ export class Receipt extends Money {
     }
 
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptId) {
-      const id = args[1] as number;
+      const id = args[1] as bigint;
       super(Money.byMoneyId, id);
 
       return;
@@ -171,7 +171,7 @@ export class Receipt extends Money {
     }
 
     if (args.length === 1 && isInt64(args[0])) {
-      const id = args[0] as number;
+      const id = args[0] as bigint;
       super(Money.byMoneyId, id);
 
       return;
@@ -192,7 +192,7 @@ export class Receipt extends Money {
     return new Receipt(Receipt.byReceiptCode, code);
   }
 
-  protected static fromReceiptId(id: number): Receipt {
+  protected static fromReceiptId(id: bigint): Receipt {
     return new Receipt(Receipt.byReceiptId, id);
   }
 }

@@ -5,9 +5,8 @@ namespace Metano.Tests;
 
 /// <summary>
 /// The transpiled twin of the spec 012 reference matrix (FR-064):
-/// <c>samples/SampleInt64Conformance</c> transpiled in the staging
-/// <see cref="Int64Representation.BigInt"/> mode, which has no MSBuild
-/// surface (DECIDED-22), must equal the committed
+/// <c>samples/SampleInt64Conformance</c>, which this test transpiles (the
+/// sample has no MSBuild transpile step), must equal the committed
 /// <c>targets/js/sample-int64-conformance/src</c>, whose bun and Node tests
 /// run it against the fixtures of <c>tests/Int64Reference</c>.
 ///
@@ -38,7 +37,7 @@ public class Int64ConformanceSampleTests
     );
 
     [Test]
-    public async Task BigIntMode_TranspiledTwin_MatchesTheCommittedOutput()
+    public async Task TranspiledTwin_MatchesTheCommittedOutput()
     {
         var (files, diagnostics) = TranspileHelper.TranspileSourceDirectory(SampleDirectory);
 

@@ -5,8 +5,7 @@ namespace Metano.Tests;
 
 /// <summary>
 /// The 64-bit division, remainder and shifts of spec 012 slice 012d
-/// (FR-027–FR-030) in the staging <see cref="Int64Representation.BigInt"/>
-/// mode: <c>/</c> and <c>%</c> call the throwing helpers unless the divisor
+/// (FR-027–FR-030): <c>/</c> and <c>%</c> call the throwing helpers unless the divisor
 /// is a constant that cannot throw, shift counts are masked with <c>63</c>
 /// and converted to <c>bigint</c>, <c>&lt;&lt;</c> wraps in either context
 /// and <c>&gt;&gt;&gt;</c> on <c>long</c> shifts the unsigned bits. Every
@@ -142,7 +141,7 @@ public class Int64DivisionShiftTests
         """;
 
     [Test]
-    public async Task BigIntMode_DivisionAndRemainder_CallTheThrowingHelpers()
+    public async Task DivisionAndRemainder_CallTheThrowingHelpers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(DivisionSource);
 
@@ -154,7 +153,7 @@ public class Int64DivisionShiftTests
     }
 
     [Test]
-    public async Task BigIntMode_Shifts_MaskAndConvertTheCount()
+    public async Task Shifts_MaskAndConvertTheCount()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ShiftSource);
 
@@ -163,30 +162,6 @@ public class Int64DivisionShiftTests
             .IsEqualTo(TranspileHelper.ReadExpected("int64-shifts.ts"));
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-    }
-
-    /// <summary>
-    /// The shipped <c>Number</c> mode keeps the 2.x output (DECIDED-22):
-    /// <c>intDiv</c>, the native remainder and shifts, no count mask and the
-    /// native compound operators.
-    /// </summary>
-    [Test]
-    public async Task NumberMode_KeepsTheShippedDivisionAndShifts()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(DivisionSource + ShiftSource);
-
-        var divide = files["divide.ts"];
-        var shift = files["shift.ts"];
-
-        await Assert.That(divide).Contains("return intDiv(l, m);");
-        await Assert.That(divide).Contains("return l % m;");
-        await Assert.That(divide).Contains("l %= m;");
-        await Assert.That(shift).Contains("return l << n;");
-        await Assert.That(shift).Contains("return l << 70;");
-        await Assert.That(shift).Contains("l >>>= n;");
-        await Assert.That(divide + shift).DoesNotContain("divInt64");
-        await Assert.That(divide + shift).DoesNotContain("& 63");
-        await Assert.That(divide + shift).DoesNotContain("asIntN");
     }
 
     /// <summary>

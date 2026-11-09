@@ -6,9 +6,8 @@ namespace Metano.Tests;
 
 /// <summary>
 /// The transpiled 64-bit scenario of <c>samples/SampleIssueTracker</c> (spec
-/// 012 FR-068): the sample transpiled in the staging
-/// <see cref="Int64Representation.BigInt"/> mode, which has no MSBuild
-/// surface (DECIDED-22), must equal the committed
+/// 012 FR-068): the sample, which this test transpiles (it has no MSBuild
+/// transpile step), must equal the committed
 /// <c>targets/js/sample-issue-tracker/src</c>, whose bun tests round-trip
 /// the snowflake ids and the tick math through its <c>JsonContext</c>.
 ///
@@ -50,7 +49,7 @@ public class Int64IssueTrackerSampleTests
     );
 
     [Test]
-    public async Task BigIntMode_TranspiledSample_MatchesTheCommittedOutput()
+    public async Task TranspiledSample_MatchesTheCommittedOutput()
     {
         var (files, diagnostics) = TranspileHelper.TranspileProjectDirectory(SampleDirectory);
 
@@ -87,9 +86,9 @@ public class Int64IssueTrackerSampleTests
     }
 
     /// <summary>
-    /// The BigInt mode has no MSBuild surface, so the sample must keep no
-    /// transpile wiring in its project file — the drift test above is the
-    /// generator (the twin of the conformance sample's own guard).
+    /// The drift test above is the sample's generator (as for the conformance
+    /// twin), so the project file must keep no transpile wiring that would
+    /// write the same files.
     /// </summary>
     [Test]
     public async Task SampleProject_KeepsNoMsBuildTranspileWiring()

@@ -1,4 +1,4 @@
-import { compareInt64, formatInt64, objectEquals, parseInt64, parseUInt64, tryParseInt64Value, tryParseUInt64 } from "metano-runtime";
+import { compareInt64, formatInt64, objectEquals, parseInt64, parseUInt64, tryParseInt64, tryParseUInt64 } from "metano-runtime";
 
 export class Text {
   constructor() { }
@@ -32,7 +32,7 @@ export class Text {
   }
 
   tryParse(s: string): bigint {
-    const [$found0, x] = tryParseInt64Value(s);
+    const [$found0, x] = tryParseInt64(s);
 
     return $found0 ? x : -1n;
   }

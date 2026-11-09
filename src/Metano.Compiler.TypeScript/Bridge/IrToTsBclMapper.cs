@@ -23,6 +23,7 @@ public static class IrToTsBclMapper
     {
         if (access.Origin is null)
             return null;
+
         if (
             !registry.TryGetPropertyByFullName(
                 access.Origin.DeclaringTypeFullName,
@@ -31,11 +32,14 @@ public static class IrToTsBclMapper
             )
         )
             return null;
+
         // Dart-only entries share the registry but carry no JS data; skip
         // them so the dereferences in ApplyPropertyMapping never see nulls.
         if (!entry.HasJsMapping)
             return null;
+
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
+
         return ApplyPropertyMapping(entry, receiver);
     }
 
@@ -64,6 +68,7 @@ public static class IrToTsBclMapper
             return null;
 
         DeclarativeMappingEntry? match = null;
+
         foreach (var candidate in candidates)
         {
             // Multi-target attributes can carry only Dart-side data; those
@@ -72,14 +77,17 @@ public static class IrToTsBclMapper
             // crash otherwise.
             if (!candidate.HasJsMapping)
                 continue;
+
             if (!candidate.MatchesOverload(loweredArgs.Count, call.Origin.ParameterTypes))
                 continue;
+
             if (DeclarativeMappingRendering.MatchesArgFilter(candidate, loweredArgs))
             {
                 match = candidate;
                 break;
             }
         }
+
         if (match is null)
             return null;
 

@@ -1,5 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, isBigInt, roundDecimal } from "metano-runtime";
+import {
+  HashCode,
+  bigIntegerFromDecimal,
+  copyRecordWith,
+  decimalTextFromBigInteger,
+  isBigInt,
+  roundDecimal,
+} from "metano-runtime";
 import { Decimal } from "decimal.js";
 import type { Currency } from "./currency";
 import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
@@ -107,7 +114,7 @@ export class Money {
   }
 
   toDecimal(): Decimal {
-    return new Decimal(this.cents.toString()).div(new Decimal("100"));
+    return new Decimal(decimalTextFromBigInteger(this.cents)).div(new Decimal("100"));
   }
 
   toString(): string {
@@ -119,7 +126,10 @@ export class Money {
   }
 
   static fromValue(amount: Decimal, currency: Currency): Money {
-    return new Money(BigInt(roundDecimal(amount.times(new Decimal("100"))).toFixed(0)), currency);
+    return new Money(
+      bigIntegerFromDecimal(roundDecimal(amount.times(new Decimal("100")))),
+      currency,
+    );
   }
 
   private static expectSameCurrency(left: Money, right: Money): void {

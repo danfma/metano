@@ -5,9 +5,8 @@ namespace Metano.Tests;
 
 /// <summary>
 /// The 64-bit type mapping, literals, constants and conversions of spec 012
-/// slice 012b (FR-001–FR-020, FR-031–FR-034, FR-058, FR-069) in the staging
-/// <see cref="Int64Representation.BigInt"/> mode, plus the floating-point to
-/// narrow-integer truncation of FR-070, which applies in both modes.
+/// slice 012b (FR-001–FR-020, FR-031–FR-034, FR-058, FR-069), plus the
+/// floating-point to narrow-integer truncation of FR-070.
 /// </summary>
 public class Int64ConversionTests
 {
@@ -132,14 +131,14 @@ public class Int64ConversionTests
         }
         """;
 
-    /// <summary>The <see cref="ConversionSource"/> output in BigInt mode, shared by the tests that read it.</summary>
+    /// <summary>The <see cref="ConversionSource"/> output, shared by the tests that read it.</summary>
     private static readonly Lazy<(
         Dictionary<string, string> Files,
         IReadOnlyList<MetanoDiagnostic> Diagnostics
     )> BigIntOutput = new(() => TranspileHelper.TranspileWithDiagnostics(ConversionSource));
 
     [Test]
-    public async Task BigIntMode_ConversionMatrix_MatchesGolden()
+    public async Task ConversionMatrix_MatchesGolden()
     {
         var (files, _) = BigIntOutput.Value;
 
@@ -149,7 +148,7 @@ public class Int64ConversionTests
     }
 
     [Test]
-    public async Task BigIntMode_LongBackedEnums_KeepNumberValues()
+    public async Task LongBackedEnums_KeepNumberValues()
     {
         var (files, _) = BigIntOutput.Value;
 
@@ -158,7 +157,7 @@ public class Int64ConversionTests
     }
 
     [Test]
-    public async Task BigIntMode_Record_MapsEverySixtyFourBitPosition()
+    public async Task Record_MapsEverySixtyFourBitPosition()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
             "[Transpile] public record Snowflake(long Id, ulong Mask, long? Parent, long[] Ids);"
@@ -178,7 +177,7 @@ public class Int64ConversionTests
     /// <c>bigint</c> literal (the 012a <c>TODO(012b)</c>).
     /// </summary>
     [Test]
-    public async Task BigIntMode_CheckedContextConstant_TakesTheConvertedKind()
+    public async Task CheckedContextConstant_TakesTheConvertedKind()
     {
         var (files, _) = BigIntOutput.Value;
 
@@ -260,19 +259,14 @@ public class Int64ConversionTests
     }
 
     /// <summary>
-    /// <c>MS0064</c> describes the BigInt-mode emission, so the shipped
-    /// <c>Number</c> mode and Dart (whose <c>int</c> is 64-bit) report none.
+    /// <c>MS0064</c> describes the TypeScript emission, so Dart (whose
+    /// <c>int</c> is 64-bit) reports none.
     /// </summary>
     [Test]
-    public async Task Int64EnumValuePrecision_IsSilentInNumberModeAndDart()
+    public async Task Int64EnumValuePrecision_IsSilentInDart()
     {
-        var (_, numberDiagnostics) = TranspileHelper.TranspileWithDiagnostics(ConversionSource);
-
         var (_, dartDiagnostics) = DartTranspileHelper.Transpile(ConversionSource);
 
-        await Assert
-            .That(numberDiagnostics.Any(d => d.Code == DiagnosticCodes.Int64EnumValuePrecision))
-            .IsFalse();
         await Assert
             .That(dartDiagnostics.Any(d => d.Code == DiagnosticCodes.Int64EnumValuePrecision))
             .IsFalse();
@@ -286,7 +280,7 @@ public class Int64ConversionTests
     /// (#488 bullet 4, #484).
     /// </summary>
     [Test]
-    public async Task BigIntMode_UserFunctionNamedLikeAHelper_AliasesTheRuntimeImport()
+    public async Task UserFunctionNamedLikeAHelper_AliasesTheRuntimeImport()
     {
         const string source = """
             [Transpile, ExportedAsModule]
@@ -342,7 +336,7 @@ public class Int64ConversionTests
     /// never holds a <c>number</c>.
     /// </summary>
     [Test]
-    public async Task BigIntMode_ForEach_ConvertsEachElement()
+    public async Task ForEach_ConvertsEachElement()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource);
 
@@ -352,15 +346,6 @@ public class Int64ConversionTests
         await Assert.That(output).Contains("const x = BigInt(x$element);");
         await Assert.That(output).Contains("for (const x$element of longs) {");
         await Assert.That(output).Contains("const x = Number(BigInt.asIntN(32, x$element));");
-    }
-
-    [Test]
-    public async Task NumberMode_ForEach_KeepsTheShippedLoop()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource);
-
-        await Assert.That(files["loops.ts"]).Contains("for (const x of ints) {");
-        await Assert.That(files["loops.ts"]).DoesNotContain("$element");
     }
 
     private static string LocatedText(MetanoDiagnostic diagnostic) =>
