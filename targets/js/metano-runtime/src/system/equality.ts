@@ -110,9 +110,10 @@ export function equals(a: unknown, b: unknown): boolean {
  * Rules:
  * 1. `null` / `undefined` → 0.
  * 2. Objects with a custom `hashCode()` method delegate to it.
- * 3. A `bigint` (a 64-bit integer or a `BigInteger`) answers `hashInt64`, .NET's raw
- *    fold of its two 32-bit words (FR-046); every other primitive goes through
- *    `HashCode.combine`.
+ * 3. A `bigint` answers `hashInt64`, the fold of its two 32-bit words that .NET's
+ *    `long` / `ulong` `GetHashCode` computes (FR-046). A `BigInteger` is a `bigint` too
+ *    and hashes the same way, which is not .NET's `BigInteger` hash. Every other
+ *    primitive goes through `HashCode.combine`.
  * 4. Arrays hash size + each element in order.
  * 5. `Map` and `Set` hash with an order-independent XOR fold so two Maps/Sets with the
  *    same content but different insertion order get the same hash.
