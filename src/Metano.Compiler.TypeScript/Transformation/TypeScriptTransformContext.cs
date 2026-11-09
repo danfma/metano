@@ -265,7 +265,7 @@ public sealed class TypeScriptTransformContext(
     /// declared, matching <c>IrToTsNamingPolicy.ToFunctionName</c>.
     /// </summary>
     private static string ResolveMethodHelperName(IMethodSymbol method) =>
-        SymbolHelper.GetNameOverride(method, TargetLanguage.TypeScript)
+        method.GetMethodNameOverride(TargetLanguage.TypeScript)
         ?? TypeScriptNaming.ToCamelCase(method.Name);
 
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>

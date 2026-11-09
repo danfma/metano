@@ -98,7 +98,7 @@ internal sealed class TsInterfaceFastPaths
                     break;
 
                 case IrMethodDeclaration method:
-                    names.Add(IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes));
+                    names.Add(TsClassMemberTable.MethodNameOf(method));
                     break;
             }
         }

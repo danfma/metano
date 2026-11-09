@@ -172,7 +172,7 @@ public static class IrToTsBrandedBridge
     /// receivers and matches the escape so the two halves stay in sync.
     /// </summary>
     private static string FunctionName(IrMethodDeclaration method) =>
-        IrToTsNamingPolicy.ToFunctionName(method.Name, method.Attributes);
+        IrToTsNamingPolicy.ToFunctionName(method);
 
     private static TsFunction ConvertStaticMethod(
         IrMethodDeclaration method,

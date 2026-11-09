@@ -59,7 +59,8 @@ public static class IrConstructorExtractor
                 .Select(ctor =>
                     (ctor, BuildFromMethod(ctor, context.OriginResolver, promotionContext))
                 )
-                .ToList()
+                .ToList(),
+            context.Target
         );
 
         var primaryIndex = explicitCtors

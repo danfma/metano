@@ -24,6 +24,17 @@ namespace Metano.Annotations;
 /// public interface ICounterView { … }
 /// </code>
 /// </para>
+/// <para>
+/// On one overload of a dispatched group — a constructor or method overload
+/// (operators, module functions and extensions included) — the name pins the
+/// overload's generated <em>suffix</em> only, capitalized; the dispatcher keeps
+/// the C# name: <c>[Name("cents")]</c> on <c>Money(int c)</c> emits
+/// <c>Money.fromCents</c> and the selector <c>byMoneyCents</c>, on
+/// <c>Add(int c)</c> the fast path <c>addCents</c>. The value must start with an
+/// ASCII letter or <c>_</c> and contain only ASCII letters, digits and
+/// <c>_</c>. An override or interface implementation takes its root's name, so
+/// its own <c>[Name]</c> is ignored.
+/// </para>
 /// </summary>
 [AttributeUsage(
     AttributeTargets.Class
@@ -32,6 +43,7 @@ namespace Metano.Annotations;
         | AttributeTargets.Interface
         | AttributeTargets.Delegate
         | AttributeTargets.Method
+        | AttributeTargets.Constructor
         | AttributeTargets.Property
         | AttributeTargets.Field
         | AttributeTargets.Parameter
