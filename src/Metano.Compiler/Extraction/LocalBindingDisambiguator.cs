@@ -130,13 +130,14 @@ internal static class LocalBindingDisambiguator
     public static LocalBindingNames ForStatements(
         IReadOnlyList<StatementSyntax> statements,
         SemanticModel semantic,
-        LocalNaming naming
+        LocalNaming naming,
+        Metano.Annotations.TargetLanguage? target
     )
     {
         if (statements.Count == 0)
             return LocalBindingNames.Empty;
 
-        var collector = new BindingCollector(semantic, naming);
+        var collector = new BindingCollector(semantic, naming, target);
         var bindings = statements.SelectMany(collector.Collect).ToList();
 
         return Disambiguate(bindings, statements[0], naming);
@@ -236,7 +237,7 @@ internal static class LocalBindingDisambiguator
         if (model is null)
             return LocalBindingNames.Empty;
 
-        var collector = new BindingCollector(model, naming);
+        var collector = new BindingCollector(model, naming, context.Target);
 
         return Disambiguate(roots.SelectMany(collector.Collect).ToList(), reportAt, naming);
     }
@@ -400,7 +401,11 @@ internal static class LocalBindingDisambiguator
     /// receiver of the C# 14 extension block a member is declared in — both
     /// part of the call surface, so never renamed.
     /// </summary>
-    private sealed class BindingCollector(SemanticModel semantic, LocalNaming naming)
+    private sealed class BindingCollector(
+        SemanticModel semantic,
+        LocalNaming naming,
+        Metano.Annotations.TargetLanguage? target
+    )
     {
         public IEnumerable<Binding> Collect(SyntaxNode root)
         {
@@ -481,7 +486,7 @@ internal static class LocalBindingDisambiguator
         private Binding ToBinding(ISymbol symbol, string identifier, int position, SyntaxNode scope)
         {
             var irName = symbol is IParameterSymbol parameter
-                ? IrParameterNaming.IrNameOf(parameter, semantic.Compilation)
+                ? IrParameterNaming.IrNameOf(parameter, semantic.Compilation, target)
                 : identifier;
 
             return new Binding(

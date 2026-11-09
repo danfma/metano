@@ -20,7 +20,8 @@ public sealed record DartImport(
 /// <param name="TypeParameters">Generic type parameters.</param>
 /// <param name="ExtendsType">Base class to extend, if any.</param>
 /// <param name="Implements">Interfaces this class implements.</param>
-/// <param name="Constructor">Primary constructor declaration (optional).</param>
+/// <param name="Constructors">The constructor declarations: the unnamed one, or one named
+/// constructor per overload of a dispatched C# constructor set (spec 013 DECIDED-14).</param>
 /// <param name="Members">Fields, getters, setters, methods.</param>
 public sealed record DartClass(
     string Name,
@@ -28,7 +29,7 @@ public sealed record DartClass(
     IReadOnlyList<DartTypeParameter>? TypeParameters = null,
     DartType? ExtendsType = null,
     IReadOnlyList<DartType>? Implements = null,
-    DartConstructor? Constructor = null,
+    IReadOnlyList<DartConstructor>? Constructors = null,
     IReadOnlyList<DartClassMember>? Members = null
 ) : DartTopLevel;
 
@@ -66,14 +67,29 @@ public sealed record DartEnumValue(string Name, string? Value = null);
 /// <summary>A Dart generic type parameter: <c>T</c> or <c>T extends Comparable</c>.</summary>
 public sealed record DartTypeParameter(string Name, DartType? Extends = null);
 
-/// <summary>A primary constructor declaration. When <see cref="Body"/> is non-null the
+/// <summary>A constructor declaration. When <see cref="Body"/> is non-null the
 /// printer emits the IR statements inside the ctor body; otherwise it renders just
 /// the parameter list followed by <c>;</c>.</summary>
+/// <param name="Name">The constructor's name after the class name
+/// (<c>Dimension.fromSize</c>); <c>null</c> for the unnamed constructor.</param>
+/// <param name="Redirect">The sibling constructor a redirecting constructor
+/// delegates to (<c>: this.fromXY(v, v)</c>), which then has no body.</param>
 public sealed record DartConstructor(
     string ClassName,
     IReadOnlyList<DartConstructorParameter> Parameters,
     bool IsConst = false,
-    IReadOnlyList<Metano.Compiler.IR.IrStatement>? Body = null
+    IReadOnlyList<Metano.Compiler.IR.IrStatement>? Body = null,
+    string? Name = null,
+    DartConstructorRedirect? Redirect = null
+);
+
+/// <summary>
+/// A redirecting constructor's target: <c>this.<see cref="ConstructorName"/>(arguments)</c>,
+/// or <c>this(arguments)</c> when the name is <c>null</c>.
+/// </summary>
+public sealed record DartConstructorRedirect(
+    string? ConstructorName,
+    IReadOnlyList<Metano.Compiler.IR.IrArgument> Arguments
 );
 
 /// <summary>A constructor parameter that may bind a field via <c>this.x</c>.</summary>

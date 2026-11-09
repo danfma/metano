@@ -249,11 +249,11 @@ public static class IrBodyPrinter
                 when IsContainerlessFunction(origin):
                 // A [NoContainer] static class lowers to top-level functions, so the
                 // class qualifier vanishes at the call site (`DelExt.twice(x)` → `twice(x)`).
-                sb.Append(IrToDartNamingPolicy.ToParameterName(ma.MemberName));
+                sb.Append(MemberNameOf(ma));
                 break;
             case IrMemberAccess ma:
                 PrintAccessTarget(sb, ma.Target);
-                sb.Append('.').Append(IrToDartNamingPolicy.ToParameterName(ma.MemberName));
+                sb.Append('.').Append(MemberNameOf(ma));
                 break;
             case IrElementAccess ea:
                 PrintAccessTarget(sb, ea.Target);
@@ -1246,6 +1246,19 @@ public static class IrBodyPrinter
             IrUnaryOp.NonNullAssertion => "!",
             _ => "",
         };
+
+    /// <summary>
+    /// The name a member access spells: a method's <c>[Name]</c>, which its
+    /// declaration emits verbatim (<see cref="IrToDartNamingPolicy.ToMemberName"/>),
+    /// else the camelCase C# name. A method origin is the one that carries
+    /// parameter types; a <c>[Name]</c> that pins an overload's suffix reaches
+    /// the call site as the fast path itself (<see cref="Bridge.DartIrRewriter"/>),
+    /// never as an emitted name.
+    /// </summary>
+    private static string MemberNameOf(IrMemberAccess access) =>
+        access.Origin is { ParameterTypes: not null, EmittedName: { } emittedName }
+            ? emittedName
+            : IrToDartNamingPolicy.ToParameterName(access.MemberName);
 
     private static string FormatType(IrTypeRef type) =>
         DartTypeFormatter.Format(IrToDartTypeMapper.Map(type));

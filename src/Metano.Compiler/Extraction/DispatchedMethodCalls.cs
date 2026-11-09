@@ -29,10 +29,7 @@ internal static class DispatchedMethodCalls
     /// </summary>
     public static IrOverloadRef? RefOf(IMethodSymbol? method, TargetLanguage? target)
     {
-        // Dart claims no fast-path names yet (013g), so every call keeps its
-        // dispatcher there. The gate is core-side only for that reason.
-        // #549
-        if (method is null || target == TargetLanguage.Dart)
+        if (method is null)
             return null;
 
         var definition = method.OriginalDefinition;

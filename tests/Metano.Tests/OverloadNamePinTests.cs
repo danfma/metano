@@ -647,13 +647,14 @@ public class OverloadNamePinTests
     }
 
     /// <summary>
-    /// Dart names no fast paths before 013g, so a <c>[Name]</c> on an
-    /// overload keeps renaming the member there, with no pin diagnostics: an
-    /// invalid suffix (<c>put$text</c>) and an override's <c>[Name]</c> are
-    /// not reported.
+    /// Dart honors the pins since 013g (spec 013 FR-005, FR-022): a valid
+    /// <c>[Name]</c> pins the overload's fast-path suffix, an invalid one
+    /// (<c>put$text</c>) is an <c>MS0003</c> error and keeps the generated
+    /// suffix, and an override's <c>[Name]</c> naming another suffix than its
+    /// root's is ignored with an <c>MS0003</c> warning.
     /// </summary>
     [Test]
-    public async Task Dart_KeepsNameAsAWholeMemberRename_WithNoPinDiagnostics()
+    public async Task Dart_PinsTheSuffix_WithThePinDiagnostics()
     {
         var (files, diagnostics) = TranspileHelper.TranspileDart(
             """
@@ -665,6 +666,9 @@ public class OverloadNamePinTests
 
                 [Name("put$text")]
                 public int Put(string s) => 0;
+
+                [Name("raw")]
+                public int Put(bool b) => 1;
             }
 
             [Transpile]
@@ -684,19 +688,22 @@ public class OverloadNamePinTests
             """
         );
 
-        // Dart's own overload warnings (MS0001), as before; no pin report.
         await Assert
-            .That(diagnostics.Select(d => d.Code))
+            .That(diagnostics.Select(d => (d.Code, d.Severity)))
             .IsEquivalentTo([
-                DiagnosticCodes.UnsupportedFeature,
-                DiagnosticCodes.UnsupportedFeature,
+                (DiagnosticCodes.AmbiguousConstruct, MetanoDiagnosticSeverity.Error),
+                (DiagnosticCodes.AmbiguousConstruct, MetanoDiagnosticSeverity.Warning),
             ]);
         await Assert
             .That(files["box.dart"])
             .IsEqualTo(
                 """
                 class Box {
-                  int put(int x) => x;
+                  int putX(int x) => x;
+
+                  int putS(String s) => 0;
+
+                  int putRaw(bool b) => 1;
                 }
 
                 """
@@ -708,7 +715,7 @@ public class OverloadNamePinTests
                 import 'counter.dart';
 
                 class Doubler extends Counter {
-                  int other(int x) => x * 2;
+                  int addX(int x) => x * 2;
                 }
 
                 """

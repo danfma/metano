@@ -139,7 +139,12 @@ public sealed class IrStatementExtractor(
             _inheritedLocalNames
                 ?? (
                     _context.LocalNaming is { } naming
-                        ? LocalBindingDisambiguator.ForStatements(source, _semantic, naming)
+                        ? LocalBindingDisambiguator.ForStatements(
+                            source,
+                            _semantic,
+                            naming,
+                            _context.Target
+                        )
                         : LocalBindingNames.Empty
                 )
         );

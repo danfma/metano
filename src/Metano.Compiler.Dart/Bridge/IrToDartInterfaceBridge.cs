@@ -11,10 +11,18 @@ namespace Metano.Compiler.Dart.Bridge;
 /// Method and property bodies are left abstract (<c>;</c>-terminated signatures) for now.
 /// When expression extraction lands, default implementations will render as concrete bodies.
 /// </para>
+/// <para>
+/// An overload of a dispatched group is declared under its claimed fast path
+/// (<c>areaSide</c>, <c>areaWH</c>, spec 013 FR-022, FR-031), the name its implementers take.
+/// </para>
 /// </summary>
 public static class IrToDartInterfaceBridge
 {
-    public static void Convert(IrInterfaceDeclaration ir, List<DartTopLevel> statements)
+    public static void Convert(
+        IrInterfaceDeclaration ir,
+        DartOverloadClaims claims,
+        List<DartTopLevel> statements
+    )
     {
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var typeParameters = IrToDartTypeParameterMapper.Map(ir.TypeParameters);
@@ -35,7 +43,7 @@ public static class IrToDartInterfaceBridge
                         members.Add(ConvertPropertyAsGetter(prop));
                         break;
                     case IrMethodDeclaration method:
-                        members.Add(ConvertMethod(method));
+                        members.Add(ConvertMethod(method, NameOf(method, claims)));
                         break;
                     // Events are not emitted on Dart interfaces — Dart doesn't have a
                     // first-class event construct. Users can expose `Stream<T>` getters
@@ -63,7 +71,13 @@ public static class IrToDartInterfaceBridge
             IsAbstract: true
         );
 
-    private static DartMethodSignature ConvertMethod(IrMethodDeclaration method)
+    private static string NameOf(IrMethodDeclaration method, DartOverloadClaims claims) =>
+        method.OverloadName is null
+            ? IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes)
+            : claims.FastPathAt(method.Name, method.DeclarationOrdinal)
+                ?? IrToDartNamingPolicy.ToFastPathName(method.Name, method.OverloadName.Suffix);
+
+    private static DartMethodSignature ConvertMethod(IrMethodDeclaration method, string name)
     {
         var parameters = method
             .Parameters.Select(p => new DartParameter(
@@ -72,7 +86,7 @@ public static class IrToDartInterfaceBridge
             ))
             .ToList();
         return new DartMethodSignature(
-            Name: IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes),
+            Name: name,
             Parameters: parameters,
             ReturnType: IrToDartTypeMapper.Map(method.ReturnType),
             TypeParameters: IrToDartTypeParameterMapper.Map(method.TypeParameters),

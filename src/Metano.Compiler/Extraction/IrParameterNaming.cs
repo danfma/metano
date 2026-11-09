@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using Metano.Annotations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -12,18 +14,34 @@ namespace Metano.Compiler.Extraction;
 /// <c>$</c> suffix, both where it is declared and where it is read; any other
 /// parameter keeps its name. A shadowed module variable is a different case,
 /// rejected with MS0001 by the module-variable validator.
+/// <para>
+/// The callee's emitted name depends on the target: a <c>[Name]</c> may be
+/// targeted, and on an overload of a dispatched group it pins a suffix rather
+/// than renaming the member (<see cref="OverloadEmittedName"/>). The colliding
+/// names are therefore computed, and cached, per owner and target.
+/// </para>
 /// </summary>
 internal static class IrParameterNaming
 {
     private const string CollisionSuffix = "$";
 
-    private static readonly ConditionalWeakTable<ISymbol, HashSet<string>> CollidingNamesByOwner =
-        new();
+    private static readonly ConditionalWeakTable<
+        ISymbol,
+        ConcurrentDictionary<int, HashSet<string>>
+    > CollidingNamesByOwner = new();
 
-    public static string IrNameOf(IParameterSymbol parameter, Compilation? compilation) =>
+    /// <summary>The cache key of a call without a target.</summary>
+    private const int NoTarget = -1;
+
+    public static string IrNameOf(
+        IParameterSymbol parameter,
+        Compilation? compilation,
+        TargetLanguage? target
+    ) =>
         compilation is not null
         && IsRenamableOwner(parameter.ContainingSymbol)
-        && CollidingNamesOf(parameter.ContainingSymbol, compilation).Contains(parameter.Name)
+        && CollidingNamesOf(parameter.ContainingSymbol, compilation, target)
+            .Contains(parameter.Name)
             ? parameter.Name + CollisionSuffix
             : parameter.Name;
 
@@ -64,14 +82,27 @@ internal static class IrParameterNaming
                 MethodKind: MethodKind.UserDefinedOperator or MethodKind.Conversion
             };
 
-    private static HashSet<string> CollidingNamesOf(ISymbol owner, Compilation compilation) =>
-        CollidingNamesByOwner.GetValue(owner, key => FindCollidingNames(key, compilation));
+    private static HashSet<string> CollidingNamesOf(
+        ISymbol owner,
+        Compilation compilation,
+        TargetLanguage? target
+    ) =>
+        CollidingNamesByOwner
+            .GetValue(owner, _ => new ConcurrentDictionary<int, HashSet<string>>())
+            .GetOrAdd(
+                target is { } language ? (int)language : NoTarget,
+                _ => FindCollidingNames(owner, compilation, target)
+            );
 
     /// <summary>
     /// The names of the owner's parameters that share their emitted name with
     /// a containerless static method the owner's body references.
     /// </summary>
-    private static HashSet<string> FindCollidingNames(ISymbol owner, Compilation compilation)
+    private static HashSet<string> FindCollidingNames(
+        ISymbol owner,
+        Compilation compilation,
+        TargetLanguage? target
+    )
     {
         var colliding = new HashSet<string>();
 
@@ -95,7 +126,7 @@ internal static class IrParameterNaming
                 continue;
 
             var calleeName =
-                OverloadEmittedName.NameOverrideOf(callee, target: null)
+                OverloadEmittedName.NameOverrideOf(callee, target)
                 ?? SymbolHelper.ToCamelCase(callee.Name);
 
             colliding.UnionWith(

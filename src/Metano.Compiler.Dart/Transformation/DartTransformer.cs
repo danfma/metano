@@ -23,16 +23,26 @@ namespace Metano.Compiler.Dart.Transformation;
 /// lands in Phase 5.
 /// </para>
 /// </summary>
-public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
+public sealed class DartTransformer
 {
-    private readonly IrCompilation _ir = ir;
-    private readonly Compilation _compilation = compilation;
+    private readonly IrCompilation _ir;
+    private readonly Compilation _compilation;
     private readonly List<MetanoDiagnostic> _diagnostics = new();
     private readonly object _diagnosticsLock = new();
-    private readonly DartIrRewriter _rewriter = new(
-        DeclarativeMappingRegistry.FromIr(ir),
-        ContainerlessTypeNames(ir)
-    );
+    private readonly DartOverloadClaimsRegistry _overloadClaims;
+    private readonly DartIrRewriter _rewriter;
+
+    public DartTransformer(IrCompilation ir, Compilation compilation)
+    {
+        _ir = ir;
+        _compilation = compilation;
+        _overloadClaims = new DartOverloadClaimsRegistry(compilation, Extraction);
+        _rewriter = new DartIrRewriter(
+            DeclarativeMappingRegistry.FromIr(ir),
+            ContainerlessTypeNames(ir),
+            _overloadClaims
+        );
+    }
 
     /// <summary>
     /// The extraction context the core extractors receive: this compilation
@@ -40,9 +50,18 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     /// renaming is TypeScript-only until #402 lands it for Dart. Dart always
     /// takes the exact 64-bit lowering: its <c>int</c> is 64-bit, so the
     /// conversions it prints are the narrowing ones (spec 012 DECIDED-19).
+    /// A dispatched constructor set becomes named constructors, so a
+    /// construction binds the overload it selects; an overloaded operator
+    /// group keeps one <c>operator</c> declaration, so an operator
+    /// application keeps the source operator (spec 013 FR-022).
     /// </summary>
     private IrExtractionContext Extraction =>
-        new(Compilation: _compilation, Target: TargetLanguage.Dart) { ExactInt64Lowering = true };
+        new(Compilation: _compilation, Target: TargetLanguage.Dart)
+        {
+            ExactInt64Lowering = true,
+            EmitsConstructorSelectors = DartTypeShapes.EmitsNamedConstructors,
+            EmitsOperatorFastPaths = false,
+        };
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
 
@@ -138,7 +157,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
                 case TypeKind.Interface:
                     var interfaceIr = IrInterfaceExtractor.Extract(type, Extraction);
-                    IrToDartInterfaceBridge.Convert(interfaceIr, statements);
+                    IrToDartInterfaceBridge.Convert(interfaceIr, ClaimsOf(type), statements);
                     ScanInto(runtimeRequirements, interfaceIr);
                     break;
 
@@ -148,16 +167,22 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     // [ExportedAsModule] still tracked under the same predicate)
                     // collapse to top-level Dart functions (the idiomatic
                     // utility-module shape) instead of a class of static methods.
-                    if (LowersToTopLevelFunctions(type))
+                    if (DartTypeShapes.LowersToTopLevelFunctions(type))
                     {
                         var functions = IrModuleFunctionExtractor.Extract(type, Extraction);
-                        IrToDartModuleBridge.Convert(functions, statements, _rewriter);
+                        IrToDartModuleBridge.Convert(
+                            functions,
+                            ClaimsOf(type),
+                            statements,
+                            _rewriter
+                        );
                         ScanFunctionsInto(runtimeRequirements, functions);
                         break;
                     }
                     var classIr = IrClassExtractor.Extract(type, Extraction);
-                    ReportOverloadDiagnostics(classIr, type.Name);
-                    IrToDartClassBridge.Convert(classIr, statements, _rewriter);
+                    ReportUnnamedOverloads(classIr, type.Name);
+                    ReportMultiplyConstructedInterfaces(type);
+                    IrToDartClassBridge.Convert(classIr, ClaimsOf(type), statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
                     break;
 
@@ -204,21 +229,40 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// Whether a static class lowers to top-level Dart functions ([NoContainer] /
-    /// [ExportedAsModule]) instead of a class of static methods.
+    /// The claim results of a type this transform emits, with their findings
+    /// (<c>MS0067</c>, <c>MS0068</c>) reported at its declarations — once,
+    /// since each type is emitted once.
     /// </summary>
-    private static bool LowersToTopLevelFunctions(INamedTypeSymbol type) =>
-        type.IsStatic && SymbolHelper.IsContainerless(type);
+    private DartOverloadClaims ClaimsOf(INamedTypeSymbol type)
+    {
+        var claims = _overloadClaims.ClaimsOf(type);
+
+        claims.Report(type, ReportDiagnostic);
+
+        return claims;
+    }
+
+    /// <summary>
+    /// <c>MS0069</c> at a type that implements a generic interface with
+    /// overload groups more than once: Dart declares each root name once.
+    /// </summary>
+    private void ReportMultiplyConstructedInterfaces(INamedTypeSymbol type)
+    {
+        foreach (
+            var diagnostic in MultiplyConstructedInterfaces.DiagnosticsOf(type, TargetLanguage.Dart)
+        )
+            ReportDiagnostic(diagnostic);
+    }
 
     /// <summary>
     /// The stable full names of the transpilable static classes that
-    /// <see cref="LowersToTopLevelFunctions"/> flattens. Types of referenced assemblies are
-    /// not listed, so their call sites keep the qualifier.
+    /// <see cref="DartTypeShapes.LowersToTopLevelFunctions"/> flattens. Types of referenced
+    /// assemblies are not listed, so their call sites keep the qualifier.
     /// </summary>
     private static HashSet<string> ContainerlessTypeNames(IrCompilation ir) =>
         (ir.TranspilableTypeEntries ?? [])
             .Select(entry => entry.Symbol)
-            .Where(LowersToTopLevelFunctions)
+            .Where(DartTypeShapes.LowersToTopLevelFunctions)
             .Select(type => type.GetStableFullName())
             .ToHashSet(StringComparer.Ordinal);
 
@@ -247,33 +291,36 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// Dart has no method overloading — two methods with the same name but
-    /// different signatures can't coexist. The IR captures C# overload sets via
-    /// <see cref="IrMethodDeclaration.Overloads"/>; when the Dart bridge sees
-    /// one, we surface a diagnostic pointing the user at <c>[Name]</c> (rename)
-    /// or optional-parameter refactoring and keep emitting the primary method
-    /// only. Silently dropping the extras would hide a real semantic mismatch.
+    /// Dart has no method overloading: a dispatched group is declared as one
+    /// fast path per overload (spec 013 FR-022). Two kinds of overload set
+    /// keep the primary declaration only — an overloaded operator group, since
+    /// Dart declares one <c>operator</c> per symbol, and the overloads of a
+    /// keep-today's-emission shape (<see cref="DartTypeShapes.NamesOverloadMembers"/>);
+    /// silently dropping the others would hide a real semantic mismatch.
     /// </summary>
-    private void ReportOverloadDiagnostics(IrClassDeclaration classIr, string typeName)
+    private void ReportUnnamedOverloads(IrClassDeclaration classIr, string typeName)
     {
-        if (classIr.Members is null)
-            return;
-        foreach (var member in classIr.Members)
+        var namesOverloadMembers = DartTypeShapes.NamesOverloadMembers(classIr);
+
+        foreach (var member in classIr.Members ?? [])
         {
-            if (member is IrMethodDeclaration method && method.Overloads is { Count: > 0 })
-            {
-                ReportDiagnostic(
-                    new MetanoDiagnostic(
-                        MetanoDiagnosticSeverity.Warning,
-                        DiagnosticCodes.UnsupportedFeature,
-                        $"Dart target: '{typeName}.{method.Name}' has "
-                            + $"{method.Overloads.Count + 1} overloads but Dart doesn't "
-                            + "support method overloading. Emitting the primary signature "
-                            + "only; rename the other overloads via [Name(\"...\")] or merge "
-                            + "them into a single method with optional parameters."
-                    )
-                );
-            }
+            if (member is not IrMethodDeclaration { Overloads.Count: > 0 } method)
+                continue;
+
+            if (namesOverloadMembers && DartClassMemberNames.IsFastPathGroup(method))
+                continue;
+
+            ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"Dart target: '{typeName}.{method.Name}' has "
+                        + $"{method.Overloads!.Count + 1} overloads but Dart doesn't "
+                        + "support overloading it. Emitting the primary signature "
+                        + "only; rename the other overloads via [Name(\"...\")] or merge "
+                        + "them into a single method with optional parameters."
+                )
+            );
         }
     }
 

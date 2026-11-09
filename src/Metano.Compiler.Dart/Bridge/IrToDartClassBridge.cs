@@ -13,15 +13,25 @@ namespace Metano.Compiler.Dart.Bridge;
 /// Promoted constructor parameters become <c>final</c> fields plus <c>this.x</c> initializers,
 /// matching the Dart idiom for immutable data-carrying classes.
 /// </para>
+/// <para>
+/// Dart has no overloading, so a dispatched overload set is declared under the names the
+/// class's claim pass gave it (spec 013 FR-022, DECIDED-14): one named constructor per
+/// constructor overload (<c>Dimension.fromSize</c>; a <c>: this(...)</c> chain redirects to
+/// its target's) and one fast path per method overload (<c>addXY</c>), with no dispatcher and
+/// no selector. An overloaded operator group and the overloads of a keep-today's-emission
+/// shape (<see cref="DartTypeShapes.NamesOverloadMembers"/>) keep the primary declaration.
+/// </para>
 /// </summary>
 public static class IrToDartClassBridge
 {
     public static void Convert(
         IrClassDeclaration ir,
+        DartOverloadClaims claims,
         List<DartTopLevel> statements,
         DartIrRewriter rewriter
     )
     {
+        var namesOverloadMembers = DartTypeShapes.NamesOverloadMembers(ir);
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var modifier = ResolveClassModifier(ir);
         var typeParameters = IrToDartTypeParameterMapper.Map(ir.TypeParameters);
@@ -43,6 +53,7 @@ public static class IrToDartClassBridge
             : [];
 
         var members = new List<DartClassMember>();
+        var emittedFastPaths = new HashSet<string>(StringComparer.Ordinal);
         AddPromotedFields(ir.Constructor, members);
         if (ir.Members is not null)
         {
@@ -50,6 +61,10 @@ public static class IrToDartClassBridge
             {
                 switch (m)
                 {
+                    case IrMethodDeclaration method
+                        when namesOverloadMembers && DartClassMemberNames.IsFastPathGroup(method):
+                        AddFastPaths(method, claims, members, emittedFastPaths, rewriter);
+                        break;
                     case IrFieldDeclaration field:
                         members.Add(ConvertField(field, rewriter));
                         break;
@@ -61,19 +76,18 @@ public static class IrToDartClassBridge
                         members.Add(ConvertHashCodeOverride(method, rewriter));
                         break;
                     case IrMethodDeclaration method:
-                        members.Add(ConvertMethod(method, rewriter));
-
-                        if (IrObjectContract.IsEqualsOverride(method))
-                            members.Add(BuildEqualsOperatorDelegatingTo(method));
-
+                        AddMethod(
+                            method,
+                            IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes),
+                            members,
+                            rewriter
+                        );
                         break;
                 }
             }
         }
 
-        var ctor = ir.Constructor is not null
-            ? ConvertConstructor(ir.Constructor, name, rewriter)
-            : null;
+        var constructors = ConvertConstructors(ir, name, claims, namesOverloadMembers, rewriter);
 
         // Record types get value-equality semantics synthesized into the class:
         // an `operator ==`, a `hashCode` getter, and a `copyWith` method
@@ -81,7 +95,12 @@ public static class IrToDartClassBridge
         // synthesis is skipped for [PlainObject] records — those are emitted
         // as plain data carriers without behavior.
         if (ShouldSynthesizeRecordMembers(ir))
-            SynthesizeRecordMembers(ir, name, members);
+            SynthesizeRecordMembers(
+                ir,
+                name,
+                PrimaryConstructorNameOf(ir, claims, namesOverloadMembers),
+                members
+            );
 
         statements.Add(
             new DartClass(
@@ -90,7 +109,7 @@ public static class IrToDartClassBridge
                 TypeParameters: typeParameters,
                 ExtendsType: extendsType,
                 Implements: implementsList,
-                Constructor: ctor,
+                Constructors: constructors,
                 Members: members.Count > 0 ? members : null
             )
         );
@@ -118,6 +137,7 @@ public static class IrToDartClassBridge
     private static void SynthesizeRecordMembers(
         IrClassDeclaration ir,
         string className,
+        string? primaryConstructorName,
         List<DartClassMember> members
     )
     {
@@ -138,7 +158,7 @@ public static class IrToDartClassBridge
         if (!IrRecordEqualityOverrides.DeclaresHashCode(ir))
             members.Add(BuildHashCodeGetter(fields));
 
-        members.Add(BuildCopyWithMethod(className, fields));
+        members.Add(BuildCopyWithMethod(className, primaryConstructorName, fields));
     }
 
     /// <summary>
@@ -153,7 +173,7 @@ public static class IrToDartClassBridge
                     new IrTypePattern(new IrNamedTypeRef(className))
                 ),
                 IrBinaryOp.LogicalAnd,
-                CallUserEquals(nameof(object.Equals), attributes: null)
+                CallUserEquals(IrToDartNamingPolicy.ToMemberName(nameof(object.Equals), null))
             )
         );
 
@@ -163,22 +183,12 @@ public static class IrToDartClassBridge
     /// <c>x.Equals(y)</c> call sites keep resolving: Dart's <c>==</c> (and
     /// every collection) then uses the user's equality.
     /// </summary>
-    private static DartMethodSignature BuildEqualsOperatorDelegatingTo(
-        IrMethodDeclaration equalsOverride
-    ) =>
-        BuildEqualsOperatorReturning(
-            CallUserEquals(equalsOverride.Name, equalsOverride.Attributes)
-        );
+    private static DartMethodSignature BuildEqualsOperatorDelegatingTo(string equalsName) =>
+        BuildEqualsOperatorReturning(CallUserEquals(equalsName));
 
-    private static IrCallExpression CallUserEquals(
-        string methodName,
-        IReadOnlyList<IrAttribute>? attributes
-    ) =>
+    private static IrCallExpression CallUserEquals(string emittedName) =>
         new(
-            new IrMemberAccess(
-                new IrThisExpression(),
-                IrToDartNamingPolicy.ToMemberName(methodName, attributes)
-            ),
+            new IrMemberAccess(new IrThisExpression(), emittedName),
             [new IrArgument(new IrIdentifier("other"))]
         );
 
@@ -352,6 +362,7 @@ public static class IrToDartClassBridge
     /// </summary>
     private static DartMethodSignature BuildCopyWithMethod(
         string className,
+        string? primaryConstructorName,
         IReadOnlyList<(string Name, DartType Type)> fields
     )
     {
@@ -374,7 +385,12 @@ public static class IrToDartClassBridge
             ))
             .ToList();
 
-        IrExpression body = new IrNewExpression(new IrNamedTypeRef(className), callArgs);
+        IrExpression body = primaryConstructorName is null
+            ? new IrNewExpression(new IrNamedTypeRef(className), callArgs)
+            : new IrCallExpression(
+                new IrMemberAccess(new IrTypeReference(className), primaryConstructorName),
+                callArgs
+            );
         return new DartMethodSignature(
             Name: "copyWith",
             Parameters: parameters,
@@ -404,25 +420,130 @@ public static class IrToDartClassBridge
         }
     }
 
-    private static DartConstructor ConvertConstructor(
-        IrConstructorDeclaration ctor,
+    /// <summary>
+    /// The class's constructors: one named constructor per overload of a
+    /// dispatched set, in declaration order, or today's unnamed one.
+    /// </summary>
+    private static IReadOnlyList<DartConstructor>? ConvertConstructors(
+        IrClassDeclaration ir,
         string className,
+        DartOverloadClaims claims,
+        bool namesOverloadMembers,
         DartIrRewriter rewriter
     )
     {
-        var parameters = ctor
-            .Parameters.Select(p => new DartConstructorParameter(
-                Name: IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
-                Type: p.Promotion == IrParameterPromotion.None
-                    ? IrToDartTypeMapper.Map(p.Parameter.Type)
-                    : null,
-                IsFieldInitializer: p.Promotion != IrParameterPromotion.None,
-                IsRequired: !p.Parameter.HasDefaultValue,
-                DefaultValue: rewriter.Rewrite(p.Parameter.DefaultValue)
-            ))
+        if (ir.Constructor is not { } constructor)
+            return null;
+
+        if (
+            !namesOverloadMembers
+            || constructor is not { Overloads.Count: > 0, OverloadName: not null }
+        )
+            return [ConvertConstructor(constructor, className, name: null, rewriter)];
+
+        return constructor
+            .DeclarationsInOrder.Select(overload =>
+                ConvertNamedConstructor(overload, className, claims, rewriter)
+            )
             .ToList();
-        return new DartConstructor(className, parameters, Body: rewriter.Rewrite(ctor.Body));
     }
+
+    /// <summary>
+    /// The name of the constructor <c>copyWith</c> rebuilds a record through:
+    /// the primary's named constructor when the set is dispatched, else
+    /// <c>null</c> (the unnamed one).
+    /// </summary>
+    private static string? PrimaryConstructorNameOf(
+        IrClassDeclaration ir,
+        DartOverloadClaims claims,
+        bool namesOverloadMembers
+    ) =>
+        namesOverloadMembers && ir.Constructor is { Overloads.Count: > 0 } primary
+            ? claims.ConstructorNameAt(primary.DeclarationOrdinal)
+            : null;
+
+    /// <summary>
+    /// One overload of a dispatched set as its named constructor. A
+    /// <c>: this(...)</c> chain becomes a redirect to the target's named
+    /// constructor; Dart allows a redirecting constructor no body, so a chain
+    /// with a body of its own keeps the body and reports that the chain is
+    /// dropped.
+    /// </summary>
+    private static DartConstructor ConvertNamedConstructor(
+        IrConstructorDeclaration overload,
+        string className,
+        DartOverloadClaims claims,
+        DartIrRewriter rewriter
+    )
+    {
+        var name = claims.ConstructorNameAt(overload.DeclarationOrdinal);
+        var constructor = ConvertConstructor(overload, className, name, rewriter);
+
+        if (overload.ThisChain is not { } chain)
+            return constructor;
+
+        if (overload.Body is { Count: > 0 })
+        {
+            DartUnsupported.Report(
+                $"Dart target: the constructor '{className}.{name}' chains through "
+                    + ": this(...) and has a body; Dart's redirecting constructors have none, so "
+                    + "the chain is not emitted."
+            );
+            return constructor;
+        }
+
+        var redirect = new DartConstructorRedirect(
+            claims.ConstructorNameAt(chain.Target.DeclarationOrdinal),
+            DartConstructorChainArguments.Of(chain, rewriter)
+        );
+
+        // A redirecting constructor initializes nothing itself: Dart rejects
+        // `this.x` parameters there, so promoted ones become plain parameters.
+        return constructor with
+        {
+            Parameters = ConvertParameters(overload, rewriter, initializesFields: false),
+            Body = null,
+            Redirect = redirect,
+        };
+    }
+
+    private static DartConstructor ConvertConstructor(
+        IrConstructorDeclaration ctor,
+        string className,
+        string? name,
+        DartIrRewriter rewriter
+    ) =>
+        new(
+            className,
+            ConvertParameters(ctor, rewriter, initializesFields: true),
+            Body: rewriter.Rewrite(ctor.Body),
+            Name: name
+        );
+
+    /// <summary>
+    /// The constructor's parameters; a promoted one is a <c>this.x</c> field
+    /// initializer when <paramref name="initializesFields"/> holds.
+    /// </summary>
+    private static IReadOnlyList<DartConstructorParameter> ConvertParameters(
+        IrConstructorDeclaration ctor,
+        DartIrRewriter rewriter,
+        bool initializesFields
+    ) =>
+        ctor
+            .Parameters.Select(p =>
+            {
+                var isFieldInitializer =
+                    initializesFields && p.Promotion != IrParameterPromotion.None;
+
+                return new DartConstructorParameter(
+                    Name: IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
+                    Type: isFieldInitializer ? null : IrToDartTypeMapper.Map(p.Parameter.Type),
+                    IsFieldInitializer: isFieldInitializer,
+                    IsRequired: !p.Parameter.HasDefaultValue,
+                    DefaultValue: rewriter.Rewrite(p.Parameter.DefaultValue)
+                );
+            })
+            .ToList();
 
     // ── Members ────────────────────────────────────────────────────────────
 
@@ -510,12 +631,58 @@ public static class IrToDartClassBridge
         );
     }
 
+    /// <summary>
+    /// The fast path of each overload of a dispatched method group, under the
+    /// name the claim pass gave it. Two implementations of a multiply
+    /// constructed interface root share its name (<c>MS0069</c>): the first
+    /// is declared.
+    /// </summary>
+    private static void AddFastPaths(
+        IrMethodDeclaration primary,
+        DartOverloadClaims claims,
+        List<DartClassMember> members,
+        HashSet<string> emittedFastPaths,
+        DartIrRewriter rewriter
+    )
+    {
+        var overloads = IrMethodGroup
+            .Of(primary)
+            .Members.OrderBy(overload => overload.DeclarationOrdinal);
+
+        foreach (var overload in overloads)
+        {
+            var name =
+                claims.FastPathAt(overload.Name, overload.DeclarationOrdinal)
+                ?? IrToDartNamingPolicy.ToFastPathName(
+                    overload.Name,
+                    overload.OverloadName!.Suffix
+                );
+
+            if (emittedFastPaths.Add(name))
+                AddMethod(overload, name, members, rewriter);
+        }
+    }
+
+    private static void AddMethod(
+        IrMethodDeclaration method,
+        string name,
+        List<DartClassMember> members,
+        DartIrRewriter rewriter
+    )
+    {
+        members.Add(ConvertMethod(method, name, rewriter));
+
+        if (IrObjectContract.IsEqualsOverride(method))
+            members.Add(BuildEqualsOperatorDelegatingTo(name));
+    }
+
     private static DartMethodSignature ConvertMethod(
         IrMethodDeclaration method,
+        string name,
         DartIrRewriter rewriter
     ) =>
         new(
-            Name: IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes),
+            Name: name,
             Parameters: method
                 .Parameters.Select(p => new DartParameter(
                     IrToDartNamingPolicy.ToParameterName(p.Name),
