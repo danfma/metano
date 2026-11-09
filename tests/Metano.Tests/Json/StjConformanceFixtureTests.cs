@@ -1120,6 +1120,19 @@ public class StjConformanceFixtureTests
 
                 await Assert.That(containers.ByName[0]).IsEqualTo("c");
             }),
+            // The exact-path rows of slice 012h (FR-053): digits beyond 2^53
+            // and the integer tokens deserializeText keeps.
+            ["I19"] = ReadOnly(async value =>
+            {
+                var box = (Int64Box)value!;
+
+                await Assert.That(box.Id).IsEqualTo(9007199254740993);
+
+                await Assert.That(box.Mask).IsEqualTo(ulong.MaxValue);
+
+                await Assert.That(box.Parent).IsEqualTo(long.MinValue);
+            }),
+            ["I20"] = ReadOnly(async value => await Assert.That((long)value!).IsEqualTo(0)),
         };
 
     private static async Task AssertDecimal(object? value, string text) =>

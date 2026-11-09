@@ -2028,7 +2028,7 @@
       "message": "The JSON value could not be converted to Int64Box.",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012e: the int64 descriptor rejects 1.0 (not an integer token); the 2.x number descriptor passes it through"
+    "divergence": "spec 012 012e: the int64 descriptor rejects 1.0 (not an integer token); the 2.x number descriptor passes it through. Since 012h (FR-053) deserializeText keeps the fraction on the exact path, so the runtime rejects it too"
   },
   {
     "id": "I6",
@@ -2117,5 +2117,103 @@
     "json": "{\"ByName\":{\"05\":\"a\",\"+5\":\"b\",\"-0\":\"c\"}}",
     "sides": ["stj"],
     "divergence": "spec 012 012e: signed key grammar (05, +5, -0 read; the duplicate 5 keeps the last, as a dictionary write does); TypeScript side at 012k"
+  },
+  {
+    "id": "I13",
+    "context": "StudioJsonContext",
+    "getter": "int64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "1e3",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int64."
+    },
+    "divergence": "spec 012 012h: an exponent is not an integer token, even when its value is (FR-052); deserializeText keeps the token's shape on the exact path (FR-053); the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I14",
+    "context": "StudioJsonContext",
+    "getter": "uInt64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "1.0",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.UInt64."
+    },
+    "divergence": "spec 012 012h: a fraction is not an integer token, even a zero one; JSON.parse would fold it into 1; the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I15",
+    "context": "StudioJsonContext",
+    "getter": "int64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "-0.0",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int64."
+    },
+    "divergence": "spec 012 012h: -0 reads as 0, but -0.0 is not an integer token; the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I16",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Mask\":2.0}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Int64Box.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
+    },
+    "divergence": "spec 012 012h: a short fraction in a ulong member throws naming the declaring contract; the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I17",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Parent\":1E0}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Int64Box.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
+    },
+    "divergence": "spec 012 012h: an uppercase exponent in a nullable member; the runtime names System.Nullable`1[System.Int64] (the I6 divergence); the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I18",
+    "context": "StudioJsonContext",
+    "getter": "int64Containers",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Values\":[1,2.0]}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int64."
+    },
+    "divergence": "spec 012 012h: a short fraction in an array element names the element type; the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I19",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Id\":9007199254740993,\"Mask\":18446744073709551615,\"Parent\":-9223372036854775808}",
+    "divergence": "spec 012 012h: 2^53 + 1, ulong.MaxValue and long.MinValue read from their exact digits through deserializeText (FR-053); the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I20",
+    "context": "StudioJsonContext",
+    "getter": "int64",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "-0",
+    "divergence": "spec 012 012h: -0 is an integer token and reads as 0 for a long (R7); the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
   }
 ]

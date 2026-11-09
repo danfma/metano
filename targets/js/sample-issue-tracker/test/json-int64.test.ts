@@ -150,3 +150,68 @@ describe("int64 JSON — the snowflake-keyed activity feed", () => {
     expect(read[0]!.id).toBe(ID);
   });
 });
+
+// The exact text path (spec 012 FR-053, slice 012h): `deserializeText` hands
+// every 64-bit leaf that is not a short integer token its source text, so
+// the generated converters read digits beyond 2^53 and reject what
+// System.Text.Json rejects (`1.0`, `1e3`), in every position.
+describe("int64 JSON — exact reads from text", () => {
+  const activityJson = (fields: string) =>
+    `{"id":1152921504606846977,"issueKey":"ISSUE-1","kind":"created",${fields}}`;
+
+  test("a snowflake-keyed feed reads every key and value from its digits", () => {
+    const feed = JsonSerializer.deserializeText(
+      `{"entries":{"1152921504606846977":${activityText},` +
+        `"-9223372036854775808":${activityJson('"occurredAtTicks":9223372036854775807,"durationTicks":null')}}}`,
+      ctx.activityFeed,
+    )!;
+
+    expect(feed.entries.get(1152921504606846977n)!.durationTicks).toBe(9007199254740993n);
+    expect(feed.entries.get(-9223372036854775808n)!.occurredAtTicks).toBe(9223372036854775807n);
+  });
+
+  test("an activity array root reads its entries' digits", () => {
+    const read = JsonSerializer.deserializeText(`[${activityText}]`, ctx.issueActivityArray)!;
+
+    expect(read[0]!.id).toBe(ID);
+    expect(read[0]!.occurredAtTicks).toBe(639028224000000000n);
+  });
+
+  test("a short fraction or exponent throws, as System.Text.Json throws", () => {
+    const rejected = [
+      '{"id":1.0,"issueKey":"ISSUE-1","kind":"created","occurredAtTicks":1,"durationTicks":null}',
+      activityJson('"occurredAtTicks":1e3,"durationTicks":null'),
+    ];
+
+    for (const text of rejected) {
+      expect(() => JsonSerializer.deserializeText(text, ctx.issueActivity)).toThrow(
+        "The JSON value could not be converted to IssueActivity.",
+      );
+    }
+
+    // A nullable member names the nullable (spec 009's nullable-inner design).
+    expect(() =>
+      JsonSerializer.deserializeText(
+        activityJson('"occurredAtTicks":1,"durationTicks":2.0'),
+        ctx.issueActivity,
+      ),
+    ).toThrow("The JSON value could not be converted to System.Nullable`1[System.Int64].");
+
+    expect(() =>
+      JsonSerializer.deserializeText(
+        `[${activityJson('"occurredAtTicks":1.5,"durationTicks":null')}]`,
+        ctx.issueActivityArray,
+      ),
+    ).toThrow("The JSON value could not be converted to IssueActivity.");
+  });
+
+  test("a short integer token still reads, -0 as 0", () => {
+    const read = JsonSerializer.deserializeText(
+      activityJson('"occurredAtTicks":-0,"durationTicks":42'),
+      ctx.issueActivity,
+    )!;
+
+    expect(read.occurredAtTicks).toBe(0n);
+    expect(read.durationTicks).toBe(42n);
+  });
+});
