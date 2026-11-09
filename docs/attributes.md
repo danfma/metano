@@ -77,7 +77,9 @@ digits and `_`; otherwise `MS0003` is reported and the generated suffix is kept.
 Two overloads pinned to the same suffix also report `MS0003`. An override or an
 interface implementation always takes the suffix of the member it overrides or
 implements, so put `[Name]` there; a different `[Name]` on the implementer is
-ignored with an `MS0003` warning.
+ignored with an `MS0003` warning. A conversion operator has no C# name, so its
+`[Name]` still names it, and `[Name]` on a constructor that is not overloaded has
+no effect (an `MS0003` warning).
 
 ### `[Ignore]`
 

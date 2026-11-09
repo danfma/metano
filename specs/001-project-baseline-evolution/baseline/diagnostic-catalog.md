@@ -20,7 +20,7 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | --- | --- | --- |
 | `MS0001` | `UnsupportedFeature` | A C# language feature is not supported by the transpiler. |
 | `MS0002` | `UnresolvedType` | A referenced type could not be resolved or is not transpileable. |
-| `MS0003` | `AmbiguousConstruct` | An ambiguous construct may produce incorrect output. Spec 013 uses it for overload names: the climb's dead end (FR-024, error, `$1` / `$2`), an invalid `[Name]` suffix on an overload (FR-005, error at the attribute's argument; the generated suffix is kept), and a `[Name]` on an override or interface implementation that is ignored for its root's (FR-005, FR-025, warning) (`Extraction/OverloadGroupNaming.cs`; tests `tests/Metano.Tests/OverloadNamePinTests.cs`). |
+| `MS0003` | `AmbiguousConstruct` | An ambiguous construct may produce incorrect output. Spec 013 uses it for overload names: the climb's dead end (FR-024, error, `$1` / `$2`), an invalid `[Name]` suffix on an overload (FR-005, error at the attribute's argument; the generated suffix is kept), a `[Name]` on an override or interface implementation that is ignored for its root's (FR-005, FR-025, warning), and a `[Name]` on a constructor outside a dispatched set (FR-005, warning); the Dart target reports none of the `[Name]` ones before slice 013g (`Extraction/OverloadGroupNaming.cs`, `Extraction/OverloadSuffixPin.cs`; tests `tests/Metano.Tests/OverloadNamePinTests.cs`). |
 | `MS0004` | `ConflictingAttributes` | Conflicting attributes are present on a single symbol. |
 | `MS0005` | `CyclicReference` | A cyclic reference exists between generated target files. |
 | `MS0006` | `InvalidModuleEntryPoint` | Invalid `[ModuleEntryPoint]` (signature or conflicting setup). |

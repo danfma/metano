@@ -83,9 +83,15 @@ or module function; for virtual and interface members, the **root** group of § 
    value that is not `^[A-Za-z_][A-Za-z0-9_]*$` (empty, a leading digit, `-`, `$`, which the
    claims and the dead end reserve) reports `MS0003` (error) at the attribute's argument, and the
    overload keeps its generated suffix. A member that is not an overload of a dispatched group —
-   a single method or operator, or an overload of an `[External]` type, which emits no
-   dispatcher — keeps today's meaning: `[Name]` renames the whole member. Root anchoring decides
-   overrides and implementations (§ Root anchoring).
+   a single method or operator, or an overload of an `[External]`, `[JsCallable]` or
+   `[PlainObject]` type, which emits no dispatcher — keeps today's meaning: `[Name]` renames the
+   whole member. A conversion operator has no C# name, so its `[Name]` names its group and pins
+   nothing (`[Name("toInt")] explicit operator int(Money)` / `explicit operator long(Money)` →
+   `__toInt` over `__toIntMoneyToInt32` / `__toIntMoneyToInt64`). A `[Name]` on a constructor
+   outside a dispatched set names nothing and reports an `MS0003` warning. Dart pins nothing
+   before slice 013g. Root anchoring decides overrides and implementations (§ Root anchoring):
+   in a derived type's visible group an anchored member carries its root's pin, never its own,
+   so its ignored `[Name]` cannot move the type's other overloads.
 8. **Candidate names.** From the suffix `S` of overload `o` of type `T`:
 
    | Member | Candidate |

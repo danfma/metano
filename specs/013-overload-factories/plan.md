@@ -108,7 +108,7 @@ breaks; the CHANGELOG collects the breaks for the release.
 | **013d — Root-anchored fast paths** | `feat!:` | addressable fast paths with per-overload visibility (overrides: the root's); root anchoring on constructed roots; `override` fast paths and no dispatcher for override-only types; `override` superset dispatchers forwarding to `super` for types adding overloads; claim step 7 (`MS0067` reason 3) for `new` methods and new overloads; `abstract` fast paths (lifting today's `MS0001`); interface fast-path signatures, implementer forwarding, explicit implementations; multiply-constructed interfaces with `MS0069`; root names from metadata symbols for DLL / package bases (DECIDED-28); `MS0068` reason 1. | FR-015, FR-016, FR-025, FR-030, FR-031, FR-034, FR-036, FR-037, FR-020 (`MS0067` reason 3, `MS0068` reason 1, `MS0069`) | 013a, 013b (claim pass), #445 |
 | **013e — Direct method call sites** | `feat!:` | method, `base.M`, method-group, operator and module-function call sites, with Roslyn's bound defaults passed explicitly (DECIDED-32); overloaded module groups with exported fast paths and barrel claims; `params` forms; generic type arguments; project-reference-only cross-package resolution. | FR-018, FR-019 (method half), FR-032 | 013d |
 | **013f — `[Name]` on overloads** | `feat:` | the OQ-1 decision. | FR-005 | 013b, 013d |
-| **013g — Dart names, docs, samples** | `feat:` + `docs:` | Dart named-constructor mapping and claim pass; `docs/` naming rule; CHANGELOG migration notes; the sample scenario with its Node run; matrix rows → Implemented. | FR-021 (sample), FR-022, FR-023 | 013c, 013e, 013f |
+| **013g — Dart names, docs, samples** | `feat:` + `docs:` | Dart named-constructor mapping and claim pass (Dart then honors the 013f pins and their diagnostics); `docs/` naming rule; CHANGELOG migration notes (including the 013f `[Name]` renames below); the sample scenario with its Node run; matrix rows → Implemented. | FR-021 (sample), FR-022, FR-023 | 013c, 013e, 013f |
 
 ```mermaid
 flowchart LR
@@ -294,36 +294,57 @@ assembly only — correct, only slower (DECIDED-24); closing that gap is a follo
 dispatcher's branch builder copies the class one over `IrModuleFunction`s until
 `TsDispatcherShape` lands: follow-up issue to file.
 
-As landed in 013f (OQ-1 closed with (a)): `[Name]` on an overload pins its suffix only. The
-core reads the pin through `OverloadSuffixPin` (`Extraction/`; the attribute targeted at the
-extraction's target, else the untargeted one, via `SymbolHelper.FindNameOverrideAttribute`), and
-`OverloadGroupNaming.SuffixesOf(symbols, target)` hands it to `OverloadNamePolicy` as
-`OverloadSignature.PinnedSuffix`: the pin replaces the suffix in every pass (operator groups
-included) and is one spelling part that never climbs, so collisions move the computed overloads
-and equal pins dead-end (`MS0003`, whose message then names the pinned overloads). An invalid
-value (not `^[A-Za-z_][A-Za-z0-9_]*$`) reports `MS0003` (error) at the attribute's argument and
-the overload keeps its generated suffix; the message names no suffix, so a derived type's visible
-group reporting it again deduplicates. Every caller passes its target (constructors, class and
-interface groups, root suffixes, module claims). Anchored members keep taking their root's suffix
-(`MethodOverloadGroups.SuffixesOf`), so the root's `[Name]` wins; the implementer's own, when it
-names another suffix, is an `MS0003` warning at the attribute (`OverloadGroupNaming.ReportIgnoredPin`).
-`NameAttribute` now allows `AttributeTargets.Constructor`. Dispatchers keep the C# name
-everywhere: `SymbolHelper.GetMethodNameOverride` answers `null` for an overload of a dispatched
-group of a type the toolchain emits (not `[External]`, not `[JsCallable]`) and is used by the
-call-site `EmittedName` (member access and extension helpers), the barrel claims, the extension
-helper registry and the `[NoContainer]` export names; on the declaration side,
-`TsClassMemberTable.OperatorNameOf` (operator groups), the interface bridge's dispatcher
-signatures and member table, and `IrToTsNamingPolicy.ToFunctionName(IrModuleFunction |
-IrMethodDeclaration)` (module dispatchers, branded companions) ignore the overload's `[Name]`.
-Before 013f, `[Name]` was ignored on class method overloads, renamed a whole overloaded operator
-group after its first overload (`__op…`), gave an interface overload a dispatcher signature of
-its own (`side(s)` beside `area(w, h)`), and renamed a module overload's fast-path base
-(`textS` beside the dispatcher `twice`); no existing golden pinned
-any of these, so none changed. Goldens: `overload-name-pin-class`, `-roots`, `-module` (all
-type-checked with `tsgo --strict --noImplicitOverride`), `-cross-package` and
-`-cross-package-metadata` (consumer only). Not covered: Dart (013g); `[Name]` on a constructor
-that is not an overload (a single declared constructor) has no effect and is not reported;
-`[PlainObject]` overloads, which have no dispatcher.
+As landed in 013f (OQ-1 closed with (a)): `[Name]` on an overload pins its suffix only.
+`OverloadSuffixPin` (`Extraction/`) reads the pin — the attribute targeted at the extraction's
+target, else the untargeted one — validates it once (`^[A-Za-z_][A-Za-z0-9_]*$`), and owns the
+pin's reports: an invalid value (`MS0003` error at the attribute's argument; the overload keeps
+its generated suffix, and the message names no suffix so re-reports deduplicate), a pin on an
+override or implementation naming another suffix than its root's (`MS0003` warning), and a pin on
+a constructor outside a dispatched set (`MS0003` warning). A pin applies neither to a conversion
+operator, which has no C# name, so its `[Name]` names its group as before (`__toInt`), nor to the
+Dart target, which names no fast paths before 013g (Dart output and diagnostics are unchanged).
+`OverloadGroupNaming.SuffixesOf` takes `PinnedOverload`s and hands the validated suffix to
+`OverloadNamePolicy` as `OverloadSignature.PinnedSuffix` (a string: the policy is pure and needs
+only the suffix): the pin replaces the suffix in every pass and is one spelling part that never
+climbs, so collisions move the computed overloads and equal pins dead-end (`MS0003`, naming the
+pinned overloads). Anchored members take their root's suffix, so the root's `[Name]` wins, and in
+a derived type's visible group an anchored member carries its root's pin, never its own, so an
+ignored `[Name]` cannot move the type's other overloads. `NameAttribute` now allows
+`AttributeTargets.Constructor`. Dispatchers keep the C# name everywhere: the core's
+`OverloadEmittedName.NameOverrideOf` answers `null` for an overload of a dispatched group of a
+type that emits dispatchers (not `[External]`, `[JsCallable]` or `[PlainObject]`) and is used by
+the call-site `EmittedName`, `OverrideChains` (`toJSON` detection) and `IrParameterNaming`
+(flattened callees; that cache is target-agnostic, so it reads the TypeScript-like rule); the
+TypeScript side reads symbols through one `IrToTsNamingPolicy.ToFunctionName(IMethodSymbol)`
+(barrel claims, extension-helper registry, `[NoContainer]` exports, the `[JsonFactory]`
+descriptor) and IR declarations through `IrToTsNamingPolicy.FindMemberNameOverride`
+(`TsClassMemberTable.OperatorNameOf`, module and branded dispatchers) and
+`TsClassMemberTable.MethodNameOf` (class and interface dispatchers); #543 records the rule for the
+shared `TsDispatcherShape`. `ExplicitImplementationLowering.EmittedName` keeps the plain
+`GetNameOverride`: it runs inside the grouping itself (`MethodOverloadGroups.DeclaredMethods`), so
+the group rule would recurse, and it compares explicit implementations by the interface member's
+name. `[JsonFactory]` on an overloaded method stays `MS0034`, so no descriptor names a pinned fast
+path. Before 013f, `[Name]` was ignored on class method overloads, renamed a whole overloaded
+operator group after its first overload (`__op…`), gave an interface overload a dispatcher
+signature of its own (`side(s)` beside `area(w, h)`), and renamed a module overload's fast-path
+base (`textS` beside the dispatcher `twice`); no existing golden pinned any of these, so none
+changed. Goldens: `overload-name-pin-{class,roots,module,invalid,equal,dead-end,claimed,
+deterministic,conversions,plain-object,override-leak,json-factory}` (type-checked with
+`tsgo --strict --noImplicitOverride`; `override-leak` against a hand-copied base), and
+`-cross-package` / `-cross-package-metadata` (consumer only). Found in review and filed: #564 (an
+override next to its root in the visible group reports a bogus `MS0003`), #565 (an interface
+member renamed by `[Name]` is never declared by an implementer with overloads, TS2420), #566
+(`[PlainObject]` overloads, unary and conversion call sites, C# 14 extension blocks, static and
+instance overloads grouped together), #567 (duplicate barrel re-exports after `MS0020`, an
+override of a single `[Name]`'d virtual).
+
+Migration notes 013f hands to 013g's CHANGELOG (`[Name]` on an overload now pins the suffix):
+an overloaded operator group named by one overload's `[Name("scaled")]` (`__scaled`, `$scaled`)
+becomes `__multiply` / `$multiply` with the fast path `__multiplyScaled`; a module or extension
+overload's `[Name("text")]` (`textS`) becomes `twiceText`; an interface overload's
+`[Name("side")]` (`side(s)` beside `area(w, h)`) becomes `area(s)` plus the fast path `areaSide`;
+a class method overload's `[Name("addText")]`, ignored before (`addS`), becomes `addAddText`.
+Conversion operator groups keep their `[Name]` (`__toInt`).
 
 Deferred from the 013d reviews (design, no behavior): a target capability port instead of
 `IsDartTarget` for binding `base.M(...)`; reporting `MS0069` from the core so every target gets it;

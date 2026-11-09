@@ -12,7 +12,7 @@ symbols) report nothing: they fall back to the dispatcher, which is correct, onl
 | `MS0068` | `OverloadFastPathHijacked` | Error | the user member that would override an inherited fast path, or redeclare an inherited factory |
 | `MS0069` | `MultiplyConstructedOverloadGroup` | Warning | the type implementing one generic interface more than once |
 | `MS0003` (existing) | `AmbiguousConstruct` | Error | the later overload of a set the climb cannot separate (FR-024); an invalid `[Name]` pin's argument (FR-005) |
-| `MS0003` (existing) | `AmbiguousConstruct` | Warning | the `[Name]` argument of an override or implementation that is ignored for its root's name (FR-005, FR-025) |
+| `MS0003` (existing) | `AmbiguousConstruct` | Warning | the `[Name]` argument of an override or implementation that is ignored for its root's name (FR-005, FR-025), or of a constructor outside a dispatched set (FR-005) |
 
 ## `MS0067` reasons
 
@@ -88,3 +88,10 @@ A `[Name]` on an override or interface implementation that names another suffix 
 is ignored, a warning at the attribute's argument (FR-025):
 
 `[Name("ignored")] on 'Square.Area(int side)' is ignored: an override or interface implementation takes the suffix 'Side' of its root 'IShape.Area(int s)'; put [Name] on the root (spec 013 FR-005, FR-025).`
+
+A `[Name]` on a constructor that is not part of a dispatched set names no factory or selector,
+a warning at the attribute's argument:
+
+`[Name("cents")] on the constructor 'Fee(int value)' has no effect: only an overload of a dispatched constructor set gets a factory and a selector to name (spec 013 FR-005).`
+
+The Dart target reports none of the `[Name]` diagnostics before slice 013g: it pins no suffix.
