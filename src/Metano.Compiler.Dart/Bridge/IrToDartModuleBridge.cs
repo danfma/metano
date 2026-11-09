@@ -25,9 +25,8 @@ public static class IrToDartModuleBridge
     }
 
     private static string NameOf(IrModuleFunction fn, DartOverloadClaims claims) =>
-        fn is { OverloadRef: { } overloadRef, OverloadName: { } overloadName }
-            ? claims.FastPathAt(overloadRef.MemberName, overloadRef.Ordinal)
-                ?? IrToDartNamingPolicy.ToFastPathName(fn.Name, overloadName.Suffix)
+        fn is { OverloadRef: { } overloadRef, OverloadName: not null }
+            ? claims.RequiredFastPathAt(overloadRef.MemberName, overloadRef.Ordinal)
             : IrToDartNamingPolicy.ToMemberName(fn.Name, fn.Attributes);
 
     private static DartFunction ConvertFunction(

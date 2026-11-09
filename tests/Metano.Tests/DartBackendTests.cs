@@ -764,12 +764,21 @@ public class DartBackendTests
             """
         );
 
-        var dart = files["widget.dart"];
-
-        await Assert.That(dart).Contains("void drawDefault()");
-        await Assert.That(dart).Contains("void drawTimes(int times)");
-        await Assert.That(dart).DoesNotContain("void draw(");
         await Assert.That(diagnostics).IsEmpty();
+        await Assert
+            .That(files["widget.dart"])
+            .IsEqualTo(
+                """
+                class Widget {
+                  void drawDefault() {
+                  }
+
+                  void drawTimes(int times) {
+                  }
+                }
+
+                """
+            );
     }
 
     [Test]

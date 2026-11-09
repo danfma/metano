@@ -11,7 +11,7 @@ namespace Metano.Compiler.Dart.Bridge;
 /// keeps as today's emission (<c>[PlainObject]</c>, branded — DECIDED-10)
 /// names no overload members.
 /// </summary>
-public static class DartTypeShapes
+internal static class DartTypeShapes
 {
     /// <summary>
     /// Whether a static class lowers to top-level Dart functions
@@ -29,7 +29,7 @@ public static class DartTypeShapes
     /// </summary>
     public static bool EmitsNamedConstructors(INamedTypeSymbol type) =>
         type.TypeKind is TypeKind.Class or TypeKind.Struct
-        && IsTranspiled(type)
+        && SymbolHelper.IsTranspiledByItsAssembly(type)
         && !LowersToTopLevelFunctions(type)
         && !SymbolHelper.HasIgnore(type, TargetLanguage.Dart)
         && !SymbolHelper.HasPlainObject(type)
@@ -44,11 +44,4 @@ public static class DartTypeShapes
     /// </summary>
     public static bool NamesOverloadMembers(IrClassDeclaration ir) =>
         !ir.Semantics.IsPlainObject && !ir.Semantics.IsBranded;
-
-    private static bool IsTranspiled(INamedTypeSymbol type) =>
-        SymbolHelper.IsTranspilable(
-            type,
-            type.ContainingAssembly.HasTranspileAssembly(),
-            type.ContainingAssembly
-        );
 }

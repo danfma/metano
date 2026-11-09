@@ -548,6 +548,7 @@ public sealed class TypeScriptTransformContext(
             // STAGING(012k): always exact.
             ExactInt64Lowering = Int64Representation is Int64Representation.BigInt,
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
+            EmitsOperatorFastPaths = true,
         };
 
     private BclExportTypeOverrides? _bclOverrides;

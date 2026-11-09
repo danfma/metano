@@ -5,8 +5,10 @@ namespace Metano.Tests;
 /// <summary>
 /// The Dart names of spec 013 (FR-022, DECIDED-14): a dispatched constructor
 /// set becomes named constructors, a dispatched method group one fast path per
-/// overload — the core candidates, claimed in Dart's single member namespace
-/// per class — and every direct call site spells those names.
+/// overload — the core candidates, claimed in Dart's member namespace per
+/// class — and every direct call site spells those names. Each expected file
+/// was checked with <c>dart analyze</c> and, where it runs, <c>dart run</c>
+/// against the C# results.
 /// </summary>
 public class DartOverloadNamingTests
 {
@@ -31,34 +33,40 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await Assert
-            .That(files["dimension.dart"])
-            .IsEqualTo(
-                """
-                class Dimension {
-                  Dimension.fromSize(int size) {
-                    this.size = size;
-                  }
+        await AssertFile(
+            files,
+            "dimension.dart",
+            """
+            class Dimension {
+              Dimension.fromSize(int size) {
+                this.size = size;
+              }
 
-                  Dimension.fromWidthHeight(int width, int height) {
-                    this.width = width * height;
-                  }
+              Dimension.fromWidthHeight(int width, int height) {
+                this.width = width * height;
+              }
 
-                  late int size;
+              late int size;
 
-                  late int width;
+              late int width;
 
-                  static Dimension square(int side) => Dimension.fromWidthHeight(side, side);
-                }
+              static Dimension square(int side) => Dimension.fromWidthHeight(side, side);
+            }
 
-                """
-            );
+            """
+        );
     }
 
+    /// <summary>
+    /// A <c>: this(...)</c> chain redirects to the named constructor of the
+    /// overload it chains to — not the first one — with named arguments placed
+    /// by position and a skipped default passed; a record's <c>copyWith</c>
+    /// rebuilds through the primary's named constructor.
+    /// </summary>
     [Test]
-    public async Task ThisChain_RedirectsToTheTargetsNamedConstructor_AndCopyWithUsesThePrimary()
+    public async Task ThisChain_RedirectsToTheChainedNamedConstructor_AndCopyWithUsesThePrimary()
     {
-        var (files, _) = DartTranspileHelper.Transpile(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Point(int X, int Y)
@@ -67,17 +75,261 @@ public class DartOverloadNamingTests
 
                 public Point(string s, int y = 7) : this(Y: y, X: s.Length) { }
             }
+
+            [Transpile]
+            public class Dim
+            {
+                public int W;
+
+                public Dim(int size) : this(size, size) { }
+
+                public Dim(int w, int h) => W = w * h;
+            }
             """
         );
 
-        var dart = files["point.dart"];
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "point.dart",
+            """
+            import 'package:metano_runtime/metano_runtime.dart' show HashCode;
 
-        await Assert.That(dart).Contains("Point.fromXY(this.x, this.y);");
-        await Assert.That(dart).Contains("Point.fromV(int v) : this.fromXY(v, v);");
-        await Assert
-            .That(dart)
-            .Contains("Point.fromSY(String s, [int y = 7]) : this.fromXY(s.length, y);");
-        await Assert.That(dart).Contains("=> Point.fromXY(x ?? this.x, y ?? this.y);");
+            class Point {
+              Point.fromXY(this.x, this.y);
+
+              Point.fromV(int v) : this.fromXY(v, v);
+
+              Point.fromSY(String s, [int y = 7]) : this.fromXY(s.length, y);
+
+              final int x;
+
+              final int y;
+
+              late final int _y;
+
+              late final int _x;
+
+              @override
+              bool operator ==(Object other) => other is Point && other.runtimeType == this.runtimeType && other.x == this.x && other.y == this.y;
+
+              @override
+              int get hashCode => HashCode.combine2(this.x, this.y);
+
+              Point copyWith({int? x, int? y}) => Point.fromXY(x ?? this.x, y ?? this.y);
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "dim.dart",
+            """
+            class Dim {
+              Dim.fromSize(int size) : this.fromWH(size, size);
+
+              Dim.fromWH(int w, int h) {
+                this.w = w * h;
+              }
+
+              late int w;
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// A chain to an overload whose own chain skips a default: each redirect
+    /// names its own target (<c>fromS</c> → <c>fromBig</c> → <c>fromAB</c>),
+    /// so <c>Opt("x")</c> returns 79 as in C#.
+    /// </summary>
+    [Test]
+    public async Task ChainOfChains_RedirectsEachOverloadToItsTarget()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Opt
+            {
+                public int V;
+
+                public Opt(int a, int b = 5) => V = a * 10 + b;
+
+                public Opt(long big) : this((int)big, 9) { }
+
+                public Opt(string s) : this(7L) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "opt.dart",
+            """
+            class Opt {
+              Opt.fromAB(int a, [int b = 5]) {
+                this.v = a * 10 + b;
+              }
+
+              Opt.fromBig(int big) : this.fromAB(big.toSigned(32), 9);
+
+              Opt.fromS(String s) : this.fromBig(7);
+
+              late int v;
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// A chain with a body of its own cannot redirect in Dart: the named
+    /// constructor keeps the body, and <c>MS0001</c> is reported at the
+    /// constructor.
+    /// </summary>
+    [Test]
+    public async Task ThisChainWithABody_KeepsTheBody_AndReportsMS0001AtTheConstructor()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Box
+            {
+                public int W;
+
+                public Box(int w) => W = w;
+
+                public Box(string s) : this(s.Length) { W++; }
+            }
+            """
+        );
+
+        var unsupported = diagnostics.Single();
+
+        await Assert.That(unsupported.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        await Assert.That(SourceTextOf(unsupported)).StartsWith("public Box(string s)");
+        await AssertFile(
+            files,
+            "box.dart",
+            """
+            class Box {
+              Box.fromW(int w) {
+                this.w = w;
+              }
+
+              Box.fromS(String s) {
+                this.w++;
+              }
+
+              late int w;
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// Named arguments out of parameter order evaluate in C#'s order: each is
+    /// bound before the call, for a construction and for a method call alike.
+    /// </summary>
+    [Test]
+    public async Task NamedArgumentsOutOfOrder_EvaluateInSourceOrder()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Opt
+            {
+                public int V;
+
+                public Opt(int a, int b) => V = a * 10 + b;
+
+                public Opt(string s) => V = s.Length;
+            }
+
+            [Transpile]
+            public class Calc
+            {
+                public int Sub(int x, int y) => x - y;
+
+                public int Sub(string s) => s.Length;
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Next() => 1;
+
+                public static int Make() => new Opt(b: Next(), a: Next()).V;
+
+                public static int Run(Calc c) => c.Sub(y: Next(), x: Next());
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'calc.dart';
+            import 'opt.dart';
+
+            class Use {
+              static int next() => 1;
+
+              static int make() => (($arg1) => (($arg0) => Opt.fromAB($arg0, $arg1))(Use.next()))(Use.next()).v;
+
+              static int run(Calc c) => (($arg1) => (($arg0) => c.subXY($arg0, $arg1))(Use.next()))(Use.next());
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// A generic construction keeps its explicit type arguments before the
+    /// constructor's name (<c>Gen&lt;Object&gt;.fromValue(5)</c>), so Dart does
+    /// not infer a narrower type from the arguments.
+    /// </summary>
+    [Test]
+    public async Task GenericConstruction_KeepsItsTypeArguments()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Gen<T>
+            {
+                public T Value;
+
+                public Gen(T value) => Value = value;
+
+                public Gen(T value, int extra) => Value = value;
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static Gen<object> Make() => new Gen<object>(5);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'gen.dart';
+
+            class Use {
+              static Gen<Object> make() => Gen<Object>.fromValue(5);
+            }
+
+            """
+        );
     }
 
     [Test]
@@ -105,31 +357,31 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await Assert
-            .That(files["calc.dart"])
-            .IsEqualTo(
-                """
-                class Calc {
-                  int addX(int x) => x;
+        await AssertFile(
+            files,
+            "calc.dart",
+            """
+            class Calc {
+              int addX(int x) => x;
 
-                  int addXY(int x, int y) => x + y;
+              int addXY(int x, int y) => x + y;
 
-                  int addText(String s) => s.length;
+              int addText(String s) => s.length;
 
-                  int total() {
-                    int Function(int) f = this.addX;
-                    return this.addX(1) + this.addXY(2, 3) + this.addText('abc') + f(4);
-                  }
-                }
+              int total() {
+                int Function(int) f = this.addX;
+                return this.addX(1) + this.addXY(2, 3) + this.addText('abc') + f(4);
+              }
+            }
 
-                """
-            );
+            """
+        );
     }
 
     [Test]
     public async Task Overrides_TakeTheRootsName_AndBaseCallsTheRootsFastPath()
     {
-        var (files, _) = DartTranspileHelper.Transpile(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Animal
@@ -153,18 +405,37 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert
-            .That(files["cat.dart"])
-            .Contains("String speakN(int n) => super.speakN(n) + '!';");
-        await Assert
-            .That(files["zoo.dart"])
-            .Contains("static String run(Animal a) => a.speakN(1) + a.speakS('x');");
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "cat.dart",
+            """
+            import 'animal.dart';
+
+            class Cat extends Animal {
+              String speakN(int n) => super.speakN(n) + '!';
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "zoo.dart",
+            """
+            import 'animal.dart';
+
+            class Zoo {
+              static String run(Animal a) => a.speakN(1) + a.speakS('x');
+            }
+
+            """
+        );
     }
 
     [Test]
     public async Task InterfaceOverloads_DeclareFastPaths_ThatImplementersTake()
     {
-        var (files, _) = DartTranspileHelper.Transpile(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public interface IShape
@@ -184,17 +455,42 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(files["i_shape.dart"]).Contains("double areaSide(double side);");
-        await Assert.That(files["i_shape.dart"]).Contains("double areaWH(double w, double h);");
-        await Assert.That(files["rect.dart"]).Contains("double areaSide(double side) =>");
-        await Assert.That(files["rect.dart"]).Contains("double areaWH(double w, double h) =>");
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "i_shape.dart",
+            """
+            abstract interface class IShape {
+              double areaSide(double side);
+
+              double areaWH(double w, double h);
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "rect.dart",
+            """
+            import 'i_shape.dart';
+
+            class Rect implements IShape {
+              double areaSide(double side) => side * side;
+
+              double areaWH(double w, double h) => w * h;
+            }
+
+            """
+        );
     }
 
     /// <summary>
-    /// Dart claims named constructors and fast paths in one table per class
-    /// (DECIDED-18): a named constructor that meets a user member, and a
-    /// <c>new</c> method's fast path that meets an inherited one, take
-    /// <c>$</c> and report <c>MS0067</c>.
+    /// A named constructor conflicts with a static member of its class, not
+    /// with an instance one: <c>Money.fromCents</c> meets the static
+    /// <c>FromCents</c> and takes <c>$</c>, while <c>Taken.fromSize</c> sits
+    /// beside the instance <c>fromSize()</c>. A <c>new</c> method's fast path
+    /// that meets an inherited one takes <c>$</c>. Each rename reports
+    /// <c>MS0067</c> at the renamed overload.
     /// </summary>
     [Test]
     public async Task TakenNames_TakeTheMark_AndReportMS0067()
@@ -214,6 +510,18 @@ public class DartOverloadNamingTests
             }
 
             [Transpile]
+            public class Taken
+            {
+                public int Size;
+
+                public Taken(int size) => Size = size;
+
+                public Taken(string s) => Size = s.Length;
+
+                public int fromSize() => Size;
+            }
+
+            [Transpile]
             public class Animal
             {
                 public virtual string Speak(int n) => "a";
@@ -229,16 +537,71 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(files["money.dart"]).Contains("Money.fromCents$(int cents)");
+        await AssertFile(
+            files,
+            "money.dart",
+            """
+            class Money {
+              Money.fromAmount(Decimal amount) {
+                this.cents = 1;
+              }
+
+              Money.fromCents$(int cents) {
+                this.cents = cents;
+              }
+
+              late int cents;
+
+              static Money fromCents(int cents) => Money.fromCents$(cents);
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "taken.dart",
+            """
+            class Taken {
+              Taken.fromSize(int size) {
+                this.size = size;
+              }
+
+              Taken.fromS(String s) {
+                this.size = s.length;
+              }
+
+              late int size;
+
+              int fromSize() => this.size;
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "dog.dart",
+            """
+            import 'animal.dart';
+
+            class Dog extends Animal {
+              String speakN$(int n) => 'd';
+            }
+
+            """
+        );
         await Assert
-            .That(files["money.dart"])
-            .Contains("static Money fromCents(int cents) => Money.fromCents$(cents);");
-        await Assert.That(files["dog.dart"]).Contains("String speakN$(int n) => 'd';");
-        await Assert
-            .That(diagnostics.Select(d => (d.Code, d.Severity)))
+            .That(diagnostics.Select(d => (d.Code, d.Severity, FirstLineOf(d))))
             .IsEquivalentTo([
-                (DiagnosticCodes.OverloadNameShadowed, MetanoDiagnosticSeverity.Warning),
-                (DiagnosticCodes.OverloadNameShadowed, MetanoDiagnosticSeverity.Warning),
+                (
+                    DiagnosticCodes.OverloadNameShadowed,
+                    MetanoDiagnosticSeverity.Warning,
+                    "public Money(int cents) => Cents = cents;"
+                ),
+                (
+                    DiagnosticCodes.OverloadNameShadowed,
+                    MetanoDiagnosticSeverity.Warning,
+                    "public new string Speak(int n) => \"d\";"
+                ),
             ]);
     }
 
@@ -271,13 +634,13 @@ public class DartOverloadNamingTests
 
         await Assert.That(hijack.Code).IsEqualTo(DiagnosticCodes.OverloadFastPathHijacked);
         await Assert.That(hijack.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert.That(hijack.Location).IsNotNull();
+        await Assert.That(FirstLineOf(hijack)).IsEqualTo("public string SpeakN(int n) => \"p\";");
     }
 
     [Test]
     public async Task ModuleAndExtensionOverloads_DeclareFastPaths_AndCallsUseThem()
     {
-        var (files, _) = DartTranspileHelper.Transpile(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [NoContainer]
             [Transpile]
@@ -305,13 +668,42 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(files["text.dart"]).Contains("String twiceS(String s) => s + s;");
-        await Assert.That(files["text.dart"]).Contains("String twiceText(int n) =>");
-        await Assert.That(files["ext.dart"]).Contains("static int dblInt32(int x) => x * 2;");
-        await Assert.That(files["ext.dart"]).Contains("static int dblString(String x) =>");
-        await Assert
-            .That(files["use.dart"])
-            .Contains("twiceS('x') + twiceText(2) + Ext.dblInt32(3) + Ext.dblString('ab')");
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "text.dart",
+            """
+            String twiceS(String s) => s + s;
+
+            String twiceText(int n) => n.toString();
+
+            """
+        );
+        await AssertFile(
+            files,
+            "ext.dart",
+            """
+            class Ext {
+              static int dblInt32(int x) => x * 2;
+
+              static int dblString(String x) => x.length;
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'ext.dart';
+            import 'text.dart';
+
+            class Use {
+              static String run() => twiceS('x') + twiceText(2) + Ext.dblInt32(3) + Ext.dblString('ab');
+            }
+
+            """
+        );
     }
 
     /// <summary>
@@ -338,9 +730,116 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(files["money.dart"]).DoesNotContain("__add");
-        await Assert.That(files["money.dart"]).Contains("=> a + b;");
         await Assert.That(diagnostics.Single().Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        await AssertFile(
+            files,
+            "money.dart",
+            """
+            class Money {
+              late int cents;
+
+              static Money operator +(Money a, Money b) => a;
+
+              static Money sum(Money a, Money b) => a + b;
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// The keep-today's-emission shapes declare the primary of a dispatched
+    /// group under the name its call sites spell: on a branded type the
+    /// primary's <c>[Name]</c> pins a suffix, so it is declared <c>plus</c>;
+    /// on a <c>[PlainObject]</c> type <c>[Name]</c> renames the member, so it
+    /// is declared <c>named</c>.
+    /// </summary>
+    [Test]
+    public async Task KeptPrimaries_AreDeclaredUnderTheirCallSiteNames()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Branded, Transpile]
+            public readonly record struct Cents(int Value)
+            {
+                [Name("text")]
+                public Cents Plus(string s, int extra) => new(Value + s.Length + extra);
+
+                public Cents Plus(int n) => new(Value + n);
+            }
+
+            [PlainObject, Transpile]
+            public record Dto(int A)
+            {
+                public int Get(int x) => A + x;
+
+                [Name("named")]
+                public int Get(string s, int extra) => s.Length;
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Run(Cents c, Dto d) => c.Plus("ab", 1).Value + d.Get("abc", 2);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => d.Code))
+            .IsEquivalentTo([
+                DiagnosticCodes.UnsupportedFeature,
+                DiagnosticCodes.UnsupportedFeature,
+            ]);
+        await AssertFile(
+            files,
+            "cents.dart",
+            """
+            class Cents {
+              Cents(this.value);
+
+              final int value;
+
+              Cents plus(String s, int extra) => Cents(this.value + s.length + extra);
+
+              @override
+              bool operator ==(Object other) => other is Cents && other.runtimeType == this.runtimeType && other.value == this.value;
+
+              @override
+              int get hashCode => HashCode.combine(this.value);
+
+              Cents copyWith({int? value}) => Cents(value ?? this.value);
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "dto.dart",
+            """
+            class Dto {
+              Dto(this.a);
+
+              final int a;
+
+              int named(String s, int extra) => s.length;
+            }
+
+            """
+        );
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'cents.dart';
+            import 'dto.dart';
+
+            class Use {
+              static int run(Cents c, Dto d) => c.plus('ab', 1).value + d.named('abc', 2);
+            }
+
+            """
+        );
     }
 
     /// <summary>
@@ -351,7 +850,7 @@ public class DartOverloadNamingTests
     [Test]
     public async Task ParameterShadowingADartRenamedModuleFunction_TakesTheMark()
     {
-        var (files, _) = DartTranspileHelper.Transpile(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [NoContainer]
             [Transpile]
@@ -365,6 +864,33 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(files["logger.dart"]).Contains("void use(String log$) => log(log$);");
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertFile(
+            files,
+            "logger.dart",
+            """
+            void log(String message) {
+            }
+
+            void use(String log$) => log(log$);
+
+            """
+        );
     }
+
+    private static string SourceTextOf(MetanoDiagnostic diagnostic) =>
+        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+
+    private static string FirstLineOf(MetanoDiagnostic diagnostic) =>
+        diagnostic
+            .Location!.SourceTree!.GetText()
+            .Lines[diagnostic.Location.GetLineSpan().StartLinePosition.Line]
+            .ToString()
+            .Trim();
+
+    private static async Task AssertFile(
+        Dictionary<string, string> files,
+        string name,
+        string expected
+    ) => await Assert.That(files[name]).IsEqualTo(expected);
 }

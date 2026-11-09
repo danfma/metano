@@ -1,3 +1,4 @@
+using Metano.Compiler.Dart.AST;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 
@@ -29,7 +30,7 @@ public sealed class DartIrRewriter
 {
     private readonly DeclarativeMappingRegistry _registry;
     private readonly IReadOnlySet<string> _flattenedStaticClassNames;
-    private readonly DartOverloadClaimsRegistry? _overloads;
+    private readonly IDartOverloadNames _overloads;
 
     /// <param name="registry">Declarative BCL mappings.</param>
     /// <param name="flattenedStaticClassNames">Stable full names of the static classes this target
@@ -37,16 +38,17 @@ public sealed class DartIrRewriter
     /// containerless, but Dart keeps a plain static class as a class, so the call site only
     /// loses its qualifier for the types listed here.</param>
     /// <param name="overloads">The claim results overload call sites resolve through;
-    /// <c>null</c> keeps every call site's source spelling.</param>
+    /// omitted, every call site keeps its source spelling
+    /// (<see cref="NoDartOverloadNames"/>).</param>
     public DartIrRewriter(
         DeclarativeMappingRegistry registry,
         IReadOnlySet<string>? flattenedStaticClassNames = null,
-        DartOverloadClaimsRegistry? overloads = null
+        IDartOverloadNames? overloads = null
     )
     {
         _registry = registry;
         _flattenedStaticClassNames = flattenedStaticClassNames ?? new HashSet<string>();
-        _overloads = overloads;
+        _overloads = overloads ?? NoDartOverloadNames.Instance;
     }
 
     public IrExpression? Rewrite(IrExpression? expression) =>
@@ -268,8 +270,15 @@ public sealed class DartIrRewriter
         var rewrittenArgs = call.Arguments.Select(RewriteArgument).ToList();
         var rewrittenCall = call with { Target = rewrittenTarget, Arguments = rewrittenArgs };
 
-        var mapped = IrToDartBclMapper.TryMapCall(rewrittenCall, _registry);
-        return mapped ?? rewrittenCall;
+        if (IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) is { } mapped)
+            return mapped;
+
+        return DartEvaluationOrder.Bind(
+            rewrittenTarget,
+            rewrittenArgs,
+            call.Overload?.EvaluationOrder,
+            (callee, arguments) => rewrittenCall with { Target = callee, Arguments = arguments }
+        );
     }
 
     private IrExpression RewriteMemberAccess(IrMemberAccess access)
@@ -294,7 +303,7 @@ public sealed class DartIrRewriter
     /// </summary>
     private IrExpression WithFastPath(IrExpression callee, IrSelectedOverload? overload)
     {
-        if (overload is null || _overloads?.FastPathOf(overload.Target) is not { } fastPath)
+        if (overload is null || _overloads.FastPathOf(overload.Target) is not { } fastPath)
             return callee;
 
         return callee switch
@@ -311,22 +320,25 @@ public sealed class DartIrRewriter
 
     /// <summary>
     /// A construction that selected a constructor overload calls its named
-    /// constructor, <c>T.fromSize(args)</c>, with the bound arguments. Dart
-    /// infers the type arguments of a generic class from them.
+    /// constructor, <c>Box&lt;Object&gt;.fromValue(args)</c>, with the bound
+    /// arguments in C#'s evaluation order and the constructed type's
+    /// arguments kept.
     /// </summary>
     private IrExpression RewriteNew(IrNewExpression construction)
     {
         var arguments = construction.Arguments.Select(RewriteArgument).ToList();
 
         if (
-            construction is not { Overload: { } overload, Type: IrNamedTypeRef type }
-            || _overloads?.ConstructorNameOf(overload.Target) is not { } constructorName
+            construction.Overload is not { } overload
+            || _overloads.ConstructorNameOf(overload.Target) is not { } constructorName
         )
             return construction with { Arguments = arguments };
 
-        return new IrCallExpression(
-            new IrMemberAccess(new IrTypeReference(type.Name, type.Origin), constructorName),
-            arguments
+        return DartEvaluationOrder.Bind(
+            new IrTypeReference(constructorName),
+            arguments,
+            overload.EvaluationOrder,
+            (_, ordered) => new DartNamedConstruction(construction.Type, constructorName, ordered)
         );
     }
 

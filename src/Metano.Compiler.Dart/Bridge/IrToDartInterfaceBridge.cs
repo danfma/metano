@@ -74,8 +74,7 @@ public static class IrToDartInterfaceBridge
     private static string NameOf(IrMethodDeclaration method, DartOverloadClaims claims) =>
         method.OverloadName is null
             ? IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes)
-            : claims.FastPathAt(method.Name, method.DeclarationOrdinal)
-                ?? IrToDartNamingPolicy.ToFastPathName(method.Name, method.OverloadName.Suffix);
+            : claims.RequiredFastPathAt(method.Name, method.DeclarationOrdinal);
 
     private static DartMethodSignature ConvertMethod(IrMethodDeclaration method, string name)
     {
