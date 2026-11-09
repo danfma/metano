@@ -139,7 +139,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `xs.LongCount()` | `BigInt(<count terminal>)` |
 | `l.ToString("N0")`, `$"{l:X}"`, `$"{l,8}"` | `formatInt64(l, "N0")`, `formatInt64(l, "X")`, `formatInt64(l, null, 8)` |
 | `long.Parse(s)`, `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)`, `parseUInt64(s, 515)` (the folded `NumberStyles` flags) |
-| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` (`tryParseInt64Value` until 012k) |
+| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` |
 | `Convert.ToInt64(d)`, `Convert.ToInt64(s)`, `Convert.ToInt64(s, 16)` | `convertDoubleToInt64(d)`, `convertStringToInt64(s)`, `convertStringToInt64(s, 16)` |
 | `Convert.ToInt32(l)` | `Number(convertNarrow(l, "Int32"))` |
 | `l.CompareTo(m)`, `l.Equals(m)`, `l.GetHashCode()` | `compareInt64(l, m)`, `l === m`, `valueHashCode(l)` |

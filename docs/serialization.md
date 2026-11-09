@@ -938,8 +938,8 @@ The generated context is the supported writer — see [When to use
 plain-object rule of thumb.
 
 **Migration.** The 3.0 items — the type change, the tree leaf, the hazard,
-the interop warnings (`MS0065`) and the renamed staging helpers
-(`isInt64Value` / `isUInt64Value`, `tryParseInt64Value`, `hashInt64`) — are
+the interop warnings (`MS0065`) and the runtime helpers that changed meaning
+(`isInt64` / `isUInt64`, `tryParseInt64`, the `bigint` hash) — are
 listed in [Migrating to 3.0](#migrating-to-30) and the spec's own migration
 section.
 
@@ -1045,13 +1045,13 @@ writes or accepts, so a payload exchanged with a 2.x build can differ:
   JavaScript now; the compiler warns `MS0065` at each one.
 - Overflow wraps and `checked` throws like C# (`long.MaxValue + 1` is
   `long.MinValue`); `/` by zero throws `DivideByZeroException` for `long` too.
-- Runtime staging names, renamed again by the 3.0 flip: the `bigint` type
-  checks ship as `isInt64Value` / `isUInt64Value` (2.x `isInt64` /
-  `isUInt64` stay the `number` range checks until the flip replaces them),
-  the signed `TryParse` helper as `tryParseInt64Value` (2.x `tryParseInt64`
-  stays the `number` parser), and every `bigint` hash — `HashCode.add`,
-  `valueHashCode`, `hashInt64` — is the .NET word fold, so `BigInteger` hash
-  values computed in 2.x no longer match.
+- Runtime helpers that keep their name and change meaning: `isInt64` /
+  `isUInt64` test a `bigint` over the whole `long` / `ulong` range (2.x
+  tested a safe-integer `number`), `tryParseInt64` returns `[found, bigint]`
+  and takes an optional `NumberStyles` value (2.x returned a `number`), and
+  every `bigint` hash — `HashCode.add`, `valueHashCode`, `hashInt64` — is
+  the .NET word fold, so `BigInteger` hash values computed in 2.x no longer
+  match.
 - Overload dispatch decides `M(int)` vs `M(long)` by `typeof` now (2.x
   decided by range), and `object o = 5UL; o is long` is `true` where C# says
   `false` (a raw `bigint` reads its range; see
