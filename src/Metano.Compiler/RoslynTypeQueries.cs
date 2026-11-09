@@ -20,6 +20,14 @@ public static class RoslynTypeQueries
         "System.Collections.Immutable.IImmutableDictionary",
     ];
 
+    private static readonly string[] SetTypeNames =
+    [
+        "System.Collections.Generic.HashSet",
+        "System.Collections.Generic.ISet",
+        "System.Collections.Generic.SortedSet",
+        "System.Collections.Immutable.ImmutableHashSet",
+    ];
+
     /// <summary>
     /// Formats an assembly's version as an npm-compatible specifier.
     /// Assemblies that don't declare a version (Roslyn defaults to
@@ -108,14 +116,26 @@ public static class RoslynTypeQueries
         };
     }
 
+    /// <summary>
+    /// True for the BCL set types (and their nested types). A name matches
+    /// only up to a generic boundary, as in <see cref="IsDictionaryLike"/>.
+    /// </summary>
     public static bool IsSetLike(this INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
-        return fullName.StartsWith("System.Collections.Generic.HashSet")
-            || fullName.StartsWith("System.Collections.Generic.ISet")
-            || fullName.StartsWith("System.Collections.Generic.SortedSet")
-            || fullName.StartsWith("System.Collections.Immutable.ImmutableHashSet");
+
+        return SetTypeNames.Any(name => HasGenericNamePrefix(fullName, name));
     }
+
+    /// <summary>
+    /// True for <c>SortedDictionary&lt;K,V&gt;</c> and <c>SortedList&lt;K,V&gt;</c>
+    /// themselves: dictionaries the type mapper does not map to <c>Map</c>,
+    /// but whose collection expressions construct one.
+    /// </summary>
+    public static bool IsBclSortedDictionaryDefinition(this INamedTypeSymbol type) =>
+        type.ContainingType is null
+        && type.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic"
+        && type.MetadataName is "SortedDictionary`2" or "SortedList`2";
 
     /// <summary>
     /// True for BCL types that map to a TypeScript <c>Array</c> at the

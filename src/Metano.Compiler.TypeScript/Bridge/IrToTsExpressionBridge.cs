@@ -1746,10 +1746,17 @@ public static partial class IrToTsExpressionBridge
             );
         }
 
+        // A runtime collection (`new HashSet<number | null>([1])`) carries the
+        // C# type arguments: inference from the elements alone would narrow
+        // the element type the later `add` calls must accept.
+        var collectionTypeArguments = ne.Type is IrSetTypeRef or IrMapTypeRef
+            ? ConstructedTypeArgumentsOf(ne.Type, context)
+            : null;
+
         return InEvaluationOrder(
             ne,
             args,
-            ordered => new TsNewExpression(MapNewTarget(ne.Type), ordered)
+            ordered => new TsNewExpression(MapNewTarget(ne.Type), ordered, collectionTypeArguments)
         );
     }
 
@@ -2007,12 +2014,20 @@ public static partial class IrToTsExpressionBridge
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
         IrTypeRef type,
         IrToTsBridgeContext context
-    ) =>
-        type is IrNamedTypeRef { TypeArguments: { Count: > 0 } typeArguments }
-            ? typeArguments
-                .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
-                .ToList()
-            : null;
+    )
+    {
+        IReadOnlyList<IrTypeRef>? typeArguments = type switch
+        {
+            IrNamedTypeRef { TypeArguments: { Count: > 0 } named } => named,
+            IrSetTypeRef set => [set.ElementType],
+            IrMapTypeRef map => [map.KeyType, map.ValueType],
+            _ => null,
+        };
+
+        return typeArguments
+            ?.Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
+            .ToList();
+    }
 
     /// <summary>
     /// Lowers <c>new T(args)</c> through a declarative constructor mapping

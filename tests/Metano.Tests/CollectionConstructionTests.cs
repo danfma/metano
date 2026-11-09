@@ -335,7 +335,7 @@ public class CollectionConstructionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains("private readonly _byName: Map<string, number> = new Map();");
+            .Contains("private readonly _byName: Map<string, number> = new Map<string, number>();");
     }
 
     /// <summary>The same construction over 64-bit keys, in the BigInt mode.</summary>
@@ -362,6 +362,6 @@ public class CollectionConstructionTests
             .IsEmpty();
         await Assert
             .That(result["holder.ts"])
-            .Contains("private readonly _byId: Map<bigint, number> = new Map();");
+            .Contains("private readonly _byId: Map<bigint, number> = new Map<bigint, number>();");
     }
 }

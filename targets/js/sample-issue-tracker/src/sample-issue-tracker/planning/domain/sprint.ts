@@ -5,7 +5,7 @@ import { HashSet, dayNumber } from "metano-runtime";
 import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 
 export class Sprint {
-  private readonly _plannedIssues: HashSet<IssueId> = new HashSet();
+  private readonly _plannedIssues: HashSet<IssueId> = new HashSet<IssueId>();
 
   constructor(
     readonly key: string,
