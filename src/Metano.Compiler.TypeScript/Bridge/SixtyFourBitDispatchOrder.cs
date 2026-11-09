@@ -226,19 +226,11 @@ internal static class SixtyFourBitDispatchOrder
 
     /// <summary>The OQ-6 dispatch rank of a parameter type; <c>0</c> when it is not a 64-bit integer.</summary>
     private static int RankOf(IrTypeRef type) =>
-        PrimitiveOf(type) switch
+        SixtyFourBitTypes.PlainPrimitiveOf(type) switch
         {
             IrPrimitive.Int64 => LongRank,
             IrPrimitive.UInt64 => ULongRank,
             IrPrimitive.BigInteger => BigIntegerRank,
             _ => 0,
-        };
-
-    private static IrPrimitive? PrimitiveOf(IrTypeRef type) =>
-        type switch
-        {
-            IrPrimitiveTypeRef primitive => primitive.Primitive,
-            IrNullableTypeRef nullable => PrimitiveOf(nullable.Inner),
-            _ => null,
         };
 }

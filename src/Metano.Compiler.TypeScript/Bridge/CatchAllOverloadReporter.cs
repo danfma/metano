@@ -75,10 +75,7 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         INamedTypeSymbol type
     )
     {
-        var shadowedNames = string.Join(
-            ", ",
-            shadowed.Select(symbol => $"'{OverloadSymbols.Describe(symbol)}'")
-        );
+        var shadowedNames = OverloadSymbols.DescribeAll(shadowed);
 
         _reportDiagnostic(
             new MetanoDiagnostic(
