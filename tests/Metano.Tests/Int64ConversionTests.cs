@@ -134,12 +134,12 @@ public class Int64ConversionTests
     private static readonly Lazy<(
         Dictionary<string, string> Files,
         IReadOnlyList<MetanoDiagnostic> Diagnostics
-    )> BigIntOutput = new(() => TranspileHelper.TranspileWithDiagnostics(ConversionSource));
+    )> ConversionOutput = new(() => TranspileHelper.TranspileWithDiagnostics(ConversionSource));
 
     [Test]
     public async Task ConversionMatrix_MatchesGolden()
     {
-        var (files, _) = BigIntOutput.Value;
+        var (files, _) = ConversionOutput.Value;
 
         await Assert
             .That(files["conv.ts"])
@@ -149,7 +149,7 @@ public class Int64ConversionTests
     [Test]
     public async Task LongBackedEnums_KeepNumberValues()
     {
-        var (files, _) = BigIntOutput.Value;
+        var (files, _) = ConversionOutput.Value;
 
         await Assert.That(files["big.ts"]).Contains("B = 1099511627776,");
         await Assert.That(files["big.ts"]).Contains("C = 9007199254740992,");
@@ -178,7 +178,7 @@ public class Int64ConversionTests
     [Test]
     public async Task CheckedContextConstant_TakesTheConvertedKind()
     {
-        var (files, _) = BigIntOutput.Value;
+        var (files, _) = ConversionOutput.Value;
 
         await Assert.That(files["conv.ts"]).Contains("const x = -1n;");
     }
@@ -186,13 +186,14 @@ public class Int64ConversionTests
     [Test]
     public async Task Int64EnumValuePrecision_ReportsTheInexactMember()
     {
-        var (_, diagnostics) = BigIntOutput.Value;
+        var (_, diagnostics) = ConversionOutput.Value;
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.Int64EnumValuePrecision)
             .ToList();
 
         await Assert.That(reports).Count().IsEqualTo(2);
+
         await Assert
             .That(reports.All(d => d.Severity == MetanoDiagnosticSeverity.Warning))
             .IsTrue();
@@ -206,7 +207,7 @@ public class Int64ConversionTests
     [Test]
     public async Task Int64EnumValuePrecision_ReportsALargeFlagsMember()
     {
-        var (_, diagnostics) = BigIntOutput.Value;
+        var (_, diagnostics) = ConversionOutput.Value;
 
         var flags = diagnostics.Single(d =>
             d.Code == DiagnosticCodes.Int64EnumValuePrecision && d.Message.Contains("'Mask.High'")

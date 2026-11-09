@@ -27,10 +27,11 @@ internal static class SixtyFourBitDispatchOrder
     private const int BigIntegerRank = 3;
 
     /// <summary>
-    /// Puts every sibling set of <paramref name="sorted"/> (the legacy sort's
-    /// output) into the OQ-6 order, in place; the other members keep their
-    /// slots. Sets only form inside the contiguous same-arity blocks the
-    /// legacy sort produces, so an arity is never reordered against another.
+    /// Puts every sibling set of <paramref name="sorted"/> (the output of
+    /// <see cref="OverloadDispatchOrder"/>) into the OQ-6 order, in place; the
+    /// other members keep their slots. Sets only form inside the contiguous
+    /// same-arity blocks that order produces, so an arity is never reordered
+    /// against another.
     /// </summary>
     public static List<TOverload> Reordered<TOverload>(
         List<TOverload> sorted,

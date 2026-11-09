@@ -177,4 +177,29 @@ public class OperatorTranspileTests
         await Assert.That(output).Contains("static __add(...args: unknown[]): any {");
         await Assert.That(output).Contains("$add(...args: unknown[]): any {");
     }
+
+    /// <summary>
+    /// Overloads that return the same generic type keep it on the dispatcher
+    /// implementation: each maps its own type instance, which still is one
+    /// type.
+    /// </summary>
+    [Test]
+    public async Task OperatorOverloads_WithTheSameGenericReturnType_KeepIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Box<T>
+            {
+                public static Box<T> operator +(Box<T> box, T item) => box;
+
+                public static Box<T> operator +(Box<T> box, int count) => box;
+            }
+            """
+        );
+
+        var output = result["box.ts"];
+
+        await Assert.That(output).Contains("static __add(...args: unknown[]): Box<T> {");
+    }
 }

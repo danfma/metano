@@ -111,12 +111,24 @@ internal static partial class IrToTsClassBridge
         // Operator overloads can differ in return type (`int` and `long`
         // conversions, `M + int` beside `M + string`), so the implementation
         // signature follows the dispatcher rule: theirs when they agree, else
-        // the erased one. An operator is neither generic nor async.
-        var sharedReturnType = IrToTsOverloadDispatcherBridge.CommonReturnTypeOf(
-            overloadReturnTypes,
-            isGeneric: false,
-            isAsync: false
-        );
+        // the erased one. An operator is neither generic nor async. Each
+        // overload maps its own type instance, so equal types are told by
+        // their printed form (`Box<T>` and `Box<T>` hold distinct argument
+        // lists).
+        var returnsOneType =
+            overloadReturnTypes
+                .Select(Printer.RenderType)
+                .Distinct(StringComparer.Ordinal)
+                .Take(2)
+                .Count() == 1;
+
+        var sharedReturnType = returnsOneType
+            ? overloadReturnTypes[indices[0]]
+            : IrToTsOverloadDispatcherBridge.CommonReturnTypeOf(
+                overloadReturnTypes,
+                isGeneric: false,
+                isAsync: false
+            );
 
         var staticOverloadSigs = indices
             .Select(i => new TsMethodOverload(overloadParameters[i], overloadReturnTypes[i]))

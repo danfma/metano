@@ -59,12 +59,21 @@ the migration list.
   as a `(long, long)`, `wide == narrow` / `wide.Equals(narrow)` between the
   two, and `List<long> l = [.. ints];` (also `HashSet<long>`, `long[]`,
   nested and nullable tuples) emit `[BigInt(p[0]), BigInt(p[1])]` /
-  `...Array.from(ints, (e) => BigInt(e))`. A converted string or
-  dictionary spread (`List<long> codes = [.. text];`) reports `MS0001`.
+  `...Array.from(ints, (e) => BigInt(e))`; a `foreach ((long, long) p in
+  intPairs)` rebuilds each element the same way. A converted string spread
+  (`List<long> codes = [.. text];`) reports `MS0001`.
 - An operator group whose overloads return different types (`int operator
   +(M, int)` beside `long operator +(M, long)`) declares its dispatcher
   implementation as `any`, as method dispatchers do; 2.x declared the first
-  overload's type, which did not type-check.
+  overload's type, which did not type-check. Overloads that return one type
+  keep it.
+- Known gaps a 2.x project can meet after the upgrade: `FirstOrDefault()`
+  and the other `OrDefault` terminals return `null` for a value type, so
+  `longs.FirstOrDefault() + 1` throws `TypeError` where 2.x computed `null
+  + 1` (#601); tuple and spread elements that convert to `decimal` are not
+  converted, and the Dart target leaves the ones that convert to `double`
+  or `BigInteger` (#606); conversion operators of one type still share a
+  dispatcher that only reaches the first (#600).
 - `[MapMethod]` / `[MapProperty]` lose the hidden `WhenInt64IsBigInt` named
   argument (it was honored only in Metano's own mappings).
 - Interop declarations (`[Import]`, `[Emit]`, `[External]`, user
