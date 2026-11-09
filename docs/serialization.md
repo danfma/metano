@@ -817,12 +817,18 @@ order.total.toFixed(); // "12345678901234567890.123456789"
   `0.0000000000000000000000000000025e2` reads as `3e-28`), and a value that rounds past `MaxValue`
   (`79228162514264337593543950335.5`) throws `The JSON value could not be
   converted to System.Decimal.`. Every other value reads as `JSON.parse` reads
-  it, custom converters included: a `double` or `long` property still gets a JS
+  it, custom converters included: a `double` property still gets a JS
   `number`.
-- **The path is chosen per spec.** A spec with no `decimal` anywhere in its
-  closure reads `JSON.parse(text)`, at the same cost as before. A spec with one
-  reads `JSON.parse(text)` too unless the text may hold a number of more than
-  15 digits, which only the runtime's tokenizer keeps exactly. On a
+- **64-bit integers** (3.0, [64-bit numbers](#64-bit-numbers)) are read from
+  their exact token: digits beyond 2^53 arrive intact, and a number with a
+  fraction or an exponent (`1.0`, `1e3`) throws, as .NET throws.
+- **The path is chosen per spec.** A spec with no `decimal` and no 64-bit
+  integer anywhere in its closure reads `JSON.parse(text)`, at the same cost as
+  before. A spec with a `decimal` reads `JSON.parse(text)` too unless the text
+  may hold a number of more than 15 digits, which only the runtime's tokenizer
+  keeps exactly; a spec with a 64-bit integer also takes the tokenizer when the
+  text may hold a number with a fraction or an exponent (a digit followed by
+  `.`, `e` or `E`, strings included). On a
   10 MB `Order[]` (`bun run bench:json`, Node 24.11 / Bun 1.4.2), prices of two
   decimal places read in 123.5 / 83.9 ms against 114.7 / 78.1 ms through
   `JSON.parse` + `deserialize`; prices of 20 or more significant digits read
@@ -879,8 +885,14 @@ System.Nullable`1[System.Int64].`` for a nullable slot; `System.UInt64` for a
 
 **Reads from text.** A root whose closure contains a 64-bit member reads
 exactly through `deserializeText` — the same forward-looking tokenizer the
-decimals use — so ids above 2^53 arrive with every digit. The tree path is
-exact only for `bigint` and `rawJSON` values; see the sample round trip in
+decimals use — so ids above 2^53 arrive with every digit, in every position
+(a property, a `long?`, an array element, a dictionary value, a `[Branded]`
+id). The tokenizer hands the converter the source text of every number that
+is not a short integer token, so the tree rules above apply to the token
+itself: `1.0`, `1e3` and `-0.0` throw, as .NET throws, and `-0` reads as `0n`
+(`ulong`: throws). A polymorphic int tag written `1.0` or `1e0` throws through
+the same path, as .NET throws. The tree path is exact only for `bigint` and
+`rawJSON` values; see the sample reads in
 [`targets/js/sample-issue-tracker/test/json-int64.test.ts`](../targets/js/sample-issue-tracker/test/json-int64.test.ts).
 
 **Dictionary keys.** A 64-bit dictionary key is written as its digits
@@ -1531,7 +1543,9 @@ the text are gone:
   (STJ throws) and an earlier invalid value of the same property
   (`{"price":1e30,"price":1}` reads `1`); in a case-insensitive context
   `{"count":1,"COUNT":2,"count":3}` reads `2` (STJ: `3`);
-- an int tag written `1.0` or `1e0` is accepted (STJ throws);
+- an int tag written `1.0` or `1e0` is accepted (STJ throws), and so is a
+  `long` written `1.0` (read as `1n`); `deserializeText` rejects both for a
+  spec with a 64-bit integer in its closure ([64-bit numbers](#64-bit-numbers));
 - an array-index key (`"0"`) written before the tag is not seen as out of
   order;
 - a `decimal` just past `MaxValue`, or with more than 15 significant digits,
