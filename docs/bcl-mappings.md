@@ -12,7 +12,7 @@ This page lists every mapping the transpiler knows about out of the box.
 | `string` | `string` |
 | `bool` | `boolean` |
 | `int`, `short`, `byte`, `sbyte`, `uint`, `ushort`, `float`, `double` | `number` |
-| `long`, `ulong`, `nint`, `nuint` | `bigint` (3.0.0; [64-bit integers](#64-bit-integers-long--ulong); 2.x output keeps `number`) |
+| `long`, `ulong`, `nint`, `nuint` | `bigint` (3.0.0; [64-bit integers](#64-bit-integers-long--ulong); 2.x mapped them to `number`) |
 | `decimal` | `Decimal` (from [`decimal.js`](https://mikemcl.github.io/decimal.js/)) |
 | `BigInteger` | `bigint` |
 | `char` | `string` (length 1) |
@@ -215,7 +215,7 @@ delegates, constructors and null-conditional calls, report MS0001 and pass by va
 | C# | TypeScript |
 |----|----|
 | `int.TryParse(s, out var n)` | `tryParseInt32(s)` |
-| `long.TryParse(s, out var n)` | `tryParseInt64Value(s)` (until the 3.0 flip; then `tryParseInt64`, which returns a `bigint`) |
+| `long.TryParse(s, out var n)` | `tryParseInt64(s)` (returns `[found, bigint]`; see [64-bit integers](#64-bit-integers-long--ulong)) |
 | `double.TryParse` / `float.TryParse` | `tryParseFloat64(s)` |
 | `bool.TryParse(s, out var b)` | `tryParseBoolean(s)` |
 
@@ -430,10 +430,8 @@ interface rather than to `double`/`float`.
 ## 64-bit integers (`long` / `ulong`)
 
 From spec 012 (3.0.0), `long`, `ulong`, `nint` and `nuint` hold `bigint`, so no digit
-is lost past 2^53 (Snowflake ids, database keys, tick counts, hashes). Until the 3.0
-flip the shipped output keeps 2.x `number` behavior behind a compiler-internal staging
-switch; everything below describes the `bigint` output, which every test and the
-conformance sample run in. The full contract is
+is lost past 2^53 (Snowflake ids, database keys, tick counts, hashes). It is the only
+mapping: there is no option to keep the 2.x `number` output. The full contract is
 [`specs/012-long-as-bigint/`](../specs/012-long-as-bigint/spec.md); the JSON side is in
 [docs/serialization.md](serialization.md#64-bit-numbers).
 
@@ -494,7 +492,7 @@ directly.
 |----|----|
 | `l.ToString("N0")`, `$"{l,8}"`, `$"{l:X}"` | `formatInt64(l, "N0")`, `formatInt64(l, null, 8)`, `formatInt64(l, "X")` (`G D N F X R` in the invariant culture; a custom format reports `MS0066` and throws) |
 | `long.Parse(s)` / `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)` / `parseUInt64(s, 515)` |
-| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64Value(s)` (`tryParseInt64` after the 3.0 flip) |
+| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` |
 | `Convert.ToInt64(d)` / `(s)` / `(s, 16)` | `convertDoubleToInt64(d)` / `convertStringToInt64(s)` / `convertStringToInt64(s, 16)` |
 | `Convert.ToInt32(l)` | `Number(convertNarrow(l, "Int32"))` |
 | `l.CompareTo(m)` / `l.Equals(m)` / `l.GetHashCode()` | `compareInt64(l, m)`, `l === m`, `valueHashCode(l)` (the .NET word fold) |
@@ -514,10 +512,9 @@ says `false` (the analogue of 011's number-box divergence). A `bigint` outside t
 `long` range also answers `o is long` with `false` and `o is ulong` with `true`, but the
 test is a range check, not a stored box.
 
-Until the 3.0 flip these `bigint` checks ship under the staging names `isInt64Value` /
-`isUInt64Value`: the runtime's `isInt64` / `isUInt64` are still the 2.x `number` range
-checks the shipped output calls, and 012k replaces them with the `bigint` versions
-(see the [CHANGELOG](../CHANGELOG.md)).
+In 2.x `isInt64` / `isUInt64` were `number` range checks over the safe integers, and
+`tryParseInt64` returned a `number`; 3.0 replaces all three with the `bigint` versions
+under the same names (see the [CHANGELOG](../CHANGELOG.md)).
 
 ### Performance
 

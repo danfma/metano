@@ -135,7 +135,7 @@ export function tryParseUInt64(text: string | null | undefined, style?: number):
   `FormatException("The input string '<text>' was not in a correct format.")`; out of range →
   `OverflowException("Value was either too large or too small for an Int64.")` (`a UInt64`). `TryParse`
   returns `[false, 0n]` for each of them.
-- Until slice 012k the signed parser is exported as `tryParseInt64Value`: the 2.x `number` `tryParseInt64` (`system/number-parsing.ts`) still serves the shipped `Number` mode, and replacing it before the flip would break that output. 012k removes it and renames `tryParseInt64Value`.
+- Slices 012g–012j exported the signed parser as `tryParseInt64Value`, beside the 2.x `number` `tryParseInt64` (`system/number-parsing.ts`) that served the staging `Number` mode. Slice 012k removed the `number` parser and gave the `bigint` one its name, `tryParseInt64`.
 - The existing `tryParseInt64` (`system/number-parsing.ts`) moves here and returns `bigint` (breaking for
   hand-written callers; migration notes).
 

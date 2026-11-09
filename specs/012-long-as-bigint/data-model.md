@@ -95,7 +95,7 @@ operand or body (FR-023), because `IsChecked` already carries the context into e
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)
 
-Until slice 012k the bridge also has the `Number` mode of the staging switch (DECIDED-22): `Int64` / `UInt64` render as `number`, `IrNumericConversion` and `IrIntegerOverflow` as their operand, 64-bit division as `intDiv`, and the BCL and JSON mappings as in 2.x. The table below is the `BigInt` mode.
+Until slice 012k the bridge also had the `Number` mode of the staging switch (DECIDED-22): `Int64` / `UInt64` rendered as `number`, `IrNumericConversion` and `IrIntegerOverflow` as their operand, 64-bit division as `intDiv`, and the BCL and JSON mappings as in 2.x. Slice 012k deleted it; the table below is the only rendering.
 
 | IR | TS |
 |---|---|
