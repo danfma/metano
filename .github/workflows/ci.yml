@@ -78,7 +78,7 @@ jobs:
         run: cd targets/js/sample-todo-service && bun run build && bun test
 
       - name: sample-issue-tracker
-        run: cd targets/js/sample-issue-tracker && bun run build && bun test
+        run: cd targets/js/sample-issue-tracker && bun run build && bun test && bun run test:node
 
       - name: overload-behavior
         run: cd targets/js/overload-behavior && bun install --frozen-lockfile && bun test
