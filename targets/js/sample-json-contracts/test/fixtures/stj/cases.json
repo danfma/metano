@@ -2215,5 +2215,19 @@
     "sides": ["stj"],
     "json": "-0",
     "divergence": "spec 012 012h: -0 is an integer token and reads as 0 for a long (R7); the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
+  },
+  {
+    "id": "I21",
+    "context": "StudioJsonContext",
+    "getter": "int64Box",
+    "direction": "read",
+    "sides": ["stj"],
+    "json": "{\"Mask\":-0}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Int64Box.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
+    },
+    "divergence": "spec 012 012h: a ulong member takes no sign, not even -0, through deserializeText too (I8 pins the root); the generated contexts carry the 2.x number descriptors until 012k, so int64-manifest.test.ts runs it against the int64 mirrors"
   }
 ]

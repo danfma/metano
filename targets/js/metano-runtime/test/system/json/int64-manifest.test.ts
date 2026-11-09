@@ -129,6 +129,7 @@ const RUNTIME_ERROR_OF: Readonly<Record<string, string>> = {
   I16: cannotConvertMessage("Int64Box"),
   I17: cannotConvertMessage("System.Nullable`1[System.Int64]"),
   I18: cannotConvertMessage("System.Int64"),
+  I21: cannotConvertMessage("Int64Box"),
 };
 
 type Int64BoxFields = { id: bigint; mask: bigint; parent: bigint | null };
