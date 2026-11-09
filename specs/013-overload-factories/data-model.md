@@ -140,7 +140,7 @@ factory, `Box.fromValue<string>(s)`), imports, and the shapes a target lowers fi
 to the method call sites of 013e.
 
 **Evaluation order (013c).** Bound arguments are in parameter order. When the source evaluates
-them in another order and one has a side effect (`new T(b: F(), a: G())`),
+them in another order and one has a side effect (`new T(b: F(), a: G())`; for a target that keeps the order, a computed property read beside a second order-sensitive argument too, `c.Two(b: h.P, a: h.Q)`, #592),
 `IrSelectedOverload.EvaluationOrder` records it and the target evaluates them first, in that
 order: TypeScript binds them through an immediately invoked arrow for a construction (the one IIFE shape of
 this feature, used by constructions and by 013d/013e calls; the documented exception of NFR-004, since the
