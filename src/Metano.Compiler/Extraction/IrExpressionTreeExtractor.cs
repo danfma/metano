@@ -76,7 +76,6 @@ internal sealed partial class IrExpressionTreeExtractor
     private readonly Metano.Annotations.TargetLanguage? _target;
     private readonly IrExpressionExtractor _valueExtractor;
     private readonly bool _isExplicitOptIn;
-    private readonly bool _exactInt64Lowering;
 
     private readonly HashSet<ISymbol> _lambdaParams = new(SymbolEqualityComparer.Default);
     private readonly Dictionary<ISymbol, IrQueryableCapture> _captures = new(
@@ -90,8 +89,7 @@ internal sealed partial class IrExpressionTreeExtractor
         IrTypeOriginResolver? originResolver,
         Metano.Annotations.TargetLanguage? target,
         IrExpressionExtractor valueExtractor,
-        bool isExplicitOptIn = false,
-        bool exactInt64Lowering = false
+        bool isExplicitOptIn = false
     )
     {
         _semantic = semanticModel;
@@ -99,7 +97,6 @@ internal sealed partial class IrExpressionTreeExtractor
         _target = target;
         _valueExtractor = valueExtractor;
         _isExplicitOptIn = isExplicitOptIn;
-        _exactInt64Lowering = exactInt64Lowering;
     }
 
     /// <summary>

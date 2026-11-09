@@ -53,11 +53,10 @@ public sealed partial class IrExpressionExtractor
             : null;
 
     /// <summary>
-    /// The count of a 64-bit shift under the exact 64-bit lowering, as C#
-    /// reads it: <c>count &amp; 63</c>, folded into a literal when constant
-    /// (<c>l &lt;&lt; 70</c> shifts by <c>6</c>, <c>l &lt;&lt; -1</c> by
-    /// <c>63</c>). Any other right operand is unchanged; the shipped
-    /// <c>Number</c> mode keeps its shifts (DECIDED-22).
+    /// The count of a 64-bit shift as C# reads it: <c>count &amp; 63</c>,
+    /// folded into a literal when constant (<c>l &lt;&lt; 70</c> shifts by
+    /// <c>6</c>, <c>l &lt;&lt; -1</c> by <c>63</c>). Any other right operand
+    /// is unchanged.
     /// </summary>
     private IrExpression ShiftCountOf(IrBinaryOp op, IrNumericKind? kind, OperatorOperand count)
     {
@@ -88,9 +87,8 @@ public sealed partial class IrExpressionExtractor
         (op.IsDivisionOrRemainder() || op.IsShift())
         && IsExactSixtyFourBit(BuiltInNumericKindOf(operatorSyntax));
 
-    /// <summary>A 64-bit operand kind under the exact 64-bit lowering.</summary>
-    private bool IsExactSixtyFourBit(IrNumericKind? kind) =>
-        _context.ExactInt64Lowering && kind?.IsSixtyFourBit() == true;
+    /// <summary>A 64-bit operand kind.</summary>
+    private static bool IsExactSixtyFourBit(IrNumericKind? kind) => kind?.IsSixtyFourBit() == true;
 
     /// <summary>A constant shift count as C# reads it for a 64-bit shift.</summary>
     private static IrLiteral MaskedConstantCount(object constant) =>

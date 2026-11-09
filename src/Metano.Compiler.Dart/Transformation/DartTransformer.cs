@@ -48,9 +48,9 @@ public sealed class DartTransformer
     /// <summary>
     /// The extraction context the core extractors receive: this compilation
     /// and the Dart target, no local-naming decision — local-name collision
-    /// renaming is TypeScript-only until #402 lands it for Dart. Dart always
-    /// takes the exact 64-bit lowering: its <c>int</c> is 64-bit, so the
-    /// conversions it prints are the narrowing ones (spec 012 DECIDED-19).
+    /// renaming is TypeScript-only until #402 lands it for Dart. Dart's
+    /// <c>int</c> is 64-bit, so of the 64-bit conversions the core makes
+    /// explicit it prints the narrowing ones (spec 012 DECIDED-19).
     /// A dispatched constructor set becomes named constructors, so a
     /// construction binds the overload it selects; an overloaded operator
     /// group keeps one <c>operator</c> declaration, so Dart leaves
@@ -60,7 +60,6 @@ public sealed class DartTransformer
     private IrExtractionContext Extraction =>
         new(Compilation: _compilation, Target: TargetLanguage.Dart)
         {
-            ExactInt64Lowering = true,
             EmitsConstructorSelectors = DartTypeShapes.EmitsNamedConstructors,
         };
 

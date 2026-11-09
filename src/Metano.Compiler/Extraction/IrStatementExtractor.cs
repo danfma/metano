@@ -436,7 +436,7 @@ public sealed class IrStatementExtractor(
         if (elementNullable && !variableNullable)
             return UnwrappedElementValue(fe, element, elementType, variableType, from, to);
 
-        if (!NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering))
+        if (!NumericEndpoints.IsLoweredExplicitly(from, to))
             return null;
 
         var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
@@ -468,10 +468,7 @@ public sealed class IrStatementExtractor(
     {
         var guarded = _expressions.GuardedValueOrThrow(element);
 
-        if (
-            from == to
-            || !NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering)
-        )
+        if (from == to || !NumericEndpoints.IsLoweredExplicitly(from, to))
             return new IrCastExpression(guarded, MapType(variableType));
 
         var unwrapped = new IrCastExpression(

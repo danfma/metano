@@ -8,7 +8,7 @@ import {
 import {
   parseInt64,
   parseUInt64,
-  tryParseInt64Value,
+  tryParseInt64,
   tryParseUInt64,
 } from "#/system/int64-parsing.ts";
 
@@ -81,16 +81,16 @@ describe("parseInt64 and parseUInt64", () => {
 
   test("other styles throw NotSupportedException", () => {
     expect(() => parseInt64("1", 167)).toThrow(NotSupportedException);
-    expect(() => tryParseInt64Value("1", 167)).toThrow(NotSupportedException);
+    expect(() => tryParseInt64("1", 167)).toThrow(NotSupportedException);
   });
 });
 
-describe("tryParseInt64Value and tryParseUInt64", () => {
+describe("tryParseInt64 and tryParseUInt64", () => {
   test("return [true, value] or [false, 0n] where Parse would throw", () => {
-    expect(tryParseInt64Value(" 42 ")).toEqual([true, 42n]);
-    expect(tryParseInt64Value(null)).toEqual([false, 0n]);
-    expect(tryParseInt64Value("x")).toEqual([false, 0n]);
-    expect(tryParseInt64Value("9223372036854775808")).toEqual([false, 0n]);
+    expect(tryParseInt64(" 42 ")).toEqual([true, 42n]);
+    expect(tryParseInt64(null)).toEqual([false, 0n]);
+    expect(tryParseInt64("x")).toEqual([false, 0n]);
+    expect(tryParseInt64("9223372036854775808")).toEqual([false, 0n]);
     expect(tryParseUInt64("ff", HEX_NUMBER)).toEqual([true, 255n]);
     expect(tryParseUInt64("-1", INTEGER)).toEqual([false, 0n]);
   });

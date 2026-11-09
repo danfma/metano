@@ -8,18 +8,15 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// The 64-bit side of the expression-tree walker (spec 012 FR-044), under
-/// the exact 64-bit lowering only: a cast into or out of a 64-bit integer,
+/// The 64-bit side of the expression-tree walker (spec 012 FR-044): a cast into or out of a 64-bit integer,
 /// and an implicit numeric conversion Roslyn reports into or out of one,
 /// become an <see cref="IrExprConvert"/>; a constant converted to a 64-bit
 /// integer folds to a literal holding the converted value.
 /// </summary>
 internal sealed partial class IrExpressionTreeExtractor
 {
-    // STAGING(012k): every member below drops its _exactInt64Lowering gate.
     private bool IsSixtyFourBitCast(CastExpressionSyntax cast) =>
-        _exactInt64Lowering
-        && _semantic.GetOperation(cast)
+        _semantic.GetOperation(cast)
             is IConversionOperation
             {
                 Conversion: { IsNumeric: true } or { IsNullable: true }
@@ -73,9 +70,6 @@ internal sealed partial class IrExpressionTreeExtractor
     /// </summary>
     private bool ConvertedTypeCrossesSixtyFourBits(ExpressionSyntax syntax, TypeInfo info)
     {
-        if (!_exactInt64Lowering)
-            return false;
-
         var conversion = _semantic.GetConversion(syntax);
 
         return conversion.IsImplicit
@@ -88,8 +82,8 @@ internal sealed partial class IrExpressionTreeExtractor
     /// value extractor applies in its position: the tree converts the capture
     /// itself.
     /// </summary>
-    private IrExpression WithoutSixtyFourBitConversion(IrExpression value) =>
-        _exactInt64Lowering && value is IrNumericConversion conversion ? conversion.Operand : value;
+    private static IrExpression WithoutSixtyFourBitConversion(IrExpression value) =>
+        value is IrNumericConversion conversion ? conversion.Operand : value;
 
     /// <summary>
     /// A numeric conversion, or a lifted one (<c>int?</c> → <c>long?</c>):

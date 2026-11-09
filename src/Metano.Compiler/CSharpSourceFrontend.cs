@@ -2213,10 +2213,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 switch (attr.AttributeClass?.Name)
                 {
                     case "MapMethodAttribute":
-                        TryRegisterMapping(attr, "JsMethod", assembly, methods, diagnostics);
+                        TryRegisterMapping(attr, "JsMethod", methods, diagnostics);
                         break;
                     case "MapPropertyAttribute":
-                        TryRegisterProperty(attr, "JsProperty", assembly, properties, diagnostics);
+                        TryRegisterProperty(attr, "JsProperty", properties, diagnostics);
                         break;
                 }
             }
@@ -2253,7 +2253,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void TryRegisterMapping(
         AttributeData attr,
         string renameNamedArg,
-        IAssemblySymbol declaringAssembly,
         Dictionary<(string, string), List<DeclarativeMappingEntry>> target,
         List<MetanoDiagnostic> diagnostics
     )
@@ -2262,7 +2261,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         if (key is null)
             return;
 
-        var entry = ReadMappingEntry(attr, renameNamedArg, declaringAssembly, diagnostics);
+        var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
         if (entry is null)
             return;
 
@@ -2277,7 +2276,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void TryRegisterProperty(
         AttributeData attr,
         string renameNamedArg,
-        IAssemblySymbol declaringAssembly,
         Dictionary<(string, string), DeclarativeMappingEntry> target,
         List<MetanoDiagnostic> diagnostics
     )
@@ -2286,7 +2284,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         if (key is null)
             return;
 
-        var entry = ReadMappingEntry(attr, renameNamedArg, declaringAssembly, diagnostics);
+        var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
         if (entry is null)
             return;
 
@@ -2309,7 +2307,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static DeclarativeMappingEntry? ReadMappingEntry(
         AttributeData attr,
         string renameNamedArg,
-        IAssemblySymbol declaringAssembly,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -2328,7 +2325,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         string? dartRuntimeImports = null;
         int? whenArgCount = null;
         IReadOnlyList<string>? whenParameterTypes = null;
-        var whenInt64IsBigInt = false;
 
         foreach (var named in attr.NamedArguments)
         {
@@ -2368,11 +2364,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 case "WhenParameterTypes":
                     whenParameterTypes = ReadParameterTypes(named.Value);
                     break;
-                case "WhenInt64IsBigInt":
-                    whenInt64IsBigInt =
-                        named.Value.Value is true
-                        && DeclaresTheAnnotations(declaringAssembly, attr);
-                    break;
             }
         }
 
@@ -2411,25 +2402,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             dartTemplate,
             dartRuntimeImports,
             whenArgCount,
-            whenParameterTypes,
-            whenInt64IsBigInt
+            whenParameterTypes
         );
     }
-
-    /// <summary>
-    /// Whether <paramref name="declaringAssembly"/> is the assembly that
-    /// defines the mapping attribute itself (Metano's own BCL mappings). The
-    /// staging filter <c>WhenInt64IsBigInt</c> (spec 012 DECIDED-22) is honored
-    /// there only, so a user mapping cannot opt into the staging behavior.
-    /// </summary>
-    private static bool DeclaresTheAnnotations(
-        IAssemblySymbol declaringAssembly,
-        AttributeData attr
-    ) =>
-        SymbolEqualityComparer.Default.Equals(
-            declaringAssembly,
-            attr.AttributeClass?.ContainingAssembly
-        );
 
     /// <summary>
     /// Reads a <c>WhenParameterTypes</c> <c>Type[]</c> argument into the

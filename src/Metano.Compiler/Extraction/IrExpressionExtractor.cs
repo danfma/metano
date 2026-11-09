@@ -3814,7 +3814,7 @@ public sealed partial class IrExpressionExtractor
         var getterName = propLowering.HelperName;
         var emittedGetterName = propLowering.EmittedName;
         var binaryOp = StepOperatorOf(op);
-        var one = ExtensionIncrementStepOf(targetSyntax);
+        var one = OneOf(targetSyntax);
 
         // Static increment: no receiver to capture — emit
         // `prop$set(prop$get() ± 1)` directly.
@@ -3991,7 +3991,7 @@ public sealed partial class IrExpressionExtractor
         var getterName = lowering.HelperName;
         var emittedGetterName = lowering.EmittedName;
         var binaryOp = StepOperatorOf(op);
-        var one = ExtensionIncrementStepOf(targetSyntax);
+        var one = OneOf(targetSyntax);
         var operation = _semantic.GetOperation(node);
         var receiver = Extract(targetSyntax.Expression);
         var indexArgs = targetSyntax
@@ -4935,19 +4935,12 @@ public sealed partial class IrExpressionExtractor
     /// C# has no runtime cast — TS is structurally typed and every numeric is
     /// just <c>number</c> or <c>bigint</c>. A numeric cast the targets must
     /// render becomes an <see cref="IrNumericConversion"/> (a floating-point
-    /// value to a narrow integer, and, under the exact 64-bit lowering, every
-    /// cast into or out of a 64-bit integer); a constant one folds. The other
-    /// casts that need runtime code change the numeric representation:
-    /// <list type="bullet">
-    ///   <item><c>(decimal)bigIntExpr</c> → <c>new Decimal(expr.toString())</c></item>
-    ///   <item><c>(BigInteger)decimalExpr</c> → <c>BigInt(expr.toFixed(0))</c></item>
-    ///   <item><c>(int|long|short|byte)decimalExpr</c> → <c>expr.toNumber()</c></item>
-    ///   <item><c>(BigInteger)intExpr</c> → <c>BigInt(expr)</c></item>
-    /// </list>
-    /// Under the exact 64-bit lowering every <c>BigInteger</c> cast is an
-    /// <see cref="IrNumericConversion"/> instead (spec 012 FR-003), so the
-    /// <c>BigInteger</c> branches serve the 2.x output only (STAGING(012k)).
-    /// All other casts collapse to the inner expression.
+    /// value to a narrow integer, and every cast into or out of a 64-bit
+    /// integer or a <c>BigInteger</c>, spec 012 FR-003); a constant one
+    /// folds. One other cast needs runtime code: a <c>decimal</c> to a 32-bit
+    /// or narrower integer (<c>(int|short|byte)decimalExpr</c>) truncates and
+    /// reads the number, <c>expr.trunc().toNumber()</c>. All other casts
+    /// collapse to the inner expression.
     /// </summary>
     private IrExpression ExtractCast(CastExpressionSyntax cast)
     {
@@ -4968,72 +4961,21 @@ public sealed partial class IrExpressionExtractor
         if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)
             return numeric;
 
-        var sourceSpecial = sourceType.SpecialType;
-        var targetSpecial = targetType.SpecialType;
-        var sourceIsBigInt = sourceType.ToDisplayString() == "System.Numerics.BigInteger";
-        var targetIsBigInt = targetType.ToDisplayString() == "System.Numerics.BigInteger";
-
-        // BigInteger → decimal: new Decimal(value.toString())
-        if (sourceIsBigInt && targetSpecial == SpecialType.System_Decimal)
-        {
-            return new IrNewExpression(
-                new IrPrimitiveTypeRef(IrPrimitive.Decimal),
-                [new IrArgument(new IrCallExpression(new IrMemberAccess(inner, "toString"), []))]
-            );
-        }
-
-        // decimal → BigInteger: BigInt(value.toFixed(0))
-        if (sourceSpecial == SpecialType.System_Decimal && targetIsBigInt)
-        {
-            return new IrCallExpression(
-                // IrTypeReference (not IrIdentifier) so the TS bridge doesn't
-                // camelCase the global JS `BigInt` builtin into `bigInt`.
-                new IrTypeReference("BigInt"),
-                [
-                    new IrArgument(
-                        new IrCallExpression(
-                            new IrMemberAccess(inner, "toFixed"),
-                            [new IrArgument(new IrLiteral(0, IrLiteralKind.Int32))]
-                        )
-                    ),
-                ]
-            );
-        }
-
-        // decimal → any integer: value.toNumber()
-        if (
-            sourceSpecial == SpecialType.System_Decimal
-            && targetSpecial
+        var truncatesDecimal =
+            sourceType.SpecialType == SpecialType.System_Decimal
+            && targetType.SpecialType
                 is SpecialType.System_Int16
                     or SpecialType.System_Int32
-                    or SpecialType.System_Int64
                     or SpecialType.System_UInt16
                     or SpecialType.System_UInt32
-                    or SpecialType.System_UInt64
                     or SpecialType.System_Byte
-                    or SpecialType.System_SByte
-        )
+                    or SpecialType.System_SByte;
+
+        if (truncatesDecimal)
         {
-            // The exact lowering truncates first, so a 64-bit conversion of
-            // the result never meets a fraction (STAGING(012k): always).
-            var integral = _context.ExactInt64Lowering
-                ? new IrCallExpression(new IrMemberAccess(inner, "trunc"), [])
-                : inner;
+            var integral = new IrCallExpression(new IrMemberAccess(inner, "trunc"), []);
 
             return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
-        }
-
-        // int/long/decimal → BigInteger: BigInt(value)
-        if (
-            targetIsBigInt
-            && sourceSpecial
-                is SpecialType.System_Int32
-                    or SpecialType.System_Int64
-                    or SpecialType.System_Int16
-                    or SpecialType.System_Decimal
-        )
-        {
-            return new IrCallExpression(new IrTypeReference("BigInt"), [new IrArgument(inner)]);
         }
 
         return new IrCastExpression(inner, ExtractTargetType(cast));

@@ -54,47 +54,18 @@ export function isUInt32(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 4294967295;
 }
 
-/** C# `long` / `Int64` (safe integer range) */
-export function isInt64(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isInteger(value) &&
-    value >= Number.MIN_SAFE_INTEGER &&
-    value <= Number.MAX_SAFE_INTEGER
-  );
-}
-
-/** C# `ulong` / `UInt64` (0..safe integer range) */
-export function isUInt64(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= Number.MAX_SAFE_INTEGER
-  );
-}
-
 // ─── 64-bit integer checks (bigint) ──────────────────────
 
 /**
- * C# `long` / `Int64` held as a `bigint`: the whole `long` range, so values
- * beyond 2^53 keep every digit.
- *
- * Staging name (spec 012 DECIDED-22, FR-048): this check ships beside the
- * `number`-based `isInt64` above while the compiler's default mode still
- * lowers `long` to `number`; slice 012k replaces the `number` checks with
- * these.
+ * C# `long` / `Int64`, a `bigint`: the whole `long` range, so values beyond
+ * 2^53 keep every digit (spec 012 FR-048).
  */
-export function isInt64Value(value: unknown): value is bigint {
+export function isInt64(value: unknown): value is bigint {
   return typeof value === "bigint" && value >= INT64_MIN && value <= INT64_MAX;
 }
 
-/**
- * C# `ulong` / `UInt64` held as a `bigint`: the whole `ulong` range.
- *
- * Staging name (spec 012 DECIDED-22, FR-048): see {@link isInt64Value}.
- */
-export function isUInt64Value(value: unknown): value is bigint {
+/** C# `ulong` / `UInt64`, a `bigint`: the whole `ulong` range (spec 012 FR-048). */
+export function isUInt64(value: unknown): value is bigint {
   return typeof value === "bigint" && value >= 0n && value <= UINT64_MAX;
 }
 
