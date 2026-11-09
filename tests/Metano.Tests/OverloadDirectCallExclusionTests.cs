@@ -215,8 +215,10 @@ public class OverloadDirectCallExclusionTests
             );
     }
 
+    // Pins MethodOverloadGroups.IsTranspiledInterface: [JsCallable] only applies
+    // to an interface, which reaches the interface branch of the gate.
     [Test]
-    public async Task JsCallable_KeepsTheDispatcher()
+    public async Task JsCallableInterface_KeepsTheDispatcherThroughIsTranspiledInterface()
     {
         var caller = await CallerOf(
             """
