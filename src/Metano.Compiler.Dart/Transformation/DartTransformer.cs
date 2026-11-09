@@ -205,6 +205,7 @@ public sealed class DartTransformer
                                 $"Dart target: failed to extract delegate IR for '{type.Name}'."
                             )
                         );
+
                         continue;
                     }
 
