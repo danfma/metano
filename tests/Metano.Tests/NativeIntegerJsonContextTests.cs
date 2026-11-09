@@ -64,10 +64,7 @@ public class NativeIntegerJsonContextTests
     [Test]
     public async Task BigIntMode_EmitsTheInt64DescriptorsForNativeIntegers()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            Source,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
 
         if (TranspileHelper.UpdateGoldensRequested)
         {

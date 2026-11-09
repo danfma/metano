@@ -14,8 +14,7 @@ internal static class Int64LinqTerminals
     /// <summary>The pipe helper the stage calls.</summary>
     public static string EmittedName(IrLinqStage stage)
     {
-        // STAGING(012k): every mode once the switch is gone.
-        if (!Int64RepresentationScope.IsBigInt || stage.SixtyFourBitValues is not { } values)
+        if (stage.SixtyFourBitValues is not { } values)
             return IrLinqMapping.EmittedName(stage.Operator);
 
         return (stage.Operator, values.IsNullable, values.Kind) switch
@@ -35,7 +34,5 @@ internal static class Int64LinqTerminals
 
     /// <summary>Whether the chain ends in a <c>LongCount</c>, whose <c>number</c> count becomes a <c>bigint</c>.</summary>
     public static bool EndsInLongCount(IrLinqChain chain) =>
-        // STAGING(012k): every mode once the switch is gone.
-        Int64RepresentationScope.IsBigInt
-        && chain.Stages is [.., { Operator: IrLinqOperator.Count, SixtyFourBitValues: not null }];
+        chain.Stages is [.., { Operator: IrLinqOperator.Count, SixtyFourBitValues: not null }];
 }

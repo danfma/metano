@@ -76,13 +76,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public string? ImportAlias { get; init; }
 
     /// <summary>
-    /// Forwarded to <see cref="TypeScriptTransformContext.Int64Representation"/>.
-    /// Compiler-internal (spec 012, DECIDED-22): set by
-    /// <see cref="TypeScriptTarget"/> and by tests, never by a user option.
-    /// </summary>
-    internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
-
-    /// <summary>
     /// Output directory for the active run, supplied by the host
     /// (<see cref="Metano.Compiler.TranspilerHost"/>) so the per-group
     /// cache (ADR-0023) can live next to the generated <c>.ts</c> files.
@@ -412,7 +405,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
-            Int64Representation = Int64Representation,
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
             StructuralGuardTypes = structuralGuards.Types,
@@ -429,18 +421,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ReportDiagnostic
         ).Validate();
 
-        // STAGING(012k): the interop warning describes the BigInt-mode emission,
-        // whose types the boundary exchanges, and runs in every mode once the
-        // switch is gone. Runs before the per-group cache is consulted so a
-        // cache hit still reports.
-        if (Int64Representation is Int64Representation.BigInt)
-        {
-            new Int64InteropBoundaries(
-                compilation,
-                _assemblyWideTranspile,
-                ReportDiagnostic
-            ).Report();
-        }
+        // The 64-bit interop warning (MS0065) runs before the per-group cache
+        // is consulted so a cache hit still reports.
+        new Int64InteropBoundaries(compilation, _assemblyWideTranspile, ReportDiagnostic).Report();
 
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
         var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
@@ -472,13 +455,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // throws, keeping subsequent TransformAll runs clean.
         var previousRenames = IrToTsTypeMapper.NamedTypeRenames;
         var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
-        var previousInt64Representation = Int64RepresentationScope.Current;
         var previousOverloadClaims = TsOverloadCallSites.Claims;
         var previousBclOverrides = IrToTsTypeMapper.BclOverrides;
         try
         {
-            // STAGING(012k): the scope goes with the switch.
-            Int64RepresentationScope.Current = Int64Representation;
             TsOverloadCallSites.Claims = OverloadClaims;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
@@ -562,7 +542,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             IrToTsTypeMapper.NamedTypeRenames = previousRenames;
             IrTypeRefMapper.NamedDelegatePredicate = previousDelegatePredicate;
-            Int64RepresentationScope.Current = previousInt64Representation;
             TsOverloadCallSites.Claims = previousOverloadClaims;
             IrToTsTypeMapper.BclOverrides = previousBclOverrides;
         }
@@ -826,9 +805,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
         IrToTsEnumBridge.Convert(enumIr, sink);
 
-        // STAGING(012k): every mode once the switch is gone.
-        if (Int64RepresentationScope.IsBigInt)
-            Int64EnumPrecision.Check(type, ReportDiagnostic);
+        Int64EnumPrecision.Check(type, ReportDiagnostic);
 
         return true;
     }

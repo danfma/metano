@@ -144,10 +144,7 @@ public class Int64DivisionShiftTests
     [Test]
     public async Task BigIntMode_DivisionAndRemainder_CallTheThrowingHelpers()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            DivisionSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(DivisionSource);
 
         await Assert
             .That(files["divide.ts"])
@@ -159,10 +156,7 @@ public class Int64DivisionShiftTests
     [Test]
     public async Task BigIntMode_Shifts_MaskAndConvertTheCount()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ShiftSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ShiftSource);
 
         await Assert
             .That(files["shift.ts"])
@@ -179,10 +173,7 @@ public class Int64DivisionShiftTests
     [Test]
     public async Task NumberMode_KeepsTheShippedDivisionAndShifts()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            DivisionSource + ShiftSource,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(DivisionSource + ShiftSource);
 
         var divide = files["divide.ts"];
         var shift = files["shift.ts"];

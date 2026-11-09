@@ -9,8 +9,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <c>number</c>, so a member of an enum over a 64-bit integer loses its exact
 /// value beyond 2^53, and a <c>[Flags]</c> member of 2^31 or more is truncated
 /// by the 32-bit JS bit operators flags code runs on. A TypeScript concern,
-/// reported where the enum is emitted, and only in the staging <c>BigInt</c>
-/// mode, whose emission it describes (STAGING(012k): every mode then).
+/// reported where the enum is emitted.
 /// </summary>
 internal static class Int64EnumPrecision
 {

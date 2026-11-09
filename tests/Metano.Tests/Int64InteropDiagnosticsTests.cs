@@ -136,8 +136,7 @@ public class Int64InteropDiagnosticsTests
 
                 public long Count() => throw new NotSupportedException();
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         var reports = diagnostics
@@ -172,8 +171,7 @@ public class Int64InteropDiagnosticsTests
 
                 public static nuint Size => (nuint)8;
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         var reports = diagnostics
@@ -186,10 +184,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task ImportMember_ReportsEachDeclarationOnce()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ImportSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ImportSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -207,10 +202,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task ImportMember_ReturnAndParameterMessages_NameTheJavaScriptSide()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ImportSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ImportSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -237,10 +229,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task ImportMember_CoversNullableArrayGenericAndDelegateForms()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ImportSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ImportSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -271,10 +260,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task ImportMember_Locations_PointAtTheDeclarations()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ImportSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ImportSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -291,10 +277,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task EmitMember_ReportsTheEmittedSignature()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            EmitSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(EmitSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -318,10 +301,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task ExternalType_ReportsEveryMemberSignature()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ExternalSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExternalSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -340,10 +320,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task MemberLevelExternal_ReportsOnlyTheMarkedMember()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            MemberExternalSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MemberExternalSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -363,10 +340,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task UserMapping_ReportsOncePerMappingAtTheAttribute()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            UserMappingSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(UserMappingSource);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -401,10 +375,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task MetanoRuntimeMappings_AreExcluded()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            MetanoMappingUseSource,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MetanoMappingUseSource);
 
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary))
@@ -414,25 +385,13 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task NumberMode_ReportsNothing()
     {
-        var (_, importDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ImportSource,
-            Int64Representation.Number
-        );
+        var (_, importDiagnostics) = TranspileHelper.TranspileWithDiagnostics(ImportSource);
 
-        var (_, emitDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            EmitSource,
-            Int64Representation.Number
-        );
+        var (_, emitDiagnostics) = TranspileHelper.TranspileWithDiagnostics(EmitSource);
 
-        var (_, externalDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ExternalSource,
-            Int64Representation.Number
-        );
+        var (_, externalDiagnostics) = TranspileHelper.TranspileWithDiagnostics(ExternalSource);
 
-        var (_, mappingDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            UserMappingSource,
-            Int64Representation.Number
-        );
+        var (_, mappingDiagnostics) = TranspileHelper.TranspileWithDiagnostics(UserMappingSource);
 
         foreach (
             var diagnostics in new[]
@@ -470,10 +429,7 @@ public class Int64InteropDiagnosticsTests
             }
             """;
 
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            source,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
 
         var reports = diagnostics
             .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
@@ -511,10 +467,7 @@ public class Int64InteropDiagnosticsTests
             }
             """;
 
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            source,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
 
         var output = files["calls.ts"];
 
@@ -542,10 +495,7 @@ public class Int64InteropDiagnosticsTests
     [Test]
     public async Task BigIntMode_PlainObject_MatchesGolden()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            PlainObjectSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(PlainObjectSource);
 
         await Assert
             .That(files["snowflake-dto.ts"])

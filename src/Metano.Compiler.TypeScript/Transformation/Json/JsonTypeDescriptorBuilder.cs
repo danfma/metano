@@ -151,9 +151,7 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// <c>[Branded]</c> type over one (which unwraps to it):
     /// <c>{ kind: "int64", numberType: … }</c> (spec 012 FR-050), whatever the
     /// context's read options. A dictionary key of a 64-bit type uses it too
-    /// (FR-055). <c>Number</c> mode never classifies a type as
-    /// <see cref="JsonPropertyKind.Int64"/>, so the shipped
-    /// <c>primitive</c> descriptors stay.
+    /// (FR-055).
     /// </summary>
     private TsObjectLiteral BuildInt64Descriptor(ITypeSymbol type)
     {

@@ -3,18 +3,17 @@ using Metano.Compiler.TypeScript;
 namespace Metano.Tests;
 
 /// <summary>
-/// The <see cref="Int64Representation"/> staging switch of spec 012
-/// (DECIDED-22, FR-071) and the IR's unsigned 64-bit primitive (FR-001): the
-/// default <see cref="Int64Representation.Number"/> mode keeps the shipped
-/// output byte for byte, <c>ulong</c> included, although the IR no longer folds
-/// <c>ulong</c> into <c>long</c>.
+/// The one 64-bit mapping of the TypeScript target after the flip of spec 012
+/// (FR-071): <c>long</c>, <c>ulong</c>, <c>nint</c> and <c>nuint</c> are
+/// native <c>bigint</c> values, with no option to select anything else, and
+/// the IR keeps <c>ulong</c> apart from <c>long</c> (FR-001).
 /// </summary>
-public class Int64StagingSwitchTests
+public class SixtyFourBitMappingTests
 {
     /// <summary>
-    /// Every 64-bit position this slice's IR change touches: types, literals
-    /// beyond <c>long.MaxValue</c>, defaults, type tests, overload dispatch and
-    /// arithmetic. The golden is the output of the compiler before slice 012a.
+    /// Every 64-bit position the IR's unsigned primitive touches: types,
+    /// literals beyond <c>long.MaxValue</c>, defaults, type tests, overload
+    /// dispatch and arithmetic.
     /// </summary>
     private const string SixtyFourBitSource = """
         using System.Collections.Generic;
@@ -64,22 +63,9 @@ public class Int64StagingSwitchTests
         public readonly record struct UId(ulong Value);
         """;
 
-    [Test]
-    public async Task NumberMode_KeepsTheShippedOutput()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            SixtyFourBitSource,
-            Int64Representation.Number
-        );
-
-        await Assert
-            .That(files["ops.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-number-mode.ts"));
-    }
-
     /// <summary>
     /// A named-argument call that skips a <c>ulong</c> default keeps the
-    /// shipped opaque default until the 64-bit literal slice (FR-071).
+    /// shipped opaque default.
     /// </summary>
     [Test]
     public async Task Dart_SkippedULongDefault_KeepsTheShippedOpaqueDefault()
@@ -95,65 +81,35 @@ public class Int64StagingSwitchTests
     }
 
     [Test]
-    public async Task DefaultMode_IsNumber()
+    public async Task UInt64_EmitsBigInt()
     {
-        var defaultFiles = TranspileHelper.Transpile(SixtyFourBitSource);
-
-        var (numberFiles, _) = TranspileHelper.TranspileWithDiagnostics(
-            SixtyFourBitSource,
-            Int64Representation.Number
-        );
-
-        await Assert.That(defaultFiles).IsEquivalentTo(numberFiles);
-    }
-
-    [Test]
-    public async Task UInt64_StillEmitsNumber_InNumberMode()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            SixtyFourBitSource,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(SixtyFourBitSource);
 
         var holder = files["holder.ts"];
 
-        await Assert.That(holder).Contains("readonly u: number,");
-        await Assert.That(holder).Contains("readonly nU: number | null,");
-        await Assert.That(holder).Contains("readonly us: number[]");
-        await Assert.That(holder).Contains("typeof v.u === \"number\"");
-        await Assert.That(files["u-id.ts"]).Contains("number & { readonly __brand: \"UId\" }");
-    }
-
-    [Test]
-    public async Task TypeScriptTarget_DefaultsToNumber()
-    {
-        var target = new TypeScriptTarget();
-
-        await Assert.That(target.Int64Representation).IsEqualTo(Int64Representation.Number);
-    }
-
-    [Test]
-    public async Task TypeScriptTarget_PinsTheRepresentationInTheCacheFingerprint()
-    {
-        var numberTarget = new TypeScriptTarget();
-
-        var bigIntTarget = new TypeScriptTarget
-        {
-            Int64Representation = Int64Representation.BigInt,
-        };
-
-        await Assert.That(numberTarget.ConfigurationFingerprint).EndsWith(";int64=Number");
-        await Assert.That(bigIntTarget.ConfigurationFingerprint).EndsWith(";int64=BigInt");
+        await Assert.That(holder).Contains("readonly u: bigint,");
+        await Assert.That(holder).Contains("readonly nU: bigint | null,");
+        await Assert.That(holder).Contains("readonly us: bigint[]");
+        await Assert.That(holder).Contains("typeof v.u === \"bigint\"");
+        await Assert.That(files["u-id.ts"]).Contains("bigint & { readonly __brand: \"UId\" }");
     }
 
     /// <summary>
-    /// <c>nint</c> / <c>nuint</c> are 64-bit (DECIDED-2), so the Number mode
-    /// maps them to <c>number</c> like <c>long</c>, where it used to emit the
-    /// undeclared <c>IntPtr</c> / <c>UIntPtr</c> type names (a DECIDED-22
-    /// exception).
+    /// The cache fingerprint names the 64-bit mapping, so a group cache
+    /// written by a compiler that mapped <c>long</c> to <c>number</c> is
+    /// never reused.
     /// </summary>
     [Test]
-    public async Task NumberMode_NativeIntegers_MapToNumber()
+    public async Task TypeScriptTarget_PinsTheBigIntMappingInTheCacheFingerprint()
+    {
+        var target = new TypeScriptTarget();
+
+        await Assert.That(target.ConfigurationFingerprint).EndsWith(";int64=bigint");
+    }
+
+    /// <summary><c>nint</c> / <c>nuint</c> are 64-bit (DECIDED-2), so they map to <c>bigint</c> like <c>long</c>.</summary>
+    [Test]
+    public async Task NativeIntegers_MapToBigInt()
     {
         const string source = """
             [Transpile]
@@ -164,12 +120,9 @@ public class Int64StagingSwitchTests
             }
             """;
 
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            source,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(source);
 
-        await Assert.That(files["native.ts"]).Contains("widen(n: number): number {");
-        await Assert.That(files["native.ts"]).Contains("widenU(n: number): number {");
+        await Assert.That(files["native.ts"]).Contains("widen(n: bigint): bigint {");
+        await Assert.That(files["native.ts"]).Contains("widenU(n: bigint): bigint {");
     }
 }

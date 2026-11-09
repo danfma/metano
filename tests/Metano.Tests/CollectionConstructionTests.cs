@@ -353,8 +353,7 @@ public class CollectionConstructionTests
             {
                 private readonly Dictionary<long, int> _byId = [];
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         await Assert

@@ -10,28 +10,17 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Renders an <see cref="IrNumericConversion"/> per spec 012
 /// contracts/ts-emission.md § Conversions. A floating-point value cast to a
 /// 32-bit or narrower integer truncates through the <c>metano-runtime</c>
-/// helpers in both 64-bit modes (FR-070). Every other conversion renders in
-/// the staging <c>BigInt</c> mode only (FR-011–FR-019), where a 64-bit
-/// integer is a <c>bigint</c>; the <c>Number</c> mode never produces one
-/// (DECIDED-22) and keeps the operand.
+/// helpers (FR-070). Every other conversion crosses the <c>bigint</c> a
+/// 64-bit integer is (FR-011–FR-019).
 /// </summary>
 internal static class IrToTsNumericConversionBridge
 {
     private const string LiftedValueName = "value";
 
-    public static TsExpression Map(IrNumericConversion conversion, TsExpression operand)
-    {
-        // STAGING(012k): every conversion renders once the switch is gone.
-        var rendersConversion =
-            Int64RepresentationScope.IsBigInt || conversion.TruncatesFloatingPoint;
-
-        if (!rendersConversion)
-            return operand;
-
-        return conversion.IsLifted
+    public static TsExpression Map(IrNumericConversion conversion, TsExpression operand) =>
+        conversion.IsLifted
             ? Lifted(conversion, operand)
             : RenderConversion(conversion.From, conversion.To, conversion.IsChecked, operand);
-    }
 
     /// <summary>
     /// <c>x == null ? null : convert(x)</c> for an operand that is safe to

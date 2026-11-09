@@ -10,16 +10,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// native <c>BigInt.asIntN(64, …)</c> / <c>BigInt.asUintN(64, …)</c>, which
 /// imports nothing, and a checked one calls <c>checkedInt64</c> /
 /// <c>checkedUInt64</c>, which throw <c>OverflowException</c> (DECIDED-5).
-/// The staging <c>Number</c> mode keeps the operand (DECIDED-22).
 /// </summary>
 internal static class IrToTsIntegerOverflowBridge
 {
     public static TsExpression Map(IrIntegerOverflow overflow, TsExpression value)
     {
-        // STAGING(012k): every reduction renders once the switch is gone.
-        if (!Int64RepresentationScope.IsBigInt)
-            return value;
-
         var isSigned = overflow.Kind.IsSigned();
 
         return overflow.Mode switch

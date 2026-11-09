@@ -233,10 +233,7 @@ public class Int64OverflowTests
     [Test]
     public async Task BigIntMode_UncheckedArithmetic_Wraps()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            UncheckedSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(UncheckedSource);
 
         await Assert
             .That(files["wrap.ts"])
@@ -248,10 +245,7 @@ public class Int64OverflowTests
     [Test]
     public async Task BigIntMode_CheckedArithmetic_CallsTheRangeChecks()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            CheckedSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CheckedSource);
 
         await Assert
             .That(files["check.ts"])
@@ -268,8 +262,7 @@ public class Int64OverflowTests
     public async Task BigIntMode_ProjectWideOverflowChecks_CheckEveryOperation()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithOverflowChecks(
-            ProjectCheckedSource,
-            Int64Representation.BigInt
+            ProjectCheckedSource
         );
 
         await Assert
@@ -282,10 +275,7 @@ public class Int64OverflowTests
     [Test]
     public async Task BigIntMode_IncrementsAndCompoundAssignments_StoreTheReducedValue()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            IncrementsSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(IncrementsSource);
 
         await Assert
             .That(files["counter.ts"])
@@ -302,8 +292,7 @@ public class Int64OverflowTests
     public async Task NumberMode_KeepsTheShippedArithmetic()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            IncrementsSource + CheckedSource.Replace("using System;", ""),
-            Int64Representation.Number
+            IncrementsSource + CheckedSource.Replace("using System;", "")
         );
 
         var counter = files["counter.ts"];
@@ -427,10 +416,7 @@ public class Int64OverflowTests
     [Test]
     public async Task BigIntMode_ExtensionMembers_StoreTheReducedValue()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ExtensionSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExtensionSource);
 
         await Assert
             .That(files["uses.ts"])
@@ -447,10 +433,7 @@ public class Int64OverflowTests
     [Test]
     public async Task NumberMode_ExtensionMembers_LiftTheNullableOnes()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ExtensionSource,
-            Int64Representation.Number
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExtensionSource);
 
         await Assert
             .That(files["uses.ts"])

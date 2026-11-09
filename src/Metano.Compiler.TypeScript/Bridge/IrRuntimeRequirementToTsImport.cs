@@ -90,11 +90,6 @@ public static class IrRuntimeRequirementToTsImport
             // Event accessor helpers and overload-dispatcher type checks all
             // ship from metano-runtime under their own name.
             "delegateAdd" or "delegateRemove" => ("metano-runtime", req.HelperName, false),
-            // The 64-bit checks resolve through the staging switch (FR-048):
-            // the BigInt mode imports the bigint range checks the runtime
-            // ships under separate names, the Number mode the shipped ones.
-            "isInt64" => ("metano-runtime", Int64TypeCheckName.OfInt64, false),
-            "isUInt64" => ("metano-runtime", Int64TypeCheckName.OfUInt64, false),
             "isChar"
             or "isString"
             or "isByte"

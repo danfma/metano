@@ -65,10 +65,7 @@ public class CheckedContextTests
     [Test]
     public async Task Int32Context_LowersTransparently()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            Int32Source,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Int32Source);
 
         await Assert
             .That(files["counter.ts"])
@@ -80,15 +77,9 @@ public class CheckedContextTests
     [Test]
     public async Task Int32Context_IsTheSameInBothRepresentations()
     {
-        var (numberFiles, _) = TranspileHelper.TranspileWithDiagnostics(
-            Int32Source,
-            Int64Representation.Number
-        );
+        var (numberFiles, _) = TranspileHelper.TranspileWithDiagnostics(Int32Source);
 
-        var (bigIntFiles, _) = TranspileHelper.TranspileWithDiagnostics(
-            Int32Source,
-            Int64Representation.BigInt
-        );
+        var (bigIntFiles, _) = TranspileHelper.TranspileWithDiagnostics(Int32Source);
 
         await Assert.That(numberFiles).IsEquivalentTo(bigIntFiles);
     }
@@ -105,8 +96,7 @@ public class CheckedContextTests
                 public long Check(long a) => checked(a * 2);
                 public long Nested(long a, long b) => unchecked(checked(a + b) * 2);
             }
-            """,
-            Int64Representation.Number
+            """
         );
 
         var ops = files["ops.ts"];
@@ -135,8 +125,7 @@ public class CheckedContextTests
                     }
                 }
             }
-            """,
-            Int64Representation.Number
+            """
         );
 
         await Assert
@@ -175,8 +164,7 @@ public class CheckedContextTests
                     return l;
                 }
             }
-            """,
-            Int64Representation.Number
+            """
         );
 
         var ops = files["ops.ts"];
@@ -209,8 +197,7 @@ public class CheckedContextTests
                     }
                 }
             }
-            """,
-            Int64Representation.Number
+            """
         );
 
         var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
@@ -274,10 +261,7 @@ public class CheckedContextTests
     [Arguments("return Hashing.offset;")]
     public async Task UncheckedConstants_LowerToTheirWrappedValue(string expected)
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            WrappedConstantsSource,
-            Int64Representation.Number
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(WrappedConstantsSource);
 
         await Assert.That(files["hashing.ts"]).Contains(expected);
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
@@ -328,8 +312,7 @@ public class CheckedContextTests
     public async Task UncheckedEnumAndCharConstants_LowerToTheirWrappedValue(string expected)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            WrappedEnumAndCharSource,
-            Int64Representation.Number
+            WrappedEnumAndCharSource
         );
 
         await Assert.That(files["codes.ts"]).Contains(expected);
@@ -404,8 +387,7 @@ public class CheckedContextTests
                     return last;
                 }
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         await Assert
@@ -449,8 +431,7 @@ public class CheckedContextTests
                     return last;
                 }
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         var output = files["loops.ts"];
@@ -488,8 +469,7 @@ public class CheckedContextTests
                     return last;
                 }
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         await Assert

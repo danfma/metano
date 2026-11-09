@@ -53,14 +53,13 @@ public static class IrToTsEnumBridge
     }
 
     /// <summary>
-    /// The value a numeric member prints. In the staging <c>BigInt</c> mode a
-    /// 64-bit value prints as the double the member actually holds, the one
-    /// <c>MS0064</c> names (spec 012 FR-058); the <c>Number</c> mode keeps the
-    /// shipped digits. STAGING(012k).
+    /// The value a numeric member prints. A 64-bit value prints as the double
+    /// the member actually holds, the one <c>MS0064</c> names (spec 012
+    /// FR-058).
     /// </summary>
     private static string NumericMemberValue(object? value)
     {
-        if (value is not (long or ulong) || !Int64RepresentationScope.IsBigInt)
+        if (value is not (long or ulong))
             return value?.ToString() ?? "";
 
         var nearest = Int64EnumPrecision.NearestDouble(Int64EnumPrecision.ToBigInteger(value));

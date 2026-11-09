@@ -239,8 +239,7 @@ public class RuntimeHelperAliasTests
                     return total;
                 }
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         var output = files["num.ts"];

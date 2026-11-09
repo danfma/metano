@@ -95,10 +95,7 @@ public class Int64JsonContextTests
     [Test]
     public async Task BigIntMode_EmitsTheInt64Descriptors()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ContextSource(),
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ContextSource());
 
         if (TranspileHelper.UpdateGoldensRequested)
         {
@@ -115,10 +112,7 @@ public class Int64JsonContextTests
     [Test]
     public async Task NumberMode_KeepsTheShippedPrimitiveDescriptors()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            ContextSource(),
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ContextSource());
 
         if (TranspileHelper.UpdateGoldensRequested)
         {

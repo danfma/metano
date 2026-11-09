@@ -136,9 +136,7 @@ public class Int64ConversionTests
     private static readonly Lazy<(
         Dictionary<string, string> Files,
         IReadOnlyList<MetanoDiagnostic> Diagnostics
-    )> BigIntOutput = new(() =>
-        TranspileHelper.TranspileWithDiagnostics(ConversionSource, Int64Representation.BigInt)
-    );
+    )> BigIntOutput = new(() => TranspileHelper.TranspileWithDiagnostics(ConversionSource));
 
     [Test]
     public async Task BigIntMode_ConversionMatrix_MatchesGolden()
@@ -163,8 +161,7 @@ public class Int64ConversionTests
     public async Task BigIntMode_Record_MapsEverySixtyFourBitPosition()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            "[Transpile] public record Snowflake(long Id, ulong Mask, long? Parent, long[] Ids);",
-            Int64Representation.BigInt
+            "[Transpile] public record Snowflake(long Id, ulong Mask, long? Parent, long[] Ids);"
         );
 
         await Assert
@@ -230,10 +227,7 @@ public class Int64ConversionTests
             [Transpile, System.Flags] public enum Narrow { A = 1, B = 1 << 30 }
             """;
 
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            source,
-            Int64Representation.BigInt
-        );
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
 
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.Int64EnumValuePrecision))
@@ -272,10 +266,7 @@ public class Int64ConversionTests
     [Test]
     public async Task Int64EnumValuePrecision_IsSilentInNumberModeAndDart()
     {
-        var (_, numberDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ConversionSource,
-            Int64Representation.Number
-        );
+        var (_, numberDiagnostics) = TranspileHelper.TranspileWithDiagnostics(ConversionSource);
 
         var (_, dartDiagnostics) = DartTranspileHelper.Transpile(ConversionSource);
 
@@ -307,10 +298,7 @@ public class Int64ConversionTests
             }
             """;
 
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            source,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
 
         var output = files["helpers.ts"];
 
@@ -356,10 +344,7 @@ public class Int64ConversionTests
     [Test]
     public async Task BigIntMode_ForEach_ConvertsEachElement()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            ForEachSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource);
 
         var output = files["loops.ts"];
 
@@ -372,10 +357,7 @@ public class Int64ConversionTests
     [Test]
     public async Task NumberMode_ForEach_KeepsTheShippedLoop()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            ForEachSource,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource);
 
         await Assert.That(files["loops.ts"]).Contains("for (const x of ints) {");
         await Assert.That(files["loops.ts"]).DoesNotContain("$element");

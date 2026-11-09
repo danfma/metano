@@ -23,9 +23,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// type-parameter-typed parameters comes first, since C# prefers the less
 /// generic overload (<c>F(int)</c> over <c>F&lt;T&gt;(T)</c>) and a type
 /// parameter's guard is the loosest. The sort is stable, so remaining ties
-/// keep declaration order — with one gated exception: in the staging BigInt
-/// mode (spec 012 DECIDED-22), <see cref="SixtyFourBitDispatchOrder"/>
-/// reorders the sibling sets whose members differ only among
+/// keep declaration order — with one exception:
+/// <see cref="SixtyFourBitDispatchOrder"/> reorders the sibling sets whose members differ only among
 /// <c>long</c>, <c>ulong</c> and <c>BigInteger</c> into the documented
 /// dispatch order of OQ-6 (their guards all accept an in-range
 /// <c>bigint</c>, so C#'s static choice is unobservable there). Overloads
@@ -35,11 +34,6 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// argument counts with a concrete optional or <c>params</c> one, since C#
 /// can rank such sets cyclically; <see cref="CatchAllOverloads"/> reports
 /// them as <c>MS0063</c> until static call-site dispatch (#25) lands.
-/// </para>
-/// <para>
-/// Like the other bridges, the sort reads the staging mode from the ambient
-/// <see cref="Int64RepresentationScope"/> the transformer holds for the
-/// module being bridged; the Number mode keeps declaration order throughout.
 /// </para>
 /// </summary>
 internal static class OverloadDispatchOrder
@@ -57,9 +51,7 @@ internal static class OverloadDispatchOrder
             .Select(entry => entry.Overload)
             .ToList();
 
-        return Int64RepresentationScope.IsBigInt
-            ? SixtyFourBitDispatchOrder.Reordered(sorted, parametersOf)
-            : sorted;
+        return SixtyFourBitDispatchOrder.Reordered(sorted, parametersOf);
     }
 
     /// <summary>The tiers, in dispatch order.</summary>

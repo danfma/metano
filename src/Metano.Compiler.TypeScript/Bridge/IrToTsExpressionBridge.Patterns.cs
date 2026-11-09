@@ -223,8 +223,8 @@ public static partial class IrToTsExpressionBridge
     /// <c>instanceof</c> its class. Two kinds precede the classification, where
     /// a bare <c>typeof</c> would over-accept: a <c>decimal</c> lowers to a
     /// decimal.js <c>Decimal</c> instance, so its test is
-    /// <c>instanceof Decimal</c>, and a 64-bit integer in the staging BigInt
-    /// mode (spec 012 DECIDED-22, FR-048) lowers to a <c>bigint</c> that the
+    /// <c>instanceof Decimal</c>, and a 64-bit integer (spec 012 FR-048)
+    /// lowers to a <c>bigint</c> that the
     /// <c>typeof</c> test alone cannot range — <c>o is long</c> and
     /// <c>o is ulong</c> read the runtime range checks
     /// (<see cref="IrTypeCheckBuilder"/> DECIDED-14), which also tells a
@@ -237,15 +237,13 @@ public static partial class IrToTsExpressionBridge
         {
             IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } =>
                 IrTypeCheckBuilder.DecimalInstanceof(value),
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 }
-                when Int64RepresentationScope.IsBigInt => SixtyFourBitRangeTest(
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 } => SixtyFourBitRangeTest(
                 value,
-                Int64TypeCheckName.OfInt64
+                "isInt64"
             ),
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 }
-                when Int64RepresentationScope.IsBigInt => SixtyFourBitRangeTest(
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 } => SixtyFourBitRangeTest(
                 value,
-                Int64TypeCheckName.OfUInt64
+                "isUInt64"
             ),
             _ => IrRuntimeTypeTest.Of(targetType) switch
             {

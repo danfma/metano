@@ -3,7 +3,7 @@ using Metano.Compiler.IR;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Finds the overload sets a BigInt-mode dispatcher cannot tell apart because
+/// Finds the overload sets a dispatcher cannot tell apart because
 /// a branded 64-bit type sits beside another <c>bigint</c>-valued type: the
 /// branded arm is a <c>typeof === "bigint"</c> test, which accepts every
 /// <c>bigint</c> the <c>long</c> / <c>ulong</c> / <c>BigInteger</c> guards
@@ -26,16 +26,13 @@ internal static class BrandedSixtyFourBitOverloads
 {
     /// <summary>
     /// Each ambiguous group, members in the order given; empty when there is
-    /// none or the 64-bit integers are not <c>bigint</c> values.
+    /// none.
     /// </summary>
     public static IReadOnlyList<IReadOnlyList<TOverload>> Find<TOverload>(
         IEnumerable<TOverload> overloads,
         Func<TOverload, IReadOnlyList<IrParameter>> parametersOf
     )
     {
-        if (!Int64RepresentationScope.IsBigInt)
-            return [];
-
         return overloads
             .Select(overload => new Candidate<TOverload>(
                 overload,

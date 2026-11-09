@@ -222,28 +222,23 @@ internal static class IrTypeCheckBuilder
     /// <c>int</c> from <c>double</c> — and it cannot range a <c>bigint</c>
     /// either, which is why the type patterns (<c>o is long</c>,
     /// <see cref="IrToTsExpressionBridge"/> pattern lowering) route the 64-bit
-    /// kinds to the runtime range checks in the staging BigInt mode instead of
-    /// here; a <c>typeof</c> answer survives only for the dispatcher's branded
-    /// check (<see cref="BrandedCheck"/>), where the guard builder's
-    /// <c>typeof</c> spelling of FR-049 is the shipped contract, and for the
-    /// Number mode's <c>number</c> spelling.
+    /// kinds to the runtime range checks instead of here; a <c>typeof</c>
+    /// answer survives only for the dispatcher's branded check
+    /// (<see cref="BrandedCheck"/>), where the guard builder's <c>typeof</c>
+    /// spelling of FR-049 is the shipped contract.
     /// </summary>
     internal static string TypeofKind(IrPrimitive primitive) =>
         primitive switch
         {
             IrPrimitive.String or IrPrimitive.Char or IrPrimitive.Guid => "string",
             IrPrimitive.Boolean => "boolean",
-            IrPrimitive.Int64 or IrPrimitive.UInt64 when Int64RepresentationScope.IsBigInt =>
-                "bigint",
+            IrPrimitive.Int64 or IrPrimitive.UInt64 or IrPrimitive.BigInteger => "bigint",
             IrPrimitive.Int32
-            or IrPrimitive.Int64
-            or IrPrimitive.UInt64
             or IrPrimitive.Int16
             or IrPrimitive.Byte
             or IrPrimitive.Float32
             or IrPrimitive.Float64
             or IrPrimitive.Decimal => "number",
-            IrPrimitive.BigInteger => "bigint",
             _ => throw new InvalidOperationException(
                 $"Primitive '{primitive}' lowers to an object, not a typeof-testable value."
             ),
@@ -278,9 +273,7 @@ internal static class IrTypeCheckBuilder
     /// (e.g. <c>M(int)</c> vs <c>M(double)</c>) remain distinguishable at
     /// runtime. <c>decimal</c> piggy-backs on <c>isFloat64</c> because the type
     /// mapper lowers it to <c>number</c> at the signature level. The 64-bit
-    /// kinds read the staging switch through <see cref="Int64TypeCheckName"/>:
-    /// the BigInt mode dispatches with the <c>bigint</c> range checks, the
-    /// Number mode with the shipped <c>number</c> checks (FR-048).
+    /// kinds dispatch with the <c>bigint</c> range checks (FR-048).
     /// </summary>
     private static TsExpression PrimitiveCheck(IrPrimitive primitive, TsExpression value) =>
         primitive switch
@@ -290,8 +283,8 @@ internal static class IrTypeCheckBuilder
             IrPrimitive.Byte => RuntimeIs("isByte", value),
             IrPrimitive.Int16 => RuntimeIs("isInt16", value),
             IrPrimitive.Int32 => RuntimeIs("isInt32", value),
-            IrPrimitive.Int64 => RuntimeIs(Int64TypeCheckName.OfInt64, value),
-            IrPrimitive.UInt64 => RuntimeIs(Int64TypeCheckName.OfUInt64, value),
+            IrPrimitive.Int64 => RuntimeIs("isInt64", value),
+            IrPrimitive.UInt64 => RuntimeIs("isUInt64", value),
             IrPrimitive.Float32 => RuntimeIs("isFloat32", value),
             IrPrimitive.Float64 => RuntimeIs("isFloat64", value),
             IrPrimitive.Boolean => RuntimeIs("isBool", value),

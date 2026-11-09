@@ -21,10 +21,8 @@ internal static class JsonTypeClassifier
         if (IsNullable(type))
             return JsonPropertyKind.Nullable;
 
-        // A long / ulong in the staging BigInt mode (spec 012 DECIDED-22,
-        // STAGING(012k)): its descriptor is int64 (FR-050). Number mode
-        // classifies it as a primitive with a numberType, the 2.x shape.
-        if (Int64RepresentationScope.IsBigInt && Is64BitIntegerType(type))
+        // A long / ulong: its descriptor is int64 (spec 012 FR-050).
+        if (Is64BitIntegerType(type))
             return JsonPropertyKind.Int64;
 
         if (IsPrimitive(type))
@@ -221,11 +219,10 @@ internal static class JsonTypeClassifier
                 : JsonPropertyKind.NumericEnum;
 
         // [Branded] (and its predecessor [InlineWrapper]) over a 64-bit
-        // integer unwraps to the int64 descriptor in the staging BigInt mode
-        // (FR-050, STAGING(012k)); any other branded type keeps the branded
-        // descriptor, the 2.x shape Number mode ships.
+        // integer unwraps to the int64 descriptor (FR-050); any other branded
+        // type keeps the branded descriptor.
         if (SymbolHelper.HasBranded(named))
-            return Int64RepresentationScope.IsBigInt && Is64BitIntegerType(UnwrapBranded(named))
+            return Is64BitIntegerType(UnwrapBranded(named))
                 ? JsonPropertyKind.Int64
                 : JsonPropertyKind.Branded;
 
