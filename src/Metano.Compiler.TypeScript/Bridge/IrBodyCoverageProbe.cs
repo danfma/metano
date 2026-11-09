@@ -115,7 +115,11 @@ public static class IrBodyCoverageProbe
             IrTupleLiteral tuple => tuple.Elements.All(IsCoveredExpression),
             IrTupleEqualityExpression tupleEquality => IsCoveredExpression(tupleEquality.Left)
                 && IsCoveredExpression(tupleEquality.Right),
-            IrSpreadExpression spread => IsCoveredExpression(spread.Expression),
+            IrSpreadExpression spread => IsCoveredExpression(spread.Expression)
+                && (
+                    spread.ElementConversion is not { } conversion
+                    || IsCoveredExpression(conversion.Converted)
+                ),
             IrYieldExpression ye => ye.Value is null || IsCoveredExpression(ye.Value),
             IrConditionalReceiver => true,
             IrNullConditionalAccess access => IsCoveredExpression(access.Receiver)

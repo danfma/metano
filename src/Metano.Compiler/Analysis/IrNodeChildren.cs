@@ -46,6 +46,11 @@ public static class IrNodeChildren
             IrTupleLiteral tuple => tuple.Elements,
             IrTupleEqualityExpression tupleEquality => [tupleEquality.Left, tupleEquality.Right],
             IrObjectLiteral obj => obj.Properties.Select(p => p.Value),
+            IrSpreadExpression { ElementConversion: { } conversion } spread =>
+            [
+                spread.Expression,
+                conversion.Converted,
+            ],
             IrSpreadExpression spread => [spread.Expression],
             IrStringInterpolation interpolation => interpolation
                 .Parts.OfType<IrInterpolationExpression>()

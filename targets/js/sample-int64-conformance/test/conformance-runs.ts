@@ -20,6 +20,7 @@ import * as mathStatics from "../src/sample-int64-conformance/math-statics.ts";
 import * as overflow from "../src/sample-int64-conformance/overflow.ts";
 import * as parsing from "../src/sample-int64-conformance/parsing.ts";
 import * as shifts from "../src/sample-int64-conformance/shifts.ts";
+import * as tupleConversions from "../src/sample-int64-conformance/tuple-conversions.ts";
 
 import type { Twin } from "./conformance.ts";
 
@@ -42,4 +43,5 @@ export const FIXTURE_RUNS: readonly FixtureRun[] = [
   },
   { name: "comparisons.json", twin: [comparisons] },
   { name: "indexing.json", twin: [indexing] },
+  { name: "tuples.json", twin: [tupleConversions] },
 ];

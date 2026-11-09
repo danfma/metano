@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Numeric conversions and constants of the exact 64-bit lowering (spec 012
+/// Numeric conversions and constants of the 64-bit lowering (spec 012
 /// FR-008, FR-010, FR-070). Roslyn decides every case: the implicit
 /// conversion it reports for an expression (<c>GetConversion</c> and the
 /// converted type), the explicit one of a cast (<see cref="IConversionOperation"/>,
@@ -113,7 +113,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var needsNode =
-            NumericEndpoints.NeedsExactConversion(from, to)
+            NumericEndpoints.CrossesSixtyFourBits(from, to)
             && !IsExactRelationalOperand(expression, from, to);
 
         return needsNode ? (from, to) : null;
@@ -238,11 +238,16 @@ public sealed partial class IrExpressionExtractor
         object value,
         ITypeSymbol? type,
         ITypeSymbol? convertedType
-    )
+    ) =>
+        ConstantLiteralOfKind(
+            value,
+            NumericEndpoints.Of(convertedType) ?? NumericEndpoints.Of(type)
+        );
+
+    /// <summary>The literal of a constant <paramref name="value"/> in the kind of <paramref name="target"/>.</summary>
+    private static IrLiteral ConstantLiteralOfKind(object value, IrNumericEndpoint? target)
     {
-        // TODO: merge ClassifyNumericForConvertedType into this; the literal
-        // path no longer has a second 64-bit representation to keep apart.
-        var target = NumericEndpoints.Of(convertedType) ?? NumericEndpoints.Of(type);
+        // TODO(#602): merge ClassifyNumericForConvertedType into this.
         var number = value is char character ? (int)character : value;
 
         // An enum value is a plain number in every target, whatever its

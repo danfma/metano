@@ -115,7 +115,7 @@ export class Comparisons {
   }
 
   static convertedArgument(a: [bigint, bigint], b: [number, number]): boolean {
-    return tupleEquals(a, b);
+    return tupleEquals(a, [BigInt(b[0]), BigInt(b[1])] as [bigint, bigint]);
   }
 
   static convertedLiteral(a: [number, number]): boolean {
@@ -123,7 +123,7 @@ export class Comparisons {
   }
 
   static guardedConverted(a: [bigint, bigint] | null, b: [number, number]): boolean | null {
-    return a == null ? null : tupleEquals(a, b);
+    return a == null ? null : tupleEquals(a, [BigInt(b[0]), BigInt(b[1])] as [bigint, bigint]);
   }
 
   static boxedConverted(a: [bigint, bigint] | null, b: [number, number]): boolean {

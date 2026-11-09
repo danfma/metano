@@ -8,9 +8,9 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// The 64-bit side of the expression-tree walker (spec 012 FR-044): a cast into or out of a 64-bit integer,
-/// and an implicit numeric conversion Roslyn reports into or out of one,
-/// become an <see cref="IrExprConvert"/>; a constant converted to a 64-bit
+/// The 64-bit side of the expression-tree walker (spec 012 FR-044): a cast
+/// into or out of a 64-bit integer, and an implicit numeric conversion Roslyn
+/// reports into or out of one, become an <see cref="IrExprConvert"/>; a constant converted to a 64-bit
 /// integer folds to a literal holding the converted value.
 /// </summary>
 internal sealed partial class IrExpressionTreeExtractor
@@ -97,7 +97,7 @@ internal sealed partial class IrExpressionTreeExtractor
         NumericEndpoints.Of(from) is { } source
         && NumericEndpoints.Of(to) is { } target
         && (source.IsSixtyFourBitValue() || target.IsSixtyFourBitValue())
-        && NumericEndpoints.NeedsExactConversion(source, target);
+        && NumericEndpoints.CrossesSixtyFourBits(source, target);
 
     /// <summary>A constant's value in the type it converts to (<c>5</c> in a <c>long</c> slot is <c>5L</c>).</summary>
     private static object ConvertedConstant(object value, ITypeSymbol type) =>
