@@ -423,6 +423,8 @@ public static class IrConstructorExtractor
         var extractor = new IrExpressionExtractor(model, context.Extraction, localNames);
         var arguments = extractor.ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
 
+        extractor.ReportIfThisChainOrderIsLost(thisCall);
+
         // The target carries its declaration ordinal, so a backend that
         // addresses one constructor overload by it (a Dart redirect to a named
         // constructor) names the chained overload, not the first one.

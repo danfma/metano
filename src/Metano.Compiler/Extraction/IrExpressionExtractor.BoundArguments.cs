@@ -99,44 +99,86 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// <c>MS0001</c> at a <c>: this(...)</c> chain whose named arguments are
+    /// out of parameter order, for a target that passes them in parameter
+    /// order (<see cref="IrExtractionContext.KeepsArgumentEvaluationOrder"/>
+    /// unset): the chain's arguments are recorded as written, not bound, so
+    /// <see cref="ExtractBoundCall"/> never sees them.
+    /// </summary>
+    internal void ReportIfThisChainOrderIsLost(ConstructorInitializerSyntax thisCall)
+    {
+        if (
+            _semantic.GetOperation(thisCall) is IInvocationOperation invocation
+            && IsReordered(invocation.Arguments)
+        )
+            ReportIfEvaluationOrderIsLost(invocation, invocation.Arguments);
+    }
+
+    /// <summary>
+    /// Whether the written arguments, which Roslyn lists in evaluation order,
+    /// are out of parameter order.
+    /// </summary>
+    private static bool IsReordered(ImmutableArray<IArgumentOperation> arguments)
+    {
+        var ordinals = arguments
+            .Where(argument => argument.ArgumentKind == ArgumentKind.Explicit)
+            .Select(argument => argument.Parameter?.Ordinal ?? -1)
+            .ToList();
+
+        return !ordinals.SequenceEqual(ordinals.Order());
+    }
+
+    /// <summary>
     /// <c>MS0001</c> at a reordered call for a target that passes bound
     /// arguments in parameter order
     /// (<see cref="IrExtractionContext.KeepsArgumentEvaluationOrder"/> unset)
     /// when two or more of its evaluations are order-sensitive: the target
     /// would run them in parameter order. With one, the order cannot differ.
-    /// A constructor initializer (<c>: base(...)</c>) is left out: such a
-    /// target does not emit the bound base call.
     /// </summary>
     private void ReportIfEvaluationOrderIsLost(
         IOperation call,
         ImmutableArray<IArgumentOperation> arguments
     )
     {
-        if (
-            _context.KeepsArgumentEvaluationOrder
-            || call is IInvocationOperation { TargetMethod.MethodKind: MethodKind.Constructor }
-        )
+        if (_context.KeepsArgumentEvaluationOrder || IsBaseInitializer(call))
             return;
 
-        var orderSensitive =
-            arguments.Count(argument => !IsOrderInsensitive(argument.Value))
-            + (IsOrderInsensitiveReceiver(ReceiverOf(call)) ? 0 : 1);
-
-        if (orderSensitive < 2)
+        if (CountOrderSensitiveEvaluations(call, arguments) < 2)
             return;
 
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.UnsupportedFeature,
-                $"Named arguments out of parameter order with more than one evaluation that C# "
-                    + $"runs in written order are not supported for {_context.Target}: the call "
-                    + "passes them in parameter order, so they are evaluated in that order "
-                    + "(spec 013 FR-017, #591).",
+                "Named arguments out of parameter order with more than one evaluation that C# "
+                    + "runs in written order are not supported by this target: the call passes "
+                    + "them in parameter order, so they are evaluated in that order "
+                    + "(spec 013 FR-017).",
                 call.Syntax.GetLocation()
             )
         );
     }
+
+    /// <summary>
+    /// A <c>: base(...)</c> call. TODO(#572): Dart emits no base constructor
+    /// call yet, so its argument order has nothing to report.
+    /// </summary>
+    private static bool IsBaseInitializer(IOperation call) =>
+        call.Syntax is ConstructorInitializerSyntax initializer
+        && initializer.IsKind(SyntaxKind.BaseConstructorInitializer);
+
+    /// <summary>
+    /// The order-sensitive evaluations of a call: its arguments and a
+    /// receiver that is itself a computation. Conservative: a receiver runs
+    /// before the arguments in C# and in every target, so counting it can
+    /// report a call whose order does not change.
+    /// </summary>
+    private static int CountOrderSensitiveEvaluations(
+        IOperation call,
+        ImmutableArray<IArgumentOperation> arguments
+    ) =>
+        arguments.Count(argument => !IsOrderInsensitive(argument.Value))
+        + (IsOrderInsensitiveReceiver(ReceiverOf(call)) ? 0 : 1);
 
     private static IOperation? ReceiverOf(IOperation call) =>
         call is IInvocationOperation invocation ? invocation.Instance : null;
@@ -159,12 +201,22 @@ public sealed partial class IrExpressionExtractor
     /// constant (a literal, a negated literal, <c>null</c>, a <c>const</c>), a
     /// <c>default</c>, <c>this</c>, <c>typeof</c>, a lambda, or a collection
     /// made only of those. Every other expression — a local or member read
-    /// included, which a call or a captured closure may write — is
-    /// order-sensitive.
+    /// included, which a call or a captured closure may write, and a
+    /// user-defined conversion, which runs its operator — is order-sensitive.
     /// </summary>
+    /// <remarks>
+    /// Deliberately stricter than
+    /// <see cref="Analysis.IrEvaluationTraits.IsSideEffectFree"/>, which
+    /// counts a local read as free: a read has no side effect, but its value
+    /// depends on when it runs, so here it is order-sensitive. Do not unify
+    /// the two.
+    /// </remarks>
     private static bool IsOrderInsensitive(IOperation operation) =>
-        operation.ConstantValue.HasValue
-        || operation switch
+        operation is not IConversionOperation { OperatorMethod: not null }
+        && (operation.ConstantValue.HasValue || IsOrderInsensitiveShape(operation));
+
+    private static bool IsOrderInsensitiveShape(IOperation operation) =>
+        operation switch
         {
             IConversionOperation conversion => IsOrderInsensitive(conversion.Operand),
             IDefaultValueOperation
