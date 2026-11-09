@@ -64,4 +64,22 @@ export class Pairs {
   sameTypes(a: [bigint, bigint], b: [bigint, bigint]): boolean {
     return a[0] === b[0] && a[1] === b[1];
   }
+
+  iterated(pairs: [number, number][]): bigint {
+    let total = 0n;
+    for (const pair$element of pairs) {
+      const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
+      total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
+    }
+
+    return total;
+  }
+
+  nullableLiteral(): [bigint, bigint] | null {
+    return [1n, 2n] as [bigint, bigint];
+  }
+
+  forgiven(pair: [number, number] | null): [bigint, bigint] | null {
+    return pair == null ? null : [BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint];
+  }
 }

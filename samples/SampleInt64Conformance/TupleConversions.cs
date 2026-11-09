@@ -134,6 +134,24 @@ public static class TupleConversions
         return narrow.Item1;
     }
 
+    public static long IteratedSum(int a, int b)
+    {
+        var pairs = new List<(int, int)> { (a, b), (b, a) };
+        long total = 0;
+
+        foreach ((long, long) pair in pairs)
+            total += pair.Item1 - pair.Item2 + pair.Item1;
+
+        return total;
+    }
+
+    public static long NullableLiteralSum(int a, int b)
+    {
+        (long, long)? wide = (a, b);
+
+        return wide is { } pair ? pair.Item1 + pair.Item2 : -1;
+    }
+
     public static long SpreadListSum(int a, int b)
     {
         var ints = new List<int> { a, b };

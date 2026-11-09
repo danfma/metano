@@ -38,10 +38,14 @@ public sealed partial class IrExpressionExtractor
             return value;
 
         var typeInfo = _semantic.GetTypeInfo(expression);
-        var elements = new TupleElementConversions(NumericEndpoints.CrossesSixtyFourBits, false);
 
-        return ConvertedTuple(expression, value, typeInfo.Type, typeInfo.ConvertedType, elements)
-            ?? value;
+        return ConvertedTuple(
+                expression,
+                value,
+                typeInfo.Type,
+                typeInfo.ConvertedType,
+                TupleElementConversions.Implicit
+            ) ?? value;
     }
 
     /// <summary>
@@ -54,12 +58,30 @@ public sealed partial class IrExpressionExtractor
         IrExpression operand,
         ITypeSymbol sourceType,
         ITypeSymbol targetType
+    ) => ExplicitTupleConversion((SyntaxNode)cast, operand, sourceType, targetType);
+
+    /// <summary>
+    /// <paramref name="value"/> in the explicit tuple conversion C# applies
+    /// at <paramref name="site"/> — a cast, or the element conversion of a
+    /// <c>foreach</c> — in the site's checked context; <c>null</c> when no
+    /// element converts.
+    /// </summary>
+    internal IrExpression? ExplicitTupleConversion(
+        SyntaxNode site,
+        IrExpression value,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
     )
     {
-        var isChecked = CheckedContexts.IsChecked(cast, _semantic.Compilation);
-        var elements = new TupleElementConversions(NumericEndpoints.IsLoweredExplicitly, isChecked);
+        var isChecked = CheckedContexts.IsChecked(site, _semantic.Compilation);
 
-        return ConvertedTuple(cast, operand, sourceType, targetType, elements);
+        return ConvertedTuple(
+            site,
+            value,
+            sourceType,
+            targetType,
+            TupleElementConversions.Explicit(isChecked)
+        );
     }
 
     /// <summary>
@@ -76,11 +98,13 @@ public sealed partial class IrExpressionExtractor
         TupleElementConversions elements
     )
     {
-        if (_target is Metano.Annotations.TargetLanguage.Dart || !elements.Applies(from, to))
+        if (
+            _target is Metano.Annotations.TargetLanguage.Dart
+            || elements.ConvertingTuples(from, to) is not var (source, target)
+        )
             return null;
 
-        var source = (INamedTypeSymbol)from!.UnwrapNullableValueType();
-        var target = (INamedTypeSymbol)to!.UnwrapNullableValueType();
+        var isLifted = from.IsNullableValueType();
 
         if (source.TupleElements.Length > SymbolHelper.MaxFlatTupleArity)
         {
@@ -93,7 +117,7 @@ public sealed partial class IrExpressionExtractor
         return BindOnce(
             value,
             IrEvaluationTraits.IsSideEffectFree(value),
-            tuple => RebuiltTuple(site, tuple, from.IsNullableValueType(), source, target, elements)
+            tuple => RebuiltTuple(site, tuple, isLifted, source, target, elements)
         );
     }
 
@@ -173,12 +197,24 @@ public sealed partial class IrExpressionExtractor
         bool IsChecked
     )
     {
+        /// <summary>The implicit rule: an element converts when it crosses a 64-bit integer.</summary>
+        public static TupleElementConversions Implicit { get; } =
+            new(NumericEndpoints.CrossesSixtyFourBits, IsChecked: false);
+
+        /// <summary>The explicit-cast rule, in the cast's checked context.</summary>
+        public static TupleElementConversions Explicit(bool isChecked) =>
+            new(NumericEndpoints.IsLoweredExplicitly, isChecked);
+
         /// <summary>
-        /// Whether <paramref name="from"/> and <paramref name="to"/> are two
-        /// tuples (nullable or not) of one arity with an element, at any
-        /// depth, that converts.
+        /// The two tuple types (nullable unwrapped) when
+        /// <paramref name="from"/> and <paramref name="to"/> are tuples of
+        /// one arity with an element, at any depth, that converts;
+        /// <c>null</c> otherwise.
         /// </summary>
-        public bool Applies(ITypeSymbol? from, ITypeSymbol? to)
+        public (INamedTypeSymbol Source, INamedTypeSymbol Target)? ConvertingTuples(
+            ITypeSymbol? from,
+            ITypeSymbol? to
+        )
         {
             if (
                 from?.UnwrapNullableValueType() is not INamedTypeSymbol { IsTupleType: true } source
@@ -186,15 +222,18 @@ public sealed partial class IrExpressionExtractor
                     is not INamedTypeSymbol { IsTupleType: true } target
                 || source.TupleElements.Length != target.TupleElements.Length
             )
-                return false;
+                return null;
 
-            return source
+            var converts = source
                 .TupleElements.Zip(target.TupleElements)
-                .Any(pair =>
-                    Applies(pair.First.Type, pair.Second.Type)
-                    || ScalarEndpoints(pair.First.Type, pair.Second.Type) is not null
-                );
+                .Any(pair => ConvertsElement(pair.First.Type, pair.Second.Type));
+
+            return converts ? (source, target) : null;
         }
+
+        /// <summary>Whether an element of type <paramref name="from"/> converts on its way to <paramref name="to"/>: a tuple with a converting element, or a numeric element.</summary>
+        public bool ConvertsElement(ITypeSymbol from, ITypeSymbol to) =>
+            ConvertingTuples(from, to) is not null || ScalarEndpoints(from, to) is not null;
 
         /// <summary>The endpoints of a numeric element that converts; <c>null</c> for any other element.</summary>
         public (IrNumericEndpoint From, IrNumericEndpoint To)? ScalarEndpoints(

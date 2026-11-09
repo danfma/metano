@@ -106,7 +106,10 @@ public sealed partial class IrExpressionExtractor
     {
         var typeInfo = _semantic.GetTypeInfo(tuple);
 
-        var type = typeInfo.ConvertedType is { IsTupleType: true } converted
+        // A nullable tuple target (`(long, long)? t = (1, 2)`) converts the
+        // literal to its underlying tuple first.
+        var type = typeInfo.ConvertedType?.UnwrapNullableValueType()
+            is { IsTupleType: true } converted
             ? converted
             : typeInfo.Type;
 

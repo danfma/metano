@@ -372,7 +372,7 @@ public static partial class IrToTsExpressionBridge
             return new TsSpreadExpression(source);
 
         var convert = new TsArrowFunction(
-            [new TsParameter(conversion.Element, null)],
+            [new TsParameter(conversion.ElementName, null)],
             [new TsReturnStatement(Map(conversion.Converted, context))]
         );
 

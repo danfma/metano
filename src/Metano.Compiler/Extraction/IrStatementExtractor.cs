@@ -421,6 +421,16 @@ public sealed class IrStatementExtractor(
         var info = _semantic.GetForEachStatementInfo(fe);
         var variableType = (_semantic.GetDeclaredSymbol(fe) as ILocalSymbol)?.Type;
 
+        // `foreach ((long, long) pair in intPairs)`: the element conversion is
+        // a tuple one, rebuilt element by element like an explicit cast.
+        if (
+            info.ElementType is { } tupleElement
+            && variableType is not null
+            && _expressions.ExplicitTupleConversion(fe, element, tupleElement, variableType)
+                is { } tuple
+        )
+            return tuple;
+
         if (
             !IsNumericElementConversion(info)
             || info.ElementType is not { } elementType

@@ -719,10 +719,10 @@ public sealed record IrSpreadExpression(
 /// <summary>
 /// The per-element conversion of a spread: <see cref="Converted"/> is the
 /// value each element becomes, reading the element as the identifier
-/// <see cref="Element"/>. TypeScript maps the source through it; Dart, whose
+/// <see cref="ElementName"/>. TypeScript maps the source through it; Dart, whose
 /// <c>int</c> already holds every 64-bit integer, spreads the source as it is.
 /// </summary>
-public sealed record IrSpreadElementConversion(string Element, IrExpression Converted);
+public sealed record IrSpreadElementConversion(string ElementName, IrExpression Converted);
 
 /// <summary>What a spread operand enumerates as.</summary>
 public enum IrSpreadSource
