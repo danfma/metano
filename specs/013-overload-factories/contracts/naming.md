@@ -88,8 +88,8 @@ or module function; for virtual and interface members, the **root** group of § 
    whole member. A conversion operator has no C# name, so its `[Name]` names its group and pins
    nothing (`[Name("toInt")] explicit operator int(Money)` / `explicit operator long(Money)` →
    `__toInt` over `__toIntMoneyToInt32` / `__toIntMoneyToInt64`). A `[Name]` on a constructor
-   outside a dispatched set names nothing and reports an `MS0003` warning. Dart pins nothing
-   before slice 013g. Root anchoring decides overrides and implementations (§ Root anchoring):
+   outside a dispatched set names nothing and reports an `MS0003` warning. Dart pins the same
+   suffixes (slice 013g). Root anchoring decides overrides and implementations (§ Root anchoring):
    in a derived type's visible group an anchored member carries its root's pin, never its own,
    so its ignored `[Name]` cannot move the type's other overloads.
 8. **Candidate names.** From the suffix `S` of overload `o` of type `T`:

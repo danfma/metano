@@ -79,7 +79,8 @@ interface implementation always takes the suffix of the member it overrides or
 implements, so put `[Name]` there; a different `[Name]` on the implementer is
 ignored with an `MS0003` warning. A conversion operator has no C# name, so its
 `[Name]` still names it, and `[Name]` on a constructor that is not overloaded has
-no effect (an `MS0003` warning).
+no effect (an `MS0003` warning). The Dart target pins the same suffixes. The
+whole naming rule is in [Overloads](overloads.md#the-naming-rule).
 
 ### `[Ignore]`
 

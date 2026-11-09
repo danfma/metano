@@ -65,6 +65,23 @@ so the type keeps runtime dispatch for those names and gets no per-implementatio
 
 When two constructions are indistinguishable at run time (`IConv<List<int>>` and `IConv<int[]>`, both arrays), the message adds: `the constructions 'IConv<List<int>>' and 'IConv<int[]>' cannot be told apart at run time; the first branch wins.` — the same outcome as today's dispatcher.
 
+## The Dart target (slice 013g)
+
+Dart claims in one table per class (dart-mapping.md), so it reports `MS0067` and `MS0068` from
+its own claim pass with the same codes, severities and locations, and messages prefixed with
+`Dart target:` (`DartClassClaimPass`, `DartFlatClaimPass`):
+
+`Dart target: Named constructor 'Money.fromCents' of 'Money(int c)' collides with the user member 'fromCents'; it is emitted as 'fromCents$' (spec 013 FR-004).`
+
+`Dart target: Fast path 'Dog.speakN' of 'Speak(int n)' collides with the fast path of 'Speak(int n)' inherited from 'Animal'; it is emitted as 'speakN$' (spec 013 FR-004).`
+
+`Dart target: 'Parrot.speakN' would override the fast path of 'Speak(int n)' inherited from 'Animal'; rename the member, or rename the root overload's parameter or pin it with [Name] (spec 013 FR-034).`
+
+`MS0069` is the core's diagnostic, reported by the Dart class emission as by TypeScript's; Dart
+declares the first implementation of a shared root name (a Dart class cannot implement two
+constructions of one interface either). `MS0068` reason 2 does not arise: Dart constructors are
+not inherited.
+
 ## `MS0003` (dead end)
 
 `Overloads 'K(N.Decimal d)' and 'K(N.Decimal d)' have the same naming spelling at every qualification level; they are named with the suffixes 'GlobalNDecimal$1' and 'GlobalNDecimal$2' (spec 013 FR-024).`
@@ -94,4 +111,4 @@ a warning at the attribute's argument:
 
 `[Name("cents")] on the constructor 'Fee(int value)' has no effect: only an overload of a dispatched constructor set gets a factory and a selector to name (spec 013 FR-005).`
 
-The Dart target reports none of the `[Name]` diagnostics before slice 013g: it pins no suffix.
+The Dart target reports the same `[Name]` diagnostics since slice 013g: it pins the same suffixes.
