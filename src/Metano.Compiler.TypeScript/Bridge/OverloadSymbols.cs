@@ -17,6 +17,31 @@ internal static class OverloadSymbols
     internal static string Describe(IMethodSymbol? symbol) =>
         symbol?.ToDisplayString(SignatureFormat) ?? "an overload";
 
+    /// <summary>The quoted, comma-separated signatures of <paramref name="symbols"/>.</summary>
+    internal static string DescribeAll(IEnumerable<IMethodSymbol?> symbols) =>
+        string.Join(", ", symbols.Select(symbol => $"'{Describe(symbol)}'"));
+
+    /// <summary>
+    /// The methods named <paramref name="name"/> declared by <paramref name="type"/>
+    /// and everything it inherits or implements, which an inherited dispatcher's
+    /// overloads are declared on.
+    /// </summary>
+    internal static List<IMethodSymbol> NamedInHierarchy(INamedTypeSymbol type, string name)
+    {
+        return BaseChain(type)
+            .Concat(type.AllInterfaces)
+            .SelectMany(declaring => declaring.GetMembers(name).OfType<IMethodSymbol>())
+            .ToList();
+    }
+
+    private static IEnumerable<INamedTypeSymbol> BaseChain(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            yield return current;
+        }
+    }
+
     /// <summary>
     /// The declared overload whose parameters match <paramref name="parameters"/>
     /// by name and <c>params</c> flag, then, among several, by mapped type.
