@@ -105,6 +105,7 @@ internal sealed class DartFlatClaimPass
 
     private DartOverloadClaims Result() =>
         new(
+            DartOverloadShape.None,
             new Dictionary<int, string>(),
             _fastPaths,
             new Dictionary<string, DartClaimedMember>(StringComparer.Ordinal),
