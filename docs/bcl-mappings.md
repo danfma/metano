@@ -483,6 +483,11 @@ Every conversion across a 64-bit integer is explicit, from Roslyn's semantic mod
 | `Math.BigMul(a, b, out var low)` | `const [high, low] = bigMulInt64(a, b)` |
 | `arr[l]`, `arr.LongLength`, `new int[l]` | `arr[Number(l)]`, `BigInt(arr.length)`, `new Array<number>(Number(l)).fill(0)` |
 
+The `nint` / `nuint` overloads (`IntPtr` / `UIntPtr`) route to the same helpers. A
+`List<T>` or `string` indexer takes an `int`, so `xs[(int)l]` lowers the `(int)`
+conversion (`xs[Number(BigInt.asIntN(32, l))]`); only an array takes the 64-bit index
+directly.
+
 ### Formatting, parsing, `Convert`, LINQ
 
 | C# | TypeScript |
@@ -508,6 +513,11 @@ test reads the range — `object o = 5UL; o is long` is `true` in TypeScript whe
 says `false` (the analogue of 011's number-box divergence). A `bigint` outside the
 `long` range also answers `o is long` with `false` and `o is ulong` with `true`, but the
 test is a range check, not a stored box.
+
+Until the 3.0 flip these `bigint` checks ship under the staging names `isInt64Value` /
+`isUInt64Value`: the runtime's `isInt64` / `isUInt64` are still the 2.x `number` range
+checks the shipped output calls, and 012k replaces them with the `bigint` versions
+(see the [CHANGELOG](../CHANGELOG.md)).
 
 ### Performance
 
