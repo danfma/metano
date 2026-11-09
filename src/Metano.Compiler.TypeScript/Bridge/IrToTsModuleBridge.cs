@@ -144,16 +144,14 @@ public static class IrToTsModuleBridge
         var dispatcherName =
             claims.ClaimOf(overloads[0].OverloadRef!)?.Dispatcher
             ?? throw new InvalidOperationException(
-                $"The barrel claim pass named no dispatcher for "
-                    + $"'{overloads[0].OverloadRef!.MemberName}'."
+                $"The barrel claim pass named no dispatcher for '{SignatureOf(overloads[0])}'."
             );
 
         var fastPathNames = plan
             .Sorted.Select(fn =>
                 claims.ClaimOf(fn.OverloadRef!)?.FastPath
                 ?? throw new InvalidOperationException(
-                    $"The barrel claim pass named no fast path for "
-                        + $"'{fn.OverloadRef!.MemberName}'."
+                    $"The barrel claim pass named no fast path for '{SignatureOf(fn)}'."
                 )
             )
             .ToList();
@@ -172,6 +170,10 @@ public static class IrToTsModuleBridge
             )
         );
     }
+
+    /// <summary>The C# signature an overload is named by in an error.</summary>
+    private static string SignatureOf(IrModuleFunction function) =>
+        function.SignatureText ?? function.Name;
 
     /// <summary>The group in dispatch order with one signature per overload.</summary>
     private static ModuleFunctionGroupPlan PlanModuleFunctionGroup(

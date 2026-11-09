@@ -1,6 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler;
@@ -785,19 +786,9 @@ public static class SymbolHelper
         HasNoContainer(symbol) || HasExportedAsModule(symbol);
 
     /// <summary>
-    /// Whether the method flattens to an exported module function: an
-    /// ordinary public static — classic extensions included, whose receiver
-    /// Roslyn already exposes as the first parameter.
-    /// </summary>
-    public static bool IsExportedModuleFunction(this IMethodSymbol method) =>
-        method.IsStatic
-        && method.MethodKind == MethodKind.Ordinary
-        && method.DeclaredAccessibility == Accessibility.Public;
-
-    /// <summary>
     /// Whether the method is one exported module function a target emits
     /// (spec 013 FR-032): an ordinary public static (<see
-    /// cref="IsExportedModuleFunction"/>) that none of the exclusions
+    /// cref="IsPublicOrdinaryStatic"/>) that none of the exclusions
     /// drops — <c>[Ignore]</c>, a call-site lowering (<see
     /// cref="IsInlinedAtCallSite"/>), a member declared inside a C# 14
     /// <c>extension</c> block (emitted from the block instead), a property
@@ -805,14 +796,11 @@ public static class SymbolHelper
     /// definition the module-function extractor, the barrel claim pass and
     /// the export registry share.
     /// </summary>
-    public static bool IsEmittedModuleFunction(
-        this IMethodSymbol method,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        method.IsExportedModuleFunction()
+    public static bool IsEmittedModuleFunction(this IMethodSymbol method, TargetLanguage? target) =>
+        IsPublicOrdinaryStatic(method)
         && !HasIgnore(method, target)
         && !method.IsInlinedAtCallSite()
-        && !method.IsDeclaredInsideExtensionBlock()
+        && !IsDeclaredInsideExtensionBlock(method)
         && method.AssociatedSymbol is not IPropertySymbol
         && !method.Name.StartsWith("get_", StringComparison.Ordinal)
         && !method.Name.StartsWith("set_", StringComparison.Ordinal);
@@ -823,7 +811,7 @@ public static class SymbolHelper
     /// lifted onto the static class and on the block's synthetic type, and
     /// the lifted view walks up to the block's declaration.
     /// </summary>
-    public static bool IsDeclaredInsideExtensionBlock(this IMethodSymbol method)
+    private static bool IsDeclaredInsideExtensionBlock(IMethodSymbol method)
     {
         foreach (var syntaxRef in method.DeclaringSyntaxReferences)
         {
@@ -831,16 +819,23 @@ public static class SymbolHelper
             {
                 // No SyntaxKind member in Roslyn 5.3 — the extension block
                 // declares itself only as a node kind string.
-                if (
-                    Microsoft.CodeAnalysis.CSharp.CSharpExtensions.Kind(node).ToString()
-                    == "ExtensionBlockDeclaration"
-                )
+                if (node.Kind().ToString() == "ExtensionBlockDeclaration")
                     return true;
             }
         }
 
         return false;
     }
+
+    /// <summary>
+    /// Whether the method is an ordinary public static — classic extensions
+    /// included, whose receiver Roslyn already exposes as the first
+    /// parameter: the shape every exported module function starts from.
+    /// </summary>
+    private static bool IsPublicOrdinaryStatic(IMethodSymbol method) =>
+        method.IsStatic
+        && method.MethodKind == MethodKind.Ordinary
+        && method.DeclaredAccessibility == Accessibility.Public;
 
     /// <summary>
     /// A member of a C# 14 <c>extension(R r) { … }</c> block: Roslyn declares it

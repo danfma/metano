@@ -93,6 +93,18 @@ public static class IrModuleFunctionExtractor
     }
 
     /// <summary>
+    /// The module function one emitted static method (<see
+    /// cref="SymbolHelper.IsEmittedModuleFunction"/>) becomes — the function
+    /// <see cref="Extract"/> produces for that member. A caller that needs
+    /// each function beside the member it came from extracts member by
+    /// member instead of joining two lists by position.
+    /// </summary>
+    public static IrModuleFunction ExtractFunction(
+        IMethodSymbol method,
+        IrExtractionContext? context = null
+    ) => ConvertMethod(method, context ?? IrExtractionContext.Empty);
+
+    /// <summary>
     /// Classic-style extension property — <c>public static T Foo(this X x) {…}</c>
     /// surfaces on Roslyn as an <see cref="IPropertySymbol"/> with the receiver
     /// in <see cref="IPropertySymbol.Parameters"/>. Emit it as a getter-shaped

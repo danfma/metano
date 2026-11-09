@@ -47,9 +47,11 @@ internal static class DispatchedMethodCalls
         if (!IsEmittedContainingType(containingType, target))
             return null;
 
+        // A containerless class calls only the module functions it emits —
+        // the same predicate its extraction and the barrel claim pass use.
         if (
             SymbolHelper.IsContainerless(containingType)
-            && !SymbolHelper.IsExportedModuleFunction(definition)
+            && !definition.IsEmittedModuleFunction(target)
         )
             return null;
 
@@ -74,17 +76,21 @@ internal static class DispatchedMethodCalls
         TargetLanguage? target
     )
     {
-        if (RefOf(method, target) is not { } reference)
+        if (method is null || RefOf(method, target) is not { } reference)
             return null;
 
-        var definition = method!.OriginalDefinition;
+        var definition = method.OriginalDefinition;
         var type = definition.ContainingType;
 
         if (type.TypeKind == TypeKind.Interface)
             return null;
 
-        var group = MethodOverloadGroups.GroupOf(definition, target)!;
-        var member = group.MemberOf(definition)!;
+        if (
+            MethodOverloadGroups.GroupOf(definition, target) is not { } group
+            || group.MemberOf(definition) is not { } member
+        )
+            return null;
+
         var suffix = MethodOverloadGroups.SuffixesOf(type, group, target)[member.Symbol];
 
         return (reference, new IrOverloadName(suffix), OverloadSignatureText.Of(definition));
