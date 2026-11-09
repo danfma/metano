@@ -309,8 +309,9 @@ public static class IrBodyPrinter
                 // A set or dictionary collection expression: Dart's `Set` and
                 // `Map` constructors take no elements, their `.of` /
                 // `.fromEntries` factories take the iterable.
-                sb.Append(FormatType(collection.Type))
-                    .Append(collection.Type is IrSetTypeRef ? ".of(" : ".fromEntries(");
+                var factory = collection.Type is IrSetTypeRef ? ".of(" : ".fromEntries(";
+
+                sb.Append(FormatType(collection.Type)).Append(factory);
                 PrintExpression(sb, elements);
                 sb.Append(')');
                 break;
@@ -424,11 +425,13 @@ public static class IrBodyPrinter
                 sb.Append(']');
                 break;
             case IrSpreadExpression spread:
-                // Produced only for a collection-expression element, so it
-                // always sits inside a list literal, where Dart spreads any
-                // Iterable.
+                // A collection-expression element (or a String.Join / JSX
+                // children list), so it sits inside a list literal, where Dart
+                // spreads any Iterable. A Dart Map and String are not
+                // Iterable: a map spreads its entries (the KeyValuePair is a
+                // MapEntry) and a string its characters.
                 sb.Append("...");
-                PrintExpression(sb, spread.Expression);
+                PrintSpreadOperand(sb, spread);
                 break;
             case IrArrayCreation creation:
                 // Dart's `int` is 64-bit, so a `long` length needs no conversion.
@@ -478,6 +481,19 @@ public static class IrBodyPrinter
     /// position, which printed bare would parse as <c>a ?? b()</c> and
     /// <c>value ?? ''.trim()</c>.
     /// </summary>
+    private static void PrintSpreadOperand(StringBuilder sb, IrSpreadExpression spread)
+    {
+        if (spread.Source is IrSpreadSource.Iterable)
+        {
+            PrintExpression(sb, spread.Expression);
+
+            return;
+        }
+
+        PrintReceiver(sb, spread.Expression);
+        sb.Append(spread.Source is IrSpreadSource.Map ? ".entries" : ".split('')");
+    }
+
     private static void PrintReceiver(StringBuilder sb, IrExpression receiver) =>
         PrintOperand(sb, receiver, ReceiverRequiresParens(receiver));
 

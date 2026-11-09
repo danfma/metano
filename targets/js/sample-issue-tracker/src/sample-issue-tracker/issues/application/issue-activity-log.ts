@@ -5,7 +5,7 @@ import { linq, orderBy, sumInt64, toArray, where } from "metano-runtime/system/l
 import type { IssueActivity } from "#/sample-issue-tracker/issues/domain/issue-activity";
 
 export class IssueActivityLog {
-  private readonly _activities: Map<bigint, IssueActivity> = new Map();
+  private readonly _activities: Map<bigint, IssueActivity> = new Map<bigint, IssueActivity>();
 
   constructor() {}
 

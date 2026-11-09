@@ -19,16 +19,21 @@ public sealed partial class IrExpressionExtractor
 {
     private IrExpression ExtractCollectionExpression(CollectionExpressionSyntax coll)
     {
-        if (_semantic.GetTypeInfo(coll).ConvertedType is not INamedTypeSymbol target)
+        // The operation's type is the collection the expression builds, a cast
+        // target included (`(HashSet<int>)[1, 2]`), which the expression's
+        // converted type does not report.
+        var operation = _semantic.GetOperation(coll) as ICollectionExpressionOperation;
+
+        if (operation?.Type is not INamedTypeSymbol target)
             return new IrArrayLiteral(ExtractCollectionElements(coll));
 
-        if (target.IsSetLike())
-            return NewCollectionOf(new IrSetTypeRef(MapTypeArgument(target, 0)), coll);
+        if (IsSetTarget(target))
+            return NewCollectionOf(new IrSetTypeRef(ToIrTypeArgument(target, 0)), coll);
 
         if (!IsMapTarget(target))
             return new IrArrayLiteral(ExtractCollectionElements(coll));
 
-        if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(coll))
+        if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(operation))
             return ReportUnsupported(
                 coll,
                 coll.Kind().ToString(),
@@ -37,16 +42,14 @@ public sealed partial class IrExpressionExtractor
                     + "does not reproduce. Build the dictionary with explicit Add calls instead."
             );
 
-        var mapType = new IrMapTypeRef(MapTypeArgument(target, 0), MapTypeArgument(target, 1));
+        var mapType = new IrMapTypeRef(ToIrTypeArgument(target, 0), ToIrTypeArgument(target, 1));
 
         return NewCollectionOf(mapType, coll);
     }
 
     /// <summary>
     /// <c>new T()</c> for an empty collection expression; otherwise
-    /// <c>new T([elements])</c>, the construction from one iterable that both
-    /// the TypeScript runtime collections and Dart's <c>.of</c> /
-    /// <c>.fromEntries</c> factories take.
+    /// <c>new T([elements])</c>, the construction from one iterable.
     /// </summary>
     private IrNewExpression NewCollectionOf(IrTypeRef type, CollectionExpressionSyntax coll)
     {
@@ -61,20 +64,34 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The elements in source order: a plain element extracts directly, a
     /// spread (<c>..source</c>) becomes an <see cref="IrSpreadExpression"/> so
-    /// a backend re-emits <c>...source</c> instead of dropping it.
+    /// a backend re-emits <c>...source</c> instead of dropping it. Any other
+    /// element kind (a later C# version's) is reported.
     /// </summary>
     private List<IrExpression> ExtractCollectionElements(CollectionExpressionSyntax coll) =>
         coll
             .Elements.Select<CollectionElementSyntax, IrExpression>(element =>
                 element switch
                 {
+                    ExpressionElementSyntax expression => Extract(expression.Expression),
                     SpreadElementSyntax spread => new IrSpreadExpression(
-                        Extract(spread.Expression)
+                        Extract(spread.Expression),
+                        SpreadSourceOf(spread.Expression)
                     ),
-                    _ => Extract(((ExpressionElementSyntax)element).Expression),
+                    _ => ReportUnsupported(element, element.Kind().ToString()),
                 }
             )
             .ToList();
+
+    private IrSpreadSource SpreadSourceOf(ExpressionSyntax spreadOperand) =>
+        _semantic.GetTypeInfo(spreadOperand).Type switch
+        {
+            { SpecialType: SpecialType.System_String } => IrSpreadSource.String,
+            INamedTypeSymbol named when IsMapTarget(named) => IrSpreadSource.Map,
+            _ => IrSpreadSource.Iterable,
+        };
+
+    private IrTypeRef ToIrTypeArgument(INamedTypeSymbol type, int index) =>
+        IrTypeRefMapper.Map(type.TypeArguments[index], _originResolver, _target);
 
     /// <summary>
     /// A BCL dictionary has no public single-argument <c>Add</c>, so a
@@ -86,12 +103,12 @@ public sealed partial class IrExpressionExtractor
     /// hands the elements to the BCL factory instead, which keeps the last
     /// value of a repeated key, as a JS <c>Map</c> does.
     /// </summary>
-    private bool AddsThroughUserDefinedMethod(CollectionExpressionSyntax coll) =>
-        _semantic.GetOperation(coll)
-            is ICollectionExpressionOperation
-            {
-                ConstructMethod.MethodKind: MethodKind.Constructor,
-            };
+    private static bool AddsThroughUserDefinedMethod(ICollectionExpressionOperation operation) =>
+        operation.ConstructMethod is { MethodKind: MethodKind.Constructor };
+
+    /// <summary>The set types a collection expression lowers to the runtime <c>HashSet</c>.</summary>
+    private static bool IsSetTarget(INamedTypeSymbol target) =>
+        target.TypeArguments.Length == 1 && target.IsSetLike();
 
     /// <summary>
     /// The dictionary types a collection expression lowers to a JS
@@ -101,14 +118,6 @@ public sealed partial class IrExpressionExtractor
     private static bool IsMapTarget(INamedTypeSymbol target) =>
         target.TypeArguments.Length == 2
         && (
-            target.IsDictionaryLike()
-            || target.OriginalDefinition.ToDisplayString()
-                is "System.Collections.Generic.SortedDictionary<TKey, TValue>"
-                    or "System.Collections.Generic.SortedList<TKey, TValue>"
+            target.IsDictionaryLike() || target.OriginalDefinition.IsBclSortedDictionaryDefinition()
         );
-
-    private IrTypeRef MapTypeArgument(INamedTypeSymbol type, int index) =>
-        index < type.TypeArguments.Length
-            ? IrTypeRefMapper.Map(type.TypeArguments[index], _originResolver, _target)
-            : new IrUnknownTypeRef();
 }

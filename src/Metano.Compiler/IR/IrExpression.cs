@@ -702,9 +702,27 @@ public sealed record IrObjectLiteral(IReadOnlyList<(string Name, IrExpression Va
     : IrExpression;
 
 /// <summary>
-/// Spread expression: <c>...expr</c>.
+/// Spread expression: <c>...expr</c>. <see cref="Source"/> is what the spread
+/// operand enumerates as in C#, for targets whose map or string is not itself
+/// iterable (Dart spreads a map's <c>entries</c> and a string's characters).
 /// </summary>
-public sealed record IrSpreadExpression(IrExpression Expression) : IrExpression;
+public sealed record IrSpreadExpression(
+    IrExpression Expression,
+    IrSpreadSource Source = IrSpreadSource.Iterable
+) : IrExpression;
+
+/// <summary>What a spread operand enumerates as.</summary>
+public enum IrSpreadSource
+{
+    /// <summary>A sequence of its elements (an array, a list, a set, an <c>IEnumerable&lt;T&gt;</c>).</summary>
+    Iterable,
+
+    /// <summary>A dictionary: its key-value pairs.</summary>
+    Map,
+
+    /// <summary>A <c>string</c>: its characters.</summary>
+    String,
+}
 
 // -- String interpolation --
 
