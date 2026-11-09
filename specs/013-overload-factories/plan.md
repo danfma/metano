@@ -367,12 +367,18 @@ which the target-less lookup missed). The Dart emission, claims and call sites a
 contracts/dart-mapping.md § As landed; Dart call sites now spell a method's whole-member
 `[Name]` (`IrMemberOrigin.EmittedName`), which they ignored before. The claim findings of both
 targets are located through the core `OverloadDeclarationSite` (the TypeScript `TsClaimSite` is
-gone). The three "keep today's emission" lists still differ per concept and target — the core's
-`OverloadEmittedName` (whether `[Name]` pins: not `[External]`, `[JsCallable]`, `[PlainObject]`),
-the core's `DispatchedMethodCalls` (whether calls bind: also not branded), and each target's
-shapes (`TsConstructorSelectorShapes`, `DartTypeShapes`); Dart reconciles the one case where they
-disagree (a branded type's kept primary is declared under its pinned call-site name), and a
-target port replacing the core lists is the open half of #549. The Dart output of
+gone). Four lists decide what a "keep today's emission" type is, per concept: (a) the core's
+`OverloadEmittedName.PinsOverloadSuffixes` (whether `[Name]` pins: not `[External]`,
+`[JsCallable]`, `[PlainObject]`), (b) the core's `DispatchedMethodCalls.IsEmittedContainingType`
+(whether calls bind: also not branded), (c) the targets' constructor shapes
+(`TsConstructorSelectorShapes.EmitsSelectors`, `DartTypeShapes.EmitsNamedConstructors`) and (d) the
+targets' member naming (`TsClassMemberTable`, `DartOverloadShape.NamesMembers`). They disagreed for
+Dart on more than one shape: a branded type's kept primary (declared under its `[Name]` while call
+sites spelled the pinned C# name) and an `[Import]` class (named constructors declared, `Ext(2)`
+called); Dart now derives (c) and (d) once per symbol (`DartTypeShapes.ShapeOf`), read by the core
+port, the claim pass and the class bridge, and declares a kept primary under (a)'s rule. Writing the
+effective name into the IR (`IrMethodDeclaration.EmittedName`) and a target port for (a)/(b) are
+the open half of #549 (comment there, and on #543). The Dart output of
 SampleCounterV1–V4 is byte-identical to `main`; the Dart output of SampleTodo,
 SampleTodo.Service and SampleIssueTracker changes where they declare overloads (none of it is
 committed: `targets/flutter` holds SampleCounterV1 only, and its committed files predate later
