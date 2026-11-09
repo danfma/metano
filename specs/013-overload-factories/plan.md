@@ -294,6 +294,37 @@ assembly only — correct, only slower (DECIDED-24); closing that gap is a follo
 dispatcher's branch builder copies the class one over `IrModuleFunction`s until
 `TsDispatcherShape` lands: follow-up issue to file.
 
+As landed in 013f (OQ-1 closed with (a)): `[Name]` on an overload pins its suffix only. The
+core reads the pin through `OverloadSuffixPin` (`Extraction/`; the attribute targeted at the
+extraction's target, else the untargeted one, via `SymbolHelper.FindNameOverrideAttribute`), and
+`OverloadGroupNaming.SuffixesOf(symbols, target)` hands it to `OverloadNamePolicy` as
+`OverloadSignature.PinnedSuffix`: the pin replaces the suffix in every pass (operator groups
+included) and is one spelling part that never climbs, so collisions move the computed overloads
+and equal pins dead-end (`MS0003`, whose message then names the pinned overloads). An invalid
+value (not `^[A-Za-z_][A-Za-z0-9_]*$`) reports `MS0003` (error) at the attribute's argument and
+the overload keeps its generated suffix; the message names no suffix, so a derived type's visible
+group reporting it again deduplicates. Every caller passes its target (constructors, class and
+interface groups, root suffixes, module claims). Anchored members keep taking their root's suffix
+(`MethodOverloadGroups.SuffixesOf`), so the root's `[Name]` wins; the implementer's own, when it
+names another suffix, is an `MS0003` warning at the attribute (`OverloadGroupNaming.ReportIgnoredPin`).
+`NameAttribute` now allows `AttributeTargets.Constructor`. Dispatchers keep the C# name
+everywhere: `SymbolHelper.GetMethodNameOverride` answers `null` for an overload of a dispatched
+group of a type the toolchain emits (not `[External]`, not `[JsCallable]`) and is used by the
+call-site `EmittedName` (member access and extension helpers), the barrel claims, the extension
+helper registry and the `[NoContainer]` export names; on the declaration side,
+`TsClassMemberTable.OperatorNameOf` (operator groups), the interface bridge's dispatcher
+signatures and member table, and `IrToTsNamingPolicy.ToFunctionName(IrModuleFunction |
+IrMethodDeclaration)` (module dispatchers, branded companions) ignore the overload's `[Name]`.
+Before 013f, `[Name]` was ignored on class method overloads, renamed a whole overloaded operator
+group after its first overload (`__op…`), gave an interface overload a dispatcher signature of
+its own (`side(s)` beside `area(w, h)`), and renamed a module overload's fast-path base
+(`textS` beside the dispatcher `twice`); no existing golden pinned
+any of these, so none changed. Goldens: `overload-name-pin-class`, `-roots`, `-module` (all
+type-checked with `tsgo --strict --noImplicitOverride`), `-cross-package` and
+`-cross-package-metadata` (consumer only). Not covered: Dart (013g); `[Name]` on a constructor
+that is not an overload (a single declared constructor) has no effect and is not reported;
+`[PlainObject]` overloads, which have no dispatcher.
+
 Deferred from the 013d reviews (design, no behavior): a target capability port instead of
 `IsDartTarget` for binding `base.M(...)`; reporting `MS0069` from the core so every target gets it;
 splitting `MethodOverloadGroups` into grouping, anchoring and inherited-dispatcher modules; a shared

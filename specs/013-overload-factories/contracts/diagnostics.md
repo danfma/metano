@@ -11,7 +11,8 @@ symbols) report nothing: they fall back to the dispatcher, which is correct, onl
 | `MS0067` | `OverloadNameShadowed` | Warning | the overload whose candidate name was `$`-renamed |
 | `MS0068` | `OverloadFastPathHijacked` | Error | the user member that would override an inherited fast path, or redeclare an inherited factory |
 | `MS0069` | `MultiplyConstructedOverloadGroup` | Warning | the type implementing one generic interface more than once |
-| `MS0003` (existing) | `AmbiguousConstruct` | Error | the later overload of a set the climb cannot separate (FR-024) |
+| `MS0003` (existing) | `AmbiguousConstruct` | Error | the later overload of a set the climb cannot separate (FR-024); an invalid `[Name]` pin's argument (FR-005) |
+| `MS0003` (existing) | `AmbiguousConstruct` | Warning | the `[Name]` argument of an override or implementation that is ignored for its root's name (FR-005, FR-025) |
 
 ## `MS0067` reasons
 
@@ -71,3 +72,19 @@ When two constructions are indistinguishable at run time (`IConv<List<int>>` and
 The core names suffixes, not emitted members: each target derives and claims the member names (DECIDED-18).
 
 The positional markers keep the output valid TypeScript; the error fails the build.
+
+When `[Name]` pins a suffix of the set (FR-005), the message says so:
+
+`Overloads 'Put(int a)' and 'Put(string b)' have the same suffix at every qualification level, and [Name] pins the suffix of 'Put(int a)' and 'Put(string b)'; they are named with the suffixes 'Value$1' and 'Value$2' (spec 013 FR-005, FR-024).`
+
+## `MS0003` (`[Name]` on an overload, FR-005)
+
+An invalid pin — not `^[A-Za-z_][A-Za-z0-9_]*$` — is an error at the attribute's argument; the
+overload keeps its generated suffix:
+
+`[Name("2nd")] on the overload 'Put(string s)' is not a valid suffix: it must start with an ASCII letter or '_' and contain only ASCII letters, digits and '_'; the overload keeps its generated suffix (spec 013 FR-005).`
+
+A `[Name]` on an override or interface implementation that names another suffix than its root's
+is ignored, a warning at the attribute's argument (FR-025):
+
+`[Name("ignored")] on 'Square.Area(int side)' is ignored: an override or interface implementation takes the suffix 'Side' of its root 'IShape.Area(int s)'; put [Name] on the root (spec 013 FR-005, FR-025).`

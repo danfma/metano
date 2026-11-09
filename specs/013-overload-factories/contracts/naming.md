@@ -69,9 +69,23 @@ or module function; for virtual and interface members, the **root** group of § 
    spellings the grammar does not separate (`Outer<A<B>, C>` / `Outer<A<B, C>>` both spell
    `OuterOfAOfBC`; a containing type's type arguments are spelled unqualified and do not climb,
    so `Outer<A.Id>.Inner` / `Outer<B.Id>.Inner` dead-end).
-7. **`[Name]` (FR-005, OQ-1).** An overload carrying `[Name("…")]` replaces its suffix with the
-   attribute's value, capitalized, before step 2; it takes part in the distinctness checks like a
-   computed suffix. An invalid identifier reports `MS0003`.
+7. **`[Name]` (FR-005, OQ-1 (a)).** An overload carrying `[Name("…")]` — the attribute targeted
+   at the emitting target, else the untargeted one — replaces its suffix with the attribute's
+   value, capitalized, in **every** pass (step 1 and step 3 alike, an operator group included);
+   the other overloads are named by the normal rules. The pin takes part in the distinctness
+   checks like a computed suffix, but it is one part that never climbs: a collision with it moves
+   the computed overloads (`Add(int x)` / `[Name("x")] Add(string s)` → `Int32` / `X`), and two
+   equal pins, or a pin equal to a spelling that cannot climb (`[Name("int32")]` beside
+   `F(int a)` once the group spells types), are a dead end (step 6). Only the suffix changes: the
+   dispatcher, the operator helper and the module dispatcher keep the C# name (`[Name("cents")]`
+   on `Money(int c)` → `byMoneyCents` / `fromCents`; on `Add(int c)` → `addCents` beside the
+   dispatcher `add`; on `operator *(Money, int)` → `__multiplyCents` beside `__multiply`). A
+   value that is not `^[A-Za-z_][A-Za-z0-9_]*$` (empty, a leading digit, `-`, `$`, which the
+   claims and the dead end reserve) reports `MS0003` (error) at the attribute's argument, and the
+   overload keeps its generated suffix. A member that is not an overload of a dispatched group —
+   a single method or operator, or an overload of an `[External]` type, which emits no
+   dispatcher — keeps today's meaning: `[Name]` renames the whole member. Root anchoring decides
+   overrides and implementations (§ Root anchoring).
 8. **Candidate names.** From the suffix `S` of overload `o` of type `T`:
 
    | Member | Candidate |
@@ -121,6 +135,15 @@ the spelling.
   (`D : C, IConv<string>` with `C : IConv<int>`, `D.Conv(string)`) is an **implementation** of a
   root, not a non-root candidate and not an override: it takes the root's name and joins the
   DECIDED-30 dispatcher for that name.
+- **`[Name]` on an anchored overload (FR-005).** The root's `[Name]` names the root group, so
+  every override and implementation inherits the pinned suffix (`IShape.[Name("side")]
+  Area(int s)` → `areaSide` on the interface and on every implementer, whatever its parameter
+  is called). The implementer's own `[Name]` cannot move a name its dispatcher and its callers
+  share: when it names another suffix it is ignored and reported as an `MS0003` warning at the
+  attribute (`[Name("ignored")] on 'Square.Area(int side)' is ignored: an override or interface
+  implementation takes the suffix 'Side' of its root 'IShape.Area(int s)'; put [Name] on the
+  root (spec 013 FR-005, FR-025).`); repeating the root's value is silent. A `new` method or a
+  derived type's new overload is its own root, so its `[Name]` pins its suffix as usual.
 - An override's fast path takes the root's mapped visibility (#445's root walk): a cross-assembly
   `protected override` of a `protected internal` root is public, as the root is (TS2415 otherwise,
   R14).
@@ -254,6 +277,9 @@ cannot be qualified (user names never move) and is `MS0068`.
 | `IShape.Area(int s)` / `Area(int w, int h)`; `Sq.Area(int side)` | `Sq.areaSide`, `areaWH` (private) | `areaS`, `areaWH` on `IShape` and `Sq` (root names) |
 | extension `Twice(this Base b, int x)` / `Twice(this Base b, string s)` | two `export function twice` (TS2393) | `twiceX`, `twiceS` + dispatcher `twice` |
 | operators `+(Acct a, long b)` / `+(Acct a, ulong b)` | `__addAcctLong`, `__addAcctULong` | `__addAcctInt64`, `__addAcctUInt64` |
+| `Money(string text)` / `[Name("cents")] Money(int value)` | `[Name]` not allowed on a constructor (CS0592) | `fromText` / `fromCents`, `byMoneyText` / `byMoneyCents` (FR-005) |
+| `Add(int x)` / `[Name("x")] Add(string s)` / `[Name(TargetLanguage.TypeScript, "flag")] Add(bool b)` | `[Name]` ignored | `addInt32` / `addX` / `addFlag` (the pin collides, the others spell types) |
+| `[Name("v")] Put(int a)` / `[Name("v")] Put(string b)` | — | `putV$1` / `putV$2` + `MS0003` (dead end) |
 
 ## Stability (D7)
 
