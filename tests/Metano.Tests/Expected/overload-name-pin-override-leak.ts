@@ -10,7 +10,7 @@ export class Derived extends Base {
     return x + 1;
   }
 
-  addBoolean(b: boolean): number {
+  addB(b: boolean): number {
     return 1;
   }
 
@@ -19,7 +19,7 @@ export class Derived extends Base {
   override add(b: boolean): number;
   override add(...args: unknown[]): number {
     if (args.length === 1 && isBool(args[0])) {
-      return this.addBoolean(args[0] as boolean);
+      return this.addB(args[0] as boolean);
     }
 
     return super.add(...args as [never]);

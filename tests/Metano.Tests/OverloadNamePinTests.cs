@@ -528,8 +528,8 @@ public class OverloadNamePinTests
     /// must not move its type's other overloads: the derived type names its
     /// new overload the same with no pin, a pin naming another type
     /// (<c>string</c>) and a pin naming another parameter (<c>s</c>). The
-    /// override sitting next to the root in the visible group dead-ends
-    /// whatever the pin (#564).
+    /// override stands for its root in the visible group, so nothing
+    /// dead-ends (#564).
     /// </summary>
     [Test]
     [Arguments("")]
@@ -564,13 +564,7 @@ public class OverloadNamePinTests
 
         await AssertGolden("overload-name-pin-override-leak.ts", files["derived.ts"]);
 
-        await Assert
-            .That(namingErrors)
-            .IsEquivalentTo([
-                "Overloads 'Add(int x)' and 'Add(int x)' have the same naming spelling at every "
-                    + "qualification level; they are named with the suffixes 'Int32$1' and "
-                    + "'Int32$2' (spec 013 FR-024).",
-            ]);
+        await Assert.That(namingErrors).IsEmpty();
     }
 
     [Test]
