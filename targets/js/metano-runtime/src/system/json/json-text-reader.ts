@@ -161,7 +161,8 @@ export function mayHoldNonIntegerNumber(text: string): boolean {
 
 /**
  * Whether `readJsonText(text, leaves)` can build a number leaf (a
- * `JsonNumberText` or a `JsonNonIntegerNumber`); when it cannot, `JSON.parse` builds the same tree, faster.
+ * `JsonNumberText` or a `JsonNonIntegerNumber`); when it cannot,
+ * `JSON.parse` builds the same tree, faster.
  */
 export function mayHoldNumberTextLeaf(text: string, leaves: NumberTextLeaves): boolean {
   if (mayHoldInexactNumber(text)) {

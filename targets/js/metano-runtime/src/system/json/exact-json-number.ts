@@ -136,10 +136,11 @@ export function numberOfTreeValue(value: unknown): unknown {
  * `value` with every number leaf of its subtree read as the `number`
  * `JSON.parse` gives, for a converter that gets a whole subtree: a custom one
  * (a custom `array` or `ref` converter reads the elements and members
- * itself) and a passthrough `primitive` (an `object` slot). Copy-on-write: only the arrays and objects that hold a
- * leaf, directly or below, are copied; any other value is returned as is.
- * A spread copy keeps `__proto__` an own property, as `JSON.parse` builds
- * it.
+ * itself) and every built-in one that is no container or `ref` (an `object`
+ * slot, a `[Branded]` factory's input, an enum's error). Copy-on-write: only
+ * the arrays and objects that hold a leaf, directly or below, are copied;
+ * any other value is returned as is. A spread copy keeps `__proto__` an own
+ * property, as `JSON.parse` builds it.
  */
 export function treeWithDoubles(value: unknown): unknown {
   if (value instanceof JsonNumberText || value instanceof JsonNonIntegerNumber) {
