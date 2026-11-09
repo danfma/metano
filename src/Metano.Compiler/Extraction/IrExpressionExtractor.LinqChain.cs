@@ -191,8 +191,7 @@ public sealed partial class IrExpressionExtractor
                 _originResolver,
                 _target,
                 this,
-                isExplicitOptIn: isExplicit,
-                exactInt64Lowering: _context.ExactInt64Lowering
+                isExplicitOptIn: isExplicit
             );
             var meta = walker.TryExtract(lambda);
             if (meta is not null)
@@ -257,8 +256,7 @@ public sealed partial class IrExpressionExtractor
                 _originResolver,
                 _target,
                 this,
-                isExplicitOptIn: true,
-                exactInt64Lowering: _context.ExactInt64Lowering
+                isExplicitOptIn: true
             );
             walker.TryExtract(lambda);
         }

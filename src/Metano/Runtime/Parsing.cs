@@ -8,12 +8,9 @@
 // `NumberStyles` / `IFormatProvider` overloads stay unmapped.
 
 //
-// `long` and `ulong` (spec 012 FR-038): while 64-bit integers are `bigint` values
-// (`WhenInt64IsBigInt`, a staging filter), `Parse` and `TryParse` lower to the
-// `metano-runtime` parsers with the `NumberStyles` argument folded to its flags value
-// by the compiler. They precede the 2.x `long.TryParse` declaration below, which
-// returns a `number`. The signed `TryParse` helper is `tryParseInt64Value` until the
-// 2.x `tryParseInt64` goes with the staging switch.
+// `long` and `ulong` (spec 012 FR-038): `Parse` and `TryParse` lower to the
+// `metano-runtime` parsers, which return a `bigint`, with the `NumberStyles` argument
+// folded to its flags value by the compiler.
 
 using System.Globalization;
 using Metano.Annotations;
@@ -23,109 +20,96 @@ using Metano.Annotations;
     nameof(long.Parse),
     JsTemplate = "parseInt64($0)",
     RuntimeImports = "parseInt64",
-    WhenParameterTypes = [typeof(string)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string)]
 )]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.Parse),
     JsTemplate = "parseInt64($0, $1)",
     RuntimeImports = "parseInt64",
-    WhenParameterTypes = [typeof(string), typeof(NumberStyles)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(NumberStyles)]
 )]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.Parse),
     JsTemplate = "parseInt64($0)",
     RuntimeImports = "parseInt64",
-    WhenParameterTypes = [typeof(string), typeof(IFormatProvider)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider)]
 )]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.Parse),
     JsTemplate = "parseInt64($0, $1)",
     RuntimeImports = "parseInt64",
-    WhenParameterTypes = [typeof(string), typeof(NumberStyles), typeof(IFormatProvider)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(NumberStyles), typeof(IFormatProvider)]
 )]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.TryParse),
-    JsTemplate = "tryParseInt64Value($0)",
-    RuntimeImports = "tryParseInt64Value",
-    WhenParameterTypes = [typeof(string), typeof(long)],
-    WhenInt64IsBigInt = true
+    JsTemplate = "tryParseInt64($0)",
+    RuntimeImports = "tryParseInt64",
+    WhenParameterTypes = [typeof(string), typeof(long)]
 )]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.TryParse),
-    JsTemplate = "tryParseInt64Value($0)",
-    RuntimeImports = "tryParseInt64Value",
-    WhenParameterTypes = [typeof(string), typeof(IFormatProvider), typeof(long)],
-    WhenInt64IsBigInt = true
+    JsTemplate = "tryParseInt64($0)",
+    RuntimeImports = "tryParseInt64",
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider), typeof(long)]
 )]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.TryParse),
-    JsTemplate = "tryParseInt64Value($0, $1)",
-    RuntimeImports = "tryParseInt64Value",
+    JsTemplate = "tryParseInt64($0, $1)",
+    RuntimeImports = "tryParseInt64",
     WhenParameterTypes = [
         typeof(string),
         typeof(NumberStyles),
         typeof(IFormatProvider),
         typeof(long),
-    ],
-    WhenInt64IsBigInt = true
+    ]
 )]
 [assembly: MapMethod(
     typeof(ulong),
     nameof(ulong.Parse),
     JsTemplate = "parseUInt64($0)",
     RuntimeImports = "parseUInt64",
-    WhenParameterTypes = [typeof(string)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string)]
 )]
 [assembly: MapMethod(
     typeof(ulong),
     nameof(ulong.Parse),
     JsTemplate = "parseUInt64($0, $1)",
     RuntimeImports = "parseUInt64",
-    WhenParameterTypes = [typeof(string), typeof(NumberStyles)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(NumberStyles)]
 )]
 [assembly: MapMethod(
     typeof(ulong),
     nameof(ulong.Parse),
     JsTemplate = "parseUInt64($0)",
     RuntimeImports = "parseUInt64",
-    WhenParameterTypes = [typeof(string), typeof(IFormatProvider)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider)]
 )]
 [assembly: MapMethod(
     typeof(ulong),
     nameof(ulong.Parse),
     JsTemplate = "parseUInt64($0, $1)",
     RuntimeImports = "parseUInt64",
-    WhenParameterTypes = [typeof(string), typeof(NumberStyles), typeof(IFormatProvider)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(NumberStyles), typeof(IFormatProvider)]
 )]
 [assembly: MapMethod(
     typeof(ulong),
     nameof(ulong.TryParse),
     JsTemplate = "tryParseUInt64($0)",
     RuntimeImports = "tryParseUInt64",
-    WhenParameterTypes = [typeof(string), typeof(ulong)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(ulong)]
 )]
 [assembly: MapMethod(
     typeof(ulong),
     nameof(ulong.TryParse),
     JsTemplate = "tryParseUInt64($0)",
     RuntimeImports = "tryParseUInt64",
-    WhenParameterTypes = [typeof(string), typeof(IFormatProvider), typeof(ulong)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider), typeof(ulong)]
 )]
 [assembly: MapMethod(
     typeof(ulong),
@@ -137,8 +121,7 @@ using Metano.Annotations;
         typeof(NumberStyles),
         typeof(IFormatProvider),
         typeof(ulong),
-    ],
-    WhenInt64IsBigInt = true
+    ]
 )]
 
 [assembly: MapMethod(

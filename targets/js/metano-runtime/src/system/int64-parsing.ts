@@ -91,10 +91,9 @@ export function parseUInt64(
 
 /**
  * `long.TryParse(text, style, out value)`: `[false, 0n]` wherever
- * {@link parseInt64} throws. Named apart from the 2.x `number` `tryParseInt64`
- * until the `bigint` mapping is the only one (spec 012 slice 012k).
+ * {@link parseInt64} throws.
  */
-export function tryParseInt64Value(
+export function tryParseInt64(
   text: string | null | undefined,
   style: number = INTEGER_STYLE,
 ): Int64ParseResult {

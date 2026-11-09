@@ -31,14 +31,13 @@ public sealed partial class IrExpressionExtractor
     /// A constant <c>System.Globalization.NumberStyles</c> argument of
     /// <c>long</c> / <c>ulong</c> <c>Parse</c> / <c>TryParse</c>
     /// (<c>HexNumber</c>, <c>Integer | AllowThousands</c>) folded to its flags
-    /// value under the exact 64-bit lowering (spec 012 FR-038): the BCL enum
-    /// has no counterpart in the targets, and the 64-bit parsers take the
-    /// flags as a number. <c>null</c> for any other expression
-    /// (STAGING(012k): every mode).
+    /// value (spec 012 FR-038): the BCL enum has no counterpart in the
+    /// targets, and the 64-bit parsers take the flags as a number.
+    /// <c>null</c> for any other expression.
     /// </summary>
     private IrLiteral? FoldedNumberStylesConstant(ExpressionSyntax expression)
     {
-        if (!_context.ExactInt64Lowering || !IsSixtyFourBitParserArgument(expression))
+        if (!IsSixtyFourBitParserArgument(expression))
             return null;
 
         var isNumberStyles =

@@ -15,8 +15,6 @@ export type ParseResult<T> = readonly [found: boolean, value: T];
 
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
-const INT64_MIN = -9223372036854775808n;
-const INT64_MAX = 9223372036854775807n;
 
 /** `NumberStyles.Integer`: an optional sign followed by decimal digits. */
 const INTEGER = /^[+-]?\d+$/;
@@ -43,19 +41,6 @@ export function tryParseInt32(text: string | null | undefined): ParseResult<numb
   const integer = parseInteger(text);
 
   return integer !== null && integer >= INT32_MIN && integer <= INT32_MAX
-    ? [true, Number(integer)]
-    : [false, 0];
-}
-
-/**
- * Mirrors `long.TryParse(string, out long)`. The range check is exact; the value is a
- * JavaScript `number`, so magnitudes above `Number.MAX_SAFE_INTEGER` lose precision, as
- * every `long` does in the generated code.
- */
-export function tryParseInt64(text: string | null | undefined): ParseResult<number> {
-  const integer = parseInteger(text);
-
-  return integer !== null && integer >= INT64_MIN && integer <= INT64_MAX
     ? [true, Number(integer)]
     : [false, 0];
 }

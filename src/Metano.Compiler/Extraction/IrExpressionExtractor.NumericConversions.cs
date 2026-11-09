@@ -24,14 +24,10 @@ public sealed partial class IrExpressionExtractor
     /// constant (<c>long.MaxValue</c>, <c>1L &lt;&lt; 40</c>, <c>5</c> in a
     /// <c>long</c> slot), plus the native-integer limits, which are not C#
     /// constants (FR-005). A bare reference to a constant declared in source
-    /// stays a reference when it needs no conversion. <c>null</c> otherwise,
-    /// and always outside the exact lowering.
+    /// stays a reference when it needs no conversion. <c>null</c> otherwise.
     /// </summary>
     private IrLiteral? FoldedInt64Constant(ExpressionSyntax expression)
     {
-        if (!_context.ExactInt64Lowering)
-            return null;
-
         if (NativeIntegerLimit(expression) is { } limit)
             return limit;
 
@@ -83,13 +79,15 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Outside the exact lowering nothing is converted; a literal already
-    /// carries its converted kind; a parenthesized or <c>checked</c> /
-    /// <c>unchecked</c> expression leaves the conversion to its operand.
+    /// A literal already carries its converted kind; a parenthesized or
+    /// <c>checked</c> / <c>unchecked</c> expression leaves the conversion to
+    /// its operand.
     /// </summary>
-    private bool CarriesNoImplicitConversion(ExpressionSyntax expression, IrExpression value) =>
-        !_context.ExactInt64Lowering
-        || value is IrLiteral
+    private static bool CarriesNoImplicitConversion(
+        ExpressionSyntax expression,
+        IrExpression value
+    ) =>
+        value is IrLiteral
         || expression is ParenthesizedExpressionSyntax or CheckedExpressionSyntax;
 
     /// <summary>
@@ -154,9 +152,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A cast of a nullable value type to its non-nullable value (<c>(int)ni</c>),
     /// other than a user-defined conversion, which takes the nullable itself.
-    /// Under the exact 64-bit lowering a user-defined operator over the
-    /// non-nullable type (<c>(int)nullableBigInteger</c>) unwraps too, as C#
-    /// reads <c>.Value</c> before it (STAGING(012k): always).
+    /// A user-defined operator over the non-nullable type
+    /// (<c>(int)nullableBigInteger</c>) unwraps too, as C# reads
+    /// <c>.Value</c> before it.
     /// </summary>
     private bool IsNullableUnwrapCast(
         CastExpressionSyntax cast,
@@ -167,7 +165,7 @@ public sealed partial class IrExpressionExtractor
         && _semantic.GetOperation(cast) switch
         {
             IConversionOperation { Conversion.IsUserDefined: true } conversion =>
-                _context.ExactInt64Lowering && TakesNonNullableOperand(conversion),
+                TakesNonNullableOperand(conversion),
             _ => true,
         };
 
@@ -178,9 +176,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The conversion an explicit cast from <paramref name="sourceType"/> to
     /// <paramref name="targetType"/> lowers to: a floating-point value cast
-    /// to a 32-bit or narrower integer in every mode (FR-070), and every cast
-    /// into or out of a 64-bit integer under the exact lowering. <c>null</c>
-    /// when the cast keeps its existing lowering.
+    /// to a 32-bit or narrower integer (FR-070), and every cast into or out
+    /// of a 64-bit integer or a <c>BigInteger</c>. <c>null</c> when the cast
+    /// keeps its existing lowering.
     /// </summary>
     private IrNumericConversion? ExplicitNumericConversion(
         CastExpressionSyntax cast,
@@ -196,7 +194,7 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        if (!NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering))
+        if (!NumericEndpoints.IsLoweredExplicitly(from, to))
             return null;
 
         var isChecked = _semantic.GetOperation(cast) is IConversionOperation { IsChecked: true };
@@ -242,8 +240,8 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol? convertedType
     )
     {
-        // TODO(012k): merge ClassifyNumericForConvertedType into this once the
-        // literal path no longer has a Number mode to keep byte-identical.
+        // TODO: merge ClassifyNumericForConvertedType into this; the literal
+        // path no longer has a second 64-bit representation to keep apart.
         var target = NumericEndpoints.Of(convertedType) ?? NumericEndpoints.Of(type);
         var number = value is char character ? (int)character : value;
 

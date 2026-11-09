@@ -28,44 +28,38 @@ using Metano.Annotations;
 )]
 
 // Ticks (spec 012 FR-042): one tick is 100 ns, and `DateTime` ticks count from
-// 0001-01-01T00:00:00. The 64-bit tick counts are `bigint` values, so these apply only
-// while 64-bit integers map to `bigint` (`WhenInt64IsBigInt`, a staging filter); the
+// 0001-01-01T00:00:00. The 64-bit tick counts are `bigint` values; the
 // `TimeSpan.TicksPer*` constants fold.
 [assembly: MapProperty(
     typeof(TimeSpan),
     nameof(TimeSpan.Ticks),
     JsTemplate = "durationTicks($this)",
-    RuntimeImports = "durationTicks",
-    WhenInt64IsBigInt = true
+    RuntimeImports = "durationTicks"
 )]
 [assembly: MapMethod(
     typeof(TimeSpan),
     nameof(TimeSpan.FromTicks),
     JsTemplate = "durationFromTicks($0)",
     RuntimeImports = "durationFromTicks",
-    WhenParameterTypes = [typeof(long)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(long)]
 )]
 [assembly: MapMethod(
     typeof(TimeSpan),
     MapMethodAttribute.ConstructorName,
     JsTemplate = "durationFromTicks($0)",
     RuntimeImports = "durationFromTicks",
-    WhenParameterTypes = [typeof(long)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(long)]
 )]
 [assembly: MapProperty(
     typeof(DateTime),
     nameof(DateTime.Ticks),
     JsTemplate = "plainDateTimeTicks($this)",
-    RuntimeImports = "plainDateTimeTicks",
-    WhenInt64IsBigInt = true
+    RuntimeImports = "plainDateTimeTicks"
 )]
 [assembly: MapMethod(
     typeof(DateTime),
     MapMethodAttribute.ConstructorName,
     JsTemplate = "plainDateTimeFromTicks($0)",
     RuntimeImports = "plainDateTimeFromTicks",
-    WhenParameterTypes = [typeof(long)],
-    WhenInt64IsBigInt = true
+    WhenParameterTypes = [typeof(long)]
 )]

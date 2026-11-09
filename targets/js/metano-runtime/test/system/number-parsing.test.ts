@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  tryParseBoolean,
-  tryParseFloat64,
-  tryParseInt32,
-  tryParseInt64,
-} from "#/system/number-parsing.ts";
+import { tryParseBoolean, tryParseFloat64, tryParseInt32 } from "#/system/number-parsing.ts";
 
 describe("tryParseInt32", () => {
   test("parses a signed integer surrounded by whitespace", () => {
@@ -30,21 +25,6 @@ describe("tryParseInt32", () => {
 
   test("parses negative zero as zero", () => {
     expect(Object.is(tryParseInt32("-0")[1], 0)).toBe(true);
-  });
-});
-
-describe("tryParseInt64", () => {
-  test("accepts values beyond Int32", () => {
-    expect(tryParseInt64("2147483648")).toEqual([true, 2147483648]);
-  });
-
-  test("accepts the Int64 bounds", () => {
-    expect(tryParseInt64("9223372036854775807")[0]).toBe(true);
-    expect(tryParseInt64("-9223372036854775808")[0]).toBe(true);
-  });
-
-  test("rejects values beyond Int64", () => {
-    expect(tryParseInt64("9223372036854775808")).toEqual([false, 0]);
   });
 });
 

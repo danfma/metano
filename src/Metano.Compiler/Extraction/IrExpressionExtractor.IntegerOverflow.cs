@@ -15,15 +15,14 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// The reduction <paramref name="operation"/> needs under the exact
-    /// 64-bit lowering; <c>null</c> outside it, so the shipped <c>Number</c>
-    /// mode keeps its IR (DECIDED-22).
+    /// The reduction <paramref name="operation"/> needs; <c>null</c> when it
+    /// needs none.
     /// </summary>
-    private IntegerOverflowReduction? OverflowReductionOf(IOperation? operation) =>
-        _context.ExactInt64Lowering ? IntegerOverflowLowering.ReductionOf(operation) : null;
+    private static IntegerOverflowReduction? OverflowReductionOf(IOperation? operation) =>
+        IntegerOverflowLowering.ReductionOf(operation);
 
     /// <summary><paramref name="result"/> reduced as <paramref name="operation"/> needs, or unchanged.</summary>
-    private IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
+    private static IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
         OverflowReductionOf(operation) is { } reduction ? reduction.Reduce(result) : result;
 
     /// <summary>
@@ -82,12 +81,4 @@ public sealed partial class IrExpressionExtractor
 
     private static IrUnaryOp InverseOf(IrUnaryOp op) =>
         op is IrUnaryOp.Increment ? IrUnaryOp.Decrement : IrUnaryOp.Increment;
-
-    /// <summary>
-    /// The step of an extension property or indexer increment: the 64-bit
-    /// <c>1n</c> under the exact lowering, the plain <c>1</c> the shipped
-    /// <c>Number</c> mode has always emitted (DECIDED-22).
-    /// </summary>
-    private IrExpression ExtensionIncrementStepOf(ExpressionSyntax operand) =>
-        _context.ExactInt64Lowering ? OneOf(operand) : OneLiteral;
 }

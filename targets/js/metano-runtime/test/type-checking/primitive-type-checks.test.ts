@@ -9,13 +9,11 @@ import {
   isInt16,
   isInt32,
   isInt64,
-  isInt64Value,
   isSByte,
   isString,
   isUInt16,
   isUInt32,
   isUInt64,
-  isUInt64Value,
 } from "#/type-checking/primitive-type-checks.ts";
 
 describe("String type checks", () => {
@@ -99,23 +97,9 @@ describe("Integer type checks", () => {
     expect(isUInt32(4294967296)).toBe(false);
   });
 
-  test("isInt64 accepts safe integer range", () => {
-    expect(isInt64(0)).toBe(true);
-    expect(isInt64(Number.MAX_SAFE_INTEGER)).toBe(true);
-    expect(isInt64(Number.MIN_SAFE_INTEGER)).toBe(true);
-    expect(isInt64(1.5)).toBe(false);
-  });
-
-  test("isUInt64 accepts 0..safe integer range", () => {
-    expect(isUInt64(0)).toBe(true);
-    expect(isUInt64(Number.MAX_SAFE_INTEGER)).toBe(true);
-    expect(isUInt64(-1)).toBe(false);
-  });
-
   test("integer checks reject floats", () => {
     expect(isByte(1.5)).toBe(false);
     expect(isInt32(3.14)).toBe(false);
-    expect(isInt64(0.1)).toBe(false);
   });
 
   test("integer checks reject non-numbers", () => {
@@ -161,44 +145,44 @@ describe("Other primitive type checks", () => {
 });
 
 describe("64-bit integer checks (bigint)", () => {
-  test("isInt64Value accepts the whole long range", () => {
-    expect(isInt64Value(0n)).toBe(true);
-    expect(isInt64Value(5n)).toBe(true);
-    expect(isInt64Value(-9223372036854775808n)).toBe(true);
-    expect(isInt64Value(9223372036854775807n)).toBe(true);
-    expect(isInt64Value(9007199254740993n)).toBe(true);
+  test("isInt64 accepts the whole long range", () => {
+    expect(isInt64(0n)).toBe(true);
+    expect(isInt64(5n)).toBe(true);
+    expect(isInt64(-9223372036854775808n)).toBe(true);
+    expect(isInt64(9223372036854775807n)).toBe(true);
+    expect(isInt64(9007199254740993n)).toBe(true);
   });
 
-  test("isInt64Value rejects values outside the long range", () => {
-    expect(isInt64Value(-9223372036854775809n)).toBe(false);
-    expect(isInt64Value(9223372036854775808n)).toBe(false);
-    expect(isInt64Value(18446744073709551615n)).toBe(false);
+  test("isInt64 rejects values outside the long range", () => {
+    expect(isInt64(-9223372036854775809n)).toBe(false);
+    expect(isInt64(9223372036854775808n)).toBe(false);
+    expect(isInt64(18446744073709551615n)).toBe(false);
   });
 
-  test("isUInt64Value accepts the whole ulong range", () => {
-    expect(isUInt64Value(0n)).toBe(true);
-    expect(isUInt64Value(5n)).toBe(true);
-    expect(isUInt64Value(9223372036854775808n)).toBe(true);
-    expect(isUInt64Value(18446744073709551615n)).toBe(true);
+  test("isUInt64 accepts the whole ulong range", () => {
+    expect(isUInt64(0n)).toBe(true);
+    expect(isUInt64(5n)).toBe(true);
+    expect(isUInt64(9223372036854775808n)).toBe(true);
+    expect(isUInt64(18446744073709551615n)).toBe(true);
   });
 
-  test("isUInt64Value rejects negatives and values beyond the ulong range", () => {
-    expect(isUInt64Value(-1n)).toBe(false);
-    expect(isUInt64Value(18446744073709551616n)).toBe(false);
+  test("isUInt64 rejects negatives and values beyond the ulong range", () => {
+    expect(isUInt64(-1n)).toBe(false);
+    expect(isUInt64(18446744073709551616n)).toBe(false);
   });
 
   test("2^63 answers only the ulong check (DECIDED-14)", () => {
-    expect(isInt64Value(9223372036854775808n)).toBe(false);
-    expect(isUInt64Value(9223372036854775808n)).toBe(true);
+    expect(isInt64(9223372036854775808n)).toBe(false);
+    expect(isUInt64(9223372036854775808n)).toBe(true);
   });
 
   test("the bigint checks reject every other typeof", () => {
-    expect(isInt64Value(5)).toBe(false);
-    expect(isInt64Value("5n")).toBe(false);
-    expect(isInt64Value(null)).toBe(false);
-    expect(isInt64Value(undefined)).toBe(false);
-    expect(isUInt64Value(5)).toBe(false);
-    expect(isUInt64Value(null)).toBe(false);
+    expect(isInt64(5)).toBe(false);
+    expect(isInt64("5n")).toBe(false);
+    expect(isInt64(null)).toBe(false);
+    expect(isInt64(undefined)).toBe(false);
+    expect(isUInt64(5)).toBe(false);
+    expect(isUInt64(null)).toBe(false);
   });
 });
 

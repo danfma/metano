@@ -537,7 +537,6 @@ public sealed class TypeScriptTransformContext(
     public IrExtractionContext Extraction =>
         new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming)
         {
-            ExactInt64Lowering = true,
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
             KeepsArgumentEvaluationOrder = true,

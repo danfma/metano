@@ -6,11 +6,6 @@ namespace Metano.Tests.IR;
 
 public class IrExpressionExtractionTests
 {
-    private static readonly IrExtractionContext ExactLowering = IrExtractionContext.Empty with
-    {
-        ExactInt64Lowering = true,
-    };
-
     [Test]
     public async Task IntLiteral_ExtractsAsInt32()
     {
@@ -32,24 +27,27 @@ public class IrExpressionExtractionTests
     }
 
     [Test]
-    [Arguments("checked(a + b)")]
-    [Arguments("unchecked(a + b)")]
-    [Arguments("checked((a + b))")]
-    public async Task CheckedContextExpression_ExtractsAsItsOperand(string body)
+    [Arguments("checked(a + b)", IrOverflowMode.Check)]
+    [Arguments("unchecked(a + b)", IrOverflowMode.Wrap)]
+    [Arguments("checked((a + b))", IrOverflowMode.Check)]
+    public async Task CheckedContextExpression_ExtractsAsItsReducedOperand(
+        string body,
+        IrOverflowMode mode
+    )
     {
         var ir = ExtractFromMethod($"long Get(long a, long b) => {body};");
         var ret = GetAt<IrReturnStatement>(ir, 0);
 
+        var sum = new IrBinaryExpression(
+            new IrIdentifier("a"),
+            IrBinaryOp.Add,
+            new IrIdentifier("b"),
+            IrNumericKind.Int64
+        );
+
         await Assert
             .That(ret.Value)
-            .IsEqualTo(
-                new IrBinaryExpression(
-                    new IrIdentifier("a"),
-                    IrBinaryOp.Add,
-                    new IrIdentifier("b"),
-                    IrNumericKind.Int64
-                )
-            );
+            .IsEqualTo(new IrIntegerOverflow(sum, IrNumericKind.Int64, mode));
     }
 
     /// <summary>
@@ -91,7 +89,7 @@ public class IrExpressionExtractionTests
     [Arguments("ulong Get(ulong a) => a >>> 64;", 0)]
     public async Task SixtyFourBitConstantShiftCount_IsFoldedMasked(string method, int count)
     {
-        var shift = ReturnedBinary(method, ExactLowering);
+        var shift = ReturnedBinary(method);
 
         await Assert.That(shift.Right).IsEqualTo(new IrLiteral(count, IrLiteralKind.Int32));
     }
@@ -99,7 +97,7 @@ public class IrExpressionExtractionTests
     [Test]
     public async Task SixtyFourBitVariableShiftCount_IsMasked()
     {
-        var shift = ReturnedBinary("long Get(long a, int n) => a >> n;", ExactLowering);
+        var shift = ReturnedBinary("long Get(long a, int n) => a >> n;");
 
         await Assert
             .That(shift.Right)
@@ -113,24 +111,13 @@ public class IrExpressionExtractionTests
             );
     }
 
-    /// <summary>A 32-bit shift keeps its count, under the exact 64-bit lowering too.</summary>
+    /// <summary>A 32-bit shift keeps its count.</summary>
     [Test]
     public async Task NarrowShiftCount_IsKept()
     {
-        var shift = ReturnedBinary("int Get(int a, int n) => a >> n;", ExactLowering);
+        var shift = ReturnedBinary("int Get(int a, int n) => a >> n;");
 
         await Assert.That(shift.Right).IsEqualTo(new IrIdentifier("n"));
-    }
-
-    /// <summary>The shipped <c>Number</c> mode keeps a 64-bit shift count, constant or not (DECIDED-22).</summary>
-    [Test]
-    public async Task SixtyFourBitShiftCount_IsKeptInTheShippedMode()
-    {
-        var variable = ReturnedBinary("long Get(long a, int n) => a >> n;");
-        var constant = ReturnedBinary("long Get(long a) => a >> 70;");
-
-        await Assert.That(variable.Right).IsEqualTo(new IrIdentifier("n"));
-        await Assert.That(constant.Right).IsEqualTo(new IrLiteral(70, IrLiteralKind.Int32));
     }
 
     [Test]
