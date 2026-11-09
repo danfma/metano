@@ -337,7 +337,9 @@ changed. Goldens: `overload-name-pin-{class,roots,module,invalid,equal,dead-end,
 deterministic,conversions,plain-object,override-leak,json-factory}` (type-checked with
 `tsgo --strict --noImplicitOverride`; `override-leak` against a hand-copied base), and
 `-cross-package` / `-cross-package-metadata` (consumer only). Found in review and filed: #564 (an
-override next to its root in the visible group reports a bogus `MS0003`), #565 (an interface
+override next to its root in the visible group reports a bogus `MS0003`; fixed since: the override
+stands for its root once, which also names the added overload by its parameter, `addB`, where the
+bogus collision had climbed it to `addBoolean`), #565 (an interface
 member renamed by `[Name]` is never declared by an implementer with overloads, TS2420), #566
 (`[PlainObject]` overloads, unary and conversion call sites, C# 14 extension blocks, static and
 instance overloads grouped together), #567 (duplicate barrel re-exports after `MS0020`, an

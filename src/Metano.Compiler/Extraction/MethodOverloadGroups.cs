@@ -139,23 +139,29 @@ internal static class MethodOverloadGroups
         if (own.Count == 0)
             return suffixes;
 
+        var inherited = VisibleInheritedOverloads(type, group).ToList();
+
+        // An override stands for the inherited overload it overrides, which
+        // the visible group already names: naming both would dead-end the
+        // pair (FR-024, FR-025, #564).
+        var named = group.Members.Where(member => !OverridesOneOf(inherited, member)).ToList();
+
         // An anchored member names with its root's pin, never its own: the
         // pin it cannot use must not move its type's other overloads (FR-005).
-        var visible = VisibleInheritedOverloads(type, group)
+        var visible = inherited
             .Select(overload => new PinnedOverload(
                 overload,
                 OverloadSuffixPin.Of(overload, target)
             ))
-            .Concat(group.Members.Select(member => PinnedOverloadOf(member, target)))
+            .Concat(named.Select(member => PinnedOverloadOf(member, target)))
             .ToList();
 
         var computed = OverloadGroupNaming.SuffixesOf(visible);
-        var offset = visible.Count - group.Members.Count;
 
-        for (var i = 0; i < group.Members.Count; i++)
+        for (var i = 0; i < named.Count; i++)
         {
-            if (group.Members[i].Anchor is null)
-                suffixes[group.Members[i].Symbol] = computed[offset + i];
+            if (named[i].Anchor is null)
+                suffixes[named[i].Symbol] = computed[inherited.Count + i];
         }
 
         return suffixes;
@@ -604,6 +610,18 @@ internal static class MethodOverloadGroups
         INamedTypeSymbol type,
         MethodOverloadGroup group
     ) => (group.InheritedOverloads ?? []).Where(overload => IsVisibleFrom(overload, type));
+
+    /// <summary>
+    /// Whether <paramref name="member"/> is an override of one of the
+    /// <paramref name="inherited"/> overloads: an inherited dispatcher holds
+    /// one overload per signature, so the override's signature finds it.
+    /// </summary>
+    private static bool OverridesOneOf(
+        IReadOnlyList<IMethodSymbol> inherited,
+        MethodGroupMember member
+    ) =>
+        member.Symbol.IsOverride
+        && inherited.Any(overload => SymbolHelper.HasSameParameters(member.Symbol, overload));
 
     private static bool IsVisibleFrom(IMethodSymbol member, INamedTypeSymbol type) =>
         member.DeclaredAccessibility switch
