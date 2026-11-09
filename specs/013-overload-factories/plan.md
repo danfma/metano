@@ -282,8 +282,11 @@ class` registers its fast paths in the extension-helper registry, so the importi
 them (`overload-extension-helper`); a call whose named arguments evaluate out of parameter order
 binds an impure receiver first (`$recv` before the argument bindings), keeping C#'s
 receiver-before-arguments order (`overload-calls-receiver-order`; since #592 a reordered call whose
-arguments read computed properties records its evaluation order too, for TypeScript only:
-`ComputedReadsAreOrderSensitive`, `overload-calls-computed-read-order`); a lifted operator application
+arguments run user code implicitly (a computed property read, a user-defined operator or
+conversion, a `ToString` in a concatenation) records its evaluation order too, for TypeScript
+only: `KeepsOrderForImplicitUserCode`, `overload-calls-computed-read-order`,
+`overload-calls-stable-read-order`; Dart is unchanged, pinned by
+`ReorderedComputedReads_KeepParameterOrder_AndReportNothing`); a lifted operator application
 — a nullable operand C# null-propagates — keeps the lifted guard, since the fast path would
 throw on the value read (`ExtractBoundOperatorCall` rejects `IsLifted`); and a generic call
 whose type arguments are error or anonymous types keeps the dispatcher, since no emitted
