@@ -1,4 +1,5 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 
 namespace Metano.Compiler.TypeScript.Bridge;
@@ -96,7 +97,7 @@ internal sealed class TsOverloadClaimPass
                     + $"'{name}' of '{fastPath.DeclaredBy}.{fastPath.Declaration}'; rename the "
                     + "member, or rename the root overload's parameter or pin it with [Name] "
                     + "(spec 013 FR-034).",
-                new TsClaimSite(declaredBy)
+                new OverloadDeclarationSite(declaredBy)
             )
         );
 
@@ -119,7 +120,7 @@ internal sealed class TsOverloadClaimPass
                     $"'{_input.Ir.Name}.{declaredBy}' would redeclare the generated factory "
                         + $"'{name}' of '{factory.Declaration}'; rename the member or give it "
                         + "[Name], or pin the constructor's suffix with [Name] (spec 013 FR-034).",
-                    new TsClaimSite(declaredBy)
+                    new OverloadDeclarationSite(declaredBy)
                 )
             );
         }
@@ -284,7 +285,10 @@ internal sealed class TsOverloadClaimPass
         ReportRename(
             $"{collision.Kind} '{TypeName}.{collision.Candidate}' collides with "
                 + $"{DescriptionOf(collision.Holder)}; {emitted} (spec 013 FR-004).",
-            new TsClaimSite(DispatchedOverload.SignatureOf(overload), overload.DeclarationOrdinal)
+            new OverloadDeclarationSite(
+                DispatchedOverload.SignatureOf(overload),
+                overload.DeclarationOrdinal
+            )
         );
     }
 
@@ -494,7 +498,10 @@ internal sealed class TsOverloadClaimPass
                 + $"'{DispatchedOverload.SignatureOf(overload)}' "
                 + $"collides with {DescriptionOf(collision.Holder)}; it is emitted as '{claimed}' "
                 + "(spec 013 FR-004).",
-            new TsClaimSite(overload.Name, Signature: DispatchedOverload.SignatureOf(overload))
+            new OverloadDeclarationSite(
+                overload.Name,
+                Signature: DispatchedOverload.SignatureOf(overload)
+            )
         );
 
     /// <summary>
@@ -502,7 +509,7 @@ internal sealed class TsOverloadClaimPass
     /// synthesized name, 3 for an inherited instance member — is the holder
     /// the message names, not a separate field.
     /// </summary>
-    private void ReportRename(string message, TsClaimSite site) =>
+    private void ReportRename(string message, OverloadDeclarationSite site) =>
         _findings.Add(
             new TsClaimFinding(
                 MetanoDiagnosticSeverity.Warning,

@@ -20,7 +20,7 @@ public static class TsConstructorSelectorShapes
     /// <summary>Whether TypeScript emits <paramref name="type"/> as a class.</summary>
     public static bool EmitsSelectors(INamedTypeSymbol type) =>
         type.TypeKind is TypeKind.Class or TypeKind.Struct
-        && IsTranspiled(type)
+        && SymbolHelper.IsTranspiledByItsAssembly(type)
         && !SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
         && !SymbolHelper.HasPlainObject(type)
         && !SymbolHelper.HasBranded(type)
@@ -35,16 +35,4 @@ public static class TsConstructorSelectorShapes
     /// </summary>
     public static bool ConstructsThroughFactories(INamedTypeSymbol type) =>
         DispatchedConstructorCalls.ConstructsThroughFactories(type, EmitsSelectors);
-
-    /// <summary>
-    /// Whether the compilation declaring <paramref name="type"/> transpiles it,
-    /// by the rule that compilation applies to its own types
-    /// (<see cref="SymbolHelper.IsTranspilable"/>).
-    /// </summary>
-    private static bool IsTranspiled(INamedTypeSymbol type) =>
-        SymbolHelper.IsTranspilable(
-            type,
-            type.ContainingAssembly.HasTranspileAssembly(),
-            type.ContainingAssembly
-        );
 }

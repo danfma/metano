@@ -46,14 +46,15 @@ public sealed record IrExtractionContext(
     /// <summary>
     /// Whether the target emits an addressable fast path per overload of a
     /// dispatched operator group (spec 013 FR-033), so the extractor binds an
-    /// operator application to the overload Roslyn resolved. TypeScript does
+    /// operator application to the overload Roslyn resolved. Opt-in, like
+    /// <see cref="EmitsConstructorSelectors"/>: a target that does not
+    /// declare the fast paths keeps the source operator. TypeScript sets it
     /// (<c>Money.__addMoneyInt32(a, b)</c>); Dart declares one
-    /// <c>operator +</c> per class and keeps the source operator, so it
-    /// clears it. Method, <c>base.M</c>, method-group and module-function
-    /// call sites bind on every target: each names the fast paths of those
-    /// groups (#549).
+    /// <c>operator +</c> per class and leaves it unset. Method, <c>base.M</c>,
+    /// method-group and module-function call sites bind on every target: each
+    /// names the fast paths of those groups (#549).
     /// </summary>
-    public bool EmitsOperatorFastPaths { get; init; } = true;
+    public bool EmitsOperatorFastPaths { get; init; }
 
     /// <summary>
     /// The context of a constant parameter default: the origin resolver and

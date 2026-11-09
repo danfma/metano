@@ -13,19 +13,22 @@ namespace Metano.Compiler.Dart.Bridge;
 /// 013 DECIDED-18). Call sites resolve an overload identity
 /// (<see cref="IrOverloadRef"/>) through it.
 /// </summary>
-public sealed class DartOverloadClaimsRegistry(
-    Compilation compilation,
-    IrExtractionContext extraction
-)
+public sealed class DartOverloadClaimsRegistry : IDartOverloadNames
 {
-    private readonly Compilation _compilation = compilation;
+    private readonly Compilation _compilation;
 
     // A shape: no bodies, so no compilation, and nothing reported twice.
-    private readonly IrExtractionContext _shapeExtraction = extraction with { Compilation = null };
+    private readonly IrExtractionContext _shapeExtraction;
 
     private readonly ConcurrentDictionary<INamedTypeSymbol, Lazy<DartOverloadClaims>> _claims = new(
         SymbolEqualityComparer.Default
     );
+
+    public DartOverloadClaimsRegistry(Compilation compilation, IrExtractionContext extraction)
+    {
+        _compilation = compilation;
+        _shapeExtraction = extraction with { Compilation = null };
+    }
 
     /// <summary>The claims of <paramref name="type"/>, computed on first use.</summary>
     public DartOverloadClaims ClaimsOf(INamedTypeSymbol type) =>
@@ -102,4 +105,29 @@ public sealed class DartOverloadClaimsRegistry(
         && !SymbolHelper.HasExternal(baseType)
             ? ClaimsOf(baseType).Members
             : DartOverloadClaims.None.Members;
+}
+
+/// <summary>
+/// The names a Dart call site resolves a selected overload to (spec 013
+/// DECIDED-18): the named constructor of a constructor overload, the fast path
+/// of a method overload; <c>null</c> when the declaring type is not visible,
+/// which keeps the source spelling.
+/// </summary>
+public interface IDartOverloadNames
+{
+    string? ConstructorNameOf(IrOverloadRef overload);
+
+    string? FastPathOf(IrOverloadRef overload);
+}
+
+/// <summary>The names of a rewrite that resolves no overload: every call site keeps its source spelling.</summary>
+public sealed class NoDartOverloadNames : IDartOverloadNames
+{
+    private NoDartOverloadNames() { }
+
+    public static NoDartOverloadNames Instance { get; } = new();
+
+    public string? ConstructorNameOf(IrOverloadRef overload) => null;
+
+    public string? FastPathOf(IrOverloadRef overload) => null;
 }

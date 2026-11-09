@@ -33,6 +33,31 @@ public class ParameterShadowingTests
         await Assert.That(files["mod.ts"]).Contains("return log(x) + log$;");
     }
 
+    /// <summary>
+    /// The shadow check reads the emitting target's <c>[Name]</c>: a
+    /// function renamed for TypeScript only (<c>Write</c> → <c>log</c>) is
+    /// shadowed by a parameter <c>log</c>, which takes <c>$</c>.
+    /// </summary>
+    [Test]
+    public async Task ModuleFunction_RenamedForTheTarget_RenamesTheShadowingParameter()
+    {
+        var files = Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Mod
+            {
+                [Name(TargetLanguage.TypeScript, "log")]
+                public static int Write(int value) => value + 1;
+
+                public static int Run(int log) => Write(log);
+            }
+            """
+        );
+
+        await Assert.That(files["mod.ts"]).Contains("export function run(log$: number): number {");
+        await Assert.That(files["mod.ts"]).Contains("return log(log$);");
+    }
+
     [Test]
     public async Task ClassMethod_CallingTheModuleFunction_RenamesTheShadowingParameter()
     {

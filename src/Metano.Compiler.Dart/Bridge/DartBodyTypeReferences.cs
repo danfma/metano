@@ -53,7 +53,7 @@ public static class DartBodyTypeReferences
     {
         types.AddRange(TypesNamedBy(expression));
 
-        foreach (var child in IrNodeChildren.ExpressionsOf(expression))
+        foreach (var child in ChildrenOf(expression))
             VisitExpression(child, types);
 
         foreach (var statement in IrNodeChildren.StatementsOf(expression))
@@ -73,9 +73,19 @@ public static class DartBodyTypeReferences
             .OfType<IrTypeRef>()
             .Select(IrToDartTypeMapper.Map);
 
+    /// <summary>
+    /// The child expressions, the Dart-only <see cref="DartNamedConstruction"/>
+    /// (which the core walk does not know) included.
+    /// </summary>
+    private static IEnumerable<IrExpression> ChildrenOf(IrExpression expression) =>
+        expression is DartNamedConstruction construction
+            ? construction.Arguments.Select(argument => argument.Value)
+            : IrNodeChildren.ExpressionsOf(expression);
+
     private static IEnumerable<DartType> TypesNamedBy(IrExpression expression) =>
         expression switch
         {
+            DartNamedConstruction construction => [IrToDartTypeMapper.Map(construction.Type)],
             IrTypeReference reference => [IrToDartTypeMapper.Map(NamedTypeOf(reference))],
             IrNewExpression creation => [IrToDartTypeMapper.Map(creation.Type)],
             IrCastExpression cast => [IrToDartTypeMapper.Map(cast.TargetType)],

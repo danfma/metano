@@ -1,4 +1,5 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.Transformation;
 
@@ -63,7 +64,10 @@ internal sealed class TsInterfaceFastPaths
                 $"Fast path '{interfaceName}.{candidate}' of "
                     + $"'{DispatchedOverload.SignatureOf(method)}' collides with a member of the "
                     + $"interface; it is emitted as '{claimed}' (spec 013 FR-004).",
-                new TsClaimSite(method.Name, Signature: DispatchedOverload.SignatureOf(method))
+                new OverloadDeclarationSite(
+                    method.Name,
+                    Signature: DispatchedOverload.SignatureOf(method)
+                )
             )
         );
 

@@ -27,11 +27,8 @@ internal static class IrParameterNaming
 
     private static readonly ConditionalWeakTable<
         ISymbol,
-        ConcurrentDictionary<int, HashSet<string>>
+        ConcurrentDictionary<TargetKey, HashSet<string>>
     > CollidingNamesByOwner = new();
-
-    /// <summary>The cache key of a call without a target.</summary>
-    private const int NoTarget = -1;
 
     public static string IrNameOf(
         IParameterSymbol parameter,
@@ -88,11 +85,8 @@ internal static class IrParameterNaming
         TargetLanguage? target
     ) =>
         CollidingNamesByOwner
-            .GetValue(owner, _ => new ConcurrentDictionary<int, HashSet<string>>())
-            .GetOrAdd(
-                target is { } language ? (int)language : NoTarget,
-                _ => FindCollidingNames(owner, compilation, target)
-            );
+            .GetValue(owner, _ => new ConcurrentDictionary<TargetKey, HashSet<string>>())
+            .GetOrAdd(new TargetKey(target), _ => FindCollidingNames(owner, compilation, target));
 
     /// <summary>
     /// The names of the owner's parameters that share their emitted name with
@@ -139,4 +133,10 @@ internal static class IrParameterNaming
 
     private static bool IsFlattened(IMethodSymbol callee) =>
         callee is { IsStatic: true } && callee.ContainingType.IsContainerless();
+
+    /// <summary>
+    /// The cache key of a target, <c>null</c> (no target) included, which a
+    /// dictionary key cannot be on its own.
+    /// </summary>
+    private readonly record struct TargetKey(TargetLanguage? Language);
 }

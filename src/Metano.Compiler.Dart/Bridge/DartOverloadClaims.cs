@@ -61,6 +61,25 @@ public sealed class DartOverloadClaims
     public string? FastPathAt(string memberName, int ordinal) =>
         _fastPaths.GetValueOrDefault(new DartOverloadKey(memberName, ordinal));
 
+    /// <summary>
+    /// The fast path of an overload the type declares. The claim pass runs
+    /// over the same shape the declaration is emitted from, so a missing name
+    /// is a broken invariant: a fallback would declare a name no call site
+    /// resolves.
+    /// </summary>
+    internal string RequiredFastPathAt(string memberName, int ordinal) =>
+        FastPathAt(memberName, ordinal)
+        ?? throw new InvalidOperationException(
+            $"The Dart claim pass named no fast path for '{memberName}' at ordinal {ordinal}."
+        );
+
+    /// <summary>The named constructor of a constructor overload of a dispatched set (see <see cref="RequiredFastPathAt"/>).</summary>
+    internal string RequiredConstructorNameAt(int ordinal) =>
+        ConstructorNameAt(ordinal)
+        ?? throw new InvalidOperationException(
+            $"The Dart claim pass named no constructor at ordinal {ordinal}."
+        );
+
     /// <summary>Reports the findings, located at the declarations of <paramref name="type"/>.</summary>
     public void Report(INamedTypeSymbol type, Action<MetanoDiagnostic> report)
     {
@@ -101,13 +120,31 @@ internal enum DartClaimedMemberKind
 
 /// <summary>
 /// A name held in a Dart member table: what holds it, described for a
-/// message, and the type that declares it.
+/// message, the type that declares it, and whether it is a static member —
+/// a named constructor conflicts with a static member of its class, never
+/// with an instance one.
 /// </summary>
 internal sealed record DartClaimedMember(
     DartClaimedMemberKind Kind,
     string Description,
-    string DeclaredBy
-);
+    string DeclaredBy,
+    bool IsStatic
+)
+{
+    /// <summary>
+    /// Whether a named constructor of the same class cannot take this name:
+    /// another named constructor or a static member holds it.
+    /// </summary>
+    public bool ConflictsWithConstructor =>
+        IsStatic || Kind == DartClaimedMemberKind.NamedConstructor;
+
+    /// <summary>
+    /// Whether a member of the given staticness cannot take this name: any
+    /// member holds it, except a named constructor next to an instance member.
+    /// </summary>
+    public bool ConflictsWithMember(bool isStatic) =>
+        isStatic || Kind != DartClaimedMemberKind.NamedConstructor;
+}
 
 /// <summary>A diagnostic a claim pass found, and the declaration it is about.</summary>
 internal sealed record DartClaimFinding(

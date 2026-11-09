@@ -423,7 +423,13 @@ public static class IrConstructorExtractor
         var extractor = new IrExpressionExtractor(model, context.Extraction, localNames);
         var arguments = extractor.ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
 
-        var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context);
+        // The target carries its declaration ordinal, so a backend that
+        // addresses one constructor overload by it (a Dart redirect to a named
+        // constructor) names the chained overload, not the first one.
+        var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context) with
+        {
+            DeclarationOrdinal = DeclarationOrdinalOf(chainedCtor) ?? 0,
+        };
 
         return new IrConstructorChain(arguments, chainedDecl);
     }

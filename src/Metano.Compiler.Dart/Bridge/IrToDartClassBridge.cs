@@ -78,7 +78,7 @@ public static class IrToDartClassBridge
                     case IrMethodDeclaration method:
                         AddMethod(
                             method,
-                            IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes),
+                            DartClassMemberNames.MethodNameOf(ir, method),
                             members,
                             rewriter
                         );
@@ -391,6 +391,7 @@ public static class IrToDartClassBridge
                 new IrMemberAccess(new IrTypeReference(className), primaryConstructorName),
                 callArgs
             );
+
         return new DartMethodSignature(
             Name: "copyWith",
             Parameters: parameters,
@@ -465,9 +466,9 @@ public static class IrToDartClassBridge
     /// <summary>
     /// One overload of a dispatched set as its named constructor. A
     /// <c>: this(...)</c> chain becomes a redirect to the target's named
-    /// constructor; Dart allows a redirecting constructor no body, so a chain
-    /// with a body of its own keeps the body and reports that the chain is
-    /// dropped.
+    /// constructor. Dart allows a redirecting constructor no body, so a chain
+    /// with a body of its own keeps the body without the chain (the
+    /// transformer reports it, <c>MS0001</c>, at the constructor).
     /// </summary>
     private static DartConstructor ConvertNamedConstructor(
         IrConstructorDeclaration overload,
@@ -476,24 +477,14 @@ public static class IrToDartClassBridge
         DartIrRewriter rewriter
     )
     {
-        var name = claims.ConstructorNameAt(overload.DeclarationOrdinal);
+        var name = claims.RequiredConstructorNameAt(overload.DeclarationOrdinal);
         var constructor = ConvertConstructor(overload, className, name, rewriter);
 
-        if (overload.ThisChain is not { } chain)
+        if (overload is not { ThisChain: { } chain, Body: null or { Count: 0 } })
             return constructor;
-
-        if (overload.Body is { Count: > 0 })
-        {
-            DartUnsupported.Report(
-                $"Dart target: the constructor '{className}.{name}' chains through "
-                    + ": this(...) and has a body; Dart's redirecting constructors have none, so "
-                    + "the chain is not emitted."
-            );
-            return constructor;
-        }
 
         var redirect = new DartConstructorRedirect(
-            claims.ConstructorNameAt(chain.Target.DeclarationOrdinal),
+            claims.RequiredConstructorNameAt(chain.Target.DeclarationOrdinal),
             DartConstructorChainArguments.Of(chain, rewriter)
         );
 
@@ -651,12 +642,7 @@ public static class IrToDartClassBridge
 
         foreach (var overload in overloads)
         {
-            var name =
-                claims.FastPathAt(overload.Name, overload.DeclarationOrdinal)
-                ?? IrToDartNamingPolicy.ToFastPathName(
-                    overload.Name,
-                    overload.OverloadName!.Suffix
-                );
+            var name = claims.RequiredFastPathAt(overload.Name, overload.DeclarationOrdinal);
 
             if (emittedFastPaths.Add(name))
                 AddMethod(overload, name, members, rewriter);
