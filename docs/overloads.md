@@ -278,13 +278,18 @@ Limitations of the experimental Dart target:
   member (`MS0001`), declared under the name its call sites spell;
 - a containerless module's fast paths are claimed per file, not across the
   files a consumer imports together;
-- named arguments out of parameter order are passed in parameter order. With
-  at most one order-sensitive evaluation among them (a call, a read, an
-  `await`; constants, lambdas and constant collections do not count) the
-  order cannot differ from C# and the call stays inline
+- named arguments out of parameter order (in a call, a construction or a
+  `: this(...)` chain) are passed in parameter order. With at most one
+  order-sensitive evaluation among them (a call, a read, an `await`, a
+  user-defined conversion; constants, lambdas and constant collections do
+  not count) the order cannot differ from C# and the call stays inline
   (`k.scaleDN(2, Run.next())`); with two or more, `MS0001` reports the call,
-  which then evaluates them in parameter order. Keeping C#'s order there is
-  #591.
+  which then evaluates them in parameter order. The count is deliberately
+  conservative: it also counts a receiver that is a computation and an
+  extension call's receiver, which run first in both languages, so
+  `h.Inner.Two(b: Next(), a: 3)` reports although its Dart order matches C#.
+  Property getters with side effects are not covered (#592). Keeping C#'s
+  order, without these false positives, is #591.
 
 Gaps of the Dart prototype that predate spec 013 and also touch overloads:
 

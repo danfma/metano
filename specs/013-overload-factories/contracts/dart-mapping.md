@@ -65,19 +65,30 @@ the same overload differently after claims; the core candidates are identical.
   arguments before the constructor's name (`Gen<Object>.fromValue(5)`, the Dart-only
   `DartNamedConstruction` node). Bound arguments are passed in parameter order. When named
   arguments put them out of that order (`IrSelectedOverload.EvaluationOrder`), Dart does not
-  keep C#'s evaluation order (#591); the core classifies the reordered call
-  (`IrExtractionContext.KeepsArgumentEvaluationOrder`, unset for Dart):
+  keep C#'s evaluation order (#591); the core counts the order-sensitive evaluations of a
+  reordered call or `: this(...)` chain (`IrExtractionContext.KeepsArgumentEvaluationOrder`, a
+  target capability Dart leaves unset):
 
   | Reordered call | Dart |
   |---|---|
   | at most one order-sensitive evaluation (`k.Scale(n: Next(), d: 2)`, `k.Count(n: Next(), items: [])`, `c.M(b: (c = new Inner(2)).Tag, a: 3)`) | inline in parameter order, each argument typed by its parameter: `k.scaleDN(2, Run.next())`, `k.countNItems(Run.next(), [])` |
   | only order-insensitive arguments (`i.M(b: 1, a: 2)`) | inline in parameter order: `i.mAB(2, 1)` |
-  | two or more order-sensitive evaluations — calls, local or member reads, conditionals, binaries, `await`s, a receiver that is a computation (`new Pair(b: Next(), a: Next())`, `p.Two(b: Next(), a: x)`, `p.Scale(n: Next(), d: Flag() ? 2 : 3)`, `h.Inner.Two(b: Next(), a: 3)`, `p.Two(b: Next(), a: await NextAsync())`) | `MS0001` at the call, emitted in parameter order: `Named arguments out of parameter order with more than one evaluation that C# runs in written order are not supported for Dart: …` |
+  | two or more order-sensitive evaluations — calls, local or member reads, conditionals, binaries, `await`s, a receiver that is a computation (`new Pair(b: Next(), a: Next())`, `p.Two(b: Next(), a: x)`, `p.Scale(n: Next(), d: Flag() ? 2 : 3)`, `h.Inner.Two(b: Next(), a: 3)`, `p.Two(b: Next(), a: await NextAsync())`) | `MS0001` at the call or initializer, emitted in parameter order: `Named arguments out of parameter order with more than one evaluation that C# runs in written order are not supported by this target: …` |
 
   Order-insensitive: constants (literals, negated literals, `null`, `const`), `default`, `this`,
-  `typeof`, lambdas, and collection literals of those. A receiver is evaluated before the
-  arguments in both languages, so a local, a parameter, `this`, `base`, a type or a
-  null-conditional receiver does not count. An `await` argument follows the same rule.
+  `typeof`, lambdas, and collection literals of those; a user-defined conversion runs its
+  operator and counts. A local, a parameter, `this`, `base`, a type or a null-conditional
+  receiver does not count; an `await` argument follows the same rule.
+
+  The count is deliberately **conservative**: it counts a receiver that is a computation and an
+  extension call's receiver (bound as its first argument), although a receiver runs first in
+  both languages, so `h.Inner.Two(b: Next(), a: 3)` and `m.E(b: Next(), a: 2)` report `MS0001`
+  while the Dart order matches C#; the same holds for reads no argument can change
+  (`: this(Y: y, X: s.Length)`). These false positives go away with #591, which checks whether
+  the relative order of two order-sensitive evaluations actually changes. It does **not** cover
+  property getters with side effects: a reordered call whose arguments are all member reads
+  (`c.Two(b: h.P, a: h.Q)`) is considered free of side effects by the core and keeps parameter
+  order without a report, on every target (#592).
   The prototype still emits no `super(...)` initializer for a derived constructor (RT-02, #572),
   so `BaseOverload` is unused there.
 - **`[Name]`.** Pins the suffix as in TypeScript, with the same `MS0003` reports; a method's
