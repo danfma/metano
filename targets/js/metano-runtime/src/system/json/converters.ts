@@ -63,7 +63,7 @@ import { type PropertyLookup, propertyLookupPlanOf } from "./property-lookup.ts"
  * names the type a built-in conversion error reports: a property names the
  * declaring contract, every other position names the value's own CLR type
  * (#485). Under exact tree numbers, only the built-in converters that read a
- * number's exact text see a `JsonNumberText` leaf (`withNumberTextsAsDoubles`).
+ * number's exact text see a number leaf (`withNumberTextsAsDoubles`).
  */
 function resolveConverter(
   descriptor: TypeDescriptor,
@@ -90,17 +90,24 @@ function customOrBuiltinConverter(
 
   const builtin = builtinOf();
 
-  return forwardsNumberTexts(descriptor)
-    ? builtin
-    : withNumberTextsAsDoubles(builtin, plans, numberOfTreeValue);
+  if (forwardsNumberTexts(descriptor)) {
+    return builtin;
+  }
+
+  // A passthrough `primitive` (an `object` slot, FR-056) keeps a whole
+  // subtree, so every leaf below it is read too; any other built-in
+  // converter hands each child to a child converter.
+  const asDoubles = descriptor.kind === "primitive" ? treeWithDoubles : numberOfTreeValue;
+
+  return withNumberTextsAsDoubles(builtin, plans, asDoubles);
 }
 
 /**
- * `converter`, reading the `JsonNumberText` leaves of an exact tree as the
- * `number` `JSON.parse` gives (#457), through `asDoubles`: a built-in
- * converter needs only its own value converted, since it hands each child
- * to a child converter that converts it in turn; a custom one gets the
- * whole subtree converted (`treeWithDoubles`). A parsed tree holds no leaf,
+ * `converter`, reading the number leaves of an exact tree as the `number`
+ * `JSON.parse` gives (#457), through `asDoubles`: a built-in converter needs
+ * only its own value converted, since it hands each child to a child
+ * converter that converts it in turn; a custom one and a passthrough
+ * `primitive` get the whole subtree converted (`treeWithDoubles`). A parsed tree holds no leaf,
  * so its converters stay as they are.
  */
 function withNumberTextsAsDoubles(
@@ -571,10 +578,11 @@ interface PropertyPlan {
 
 /**
  * How the tree being read holds its numbers: `parsed`, each a `number`, as
- * `JSON.parse` builds it; `exact`, some as `JsonNumberText` leaves, as
- * `readJsonText` builds it (#457): those with more significant digits than a
- * double holds and, for a spec that reads a 64-bit integer, those with a
- * fraction or an exponent (`NumberTextLeaves`).
+ * `JSON.parse` builds it; `exact`, some as leaves, as `readJsonText` builds
+ * it (#457): a `JsonNumberText` for those with more significant digits than
+ * a double holds and, for a spec that reads a 64-bit integer, a
+ * `JsonNonIntegerNumber` for the other ones with a fraction or an exponent
+ * (`NumberTextLeaves`).
  */
 export type TreeNumbers = "parsed" | "exact";
 

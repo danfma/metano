@@ -10,6 +10,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+import { Decimal } from "decimal.js";
 import { specNumberTextLeaves } from "#/system/json/exact-number-reads.ts";
 import { readExactNumberText } from "#/system/json/number-from-string.ts";
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
@@ -840,3 +841,56 @@ describe("int64 — the exact tree of a 64-bit closure (FR-053)", () => {
   });
 });
 
+describe("int64 — other converters of a 64-bit closure read doubles (FR-053)", () => {
+  const LONG: TypeDescriptor = { kind: "int64", numberType: "System.Int64" };
+
+  class Holder {}
+
+  function holderSpec(properties: readonly PropertySpec[]): TypeSpec {
+    return {
+      type: Holder,
+      factory: (props) => Object.assign(new Holder(), props),
+      properties,
+    };
+  }
+
+  // An `object` slot (FR-056) keeps the JSON value as parsed, whole subtree
+  // included: no marked or inexact leaf may leak into it.
+  test("an object slot reads its nested numbers as JSON.parse does", () => {
+    const spec = holderSpec([
+      { ts: "id", json: "id", type: LONG },
+      { ts: "extra", json: "extra", type: { kind: "primitive" } },
+      { ts: "list", json: "list", type: { kind: "primitive" } },
+    ]);
+
+    const text =
+      '{"id":1,"extra":{"a":1.5,"b":[2.5,1e3],"c":12345678901234567890},' +
+      '"list":[1.0,{"d":-0.5}]}';
+
+    const read = JsonSerializer.deserializeText(text, spec) as { extra: unknown; list: unknown };
+    const parsed = JSON.parse(text) as { extra: unknown; list: unknown };
+
+    expect(read.extra).toEqual(parsed.extra);
+    expect(read.list).toEqual(parsed.list);
+  });
+
+  // #457 reads a decimal of at most 15 digits from its double; a 64-bit
+  // member beside it must not change that.
+  test("a decimal beside a long reads as in a spec without one", () => {
+    const decimal: TypeDescriptor = { kind: "decimal", type: Decimal };
+    const decimalOnly = holderSpec([{ ts: "price", json: "price", type: decimal }]);
+
+    const mixed = holderSpec([
+      { ts: "price", json: "price", type: decimal },
+      { ts: "id", json: "id", type: LONG, optional: true },
+    ]);
+
+    for (const price of ["1.5", "1e3", "-0.0", "0.30000000000000004", "1.10"]) {
+      const text = `{"price":${price}}`;
+      const expected = (JsonSerializer.deserializeText(text, decimalOnly) as { price: Decimal }).price;
+      const actual = (JsonSerializer.deserializeText(text, mixed) as { price: Decimal }).price;
+
+      expect([price, actual.toString()]).toEqual([price, expected.toString()]);
+    }
+  });
+});
