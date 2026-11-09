@@ -87,10 +87,12 @@ public sealed partial class IrExpressionExtractor
             .OrderBy(argument => argument.ParameterOrdinal)
             .ToList();
 
-        var evaluationOrder = EvaluationOrderOf(
-            inParameterOrder,
-            ComputedReadsAreOrderSensitive(bindable)
-        );
+        var sourceOrder = EvaluationOrderOf(inParameterOrder);
+
+        var evaluationOrder =
+            sourceOrder is not null && HasOrderToKeep(inParameterOrder, bindable)
+                ? sourceOrder
+                : null;
 
         if (evaluationOrder is not null && call is not null)
             ReportIfEvaluationOrderIsLost(call, bindable);
@@ -180,8 +182,15 @@ public sealed partial class IrExpressionExtractor
         IOperation call,
         ImmutableArray<IArgumentOperation> arguments
     ) =>
-        arguments.Count(argument => !IsOrderInsensitive(argument.Value))
+        CountOrderSensitiveArguments(arguments)
         + (IsOrderInsensitiveReceiver(ReceiverOf(call)) ? 0 : 1);
+
+    /// <summary>
+    /// The arguments that are not <see cref="IsOrderInsensitive">order-insensitive</see>;
+    /// the receiver is not one of them.
+    /// </summary>
+    private static int CountOrderSensitiveArguments(ImmutableArray<IArgumentOperation> arguments) =>
+        arguments.Count(argument => !IsOrderInsensitive(argument.Value));
 
     private static IOperation? ReceiverOf(IOperation call) =>
         call is IInvocationOperation invocation ? invocation.Instance : null;
@@ -251,14 +260,10 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The parameter-order positions of the arguments, listed in the order C#
     /// evaluates them (<c>order[k]</c> is the position of the k-th argument
-    /// evaluated); <c>null</c> when that is parameter order, or when no
-    /// argument has a side effect to keep in place: neither one its lowered
-    /// shape shows nor a computed read
-    /// (<paramref name="computedReadsAreOrderSensitive"/>).
+    /// evaluated); <c>null</c> when that is parameter order.
     /// </summary>
     private static IReadOnlyList<int>? EvaluationOrderOf(
-        IReadOnlyList<BoundArgument> inParameterOrder,
-        bool computedReadsAreOrderSensitive
+        IReadOnlyList<BoundArgument> inParameterOrder
     )
     {
         var order = inParameterOrder
@@ -267,53 +272,100 @@ public sealed partial class IrExpressionExtractor
             .Select(entry => entry.Position)
             .ToList();
 
-        var isParameterOrder = order.SequenceEqual(Enumerable.Range(0, order.Count));
-
-        var hasSideEffect =
-            computedReadsAreOrderSensitive
-            || inParameterOrder.Any(argument =>
-                !IrEvaluationTraits.IsSideEffectFree(argument.Value.Value)
-            );
-
-        return isParameterOrder || !hasSideEffect ? null : order;
+        return order.SequenceEqual(Enumerable.Range(0, order.Count)) ? null : order;
     }
 
     /// <summary>
-    /// Whether a property read among the arguments can tell their order
-    /// apart, for a target that binds them in source order
-    /// (<see cref="IrExtractionContext.KeepsArgumentEvaluationOrder"/>; the
-    /// other targets keep the <c>MS0001</c> rule of
-    /// <see cref="ReportIfEvaluationOrderIsLost"/>). The lowered shape of a
-    /// member read does not say whether it is a field or a property, so
-    /// <see cref="IrEvaluationTraits.IsSideEffectFree"/> takes a getter for
-    /// free; here the symbol decides. A <see cref="ReadsComputedProperty">
-    /// computed read</see> runs code that may write what another argument
-    /// reads, so it is order-sensitive as soon as a second argument is not
-    /// <see cref="IsOrderInsensitive">order-insensitive</see>. Field and
-    /// auto-property reads alone run no code: no order tells them apart.
+    /// Whether arguments written out of parameter order have an order to
+    /// keep: a side effect visible in the lowered shape of one of them, or
+    /// <see cref="KeepsOrderForImplicitUserCode">user code an argument runs
+    /// implicitly</see>. Without either, no order tells the arguments apart.
     /// </summary>
-    private bool ComputedReadsAreOrderSensitive(ImmutableArray<IArgumentOperation> arguments) =>
-        _context.KeepsArgumentEvaluationOrder
-        && arguments.Any(argument => ReadsComputedProperty(argument.Value))
-        && arguments.Count(argument => !IsOrderInsensitive(argument.Value)) >= 2;
+    private bool HasOrderToKeep(
+        IReadOnlyList<BoundArgument> inParameterOrder,
+        ImmutableArray<IArgumentOperation> arguments
+    ) =>
+        inParameterOrder.Any(argument => !IrEvaluationTraits.IsSideEffectFree(argument.Value.Value))
+        || KeepsOrderForImplicitUserCode(arguments);
 
     /// <summary>
-    /// Whether evaluating <paramref name="operation"/> reads a property whose
-    /// getter may run code: every property but a non-overridable
-    /// auto-property of this compilation (a hand-written, <c>field</c>-keyword,
-    /// overridable or interface getter, an indexer, a property of another
-    /// assembly). A constant and a lambda's body read nothing here.
+    /// Whether the target keeps the source order of arguments because one of
+    /// them <see cref="RunsImplicitUserCode">runs user code implicitly</see>
+    /// beside a second order-sensitive argument.
     /// </summary>
-    private static bool ReadsComputedProperty(IOperation operation) =>
+    /// <remarks>
+    /// The lowered shape of a member read does not say whether it is a field
+    /// or a property, and a concatenation does not say what it formats, so
+    /// <see cref="IrEvaluationTraits.IsSideEffectFree"/> takes both for
+    /// free; here the symbols decide. Implicit user code may write what
+    /// another argument reads, so it is order-sensitive as soon as a second
+    /// argument is not <see cref="IsOrderInsensitive">order-insensitive</see>.
+    /// Field and auto-property reads alone run no code: no order tells them
+    /// apart. Only a target that binds the arguments in source order
+    /// (<see cref="IrExtractionContext.KeepsArgumentEvaluationOrder"/>)
+    /// takes this trigger; the other targets are unchanged: such a call
+    /// records no order there and reports no <c>MS0001</c>.
+    /// </remarks>
+    private bool KeepsOrderForImplicitUserCode(ImmutableArray<IArgumentOperation> arguments) =>
+        // TODO(#592): the Dart half. A target that passes arguments in
+        // parameter order should report these calls instead of skipping them.
+        _context.KeepsArgumentEvaluationOrder
+        && CountOrderSensitiveArguments(arguments) >= 2
+        && arguments.Any(argument => RunsImplicitUserCode(argument.Value));
+
+    /// <summary>
+    /// Whether evaluating <paramref name="operation"/> runs user code its
+    /// lowered shape does not show: a read of a
+    /// <see cref="IsComputed">computed property</see>, a user-defined
+    /// operator or conversion, or a string concatenation that formats an
+    /// operand through its <c>ToString</c>. A constant and a lambda's body
+    /// run nothing here.
+    /// </summary>
+    private static bool RunsImplicitUserCode(IOperation operation) =>
         operation switch
         {
             { ConstantValue.HasValue: true } or IAnonymousFunctionOperation => false,
             IPropertyReferenceOperation read when IsComputed(read.Property) => true,
-            _ => operation.ChildOperations.Any(ReadsComputedProperty),
+            _ when InvokesUserOperator(operation) => true,
+            IBinaryOperation concatenation when FormatsThroughToString(concatenation) => true,
+            _ => operation.ChildOperations.Any(RunsImplicitUserCode),
         };
 
-    private static bool IsComputed(IPropertySymbol property) =>
-        !IsAutoProperty(property) || IsOverridable(property);
+    /// <summary>A user-defined operator or conversion application.</summary>
+    private static bool InvokesUserOperator(IOperation operation) =>
+        operation
+            is IConversionOperation { OperatorMethod: not null }
+                or IUnaryOperation { OperatorMethod: not null }
+                or IBinaryOperation { OperatorMethod: not null };
+
+    /// <summary>
+    /// A string concatenation with an operand whose text comes from a
+    /// <c>ToString</c> that may be user code: any type but a string, a
+    /// <c>bool</c>, a <c>char</c>, a number or an enum (nullable or not).
+    /// </summary>
+    private static bool FormatsThroughToString(IBinaryOperation operation) =>
+        operation
+            is { OperatorKind: BinaryOperatorKind.Add, Type.SpecialType: SpecialType.System_String }
+        && new[] { operation.LeftOperand, operation.RightOperand }.Any(operand =>
+            !FormatsWithoutUserCode(ConcatenatedTypeOf(operand))
+        );
+
+    /// <summary>The type of a concatenation operand, under the boxing C# adds to it.</summary>
+    private static ITypeSymbol? ConcatenatedTypeOf(IOperation operand) =>
+        operand is IConversionOperation { IsImplicit: true, OperatorMethod: null } boxing
+            ? ConcatenatedTypeOf(boxing.Operand)
+            : operand.Type;
+
+    private static bool FormatsWithoutUserCode(ITypeSymbol? type) =>
+        type switch
+        {
+            null or { TypeKind: TypeKind.Enum } => true,
+            INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            } nullable => FormatsWithoutUserCode(nullable.TypeArguments[0]),
+            _ => type.SpecialType is >= SpecialType.System_Boolean and <= SpecialType.System_String,
+        };
 
     private IEnumerable<IrArgument> BoundArgumentsOf(IArgumentOperation argument) =>
         argument.ArgumentKind switch

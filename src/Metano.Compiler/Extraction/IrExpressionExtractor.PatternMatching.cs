@@ -114,9 +114,18 @@ public sealed partial class IrExpressionExtractor
         symbol switch
         {
             ILocalSymbol or IParameterSymbol or IFieldSymbol => true,
-            IPropertySymbol property => IsAutoProperty(property) && !IsOverridable(property),
+            IPropertySymbol property => !IsComputed(property),
             _ => false,
         };
+
+    /// <summary>
+    /// A property whose getter may run code: every property but a
+    /// non-overridable auto-property of this compilation (a hand-written,
+    /// <c>field</c>-keyword, overridable or interface getter, an indexer, a
+    /// property of another assembly).
+    /// </summary>
+    private static bool IsComputed(IPropertySymbol property) =>
+        !IsAutoProperty(property) || IsOverridable(property);
 
     /// <summary>
     /// A property with a compiler-generated backing field and a body-less
