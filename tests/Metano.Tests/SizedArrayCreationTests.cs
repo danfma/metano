@@ -79,6 +79,11 @@ public class SizedArrayCreationTests
             .ToList();
 
         await Assert.That(unsupported).HasSingleItem();
-        await Assert.That(unsupported[0]).Contains("new T[n]");
+
+        await Assert
+            .That(unsupported[0])
+            .IsEqualTo(
+                "Expression 'new T[n]' (ArrayCreationExpression) is not supported by the transpiler."
+            );
     }
 }

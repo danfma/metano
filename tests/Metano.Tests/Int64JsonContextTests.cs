@@ -15,7 +15,7 @@ public class Int64JsonContextTests
 {
     private const string ContextPath = "test-app/json-context.ts";
 
-    private const string BigIntGolden = "int64-json-context.ts";
+    private const string ContextGolden = "int64-json-context.ts";
 
     private const string ContextBoilerplate = """
         public partial class JsonContext : JsonSerializerContext
@@ -92,12 +92,14 @@ public class Int64JsonContextTests
 
         if (TranspileHelper.UpdateGoldensRequested)
         {
-            TranspileHelper.WriteExpected(BigIntGolden, files[ContextPath]);
+            TranspileHelper.WriteExpected(ContextGolden, files[ContextPath]);
 
             return;
         }
 
-        await Assert.That(files[ContextPath]).IsEqualTo(TranspileHelper.ReadExpected(BigIntGolden));
+        await Assert
+            .That(files[ContextPath])
+            .IsEqualTo(TranspileHelper.ReadExpected(ContextGolden));
 
         await Assert.That(diagnostics).IsEmpty();
     }

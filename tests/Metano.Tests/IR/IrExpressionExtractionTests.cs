@@ -637,6 +637,34 @@ public class IrExpressionExtractionTests
 
     // -- helpers --
 
+    /// <summary>
+    /// A constant parameter default is extracted with the origin resolver
+    /// alone: the target capabilities are dropped on purpose, since a C#
+    /// default value holds nothing for them to bind.
+    /// </summary>
+    [Test]
+    public async Task ForConstantDefault_KeepsTheResolver_AndDropsTheTargetCapabilities()
+    {
+        IrTypeOriginResolver resolver = _ => null;
+
+        var context = new IrExtractionContext(
+            resolver,
+            Target: Metano.Annotations.TargetLanguage.TypeScript
+        )
+        {
+            EmitsConstructorSelectors = _ => true,
+            EmitsOperatorFastPaths = true,
+            KeepsArgumentEvaluationOrder = true,
+        };
+
+        var constant = context.ForConstantDefault();
+
+        await Assert.That(constant).IsEqualTo(new IrExtractionContext(resolver));
+        await Assert.That(constant.EmitsConstructorSelectors).IsNull();
+        await Assert.That(constant.EmitsOperatorFastPaths).IsFalse();
+        await Assert.That(constant.KeepsArgumentEvaluationOrder).IsFalse();
+    }
+
     private static IReadOnlyList<IrStatement> ExtractFromMethod(
         string method,
         string? extraMembers = null,
@@ -693,33 +721,5 @@ public class IrExpressionExtractionTests
             );
 
         return typed;
-    }
-
-    /// <summary>
-    /// A constant parameter default is extracted with the origin resolver
-    /// alone: the target capabilities are dropped on purpose, since a C#
-    /// default value holds nothing for them to bind.
-    /// </summary>
-    [Test]
-    public async Task ForConstantDefault_KeepsTheResolver_AndDropsTheTargetCapabilities()
-    {
-        IrTypeOriginResolver resolver = _ => null;
-
-        var context = new IrExtractionContext(
-            resolver,
-            Target: Metano.Annotations.TargetLanguage.TypeScript
-        )
-        {
-            EmitsConstructorSelectors = _ => true,
-            EmitsOperatorFastPaths = true,
-            KeepsArgumentEvaluationOrder = true,
-        };
-
-        var constant = context.ForConstantDefault();
-
-        await Assert.That(constant).IsEqualTo(new IrExtractionContext(resolver));
-        await Assert.That(constant.EmitsConstructorSelectors).IsNull();
-        await Assert.That(constant.EmitsOperatorFastPaths).IsFalse();
-        await Assert.That(constant.KeepsArgumentEvaluationOrder).IsFalse();
     }
 }
