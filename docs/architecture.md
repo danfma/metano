@@ -325,7 +325,16 @@ properties so a single `BclExportTypeOverrides` and a single
 - **`Bridge/`** — `IrToDartClassBridge`, `IrToDartEnumBridge`,
   `IrToDartInterfaceBridge`, `IrToDartModuleBridge`, `IrToDartDelegateBridge`,
   `IrToDartBclMapper`, `IrRuntimeRequirementToDartImport`,
-  `IrToDartTypeMapper`, `IrToDartNamingPolicy`.
+  `IrToDartTypeMapper`, `IrToDartNamingPolicy`. Overloads (spec 013 FR-022):
+  `DartOverloadClaimsRegistry` caches one claim result per type — a class's
+  from `DartClassClaimPass` (one table per class: user members, named
+  constructors, fast paths, inherited members; `MS0067` / `MS0068`), an
+  interface's or a containerless module's from `DartFlatClaimPass` — and
+  `DartIrRewriter` resolves every bound call site (`IrNewExpression.Overload`,
+  `IrCallExpression.Overload`, `IrMemberAccess.Overload`) through it.
+  `DartTypeShapes` answers the core's `EmitsConstructorSelectors` port with the
+  types that get named constructors; Dart clears `EmitsOperatorFastPaths`, so an
+  overloaded operator keeps its source operator.
 - **`Transformation/`** — `DartTransformer` orchestrates discovery and
   file grouping; skips types flagged with `[Ignore(TargetLanguage.Dart)]`.
 - **`Dart/`** — Dart AST records and `IrBodyPrinter`, which renders IR
