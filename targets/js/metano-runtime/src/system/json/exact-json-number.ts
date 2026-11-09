@@ -10,11 +10,11 @@
  * function yet, hence the local types.
  *
  * On read (#457), `JsonSerializer.deserializeText` keeps a number with more
- * significant digits than a double holds — and, for a spec that reads a
- * `long` / `ulong`, one with a fraction or an exponent — as a
- * `JsonNumberText` leaf, which the converters that read exact digits take
- * from its text and every other converter reads as the `number`
- * `JSON.parse` gives.
+ * significant digits than a double holds as a `JsonNumberText` leaf — and,
+ * for a spec that reads a `long` / `ulong`, marks every other number with a
+ * fraction or an exponent as a `JsonNonIntegerNumber` — which the converters
+ * that read exact numbers take as they are and every other converter reads
+ * as the `number` `JSON.parse` gives.
  */
 
 /** Builds the JSON leaf of a number from its exact text. */
@@ -88,13 +88,27 @@ export class JsonNumberText {
 }
 
 /**
- * Which numbers an exact tree keeps as `JsonNumberText` leaves:
+ * A JSON number with a fraction or an exponent and at most 15 significant
+ * digits, read by `deserializeText` for a spec that reads a 64-bit integer
+ * (spec 012 FR-053). Its double is exact, so only its shape is kept: it is
+ * not an integer token, which a `long` / `ulong` and an int tag reject. Every
+ * other converter reads `value`, a `decimal` included (#457 reads a number of
+ * at most 15 digits from its double). No text is copied, so marking a
+ * fraction costs one small object.
+ */
+export class JsonNonIntegerNumber {
+  constructor(readonly value: number) {}
+}
+
+/**
+ * Which numbers an exact tree keeps as leaves:
  *
- * - `inexact`: those with more significant digits than a double holds, which
- *   a `decimal` reads from its source digits (#457);
- * - `inexactOrNonInteger`: those, and every number with a fraction or an
- *   exponent, whose shape a `long` / `ulong` rejects (spec 012 FR-052,
- *   FR-053) but a double erases (`1.0` reads as `1`, `1e3` as `1000`).
+ * - `inexact`: those with more significant digits than a double holds, as a
+ *   `JsonNumberText`, which a `decimal` reads from its source digits (#457);
+ * - `inexactOrNonInteger`: those, and every other number with a fraction or
+ *   an exponent as a `JsonNonIntegerNumber`, whose shape a `long` / `ulong`
+ *   rejects (spec 012 FR-052, FR-053) but a double erases (`1.0` reads as
+ *   `1`, `1e3` as `1000`).
  */
 export type NumberTextLeaves = "inexact" | "inexactOrNonInteger";
 
@@ -106,23 +120,30 @@ export function exactNumberTextOf(value: unknown): string | undefined {
   return value instanceof JsonNumberText ? value.text : rawJsonTextOf(value);
 }
 
-/** `value`, with a `JsonNumberText` leaf read as the `number` `JSON.parse` gives. */
+/**
+ * `value`, with a `JsonNumberText` or `JsonNonIntegerNumber` leaf read as the
+ * `number` `JSON.parse` gives.
+ */
 export function numberOfTreeValue(value: unknown): unknown {
+  if (value instanceof JsonNonIntegerNumber) {
+    return value.value;
+  }
+
   return value instanceof JsonNumberText ? Number(value.text) : value;
 }
 
 /**
- * `value` with every `JsonNumberText` leaf of its subtree read as the
- * `number` `JSON.parse` gives, for a custom converter, which gets a whole
- * subtree (a custom `array` or `ref` converter reads the elements and
- * members itself). Copy-on-write: only the arrays and objects that hold a
+ * `value` with every number leaf of its subtree read as the `number`
+ * `JSON.parse` gives, for a converter that gets a whole subtree: a custom one
+ * (a custom `array` or `ref` converter reads the elements and members
+ * itself) and a passthrough `primitive` (an `object` slot). Copy-on-write: only the arrays and objects that hold a
  * leaf, directly or below, are copied; any other value is returned as is.
  * A spread copy keeps `__proto__` an own property, as `JSON.parse` builds
  * it.
  */
 export function treeWithDoubles(value: unknown): unknown {
-  if (value instanceof JsonNumberText) {
-    return Number(value.text);
+  if (value instanceof JsonNumberText || value instanceof JsonNonIntegerNumber) {
+    return numberOfTreeValue(value);
   }
 
   if (Array.isArray(value)) {

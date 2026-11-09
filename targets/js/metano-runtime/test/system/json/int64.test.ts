@@ -604,7 +604,7 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
   // read (divergence I5). The exact tree now keeps their shape, and the
   // integer-token rules reject them, as STJ does (measured).
   test("a short fraction or exponent throws, as STJ throws (FR-053)", () => {
-    for (const text of ["1.0", "1e3", "1E0", "-0.0", "1.5", "0e0"]) {
+    for (const text of ["1.0", "1e3", "1E0", "-0.0", "1.5", "0e0", "1e400"]) {
       expectJsonException(
         () => JsonSerializer.deserializeText(text, int64Root("System.Int64")),
         cannotConvertMessage("System.Int64"),
@@ -839,3 +839,4 @@ describe("int64 — the exact tree of a 64-bit closure (FR-053)", () => {
     expect(read.id).toBe(5n);
   });
 });
+
