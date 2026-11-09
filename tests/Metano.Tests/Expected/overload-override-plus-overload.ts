@@ -73,16 +73,16 @@ export class Clash extends Base {
     return "clash";
   }
 
-  addInt64(x: number): string {
+  addInt64(x: bigint): string {
     return "long";
   }
 
   override add(x: number): string;
   override add(s: string): string;
-  override add(x: number): string;
+  override add(x: bigint): string;
   override add(...args: unknown[]): string {
     if (args.length === 1 && isInt64(args[0])) {
-      return this.addInt64(args[0] as number);
+      return this.addInt64(args[0] as bigint);
     }
 
     return super.add(...args as [never]);
