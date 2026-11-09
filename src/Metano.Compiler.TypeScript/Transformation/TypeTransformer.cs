@@ -2734,6 +2734,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 {
                     if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                         continue;
+
                     var fnName = IrToTsNamingPolicy.ToFunctionName(member);
                     // First-wins: own-assembly entries already registered take priority.
                     if (exports.ContainsKey(fnName))

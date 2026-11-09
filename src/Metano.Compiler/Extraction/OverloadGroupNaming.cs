@@ -181,6 +181,7 @@ internal static class OverloadGroupNaming
         var signatures = JoinQuoted(
             deadEnd.Select(overload => OverloadSignatureText.DisplayOf(overload.Symbol))
         );
+
         var names = JoinQuoted(indexes.Select(index => suffixes.Suffixes[index]));
 
         ExtractionDiagnostics.Report(
