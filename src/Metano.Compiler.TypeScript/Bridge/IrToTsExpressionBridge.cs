@@ -127,7 +127,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrTupleLiteral tuple => MapTupleLiteral(tuple, context),
             IrTupleEqualityExpression equality => MapTupleEquality(equality, context),
-            IrSpreadExpression spread => new TsSpreadExpression(Map(spread.Expression, context)),
+            IrSpreadExpression spread => MapSpread(spread, context),
             IrTemplateExpression tpl => new TsTemplate(
                 tpl.Template,
                 tpl.Receiver is null ? null : Map(tpl.Receiver, context),
@@ -356,6 +356,32 @@ public static partial class IrToTsExpressionBridge
         return bin.Operator is IrBinaryOp.ValueNotEqual
             ? new TsUnaryExpression("!", equality)
             : equality;
+    }
+
+    /// <summary>
+    /// <c>...source</c>, or <c>...Array.from(source, (element) =&gt;
+    /// converted)</c> when C# converts each spread element (<c>List&lt;long&gt;
+    /// l = [.. ints]</c>): <c>Array.from</c> reads any iterable once and maps
+    /// each element as it copies.
+    /// </summary>
+    private static TsExpression MapSpread(IrSpreadExpression spread, IrToTsBridgeContext context)
+    {
+        var source = Map(spread.Expression, context);
+
+        if (spread.ElementConversion is not { } conversion)
+            return new TsSpreadExpression(source);
+
+        var convert = new TsArrowFunction(
+            [new TsParameter(conversion.Element, null)],
+            [new TsReturnStatement(Map(conversion.Converted, context))]
+        );
+
+        var mapped = new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("Array"), "from"),
+            [source, convert]
+        );
+
+        return new TsSpreadExpression(mapped);
     }
 
     /// <summary>
@@ -1274,11 +1300,13 @@ public static partial class IrToTsExpressionBridge
         {
             new("kind", new TsStringLiteral(kind)),
         };
+
         foreach (var (key, value) in fields)
         {
             if (value is not null)
                 props.Add(new TsObjectProperty(key, value));
         }
+
         return new TsObjectLiteral(props);
     }
 

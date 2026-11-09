@@ -705,11 +705,24 @@ public sealed record IrObjectLiteral(IReadOnlyList<(string Name, IrExpression Va
 /// Spread expression: <c>...expr</c>. <see cref="Source"/> is what the spread
 /// operand enumerates as in C#, for targets whose map or string is not itself
 /// iterable (Dart spreads a map's <c>entries</c> and a string's characters).
+/// <see cref="ElementConversion"/> is the conversion C# applies to each
+/// spread element on its way into the collection (<c>List&lt;long&gt; l =
+/// [.. ints]</c>), when it crosses a 64-bit integer (spec 012 FR-010);
+/// <c>null</c> when the elements are spread as they are.
 /// </summary>
 public sealed record IrSpreadExpression(
     IrExpression Expression,
-    IrSpreadSource Source = IrSpreadSource.Iterable
+    IrSpreadSource Source = IrSpreadSource.Iterable,
+    IrSpreadElementConversion? ElementConversion = null
 ) : IrExpression;
+
+/// <summary>
+/// The per-element conversion of a spread: <see cref="Converted"/> is the
+/// value each element becomes, reading the element as the identifier
+/// <see cref="Element"/>. TypeScript maps the source through it; Dart, whose
+/// <c>int</c> already holds every 64-bit integer, spreads the source as it is.
+/// </summary>
+public sealed record IrSpreadElementConversion(string Element, IrExpression Converted);
 
 /// <summary>What a spread operand enumerates as.</summary>
 public enum IrSpreadSource

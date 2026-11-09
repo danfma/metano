@@ -73,14 +73,86 @@ public sealed partial class IrExpressionExtractor
                 element switch
                 {
                     ExpressionElementSyntax expression => Extract(expression.Expression),
-                    SpreadElementSyntax spread => new IrSpreadExpression(
-                        Extract(spread.Expression),
-                        SpreadSourceOf(spread.Expression)
-                    ),
+                    SpreadElementSyntax spread => ExtractSpread(spread),
                     _ => ReportUnsupported(element, element.Kind().ToString()),
                 }
             )
             .ToList();
+
+    /// <summary>
+    /// <c>..source</c> with the conversion C# applies to each element it
+    /// spreads. A converted string or dictionary spread is reported: its
+    /// elements are not what the target iterates.
+    /// </summary>
+    private IrExpression ExtractSpread(SpreadElementSyntax spread)
+    {
+        var source = SpreadSourceOf(spread.Expression);
+        var conversion = SpreadElementConversionOf(spread);
+
+        if (conversion is not null && source is not IrSpreadSource.Iterable)
+        {
+            return ReportUnsupported(
+                spread,
+                "spread of a string or dictionary whose elements convert to a 64-bit integer"
+            );
+        }
+
+        return new IrSpreadExpression(Extract(spread.Expression), source, conversion);
+    }
+
+    /// <summary>
+    /// The conversion from the spread's element type to the element type of
+    /// the collection being built, when it crosses a 64-bit integer (a
+    /// scalar, or a tuple element by element); <c>null</c> otherwise.
+    /// </summary>
+    private IrSpreadElementConversion? SpreadElementConversionOf(SpreadElementSyntax spread)
+    {
+        if (
+            _semantic.GetOperation(spread)
+                is not ISpreadOperation
+                {
+                    ElementType: { } from,
+                    Parent: ICollectionExpressionOperation { Type: { } collection },
+                }
+            || CollectionElementTypeOf(collection) is not { } to
+        )
+            return null;
+
+        var name = NextSpreadElementName();
+        var element = new IrIdentifier(name);
+        var implicitly = new TupleElementConversions(NumericEndpoints.CrossesSixtyFourBits, false);
+        var converted = ConvertedElement(spread, element, from, to, implicitly);
+
+        return ReferenceEquals(converted, element)
+            ? null
+            : new IrSpreadElementConversion(name, converted);
+    }
+
+    /// <summary>
+    /// The element type of a collection-expression target: an array's
+    /// element, the <c>T</c> of the <c>IEnumerable&lt;T&gt;</c> the type is or
+    /// implements, else its single type argument (<c>Span&lt;T&gt;</c>).
+    /// </summary>
+    private static ITypeSymbol? CollectionElementTypeOf(ITypeSymbol collection)
+    {
+        if (collection is IArrayTypeSymbol array)
+            return array.ElementType;
+
+        if (collection is not INamedTypeSymbol named)
+            return null;
+
+        var enumerable = named
+            .AllInterfaces.Prepend(named)
+            .FirstOrDefault(type =>
+                type.OriginalDefinition.SpecialType
+                is SpecialType.System_Collections_Generic_IEnumerable_T
+            );
+
+        if (enumerable is not null)
+            return enumerable.TypeArguments[0];
+
+        return named.TypeArguments is [var single] ? single : null;
+    }
 
     private IrSpreadSource SpreadSourceOf(ExpressionSyntax spreadOperand) =>
         _semantic.GetTypeInfo(spreadOperand).Type switch

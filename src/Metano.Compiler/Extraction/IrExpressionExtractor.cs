@@ -118,6 +118,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>A fresh temporary holding one operand value of a tuple comparison.</summary>
     private string NextTupleOperandTempName() => $"tuple$temp${_temporaryCounter++}";
 
+    /// <summary>A fresh name for the element a converted spread maps over.</summary>
+    private string NextSpreadElementName() => $"element$temp${_temporaryCounter++}";
+
     public IrExpressionExtractor(SemanticModel semanticModel, IrExtractionContext context)
         : this(semanticModel, context, localNames: null) { }
 
@@ -198,7 +201,15 @@ public sealed partial class IrExpressionExtractor
     private string LocalIrNameOf(ISymbol? symbol, string identifier) =>
         LocalNames.NameOf(symbol, identifier);
 
-    public IrExpression Extract(ExpressionSyntax expression)
+    public IrExpression Extract(ExpressionSyntax expression) =>
+        WithImplicitTupleConversion(expression, ExtractWithoutTupleConversion(expression));
+
+    /// <summary>
+    /// <paramref name="expression"/> with its scalar conversions, but not
+    /// rebuilt as the tuple type Roslyn converts it to: for a consumer that
+    /// converts the elements itself (a tuple <c>==</c>).
+    /// </summary>
+    private IrExpression ExtractWithoutTupleConversion(ExpressionSyntax expression)
     {
         if (_conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax)
             return new IrConditionalReceiver();
@@ -3827,6 +3838,7 @@ public sealed partial class IrExpressionExtractor
                 Array.Empty<IrArgument>(),
                 typeArguments: null
             );
+
             return BuildExtensionHelperCall(
                 propLowering.HelperContainer,
                 setterName,
@@ -3994,6 +4006,7 @@ public sealed partial class IrExpressionExtractor
         var one = OneOf(targetSyntax);
         var operation = _semantic.GetOperation(node);
         var receiver = Extract(targetSyntax.Expression);
+
         var indexArgs = targetSyntax
             .ArgumentList.Arguments.Select(a => Extract(a.Expression))
             .ToList();
@@ -4926,6 +4939,7 @@ public sealed partial class IrExpressionExtractor
     private IrTypeRef ExtractTargetType(CastExpressionSyntax cast)
     {
         var info = _semantic.GetTypeInfo(cast.Type).Type;
+
         return info is not null
             ? IrTypeRefMapper.Map(info, _originResolver, _target)
             : new IrUnknownTypeRef();
@@ -4947,6 +4961,7 @@ public sealed partial class IrExpressionExtractor
         var inner = Extract(cast.Expression);
         var sourceType = _semantic.GetTypeInfo(cast.Expression).Type;
         var targetType = _semantic.GetTypeInfo(cast).Type;
+
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
 
@@ -4960,6 +4975,9 @@ public sealed partial class IrExpressionExtractor
 
         if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)
             return numeric;
+
+        if (ExplicitTupleConversion(cast, inner, sourceType, targetType) is { } tuple)
+            return tuple;
 
         var truncatesDecimal =
             sourceType.SpecialType == SpecialType.System_Decimal

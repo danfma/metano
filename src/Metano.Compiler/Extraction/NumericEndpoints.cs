@@ -44,17 +44,17 @@ internal static class NumericEndpoints
     /// is a 64-bit integer or a <c>BigInteger</c> (spec 012 FR-003), so one
     /// table decides every <c>bigint</c> conversion.
     /// </summary>
-    public static bool NeedsExactConversion(IrNumericEndpoint from, IrNumericEndpoint to) =>
+    public static bool CrossesSixtyFourBits(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from != to && (from.IsWideIntegerValue() || to.IsWideIntegerValue());
 
     /// <summary>
     /// Whether a conversion from <paramref name="from"/> to
     /// <paramref name="to"/> becomes an <see cref="IrNumericConversion"/>: a
     /// floating-point truncation (FR-070), and the conversions of
-    /// <see cref="NeedsExactConversion"/>.
+    /// <see cref="CrossesSixtyFourBits"/>.
     /// </summary>
     public static bool IsLoweredExplicitly(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        IrNumericConversion.IsFloatingPointTruncation(from, to) || NeedsExactConversion(from, to);
+        IrNumericConversion.IsFloatingPointTruncation(from, to) || CrossesSixtyFourBits(from, to);
 
     private static IrNumericKind? KindOf(ITypeSymbol? type) =>
         type?.SpecialType switch

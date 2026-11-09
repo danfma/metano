@@ -217,8 +217,11 @@ public sealed partial class IrExpressionExtractor
         if (IsDefaultValueSyntax(unwrapped))
             return DefaultOperandOf(typeInfo.ConvertedType ?? typeInfo.Type);
 
+        // A whole-tuple operand keeps its own element types: the comparison
+        // promotes each element pair itself (PromotedElements), so the tuple
+        // is not rebuilt in the type Roslyn converts it to.
         if (unwrapped is not TupleExpressionSyntax literal)
-            return new ValueOperand(typeInfo.Type, Extract(unwrapped));
+            return new ValueOperand(typeInfo.Type, ExtractWithoutTupleConversion(unwrapped));
 
         var elements = literal.Arguments.Select(a => TupleOperandOf(a.Expression)).ToList();
 
@@ -367,10 +370,75 @@ public sealed partial class IrExpressionExtractor
         if (IsDecimal(right.Type))
             return BuildDecimalEquality(right.Value, left.Value, negated);
 
+        var (leftValue, rightValue) = PromotedElements(left, right);
+
         return new IrBinaryExpression(
-            left.Value,
+            leftValue,
             EqualityOperator(ComparesElementsByValue(left, right), negated),
-            right.Value
+            rightValue
+        );
+    }
+
+    /// <summary>
+    /// The two element values in the type C# compares them in, when their
+    /// numeric kinds differ across a 64-bit integer (<c>long</c> against
+    /// <c>int</c>): the binary numeric promotion a scalar <c>==</c> applies
+    /// to its operands, which a tuple <c>==</c> applies per element (FR-010).
+    /// A <c>bigint</c> never strictly equals a <c>number</c>, so the narrower
+    /// side converts. Any other pair is returned as it is.
+    /// </summary>
+    private static (IrExpression Left, IrExpression Right) PromotedElements(
+        ValueOperand left,
+        ValueOperand right
+    )
+    {
+        if (
+            NumericEndpoints.Of(left.Type) is not { IsEnum: false } leftKind
+            || NumericEndpoints.Of(right.Type) is not { IsEnum: false } rightKind
+        )
+            return (left.Value, right.Value);
+
+        var common = PromotedKind(leftKind, rightKind);
+
+        return (PromotedTo(left, leftKind, common), PromotedTo(right, rightKind, common));
+    }
+
+    /// <summary>
+    /// The kind two numeric operands compare in: the floating-point side
+    /// when there is one, else <c>BigInteger</c>, else the 64-bit side, else
+    /// the left one (two narrow integers are both <c>number</c> values).
+    /// </summary>
+    private static IrNumericEndpoint PromotedKind(IrNumericEndpoint left, IrNumericEndpoint right)
+    {
+        IrNumericEndpoint[] sides = [left, right];
+
+        return sides.FirstOrDefault(side => side.Kind is IrNumericKind.Double)
+            ?? sides.FirstOrDefault(side => side.Kind.IsFloatingPoint())
+            ?? sides.FirstOrDefault(side => side.Kind is IrNumericKind.BigInteger)
+            ?? sides.FirstOrDefault(side => side.IsSixtyFourBitValue())
+            ?? left;
+    }
+
+    private static IrExpression PromotedTo(
+        ValueOperand operand,
+        IrNumericEndpoint from,
+        IrNumericEndpoint to
+    )
+    {
+        var isAlreadyPromoted = operand.Value is IrNumericConversion { To: var kind } && kind == to;
+
+        if (isAlreadyPromoted || !NumericEndpoints.CrossesSixtyFourBits(from, to))
+            return operand.Value;
+
+        if (operand.Value is IrLiteral { Value: { } constant } && IsNumericConstant(constant))
+            return ConstantLiteralOfKind(constant, to);
+
+        return new IrNumericConversion(
+            operand.Value,
+            from,
+            to,
+            IsChecked: false,
+            IsLifted: operand.Type.IsNullableValueType()
         );
     }
 
