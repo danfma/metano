@@ -321,12 +321,15 @@ public class QueryableExpressionTreeTests
         var compilation = Metano.Tests.IR.IrTestHelper.Compile(source);
         var diagnostics = new List<Metano.Compiler.Diagnostics.MetanoDiagnostic>();
         var syntaxTree = compilation.SyntaxTrees.First();
+
         var lambda = syntaxTree
             .GetRoot()
             .DescendantNodes()
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
             .First();
+
         var model = compilation.GetSemanticModel(syntaxTree);
+
         using (Metano.Compiler.Extraction.ExtractionDiagnostics.Open(diagnostics.Add))
         {
             var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
@@ -579,12 +582,15 @@ public class QueryableExpressionTreeTests
         var compilation = Metano.Tests.IR.IrTestHelper.Compile(source);
         var diagnostics = new List<Metano.Compiler.Diagnostics.MetanoDiagnostic>();
         var syntaxTree = compilation.SyntaxTrees.First();
+
         var lambda = syntaxTree
             .GetRoot()
             .DescendantNodes()
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
             .First();
+
         var model = compilation.GetSemanticModel(syntaxTree);
+
         using (Metano.Compiler.Extraction.ExtractionDiagnostics.Open(diagnostics.Add))
         {
             var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(

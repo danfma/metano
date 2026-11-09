@@ -185,6 +185,7 @@ public sealed partial class IrExpressionExtractor
                 methodHasQueryable,
                 paramSymbol
             );
+
             var isExplicit = IsExplicitQueryableOptIn(trigger);
 
             var walker = new IrExpressionTreeExtractor(
@@ -247,10 +248,12 @@ public sealed partial class IrExpressionExtractor
         for (var i = 0; i < inv.ArgumentList.Arguments.Count; i++)
         {
             var argSyntax = inv.ArgumentList.Arguments[i];
+
             if (argSyntax.Expression is not LambdaExpressionSyntax lambda)
                 continue;
 
             var paramSymbol = ResolveStageParameter(symbol, i);
+
             if (!HasExplicitParameterOptIn(paramSymbol))
                 continue;
 

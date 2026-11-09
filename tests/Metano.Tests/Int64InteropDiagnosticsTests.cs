@@ -1,5 +1,4 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript;
 
 namespace Metano.Tests;
 
@@ -268,6 +267,7 @@ public class Int64InteropDiagnosticsTests
         await Assert
             .That(LocatedText(reports.Single(d => d.Message.Contains("'Lib.Count()'"))))
             .IsEqualTo("Count");
+
         await Assert
             .That(LocatedText(reports.Single(d => d.Message.Contains("'Lib.Tick'"))))
             .IsEqualTo("Tick");

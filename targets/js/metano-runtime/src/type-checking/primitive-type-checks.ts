@@ -1,7 +1,7 @@
 /**
  * Specialized runtime type checks for C# numeric and string types.
  * Used by Metano-generated overload dispatchers to differentiate
- * types that map to the same JS primitive (e.g., int vs long → both number).
+ * types that map to the same JS primitive (e.g., int vs double → both number).
  */
 import { INT64_MAX, INT64_MIN, UINT64_MAX } from "../system/int64.ts";
 

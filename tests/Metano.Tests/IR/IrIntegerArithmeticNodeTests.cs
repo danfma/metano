@@ -5,7 +5,6 @@ using Metano.Compiler.Dart.Bridge;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
-using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.Bridge;
 
 namespace Metano.Tests.IR;
@@ -13,9 +12,8 @@ namespace Metano.Tests.IR;
 /// <summary>
 /// The 64-bit integer IR nodes of spec 012 (<see cref="IrNumericConversion"/>,
 /// <see cref="IrIntegerOverflow"/>) are walked, rewritten and printed by every
-/// stage before any extractor produces them (slice 012a): TypeScript renders
-/// the reduction around the operand and Dart renders the operand, keeping the
-/// operand's own grouping.
+/// stage: TypeScript renders the reduction around the operand and Dart
+/// renders the operand, keeping the operand's own grouping.
 /// </summary>
 public class IrIntegerArithmeticNodeTests
 {

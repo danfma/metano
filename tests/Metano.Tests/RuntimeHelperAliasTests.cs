@@ -1,6 +1,5 @@
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript;
 
 namespace Metano.Tests;
 
@@ -247,6 +246,7 @@ public class RuntimeHelperAliasTests
         await Assert
             .That(output)
             .Contains(@"import { int64ToSingle as int64ToSingle$rt } from ""metano-runtime"";");
+
         await Assert.That(output).Contains("while (total < int64ToSingle$rt(n)) {");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -477,6 +477,42 @@ public class RuntimeHelperAliasTests
         var output = files["store.ts"];
         await Assert.That(output).Contains("let g: UUID;");
         await Assert.That(output).Contains(@"import { UUID } from ""metano-runtime"";");
+    }
+
+    /// <summary>
+    /// A module function named like the 64-bit dispatcher check: the
+    /// dispatcher's <c>isInt64</c> would bind to the user function, so the
+    /// runtime import aliases and the guard routes through it.
+    /// </summary>
+    [Test]
+    public async Task UserFunctionNamedLikeTheInt64Check_AliasesTheRuntimeImport()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, ExportedAsModule]
+            [EmitInFile("gates")]
+            public static class Checks
+            {
+                public static bool IsInt64(string text) => text.Length > 0;
+            }
+
+            [Transpile]
+            [EmitInFile("gates")]
+            public class Gates
+            {
+                public string Pick(long value) => "long";
+
+                public string Pick(string value) => "string";
+            }
+            """
+        );
+
+        var output = files["gates.ts"];
+
+        await Assert.That(output).Contains("isInt64 as isInt64$rt");
+        await Assert.That(output).Contains("isInt64$rt(args[0])");
+        await Assert.That(output).Contains("export function isInt64(text: string): boolean {");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
     private static List<MetanoDiagnostic> UnsupportedFeatures(

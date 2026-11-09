@@ -3,8 +3,8 @@
     The C# twin of the spec 012 reference matrix (FR-064). It has no Metano
     MSBuild transpile step: tests/Metano.Tests/Int64ConformanceSampleTests.cs
     transpiles it into targets/js/sample-int64-conformance/src and fails on
-    drift (the arrangement of the spec 012 staging slices, kept after the
-    flip).
+    drift, because the same test generates the output tests/Int64Reference
+    is compared with (#603 decides whether it returns to the MSBuild step).
     tests/Int64Reference runs the same methods on .NET to write the fixtures.
   -->
   <PropertyGroup>

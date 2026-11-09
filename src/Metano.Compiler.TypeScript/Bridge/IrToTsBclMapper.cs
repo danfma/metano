@@ -58,6 +58,7 @@ public static class IrToTsBclMapper
     {
         if (call.Origin is null)
             return null;
+
         if (
             !registry.TryGetMethodsByFullName(
                 call.Origin.DeclaringTypeFullName,

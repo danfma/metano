@@ -70,7 +70,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// flipping any one invalidates the incremental cache. Format is
     /// kept small + ordered so future additions extend it without
     /// breaking older caches (the format-version bump in
-    /// <see cref="TranspilationCache"/> handles structural breaks).
+    /// <see cref="TranspilationCache"/> handles structural breaks). The
+    /// constant <c>int64=bigint</c> segment is no flag: it exists so a cache
+    /// written before the flip of spec 012, when <c>long</c> could still map
+    /// to <c>number</c> (<c>int64=Number</c>), never matches.
     /// </summary>
     public string ConfigurationFingerprint =>
         BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix, ImportAlias);

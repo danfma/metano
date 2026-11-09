@@ -80,8 +80,8 @@ public class IrExpressionExtractionTests
     }
 
     /// <summary>
-    /// Under the exact 64-bit lowering a constant 64-bit shift count is
-    /// folded masked with 63, as C# reads it (DECIDED-9).
+    /// A constant 64-bit shift count is folded masked with 63, as C# reads it
+    /// (DECIDED-9).
     /// </summary>
     [Test]
     [Arguments("long Get(long a) => a >> 70;", 6)]
@@ -686,10 +686,40 @@ public class IrExpressionExtractionTests
         where T : IrStatement
     {
         var s = statements[index];
+
         if (s is not T typed)
             throw new InvalidOperationException(
                 $"Expected statement #{index} to be {typeof(T).Name} but was {s.GetType().Name}."
             );
+
         return typed;
+    }
+
+    /// <summary>
+    /// A constant parameter default is extracted with the origin resolver
+    /// alone: the target capabilities are dropped on purpose, since a C#
+    /// default value holds nothing for them to bind.
+    /// </summary>
+    [Test]
+    public async Task ForConstantDefault_KeepsTheResolver_AndDropsTheTargetCapabilities()
+    {
+        IrTypeOriginResolver resolver = _ => null;
+
+        var context = new IrExtractionContext(
+            resolver,
+            Target: Metano.Annotations.TargetLanguage.TypeScript
+        )
+        {
+            EmitsConstructorSelectors = _ => true,
+            EmitsOperatorFastPaths = true,
+            KeepsArgumentEvaluationOrder = true,
+        };
+
+        var constant = context.ForConstantDefault();
+
+        await Assert.That(constant).IsEqualTo(new IrExtractionContext(resolver));
+        await Assert.That(constant.EmitsConstructorSelectors).IsNull();
+        await Assert.That(constant.EmitsOperatorFastPaths).IsFalse();
+        await Assert.That(constant.KeepsArgumentEvaluationOrder).IsFalse();
     }
 }

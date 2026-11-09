@@ -804,9 +804,11 @@ internal sealed partial class IrExpressionTreeExtractor
     private IrTypeRef? MapType(ExpressionSyntax expr)
     {
         var info = _semantic.GetTypeInfo(expr);
+
         var t = ConvertedTypeCrossesSixtyFourBits(expr, info)
             ? info.Type
             : info.ConvertedType ?? info.Type;
+
         return t is null ? null : IrTypeRefMapper.Map(t, _originResolver, _target);
     }
 

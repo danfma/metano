@@ -24,8 +24,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// generic overload (<c>F(int)</c> over <c>F&lt;T&gt;(T)</c>) and a type
 /// parameter's guard is the loosest. The sort is stable, so remaining ties
 /// keep declaration order — with one exception:
-/// <see cref="SixtyFourBitDispatchOrder"/> reorders the sibling sets whose members differ only among
-/// <c>long</c>, <c>ulong</c> and <c>BigInteger</c> into the documented
+/// <see cref="SixtyFourBitDispatchOrder"/> reorders the sibling sets whose
+/// members differ only among <c>long</c>, <c>ulong</c> and
+/// <c>BigInteger</c> into the documented
 /// dispatch order of OQ-6 (their guards all accept an in-range
 /// <c>bigint</c>, so C#'s static choice is unobservable there). Overloads
 /// that are not such siblings never move.

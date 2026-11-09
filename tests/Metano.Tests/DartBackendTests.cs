@@ -1762,4 +1762,33 @@ public class DartBackendTests
             .That(output)
             .Contains("static bool staticBoxed(Object e, (int, int) f) => e == f;");
     }
+
+    /// <summary>
+    /// A named-argument call that skips a <c>ulong</c> default keeps the
+    /// opaque default.
+    /// </summary>
+    [Test]
+    public async Task SkippedULongDefault_KeepsTheOpaqueDefault()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Ops
+            {
+                public ulong Defaults(ulong a = 10, ulong b = ulong.MaxValue, long c = -1) =>
+                    a + b + (ulong)c;
+
+                public string CallDefaults() =>
+                    Defaults(b: 3).ToString() + Defaults(c: 2) + Defaults();
+            }
+            """
+        );
+
+        await Assert
+            .That(files["ops.dart"])
+            .Contains(
+                "this.defaults(/* default */ null, b: 3, -1).toString()"
+                    + " + this.defaults(/* default */ null, /* default */ null, c: 2)"
+            );
+    }
 }

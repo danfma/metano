@@ -1,5 +1,4 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript;
 
 namespace Metano.Tests;
 
@@ -299,6 +298,7 @@ public class Int64ConversionTests
         await Assert
             .That(output)
             .Contains(@"import { int64FromDouble as int64FromDouble$rt } from ""metano-runtime"";");
+
         await Assert.That(output).Contains("export function int64FromDouble(d: number): bigint");
         await Assert.That(output).Contains("int64FromDouble$rt(d)");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();

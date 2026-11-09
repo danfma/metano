@@ -1,5 +1,3 @@
-using Metano.Compiler.TypeScript;
-
 namespace Metano.Tests;
 
 /// <summary>
@@ -38,9 +36,11 @@ public class FloatingPointTruncationTests
         await Assert.That(output).Contains("return int32FromDouble(d);");
         await Assert.That(output).Contains("return uint32FromDouble(f);");
         await Assert.That(output).Contains("return int32FromDouble(d) & 0xFF;");
+
         await Assert
             .That(output)
             .Contains("return Number(checkedNarrow(BigInt(int32FromDoubleChecked(d)), 16, true));");
+
         await Assert.That(output).Contains("return 3;");
 
         await Assert

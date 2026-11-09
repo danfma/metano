@@ -3,9 +3,9 @@ using Metano.Compiler.IR;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Reorders the sibling sets of a dispatcher into the documented dispatch order of spec 012 FR-048 (OQ-6). A sibling set is a
-/// group of same-arity overloads whose parameter types are identical except at
-/// positions where both sides are 64-bit integers (<c>long</c>, <c>ulong</c>,
+/// Reorders the sibling sets of a dispatcher into the documented dispatch
+/// order of spec 012 FR-048 (OQ-6). A sibling set is a group of same-arity
+/// overloads whose parameter types are identical except at positions where both sides are 64-bit integers (<c>long</c>, <c>ulong</c>,
 /// <c>BigInteger</c>, nullable included): their guards all accept an in-range
 /// <c>bigint</c>, so C#'s static binding is unobservable at a runtime call and
 /// the documented order decides — <c>long</c>, then <c>ulong</c>, then
@@ -15,8 +15,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Only the members of such a set move, and only into the slots the set
 /// already occupies, so an overload that names a non-64-bit parameter where a
 /// neighbor names a 64-bit one (a branded value, <c>object</c>,
-/// <c>string</c>), or an overload outside any set, keeps the declaration order
-/// the legacy sort produced. Members of a set that rank the same
+/// <c>string</c>), or an overload outside any set, keeps the order
+/// <see cref="OverloadDispatchOrder"/> gave it. Members of a set that rank the same
 /// (<c>M(long)</c> beside <c>M(long?)</c>) keep declaration order too.
 /// </remarks>
 internal static class SixtyFourBitDispatchOrder

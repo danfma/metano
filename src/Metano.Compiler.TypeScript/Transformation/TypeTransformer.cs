@@ -457,11 +457,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
         var previousOverloadClaims = TsOverloadCallSites.Claims;
         var previousBclOverrides = IrToTsTypeMapper.BclOverrides;
+
         try
         {
             TsOverloadCallSites.Claims = OverloadClaims;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
+
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
                 || Context.OriginResolver?.Invoke(sym) is not null;
@@ -802,6 +804,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         if (type.TypeKind != TypeKind.Enum)
             return false;
+
         var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
         IrToTsEnumBridge.Convert(enumIr, sink);
 

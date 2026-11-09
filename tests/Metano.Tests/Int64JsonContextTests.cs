@@ -1,5 +1,3 @@
-using Metano.Compiler.TypeScript;
-
 namespace Metano.Tests;
 
 /// <summary>
