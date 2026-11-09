@@ -254,7 +254,8 @@ member namespace per class:
 | `Add(int x)` / `Add(int x, int y)` | `addX(…)` / `addXY(…)`, no dispatcher (Dart has no overloading) |
 | `new Dimension(3)`, `d.Add(1)`, `base.Add(1)` | `Dimension.fromSize(3)`, `d.addX(1)`, `super.addX(1)` |
 | an overloaded operator group | one `operator` declaration (the primary) and an `MS0001` warning |
-| `new T(b: F(), a: G())` | the observable arguments evaluated in source order before the call, so `G()` still runs after `F()` |
+| `k.Scale(n: Next(), d: 2)` | `k.scaleDN(2, Run.next())`: one order-sensitive evaluation, passed in parameter order |
+| `new T(b: F(), a: G())` | `MS0001`: two order-sensitive evaluations Dart would run in parameter order (#591) |
 | `new Box<object>(5)` | `Box<Object>.fromValue(5)` |
 
 Dart claims in one table per class, where a named constructor conflicts with
@@ -277,14 +278,13 @@ Limitations of the experimental Dart target:
   member (`MS0001`), declared under the name its call sites spell;
 - a containerless module's fast paths are claimed per file, not across the
   files a consumer imports together;
-- arguments evaluated out of parameter order whose evaluation can be observed
-  are passed through one immediately invoked closure,
-  `(($recv, $arg1) => $recv.mAB(3, $arg1))(o.inner, swap(o))`; literals,
-  constants, unassigned locals, lambdas and collection literals of those stay
-  inline, typed by their parameter. An `await` among the bound arguments is
-  evaluated in the enclosing function, but not inside a null-conditional
-  call (`c?.sub(…)`), whose receiver closure is synchronous: that form does
-  not compile.
+- named arguments out of parameter order are passed in parameter order. With
+  at most one order-sensitive evaluation among them (a call, a read, an
+  `await`; constants, lambdas and constant collections do not count) the
+  order cannot differ from C# and the call stays inline
+  (`k.scaleDN(2, Run.next())`); with two or more, `MS0001` reports the call,
+  which then evaluates them in parameter order. Keeping C#'s order there is
+  #591.
 
 Gaps of the Dart prototype that predate spec 013 and also touch overloads:
 

@@ -270,15 +270,7 @@ public sealed class DartIrRewriter
         var rewrittenArgs = call.Arguments.Select(RewriteArgument).ToList();
         var rewrittenCall = call with { Target = rewrittenTarget, Arguments = rewrittenArgs };
 
-        if (IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) is { } mapped)
-            return mapped;
-
-        return DartEvaluationOrder.Bind(
-            rewrittenTarget,
-            rewrittenArgs,
-            call.Overload?.EvaluationOrder,
-            (callee, arguments) => rewrittenCall with { Target = callee, Arguments = arguments }
-        );
+        return IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) ?? rewrittenCall;
     }
 
     private IrExpression RewriteMemberAccess(IrMemberAccess access)
@@ -321,25 +313,23 @@ public sealed class DartIrRewriter
     /// <summary>
     /// A construction that selected a constructor overload calls its named
     /// constructor, <c>Box&lt;Object&gt;.fromValue(args)</c>, with the bound
-    /// arguments in C#'s evaluation order and the constructed type's
-    /// arguments kept.
+    /// arguments in parameter order and the constructed type's arguments
+    /// kept. Reordered named arguments are passed in parameter order too: the
+    /// core reports the calls where that changes what C# evaluates first
+    /// (<see cref="Extraction.IrExtractionContext.KeepsArgumentEvaluationOrder"/>).
     /// </summary>
     private IrExpression RewriteNew(IrNewExpression construction)
     {
         var arguments = construction.Arguments.Select(RewriteArgument).ToList();
 
-        if (
-            construction.Overload is not { } overload
-            || _overloads.ConstructorNameOf(overload.Target) is not { } constructorName
-        )
-            return construction with { Arguments = arguments };
-
-        return DartEvaluationOrder.Bind(
-            new IrTypeReference(constructorName),
-            arguments,
-            overload.EvaluationOrder,
-            (_, ordered) => new DartNamedConstruction(construction.Type, constructorName, ordered)
-        );
+        return
+            construction.Overload is { } overload
+            && _overloads.ConstructorNameOf(overload.Target) is { } constructorName
+            ? new DartNamedConstruction(construction.Type, constructorName, arguments)
+            : construction with
+            {
+                Arguments = arguments,
+            };
     }
 
     private IrMemberOrigin? ClearNoContainerUnlessFlattened(IrMemberOrigin? origin) =>

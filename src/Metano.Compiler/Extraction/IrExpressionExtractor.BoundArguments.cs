@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -86,11 +87,98 @@ public sealed partial class IrExpressionExtractor
             .OrderBy(argument => argument.ParameterOrdinal)
             .ToList();
 
+        var evaluationOrder = EvaluationOrderOf(inParameterOrder);
+
+        if (evaluationOrder is not null && call is not null)
+            ReportIfEvaluationOrderIsLost(call, bindable);
+
         return new BoundOverloadCall(
             inParameterOrder.Select(argument => argument.Value).ToList(),
-            new IrSelectedOverload(target, EvaluationOrderOf(inParameterOrder))
+            new IrSelectedOverload(target, evaluationOrder)
         );
     }
+
+    /// <summary>
+    /// <c>MS0001</c> at a reordered call for a target that passes bound
+    /// arguments in parameter order
+    /// (<see cref="IrExtractionContext.KeepsArgumentEvaluationOrder"/> unset)
+    /// when two or more of its evaluations are order-sensitive: the target
+    /// would run them in parameter order. With one, the order cannot differ.
+    /// A constructor initializer (<c>: base(...)</c>) is left out: such a
+    /// target does not emit the bound base call.
+    /// </summary>
+    private void ReportIfEvaluationOrderIsLost(
+        IOperation call,
+        ImmutableArray<IArgumentOperation> arguments
+    )
+    {
+        if (
+            _context.KeepsArgumentEvaluationOrder
+            || call is IInvocationOperation { TargetMethod.MethodKind: MethodKind.Constructor }
+        )
+            return;
+
+        var orderSensitive =
+            arguments.Count(argument => !IsOrderInsensitive(argument.Value))
+            + (IsOrderInsensitiveReceiver(ReceiverOf(call)) ? 0 : 1);
+
+        if (orderSensitive < 2)
+            return;
+
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Named arguments out of parameter order with more than one evaluation that C# "
+                    + $"runs in written order are not supported for {_context.Target}: the call "
+                    + "passes them in parameter order, so they are evaluated in that order "
+                    + "(spec 013 FR-017, #591).",
+                call.Syntax.GetLocation()
+            )
+        );
+    }
+
+    private static IOperation? ReceiverOf(IOperation call) =>
+        call is IInvocationOperation invocation ? invocation.Instance : null;
+
+    /// <summary>
+    /// A receiver evaluates before the arguments in C# and in every target,
+    /// so only one that is itself a computation counts: a static call, <c>this</c>,
+    /// <c>base</c>, a local, a parameter and a null-conditional receiver do not.
+    /// </summary>
+    private static bool IsOrderInsensitiveReceiver(IOperation? receiver) =>
+        receiver
+            is null
+                or IInstanceReferenceOperation
+                or ILocalReferenceOperation
+                or IParameterReferenceOperation
+                or IConditionalAccessInstanceOperation;
+
+    /// <summary>
+    /// Whether an argument's evaluation cannot be told apart in any order: a
+    /// constant (a literal, a negated literal, <c>null</c>, a <c>const</c>), a
+    /// <c>default</c>, <c>this</c>, <c>typeof</c>, a lambda, or a collection
+    /// made only of those. Every other expression — a local or member read
+    /// included, which a call or a captured closure may write — is
+    /// order-sensitive.
+    /// </summary>
+    private static bool IsOrderInsensitive(IOperation operation) =>
+        operation.ConstantValue.HasValue
+        || operation switch
+        {
+            IConversionOperation conversion => IsOrderInsensitive(conversion.Operand),
+            IDefaultValueOperation
+            or IInstanceReferenceOperation
+            or ITypeOfOperation
+            or IAnonymousFunctionOperation => true,
+            IDelegateCreationOperation creation => IsOrderInsensitive(creation.Target),
+            ICollectionExpressionOperation collection => collection.Elements.All(
+                IsOrderInsensitive
+            ),
+            IArrayCreationOperation array => array.DimensionSizes.All(IsOrderInsensitive)
+                && (array.Initializer?.ElementValues.All(IsOrderInsensitive) ?? true),
+            _ => false,
+        };
 
     private static bool IsBindable(IArgumentOperation argument) =>
         argument.Parameter is not null

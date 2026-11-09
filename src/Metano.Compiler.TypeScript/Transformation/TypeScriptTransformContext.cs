@@ -549,6 +549,7 @@ public sealed class TypeScriptTransformContext(
             ExactInt64Lowering = Int64Representation is Int64Representation.BigInt,
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
+            KeepsArgumentEvaluationOrder = true,
         };
 
     private BclExportTypeOverrides? _bclOverrides;
