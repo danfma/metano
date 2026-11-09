@@ -160,8 +160,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         var descriptor = WithStringProperty(
             BuildBareKindDescriptor(JsonPropertyKind.Int64),
             "numberType",
-            JsonTypeClassifier.NumberTypeNameOf(JsonTypeClassifier.UnwrapBranded(type))
-                ?? "System.Int64"
+            JsonTypeClassifier.Int64NumberTypeNameOf(JsonTypeClassifier.UnwrapBranded(type))
         );
 
         // A [Branded] type keeps its companion factory (the valid

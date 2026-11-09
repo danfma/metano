@@ -883,6 +883,16 @@ a 64-bit integer, whose descriptor keeps the branded companion factory and CLR
 }
 ```
 
+**Native integers.** `nint` follows `long` and `nuint` follows `ulong` (spec
+012 DECIDED-2): the same `int64` descriptor, `numberType` `System.Int64` /
+`System.UInt64`, the same exact reads and writes, range checks, dictionary keys
+and `[Branded]` / `[InlineWrapper]` wrappers. System.Text.Json itself has no
+converter for `IntPtr` / `UIntPtr` (it throws `NotSupportedException` for a
+property, a root or a dictionary key; measured on .NET 10 and 11), so a payload
+for a native integer has no STJ counterpart: the contract is Metano's, and a
+rejected value names `System.Int64` / `System.UInt64` rather than the CLR
+`System.IntPtr`.
+
 **Writes.** The converter writes a `bigint` through the shared exact-number
 writer (`writeExactNumber`), so `JSON.stringify` prints the exact digits,
 unquoted, byte-identical to System.Text.Json. A `rawJSON` leaf and a safe
