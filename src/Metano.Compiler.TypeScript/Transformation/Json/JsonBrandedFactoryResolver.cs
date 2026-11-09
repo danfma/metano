@@ -197,7 +197,7 @@ internal static class JsonBrandedFactoryResolver
     /// what the companion declares.
     /// </summary>
     private static string TsNameOf(IMethodSymbol method) =>
-        IrToTsNamingPolicy.ToFunctionName(method.Name, IrAttributeExtractor.Extract(method));
+        IrToTsNamingPolicy.ToFunctionName(method);
 
     private static MetanoDiagnostic Error(IMethodSymbol method, string message) =>
         new(

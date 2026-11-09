@@ -4,6 +4,7 @@ using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.Transformation;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -179,14 +180,32 @@ public static class IrToTsNamingPolicy
     public static string ToFunctionName(IrMethodDeclaration method) =>
         ToGroupFunctionName(method.Name, method.Attributes, method.OverloadName);
 
+    /// <summary>
+    /// The name a method is declared and called by as a function — a module
+    /// function, an extension helper, a <c>[NoContainer]</c> export, a
+    /// branded companion function — read from its symbol: its
+    /// <see cref="OverloadEmittedName"/>, else its camelCased C# name.
+    /// </summary>
+    public static string ToFunctionName(IMethodSymbol method) =>
+        OverloadEmittedName.NameOverrideOf(method, TargetLanguage.TypeScript)
+        ?? TypeScriptNaming.ToCamelCase(method.Name);
+
+    /// <summary>
+    /// The <c>[Name]</c> that renames a declaration: none for an overload of
+    /// a dispatched group (<paramref name="overloadName"/> set), whose
+    /// <c>[Name]</c> pins its suffix while the dispatcher keeps the C# name
+    /// (spec 013 FR-005) — the IR side of <see cref="OverloadEmittedName"/>.
+    /// </summary>
+    public static string? FindMemberNameOverride(
+        IReadOnlyList<IrAttribute>? attributes,
+        IrOverloadName? overloadName
+    ) => overloadName is null ? FindNameOverride(attributes) : null;
+
     private static string ToGroupFunctionName(
         string name,
         IReadOnlyList<IrAttribute>? attributes,
         IrOverloadName? overloadName
-    ) =>
-        overloadName is not null
-            ? TypeScriptNaming.ToCamelCase(name)
-            : ToFunctionName(name, attributes);
+    ) => FindMemberNameOverride(attributes, overloadName) ?? TypeScriptNaming.ToCamelCase(name);
 
     /// <summary>
     /// Class method name: honors <c>[Name]</c> verbatim when present,

@@ -14,6 +14,54 @@ namespace Metano.Tests;
 /// </summary>
 public class OverloadNamePinTests
 {
+    private const string PinLibrary = """
+        using Metano.Annotations;
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("lib")]
+
+        namespace Lib;
+
+        public class Money
+        {
+            public decimal Amount { get; }
+
+            public Money(decimal amount) { Amount = amount; }
+
+            [Name("cents")]
+            public Money(int value) { Amount = value / 100m; }
+
+            public Money Add(Money other) => new Money(Amount + other.Amount);
+
+            [Name("cents")]
+            public Money Add(int value) => Add(new Money(value));
+        }
+
+        [ExportedAsModule]
+        public static class Pricing
+        {
+            public static Money Discount(Money m, int percent) => m;
+
+            [Name("flat")]
+            public static Money Discount(Money m, Money off) => m;
+        }
+        """;
+
+    private const string PinConsumer = """
+        using Metano.Annotations;
+        [assembly: TranspileAssembly]
+
+        namespace App;
+
+        public class Register
+        {
+            public Lib.Money Total() =>
+                new Lib.Money(150).Add(25).Add(new Lib.Money(1m));
+
+            public Lib.Money Sale(Lib.Money m) =>
+                Lib.Pricing.Discount(Lib.Pricing.Discount(m, 10), new Lib.Money(5));
+        }
+        """;
+
     [Test]
     public async Task Pin_RenamesTheFactorySelectorFastPathAndOperatorSuffixes()
     {
@@ -138,7 +186,6 @@ public class OverloadNamePinTests
 
         await AssertGolden("overload-name-pin-roots.ts", outputs);
         await Assert.That(diagnostics.Count).IsEqualTo(2);
-        await Assert.That(ignored.Count).IsEqualTo(2);
         await Assert
             .That(ignored.All(d => d.Severity == MetanoDiagnosticSeverity.Warning))
             .IsTrue();
@@ -150,8 +197,13 @@ public class OverloadNamePinTests
                     + "'IShape.Area(int s)'; put [Name] on the root (spec 013 FR-005, FR-025)."
             );
         await Assert.That(SourceTextOf(onSquare)).IsEqualTo("\"ignored\"");
-        await Assert.That(onDoubler.Message).Contains("[Name(\"other\")]");
-        await Assert.That(onDoubler.Message).Contains("the suffix 'One'");
+        await Assert
+            .That(onDoubler.Message)
+            .IsEqualTo(
+                "[Name(\"other\")] on 'Doubler.Add(int x)' is ignored: an override or "
+                    + "interface implementation takes the suffix 'One' of its root "
+                    + "'Counter.Add(int x)'; put [Name] on the root (spec 013 FR-005, FR-025)."
+            );
     }
 
     [Test]
@@ -244,6 +296,8 @@ public class OverloadNamePinTests
 
         var invalid = diagnostics.Where(d => d.Code == DiagnosticCodes.AmbiguousConstruct).ToList();
 
+        await AssertGolden("overload-name-pin-invalid.ts", files["box.ts"]);
+        await Assert.That(diagnostics.Count).IsEqualTo(4);
         await Assert
             .That(invalid.Select(SourceTextOf))
             .IsEquivalentTo(["\"2nd\"", "\"a-b\"", "\"x$\"", "\"\""]);
@@ -255,10 +309,6 @@ public class OverloadNamePinTests
                     + "start with an ASCII letter or '_' and contain only ASCII letters, digits "
                     + "and '_'; the overload keeps its generated suffix (spec 013 FR-005)."
             );
-        await Assert.That(files["box.ts"]).Contains("putS(s: string)");
-        await Assert.That(files["box.ts"]).Contains("putB(b: boolean)");
-        await Assert.That(files["box.ts"]).Contains("putD(d: number)");
-        await Assert.That(files["box.ts"]).Contains("putC(c: string)");
     }
 
     [Test]
@@ -278,8 +328,10 @@ public class OverloadNamePinTests
             """
         );
 
-        var deadEnd = diagnostics.Single(d => d.Code == DiagnosticCodes.AmbiguousConstruct);
+        var deadEnd = diagnostics.Single();
 
+        await AssertGolden("overload-name-pin-equal.ts", files["box.ts"]);
+        await Assert.That(deadEnd.Code).IsEqualTo(DiagnosticCodes.AmbiguousConstruct);
         await Assert.That(deadEnd.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
         await Assert
             .That(deadEnd.Message)
@@ -289,8 +341,6 @@ public class OverloadNamePinTests
                     + "'Put(string b)'; they are named with the suffixes 'Value$1' and 'Value$2' "
                     + "(spec 013 FR-005, FR-024)."
             );
-        await Assert.That(files["box.ts"]).Contains("putValue$1(a: number)");
-        await Assert.That(files["box.ts"]).Contains("putValue$2(b: string)");
     }
 
     /// <summary>
@@ -316,13 +366,16 @@ public class OverloadNamePinTests
             """
         );
 
-        var deadEnd = diagnostics.Single(d => d.Code == DiagnosticCodes.AmbiguousConstruct);
+        var deadEnd = diagnostics.Single();
 
-        await Assert.That(deadEnd.Message).Contains("'F(int a)' and 'F(bool b)'");
-        await Assert.That(deadEnd.Message).Contains("[Name] pins the suffix of 'F(bool b)'");
-        await Assert.That(files["box.ts"]).Contains("fInt32$1(a: number)");
-        await Assert.That(files["box.ts"]).Contains("fString(a: string)");
-        await Assert.That(files["box.ts"]).Contains("fInt32$2(b: boolean)");
+        await AssertGolden("overload-name-pin-dead-end.ts", files["box.ts"]);
+        await Assert
+            .That(deadEnd.Message)
+            .IsEqualTo(
+                "Overloads 'F(int a)' and 'F(bool b)' have the same suffix at every "
+                    + "qualification level, and [Name] pins the suffix of 'F(bool b)'; they are "
+                    + "named with the suffixes 'Int32$1' and 'Int32$2' (spec 013 FR-005, FR-024)."
+            );
     }
 
     /// <summary>
@@ -337,26 +390,28 @@ public class OverloadNamePinTests
             [Transpile]
             public class Fee
             {
-                public decimal Amount { get; }
+                public int Cents { get; }
 
-                public Fee(decimal amount)
+                public Fee(string text)
                 {
-                    Amount = amount;
+                    Cents = text.Length;
                 }
 
                 [Name("cents")]
                 public Fee(int value)
                 {
-                    Amount = value / 100m;
+                    Cents = value;
                 }
 
-                public static Fee FromCents(int value) => new Fee(value * 1m);
+                public static Fee FromCents(int value) => new Fee(value);
             }
             """
         );
 
-        var rename = diagnostics.Single(d => d.Code == DiagnosticCodes.OverloadNameShadowed);
+        var rename = diagnostics.Single();
 
+        await AssertGolden("overload-name-pin-claimed.ts", files["fee.ts"]);
+        await Assert.That(rename.Code).IsEqualTo(DiagnosticCodes.OverloadNameShadowed);
         await Assert
             .That(rename.Message)
             .IsEqualTo(
@@ -364,8 +419,6 @@ public class OverloadNamePinTests
                     + "generated factory and selector are emitted as 'fromCents$' and "
                     + "'byFeeCents$' (spec 013 FR-004)."
             );
-        await Assert.That(files["fee.ts"]).Contains("static fromCents$(value: number): Fee");
-        await Assert.That(files["fee.ts"]).Contains("static fromCents(value: number): Fee");
     }
 
     [Test]
@@ -375,7 +428,7 @@ public class OverloadNamePinTests
             [Transpile]
             public class Money
             {
-                public Money(decimal amount) { }
+                public Money(string text) { }
 
                 [Name("cents")]
                 public Money(int value) { }
@@ -391,8 +444,275 @@ public class OverloadNamePinTests
         var second = TranspileHelper.Transpile(source)["money.ts"];
 
         await Assert.That(second).IsEqualTo(first);
-        await Assert.That(first).Contains("addInt32(x: number)");
-        await Assert.That(first).Contains("addX(s: string)");
+        await AssertGolden("overload-name-pin-deterministic.ts", first);
+    }
+
+    /// <summary>
+    /// A conversion operator has no C# name, so its <c>[Name]</c> names its
+    /// group, overloaded or not, as before 013f; a single unary operator keeps
+    /// its <c>[Name]</c> as its whole name too.
+    /// </summary>
+    [Test]
+    public async Task ConversionGroup_IsNamedByItsName_AndPinsNoSuffix()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Money
+            {
+                public int Cents;
+
+                [Name("toInt")]
+                public static explicit operator int(Money m) => m.Cents;
+
+                [Name("toLong")]
+                public static explicit operator long(Money m) => m.Cents;
+
+                [Name("negate")]
+                public static Money operator -(Money m) => m;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertGolden("overload-name-pin-conversions.ts", files["money.ts"]);
+    }
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> type emits no dispatcher, so its methods keep
+    /// their <c>[Name]</c> as their whole name where they are called.
+    /// </summary>
+    [Test]
+    public async Task PlainObjectOverloads_KeepTheirNameAtCallSites()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, PlainObject]
+            public record Reading(int Value)
+            {
+                [Name("getNum")]
+                public int Get(int x) => x;
+
+                [Name("getStr")]
+                public int Get(string s) => s.Length;
+            }
+
+            [Transpile]
+            public class Use
+            {
+                public int Run(Reading r) => r.Get(1);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await AssertGolden(
+            "overload-name-pin-plain-object.ts",
+            string.Join("\n", files["reading.ts"], files["use.ts"])
+        );
+    }
+
+    /// <summary>
+    /// An override takes its root's suffix, and its own (ignored) <c>[Name]</c>
+    /// must not move its type's other overloads: the derived type names its
+    /// new overload the same with no pin, a pin naming another type
+    /// (<c>string</c>) and a pin naming another parameter (<c>s</c>). The
+    /// override sitting next to the root in the visible group dead-ends
+    /// whatever the pin (#564).
+    /// </summary>
+    [Test]
+    [Arguments("")]
+    [Arguments("[Name(\"string\")]")]
+    [Arguments("[Name(\"s\")]")]
+    public async Task OverridePin_DoesNotRenameTheTypesOtherOverloads(string pin)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            [Transpile]
+            public class Base
+            {
+                public virtual int Add(int x) => x;
+
+                public virtual int Add(string s) => s.Length;
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                {{pin}}
+                public override int Add(int x) => x + 1;
+
+                public int Add(bool b) => 1;
+            }
+            """
+        );
+
+        var namingErrors = diagnostics
+            .Where(d => d.Severity == MetanoDiagnosticSeverity.Error)
+            .Select(d => d.Message);
+
+        await AssertGolden("overload-name-pin-override-leak.ts", files["derived.ts"]);
+        await Assert
+            .That(namingErrors)
+            .IsEquivalentTo([
+                "Overloads 'Add(int x)' and 'Add(int x)' have the same naming spelling at every "
+                    + "qualification level; they are named with the suffixes 'Int32$1' and "
+                    + "'Int32$2' (spec 013 FR-024).",
+            ]);
+    }
+
+    [Test]
+    public async Task NameOnALoneConstructor_IsReportedAsUnused()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Fee
+            {
+                public int Cents { get; }
+
+                [Name("cents")]
+                public Fee(int value)
+                {
+                    Cents = value;
+                }
+            }
+            """
+        );
+
+        var unused = diagnostics.Single();
+
+        await Assert.That(unused.Code).IsEqualTo(DiagnosticCodes.AmbiguousConstruct);
+        await Assert.That(unused.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(SourceTextOf(unused)).IsEqualTo("\"cents\"");
+        await Assert
+            .That(unused.Message)
+            .IsEqualTo(
+                "[Name(\"cents\")] on the constructor 'Fee(int value)' has no effect: only an "
+                    + "overload of a dispatched constructor set gets a factory and a selector to "
+                    + "name (spec 013 FR-005)."
+            );
+    }
+
+    /// <summary>
+    /// <c>[JsonFactory]</c> on an overloaded method stays <c>MS0034</c> (the
+    /// dispatcher could call another overload), so no descriptor names the
+    /// pinned fast path; the companion still pins it (<c>fromParse</c>).
+    /// </summary>
+    [Test]
+    public async Task JsonFactoryOnAPinnedOverload_IsRejected_AndTheCompanionPinsIt()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Text.Json.Serialization;
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, Branded]
+            public readonly record struct Email(string Value)
+            {
+                [JsonFactory, Name("parse")]
+                public static Email From(string value) => new(value);
+
+                public static Email From(int value) => new(value.ToString());
+            }
+
+            [Transpile]
+            public sealed record Contact(Email Email);
+
+            [JsonSerializable(typeof(Contact))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions =>
+                    null;
+
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(
+                    System.Type type
+                ) => null;
+            }
+            """
+        );
+
+        var rejected = diagnostics.Single();
+
+        await AssertGolden("overload-name-pin-json-factory.ts", files["email.ts"]);
+        await Assert.That(rejected.Code).IsEqualTo(DiagnosticCodes.InvalidJsonFactory);
+        await Assert
+            .That(rejected.Message)
+            .IsEqualTo(
+                "[JsonFactory] 'Email.From' is overloaded; the TypeScript dispatcher could call a "
+                    + "different overload."
+            );
+    }
+
+    /// <summary>
+    /// Dart names no fast paths before 013g, so a <c>[Name]</c> on an
+    /// overload keeps renaming the member there, with no pin diagnostics: an
+    /// invalid suffix (<c>put$text</c>) and an override's <c>[Name]</c> are
+    /// not reported.
+    /// </summary>
+    [Test]
+    public async Task Dart_KeepsNameAsAWholeMemberRename_WithNoPinDiagnostics()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+            [Transpile]
+            public class Box
+            {
+                public int Put(int x) => x;
+
+                [Name("put$text")]
+                public int Put(string s) => 0;
+            }
+
+            [Transpile]
+            public class Counter
+            {
+                public virtual int Add(int x) => x;
+
+                public virtual int Add(string s) => s.Length;
+            }
+
+            [Transpile]
+            public class Doubler : Counter
+            {
+                [Name("other")]
+                public override int Add(int x) => x * 2;
+            }
+            """
+        );
+
+        // Dart's own overload warnings (MS0001), as before; no pin report.
+        await Assert
+            .That(diagnostics.Select(d => d.Code))
+            .IsEquivalentTo([
+                DiagnosticCodes.UnsupportedFeature,
+                DiagnosticCodes.UnsupportedFeature,
+            ]);
+        await Assert
+            .That(files["box.dart"])
+            .IsEqualTo(
+                """
+                class Box {
+                  int put(int x) => x;
+                }
+
+                """
+            );
+        await Assert
+            .That(files["doubler.dart"])
+            .IsEqualTo(
+                """
+                import 'counter.dart';
+
+                class Doubler extends Counter {
+                  int other(int x) => x * 2;
+                }
+
+                """
+            );
     }
 
     private static string SourceTextOf(MetanoDiagnostic diagnostic) =>
@@ -409,52 +729,4 @@ public class OverloadNamePinTests
 
         await Assert.That(actual).IsEqualTo(TranspileHelper.ReadExpected(name));
     }
-
-    private const string PinLibrary = """
-        using Metano.Annotations;
-        [assembly: TranspileAssembly]
-        [assembly: EmitPackage("lib")]
-
-        namespace Lib;
-
-        public class Money
-        {
-            public decimal Amount { get; }
-
-            public Money(decimal amount) { Amount = amount; }
-
-            [Name("cents")]
-            public Money(int value) { Amount = value / 100m; }
-
-            public Money Add(Money other) => new Money(Amount + other.Amount);
-
-            [Name("cents")]
-            public Money Add(int value) => Add(new Money(value));
-        }
-
-        [ExportedAsModule]
-        public static class Pricing
-        {
-            public static Money Discount(Money m, int percent) => m;
-
-            [Name("flat")]
-            public static Money Discount(Money m, Money off) => m;
-        }
-        """;
-
-    private const string PinConsumer = """
-        using Metano.Annotations;
-        [assembly: TranspileAssembly]
-
-        namespace App;
-
-        public class Register
-        {
-            public Lib.Money Total() =>
-                new Lib.Money(150).Add(25).Add(new Lib.Money(1m));
-
-            public Lib.Money Sale(Lib.Money m) =>
-                Lib.Pricing.Discount(Lib.Pricing.Discount(m, 10), new Lib.Money(5));
-        }
-        """;
 }

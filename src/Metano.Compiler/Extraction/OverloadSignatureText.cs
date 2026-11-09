@@ -27,6 +27,19 @@ public static class OverloadSignatureText
         return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";
     }
 
+    /// <summary>
+    /// <paramref name="method"/> as the naming diagnostics quote it: its name
+    /// and its parameters' display types and names (<c>Put(string s)</c>).
+    /// </summary>
+    internal static string DisplayOf(IMethodSymbol method)
+    {
+        var parameters = method.Parameters.Select(parameter =>
+            $"{parameter.Type.ToDisplayString()} {parameter.Name}"
+        );
+
+        return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";
+    }
+
     /// <summary>The method's name, or a constructor's type name.</summary>
     internal static string DeclaredNameOf(IMethodSymbol method) =>
         method.MethodKind == MethodKind.Constructor ? method.ContainingType.Name : method.Name;

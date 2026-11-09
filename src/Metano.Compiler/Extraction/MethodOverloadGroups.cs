@@ -128,7 +128,9 @@ internal static class MethodOverloadGroups
             var rootSuffix = RootSuffixOf(anchor.Root, target);
 
             suffixes[member.Symbol] = rootSuffix;
-            OverloadGroupNaming.ReportIgnoredPin(member.Symbol, anchor.Root, rootSuffix, target);
+            OverloadSuffixPin
+                .Of(member.Symbol, target)
+                ?.ReportIfIgnoredFor(anchor.Root, rootSuffix);
         }
 
         var own = group.Members.Where(member => member.Anchor is null).ToList();
@@ -136,11 +138,17 @@ internal static class MethodOverloadGroups
         if (own.Count == 0)
             return suffixes;
 
+        // An anchored member names with its root's pin, never its own: the
+        // pin it cannot use must not move its type's other overloads (FR-005).
         var visible = VisibleInheritedOverloads(type, group)
-            .Concat(group.Members.Select(member => member.Symbol))
+            .Select(overload => new PinnedOverload(
+                overload,
+                OverloadSuffixPin.Of(overload, target)
+            ))
+            .Concat(group.Members.Select(member => PinnedOverloadOf(member, target)))
             .ToList();
 
-        var computed = OverloadGroupNaming.SuffixesOf(visible, target);
+        var computed = OverloadGroupNaming.SuffixesOf(visible);
         var offset = visible.Count - group.Members.Count;
 
         for (var i = 0; i < group.Members.Count; i++)
@@ -604,4 +612,9 @@ internal static class MethodOverloadGroups
                 member.ContainingAssembly.GivesAccessTo(type.ContainingAssembly),
             _ => true,
         };
+
+    private static PinnedOverload PinnedOverloadOf(
+        MethodGroupMember member,
+        TargetLanguage? target
+    ) => new(member.Symbol, OverloadSuffixPin.Of(member.Anchor?.Root ?? member.Symbol, target));
 }

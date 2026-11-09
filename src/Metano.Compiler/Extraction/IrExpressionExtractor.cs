@@ -3244,7 +3244,7 @@ public sealed partial class IrExpressionExtractor
         // `[Name("x")]` (target-aware) is resolved once here so backends
         // consult the emitted name instead of re-scanning attributes.
         var emittedName = symbol is IMethodSymbol method
-            ? method.GetMethodNameOverride(_target)
+            ? OverloadEmittedName.NameOverrideOf(method, _target)
             : SymbolHelper.GetNameOverride(symbol, _target);
         // `[External]` (TS-specific) and `[NoContainer]`
         // (cross-target) both cause static member access to flatten
@@ -4454,7 +4454,7 @@ public sealed partial class IrExpressionExtractor
     /// override through <c>IrToTsNamingPolicy.ToFunctionName</c>).
     /// </summary>
     private string? ResolveEmittedName(IMethodSymbol method) =>
-        method.GetMethodNameOverride(_target);
+        OverloadEmittedName.NameOverrideOf(method, _target);
 
     /// <summary>
     /// Skips BCL / external static classes (LINQ, framework helpers) so

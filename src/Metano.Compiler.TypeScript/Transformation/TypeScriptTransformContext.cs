@@ -122,7 +122,7 @@ public sealed class TypeScriptTransformContext(
                 when method.IsExtensionMethod
                     && method.IsEmittedModuleFunction(TargetLanguage.TypeScript):
                 Register(
-                    ResolveMethodHelperName(method),
+                    IrToTsNamingPolicy.ToFunctionName(method),
                     method,
                     ownerRef,
                     map,
@@ -194,7 +194,7 @@ public sealed class TypeScriptTransformContext(
                 when method.MethodKind is MethodKind.Ordinary
                     && method.DeclaredAccessibility == Accessibility.Public:
                 Register(
-                    ResolveMethodHelperName(method),
+                    IrToTsNamingPolicy.ToFunctionName(method),
                     method,
                     ownerRef,
                     map,
@@ -257,16 +257,6 @@ public sealed class TypeScriptTransformContext(
                 break;
         }
     }
-
-    /// <summary>
-    /// Mirrors the same <c>[Name]</c> resolution the IR call-site rewrite
-    /// applies, so the registry key and the lowered call agree on the
-    /// emitted helper name. Falls back to camelCase when no override is
-    /// declared, matching <c>IrToTsNamingPolicy.ToFunctionName</c>.
-    /// </summary>
-    private static string ResolveMethodHelperName(IMethodSymbol method) =>
-        method.GetMethodNameOverride(TargetLanguage.TypeScript)
-        ?? TypeScriptNaming.ToCamelCase(method.Name);
 
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
         (
