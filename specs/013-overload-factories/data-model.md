@@ -142,8 +142,9 @@ to the method call sites of 013e.
 **Evaluation order (013c).** Bound arguments are in parameter order. When the source evaluates
 them in another order and one has a side effect (`new T(b: F(), a: G())`),
 `IrSelectedOverload.EvaluationOrder` records it and the target evaluates them first, in that
-order: TypeScript binds them through an immediately invoked arrow for a construction (the only
-IIFE of this feature, the documented exception of NFR-004, which the expression position leaves no alternative to; method call sites of 013e reuse it)
+order: TypeScript binds them through an immediately invoked arrow for a construction (the one IIFE shape of
+this feature, used by constructions and by 013d/013e calls; the documented exception of NFR-004, since the
+expression position leaves no alternative)
 and through `const __baseArgN` temporaries before `super(...)`.
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)
