@@ -403,8 +403,8 @@ public sealed class IrStatementExtractor(
     /// <summary>
     /// The value the loop variable is declared from: the numeric conversion
     /// of <paramref name="element"/> when Roslyn's element conversion lowers
-    /// explicitly (a floating-point truncation in every mode, a 64-bit one
-    /// under the exact lowering), or null when the variable binds the raw
+    /// explicitly (a floating-point truncation or a conversion across a 64-bit
+    /// integer), or null when the variable binds the raw
     /// element. A <c>foreach</c> conversion is explicit, so it checks in a
     /// checked context; no operation carries that flag, so it comes from the
     /// enclosing context and the compilation options.

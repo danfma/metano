@@ -8,8 +8,8 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The built-in numeric binary operators of spec 012 slice 012d (FR-027–FR-030):
 /// each node carries its operand kind, so a target picks the 64-bit division
-/// helpers and converts a shift count without re-deriving types, and under
-/// the exact 64-bit lowering a 64-bit shift count is masked as C# masks it
+/// helpers and converts a shift count without re-deriving types, and a
+/// 64-bit shift count is masked as C# masks it
 /// (<c>count &amp; 63</c>, folded when constant, DECIDED-9).
 /// </summary>
 public sealed partial class IrExpressionExtractor

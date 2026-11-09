@@ -23,8 +23,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Builds <paramref name="target"/> <c>op=</c> <c>right</c>. An integer
-    /// <c>/=</c>, a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c> and, under
-    /// the exact 64-bit lowering, a 64-bit compound operator that wraps,
+    /// <c>/=</c>, a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c> and a
+    /// 64-bit compound operator that wraps,
     /// checks, divides or shifts have no compound operator in the targets
     /// that keeps C# semantics, so each becomes the read-modify-write
     /// <c>target = target op right</c> (see <see cref="BuildReadModifyWrite"/>)
