@@ -1,16 +1,26 @@
+import type { NumberTextLeaves } from "./exact-json-number.ts";
 import type { JsonTypeInfo, TypeDescriptor, TypeSpec } from "./types.ts";
 
 /**
- * Which reads need a number's exact digits (#457). `deserializeText` reads a
+ * Which reads need a number's exact text (#457). `deserializeText` reads a
  * spec through the exact tree only when its closure holds such a
- * descriptor, so every other spec keeps plain `JSON.parse`. A `decimal` and
- * a `long` / `ulong` as `bigint` (#450, FR-052's integer-token rules) read
- * their exact text.
+ * descriptor, so every other spec keeps plain `JSON.parse`. A `decimal`
+ * reads its exact digits; a `long` / `ulong` as `bigint` reads its exact
+ * token, digits and shape (spec 012 FR-052, FR-053).
  */
 
 /** Whether the built-in converter of `descriptor` reads a JSON number from its exact text. */
 export function readsNumberText(descriptor: TypeDescriptor): boolean {
-  return descriptor.kind === "decimal" || descriptor.kind === "int64";
+  return descriptor.kind === "decimal" || readsIntegerToken(descriptor);
+}
+
+/**
+ * Whether the built-in converter of `descriptor` reads an integer token
+ * only, so a number with a fraction or an exponent must reach it with its
+ * shape (`1.0` is not `1`).
+ */
+function readsIntegerToken(descriptor: TypeDescriptor): boolean {
+  return descriptor.kind === "int64";
 }
 
 /**
@@ -22,36 +32,50 @@ export function forwardsNumberTexts(descriptor: TypeDescriptor): boolean {
   return readsNumberText(descriptor) || descriptor.kind === "nullable";
 }
 
-/** The answer of each spec asked about, computed once on its first exact-capable read. */
-const needsByInfo = new WeakMap<JsonTypeInfo, boolean>();
+/** The answer of each spec asked about (`null` for none), computed once on its first text read. */
+const leavesByInfo = new WeakMap<JsonTypeInfo, NumberTextLeaves | null>();
 
 /**
- * Whether reading `info` can reach a descriptor that reads exact text:
- * through properties (bases included), derived contracts of a polymorphic
- * base, collection elements, dictionary values, nullables and refs. Thunks
- * (`ref.spec`, `derived.spec`) are called here, outside every generated
- * getter, as the dispatch index calls them.
+ * The numbers the exact tree of `info` must keep as their text, or
+ * `undefined` when reading `info` reaches no descriptor that reads exact
+ * text: `inexactOrNonInteger` when it reaches a 64-bit integer, `inexact`
+ * when it reaches decimals only. The closure runs through properties (bases
+ * included), derived contracts of a polymorphic base, collection elements,
+ * dictionary values, nullables and refs. Thunks (`ref.spec`,
+ * `derived.spec`) are called here, outside every generated getter, as the
+ * dispatch index calls them.
  */
-export function specNeedsExactNumbers(info: JsonTypeInfo): boolean {
-  const known = needsByInfo.get(info);
+export function specNumberTextLeaves(info: JsonTypeInfo): NumberTextLeaves | undefined {
+  const known = leavesByInfo.get(info);
 
   if (known !== undefined) {
-    return known;
+    return known ?? undefined;
   }
 
-  const needs = closureReachesNumberText(info);
+  const leaves = closureNumberTextLeaves(info);
 
-  needsByInfo.set(info, needs);
+  leavesByInfo.set(info, leaves ?? null);
 
-  return needs;
+  return leaves;
+}
+
+function closureNumberTextLeaves(info: JsonTypeInfo): NumberTextLeaves | undefined {
+  if (closureReaches(info, readsIntegerToken)) {
+    return "inexactOrNonInteger";
+  }
+
+  return closureReaches(info, readsNumberText) ? "inexact" : undefined;
 }
 
 /**
- * One walk of a closure. Only the root's answer is kept: a spec inside a
- * cycle is answered before the walk returns to it, so its own answer may be
- * incomplete.
+ * One walk of a closure, looking for a descriptor `matches` accepts. Only
+ * the root's answer is kept: a spec inside a cycle is answered before the
+ * walk returns to it, so its own answer may be incomplete.
  */
-function closureReachesNumberText(info: JsonTypeInfo): boolean {
+function closureReaches(
+  info: JsonTypeInfo,
+  matches: (descriptor: TypeDescriptor) => boolean,
+): boolean {
   const visited = new Set<TypeSpec>();
 
   const specReaches = (spec: TypeSpec): boolean => {
@@ -74,7 +98,7 @@ function closureReachesNumberText(info: JsonTypeInfo): boolean {
   };
 
   const descriptorReaches = (descriptor: TypeDescriptor): boolean => {
-    if (readsNumberText(descriptor)) {
+    if (matches(descriptor)) {
       return true;
     }
 

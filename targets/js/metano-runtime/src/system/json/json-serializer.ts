@@ -7,8 +7,8 @@ import {
   deserializeWithValueSpec,
   type TreeNumbers,
 } from "./converters.ts";
-import { specNeedsExactNumbers } from "./exact-number-reads.ts";
-import { mayHoldInexactNumber, parseJsonText, readJsonText } from "./json-text-reader.ts";
+import { specNumberTextLeaves } from "./exact-number-reads.ts";
+import { mayHoldNumberTextLeaf, parseJsonText, readJsonText } from "./json-text-reader.ts";
 import { readNull } from "./null-reads.ts";
 import { isValueSpec } from "./spec-kind.ts";
 
@@ -61,21 +61,24 @@ function deserializeWithInfo<T>(
 /**
  * Reads JSON text as System.Text.Json's `Deserialize(string)` does (#457).
  * The path is chosen per spec, once: a spec whose closure reads no number
- * from its exact digits (no `decimal`) reads `JSON.parse(text)`, as before.
- * One that does reads the exact tree (`readJsonText`), so each `decimal` is
- * built from its source digits, unless no number of the text can have more
- * than 15 significant digits (`mayHoldInexactNumber`), when `JSON.parse` is
- * already exact. Invalid text throws STJ's `JsonException` on every path.
+ * from its exact text (no `decimal`, no `long` / `ulong`) reads
+ * `JSON.parse(text)`, as before. One that does reads the exact tree
+ * (`readJsonText`), so each `decimal` is built from its source digits and
+ * each 64-bit integer from its source token (spec 012 FR-053), unless the
+ * text can hold no number the tree would keep as text
+ * (`mayHoldNumberTextLeaf`), when `JSON.parse` builds the same tree. Invalid
+ * text throws STJ's `JsonException` on every path.
  */
 function deserializeTextWithInfo<T>(
   text: string,
   spec: JsonTypeInfo<T>,
   converters?: readonly JsonConverter[],
 ): T | null {
-  const readsExactTree = specNeedsExactNumbers(spec) && mayHoldInexactNumber(text);
+  const leaves = specNumberTextLeaves(spec);
+  const readsExactTree = leaves !== undefined && mayHoldNumberTextLeaf(text, leaves);
 
   if (readsExactTree) {
-    return deserializeWithInfo(readJsonText(text), spec, converters, "exact");
+    return deserializeWithInfo(readJsonText(text, leaves), spec, converters, "exact");
   }
 
   return deserializeWithInfo(parseJsonText(text), spec, converters);
@@ -114,11 +117,14 @@ export class BoundSerializer {
     return deserializeWithInfo(data, spec, this.context.converters);
   }
 
-  /** Deserialize JSON text into a typed instance, decimals with their exact digits. */
+  /**
+   * Deserialize JSON text into a typed instance, decimals and 64-bit
+   * integers with their exact digits.
+   */
   deserializeText<T>(text: string, spec: TypeSpec<T>): T | null;
   /**
-   * Deserialize JSON text into a non-object root value, decimals with their
-   * exact digits. `T` holds `| null` for a reference-type root; a value-type
+   * Deserialize JSON text into a non-object root value, decimals and 64-bit
+   * integers with their exact digits. `T` holds `| null` for a reference-type root; a value-type
    * root throws for `null`.
    */
   deserializeText<T>(text: string, spec: ValueSpec<T>): T;
@@ -218,7 +224,8 @@ export class JsonSerializer {
   /**
    * Deserialize JSON text into a typed instance using the given spec, as
    * System.Text.Json's `Deserialize(string, JsonTypeInfo<T>)` does: each
-   * `decimal` is read from its exact digits, and invalid text throws
+   * `decimal` is read from its exact digits, each `long` / `ulong` from its
+   * exact integer token (`1.0` and `1e3` throw), and invalid text throws
    * `JsonException` with STJ's message. The text `null` reads as `null`,
    * except for a struct contract (`valueType`), which throws (FR-037).
    */

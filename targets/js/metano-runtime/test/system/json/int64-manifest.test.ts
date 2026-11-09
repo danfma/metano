@@ -17,21 +17,18 @@ import manifest from "../../../../sample-json-contracts/test/fixtures/stj/cases.
  * until the bigint flip (012k).
  *
  * Reads go through `deserializeText`, exactly as System.Text.Json reads its
- * text: the exact tree hands every 64-bit leaf its source digits, so the
- * accepted reads and the errors match the STJ expectations of the manifest.
- * (A parsed tree could not: `JSON.parse` has already rounded a 19-digit
- * integer or folded `1.0` into `1`.) Writes re-serialize what the row's
- * text read into and must print the row's text byte for byte.
+ * text: the exact tree hands every 64-bit leaf that is not a short integer
+ * token its source text (FR-053, slice 012h), so the accepted reads and the
+ * errors match the STJ expectations of the manifest. (A parsed tree could
+ * not: `JSON.parse` has already rounded a 19-digit integer or folded `1.0`
+ * into `1`.) Writes re-serialize what the row's text read into and must
+ * print the row's text byte for byte.
  *
- * Two rows diverge by design:
- *
- * - I5 (`{"Id":1.0}`): STJ rejects the fraction, but the text has at most 15
- *   significant digits, so `deserializeText` reads it with `JSON.parse`,
- *   which folds `1.0` into `1` — the runtime accepts `1n` (the token rules
- *   run on 16+-digit texts, where the exact tree keeps the shape).
- * - I6's nullable member error names ``System.Nullable`1[System.Int64]``
- *   where STJ names the declaring contract — the 009 nullable-inner design,
- *   primitives included.
+ * One divergence remains by design: the nullable member errors of I6 and
+ * I17 name ``System.Nullable`1[System.Int64]`` where STJ names the
+ * declaring contract — the 009 nullable-inner design, primitives included.
+ * (I5, `{"Id":1.0}`, read as `1n` until 012h: a text of at most 15
+ * significant digits went through `JSON.parse`, which folds the fraction.)
  *
  * The mirrors mark the members a partial payload omits `optional`: the
  * runtime throws `Missing required property` for an absent required member
@@ -115,54 +112,66 @@ function specOf(getter: string): TypeSpec | ValueSpec {
 
 /**
  * The message the runtime throws for an error row: the manifest's STJ
- * expectation, except I6 (the nullable-inner name above). I5 is not in the
- * table: the runtime accepts `1.0` as `1n` (the divergence above), so it is
- * an accepted row for us.
+ * expectation, except I6 and I17 (the nullable-inner name above).
  */
 const RUNTIME_ERROR_OF: Readonly<Record<string, string>> = {
   I4: cannotConvertMessage("Int64Box"),
+  I5: cannotConvertMessage("Int64Box"),
   I6: cannotConvertMessage("System.Nullable`1[System.Int64]"),
   I7: cannotConvertMessage("System.Int64"),
   I8: cannotConvertMessage("System.UInt64"),
   I9: cannotConvertMessage("System.Int64"),
   I10: cannotConvertMessage("System.UInt64"),
   I11: cannotConvertMessage("System.Int64"),
+  I13: cannotConvertMessage("System.Int64"),
+  I14: cannotConvertMessage("System.UInt64"),
+  I15: cannotConvertMessage("System.Int64"),
+  I16: cannotConvertMessage("Int64Box"),
+  I17: cannotConvertMessage("System.Nullable`1[System.Int64]"),
+  I18: cannotConvertMessage("System.Int64"),
 };
 
-/** The value a row the runtime accepts where STJ throws must read into. */
-const RUNTIME_ACCEPTS_OF: Readonly<Record<string, (value: unknown) => void>> = {
-  I5: (value) => {
+type Int64BoxFields = { id: bigint; mask: bigint; parent: bigint | null };
+
+/** The fields a read or roundtrip row must read back, by row id. */
+const READ_ASSERTIONS_OF: Readonly<Record<string, (value: unknown) => void>> = {
+  I2: (value) => {
     expect(value).toBeInstanceOf(Int64Box);
 
-    expect((value as { id: bigint | null }).id).toBe(1n);
+    const box = value as Int64BoxFields;
+
+    expect(box.id).toBe(42n);
+    expect(box.mask).toBe(7n);
+    expect(box.parent).toBeNull();
   },
+  I12: (value) => {
+    expect(value).toBeInstanceOf(Int64Containers);
+
+    const containers = value as { byName: Map<bigint, string> };
+
+    expect(containers.byName.get(5n)).toBe("b");
+    expect(containers.byName.get(0n)).toBe("c");
+  },
+  I19: (value) => {
+    expect(value).toBeInstanceOf(Int64Box);
+
+    const box = value as Int64BoxFields;
+
+    expect(box.id).toBe(9007199254740993n);
+    expect(box.mask).toBe(18446744073709551615n);
+    expect(box.parent).toBe(-9223372036854775808n);
+  },
+  I20: (value) => expect(value).toBe(0n),
 };
 
-/** The fields a roundtrip row must read back, by getter. */
-function assertReadOf(getter: string): (value: unknown) => void {
-  switch (getter) {
-    case "int64Box":
-      return (value) => {
-        expect(value).toBeInstanceOf(Int64Box);
+function assertReadOf(rowId: string): (value: unknown) => void {
+  const assertRead = READ_ASSERTIONS_OF[rowId];
 
-        const box = value as { id: bigint; mask: bigint; parent: bigint | null };
-
-        expect(box.id).toBe(42n);
-        expect(box.mask).toBe(7n);
-        expect(box.parent).toBeNull();
-      };
-    case "int64Containers":
-      return (value) => {
-        expect(value).toBeInstanceOf(Int64Containers);
-
-        const containers = value as { byName: Map<bigint, string> };
-
-        expect(containers.byName.get(5n)).toBe("b");
-        expect(containers.byName.get(0n)).toBe("c");
-      };
-    default:
-      throw new Error(`no read assertions for the manifest getter '${getter}'`);
+  if (assertRead === undefined) {
+    throw new Error(`no read assertions for the manifest row '${rowId}'`);
   }
+
+  return assertRead;
 }
 
 describe("int64 manifest rows — the runtime side of the STJ conformance fixture", () => {
@@ -178,14 +187,6 @@ describe("int64 manifest rows — the runtime side of the STJ conformance fixtur
       const text = row.json as string;
 
       if (row.error !== undefined) {
-        const runtimeAccepts = RUNTIME_ACCEPTS_OF[row.id];
-
-        if (runtimeAccepts !== undefined) {
-          runtimeAccepts(JsonSerializer.deserializeText(text, spec));
-
-          return;
-        }
-
         expectJsonException(
           () => JsonSerializer.deserializeText(text, spec),
           RUNTIME_ERROR_OF[row.id],
@@ -196,9 +197,11 @@ describe("int64 manifest rows — the runtime side of the STJ conformance fixtur
 
       const value = JsonSerializer.deserializeText(text, spec);
 
-      if (row.direction === "read") {
-        assertReadOf(row.getter)(value);
+      if (row.direction !== "write") {
+        assertReadOf(row.id)(value);
+      }
 
+      if (row.direction === "read") {
         return;
       }
 

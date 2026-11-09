@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { JsonException } from "#/system/json";
 import { JsonNumberText } from "#/system/json/exact-json-number";
-import { mayHoldInexactNumber, parseJsonText, readJsonText } from "#/system/json/json-text-reader";
+import {
+  mayHoldInexactNumber,
+  mayHoldNonIntegerNumber,
+  mayHoldNumberTextLeaf,
+  parseJsonText,
+  readJsonText,
+} from "#/system/json/json-text-reader";
 import { expectedTextOutcomeOf, JSON_TEXT_ROWS, textOutcomeOf } from "./json-text-rows.ts";
 
 /** The tree with every `JsonNumberText` leaf read as `JSON.parse` reads it. */
@@ -189,6 +195,38 @@ describe("readJsonText — numbers beyond double precision", () => {
   });
 });
 
+describe("readJsonText — inexactOrNonInteger leaves (spec 012 FR-053)", () => {
+  const leafTextOf = (text: string) => {
+    const read = readJsonText(text, "inexactOrNonInteger");
+
+    return read instanceof JsonNumberText ? read.text : read;
+  };
+
+  test("a number with a fraction or an exponent keeps its text, however short", () => {
+    expect(leafTextOf("1.0")).toBe("1.0");
+    expect(leafTextOf("1e3")).toBe("1e3");
+    expect(leafTextOf("-0.0")).toBe("-0.0");
+    expect(leafTextOf("2E+0")).toBe("2E+0");
+  });
+
+  test("a short integer token is a number, and a long one keeps its digits", () => {
+    expect(leafTextOf("42")).toBe(42);
+    expect(Object.is(leafTextOf("-0"), -0)).toBe(true);
+    expect(leafTextOf("9007199254740993")).toBe("9007199254740993");
+  });
+
+  test("the default leaves keep a short fraction a number", () => {
+    expect(readJsonText("1.0")).toBe(1);
+    expect(readJsonText("1e3")).toBe(1000);
+  });
+
+  test("the tree is JSON.parse's once the leaves are read as doubles", () => {
+    const text = '{"a":[1,2.5,3e2],"b":{"c":-0.0,"d":"1.0"}}';
+
+    expect(asParsed(readJsonText(text, "inexactOrNonInteger"))).toEqual(JSON.parse(text));
+  });
+});
+
 /** `seed` with `character` inserted at `at`, the character at `at` deleted, or replaced. */
 function mutate(seed: string, at: number, character: string, kind: number): string {
   switch (kind) {
@@ -265,5 +303,27 @@ describe("mayHoldInexactNumber", () => {
   test("true for long digit runs that are not inexact numbers (conservative)", () => {
     expect(mayHoldInexactNumber('                "1234567890123456"')).toBe(true);
     expect(mayHoldInexactNumber("               1.23456789012345")).toBe(true);
+  });
+});
+
+describe("mayHoldNonIntegerNumber / mayHoldNumberTextLeaf", () => {
+  test("a digit before a point or an exponent marks a possible non-integer number", () => {
+    expect(mayHoldNonIntegerNumber('{"a":1.0}')).toBe(true);
+    expect(mayHoldNonIntegerNumber('{"a":1e3}')).toBe(true);
+    expect(mayHoldNonIntegerNumber('{"a":1E3}')).toBe(true);
+    expect(mayHoldNonIntegerNumber('{"a":[1,-20,300],"b":"text"}')).toBe(false);
+  });
+
+  // A string like a version or a GUID only sends the text to the slower exact read.
+  test("true for strings that look like one (conservative)", () => {
+    expect(mayHoldNonIntegerNumber('{"v":"1.0"}')).toBe(true);
+    expect(mayHoldNonIntegerNumber('{"g":"3e4f0000"}')).toBe(true);
+  });
+
+  test("only inexactOrNonInteger leaves ask about non-integer numbers", () => {
+    expect(mayHoldNumberTextLeaf('{"a":1.5}', "inexact")).toBe(false);
+    expect(mayHoldNumberTextLeaf('{"a":1.5}', "inexactOrNonInteger")).toBe(true);
+    expect(mayHoldNumberTextLeaf('{"a":1234567890123456}', "inexact")).toBe(true);
+    expect(mayHoldNumberTextLeaf('{"a":12}', "inexactOrNonInteger")).toBe(false);
   });
 });

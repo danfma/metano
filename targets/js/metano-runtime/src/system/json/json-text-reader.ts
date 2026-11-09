@@ -1,6 +1,6 @@
 import type { JsonContainer } from "./container-depth.ts";
 import { JsonException } from "./errors.ts";
-import { JsonNumberText } from "./exact-json-number.ts";
+import { JsonNumberText, type NumberTextLeaves } from "./exact-json-number.ts";
 
 /**
  * Reads JSON text into the tree `JSON.parse` builds (#457), for
@@ -10,7 +10,10 @@ import { JsonNumberText } from "./exact-json-number.ts";
  *   `JsonException` for invalid text instead of the engine's `SyntaxError`;
  * - `readJsonText` tokenizes the text itself and keeps every number with more
  *   significant digits than a double holds as a `JsonNumberText` leaf, so a
- *   `decimal` is built from its source digits.
+ *   `decimal` is built from its source digits — and, asked for
+ *   `inexactOrNonInteger` leaves, every number with a fraction or an
+ *   exponent too, so a `long` / `ulong` sees the token shape a double erases
+ *   (spec 012 FR-053).
  *
  * Both accept exactly what `JSON.parse` accepts (lone surrogates included,
  * which STJ rejects) and build the same tree: the last of duplicate keys
@@ -139,6 +142,31 @@ function isNumberRunCode(code: number): boolean {
   return isDigit(code) || code === DOT;
 }
 
+/**
+ * A digit followed by `.`, `e` or `E`: every number with a fraction or an
+ * exponent holds one. Inside a string (`"v1.0"`, a GUID's `"3e4f…"`) it
+ * answers `true` for a text without such a number; the tokenizer then reads
+ * the same tree `JSON.parse` would, only more slowly.
+ */
+const NON_INTEGER_NUMBER_PATTERN = /[0-9][.eE]/;
+
+/** Whether a number of `text` can have a fraction or an exponent. */
+export function mayHoldNonIntegerNumber(text: string): boolean {
+  return NON_INTEGER_NUMBER_PATTERN.test(text);
+}
+
+/**
+ * Whether `readJsonText(text, leaves)` can build a `JsonNumberText` leaf;
+ * when it cannot, `JSON.parse` builds the same tree, faster.
+ */
+export function mayHoldNumberTextLeaf(text: string, leaves: NumberTextLeaves): boolean {
+  if (mayHoldInexactNumber(text)) {
+    return true;
+  }
+
+  return leaves === "inexactOrNonInteger" && mayHoldNonIntegerNumber(text);
+}
+
 /** `JSON.parse(text)`, throwing System.Text.Json's `JsonException` for invalid text. */
 export function parseJsonText(text: string): unknown {
   try {
@@ -155,15 +183,16 @@ export function parseJsonText(text: string): unknown {
 
 /**
  * The tree `JSON.parse(text)` builds, except that a number whose mantissa has
- * more than 15 digits past a zero integer part is a `JsonNumberText` leaf.
- * Strings are copied, so the tree never keeps `text` alive (a slice would,
- * on JavaScriptCore). A caller already deep in the stack can run out of it
- * before `MAX_TEXT_DEPTH`; the stack overflow then throws the same
- * `JsonException` as the bound.
+ * more than 15 digits past a zero integer part is a `JsonNumberText` leaf —
+ * and, for `inexactOrNonInteger` leaves, so is every number with a fraction
+ * or an exponent. Strings are copied, so the tree never keeps `text` alive
+ * (a slice would, on JavaScriptCore). A caller already deep in the stack can
+ * run out of it before `MAX_TEXT_DEPTH`; the stack overflow then throws the
+ * same `JsonException` as the bound.
  */
-export function readJsonText(text: string): unknown {
+export function readJsonText(text: string, leaves: NumberTextLeaves = "inexact"): unknown {
   try {
-    return new JsonTextReader(text).readDocument();
+    return new JsonTextReader(text, leaves === "inexactOrNonInteger").readDocument();
   } catch (error) {
     if (isStackOverflow(error)) {
       throw new JsonException(TOO_DEEP);
@@ -183,7 +212,10 @@ class JsonTextReader {
   private position = 0;
   private depth = 0;
 
-  constructor(private readonly text: string) {}
+  constructor(
+    private readonly text: string,
+    private readonly keepsNonIntegerTexts: boolean,
+  ) {}
 
   readDocument(): unknown {
     const first = this.skipWhitespace();
@@ -480,6 +512,12 @@ class JsonTextReader {
     this.throwIfNoDelimiterAt(end, endsAfterFraction);
     this.position = end;
 
+    const isIntegerToken = end === integerEnd;
+
+    if (this.keepsNonIntegerTexts && !isIntegerToken) {
+      return numberTextOf(text, start, end);
+    }
+
     // A text no longer than 15 characters past its sign has at most 15 digits.
     const fitsInDouble = end - start - signLength <= DOUBLE_EXACT_DIGITS;
 
@@ -663,15 +701,18 @@ function numberOrNumberText(
   end: number,
   hasFraction: boolean,
 ): number | JsonNumberText {
-  const source = text.slice(start, end);
-
   if (textDigitsOf(text, mantissaStart, mantissaEnd, hasFraction) <= DOUBLE_EXACT_DIGITS) {
-    return Number(source);
+    return Number(text.slice(start, end));
   }
 
-  // `source` is a slice of `text`, which a slice keeps alive on
-  // JavaScriptCore; `JSON.parse` of it quoted builds an independent copy.
-  return new JsonNumberText(JSON.parse(`"${source}"`) as string);
+  return numberTextOf(text, start, end);
+}
+
+/** The `JsonNumberText` of the number `text` spells from `start` to `end`. */
+function numberTextOf(text: string, start: number, end: number): JsonNumberText {
+  // A slice of `text` keeps it alive on JavaScriptCore; `JSON.parse` of the
+  // slice quoted builds an independent copy.
+  return new JsonNumberText(JSON.parse(`"${text.slice(start, end)}"`) as string);
 }
 
 /**
