@@ -236,40 +236,61 @@ public class DartOverloadNamingTests
     }
 
     /// <summary>
-    /// Named arguments out of parameter order evaluate in C#'s order: each is
-    /// bound before the call, for a construction and for a method call alike.
+    /// Named arguments out of parameter order are passed in parameter order.
+    /// With at most one order-sensitive evaluation the order cannot differ
+    /// from C#, so the call stays inline and Dart types each argument from
+    /// its parameter (<c>2</c> as a <c>double</c>, <c>[]</c> as a
+    /// <c>List&lt;int&gt;</c>): a call with a constant, an assignment beside a
+    /// constant (the local receiver is read first in both languages), and a
+    /// call whose arguments are all constants.
     /// </summary>
     [Test]
-    public async Task NamedArgumentsOutOfOrder_EvaluateInSourceOrder()
+    public async Task ReorderedArguments_WithOneOrderSensitiveEvaluation_StayInline()
     {
         var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
+            using System.Collections.Generic;
+
             [Transpile]
-            public class Opt
+            public class K
             {
-                public int V;
+                public double Scale(double d, int n) => d * n;
 
-                public Opt(int a, int b) => V = a * 10 + b;
+                public double Scale(string s) => 0;
 
-                public Opt(string s) => V = s.Length;
+                public int Count(int n, List<int> items) => n + items.Count;
+
+                public int Count(string s) => 0;
             }
 
             [Transpile]
-            public class Calc
+            public class Inner
             {
-                public int Sub(int x, int y) => x - y;
+                public int Tag;
 
-                public int Sub(string s) => s.Length;
+                public Inner(int tag) => Tag = tag;
+
+                public int M(int a, int b) => Tag * 100 + a * 10 + b;
+
+                public int M(string s) => 0;
             }
 
             [Transpile]
-            public static class Use
+            public static class Run
             {
                 public static int Next() => 1;
 
-                public static int Make() => new Opt(b: Next(), a: Next()).V;
+                public static double A(K k) => k.Scale(n: Next(), d: 2);
 
-                public static int Run(Calc c) => c.Sub(y: Next(), x: Next());
+                public static int B(K k) => k.Count(n: Next(), items: []);
+
+                public static int C()
+                {
+                    var c = new Inner(1);
+                    return c.M(b: (c = new Inner(2)).Tag, a: 3);
+                }
+
+                public static int D(Inner i) => i.M(b: 1, a: 2);
             }
             """
         );
@@ -278,22 +299,188 @@ public class DartOverloadNamingTests
 
         await AssertFile(
             files,
-            "use.dart",
+            "run.dart",
             """
-            import 'calc.dart';
-            import 'opt.dart';
+            import 'inner.dart';
+            import 'k.dart';
 
-            class Use {
+            class Run {
               static int next() => 1;
 
-              static int make() => (($arg1, $arg0) => Opt.fromAB($arg0, $arg1))(Use.next(), Use.next()).v;
+              static double a(K k) => k.scaleDN(2, Run.next());
 
-              static int run(Calc c) => (($arg1, $arg0) => c.subXY($arg0, $arg1))(Use.next(), Use.next());
+              static int b(K k) => k.countNItems(Run.next(), []);
+
+              static int c() {
+                var c = Inner(1);
+                return c.mAB(3, (c = Inner(2)).tag);
+              }
+
+              static int d(Inner i) => i.mAB(2, 1);
             }
 
             """
         );
     }
+
+    /// <summary>
+    /// With two or more order-sensitive evaluations among the reordered
+    /// arguments and a receiver that is a computation, Dart would evaluate
+    /// them in parameter order: <c>MS0001</c> at the call, which is emitted in
+    /// parameter order (#591). Constructions, method calls, a local read
+    /// beside a call, a conditional, an <c>await</c> and a closure that writes
+    /// a local read by another argument alike.
+    /// </summary>
+    [Test]
+    public async Task ReorderedArguments_WithTwoOrderSensitiveEvaluations_ReportMS0001()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using System.Threading.Tasks;
+
+            [Transpile]
+            public class Pair
+            {
+                public int V;
+
+                public Pair(int a, int b) => V = a * 10 + b;
+
+                public Pair(string s) => V = s.Length;
+
+                public double Scale(double d, int n) => d * n;
+
+                public double Scale(string s) => 0;
+
+                public int Two(int a, int b) => a * 10 + b;
+
+                public int Two(string s) => 0;
+            }
+
+            [Transpile]
+            public class Holder
+            {
+                public Pair Inner = new Pair(1, 2);
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Next() => 1;
+
+                public static bool Flag() => true;
+
+                public static Task<int> NextAsync() => Task.FromResult(1);
+
+                public static int Construct() => new Pair(b: Next(), a: Next()).V;
+
+                public static int Call(Pair p) => p.Two(b: Next(), a: Next());
+
+                public static int Receiver(Holder h) => h.Inner.Two(b: Next(), a: 3);
+
+                public static int LocalRead(Pair p)
+                {
+                    var x = 5;
+                    return p.Two(b: Next(), a: x);
+                }
+
+                public static double Conditional(Pair p) => p.Scale(n: Next(), d: Flag() ? 2 : 3);
+
+                public static async Task<int> Awaited(Pair p) => p.Two(b: Next(), a: await NextAsync());
+
+                public static int Captured(Pair p)
+                {
+                    int x = 0;
+                    System.Func<int> bump = () => ++x;
+                    return p.Two(b: bump(), a: x);
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => (d.Code, d.Message, FirstLineOf(d))))
+            .IsEquivalentTo([
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static int Construct() => new Pair(b: Next(), a: Next()).V;"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static int Call(Pair p) => p.Two(b: Next(), a: Next());"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static int Receiver(Holder h) => h.Inner.Two(b: Next(), a: 3);"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "return p.Two(b: Next(), a: x);"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static double Conditional(Pair p) => p.Scale(n: Next(), d: Flag() ? 2 : 3);"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static async Task<int> Awaited(Pair p) => p.Two(b: Next(), a: await NextAsync());"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "return p.Two(b: bump(), a: x);"
+                ),
+            ]);
+
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'holder.dart';
+            import 'pair.dart';
+
+            class Use {
+              static int next() => 1;
+
+              static bool flag() => true;
+
+              static Future<int> nextAsync() => Task.fromResult(1);
+
+              static int construct() => Pair.fromAB(Use.next(), Use.next()).v;
+
+              static int call(Pair p) => p.twoAB(Use.next(), Use.next());
+
+              static int receiver(Holder h) => h.inner.twoAB(3, Use.next());
+
+              static int localRead(Pair p) {
+                var x = 5;
+                return p.twoAB(x, Use.next());
+              }
+
+              static double conditional(Pair p) => p.scaleDN(Use.flag() ? 2 : 3, Use.next());
+
+              static Future<int> awaited(Pair p) async => p.twoAB(await Use.nextAsync(), Use.next());
+
+              static int captured(Pair p) {
+                int x = 0;
+                int Function() bump = () => ++x;
+                return p.twoAB(x, bump());
+              }
+            }
+
+            """
+        );
+    }
+
+    private const string ReorderMessage =
+        "Named arguments out of parameter order with more than one evaluation that C# runs in "
+        + "written order are not supported for Dart: the call passes them in parameter order, so "
+        + "they are evaluated in that order (spec 013 FR-017, #591).";
 
     /// <summary>
     /// A generic construction keeps its explicit type arguments before the
@@ -896,157 +1083,6 @@ public class DartOverloadNamingTests
             }
 
             void use(String log$) => log(log$);
-
-            """
-        );
-    }
-
-    /// <summary>
-    /// The receiver of an out-of-order call is read before the arguments, as
-    /// C# reads it, even when it is a member access an argument reassigns,
-    /// and an <c>await</c> among the arguments stays in the enclosing async
-    /// function: one closure takes the receiver and the arguments in source
-    /// order (Dart evaluates them left to right).
-    /// </summary>
-    [Test]
-    public async Task OutOfOrderArguments_BindTheReceiverFirst_AndKeepAwaitOutside()
-    {
-        var (files, diagnostics) = DartTranspileHelper.Transpile(
-            """
-            using System.Threading.Tasks;
-
-            [Transpile]
-            public class Inner
-            {
-                public int Tag;
-
-                public Inner(int tag) => Tag = tag;
-
-                public int M(int a, int b) => Tag * 100 + a * 10 + b;
-
-                public int M(string s) => 0;
-            }
-
-            [Transpile]
-            public class Outer
-            {
-                public Inner Inner = new Inner(1);
-            }
-
-            [Transpile]
-            public static class Use
-            {
-                public static int Swap(Outer o) => 5;
-
-                public static Task<int> NextAsync() => Task.FromResult(1);
-
-                public static int Chain(Outer o) => o.Inner.M(b: Swap(o), a: 3);
-
-                public static async Task<int> Awaited(Inner i) => i.M(b: Swap(new Outer()), a: await NextAsync());
-            }
-            """
-        );
-
-        await Assert.That(diagnostics).IsEmpty();
-
-        await AssertFile(
-            files,
-            "use.dart",
-            """
-            import 'inner.dart';
-            import 'outer.dart';
-
-            class Use {
-              static int swap(Outer o) => 5;
-
-              static Future<int> nextAsync() => Task.fromResult(1);
-
-              static int chain(Outer o) => (($recv, $arg1) => $recv.mAB(3, $arg1))(o.inner, Use.swap(o));
-
-              static Future<int> awaited(Inner i) async => (($arg1, $arg0) => i.mAB($arg0, $arg1))(Use.swap(Outer()), await Use.nextAsync());
-            }
-
-            """
-        );
-    }
-
-    /// <summary>
-    /// Only the arguments whose evaluation can be observed are bound: a
-    /// literal or an empty collection stays inline, typed by its parameter
-    /// (<c>2</c> as a <c>double</c>, <c>[]</c> as a <c>List&lt;int&gt;</c>), and
-    /// a single observable argument needs no closure. A local an argument
-    /// reassigns is bound as the receiver first, as C# reads it.
-    /// </summary>
-    [Test]
-    public async Task OutOfOrderArguments_BindOnlyObservableEvaluations()
-    {
-        var (files, diagnostics) = DartTranspileHelper.Transpile(
-            """
-            using System.Collections.Generic;
-
-            [Transpile]
-            public class K
-            {
-                public double Scale(double d, int n) => d * n;
-
-                public double Scale(string s) => 0;
-
-                public int Count(int n, List<int> items) => n + items.Count;
-
-                public int Count(string s) => 0;
-            }
-
-            [Transpile]
-            public class Inner
-            {
-                public int Tag;
-
-                public Inner(int tag) => Tag = tag;
-
-                public int M(int a, int b) => Tag * 100 + a * 10 + b;
-
-                public int M(string s) => 0;
-            }
-
-            [Transpile]
-            public static class Run
-            {
-                public static int Next() => 1;
-
-                public static double A(K k) => k.Scale(n: Next(), d: 2);
-
-                public static int B(K k) => k.Count(n: Next(), items: []);
-
-                public static int C()
-                {
-                    var c = new Inner(1);
-                    return c.M(b: (c = new Inner(2)).Tag, a: 3);
-                }
-            }
-            """
-        );
-
-        await Assert.That(diagnostics).IsEmpty();
-
-        await AssertFile(
-            files,
-            "run.dart",
-            """
-            import 'inner.dart';
-            import 'k.dart';
-
-            class Run {
-              static int next() => 1;
-
-              static double a(K k) => k.scaleDN(2, Run.next());
-
-              static int b(K k) => k.countNItems(Run.next(), []);
-
-              static int c() {
-                var c = Inner(1);
-                return (($recv, $arg1) => $recv.mAB(3, $arg1))(c, (c = Inner(2)).tag);
-              }
-            }
 
             """
         );

@@ -63,20 +63,21 @@ the same overload differently after claims; the core candidates are identical.
   `DispatchedMethodCalls`; `DartIrRewriter` renames them to the claimed names
   (`Base.fromAB(1, 5)` with the omitted default explicit). A construction keeps its type
   arguments before the constructor's name (`Gen<Object>.fromValue(5)`, the Dart-only
-  `DartNamedConstruction` node). A construction or call whose named arguments evaluate out of
-  parameter order (`IrSelectedOverload.EvaluationOrder`) binds the evaluations that can be
-  observed, in the source's order, as the arguments of one immediately invoked closure
-  (`(($arg1, $arg0) => c.subXY($arg0, $arg1))(next(), next())`; Dart evaluates arguments left to
-  right; `DartEvaluationOrder`). A receiver an argument could change — a member access, or a
-  local an argument assigns — is bound first as `$recv`. An argument nobody can observe (a
-  literal, a constant, a local no argument assigns, a lambda, a collection literal of such
-  values) stays inline, typed by its parameter (`k.scaleDN(2, next())`, `2` a `double`); with at
-  most one observable evaluation the call is not wrapped. The closure parameters are untyped:
-  every bound argument is an expression whose static type Dart computes from itself. An `await`
-  among the bound arguments is a closure argument, evaluated in the enclosing async function;
-  inside a null-conditional call (`c?.Sub(y: Next(), x: await NextAsync())`) the Dart printer's
-  own receiver closure is synchronous, so that form does not compile (pre-existing for any
-  `await` in a null-conditional call's arguments).
+  `DartNamedConstruction` node). Bound arguments are passed in parameter order. When named
+  arguments put them out of that order (`IrSelectedOverload.EvaluationOrder`), Dart does not
+  keep C#'s evaluation order (#591); the core classifies the reordered call
+  (`IrExtractionContext.KeepsArgumentEvaluationOrder`, unset for Dart):
+
+  | Reordered call | Dart |
+  |---|---|
+  | at most one order-sensitive evaluation (`k.Scale(n: Next(), d: 2)`, `k.Count(n: Next(), items: [])`, `c.M(b: (c = new Inner(2)).Tag, a: 3)`) | inline in parameter order, each argument typed by its parameter: `k.scaleDN(2, Run.next())`, `k.countNItems(Run.next(), [])` |
+  | only order-insensitive arguments (`i.M(b: 1, a: 2)`) | inline in parameter order: `i.mAB(2, 1)` |
+  | two or more order-sensitive evaluations — calls, local or member reads, conditionals, binaries, `await`s, a receiver that is a computation (`new Pair(b: Next(), a: Next())`, `p.Two(b: Next(), a: x)`, `p.Scale(n: Next(), d: Flag() ? 2 : 3)`, `h.Inner.Two(b: Next(), a: 3)`, `p.Two(b: Next(), a: await NextAsync())`) | `MS0001` at the call, emitted in parameter order: `Named arguments out of parameter order with more than one evaluation that C# runs in written order are not supported for Dart: …` |
+
+  Order-insensitive: constants (literals, negated literals, `null`, `const`), `default`, `this`,
+  `typeof`, lambdas, and collection literals of those. A receiver is evaluated before the
+  arguments in both languages, so a local, a parameter, `this`, `base`, a type or a
+  null-conditional receiver does not count. An `await` argument follows the same rule.
   The prototype still emits no `super(...)` initializer for a derived constructor (RT-02, #572),
   so `BaseOverload` is unused there.
 - **`[Name]`.** Pins the suffix as in TypeScript, with the same `MS0003` reports; a method's

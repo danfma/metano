@@ -336,8 +336,10 @@ properties so a single `BclExportTypeOverrides` and a single
   types that get named constructors and leaves the opt-in
   `EmitsOperatorFastPaths` unset, so an overloaded operator keeps its source
   operator. A construction through a named constructor is the Dart-only
-  expression `DartNamedConstruction` (`Box<Object>.fromValue(5)`), and
-  `DartEvaluationOrder` binds out-of-order named arguments in source order.
+  expression `DartNamedConstruction` (`Box<Object>.fromValue(5)`). Bound
+  arguments are passed in parameter order; Dart leaves the opt-in
+  `KeepsArgumentEvaluationOrder` unset, so the core reports `MS0001` at a
+  reordered call with two or more order-sensitive evaluations (#591).
 - **`Transformation/`** — `DartTransformer` orchestrates discovery and
   file grouping; skips types flagged with `[Ignore(TargetLanguage.Dart)]`.
 - **`Dart/`** — Dart AST records and `IrBodyPrinter`, which renders IR
