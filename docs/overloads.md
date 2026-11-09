@@ -117,6 +117,19 @@ redeclared compatibly, the factory is qualified with the type name
 (`GiftReceipt.fromGiftReceiptAmount`). A derived class inherits the base
 factories it does not redeclare, and they return the base type.
 
+A call into an overloaded group passes its arguments in parameter order. When
+named arguments are written in another order and that order can be observed,
+the generated call evaluates them first, in the order you wrote them, through
+an arrow invoked on the spot:
+`(($arg1, $arg0) => c.twoAB($arg0, $arg1))(h.p, h.q)` for
+`c.Two(b: h.P, a: h.Q)`. The order is observable when one argument has a side
+effect, or runs code implicitly (a property getter that is not a plain
+auto-property, a user-defined operator or conversion, a `ToString` called by a
+string concatenation) beside a second argument that is not a constant. Field
+and auto-property reads alone, or one such argument beside constants, stay a
+plain call. Reordered named arguments of a call that is not overloaded are not
+covered yet (#597).
+
 Generated code only binds a type whose source the compiler can read — the
 current project or a project reference. A type read from a DLL or an npm
 package only keeps the dispatcher call, which is correct, just slower.
