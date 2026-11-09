@@ -70,11 +70,11 @@ it with the `rawJSON` rules above. #457 shipped its own leaf (OQ-3): `JsonNumber
 `exactNumberTextOf` beside `rawJsonTextOf`. The tree keeps a number as that leaf by the closure's needs
 (`specNumberTextLeaves`, `exact-number-reads.ts`):
 
-| Closure reaches | Leaves (`NumberTextLeaves`) | Kept as `JsonNumberText` | Tokenizer gate (else `JSON.parse`) |
+| Closure reaches | Leaves (`NumberTextLeaves`) | Leaves in the tree | Tokenizer gate (else `JSON.parse`) |
 |---|---|---|---|
-| no `decimal`, no `int64` | — | nothing | never |
-| `decimal` only | `inexact` | more than 15 significant digits | a run of 16 `[0-9.]` characters |
-| an `int64` | `inexactOrNonInteger` | that, and any fraction or exponent | that, or a digit followed by `.` / `e` / `E` |
+| no `decimal`, no `int64` | — | none | never |
+| `decimal` only | `inexact` | `JsonNumberText` (copied text) for more than 15 significant digits | a run of 16 `[0-9.]` characters |
+| an `int64` | `inexactOrNonInteger` | that, and `JsonNonIntegerNumber` (its double, no text) for any other fraction or exponent | that, or a digit followed by `.` / `e` / `E` |
 
 | Text (`deserializeText`) | `long` | `ulong` | STJ (.NET 10) |
 |---|---|---|---|
@@ -84,9 +84,11 @@ it with the `rawJSON` rules above. #457 shipped its own leaf (OQ-3): `JsonNumber
 | `-0` | `0n` | `JsonException` | same |
 | `{"$type":1.0,…}` (int tag, polymorphic base with an `int64` in its closure) | `JsonException` | — | `JsonException` |
 
-The other converters of an exact tree read a leaf as the `number` `JSON.parse` gives (`numberOfTreeValue`;
-a custom converter gets its whole subtree with doubles), so a `double` member of the same contract still
-reads `1.5`.
+The int64 converter rejects a `JsonNonIntegerNumber` (it has no integer token), and so does an int tag. The
+other converters of an exact tree read a leaf as the `number` `JSON.parse` gives (`numberOfTreeValue`; a
+custom converter and an `object` slot get their whole subtree with doubles, `treeWithDoubles`), so a `double`
+member of the same contract still reads `1.5` and a `decimal` reads a short fraction from its double, as in
+a decimal-only spec.
 
 ## Numbers from strings (009 FR-048 item 4)
 

@@ -826,13 +826,23 @@ order.total.toFixed(); // "12345678901234567890.123456789"
   integer anywhere in its closure reads `JSON.parse(text)`, at the same cost as
   before. A spec with a `decimal` reads `JSON.parse(text)` too unless the text
   may hold a number of more than 15 digits, which only the runtime's tokenizer
-  keeps exactly; a spec with a 64-bit integer also takes the tokenizer when the
-  text may hold a number with a fraction or an exponent (a digit followed by
-  `.`, `e` or `E`, strings included). On a
-  10 MB `Order[]` (`bun run bench:json`, Node 24.11 / Bun 1.4.2), prices of two
-  decimal places read in 123.5 / 83.9 ms against 114.7 / 78.1 ms through
-  `JSON.parse` + `deserialize`; prices of 20 or more significant digits read
-  exactly in 237.9 / 139.4 ms, against 124.0 / 84.1 ms for the inexact tree.
+  keeps exactly. On a 10 MB `Order[]` (`bun run bench:json`, Node 24.11 /
+  Bun 1.4.2), prices of two decimal places read in 123.5 / 83.9 ms against
+  114.7 / 78.1 ms through `JSON.parse` + `deserialize`; prices of 20 or more
+  significant digits read exactly in 237.9 / 139.4 ms, against 124.0 / 84.1 ms
+  for the inexact tree.
+- **A 64-bit integer costs more.** A spec with a `long` / `ulong` anywhere in
+  its closure takes the tokenizer whenever the text may hold a number with a
+  fraction or an exponent — a digit followed by `.`, `e` or `E` anywhere,
+  strings included (`"v1.0"`, a GUID's `"3e4f…"`) — so in practice for most
+  payloads that also carry a `double`, a `decimal` or such strings. Only a
+  text of integers and plain strings keeps `JSON.parse`. On a 5.8 MB array of
+  `{ id: long, x, y, z, w: double }` (77 800 items, Node 24.11 / Bun 1.4.2),
+  `deserializeText` takes 72–82 / 41–42 ms, against 37–38 / 22–23 ms for the
+  same payload read through a spec whose `id` is not 64-bit (about 2x Node,
+  1.9x Bun). Nearly all of the difference is the tokenizer itself, which is
+  slower than the engine's `JSON.parse`; marking a short fraction (`1.5`) as
+  non-integer costs one small object and no copy of its text.
 - **Invalid text** throws `JsonException` with .NET's reader message (`'}' is
   an invalid start of a value.`, `Expected depth to be zero at the end of the
   JSON payload. …`), not the engine's `SyntaxError`. The runtime accepts what
@@ -842,6 +852,15 @@ order.total.toFixed(); // "12345678901234567890.123456789"
 - **Depth.** The limit of 64 counts the containers the contract reads, whichever
   path read the text ([Errors and limits](#errors-and-limits)). The tokenizer
   itself stops at 1 000 levels, short of the stack, where `JSON.parse` reads on.
+  Which one reads the text depends on its numbers, so the same deeply nested
+  payload can read or throw: a value deeper than 1 000 levels in an `object`
+  slot (which the contract does not count) reads through `JSON.parse`, but
+  throws `The JSON text nests containers deeper than 1000 levels…` once the
+  text also holds `1.0` anywhere (even in a string) and the spec has a 64-bit
+  integer — or a number of 16+ digits and the spec has a `decimal`. .NET
+  rejects both at its default `MaxDepth` of 64; the two runtime paths are left
+  apart (bounding `JSON.parse` would cost every read a walk) and documented
+  here instead.
 
 ## 64-bit numbers
 
