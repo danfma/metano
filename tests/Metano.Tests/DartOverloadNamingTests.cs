@@ -12,6 +12,11 @@ namespace Metano.Tests;
 /// </summary>
 public class DartOverloadNamingTests
 {
+    private const string ReorderMessage =
+        "Named arguments out of parameter order with more than one evaluation that C# runs in "
+        + "written order are not supported by this target: the call passes them in parameter "
+        + "order, so they are evaluated in that order (spec 013 FR-017).";
+
     [Test]
     public async Task ConstructorOverloads_BecomeNamedConstructors_AndCallSitesSelectThem()
     {
@@ -89,7 +94,9 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(diagnostics).IsEmpty();
+        // The named arguments read a parameter and a member: two order-sensitive
+        // evaluations the redirect passes in parameter order (conservative).
+        await Assert.That(diagnostics.Single().Message).IsEqualTo(ReorderMessage);
 
         await AssertFile(
             files,
@@ -439,6 +446,46 @@ public class DartOverloadNamingTests
 
         await AssertFile(
             files,
+            "pair.dart",
+            """
+            class Pair {
+              Pair.fromAB(int a, int b) {
+                this.v = a * 10 + b;
+              }
+
+              Pair.fromS(String s) {
+                this.v = s.length;
+              }
+
+              late int v;
+
+              double scaleDN(double d, int n) => d * n;
+
+              double scaleS(String s) => 0;
+
+              int twoAB(int a, int b) => a * 10 + b;
+
+              int twoS(String s) => 0;
+            }
+
+            """
+        );
+
+        await AssertFile(
+            files,
+            "holder.dart",
+            """
+            import 'pair.dart';
+
+            class Holder {
+              Pair inner = Pair.fromAB(1, 2);
+            }
+
+            """
+        );
+
+        await AssertFile(
+            files,
             "use.dart",
             """
             import 'holder.dart';
@@ -477,10 +524,67 @@ public class DartOverloadNamingTests
         );
     }
 
-    private const string ReorderMessage =
-        "Named arguments out of parameter order with more than one evaluation that C# runs in "
-        + "written order are not supported for Dart: the call passes them in parameter order, so "
-        + "they are evaluated in that order (spec 013 FR-017, #591).";
+    /// <summary>
+    /// A <c>: this(...)</c> chain with reordered named arguments follows the
+    /// same rule as a call: one order-sensitive evaluation redirects inline,
+    /// two report <c>MS0001</c> at the initializer, and the redirect passes
+    /// them in parameter order.
+    /// </summary>
+    [Test]
+    public async Task ReorderedThisChainArguments_FollowTheOrderRule()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class C
+            {
+                public int V;
+
+                public static int An() => 1;
+
+                public static int Bn() => 2;
+
+                public C(int a, int b) => V = a * 10 + b;
+
+                public C(string s) : this(b: Bn(), a: An()) { }
+
+                public C(bool f) : this(b: Bn(), a: 7) { }
+            }
+            """
+        );
+
+        var unsupported = diagnostics.Single();
+
+        await Assert.That(unsupported.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        await Assert.That(unsupported.Message).IsEqualTo(ReorderMessage);
+
+        await Assert
+            .That(FirstLineOf(unsupported))
+            .IsEqualTo("public C(string s) : this(b: Bn(), a: An()) { }");
+
+        await AssertFile(
+            files,
+            "c.dart",
+            """
+            class C {
+              C.fromAB(int a, int b) {
+                this.v = a * 10 + b;
+              }
+
+              C.fromS(String s) : this.fromAB(C.an(), C.bn());
+
+              C.fromF(bool f) : this.fromAB(7, C.bn());
+
+              late int v;
+
+              static int an() => 1;
+
+              static int bn() => 2;
+            }
+
+            """
+        );
+    }
 
     /// <summary>
     /// A generic construction keeps its explicit type arguments before the

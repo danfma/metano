@@ -57,13 +57,13 @@ public sealed record IrExtractionContext(
     public bool EmitsOperatorFastPaths { get; init; }
 
     /// <summary>
-    /// Whether the target keeps C#'s evaluation order for a bound call whose
-    /// named arguments are out of parameter order
-    /// (<see cref="IR.IrSelectedOverload.EvaluationOrder"/>). Opt-in:
-    /// TypeScript binds such arguments in source order. A target that leaves
-    /// it unset passes them in parameter order, which cannot differ from C#
-    /// while at most one argument has an observable evaluation; with two or
-    /// more the extractor reports <c>MS0001</c> at the call (Dart, #591).
+    /// A target capability: whether the target keeps C#'s evaluation order
+    /// for a bound call or <c>: this(...)</c> chain whose named arguments are
+    /// out of parameter order (<see cref="IR.IrSelectedOverload.EvaluationOrder"/>),
+    /// binding them in source order. Opt-in. A target that leaves it unset
+    /// passes them in parameter order, which cannot differ from C# while at
+    /// most one evaluation is order-sensitive; with two or more the extractor
+    /// reports <c>MS0001</c> at the call.
     /// </summary>
     public bool KeepsArgumentEvaluationOrder { get; init; }
 
