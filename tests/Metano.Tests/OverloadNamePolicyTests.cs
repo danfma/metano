@@ -52,6 +52,37 @@ public class OverloadNamePolicyTests
         await Assert.That(byType).IsEqualTo("Default / Int32 / String");
     }
 
+    /// <summary>
+    /// FR-005: a <c>[Name]</c> pins its overload's suffix in every pass — the
+    /// others are named by the normal rules, and a collision with the pin
+    /// moves them, never the pin.
+    /// </summary>
+    [Test]
+    public async Task NamePin_ReplacesTheSuffix_InEveryPass()
+    {
+        var byName = SuffixesOf(
+            """
+            public int Add(int width, int height) => 0;
+            [Name("cents")]
+            public int Add(int value) => 0;
+            """,
+            "Add"
+        );
+
+        var byType = SuffixesOf(
+            """
+            public int Add(int x) => 0;
+            [Name("x")]
+            public int Add(string s) => 0;
+            public int Add(bool x) => 0;
+            """,
+            "Add"
+        );
+
+        await Assert.That(byName).IsEqualTo("WidthHeight / Cents");
+        await Assert.That(byType).IsEqualTo("Int32 / X / Boolean");
+    }
+
     [Test]
     public async Task PrimitiveSpellings_AreTheExactClrNames()
     {

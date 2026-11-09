@@ -242,7 +242,7 @@ public static class IrToTsModuleBridge
 
         body.Add(
             IrToTsOverloadDispatcherBridge.NoMatchingOverload(
-                IrToTsNamingPolicy.ToFunctionName(sorted[0].Name, sorted[0].Attributes)
+                IrToTsNamingPolicy.ToFunctionName(sorted[0])
             )
         );
 
@@ -286,7 +286,7 @@ public static class IrToTsModuleBridge
         string? emittedName = null
     )
     {
-        var name = emittedName ?? IrToTsNamingPolicy.ToFunctionName(fn.Name, fn.Attributes);
+        var name = emittedName ?? IrToTsNamingPolicy.ToFunctionName(fn);
 
         if (IrToTsObjectArgsBridge.HasObjectArgs(fn.Attributes))
             return ConvertObjectArgsFunction(fn, name, bclRegistry);

@@ -163,6 +163,32 @@ public static class IrToTsNamingPolicy
     }
 
     /// <summary>
+    /// The name a module function declares: a dispatched group's dispatcher
+    /// keeps the camelCased C# name, which its fast paths extend — a
+    /// <c>[Name]</c> on one of its overloads pins that overload's suffix
+    /// (spec 013 FR-005) —; a single function takes
+    /// <see cref="ToFunctionName(string, IReadOnlyList{IrAttribute})"/>.
+    /// </summary>
+    public static string ToFunctionName(IrModuleFunction function) =>
+        ToGroupFunctionName(function.Name, function.Attributes, function.OverloadName);
+
+    /// <summary>
+    /// <see cref="ToFunctionName(IrModuleFunction)"/> for a static method a
+    /// companion namespace declares as a function.
+    /// </summary>
+    public static string ToFunctionName(IrMethodDeclaration method) =>
+        ToGroupFunctionName(method.Name, method.Attributes, method.OverloadName);
+
+    private static string ToGroupFunctionName(
+        string name,
+        IReadOnlyList<IrAttribute>? attributes,
+        IrOverloadName? overloadName
+    ) =>
+        overloadName is not null
+            ? TypeScriptNaming.ToCamelCase(name)
+            : ToFunctionName(name, attributes);
+
+    /// <summary>
     /// Class method name: honors <c>[Name]</c> verbatim when present,
     /// otherwise camelCases the IR name <em>without</em> reserved-word
     /// escaping (a method called <c>Delete</c> becomes <c>delete()</c>, not

@@ -363,7 +363,7 @@ public sealed class TsModuleFunctionClaims
         }
 
         private static string FunctionNameOf(IMethodSymbol method) =>
-            SymbolHelper.GetNameOverride(method, TargetLanguage.TypeScript)
+            method.GetMethodNameOverride(TargetLanguage.TypeScript)
             ?? TypeScriptNaming.ToCamelCase(method.Name);
 
         /// <summary>

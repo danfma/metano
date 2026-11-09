@@ -128,8 +128,9 @@ internal sealed class TsClassMemberTable
 
     /// <summary>
     /// The name a method declares: a dispatched group's dispatcher keeps the
-    /// camelCased C# name, which its fast paths extend; a single method takes
-    /// its own naming policy.
+    /// camelCased C# name, which its fast paths extend — a <c>[Name]</c> on
+    /// one of its overloads pins that overload's suffix (spec 013 FR-005) —;
+    /// a single method takes its own naming policy.
     /// </summary>
     public static string MethodNameOf(IrMethodDeclaration method) =>
         method.OverloadName is not null
@@ -137,12 +138,14 @@ internal sealed class TsClassMemberTable
             : IrToTsNamingPolicy.ToMethodName(method);
 
     /// <summary>
-    /// The name an operator lowers to (<c>add</c>, <c>negate</c>): its
-    /// <c>[Name]</c> override, else the name of its operator kind; <c>null</c>
-    /// when the kind has none.
+    /// The name an operator lowers to (<c>add</c>, <c>negate</c>): a single
+    /// operator's <c>[Name]</c> override, else the name of its operator kind;
+    /// <c>null</c> when the kind has none. An overloaded operator group keeps
+    /// the kind's name, which its fast paths extend: a <c>[Name]</c> on one of
+    /// its overloads pins that overload's suffix (spec 013 FR-005).
     /// </summary>
     public static string? OperatorNameOf(IrMethodDeclaration op) =>
-        IrToTsNamingPolicy.FindNameOverride(op.Attributes)
+        (op.OverloadName is null ? IrToTsNamingPolicy.FindNameOverride(op.Attributes) : null)
         ?? (
             op.Semantics.OperatorKind is { } kind
                 ? IrToTsClassBridge.MapOperatorKindToName(kind)

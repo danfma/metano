@@ -35,9 +35,13 @@ internal sealed record OverloadParameter(string Name, IrNamingSpelling Spelling)
 /// C# tells conversions apart by (<c>explicit operator int(Money m)</c> /
 /// <c>explicit operator long(Money m)</c> → <c>MoneyToInt32</c> /
 /// <c>MoneyToInt64</c>); <c>null</c> for any other overload.</param>
+/// <param name="PinnedSuffix">The suffix a <c>[Name]</c> pins on the overload
+/// (spec 013 FR-005, contracts/naming.md § Stage 1, step 7), already
+/// capitalized; <c>null</c> when the overload's suffix is computed.</param>
 internal sealed record OverloadSignature(
     IReadOnlyList<OverloadParameter> Parameters,
-    IrNamingSpelling? ConversionTarget = null
+    IrNamingSpelling? ConversionTarget = null,
+    string? PinnedSuffix = null
 );
 
 /// <summary>
@@ -69,6 +73,9 @@ internal sealed record OverloadSuffixes(
 ///   <item>A set that can climb no further keeps positional markers
 ///   (<c>$1</c>, <c>$2</c>) in declaration order.</item>
 /// </list>
+/// An overload whose suffix a <c>[Name]</c> pins keeps it in every pass: it
+/// takes part in the distinctness checks but never climbs, so two equal pins,
+/// or a pin equal to a spelling that cannot climb, are a dead end (FR-005).
 /// A pure function of its input: the same group always gets the same suffixes.
 /// The targets claim the names derived from the suffixes (DECIDED-18).
 /// </summary>
@@ -88,7 +95,9 @@ internal static class OverloadNamePolicy
         if (kind != OverloadGroupKind.Operator)
         {
             var byParameterName = participating
-                .Select(overload => ParameterNameSuffix(overload.Parameters))
+                .Select(overload =>
+                    overload.PinnedSuffix ?? ParameterNameSuffix(overload.Parameters)
+                )
                 .ToList();
 
             if (AreDistinct(byParameterName))
@@ -140,11 +149,15 @@ internal static class OverloadNamePolicy
             : string.Concat(parameters.Select(parameter => NamingText.Capitalize(parameter.Name)));
 
     /// <summary>
-    /// The overload's type spelling parts: its parameters' parts (or
-    /// <c>Default</c>), then <c>To</c> and a conversion's target type.
+    /// The overload's type spelling parts: its pinned suffix as one part that
+    /// never climbs, else its parameters' parts (or <c>Default</c>), then
+    /// <c>To</c> and a conversion's target type.
     /// </summary>
     private static IReadOnlyList<IrNamingComponent> SpellingComponents(OverloadSignature overload)
     {
+        if (overload.PinnedSuffix is { } pinned)
+            return [new IrNamingComponent(pinned, [])];
+
         IReadOnlyList<IrNamingComponent> parameterParts =
             overload.Parameters.Count == 0
                 ? [new IrNamingComponent(ParameterlessSuffix, [])]

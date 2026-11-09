@@ -109,7 +109,8 @@ internal static class MethodOverloadGroups
     /// <summary>
     /// The suffix of each member of <paramref name="group"/>, declared by
     /// <paramref name="type"/> (FR-001, FR-025): an anchored member's is its
-    /// root's; the others are named over the visible group.
+    /// root's — the root's <c>[Name]</c> wins, the member's own is ignored
+    /// (FR-005) —; the others are named over the visible group.
     /// </summary>
     public static IReadOnlyDictionary<IMethodSymbol, string> SuffixesOf(
         INamedTypeSymbol type,
@@ -121,8 +122,13 @@ internal static class MethodOverloadGroups
 
         foreach (var member in group.Members)
         {
-            if (member.Anchor is { } anchor)
-                suffixes[member.Symbol] = RootSuffixOf(anchor.Root, target);
+            if (member.Anchor is not { } anchor)
+                continue;
+
+            var rootSuffix = RootSuffixOf(anchor.Root, target);
+
+            suffixes[member.Symbol] = rootSuffix;
+            OverloadGroupNaming.ReportIgnoredPin(member.Symbol, anchor.Root, rootSuffix, target);
         }
 
         var own = group.Members.Where(member => member.Anchor is null).ToList();
@@ -134,7 +140,7 @@ internal static class MethodOverloadGroups
             .Concat(group.Members.Select(member => member.Symbol))
             .ToList();
 
-        var computed = OverloadGroupNaming.SuffixesOf(visible);
+        var computed = OverloadGroupNaming.SuffixesOf(visible, target);
         var offset = visible.Count - group.Members.Count;
 
         for (var i = 0; i < group.Members.Count; i++)
@@ -471,7 +477,7 @@ internal static class MethodOverloadGroups
         {
             var members = InterfaceOverloadGroup.Of(type, definition.Name, target);
 
-            return OverloadGroupNaming.SuffixesOf(members)[members.IndexOf(definition)];
+            return OverloadGroupNaming.SuffixesOf(members, target)[members.IndexOf(definition)];
         }
 
         var group =

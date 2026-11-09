@@ -2142,7 +2142,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     )
     {
         var functionNames = functions
-            .Select(fn => IrToTsNamingPolicy.ToFunctionName(fn.Name, fn.Attributes))
+            .Select(IrToTsNamingPolicy.ToFunctionName)
             .ToHashSet(StringComparer.Ordinal);
         var collisions = variables
             .Where(variable =>
@@ -2862,7 +2862,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     private static string ResolveNoContainerFunctionName(IMethodSymbol member) =>
-        SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+        member.GetMethodNameOverride(TargetLanguage.TypeScript)
         ?? TypeScriptNaming.ToCamelCase(member.Name);
 
     /// <summary>

@@ -99,7 +99,7 @@ public static class IrToTsInterfaceBridge
 
     private static TsInterfaceMethod ConvertMethod(IrMethodDeclaration method)
     {
-        var name = IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes);
+        var name = TsClassMemberTable.MethodNameOf(method);
         var returnType = IrToTsTypeMapper.Map(method.ReturnType);
         var parameters = method
             .Parameters.Select(p => new TsParameter(

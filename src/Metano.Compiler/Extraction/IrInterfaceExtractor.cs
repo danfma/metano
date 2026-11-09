@@ -101,7 +101,7 @@ public static class IrInterfaceExtractor
         if (group.Count < 2 || ordinal < 0)
             return declaration;
 
-        var suffixes = GroupSuffixesOf(method.Name, group, groupSuffixes);
+        var suffixes = GroupSuffixesOf(method.Name, group, target, groupSuffixes);
 
         var named = OverloadGroupNaming.Apply([(method, declaration)], _ => suffixes[ordinal])[
             method
@@ -120,13 +120,14 @@ public static class IrInterfaceExtractor
     private static IReadOnlyList<string> GroupSuffixesOf(
         string name,
         IReadOnlyList<IMethodSymbol> group,
+        Metano.Annotations.TargetLanguage? target,
         Dictionary<string, IReadOnlyList<string>> groupSuffixes
     )
     {
         if (groupSuffixes.TryGetValue(name, out var cached))
             return cached;
 
-        var suffixes = OverloadGroupNaming.SuffixesOf(group);
+        var suffixes = OverloadGroupNaming.SuffixesOf(group, target);
 
         groupSuffixes[name] = suffixes;
 
