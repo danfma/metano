@@ -424,10 +424,12 @@ public class OverloadCallMethodSiteGoldenTests
     }
 
     /// <summary>
-    /// The MS0067 shadow report travels the extension-container path too: a
-    /// fast path whose candidate name a sibling type's dispatcher took is
-    /// renamed with a warning at the member, and the module emits the
-    /// renamed function (spec 013 FR-032).
+    /// The MS0067 shadow report travels the extension-container path too:
+    /// <c>Mixed</c> keeps its namespace and joins the barrel only through
+    /// its classic extension, yet a fast path of its plain statics whose
+    /// candidate name a sibling type's dispatcher took is renamed with a
+    /// warning at the member, and the module emits the renamed function
+    /// (spec 013 FR-032).
     /// </summary>
     [Test]
     public async Task ExtensionContainer_FastPathClash_ReportsTheShadowAndRenames()
@@ -440,9 +442,11 @@ public class OverloadCallMethodSiteGoldenTests
                 public static int FoldX(int x) => x;
             }
 
-            [Transpile, NoContainer]
+            [Transpile]
             public static class Mixed
             {
+                public static int Twice(this int x) => x * 2;
+
                 public static int Fold(int x) => x + 1;
 
                 public static int Fold(string s) => s.Length + 1;
@@ -590,6 +594,206 @@ public class OverloadCallMethodSiteGoldenTests
 
         await Assert.That(outputs).DoesNotContain("quxX$");
         await Assert.That(result["real.ts"]).Contains("export function quxX(");
+    }
+
+    /// <summary>
+    /// An <c>[Import]</c> facade emits no function, yet every call to it
+    /// binds its local name — <c>import { fooX } from "ext-lib"</c> — in
+    /// the caller's file, so the barrel reserves that name before any fast
+    /// path claims it: <c>Foo(int x)</c> and, across classes,
+    /// <c>Qux(int x)</c> move to <c>fooX$</c> and <c>quxX$</c> with MS0067,
+    /// and the external import survives beside them. An <c>[Emit]</c>
+    /// template or an <c>[Ignore]</c>d member binds nothing, so the
+    /// <c>barX</c> and <c>bazX</c> fast paths keep their clean names (spec
+    /// 013 FR-032).
+    /// </summary>
+    [Test]
+    public async Task ImportFacade_ReservesItsLocalName_BeforeTheFastPaths()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            [NoContainer]
+            public static class Res
+            {
+                [Import("fooX", "ext-lib")]
+                public static int FooX(int x) => x;
+
+                [Emit("($0 + 1)")]
+                public static int BarX(int x) => x;
+
+                [Ignore]
+                public static int BazX(int x) => x;
+
+                public static int Foo(int x) => x;
+
+                public static int Foo(string s) => 0;
+
+                public static int Bar(int x) => x;
+
+                public static int Bar(string s) => 0;
+
+                public static int Baz(int x) => x;
+
+                public static int Baz(string s) => 0;
+            }
+
+            [NoContainer]
+            public static class Ext
+            {
+                [Import("quxX", "ext-lib")]
+                public static int QuxX(int x) => x;
+            }
+
+            [NoContainer]
+            public static class Q
+            {
+                public static int Qux(int x) => x;
+
+                public static int Qux(string s) => 0;
+            }
+
+            public class Use
+            {
+                public int Go() =>
+                    Res.FooX(1) + Res.BarX(2) + Res.Foo(1) + Res.Foo("a") + Res.Bar(1)
+                    + Res.Bar("b") + Res.Baz(1) + Res.Baz("c") + Ext.QuxX(5) + Q.Qux(1)
+                    + Q.Qux("z");
+            }
+            """
+        );
+
+        var shadows = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
+            .Select(diagnostic => diagnostic.Message)
+            .ToList();
+
+        await Assert.That(shadows.Count).IsEqualTo(2);
+        await Assert.That(shadows[0]).Contains("'Res.fooX' of 'Foo(int x)'");
+        await Assert.That(shadows[1]).Contains("'Q.quxX' of 'Qux(int x)'");
+
+        await Assert.That(result["res.ts"]).Contains("export function fooX$(x: number)");
+        await Assert.That(result["res.ts"]).Contains("export function barX(x: number)");
+        await Assert.That(result["res.ts"]).Contains("export function bazX(x: number)");
+        await Assert.That(result["q.ts"]).Contains("export function quxX$(x: number)");
+        await Assert
+            .That(result["use.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved.ts"));
+    }
+
+    /// <summary>
+    /// The name an <c>[Import]</c> facade reserves is the one it binds, not
+    /// the one it imports: <c>[Import("other")] OtherX</c> binds
+    /// <c>otherX</c> (<c>import { other as otherX }</c>), so the
+    /// <c>Other(int x)</c> fast path moves to <c>otherX$</c>, while
+    /// <c>[Import("otherS")] Thing</c> binds <c>thing</c> and leaves the
+    /// <c>otherS</c> fast path alone. Under an <c>[Emit]</c> template the
+    /// template spells the imported name itself, so <c>fooY</c> is reserved
+    /// and the <c>Foo(int y)</c> fast path moves to <c>fooY$</c> (spec 013
+    /// FR-032).
+    /// </summary>
+    [Test]
+    public async Task ImportFacade_ReservesTheBoundAlias_NotTheImportedName()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            [NoContainer]
+            public static class Res
+            {
+                [Import("other", "ext-lib")]
+                public static int OtherX(int x) => x;
+
+                [Import("otherS", "ext-lib")]
+                public static int Thing(string s) => 0;
+
+                [Emit("fooY($0)"), Import("fooY", "ext-lib")]
+                public static int Templ(int y) => y;
+
+                public static int Other(int x) => x;
+
+                public static int Other(string s) => 0;
+
+                public static int Foo(int y) => y;
+
+                public static int Foo(string s) => 0;
+            }
+
+            public class Use
+            {
+                public int Go() =>
+                    Res.OtherX(1) + Res.Thing("t") + Res.Templ(2) + Res.Other(1) + Res.Other("a")
+                    + Res.Foo(3) + Res.Foo("b");
+            }
+            """
+        );
+
+        var shadows = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
+            .Select(diagnostic => diagnostic.Message)
+            .ToList();
+
+        await Assert.That(shadows.Count).IsEqualTo(2);
+        await Assert.That(shadows[0]).Contains("'Res.otherX' of 'Other(int x)'");
+        await Assert.That(shadows[1]).Contains("'Res.fooY' of 'Foo(int y)'");
+
+        await Assert.That(result["res.ts"]).Contains("export function otherX$(x: number)");
+        await Assert.That(result["res.ts"]).Contains("export function otherS(s: string)");
+        await Assert.That(result["res.ts"]).Contains("export function fooY$(y: number)");
+        await Assert
+            .That(result["use.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias.ts"));
+    }
+
+    /// <summary>
+    /// A <c>[NoContainer]</c> class holding a C# 14 <c>extension(...)</c>
+    /// block still exports the block's members through the extension-helper
+    /// registry: the lifted static view of a block member is no module
+    /// function of its own (the block emits it), and the registry resolves
+    /// the block members off the block's synthetic type, so a caller in
+    /// another file imports <c>twice</c> and <c>size$get</c> from the
+    /// host's module (spec 013 FR-032).
+    /// </summary>
+    [Test]
+    public async Task NoContainerExtensionBlock_ResolvesImportsThroughTheHelperRegistry()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            [NoContainer]
+            public static class BlockHost
+            {
+                extension(string s)
+                {
+                    public int Twice() => s.Length * 2;
+
+                    public int Size => s.Length;
+                }
+
+                public static int Plain(int x) => x;
+
+                public static int Plain(string x) => 0;
+            }
+
+            public class UseBlock
+            {
+                public int Go() => "x".Twice() + "x".Size + BlockHost.Plain(1) + BlockHost.Plain("y");
+            }
+            """
+        );
+
+        await Assert
+            .That(result["use-block.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("module-extension-block-imports.ts"));
     }
 
     /// <summary>
