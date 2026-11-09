@@ -323,8 +323,13 @@ descriptor) and IR declarations through `IrToTsNamingPolicy.FindMemberNameOverri
 shared `TsDispatcherShape`. `ExplicitImplementationLowering.EmittedName` keeps the plain
 `GetNameOverride`: it runs inside the grouping itself (`MethodOverloadGroups.DeclaredMethods`), so
 the group rule would recurse, and it compares explicit implementations by the interface member's
-name. `[JsonFactory]` on an overloaded method stays `MS0034`, so no descriptor names a pinned fast
-path. Before 013f, `[Name]` was ignored on class method overloads, renamed a whole overloaded
+name. `[JsonFactory]` on a method of a dispatched group is `MS0034` (the dispatcher is shared with its
+siblings), so no descriptor names a pinned fast path; a `[JsonFactory] From(string)` next to a
+`[Name("num")] From(int)` was accepted before 013f (descriptor `create: UserId.from`, the
+dispatcher) and is now an `MS0034` error: a build break for the 013g migration notes.
+`IrParameterNaming` passes no target, so for Dart a flattened `[NoContainer]` callee that is an
+overload with `[Name]` no longer gets the `$` rename of a parameter that shadows it (Dart renames
+the whole member and its call sites ignore `[Name]`): a 013g item, with the Dart pins. Before 013f, `[Name]` was ignored on class method overloads, renamed a whole overloaded
 operator group after its first overload (`__op…`), gave an interface overload a dispatcher
 signature of its own (`side(s)` beside `area(w, h)`), and renamed a module overload's fast-path
 base (`textS` beside the dispatcher `twice`); no existing golden pinned any of these, so none
