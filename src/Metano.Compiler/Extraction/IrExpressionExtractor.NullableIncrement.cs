@@ -63,8 +63,8 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The step <c>1</c> in the operand's numeric representation: a
     /// <c>BigInteger</c> is a <c>bigint</c>, which JS does not mix with a
-    /// <c>number</c>, and so is a 64-bit integer under the exact lowering
-    /// (a <c>1n</c> literal of its kind).
+    /// <c>number</c>, and so is a 64-bit integer (a <c>1n</c> literal of its
+    /// kind).
     /// </summary>
     private IrExpression OneOf(ExpressionSyntax operand)
     {

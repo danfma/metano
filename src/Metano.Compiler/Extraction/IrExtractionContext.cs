@@ -61,7 +61,14 @@ public sealed record IrExtractionContext(
     /// alone. It names no local, so it needs no local naming, and it drops
     /// the target and the compilation as defaults always have: a constant
     /// needs neither a target-specific rewrite (the Temporal comparisons) nor
-    /// a second semantic model.
+    /// a second semantic model. The target capabilities
+    /// (<see cref="EmitsConstructorSelectors"/>,
+    /// <see cref="EmitsOperatorFastPaths"/>,
+    /// <see cref="KeepsArgumentEvaluationOrder"/>) are dropped on purpose:
+    /// each one binds a constructor call, a user-defined operator or a call
+    /// with named arguments, and a C# default value is a constant,
+    /// <c>default</c> or a parameterless struct construction, which holds
+    /// none of them.
     /// </summary>
     public IrExtractionContext ForConstantDefault() => new(OriginResolver);
 

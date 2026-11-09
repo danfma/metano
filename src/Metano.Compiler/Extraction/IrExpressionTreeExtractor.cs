@@ -798,8 +798,8 @@ internal sealed partial class IrExpressionTreeExtractor
     /// <c>1</c> binding to a <c>long</c> parameter) keep the actual
     /// expression type the provider sees, falling back to the static
     /// <c>Type</c> when no conversion is in play. A conversion across a
-    /// 64-bit integer is a <see cref="IrExprConvert"/> node of its own under
-    /// the exact 64-bit lowering, so the operand keeps its own type there.
+    /// 64-bit integer is a <see cref="IrExprConvert"/> node of its own, so the
+    /// operand keeps its own type there.
     /// </summary>
     private IrTypeRef? MapType(ExpressionSyntax expr)
     {

@@ -424,7 +424,7 @@ public static class DiagnosticCodes
     /// reach the catch-all one (ambiguous runtime dispatch). C# ranks such sets at
     /// compile time, sometimes cyclically, so no dispatch order matches it; static
     /// call-site dispatch (#25) will. A warning at the catch-all overload (#440). Also
-    /// reported, in the staging BigInt mode, once per group of overloads that differ only
+    /// reported once per group of overloads that differ only
     /// among 64-bit integers and branded 64-bit wrappers when the group holds a branded
     /// member: its <c>typeof === "bigint"</c> arm cannot be told apart from the
     /// <c>long</c> / <c>ulong</c> / <c>BigInteger</c> arms by a call that reaches the

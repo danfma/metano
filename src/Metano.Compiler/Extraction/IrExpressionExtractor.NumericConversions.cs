@@ -92,7 +92,7 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The endpoints of the implicit conversion Roslyn reports for
-    /// <paramref name="expression"/>, when the exact lowering makes it
+    /// <paramref name="expression"/>, when the 64-bit lowering makes it
     /// explicit; <c>null</c> for no conversion, a non-numeric one, one that
     /// needs no node, or an exact relational operand (FR-069).
     /// </summary>
