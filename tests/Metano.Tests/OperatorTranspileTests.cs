@@ -148,4 +148,33 @@ public class OperatorTranspileTests
         await Assert.That(output).Contains("static __subtract(");
         await Assert.That(output).Contains("$subtract(): Vec2");
     }
+
+    /// <summary>
+    /// Operator overloads that differ in return type share one dispatcher,
+    /// whose implementation signature cannot name either: it erases the
+    /// return type, as a method dispatcher does, and the overload signatures
+    /// keep the precise ones.
+    /// </summary>
+    [Test]
+    public async Task OperatorOverloads_WithDifferentReturnTypes_EraseTheImplementationReturn()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Meter
+            {
+                public static int operator +(Meter m, int i) => i;
+
+                public static long operator +(Meter m, long l) => l;
+            }
+            """
+        );
+
+        var output = result["meter.ts"];
+
+        await Assert.That(output).Contains("static __add(m: Meter, i: number): number;");
+        await Assert.That(output).Contains("static __add(m: Meter, l: bigint): bigint;");
+        await Assert.That(output).Contains("static __add(...args: unknown[]): any {");
+        await Assert.That(output).Contains("$add(...args: unknown[]): any {");
+    }
 }
