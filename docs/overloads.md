@@ -27,7 +27,7 @@ public class Dimension
 
     public Dimension(int size) => Size = size;
 
-    private Dimension(int width, int height)
+    public Dimension(int width, int height)
     {
         Width = width;
         Height = height;
@@ -41,31 +41,62 @@ public class Dimension
 }
 ```
 
+The generated TypeScript, verbatim except for the two runtime-dispatch bodies:
+
 ```ts
+import { isInt32 } from "metano-runtime";
+
 export class Dimension {
   protected static readonly byDimensionSize: unique symbol = Symbol("Dimension(int size)");
+
   protected static readonly byDimensionWidthHeight: unique symbol = Symbol("Dimension(int width, int height)");
+
+  size: number = 0;
+
+  width: number = 0;
+
+  height: number = 0;
 
   constructor(overload: typeof Dimension.byDimensionSize, size: number);
   constructor(overload: typeof Dimension.byDimensionWidthHeight, width: number, height: number);
   constructor(width: number, height: number);
   constructor(size: number);
-  constructor(...args: unknown[]) { /* selector branches first, then the runtime fallback */ }
-
-  static fromSize(size: number): Dimension { /* … */ }
-  private static fromWidthHeight(width: number, height: number): Dimension { /* … */ }
-
-  static square(side: number): Dimension {
-    return Dimension.fromWidthHeight(side, side); // the overload C# selected
+  constructor(...args: unknown[]) {
+    // the guarded selector branches, then the runtime arity-and-type fallback
   }
 
-  addX(x: number): number { /* … */ }
-  addXY(x: number, y: number): number { /* … */ }
-  add(x: number): number;
+  static fromSize(size: number): Dimension {
+    return new Dimension(Dimension.byDimensionSize, size);
+  }
+
+  static fromWidthHeight(width: number, height: number): Dimension {
+    return new Dimension(Dimension.byDimensionWidthHeight, width, height);
+  }
+
+  static square(side: number): Dimension {
+    return Dimension.fromWidthHeight(side, side);
+  }
+
+  addXY(x: number, y: number): number {
+    return this.size + x + y;
+  }
+
+  addX(x: number): number {
+    return this.size + x;
+  }
+
   add(x: number, y: number): number;
-  add(...args: unknown[]): number { /* runtime dispatcher, calls addX / addXY */ }
+  add(x: number): number;
+  add(...args: unknown[]): number {
+    // the runtime dispatcher: calls this.addXY or this.addX by arity and type
+  }
 }
 ```
+
+A non-public overload keeps its accessibility on its factory or fast path
+(`private static fromWidthHeight`, a `/** @internal */` tag for `internal`); the
+constructor itself takes the most permissive accessibility of the set (`MS0060`
+when they differ).
 
 | C# | TypeScript |
 |---|---|
@@ -223,10 +254,29 @@ member namespace per class:
 | `Add(int x)` / `Add(int x, int y)` | `addX(…)` / `addXY(…)`, no dispatcher (Dart has no overloading) |
 | `new Dimension(3)`, `d.Add(1)`, `base.Add(1)` | `Dimension.fromSize(3)`, `d.addX(1)`, `super.addX(1)` |
 | an overloaded operator group | one `operator` declaration (the primary) and an `MS0001` warning |
+| `new T(b: F(), a: G())` | the arguments bound in source order before the call, so `G()` still runs after `F()` |
+| `new Box<object>(5)` | `Box<Object>.fromValue(5)` |
 
-Because a Dart class shares one namespace between constructors, statics and
-instance members, the two targets can claim the same overload differently
-(`fromCents$` in Dart where TypeScript keeps `fromCents`).
+Dart claims in one table per class, where a named constructor conflicts with
+another named constructor or a static member but not with an instance member,
+and every other member conflicts with any member of its name. TypeScript keeps
+separate static and instance tables, so the two targets can claim the same
+overload differently: an instance fast path `addX` beside a user static
+`AddX()` takes `$` in Dart only.
+
+Limitations of the experimental Dart target:
+
+- a derived class's constructor emits no `super(...)` initializer, so it never
+  selects a base named constructor (and a base with only named constructors
+  does not compile as a superclass yet);
+- a `: this(...)` chain whose constructor also has a body keeps the body
+  without the chain (`MS0001` at the constructor): Dart redirecting
+  constructors have no body;
+- an overloaded operator group keeps only its primary operator (`MS0001`);
+- the overloads of a `[PlainObject]` or branded type keep only the primary
+  member (`MS0001`), declared under the name its call sites spell;
+- a containerless module's fast paths are claimed per file, not across the
+  files a consumer imports together.
 
 ## Migrating from 2.x
 

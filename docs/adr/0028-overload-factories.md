@@ -1,6 +1,6 @@
 # ADR-0028 — Overload factories, selector symbols and direct call sites
 
-**Status:** Proposed (spec [013-overload-factories](../../specs/013-overload-factories/spec.md); implementation starts after #445)
+**Status:** Accepted — implemented by spec [013-overload-factories](../../specs/013-overload-factories/spec.md), slices 013a–013g
 **Date:** 2026-11-04
 **Supersedes (in part):** [ADR-0008](0008-overload-dispatch.md)
 
@@ -52,6 +52,20 @@ runtime-comparable, type-level-distinct, subclass-visible name for one construct
   factories target the factory, the selector or the fast path, when the declaring type's IR is
   available (source or project reference).
 - **The dispatcher stays public** as the hand-written fallback.
+- **Dart maps the same candidates natively.** A dispatched constructor set becomes one named
+  constructor per overload (`Dimension.fromSize`, no selectors; a `: this(...)` chain redirects),
+  a method, interface or module-function group one fast path per overload with no dispatcher
+  (Dart has no overloading), claimed in one table per class where a named constructor conflicts
+  only with static members and other constructors. An overloaded operator group keeps one
+  `operator` declaration and reports `MS0001`.
+- **Targets declare what they emit; the core stays target-neutral.** The core binds a
+  construction to its overload when the target's `IrExtractionContext.EmitsConstructorSelectors`
+  port says the type is emitted with an addressable form per overload (TypeScript selectors and
+  factories, Dart named constructors), and an operator application when the target sets the
+  opt-in `EmitsOperatorFastPaths` (TypeScript only). Method, `base.M`, method-group and
+  module-function call sites bind on every target. Which shapes keep today's emission
+  (`[PlainObject]`, branded, `[External]`, `[JsCallable]`) is still decided by core lists; a port
+  for it is #549.
 
 ## Consequences
 
