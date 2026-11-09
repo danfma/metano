@@ -128,6 +128,7 @@ internal static class MethodOverloadGroups
             var rootSuffix = RootSuffixOf(anchor.Root, target);
 
             suffixes[member.Symbol] = rootSuffix;
+
             OverloadSuffixPin
                 .Of(member.Symbol, target)
                 ?.ReportIfIgnoredFor(anchor.Root, rootSuffix);

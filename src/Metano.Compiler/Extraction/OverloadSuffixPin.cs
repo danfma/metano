@@ -67,7 +67,9 @@ internal sealed partial class OverloadSuffixPin
     /// before 013g and renames the member as it always did.
     /// </summary>
     public static bool Applies(IMethodSymbol overload, TargetLanguage? target) =>
-        target != TargetLanguage.Dart && overload.MethodKind != MethodKind.Conversion;
+        // TODO(#549): the same target capability as the direct-call fast paths.
+        target != TargetLanguage.Dart
+        && overload.MethodKind != MethodKind.Conversion;
 
     /// <summary>
     /// An invalid value pins nothing: the overload keeps its generated suffix
