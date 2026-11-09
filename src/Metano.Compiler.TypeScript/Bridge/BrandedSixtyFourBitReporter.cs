@@ -8,9 +8,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Reports <c>MS0063</c> for each group of overloads a BigInt-mode dispatcher
 /// cannot tell apart because of a branded 64-bit type (see
 /// <see cref="BrandedSixtyFourBitOverloads"/>), once per group, at the first
-/// branded overload the type declares in the group (else its first declared one), naming all of them. A dispatcher
-/// that overrides an inherited one is judged over the inherited overloads
-/// plus the ones the type adds, since its own arms run before the base's.
+/// branded overload the type declares in the group (else its first declared
+/// one), naming all of them. A dispatcher that overrides an inherited one is
+/// judged over the inherited overloads plus the ones the type adds, since its
+/// own arms run before the base's.
 /// </summary>
 internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> reportDiagnostic)
 {
