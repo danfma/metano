@@ -119,7 +119,8 @@ public sealed class TypeScriptTransformContext(
         switch (member)
         {
             case IMethodSymbol method
-                when method.IsExtensionMethod && SymbolHelper.IsExportedModuleFunction(method):
+                when method.IsExtensionMethod
+                    && method.IsEmittedModuleFunction(TargetLanguage.TypeScript):
                 Register(
                     ResolveMethodHelperName(method),
                     method,

@@ -534,7 +534,7 @@ public class OverloadCallMethodSiteGoldenTests
 
         await Assert.That(shadows.Count).IsEqualTo(1);
         await Assert.That(shadows[0].Message).Contains("'Clash.getAllX'");
-        await Assert.That(shadows[0].Message).Contains("of 'GetAll'");
+        await Assert.That(shadows[0].Message).Contains("of 'GetAll(int x)'");
         await Assert.That(shadows[0].Location).IsNotNull();
 
         // The call sites call the claimed name of the overload Roslyn
