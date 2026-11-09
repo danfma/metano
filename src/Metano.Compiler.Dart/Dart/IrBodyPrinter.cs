@@ -473,13 +473,8 @@ public static class IrBodyPrinter
     }
 
     /// <summary>
-    /// Print a call target or the object of a member / element access,
-    /// wrapping it in parentheses when its node kind binds looser than the
-    /// call or selector that follows. Required because the IR carries
-    /// grouping only as tree shape: <c>(a ?? b)?.Invoke()</c> and
-    /// <c>(value ?? "").Trim()</c> put a binary expression in receiver
-    /// position, which printed bare would parse as <c>a ?? b()</c> and
-    /// <c>value ?? ''.trim()</c>.
+    /// Print the operand of a spread element as an iterable: a map spreads its
+    /// <c>entries</c> and a string its UTF-16 code units, as C# spreads them.
     /// </summary>
     private static void PrintSpreadOperand(StringBuilder sb, IrSpreadExpression spread)
     {
@@ -494,6 +489,15 @@ public static class IrBodyPrinter
         sb.Append(spread.Source is IrSpreadSource.Map ? ".entries" : ".split('')");
     }
 
+    /// <summary>
+    /// Print a call target or the object of a member / element access,
+    /// wrapping it in parentheses when its node kind binds looser than the
+    /// call or selector that follows. Required because the IR carries
+    /// grouping only as tree shape: <c>(a ?? b)?.Invoke()</c> and
+    /// <c>(value ?? "").Trim()</c> put a binary expression in receiver
+    /// position, which printed bare would parse as <c>a ?? b()</c> and
+    /// <c>value ?? ''.trim()</c>.
+    /// </summary>
     private static void PrintReceiver(StringBuilder sb, IrExpression receiver) =>
         PrintOperand(sb, receiver, ReceiverRequiresParens(receiver));
 
