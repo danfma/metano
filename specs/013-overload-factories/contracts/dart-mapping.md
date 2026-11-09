@@ -64,12 +64,19 @@ the same overload differently after claims; the core candidates are identical.
   (`Base.fromAB(1, 5)` with the omitted default explicit). A construction keeps its type
   arguments before the constructor's name (`Gen<Object>.fromValue(5)`, the Dart-only
   `DartNamedConstruction` node). A construction or call whose named arguments evaluate out of
-  parameter order (`IrSelectedOverload.EvaluationOrder`) binds them, and an impure receiver
-  first, in the source's order through immediately invoked closures
-  (`(($arg1, $arg0) => c.subXY($arg0, $arg1))(next(), next())`: one closure whose arguments Dart
-  evaluates left to right, a receiver that is not a plain value bound first as `$recv` — a member
-  access an argument may reassign included; an `await` among the arguments stays outside the
-  closure, in the enclosing async function; `DartEvaluationOrder`).
+  parameter order (`IrSelectedOverload.EvaluationOrder`) binds the evaluations that can be
+  observed, in the source's order, as the arguments of one immediately invoked closure
+  (`(($arg1, $arg0) => c.subXY($arg0, $arg1))(next(), next())`; Dart evaluates arguments left to
+  right; `DartEvaluationOrder`). A receiver an argument could change — a member access, or a
+  local an argument assigns — is bound first as `$recv`. An argument nobody can observe (a
+  literal, a constant, a local no argument assigns, a lambda, a collection literal of such
+  values) stays inline, typed by its parameter (`k.scaleDN(2, next())`, `2` a `double`); with at
+  most one observable evaluation the call is not wrapped. The closure parameters are untyped:
+  every bound argument is an expression whose static type Dart computes from itself. An `await`
+  among the bound arguments is a closure argument, evaluated in the enclosing async function;
+  inside a null-conditional call (`c?.Sub(y: Next(), x: await NextAsync())`) the Dart printer's
+  own receiver closure is synchronous, so that form does not compile (pre-existing for any
+  `await` in a null-conditional call's arguments).
   The prototype still emits no `super(...)` initializer for a derived constructor (RT-02, #572),
   so `BaseOverload` is unused there.
 - **`[Name]`.** Pins the suffix as in TypeScript, with the same `MS0003` reports; a method's

@@ -7,7 +7,8 @@ namespace Metano.Compiler.Dart.Bridge;
 /// <summary>
 /// Lists the Dart types a method body names, so <see cref="DartImportCollector"/> can import
 /// their files exactly as it does for signature types. The walk is read-only and descends
-/// through <see cref="IrNodeChildren"/> (<see cref="DartIrChildren"/> for expressions), crossing lambda boundaries.
+/// through <see cref="IrNodeChildren"/> (<see cref="DartIrChildren"/> for expressions),
+/// crossing lambda boundaries.
 /// <para>
 /// Covered positions: static-member receivers (<c>DelExt.twice(h.get)</c>, which includes the
 /// type hosting an extension helper), <c>new</c> expressions, casts, type tests and top-level
