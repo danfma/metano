@@ -420,11 +420,12 @@ public class OverloadCallSiteGoldenTests
     }
 
     /// <summary>
-    /// A target that emits no selectors or factories (the Dart prototype)
-    /// keeps its source arguments and constructor call.
+    /// Dart constructs through the named constructor of the overload Roslyn
+    /// selected, with the bound arguments — the omitted default passed
+    /// explicitly (spec 013 FR-017, FR-022).
     /// </summary>
     [Test]
-    public async Task TargetWithoutFactories_KeepsTheSourceConstruction()
+    public async Task Dart_ConstructsThroughTheNamedConstructor()
     {
         var (files, _) = TranspileHelper.TranspileDart(
             """
@@ -446,7 +447,7 @@ public class OverloadCallSiteGoldenTests
             """
         );
 
-        await Assert.That(files["shop.dart"]).Contains("static Base make() => Base(1);");
+        await Assert.That(files["shop.dart"]).Contains("static Base make() => Base.fromAB(1, 5);");
     }
 
     /// <summary>

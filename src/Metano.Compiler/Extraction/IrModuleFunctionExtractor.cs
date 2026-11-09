@@ -448,7 +448,10 @@ public static class IrModuleFunctionExtractor
             method.Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        localNames.NameOf(p, IrParameterNaming.IrNameOf(p, context.Compilation)),
+                        localNames.NameOf(
+                            p,
+                            IrParameterNaming.IrNameOf(p, context.Compilation, context.Target)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, context),
@@ -603,7 +606,10 @@ public static class IrModuleFunctionExtractor
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        localNames.NameOf(p, IrParameterNaming.IrNameOf(p, context.Compilation)),
+                        localNames.NameOf(
+                            p,
+                            IrParameterNaming.IrNameOf(p, context.Compilation, context.Target)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, context),
@@ -743,7 +749,10 @@ public static class IrModuleFunctionExtractor
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        localNames.NameOf(p, IrParameterNaming.IrNameOf(p, context.Compilation)),
+                        localNames.NameOf(
+                            p,
+                            IrParameterNaming.IrNameOf(p, context.Compilation, context.Target)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, context),

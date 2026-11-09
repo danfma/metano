@@ -135,37 +135,13 @@ internal sealed class TsOverloadClaims
     private static MetanoDiagnostic DiagnosticOf(TsClaimFinding finding, INamedTypeSymbol type) =>
         new(finding.Severity, finding.Code, finding.Message, LocationOf(type, finding.Site));
 
-    /// <summary>
-    /// The declaration a finding is about: the constructor at its declaration
-    /// ordinal, the method overload with its signature text, or the first
-    /// member with its C# name; the type when none matches.
-    /// </summary>
-    private static Location? LocationOf(INamedTypeSymbol type, TsClaimSite site)
-    {
-        var declaration = site.ConstructorOrdinal is { } ordinal
-            ? ConstructorAt(type, ordinal)
-            : MemberAt(type, site);
-
-        return (declaration ?? type).Locations.FirstOrDefault();
-    }
-
-    private static IMethodSymbol ConstructorAt(INamedTypeSymbol type, int ordinal) =>
-        IrConstructorExtractor.AllExplicitConstructors(type).ElementAtOrDefault(ordinal)
-        ?? throw new InvalidOperationException(
-            $"'{type.Name}' has no declared constructor at ordinal {ordinal}."
-        );
-
-    private static ISymbol? MemberAt(INamedTypeSymbol type, TsClaimSite site)
-    {
-        var members = type.GetMembers(site.MemberName);
-
-        if (site.Signature is not { } signature)
-            return members.FirstOrDefault();
-
-        return members
-            .OfType<IMethodSymbol>()
-            .FirstOrDefault(method => OverloadSignatureText.Of(method) == signature);
-    }
+    /// <summary>The declaration a finding is about (<see cref="OverloadDeclarationSite"/>).</summary>
+    private static Location? LocationOf(INamedTypeSymbol type, TsClaimSite site) =>
+        new OverloadDeclarationSite(
+            site.MemberName,
+            site.ConstructorOrdinal,
+            site.Signature
+        ).LocationIn(type);
 }
 
 /// <summary>

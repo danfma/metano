@@ -8,23 +8,35 @@ namespace Metano.Compiler.Dart.Bridge;
 /// declarations. Called for C# static classes decorated with
 /// <c>[ExportedAsModule]</c>: rather than a Dart class of static methods, the
 /// consumer gets a flat file of importable functions, which is the idiomatic
-/// Dart shape for a utility module.
+/// Dart shape for a utility module. An overload of a dispatched group is declared under its
+/// claimed fast path (<c>twiceText</c>, spec 013 FR-022, FR-032).
 /// </summary>
 public static class IrToDartModuleBridge
 {
     public static void Convert(
         IReadOnlyList<IrModuleFunction> functions,
+        DartOverloadClaims claims,
         List<DartTopLevel> statements,
         DartIrRewriter rewriter
     )
     {
         foreach (var fn in functions)
-            statements.Add(ConvertFunction(fn, rewriter));
+            statements.Add(ConvertFunction(fn, NameOf(fn, claims), rewriter));
     }
 
-    private static DartFunction ConvertFunction(IrModuleFunction fn, DartIrRewriter rewriter) =>
+    private static string NameOf(IrModuleFunction fn, DartOverloadClaims claims) =>
+        fn is { OverloadRef: { } overloadRef, OverloadName: { } overloadName }
+            ? claims.FastPathAt(overloadRef.MemberName, overloadRef.Ordinal)
+                ?? IrToDartNamingPolicy.ToFastPathName(fn.Name, overloadName.Suffix)
+            : IrToDartNamingPolicy.ToMemberName(fn.Name, fn.Attributes);
+
+    private static DartFunction ConvertFunction(
+        IrModuleFunction fn,
+        string name,
+        DartIrRewriter rewriter
+    ) =>
         new(
-            Name: IrToDartNamingPolicy.ToMemberName(fn.Name, fn.Attributes),
+            Name: name,
             Parameters: fn.Parameters.Select(p => new DartParameter(
                     IrToDartNamingPolicy.ToParameterName(p.Name),
                     IrToDartTypeMapper.Map(p.Type),

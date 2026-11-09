@@ -11,7 +11,7 @@ namespace Metano.Compiler.Extraction;
 /// (<see cref="OverloadSuffixPin"/>) and its dispatcher keeps the C# name.
 /// Every other method — a single one, a conversion operator, an overload of a
 /// type that emits no dispatcher (<c>[External]</c>, <c>[JsCallable]</c>,
-/// <c>[PlainObject]</c>), any method for a target that pins no suffix — keeps
+/// <c>[PlainObject]</c>) — keeps
 /// <c>[Name]</c> as its whole name. The one rule declarations, call sites and
 /// claims share.
 /// </summary>
@@ -31,7 +31,7 @@ public static class OverloadEmittedName
     }
 
     private static bool PinsItsSuffix(IMethodSymbol method, TargetLanguage? target) =>
-        OverloadSuffixPin.Applies(method, target)
+        OverloadSuffixPin.Applies(method)
         && method.ContainingType is { } type
         && EmitsOverloadDispatchers(type, target)
         && IsDispatchedOverload(method, type, target);

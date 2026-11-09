@@ -28,6 +28,24 @@ public static class IrToDartNamingPolicy
     public static string ToParameterName(string irName) => ToCamelCase(irName);
 
     /// <summary>
+    /// The candidate of one overload of a dispatched method group (spec 013
+    /// FR-001, FR-022): the group's C# name in camelCase plus the suffix the
+    /// core's naming policy computed (<c>add</c> + <c>XY</c>). A
+    /// <c>[Name]</c> on the overload pinned the suffix, never the group name.
+    /// </summary>
+    public static string ToFastPathName(string groupName, string suffix) =>
+        ToCamelCase(groupName) + suffix;
+
+    /// <summary>
+    /// The candidate named constructor of one overload of a dispatched
+    /// constructor set (spec 013 DECIDED-14): <c>from</c> plus its suffix,
+    /// the name TypeScript gives its factory.
+    /// </summary>
+    public static string ToNamedConstructorName(string suffix) => NamedConstructorPrefix + suffix;
+
+    private const string NamedConstructorPrefix = "from";
+
+    /// <summary>
     /// Dart flattens nested types, so a qualified IR type name is emitted (and imported)
     /// by its last segment only.
     /// </summary>

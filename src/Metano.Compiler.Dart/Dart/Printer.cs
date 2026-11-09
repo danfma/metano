@@ -170,13 +170,19 @@ public sealed class Printer
         PrintClassHeader(sb, cls);
         sb.AppendLine(" {");
 
-        // Constructor comes before members by Dart convention.
-        if (cls.Constructor is not null)
+        // Constructors come before members by Dart convention.
+        var constructors = cls.Constructors ?? [];
+
+        for (var i = 0; i < constructors.Count; i++)
         {
-            PrintConstructor(sb, cls.Constructor);
-            if (cls.Members is { Count: > 0 })
+            if (i > 0)
                 sb.AppendLine();
+
+            PrintConstructor(sb, constructors[i]);
         }
+
+        if (constructors.Count > 0 && cls.Members is { Count: > 0 })
+            sb.AppendLine();
 
         if (cls.Members is not null)
         {
@@ -216,7 +222,10 @@ public sealed class Printer
         sb.Append(Indent);
         if (ctor.IsConst)
             sb.Append("const ");
-        sb.Append(ctor.ClassName).Append('(');
+        sb.Append(ctor.ClassName);
+        if (ctor.Name is not null)
+            sb.Append('.').Append(ctor.Name);
+        sb.Append('(');
 
         // Dart splits ctor parameters into two regions: required positional, then an
         // optional positional block delimited by [...]. To preserve C# semantics
@@ -246,7 +255,29 @@ public sealed class Printer
             sb.Append(']');
         }
         sb.Append(')');
-        EmitCtorBodyOrSemicolon(sb, ctor.Body);
+
+        if (ctor.Redirect is { } redirect)
+            PrintRedirect(sb, redirect);
+        else
+            EmitCtorBodyOrSemicolon(sb, ctor.Body);
+    }
+
+    /// <summary><c> : this.name(args);</c> — a redirecting constructor has no body.</summary>
+    private static void PrintRedirect(StringBuilder sb, DartConstructorRedirect redirect)
+    {
+        sb.Append(" : this");
+        if (redirect.ConstructorName is not null)
+            sb.Append('.').Append(redirect.ConstructorName);
+        sb.Append('(');
+
+        for (var i = 0; i < redirect.Arguments.Count; i++)
+        {
+            if (i > 0)
+                sb.Append(", ");
+            IrBodyPrinter.PrintExpression(sb, redirect.Arguments[i].Value);
+        }
+
+        sb.AppendLine(");");
     }
 
     private static void AppendConstructorParameter(StringBuilder sb, DartConstructorParameter p)

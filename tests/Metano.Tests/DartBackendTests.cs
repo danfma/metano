@@ -748,12 +748,11 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task OverloadedMethods_CollapseIntoSingleDartEmissionPlusDiagnostic()
+    public async Task OverloadedMethods_EmitOneFastPathPerOverload()
     {
-        // Roslyn exposes each overload as a separate IMethodSymbol; the IR
-        // extractor must fold them into one primary with Overloads populated
-        // so DartTransformer emits a single method declaration and the Dart
-        // "no overloading" diagnostic fires.
+        // Dart has no overloading: each overload of a dispatched group is
+        // declared under its fast path (spec 013 FR-022), with no dispatcher
+        // and no "no overloading" diagnostic.
         var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
@@ -766,14 +765,11 @@ public class DartBackendTests
         );
 
         var dart = files["widget.dart"];
-        // Only ONE `draw` declaration — no duplicate emission.
-        var drawCount = (dart.Split("void draw(").Length - 1) + (dart.Split("draw();").Length - 1);
-        await Assert.That(drawCount).IsEqualTo(1);
-        await Assert
-            .That(
-                diagnostics.Any(d => d.Message.Contains("Dart doesn't support method overloading"))
-            )
-            .IsTrue();
+
+        await Assert.That(dart).Contains("void drawDefault()");
+        await Assert.That(dart).Contains("void drawTimes(int times)");
+        await Assert.That(dart).DoesNotContain("void draw(");
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
@@ -1604,10 +1600,9 @@ public class DartBackendTests
 
     /// <summary>
     /// A conditional <c>?.Equals</c> whose receiver is not a tuple keeps the
-    /// general lowering — the receiver's own <c>equals</c> runs (the Dart
-    /// target does not apply <c>[Name]</c> to methods yet; the rename itself
-    /// is pinned on the TypeScript side). The tuple recognizer must not
-    /// hijack the override-chain root (#331).
+    /// general lowering — the receiver's own method runs, under the name its
+    /// <c>[Name]</c> gives it (<c>isSame</c>), as its declaration does. The
+    /// tuple recognizer must not hijack the override-chain root (#331).
     /// </summary>
     [Test]
     public async Task NonTupleConditionalEquals_KeepTheGeneralLowering()
@@ -1641,7 +1636,7 @@ public class DartBackendTests
 
         await Assert
             .That(output)
-            .Contains("static bool? renamed(User? a, User b) => a?.equals(b);");
+            .Contains("static bool? renamed(User? a, User b) => a?.isSame(b);");
 
         await Assert
             .That(output)
