@@ -459,14 +459,37 @@ public static partial class IrToTsExpressionBridge
 
         return new TsCallExpression(
             new TsPropertyAccess(array, "fill"),
-            [Map(creation.ElementDefault, context)]
+            [ArrayElementDefault(creation, context)]
         );
     }
 
     private static IReadOnlyList<TsType>? ArrayElementTypeArguments(IrArrayCreation creation) =>
         creation.ElementDefault is IrLiteral { Kind: IrLiteralKind.Null }
             ? null
-            : [IrToTsTypeMapper.Map(creation.ElementType)];
+            : [ArrayElementType(creation)];
+
+    /// <summary>The element type, through the <c>[ExportFromBcl]</c> overrides (<c>decimal</c> is <c>Decimal</c>).</summary>
+    private static TsType ArrayElementType(IrArrayCreation creation) =>
+        IrToTsTypeMapper.Map(creation.ElementType, IrToTsTypeMapper.BclOverrides);
+
+    /// <summary>
+    /// The shared slot value. An enum that declares no zero member defaults
+    /// to a bare <c>0</c>, which is asserted to the enum type so the fill
+    /// type-checks (<c>0 as Level</c>).
+    /// </summary>
+    private static TsExpression ArrayElementDefault(
+        IrArrayCreation creation,
+        IrToTsBridgeContext context
+    )
+    {
+        var value = Map(creation.ElementDefault, context);
+
+        var isBareEnumZero =
+            creation.ElementType is IrNamedTypeRef
+            && creation.ElementDefault is IrLiteral { Kind: IrLiteralKind.Int32 };
+
+        return isBareEnumZero ? new TsCastExpression(value, ArrayElementType(creation)) : value;
+    }
 
     /// <summary>
     /// An array index or length as the <c>number</c> JS arrays take:
