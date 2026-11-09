@@ -52,7 +52,11 @@ public static class IrConstructorExtractor
         var promotionContext = new PromotionContext(type, context, promotion);
 
         if (!IsDispatchedSet(type))
+        {
+            ReportUnusedPins(explicitCtors, context.Target);
+
             return BuildFromMethod(primary, context.OriginResolver, promotionContext);
+        }
 
         var named = OverloadGroupNaming.ApplyToConstructors(
             explicitCtors
@@ -157,6 +161,19 @@ public static class IrConstructorExtractor
         IsPrimaryConstructor(ctor) || IsImplicitAbstractConstructorInMetadata(ctor)
             ? IrVisibility.Public
             : IrVisibilityMapper.Map(ctor.DeclaredAccessibility);
+
+    /// <summary>
+    /// A <c>[Name]</c> on a constructor outside a dispatched set names no
+    /// factory or selector (spec 013 FR-005), so it is reported.
+    /// </summary>
+    private static void ReportUnusedPins(
+        IEnumerable<IMethodSymbol> constructors,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        foreach (var constructor in constructors)
+            OverloadSuffixPin.Of(constructor, target)?.ReportUnusedOnConstructor();
+    }
 
     /// <summary>
     /// Whether <paramref name="type"/>'s declared constructors form a

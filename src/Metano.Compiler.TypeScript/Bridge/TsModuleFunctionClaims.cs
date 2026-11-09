@@ -305,7 +305,7 @@ public sealed class TsModuleFunctionClaims
 
         private void ClaimDispatcher(INamedTypeSymbol type, MemberFunction function)
         {
-            var dispatcher = FunctionNameOf(function.Member);
+            var dispatcher = IrToTsNamingPolicy.ToFunctionName(function.Member);
 
             Reserve(dispatcher);
 
@@ -361,10 +361,6 @@ public sealed class TsModuleFunctionClaims
 
             return created;
         }
-
-        private static string FunctionNameOf(IMethodSymbol method) =>
-            method.GetMethodNameOverride(TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(method.Name);
 
         /// <summary>
         /// A type's emitted module functions, each extracted from its own

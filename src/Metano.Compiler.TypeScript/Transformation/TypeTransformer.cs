@@ -2533,7 +2533,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                     continue;
 
-                var fnName = ResolveNoContainerFunctionName(member);
+                var fnName = IrToTsNamingPolicy.ToFunctionName(member);
 
                 if (
                     TryResolveImportNameCollision(
@@ -2734,7 +2734,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 {
                     if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                         continue;
-                    var fnName = ResolveNoContainerFunctionName(member);
+                    var fnName = IrToTsNamingPolicy.ToFunctionName(member);
                     // First-wins: own-assembly entries already registered take priority.
                     if (exports.ContainsKey(fnName))
                         continue;
@@ -2860,10 +2860,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string Description,
         IrTranspilableTypeRef? OwnerRef = null
     );
-
-    private static string ResolveNoContainerFunctionName(IMethodSymbol member) =>
-        member.GetMethodNameOverride(TargetLanguage.TypeScript)
-        ?? TypeScriptNaming.ToCamelCase(member.Name);
 
     /// <summary>
     /// Returns <c>true</c> when a diagnostic was reported for

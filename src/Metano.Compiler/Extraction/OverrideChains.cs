@@ -142,7 +142,8 @@ internal static class OverrideChains
     private static string EmittedNameOf(
         IMethodSymbol method,
         Metano.Annotations.TargetLanguage? target
-    ) => method.GetNameOverride(target) ?? SymbolHelper.ToCamelCase(method.Name);
+    ) =>
+        OverloadEmittedName.NameOverrideOf(method, target) ?? SymbolHelper.ToCamelCase(method.Name);
 
     /// <summary>
     /// Whether a class the compilation declares, among the ancestors of

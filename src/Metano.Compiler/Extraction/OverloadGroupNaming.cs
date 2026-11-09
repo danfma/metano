@@ -11,9 +11,8 @@ namespace Metano.Compiler.Extraction;
 /// <see cref="IrNamingSpelling"/> from its Roslyn symbol, runs
 /// <see cref="OverloadNamePolicy"/> and records the result on each
 /// declaration's <c>OverloadName</c>. A <c>[Name]</c> on an overload pins its
-/// suffix (FR-005). A set of overloads the climb cannot separate reports
-/// <c>MS0003</c> at its later overload (FR-024), and so does an invalid
-/// <c>[Name]</c> pin, at its attribute.
+/// suffix (FR-005, <see cref="OverloadSuffixPin"/>). A set of overloads the
+/// climb cannot separate reports <c>MS0003</c> at its later overload (FR-024).
 /// </summary>
 internal static class OverloadGroupNaming
 {
@@ -46,32 +45,41 @@ internal static class OverloadGroupNaming
 
     /// <summary>
     /// The suffixes of a group of methods, in the group's order (spec 013
-    /// FR-001), read from the Roslyn symbols: each parameter's C# name and its
-    /// <see cref="IrNamingSpelling"/>, or the suffix a <c>[Name]</c> for
-    /// <paramref name="target"/> pins (FR-005). A set the climb cannot
-    /// separate reports <c>MS0003</c> at its later overload (FR-024); an
-    /// invalid pin reports <c>MS0003</c> at its attribute and is not pinned.
+    /// FR-001), each overload pinned by its own <c>[Name]</c> for
+    /// <paramref name="target"/> (FR-005).
     /// </summary>
     public static IReadOnlyList<string> SuffixesOf(
         IReadOnlyList<IMethodSymbol> symbols,
         TargetLanguage? target
-    )
+    ) =>
+        SuffixesOf(
+            symbols
+                .Select(symbol => new PinnedOverload(symbol, OverloadSuffixPin.Of(symbol, target)))
+                .ToList()
+        );
+
+    /// <summary>
+    /// The suffixes of a group of methods, in the group's order (spec 013
+    /// FR-001), read from the Roslyn symbols: each parameter's C# name and its
+    /// <see cref="IrNamingSpelling"/>, or the suffix its pin carries (FR-005).
+    /// A set the climb cannot separate reports <c>MS0003</c> at its later
+    /// overload (FR-024); an invalid pin reports <c>MS0003</c> at its
+    /// attribute and pins nothing.
+    /// </summary>
+    public static IReadOnlyList<string> SuffixesOf(IReadOnlyList<PinnedOverload> overloads)
     {
-        var pins = symbols.Select(symbol => OverloadSuffixPin.Of(symbol, target)).ToList();
+        var symbols = overloads.Select(overload => overload.Symbol).ToList();
 
         var suffixes = OverloadNamePolicy.Compute(
-            symbols.Select((symbol, index) => SignatureOf(symbol, pins[index]?.Suffix)).ToList(),
+            overloads.Select(SignatureOf).ToList(),
             KindOf(symbols)
         );
 
-        for (var index = 0; index < symbols.Count; index++)
-        {
-            if (pins[index] is { IsValid: false } invalid)
-                ReportInvalidPin(symbols[index], invalid);
-        }
+        foreach (var overload in overloads)
+            overload.Pin?.ReportIfInvalid();
 
         foreach (var deadEnd in suffixes.DeadEnds)
-            ReportDeadEnd(deadEnd, symbols, suffixes.Suffixes, pins);
+            ReportDeadEnd(deadEnd.Select(index => overloads[index]).ToList(), deadEnd, suffixes);
 
         return suffixes.Suffixes;
     }
@@ -140,18 +148,18 @@ internal static class OverloadGroupNaming
             .ToList();
     }
 
-    private static OverloadSignature SignatureOf(IMethodSymbol symbol, string? pinnedSuffix) =>
+    private static OverloadSignature SignatureOf(PinnedOverload overload) =>
         new(
-            symbol
-                .Parameters.Select(parameter => new OverloadParameter(
+            overload
+                .Symbol.Parameters.Select(parameter => new OverloadParameter(
                     parameter.Name,
                     IrNamingSpellingExtractor.Extract(parameter)
                 ))
                 .ToList(),
-            symbol.MethodKind == MethodKind.Conversion
-                ? IrNamingSpellingExtractor.Extract(symbol.ReturnType)
+            overload.Symbol.MethodKind == MethodKind.Conversion
+                ? IrNamingSpellingExtractor.Extract(overload.Symbol.ReturnType)
                 : null,
-            pinnedSuffix
+            overload.Pin?.Suffix
         );
 
     private static OverloadGroupKind KindOf(IReadOnlyList<IMethodSymbol> symbols)
@@ -164,101 +172,48 @@ internal static class OverloadGroupNaming
             : OverloadGroupKind.Method;
     }
 
-    /// <summary>
-    /// A <c>[Name]</c> on an override or interface implementation that names
-    /// another suffix than its root's: the root's names win (FR-025), so the
-    /// pin is ignored and reported (FR-005). Repeating the root's suffix is
-    /// silent.
-    /// </summary>
-    public static void ReportIgnoredPin(
-        IMethodSymbol overload,
-        IMethodSymbol root,
-        string rootSuffix,
-        TargetLanguage? target
-    )
-    {
-        if (OverloadSuffixPin.Of(overload, target) is not { Location: { } location } pin)
-            return;
-
-        if (pin.Suffix == rootSuffix)
-            return;
-
-        var rootSignature = OverloadSignatureText.Of(root.OriginalDefinition);
-
-        ExtractionDiagnostics.Report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.AmbiguousConstruct,
-                $"[Name(\"{pin.Value}\")] on '{overload.ContainingType.Name}."
-                    + $"{DisplaySignatureOf(overload)}' is ignored: an override or interface "
-                    + $"implementation takes the suffix '{rootSuffix}' of its root "
-                    + $"'{root.ContainingType.Name}.{rootSignature}'; put [Name] on the root "
-                    + "(spec 013 FR-005, FR-025).",
-                location
-            )
-        );
-    }
-
-    /// <summary>
-    /// An invalid <c>[Name]</c> on an overload: the overload keeps its
-    /// generated suffix, and the error fails the build (FR-005). The message
-    /// names no suffix, so the report is the same from every group that
-    /// sees the overload (a derived type's visible group included).
-    /// </summary>
-    private static void ReportInvalidPin(IMethodSymbol overload, OverloadSuffixPin pin)
-    {
-        if (pin.Location is not { } location)
-            return;
-
-        ExtractionDiagnostics.Report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.AmbiguousConstruct,
-                $"[Name(\"{pin.Value}\")] on the overload '{DisplaySignatureOf(overload)}' is not a "
-                    + "valid suffix: it must start with an ASCII letter or '_' and contain only "
-                    + "ASCII letters, digits and '_'; the overload keeps its generated suffix "
-                    + "(spec 013 FR-005).",
-                location
-            )
-        );
-    }
-
     private static void ReportDeadEnd(
-        IReadOnlyList<int> deadEnd,
-        IReadOnlyList<IMethodSymbol> symbols,
-        IReadOnlyList<string> suffixes,
-        IReadOnlyList<OverloadSuffixPin?> pins
+        IReadOnlyList<PinnedOverload> deadEnd,
+        IReadOnlyList<int> indexes,
+        OverloadSuffixes suffixes
     )
     {
-        var signatures = JoinQuoted(deadEnd.Select(index => DisplaySignatureOf(symbols[index])));
-        var names = JoinQuoted(deadEnd.Select(index => suffixes[index]));
-        var pinned = deadEnd.Where(index => pins[index]?.Suffix is not null).ToList();
-
-        var cause =
-            pinned.Count == 0
-                ? "have the same naming spelling at every qualification level"
-                : "have the same suffix at every qualification level, and [Name] pins the suffix of "
-                    + JoinQuoted(pinned.Select(index => DisplaySignatureOf(symbols[index])));
+        var signatures = JoinQuoted(
+            deadEnd.Select(overload => OverloadSignatureText.DisplayOf(overload.Symbol))
+        );
+        var names = JoinQuoted(indexes.Select(index => suffixes.Suffixes[index]));
 
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.AmbiguousConstruct,
-                $"Overloads {signatures} {cause}; they are named with the suffixes {names} "
-                    + (pinned.Count == 0 ? "(spec 013 FR-024)." : "(spec 013 FR-005, FR-024)."),
-                symbols[deadEnd[^1]].Locations.FirstOrDefault()
+                $"Overloads {signatures} {DeadEndCauseOf(deadEnd)}; they are named with the "
+                    + $"suffixes {names} {DeadEndReferenceOf(deadEnd)}",
+                deadEnd[^1].Symbol.Locations.FirstOrDefault()
             )
         );
     }
 
-    private static string DisplaySignatureOf(IMethodSymbol method)
+    private static string DeadEndCauseOf(IReadOnlyList<PinnedOverload> deadEnd)
     {
-        var parameters = method.Parameters.Select(parameter =>
-            $"{parameter.Type.ToDisplayString()} {parameter.Name}"
+        var pinned = PinnedIn(deadEnd);
+
+        if (pinned.Count == 0)
+            return "have the same naming spelling at every qualification level";
+
+        var pinnedSignatures = JoinQuoted(
+            pinned.Select(overload => OverloadSignatureText.DisplayOf(overload.Symbol))
         );
 
-        return $"{OverloadSignatureText.DeclaredNameOf(method)}({string.Join(", ", parameters)})";
+        return "have the same suffix at every qualification level, and [Name] pins the suffix "
+            + $"of {pinnedSignatures}";
     }
+
+    private static string DeadEndReferenceOf(IReadOnlyList<PinnedOverload> deadEnd) =>
+        PinnedIn(deadEnd).Count == 0 ? "(spec 013 FR-024)." : "(spec 013 FR-005, FR-024).";
+
+    private static List<PinnedOverload> PinnedIn(IReadOnlyList<PinnedOverload> deadEnd) =>
+        deadEnd.Where(overload => overload.Pin?.Suffix is not null).ToList();
 
     private static string JoinQuoted(IEnumerable<string> items)
     {
@@ -269,3 +224,10 @@ internal static class OverloadGroupNaming
             : string.Join(", ", quoted.Take(quoted.Count - 1)) + $" and {quoted[^1]}";
     }
 }
+
+/// <summary>
+/// One overload as its group's naming reads it: the symbol whose signature is
+/// named and the pin that names it — its own <c>[Name]</c>, or, for an
+/// override or interface implementation, its root's (FR-005, FR-025).
+/// </summary>
+internal sealed record PinnedOverload(IMethodSymbol Symbol, OverloadSuffixPin? Pin);

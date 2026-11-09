@@ -94,7 +94,9 @@ internal static class IrParameterNaming
             )
                 continue;
 
-            var calleeName = callee.GetNameOverride() ?? SymbolHelper.ToCamelCase(callee.Name);
+            var calleeName =
+                OverloadEmittedName.NameOverrideOf(callee, target: null)
+                ?? SymbolHelper.ToCamelCase(callee.Name);
 
             colliding.UnionWith(
                 parametersByEmittedName[calleeName].Select(parameter => parameter.Name)

@@ -193,6 +193,12 @@ public static class SymbolHelper
     ///   <item>Otherwise <c>null</c>.</item>
     /// </list>
     /// </summary>
+    /// <remarks>
+    /// On a method, this is the attribute's value only: an overload of a
+    /// dispatched group uses it as a suffix, not as its name (spec 013
+    /// FR-005); ask <see cref="Extraction.OverloadEmittedName"/> for the name
+    /// a method is declared and called by.
+    /// </remarks>
     public static string? GetNameOverride(this ISymbol symbol, TargetLanguage? target = null) =>
         FindNameOverrideAttribute(symbol, target) is { } attribute
             ? NameOverrideValueOf(attribute)
@@ -203,7 +209,7 @@ public static class SymbolHelper
     /// value from, by the same rules; <c>null</c> when none applies. Callers
     /// that report on the value locate the attribute through it.
     /// </summary>
-    public static AttributeData? FindNameOverrideAttribute(
+    internal static AttributeData? FindNameOverrideAttribute(
         this ISymbol symbol,
         TargetLanguage? target = null
     )
@@ -238,52 +244,17 @@ public static class SymbolHelper
         return untargeted;
     }
 
-    /// <summary>The name a <c>[Name]</c> attribute carries, in either constructor shape.</summary>
-    public static string NameOverrideValueOf(AttributeData attribute) =>
-        attribute.ConstructorArguments is [{ Value: string untargeted }]
-            ? untargeted
-            : (string)attribute.ConstructorArguments[1].Value!;
-
     /// <summary>
-    /// The <c>[Name]</c> that renames <paramref name="method"/> where it is
-    /// declared and called: <see cref="GetNameOverride"/>, except on an
-    /// overload of a dispatched group (two or more overloads, an inherited
-    /// dispatcher, an anchored override or implementation, an interface
-    /// group), whose <c>[Name]</c> pins its fast-path suffix instead while the
-    /// dispatcher keeps the C# name (spec 013 FR-005, OQ-1 (a)).
+    /// The name a <c>[Name]</c> attribute carries, in either constructor
+    /// shape; <c>null</c> for a malformed attribute.
     /// </summary>
-    public static string? GetMethodNameOverride(
-        this IMethodSymbol method,
-        TargetLanguage? target = null
-    )
-    {
-        if (method.GetNameOverride(target) is not { } name)
-            return null;
-
-        return IsDispatchedOverload(method.OriginalDefinition, target) ? null : name;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="method"/> is an overload of a group the
-    /// toolchain emits a dispatcher for. An <c>[External]</c> type emits
-    /// nothing, so its overloads keep their <c>[Name]</c> (several C#
-    /// overloads binding one JavaScript function).
-    /// </summary>
-    private static bool IsDispatchedOverload(IMethodSymbol method, TargetLanguage? target)
-    {
-        if (method.ContainingType is not { } type || !IsEmittedOverloadContainer(type, target))
-            return false;
-
-        return type.TypeKind == TypeKind.Interface
-            ? Frontend.Roslyn.InterfaceOverloadGroup.IsMember(method, target)
-                && Frontend.Roslyn.InterfaceOverloadGroup.IsDispatched(method, target)
-            : Extraction.MethodOverloadGroups.GroupOf(method, target) is { IsDispatched: true };
-    }
-
-    private static bool IsEmittedOverloadContainer(INamedTypeSymbol type, TargetLanguage? target) =>
-        Extraction.IrTypeRefMapper.IsTranspilableType(type, target)
-        && !type.HasExternal()
-        && !type.HasJsCallable();
+    internal static string? NameOverrideValueOf(AttributeData attribute) =>
+        attribute.ConstructorArguments switch
+        {
+            [{ Value: string untargeted }] => untargeted,
+            [{ Value: int }, { Value: string targeted }, ..] => targeted,
+            _ => null,
+        };
 
     public static bool HasTranspile(this ISymbol symbol) => HasAttribute(symbol, "Transpile");
 
