@@ -4,7 +4,8 @@
  * resolve them, plain Node ESM does not. A relative specifier Node cannot
  * find is retried with the `.js` extension the build emits, so the Node run
  * loads the real built modules, in their own evaluation order. Loaded with
- * `node --import`.
+ * `node --import`. A consumer has no such hook: emitting Node-resolvable
+ * specifiers is #573, which deletes this shim.
  */
 
 import { registerHooks } from "node:module";

@@ -27,27 +27,22 @@ internal sealed class DartFlatClaimPass
     /// <summary>The fast paths an interface declares beside its other members.</summary>
     public static DartOverloadClaims Run(IrInterfaceDeclaration ir)
     {
-        var methods = (ir.Members ?? []).OfType<IrMethodDeclaration>().ToList();
+        var members = ir.Members ?? [];
 
-        var userMembers = (ir.Members ?? [])
+        var userMembers = members
             .Where(member => member is not IrMethodDeclaration { OverloadName: not null })
             .Select(member => IrToDartNamingPolicy.ToMemberName(member.Name, member.Attributes));
 
-        var pass = new DartFlatClaimPass(ir.Name, userMembers);
+        var candidates = members
+            .OfType<IrMethodDeclaration>()
+            .Where(method => method.OverloadName is not null)
+            .Select(method => new DartFlatCandidate(
+                DartOverloadKey.Of(method),
+                IrToDartNamingPolicy.ToFastPathName(method.Name, method.OverloadName!.Suffix),
+                method.SignatureText
+            ));
 
-        foreach (var method in methods)
-        {
-            if (method.OverloadName is { } overloadName)
-            {
-                pass.Claim(
-                    DartOverloadKey.Of(method),
-                    IrToDartNamingPolicy.ToFastPathName(method.Name, overloadName.Suffix),
-                    method.SignatureText
-                );
-            }
-        }
-
-        return pass.Result();
+        return Run(ir.Name, userMembers, candidates);
     }
 
     /// <summary>The top-level fast paths of a containerless module's dispatched groups.</summary>
@@ -62,19 +57,27 @@ internal sealed class DartFlatClaimPass
                 IrToDartNamingPolicy.ToMemberName(function.Name, function.Attributes)
             );
 
-        var pass = new DartFlatClaimPass(moduleName, userMembers);
+        var candidates = functions
+            .Where(function => function is { OverloadName: not null, OverloadRef: not null })
+            .Select(function => new DartFlatCandidate(
+                DartOverloadKey.Of(function.OverloadRef!),
+                IrToDartNamingPolicy.ToFastPathName(function.Name, function.OverloadName!.Suffix),
+                function.SignatureText
+            ));
 
-        foreach (var function in functions)
-        {
-            if (function is { OverloadName: { } overloadName, OverloadRef: { } overloadRef })
-            {
-                pass.Claim(
-                    DartOverloadKey.Of(overloadRef),
-                    IrToDartNamingPolicy.ToFastPathName(function.Name, overloadName.Suffix),
-                    function.SignatureText
-                );
-            }
-        }
+        return Run(moduleName, userMembers, candidates);
+    }
+
+    private static DartOverloadClaims Run(
+        string ownerName,
+        IEnumerable<string> userMembers,
+        IEnumerable<DartFlatCandidate> candidates
+    )
+    {
+        var pass = new DartFlatClaimPass(ownerName, userMembers);
+
+        foreach (var candidate in candidates)
+            pass.Claim(candidate.Key, candidate.Name, candidate.Signature);
 
         return pass.Result();
     }
@@ -108,3 +111,6 @@ internal sealed class DartFlatClaimPass
             _findings
         );
 }
+
+/// <summary>One overload's candidate fast path in a flat table, with its C# signature.</summary>
+internal sealed record DartFlatCandidate(DartOverloadKey Key, string Name, string? Signature);

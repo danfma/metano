@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Dart.AST;
 using Metano.Compiler.Dart.Bridge;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -299,6 +300,14 @@ public static class IrBodyPrinter
                     sb.Append("?.call");
                 sb.Append('(');
                 PrintArgs(sb, call.Arguments);
+                sb.Append(')');
+                break;
+            case DartNamedConstruction construction:
+                sb.Append(FormatType(construction.Type))
+                    .Append('.')
+                    .Append(construction.ConstructorName)
+                    .Append('(');
+                PrintArgs(sb, construction.Arguments);
                 sb.Append(')');
                 break;
             case IrNewExpression ne:

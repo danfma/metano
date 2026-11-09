@@ -23,9 +23,11 @@ internal static class DartConstructorChainArguments
 
         var parameters = chain.Target.PlainParameters;
         var positional = chain.Arguments.TakeWhile(argument => argument.Name is null).ToList();
+
         var named = chain
             .Arguments.Where(argument => argument.Name is not null)
             .ToDictionary(argument => argument.Name!, StringComparer.Ordinal);
+
         var lastPassed = LastPassedIndex(parameters, positional.Count, named);
 
         return parameters

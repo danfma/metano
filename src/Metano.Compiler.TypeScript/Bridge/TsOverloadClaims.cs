@@ -133,15 +133,7 @@ internal sealed class TsOverloadClaims
     }
 
     private static MetanoDiagnostic DiagnosticOf(TsClaimFinding finding, INamedTypeSymbol type) =>
-        new(finding.Severity, finding.Code, finding.Message, LocationOf(type, finding.Site));
-
-    /// <summary>The declaration a finding is about (<see cref="OverloadDeclarationSite"/>).</summary>
-    private static Location? LocationOf(INamedTypeSymbol type, TsClaimSite site) =>
-        new OverloadDeclarationSite(
-            site.MemberName,
-            site.ConstructorOrdinal,
-            site.Signature
-        ).LocationIn(type);
+        new(finding.Severity, finding.Code, finding.Message, finding.Site.LocationIn(type));
 }
 
 /// <summary>
@@ -190,17 +182,5 @@ internal sealed record TsClaimFinding(
     MetanoDiagnosticSeverity Severity,
     string Code,
     string Message,
-    TsClaimSite Site
-);
-
-/// <summary>
-/// The C# declaration a claim finding is about: a constructor by its
-/// declaration ordinal, otherwise a member by its C# name — a method overload
-/// also by its signature text (<see cref="OverloadSignatureText"/>), since the
-/// overloads of a group may share every parameter name.
-/// </summary>
-internal sealed record TsClaimSite(
-    string MemberName,
-    int? ConstructorOrdinal = null,
-    string? Signature = null
+    OverloadDeclarationSite Site
 );

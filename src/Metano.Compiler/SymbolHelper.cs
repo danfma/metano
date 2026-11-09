@@ -1411,6 +1411,19 @@ public static class SymbolHelper
                 a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
             );
 
+    /// <summary>
+    /// Whether the compilation declaring <paramref name="type"/> transpiles it,
+    /// by the rule that compilation applies to its own types
+    /// (<see cref="IsTranspilable"/>): a target asks it of a type declared in
+    /// this compilation or in a project reference alike.
+    /// </summary>
+    public static bool IsTranspiledByItsAssembly(INamedTypeSymbol type) =>
+        IsTranspilable(
+            type,
+            type.ContainingAssembly.HasTranspileAssembly(),
+            type.ContainingAssembly
+        );
+
     public static bool IsTranspilable(
         ISymbol symbol,
         bool assemblyWideTranspile = false,
