@@ -892,10 +892,10 @@ describe("int64 — other converters of a 64-bit closure read doubles (FR-053)",
 
     for (const price of ["1.5", "1e3", "-0.0", "0.30000000000000004", "1.10"]) {
       const text = `{"price":${price}}`;
-      const expected = (JsonSerializer.deserializeText(text, decimalOnly) as { price: Decimal }).price;
-      const actual = (JsonSerializer.deserializeText(text, mixed) as { price: Decimal }).price;
+      const expected = JsonSerializer.deserializeText(text, decimalOnly) as { price: Decimal };
+      const actual = JsonSerializer.deserializeText(text, mixed) as { price: Decimal };
 
-      expect([price, actual.toString()]).toEqual([price, expected.toString()]);
+      expect([price, actual.price.toString()]).toEqual([price, expected.price.toString()]);
     }
   });
 });
