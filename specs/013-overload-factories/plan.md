@@ -391,7 +391,14 @@ rule and migration guide are `docs/overloads.md`; the CHANGELOG lists the 3.0 it
 Accepted. Known Dart gaps (prototype, RT-02, #572): no `super(...)` initializer, so a derived
 class of a dispatched base does not select the base's named constructor; a `: this(...)` chain
 whose constructor has a body keeps the body without the chain (`MS0001` at the constructor);
-module fast paths are claimed per file, not across the files a consumer imports together.
+module fast paths are claimed per file, not across the files a consumer imports together; named
+arguments out of parameter order are passed in parameter order, which the core reports as
+`MS0001` at a call with two or more order-sensitive evaluations (the opt-in
+`IrExtractionContext.KeepsArgumentEvaluationOrder`, set by TypeScript only; with one, the call stays
+inline and Dart types each argument from its parameter). Two closure-based attempts were withdrawn
+in review: an untyped closure parameter loses Dart's downward inference (`2` passed as a `double`,
+`[]` as a `List<int>`, a generic `T`) and a syntactic "unassigned local" test misses a write
+captured by a closure; the typed-closure approach is #591.
 
 Deferred from the 013d reviews (design, no behavior): reporting `MS0069` from the core so every target gets it;
 splitting `MethodOverloadGroups` into grouping, anchoring and inherited-dispatcher modules; a shared

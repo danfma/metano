@@ -57,6 +57,17 @@ public sealed record IrExtractionContext(
     public bool EmitsOperatorFastPaths { get; init; }
 
     /// <summary>
+    /// Whether the target keeps C#'s evaluation order for a bound call whose
+    /// named arguments are out of parameter order
+    /// (<see cref="IR.IrSelectedOverload.EvaluationOrder"/>). Opt-in:
+    /// TypeScript binds such arguments in source order. A target that leaves
+    /// it unset passes them in parameter order, which cannot differ from C#
+    /// while at most one argument has an observable evaluation; with two or
+    /// more the extractor reports <c>MS0001</c> at the call (Dart, #591).
+    /// </summary>
+    public bool KeepsArgumentEvaluationOrder { get; init; }
+
+    /// <summary>
     /// The context of a constant parameter default: the origin resolver and
     /// the 64-bit lowering. It names no local, so it needs no local naming,
     /// and it drops the target and the compilation as defaults always have:
