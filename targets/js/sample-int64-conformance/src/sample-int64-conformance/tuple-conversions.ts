@@ -106,6 +106,29 @@ export function explicitNarrowed(a: bigint): number {
   return narrow[0];
 }
 
+export function iteratedSum(a: number, b: number): bigint {
+  const pairs = ((receiver$temp$0) => {
+    receiver$temp$0.push([a, b] as [number, number]);
+    receiver$temp$0.push([b, a] as [number, number]);
+
+    return receiver$temp$0;
+  })([] as Array<[number, number]>);
+  let total = 0n;
+  for (const pair$element of pairs) {
+    const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
+    total = BigInt.asIntN(64, total + BigInt.asIntN(64, BigInt.asIntN(64, pair[0] - pair[1]) + pair[0]));
+  }
+
+  return total;
+}
+
+export function nullableLiteralSum(a: number, b: number): bigint {
+  const wide = [BigInt(a), BigInt(b)] as [bigint, bigint];
+  let pair: [bigint, bigint];
+
+  return wide != null && (pair = wide, true) ? BigInt.asIntN(64, pair[0] + pair[1]) : -1n;
+}
+
 export function spreadListSum(a: number, b: number): bigint {
   const ints = ((receiver$temp$0) => {
     receiver$temp$0.push(a);

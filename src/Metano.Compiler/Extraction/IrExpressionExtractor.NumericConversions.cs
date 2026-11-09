@@ -49,8 +49,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Wraps <paramref name="value"/> in the implicit numeric conversion
-    /// Roslyn reports for <paramref name="expression"/> when the exact 64-bit
-    /// lowering needs it (FR-010, FR-019). A parenthesized or
+    /// Roslyn reports for <paramref name="expression"/> when it crosses a
+    /// 64-bit integer (FR-010, FR-019). A parenthesized or
     /// <c>checked</c> / <c>unchecked</c> expression reports the conversion of
     /// its operand, which carries it, so it is not wrapped twice. A relational
     /// operand of two integer kinds keeps its own type, because JS compares a
@@ -66,7 +66,7 @@ public sealed partial class IrExpressionExtractor
 
         var typeInfo = _semantic.GetTypeInfo(expression);
 
-        if (ImplicitExactConversionEndpoints(expression, typeInfo) is not var (from, to))
+        if (ImplicitSixtyFourBitEndpoints(expression, typeInfo) is not var (from, to))
             return value;
 
         return new IrNumericConversion(
@@ -79,16 +79,17 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// A literal already carries its converted kind; a parenthesized or
-    /// <c>checked</c> / <c>unchecked</c> expression leaves the conversion to
-    /// its operand.
+    /// A literal already carries its converted kind; a parenthesized,
+    /// <c>checked</c> / <c>unchecked</c> or null-forgiving (<c>x!</c>)
+    /// expression leaves the conversion to its operand.
     /// </summary>
     private static bool CarriesNoImplicitConversion(
         ExpressionSyntax expression,
         IrExpression value
     ) =>
         value is IrLiteral
-        || expression is ParenthesizedExpressionSyntax or CheckedExpressionSyntax;
+        || expression is ParenthesizedExpressionSyntax or CheckedExpressionSyntax
+        || expression.IsKind(SyntaxKind.SuppressNullableWarningExpression);
 
     /// <summary>
     /// The endpoints of the implicit conversion Roslyn reports for
@@ -96,7 +97,7 @@ public sealed partial class IrExpressionExtractor
     /// explicit; <c>null</c> for no conversion, a non-numeric one, one that
     /// needs no node, or an exact relational operand (FR-069).
     /// </summary>
-    private (IrNumericEndpoint From, IrNumericEndpoint To)? ImplicitExactConversionEndpoints(
+    private (IrNumericEndpoint From, IrNumericEndpoint To)? ImplicitSixtyFourBitEndpoints(
         ExpressionSyntax expression,
         TypeInfo typeInfo
     )

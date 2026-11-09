@@ -81,8 +81,9 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>..source</c> with the conversion C# applies to each element it
-    /// spreads. A converted string or dictionary spread is reported: its
-    /// elements are not what the target iterates.
+    /// spreads. A converted string spread is reported: C# spreads its UTF-16
+    /// code units, which the mapped spread does not iterate. (A dictionary
+    /// spreads key-value pairs, which have no numeric conversion.)
     /// </summary>
     private IrExpression ExtractSpread(SpreadElementSyntax spread)
     {
@@ -93,7 +94,7 @@ public sealed partial class IrExpressionExtractor
         {
             return ReportUnsupported(
                 spread,
-                "spread of a string or dictionary whose elements convert to a 64-bit integer"
+                "spread of a string whose characters convert to a 64-bit integer"
             );
         }
 
@@ -103,10 +104,14 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The conversion from the spread's element type to the element type of
     /// the collection being built, when it crosses a 64-bit integer (a
-    /// scalar, or a tuple element by element); <c>null</c> otherwise.
+    /// scalar, or a tuple element by element); <c>null</c> otherwise, and
+    /// always for Dart, which spreads the source as it is.
     /// </summary>
     private IrSpreadElementConversion? SpreadElementConversionOf(SpreadElementSyntax spread)
     {
+        if (_target is Metano.Annotations.TargetLanguage.Dart)
+            return null;
+
         if (
             _semantic.GetOperation(spread)
                 is not ISpreadOperation
@@ -118,14 +123,15 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var name = NextSpreadElementName();
-        var element = new IrIdentifier(name);
-        var implicitly = new TupleElementConversions(NumericEndpoints.CrossesSixtyFourBits, false);
-        var converted = ConvertedElement(spread, element, from, to, implicitly);
+        var implicitly = TupleElementConversions.Implicit;
 
-        return ReferenceEquals(converted, element)
-            ? null
-            : new IrSpreadElementConversion(name, converted);
+        if (!implicitly.ConvertsElement(from, to))
+            return null;
+
+        var name = NextSpreadElementName();
+        var converted = ConvertedElement(spread, new IrIdentifier(name), from, to, implicitly);
+
+        return new IrSpreadElementConversion(name, converted);
     }
 
     /// <summary>

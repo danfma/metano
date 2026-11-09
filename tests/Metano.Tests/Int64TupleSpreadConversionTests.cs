@@ -54,6 +54,20 @@ public class Int64TupleSpreadConversionTests
             public bool EqualsMethod((long, long) wide, (int, int) narrow) => wide.Equals(narrow);
 
             public bool SameTypes((long, long) a, (long, long) b) => a == b;
+
+            public long Iterated(List<(int, int)> pairs)
+            {
+                long total = 0;
+
+                foreach ((long, long) pair in pairs)
+                    total += pair.Item1 + pair.Item2;
+
+                return total;
+            }
+
+            public (long, long)? NullableLiteral() => (1, 2);
+
+            public (long, long)? Forgiven((int, int)? pair) => pair!;
         }
 
         [Transpile]
@@ -76,9 +90,7 @@ public class Int64TupleSpreadConversionTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
 
-        await Assert
-            .That(files["pairs.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-tuple-conversions.ts"));
+        await TranspileHelper.AssertGolden("int64-tuple-conversions.ts", files["pairs.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -88,17 +100,16 @@ public class Int64TupleSpreadConversionTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
 
-        await Assert
-            .That(files["spreads.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-spread-conversions.ts"));
+        await TranspileHelper.AssertGolden("int64-spread-conversions.ts", files["spreads.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
     /// <summary>
-    /// A string spreads its characters and a dictionary its pairs, which the
-    /// mapped spread does not read as C# does, so a converted one is reported
-    /// instead of emitted unconverted.
+    /// A string spreads its UTF-16 code units, which the mapped spread does
+    /// not read as C# does, so a converted one is reported instead of emitted
+    /// unconverted. (A dictionary spreads key-value pairs, which C# never
+    /// converts numerically, so it has no such case.)
     /// </summary>
     [Test]
     public async Task ConvertedStringSpread_IsReported()
@@ -118,14 +129,47 @@ public class Int64TupleSpreadConversionTests
         var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
 
         await Assert.That(messages).HasSingleItem();
-        await Assert.That(messages[0]).Contains("spread of a string or dictionary");
+
+        await Assert
+            .That(messages[0])
+            .IsEqualTo(
+                "Expression '.. text' (spread of a string whose characters convert to a 64-bit "
+                    + "integer) is not supported by the transpiler."
+            );
+    }
+
+    [Test]
+    public async Task TupleConversionOverMoreThanSevenElements_IsReported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Wide
+            {
+                public (long, long, long, long, long, long, long, long) Of(
+                    (int, int, int, int, int, int, int, int) row
+                ) => row;
+            }
+            """
+        );
+
+        var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
+
+        await Assert.That(messages).HasSingleItem();
+
+        await Assert
+            .That(messages[0])
+            .IsEqualTo(
+                "Expression 'row' (tuple conversion over more than 7 elements) is not supported "
+                    + "by the transpiler."
+            );
     }
 
     /// <summary>Dart's <c>int</c> holds both widths, so its records and spreads stay as they are.</summary>
     [Test]
     public async Task Dart_KeepsTheTupleAndTheSpread()
     {
-        var (files, _) = DartTranspileHelper.Transpile(Source);
+        var (files, diagnostics) = DartTranspileHelper.Transpile(Source + DartOnlySource);
 
         await Assert
             .That(files["pairs.dart"])
@@ -133,7 +177,19 @@ public class Int64TupleSpreadConversionTests
 
         await Assert.That(files["spreads.dart"]).Contains("[...ints]");
         await Assert.That(files["spreads.dart"]).DoesNotContain("element$temp");
+        await Assert.That(files["codes.dart"]).Contains("[...text.split('')]");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
+
+    /// <summary>A converted string spread, which only TypeScript reports: Dart prints no conversion.</summary>
+    private const string DartOnlySource = """
+
+        [Transpile]
+        public class Codes
+        {
+            public List<long> Of(string text) => [.. text];
+        }
+        """;
 
     private static List<MetanoDiagnostic> UnsupportedFeatures(
         IEnumerable<MetanoDiagnostic> diagnostics
