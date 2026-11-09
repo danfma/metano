@@ -45,7 +45,7 @@ than marking each type individually.
 ### `[Name("x")]`
 
 Overrides the name emitted in the TypeScript output. Works on types, methods,
-properties, fields, and enum members.
+constructor overloads, properties, fields, and enum members.
 
 ```csharp
 [Name("USD")] USDollar,
@@ -56,6 +56,28 @@ public void CallApi() { /* … */ }
 [Name("snake_case_name")]
 public string OriginalCamelCase { get; set; }
 ```
+
+On one overload of an overloaded constructor, method, operator or module
+function, `[Name]` pins only the overload's generated suffix (spec 013 FR-005):
+the dispatcher keeps the C# name, and the other overloads are named by the
+usual rules.
+
+```csharp
+public Money(string text) { /* … */ }        // Money.fromText, Money.byMoneyText
+
+[Name("cents")]
+public Money(int value) { /* … */ }          // Money.fromCents, Money.byMoneyCents
+
+[Name("cents")]
+public Money Add(int value) => /* … */;      // money.addCents, beside the dispatcher money.add
+```
+
+The value must start with an ASCII letter or `_` and contain only ASCII letters,
+digits and `_`; otherwise `MS0003` is reported and the generated suffix is kept.
+Two overloads pinned to the same suffix also report `MS0003`. An override or an
+interface implementation always takes the suffix of the member it overrides or
+implements, so put `[Name]` there; a different `[Name]` on the implementer is
+ignored with an `MS0003` warning.
 
 ### `[Ignore]`
 

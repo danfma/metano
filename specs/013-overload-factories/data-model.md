@@ -37,7 +37,8 @@ public sealed record IrNamingComponent(
 /// (DECIDED-18), so the emitted spelling may carry a `$`.
 /// </summary>
 public sealed record IrOverloadName(
-    string Suffix               // "Amount", "WidthHeight", "NumericsDecimal", "Default" (013a)
+    string Suffix               // "Amount", "WidthHeight", "NumericsDecimal", "Default" (013a),
+                                // or a [Name] pin, capitalized: "Cents" (013f, FR-005)
     // Deferred to the slices that consume them:
     // IrOverloadRef Root       — the root overload this name belongs to (FR-025, 013d)
 );
