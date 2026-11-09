@@ -411,12 +411,12 @@ public class OverloadCallMethodSiteGoldenTests
         // The plain statics dispatch like the extension beside them: one
         // fast path per overload, named off the parameter spellings, under
         // one dispatcher whose first signature names the group.
-        await Assert.That(module).Contains("export function foldX(x: number)");
-        await Assert.That(module).Contains("export function foldS(s: string)");
+        await Assert.That(module).Contains("export function foldX(x: number): number {");
+        await Assert.That(module).Contains("export function foldS(s: string): number {");
         await Assert.That(module).Contains("export function fold(x: number): number;");
 
         // The single extension stays a plain module function of its own.
-        await Assert.That(module).Contains("export function twice(");
+        await Assert.That(module).Contains("export function twice(x: number): number {");
 
         // The private overload shapes the spellings but never joins: no
         // function, no claimed fast path.
@@ -467,15 +467,23 @@ public class OverloadCallMethodSiteGoldenTests
             .ToList();
 
         await Assert.That(shadows.Count).IsEqualTo(1);
-        await Assert.That(shadows[0].Message).Contains("'Mixed.foldX'");
+        await Assert
+            .That(shadows[0].Message)
+            .IsEqualTo(
+                "Fast path 'Mixed.foldX' of 'Fold(int x)' is already taken in the barrel; it is "
+                    + "emitted as 'foldX$' (spec 013 FR-032)."
+            );
         await Assert.That(shadows[0].Location).IsNotNull();
+        await Assert
+            .That(result["mixed.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("extension-container-fast-path-clash.ts"));
 
-        var module = result["mixed.ts"];
+        // The callers call the claimed names; the container qualifier they
+        // keep is the pre-existing #554, so the file is not pinned whole.
+        var calls = result["use-mixed.ts"];
 
-        await Assert.That(module).Contains("export function foldX$(x: number)");
-        await Assert.That(module).DoesNotContain("export function foldX(x: number)");
-        await Assert.That(result["use-mixed.ts"]).Contains("foldX$(1)");
-        await Assert.That(result["use-mixed.ts"]).Contains("foldS(\"ab\")");
+        await Assert.That(calls).Contains("return Mixed.foldX$(1);");
+        await Assert.That(calls).Contains("return Mixed.foldS(\"ab\");");
     }
 
     /// <summary>
@@ -527,18 +535,24 @@ public class OverloadCallMethodSiteGoldenTests
         // overload; GetAll(int x) — the second group — is renamed. The
         // callers call the claimed name of the overload Roslyn resolved.
         var module = result["clash.ts"];
-        await Assert.That(module).Contains("export function getAB(a: number, b: number)");
-        await Assert.That(module).Contains("export function getAllX(allX: number)");
-        await Assert.That(module).Contains("export function getAllX$(x: number)");
-        await Assert.That(module).Contains("export function getAllXY(x: number, y: number)");
+        await Assert.That(module).Contains("export function getAB(a: number, b: number): number {");
+        await Assert.That(module).Contains("export function getAllX(allX: number): number {");
+        await Assert.That(module).Contains("export function getAllX$(x: number): number {");
+        await Assert
+            .That(module)
+            .Contains("export function getAllXY(x: number, y: number): number {");
 
         var shadows = diagnostics
             .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
             .ToList();
 
         await Assert.That(shadows.Count).IsEqualTo(1);
-        await Assert.That(shadows[0].Message).Contains("'Clash.getAllX'");
-        await Assert.That(shadows[0].Message).Contains("of 'GetAll(int x)'");
+        await Assert
+            .That(shadows[0].Message)
+            .IsEqualTo(
+                "Fast path 'Clash.getAllX' of 'GetAll(int x)' is already taken in the barrel; it is "
+                    + "emitted as 'getAllX$' (spec 013 FR-032)."
+            );
         await Assert.That(shadows[0].Location).IsNotNull();
 
         // The call sites call the claimed name of the overload Roslyn
@@ -593,7 +607,7 @@ public class OverloadCallMethodSiteGoldenTests
         var outputs = string.Join("\n", result.Values);
 
         await Assert.That(outputs).DoesNotContain("quxX$");
-        await Assert.That(result["real.ts"]).Contains("export function quxX(");
+        await Assert.That(result["real.ts"]).Contains("export function quxX(x: number): number {");
     }
 
     /// <summary>
@@ -671,14 +685,20 @@ public class OverloadCallMethodSiteGoldenTests
             .Select(diagnostic => diagnostic.Message)
             .ToList();
 
-        await Assert.That(shadows.Count).IsEqualTo(2);
-        await Assert.That(shadows[0]).Contains("'Res.fooX' of 'Foo(int x)'");
-        await Assert.That(shadows[1]).Contains("'Q.quxX' of 'Qux(int x)'");
-
-        await Assert.That(result["res.ts"]).Contains("export function fooX$(x: number)");
-        await Assert.That(result["res.ts"]).Contains("export function barX(x: number)");
-        await Assert.That(result["res.ts"]).Contains("export function bazX(x: number)");
-        await Assert.That(result["q.ts"]).Contains("export function quxX$(x: number)");
+        await Assert
+            .That(shadows)
+            .IsEquivalentTo([
+                "Fast path 'Res.fooX' of 'Foo(int x)' is already taken in the barrel; it is "
+                    + "emitted as 'fooX$' (spec 013 FR-032).",
+                "Fast path 'Q.quxX' of 'Qux(int x)' is already taken in the barrel; it is "
+                    + "emitted as 'quxX$' (spec 013 FR-032).",
+            ]);
+        await Assert
+            .That(result["res.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-res.ts"));
+        await Assert
+            .That(result["q.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-q.ts"));
         await Assert
             .That(result["use.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved.ts"));
@@ -739,13 +759,17 @@ public class OverloadCallMethodSiteGoldenTests
             .Select(diagnostic => diagnostic.Message)
             .ToList();
 
-        await Assert.That(shadows.Count).IsEqualTo(2);
-        await Assert.That(shadows[0]).Contains("'Res.otherX' of 'Other(int x)'");
-        await Assert.That(shadows[1]).Contains("'Res.fooY' of 'Foo(int y)'");
-
-        await Assert.That(result["res.ts"]).Contains("export function otherX$(x: number)");
-        await Assert.That(result["res.ts"]).Contains("export function otherS(s: string)");
-        await Assert.That(result["res.ts"]).Contains("export function fooY$(y: number)");
+        await Assert
+            .That(shadows)
+            .IsEquivalentTo([
+                "Fast path 'Res.otherX' of 'Other(int x)' is already taken in the barrel; it is "
+                    + "emitted as 'otherX$' (spec 013 FR-032).",
+                "Fast path 'Res.fooY' of 'Foo(int y)' is already taken in the barrel; it is "
+                    + "emitted as 'fooY$' (spec 013 FR-032).",
+            ]);
+        await Assert
+            .That(result["res.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias-res.ts"));
         await Assert
             .That(result["use.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias.ts"));
