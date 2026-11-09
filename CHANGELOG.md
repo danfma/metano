@@ -41,9 +41,30 @@ the migration list.
   `BigInt(dec.toFixed(0))`, which rounded where C# truncates), an `int`
   converted to `BigInteger`, implicitly or by a cast, is `BigInt(i)` (2.x
   emitted the bare `number` for the implicit one), and `(int)dec` truncates
-  before it reads the number (`dec.trunc().toNumber()`).
-- `new T[n]` with a shareable element default (a number, `false`, an enum
-  member) is supported now and emits a filled array; 2.x reported `MS0001`.
+  before it reads the number (`dec.trunc().toNumber()`). The narrowing and
+  floating-point casts of a `BigInteger` — `(int)`, `(uint)`, `(short)`,
+  `(byte)`, `(double)`, `(float)` — and `(BigInteger)someDouble` were erased
+  in 2.x; they call runtime helpers now (`int32FromBigInteger`,
+  `doubleFromBigInteger`, `bigIntegerFromDouble`, …), which throw
+  `OverflowException` where .NET does.
+- `new T[n]` is supported now and emits an array filled with the element
+  default: `0` / `0n` / `new Decimal("0")` for numbers, `false`,
+  `"\u0000"` for `char`, `UUID.empty` for `Guid`, the zero member of an
+  enum (`0 as E` when it declares none), and `null` for a string, a class,
+  a nullable type or a type parameter constrained to `class`. 2.x reported
+  `MS0001`, which other struct elements and unconstrained type parameters
+  still do.
+- Tuples and collection-expression spreads convert element by element where
+  C# does: `(long, long) t = intPair;`, an `(int, int)` returned or passed
+  as a `(long, long)`, `wide == narrow` / `wide.Equals(narrow)` between the
+  two, and `List<long> l = [.. ints];` (also `HashSet<long>`, `long[]`,
+  nested and nullable tuples) emit `[BigInt(p[0]), BigInt(p[1])]` /
+  `...Array.from(ints, (e) => BigInt(e))`. A converted string or
+  dictionary spread (`List<long> codes = [.. text];`) reports `MS0001`.
+- An operator group whose overloads return different types (`int operator
+  +(M, int)` beside `long operator +(M, long)`) declares its dispatcher
+  implementation as `any`, as method dispatchers do; 2.x declared the first
+  overload's type, which did not type-check.
 - `[MapMethod]` / `[MapProperty]` lose the hidden `WhenInt64IsBigInt` named
   argument (it was honored only in Metano's own mappings).
 - Interop declarations (`[Import]`, `[Emit]`, `[External]`, user
@@ -52,9 +73,16 @@ the migration list.
 - Overload dispatch decides `M(int)` vs `M(long)` by `typeof`; `object o =
   5UL; o is long` is now `true` (a raw `bigint` reads its range).
 - `uint op int` promotes to `long` in C#, so those expressions produce
-  `bigint` intermediates even in code that never names `long`; and
-  floating-point → integer casts truncate now instead of being erased
-  (`(int)3.7` is `3`).
+  `bigint` intermediates even in code that never names `long` (`u == i`
+  emits `BigInt(u) === BigInt(i)`); so does an `int` passed to a BCL
+  parameter that is a `long` (`new TimeSpan(i)`,
+  `TimeSpan.FromMilliseconds(i)`, `DateTimeOffset.FromUnixTimeSeconds(i)`
+  pass `BigInt(i)`). Floating-point → integer casts truncate now instead of
+  being erased (`(int)3.7` is `3`).
+- For authors of other targets: the core always produces
+  `IrNumericConversion`, `IrIntegerOverflow`, folded 64-bit literals,
+  `IrArrayCreation` with its element default, and the element conversion of
+  an `IrSpreadExpression`; no extraction option turns them off.
 - The cost is documented and benchmarked (`bun run bench:int64`); code that
   does not need 64-bit range should keep `int` or `double`.
 
