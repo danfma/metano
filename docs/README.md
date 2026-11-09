@@ -27,6 +27,7 @@ flowchart TD
 | [Getting Started](getting-started.md) | Create a first C# source project, configure `Metano.Build`, and consume the generated TypeScript package. |
 | [Attribute Reference](attributes.md) | Choose the right annotation for selection, naming, output shape, module emission, imports, guards, and target-specific TypeScript behavior. |
 | [BCL Type Mappings](bcl-mappings.md) | Understand how primitives, collections, temporal values, `decimal`, `Guid`, LINQ, async, strings, and math are emitted. The current reference is TypeScript-focused. |
+| [Overloads](overloads.md) | Use the factories and fast paths generated for overloaded constructors and methods, predict or pin their names, and migrate overload code from 2.x. |
 | [Cross-Project References](cross-package.md) | Share generated types across multiple C# assemblies and npm packages. |
 | [JSON Serialization](serialization.md) | Generate TypeScript serializer metadata from `JsonSerializerContext`. |
 | [Comparison](comparison.md) | Decide whether Metano fits better than Blazor, Bridge.NET-style tools, OpenAPI generators, or Fable for your use case. |

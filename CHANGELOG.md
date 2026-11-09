@@ -6,9 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased (3.0.0 migration notes)
 
-Pre-release notes for the 3.0.0 breaking changes that are already merged
-behind the compiler-internal staging switch; the release regenerates the
-released sections, and these notes carry forward the migration list.
+Pre-release notes for the 3.0.0 breaking changes that are already merged —
+the 64-bit ones behind the compiler-internal staging switch, the overload ones
+directly; the release regenerates the released sections, and these notes carry
+forward the migration list.
 
 ### ⚠ 64-bit integers become `bigint` (spec 012)
 
@@ -42,6 +43,65 @@ released sections, and these notes carry forward the migration list.
   (`(int)3.7` is `3`).
 - The cost is documented and benchmarked (`bun run bench:int64`); code that
   does not need 64-bit range should keep `int` or `double`.
+
+### ⚠ Overload factories, fast paths and direct call sites (spec 013)
+
+The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
+
+- Generated code calls the overload C# bound: `new Money(19.9m)` →
+  `Money.fromAmount(…)`, `: base(amount)` → `super(Money.byMoneyAmount, …)`,
+  `d.Add(1)` → `d.addX(1)`, `base.Add(1)` → `super.addX(1)`, operators →
+  `Money.__addMoneyInt32(a, b)`, overloaded module functions and extensions →
+  their exported fast paths, with omitted defaults passed explicitly. The
+  dispatchers stay public for hand-written TypeScript, which is bypassed when
+  it patches a generated constructor's or dispatcher's runtime branches:
+  override the fast path instead, and implement the fast paths of a generated
+  interface (TS2420).
+- Static binding: `object o = "s"; F(o);` with `F(object)` / `F(string)` now
+  calls `F(object)` in generated code, as C# does (the 2.x dispatcher chose by
+  runtime type).
+- New public members: per constructor overload a `protected static readonly`
+  selector (`byMoneyAmount`) and a factory (`fromAmount`, with the overload's
+  accessibility; `static override` when it keeps an inherited factory's name);
+  per method overload an addressable fast path with its overload's
+  accessibility (`override` / `abstract` where C# has them, declared on
+  interfaces); exported module fast paths in the barrels. A derived class
+  inherits the base factories it does not redeclare.
+- Renamed fast paths (exact CLR spellings, root-anchored names): `fInt` →
+  `fInt32`, `gLong` → `gInt64`, `wLong` / `wULong` → `wInt64` / `wUInt64`,
+  `pickLong` / `pickULong` → `pickInt64` / `pickUInt64`, `sumIntArray` →
+  `sumInt32Array`, `hIntOrNull` → `hInt32OrNull`, `identityValue` →
+  `identityT`, `now` → `nowDefault`, `areaSide` → `areaS`; operator helpers
+  `__addAcctLong` / `__addAcctULong` → `__addAcctInt64` / `__addAcctUInt64`
+  (every `Int`, `Long`, `ULong`, `Bool`, `Float` spelling); duplicate 2.x
+  names split (`uInt32` / `uUInt32`, `lListOfInt32` / `lInt32Array`,
+  `kNumericsDecimal` / `kOtherDecimal`); a `From`-style fast path a factory
+  claims takes `$` (`fromAmount$`).
+- `[Name]` on one overload pins its suffix only: an operator overload's
+  `[Name("scaled")]` (`__scaled`) becomes `__multiply` plus the fast path
+  `__multiplyScaled`; a module or extension overload's `[Name("text")]`
+  (`textS`) becomes `twiceText`; an interface overload's `[Name("side")]`
+  (`side(s)` beside `area(w, h)`) becomes `area(s)` plus the fast path
+  `areaSide`; a class method overload's `[Name("addText")]`, ignored in 2.x
+  (`addS`), becomes `addAddText`. Conversion operators keep their `[Name]`
+  (`__toInt`).
+- `[JsonFactory]` on a method of an overloaded group is now `MS0034` (error):
+  `[JsonFactory] From(string)` beside `[Name("num")] From(int)` used to
+  generate a descriptor calling the dispatcher.
+- New diagnostics: `MS0067` (warning: a generated name was taken and took
+  `$`), `MS0068` (error: a user member takes a generated fast path or factory
+  name), `MS0069` (warning: a generic interface with overload groups
+  implemented more than once keeps runtime dispatch); `MS0003` also reports the
+  naming dead end and invalid or ignored `[Name]` pins.
+- `stripInternal` is unsupported for a package consumed by other Metano
+  packages, whose generated code calls its `internal` factories and fast paths.
+- Upgrade packages and consumers together: a 3.0 consumer with a project
+  reference calls factories and fast paths a 2.x-built producer lacks; a
+  metadata-only reference keeps the dispatcher calls.
+- Dart (experimental): overloaded constructors become named constructors
+  (`Dimension.fromSize`) and overloaded methods fast paths (`addX`), with
+  direct call sites, instead of the primary overload alone; `[Name]` on an
+  overload pins its suffix there too, and call sites spell a method's `[Name]`.
 
 ## 2.10.1
 
