@@ -87,8 +87,8 @@ the same overload differently after claims; the core candidates are identical.
   (`: this(Y: y, X: s.Length)`). These false positives go away with #591, which checks whether
   the relative order of two order-sensitive evaluations actually changes. It does **not** cover
   property getters with side effects: a reordered call whose arguments are all member reads
-  (`c.Two(b: h.P, a: h.Q)`) is considered free of side effects by the core and keeps parameter
-  order without a report, on every target (#592).
+  (`c.Two(b: h.P, a: h.Q)`) is considered free of side effects by the core for Dart and keeps parameter
+  order without a report (#592; the TypeScript target binds such a call in source order).
   The prototype still emits no `super(...)` initializer for a derived constructor (RT-02, #572),
   so `BaseOverload` is unused there.
 - **`[Name]`.** Pins the suffix as in TypeScript, with the same `MS0003` reports; a method's

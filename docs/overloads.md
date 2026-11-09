@@ -288,7 +288,8 @@ Limitations of the experimental Dart target:
   conservative: it also counts a receiver that is a computation and an
   extension call's receiver, which run first in both languages, so
   `h.Inner.Two(b: Next(), a: 3)` reports although its Dart order matches C#.
-  Property getters with side effects are not covered (#592). Keeping C#'s
+  Property getters with side effects are not covered in Dart (#592; the
+  TypeScript target binds them in source order). Keeping C#'s
   order, without these false positives, is #591.
 
 Gaps of the Dart prototype that predate spec 013 and also touch overloads:
