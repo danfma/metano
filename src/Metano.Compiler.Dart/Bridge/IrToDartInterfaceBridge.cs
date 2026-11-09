@@ -84,6 +84,7 @@ public static class IrToDartInterfaceBridge
                 IrToDartTypeMapper.Map(p.Type)
             ))
             .ToList();
+
         return new DartMethodSignature(
             Name: name,
             Parameters: parameters,

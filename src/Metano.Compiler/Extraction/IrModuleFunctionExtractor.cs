@@ -444,6 +444,7 @@ public static class IrModuleFunctionExtractor
         var localNames = LocalBindingDisambiguator.ForMember(method, context);
 
         var parameters = new List<IrParameter> { receiver };
+
         parameters.AddRange(
             method.Parameters.Select(p =>
                 OutParameterFlow.Annotate(

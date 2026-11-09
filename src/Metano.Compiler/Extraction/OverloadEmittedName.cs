@@ -33,7 +33,7 @@ public static class OverloadEmittedName
     private static bool PinsItsSuffix(IMethodSymbol method, TargetLanguage? target) =>
         OverloadSuffixPin.Applies(method)
         && method.ContainingType is { } type
-        && EmitsOverloadDispatchers(type, target)
+        && PinsOverloadSuffixes(type, target)
         && IsDispatchedOverload(method, type, target);
 
     private static bool IsDispatchedOverload(
@@ -47,12 +47,15 @@ public static class OverloadEmittedName
             : MethodOverloadGroups.GroupOf(method, target) is { IsDispatched: true };
 
     /// <summary>
-    /// A type whose overload groups the toolchain emits behind a dispatcher:
-    /// transpiled, and not <c>[External]</c> (it emits nothing, so several C#
-    /// overloads can bind one JavaScript function by <c>[Name]</c>),
-    /// <c>[JsCallable]</c> or <c>[PlainObject]</c> (no dispatcher either).
+    /// Whether a <c>[Name]</c> on an overload of a dispatched group of
+    /// <paramref name="type"/> pins a suffix (its group is emitted behind a
+    /// dispatcher, or as fast paths): transpiled, and not <c>[External]</c>
+    /// (it emits nothing, so several C# overloads can bind one JavaScript
+    /// function by <c>[Name]</c>), <c>[JsCallable]</c> or <c>[PlainObject]</c>
+    /// (no dispatcher either). A target that keeps only the primary of such a
+    /// group declares it under the name call sites spell from this rule.
     /// </summary>
-    private static bool EmitsOverloadDispatchers(INamedTypeSymbol type, TargetLanguage? target) =>
+    public static bool PinsOverloadSuffixes(INamedTypeSymbol type, TargetLanguage? target) =>
         IrTypeRefMapper.IsTranspilableType(type, target)
         && !type.HasExternal()
         && !type.HasJsCallable()

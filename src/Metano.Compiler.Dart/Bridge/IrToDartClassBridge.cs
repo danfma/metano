@@ -19,7 +19,7 @@ namespace Metano.Compiler.Dart.Bridge;
 /// constructor overload (<c>Dimension.fromSize</c>; a <c>: this(...)</c> chain redirects to
 /// its target's) and one fast path per method overload (<c>addXY</c>), with no dispatcher and
 /// no selector. An overloaded operator group and the overloads of a keep-today's-emission
-/// shape (<see cref="DartTypeShapes.NamesOverloadMembers"/>) keep the primary declaration.
+/// shape (<see cref="DartOverloadShape.NamesMembers"/>) keep the primary declaration.
 /// </para>
 /// </summary>
 public static class IrToDartClassBridge
@@ -31,7 +31,7 @@ public static class IrToDartClassBridge
         DartIrRewriter rewriter
     )
     {
-        var namesOverloadMembers = DartTypeShapes.NamesOverloadMembers(ir);
+        var namesOverloadMembers = claims.Shape.NamesMembers;
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var modifier = ResolveClassModifier(ir);
         var typeParameters = IrToDartTypeParameterMapper.Map(ir.TypeParameters);
@@ -78,10 +78,11 @@ public static class IrToDartClassBridge
                     case IrMethodDeclaration method:
                         AddMethod(
                             method,
-                            DartClassMemberNames.MethodNameOf(ir, method),
+                            DartClassMemberNames.MethodNameOf(claims.Shape, method),
                             members,
                             rewriter
                         );
+
                         break;
                 }
             }
@@ -480,7 +481,7 @@ public static class IrToDartClassBridge
         var name = claims.RequiredConstructorNameAt(overload.DeclarationOrdinal);
         var constructor = ConvertConstructor(overload, className, name, rewriter);
 
-        if (overload is not { ThisChain: { } chain, Body: null or { Count: 0 } })
+        if (overload.ThisChain is not { } chain || KeepsBodyWithoutChain(overload))
             return constructor;
 
         var redirect = new DartConstructorRedirect(
@@ -497,6 +498,15 @@ public static class IrToDartClassBridge
             Redirect = redirect,
         };
     }
+
+    /// <summary>
+    /// Whether a constructor of a dispatched set chains through
+    /// <c>: this(...)</c> and has a body of its own, which a Dart redirecting
+    /// constructor cannot carry: its named constructor keeps the body without
+    /// the chain.
+    /// </summary>
+    internal static bool KeepsBodyWithoutChain(IrConstructorDeclaration overload) =>
+        overload is { ThisChain: not null, Body.Count: > 0 };
 
     private static DartConstructor ConvertConstructor(
         IrConstructorDeclaration ctor,

@@ -317,12 +317,12 @@ public static class IrBodyPrinter
                 sb.Append(')');
                 break;
             case DartNamedConstruction construction:
-                sb.Append(FormatType(construction.Type))
-                    .Append('.')
-                    .Append(construction.ConstructorName)
-                    .Append('(');
+                var constructor = $"{FormatType(construction.Type)}.{construction.ConstructorName}";
+
+                sb.Append(constructor).Append('(');
                 PrintArgs(sb, construction.Arguments);
                 sb.Append(')');
+
                 break;
             case IrNewExpression ne:
                 // Dart has no `new` keyword (optional since Dart 2). Constructor call

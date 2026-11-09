@@ -186,9 +186,11 @@ public class OverloadNamePinTests
 
         await AssertGolden("overload-name-pin-roots.ts", outputs);
         await Assert.That(diagnostics.Count).IsEqualTo(2);
+
         await Assert
             .That(ignored.All(d => d.Severity == MetanoDiagnosticSeverity.Warning))
             .IsTrue();
+
         await Assert
             .That(onSquare.Message)
             .IsEqualTo(
@@ -196,7 +198,9 @@ public class OverloadNamePinTests
                     + "interface implementation takes the suffix 'Side' of its root "
                     + "'IShape.Area(int s)'; put [Name] on the root (spec 013 FR-005, FR-025)."
             );
+
         await Assert.That(SourceTextOf(onSquare)).IsEqualTo("\"ignored\"");
+
         await Assert
             .That(onDoubler.Message)
             .IsEqualTo(
@@ -298,10 +302,13 @@ public class OverloadNamePinTests
 
         await AssertGolden("overload-name-pin-invalid.ts", files["box.ts"]);
         await Assert.That(diagnostics.Count).IsEqualTo(4);
+
         await Assert
             .That(invalid.Select(SourceTextOf))
             .IsEquivalentTo(["\"2nd\"", "\"a-b\"", "\"x$\"", "\"\""]);
+
         await Assert.That(invalid.All(d => d.Severity == MetanoDiagnosticSeverity.Error)).IsTrue();
+
         await Assert
             .That(invalid.Single(d => SourceTextOf(d) == "\"2nd\"").Message)
             .IsEqualTo(
@@ -333,6 +340,7 @@ public class OverloadNamePinTests
         await AssertGolden("overload-name-pin-equal.ts", files["box.ts"]);
         await Assert.That(deadEnd.Code).IsEqualTo(DiagnosticCodes.AmbiguousConstruct);
         await Assert.That(deadEnd.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+
         await Assert
             .That(deadEnd.Message)
             .IsEqualTo(
@@ -369,6 +377,7 @@ public class OverloadNamePinTests
         var deadEnd = diagnostics.Single();
 
         await AssertGolden("overload-name-pin-dead-end.ts", files["box.ts"]);
+
         await Assert
             .That(deadEnd.Message)
             .IsEqualTo(
@@ -412,6 +421,7 @@ public class OverloadNamePinTests
 
         await AssertGolden("overload-name-pin-claimed.ts", files["fee.ts"]);
         await Assert.That(rename.Code).IsEqualTo(DiagnosticCodes.OverloadNameShadowed);
+
         await Assert
             .That(rename.Message)
             .IsEqualTo(
@@ -506,6 +516,7 @@ public class OverloadNamePinTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await AssertGolden(
             "overload-name-pin-plain-object.ts",
             string.Join("\n", files["reading.ts"], files["use.ts"])
@@ -552,6 +563,7 @@ public class OverloadNamePinTests
             .Select(d => d.Message);
 
         await AssertGolden("overload-name-pin-override-leak.ts", files["derived.ts"]);
+
         await Assert
             .That(namingErrors)
             .IsEquivalentTo([
@@ -585,6 +597,7 @@ public class OverloadNamePinTests
         await Assert.That(unused.Code).IsEqualTo(DiagnosticCodes.AmbiguousConstruct);
         await Assert.That(unused.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert.That(SourceTextOf(unused)).IsEqualTo("\"cents\"");
+
         await Assert
             .That(unused.Message)
             .IsEqualTo(
@@ -638,6 +651,7 @@ public class OverloadNamePinTests
 
         await AssertGolden("overload-name-pin-json-factory.ts", files["email.ts"]);
         await Assert.That(rejected.Code).IsEqualTo(DiagnosticCodes.InvalidJsonFactory);
+
         await Assert
             .That(rejected.Message)
             .IsEqualTo(
@@ -694,6 +708,7 @@ public class OverloadNamePinTests
                 (DiagnosticCodes.AmbiguousConstruct, MetanoDiagnosticSeverity.Error),
                 (DiagnosticCodes.AmbiguousConstruct, MetanoDiagnosticSeverity.Warning),
             ]);
+
         await Assert
             .That(files["box.dart"])
             .IsEqualTo(
@@ -708,6 +723,7 @@ public class OverloadNamePinTests
 
                 """
             );
+
         await Assert
             .That(files["doubler.dart"])
             .IsEqualTo(

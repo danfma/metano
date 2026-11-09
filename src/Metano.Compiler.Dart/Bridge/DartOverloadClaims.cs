@@ -18,12 +18,14 @@ public sealed class DartOverloadClaims
     private readonly IReadOnlyDictionary<DartOverloadKey, string> _fastPaths;
 
     internal DartOverloadClaims(
+        DartOverloadShape shape,
         IReadOnlyDictionary<int, string> constructors,
         IReadOnlyDictionary<DartOverloadKey, string> fastPaths,
         IReadOnlyDictionary<string, DartClaimedMember> members,
         IReadOnlyList<DartClaimFinding> findings
     )
     {
+        Shape = shape;
         _constructors = constructors;
         _fastPaths = fastPaths;
         Members = members;
@@ -33,6 +35,7 @@ public sealed class DartOverloadClaims
     /// <summary>A type with no dispatched overload.</summary>
     public static DartOverloadClaims None { get; } =
         new(
+            DartOverloadShape.None,
             new Dictionary<int, string>(),
             new Dictionary<DartOverloadKey, string>(),
             new Dictionary<string, DartClaimedMember>(StringComparer.Ordinal),
@@ -46,6 +49,9 @@ public sealed class DartOverloadClaims
     internal IReadOnlyDictionary<string, DartClaimedMember> Members { get; }
 
     internal IReadOnlyList<DartClaimFinding> Findings { get; }
+
+    /// <summary>How Dart emits the type's overload groups (<see cref="DartTypeShapes.ShapeOf"/>).</summary>
+    internal DartOverloadShape Shape { get; }
 
     /// <summary>
     /// The named constructor of the constructor overload at

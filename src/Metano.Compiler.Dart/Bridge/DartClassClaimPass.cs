@@ -34,7 +34,7 @@ internal sealed class DartClassClaimPass
     private DartClassClaimPass(DartClassClaimInput input)
     {
         _input = input;
-        _userMembers = DartClassMemberNames.Of(input.Ir, input.NamesOverloadMembers);
+        _userMembers = DartClassMemberNames.Of(input.Ir, input.Shape);
         _table = new Dictionary<string, DartClaimedMember>(StringComparer.Ordinal);
 
         foreach (var member in _userMembers)
@@ -62,13 +62,19 @@ internal sealed class DartClassClaimPass
     {
         ReportHijackedFastPaths();
 
-        if (_input.NamesOverloadMembers)
+        if (_input.Shape.NamesMembers)
         {
             ClaimConstructors();
             ClaimMethodFastPaths();
         }
 
-        return new DartOverloadClaims(_constructors, _fastPaths, InheritableMembers(), _findings);
+        return new DartOverloadClaims(
+            _input.Shape,
+            _constructors,
+            _fastPaths,
+            InheritableMembers(),
+            _findings
+        );
     }
 
     /// <summary>
@@ -279,103 +285,15 @@ internal sealed class DartClassClaimPass
 
 /// <summary>
 /// What the claim pass of one class reads: its IR (shape only), its Dart
-/// name, whether it names its overload members
-/// (<see cref="DartTypeShapes.NamesOverloadMembers"/>), the members it
+/// name, how Dart emits its overload groups
+/// (<see cref="DartTypeShapes.ShapeOf"/>), the members it
 /// inherits from its emitted base, and the emitted name of a root overload
 /// (<c>null</c> when the transform cannot see its declaring type).
 /// </summary>
 internal sealed record DartClassClaimInput(
     IrClassDeclaration Ir,
     string TypeName,
-    bool NamesOverloadMembers,
+    DartOverloadShape Shape,
     IReadOnlyDictionary<string, DartClaimedMember> InheritedMembers,
     Func<IrOverloadRef, string?> RootFastPathOf
 );
-
-/// <summary>
-/// A user member of a class: the Dart name the class bridge declares it under,
-/// its C# name (where a finding about it is located) and whether it is static.
-/// </summary>
-internal sealed record DartUserMember(string DartName, string CSharpName, bool IsStatic);
-
-/// <summary>
-/// The Dart names a class's user members declare — the names the class bridge
-/// gives its promoted parameters, fields, properties, single methods and the
-/// synthesized record members — which every generated name claims against.
-/// </summary>
-internal static class DartClassMemberNames
-{
-    private const string CopyWith = "copyWith";
-
-    public static IReadOnlyList<DartUserMember> Of(IrClassDeclaration ir, bool namesOverloadMembers)
-    {
-        var members = new List<DartUserMember>();
-
-        foreach (var parameter in ir.Constructor?.Parameters ?? [])
-        {
-            if (parameter.Promotion != IrParameterPromotion.None)
-            {
-                members.Add(
-                    new DartUserMember(
-                        IrToDartNamingPolicy.ToParameterName(parameter.Parameter.Name),
-                        parameter.Parameter.Name,
-                        IsStatic: false
-                    )
-                );
-            }
-        }
-
-        foreach (var member in ir.Members ?? [])
-        {
-            if (NameOf(ir, member, namesOverloadMembers) is { } name)
-                members.Add(new DartUserMember(name, member.Name, member.IsStatic));
-        }
-
-        if (ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject)
-            members.Add(new DartUserMember(CopyWith, CopyWith, IsStatic: false));
-
-        return members;
-    }
-
-    /// <summary>
-    /// Whether a method carries a dispatched group whose overloads Dart
-    /// declares as fast paths: an overloaded operator group keeps one
-    /// <c>operator</c> declaration instead.
-    /// </summary>
-    public static bool IsFastPathGroup(IrMethodDeclaration method) =>
-        method.OverloadName is not null && !method.Semantics.IsOperator;
-
-    /// <summary>
-    /// The Dart name of a method declared under one name: a single method's
-    /// <c>[Name]</c> or camelCase name, and the primary that a
-    /// keep-today's-emission shape keeps of a dispatched group. There the
-    /// core decides what the group's <c>[Name]</c> means, and the call sites
-    /// follow it (<see cref="Extraction.OverloadEmittedName"/>): on a
-    /// <c>[PlainObject]</c> type it renames the member, on a branded one it
-    /// pins a suffix, which names nothing the primary declares.
-    /// </summary>
-    public static string MethodNameOf(IrClassDeclaration ir, IrMethodDeclaration method) =>
-        method.OverloadName is not null && !ir.Semantics.IsPlainObject
-            ? IrToDartNamingPolicy.ToParameterName(method.Name)
-            : IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes);
-
-    private static string? NameOf(
-        IrClassDeclaration ir,
-        IrMemberDeclaration member,
-        bool namesOverloadMembers
-    ) =>
-        member switch
-        {
-            IrFieldDeclaration field => IrToDartNamingPolicy.ToParameterName(field.Name),
-            IrPropertyDeclaration property => IrToDartNamingPolicy.ToMemberName(
-                property.Name,
-                property.Attributes
-            ),
-            IrMethodDeclaration method when IrObjectContract.IsHashCodeOverride(method) =>
-                "hashCode",
-            IrMethodDeclaration { Semantics.IsOperator: true } => null,
-            IrMethodDeclaration method when namesOverloadMembers && IsFastPathGroup(method) => null,
-            IrMethodDeclaration method => MethodNameOf(ir, method),
-            _ => null,
-        };
-}

@@ -35,6 +35,7 @@ public class DartBackendTests
         );
 
         await Assert.That(files.Count).IsEqualTo(1);
+
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.AmbiguousConstruct))
             .IsTrue();
@@ -165,6 +166,7 @@ public class DartBackendTests
         // `combine4` for narrow records; anything wider must switch to the
         // builder API so every field still feeds into the hash.
         var fields = string.Join(", ", Enumerable.Range(1, 5).Select(i => $"int F{i}"));
+
         var (files, _) = DartTranspileHelper.Transpile(
             $$"""
             [Transpile]
@@ -253,6 +255,7 @@ public class DartBackendTests
 
         var dart = files["click_handler.dart"];
         await Assert.That(dart).Contains("typedef ClickHandler = void Function(int, int);");
+
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsFalse();
@@ -765,6 +768,7 @@ public class DartBackendTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await Assert
             .That(files["widget.dart"])
             .IsEqualTo(
@@ -1026,6 +1030,7 @@ public class DartBackendTests
         var dart = files["caster.dart"];
         await Assert.That(dart).Contains("o is Square ? o as Square : null");
         await Assert.That(dart).Contains("o is IShape ? o as IShape : null");
+
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsEmpty();
@@ -1046,6 +1051,7 @@ public class DartBackendTests
         );
 
         var dart = files["money.dart"];
+
         await Assert
             .That(dart)
             .Contains("import 'package:metano_runtime/metano_runtime.dart' show HashCode;");
@@ -1285,14 +1291,17 @@ public class DartBackendTests
         await Assert
             .That(dart)
             .Contains("int? orElse(int? a, int? b) => (a == null ? null : a + 1) ?? b;");
+
         await Assert
             .That(dart)
             .Contains("int negatedOrZero(int? a) => (a == null ? null : -a) ?? 0;");
+
         await Assert.That(dart).Contains("int unchecked(int? a) => a ?? (throw ");
 
         await Assert
             .That(dart)
             .Contains("bool isInt(int? a) => (a == null ? null : a + 1) is int;");
+
         await Assert.That(dart).Contains("int twice(int a) => -(-a);");
 
         // A nullable relational pattern's implicit non-null test is Dart's
@@ -1602,6 +1611,7 @@ public class DartBackendTests
         var output = files["comparisons.dart"];
 
         await Assert.That(output).Contains("=> a == b;");
+
         await Assert
             .That(output)
             .Contains("=> (($receiver) => $receiver == null ? null : $receiver == b)(a) == true;");

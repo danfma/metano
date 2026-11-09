@@ -9,8 +9,6 @@ using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Dart.Transformation;
 
@@ -184,16 +182,20 @@ public sealed class DartTransformer
                         ScanFunctionsInto(runtimeRequirements, functions);
                         break;
                     }
+
                     var classIr = IrClassExtractor.Extract(type, Extraction);
-                    ReportUnnamedOverloads(classIr, type.Name);
+                    var classClaims = ClaimsOf(type);
+
+                    ReportUnnamedOverloads(classIr, type.Name, classClaims.Shape);
                     ReportMultiplyConstructedInterfaces(type);
-                    ReportChainedConstructorsWithBodies(type, classIr);
-                    IrToDartClassBridge.Convert(classIr, ClaimsOf(type), statements, _rewriter);
+                    ReportChainedConstructorsWithBodies(type, classIr, classClaims.Shape);
+                    IrToDartClassBridge.Convert(classIr, classClaims, statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
                     break;
 
                 case TypeKind.Delegate:
                     var delegateIr = IrDelegateExtractor.Extract(type, Extraction);
+
                     if (delegateIr is null)
                     {
                         ReportDiagnostic(
@@ -205,6 +207,7 @@ public sealed class DartTransformer
                         );
                         continue;
                     }
+
                     IrToDartDelegateBridge.Convert(delegateIr, statements);
                     ScanInto(runtimeRequirements, delegateIr);
                     break;
@@ -262,50 +265,44 @@ public sealed class DartTransformer
 
     /// <summary>
     /// <c>MS0001</c> at each constructor of a dispatched set that chains
-    /// through <c>: this(...)</c> and has a body of its own: Dart's
+    /// through <c>: this(...)</c> and has a body of its own
+    /// (<see cref="IrToDartClassBridge.KeepsBodyWithoutChain"/>): Dart's
     /// redirecting constructors have no body, so its named constructor keeps
     /// the body without the chain, and the members the chained constructor
     /// sets stay unset.
     /// </summary>
     private void ReportChainedConstructorsWithBodies(
         INamedTypeSymbol type,
-        IrClassDeclaration classIr
+        IrClassDeclaration classIr,
+        DartOverloadShape shape
     )
     {
-        if (
-            !DartTypeShapes.NamesOverloadMembers(classIr)
-            || classIr.Constructor is not { Overloads.Count: > 0 }
-        )
+        if (!shape.NamesMembers || classIr.Constructor is not { Overloads.Count: > 0 } constructor)
             return;
 
-        foreach (var constructor in type.InstanceConstructors)
+        var chainedWithBodies = constructor.DeclarationsInOrder.Where(
+            IrToDartClassBridge.KeepsBodyWithoutChain
+        );
+
+        foreach (var overload in chainedWithBodies)
         {
-            if (ChainedDeclarationWithBody(constructor) is not { } declaration)
-                continue;
+            var site = new OverloadDeclarationSite(
+                IrOverloadRef.ConstructorName,
+                overload.DeclarationOrdinal
+            );
 
             ReportDiagnostic(
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Warning,
                     DiagnosticCodes.UnsupportedFeature,
-                    $"Dart target: the constructor '{type.Name}.{OverloadSignatureText.Of(constructor)}' "
-                        + "chains through : this(...) and has a body; a Dart redirecting "
-                        + "constructor has none, so its named constructor keeps the body without "
-                        + "the chain.",
-                    declaration.GetLocation()
+                    $"Dart target: the constructor '{overload.SignatureText}' chains through "
+                        + ": this(...) and has a body; a Dart redirecting constructor has none, so "
+                        + "its named constructor keeps the body without the chain.",
+                    site.LocationIn(type)
                 )
             );
         }
     }
-
-    private static ConstructorDeclarationSyntax? ChainedDeclarationWithBody(
-        IMethodSymbol constructor
-    ) =>
-        constructor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-            is ConstructorDeclarationSyntax { Initializer: { } initializer } declaration
-        && initializer.IsKind(SyntaxKind.ThisConstructorInitializer)
-        && (declaration.ExpressionBody is not null || declaration.Body is { Statements.Count: > 0 })
-            ? declaration
-            : null;
 
     /// <summary>
     /// The stable full names of the transpilable static classes that
@@ -348,12 +345,16 @@ public sealed class DartTransformer
     /// fast path per overload (spec 013 FR-022). Two kinds of overload set
     /// keep the primary declaration only — an overloaded operator group, since
     /// Dart declares one <c>operator</c> per symbol, and the overloads of a
-    /// keep-today's-emission shape (<see cref="DartTypeShapes.NamesOverloadMembers"/>);
+    /// keep-today's-emission shape (<see cref="DartOverloadShape.NamesMembers"/>);
     /// silently dropping the others would hide a real semantic mismatch.
     /// </summary>
-    private void ReportUnnamedOverloads(IrClassDeclaration classIr, string typeName)
+    private void ReportUnnamedOverloads(
+        IrClassDeclaration classIr,
+        string typeName,
+        DartOverloadShape shape
+    )
     {
-        var namesOverloadMembers = DartTypeShapes.NamesOverloadMembers(classIr);
+        var namesOverloadMembers = shape.NamesMembers;
 
         foreach (var member in classIr.Members ?? [])
         {
