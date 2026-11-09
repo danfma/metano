@@ -94,21 +94,38 @@ function customOrBuiltinConverter(
     return builtin;
   }
 
-  // A passthrough `primitive` (an `object` slot, FR-056) keeps a whole
-  // subtree, so every leaf below it is read too; any other built-in
-  // converter hands each child to a child converter.
-  const asDoubles = descriptor.kind === "primitive" ? treeWithDoubles : numberOfTreeValue;
+  const asDoubles = handsChildrenToConverters(descriptor) ? numberOfTreeValue : treeWithDoubles;
 
   return withNumberTextsAsDoubles(builtin, plans, asDoubles);
 }
 
 /**
+ * Whether the built-in converter of `descriptor` reads each child of its
+ * value through a child converter, which reads that child's leaves in turn.
+ * Every other built-in converter gets a scalar, or the whole subtree of an
+ * invalid or passthrough value (an `object` slot, FR-056, a `[Branded]`
+ * factory's input, an enum's error), which it must see as `JSON.parse`
+ * builds it.
+ */
+function handsChildrenToConverters(descriptor: TypeDescriptor): boolean {
+  switch (descriptor.kind) {
+    case "array":
+    case "hashSet":
+    case "map":
+    case "ref":
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
  * `converter`, reading the number leaves of an exact tree as the `number`
- * `JSON.parse` gives (#457), through `asDoubles`: a built-in converter needs
- * only its own value converted, since it hands each child to a child
- * converter that converts it in turn; a custom one and a passthrough
- * `primitive` get the whole subtree converted (`treeWithDoubles`). A parsed tree holds no leaf,
- * so its converters stay as they are.
+ * `JSON.parse` gives (#457), through `asDoubles`: a container or `ref`
+ * converter needs only its own value converted, since it hands each child
+ * to a child converter that converts it in turn; a custom one and every
+ * other built-in one get the whole subtree converted (`treeWithDoubles`).
+ * A parsed tree holds no leaf, so its converters stay as they are.
  */
 function withNumberTextsAsDoubles(
   converter: ValueConverter,
