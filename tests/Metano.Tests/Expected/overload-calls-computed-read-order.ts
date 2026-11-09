@@ -1,11 +1,13 @@
 import { Engine } from "./engine";
+import { scaleFD } from "./engine-extensions";
 import { Holder } from "./holder";
+import type { IEngine } from "./i-engine";
 import type { IReading } from "./i-reading";
+import { blendFD } from "./mixer";
 import type { Plain } from "./plain";
-import type { Point } from "./point";
 import { Trace } from "./trace";
 
-export class Calls {
+export class SourceOrderCalls {
   constructor() { }
 
   static getters(e: Engine, h: Holder): number {
@@ -60,32 +62,29 @@ export class Calls {
     return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(name.length, h.auto);
   }
 
-  static insideOneArgument(e: Engine, h: Holder): number {
-    return e.applyFD(7, h.p - h.q);
+  static extension(e: Engine, h: Holder): number {
+    return (($arg0, $arg2, $arg1) => scaleFD($arg0, $arg1, $arg2))(e, h.p, h.q);
   }
 
-  static getterAndConstant(e: Engine, h: Holder): number {
-    return e.applyFD(7, h.p);
+  static moduleFunction(h: Holder): number {
+    return (($arg1, $arg0) => blendFD($arg0, $arg1))(h.p, h.q);
   }
 
-  static autoAndField(e: Engine, h: Holder): number {
-    return e.applyFD(h.field, h.auto);
+  static interfaceReceiver(e: IEngine, h: Holder): number {
+    return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(h.p, h.q);
   }
 
-  static staticAutos(e: Engine): number {
-    return e.applyFD(Holder.shared, Holder.shared);
+  static throwing(e: Engine, h: Holder): number {
+    return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(h.throwA, h.throwB);
   }
 
-  static positionalRecord(e: Engine, p: Point): number {
-    return e.applyFD(p.y, p.x);
-  }
-
-  static inParameterOrder(e: Engine, h: Holder): number {
-    return e.applyFD(h.p, h.q);
+  static formattedOperands(e: Engine, h: Holder): number {
+    return (($arg1, $arg0) => e.joinFD($arg0, $arg1))("x" + h.first, "y" + h.second);
   }
 }
 
 import { Engine } from "./engine";
+import { Label } from "./label";
 import { Trace } from "./trace";
 
 export class Holder {
@@ -94,6 +93,18 @@ export class Holder {
   auto: number = 0;
 
   static shared: number = 0;
+
+  first: Label = ((receiver$temp$0) => {
+    receiver$temp$0.text = "a";
+
+    return receiver$temp$0;
+  })(new Label());
+
+  second: Label = ((receiver$temp$0) => {
+    receiver$temp$0.text = "b";
+
+    return receiver$temp$0;
+  })(new Label());
 
   constructor() { }
 
@@ -127,6 +138,16 @@ export class Holder {
     return Engine.fromDefault();
   }
 
+  get throwA(): number {
+    Trace.next("A");
+    throw new Error("A");
+  }
+
+  get throwB(): number {
+    Trace.next("B");
+    throw new Error("B");
+  }
+
   onThis(e: Engine): number {
     return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(this.p, this.q);
   }
@@ -136,6 +157,17 @@ import { Engine } from "./engine";
 import type { Holder } from "./holder";
 
 export class Derived extends Engine {
+  constructor(h: Holder) {
+    const __baseArg1 = h.p;
+    const __baseArg0 = h.q;
+    super(Engine.byEngineFD, __baseArg0, __baseArg1);
+  }
+}
+
+import { Engine } from "./engine";
+import type { Holder } from "./holder";
+
+export class Tuned extends Engine {
   constructor(h: Holder) {
     const __baseArg1 = h.p;
     const __baseArg0 = h.q;

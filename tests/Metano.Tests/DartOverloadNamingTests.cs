@@ -1331,6 +1331,61 @@ public class DartOverloadNamingTests
         );
     }
 
+    /// <summary>
+    /// A reordered call whose arguments only read computed properties is
+    /// still passed in parameter order with no report: the core takes a
+    /// getter for free of side effects on this target, so Dart runs
+    /// <c>Q</c> before <c>P</c> where C# runs <c>P</c> first. Pins the open
+    /// Dart half of #592; the TypeScript target binds such a call.
+    /// </summary>
+    [Test]
+    public async Task ReorderedComputedReads_KeepParameterOrder_AndReportNothing()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Holder
+            {
+                public int Count;
+
+                public int P => ++Count;
+
+                public int Q => ++Count;
+            }
+
+            [Transpile]
+            public class Engine
+            {
+                public int Two(int a, int b) => a * 10 + b;
+
+                public int Two(string s) => 0;
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Call(Engine e, Holder h) => e.Two(b: h.P, a: h.Q);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'engine.dart';
+            import 'holder.dart';
+
+            class Use {
+              static int call(Engine e, Holder h) => e.twoAB(h.q, h.p);
+            }
+
+            """
+        );
+    }
+
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>
         diagnostic
             .Location!.SourceTree!.GetText()
