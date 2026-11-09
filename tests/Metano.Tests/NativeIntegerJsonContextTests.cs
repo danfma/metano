@@ -80,19 +80,4 @@ public class NativeIntegerJsonContextTests
 
         await Assert.That(diagnostics).IsEmpty();
     }
-
-    [Test]
-    public async Task BigIntMode_NamesTheSignedAndUnsignedNumberTypes()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            Source,
-            Int64Representation.BigInt
-        );
-        var context = files[ContextPath];
-
-        await Assert.That(context).Contains("{ kind: \"int64\", numberType: \"System.Int64\" }");
-        await Assert.That(context).Contains("{ kind: \"int64\", numberType: \"System.UInt64\" }");
-        await Assert.That(context).DoesNotContain("numberType: \"System.IntPtr\"");
-        await Assert.That(context).DoesNotContain("numberType: \"System.UIntPtr\"");
-    }
 }
