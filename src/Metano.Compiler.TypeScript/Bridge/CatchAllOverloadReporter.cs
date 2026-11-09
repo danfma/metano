@@ -14,9 +14,6 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDiagnostic)
 {
-    private static readonly SymbolDisplayFormat SignatureFormat =
-        SymbolDisplayFormat.CSharpShortErrorMessageFormat;
-
     private readonly Action<MetanoDiagnostic> _reportDiagnostic = reportDiagnostic;
 
     public void ReportConstructors(
@@ -36,8 +33,8 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         foreach (var catchAll in found)
         {
             Report(
-                SymbolOf(symbols, catchAll.Overload.PlainParameters),
-                catchAll.Shadowed.Select(ctor => SymbolOf(symbols, ctor.PlainParameters)),
+                OverloadSymbols.Of(symbols, catchAll.Overload.PlainParameters),
+                catchAll.Shadowed.Select(ctor => OverloadSymbols.Of(symbols, ctor.PlainParameters)),
                 type
             );
         }
@@ -65,8 +62,8 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         foreach (var catchAll in found)
         {
             Report(
-                SymbolOf(symbols, catchAll.Overload.Parameters),
-                catchAll.Shadowed.Select(method => SymbolOf(symbols, method.Parameters)),
+                OverloadSymbols.Of(symbols, catchAll.Overload.Parameters),
+                catchAll.Shadowed.Select(method => OverloadSymbols.Of(symbols, method.Parameters)),
                 type
             );
         }
@@ -78,13 +75,16 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         INamedTypeSymbol type
     )
     {
-        var shadowedNames = string.Join(", ", shadowed.Select(symbol => $"'{Describe(symbol)}'"));
+        var shadowedNames = string.Join(
+            ", ",
+            shadowed.Select(symbol => $"'{OverloadSymbols.Describe(symbol)}'")
+        );
 
         _reportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.AmbiguousRuntimeDispatch,
-                $"Overload '{Describe(catchAll)}' accepts any argument at runtime, so the "
+                $"Overload '{OverloadSymbols.Describe(catchAll)}' accepts any argument at runtime, so the "
                     + $"TypeScript dispatcher tries it before {shadowedNames}, whose argument "
                     + "counts it overlaps: a call C# binds to one of them can reach it "
                     + "instead (ambiguous runtime dispatch). Static call-site dispatch (#25) "
@@ -94,40 +94,4 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
             )
         );
     }
-
-    private static string Describe(IMethodSymbol? symbol) =>
-        symbol?.ToDisplayString(SignatureFormat) ?? "an overload";
-
-    /// <summary>
-    /// The declared overload whose parameters match <paramref name="parameters"/>
-    /// by name and <c>params</c> flag, then, among several, by mapped type.
-    /// </summary>
-    private static IMethodSymbol? SymbolOf(
-        IReadOnlyList<IMethodSymbol> symbols,
-        IReadOnlyList<IrParameter> parameters
-    )
-    {
-        var byName = symbols
-            .Where(symbol => HasParameters(symbol, parameters, MatchesByName))
-            .ToList();
-
-        return byName.Count == 1
-            ? byName[0]
-            : byName.FirstOrDefault(symbol => HasParameters(symbol, parameters, MatchesByType));
-    }
-
-    private static bool HasParameters(
-        IMethodSymbol symbol,
-        IReadOnlyList<IrParameter> parameters,
-        Func<IParameterSymbol, IrParameter, bool> matches
-    ) =>
-        symbol.Parameters.Length == parameters.Count
-        && symbol.Parameters.Zip(parameters).All(pair => matches(pair.First, pair.Second));
-
-    private static bool MatchesByName(IParameterSymbol symbol, IrParameter parameter) =>
-        symbol.Name == parameter.Name && symbol.IsParams == parameter.IsParams;
-
-    private static bool MatchesByType(IParameterSymbol symbol, IrParameter parameter) =>
-        IrTypeRefSignatures.Describe(IrTypeRefMapper.Map(symbol.Type))
-        == IrTypeRefSignatures.Describe(parameter.Type);
 }

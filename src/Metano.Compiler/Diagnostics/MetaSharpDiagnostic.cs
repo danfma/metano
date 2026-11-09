@@ -423,7 +423,11 @@ public static class DiagnosticCodes
     /// argument-count range overlaps it, so calls C# binds to the concrete overload can
     /// reach the catch-all one (ambiguous runtime dispatch). C# ranks such sets at
     /// compile time, sometimes cyclically, so no dispatch order matches it; static
-    /// call-site dispatch (#25) will. A warning at the catch-all overload (#440).</summary>
+    /// call-site dispatch (#25) will. A warning at the catch-all overload (#440). Also
+    /// reported, in the staging BigInt mode, once per group of overloads that differ only
+    /// among 64-bit integers and <c>[Branded]</c> 64-bit wrappers when the group holds a
+    /// branded member: its <c>typeof === "bigint"</c> arm cannot be told apart from the
+    /// <c>long</c> / <c>ulong</c> / <c>BigInteger</c> arms at runtime (#541).</summary>
     public const string AmbiguousRuntimeDispatch = "MS0063";
 
     /// <summary>MS0064 — a member of an enum whose underlying type is <c>long</c>,
