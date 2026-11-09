@@ -20,6 +20,8 @@ dictionary value and root (FR-050), whatever the read options (and for a `[Brand
 `numberType: "System.Int64"` / `"System.UInt64"`. A nullable 64-bit slot keeps the existing nullable
 wrapping, and its error names ``System.Nullable`1[System.Int64]``.
 
+`nint` / `nuint` (and a `[Branded]` / `[InlineWrapper]` over one) emit the same descriptor with `numberType` `System.Int64` / `System.UInt64` (issue #529). The union stays two names: System.Text.Json has no converter for `IntPtr` / `UIntPtr` (it throws `NotSupportedException`, measured on .NET 10 and 11), so there is no CLR error text to mirror, and a rejected value names the 64-bit sibling. The one place the CLR name survives is a value root's `typeName` (the type a JSON `null` error names), which stays `System.IntPtr` / `System.UIntPtr`.
+
 Generated shape:
 
 ```ts

@@ -129,11 +129,33 @@ internal static class JsonTypeClassifier
                 or SpecialType.System_Char;
 
     /// <summary>
-    /// The exact 64-bit integers, <c>System.Int64</c> and
-    /// <c>System.UInt64</c>; <c>false</c> for any other type.
+    /// The exact 64-bit integers: <c>long</c> and <c>nint</c> (signed),
+    /// <c>ulong</c> and <c>nuint</c> (unsigned) — <c>nint</c> / <c>nuint</c>
+    /// follow them for every rule (spec 012 DECIDED-2, issue #529);
+    /// <c>false</c> for any other type.
     /// </summary>
     public static bool Is64BitIntegerType(ITypeSymbol type) =>
-        type.SpecialType is (SpecialType.System_Int64 or SpecialType.System_UInt64);
+        type.SpecialType
+            is (
+                SpecialType.System_Int64
+                or SpecialType.System_UInt64
+                or SpecialType.System_IntPtr
+                or SpecialType.System_UIntPtr
+            );
+
+    /// <summary>
+    /// The <c>numberType</c> an <c>int64</c> descriptor names for a 64-bit
+    /// integer: <c>System.Int64</c> for <c>long</c> / <c>nint</c>,
+    /// <c>System.UInt64</c> for <c>ulong</c> / <c>nuint</c>. The native
+    /// integers share their 64-bit sibling's name: System.Text.Json has no
+    /// converter for <c>IntPtr</c> / <c>UIntPtr</c> (it throws
+    /// <c>NotSupportedException</c>), so no CLR error text exists to mirror
+    /// and the runtime keeps its two-name union (issue #529).
+    /// </summary>
+    public static string Int64NumberTypeNameOf(ITypeSymbol type) =>
+        type.SpecialType is SpecialType.System_UInt64 or SpecialType.System_UIntPtr
+            ? "System.UInt64"
+            : "System.Int64";
 
     /// <summary>
     /// The 64-bit integer a <c>[Branded]</c> type wraps, or the type itself —
