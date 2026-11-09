@@ -118,36 +118,32 @@ export class Derived extends Base {
   }
 }
 
-// hider.ts
-import { isBool, isInt32 } from "metano-runtime";
-import { Base } from "./base";
+// flag-mapper.ts
+import { isBool } from "metano-runtime";
+import { Mapper } from "./mapper";
 
-export class Hider extends Base {
+export class FlagMapper extends Mapper {
   constructor() {
     super();
   }
 
-  addX$(x: number): string {
-    return "hidden";
+  mapBC(b: boolean, c: boolean): string {
+    return "flags";
   }
 
-  addB(b: boolean): string {
-    return "bool";
+  override mapX<T>(x: T): string {
+    return "flag:" + super.mapX<T>(x);
   }
 
-  override add(s: string): string;
-  override add(x: number): string;
-  override add(b: boolean): string;
-  override add(...args: unknown[]): string {
-    if (args.length === 1 && isInt32(args[0])) {
-      return this.addX$(args[0] as number);
+  override map(x: number, y: number): string;
+  override map<T>(x: T): string;
+  override map(b: boolean, c: boolean): string;
+  override map(...args: unknown[]): any {
+    if (args.length === 2 && isBool(args[0]) && isBool(args[1])) {
+      return this.mapBC(args[0] as boolean, args[1] as boolean);
     }
 
-    if (args.length === 1 && isBool(args[0])) {
-      return this.addB(args[0] as boolean);
-    }
-
-    return super.add(...args as [never]);
+    return super.map(...args as [never]);
   }
 }
 
@@ -164,10 +160,13 @@ export { Base } from "./base";
 export { Circle } from "./circle";
 export { Clash } from "./clash";
 export { Derived } from "./derived";
-export { Hider } from "./hider";
+export { FlagMapper } from "./flag-mapper";
 export type { ISink } from "./i-sink";
 export { Leaf } from "./leaf";
+export { Mapper } from "./mapper";
 export { Middle } from "./middle";
+export { RenamedClash } from "./renamed-clash";
+export { Renamed } from "./renamed";
 export { Repo } from "./repo";
 export { Shape } from "./shape";
 export { Sink } from "./sink";
@@ -184,6 +183,10 @@ export class Leaf extends Middle {
 
   override addX(x: number): string {
     return "leaf";
+  }
+
+  override addS(s: string): string {
+    return "leaf:" + super.addS(s);
   }
 
   override addD(d: number): string {
@@ -204,6 +207,35 @@ export class Leaf extends Middle {
     }
 
     return super.add(...args as [never]);
+  }
+}
+
+// mapper.ts
+import { isInt32 } from "metano-runtime";
+
+export class Mapper {
+  constructor() { }
+
+  mapXY(x: number, y: number): string {
+    return "pair";
+  }
+
+  mapX<T>(x: T): string {
+    return "generic";
+  }
+
+  map(x: number, y: number): string;
+  map<T>(x: T): string;
+  map(...args: unknown[]): any {
+    if (args.length === 2 && isInt32(args[0]) && isInt32(args[1])) {
+      return this.mapXY(args[0] as number, args[1] as number);
+    }
+
+    if (args.length === 1) {
+      return this.mapX(args[0] as any);
+    }
+
+    throw new Error("No matching overload for map");
   }
 }
 
@@ -230,6 +262,64 @@ export class Middle extends Base {
   override add(...args: unknown[]): string {
     if (args.length === 1 && isFloat64(args[0])) {
       return this.addD(args[0] as number);
+    }
+
+    return super.add(...args as [never]);
+  }
+}
+
+// renamed-clash.ts
+import { isBool } from "metano-runtime";
+import { Base } from "./base";
+
+export class RenamedClash extends Base {
+  constructor() {
+    super();
+  }
+
+  override addX(y: number): string {
+    return "renamed";
+  }
+
+  addBoolean(x: boolean): string {
+    return "bool";
+  }
+
+  override add(x: number): string;
+  override add(s: string): string;
+  override add(x: boolean): string;
+  override add(...args: unknown[]): string {
+    if (args.length === 1 && isBool(args[0])) {
+      return this.addBoolean(args[0] as boolean);
+    }
+
+    return super.add(...args as [never]);
+  }
+}
+
+// renamed.ts
+import { isBool } from "metano-runtime";
+import { Base } from "./base";
+
+export class Renamed extends Base {
+  constructor() {
+    super();
+  }
+
+  override addX(y: number): string {
+    return "renamed";
+  }
+
+  addY(y: boolean): string {
+    return "bool";
+  }
+
+  override add(x: number): string;
+  override add(s: string): string;
+  override add(y: boolean): string;
+  override add(...args: unknown[]): string {
+    if (args.length === 1 && isBool(args[0])) {
+      return this.addY(args[0] as boolean);
     }
 
     return super.add(...args as [never]);

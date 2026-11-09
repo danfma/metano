@@ -90,8 +90,9 @@ or module function; for virtual and interface members, the **root** group of § 
    `__toInt` over `__toIntMoneyToInt32` / `__toIntMoneyToInt64`). A `[Name]` on a constructor
    outside a dispatched set names nothing and reports an `MS0003` warning. Dart pins the same
    suffixes (slice 013g). Root anchoring decides overrides and implementations (§ Root anchoring):
-   in a derived type's visible group an anchored member carries its root's pin, never its own,
-   so its ignored `[Name]` cannot move the type's other overloads.
+   in a derived type's visible group an override is not named at all (the inherited overload it
+   overrides stands for it) and an anchored implementation carries its root's pin, never its own,
+   so an ignored `[Name]` cannot move the type's other overloads.
 8. **Candidate names.** From the suffix `S` of overload `o` of type `T`:
 
    | Member | Candidate |
@@ -157,7 +158,17 @@ the spelling.
   own root. Its candidate is a non-root candidate for the claim pass (step 7), so it can never
   silently override a base fast path (R14: `addX` → `addX$`).
 - A derived type that declares **new** overloads next to inherited ones names them by running stage
-  1 over the derived type's whole visible group (inherited + declared). The inherited overloads
+  1 over the derived type's whole visible group: the inherited overloads it can see, then the
+  members it declares, minus its overrides of an inherited overload. The inherited overload stands
+  for its override, found by the `OverriddenMethod` chain and not by signature (a generic method's
+  override declares its own type parameters), so a signature is named once and `override Add(int x)`
+  next to a new `Add(bool b)` gives `addB` with no dead end (#564). An override that is emitted
+  under another root's name than the overload it overrides — a multiply-constructed interface
+  root, DECIDED-30: `QD : QB, IQ<int>, IQ<string>` with `IQ<T>.[Name("q")] Q(T a)`,
+  `QB.[Name("bq")] Q(int z)`, `override Q(int z)` and a new `Q(bool q)` — is named in stage 1 by
+  the base overload only (`Bq`), so the new overload computes the interface root's `qQ` and the
+  claim pass moves it to `qQ$` with `MS0067` (it was `qBoolean` while the override was named
+  twice). The inherited overloads
   keep their root names; the new ones take the names computed for them and claim them after the
   inherited names, against inherited instance members of every visibility (§ Claim pass, step 7).
   The derived type emits an `override` dispatcher whose signatures are a **superset** of the base

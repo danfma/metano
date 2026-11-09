@@ -144,7 +144,9 @@ internal static class MethodOverloadGroups
         // An override stands for the inherited overload it overrides, which
         // the visible group already names: naming both would dead-end the
         // pair (FR-024, FR-025, #564).
-        var named = group.Members.Where(member => !OverridesOneOf(inherited, member)).ToList();
+        var namingMembers = group
+            .Members.Where(member => !OverridesOneOf(inherited, member.Symbol))
+            .ToList();
 
         // An anchored member names with its root's pin, never its own: the
         // pin it cannot use must not move its type's other overloads (FR-005).
@@ -153,15 +155,15 @@ internal static class MethodOverloadGroups
                 overload,
                 OverloadSuffixPin.Of(overload, target)
             ))
-            .Concat(named.Select(member => PinnedOverloadOf(member, target)))
+            .Concat(namingMembers.Select(member => PinnedOverloadOf(member, target)))
             .ToList();
 
-        var computed = OverloadGroupNaming.SuffixesOf(visible);
+        var memberSuffixes = OverloadGroupNaming.SuffixesOf(visible).Skip(inherited.Count);
 
-        for (var i = 0; i < named.Count; i++)
+        foreach (var (member, suffix) in namingMembers.Zip(memberSuffixes))
         {
-            if (named[i].Anchor is null)
-                suffixes[named[i].Symbol] = computed[inherited.Count + i];
+            if (member.Anchor is null)
+                suffixes[member.Symbol] = suffix;
         }
 
         return suffixes;
@@ -612,16 +614,29 @@ internal static class MethodOverloadGroups
     ) => (group.InheritedOverloads ?? []).Where(overload => IsVisibleFrom(overload, type));
 
     /// <summary>
-    /// Whether <paramref name="member"/> is an override of one of the
-    /// <paramref name="inherited"/> overloads: an inherited dispatcher holds
-    /// one overload per signature, so the override's signature finds it.
+    /// Whether <paramref name="method"/> overrides one of the
+    /// <paramref name="inherited"/> overloads, directly or through the
+    /// overrides between them. The override chain decides, not the
+    /// signature: a generic method's override declares type parameters of
+    /// its own.
     /// </summary>
-    private static bool OverridesOneOf(
-        IReadOnlyList<IMethodSymbol> inherited,
-        MethodGroupMember member
-    ) =>
-        member.Symbol.IsOverride
-        && inherited.Any(overload => SymbolHelper.HasSameParameters(member.Symbol, overload));
+    private static bool OverridesOneOf(IReadOnlyList<IMethodSymbol> inherited, IMethodSymbol method)
+    {
+        for (
+            var overridden = method.OverriddenMethod;
+            overridden is not null;
+            overridden = overridden.OverriddenMethod
+        )
+        {
+            if (inherited.Any(overload => IsSameDefinition(overload, overridden)))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSameDefinition(IMethodSymbol method, IMethodSymbol other) =>
+        SymbolEqualityComparer.Default.Equals(method.OriginalDefinition, other.OriginalDefinition);
 
     private static bool IsVisibleFrom(IMethodSymbol member, INamedTypeSymbol type) =>
         member.DeclaredAccessibility switch

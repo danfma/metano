@@ -744,7 +744,25 @@ public static class TranspileHelper
         Environment.GetEnvironmentVariable("METANO_UPDATE_GOLDENS") == "1";
 
     /// <summary>
-    /// Reads an expected .ts file from the Expected/ directory.
+    /// Asserts that <paramref name="actual"/> is the expected file
+    /// <paramref name="name"/>, or rewrites that file when
+    /// <see cref="UpdateGoldensRequested"/>.
+    /// </summary>
+    public static async Task AssertGolden(string name, string actual)
+    {
+        if (UpdateGoldensRequested)
+        {
+            WriteExpected(name, actual);
+
+            return;
+        }
+
+        await Assert.That(actual).IsEqualTo(ReadExpected(name));
+    }
+
+    /// <summary>
+    /// Reads an expected output file (.ts, .tsx or .dart) from the Expected/
+    /// directory.
     /// </summary>
     public static string ReadExpected(string filename)
     {
@@ -755,7 +773,7 @@ public static class TranspileHelper
     }
 
     /// <summary>
-    /// Writes an expected .ts file into the source tree's
+    /// Writes an expected output file into the source tree's
     /// <c>tests/Metano.Tests/Expected/</c> — the local regeneration path of
     /// the golden tests that expose <see cref="UpdateGoldensRequested"/>. The
     /// copy in the output directory is build output.
