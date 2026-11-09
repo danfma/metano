@@ -42,7 +42,15 @@ the same overload differently after claims; the core candidates are identical.
   opt-in `IrExtractionContext.EmitsOperatorFastPaths` unset). `[PlainObject]` and branded types
   keep today's single primary member with `MS0001` (DECIDED-10), declared under the name its
   call sites spell: the core pins a branded overload's `[Name]` as a suffix and renames a
-  `[PlainObject]` one (`DartClassMemberNames.MethodNameOf`).
+  `[PlainObject]` one, and a conversion operator's `[Name]` names it
+  (`DartClassMemberNames.MethodNameOf`). Whether a type names its overload members and whether a
+  `new` binds its named constructor come from one per-symbol shape (`DartTypeShapes.ShapeOf`), so
+  an `[Import]` class Dart emits declares and constructs through named constructors alike.
+- **Pre-existing Dart gaps that touch overloads:** a base whose unnamed constructor has only
+  optional parameters lets a derived constructor compile and run it with its defaults, silently
+  (#572); a `params` argument is passed element by element (#585); out-of-order named arguments
+  of a non-overloaded call print as named arguments (#586); a generic method call drops its type
+  arguments (#587).
 - **Claims.** `DartClassClaimPass` claims, in one table per class: user members, the named
   constructors, the anchored fast paths (their root's names), then the own fast paths, which
   also claim against the inherited members of every visibility; `DartFlatClaimPass` claims an
@@ -58,7 +66,10 @@ the same overload differently after claims; the core candidates are identical.
   `DartNamedConstruction` node). A construction or call whose named arguments evaluate out of
   parameter order (`IrSelectedOverload.EvaluationOrder`) binds them, and an impure receiver
   first, in the source's order through immediately invoked closures
-  (`(($arg1) => (($arg0) => c.subXY($arg0, $arg1))(next()))(next())`, `DartEvaluationOrder`).
+  (`(($arg1, $arg0) => c.subXY($arg0, $arg1))(next(), next())`: one closure whose arguments Dart
+  evaluates left to right, a receiver that is not a plain value bound first as `$recv` — a member
+  access an argument may reassign included; an `await` among the arguments stays outside the
+  closure, in the enclosing async function; `DartEvaluationOrder`).
   The prototype still emits no `super(...)` initializer for a derived constructor (RT-02, #572),
   so `BaseOverload` is unused there.
 - **`[Name]`.** Pins the suffix as in TypeScript, with the same `MS0003` reports; a method's
