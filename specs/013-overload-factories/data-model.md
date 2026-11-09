@@ -143,7 +143,7 @@ to the method call sites of 013e.
 them in another order and one has a side effect (`new T(b: F(), a: G())`),
 `IrSelectedOverload.EvaluationOrder` records it and the target evaluates them first, in that
 order: TypeScript binds them through an immediately invoked arrow for a construction (the only
-IIFE of this feature, against NFR-004, which the expression position leaves no alternative to)
+IIFE of this feature, the documented exception of NFR-004, which the expression position leaves no alternative to; method call sites of 013e reuse it)
 and through `const __baseArgN` temporaries before `super(...)`.
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)
