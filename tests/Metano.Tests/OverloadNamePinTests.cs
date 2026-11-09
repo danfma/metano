@@ -112,7 +112,7 @@ public class OverloadNamePinTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await AssertGolden("overload-name-pin-class.ts", files["money.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-class.ts", files["money.ts"]);
     }
 
     [Test]
@@ -184,7 +184,7 @@ public class OverloadNamePinTests
         var onSquare = ignored.Single(d => d.Message.Contains("'Square.Area(int side)'"));
         var onDoubler = ignored.Single(d => d.Message.Contains("'Doubler.Add(int x)'"));
 
-        await AssertGolden("overload-name-pin-roots.ts", outputs);
+        await TranspileHelper.AssertGolden("overload-name-pin-roots.ts", outputs);
         await Assert.That(diagnostics.Count).IsEqualTo(2);
 
         await Assert
@@ -246,7 +246,7 @@ public class OverloadNamePinTests
         var outputs = string.Join("\n", files["greets.ts"], files["caller.ts"], files["index.ts"]);
 
         await Assert.That(diagnostics).IsEmpty();
-        await AssertGolden("overload-name-pin-module.ts", outputs);
+        await TranspileHelper.AssertGolden("overload-name-pin-module.ts", outputs);
     }
 
     [Test]
@@ -258,7 +258,11 @@ public class OverloadNamePinTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await AssertGolden("overload-name-pin-cross-package.ts", files["app/register.ts"]);
+
+        await TranspileHelper.AssertGolden(
+            "overload-name-pin-cross-package.ts",
+            files["app/register.ts"]
+        );
     }
 
     /// <summary>
@@ -270,7 +274,10 @@ public class OverloadNamePinTests
     {
         var files = TranspileHelper.TranspileWithLibraryImage(PinLibrary, PinConsumer);
 
-        await AssertGolden("overload-name-pin-cross-package-metadata.ts", files["app/register.ts"]);
+        await TranspileHelper.AssertGolden(
+            "overload-name-pin-cross-package-metadata.ts",
+            files["app/register.ts"]
+        );
     }
 
     [Test]
@@ -300,7 +307,7 @@ public class OverloadNamePinTests
 
         var invalid = diagnostics.Where(d => d.Code == DiagnosticCodes.AmbiguousConstruct).ToList();
 
-        await AssertGolden("overload-name-pin-invalid.ts", files["box.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-invalid.ts", files["box.ts"]);
         await Assert.That(diagnostics.Count).IsEqualTo(4);
 
         await Assert
@@ -337,7 +344,7 @@ public class OverloadNamePinTests
 
         var deadEnd = diagnostics.Single();
 
-        await AssertGolden("overload-name-pin-equal.ts", files["box.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-equal.ts", files["box.ts"]);
         await Assert.That(deadEnd.Code).IsEqualTo(DiagnosticCodes.AmbiguousConstruct);
         await Assert.That(deadEnd.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
 
@@ -376,7 +383,7 @@ public class OverloadNamePinTests
 
         var deadEnd = diagnostics.Single();
 
-        await AssertGolden("overload-name-pin-dead-end.ts", files["box.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-dead-end.ts", files["box.ts"]);
 
         await Assert
             .That(deadEnd.Message)
@@ -419,7 +426,7 @@ public class OverloadNamePinTests
 
         var rename = diagnostics.Single();
 
-        await AssertGolden("overload-name-pin-claimed.ts", files["fee.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-claimed.ts", files["fee.ts"]);
         await Assert.That(rename.Code).IsEqualTo(DiagnosticCodes.OverloadNameShadowed);
 
         await Assert
@@ -454,7 +461,7 @@ public class OverloadNamePinTests
         var second = TranspileHelper.Transpile(source)["money.ts"];
 
         await Assert.That(second).IsEqualTo(first);
-        await AssertGolden("overload-name-pin-deterministic.ts", first);
+        await TranspileHelper.AssertGolden("overload-name-pin-deterministic.ts", first);
     }
 
     /// <summary>
@@ -485,7 +492,7 @@ public class OverloadNamePinTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await AssertGolden("overload-name-pin-conversions.ts", files["money.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-conversions.ts", files["money.ts"]);
     }
 
     /// <summary>
@@ -517,7 +524,7 @@ public class OverloadNamePinTests
 
         await Assert.That(diagnostics).IsEmpty();
 
-        await AssertGolden(
+        await TranspileHelper.AssertGolden(
             "overload-name-pin-plain-object.ts",
             string.Join("\n", files["reading.ts"], files["use.ts"])
         );
@@ -532,10 +539,10 @@ public class OverloadNamePinTests
     /// dead-ends (#564).
     /// </summary>
     [Test]
-    [Arguments("")]
-    [Arguments("[Name(\"string\")]")]
-    [Arguments("[Name(\"s\")]")]
-    public async Task OverridePin_DoesNotRenameTheTypesOtherOverloads(string pin)
+    [Arguments(null)]
+    [Arguments("string")]
+    [Arguments("s")]
+    public async Task OverridePin_DoesNotRenameTheTypesOtherOverloads(string? pin)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             $$"""
@@ -550,7 +557,7 @@ public class OverloadNamePinTests
             [Transpile]
             public class Derived : Base
             {
-                {{pin}}
+                {{(pin is null ? "" : $"[Name(\"{pin}\")]")}}
                 public override int Add(int x) => x + 1;
 
                 public int Add(bool b) => 1;
@@ -558,14 +565,25 @@ public class OverloadNamePinTests
             """
         );
 
-        var namingErrors = diagnostics
-            .Where(d => d.Severity == MetanoDiagnosticSeverity.Error)
-            .Select(d => d.Message);
+        await TranspileHelper.AssertGolden(
+            "overload-name-pin-override-leak.ts",
+            files["derived.ts"]
+        );
 
-        await AssertGolden("overload-name-pin-override-leak.ts", files["derived.ts"]);
-
-        await Assert.That(namingErrors).IsEmpty();
+        await Assert
+            .That(diagnostics.Select(diagnostic => diagnostic.Message))
+            .IsEquivalentTo(IgnoredOverridePinReportsOf(pin));
     }
+
+    private static string[] IgnoredOverridePinReportsOf(string? pin) =>
+        pin is null
+            ? []
+            :
+            [
+                $"[Name(\"{pin}\")] on 'Derived.Add(int x)' is ignored: an override or interface "
+                    + "implementation takes the suffix 'X' of its root 'Base.Add(int x)'; put "
+                    + "[Name] on the root (spec 013 FR-005, FR-025).",
+            ];
 
     [Test]
     public async Task NameOnALoneConstructor_IsReportedAsUnused()
@@ -643,7 +661,7 @@ public class OverloadNamePinTests
 
         var rejected = diagnostics.Single();
 
-        await AssertGolden("overload-name-pin-json-factory.ts", files["email.ts"]);
+        await TranspileHelper.AssertGolden("overload-name-pin-json-factory.ts", files["email.ts"]);
         await Assert.That(rejected.Code).IsEqualTo(DiagnosticCodes.InvalidJsonFactory);
 
         await Assert
@@ -734,16 +752,4 @@ public class OverloadNamePinTests
 
     private static string SourceTextOf(MetanoDiagnostic diagnostic) =>
         diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
-
-    private static async Task AssertGolden(string name, string actual)
-    {
-        if (TranspileHelper.UpdateGoldensRequested)
-        {
-            TranspileHelper.WriteExpected(name, actual);
-
-            return;
-        }
-
-        await Assert.That(actual).IsEqualTo(TranspileHelper.ReadExpected(name));
-    }
 }

@@ -413,7 +413,8 @@ predates this feature and only hand-written callers keep facing it.)
 Probe `s013r2/h` [V], compiled with `--strict --noImplicitOverride --declaration` (`exit=0`), Node
 and Bun both print `2 3 100 3 2 6 3 5 4`:
 
-- **A derived type adding an overload** (FR-030): `Derived` overrides `addX`, adds `addBoolean`,
+- **A derived type adding an overload** (FR-030): `Derived` overrides `addX`, adds `addBoolean`
+  (the hand-written probe's name; the compiler names it `addB` since #564),
   and redeclares the dispatcher `add` with all three signatures (a superset of `Base.add`'s, so no
   TS2416); `d.add(1)` → `2`, `d.add("abc")` → `3`, `d.add(true)` → `100`.
 - **One method implementing two roots** (naming.md § Root anchoring): `Both implements IA, IB`

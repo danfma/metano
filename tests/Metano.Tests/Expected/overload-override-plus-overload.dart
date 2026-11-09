@@ -34,13 +34,13 @@ class Derived extends Base {
   String addB(bool b) => 'bool';
 }
 
-// hider.dart
-import 'base.dart';
+// flag_mapper.dart
+import 'mapper.dart';
 
-class Hider extends Base {
-  String addX$(int x) => 'hidden';
+class FlagMapper extends Mapper {
+  String mapX<T>(T x) => 'flag:' + super.mapX(x);
 
-  String addB(bool b) => 'bool';
+  String mapBC(bool b, bool c) => 'flags';
 }
 
 // i_sink.dart
@@ -56,9 +56,18 @@ import 'middle.dart';
 class Leaf extends Middle {
   String addX(int x) => 'leaf';
 
+  String addS(String s) => 'leaf:' + super.addS(s);
+
   String addD(double d) => 'leaf:' + super.addD(d);
 
   String addB(bool b) => 'bool';
+}
+
+// mapper.dart
+class Mapper {
+  String mapX<T>(T x) => 'generic';
+
+  String mapXY(int x, int y) => 'pair';
 }
 
 // middle.dart
@@ -68,6 +77,24 @@ class Middle extends Base {
   String addS(String s) => 'middle';
 
   String addD(double d) => 'double';
+}
+
+// renamed.dart
+import 'base.dart';
+
+class Renamed extends Base {
+  String addX(int y) => 'renamed';
+
+  String addY(bool y) => 'bool';
+}
+
+// renamed_clash.dart
+import 'base.dart';
+
+class RenamedClash extends Base {
+  String addX(int y) => 'renamed';
+
+  String addBoolean(bool x) => 'bool';
 }
 
 // repo.dart
