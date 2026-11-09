@@ -879,6 +879,60 @@ describe("int64 — other converters of a 64-bit closure read doubles (FR-053)",
     expect(read.list).toEqual(parsed.list);
   });
 
+  // A built-in converter that is no container or `ref` gets an invalid or
+  // passthrough value whole: a `[Branded]` factory's input and an enum's
+  // error must show the subtree `JSON.parse` builds, not the exact leaves.
+  describe("a scalar slot given a subtree sees it as JSON.parse builds it", () => {
+    const subtreeText = '[1.0,-0.0,12345678901234567890,{"x":1.5}]';
+
+    /** The read of `subtreeText` into a slot of `type` beside a long, or what it threw. */
+    function readSlot(type: TypeDescriptor): unknown {
+      const spec = holderSpec([
+        { ts: "id", json: "id", type: LONG },
+        { ts: "slot", json: "slot", type },
+      ]);
+
+      try {
+        const read = JsonSerializer.deserializeText(`{"id":1,"slot":${subtreeText}}`, spec);
+
+        return (read as { slot: unknown }).slot;
+      } catch (error) {
+        return (error as Error).message;
+      }
+    }
+
+    test("a branded factory receives the parsed subtree", () => {
+      const read = readSlot({
+        kind: "branded",
+        typeName: "MyApp.Tags",
+        create: (value: unknown) => ({ wrapped: value }),
+      });
+
+      expect(read).toEqual({ wrapped: JSON.parse(subtreeText) });
+    });
+
+    test("an enum names the parsed subtree in its error", () => {
+      const read = readSlot({ kind: "enum", typeName: "MyApp.Color", values: { Red: "red" } });
+
+      expect(read).toBe(
+        `Invalid enum value: ${JSON.stringify(JSON.parse(subtreeText))}. Expected one of: red`,
+      );
+    });
+
+    test("a numeric enum names the parsed subtree in its error", () => {
+      const read = readSlot({
+        kind: "numericEnum",
+        typeName: "MyApp.Level",
+        values: { Low: 0, 0: "Low" },
+      });
+
+      expect(read).toBe(
+        `Invalid numeric enum value: ${JSON.stringify(JSON.parse(subtreeText))}. ` +
+          "Expected one of: 0",
+      );
+    });
+  });
+
   // #457 reads a decimal of at most 15 digits from its double; a 64-bit
   // member beside it must not change that.
   test("a decimal beside a long reads as in a spec without one", () => {

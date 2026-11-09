@@ -84,11 +84,14 @@ it with the `rawJSON` rules above. #457 shipped its own leaf (OQ-3): `JsonNumber
 | `-0` | `0n` | `JsonException` | same |
 | `{"$type":1.0,…}` (int tag, polymorphic base with an `int64` in its closure) | `JsonException` | — | `JsonException` |
 
-The int64 converter rejects a `JsonNonIntegerNumber` (it has no integer token), and so does an int tag. The
-other converters of an exact tree read a leaf as the `number` `JSON.parse` gives (`numberOfTreeValue`; a
-custom converter and an `object` slot get their whole subtree with doubles, `treeWithDoubles`), so a `double`
-member of the same contract still reads `1.5` and a `decimal` reads a short fraction from its double, as in
-a decimal-only spec.
+The int64 converter rejects a `JsonNonIntegerNumber` (it has no integer token), and so does an int tag. A
+`decimal` reads a short fraction from its double, as in a decimal-only spec. Every other converter of an exact
+tree sees its value as `JSON.parse` builds it: an `array`, `hashSet`, `map` or `ref` converter gets its own
+value with its leaf read as a `number` (`numberOfTreeValue`) and hands each child to a child converter, which
+reads that child in turn; a custom converter and every other built-in one (`primitive`, including an
+`object` slot, `branded`, `enum`, `numericEnum`, `temporal`, `bytes`) get the whole subtree with doubles
+(`treeWithDoubles`), so a `double` member of the same contract still reads `1.5`, a `[Branded]` factory never
+receives a leaf and an enum error prints the parsed value.
 
 ## Numbers from strings (009 FR-048 item 4)
 
