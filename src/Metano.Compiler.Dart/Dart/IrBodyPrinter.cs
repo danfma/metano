@@ -301,6 +301,19 @@ public static class IrBodyPrinter
                 PrintArgs(sb, call.Arguments);
                 sb.Append(')');
                 break;
+            case IrNewExpression
+            {
+                Type: IrSetTypeRef or IrMapTypeRef,
+                Arguments: [{ Value: IrArrayLiteral elements }],
+            } collection:
+                // A set or dictionary collection expression: Dart's `Set` and
+                // `Map` constructors take no elements, their `.of` /
+                // `.fromEntries` factories take the iterable.
+                sb.Append(FormatType(collection.Type))
+                    .Append(collection.Type is IrSetTypeRef ? ".of(" : ".fromEntries(");
+                PrintExpression(sb, elements);
+                sb.Append(')');
+                break;
             case IrNewExpression ne:
                 // Dart has no `new` keyword (optional since Dart 2). Constructor call
                 // with positional args matches the common idiom for classes with
@@ -409,6 +422,13 @@ public static class IrBodyPrinter
                     PrintExpression(sb, array.Elements[i]);
                 }
                 sb.Append(']');
+                break;
+            case IrSpreadExpression spread:
+                // Produced only for a collection-expression element, so it
+                // always sits inside a list literal, where Dart spreads any
+                // Iterable.
+                sb.Append("...");
+                PrintExpression(sb, spread.Expression);
                 break;
             case IrArrayCreation creation:
                 // Dart's `int` is 64-bit, so a `long` length needs no conversion.
