@@ -1,98 +1,250 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
 /// The shapes spec 013 DECIDED-10 keeps out of the overload machinery
-/// (<c>[External]</c>, <c>[Branded]</c> /
-/// <c>[InlineWrapper]</c>, <c>[PlainObject]</c>, <c>[JsCallable]</c>) get no
-/// factories, selectors or fast paths, so a call to their overloaded members
-/// must keep the dispatcher name instead of lowering to a fast path the type
-/// never declares (<c>DispatchedMethodCalls.IsEmittedContainingType</c>,
-/// issue #536).
+/// (<c>[External]</c>, <c>[Branded]</c>, <c>[InlineWrapper]</c>,
+/// <c>[PlainObject]</c>, <c>[JsCallable]</c>) get no factories, selectors or
+/// fast paths, so a call to their overloaded members must keep the dispatcher
+/// name instead of lowering to a fast path the type never declares
+/// (<c>DispatchedMethodCalls.IsEmittedContainingType</c>, issue #536). A
+/// control class pins that the same call does lower to a fast path.
 /// </summary>
 public class OverloadDirectCallExclusionTests
 {
-    [Test]
-    public async Task ExcludedShapes_KeepTheDispatcherAtTheirCallSites()
+    private static async Task<string> CallerOf(
+        string declarations,
+        string calls,
+        string parameters = ""
+    )
     {
-        var result = TranspileHelper.Transpile(
-            """
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
             using Metano.Annotations.TypeScript;
 
-            [External]
-            public class Ambient
-            {
-                public static int Pick(int x) => x;
-                public static int Pick(string s) => s.Length;
-            }
-
-            [Transpile, Branded]
-            public readonly record struct Id(int Value)
-            {
-                public static int Pick(int x) => x;
-                public static int Pick(string s) => s.Length;
-            }
-
-            [Transpile, InlineWrapper]
-            public readonly record struct Tag(string Value)
-            {
-                public static int Pick(int x) => x;
-                public static int Pick(string s) => s.Length;
-            }
-
-            [Transpile, PlainObject]
-            public record Dto(int Value)
-            {
-                public static int Pick(int x) => x;
-                public static int Pick(string s) => s.Length;
-            }
-
-            [Transpile, JsCallable]
-            public interface ISetter
-            {
-                void Invoke(int value);
-                void Invoke(string value);
-            }
-
-            [Transpile]
-            public class Plain
-            {
-                public static int Pick(int x) => x;
-                public static int Pick(string s) => s.Length;
-            }
+            {{declarations}}
 
             [Transpile]
             public class Caller
             {
-                public int Calls(ISetter setter)
-                {
-                    setter.Invoke(1);
-                    setter.Invoke("a");
-
-                    return Ambient.Pick(1)
-                        + Ambient.Pick("a")
-                        + Id.Pick(1)
-                        + Id.Pick("a")
-                        + Tag.Pick(1)
-                        + Tag.Pick("a")
-                        + Dto.Pick(1)
-                        + Dto.Pick("a")
-                        + Plain.Pick(1)
-                        + Plain.Pick("a");
-                }
+                public int Calls({{parameters}}) => {{calls}};
             }
             """
         );
 
-        var caller = result["caller.ts"];
+        await Assert
+            .That(diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsEmpty();
+
+        return files["caller.ts"];
+    }
+
+    private static string ExpectedCaller(string text) => text + "\n";
+
+    [Test]
+    public async Task Control_TranspiledClass_CallsTheFastPaths()
+    {
+        var caller = await CallerOf(
+            """
+            [Transpile]
+            public class Shape
+            {
+                public static int Pick(int x) => x;
+                public static int Pick(string s) => s.Length;
+            }
+            """,
+            """Shape.Pick(1) + Shape.Pick("a")"""
+        );
 
         await Assert
             .That(caller)
-            .Contains(
-                "return Ambient.pick(1) + Ambient.pick(\"a\") + Id.pick(1) + Id.pick(\"a\") "
-                    + "+ Tag.pick(1) + Tag.pick(\"a\") + Dto.pick(1) + Dto.pick(\"a\") "
-                    + "+ Plain.pickX(1) + Plain.pickS(\"a\");"
+            .IsEqualTo(
+                ExpectedCaller(
+                    """
+                    import { Shape } from "./shape";
+
+                    export class Caller {
+                      constructor() { }
+
+                      calls(): number {
+                        return Shape.pickX(1) + Shape.pickS("a");
+                      }
+                    }
+                    """
+                )
             );
-        await Assert.That(caller).Contains("setter(1);");
-        await Assert.That(caller).Contains("setter(\"a\");");
+    }
+
+    [Test]
+    public async Task External_KeepsTheDispatcher()
+    {
+        var caller = await CallerOf(
+            """
+            [assembly: TranspileAssembly]
+
+            [External]
+            public static class Shape
+            {
+                public static int Pick(int x) => x;
+                public static int Pick(string s) => s.Length;
+            }
+            """,
+            """Shape.Pick(1) + Shape.Pick("a")"""
+        );
+
+        await Assert
+            .That(caller)
+            .IsEqualTo(
+                ExpectedCaller(
+                    """
+                    export class Caller {
+                      constructor() { }
+
+                      calls(): number {
+                        return Shape.pick(1) + Shape.pick("a");
+                      }
+                    }
+                    """
+                )
+            );
+    }
+
+    [Test]
+    public async Task Branded_KeepsTheDispatcher()
+    {
+        var caller = await CallerOf(
+            """
+            [Transpile, Branded]
+            public readonly record struct Shape(int Value)
+            {
+                public static int Pick(int x) => x;
+                public static int Pick(string s) => s.Length;
+            }
+            """,
+            """Shape.Pick(1) + Shape.Pick("a")"""
+        );
+
+        await Assert
+            .That(caller)
+            .IsEqualTo(
+                ExpectedCaller(
+                    """
+                    import { Shape } from "./shape";
+
+                    export class Caller {
+                      constructor() { }
+
+                      calls(): number {
+                        return Shape.pick(1) + Shape.pick("a");
+                      }
+                    }
+                    """
+                )
+            );
+    }
+
+    [Test]
+    public async Task InlineWrapper_KeepsTheDispatcher()
+    {
+        var caller = await CallerOf(
+            """
+            [Transpile, InlineWrapper]
+            public readonly record struct Shape(string Value)
+            {
+                public static int Pick(int x) => x;
+                public static int Pick(string s) => s.Length;
+            }
+            """,
+            """Shape.Pick(1) + Shape.Pick("a")"""
+        );
+
+        await Assert
+            .That(caller)
+            .IsEqualTo(
+                ExpectedCaller(
+                    """
+                    import { Shape } from "./shape";
+
+                    export class Caller {
+                      constructor() { }
+
+                      calls(): number {
+                        return Shape.pick(1) + Shape.pick("a");
+                      }
+                    }
+                    """
+                )
+            );
+    }
+
+    // The dispatcher name is the pinned part: a [PlainObject] keeps only its
+    // interface, so `Shape.pick` itself does not type-check (its static
+    // overloads are dropped silently, tracked as #566).
+    [Test]
+    public async Task PlainObject_KeepsTheDispatcher()
+    {
+        var caller = await CallerOf(
+            """
+            [Transpile, PlainObject]
+            public record Shape(int Value)
+            {
+                public static int Pick(int x) => x;
+                public static int Pick(string s) => s.Length;
+            }
+            """,
+            """Shape.Pick(1) + Shape.Pick("a")"""
+        );
+
+        await Assert
+            .That(caller)
+            .IsEqualTo(
+                ExpectedCaller(
+                    """
+                    import { Shape } from "./shape";
+
+                    export class Caller {
+                      constructor() { }
+
+                      calls(): number {
+                        return Shape.pick(1) + Shape.pick("a");
+                      }
+                    }
+                    """
+                )
+            );
+    }
+
+    [Test]
+    public async Task JsCallable_KeepsTheDispatcher()
+    {
+        var caller = await CallerOf(
+            """
+            [Transpile, JsCallable]
+            public interface IShape
+            {
+                int Invoke(int value);
+                int Invoke(string value);
+            }
+            """,
+            """s.Invoke(1) + s.Invoke("a")""",
+            """IShape s"""
+        );
+
+        await Assert
+            .That(caller)
+            .IsEqualTo(
+                ExpectedCaller(
+                    """
+                    export class Caller {
+                      constructor() { }
+
+                      calls(s: ((value: number) => number) & ((value: string) => number)): number {
+                        return s(1) + s("a");
+                      }
+                    }
+                    """
+                )
+            );
     }
 }
