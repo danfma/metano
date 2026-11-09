@@ -1,5 +1,4 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript;
 
 namespace Metano.Tests;
 
@@ -359,6 +358,7 @@ public class CollectionConstructionTests
         await Assert
             .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
             .IsEmpty();
+
         await Assert
             .That(result["holder.ts"])
             .Contains("private readonly _byId: Map<bigint, number> = new Map<bigint, number>();");

@@ -758,8 +758,8 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     assertRead: (value) => expect((value as { c: string }).c).toBe("a"),
   },
   // The 64-bit rows of spec 012 (slice 012e) run on the System.Text.Json
-  // side only, but I2 is wire-compatible within the safe integers: the
-  // generated fields are bigint values, which write and read the same text.
+  // side only (#605 moves them here); I2 runs on both sides: the generated
+  // fields are bigint values, which write and read the same digits.
   I2: {
     build: () => new Int64Box(42n, 7n, null),
     assertRead: (value) => {

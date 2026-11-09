@@ -4,12 +4,13 @@
 // The compiler lowers a call with `out` arguments to a call returning `[result, out…]`
 // and keeps one argument slot per `out` parameter filled with `default(T)` (`$1` here).
 // The runtime helpers report the default themselves, so the templates use `$0` only.
-// `WhenArgCount = 2` limits the mapping to the `(string, out T)` overload; the
-// `NumberStyles` / `IFormatProvider` overloads stay unmapped.
-
+// For `int`, `double`, `float` and `bool`, `WhenArgCount = 2` limits the mapping to the
+// two-argument overloads (`(string, out T)` and its span forms); their `NumberStyles` /
+// `IFormatProvider` overloads stay unmapped.
 //
 // `long` and `ulong` (spec 012 FR-038): `Parse` and `TryParse` lower to the
-// `metano-runtime` parsers, which return a `bigint`, with the `NumberStyles` argument
+// `metano-runtime` parsers, which return a `bigint`. Every `string` overload is mapped,
+// the `NumberStyles` / `IFormatProvider` ones included, with the `NumberStyles` argument
 // folded to its flags value by the compiler.
 
 using System.Globalization;
@@ -131,6 +132,9 @@ using Metano.Annotations;
     RuntimeImports = "tryParseInt32",
     WhenArgCount = 2
 )]
+// The `string` overload of `long.TryParse` matches its typed declaration above; this
+// one stays for the other two-argument overloads (`ReadOnlySpan<char>`, which is a
+// `string` in the output), as the `int` declaration does.
 [assembly: MapMethod(
     typeof(long),
     nameof(long.TryParse),

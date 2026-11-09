@@ -60,7 +60,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression ShiftCountOf(IrBinaryOp op, IrNumericKind? kind, OperatorOperand count)
     {
-        if (!op.IsShift() || !IsExactSixtyFourBit(kind))
+        if (!op.IsShift() || !IsSixtyFourBit(kind))
             return count.Value;
 
         if (_semantic.GetConstantValue(count.Syntax) is { HasValue: true, Value: { } constant })
@@ -85,10 +85,10 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private bool NeedsSixtyFourBitReadModifyWrite(IrBinaryOp op, ExpressionSyntax operatorSyntax) =>
         (op.IsDivisionOrRemainder() || op.IsShift())
-        && IsExactSixtyFourBit(BuiltInNumericKindOf(operatorSyntax));
+        && IsSixtyFourBit(BuiltInNumericKindOf(operatorSyntax));
 
     /// <summary>A 64-bit operand kind.</summary>
-    private static bool IsExactSixtyFourBit(IrNumericKind? kind) => kind?.IsSixtyFourBit() == true;
+    private static bool IsSixtyFourBit(IrNumericKind? kind) => kind?.IsSixtyFourBit() == true;
 
     /// <summary>A constant shift count as C# reads it for a 64-bit shift.</summary>
     private static IrLiteral MaskedConstantCount(object constant) =>

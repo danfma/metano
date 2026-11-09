@@ -28,6 +28,7 @@ public class GetValueOrDefaultMappingTests
             .Contains(
                 "static count(d: Map<string, number>): number {\n    return getValueOrDefault(d, \"a\", 0);"
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -41,9 +42,11 @@ public class GetValueOrDefaultMappingTests
             );
 
         await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", false);");
+
         await Assert
             .That(output)
             .Contains("return getValueOrDefault(d, \"a\", new Decimal(\"0\"));");
+
         await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", Level.Low);");
         await Assert.That(output).DoesNotContain(".getValueOrDefault(");
     }

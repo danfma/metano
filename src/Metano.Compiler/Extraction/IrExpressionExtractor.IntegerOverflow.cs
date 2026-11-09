@@ -5,8 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// The 64-bit overflow reduction of the exact 64-bit lowering (spec 012
-/// FR-021–FR-026): the result of an operation that can leave the 64-bit
+/// The 64-bit overflow reduction (spec 012 FR-021–FR-026): the result of an operation that can leave the 64-bit
 /// domain is wrapped in an <see cref="IrIntegerOverflow"/>, which
 /// <see cref="IntegerOverflowLowering"/> decides from Roslyn. An increment
 /// or a compound assignment stores the reduced value through the
@@ -14,16 +13,11 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
-    /// <summary>
-    /// The reduction <paramref name="operation"/> needs; <c>null</c> when it
-    /// needs none.
-    /// </summary>
-    private static IntegerOverflowReduction? OverflowReductionOf(IOperation? operation) =>
-        IntegerOverflowLowering.ReductionOf(operation);
-
     /// <summary><paramref name="result"/> reduced as <paramref name="operation"/> needs, or unchanged.</summary>
     private static IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
-        OverflowReductionOf(operation) is { } reduction ? reduction.Reduce(result) : result;
+        IntegerOverflowLowering.ReductionOf(operation) is { } reduction
+            ? reduction.Reduce(result)
+            : result;
 
     /// <summary>
     /// <c>x++</c>, <c>++x</c>, <c>x--</c> or <c>--x</c> on a 64-bit value:
@@ -41,7 +35,7 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix
     )
     {
-        if (OverflowReductionOf(_semantic.GetOperation(node)) is not { } reduction)
+        if (IntegerOverflowLowering.ReductionOf(_semantic.GetOperation(node)) is not { } reduction)
             return null;
 
         var stepOperator = StepOperatorOf(op);

@@ -224,8 +224,7 @@ public static partial class IrToTsExpressionBridge
     /// a bare <c>typeof</c> would over-accept: a <c>decimal</c> lowers to a
     /// decimal.js <c>Decimal</c> instance, so its test is
     /// <c>instanceof Decimal</c>, and a 64-bit integer (spec 012 FR-048)
-    /// lowers to a <c>bigint</c> that the
-    /// <c>typeof</c> test alone cannot range — <c>o is long</c> and
+    /// lowers to a <c>bigint</c> that the <c>typeof</c> test alone cannot range — <c>o is long</c> and
     /// <c>o is ulong</c> read the runtime range checks
     /// (<see cref="IrTypeCheckBuilder"/> DECIDED-14), which also tells a
     /// <c>switch</c> over <c>long</c> / <c>ulong</c> /

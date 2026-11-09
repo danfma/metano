@@ -1,5 +1,3 @@
-using Metano.Compiler.TypeScript;
-
 namespace Metano.Tests;
 
 /// <summary>
@@ -187,6 +185,7 @@ public class Int64DispatchGuardTests
         var output = files["mixed.ts"];
 
         var longBranch = output.IndexOf("isInt64(args[0])", StringComparison.Ordinal);
+
         var brandedBranch = output.IndexOf(
             "typeof args[0] === \"bigint\"",
             StringComparison.Ordinal

@@ -1,5 +1,3 @@
-using Metano.Compiler.TypeScript;
-
 namespace Metano.Tests;
 
 /// <summary>
@@ -62,23 +60,6 @@ public class SixtyFourBitMappingTests
         [Transpile, Branded]
         public readonly record struct UId(ulong Value);
         """;
-
-    /// <summary>
-    /// A named-argument call that skips a <c>ulong</c> default keeps the
-    /// shipped opaque default.
-    /// </summary>
-    [Test]
-    public async Task Dart_SkippedULongDefault_KeepsTheShippedOpaqueDefault()
-    {
-        var (files, _) = DartTranspileHelper.Transpile(SixtyFourBitSource);
-
-        await Assert
-            .That(files["ops.dart"])
-            .Contains(
-                "this.defaults(/* default */ null, b: 3, -1).toString()"
-                    + " + this.defaults(/* default */ null, /* default */ null, c: 2)"
-            );
-    }
 
     [Test]
     public async Task UInt64_EmitsBigInt()

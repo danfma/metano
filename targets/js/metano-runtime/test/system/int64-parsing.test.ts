@@ -94,4 +94,9 @@ describe("tryParseInt64 and tryParseUInt64", () => {
     expect(tryParseUInt64("ff", HEX_NUMBER)).toEqual([true, 255n]);
     expect(tryParseUInt64("-1", INTEGER)).toEqual([false, 0n]);
   });
+
+  test("keep every digit at the Int64 bounds", () => {
+    expect(tryParseInt64("9223372036854775807")).toEqual([true, 9223372036854775807n]);
+    expect(tryParseInt64("-9223372036854775808")).toEqual([true, -9223372036854775808n]);
+  });
 });

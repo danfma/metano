@@ -1,5 +1,4 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript;
 
 namespace Metano.Tests;
 
@@ -333,11 +332,14 @@ public class Int64BclMappingTests
         await Assert.That(messages[0]).StartsWith("Format 'C' is not supported");
         await Assert.That(messages[1]).StartsWith("Format '#,##0' is not supported");
         await Assert.That(messages[2]).StartsWith("NumberStyles value 167 is not supported");
+
         await Assert
             .That(diagnostics.Where(d => d.Code == UnsupportedFormat))
             .All(d => d.Severity == MetanoDiagnosticSeverity.Warning);
+
         await Assert.That(files["unsupported.ts"]).Contains("return formatInt64(l, \"C\");");
         await Assert.That(files["unsupported.ts"]).Contains("return parseInt64(s, 167);");
+
         await Assert
             .That(files["unsupported.ts"])
             .Contains("Int32.parse(s, NumberStyles.HexNumber)");

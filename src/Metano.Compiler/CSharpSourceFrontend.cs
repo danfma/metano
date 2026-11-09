@@ -2200,6 +2200,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         var properties = new Dictionary<(string, string), DeclarativeMappingEntry>();
 
         var assemblies = new List<IAssemblySymbol> { compilation.Assembly };
+
         foreach (var reference in compilation.References)
         {
             if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly)
@@ -2223,17 +2224,20 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         }
 
         var chainMethodsByWrapper = new Dictionary<string, HashSet<string>>();
+
         foreach (var entries in methods.Values)
         {
             foreach (var entry in entries)
             {
                 if (entry.WrapReceiver is null || entry.JsName is null)
                     continue;
+
                 if (!chainMethodsByWrapper.TryGetValue(entry.WrapReceiver, out var set))
                 {
                     set = [];
                     chainMethodsByWrapper[entry.WrapReceiver] = set;
                 }
+
                 set.Add(entry.JsName);
             }
         }
@@ -2242,6 +2246,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             kv => kv.Key,
             kv => (IReadOnlyList<DeclarativeMappingEntry>)kv.Value
         );
+
         var readonlyChains = chainMethodsByWrapper.ToDictionary(
             kv => kv.Key,
             kv => (IReadOnlySet<string>)kv.Value
@@ -2272,6 +2277,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             list = [];
             target[key.Value] = list;
         }
+
         list.Add(entry);
     }
 

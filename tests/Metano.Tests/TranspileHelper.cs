@@ -213,6 +213,7 @@ public static class TranspileHelper
                 ? (IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic>)
                     transformer.Diagnostics
                 : ir.Diagnostics.Concat(transformer.Diagnostics).ToList();
+
         return (result, diagnostics);
     }
 

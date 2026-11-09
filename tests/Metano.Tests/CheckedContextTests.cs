@@ -1,5 +1,4 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript;
 
 namespace Metano.Tests;
 
@@ -359,6 +358,7 @@ public class CheckedContextTests
         await Assert
             .That(files["loops.ts"])
             .Contains("const x = int32FromDoubleChecked(x$element);");
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
@@ -441,6 +441,7 @@ public class CheckedContextTests
         await Assert
             .That(files["loops.ts"])
             .Contains("const read = () => int32FromDoubleChecked(d);");
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 

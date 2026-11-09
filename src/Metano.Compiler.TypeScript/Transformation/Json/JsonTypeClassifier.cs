@@ -103,7 +103,11 @@ internal static class JsonTypeClassifier
     /// <summary>
     /// The CLR name of a C# numeric type that maps to a TS <c>number</c>
     /// (<c>System.Int32</c>, <c>System.Double</c>, …), as System.Text.Json
-    /// names it in errors; <c>null</c> for any other type.
+    /// names it in errors; <c>null</c> for any other type. It names
+    /// <c>System.Int64</c> / <c>System.UInt64</c> only for an enum's
+    /// underlying type (a <c>long</c>-backed enum keeps <c>number</c> values);
+    /// a <c>long</c> / <c>ulong</c> value classifies as
+    /// <see cref="JsonPropertyKind.Int64"/> before it reaches this.
     /// </summary>
     public static string? NumberTypeNameOf(ITypeSymbol type) =>
         IsNumber(type) ? $"System.{type.MetadataName}" : null;
@@ -171,7 +175,11 @@ internal static class JsonTypeClassifier
         return type;
     }
 
-    /// <summary>The C# numeric types that map to a TS <c>number</c>.</summary>
+    /// <summary>
+    /// The C# numeric types that map to a TS <c>number</c>, plus <c>long</c> /
+    /// <c>ulong</c> as the underlying type of an enum, the one place they
+    /// are reachable here (their values are <see cref="JsonPropertyKind.Int64"/>).
+    /// </summary>
     private static bool IsNumber(ITypeSymbol type) =>
         type.SpecialType
             is SpecialType.System_Byte
