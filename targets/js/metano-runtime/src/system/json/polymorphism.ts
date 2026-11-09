@@ -1,7 +1,7 @@
 import type { DerivedTypeSpec, PolymorphismSpec, TypeDiscriminator, TypeSpec } from "./types.ts";
 import { cannotConvertTo, contractNameOf } from "./contract-name.ts";
 import { JsonException, NotSupportedException } from "./errors.ts";
-import { JsonNumberText } from "./exact-json-number.ts";
+import { JsonNonIntegerNumber, JsonNumberText } from "./exact-json-number.ts";
 
 /**
  * The contract a polymorphic base writes a value with, and the tag written
@@ -604,8 +604,9 @@ function notSupportedAbstractTypeException(spec: TypeSpec): NotSupportedExceptio
 
 /**
  * A tag is a JSON string or a JSON number that fits an `Int32`, which
- * System.Text.Json reads it as; any other number (a `JsonNumberText` leaf of
- * an exact tree included) cannot be converted to the base, and any other
+ * System.Text.Json reads it as; any other number (a `JsonNumberText` or
+ * `JsonNonIntegerNumber` leaf of an exact tree included: `1.0` and `1e0`
+ * are not integer tokens) cannot be converted to the base, and any other
  * JSON value is not a valid metadata property.
  */
 function readTag(value: unknown, spec: TypeSpec): TypeDiscriminator {
@@ -613,7 +614,7 @@ function readTag(value: unknown, spec: TypeSpec): TypeDiscriminator {
     return value;
   }
 
-  if (value instanceof JsonNumberText) {
+  if (value instanceof JsonNumberText || value instanceof JsonNonIntegerNumber) {
     throw cannotConvertTo(spec);
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { JsonException } from "#/system/json";
-import { JsonNumberText } from "#/system/json/exact-json-number";
+import { JsonNonIntegerNumber, JsonNumberText } from "#/system/json/exact-json-number";
 import {
   mayHoldInexactNumber,
   mayHoldNonIntegerNumber,
@@ -10,10 +10,14 @@ import {
 } from "#/system/json/json-text-reader";
 import { expectedTextOutcomeOf, JSON_TEXT_ROWS, textOutcomeOf } from "./json-text-rows.ts";
 
-/** The tree with every `JsonNumberText` leaf read as `JSON.parse` reads it. */
+/** The tree with every number leaf read as `JSON.parse` reads it. */
 function asParsed(value: unknown): unknown {
   if (value instanceof JsonNumberText) {
     return Number(value.text);
+  }
+
+  if (value instanceof JsonNonIntegerNumber) {
+    return value.value;
   }
 
   if (Array.isArray(value)) {
@@ -202,11 +206,20 @@ describe("readJsonText — inexactOrNonInteger leaves (spec 012 FR-053)", () => 
     return read instanceof JsonNumberText ? read.text : read;
   };
 
-  test("a number with a fraction or an exponent keeps its text, however short", () => {
-    expect(leafTextOf("1.0")).toBe("1.0");
-    expect(leafTextOf("1e3")).toBe("1e3");
-    expect(leafTextOf("-0.0")).toBe("-0.0");
-    expect(leafTextOf("2E+0")).toBe("2E+0");
+  test("a short number with a fraction or an exponent is marked, holding its double", () => {
+    expect(leafTextOf("1.0")).toEqual(new JsonNonIntegerNumber(1));
+    expect(leafTextOf("1e3")).toEqual(new JsonNonIntegerNumber(1000));
+    expect(leafTextOf("2E+0")).toEqual(new JsonNonIntegerNumber(2));
+    expect(leafTextOf("1e400")).toEqual(new JsonNonIntegerNumber(Infinity));
+
+    const negativeZero = leafTextOf("-0.0") as JsonNonIntegerNumber;
+
+    expect(Object.is(negativeZero.value, -0)).toBe(true);
+  });
+
+  test("a long one keeps its text, as for a decimal", () => {
+    expect(leafTextOf("1.0000000000000000")).toBe("1.0000000000000000");
+    expect(leafTextOf("1152921504606846977e0")).toBe("1152921504606846977e0");
   });
 
   test("a short integer token is a number, and a long one keeps its digits", () => {
