@@ -610,6 +610,7 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
         () => JsonSerializer.deserializeText(text, int64Root("System.Int64")),
         cannotConvertMessage("System.Int64"),
       );
+
       expectJsonException(
         () => JsonSerializer.deserializeText(text, int64Root("System.UInt64")),
         cannotConvertMessage("System.UInt64"),
@@ -761,7 +762,11 @@ describe("int64 — exact reads in every position (FR-053)", () => {
       int64: 1152921504606846977n,
     });
 
-    expect(() => JsonSerializer.deserializeText("1.0", branded)).toThrow(JsonException);
+    // A branded root names the 64-bit type, as for any other rejected value.
+    expectJsonException(
+      () => JsonSerializer.deserializeText("1.0", branded),
+      cannotConvertMessage("System.Int64"),
+    );
   });
 
   // A custom converter gets the whole subtree with doubles, as for decimals:

@@ -124,8 +124,8 @@ export class BoundSerializer {
   deserializeText<T>(text: string, spec: TypeSpec<T>): T | null;
   /**
    * Deserialize JSON text into a non-object root value, decimals and 64-bit
-   * integers with their exact digits. `T` holds `| null` for a reference-type root; a value-type
-   * root throws for `null`.
+   * integers with their exact digits. `T` holds `| null` for a
+   * reference-type root; a value-type root throws for `null`.
    */
   deserializeText<T>(text: string, spec: ValueSpec<T>): T;
   deserializeText<T>(text: string, spec: JsonTypeInfo<T>): T | null {

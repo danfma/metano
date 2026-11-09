@@ -9,11 +9,6 @@ import type { JsonTypeInfo, TypeDescriptor, TypeSpec } from "./types.ts";
  * token, digits and shape (spec 012 FR-052, FR-053).
  */
 
-/** Whether the built-in converter of `descriptor` reads a JSON number from its exact text. */
-export function readsNumberText(descriptor: TypeDescriptor): boolean {
-  return descriptor.kind === "decimal" || readsIntegerToken(descriptor);
-}
-
 /**
  * Whether the built-in converter of `descriptor` reads an integer token
  * only, so a number with a fraction or an exponent must reach it with its
@@ -21,6 +16,11 @@ export function readsNumberText(descriptor: TypeDescriptor): boolean {
  */
 function readsIntegerToken(descriptor: TypeDescriptor): boolean {
   return descriptor.kind === "int64";
+}
+
+/** Whether the built-in converter of `descriptor` reads a JSON number from its exact text. */
+export function readsNumberText(descriptor: TypeDescriptor): boolean {
+  return descriptor.kind === "decimal" || readsIntegerToken(descriptor);
 }
 
 /**
