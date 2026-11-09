@@ -87,7 +87,10 @@ public sealed partial class IrExpressionExtractor
             .OrderBy(argument => argument.ParameterOrdinal)
             .ToList();
 
-        var evaluationOrder = EvaluationOrderOf(inParameterOrder);
+        var evaluationOrder = EvaluationOrderOf(
+            inParameterOrder,
+            ComputedReadsAreOrderSensitive(bindable)
+        );
 
         if (evaluationOrder is not null && call is not null)
             ReportIfEvaluationOrderIsLost(call, bindable);
@@ -249,10 +252,13 @@ public sealed partial class IrExpressionExtractor
     /// The parameter-order positions of the arguments, listed in the order C#
     /// evaluates them (<c>order[k]</c> is the position of the k-th argument
     /// evaluated); <c>null</c> when that is parameter order, or when no
-    /// argument has a side effect to keep in place.
+    /// argument has a side effect to keep in place: neither one its lowered
+    /// shape shows nor a computed read
+    /// (<paramref name="computedReadsAreOrderSensitive"/>).
     /// </summary>
     private static IReadOnlyList<int>? EvaluationOrderOf(
-        IReadOnlyList<BoundArgument> inParameterOrder
+        IReadOnlyList<BoundArgument> inParameterOrder,
+        bool computedReadsAreOrderSensitive
     )
     {
         var order = inParameterOrder
@@ -263,12 +269,51 @@ public sealed partial class IrExpressionExtractor
 
         var isParameterOrder = order.SequenceEqual(Enumerable.Range(0, order.Count));
 
-        var hasSideEffect = inParameterOrder.Any(argument =>
-            !IrEvaluationTraits.IsSideEffectFree(argument.Value.Value)
-        );
+        var hasSideEffect =
+            computedReadsAreOrderSensitive
+            || inParameterOrder.Any(argument =>
+                !IrEvaluationTraits.IsSideEffectFree(argument.Value.Value)
+            );
 
         return isParameterOrder || !hasSideEffect ? null : order;
     }
+
+    /// <summary>
+    /// Whether a property read among the arguments can tell their order
+    /// apart, for a target that binds them in source order
+    /// (<see cref="IrExtractionContext.KeepsArgumentEvaluationOrder"/>; the
+    /// other targets keep the <c>MS0001</c> rule of
+    /// <see cref="ReportIfEvaluationOrderIsLost"/>). The lowered shape of a
+    /// member read does not say whether it is a field or a property, so
+    /// <see cref="IrEvaluationTraits.IsSideEffectFree"/> takes a getter for
+    /// free; here the symbol decides. A <see cref="ReadsComputedProperty">
+    /// computed read</see> runs code that may write what another argument
+    /// reads, so it is order-sensitive as soon as a second argument is not
+    /// <see cref="IsOrderInsensitive">order-insensitive</see>. Field and
+    /// auto-property reads alone run no code: no order tells them apart.
+    /// </summary>
+    private bool ComputedReadsAreOrderSensitive(ImmutableArray<IArgumentOperation> arguments) =>
+        _context.KeepsArgumentEvaluationOrder
+        && arguments.Any(argument => ReadsComputedProperty(argument.Value))
+        && arguments.Count(argument => !IsOrderInsensitive(argument.Value)) >= 2;
+
+    /// <summary>
+    /// Whether evaluating <paramref name="operation"/> reads a property whose
+    /// getter may run code: every property but a non-overridable
+    /// auto-property of this compilation (a hand-written, <c>field</c>-keyword,
+    /// overridable or interface getter, an indexer, a property of another
+    /// assembly). A constant and a lambda's body read nothing here.
+    /// </summary>
+    private static bool ReadsComputedProperty(IOperation operation) =>
+        operation switch
+        {
+            { ConstantValue.HasValue: true } or IAnonymousFunctionOperation => false,
+            IPropertyReferenceOperation read when IsComputed(read.Property) => true,
+            _ => operation.ChildOperations.Any(ReadsComputedProperty),
+        };
+
+    private static bool IsComputed(IPropertySymbol property) =>
+        !IsAutoProperty(property) || IsOverridable(property);
 
     private IEnumerable<IrArgument> BoundArgumentsOf(IArgumentOperation argument) =>
         argument.ArgumentKind switch
