@@ -239,8 +239,7 @@ public class CollectionExpressionTests
             {
                 public HashSet<long> Ids(long[] more) => [1, 2, .. more];
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         await Assert

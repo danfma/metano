@@ -518,14 +518,6 @@ public sealed class TypeScriptTransformContext(
     public bool UseIrBodiesWhenCovered { get; init; } = true;
 
     /// <summary>
-    /// How 64-bit integers are represented in the emitted TypeScript; the
-    /// compiler-internal staging switch of spec 012 (DECIDED-22). In
-    /// <see cref="Int64Representation.BigInt"/> mode the extraction applies the
-    /// exact 64-bit lowering (<see cref="IrExtractionContext.ExactInt64Lowering"/>).
-    /// </summary>
-    internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
-
-    /// <summary>
     /// The <c>[PlainObject]</c> types (original definitions) whose <c>isT</c>
     /// guard a polymorphic JSON hierarchy synthesizes without
     /// <c>[GenerateGuard]</c> (spec 009 FR-019 rule 1). Their keys are also in
@@ -545,8 +537,7 @@ public sealed class TypeScriptTransformContext(
     public IrExtractionContext Extraction =>
         new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming)
         {
-            // STAGING(012k): always exact.
-            ExactInt64Lowering = Int64Representation is Int64Representation.BigInt,
+            ExactInt64Lowering = true,
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
             KeepsArgumentEvaluationOrder = true,

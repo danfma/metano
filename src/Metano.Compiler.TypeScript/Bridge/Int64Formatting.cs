@@ -42,10 +42,8 @@ internal static partial class Int64Formatting
     /// </summary>
     public static TsExpression? TryFormatHole(IrInterpolationExpression hole, TsExpression value)
     {
-        // STAGING(012k): every mode once the switch is gone.
         var formatsItself =
-            Int64RepresentationScope.IsBigInt
-            && hole.SixtyFourBitKind is not null
+            hole.SixtyFourBitKind is not null
             && (hole.FormatSpecifier is not null || hole.Alignment is not null);
 
         if (!formatsItself)
@@ -71,8 +69,7 @@ internal static partial class Int64Formatting
     /// </summary>
     public static void ReportUnsupportedFormatOrStyle(IrCallExpression call)
     {
-        // STAGING(012k): every mode once the switch is gone.
-        if (!Int64RepresentationScope.IsBigInt || !IsSixtyFourBitMember(call.Origin))
+        if (!IsSixtyFourBitMember(call.Origin))
             return;
 
         switch (call.Origin!.MemberName)

@@ -115,10 +115,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Dispatch_BigIntMode_Golden()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            DispatchSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(DispatchSource);
 
         await Assert
             .That(files["gates.ts"])
@@ -133,10 +130,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Dispatch_BigIntMode_TriesLongThenUlongThenBigInteger()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            DispatchSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(DispatchSource);
 
         var output = files["gates.ts"];
 
@@ -164,10 +158,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Siblings_BigIntMode_ReorderOnTheSixtyFourBitPositions()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            SiblingSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(SiblingSource);
 
         var output = files["shapes.ts"];
 
@@ -193,10 +184,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Siblings_BigIntMode_BrandedNeighborKeepsDeclarationOrder()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            SiblingSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(SiblingSource);
 
         var output = files["mixed.ts"];
 
@@ -218,10 +206,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Operators_BigIntMode_TryLongBeforeUlong()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            SiblingSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(SiblingSource);
 
         var output = files["money.ts"];
 
@@ -243,10 +228,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Constructors_BigIntMode_TryLongBeforeUlong()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            SiblingSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(SiblingSource);
 
         var output = files["stamp.ts"];
 
@@ -267,10 +249,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Patterns_BigIntMode_RangeCheckTheBoxedValue()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            PatternSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(PatternSource);
 
         var output = files["names.ts"];
 
@@ -292,10 +271,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Guard_BigIntMode_TestsBigintMembers()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            GuardSource,
-            Int64Representation.BigInt
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(GuardSource);
 
         var output = files["snowflake.ts"];
 
@@ -313,15 +289,9 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Dispatch_Guard_NumberMode_KeepsTheShippedChecks()
     {
-        var (dispatchFiles, _) = TranspileHelper.TranspileWithDiagnostics(
-            DispatchSource,
-            Int64Representation.Number
-        );
+        var (dispatchFiles, _) = TranspileHelper.TranspileWithDiagnostics(DispatchSource);
 
-        var (guardFiles, _) = TranspileHelper.TranspileWithDiagnostics(
-            GuardSource,
-            Int64Representation.Number
-        );
+        var (guardFiles, _) = TranspileHelper.TranspileWithDiagnostics(GuardSource);
 
         await Assert
             .That(dispatchFiles["gates.ts"])
@@ -338,10 +308,7 @@ public class Int64DispatchGuardTests
     [Test]
     public async Task Patterns_NumberMode_KeepsTheTypeofTests()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            PatternSource,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(PatternSource);
 
         var output = files["names.ts"];
 

@@ -3,8 +3,7 @@ using Metano.Compiler.IR;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Reorders the sibling sets of the staging BigInt mode's dispatchers into the
-/// documented dispatch order of spec 012 FR-048 (OQ-6). A sibling set is a
+/// Reorders the sibling sets of a dispatcher into the documented dispatch order of spec 012 FR-048 (OQ-6). A sibling set is a
 /// group of same-arity overloads whose parameter types are identical except at
 /// positions where both sides are 64-bit integers (<c>long</c>, <c>ulong</c>,
 /// <c>BigInteger</c>, nullable included): their guards all accept an in-range
@@ -18,11 +17,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// neighbor names a 64-bit one (a branded value, <c>object</c>,
 /// <c>string</c>), or an overload outside any set, keeps the declaration order
 /// the legacy sort produced. Members of a set that rank the same
-/// (<c>M(long)</c> beside <c>M(long?)</c>) keep declaration order too. The
-/// reorder runs only in the staging BigInt mode — its caller
-/// (<see cref="OverloadDispatchOrder.Sort"/>) gates on
-/// <see cref="Int64RepresentationScope"/>, and the Number mode keeps the
-/// shipped output byte for byte (NFR-001).
+/// (<c>M(long)</c> beside <c>M(long?)</c>) keep declaration order too.
 /// </remarks>
 internal static class SixtyFourBitDispatchOrder
 {

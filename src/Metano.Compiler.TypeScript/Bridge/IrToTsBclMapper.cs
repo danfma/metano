@@ -33,7 +33,7 @@ public static class IrToTsBclMapper
             return null;
         // Dart-only entries share the registry but carry no JS data; skip
         // them so the dereferences in ApplyPropertyMapping never see nulls.
-        if (!entry.IsActiveJsMapping())
+        if (!entry.HasJsMapping)
             return null;
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
         return ApplyPropertyMapping(entry, receiver);
@@ -70,7 +70,7 @@ public static class IrToTsBclMapper
             // entries must be invisible to the TS pipeline because the call
             // site below dereferences `JsName!` / `JsTemplate!` and would
             // crash otherwise.
-            if (!candidate.IsActiveJsMapping())
+            if (!candidate.HasJsMapping)
                 continue;
             if (!candidate.MatchesOverload(loweredArgs.Count, call.Origin.ParameterTypes))
                 continue;
@@ -144,7 +144,7 @@ public static class IrToTsBclMapper
         IReadOnlyList<string>? parameterTypes
     ) =>
         candidate.HasTemplate
-        && candidate.IsActiveJsMapping()
+        && candidate.HasJsMapping
         && candidate.MatchesOverload(argumentCount, parameterTypes)
         && ReadsOnlySuppliedArguments(candidate.JsTemplate!, argumentCount);
 

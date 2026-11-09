@@ -242,10 +242,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_MathStatics_CallTheInt64Helpers()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            MathSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MathSource);
 
         await Assert
             .That(files["statics.ts"])
@@ -278,8 +275,7 @@ public class Int64BclMappingTests
                 public static nuint MaxU(nuint a, nuint b) => Math.Max(a, b);
                 public static nuint ClampU(nuint v, nuint lo, nuint hi) => Math.Clamp(v, lo, hi);
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         var native = files["native-math.ts"];
@@ -302,10 +298,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task NumberMode_MathStatics_KeepTheShippedLowering()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            MathSource,
-            Int64Representation.Number
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MathSource);
 
         var statics = files["statics.ts"];
 
@@ -319,10 +312,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_FormattingParsingAndComparison_CallTheInt64Helpers()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            FormattingSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(FormattingSource);
 
         await Assert
             .That(files["text.ts"])
@@ -334,10 +324,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_Convert_CallsTheConvertHelpers()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ConvertSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ConvertSource);
 
         await Assert
             .That(files["converts.ts"])
@@ -355,8 +342,7 @@ public class Int64BclMappingTests
     public async Task BigIntMode_UnsupportedFormatsAndStyles_ReportMS0066()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            UnsupportedFormatSource,
-            Int64Representation.BigInt
+            UnsupportedFormatSource
         );
 
         var messages = diagnostics
@@ -386,20 +372,11 @@ public class Int64BclMappingTests
     [Test]
     public async Task NumberMode_FormattingAndConvert_KeepTheShippedLowering()
     {
-        var formatting = TranspileHelper.TranspileWithDiagnostics(
-            FormattingSource,
-            Int64Representation.Number
-        );
+        var formatting = TranspileHelper.TranspileWithDiagnostics(FormattingSource);
 
-        var convert = TranspileHelper.TranspileWithDiagnostics(
-            ConvertSource,
-            Int64Representation.Number
-        );
+        var convert = TranspileHelper.TranspileWithDiagnostics(ConvertSource);
 
-        var unsupported = TranspileHelper.TranspileWithDiagnostics(
-            UnsupportedFormatSource,
-            Int64Representation.Number
-        );
+        var unsupported = TranspileHelper.TranspileWithDiagnostics(UnsupportedFormatSource);
 
         var text = formatting.Files["text.ts"];
         var diagnostics = formatting.Diagnostics.Concat(unsupported.Diagnostics);
@@ -417,10 +394,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_ArraysAndLinq_IndexByNumberAndCallTheInt64Terminals()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            CollectionSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CollectionSource);
 
         await Assert
             .That(files["collections.ts"])
@@ -432,10 +406,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_TicksAndConsole_CallTheTicksHelpersAndString()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            TicksSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(TicksSource);
 
         await Assert
             .That(files["clock.ts"])
@@ -452,10 +423,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_ExpressionTree_CarriesBigIntLiteralsAndConvertNodes()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            ExpressionTreeSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExpressionTreeSource);
 
         await Assert
             .That(files["rows.ts"])
@@ -474,15 +442,9 @@ public class Int64BclMappingTests
     [Test]
     public async Task NumberMode_CollectionsAndTicks_KeepTheShippedLowering()
     {
-        var collections = TranspileHelper.TranspileWithDiagnostics(
-            CollectionSource,
-            Int64Representation.Number
-        );
+        var collections = TranspileHelper.TranspileWithDiagnostics(CollectionSource);
 
-        var clock = TranspileHelper.TranspileWithDiagnostics(
-            TicksSource,
-            Int64Representation.Number
-        );
+        var clock = TranspileHelper.TranspileWithDiagnostics(TicksSource);
 
         var output = collections.Files["collections.ts"];
 
@@ -513,8 +475,7 @@ public class Int64BclMappingTests
             {
                 public long Highest(long[] ids, IComparer<long> order) => ids.Max(order);
             }
-            """,
-            Int64Representation.BigInt
+            """
         );
 
         await Assert.That(files["ordered.ts"]).Contains("linq(ids, max(order))");
@@ -561,10 +522,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task BigIntMode_BigIntegerCasts_CallTheCheckedHelpers()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            BigIntegerSource,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(BigIntegerSource);
 
         await Assert
             .That(files["big.ts"])
@@ -577,10 +535,7 @@ public class Int64BclMappingTests
     [Test]
     public async Task NumberMode_BigIntegerCasts_KeepTheShippedLowering()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            BigIntegerSource,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(BigIntegerSource);
 
         var big = files["big.ts"];
 

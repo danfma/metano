@@ -52,10 +52,7 @@ public class Int64IssueTrackerSampleTests
     [Test]
     public async Task BigIntMode_TranspiledSample_MatchesTheCommittedOutput()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileProjectDirectory(
-            SampleDirectory,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileProjectDirectory(SampleDirectory);
 
         await Assert
             .That(diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error))

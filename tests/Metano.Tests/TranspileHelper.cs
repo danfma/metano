@@ -178,8 +178,7 @@ public static class TranspileHelper
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
         string? importAlias = null,
-        IEnumerable<SyntaxTree>? generatedTrees = null,
-        Int64Representation int64Representation = Int64Representation.Number
+        IEnumerable<SyntaxTree>? generatedTrees = null
     )
     {
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(
@@ -193,7 +192,6 @@ public static class TranspileHelper
             NamespaceBarrels = namespaceBarrels,
             StripInterfacePrefix = stripInterfacePrefix,
             ImportAlias = importAlias,
-            Int64Representation = int64Representation,
         };
 
         var files = transformer.TransformAll();
@@ -360,26 +358,6 @@ public static class TranspileHelper
     }
 
     /// <summary>
-    /// Like <see cref="TranspileWithDiagnostics(string, string?)"/> under an
-    /// explicit 64-bit integer representation: the compiler-internal staging
-    /// switch of spec 012 (DECIDED-22), which the 64-bit tests set to
-    /// <see cref="Int64Representation.BigInt"/>.
-    /// </summary>
-    internal static (
-        Dictionary<string, string> Files,
-        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileWithDiagnostics(string csharpSource, Int64Representation int64Representation)
-    {
-        var compilation = CompileAssembly(
-            csharpSource,
-            "TestAssembly",
-            OutputKind.DynamicallyLinkedLibrary
-        );
-
-        return TranspileCore(compilation, int64Representation: int64Representation);
-    }
-
-    /// <summary>
     /// Transpiles the C# files of <paramref name="directory"/> (not its
     /// subdirectories) as one assembly named after it, as they are: no
     /// <c>using</c> is prepended, so a sample project compiles here as it does
@@ -388,7 +366,7 @@ public static class TranspileHelper
     internal static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileSourceDirectory(string directory, Int64Representation int64Representation)
+    ) TranspileSourceDirectory(string directory)
     {
         var trees = Directory
             .GetFiles(directory, "*.cs")
@@ -410,7 +388,7 @@ public static class TranspileHelper
 
         ThrowOnErrors(compilation.GetDiagnostics(), $"C# compilation ({directory})");
 
-        return TranspileCore(compilation, int64Representation: int64Representation);
+        return TranspileCore(compilation);
     }
 
     /// <summary>
@@ -418,19 +396,12 @@ public static class TranspileHelper
     /// subdirectories as one assembly named after it, the way MSBuild builds a
     /// sample project: with the SDK's implicit usings, the System.Text.Json
     /// source generator run over the compilation, and namespace barrels. The
-    /// sample drift tests whose committed output must run in the staging
-    /// <see cref="Int64Representation.BigInt"/> mode use it (spec 012
-    /// DECIDED-22: the staging switch has no MSBuild surface, so the samples
-    /// cannot transpile through the build).
+    /// sample drift tests use it.
     /// </summary>
     internal static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileProjectDirectory(
-        string directory,
-        Int64Representation int64Representation,
-        bool namespaceBarrels = true
-    )
+    ) TranspileProjectDirectory(string directory, bool namespaceBarrels = true)
     {
         var trees = Directory
             .GetFiles(directory, "*.cs", SearchOption.AllDirectories)
@@ -460,8 +431,7 @@ public static class TranspileHelper
         return TranspileCore(
             updated,
             namespaceBarrels: namespaceBarrels,
-            generatedTrees: generatedTrees,
-            int64Representation: int64Representation
+            generatedTrees: generatedTrees
         );
     }
 
@@ -485,7 +455,7 @@ public static class TranspileHelper
         );
 
     /// <summary>
-    /// Like <see cref="TranspileWithDiagnostics(string, Int64Representation)"/>
+    /// Like <see cref="TranspileWithDiagnostics(string, string?)"/>
     /// for a project compiled with <c>CheckForOverflowUnderflow</c>
     /// (Roslyn's <c>CheckOverflow</c> option), so every operation outside an
     /// <c>unchecked</c> context is checked (spec 012 DECIDED-4).
@@ -493,7 +463,7 @@ public static class TranspileHelper
     internal static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileWithOverflowChecks(string csharpSource, Int64Representation int64Representation)
+    ) TranspileWithOverflowChecks(string csharpSource)
     {
         var compilation = CompileAssembly(
             csharpSource,
@@ -505,7 +475,7 @@ public static class TranspileHelper
             compilation.Options.WithOverflowChecks(true)
         );
 
-        return TranspileCore(checkedCompilation, int64Representation: int64Representation);
+        return TranspileCore(checkedCompilation);
     }
 
     /// <summary>

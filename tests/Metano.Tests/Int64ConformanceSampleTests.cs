@@ -40,10 +40,7 @@ public class Int64ConformanceSampleTests
     [Test]
     public async Task BigIntMode_TranspiledTwin_MatchesTheCommittedOutput()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileSourceDirectory(
-            SampleDirectory,
-            Int64Representation.BigInt
-        );
+        var (files, diagnostics) = TranspileHelper.TranspileSourceDirectory(SampleDirectory);
 
         if (UpdateOutput)
             Rewrite(files);

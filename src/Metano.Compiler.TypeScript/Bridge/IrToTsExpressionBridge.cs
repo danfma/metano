@@ -474,10 +474,7 @@ public static partial class IrToTsExpressionBridge
     /// FR-036); any other value as is.
     /// </summary>
     private static TsExpression AsArrayIndex(TsExpression value, IrNumericKind? kind) =>
-        // STAGING(012k): every mode once the switch is gone.
-        Int64RepresentationScope.IsBigInt && kind is not null
-            ? Int64TsExpressions.Number(value)
-            : value;
+        kind is not null ? Int64TsExpressions.Number(value) : value;
 
     /// <summary>
     /// <c>target.slice(start, end)</c> — the same half-open copy for JS arrays
@@ -1234,13 +1231,13 @@ public static partial class IrToTsExpressionBridge
         type switch
         {
             IrNullableTypeRef nullable => ResolveStructuredType(nullable.Inner),
-            // STAGING(012k): every mode once the switch is gone. A `bigint`
-            // is named by its .NET type, so a provider tells `long` from
-            // `ulong` (spec 012 FR-044).
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 }
-                when Int64RepresentationScope.IsBigInt => new(ExprTreeInt64TypeName, null),
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 }
-                when Int64RepresentationScope.IsBigInt => new(ExprTreeUInt64TypeName, null),
+            // A `bigint` is named by its .NET type, so a provider tells
+            // `long` from `ulong` (spec 012 FR-044).
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 } => new(ExprTreeInt64TypeName, null),
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 } => new(
+                ExprTreeUInt64TypeName,
+                null
+            ),
             IrNamedTypeRef named => new(named.Name, named.Origin?.PackageId),
             _ => new(Printer.RenderType(IrToTsTypeMapper.Map(type)), null),
         };
@@ -1266,8 +1263,7 @@ public static partial class IrToTsExpressionBridge
         value switch
         {
             null => new TsLiteral("null"),
-            // STAGING(012k): every mode once the switch is gone.
-            long or ulong when Int64RepresentationScope.IsBigInt => new TsLiteral(
+            long or ulong => new TsLiteral(
                 string.Create(CultureInfo.InvariantCulture, $"{value}n")
             ),
             bool b => new TsLiteral(b ? "true" : "false"),
@@ -2149,10 +2145,8 @@ public static partial class IrToTsExpressionBridge
                 [new TsStringLiteral(FormatNumericValue(lit.Value))]
             ),
             // BigInteger literals use the native bigint suffix `n`, and so do
-            // 64-bit ones in the staging BigInt mode (spec 012 FR-007).
-            // STAGING(012k): 64-bit literals always take the suffix.
-            IrLiteralKind.BigInteger => BigIntLiteral(lit.Value),
-            IrLiteralKind.Int64 or IrLiteralKind.UInt64 when Int64RepresentationScope.IsBigInt =>
+            // 64-bit ones (spec 012 FR-007).
+            IrLiteralKind.BigInteger or IrLiteralKind.Int64 or IrLiteralKind.UInt64 =>
                 BigIntLiteral(lit.Value),
             _ => new TsLiteral(FormatNumericValue(lit.Value)),
         };

@@ -14,23 +14,21 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// unless the core says the constant divisor cannot throw: native
 /// <c>bigint</c> division already truncates toward zero and its remainder
 /// takes the dividend's sign (DECIDED-8). A shift count, already masked by
-/// the core, becomes a <c>bigint</c> (DECIDED-9). The staging <c>Number</c>
-/// mode keeps its <c>intDiv</c> and native operators (DECIDED-22).
+/// the core, becomes a <c>bigint</c> (DECIDED-9).
 /// </summary>
 internal static class IrToTsInt64OperatorBridge
 {
     /// <summary>
     /// <paramref name="binary"/> rendered with <paramref name="map"/> mapping
-    /// its operands, when it is a 64-bit division, remainder or shift in the
-    /// <c>BigInt</c> mode; <c>null</c> otherwise.
+    /// its operands, when it is a 64-bit division, remainder or shift;
+    /// <c>null</c> otherwise.
     /// </summary>
     public static TsExpression? TryMap(
         IrBinaryExpression binary,
         Func<IrExpression, TsExpression> map
     )
     {
-        // STAGING(012k): every 64-bit operator renders once the switch is gone.
-        if (!Int64RepresentationScope.IsBigInt || SixtyFourBitKindOf(binary) is not { } kind)
+        if (SixtyFourBitKindOf(binary) is not { } kind)
             return null;
 
         var isSigned = kind.IsSigned();

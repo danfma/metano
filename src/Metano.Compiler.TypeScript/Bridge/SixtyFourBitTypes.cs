@@ -3,8 +3,8 @@ using Metano.Compiler.IR;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The one definition of the 64-bit integer types a BigInt-mode dispatcher
-/// treats alike: <c>long</c>, <c>ulong</c> and <c>BigInteger</c> (nullable
+/// The one definition of the 64-bit integer types a dispatcher treats
+/// alike: <c>long</c>, <c>ulong</c> and <c>BigInteger</c> (nullable
 /// included) all lower to a <c>bigint</c>. Shared by the OQ-6 reorder
 /// (<see cref="SixtyFourBitDispatchOrder"/>) and the branded-ambiguity
 /// detector (<see cref="BrandedSixtyFourBitOverloads"/>).

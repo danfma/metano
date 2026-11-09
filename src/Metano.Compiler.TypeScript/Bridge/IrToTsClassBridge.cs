@@ -162,10 +162,7 @@ internal static partial class IrToTsClassBridge
     }
 
     /// <summary>
-    /// The zero of <c>long</c> / <c>ulong</c>: <c>0n</c> in the staging
-    /// <c>BigInt</c> mode (spec 012 FR-004), <c>0</c> otherwise.
-    /// STAGING(012k): always <c>0n</c>.
+    /// The zero of <c>long</c> / <c>ulong</c>: <c>0n</c> (spec 012 FR-004).
     /// </summary>
-    internal static TsLiteral SixtyFourBitZero() =>
-        new(Int64RepresentationScope.IsBigInt ? "0n" : "0");
+    internal static TsLiteral SixtyFourBitZero() => new("0n");
 }

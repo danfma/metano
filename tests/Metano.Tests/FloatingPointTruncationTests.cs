@@ -31,10 +31,7 @@ public class FloatingPointTruncationTests
             }
             """;
 
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            source,
-            Int64Representation.Number
-        );
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(source);
 
         var output = files["casts.ts"];
 
@@ -102,17 +99,13 @@ public class FloatingPointTruncationTests
 
     /// <summary>
     /// A <c>foreach</c> variable converted from a floating-point element
-    /// truncates too, in both modes (FR-070's "every source"), and checks
+    /// truncates too (FR-070's "every source"), and checks
     /// inside a <c>checked</c> block.
     /// </summary>
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task ForEach_FloatingPointElement_Truncates(bool bigIntMode)
+    public async Task ForEach_FloatingPointElement_Truncates()
     {
-        var mode = bigIntMode ? Int64Representation.BigInt : Int64Representation.Number;
-
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource, mode);
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource);
 
         var output = files["loops.ts"];
 

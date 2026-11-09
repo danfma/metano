@@ -111,8 +111,7 @@ public static partial class IrToTsExpressionBridge
                 out var candidates
             )
             && candidates.Any(candidate =>
-                candidate.IsActiveJsMapping()
-                && candidate.MatchesOverload(arity, origin.ParameterTypes)
+                candidate.HasJsMapping && candidate.MatchesOverload(arity, origin.ParameterTypes)
             );
     }
 

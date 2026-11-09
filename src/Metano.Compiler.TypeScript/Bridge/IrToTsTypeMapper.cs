@@ -228,12 +228,9 @@ public static class IrToTsTypeMapper
         };
 
     /// <summary>
-    /// <c>long</c> / <c>ulong</c>: a native <c>bigint</c> in the staging
-    /// <c>BigInt</c> mode (spec 012 FR-002), a <c>number</c> otherwise.
-    /// STAGING(012k): always <c>bigint</c>.
+    /// <c>long</c> / <c>ulong</c>: a native <c>bigint</c> (spec 012 FR-002).
     /// </summary>
-    private static TsType SixtyFourBitIntegerType() =>
-        Int64RepresentationScope.IsBigInt ? new TsBigIntType() : new TsNumberType();
+    private static TsType SixtyFourBitIntegerType() => new TsBigIntType();
 
     /// <summary>
     /// <c>readonly [result: R, value: T]</c>, or for a discriminated result

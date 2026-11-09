@@ -5,7 +5,7 @@ namespace Metano.Tests;
 
 /// <summary>
 /// The <c>MS0063</c> warning for a branded 64-bit type that shares a
-/// BigInt-mode dispatcher with another <c>bigint</c>-valued type (issue
+/// dispatcher with another <c>bigint</c>-valued type (issue
 /// #541): the branded arm is a <c>typeof === "bigint"</c> test, so it accepts
 /// what the <c>long</c>, <c>ulong</c> and <c>BigInteger</c> arms accept and
 /// the overloads cannot be told apart through the dispatcher. Groups without a
@@ -46,12 +46,9 @@ public class Int64BrandedDispatchDiagnosticTests
         + "are not affected. To make the dispatcher unambiguous, give the overloads distinct "
         + "arities or a distinct non-64-bit parameter.";
 
-    private static IReadOnlyList<MetanoDiagnostic> Ambiguity(
-        string source,
-        Int64Representation representation = Int64Representation.BigInt
-    ) =>
+    private static IReadOnlyList<MetanoDiagnostic> Ambiguity(string source) =>
         TranspileHelper
-            .TranspileWithDiagnostics(Preamble + source, representation)
+            .TranspileWithDiagnostics(Preamble + source)
             .Diagnostics.Where(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch)
             .ToList();
 
@@ -302,24 +299,6 @@ public class Int64BrandedDispatchDiagnosticTests
                 public override string H(long l) => "derived long";
             }
             """
-        );
-
-        await Assert.That(warnings).IsEmpty();
-    }
-
-    [Test]
-    public async Task NumberMode_ReportsNothing()
-    {
-        var warnings = Ambiguity(
-            """
-            [Transpile]
-            public class Calls
-            {
-                public string H(long l) => "long";
-                public string H(UId u) => "uid";
-            }
-            """,
-            Int64Representation.Number
         );
 
         await Assert.That(warnings).IsEmpty();
