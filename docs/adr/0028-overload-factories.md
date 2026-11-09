@@ -64,8 +64,10 @@ runtime-comparable, type-level-distinct, subclass-visible name for one construct
   factories, Dart named constructors), and an operator application when the target sets the
   opt-in `EmitsOperatorFastPaths` (TypeScript only). Method, `base.M`, method-group and
   module-function call sites bind on every target. Which shapes keep today's emission
-  (`[PlainObject]`, branded, `[External]`, `[JsCallable]`) is still decided by core lists; a port
-  for it is #549.
+  (`[PlainObject]`, branded, `[External]`, `[JsCallable]`) is decided by four lists: two in the
+  core (whether `[Name]` pins a suffix, whether a call binds) and two per target (the constructor
+  shapes behind the port, and the member naming, which Dart derives with the constructor shapes
+  from one per-symbol shape); replacing the core lists by a target port is #549.
 
 ## Consequences
 

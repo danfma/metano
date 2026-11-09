@@ -276,7 +276,19 @@ Limitations of the experimental Dart target:
 - the overloads of a `[PlainObject]` or branded type keep only the primary
   member (`MS0001`), declared under the name its call sites spell;
 - a containerless module's fast paths are claimed per file, not across the
-  files a consumer imports together.
+  files a consumer imports together;
+- arguments evaluated out of parameter order go through one immediately
+  invoked closure, `(($recv, $arg1, $arg0) => …)(…)`; an `await` among them
+  stays in the enclosing function, but the closure itself is synchronous.
+
+Gaps of the Dart prototype that predate spec 013 and also touch overloads:
+
+- when a base's unnamed constructor has only optional parameters, a derived
+  constructor compiles but runs the base with its defaults, silently (#572);
+- a `params` argument is passed element by element, not as one list (#585);
+- out-of-order named arguments of a non-overloaded call print as Dart named
+  arguments (`name: value`) against positional parameters (#586);
+- a generic method call drops its type arguments (#587).
 
 ## Migrating from 2.x
 
