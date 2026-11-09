@@ -65,7 +65,7 @@ public class AutoInitDefaultTests
 
         var output = result["counter.ts"];
         await Assert.That(output).Contains("count: number = 0");
-        await Assert.That(output).Contains("total: number = 0");
+        await Assert.That(output).Contains("total: bigint = 0n");
     }
 
     [Test]

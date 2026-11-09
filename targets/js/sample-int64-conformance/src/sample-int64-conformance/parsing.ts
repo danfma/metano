@@ -1,4 +1,4 @@
-import { parseInt64, parseUInt64, tryParseInt64Value, tryParseUInt64 } from "metano-runtime";
+import { parseInt64, parseUInt64, tryParseInt64, tryParseUInt64 } from "metano-runtime";
 
 export function parse(text: string): bigint {
   return parseInt64(text);
@@ -29,7 +29,7 @@ export function parseUnsignedNumber(text: string): bigint {
 }
 
 export function tryParse(text: string): bigint | null {
-  const [$found0, value] = tryParseInt64Value(text);
+  const [$found0, value] = tryParseInt64(text);
 
   return $found0 ? value : null;
 }
@@ -41,7 +41,7 @@ export function tryParseUnsignedNumber(text: string): bigint | null {
 }
 
 export function tryParseFailureValue(text: string): bigint {
-  const [, value] = tryParseInt64Value(text, 515);
+  const [, value] = tryParseInt64(text, 515);
 
   return value;
 }

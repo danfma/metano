@@ -338,7 +338,7 @@ public class CollectionConstructionTests
             .Contains("private readonly _byName: Map<string, number> = new Map<string, number>();");
     }
 
-    /// <summary>The same construction over 64-bit keys, in the BigInt mode.</summary>
+    /// <summary>The same construction over 64-bit keys.</summary>
     [Test]
     public async Task DictionaryCollectionExpression_WithLongKeys_IsANewEmptyMap()
     {

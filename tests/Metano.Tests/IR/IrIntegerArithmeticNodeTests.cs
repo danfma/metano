@@ -13,9 +13,9 @@ namespace Metano.Tests.IR;
 /// <summary>
 /// The 64-bit integer IR nodes of spec 012 (<see cref="IrNumericConversion"/>,
 /// <see cref="IrIntegerOverflow"/>) are walked, rewritten and printed by every
-/// stage before any extractor produces them (slice 012a): the TypeScript
-/// <see cref="Int64Representation.Number"/> mode and Dart render them as their
-/// operand, keeping the operand's own grouping.
+/// stage before any extractor produces them (slice 012a): TypeScript renders
+/// the reduction around the operand and Dart renders the operand, keeping the
+/// operand's own grouping.
 /// </summary>
 public class IrIntegerArithmeticNodeTests
 {
@@ -71,7 +71,7 @@ public class IrIntegerArithmeticNodeTests
     }
 
     [Test]
-    public async Task TypeScriptNumberMode_RendersTheOperandWithItsGrouping()
+    public async Task TypeScript_RendersTheWrappedOperand()
     {
         var mapped = IrToTsExpressionBridge.Map(
             ProductOfWrappedSum,
@@ -80,7 +80,7 @@ public class IrIntegerArithmeticNodeTests
 
         await Assert
             .That(new Metano.Compiler.TypeScript.Printer().PrintExpressionFragment(mapped))
-            .IsEqualTo("a * (b + c)");
+            .IsEqualTo("a * BigInt.asIntN(64, b + c)");
     }
 
     [Test]

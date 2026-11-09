@@ -2258,10 +2258,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var key = ReadMappingKey(attr);
+
         if (key is null)
             return;
 
         var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
+
         if (entry is null)
             return;
 
@@ -2281,10 +2283,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var key = ReadMappingKey(attr);
+
         if (key is null)
             return;
 
         var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
+
         if (entry is null)
             return;
 

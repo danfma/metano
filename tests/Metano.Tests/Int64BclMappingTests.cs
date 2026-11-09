@@ -4,11 +4,9 @@ using Metano.Compiler.TypeScript;
 namespace Metano.Tests;
 
 /// <summary>
-/// The BCL mappings of spec 012 slice 012g (FR-035–FR-044, FR-072) in the
-/// staging <see cref="Int64Representation.BigInt"/> mode: the 64-bit
-/// overloads lower to the <c>metano-runtime</c> helpers, while the shipped
-/// <see cref="Int64Representation.Number"/> mode never sees a <c>bigint</c>
-/// template. Every golden type-checks under <c>tsgo --strict</c>.
+/// The BCL mappings of spec 012 slice 012g (FR-035–FR-044, FR-072): the
+/// 64-bit overloads lower to the <c>metano-runtime</c> helpers. Every golden
+/// type-checks under <c>tsgo --strict</c>.
 /// </summary>
 public class Int64BclMappingTests
 {
@@ -240,7 +238,7 @@ public class Int64BclMappingTests
         """;
 
     [Test]
-    public async Task BigIntMode_MathStatics_CallTheInt64Helpers()
+    public async Task MathStatics_CallTheInt64Helpers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MathSource);
 
@@ -258,7 +256,7 @@ public class Int64BclMappingTests
     /// pointer-width variants route them to the same runtime helpers.
     /// </summary>
     [Test]
-    public async Task BigIntMode_NativeIntegerMathStatics_CallTheInt64Helpers()
+    public async Task NativeIntegerMathStatics_CallTheInt64Helpers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -290,27 +288,8 @@ public class Int64BclMappingTests
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
-    /// <summary>
-    /// The shipped <c>Number</c> mode skips the <c>bigint</c> templates
-    /// (<c>WhenInt64IsBigInt</c>): <c>Math.Max</c> keeps its JS rename and the
-    /// statics that had no mapping stay unmapped.
-    /// </summary>
     [Test]
-    public async Task NumberMode_MathStatics_KeepTheShippedLowering()
-    {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MathSource);
-
-        var statics = files["statics.ts"];
-
-        await Assert.That(statics).Contains("return Math.max(l, m) + Int64.max(l, m);");
-        await Assert.That(statics).Contains("return Math.abs(l) + Int64.abs(l);");
-        await Assert.That(statics).DoesNotContain("Int64(");
-        await Assert.That(statics).DoesNotContain("metano-runtime");
-        await Assert.That(UnsupportedFeatures(diagnostics)).IsNotEmpty();
-    }
-
-    [Test]
-    public async Task BigIntMode_FormattingParsingAndComparison_CallTheInt64Helpers()
+    public async Task FormattingParsingAndComparison_CallTheInt64Helpers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(FormattingSource);
 
@@ -322,7 +301,7 @@ public class Int64BclMappingTests
     }
 
     [Test]
-    public async Task BigIntMode_Convert_CallsTheConvertHelpers()
+    public async Task Convert_CallsTheConvertHelpers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ConvertSource);
 
@@ -339,7 +318,7 @@ public class Int64BclMappingTests
     /// emitted. An invalid format is not reported (it throws on .NET too).
     /// </summary>
     [Test]
-    public async Task BigIntMode_UnsupportedFormatsAndStyles_ReportMS0066()
+    public async Task UnsupportedFormatsAndStyles_ReportMS0066()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             UnsupportedFormatSource
@@ -364,35 +343,8 @@ public class Int64BclMappingTests
             .Contains("Int32.parse(s, NumberStyles.HexNumber)");
     }
 
-    /// <summary>
-    /// The shipped <c>Number</c> mode keeps the 2.x text: formats and
-    /// alignments dropped, <c>NumberStyles</c> by name, <c>Convert</c>
-    /// unmapped, no MS0066.
-    /// </summary>
     [Test]
-    public async Task NumberMode_FormattingAndConvert_KeepTheShippedLowering()
-    {
-        var formatting = TranspileHelper.TranspileWithDiagnostics(FormattingSource);
-
-        var convert = TranspileHelper.TranspileWithDiagnostics(ConvertSource);
-
-        var unsupported = TranspileHelper.TranspileWithDiagnostics(UnsupportedFormatSource);
-
-        var text = formatting.Files["text.ts"];
-        var diagnostics = formatting.Diagnostics.Concat(unsupported.Diagnostics);
-
-        await Assert.That(text).Contains("return `${l}|${l}|${u}`;");
-        await Assert.That(text).Contains("Int64.parse(s, NumberStyles.HexNumber)");
-        await Assert.That(text).Contains("tryParseInt64(s)");
-        await Assert.That(text).Contains("l.compareTo(m)");
-        await Assert.That(convert.Files["converts.ts"]).Contains("Convert.toInt64(d)");
-        await Assert.That(text + convert.Files["converts.ts"]).DoesNotContain("formatInt64");
-        await Assert.That(text + convert.Files["converts.ts"]).DoesNotContain("convertNarrow");
-        await Assert.That(diagnostics.Where(d => d.Code == UnsupportedFormat)).IsEmpty();
-    }
-
-    [Test]
-    public async Task BigIntMode_ArraysAndLinq_IndexByNumberAndCallTheInt64Terminals()
+    public async Task ArraysAndLinq_IndexByNumberAndCallTheInt64Terminals()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CollectionSource);
 
@@ -404,7 +356,7 @@ public class Int64BclMappingTests
     }
 
     [Test]
-    public async Task BigIntMode_TicksAndConsole_CallTheTicksHelpersAndString()
+    public async Task TicksAndConsole_CallTheTicksHelpersAndString()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(TicksSource);
 
@@ -421,7 +373,7 @@ public class Int64BclMappingTests
     /// across a 64-bit integer, explicit or implicit (FR-044).
     /// </summary>
     [Test]
-    public async Task BigIntMode_ExpressionTree_CarriesBigIntLiteralsAndConvertNodes()
+    public async Task ExpressionTree_CarriesBigIntLiteralsAndConvertNodes()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExpressionTreeSource);
 
@@ -435,35 +387,11 @@ public class Int64BclMappingTests
     }
 
     /// <summary>
-    /// The shipped <c>Number</c> mode keeps the 2.x text: plain indices,
-    /// the <c>number</c> LINQ terminals, unsupported sized arrays, unmapped
-    /// ticks and the native <c>console.log</c>.
-    /// </summary>
-    [Test]
-    public async Task NumberMode_CollectionsAndTicks_KeepTheShippedLowering()
-    {
-        var collections = TranspileHelper.TranspileWithDiagnostics(CollectionSource);
-
-        var clock = TranspileHelper.TranspileWithDiagnostics(TicksSource);
-
-        var output = collections.Files["collections.ts"];
-
-        await Assert.That(output).Contains("return values[l] + values[u];");
-        await Assert.That(output).Contains("Unsupported expression: ArrayCreationExpression");
-        await Assert.That(output).Contains("linq(ids, sum())");
-        await Assert.That(output).Contains("return values.longLength;");
-        await Assert.That(output).DoesNotContain("Int64Of");
-        await Assert.That(clock.Files["clock.ts"]).Contains("console.log(l);");
-        await Assert.That(clock.Files["clock.ts"]).Contains("return span.ticks");
-        await Assert.That(clock.Files["clock.ts"]).DoesNotContain("durationFromTicks");
-    }
-
-    /// <summary>
     /// <c>Min</c> / <c>Max</c> with an <c>IComparer</c> order by it, so they
     /// keep the generic terminal instead of the <c>bigint</c> one.
     /// </summary>
     [Test]
-    public async Task BigIntMode_MaxWithAComparer_KeepsTheGenericTerminal()
+    public async Task MaxWithAComparer_KeepsTheGenericTerminal()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -520,7 +448,7 @@ public class Int64BclMappingTests
     /// checked in any context with .NET's messages.
     /// </summary>
     [Test]
-    public async Task BigIntMode_BigIntegerCasts_CallTheCheckedHelpers()
+    public async Task BigIntegerCasts_CallTheCheckedHelpers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(BigIntegerSource);
 
@@ -529,20 +457,6 @@ public class Int64BclMappingTests
             .IsEqualTo(TranspileHelper.ReadExpected("int64-big-integer.ts"));
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-    }
-
-    /// <summary>The shipped <c>Number</c> mode keeps the 2.x <c>BigInteger</c> casts.</summary>
-    [Test]
-    public async Task NumberMode_BigIntegerCasts_KeepTheShippedLowering()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(BigIntegerSource);
-
-        var big = files["big.ts"];
-
-        await Assert.That(big).Contains("return new Decimal(b.toString());");
-        await Assert.That(big).Contains("return BigInt(d.toFixed(0));");
-        await Assert.That(big).Contains("return b;");
-        await Assert.That(big).DoesNotContain("FromBigInteger");
     }
 
     private static List<MetanoDiagnostic> UnsupportedFeatures(

@@ -1,4 +1,4 @@
-import { isBigInt, isInt32, isInt64Value, isUInt64Value } from "metano-runtime";
+import { isBigInt, isInt32, isInt64, isUInt64 } from "metano-runtime";
 
 export class Gates {
   constructor() { }
@@ -28,11 +28,11 @@ export class Gates {
       return this.pickInt32(args[0] as number);
     }
 
-    if (args.length === 1 && isInt64Value(args[0])) {
+    if (args.length === 1 && isInt64(args[0])) {
       return this.pickInt64(args[0] as bigint);
     }
 
-    if (args.length === 1 && isUInt64Value(args[0])) {
+    if (args.length === 1 && isUInt64(args[0])) {
       return this.pickUInt64(args[0] as bigint);
     }
 

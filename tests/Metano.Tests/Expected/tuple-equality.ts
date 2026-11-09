@@ -42,7 +42,7 @@ export class Comparisons {
     return a == null ? null : tupleEquals(a, b, [[], null]);
   }
 
-  static conditionalMismatched(a: [[number, number], number] | null, b: [number, number]): boolean | null {
+  static conditionalMismatched(a: [[number, number], number] | null, b: [number, bigint]): boolean | null {
     return a == null ? null : false;
   }
 
@@ -62,15 +62,15 @@ export class Comparisons {
     return tupleEquals(a, b, [[], null]);
   }
 
-  static mismatched(a: [number, number], b: [number, number]): boolean {
+  static mismatched(a: [number, number], b: [number, bigint]): boolean {
     return false;
   }
 
-  static nullableMismatched(a: [number, number] | null, b: [number, number]): boolean {
+  static nullableMismatched(a: [number, number] | null, b: [number, bigint]): boolean {
     return false;
   }
 
-  static valueMismatched(a: [number, number], b: [number, number]): boolean {
+  static valueMismatched(a: [number, number], b: [number, bigint]): boolean {
     return false;
   }
 
@@ -114,7 +114,7 @@ export class Comparisons {
     return false;
   }
 
-  static convertedArgument(a: [number, number], b: [number, number]): boolean {
+  static convertedArgument(a: [bigint, bigint], b: [number, number]): boolean {
     return tupleEquals(a, b);
   }
 
@@ -122,11 +122,11 @@ export class Comparisons {
     return tupleEquals(a, [1, 2] as [number, number]);
   }
 
-  static guardedConverted(a: [number, number] | null, b: [number, number]): boolean | null {
+  static guardedConverted(a: [bigint, bigint] | null, b: [number, number]): boolean | null {
     return a == null ? null : tupleEquals(a, b);
   }
 
-  static boxedConverted(a: [number, number] | null, b: [number, number]): boolean {
+  static boxedConverted(a: [bigint, bigint] | null, b: [number, number]): boolean {
     return false;
   }
 

@@ -224,7 +224,7 @@ public class CollectionExpressionTests
         await Assert.That(result["holder.ts"]).DoesNotContain("new Map(...");
     }
 
-    /// <summary>The same construction over 64-bit elements, in the BigInt mode.</summary>
+    /// <summary>The same construction over 64-bit elements.</summary>
     [Test]
     public async Task SetCollectionExpression_WithLongElements_ConstructsFromBigInts()
     {

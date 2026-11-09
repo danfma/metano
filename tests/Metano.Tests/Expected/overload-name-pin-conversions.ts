@@ -7,12 +7,12 @@ export class Money {
     return m.cents;
   }
 
-  static __toIntMoneyToInt64(m: Money): number {
-    return m.cents;
+  static __toIntMoneyToInt64(m: Money): bigint {
+    return BigInt(m.cents);
   }
 
   static __toInt(m: Money): number;
-  static __toInt(m: Money): number;
+  static __toInt(m: Money): bigint;
   static __toInt(...args: unknown[]): number {
     if (args.length === 1 && args[0] instanceof Money) {
       return Money.__toIntMoneyToInt32(args[0] as Money);
@@ -26,7 +26,7 @@ export class Money {
   }
 
   $toInt(): number;
-  $toInt(): number;
+  $toInt(): bigint;
   $toInt(...args: unknown[]): number {
     if (args.length === 0) {
       return Money.__toIntMoneyToInt32(this);

@@ -7,8 +7,7 @@ namespace Metano.Tests;
 /// The interop diagnostics of spec 012 slice 012i: <c>MS0065</c>
 /// (FR-059, DECIDED-18) fires once per <c>[Import]</c> / <c>[Emit]</c> /
 /// <c>[External]</c> declaration and once per user <c>[MapMethod]</c> /
-/// <c>[MapProperty]</c> mapping whose signature carries a 64-bit integer,
-/// in the staging <see cref="Int64Representation.BigInt"/> mode only, and
+/// <c>[MapProperty]</c> mapping whose signature carries a 64-bit integer, and
 /// <c>[PlainObject]</c> 64-bit fields emit <c>bigint</c> with construction
 /// conversions (FR-060).
 /// </summary>
@@ -382,33 +381,6 @@ public class Int64InteropDiagnosticsTests
             .IsFalse();
     }
 
-    [Test]
-    public async Task NumberMode_ReportsNothing()
-    {
-        var (_, importDiagnostics) = TranspileHelper.TranspileWithDiagnostics(ImportSource);
-
-        var (_, emitDiagnostics) = TranspileHelper.TranspileWithDiagnostics(EmitSource);
-
-        var (_, externalDiagnostics) = TranspileHelper.TranspileWithDiagnostics(ExternalSource);
-
-        var (_, mappingDiagnostics) = TranspileHelper.TranspileWithDiagnostics(UserMappingSource);
-
-        foreach (
-            var diagnostics in new[]
-            {
-                importDiagnostics,
-                emitDiagnostics,
-                externalDiagnostics,
-                mappingDiagnostics,
-            }
-        )
-        {
-            await Assert
-                .That(diagnostics.Any(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary))
-                .IsFalse();
-        }
-    }
-
     /// <summary>
     /// Several 64-bit forms on one declaration warn once: the message names
     /// the first position in the fixed order (return, then parameters).
@@ -493,7 +465,7 @@ public class Int64InteropDiagnosticsTests
     /// omitted defaulted argument keeps its key out.
     /// </summary>
     [Test]
-    public async Task BigIntMode_PlainObject_MatchesGolden()
+    public async Task PlainObject_MatchesGolden()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(PlainObjectSource);
 

@@ -1,13 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
     The sample carries 64-bit values (spec 012 FR-068: the SnowflakeId ids
-    and the tick math of the issue activity feed), whose generated output
-    must run in the compiler-internal BigInt mode of the staging switch
-    (DECIDED-22). The mode has no MSBuild surface on purpose, so the sample
-    has no Metano transpile step: tests/Metano.Tests/Int64IssueTrackerSampleTests.cs
-    transpiles it into targets/js/sample-issue-tracker/src (formatting it
-    with the same Biome pass the build target used to run) and fails on
-    drift. METANO_UPDATE_INT64_ISSUE_TRACKER=1 rewrites the committed output.
+    and the tick math of the issue activity feed). It has no Metano transpile
+    step: tests/Metano.Tests/Int64IssueTrackerSampleTests.cs transpiles it
+    into targets/js/sample-issue-tracker/src (formatting it with the same
+    Biome pass the build target used to run) and fails on drift (the
+    arrangement of the spec 012 staging slices, kept after the flip).
+    METANO_UPDATE_INT64_ISSUE_TRACKER=1 rewrites the committed output.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

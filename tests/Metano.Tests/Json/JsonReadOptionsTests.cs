@@ -237,7 +237,7 @@ public class JsonReadOptionsTests
 
         await Assert
             .That(ts)
-            .Contains("inner: { kind: \"primitive\", numberType: \"System.UInt64\" },");
+            .Contains("inner: { kind: \"int64\", numberType: \"System.UInt64\" },");
     }
 
     // FR-002: the out-of-order option reaches a polymorphic context.

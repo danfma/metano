@@ -52,19 +52,19 @@ export class Names {
     return "int";
   }
 
-  gInt64(v: number): string {
+  gInt64(v: bigint): string {
     return "long";
   }
 
   g(v: number): string;
-  g(v: number): string;
+  g(v: bigint): string;
   g(...args: unknown[]): string {
     if (args.length === 1 && isInt32(args[0])) {
       return this.gInt32(args[0] as number);
     }
 
     if (args.length === 1 && isInt64(args[0])) {
-      return this.gInt64(args[0] as number);
+      return this.gInt64(args[0] as bigint);
     }
 
     throw new Error("No matching overload for g");
@@ -92,23 +92,23 @@ export class Names {
     throw new Error("No matching overload for u");
   }
 
-  wInt64(a: number): string {
+  wInt64(a: bigint): string {
     return "long";
   }
 
-  wUInt64(a: number): string {
+  wUInt64(a: bigint): string {
     return "ulong";
   }
 
-  w(a: number): string;
-  w(a: number): string;
+  w(a: bigint): string;
+  w(a: bigint): string;
   w(...args: unknown[]): string {
     if (args.length === 1 && isInt64(args[0])) {
-      return this.wInt64(args[0] as number);
+      return this.wInt64(args[0] as bigint);
     }
 
     if (args.length === 1 && isUInt64(args[0])) {
-      return this.wUInt64(args[0] as number);
+      return this.wUInt64(args[0] as bigint);
     }
 
     throw new Error("No matching overload for w");

@@ -186,6 +186,7 @@ public sealed partial class IrExpressionExtractor
                 paramSymbol
             );
             var isExplicit = IsExplicitQueryableOptIn(trigger);
+
             var walker = new IrExpressionTreeExtractor(
                 _semantic,
                 _originResolver,
@@ -193,7 +194,9 @@ public sealed partial class IrExpressionExtractor
                 this,
                 isExplicitOptIn: isExplicit
             );
+
             var meta = walker.TryExtract(lambda);
+
             if (meta is not null)
                 return meta;
         }
@@ -258,6 +261,7 @@ public sealed partial class IrExpressionExtractor
                 this,
                 isExplicitOptIn: true
             );
+
             walker.TryExtract(lambda);
         }
     }

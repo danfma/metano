@@ -3,8 +3,7 @@ using Metano.Compiler.TypeScript;
 namespace Metano.Tests;
 
 /// <summary>
-/// The JSON context of native integers (spec 012 DECIDED-2, issue #529): in
-/// the staging <see cref="Int64Representation.BigInt"/> mode <c>nint</c>
+/// The JSON context of native integers (spec 012 DECIDED-2, issue #529): <c>nint</c>
 /// follows <c>long</c> and <c>nuint</c> follows <c>ulong</c>, so every
 /// native-integer property, element, dictionary key / value, root and
 /// <c>[Branded]</c> / <c>[InlineWrapper]</c> wrapper emits the <c>int64</c>
@@ -62,7 +61,7 @@ public class NativeIntegerJsonContextTests
         """;
 
     [Test]
-    public async Task BigIntMode_EmitsTheInt64DescriptorsForNativeIntegers()
+    public async Task EmitsTheInt64DescriptorsForNativeIntegers()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
 

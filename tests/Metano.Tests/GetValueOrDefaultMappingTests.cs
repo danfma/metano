@@ -33,11 +33,13 @@ public class GetValueOrDefaultMappingTests
             .Contains(
                 "static ratio(d: Map<string, number>): number {\n    return getValueOrDefault(d, \"a\", 0);"
             );
+
         await Assert
             .That(output)
             .Contains(
-                "static total(d: Map<string, number>): number {\n    return getValueOrDefault(d, \"a\", 0);"
+                "static total(d: Map<string, bigint>): bigint {\n    return getValueOrDefault(d, \"a\", 0n);"
             );
+
         await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", false);");
         await Assert
             .That(output)

@@ -759,16 +759,15 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   },
   // The 64-bit rows of spec 012 (slice 012e) run on the System.Text.Json
   // side only, but I2 is wire-compatible within the safe integers: the
-  // generated fields are numbers until the bigint flip (012k) turns them
-  // into bigint, so the builder passes numbers today.
+  // generated fields are bigint values, which write and read the same text.
   I2: {
-    build: () => new Int64Box(42, 7, null),
+    build: () => new Int64Box(42n, 7n, null),
     assertRead: (value) => {
       const box = expectClass(value, Int64Box);
 
-      expect(box.id).toBe(42);
+      expect(box.id).toBe(42n);
 
-      expect(box.mask).toBe(7);
+      expect(box.mask).toBe(7n);
 
       expect(box.parent).toBeNull();
     },

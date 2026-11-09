@@ -121,7 +121,7 @@ export class JsonContext extends SerializerContext {
   get reading(): TypeSpec<Reading> {
     return this._reading ??= this.createSpec({
       type: Reading,
-      factory: (p: Record<string, unknown>) => new Reading(p.amount as Decimal, p.total as number | null, p.weight as number, p.samples as number[], p.offsets as Map<number, number>, p.level as Level, p.valid as boolean),
+      factory: (p: Record<string, unknown>) => new Reading(p.amount as Decimal, p.total as bigint | null, p.weight as number, p.samples as number[], p.offsets as Map<number, number>, p.level as Level, p.valid as boolean),
       properties: [
         {
           ts: "amount",
@@ -133,7 +133,7 @@ export class JsonContext extends SerializerContext {
           json: "total",
           type: {
             kind: "nullable",
-            inner: { kind: "primitive", numberType: "System.Int64" },
+            inner: { kind: "int64", numberType: "System.Int64" },
           },
           optional: true,
         },

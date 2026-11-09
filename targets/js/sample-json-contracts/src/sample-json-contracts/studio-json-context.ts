@@ -201,9 +201,9 @@ export class StudioJsonContext extends SerializerContext {
 
   private _int64Containers?: TypeSpec<Int64Containers>;
 
-  private _int64?: ValueSpec<number>;
+  private _int64?: ValueSpec<bigint>;
 
-  private _uInt64?: ValueSpec<number>;
+  private _uInt64?: ValueSpec<bigint>;
 
   private _imageClip?: TypeSpec<ImageClip>;
 
@@ -1354,24 +1354,24 @@ export class StudioJsonContext extends SerializerContext {
     return (this._int64Box ??= this.createSpec({
       type: Int64Box,
       factory: (p: Record<string, unknown>) =>
-        new Int64Box(p.id as number, p.mask as number, p.parent as number | null),
+        new Int64Box(p.id as bigint, p.mask as bigint, p.parent as bigint | null),
       properties: [
         {
           ts: "id",
           json: "Id",
-          type: { kind: "primitive", numberType: "System.Int64" },
+          type: { kind: "int64", numberType: "System.Int64" },
         },
         {
           ts: "mask",
           json: "Mask",
-          type: { kind: "primitive", numberType: "System.UInt64" },
+          type: { kind: "int64", numberType: "System.UInt64" },
         },
         {
           ts: "parent",
           json: "Parent",
           type: {
             kind: "nullable",
-            inner: { kind: "primitive", numberType: "System.Int64" },
+            inner: { kind: "int64", numberType: "System.Int64" },
           },
           optional: true,
         },
@@ -1384,9 +1384,9 @@ export class StudioJsonContext extends SerializerContext {
       type: Int64Containers,
       factory: (p: Record<string, unknown>) =>
         new Int64Containers(
-          p.values as number[],
-          p.byName as Map<number, string>,
-          p.byMask as Map<number, string>,
+          p.values as bigint[],
+          p.byName as Map<bigint, string>,
+          p.byMask as Map<bigint, string>,
         ),
       properties: [
         {
@@ -1394,7 +1394,7 @@ export class StudioJsonContext extends SerializerContext {
           json: "Values",
           type: {
             kind: "array",
-            element: { kind: "primitive", numberType: "System.Int64" },
+            element: { kind: "int64", numberType: "System.Int64" },
           },
         },
         {
@@ -1402,7 +1402,7 @@ export class StudioJsonContext extends SerializerContext {
           json: "ByName",
           type: {
             kind: "map",
-            key: { kind: "primitive", numberType: "System.Int64" },
+            key: { kind: "int64", numberType: "System.Int64" },
             value: { kind: "primitive" },
           },
         },
@@ -1411,7 +1411,7 @@ export class StudioJsonContext extends SerializerContext {
           json: "ByMask",
           type: {
             kind: "map",
-            key: { kind: "primitive", numberType: "System.UInt64" },
+            key: { kind: "int64", numberType: "System.UInt64" },
             value: { kind: "primitive" },
           },
         },
@@ -1419,17 +1419,17 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
-  get int64(): ValueSpec<number> {
+  get int64(): ValueSpec<bigint> {
     return (this._int64 ??= this.createValueSpec({
-      descriptor: { kind: "primitive", numberType: "System.Int64" },
+      descriptor: { kind: "int64", numberType: "System.Int64" },
       valueType: true,
       typeName: "System.Int64",
     }));
   }
 
-  get uInt64(): ValueSpec<number> {
+  get uInt64(): ValueSpec<bigint> {
     return (this._uInt64 ??= this.createValueSpec({
-      descriptor: { kind: "primitive", numberType: "System.UInt64" },
+      descriptor: { kind: "int64", numberType: "System.UInt64" },
       valueType: true,
       typeName: "System.UInt64",
     }));
