@@ -13,7 +13,7 @@ export class Money {
 
   static __toInt(m: Money): number;
   static __toInt(m: Money): bigint;
-  static __toInt(...args: unknown[]): number {
+  static __toInt(...args: unknown[]): any {
     if (args.length === 1 && args[0] instanceof Money) {
       return Money.__toIntMoneyToInt32(args[0] as Money);
     }
@@ -27,7 +27,7 @@ export class Money {
 
   $toInt(): number;
   $toInt(): bigint;
-  $toInt(...args: unknown[]): number {
+  $toInt(...args: unknown[]): any {
     if (args.length === 0) {
       return Money.__toIntMoneyToInt32(this);
     }

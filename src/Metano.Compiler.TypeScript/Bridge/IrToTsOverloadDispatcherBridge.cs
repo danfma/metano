@@ -345,6 +345,20 @@ public static class IrToTsOverloadDispatcherBridge
 
         var isGeneric = sorted.Any(method => IsGeneric(method.TypeParameters));
 
+        return CommonReturnTypeOf(returns, isGeneric, isAsync);
+    }
+
+    /// <summary>
+    /// The one return type a dispatcher implementation can declare for its
+    /// overloads' <paramref name="returns"/>: theirs when they all agree and
+    /// none is generic, else the erased one.
+    /// </summary>
+    internal static TsType CommonReturnTypeOf(
+        IReadOnlyList<TsType> returns,
+        bool isGeneric,
+        bool isAsync
+    )
+    {
         if (!isGeneric && returns.All(t => t.Equals(returns[0])))
             return returns[0];
 
