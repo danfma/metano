@@ -57,6 +57,10 @@ public static class RoslynTypeQueries
     public static ITypeSymbol UnwrapNullableValueType(this ITypeSymbol type) =>
         type.UnderlyingValueType()!;
 
+    /// <summary>Whether <paramref name="type"/> is <c>System.Numerics.BigInteger</c>.</summary>
+    public static bool IsBigInteger(this ITypeSymbol? type) =>
+        type?.ToDisplayString() == "System.Numerics.BigInteger";
+
     /// <summary><c>T</c> for <c>Nullable&lt;T&gt;</c>, the type itself otherwise.</summary>
     public static ITypeSymbol? UnderlyingValueType(this ITypeSymbol? type) =>
         type

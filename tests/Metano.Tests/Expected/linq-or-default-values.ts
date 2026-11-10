@@ -2,7 +2,7 @@ import { UUID } from "metano-runtime";
 import { firstOrDefault, last, lastOrDefault, linq, select, singleOrDefault, where } from "metano-runtime/system/linq";
 import { Decimal } from "decimal.js";
 import { Color } from "./color";
-import { Level } from "./level";
+import type { Level } from "./level";
 import type { Person } from "./person";
 import { Point } from "./point";
 
@@ -129,77 +129,19 @@ export class Lookups {
     return linq(xs, firstOrDefault(undefined, "none"));
   }
 
+  nameOrFallback(xs: string[], fallback: string | null): string | null {
+    return linq(xs, firstOrDefault(undefined, fallback));
+  }
+
+  lastOrFallback(xs: string[], fallback: string | null): string | null {
+    return linq(xs, lastOrDefault((x: string) => x !== "a", fallback));
+  }
+
   who(xs: Person[]): Person | null {
     return linq(xs, lastOrDefault((p: Person) => p.name === "ana"));
   }
 
   any<T>(xs: T[]): T | null {
     return linq(xs, firstOrDefault());
-  }
-
-  queried(xs: Iterable<Person>): Person | null {
-    return linq(xs, firstOrDefault((p: Person) => p.name === "ana", undefined, {
-      tree: {
-        kind: "binary",
-        op: "==",
-        left: {
-          kind: "member",
-          target: {
-            kind: "param",
-            name: "p",
-            type: { name: "Person" },
-          },
-          member: "name",
-        },
-        right: {
-          kind: "literal",
-          value: "ana",
-          type: { name: "string" },
-        },
-      },
-    }));
-  }
-
-  queriedCount(xs: Iterable<number>): number {
-    return linq(xs, firstOrDefault((x: number) => x > 100, 0, {
-      tree: {
-        kind: "binary",
-        op: ">",
-        left: {
-          kind: "param",
-          name: "x",
-          type: { name: "number" },
-        },
-        right: {
-          kind: "literal",
-          value: 100,
-          type: { name: "number" },
-        },
-      },
-    }));
-  }
-
-  found(xs: number[]): number {
-    return (xs.find((x: number) => x > 100) ?? 0);
-  }
-
-  foundWide(xs: bigint[]): bigint {
-    return BigInt.asIntN(64, (xs.find((x: bigint) => x > 100n) ?? 0n) + 3n);
-  }
-
-  foundZero(xs: Color[]): Color {
-    return (xs.find((c: Color) => c !== Color.Red) ?? Color.None);
-  }
-
-  foundNoZero(xs: Level[]): Level {
-    return (xs.find((l: Level) => l !== Level.Low) ?? 0 as Level);
-  }
-
-  foundWho(xs: Person[]): Person | null {
-    return (xs.find((p: Person) => p.name === "ana") ?? null);
-  }
-
-  foundIn(xs: number[] | null): number | null {
-    return xs == null ? null : (xs.find((x: number) => x > 100) ?? 0);
   }
 }

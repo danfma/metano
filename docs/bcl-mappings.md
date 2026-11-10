@@ -304,7 +304,9 @@ The `OrDefault` terminals take `(predicate?, defaultValue?)`. The compiler passe
 `default(T)` for a non-nullable value element (`xs.FirstOrDefault()` over `int` is
 `firstOrDefault(undefined, 0)`) and the `defaultValue` argument of the .NET 6
 overloads; reference and nullable elements keep the `null` miss. An element whose
-default no literal spells (a user struct, a tuple, a `struct` type parameter, a
+default no literal spells (a user struct, a tuple, `KeyValuePair` (so
+`dict.FirstOrDefault()`), `DateTime`, `DateTimeOffset`, `TimeSpan`, `DateOnly`,
+`TimeOnly`, an `[InlineWrapper]` struct, a `struct` type parameter, a
 `[StringEnum]` without a zero member) keeps `null` and reports `MS0001` (#621). A
 type parameter that is not constrained to `struct` (unconstrained, `where T :
 notnull`, `where T : IComparable<T>`, `where T : Enum` alone) also yields `null`,

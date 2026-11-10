@@ -1648,14 +1648,11 @@ public sealed partial class IrExpressionExtractor
         if (convertedType?.SpecialType == SpecialType.System_Decimal)
             return new IrLiteral(digits, IrLiteralKind.Decimal);
 
-        if (IsBigInteger(convertedType))
+        if (convertedType.IsBigInteger())
             return new IrLiteral(digits, IrLiteralKind.BigInteger);
 
         return ClassifyNumeric(value);
     }
-
-    private static bool IsBigInteger(ITypeSymbol? type) =>
-        type?.ToDisplayString() == "System.Numerics.BigInteger";
 
     /// <summary>
     /// C#'s target-typed <c>default</c> carries no surface type — the runtime

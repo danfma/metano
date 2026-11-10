@@ -21,6 +21,12 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public static class IrLinqMapping
 {
+    /// <summary>
+    /// The position of the queryable tree among the arguments of an
+    /// <c>OrDefault</c> terminal: <c>(predicate, defaultValue, queryable)</c>.
+    /// </summary>
+    public const int OrDefaultQueryableSlot = 2;
+
     private static readonly IReadOnlyDictionary<string, IrLinqOperator> _byMethodName =
         new Dictionary<string, IrLinqOperator>(StringComparer.Ordinal)
         {
@@ -160,12 +166,6 @@ public static class IrLinqMapping
                 or IrLinqOperator.Average
                 or IrLinqOperator.Contains
                 or IrLinqOperator.Aggregate;
-
-    /// <summary>
-    /// The position of the queryable tree among the arguments of an
-    /// <c>OrDefault</c> terminal: <c>(predicate, defaultValue, queryable)</c>.
-    /// </summary>
-    public const int OrDefaultQueryableSlot = 2;
 
     /// <summary>
     /// Whether the terminal returns a default value when no element

@@ -70,7 +70,7 @@ public sealed partial class IrExpressionExtractor
     {
         var type = _semantic.GetTypeInfo(operand).Type;
 
-        if (type.UnderlyingValueType()?.ToDisplayString() == "System.Numerics.BigInteger")
+        if (type.UnderlyingValueType().IsBigInteger())
             return new IrCallExpression(
                 new IrTypeReference("BigInt"),
                 [new IrArgument(OneLiteral)]

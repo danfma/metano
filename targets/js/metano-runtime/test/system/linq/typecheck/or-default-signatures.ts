@@ -1,7 +1,6 @@
 // Compile-time checks of the `OrDefault` terminal signatures (#601), run by
-// `test/system/json/null-root-signatures.test.ts` through `tsgo -p tsconfig.typecheck.json`,
-// which covers every `typecheck/` folder. Each `@ts-expect-error` must flag an error, or
-// tsgo fails on it as unused.
+// `test/typecheck-fixtures.test.ts` through `tsgo -p tsconfig.typecheck.json`. Each
+// `@ts-expect-error` must flag an error, or tsgo fails on it as unused.
 import {
   firstOrDefault,
   lastOrDefault,
@@ -33,7 +32,7 @@ const explicitMiss = linq(numbers, singleOrDefault<number>());
 expectType<Equal<typeof explicitMiss, number | null>>();
 
 // @ts-expect-error -- the result of a terminal without a default includes null.
-export const notANumber: number = linq(numbers, firstOrDefault());
+const notANumber: number = linq(numbers, firstOrDefault());
 
 // ─── With a default value, the result is the element type ─────────────────────
 
@@ -54,6 +53,46 @@ expectType<Equal<typeof nullableElement, number | null>>();
 
 // @ts-expect-error -- a default value of another type is rejected.
 linq(numbers, firstOrDefault(undefined, "none"));
+
+// ─── A nullable default value keeps null in the result ────────────────────────
+
+declare const maybeDefault: number | null;
+
+const nullableDefault = linq(numbers, firstOrDefault((x) => x > 1, maybeDefault));
+expectType<Equal<typeof nullableDefault, number | null>>();
+
+const nullableLast = linq(numbers, lastOrDefault(undefined, maybeDefault));
+expectType<Equal<typeof nullableLast, number | null>>();
+
+const nullableSingle = linq(numbers, singleOrDefault(undefined, maybeDefault));
+expectType<Equal<typeof nullableSingle, number | null>>();
+
+// ─── A standalone term takes its element type from a type argument ────────────
+
+const detached = firstOrDefault(undefined, 0);
+expectType<Equal<ReturnType<typeof detached.apply>, unknown>>();
+
+const typedDetached = firstOrDefault<number>(undefined, 0);
+expectType<Equal<ReturnType<typeof typedDetached.apply>, number>>();
+
+// ─── Known gap: a default value wider than the element type ───────────────────
+
+class Animal {
+  readonly name = "animal";
+}
+
+class Dog extends Animal {
+  readonly breed = "dog";
+}
+
+declare const dogs: Dog[];
+declare const fallback: Animal;
+
+// @ts-expect-error -- C# widens TSource to Animal; the term takes its element type from `dogs`.
+linq(dogs, firstOrDefault(undefined, fallback));
+
+const widened = linq(dogs, firstOrDefault<Animal>(undefined, fallback));
+expectType<Equal<typeof widened, Animal>>();
 
 // ─── The queryable tree stays the third argument ──────────────────────────────
 
