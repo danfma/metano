@@ -40,26 +40,34 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 ///   next clause. A filter that reads the clause's variable binds it through
 ///   an immediately invoked arrow, since the arm's <c>const</c> is not
 ///   declared yet.</item>
-///   <item><b>Variable.</b> Each arm declares the clause's variable from the
-///   caught value: a fresh binding per catch, as C# scopes it, typed by the
-///   arm's <c>instanceof</c> narrowing.</item>
+///   <item><b>Variable.</b> An arm whose body reads the clause's variable
+///   declares it from the caught value: a fresh binding per catch, as C#
+///   scopes it, typed by the arm's <c>instanceof</c> narrowing.</item>
 ///   <item><b>Rethrow.</b> <c>throw;</c> throws the handler's parameter, the
 ///   value that was caught, whatever the clause's variable holds by then.</item>
 /// </list>
-/// A lone clause that takes every exception keeps the plain
-/// <c>catch (e) { … }</c> shape, its variable being the handler's parameter.
+/// The first clause that takes every value (no type test and no filter) ends
+/// the chain: C# never tries the clauses after it. A lone clause that takes
+/// every exception keeps the plain <c>catch (e) { … }</c> shape, its variable
+/// being the handler's parameter.
 /// <para>
-/// Known deviations: the BCL-type test is coarse (extraction reports MS0001
-/// where that would take a later clause's exceptions, see
-/// <c>UnsupportedCatchClauseReporter</c>), and an exception thrown by a filter
-/// propagates, where .NET swallows it and treats the filter as false.
+/// An interim, partial delivery of spec 011 FR-015. Known deviations:
+/// generated code constructs every BCL exception as a plain <c>Error</c>, so
+/// the BCL-type test is coarse (#651; extraction reports MS0001 where that
+/// would take a later clause's exceptions, see
+/// <c>UnsupportedCatchClauseReporter</c>); an exception thrown by a filter
+/// propagates, where .NET swallows it and treats the filter as false; and a
+/// filter runs after the <c>finally</c> blocks between the throw and the
+/// clause, where .NET runs it before them.
 /// </para>
 /// </summary>
 internal static class IrToTsCatchChainBridge
 {
     /// <summary>
-    /// The handler parameter of a chain. C# identifiers cannot contain
-    /// <c>$</c>, so no local of the clause bodies collides with it.
+    /// The handler parameter of a chain, marked again (<c>e$$</c>, …) when a
+    /// clause already names it. C# identifiers cannot contain <c>$</c>, but
+    /// the <c>[Name]</c> override of a member can; a type renamed to it is
+    /// not looked for.
     /// </summary>
     private const string CaughtValue = "e$";
 
@@ -74,9 +82,10 @@ internal static class IrToTsCatchChainBridge
         if (clauses is [var only] && KeepsPlainCatch(only))
             return MapPlainCatch(only, context);
 
-        var arms = clauses.Select(clause => MapArm(clause, context)).ToList();
+        var caught = FreeCaughtValueName(clauses);
+        var arms = clauses.Select(clause => MapArm(clause, caught, context));
 
-        return new TsCatchHandler(CaughtValue, RenderChain(WithRethrowArm(arms)));
+        return new TsCatchHandler(caught, RenderChain(EndChain(arms, caught)));
     }
 
     private static TsCatchHandler MapPlainCatch(IrCatchClause clause, IrToTsBridgeContext context)
@@ -91,32 +100,49 @@ internal static class IrToTsCatchChainBridge
         );
     }
 
-    private static CatchArm MapArm(IrCatchClause clause, IrToTsBridgeContext context)
+    private static CatchArm MapArm(IrCatchClause clause, string caught, IrToTsBridgeContext context)
     {
-        var condition = IrTypeCheckBuilder.AllOf([MapTypeTest(clause), MapFilter(clause, context)]);
+        var condition = IrTypeCheckBuilder.AllOf([
+            MapTypeTest(clause, caught),
+            MapFilter(clause, caught, context),
+        ]);
 
-        var body = IrToTsStatementBridge.MapBody(clause.Body, context.Rethrowing(CaughtValue));
+        var body = IrToTsStatementBridge.MapBody(clause.Body, context.Rethrowing(caught));
 
-        return new CatchArm(condition, [.. MapVariable(clause), .. body]);
+        return new CatchArm(condition, [.. MapVariable(clause, caught), .. body]);
     }
 
-    private static TsExpression? MapTypeTest(IrCatchClause clause) =>
-        clause is { CatchesEveryException: false, ExceptionType: { } type } && HasTypeTest(type)
-            ? IrToTsExpressionBridge.BuildTypeTest(new TsIdentifier(CaughtValue), type)
+    /// <summary>
+    /// The clause's type test; <c>null</c> for a clause that takes every
+    /// exception, and for a type extraction reported as untestable (MS0001).
+    /// </summary>
+    private static TsExpression? MapTypeTest(IrCatchClause clause, string caught) =>
+        clause is { CatchesEveryException: false, ExceptionType: { } type }
+        && IrRuntimeTypeTest.ExistsFor(type)
+            ? IrToTsExpressionBridge.BuildTypeTest(new TsIdentifier(caught), type)
             : null;
 
-    private static TsExpression? MapFilter(IrCatchClause clause, IrToTsBridgeContext context)
+    private static TsExpression? MapFilter(
+        IrCatchClause clause,
+        string caught,
+        IrToTsBridgeContext context
+    )
     {
         if (clause.Filter is not { } filter)
             return null;
 
         var condition = IrToTsExpressionBridge.Map(filter, context);
 
-        if (clause.VariableName is not { } name || !Reads(filter, name))
+        if (clause.VariableName is not { } name || !IrReferencedNames.AnyIn(filter, [name]))
             return condition;
 
         return TsImmediateInvocation.Of(
-            [new TsImmediateBinding(IrToTsNamingPolicy.ToLocalName(name), CaughtReference())],
+            [
+                new TsImmediateBinding(
+                    IrToTsNamingPolicy.ToLocalName(name),
+                    new TsIdentifier(caught)
+                ),
+            ],
             [new TsReturnStatement(condition)],
             isAsync: false
         );
@@ -127,16 +153,16 @@ internal static class IrToTsCatchChainBridge
     /// or <c>let</c> when the clause body rebinds it. A body that never reads
     /// the variable (only the filter does) declares nothing.
     /// </summary>
-    private static IEnumerable<TsStatement> MapVariable(IrCatchClause clause)
+    private static IEnumerable<TsStatement> MapVariable(IrCatchClause clause, string caught)
     {
-        if (clause.VariableName is not { } name || !clause.Body.Any(s => Reads(s, name)))
+        if (clause.VariableName is not { } name || !IrReferencedNames.AnyIn(clause.Body, [name]))
             return [];
 
         return
         [
             new TsVariableDeclaration(
                 IrToTsNamingPolicy.ToLocalName(name),
-                CaughtReference(),
+                new TsIdentifier(caught),
                 Const: !Rebinds(clause, name)
             ),
         ];
@@ -144,32 +170,69 @@ internal static class IrToTsCatchChainBridge
 
     /// <summary>
     /// Whether a lone clause lowers to the plain <c>catch (e) { … }</c>: it
-    /// takes every exception, and its variable can stand for the caught value
-    /// — which a body that rebinds the variable and then rethrows cannot.
+    /// takes every exception, and its variable can stand for the caught value.
     /// </summary>
     private static bool KeepsPlainCatch(IrCatchClause clause) =>
-        clause.HandlesEveryException
-        && !(clause.VariableName is { } name && Rebinds(clause, name) && Rethrows(clause.Body));
+        clause.HandlesEveryException && !RethrowsAfterRebinding(clause);
+
+    /// <summary>
+    /// Whether the clause's body rebinds the clause's variable and has a
+    /// <c>throw;</c>, which must still throw the value that was caught.
+    /// </summary>
+    private static bool RethrowsAfterRebinding(IrCatchClause clause) =>
+        clause.VariableName is { } name && Rebinds(clause, name) && Rethrows(clause.Body);
 
     private static bool Rebinds(IrCatchClause clause, string variable) =>
         IrLocalReassignmentCollector.CollectFromStatements(clause.Body).Contains(variable);
 
     /// <summary>
-    /// A chain whose last arm is conditional ends by rethrowing the caught
-    /// value, as C# propagates an exception no clause handles.
+    /// <c>e$</c>, marked again (<c>e$$</c>, …) while a clause names it, so
+    /// the handler's parameter captures none of the clauses' names.
     /// </summary>
-    private static IReadOnlyList<CatchArm> WithRethrowArm(IReadOnlyList<CatchArm> arms) =>
-        arms[^1].Condition is null
-            ? arms
-            : [.. arms, new CatchArm(null, [new TsThrowStatement(CaughtReference())])];
+    private static string FreeCaughtValueName(IReadOnlyList<IrCatchClause> clauses) =>
+        TsFreeName.FirstFree(
+            CaughtValue,
+            candidate => clauses.Any(clause => Names(clause, candidate))
+        );
+
+    private static bool Names(IrCatchClause clause, string name) =>
+        IrReferencedNames.AnyReadOrEmittedMemberIn(clause.Body, [name])
+        || (
+            clause.Filter is { } filter
+            && IrReferencedNames.AnyReadOrEmittedMemberIn(filter, [name])
+        );
 
     /// <summary>
-    /// The <c>if</c> / <c>else if</c> / <c>else</c> chain of the arms. A
-    /// single unconditional arm is its statements alone.
+    /// The arms C# can reach: the first unconditional arm takes every value,
+    /// so it ends the chain and the arms after it are dropped. A chain with no
+    /// such arm ends by rethrowing the caught value, as C# propagates an
+    /// exception no clause handles.
+    /// </summary>
+    private static IReadOnlyList<CatchArm> EndChain(IEnumerable<CatchArm> arms, string caught)
+    {
+        var chain = new List<CatchArm>();
+
+        foreach (var arm in arms)
+        {
+            chain.Add(arm);
+
+            if (arm.IsUnconditional)
+                return chain;
+        }
+
+        chain.Add(new CatchArm(null, [new TsThrowStatement(new TsIdentifier(caught))]));
+
+        return chain;
+    }
+
+    /// <summary>
+    /// The <c>if</c> / <c>else if</c> / <c>else</c> chain of the arms, the
+    /// last of which is the only unconditional one (see
+    /// <see cref="EndChain"/>). A single arm is its statements alone.
     /// </summary>
     private static IReadOnlyList<TsStatement> RenderChain(IReadOnlyList<CatchArm> arms)
     {
-        if (arms is [{ Condition: null } only])
+        if (arms is [var only])
             return only.Body;
 
         var text = string.Concat(arms.Select(RenderArm));
@@ -194,25 +257,6 @@ internal static class IrToTsCatchChainBridge
         return $"{head}{{\n{IrToTsStatementBridge.RenderIndentedBody(arm.Body)}}}";
     }
 
-    private static TsExpression CaughtReference() => new TsIdentifier(CaughtValue);
-
-    /// <summary>
-    /// A type extraction reported as untestable (MS0001) has no test, so its
-    /// arm takes every value.
-    /// </summary>
-    private static bool HasTypeTest(IrTypeRef type) =>
-        IrRuntimeTypeTest.Of(type) is not IrRuntimeTypeTest.None;
-
-    /// <summary>Whether <paramref name="expression"/> reads the local, nested lambdas included.</summary>
-    private static bool Reads(IrExpression expression, string local) =>
-        expression is IrIdentifier identifier && identifier.Name == local
-        || IrNodeChildren.ExpressionsOf(expression).Any(child => Reads(child, local))
-        || IrNodeChildren.StatementsOf(expression).Any(statement => Reads(statement, local));
-
-    private static bool Reads(IrStatement statement, string local) =>
-        IrNodeChildren.ExpressionsOf(statement).Any(child => Reads(child, local))
-        || IrNodeChildren.StatementsOf(statement).Any(nested => Reads(nested, local));
-
     /// <summary>
     /// Whether <paramref name="statements"/> contain a <c>throw;</c>. One
     /// nested in an inner catch clause counts too: it only keeps a rare shape
@@ -224,8 +268,12 @@ internal static class IrToTsCatchChainBridge
         );
 
     /// <summary>
-    /// One arm of the chain; a <c>null</c> <paramref name="Condition"/> is the
-    /// final <c>else</c>.
+    /// One arm of the chain. Without a <paramref name="Condition"/> the arm
+    /// takes every value: a clause with neither a type test nor a filter, or
+    /// the rethrow that ends a chain of conditional arms.
     /// </summary>
-    private sealed record CatchArm(TsExpression? Condition, IReadOnlyList<TsStatement> Body);
+    private sealed record CatchArm(TsExpression? Condition, IReadOnlyList<TsStatement> Body)
+    {
+        public bool IsUnconditional => Condition is null;
+    }
 }

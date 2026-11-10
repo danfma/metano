@@ -225,6 +225,30 @@ export class Handlers {
     }
   }
 
+  exceptionThenGeneral(kind: string): string {
+    try {
+      this.work(kind);
+
+      return "ok";
+    } catch (e$) {
+      if (e$ instanceof NotFoundException) {
+        return "missing";
+      } else {
+        return "ex";
+      }
+    }
+  }
+
+  typeParameterFirst<TFailure extends Error>(kind: string): string {
+    try {
+      this.work(kind);
+
+      return "ok";
+    } catch (e$) {
+      return "failure";
+    }
+  }
+
   logged(kind: string): void {
     try {
       this.work(kind);

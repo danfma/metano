@@ -41,6 +41,9 @@ public abstract record IrRuntimeTypeTest
     /// </summary>
     public sealed record None : IrRuntimeTypeTest;
 
+    /// <summary>Whether <paramref name="type"/> has any runtime test (not <see cref="None"/>).</summary>
+    public static bool ExistsFor(IrTypeRef type) => Of(type) is not None;
+
     public static IrRuntimeTypeTest Of(IrTypeRef type) =>
         type switch
         {

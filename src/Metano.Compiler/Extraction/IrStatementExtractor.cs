@@ -516,6 +516,7 @@ public sealed class IrStatementExtractor(
     {
         var body = ExtractStatementSequence(ts.Block.Statements);
         var catches = ts.Catches.Count > 0 ? ts.Catches.Select(ExtractCatch).ToList() : null;
+
         var finallyBody = ts.Finally is not null
             ? ExtractStatementSequence(ts.Finally.Block.Statements)
             : null;
@@ -553,21 +554,19 @@ public sealed class IrStatementExtractor(
             : null;
 
     /// <summary>
-    /// The clause's <c>when (…)</c> condition. A filter that declares a
-    /// variable or passes an <c>out</c> argument is reported (MS0001) and
-    /// extracts to the unsupported placeholder, since no target places the
-    /// declaration or the <c>out</c> result for the clause.
+    /// The clause's <c>when (…)</c> condition. A filter no target can place
+    /// (it declares a variable or passes an <c>out</c> argument) extracts to
+    /// the unsupported placeholder; the reporter decides what MS0001 says for
+    /// the target.
     /// </summary>
     private IrExpression ExtractCatchFilter(CatchFilterClauseSyntax filter)
     {
         var condition = _expressions.Extract(filter.FilterExpression);
+        var bindsVariables = ExpressionVariableLowering.DeclaresExpressionVariables(condition);
 
-        if (!ExpressionVariableLowering.DeclaresExpressionVariables(condition))
-            return condition;
+        _catchClauses.ReportUnsupportedFilter(filter, bindsVariables);
 
-        UnsupportedCatchClauseReporter.ReportFilterVariables(filter);
-
-        return new IrUnsupportedExpression("CatchFilterVariable");
+        return bindsVariables ? new IrUnsupportedExpression("CatchFilterVariable") : condition;
     }
 
     private IrStatement ExtractSwitch(SwitchStatementSyntax sw)

@@ -46,8 +46,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// suppressed, and an actual value is formatted with JS (not .NET)
 /// <c>ToString</c> rules. When a <c>Message</c> override supplies the message,
 /// the <c>stack</c> header (captured by the native constructor) keeps the base
-/// message, not the overridden one. Type tests stay coarse: every BCL exception type is
-/// <c>Error</c> on the TS side, so <c>o is ArgumentException</c> and a
+/// message, not the overridden one. Type tests stay coarse: generated code
+/// constructs every BCL exception as a plain <c>Error</c> (#651), so
+/// <c>o is ArgumentException</c> and a
 /// <c>catch (ArgumentException)</c> clause both test <c>instanceof Error</c>
 /// (see <see cref="IrToTsCatchChainBridge"/>).
 /// </para>

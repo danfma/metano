@@ -127,7 +127,10 @@ public sealed class DartIrRewriter
     private IrCatchClause RewriteCatch(IrCatchClause c) =>
         c with
         {
-            Filter = c.Filter is null ? null : RewriteExpression(c.Filter),
+            // Dart's `on T catch` has no filter and the printer keeps the native
+            // clauses (extraction reports MS0001 for the filter), so it is
+            // dropped here and names nothing the file would import.
+            Filter = null,
             Body = c.Body.Select(RewriteStatement).ToList(),
         };
 
