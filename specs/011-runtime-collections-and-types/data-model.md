@@ -115,7 +115,10 @@ classDiagram
         string? VariableName
         IrExpression? Filter
         IReadOnlyList~IrStatement~ Body
+        bool CatchesEveryException
+        bool HandlesEveryException
     }
+    class IrRethrowStatement
     class IrTypeTestExpression { IrExpression Value; IrRuntimeTypeTest Test; IrTypeRef Target }
     class IrAsExpression { IrExpression Value; IrRuntimeTypeTest Test; IrTypeRef Target }
     class IrCheckedCastExpression { IrExpression Value; IrRuntimeTypeTest Test; IrTypeRef Target; bool Unchecked }
@@ -149,7 +152,7 @@ Notes:
 - `IrIndexerUpdateExpression` is the evaluate-once node for `list[i] op= v`, `list[i]++`, `dict[k] ??= v` (FR-010); it renders as `update` / `updateReturningOld`.
 - `IrInlineCodePart` is `Text(string)` or `Hole(IrExpression)`.
 - The existing `IrIsPatternExpression` + `IrTypePattern` keep working; `IrTypeTestExpression` is the node the extractor produces for `x is T` without a designator so the target can render helpers without a pattern walk. Both carry the classification so no target recomputes it.
-- `IrCatchClause.Filter` is new (today's `ExtractCatch` never reads `CatchFilterClauseSyntax`). The try statement keeps its clause list; **each target** renders the single-catch chain from it (FR-015), so the core holds the data and no target recomputes the arm order.
+- `IrCatchClause.Filter` was delivered ahead by #628 (`ExtractCatch` reads `CatchFilterClauseSyntax`), together with the computed `CatchesEveryException` (a general `catch` or `catch (System.Exception)`) and `HandlesEveryException` (that, without a filter), and with `IrRethrowStatement` for `throw;` (TS: `throw e$;`, Dart: `rethrow;`). The try statement keeps its clause list; **each target** renders the single-catch chain from it (FR-015), so the core holds the data and no target recomputes the arm order.
 
 ## 3. TypeScript target
 
