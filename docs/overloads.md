@@ -142,9 +142,12 @@ parameters they name, so `xs.Aggregate(func: (a, x) => a + x, seed: 0)` emits
 `aggregate(0, (a, x) => a + x)`, and a stage with two or more order-sensitive
 arguments binds them in its own position of the pipe
 (`linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(F(), G()))` for
-`xs.Aggregate(func: F(), seed: G())`), which the pipe evaluates where C#
-evaluates that stage. A queryable stage captures each lambda for the parameter
-it names and keeps its expression tree after the bound arguments. The static
+`xs.Aggregate(func: F(), seed: G())`), which keeps that order among the arguments of the chain's stages. Every
+stage argument is evaluated before the pipe runs, so after a stage that
+enumerates eagerly in the middle of a chain (`ToList()`), C# runs the
+enumeration first and the pipe runs it last. A queryable stage captures its
+lambda (the first capturable one in parameter order) for the parameter it
+names and keeps its expression tree after the bound arguments. The static
 call form (`Enumerable.Aggregate(xs, func: F(), seed: G())`) has no lowering
 at all (#619).
 
