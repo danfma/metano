@@ -31,10 +31,17 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// rewriters that preserve the full <see cref="IrArgument"/> shape
 /// (named / ref / default).
 /// </param>
+/// <param name="SourceOrderOf">
+/// Bound to the extractor's <c>SourceOrderOf</c> for this call site: the
+/// evaluation order to keep for its arguments, normalized to parameter
+/// order, or <see langword="null"/> when parameter order is evaluation
+/// order.
+/// </param>
 public readonly record struct InvocationRewriteContext(
     InvocationExpressionSyntax Invocation,
     IMethodSymbol? Symbol,
     SemanticModel SemanticModel,
     Func<ExpressionSyntax, IrExpression> Recurse,
-    Func<ArgumentSyntax, IrArgument> ExtractArgument
+    Func<ArgumentSyntax, IrArgument> ExtractArgument,
+    Func<IReadOnlyList<IrArgument>, IReadOnlyList<int>?> SourceOrderOf
 );

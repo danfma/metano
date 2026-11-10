@@ -275,6 +275,16 @@ public sealed record IrCallExpression(
     /// other call.
     /// </summary>
     public IrSelectedOverload? Overload { get; init; }
+
+    /// <summary>
+    /// The order the source evaluates <see cref="Arguments"/> in, as indices
+    /// into them, on a call bound to no overload whose named arguments are
+    /// out of parameter order with two or more order-sensitive ones (spec 013
+    /// FR-017): a target must evaluate them in this order before it passes
+    /// them. <c>null</c> when parameter order is evaluation order, and on a
+    /// call bound to an <see cref="Overload"/>, which carries its own.
+    /// </summary>
+    public IReadOnlyList<int>? EvaluationOrder { get; init; }
 }
 
 /// <summary>
@@ -414,7 +424,15 @@ public sealed record IrNewExpression(
     IrMemberOrigin? Origin = null,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IrSelectedOverload? Overload = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The order the source evaluates <see cref="Arguments"/> in, on a
+    /// construction bound to no overload: see
+    /// <see cref="IrCallExpression.EvaluationOrder"/>.
+    /// </summary>
+    public IReadOnlyList<int>? EvaluationOrder { get; init; }
+}
 
 /// <summary>
 /// A single <c>Member = value</c> assignment inside an object-initializer
@@ -1006,4 +1024,13 @@ public sealed record IrTemplateExpression(
     IReadOnlyList<string>? RequiredImports = null,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IReadOnlyList<IrExternalImport>? ExternalImports = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The order the source evaluates <see cref="Arguments"/> in, on the
+    /// template of a call: see <see cref="IrCallExpression.EvaluationOrder"/>.
+    /// A template evaluates its arguments where its placeholders stand, so a
+    /// target binds them first when this is set.
+    /// </summary>
+    public IReadOnlyList<int>? EvaluationOrder { get; init; }
+}

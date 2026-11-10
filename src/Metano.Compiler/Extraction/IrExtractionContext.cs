@@ -47,9 +47,11 @@ public sealed record IrExtractionContext(
 
     /// <summary>
     /// A target capability: whether the target keeps C#'s evaluation order
-    /// for a bound call or <c>: this(...)</c> chain whose named arguments are
-    /// out of parameter order (<see cref="IR.IrSelectedOverload.EvaluationOrder"/>),
-    /// binding them in source order. Opt-in. A target that leaves it unset
+    /// for a call, construction or <c>: this(...)</c> chain whose named
+    /// arguments are out of parameter order
+    /// (<see cref="IR.IrSelectedOverload.EvaluationOrder"/> when it is bound
+    /// to an overload, <see cref="IR.IrCallExpression.EvaluationOrder"/>
+    /// otherwise), binding them in source order. Opt-in. A target that leaves it unset
     /// passes them in parameter order, which cannot differ from C# while at
     /// most one evaluation is order-sensitive; with two or more the extractor
     /// reports <c>MS0001</c> at the call.

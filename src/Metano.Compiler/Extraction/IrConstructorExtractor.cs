@@ -356,6 +356,7 @@ public static class IrConstructorExtractor
         )
         {
             BaseOverload = baseCall?.Overload,
+            BaseEvaluationOrder = baseCall?.EvaluationOrder,
         };
     }
 
@@ -541,12 +542,15 @@ public static class IrConstructorExtractor
 
         var extractor = new IrExpressionExtractor(model, context, localNames);
 
-        var arguments = extractor.ExtractInitializerArguments(
+        var arguments = extractor.ExtractBaseArguments(
             ArgumentListOf(baseCall),
             model.GetSymbolInfo(baseCall).Symbol as IMethodSymbol
         );
 
-        return new BaseConstructorCall(arguments, Overload: null);
+        return new BaseConstructorCall(arguments, Overload: null)
+        {
+            EvaluationOrder = extractor.SourceOrderOf(model.GetOperation(baseCall), arguments),
+        };
     }
 
     /// <summary>
@@ -641,6 +645,12 @@ public static class IrConstructorExtractor
         IrSelectedOverload? Overload
     )
     {
+        /// <summary>
+        /// The order to keep for the arguments of a call bound to no
+        /// overload (<see cref="IrConstructorDeclaration.BaseEvaluationOrder"/>).
+        /// </summary>
+        public IReadOnlyList<int>? EvaluationOrder { get; init; }
+
         public static BaseConstructorCall Of(BoundOverloadCall bound) =>
             new(bound.Arguments, bound.Overload);
     }
