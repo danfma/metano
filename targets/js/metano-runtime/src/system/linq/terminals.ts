@@ -84,11 +84,22 @@ export function first<T>(
   };
 }
 
-export function firstOrDefault<T, D extends T | null = null>(
+/** `FirstOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`. */
+export function firstOrDefault<T>(
   predicate?: (item: T) => boolean,
-  defaultValue: D = null as D,
+  defaultValue?: null,
   queryable?: QueryableMeta,
-): FirstOrDefaultTerm<T, D> {
+): FirstOrDefaultTerm<T, null>;
+export function firstOrDefault<T>(
+  predicate: ((item: T) => boolean) | undefined,
+  defaultValue: NoInfer<T>,
+  queryable?: QueryableMeta,
+): FirstOrDefaultTerm<T, T>;
+export function firstOrDefault<T>(
+  predicate?: (item: T) => boolean,
+  defaultValue: T | null = null,
+  queryable?: QueryableMeta,
+): FirstOrDefaultTerm<T> {
   return {
     kind: "firstOrDefault",
     predicate,
@@ -120,36 +131,58 @@ export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableM
   };
 }
 
-export function lastOrDefault<T, D extends T | null = null>(
+/** `LastOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`. */
+export function lastOrDefault<T>(
   predicate?: (item: T) => boolean,
-  defaultValue: D = null as D,
+  defaultValue?: null,
   queryable?: QueryableMeta,
-): LastOrDefaultTerm<T, D> {
+): LastOrDefaultTerm<T, null>;
+export function lastOrDefault<T>(
+  predicate: ((item: T) => boolean) | undefined,
+  defaultValue: NoInfer<T>,
+  queryable?: QueryableMeta,
+): LastOrDefaultTerm<T, T>;
+export function lastOrDefault<T>(
+  predicate?: (item: T) => boolean,
+  defaultValue: T | null = null,
+  queryable?: QueryableMeta,
+): LastOrDefaultTerm<T> {
   return {
     kind: "lastOrDefault",
     predicate,
     defaultValue,
     queryable,
     apply: (source) => {
-      let result: T | D = defaultValue;
+      let result: T | null = defaultValue;
       for (const item of source) if (!predicate || predicate(item)) result = item;
       return result;
     },
   };
 }
 
-export function singleOrDefault<T, D extends T | null = null>(
+/** `SingleOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`. */
+export function singleOrDefault<T>(
   predicate?: (item: T) => boolean,
-  defaultValue: D = null as D,
+  defaultValue?: null,
   queryable?: QueryableMeta,
-): SingleOrDefaultTerm<T, D> {
+): SingleOrDefaultTerm<T, null>;
+export function singleOrDefault<T>(
+  predicate: ((item: T) => boolean) | undefined,
+  defaultValue: NoInfer<T>,
+  queryable?: QueryableMeta,
+): SingleOrDefaultTerm<T, T>;
+export function singleOrDefault<T>(
+  predicate?: (item: T) => boolean,
+  defaultValue: T | null = null,
+  queryable?: QueryableMeta,
+): SingleOrDefaultTerm<T> {
   return {
     kind: "singleOrDefault",
     predicate,
     defaultValue,
     queryable,
     apply: (source) => {
-      let result: T | D = defaultValue;
+      let result: T | null = defaultValue;
       let count = 0;
       for (const item of source)
         if (!predicate || predicate(item)) {

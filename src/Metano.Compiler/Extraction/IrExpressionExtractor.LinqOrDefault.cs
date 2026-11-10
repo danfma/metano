@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -16,11 +17,14 @@ public sealed partial class IrExpressionExtractor
     private const string DefaultValueParameterName = "defaultValue";
 
     /// <summary>
-    /// The arguments of an <c>OrDefault</c> stage as
-    /// <c>(predicate, defaultValue)</c>, the predicate slot holding the
-    /// omitted-argument marker when the call has none. A stage that returns
-    /// <c>null</c> on a miss keeps its source arguments.
+    /// The arguments of an <c>OrDefault</c> stage: <c>(predicate)</c> when it
+    /// returns <c>null</c> on a miss, <c>(predicate, defaultValue)</c>
+    /// otherwise, the predicate slot holding the omitted-argument marker when
+    /// the call has none. A <c>default</c> literal written as the default
+    /// value is <c>default(TSource)</c>, like no argument at all.
     /// </summary>
+    // TODO(#597): a call that names `defaultValue:` before `predicate:` evaluates
+    // them predicate-first here; reconcile with the evaluation order of #597.
     private IReadOnlyList<IrExpression> OrDefaultArguments(
         InvocationExpressionSyntax stage,
         IMethodSymbol method,
@@ -31,44 +35,44 @@ public sealed partial class IrExpressionExtractor
             BoundParameterOf(argument, method).Name == DefaultValueParameterName
         );
 
-        var defaultValue =
-            defaultValueIndex >= 0 ? arguments[defaultValueIndex] : ElementDefault(stage, method);
+        var predicate = PredicateOf(arguments, defaultValueIndex);
+        var elementType = method.TypeArguments[0];
 
-        if (defaultValue is null)
-            return arguments;
+        var missValue =
+            ExplicitDefaultValue(arguments, defaultValueIndex)
+            ?? ElementMissValue.Of(elementType, BuildOrigin, MapElementType);
 
-        var predicate = arguments.Where((_, index) => index != defaultValueIndex).FirstOrDefault();
+        if (missValue is null && LowersLinqChains)
+            ElementMissValue.ReportUnrepresentable(stage, method, elementType);
 
-        return [predicate ?? OmittedArgument(), defaultValue];
+        if (missValue is null or IrLiteral { Kind: IrLiteralKind.Null })
+            return predicate is null ? [] : [predicate];
+
+        return [predicate ?? OmittedArgument(), missValue];
     }
+
+    // TODO(#549): the Dart target does not lower LINQ chains, so a warning
+    // about the lowered terminal would describe code it never prints.
+    private bool LowersLinqChains => _target is not TargetLanguage.Dart;
+
+    private static IrExpression? PredicateOf(
+        IReadOnlyList<IrExpression> arguments,
+        int defaultValueIndex
+    ) => arguments.Where((_, index) => index != defaultValueIndex).FirstOrDefault();
 
     /// <summary>
-    /// <c>default(TSource)</c> when it is not <c>null</c>. A struct without a
-    /// target-agnostic default keeps the <c>null</c> miss and is reported. The
-    /// bare <c>0</c> of an enum that declares no zero member is cast to the
-    /// enum, so a target that types its enums can assert it.
+    /// The <c>defaultValue</c> argument, unless it is a <c>default</c>
+    /// literal: that one keeps the opaque marker of an omitted argument.
     /// </summary>
-    private IrExpression? ElementDefault(InvocationExpressionSyntax stage, IMethodSymbol method)
-    {
-        var elementType = method.TypeArguments[0];
-        var elementDefault = DefaultValueLiterals.For(elementType, BuildOrigin);
+    private static IrExpression? ExplicitDefaultValue(
+        IReadOnlyList<IrExpression> arguments,
+        int defaultValueIndex
+    ) =>
+        defaultValueIndex >= 0
+        && arguments[defaultValueIndex] is not IrLiteral { Kind: IrLiteralKind.Default }
+            ? arguments[defaultValueIndex]
+            : null;
 
-        if (elementDefault is IrLiteral { Kind: IrLiteralKind.Null })
-            return null;
-
-        if (elementDefault is IrLiteral { Kind: IrLiteralKind.Int32 } && IsEnum(elementType))
-            return new IrCastExpression(
-                elementDefault,
-                IrTypeRefMapper.Map(elementType, _originResolver, _target)
-            );
-
-        if (elementDefault is not IrLiteral { Kind: IrLiteralKind.Default })
-            return elementDefault;
-
-        UnrepresentableMissValue.Report(stage, method, elementType);
-
-        return null;
-    }
-
-    private static bool IsEnum(ITypeSymbol type) => type.TypeKind is TypeKind.Enum;
+    private IrTypeRef MapElementType(ITypeSymbol elementType) =>
+        IrTypeRefMapper.Map(elementType, _originResolver, _target);
 }

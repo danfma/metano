@@ -252,6 +252,7 @@ export interface FirstTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
+/** `D` is the type of the miss value: `null` without a `defaultValue`, `T` with one. */
 export interface FirstOrDefaultTerm<T, D extends T | null = T | null>
   extends TerminalBase<T, T | D> {
   readonly kind: "firstOrDefault";
@@ -266,6 +267,7 @@ export interface LastTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
+/** `D` is the type of the miss value: `null` without a `defaultValue`, `T` with one. */
 export interface LastOrDefaultTerm<T, D extends T | null = T | null>
   extends TerminalBase<T, T | D> {
   readonly kind: "lastOrDefault";
@@ -280,6 +282,7 @@ export interface SingleTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
+/** `D` is the type of the miss value: `null` without a `defaultValue`, `T` with one. */
 export interface SingleOrDefaultTerm<T, D extends T | null = T | null>
   extends TerminalBase<T, T | D> {
   readonly kind: "singleOrDefault";

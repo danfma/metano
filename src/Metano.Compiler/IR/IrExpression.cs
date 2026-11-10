@@ -606,7 +606,15 @@ public enum IrUnaryOp
 /// <summary>
 /// Type cast: <c>(T)expr</c>.
 /// </summary>
-public sealed record IrCastExpression(IrExpression Expression, IrTypeRef TargetType) : IrExpression;
+/// <param name="IsAssertion">The compiler synthesized the cast to give the
+/// value its static type (the <c>0</c> of an enum that declares no zero
+/// member), so a target that erases casts still asserts it
+/// (<c>0 as Level</c>).</param>
+public sealed record IrCastExpression(
+    IrExpression Expression,
+    IrTypeRef TargetType,
+    bool IsAssertion = false
+) : IrExpression;
 
 /// <summary>
 /// Type check: <c>expr is T</c>.

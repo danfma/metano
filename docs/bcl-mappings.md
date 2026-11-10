@@ -303,8 +303,15 @@ const result = Enumerable.from(items)
 The `OrDefault` terminals take `(predicate?, defaultValue?)`. The compiler passes
 `default(T)` for a non-nullable value element (`xs.FirstOrDefault()` over `int` is
 `firstOrDefault(undefined, 0)`) and the `defaultValue` argument of the .NET 6
-overloads; reference and nullable elements keep the `null` miss. A struct without
-a literal default (a user struct, a tuple) keeps `null` and reports `MS0001`.
+overloads; reference and nullable elements keep the `null` miss. An element whose
+default no literal spells (a user struct, a tuple, a `struct` type parameter, a
+`[StringEnum]` without a zero member) keeps `null` and reports `MS0001` (#621). A
+type parameter that is not constrained to `struct` (unconstrained, `where T :
+notnull`, `where T : IComparable<T>`, `where T : Enum` alone) also yields `null`,
+without a warning. `ElementAt`, `ElementAtOrDefault` and `DefaultIfEmpty` have no
+lowering (#617); `Min` / `Max` over an empty or nullable `number` sequence differ
+from .NET (#618); the static call form `Enumerable.FirstOrDefault(xs)` is not
+lowered (#619).
 
 ### Direct method calls (fast path)
 
