@@ -43,9 +43,8 @@ internal static class OverloadSymbols
     /// <summary>
     /// The declared overload whose parameters match <paramref name="parameters"/>
     /// by name and <c>params</c> flag, then, among several, by mapped type.
-    /// The full parameter lists are compared first (an IR constructor lists
-    /// its <c>out</c> parameters), then the lists without the <c>out</c>
-    /// parameters (an IR method does not list them).
+    /// A constructor is compared over all its parameters, a method over the
+    /// ones that are not <c>out</c> (see <see cref="HasParameters"/>).
     /// </summary>
     internal static IMethodSymbol? Of(
         IReadOnlyList<IMethodSymbol> symbols,
@@ -61,17 +60,18 @@ internal static class OverloadSymbols
             : byName.FirstOrDefault(symbol => HasParameters(symbol, parameters, MatchesByType));
     }
 
+    /// <summary>
+    /// Whether <paramref name="symbol"/> declares <paramref name="parameters"/>:
+    /// an IR constructor lists its <c>out</c> parameters, an IR method does not.
+    /// </summary>
     private static bool HasParameters(
         IMethodSymbol symbol,
         IReadOnlyList<IrParameter> parameters,
         Func<IParameterSymbol, IrParameter, bool> matches
-    )
-    {
-        if (Corresponds(symbol.Parameters, parameters, matches))
-            return true;
-
-        return Corresponds(InputsOf(symbol), InputsOf(parameters), matches);
-    }
+    ) =>
+        symbol.MethodKind is MethodKind.Constructor
+            ? Corresponds(symbol.Parameters, parameters, matches)
+            : Corresponds(InputsOf(symbol), InputsOf(parameters), matches);
 
     private static bool Corresponds(
         IReadOnlyList<IParameterSymbol> declared,
@@ -84,8 +84,7 @@ internal static class OverloadSymbols
     /// <summary>
     /// The parameters a method dispatcher receives: an <c>out</c> parameter of
     /// a method lowers to an element of the returned tuple, so the IR method
-    /// does not list it. An IR constructor keeps its <c>out</c> parameters as
-    /// plain ones and matches position by position instead.
+    /// does not list it.
     /// </summary>
     private static List<IParameterSymbol> InputsOf(IMethodSymbol symbol) =>
         symbol.Parameters.Where(parameter => parameter.RefKind != RefKind.Out).ToList();
