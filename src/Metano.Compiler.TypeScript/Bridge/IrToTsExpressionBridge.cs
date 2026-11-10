@@ -126,18 +126,7 @@ public static partial class IrToTsExpressionBridge
             IrTupleLiteral tuple => MapTupleLiteral(tuple, context),
             IrTupleEqualityExpression equality => MapTupleEquality(equality, context),
             IrSpreadExpression spread => MapSpread(spread, context),
-            IrTemplateExpression tpl => new TsTemplate(
-                tpl.Template,
-                tpl.Receiver is null ? null : Map(tpl.Receiver, context),
-                tpl.Arguments.Select(a => Map(a, context)).ToList()
-            )
-            {
-                TypeArgumentNames = tpl.TypeArguments is { Count: > 0 } tArgs
-                    ? tArgs.Select(t => TsTypeArgName(t) ?? "unknown").ToList()
-                    : [],
-                RuntimeImports = tpl.RequiredImports ?? [],
-                ExternalImports = tpl.ExternalImports ?? [],
-            },
+            IrTemplateExpression tpl => MapTemplate(tpl, context),
             IrYieldExpression ye => new TsIdentifier(
                 ye.Value is not null ? $"yield {FormatInner(ye.Value)}" : "yield"
             ),
@@ -771,6 +760,43 @@ public static partial class IrToTsExpressionBridge
             _ => new TsStringLiteral(baseCall.TypeName),
         };
 
+    /// <summary>
+    /// A template over its lowered arguments. Its placeholders evaluate them
+    /// where they stand, so arguments C# evaluates in another order (named
+    /// ones out of parameter order, spec 013 FR-017) are bound first, in
+    /// source order.
+    /// </summary>
+    private static TsExpression MapTemplate(IrTemplateExpression tpl, IrToTsBridgeContext context)
+    {
+        var ordered = TsEvaluationOrder.Bind(
+            tpl.Arguments.Select(argument => Map(argument, context)).ToList(),
+            tpl.EvaluationOrder,
+            ConstructionArgumentPrefix
+        );
+
+        var template = new TsTemplate(
+            tpl.Template,
+            tpl.Receiver is null ? null : Map(tpl.Receiver, context),
+            ordered.Arguments
+        )
+        {
+            TypeArgumentNames = tpl.TypeArguments is { Count: > 0 } tArgs
+                ? tArgs.Select(t => TsTypeArgName(t) ?? "unknown").ToList()
+                : [],
+            RuntimeImports = tpl.RequiredImports ?? [],
+            ExternalImports = tpl.ExternalImports ?? [],
+        };
+
+        if (ordered.Bindings.Count == 0)
+            return template;
+
+        return TsImmediateInvocation.Of(
+            ordered.Bindings,
+            [new TsReturnStatement(template)],
+            isAsync: false
+        );
+    }
+
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
     {
         // TS doesn't support named arguments at the call site — the receiver's
@@ -786,6 +812,70 @@ public static partial class IrToTsExpressionBridge
         if (DispatchedFastPathCallOf(call, loweredArgs, context) is { } dispatchedFastPathCall)
             return dispatchedFastPathCall;
 
+        return call.EvaluationOrder is { } order
+            ? MapCallInSourceOrder(call, loweredArgs, order, context)
+            : MapUndispatchedCall(call, loweredArgs, context);
+    }
+
+    /// <summary>
+    /// A call bound to no overload whose named arguments C# evaluates out of
+    /// parameter order (spec 013 FR-017): the receiver — or the callee, when
+    /// the call names no member — binds first when it is a computation, then
+    /// the arguments in source order, and the call lowers as any other over
+    /// the bound names.
+    /// </summary>
+    private static TsExpression MapCallInSourceOrder(
+        IrCallExpression call,
+        IReadOnlyList<TsExpression> loweredArgs,
+        IReadOnlyList<int> order,
+        IrToTsBridgeContext context
+    )
+    {
+        var ordered = TsEvaluationOrder.Bind(loweredArgs, order, ConstructionArgumentPrefix);
+        var computed = call.Target is IrMemberAccess access ? access.Target : call.Target;
+
+        if (RemapsPurely(computed))
+            return InSourceOrder(ordered.Bindings, call, ordered.Arguments, context);
+
+        var reference = new IrIdentifier(ReceiverArgumentPrefix);
+
+        var bound = call with
+        {
+            Target = call.Target is IrMemberAccess member
+                ? member with
+                {
+                    Target = reference,
+                }
+                : reference,
+        };
+
+        var receiver = new TsImmediateBinding(
+            ReceiverArgumentPrefix,
+            MapNullTolerant(computed, context)
+        );
+
+        return InSourceOrder([receiver, .. ordered.Bindings], bound, ordered.Arguments, context);
+    }
+
+    private static TsExpression InSourceOrder(
+        IReadOnlyList<TsImmediateBinding> bindings,
+        IrCallExpression call,
+        IReadOnlyList<TsExpression> arguments,
+        IrToTsBridgeContext context
+    ) =>
+        TsImmediateInvocation.Of(
+            bindings,
+            [new TsReturnStatement(MapUndispatchedCall(call, arguments, context))],
+            isAsync: false
+        );
+
+    /// <summary>The lowering of a call that reaches no claimed fast path.</summary>
+    private static TsExpression MapUndispatchedCall(
+        IrCallExpression call,
+        IReadOnlyList<TsExpression> loweredArgs,
+        IrToTsBridgeContext context
+    )
+    {
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
         // JS function — the `Invoke` member is erased. Overloaded `Invoke`
@@ -1709,6 +1799,30 @@ public static partial class IrToTsExpressionBridge
             return IrToTsJsxBridge.Convert(ne, context);
 
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
+
+        if (ne.EvaluationOrder is not { } order)
+            return MapConstruction(ne, args, context);
+
+        var ordered = TsEvaluationOrder.Bind(args, order, ConstructionArgumentPrefix);
+
+        return TsImmediateInvocation.Of(
+            ordered.Bindings,
+            [new TsReturnStatement(MapConstruction(ne, ordered.Arguments, context))],
+            isAsync: false
+        );
+    }
+
+    /// <summary>
+    /// The construction of <paramref name="ne"/> over its lowered arguments:
+    /// an object literal, an array literal, a factory or <c>create</c> call,
+    /// a mapped template or <c>new T(…)</c>.
+    /// </summary>
+    private static TsExpression MapConstruction(
+        IrNewExpression ne,
+        IReadOnlyList<TsExpression> args,
+        IrToTsBridgeContext context
+    )
+    {
         if (ne.IsObjectArgsCtor && ne.Type is IrNamedTypeRef objectArgsTarget)
         {
             IReadOnlyList<TsType>? typeArguments = objectArgsTarget.TypeArguments
@@ -1946,15 +2060,7 @@ public static partial class IrToTsExpressionBridge
         if (call.Target is not IrMemberAccess { Target: { } receiver })
             return null;
 
-        if (
-            receiver
-            is IrThisExpression
-                or IrBaseExpression
-                or IrIdentifier
-                or IrConditionalReceiver
-                or IrTypeReference
-                or IrLiteral
-        )
+        if (RemapsPurely(receiver))
             return null;
 
         var reference = new TsIdentifier(ReceiverArgumentPrefix);
@@ -1964,6 +2070,19 @@ public static partial class IrToTsExpressionBridge
             reference
         );
     }
+
+    /// <summary>
+    /// A receiver or callee that reads a plain value: mapping it again is
+    /// pure, so an out-of-order argument list never binds it.
+    /// </summary>
+    private static bool RemapsPurely(IrExpression expression) =>
+        expression
+            is IrThisExpression
+                or IrBaseExpression
+                or IrIdentifier
+                or IrConditionalReceiver
+                or IrTypeReference
+                or IrLiteral;
 
     /// <summary>
     /// The dispatcher-form callee of a bound call whose claims are missing:

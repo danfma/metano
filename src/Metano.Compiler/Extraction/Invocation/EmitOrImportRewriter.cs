@@ -90,7 +90,10 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             templateArgs,
             TypeArguments: typeArgs,
             ExternalImports: externalImports
-        );
+        )
+        {
+            EvaluationOrder = TemplateOrderOf(context, args, templateArgs.Count),
+        };
     }
 
     private IrTemplateExpression BuildImportFacade(
@@ -113,7 +116,10 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             Receiver: null,
             templateArgs,
             ExternalImports: [ToIrExternalImport(import, emittedName)]
-        );
+        )
+        {
+            EvaluationOrder = TemplateOrderOf(context, args, templateArgs.Count),
+        };
     }
 
     /// <summary>
@@ -139,6 +145,29 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             && QualifiedMemberSyntax.From(context.Invocation.Expression) is { } memberAccess
         )
             templateArgs.Add(context.Recurse(memberAccess.Receiver));
+    }
+
+    /// <summary>
+    /// The order the source evaluates the template arguments in, when it has
+    /// to be kept: a promoted receiver first, then the call's own arguments
+    /// in their written order.
+    /// </summary>
+    private static IReadOnlyList<int>? TemplateOrderOf(
+        InvocationRewriteContext context,
+        IReadOnlyList<IrArgument> args,
+        int templateArgumentCount
+    )
+    {
+        if (context.SourceOrderOf(args) is not { } order)
+            return null;
+
+        var receiverSlots = templateArgumentCount - args.Count;
+
+        return
+        [
+            .. Enumerable.Range(0, receiverSlots),
+            .. order.Select(position => position + receiverSlots),
+        ];
     }
 
     private IReadOnlyList<IrArgument> BuildNormalizedArguments(

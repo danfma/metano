@@ -1386,6 +1386,85 @@ public class DartOverloadNamingTests
         );
     }
 
+    /// <summary>
+    /// A call bound to no overload group passes its named arguments in
+    /// parameter order as well (#597): two or more order-sensitive arguments
+    /// report <c>MS0001</c>; one beside a constant, and arguments in
+    /// parameter order, report nothing.
+    /// </summary>
+    [Test]
+    public async Task ReorderedNamedArguments_OutsideAnOverloadGroup_ReportTheLostOrder()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Engine
+            {
+                public int Single(int f, int d) => f * 10 + d;
+            }
+
+            [Transpile]
+            public class Pair
+            {
+                public int F;
+
+                public Pair(int f, int d) => F = f * 10 + d;
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Next() => 1;
+
+                public static int Call(Engine e) => e.Single(d: Next(), f: Next());
+
+                public static Pair Construct() => new Pair(d: Next(), f: Next());
+
+                public static int OneEvaluation(Engine e) => e.Single(d: Next(), f: 4);
+
+                public static int InOrder(Engine e) => e.Single(f: Next(), d: Next());
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => (d.Code, d.Message, FirstLineOf(d))))
+            .IsEquivalentTo([
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static int Call(Engine e) => e.Single(d: Next(), f: Next());"
+                ),
+                (
+                    DiagnosticCodes.UnsupportedFeature,
+                    ReorderMessage,
+                    "public static Pair Construct() => new Pair(d: Next(), f: Next());"
+                ),
+            ]);
+
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            import 'engine.dart';
+            import 'pair.dart';
+
+            class Use {
+              static int next() => 1;
+
+              static int call(Engine e) => e.single(f: Use.next(), d: Use.next());
+
+              static Pair construct() => Pair(f: Use.next(), d: Use.next());
+
+              static int oneEvaluation(Engine e) => e.single(f: 4, d: Use.next());
+
+              static int inOrder(Engine e) => e.single(f: Use.next(), d: Use.next());
+            }
+
+            """
+        );
+    }
+
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>
         diagnostic
             .Location!.SourceTree!.GetText()

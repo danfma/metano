@@ -65,14 +65,10 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     internal BoundOverloadCall? ExtractBoundCall(IOperation? call, IrOverloadRef target)
     {
-        ImmutableArray<IArgumentOperation>? arguments = call switch
-        {
-            IObjectCreationOperation creation => creation.Arguments,
-            IInvocationOperation invocation => invocation.Arguments,
-            _ => null,
-        };
-
-        if (arguments is not { } bindable || bindable.Any(argument => !IsBindable(argument)))
+        if (
+            WrittenArgumentsOf(call) is not { } bindable
+            || bindable.Any(argument => !IsBindable(argument))
+        )
             return null;
 
         var inParameterOrder = bindable
@@ -90,7 +86,8 @@ public sealed partial class IrExpressionExtractor
         var sourceOrder = EvaluationOrderOf(inParameterOrder);
 
         var evaluationOrder =
-            sourceOrder is not null && HasOrderToKeep(inParameterOrder, bindable)
+            sourceOrder is not null
+            && HasOrderToKeep(inParameterOrder.Select(argument => argument.Value), bindable)
                 ? sourceOrder
                 : null;
 
@@ -102,6 +99,69 @@ public sealed partial class IrExpressionExtractor
             new IrSelectedOverload(target, evaluationOrder)
         );
     }
+
+    /// <summary>
+    /// The order to keep for the arguments of a call or construction bound to
+    /// no overload (spec 013 FR-017): <paramref name="inParameterOrder"/> are
+    /// its arguments, one per parameter, and the result lists their positions
+    /// in the order C# evaluates them. <c>null</c> when no argument is named,
+    /// when the written order is parameter order, and when fewer than two
+    /// arguments are order-sensitive or none
+    /// <see cref="HasOrderToKeep">has an order to keep</see>: the call then
+    /// stays plain.
+    /// </summary>
+    internal IReadOnlyList<int>? SourceOrderOf(
+        IOperation? call,
+        IReadOnlyList<IrArgument> inParameterOrder
+    )
+    {
+        if (!HasNamedArgument(inParameterOrder) || WrittenArgumentsOf(call) is not { } written)
+            return null;
+
+        if (!IsReordered(written) || CountOrderSensitiveArguments(written) < 2)
+            return null;
+
+        var order = written
+            .Where(argument => !IsOmittedParamsArray(argument))
+            .Select(argument => argument.Parameter?.Ordinal ?? -1)
+            .ToList();
+
+        // One written argument per normalized one: any other shape (a
+        // receiver the call binds elsewhere, an unresolved parameter) has no
+        // position to read here.
+        if (!order.Order().SequenceEqual(Enumerable.Range(0, inParameterOrder.Count)))
+            return null;
+
+        if (!HasOrderToKeep(inParameterOrder, written))
+            return null;
+
+        ReportIfEvaluationOrderIsLost(call!, written);
+
+        return order;
+    }
+
+    /// <summary>
+    /// The empty array Roslyn binds to a <c>params</c> parameter the call
+    /// omits: it passes no element, so it has no normalized argument.
+    /// </summary>
+    private static bool IsOmittedParamsArray(IArgumentOperation argument) =>
+        argument
+            is {
+                ArgumentKind: ArgumentKind.ParamArray,
+                Value: IArrayCreationOperation { Initializer: null or { ElementValues.Length: 0 } }
+            };
+
+    /// <summary>
+    /// The arguments Roslyn bound to a call or construction, in the order C#
+    /// evaluates them; <c>null</c> for any other operation.
+    /// </summary>
+    private static ImmutableArray<IArgumentOperation>? WrittenArgumentsOf(IOperation? call) =>
+        call switch
+        {
+            IObjectCreationOperation creation => creation.Arguments,
+            IInvocationOperation invocation => invocation.Arguments,
+            _ => null,
+        };
 
     /// <summary>
     /// <c>MS0001</c> at a <c>: this(...)</c> chain whose named arguments are
@@ -165,12 +225,14 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// A <c>: base(...)</c> call. TODO(#572): Dart emits no base constructor
-    /// call yet, so its argument order has nothing to report.
+    /// A <c>: base(...)</c> call or a primary-constructor base call.
+    /// TODO(#572): Dart emits no base constructor call yet, so its argument
+    /// order has nothing to report.
     /// </summary>
     private static bool IsBaseInitializer(IOperation call) =>
-        call.Syntax is ConstructorInitializerSyntax initializer
-        && initializer.IsKind(SyntaxKind.BaseConstructorInitializer);
+        call.Syntax
+            is ConstructorInitializerSyntax { RawKind: (int)SyntaxKind.BaseConstructorInitializer }
+                or PrimaryConstructorBaseTypeSyntax;
 
     /// <summary>
     /// The order-sensitive evaluations of a call: its arguments and a
@@ -282,10 +344,10 @@ public sealed partial class IrExpressionExtractor
     /// implicitly</see>. Without either, no order tells the arguments apart.
     /// </summary>
     private bool HasOrderToKeep(
-        IReadOnlyList<BoundArgument> inParameterOrder,
+        IEnumerable<IrArgument> inParameterOrder,
         ImmutableArray<IArgumentOperation> arguments
     ) =>
-        inParameterOrder.Any(argument => !IrEvaluationTraits.IsSideEffectFree(argument.Value.Value))
+        inParameterOrder.Any(argument => !IrEvaluationTraits.IsSideEffectFree(argument.Value))
         || KeepsOrderForImplicitUserCode(arguments);
 
     /// <summary>

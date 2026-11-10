@@ -232,7 +232,7 @@ internal static partial class IrToTsClassBridge
 
         var ordered = TsEvaluationOrder.Bind(
             IrToTsExpressionBridge.WithoutNullRestArray(baseArguments, loweredArguments),
-            ctor.BaseOverload?.EvaluationOrder,
+            ctor.BaseOverload?.EvaluationOrder ?? ctor.BaseEvaluationOrder,
             BaseArgumentPrefix
         );
 

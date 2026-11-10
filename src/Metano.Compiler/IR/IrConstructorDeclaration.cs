@@ -82,6 +82,13 @@ public sealed record IrConstructorDeclaration(
     public IrSelectedOverload? BaseOverload { get; init; }
 
     /// <summary>
+    /// The order the source evaluates <see cref="BaseArguments"/> in, on a
+    /// base call bound to no overload: see
+    /// <see cref="IrCallExpression.EvaluationOrder"/>.
+    /// </summary>
+    public IReadOnlyList<int>? BaseEvaluationOrder { get; init; }
+
+    /// <summary>
     /// Every constructor of a dispatched set — this one and its
     /// <see cref="Overloads"/> — in declaration order.
     /// </summary>

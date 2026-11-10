@@ -117,7 +117,7 @@ redeclared compatibly, the factory is qualified with the type name
 (`GiftReceipt.fromGiftReceiptAmount`). A derived class inherits the base
 factories it does not redeclare, and they return the base type.
 
-A call into an overloaded group passes its arguments in parameter order. When
+A call passes its arguments in parameter order, overloaded or not. When
 named arguments are written in another order and that order can be observed,
 the generated call evaluates them first, in the order you wrote them, through
 an arrow invoked on the spot:
@@ -127,8 +127,12 @@ effect, or runs code implicitly (a property getter that is not a plain
 auto-property, a user-defined operator or conversion, a `ToString` called by a
 string concatenation) beside a second argument that is not a constant. Field
 and auto-property reads alone, or one such argument beside constants, stay a
-plain call. Reordered named arguments of a call that is not overloaded are not
-covered yet (#597).
+plain call. A call or construction that is not overloaded follows the same
+rule (`(($arg1, $arg0) => e.single($arg0, $arg1))(h.p, h.q)` for
+`e.Single(d: h.P, f: h.Q)`), and it also stays plain when a single argument has
+a side effect beside constants. One shape is not covered: a null-conditional
+delegate call (`op?.Invoke(d: F(), f: G())`, #611) evaluates its arguments in
+parameter order.
 
 Generated code only binds a type whose source the compiler can read — the
 current project or a project reference. A type read from a DLL or an npm

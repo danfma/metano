@@ -54,6 +54,14 @@ public sealed class DelegateInvokeRewriter(InvocationLoweringHelpers helpers) : 
             .Invocation.ArgumentList.Arguments.Select(context.ExtractArgument)
             .ToList();
         _helpers.ApplyParamsSpread(args, invoke, context.Invocation.ArgumentList.Arguments);
-        return new IrCallExpression(receiver, args, Origin: _helpers.BuildOrigin(invoke));
+
+        var passed = args.Any(argument => argument.Name is not null)
+            ? _helpers.NormalizeArguments(args, invoke)
+            : args;
+
+        return new IrCallExpression(receiver, passed, Origin: _helpers.BuildOrigin(invoke))
+        {
+            EvaluationOrder = context.SourceOrderOf(passed),
+        };
     }
 }

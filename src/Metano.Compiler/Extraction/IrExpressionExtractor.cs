@@ -419,7 +419,17 @@ public sealed partial class IrExpressionExtractor
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
         ApplyParamsSpread(args, method, inv.ArgumentList.Arguments);
 
-        return new IrCallExpression(receiver, args, Origin: BuildOrigin(method), IsOptional: true);
+        // TODO(#611): named arguments out of parameter order bind their
+        // parameters but are evaluated in parameter order: a null delegate
+        // evaluates none of them, so they cannot be bound ahead of the call.
+        var passed = HasNamedArgument(args) ? NormalizeArguments(args, method) : args;
+
+        return new IrCallExpression(
+            receiver,
+            passed,
+            Origin: BuildOrigin(method),
+            IsOptional: true
+        );
     }
 
     /// <summary>
@@ -2717,8 +2727,10 @@ public sealed partial class IrExpressionExtractor
             symbol,
             _semantic,
             Extract,
-            ExtractArgument
+            ExtractArgument,
+            normalized => SourceOrderOf(_semantic.GetOperation(inv), normalized)
         );
+
         foreach (var rewriter in _invocationRewriters)
         {
             if (rewriter.Rewrite(invocationContext) is { } rewritten)
@@ -2778,7 +2790,10 @@ public sealed partial class IrExpressionExtractor
             args = NormalizeArguments(args, symbol).ToList();
         }
 
-        return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
+        return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
+        {
+            EvaluationOrder = SourceOrderOf(_semantic.GetOperation(inv), args),
+        };
     }
 
     /// <summary>
@@ -3644,17 +3659,28 @@ public sealed partial class IrExpressionExtractor
                 extLowering.EmittedName,
                 extensionArgs,
                 extensionTypeArgs
-            );
+            ) with
+            {
+                EvaluationOrder = SourceOrderOf(_semantic.GetOperation(inv), extensionArgs),
+            };
         }
 
-        var receiver = Extract(extensionAccess.Receiver);
+        IReadOnlyList<IrArgument> helperArgs =
+        [
+            new IrArgument(Extract(extensionAccess.Receiver)),
+            .. extensionArgs,
+        ];
+
         return BuildExtensionHelperCall(
             extLowering.HelperContainer,
             extLowering.HelperName,
             extLowering.EmittedName,
-            [new IrArgument(receiver), .. extensionArgs],
+            helperArgs,
             extensionTypeArgs
-        );
+        ) with
+        {
+            EvaluationOrder = SourceOrderOf(_semantic.GetOperation(inv), helperArgs),
+        };
     }
 
     /// <summary>
@@ -4460,6 +4486,24 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// The arguments of a base-constructor call bound to no overload: its
+    /// <see cref="ExtractInitializerArguments">initializer arguments</see>,
+    /// named ones placed in the parameter order of
+    /// <paramref name="baseConstructor"/>.
+    /// </summary>
+    public IReadOnlyList<IrArgument> ExtractBaseArguments(
+        ArgumentListSyntax argumentList,
+        IMethodSymbol? baseConstructor
+    )
+    {
+        var args = ExtractInitializerArguments(argumentList, baseConstructor);
+
+        return baseConstructor is not null && HasNamedArgument(args)
+            ? NormalizeArguments(args, baseConstructor)
+            : args;
+    }
+
+    /// <summary>
     /// Marks the trailing argument as a spread when the C# call passes a
     /// single value into a <c>params</c> slot (the value is the array
     /// itself). Discrete element calls (<c>Foo("x", "a", 42)</c>) leave the
@@ -4662,7 +4706,12 @@ public sealed partial class IrExpressionExtractor
             Origin: BuildOrigin(ctor),
             TypeArguments: ConstructedTypeArguments(typeSymbol),
             Overload: overload
-        );
+        )
+        {
+            EvaluationOrder = overload is null
+                ? SourceOrderOf(_semantic.GetOperation(creationSyntax), args)
+                : null,
+        };
 
         var constructed = BindExceptionArguments(creation);
 
@@ -4707,28 +4756,42 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Evaluates the arguments of <paramref name="creation"/> once, in source
-    /// order: each side-effecting argument is let-bound to a temporary (see
-    /// <see cref="BindValueOnce"/>) and <paramref name="build"/> receives the
-    /// construction with those arguments replaced, free to reorder or drop
-    /// them.
+    /// order (its <see cref="IrNewExpression.EvaluationOrder"/> when named
+    /// arguments set it apart from parameter order): each side-effecting
+    /// argument is let-bound to a temporary (see <see cref="BindValueOnce"/>)
+    /// and <paramref name="build"/> receives the construction with those
+    /// arguments replaced, free to reorder or drop them.
     /// </summary>
     private IrExpression BindArgumentsOnce(
         IrNewExpression creation,
         Func<IrNewExpression, IrExpression> build
-    ) => BindArgumentsFrom(creation, 0, build);
+    ) =>
+        BindArgumentsFrom(
+            creation with
+            {
+                EvaluationOrder = null,
+            },
+            creation.EvaluationOrder ?? Enumerable.Range(0, creation.Arguments.Count).ToList(),
+            step: 0,
+            build
+        );
 
     private IrExpression BindArgumentsFrom(
         IrNewExpression creation,
-        int index,
+        IReadOnlyList<int> order,
+        int step,
         Func<IrNewExpression, IrExpression> build
     )
     {
-        if (index == creation.Arguments.Count)
+        if (step == order.Count)
             return build(creation);
+
+        var index = order[step];
 
         return BindValueOnce(
             creation.Arguments[index].Value,
-            bound => BindArgumentsFrom(WithArgumentValue(creation, index, bound), index + 1, build)
+            bound =>
+                BindArgumentsFrom(WithArgumentValue(creation, index, bound), order, step + 1, build)
         );
     }
 
@@ -4863,37 +4926,47 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Expands a mixed positional + named argument list into strict positional
-    /// order against the target method's parameters. Missing named entries
-    /// (parameters the caller skipped) are filled with their explicit default
-    /// value; when a parameter has no explicit default (shouldn't happen for
-    /// valid C#) the slot falls back to <c>IrLiteralKind.Default</c> so the
-    /// pipeline keeps a visible marker instead of silently dropping it.
+    /// order against the target method's parameters. Unnamed arguments past
+    /// the last parameter are the further elements of an expanded
+    /// <c>params</c> call.
     /// </summary>
     private IReadOnlyList<IrArgument> NormalizeArguments(
         IReadOnlyList<IrArgument> args,
         IMethodSymbol target
     )
     {
-        // Positional prefix: walk until we hit the first named argument.
         var byName = args.Where(a => a.Name is not null).ToDictionary(a => a.Name!, a => a);
-        var positional = args.TakeWhile(a => a.Name is null).ToList();
-        var result = new List<IrArgument>(target.Parameters.Length);
-        for (var i = 0; i < target.Parameters.Length; i++)
-        {
-            if (i < positional.Count)
-            {
-                result.Add(positional[i]);
-                continue;
-            }
-            var p = target.Parameters[i];
-            if (byName.TryGetValue(p.Name, out var named))
-            {
-                result.Add(named);
-                continue;
-            }
-            result.Add(new IrArgument(BuildDefaultArgument(p)));
-        }
-        return result;
+
+        var bound = target.Parameters.SelectMany(
+            (parameter, position) => ArgumentsBoundTo(parameter, position, args, byName)
+        );
+
+        return [.. bound, .. args.Skip(target.Parameters.Length).Where(a => a.Name is null)];
+    }
+
+    /// <summary>
+    /// What a call passes to <paramref name="parameter"/>: the unnamed
+    /// argument at its position (C# only lets a named argument precede it
+    /// when that one is in position), else the argument named after it, else
+    /// its explicit default — nothing for an omitted <c>params</c> parameter.
+    /// When a parameter has no explicit default (shouldn't happen for valid
+    /// C#) the slot falls back to <c>IrLiteralKind.Default</c> so the
+    /// pipeline keeps a visible marker instead of silently dropping it.
+    /// </summary>
+    private IEnumerable<IrArgument> ArgumentsBoundTo(
+        IParameterSymbol parameter,
+        int position,
+        IReadOnlyList<IrArgument> args,
+        Dictionary<string, IrArgument> byName
+    )
+    {
+        if (position < args.Count && args[position].Name is null)
+            return [args[position]];
+
+        if (byName.TryGetValue(parameter.Name, out var named))
+            return [named];
+
+        return parameter.IsParams ? [] : [new IrArgument(BuildDefaultArgument(parameter))];
     }
 
     private IrExpression BuildDefaultArgument(IParameterSymbol parameter)
