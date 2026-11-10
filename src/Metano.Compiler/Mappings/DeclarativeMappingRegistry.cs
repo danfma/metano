@@ -156,12 +156,23 @@ public sealed class DeclarativeMappingRegistry
 
     /// <summary>
     /// Whether an entry with a JavaScript mapping (<c>JsMethod</c> or
-    /// <c>JsTemplate</c>) covers <paramref name="methodName"/> of the type
-    /// named <paramref name="declaringTypeFullName"/>, for some overload.
+    /// <c>JsTemplate</c>) covers the overload of
+    /// <paramref name="methodName"/> on the type named
+    /// <paramref name="declaringTypeFullName"/> that takes
+    /// <paramref name="argumentCount"/> arguments of
+    /// <paramref name="parameterTypes"/>, by the overload filter the
+    /// TypeScript BCL mapper applies (<see cref="DeclarativeMappingEntry.MatchesOverload"/>).
     /// </summary>
-    public bool HasJsMethodMapping(string declaringTypeFullName, string methodName) =>
+    public bool HasJsMappingFor(
+        string declaringTypeFullName,
+        string methodName,
+        int argumentCount,
+        IReadOnlyList<string>? parameterTypes
+    ) =>
         TryGetMethodsByFullName(declaringTypeFullName, methodName, out var entries)
-        && entries.Any(entry => entry.HasJsMapping);
+        && entries.Any(entry =>
+            entry.HasJsMapping && entry.MatchesOverload(argumentCount, parameterTypes)
+        );
 
     /// <summary>
     /// Looks up a declarative property mapping by the declaring type's

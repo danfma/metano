@@ -72,6 +72,18 @@ export class Supported {
     return linq(xs, firstOrDefault(undefined, 0)) + linq(xs, firstOrDefault((x: number) => x > 1, 0)) + linq(xs, lastOrDefault(undefined, 7)) + linq(xs, singleOrDefault((x: number) => x > 1, 7));
   }
 
+  firstOrDefaults(xs: number[]): number {
+    return linq(xs, firstOrDefault(undefined, 7)) + linq(xs, firstOrDefault((x: number) => x > 1, 7));
+  }
+
+  lastOrDefaults(xs: number[]): number {
+    return linq(xs, lastOrDefault(undefined, 0)) + linq(xs, lastOrDefault((x: number) => x > 1, 0)) + linq(xs, lastOrDefault((x: number) => x > 1, 7));
+  }
+
+  singleOrDefaults(xs: number[]): number {
+    return linq(xs, singleOrDefault(undefined, 0)) + linq(xs, singleOrDefault((x: number) => x > 1, 0)) + linq(xs, singleOrDefault(undefined, 7));
+  }
+
   quantifiers(xs: number[]): boolean {
     return linq(xs, any()) && linq(xs, any((x: number) => x > 1)) && linq(xs, all((x: number) => x > 0));
   }

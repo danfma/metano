@@ -257,25 +257,31 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   (.NET runs it before them), and an exception thrown by a filter propagates
   (.NET treats the filter as false).
 
-### ⚠ Unimplemented LINQ overloads report `MS0001` (#648)
+### ⚠ Unimplemented LINQ overloads report `MS0001` (legacy FR-015–FR-018, partial; #648)
 
 - A LINQ call the runtime operators do not implement used to transpile
   silently and run with a wrong result or throw; it now reports `MS0001` (a
   warning, so the build still succeeds unless warnings are treated as errors)
-  and emits an expression that throws `Unsupported expression: …` at run time.
-  The supported overloads are listed in
-  [docs/bcl-mappings.md](docs/bcl-mappings.md#supported-overloads); a
+  at the method name and emits an expression that throws
+  `Unsupported expression: …` at run time. The supported overloads are listed
+  in [docs/bcl-mappings.md](docs/bcl-mappings.md#supported-overloads); a
   supported call emits the same TypeScript as before.
 - Affected: another overload of a mapped operator
   (`Aggregate(seed, func, resultSelector)` dropped the result selector,
   `GroupBy(key, element)` ignored the element selector, `Aggregate(func)` and
   the tuple `Zip(second)` threw); a comparer argument, which every operator
-  ignored (`OrderBy(k, comparer)` sorted ascending); a queryable stage whose
-  tree landed in the wrong slot (`queryable.ToDictionary(k)`,
-  `queryable.Aggregate(…)`); and a `System.Linq` extension method nothing
-  lowers, which became a member call on the receiver (`xs.Join(…)` returned
-  the string of `Array.prototype.join`; `ToLookup`, `GroupJoin`,
-  `SequenceEqual`, `Cast`, `ElementAt`, `AsQueryable` outside a chain threw).
+  ignored (`OrderBy(k, comparer)` sorted ascending); a queryable
+  `ToDictionary(k)`, whose tree landed in the value-selector slot and threw;
+  and a `System.Linq` method nothing lowers, in the extension or the static
+  form, which became a member call (`xs.Join(…)` returned the string of
+  `Array.prototype.join`; `ToLookup`, `GroupJoin`, `SequenceEqual`, `Cast`,
+  `ElementAt`, `AsQueryable` outside a chain threw).
+- A comparer that is `null` only at run time (a parameter or variable) used
+  to give the default comparison by accident and now reports and throws; a
+  `null` or `default` literal comparer lowers as the comparer-less overload,
+  as before, now without a type error.
+- A queryable `Aggregate(seed, func)` no longer passes its expression tree to
+  `aggregate`, which reads none (it ran, with a `TS2554` type error).
 - Dart output and diagnostics are unchanged.
 
 ### Toolchain

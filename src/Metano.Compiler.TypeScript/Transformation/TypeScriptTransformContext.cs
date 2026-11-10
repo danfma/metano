@@ -548,9 +548,15 @@ public sealed class TypeScriptTransformContext(
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             KeepsArgumentEvaluationOrder = true,
             LowersByDeclarativeMapping = method =>
-                DeclarativeMappings.HasJsMethodMapping(
+                DeclarativeMappings.HasJsMappingFor(
                     method.ContainingType.GetStableFullName(),
-                    method.Name
+                    method.Name,
+                    method.Parameters.Length,
+                    [
+                        .. method.OriginalDefinition.Parameters.Select(parameter =>
+                            parameter.Type.GetStableFullName()
+                        ),
+                    ]
                 ),
         };
 
