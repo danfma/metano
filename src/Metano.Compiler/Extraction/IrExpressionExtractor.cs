@@ -3213,6 +3213,7 @@ public sealed partial class IrExpressionExtractor
         var isJsCallableInvoke =
             symbol is IMethodSymbol invokeMethod && SymbolHelper.IsJsCallableInvoke(invokeMethod);
         var tupleElement = SymbolHelper.GetPositionalTupleElement(symbol);
+
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
@@ -3235,7 +3236,11 @@ public sealed partial class IrExpressionExtractor
                 ? TypeReferenceTo(symbol.ContainingType)
                 : null,
             IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
-            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true }
+            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true },
+            CompanionOverload: DispatchedMethodCalls.CompanionRefOf(
+                symbol as IMethodSymbol,
+                _target
+            )
         );
     }
 

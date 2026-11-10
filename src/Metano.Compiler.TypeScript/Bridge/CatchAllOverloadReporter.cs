@@ -6,8 +6,8 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Reports <c>MS0063</c> for each catch-all overload of a constructor or
-/// method dispatcher (see <see cref="CatchAllOverloads"/>), at the overload's
+/// Reports <c>MS0063</c> for each catch-all overload of a constructor,
+/// method or function dispatcher (see <see cref="CatchAllOverloads"/>), at the overload's
 /// declaration, naming the overloads it shadows. The IR carries no symbol, so
 /// each overload is joined back to its Roslyn symbol by its parameter names
 /// and types.
@@ -64,6 +64,35 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
             Report(
                 OverloadSymbols.Of(symbols, catchAll.Overload.Parameters),
                 catchAll.Shadowed.Select(method => OverloadSymbols.Of(symbols, method.Parameters)),
+                type
+            );
+        }
+    }
+
+    /// <summary>
+    /// The overloads of a function dispatcher named <paramref name="name"/>
+    /// on <paramref name="type"/>: a module-function or extension group, or
+    /// a static group of a branded companion namespace.
+    /// </summary>
+    public void ReportFunctions(
+        INamedTypeSymbol type,
+        string name,
+        IReadOnlyList<FunctionOverloadShape> overloads
+    )
+    {
+        var symbols = type.GetMembers(name).OfType<IMethodSymbol>().ToList();
+
+        var found = CatchAllOverloads.Find(
+            overloads,
+            overload => overload.Parameters,
+            overload => overload.Scope
+        );
+
+        foreach (var catchAll in found)
+        {
+            Report(
+                OverloadSymbols.Of(symbols, catchAll.Overload.Parameters),
+                catchAll.Shadowed.Select(o => OverloadSymbols.Of(symbols, o.Parameters)),
                 type
             );
         }

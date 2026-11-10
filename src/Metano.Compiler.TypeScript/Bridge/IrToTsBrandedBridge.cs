@@ -39,11 +39,10 @@ public static class IrToTsBrandedBridge
         // else can't be intersected with `{ readonly __brand: … }` and stay
         // assignable. Bail to the regular class/record path in that case. The
         // extractor gates the `id.Value` → `id` collapse on the same rule.
-        if (!ir.Semantics.IsBranded || !ir.Semantics.BrandedUnderlyingType.IsBrandablePrimitive())
+        if (CompanionPrimitiveOf(ir) is not { } primitiveType)
             return false;
 
         var tsTypeName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
-        var primitiveType = IrToTsTypeMapper.Map(ir.Semantics.BrandedUnderlyingType);
 
         // export type UserId = string & { readonly __brand: "UserId" };
         var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
@@ -91,31 +90,127 @@ public static class IrToTsBrandedBridge
         // [Ignore] + [Emit] filtering already happened in the extractor; we
         // just emit each remaining static method (or overload group) as
         // exported functions in the companion namespace.
-        var staticMethods = (ir.Members ?? [])
-            .OfType<IrMethodDeclaration>()
-            .Where(method => method.IsStatic)
-            .ToList();
+        var takenNames = TakenNamesOf(ir, primitiveType);
 
-        var takenNames = functions
-            .Select(function => function.Name)
-            .Concat(staticMethods.Select(FunctionName))
-            .ToHashSet(StringComparer.Ordinal);
-
-        foreach (var method in staticMethods)
-            functions.AddRange(
-                ConvertStaticMethodGroup(method, ir.Semantics, takenNames, bclRegistry)
-            );
+        foreach (var group in StaticGroupsOf(ir))
+            functions.AddRange(ConvertStaticMethodGroup(group, takenNames, bclRegistry));
 
         sink.Add(new TsNamespaceDeclaration(tsTypeName, functions));
         return true;
     }
 
     /// <summary>
-    /// Lowers a static method and the overload siblings folded onto
-    /// <see cref="IrMethodDeclaration.Overloads"/>. A single surviving method
-    /// becomes one function; two or more go through the shared overload
-    /// dispatcher so no sibling is silently dropped. Identity unwrap
-    /// conversions are filtered first (see <see cref="IsIdentityUnwrap"/>).
+    /// The static overload groups of a branded companion that go through a
+    /// dispatcher: two or more surviving methods, in member order. Empty for
+    /// a type that does not lower to a companion namespace.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<IrMethodDeclaration>> DispatchedGroupsOf(
+        IrClassDeclaration ir
+    ) =>
+        CompanionPrimitiveOf(ir) is null
+            ? []
+            : StaticGroupsOf(ir).Where(group => group.Count > 1).ToList();
+
+    /// <summary>
+    /// The fast paths a companion namespace exports for generated call sites
+    /// (#569), by overload identity: every overload of a dispatched group
+    /// whose dispatcher is ambiguous (<see cref="IsDirectlyBound"/>), named
+    /// as <see cref="Convert"/> names it. A call C# binds to one of them
+    /// calls it directly; every other group keeps the dispatcher call (spec
+    /// 013 DECIDED-10).
+    /// </summary>
+    internal static IReadOnlyDictionary<TsMethodOverloadKey, string> DirectFastPathsOf(
+        IrClassDeclaration ir
+    )
+    {
+        var direct = new Dictionary<TsMethodOverloadKey, string>();
+
+        if (CompanionPrimitiveOf(ir) is not { } primitiveType)
+            return direct;
+
+        var takenNames = TakenNamesOf(ir, primitiveType);
+
+        foreach (var group in DispatchedGroupsOf(ir))
+        {
+            // Every group claims, so the names match the emission's order.
+            var claimed = IrToTsOverloadDispatcherBridge.ClaimNamespaceFastPaths(
+                group,
+                FunctionName(group[0]),
+                takenNames
+            );
+
+            if (!IsDirectlyBound(group))
+                continue;
+
+            foreach (var (overload, fastPath) in claimed)
+            {
+                var key = new TsMethodOverloadKey(overload.Name, overload.DeclarationOrdinal);
+
+                direct[key] = fastPath;
+            }
+        }
+
+        return direct;
+    }
+
+    /// <summary>
+    /// The TS primitive a branded wrapper lowers over; <c>null</c> when the
+    /// type is not branded or wraps something a brand cannot intersect, so it
+    /// has no companion namespace.
+    /// </summary>
+    private static TsType? CompanionPrimitiveOf(IrClassDeclaration ir) =>
+        ir.Semantics is { IsBranded: true, BrandedUnderlyingType: { } underlying }
+        && underlying.IsBrandablePrimitive()
+            ? IrToTsTypeMapper.Map(underlying)
+            : null;
+
+    /// <summary>
+    /// Whether generated call sites address the group's overloads directly:
+    /// the companion dispatcher has no per-overload entry a C# call could
+    /// use, so a group it cannot tell apart at runtime (the <c>MS0063</c>
+    /// groups) would run another overload than the one C# binds.
+    /// </summary>
+    private static bool IsDirectlyBound(IReadOnlyList<IrMethodDeclaration> group) =>
+        FunctionOverloadShape.AreAmbiguous(group.Select(FunctionOverloadShape.Of).ToList());
+
+    /// <summary>
+    /// Each static method with the overload siblings folded onto
+    /// <see cref="IrMethodDeclaration.Overloads"/>, in member order. Identity
+    /// unwrap conversions are filtered (see <see cref="IsIdentityUnwrap"/>),
+    /// which can leave a group empty.
+    /// </summary>
+    private static List<List<IrMethodDeclaration>> StaticGroupsOf(IrClassDeclaration ir) =>
+        StaticMethodsOf(ir)
+            .Select(primary =>
+                new[] { primary }
+                    .Concat(primary.Overloads ?? [])
+                    .Where(method => !IsIdentityUnwrap(method, ir.Semantics))
+                    .ToList()
+            )
+            .ToList();
+
+    private static IEnumerable<IrMethodDeclaration> StaticMethodsOf(IrClassDeclaration ir) =>
+        (ir.Members ?? []).OfType<IrMethodDeclaration>().Where(method => method.IsStatic);
+
+    /// <summary>
+    /// Every function name the companion namespace holds before a dispatcher
+    /// claims its fast paths: the synthesized members and the static methods.
+    /// </summary>
+    private static HashSet<string> TakenNamesOf(IrClassDeclaration ir, TsType primitiveType)
+    {
+        // toString is synthesized unless the wrapped primitive is a string.
+        IEnumerable<string> synthesized =
+            primitiveType is TsStringType ? [CreateMember] : [CreateMember, ToStringMember];
+
+        return synthesized
+            .Concat(StaticMethodsOf(ir).Select(FunctionName))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Lowers one static group. A single surviving method becomes one
+    /// function; two or more go through the shared overload dispatcher so no
+    /// sibling is silently dropped.
     /// </summary>
     /// <param name="takenNames">
     /// Every function name already claimed in the companion namespace; the
@@ -123,18 +218,11 @@ public static class IrToTsBrandedBridge
     /// and added to it.
     /// </param>
     private static IReadOnlyList<TsFunction> ConvertStaticMethodGroup(
-        IrMethodDeclaration primary,
-        IrTypeSemantics semantics,
+        IReadOnlyList<IrMethodDeclaration> group,
         ISet<string> takenNames,
         DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var group = new[] { primary }
-            .Concat(primary.Overloads ?? [])
-            .Where(method => !IsIdentityUnwrap(method, semantics))
-            .ToList();
-
-        return group.Count switch
+    ) =>
+        group.Count switch
         {
             0 => [],
             1 => [ConvertStaticMethod(group[0], bclRegistry)],
@@ -142,10 +230,10 @@ public static class IrToTsBrandedBridge
                 group,
                 FunctionName(group[0]),
                 takenNames,
-                bclRegistry
+                bclRegistry,
+                exportsFastPaths: IsDirectlyBound(group)
             ),
         };
-    }
 
     /// <summary>
     /// A conversion operator from the wrapper to its underlying primitive

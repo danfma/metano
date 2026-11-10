@@ -214,8 +214,8 @@ public static class IrToTsOverloadDispatcherBridge
     /// Builds the dispatcher + fast paths for a group of static overloads
     /// that lowers to free functions inside a TS namespace (the
     /// <c>[Branded]</c> companion) instead of class members. The fast paths
-    /// are non-exported namespace-local functions called by bare name; the
-    /// exported dispatcher carries the overload signatures.
+    /// are namespace-local functions called by bare name; the exported
+    /// dispatcher carries the overload signatures.
     /// </summary>
     /// <param name="overloads">
     /// The overload group, two or more methods — the caller lowers a single
@@ -234,11 +234,16 @@ public static class IrToTsOverloadDispatcherBridge
     /// <param name="bclRegistry">
     /// Optional BCL mapping registry threaded through to the body bridge.
     /// </param>
+    /// <param name="exportsFastPaths">
+    /// Whether the fast paths are exported, so a generated call site
+    /// addresses the overload C# bound instead of the dispatcher (#569).
+    /// </param>
     public static IReadOnlyList<TsFunction> BuildNamespaceFunctions(
         IReadOnlyList<IrMethodDeclaration> overloads,
         string functionName,
         ISet<string> takenNames,
-        DeclarativeMappingRegistry? bclRegistry = null
+        DeclarativeMappingRegistry? bclRegistry = null,
+        bool exportsFastPaths = false
     )
     {
         if (overloads.Count < 2)
@@ -248,16 +253,12 @@ public static class IrToTsOverloadDispatcherBridge
             );
 
         var plan = PlanOverloadGroup(overloads, typeOverrides: null, sort: true);
-
-        var fastPathNames = plan
-            .Sorted.Select(overload =>
-                ClaimName(OverloadFastPathName.Of(functionName, overload), takenNames)
-            )
-            .ToList();
+        var fastPathNames = ClaimFastPathNames(plan.Sorted, functionName, takenNames);
 
         var functions = plan
             .Sorted.Select(
-                (method, i) => BuildFastPathFunction(method, fastPathNames[i], bclRegistry)
+                (method, i) =>
+                    BuildFastPathFunction(method, fastPathNames[i], bclRegistry, exportsFastPaths)
             )
             .ToList();
 
@@ -281,6 +282,37 @@ public static class IrToTsOverloadDispatcherBridge
 
         return functions;
     }
+
+    /// <summary>
+    /// The fast-path name each overload of a namespace group claims, as
+    /// <see cref="BuildNamespaceFunctions"/> claims them: in dispatch order,
+    /// against <paramref name="takenNames"/>, which receives them. A call
+    /// site resolves an exported fast path through the same names.
+    /// </summary>
+    internal static IReadOnlyList<(
+        IrMethodDeclaration Overload,
+        string FastPath
+    )> ClaimNamespaceFastPaths(
+        IReadOnlyList<IrMethodDeclaration> overloads,
+        string functionName,
+        ISet<string> takenNames
+    )
+    {
+        var sorted = OverloadDispatchOrder.Sort(overloads, method => method.Parameters);
+
+        return sorted.Zip(ClaimFastPathNames(sorted, functionName, takenNames)).ToList();
+    }
+
+    private static List<string> ClaimFastPathNames(
+        IReadOnlyList<IrMethodDeclaration> sorted,
+        string functionName,
+        ISet<string> takenNames
+    ) =>
+        sorted
+            .Select(overload =>
+                ClaimName(OverloadFastPathName.Of(functionName, overload), takenNames)
+            )
+            .ToList();
 
     // ── Phases ───────────────────────────────────────────────────────────
 
@@ -482,12 +514,15 @@ public static class IrToTsOverloadDispatcherBridge
     /// <summary>
     /// A namespace fast path is always emitted — the dispatcher branches to it
     /// by bare name — so a body-less overload lowers to the same
-    /// not-implemented stub a single companion function gets.
+    /// not-implemented stub a single companion function gets. It stays
+    /// namespace-local, the exported dispatcher being the public entry point,
+    /// unless generated call sites address it (<paramref name="exported"/>).
     /// </summary>
     private static TsFunction BuildFastPathFunction(
         IrMethodDeclaration method,
         string fastPathName,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        bool exported
     )
     {
         var context = IrToTsBridgeContext.For(bclRegistry);
@@ -497,8 +532,7 @@ public static class IrToTsOverloadDispatcherBridge
             FastPathParameters(method, context),
             IrToTsTypeMapper.Map(method.ReturnType),
             IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
-            // Namespace-local: the exported dispatcher is the public entry point.
-            Exported: false,
+            Exported: exported,
             Async: method.Semantics.IsAsync,
             TypeParameters: MapTypeParameters(method.TypeParameters)
         );

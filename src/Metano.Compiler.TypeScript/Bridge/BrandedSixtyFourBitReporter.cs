@@ -11,7 +11,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// branded overload the type declares in the group (else its first declared
 /// one), naming all of them. A dispatcher that overrides an inherited one is
 /// judged over the inherited overloads plus the ones the type adds, since its
-/// own arms run before the base's.
+/// own arms run before the base's. Function dispatchers (module functions,
+/// extension methods, a branded companion's static methods) are reported the
+/// same way through <see cref="ReportFunctions"/>.
 /// </summary>
 internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> reportDiagnostic)
 {
@@ -52,6 +54,30 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
                 group.Select(method =>
                     (OverloadSymbols.Of(symbols, method.Parameters), added.Contains(method))
                 ),
+                type
+            );
+        }
+    }
+
+    /// <summary>
+    /// The overloads of a function dispatcher named <paramref name="name"/>
+    /// on <paramref name="type"/>: a module-function or extension group, or
+    /// a static group of a branded companion namespace. Such a dispatcher
+    /// inherits nothing, so every overload is one the type declares.
+    /// </summary>
+    public void ReportFunctions(
+        INamedTypeSymbol type,
+        string name,
+        IReadOnlyList<FunctionOverloadShape> overloads
+    )
+    {
+        var symbols = type.GetMembers(name).OfType<IMethodSymbol>().ToList();
+        var groups = BrandedSixtyFourBitOverloads.Find(overloads, overload => overload.Parameters);
+
+        foreach (var group in groups)
+        {
+            Report(
+                group.Select(overload => (OverloadSymbols.Of(symbols, overload.Parameters), true)),
                 type
             );
         }

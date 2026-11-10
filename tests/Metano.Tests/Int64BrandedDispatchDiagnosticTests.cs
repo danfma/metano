@@ -35,7 +35,7 @@ public class Int64BrandedDispatchDiagnosticTests
 
         """;
 
-    private static string MessageFor(string members) =>
+    internal static string MessageFor(string members) =>
         $"Overloads {members} share one runtime test: a branded 64-bit type ([Branded] or "
         + "[InlineWrapper] over long, ulong, nint, nuint or BigInteger) lowers to a bigint, so "
         + "its dispatcher arm accepts every value the long, ulong and BigInteger arms accept. "
