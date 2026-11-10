@@ -10,24 +10,23 @@ namespace Metano.Tests;
 /// <c>[IndexerName]</c> swaps the helper base name (e.g.,
 /// <c>slot$get</c> / <c>slot$set</c>).
 /// <para>
-/// All tests are currently <see cref="SkipAttribute">skipped</see> because
-/// the Roslyn shipped with .NET 10 (Microsoft.CodeAnalysis.CSharp 5.3.0)
-/// raises <c>CS9282 "this member is not allowed in an extension block"</c>
-/// when an indexer appears inside an <c>extension(R) { … }</c> block, even
-/// under <c>LangVersion="preview"</c>. The Stage 4 lowering code paths
+/// All tests are currently <see cref="SkipAttribute">skipped</see>.
+/// Roslyn 5.3.0 rejected an indexer inside an <c>extension(R) { … }</c>
+/// block (<c>CS9282</c>); Roslyn 5.9.0 accepts it, so the sources compile,
+/// but the transpiler emits no file for the type that uses the indexer and
+/// every test here fails on the missing output (#523). The Stage 4 lowering
+/// code paths
 /// (<see cref="Metano.Compiler.Extraction.IrModuleFunctionExtractor"/>,
 /// <see cref="Metano.Compiler.Extraction.IrExpressionExtractor"/>,
 /// <see cref="Metano.Compiler.TypeScript.Transformation.TypeScriptTransformContext"/>)
-/// are wired so the rewrites kick in as soon as a future Roslyn release
-/// admits the syntax; removing the skips here will then exercise them
-/// end-to-end without further code changes.
+/// are not reached yet; remove the skips once that lowering emits.
 /// </para>
 /// </summary>
 public class ExtensionIndexerTests
 {
     private const string PendingReason =
-        "Roslyn 5.3.0 (.NET 10) rejects indexers in extension blocks (CS9282); "
-        + "remove this skip once a Roslyn release admits the syntax.";
+        "The lowering of an indexer in an extension block emits no output yet (#523); "
+        + "remove this skip once it does.";
 
     [Test]
     [Skip(PendingReason)]
