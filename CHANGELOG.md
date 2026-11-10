@@ -71,9 +71,16 @@ the migration list.
   return `default(T)` on a miss for a non-nullable value element (`0`, `0n`,
   `false`, `new Decimal("0")`, the enum's zero, `UUID.empty`), and the
   `defaultValue` overloads pass their argument: `longs.FirstOrDefault() + 1`
-  is `1n` (#601). 2.x returned `null`. A struct element without a literal
-  default (a user struct, a tuple, a `struct` type parameter) still gets
-  `null`, now with an `MS0001` warning.
+  is `1n` (#601). 2.x returned `null`. An element whose default no literal
+  spells (a user struct, a tuple, a `struct` type parameter, a
+  `[StringEnum]` without a zero member) still gets `null`, now with an
+  `MS0001` warning (#621); so does, without a warning, a type parameter
+  that is not constrained to `struct` (unconstrained, `notnull`,
+  `IComparable<T>`, `Enum` alone). `ElementAt` / `ElementAtOrDefault` /
+  `DefaultIfEmpty` have no lowering yet (#617), `Min` / `Max` / `MinBy` over
+  an empty or nullable `number` sequence still differ from .NET (#618), and
+  the static call form `Enumerable.FirstOrDefault(xs)` is not lowered
+  (#619).
 - Known gaps a 2.x project can meet after the upgrade: tuple and spread
   elements that convert to `decimal` are not converted, and the Dart target
   leaves the ones that convert to `double` or `BigInteger` (#606);

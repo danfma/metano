@@ -46,9 +46,7 @@ public sealed partial class IntrinsicBclLoweringTable
 
         var objectGetHashCode = RootDefinition(symbol);
 
-        var receiver = receiverSyntax is null
-            ? new IrThisExpression()
-            : ctx.Recurse(receiverSyntax);
+        var receiver = ReceiverOf(ctx);
 
         return new IrCallExpression(
             new IrMemberAccess(receiver, objectGetHashCode.Name),

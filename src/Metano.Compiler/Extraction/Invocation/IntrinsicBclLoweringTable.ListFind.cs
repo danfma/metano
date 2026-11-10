@@ -30,37 +30,24 @@ public sealed partial class IntrinsicBclLoweringTable
 
     private IrExpression? BuildListFindCall(InvocationRewriteContext ctx)
     {
-        // Dart has no mapping for the call, so it keeps its source shape there.
+        // TODO(#549): Dart has no mapping for the call, so it keeps its source shape there.
         if (_helpers.Target is TargetLanguage.Dart)
             return null;
 
-        var symbol = ctx.Symbol!;
-        var receiverSyntax = QualifiedMemberSyntax.From(ctx.Invocation.Expression)?.Receiver;
+        var find = ctx.Symbol!;
+        var elementType = find.ContainingType.TypeArguments[0];
+        var missValue = ElementMissValue.Of(elementType, _helpers.BuildOrigin, _helpers.MapTypeRef);
 
-        var receiver = receiverSyntax is null
-            ? new IrThisExpression()
-            : ctx.Recurse(receiverSyntax);
+        if (missValue is null)
+            ElementMissValue.ReportUnrepresentable(ctx.Invocation, find, elementType);
 
         return new IrCallExpression(
-            new IrMemberAccess(receiver, symbol.Name),
+            new IrMemberAccess(ReceiverOf(ctx), find.Name),
             [
                 .. ArgumentValues(ctx, BoundInvocation(ctx)).Select(a => new IrArgument(a)),
-                new(MissValue(ctx, symbol)),
+                new(missValue ?? new IrLiteral(null, IrLiteralKind.Null)),
             ],
-            Origin: _helpers.BuildOrigin(symbol)
+            Origin: _helpers.BuildOrigin(find)
         );
-    }
-
-    private IrExpression MissValue(InvocationRewriteContext ctx, IMethodSymbol find)
-    {
-        var elementType = find.ContainingType.TypeArguments[0];
-        var elementDefault = DefaultValueLiterals.For(elementType, _helpers.BuildOrigin);
-
-        if (elementDefault is not IrLiteral { Kind: IrLiteralKind.Default })
-            return elementDefault;
-
-        UnrepresentableMissValue.Report(ctx.Invocation, find, elementType);
-
-        return new IrLiteral(null, IrLiteralKind.Null);
     }
 }

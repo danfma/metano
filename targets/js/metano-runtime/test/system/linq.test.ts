@@ -31,7 +31,7 @@ import {
   zip,
   getStages,
   LINQ_STAGES,
-} from "../../src/system/linq/index.ts";
+} from "#/system/linq";
 
 describe("linq operators", () => {
   test("where + select + toArray", () => {
@@ -148,11 +148,12 @@ describe("linq operators", () => {
 
   test("firstOrDefault / lastOrDefault / singleOrDefault return the given default on a miss", () => {
     const none: number[] = [];
-    const first: number = linq(none, firstOrDefault(undefined, 0));
+    const zero: number = linq(none, firstOrDefault(undefined, 0));
     const wide: bigint = linq([] as bigint[], firstOrDefault(undefined, 0n));
 
-    expect(first).toBe(0);
+    expect(zero).toBe(0);
     expect(wide + 3n).toBe(3n);
+    expect(linq([] as boolean[], firstOrDefault(undefined, false))).toBe(false);
     expect(linq([1, 2, 3], firstOrDefault((x) => x > 10, 42))).toBe(42);
     expect(linq([1, 2, 3], firstOrDefault((x) => x > 1, 42))).toBe(2);
     expect(linq(none, lastOrDefault(undefined, 0))).toBe(0);
@@ -164,12 +165,24 @@ describe("linq operators", () => {
     expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow();
   });
 
+  test("a falsy element is returned as the match, not replaced by the default", () => {
+    expect(linq([0, 1], firstOrDefault((x) => x === 0, 42))).toBe(0);
+    expect(linq([1, 0], lastOrDefault((x) => x === 0, 42))).toBe(0);
+    expect(linq([1, 0], singleOrDefault((x) => x === 0, 42))).toBe(0);
+    expect(linq([false, true], firstOrDefault((x) => !x, true))).toBe(false);
+    expect(linq([true, false], lastOrDefault((x) => !x, true))).toBe(false);
+    expect(linq([0n, 1n], singleOrDefault((x) => x === 0n, 42n))).toBe(0n);
+  });
+
   test("an OrDefault terminal without a default returns null, and a null element is a match", () => {
     const maybes: (number | null)[] = [null, 4];
+    const nulls: (number | null)[] = [4, null];
 
     expect(linq([] as number[], lastOrDefault<number>())).toBeNull();
     expect(linq([] as number[], singleOrDefault<number>())).toBeNull();
     expect(linq(maybes, firstOrDefault(undefined, 42))).toBeNull();
+    expect(linq(nulls, lastOrDefault(undefined, 42))).toBeNull();
+    expect(linq(nulls, singleOrDefault((x) => x === null, 42))).toBeNull();
     expect(linq([] as (number | null)[], firstOrDefault(undefined, 42))).toBe(42);
   });
 

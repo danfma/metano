@@ -37,6 +37,12 @@ public sealed partial class IntrinsicBclLoweringTable
     /// The bound operation of a call site whose method symbol resolved,
     /// which Roslyn always produces for the BCL methods seeded here.
     /// </summary>
+    /// <summary>The receiver of an instance call; an implicit one is <c>this</c>.</summary>
+    private static IrExpression ReceiverOf(InvocationRewriteContext ctx) =>
+        QualifiedMemberSyntax.From(ctx.Invocation.Expression)?.Receiver is { } receiver
+            ? ctx.Recurse(receiver)
+            : new IrThisExpression();
+
     private static IInvocationOperation BoundInvocation(InvocationRewriteContext ctx) =>
         ctx.SemanticModel.GetOperation(ctx.Invocation) as IInvocationOperation
         ?? throw new InvalidOperationException(

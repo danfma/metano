@@ -17,12 +17,16 @@ public class LinqOrDefaultValueTests
         using System;
         using System.Collections.Generic;
         using System.Linq;
+        using System.Numerics;
 
         [Transpile]
         public enum Color { None, Red }
 
         [Transpile]
         public enum Level { Low = 1, High = 2 }
+
+        [Transpile, StringEnum]
+        public enum Tone { Soft = 1, Loud = 2 }
 
         [Transpile]
         public readonly record struct Point(int X, int Y);
@@ -52,6 +56,12 @@ public class LinqOrDefaultValueTests
 
                     public int FirstMatchOr(List<int> xs) => xs.FirstOrDefault(x => x > 100, 42);
 
+                    public int FirstMatchOrDefault(List<int> xs) => xs.FirstOrDefault(x => x > 100, default);
+
+                    public bool FirstOrNamedDefault(List<bool> xs) => xs.FirstOrDefault(defaultValue: default);
+
+                    public int FalsyMatch(List<int> xs) => xs.FirstOrDefault(x => x == 0, 42);
+
                     public int Last(int[] xs) => xs.LastOrDefault();
 
                     public int LastMatchOr(IEnumerable<int> xs) => xs.LastOrDefault(x => x > 100, 42);
@@ -67,6 +77,12 @@ public class LinqOrDefaultValueTests
                     public long Wide(List<long> xs) => xs.FirstOrDefault(x => x > 100) + xs.Last();
 
                     public ulong Unsigned(List<ulong> xs) => xs.FirstOrDefault() + 3UL;
+
+                    public nint Native(List<nint> xs) => xs.FirstOrDefault();
+
+                    public nuint NativeUnsigned(List<nuint> xs) => xs.LastOrDefault();
+
+                    public BigInteger Big(List<BigInteger> xs) => xs.SingleOrDefault();
 
                     public bool Flag(List<bool> xs) => xs.FirstOrDefault();
 
@@ -104,6 +120,10 @@ public class LinqOrDefaultValueTests
 
                     public long FoundWide(List<long> xs) => xs.Find(x => x > 100) + 3;
 
+                    public Color FoundZero(List<Color> xs) => xs.Find(c => c != Color.Red);
+
+                    public Level FoundNoZero(List<Level> xs) => xs.Find(l => l != Level.Low);
+
                     public Person? FoundWho(List<Person> xs) => xs.Find(p => p.Name == "ana");
 
                     public int? FoundIn(List<int>? xs) => xs?.Find(x => x > 100);
@@ -119,13 +139,14 @@ public class LinqOrDefaultValueTests
     }
 
     /// <summary>
-    /// A struct without a literal default (a user struct, a tuple, a
-    /// <c>struct</c>-constrained type parameter) keeps the <c>null</c> miss,
-    /// and each call reports <c>MS0001</c> as a warning. The
+    /// An element whose <c>default(T)</c> no literal spells (a user struct, a
+    /// tuple, a <c>struct</c>-constrained type parameter, a
+    /// <c>[StringEnum]</c> without a zero member) keeps the <c>null</c> miss,
+    /// and each call reports <c>MS0001</c> as a warning, on the call. The
     /// <c>defaultValue</c> overloads are the way to choose the value.
     /// </summary>
     [Test]
-    public async Task StructElementsWithoutALiteralDefault_KeepNullAndWarn()
+    public async Task ElementsWithoutALiteralDefault_KeepNullAndWarn()
     {
         var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Types
@@ -136,27 +157,44 @@ public class LinqOrDefaultValueTests
                 {
                     public Point? At(List<Point> xs) => xs.FirstOrDefault();
 
+                    public Point? AtDefault(List<Point> xs) => xs.FirstOrDefault(p => p.X > 1, default);
+
                     public (int A, int B)? Pair(List<(int A, int B)> xs) => xs.LastOrDefault(x => x.A > 1);
 
                     public T? Slot<T>(List<T> xs) where T : struct => xs.SingleOrDefault();
 
+                    public Tone? Voice(List<Tone> xs) => xs.FirstOrDefault();
+
                     public Point? Found(List<Point> xs) => xs.Find(p => p.X > 1);
+
+                    public Tone? FoundVoice(List<Tone> xs) => xs.Find(t => t != Tone.Loud);
                 }
                 """
         );
 
         var reported = diagnostics
             .Where(d => d.Severity != MetanoDiagnosticSeverity.Info)
-            .Select(d => $"{d.Severity} {d.Code}: {d.Message}")
+            .Select(d => $"{d.Severity} {d.Code} at '{CallText(d)}': {d.Message}")
             .ToList();
 
         await Assert
             .That(reported)
             .IsEquivalentTo([
-                Unrepresentable("Point", "FirstOrDefault"),
-                Unrepresentable("(int A, int B)", "LastOrDefault"),
-                Unrepresentable("T", "SingleOrDefault"),
-                Unrepresentable("Point", "Find"),
+                Unrepresentable("xs.FirstOrDefault()", "Point", "FirstOrDefault"),
+                Unrepresentable(
+                    "xs.FirstOrDefault(p => p.X > 1, default)",
+                    "Point",
+                    "FirstOrDefault"
+                ),
+                Unrepresentable(
+                    "xs.LastOrDefault(x => x.A > 1)",
+                    "(int A, int B)",
+                    "LastOrDefault"
+                ),
+                Unrepresentable("xs.SingleOrDefault()", "T", "SingleOrDefault"),
+                Unrepresentable("xs.FirstOrDefault()", "Tone", "FirstOrDefault"),
+                Unrepresentable("xs.Find(p => p.X > 1)", "Point", "Find"),
+                Unrepresentable("xs.Find(t => t != Tone.Loud)", "Tone", "Find"),
             ]);
 
         await TranspileHelper.AssertGolden(
@@ -165,8 +203,54 @@ public class LinqOrDefaultValueTests
         );
     }
 
-    private static string Unrepresentable(string type, string lookup) =>
-        $"Warning {DiagnosticCodes.UnsupportedFeature}: 'default({type})' has no literal in the "
-        + $"target: when no element qualifies, '{lookup}' returns null instead of the zeroed "
-        + "struct.";
+    /// <summary>
+    /// The zero member of an enum another package declares is imported from
+    /// that package as a value.
+    /// </summary>
+    [Test]
+    public async Task CrossPackageEnumElements_ImportTheZeroMember()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/domain")]
+
+            namespace Acme.Domain;
+
+            public enum Stage { Draft, Final }
+            """,
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+            using Acme.Domain;
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("app")]
+
+            namespace App;
+
+            public class Pipeline
+            {
+                public Stage Current(List<Stage> xs) => xs.LastOrDefault();
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "linq-or-default-cross-package.ts",
+            result["app/pipeline.ts"]
+        );
+    }
+
+    private static string CallText(MetanoDiagnostic diagnostic) =>
+        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+
+    private static string Unrepresentable(string call, string type, string lookup) =>
+        $"Warning {DiagnosticCodes.UnsupportedFeature} at '{call}': 'default({type})' has no "
+        + $"literal in the target: when no element qualifies, '{lookup}' returns null instead of "
+        + "the default value.";
 }

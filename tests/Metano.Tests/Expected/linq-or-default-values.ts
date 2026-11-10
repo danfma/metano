@@ -2,7 +2,7 @@ import { UUID } from "metano-runtime";
 import { firstOrDefault, last, lastOrDefault, linq, select, singleOrDefault, where } from "metano-runtime/system/linq";
 import { Decimal } from "decimal.js";
 import { Color } from "./color";
-import type { Level } from "./level";
+import { Level } from "./level";
 import type { Person } from "./person";
 import { Point } from "./point";
 
@@ -23,6 +23,18 @@ export class Lookups {
 
   firstMatchOr(xs: number[]): number {
     return linq(xs, firstOrDefault((x: number) => x > 100, 42));
+  }
+
+  firstMatchOrDefault(xs: number[]): number {
+    return linq(xs, firstOrDefault((x: number) => x > 100, 0));
+  }
+
+  firstOrNamedDefault(xs: boolean[]): boolean {
+    return linq(xs, firstOrDefault(undefined, false));
+  }
+
+  falsyMatch(xs: number[]): number {
+    return linq(xs, firstOrDefault((x: number) => x === 0, 42));
   }
 
   last(xs: number[]): number {
@@ -55,6 +67,18 @@ export class Lookups {
 
   unsigned(xs: bigint[]): bigint {
     return BigInt.asUintN(64, linq(xs, firstOrDefault(undefined, 0n)) + 3n);
+  }
+
+  native(xs: bigint[]): bigint {
+    return linq(xs, firstOrDefault(undefined, 0n));
+  }
+
+  nativeUnsigned(xs: bigint[]): bigint {
+    return linq(xs, lastOrDefault(undefined, 0n));
+  }
+
+  big(xs: bigint[]): bigint {
+    return linq(xs, singleOrDefault(undefined, 0n));
   }
 
   flag(xs: boolean[]): boolean {
@@ -161,6 +185,14 @@ export class Lookups {
 
   foundWide(xs: bigint[]): bigint {
     return BigInt.asIntN(64, (xs.find((x: bigint) => x > 100n) ?? 0n) + 3n);
+  }
+
+  foundZero(xs: Color[]): Color {
+    return (xs.find((c: Color) => c !== Color.Red) ?? Color.None);
+  }
+
+  foundNoZero(xs: Level[]): Level {
+    return (xs.find((l: Level) => l !== Level.Low) ?? 0 as Level);
   }
 
   foundWho(xs: Person[]): Person | null {

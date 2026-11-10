@@ -19,7 +19,8 @@ internal static class DefaultValueLiterals
     /// <summary>
     /// <c>default(T)</c> as IR: <c>null</c> for reference, nullable and
     /// unconstrained type-parameter types; <c>false</c>; the zero of each
-    /// numeric primitive; <c>'\0'</c>; <c>Guid.Empty</c>; and the zero-valued
+    /// numeric primitive, <c>nint</c>, <c>nuint</c> and <c>BigInteger</c>
+    /// included; <c>'\0'</c>; <c>Guid.Empty</c>; and the zero-valued
     /// member of an enum (a bare <c>0</c> when the enum declares none). Any
     /// other struct keeps the opaque <see cref="IrLiteralKind.Default"/>
     /// marker, since no target-agnostic value exists for it.
@@ -44,14 +45,21 @@ internal static class DefaultValueLiterals
                 0.0,
                 IrLiteralKind.Float64
             ),
-            SpecialType.System_Int64 => new IrLiteral(0L, IrLiteralKind.Int64),
-            SpecialType.System_UInt64 => new IrLiteral(0UL, IrLiteralKind.UInt64),
+            SpecialType.System_Int64 or SpecialType.System_IntPtr => new IrLiteral(
+                0L,
+                IrLiteralKind.Int64
+            ),
+            SpecialType.System_UInt64 or SpecialType.System_UIntPtr => new IrLiteral(
+                0UL,
+                IrLiteralKind.UInt64
+            ),
             SpecialType.System_SByte
             or SpecialType.System_Byte
             or SpecialType.System_Int16
             or SpecialType.System_UInt16
             or SpecialType.System_Int32
             or SpecialType.System_UInt32 => new IrLiteral(0, IrLiteralKind.Int32),
+            _ when IsBigInteger(type) => new IrLiteral("0", IrLiteralKind.BigInteger),
             _ => new IrLiteral(null, IrLiteralKind.Default),
         };
     }
@@ -80,6 +88,9 @@ internal static class DefaultValueLiterals
         || type is ITypeParameterSymbol { IsValueType: false }
         || type
             is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
+    private static bool IsBigInteger(ITypeSymbol type) =>
+        type.ToDisplayString() == "System.Numerics.BigInteger";
 
     private static bool IsGuid(ITypeSymbol type) =>
         type is INamedTypeSymbol { Name: nameof(Guid), ContainingNamespace.Name: "System" }

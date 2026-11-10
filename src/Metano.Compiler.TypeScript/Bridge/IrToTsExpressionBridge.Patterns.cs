@@ -290,6 +290,7 @@ public static partial class IrToTsExpressionBridge
     /// value to <c>any[]</c>, never to the tuple, so unlike a class (narrowed
     /// by <c>instanceof</c>) or a guarded shape (narrowed by its type
     /// predicate) the cast stays a TS assertion for the result to type-check.
+    /// So does a cast the compiler synthesized as an assertion.
     /// </summary>
     private static TsExpression MapCast(IrCastExpression cast, IrToTsBridgeContext context)
     {
@@ -298,7 +299,7 @@ public static partial class IrToTsExpressionBridge
             ? nullable.Inner
             : cast.TargetType;
 
-        return IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple
+        return cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple
             ? new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType))
             : value;
     }
