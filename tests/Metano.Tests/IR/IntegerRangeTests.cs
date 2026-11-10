@@ -63,12 +63,11 @@ public class IntegerRangeTests
         var bytes = IntegerRange.Of(IrNumericKind.Byte).GetValueOrDefault();
         var unsignedShorts = IntegerRange.Of(IrNumericKind.UInt16).GetValueOrDefault();
         var mask = IntegerRange.Exactly(0x100);
+        var zero = IntegerRange.Exactly(0);
 
         await Assert.That(unsignedShorts.BitwiseAnd(bytes).Max).IsEqualTo((Int128)255);
         await Assert.That(bytes.BitwiseUnion(mask).Max).IsEqualTo((Int128)511);
-        await Assert
-            .That(IntegerRange.Exactly(0).BitwiseUnion(IntegerRange.Exactly(0)).Max)
-            .IsEqualTo(Int128.Zero);
+        await Assert.That(zero.BitwiseUnion(zero).Max).IsEqualTo(Int128.Zero);
     }
 
     /// <summary>
