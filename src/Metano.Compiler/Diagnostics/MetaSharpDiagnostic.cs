@@ -417,7 +417,8 @@ public static class DiagnosticCodes
     /// (FR-049, #432).</summary>
     public const string JsonContractConstructorNotPublic = "MS0062";
 
-    /// <summary>MS0063 — a TypeScript overload dispatcher (constructor or method) holds
+    /// <summary>MS0063 — a TypeScript overload dispatcher (constructor, method, or a
+    /// function group of a module, an extension container or a branded companion, #569) holds
     /// an overload none of whose parameters has a runtime check (each is a type
     /// parameter without a checkable constraint) ahead of a concrete overload whose
     /// argument-count range overlaps it, so calls C# binds to the concrete overload can

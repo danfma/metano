@@ -562,6 +562,16 @@ public static partial class IrToTsExpressionBridge
             []
         );
 
+    private static string? ClaimedFastPathOf(IrMemberAccess ma)
+    {
+        if (ma.Overload is { } groupOverload)
+            return TsOverloadCallSites.MethodFastPathOf(groupOverload.Target);
+
+        return ma.Origin?.CompanionOverload is { } companionOverload
+            ? TsOverloadCallSites.CompanionFastPathOf(companionOverload)
+            : null;
+    }
+
     private static TsExpression MapMemberAccess(IrMemberAccess ma, IrToTsBridgeContext context)
     {
         if (IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma) is { } keptBaseMessage)
@@ -571,12 +581,11 @@ public static partial class IrToTsExpressionBridge
         // to the claimed fast path, keeping the receiver binding
         // (`b.addX.bind(b)`, spec 013 FR-018); a static one renames through
         // the same variable the containerless flatten reads, so a module
-        // function stays bare.
-        var memberName =
-            ma.Overload is { } groupOverload
-            && TsOverloadCallSites.MethodFastPathOf(groupOverload.Target) is { } groupFastPath
-                ? groupFastPath
-                : AccessedMemberName(ma);
+        // function stays bare. A call or method group C# binds to a static
+        // overload of a branded companion names the overload's exported
+        // function when the companion's dispatcher cannot tell the group
+        // apart (#569); any other companion call keeps the dispatcher.
+        var memberName = ClaimedFastPathOf(ma) ?? AccessedMemberName(ma);
 
         // `[Branded]` value read: the companion lowers the wrapper to
         // `T = primitive & { __brand }`, so the receiver already IS the

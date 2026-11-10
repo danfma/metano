@@ -61,6 +61,34 @@ internal static class DispatchedMethodCalls
     }
 
     /// <summary>
+    /// The overload a call into a branded companion binds (#569): a static
+    /// method of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type, in a
+    /// dispatched group, declared with syntax. <see cref="RefOf"/> answers
+    /// <c>null</c> for it (DECIDED-10: the call keeps the companion's
+    /// dispatcher); this identity lets a target address the bound overload
+    /// where its dispatcher cannot tell the group apart. <c>null</c> for any
+    /// other method.
+    /// </summary>
+    public static IrOverloadRef? CompanionRefOf(IMethodSymbol? method, TargetLanguage? target)
+    {
+        if (method?.OriginalDefinition is not { IsStatic: true } definition)
+            return null;
+
+        var isCompanionMethod =
+            definition.ContainingType is { } type
+            && SymbolHelper.HasBranded(type)
+            && HasSourceIr(type)
+            && !IsExcludedMember(definition);
+
+        if (!isCompanionMethod)
+            return null;
+
+        return MethodOverloadGroups.GroupOf(definition, target) is { IsDispatched: true }
+            ? MethodOverloadGroups.RefOf(definition, target)
+            : null;
+    }
+
+    /// <summary>
     /// The dispatched overload of an exported module function (spec 013
     /// FR-032): the ref an emission records plus the fast-path name (<see
     /// cref="IrOverloadName"/>) and C# signature its group gave it, the

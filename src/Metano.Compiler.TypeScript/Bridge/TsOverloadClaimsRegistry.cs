@@ -52,6 +52,11 @@ public sealed class TsOverloadClaimsRegistry(
         Lazy<TsInterfaceFastPaths>
     > _interfaceClaims = new(SymbolEqualityComparer.Default);
 
+    private readonly ConcurrentDictionary<
+        INamedTypeSymbol,
+        Lazy<IReadOnlyDictionary<TsMethodOverloadKey, string>>
+    > _companionFastPaths = new(SymbolEqualityComparer.Default);
+
     /// <summary>
     /// Whether a class needs a claim pass: it declares an overload group, or
     /// it extends an emitted class whose static side it must claim against.
@@ -81,6 +86,32 @@ public sealed class TsOverloadClaimsRegistry(
             ? InterfaceFastPathsOf(type).NameAt(root.MemberName, root.Ordinal)
             : For(type).FastPathNameAt(root.MemberName, root.Ordinal);
     }
+
+    /// <summary>
+    /// The exported fast path of a branded companion's static overload
+    /// (<see cref="IrMemberOrigin.CompanionOverload"/>), which a generated
+    /// call addresses instead of the dispatcher (#569); <c>null</c> when the
+    /// overload's group keeps the dispatcher call
+    /// (<see cref="IrToTsBrandedBridge.DirectFastPathsOf"/>) or this
+    /// compilation cannot see the declaring type.
+    /// </summary>
+    internal string? CompanionFastPathOf(IrOverloadRef overload) =>
+        IrTypeKeys.Find(overload.DeclaringType, _context.Compilation) is { } type
+            ? CompanionFastPathsOf(type)
+                .GetValueOrDefault(new TsMethodOverloadKey(overload.MemberName, overload.Ordinal))
+            : null;
+
+    private IReadOnlyDictionary<TsMethodOverloadKey, string> CompanionFastPathsOf(
+        INamedTypeSymbol type
+    ) =>
+        _companionFastPaths
+            .GetOrAdd(
+                type.OriginalDefinition,
+                declaration => new Lazy<IReadOnlyDictionary<TsMethodOverloadKey, string>>(() =>
+                    IrToTsBrandedBridge.DirectFastPathsOf(ShapeOf(declaration))
+                )
+            )
+            .Value;
 
     /// <summary>The fast-path names of an interface, computed on first use.</summary>
     internal TsInterfaceFastPaths InterfaceFastPathsOf(INamedTypeSymbol type) =>

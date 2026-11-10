@@ -50,4 +50,11 @@ internal static class TsOverloadCallSites
     /// </summary>
     internal static string? MethodFastPathOf(IrOverloadRef overload) =>
         RequiredClaims.RootFastPathOf(overload);
+
+    /// <summary>
+    /// The exported fast path of a branded companion's static overload;
+    /// <c>null</c> when a call to it keeps the companion's dispatcher.
+    /// </summary>
+    internal static string? CompanionFastPathOf(IrOverloadRef overload) =>
+        RequiredClaims.CompanionFastPathOf(overload);
 }

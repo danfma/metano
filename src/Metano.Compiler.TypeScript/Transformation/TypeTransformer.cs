@@ -1883,7 +1883,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             Context.DeclarativeMappings
         );
 
-        EmitModuleFunctions(functions, sink, Context.DeclarativeMappings);
+        EmitModuleFunctions(type, functions, sink, Context.DeclarativeMappings);
 
         // Entry point body flows as top-level module statements after the
         // ordinary functions, so it can reference them.
@@ -2054,6 +2054,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// claimed fast paths could not branch.
     /// </summary>
     private void EmitModuleFunctions(
+        INamedTypeSymbol type,
         IReadOnlyList<IrModuleFunction> functions,
         List<TsTopLevel> sink,
         DeclarativeMappingRegistry? bclRegistry
@@ -2100,13 +2101,46 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         IrToTsModuleBridge.Convert(singles, sink, bclRegistry);
 
-        foreach (var group in groups.Values)
+        foreach (var (key, group) in groups)
+        {
+            ReportAmbiguousFunctionDispatch(
+                type,
+                key.Member,
+                group.Select(FunctionOverloadShape.Of).ToList()
+            );
+
             IrToTsModuleBridge.ConvertDispatchedGroup(
                 group,
                 Context.ModuleFunctionClaims,
                 sink,
                 bclRegistry
             );
+        }
+    }
+
+    /// <summary>
+    /// Reports <c>MS0063</c> for a function dispatcher the two detectors find
+    /// ambiguous: a module-function or extension group, or a static group of
+    /// a branded companion namespace (issue #569). The class emitter reports
+    /// its own constructor and method dispatchers.
+    /// </summary>
+    private void ReportAmbiguousFunctionDispatch(
+        INamedTypeSymbol type,
+        string memberName,
+        IReadOnlyList<FunctionOverloadShape> overloads
+    )
+    {
+        new CatchAllOverloadReporter(Context.ReportDiagnostic).ReportFunctions(
+            type,
+            memberName,
+            overloads
+        );
+
+        new BrandedSixtyFourBitReporter(Context.ReportDiagnostic).ReportFunctions(
+            type,
+            memberName,
+            overloads
+        );
     }
 
     /// <summary>
@@ -2332,6 +2366,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
 
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+
+        foreach (var group in IrToTsBrandedBridge.DispatchedGroupsOf(ir))
+        {
+            ReportAmbiguousFunctionDispatch(
+                type,
+                group[0].Name,
+                group.Select(FunctionOverloadShape.Of).ToList()
+            );
+        }
+
         return IrToTsBrandedBridge.Convert(ir, sink, Context.DeclarativeMappings);
     }
 
