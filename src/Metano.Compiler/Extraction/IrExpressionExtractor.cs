@@ -5061,13 +5061,16 @@ public sealed partial class IrExpressionExtractor
         var sourceType = _semantic.GetTypeInfo(cast.Expression).Type;
         var targetType = _semantic.GetTypeInfo(cast).Type;
 
-        if (sourceType is null || targetType is null)
-            return new IrCastExpression(Extract(cast.Expression), ExtractTargetType(cast));
-
-        if (ExplicitTupleLiteralConversion(cast, sourceType, targetType) is { } literal)
+        if (
+            targetType is not null
+            && ExplicitTupleLiteralConversion(cast, targetType) is { } literal
+        )
             return literal;
 
         var inner = Extract(cast.Expression);
+
+        if (sourceType is null || targetType is null)
+            return new IrCastExpression(inner, ExtractTargetType(cast));
 
         var unwrapsNullable = IsNullableUnwrapCast(cast, sourceType, targetType);
 

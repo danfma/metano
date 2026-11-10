@@ -344,8 +344,9 @@ public static class IrToTsOverloadDispatcherBridge
     )
     {
         var printed = returns.Select(Printer.RenderType).Distinct(StringComparer.Ordinal);
+        var returnsOneType = printed.Take(2).Count() == 1;
 
-        if (!isGeneric && printed.Take(2).Count() == 1)
+        if (!isGeneric && returnsOneType)
             return returns[0];
 
         return isAsync

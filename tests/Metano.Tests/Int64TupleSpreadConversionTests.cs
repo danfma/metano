@@ -129,6 +129,34 @@ public class Int64TupleSpreadConversionTests
             public ((long, long), long) LiteralHoldingATuple((int, int) pair, int last) =>
                 (((long, long), long))(pair, last);
 
+            public (long, long) CastLiteralReturned(long a, long b) => ((int, int))(a, b);
+
+            public (long, long)? CastLiteralReturnedNullable(long a, long b) => ((int, int))(a, b);
+
+            public (long, long) CastLiteralAssigned(long a, long b)
+            {
+                (long, long) wide = ((int, int))(a, b);
+
+                return wide;
+            }
+
+            public long CastLiteralArgument(long a, long b) => Sum(((int, int))(a, b));
+
+            public List<(long, long)> CastLiteralElement(long a, long b) => [((int, int))(a, b)];
+
+            public (long, long) CastLiteralArm(bool narrow, long a, long b) =>
+                narrow ? ((int, int))(a, b) : (a, b);
+
+            public ((long, long), int) CastLiteralNested(long a, long b) =>
+                (((int, int))(a, b), 3);
+
+            public (long, long) CastTupleAssigned((long, long) pair)
+            {
+                (long, long) wide = ((int, int))pair;
+
+                return wide;
+            }
+
             public (long, long)? NullableLiteral() => (1, 2);
 
             public (long, long)? Forgiven((int, int)? pair) => pair!;
@@ -228,6 +256,16 @@ public class Int64TupleSpreadConversionTests
             public class Unwrapping
             {
                 public (long, long) Of((int, int)? pair) => ((long, long))pair;
+
+                public (long, long) OfKnownPresent() => ((long, long))(1, (int?)2);
+
+                public (long, long) OfChecked(int? first, int second) =>
+                    first is null ? (0, 0) : ((long, long))(first, second);
+
+                public (long, long?) OfDefault(int? first) => ((long, long?))(first, default);
+
+                public (long, (long, string?)) OfNull(int? first, int second) =>
+                    ((long, (long, string?)))(first, (second, null));
             }
             """
         );
@@ -264,6 +302,56 @@ public class Int64TupleSpreadConversionTests
             .Contains(
                 "const longs = [...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))];"
             );
+    }
+
+    /// <summary>
+    /// A cast literal with more elements than a flat tuple holds is not
+    /// converted element by element: the literal's own extraction reports
+    /// it, at the top level (with the conversion's report) and nested.
+    /// </summary>
+    [Test]
+    public async Task CastTupleLiteralOverMoreThanSevenElements_IsReported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class WideLiterals
+            {
+                public long Top(int a)
+                {
+                    var wide = ((long, long, long, long, long, long, long, long))(a, a, a, a, a, a, a, a);
+
+                    return wide.Item8;
+                }
+
+                public long Nested(int a)
+                {
+                    var wide = (((long, long, long, long, long, long, long, long), long))(
+                        (a, a, a, a, a, a, a, a),
+                        a
+                    );
+
+                    return wide.Item2;
+                }
+            }
+            """
+        );
+
+        var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
+
+        const string literal =
+            "Expression '(a, a, a, a, a, a, a, a)' (tuple literal with more than 7 elements) is "
+            + "not supported by the transpiler.";
+
+        const string conversion =
+            "Expression '((long, long, long, long, long, long, long, long))(a, a, a, a, a, a, a, "
+            + "a)' (tuple conversion over more than 7 elements) is not supported by the "
+            + "transpiler.";
+
+        // The top-level cast reports the literal and its conversion, as it
+        // did before literals converted in place; the nested one reports the
+        // literal once.
+        await Assert.That(messages).IsEquivalentTo(new[] { literal, conversion, literal });
     }
 
     [Test]

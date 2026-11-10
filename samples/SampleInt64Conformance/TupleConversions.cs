@@ -260,6 +260,69 @@ public static class TupleConversions
         return narrow.Item1 ^ (narrow.Item2 << 4);
     }
 
+    public static long LiteralCastWithDefault(int a)
+    {
+        int? first = a;
+        var wide = ((long, long?))(first, default);
+
+        return wide.Item1 + (wide.Item2 ?? 1);
+    }
+
+    /// <summary>
+    /// A cast literal under an implicit conversion: the cast narrows each
+    /// element and the position it is read from widens the result again.
+    /// </summary>
+    public static long CastLiteralInitializedSum(long a)
+    {
+        (long, long) wide = ((int, int))(a, a);
+
+        return wide.Item1 + wide.Item2;
+    }
+
+    public static long CastLiteralArgumentSum(long a)
+    {
+        Func<(long, long), long> sum = pair => pair.Item1 + pair.Item2;
+
+        return sum(((int, int))(a, a));
+    }
+
+    public static long CastLiteralReturnedSum(long a)
+    {
+        Func<(long, long)> narrowed = () => ((int, int))(a, a);
+        var wide = narrowed();
+
+        return wide.Item1 + wide.Item2;
+    }
+
+    public static long CastLiteralNullableSum(long a)
+    {
+        (long, long)? wide = ((int, int))(a, a);
+
+        return wide is { } pair ? pair.Item1 + pair.Item2 : -1;
+    }
+
+    public static long CastLiteralElementSum(long a)
+    {
+        List<(long, long)> pairs = [((int, int))(a, a)];
+
+        return pairs[0].Item1 + pairs[0].Item2;
+    }
+
+    public static long CastLiteralConditionalSum(long a)
+    {
+        (long, long) wide = a > 0 ? ((int, int))(a, a) : (5L, 6L);
+
+        return wide.Item1 + wide.Item2;
+    }
+
+    public static long CastLocalTupleSum(long a)
+    {
+        (long, long) source = (a, a);
+        (long, long) wide = ((int, int))source;
+
+        return wide.Item1 + wide.Item2;
+    }
+
     public static long NullableLiteralSum(int a, int b)
     {
         (long, long)? wide = (a, b);
