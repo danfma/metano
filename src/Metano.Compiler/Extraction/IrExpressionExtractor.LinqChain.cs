@@ -19,7 +19,9 @@ public sealed partial class IrExpressionExtractor
     /// into a single <see cref="IrLinqChain"/>. Returns null when the
     /// invocation is not a LINQ call, is not the outermost stage of its
     /// chain, or contains a method without a pipe-runtime counterpart —
-    /// in those cases the legacy fluent emission path takes over.
+    /// in those cases the legacy fluent emission path takes over. A chain
+    /// with a stage its runtime operator does not implement is reported and
+    /// lowers to the throwing placeholder (#648).
     /// </summary>
     private IrExpression? TryExtractLinqChain(InvocationExpressionSyntax inv, IMethodSymbol? symbol)
     {
@@ -52,11 +54,14 @@ public sealed partial class IrExpressionExtractor
     /// The walk stops at the first non-LINQ receiver — that becomes the
     /// chain's <see cref="IrLinqChain.Source"/>. Stages are reversed so
     /// they appear in source-to-terminal order in the IR (matches the
-    /// emission shape <c>linq(source, op1, op2, ..., opN)</c>).
+    /// emission shape <c>linq(source, op1, op2, ..., opN)</c>). A chain
+    /// with a stage its runtime operator cannot run reports each such stage
+    /// and lowers to the throwing placeholder (#648).
     /// </summary>
-    private IrLinqChain? BuildLinqChain(InvocationExpressionSyntax outermost)
+    private IrExpression? BuildLinqChain(InvocationExpressionSyntax outermost)
     {
         var stages = new List<IrLinqStage>();
+        var unsupportedStages = new List<UnsupportedLinqStage>();
         InvocationExpressionSyntax? current = outermost;
         ExpressionSyntax? sourceSyntax = null;
 
@@ -108,19 +113,21 @@ public sealed partial class IrExpressionExtractor
             if (_semantic.GetSymbolInfo(memberAccess.Receiver).Symbol is INamedTypeSymbol)
                 return null;
 
-            var args = StageArguments(current, sym!, op);
+            // A stage its runtime operator cannot run is not lowered, so its
+            // arguments are not extracted either (#648).
+            if (UnimplementedStageOf(current, sym!, op) is { } unimplemented)
+            {
+                unsupportedStages.Add(unimplemented);
+            }
+            else
+            {
+                var stage = ExtractLinqStage(current, sym!, op, memberAccess);
 
-            if (args.HasUnrepresentableMissValue && LowersLinqChains)
-                ElementMissValue.ReportUnrepresentable(current, sym!, sym!.TypeArguments[0]);
+                if (MisplacedTreeStageOf(current, sym!, stage) is { } misplaced)
+                    unsupportedStages.Add(misplaced);
 
-            var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
-
-            stages.Add(
-                new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(sym!, op))
-                {
-                    EvaluationOrder = args.EvaluationOrder,
-                }
-            );
+                stages.Add(stage);
+            }
 
             // A leading `?.Stage(…)` reads the null-conditional receiver,
             // which is already extracted (and bound): the chain starts there.
@@ -141,11 +148,38 @@ public sealed partial class IrExpressionExtractor
         if (sourceSyntax is null)
             return null;
 
+        if (unsupportedStages.Count > 0)
+            return ReportUnsupportedLinqStages(unsupportedStages);
+
         stages.Reverse();
         var source = Extract(sourceSyntax);
         // Build-time fusion of adjacent stages (#207). Idempotent on
         // chains the rules don't match — returns the original instance.
         return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
+    }
+
+    /// <summary>
+    /// One stage of a chain, with its arguments bound to the parameters of
+    /// <paramref name="method"/> and the queryable tree it captures.
+    /// </summary>
+    private IrLinqStage ExtractLinqStage(
+        InvocationExpressionSyntax call,
+        IMethodSymbol method,
+        IrLinqOperator op,
+        QualifiedMemberSyntax memberAccess
+    )
+    {
+        var args = StageArguments(call, method, op);
+
+        if (args.HasUnrepresentableMissValue && LowersLinqChains)
+            ElementMissValue.ReportUnrepresentable(call, method, method.TypeArguments[0]);
+
+        var queryable = TryCaptureQueryableMeta(call, method, memberAccess);
+
+        return new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(method, op))
+        {
+            EvaluationOrder = args.EvaluationOrder,
+        };
     }
 
     /// <summary>

@@ -389,13 +389,14 @@ public class Int64BclMappingTests
     }
 
     /// <summary>
-    /// <c>Min</c> / <c>Max</c> with an <c>IComparer</c> order by it, so they
-    /// keep the generic terminal instead of the <c>bigint</c> one.
+    /// <c>Min</c> / <c>Max</c> with an <c>IComparer</c> order by it, which no
+    /// runtime terminal does: the call reports the ignored comparer and lowers
+    /// to the throwing placeholder instead of a terminal (#648).
     /// </summary>
     [Test]
-    public async Task MaxWithAComparer_KeepsTheGenericTerminal()
+    public async Task MaxWithAComparer_ReportsTheIgnoredComparer()
     {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using System.Collections.Generic;
             using System.Linq;
@@ -408,7 +409,16 @@ public class Int64BclMappingTests
             """
         );
 
-        await Assert.That(files["ordered.ts"]).Contains("linq(ids, max(order))");
+        await Assert
+            .That(diagnostics.Select(diagnostic => diagnostic.Message))
+            .Contains(
+                "The comparer of 'Max' is not supported; the default comparison would be used. "
+                    + "The call throws at run time."
+            );
+
+        await Assert
+            .That(files["ordered.ts"])
+            .Contains("throw new Error(\"Unsupported expression: UnsupportedLinqOverload\");");
     }
 
     /// <summary>

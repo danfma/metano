@@ -74,6 +74,18 @@ public sealed record IrExtractionContext(
     public bool KeepsArgumentEvaluationOrder { get; init; }
 
     /// <summary>
+    /// The port through which a target says whether a declarative mapping
+    /// (<c>[MapMethod]</c>) of its own lowers a call to a BCL method, so the
+    /// extractor reports a <c>System.Linq</c> extension method that nothing
+    /// lowers instead of leaving it a member call on the receiver (#648).
+    /// <c>null</c>, the default, for a target that does not lower LINQ:
+    /// every such call keeps its source form. The answer covers the method
+    /// name, not each overload: a mapping that matches none of the call's
+    /// overloads still counts as lowering it.
+    /// </summary>
+    public Func<IMethodSymbol, bool>? LowersByDeclarativeMapping { get; init; }
+
+    /// <summary>
     /// The context of a constant parameter default: the origin resolver
     /// alone. It names no local, so it needs no local naming, and it drops
     /// the target and the compilation as defaults always have: a constant

@@ -315,6 +315,55 @@ lowering (#617); `Min` / `Max` over an empty or nullable `number` sequence diffe
 from .NET (#618); the static call form `Enumerable.FirstOrDefault(xs)` is not
 lowered (#619).
 
+### Supported overloads
+
+A stage lowers only the overloads its runtime operator implements, named here by
+their parameters after the source (the `Queryable` spellings `source2` and `item`
+are the same overloads):
+
+| Operator | Supported overloads |
+|----|----|
+| `Where`, `TakeWhile`, `SkipWhile` | `(predicate)`, with or without the element index |
+| `Select` | `(selector)`, with or without the element index |
+| `SelectMany` | `(selector)` |
+| `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending`, `GroupBy`, `DistinctBy`, `MinBy`, `MaxBy` | `(keySelector)` |
+| `Take`, `Skip` | `(count)` |
+| `Distinct`, `Reverse`, `ToArray`, `ToList`, `ToHashSet` | `()` |
+| `Concat` | `(second)` |
+| `Append`, `Prepend` | `(element)` |
+| `Zip` | `(second, resultSelector)` |
+| `ToDictionary` | `(keySelector)`, `(keySelector, elementSelector)` |
+| `First`, `Last`, `Single`, `Any`, `Count`, `LongCount` | `()`, `(predicate)` |
+| `FirstOrDefault`, `LastOrDefault`, `SingleOrDefault` | `()`, `(predicate)`, `(defaultValue)`, `(predicate, defaultValue)` |
+| `All` | `(predicate)` |
+| `Sum`, `Min`, `Max`, `Average` | `()`, `(selector)` |
+| `Contains` | `(value)` |
+| `Aggregate` | `(seed, func)` |
+
+Every other overload reports `MS0001` (a warning) at the call and lowers to an
+expression that throws at run time: for example `Aggregate(func)`,
+`Aggregate(seed, func, resultSelector)`, `GroupBy` with an element or result
+selector, the tuple `Zip(second)`, `Take(range)`, `SelectMany` with a result
+selector (#648). No runtime operator takes a comparer, so a comparer argument
+(`IEqualityComparer<T>` / `IComparer<T>`, as in `OrderBy(k, comparer)`,
+`ToDictionary(k, comparer)`, `Contains(x, comparer)`, `Distinct(comparer)`,
+`Min(comparer)`) reports `MS0001` at the argument. A queryable stage reports when
+its operator has no slot for the expression tree: `queryable.Aggregate(…)`, and
+`queryable.ToDictionary(k)` without an element selector. A `System.Linq` extension
+method with neither a pipe operator nor a declarative mapping (`Join`,
+`GroupJoin`, `ToLookup`, `SequenceEqual`, `Cast`, `OfType`, `ElementAt`, …)
+reports `MS0001` instead of becoming a member call on the receiver (where
+`xs.Join(…)` reached `Array.prototype.join`). The static form
+(`Enumerable.Aggregate(xs, …)`) of an unimplemented overload reports the same
+diagnostic. The Dart target does not lower LINQ chains (#549) and reports none
+of these.
+
+An overload is identified by its parameter names, not by its element types:
+`Sum`, `Min`, `Max` and `Average` over nullable values, and `Min` / `Max` over
+non-numeric elements, count as supported and still differ from .NET (#618).
+`Union`, `Intersect` and `Except` lower through declarative mappings rather than
+pipe operators, so their comparer overloads are not reported.
+
 ### Direct method calls (fast path)
 
 For simple operations that don't need LINQ wrapping, the transpiler uses the

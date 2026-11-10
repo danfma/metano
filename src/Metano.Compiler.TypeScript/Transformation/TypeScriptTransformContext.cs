@@ -547,6 +547,11 @@ public sealed class TypeScriptTransformContext(
             EmitsOperatorFastPaths = true,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             KeepsArgumentEvaluationOrder = true,
+            LowersByDeclarativeMapping = method =>
+                DeclarativeMappings.HasJsMethodMapping(
+                    method.ContainingType.GetStableFullName(),
+                    method.Name
+                ),
         };
 
     private BclExportTypeOverrides? _bclOverrides;

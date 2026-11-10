@@ -155,6 +155,15 @@ public sealed class DeclarativeMappingRegistry
     }
 
     /// <summary>
+    /// Whether an entry with a JavaScript mapping (<c>JsMethod</c> or
+    /// <c>JsTemplate</c>) covers <paramref name="methodName"/> of the type
+    /// named <paramref name="declaringTypeFullName"/>, for some overload.
+    /// </summary>
+    public bool HasJsMethodMapping(string declaringTypeFullName, string methodName) =>
+        TryGetMethodsByFullName(declaringTypeFullName, methodName, out var entries)
+        && entries.Any(entry => entry.HasJsMapping);
+
+    /// <summary>
     /// Looks up a declarative property mapping by the declaring type's
     /// stable full name and the property name. Mirrors
     /// <see cref="TryGetMethodsByFullName"/> for properties.

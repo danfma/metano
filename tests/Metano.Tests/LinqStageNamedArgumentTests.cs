@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -149,13 +151,15 @@ public class LinqStageNamedArgumentTests
     }
 
     /// <summary>
-    /// A queryable stage with arguments bound in source order keeps its tree
-    /// after them, inside the binding: it is no argument of the call.
+    /// A queryable stage whose arguments C# evaluates out of parameter order
+    /// needs two order-sensitive arguments besides its lambda; the only such
+    /// stage passes a comparer, which the runtime operator would ignore, so it
+    /// reports instead of binding them (#648).
     /// </summary>
     [Test]
-    public async Task QueryableStage_KeepsItsTreeAfterTheBoundArguments()
+    public async Task QueryableStageWithAComparer_ReportsInsteadOfBindingItsArguments()
     {
-        var files = TranspileHelper.Transpile(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Host
                 + """
                     public IEqualityComparer<int> Comparer() => EqualityComparer<int>.Default;
@@ -166,13 +170,25 @@ public class LinqStageNamedArgumentTests
                 """
         );
 
+        // `EqualityComparer<int>.Default` reports its own missing mapping.
+        var report = diagnostics.Single(diagnostic =>
+            diagnostic.Message.StartsWith("The comparer of", StringComparison.Ordinal)
+        );
+
         await Assert
-            .That(files["stages.ts"])
-            .Contains("(($arg2, $arg1, $arg0) => toMap($arg0, $arg1, $arg2, {\n      tree: {");
+            .That(report.Message)
+            .IsEqualTo(
+                "The comparer of 'ToDictionary' is not supported; the default comparison would "
+                    + "be used. The call throws at run time."
+            );
+
+        await Assert
+            .That(report.Location!.SourceTree!.GetText().ToString(report.Location.SourceSpan))
+            .IsEqualTo("Comparer()");
 
         await Assert
             .That(files["stages.ts"])
-            .Contains("}))(this.comparer(), this.picker(), (x: number) => x));");
+            .Contains("throw new Error(\"Unsupported expression: UnsupportedLinqOverload\");");
     }
 
     /// <summary>
