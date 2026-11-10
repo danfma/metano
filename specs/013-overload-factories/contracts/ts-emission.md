@@ -90,7 +90,8 @@ Rules:
 | A record positional constructor with a secondary constructor | every overload gets selector + factory; the primary's selector branch keeps the promoted-member assignments (FR-014) |
 | `params int[] parts` overload | `static fromParts(...parts: number[]): T { return new T(T.byTParts, ...parts); }` |
 | A generic class `Box<T> where T : IComparable<T>` | `static fromValue<T extends Comparable<T>>(value: T): Box<T>` — the factory re-declares the class type parameters **with their constraints** (FR-028, R4) |
-| `[PlainObject]`, `[InlineWrapper]` / `[Branded]`, `[External]`, `[NoEmit]`, `[JsCallable]` | unchanged (FR-013) |
+| `[PlainObject]`, `[External]`, `[NoEmit]`, `[JsCallable]`; the constructors of `[InlineWrapper]` / `[Branded]` | unchanged (FR-013) |
+| A static overload group of an `[InlineWrapper]` / `[Branded]` companion namespace (#569) | `export function sL(l: bigint): string` and `export function sU(u: UId): string` beside the unchanged `export function s(...args: unknown[])`; a call `Tag.S(new UId(1))` emits `Tag.sU(UId.create(1n))`; a non-public overload's function carries `/** @internal */` (FR-013) |
 | A candidate claimed by another member | `fromCents$` + `byMoneyCents$` (per suffix) + `MS0067` (FR-004) |
 | A dead-end collision | `…$1` / `…$2` + `MS0003` error (FR-024) |
 

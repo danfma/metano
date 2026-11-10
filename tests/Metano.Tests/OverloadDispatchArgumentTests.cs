@@ -77,9 +77,10 @@ public class OverloadDispatchArgumentTests
             """
         );
 
-        await Assert
-            .That(result["meters.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-defaults-params-branded.ts"));
+        await TranspileHelper.AssertGolden(
+            "dispatcher-defaults-params-branded.ts",
+            result["meters.ts"]
+        );
     }
 
     [Test]

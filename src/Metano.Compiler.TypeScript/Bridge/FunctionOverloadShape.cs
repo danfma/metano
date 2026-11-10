@@ -7,7 +7,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// scope its type checks resolve against. Module functions, extension
 /// methods and the static methods of a branded companion namespace dispatch
 /// with no class scope, so the scope is the overload's own type parameters.
-/// The two <c>MS0063</c> detectors read their dispatchers through this shape
+/// The two <c>MS0063</c> reporters read their dispatchers through this shape
 /// (issue #569).
 /// </summary>
 internal sealed record FunctionOverloadShape(
@@ -20,16 +20,4 @@ internal sealed record FunctionOverloadShape(
 
     public static FunctionOverloadShape Of(IrModuleFunction function) =>
         new(function.Parameters, new TypeCheckScope(function.TypeParameters ?? [], null));
-
-    /// <summary>
-    /// Whether a dispatcher over <paramref name="overloads"/> can run another
-    /// overload than the one C# binds: either <c>MS0063</c> detector
-    /// (<see cref="BrandedSixtyFourBitOverloads"/>,
-    /// <see cref="CatchAllOverloads"/>) finds something in the group.
-    /// </summary>
-    public static bool AreAmbiguous(IReadOnlyList<FunctionOverloadShape> overloads) =>
-        BrandedSixtyFourBitOverloads.Find(overloads, overload => overload.Parameters).Count > 0
-        || CatchAllOverloads
-            .Find(overloads, overload => overload.Parameters, overload => overload.Scope)
-            .Count > 0;
 }

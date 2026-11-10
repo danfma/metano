@@ -49,12 +49,6 @@ public sealed class IrToTsClassEmitter(
         constructorAccessFacts,
         context.ReportDiagnostic
     );
-    private readonly CatchAllOverloadReporter _catchAllOverloadReporter = new(
-        context.ReportDiagnostic
-    );
-    private readonly BrandedSixtyFourBitReporter _brandedSixtyFourBitReporter = new(
-        context.ReportDiagnostic
-    );
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
@@ -234,12 +228,11 @@ public sealed class IrToTsClassEmitter(
         {
             if (ir.Constructor is { } constructor)
             {
-                _catchAllOverloadReporter.ReportConstructors(
+                _context.AmbiguousDispatch.ReportConstructors(
                     type,
                     constructor,
                     new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
                 );
-                _brandedSixtyFourBitReporter.ReportConstructors(type, constructor);
             }
 
             // The IR pipeline owns multi-constructor dispatch. When the body
@@ -579,12 +572,11 @@ public sealed class IrToTsClassEmitter(
                 return null;
             }
 
-            _catchAllOverloadReporter.ReportMethods(
+            _context.AmbiguousDispatch.ReportMethods(
                 type,
                 irMethod,
                 new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
             );
-            _brandedSixtyFourBitReporter.ReportMethods(type, irMethod);
 
             var dispatcher = TryBuildOverloadDispatcherFromIr(
                 irMethod,

@@ -27,7 +27,15 @@ internal static class DispatchedMethodCalls
     /// The overload a call to <paramref name="method"/> targets directly;
     /// <c>null</c> when the call keeps the dispatcher.
     /// </summary>
-    public static IrOverloadRef? RefOf(IMethodSymbol? method, TargetLanguage? target)
+    /// <param name="emitsBrandedFastPaths">The target's
+    /// <see cref="IrExtractionContext.EmitsBrandedFastPaths"/> capability: a
+    /// method of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type is bound
+    /// only then.</param>
+    public static IrOverloadRef? RefOf(
+        IMethodSymbol? method,
+        TargetLanguage? target,
+        bool emitsBrandedFastPaths = false
+    )
     {
         if (method is null)
             return null;
@@ -44,6 +52,11 @@ internal static class DispatchedMethodCalls
         if (!IsEmittedContainingType(containingType, target))
             return null;
 
+        var isBrandedMethod = SymbolHelper.HasBranded(containingType);
+
+        if (isBrandedMethod && !(emitsBrandedFastPaths && HasBrandedFastPath(definition)))
+            return null;
+
         // A containerless class calls only the module functions it emits —
         // the same predicate its extraction and the barrel claim pass use.
         if (
@@ -56,34 +69,6 @@ internal static class DispatchedMethodCalls
             return null;
 
         return IsDispatchedGroupMethod(definition, target)
-            ? MethodOverloadGroups.RefOf(definition, target)
-            : null;
-    }
-
-    /// <summary>
-    /// The overload a call into a branded companion binds (#569): a static
-    /// method of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type, in a
-    /// dispatched group, declared with syntax. <see cref="RefOf"/> answers
-    /// <c>null</c> for it (DECIDED-10: the call keeps the companion's
-    /// dispatcher); this identity lets a target address the bound overload
-    /// where its dispatcher cannot tell the group apart. <c>null</c> for any
-    /// other method.
-    /// </summary>
-    public static IrOverloadRef? CompanionRefOf(IMethodSymbol? method, TargetLanguage? target)
-    {
-        if (method?.OriginalDefinition is not { IsStatic: true } definition)
-            return null;
-
-        var isCompanionMethod =
-            definition.ContainingType is { } type
-            && SymbolHelper.HasBranded(type)
-            && HasSourceIr(type)
-            && !IsExcludedMember(definition);
-
-        if (!isCompanionMethod)
-            return null;
-
-        return MethodOverloadGroups.GroupOf(definition, target) is { IsDispatched: true }
             ? MethodOverloadGroups.RefOf(definition, target)
             : null;
     }
@@ -142,10 +127,11 @@ internal static class DispatchedMethodCalls
     /// Whether <paramref name="type"/> — the declaring type of a candidate
     /// direct call — emits the member the call site needs: a transpilable
     /// class, or a transpiled interface, none of the keep-today's-emission
-    /// shapes of DECIDED-10: <c>[External]</c>, a branded companion and
-    /// <c>[PlainObject]</c> are excluded here, and <c>[JsCallable]</c>, which
-    /// only an interface carries, through
-    /// <see cref="MethodOverloadGroups.IsTranspiledInterface"/>.
+    /// shapes of DECIDED-10: <c>[External]</c> and <c>[PlainObject]</c> are
+    /// excluded here, and <c>[JsCallable]</c>, which only an interface
+    /// carries, through <see cref="MethodOverloadGroups.IsTranspiledInterface"/>.
+    /// A <c>[Branded]</c> type is judged per method
+    /// (<see cref="HasBrandedFastPath"/>).
     /// </summary>
     private static bool IsEmittedContainingType(INamedTypeSymbol type, TargetLanguage? target)
     {
@@ -155,9 +141,24 @@ internal static class DispatchedMethodCalls
         return type.TypeKind is TypeKind.Class or TypeKind.Struct
             && IrTypeRefMapper.IsTranspilableType(type, target)
             && !SymbolHelper.HasExternal(type)
-            && !SymbolHelper.HasBranded(type)
             && !SymbolHelper.HasPlainObject(type);
     }
+
+    /// <summary>
+    /// Whether a target that declares branded fast paths declares one for
+    /// <paramref name="method"/> of a <c>[Branded]</c> / <c>[InlineWrapper]</c>
+    /// type (issue #569). A wrapper over a brandable primitive lowers to a
+    /// companion that holds only the static methods; a wrapper over anything
+    /// else falls back to a class, whose methods all take part. An operator
+    /// or conversion of a branded type is never bound: its applications are
+    /// not lowered to the declared functions (#599).
+    /// </summary>
+    private static bool HasBrandedFastPath(IMethodSymbol method) =>
+        method.MethodKind is MethodKind.Ordinary
+        && (
+            method.IsStatic
+            || !IrExpressionExtractor.IsPrimitiveBackedBranded(method.ContainingType)
+        );
 
     /// <summary>
     /// Whether <paramref name="method"/> belongs to a dispatched group

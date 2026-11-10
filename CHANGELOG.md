@@ -166,6 +166,15 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `areaSide`; a class method overload's `[Name("addText")]`, ignored in 2.x
   (`addS`), becomes `addAddText`. Conversion operators keep their `[Name]`
   (`__toInt`).
+- Branded companions (`[Branded]` / `[InlineWrapper]`): every overloaded
+  static group now exports one function per overload beside its dispatcher
+  (`Tag.sL`, `Tag.sU` beside `Tag.s`; in 2.x they were namespace-local), and
+  generated code calls the one C# bound: `Tag.S(new UId(1))` →
+  `Tag.sU(UId.create(1n))`. This is new public surface on the namespace, and
+  it fixes calls the dispatcher resolved to another overload (a branded value
+  beside its primitive, `long` / `ulong`, `int` / `double`, `object` /
+  `string`). The dispatcher is unchanged. A function of a non-public overload
+  is tagged `/** @internal */`.
 - `[JsonFactory]` on a method of an overloaded group is now `MS0034` (error):
   `[JsonFactory] From(string)` beside `[Name("num")] From(int)` used to
   generate a descriptor calling the dispatcher.

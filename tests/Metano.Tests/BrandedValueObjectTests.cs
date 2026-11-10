@@ -39,9 +39,7 @@ public class BrandedValueObjectTests
     {
         var result = TranspileHelper.Transpile(EpisodeSlugSource);
 
-        var output = result["episode-slug.ts"];
-        var expected = TranspileHelper.ReadExpected("branded-value-object.ts");
-        await Assert.That(output).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("branded-value-object.ts", result["episode-slug.ts"]);
     }
 
     [Test]
@@ -221,9 +219,11 @@ public class BrandedValueObjectTests
         );
 
         var output = result["script-word-id.ts"];
+
         await Assert
             .That(output)
             .Contains("export function op_Implicit(raw: string): ScriptWordId");
+
         await Assert.That(output).DoesNotContain("self: ScriptWordId");
         await Assert.That(output).DoesNotContain("...args");
     }
@@ -252,9 +252,11 @@ public class BrandedValueObjectTests
 
         var output = result["seconds.ts"];
         await Assert.That(output).Contains("export function combine(value: number): Seconds;");
+
         await Assert
             .That(output)
             .Contains("export function combine(a: Seconds, b: Seconds): Seconds;");
+
         await Assert.That(output).Contains("return Seconds.create(a + b);");
         await Assert.That(output).Contains("return combineValue(args[0] as number);");
     }

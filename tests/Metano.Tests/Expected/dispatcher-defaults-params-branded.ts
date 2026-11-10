@@ -11,11 +11,11 @@ export namespace Meters {
     return String(value);
   }
 
-  function of_A(a: number = 5): Meters {
+  export function of_A(a: number = 5): Meters {
     return Meters.create(a);
   }
 
-  function of_SRest(s: string, ...rest: number[]): Meters {
+  export function of_SRest(s: string, ...rest: number[]): Meters {
     return Meters.create(rest.length);
   }
 

@@ -7,6 +7,6 @@ export class Calls {
   run(): string {
     const pick = Tag.sU;
 
-    return Tag.sU(UId.create(1n)) + Tag.sL(1n) + pick(UId.create(3n)) + Tag.anyValue("x") + Tag.anyValue(1) + Tag.n("a") + Tag.n(1);
+    return Tag.sU(UId.create(1n)) + Tag.sL(1n) + pick(UId.create(3n)) + Tag.anyValue<string>("x") + Tag.anyValue<number>(1) + Tag.nS("a") + Tag.nI(1);
   }
 }

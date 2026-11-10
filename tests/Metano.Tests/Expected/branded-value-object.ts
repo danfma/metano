@@ -7,7 +7,7 @@ export namespace EpisodeSlug {
     return value as EpisodeSlug;
   }
 
-  function fromValue(value: string): EpisodeSlug {
+  export function fromValue(value: string): EpisodeSlug {
     if (value.trim().length === 0) {
       throw new Error("empty");
     }
@@ -15,7 +15,7 @@ export namespace EpisodeSlug {
     return EpisodeSlug.create(value.trim());
   }
 
-  function fromNumber(number: number): EpisodeSlug {
+  export function fromNumber(number: number): EpisodeSlug {
     return EpisodeSlug.create("ep-" + number);
   }
 
@@ -34,6 +34,6 @@ export namespace EpisodeSlug {
   }
 
   export function op_Explicit(raw: string): EpisodeSlug {
-    return EpisodeSlug.from(raw);
+    return EpisodeSlug.fromValue(raw);
   }
 }

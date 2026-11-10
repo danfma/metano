@@ -2522,7 +2522,11 @@ public sealed partial class IrExpressionExtractor
         if (reference is not IrMemberAccess access)
             return reference;
 
-        var overloadRef = DispatchedMethodCalls.RefOf(method, _target);
+        var overloadRef = DispatchedMethodCalls.RefOf(
+            method,
+            _target,
+            _context.EmitsBrandedFastPaths
+        );
 
         return overloadRef is null
             ? reference
@@ -2916,7 +2920,11 @@ public sealed partial class IrExpressionExtractor
         if (symbol is null or { MethodKind: MethodKind.ReducedExtension })
             return null;
 
-        var overloadRef = DispatchedMethodCalls.RefOf(symbol, _target);
+        var overloadRef = DispatchedMethodCalls.RefOf(
+            symbol,
+            _target,
+            _context.EmitsBrandedFastPaths
+        );
 
         if (overloadRef is null)
             return null;
@@ -3236,11 +3244,7 @@ public sealed partial class IrExpressionExtractor
                 ? TypeReferenceTo(symbol.ContainingType)
                 : null,
             IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
-            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true },
-            CompanionOverload: DispatchedMethodCalls.CompanionRefOf(
-                symbol as IMethodSymbol,
-                _target
-            )
+            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true }
         );
     }
 

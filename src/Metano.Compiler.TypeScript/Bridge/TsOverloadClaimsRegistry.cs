@@ -54,8 +54,8 @@ public sealed class TsOverloadClaimsRegistry(
 
     private readonly ConcurrentDictionary<
         INamedTypeSymbol,
-        Lazy<IReadOnlyDictionary<TsMethodOverloadKey, string>>
-    > _companionFastPaths = new(SymbolEqualityComparer.Default);
+        Lazy<TsCompanionPlan?>
+    > _companionPlans = new(SymbolEqualityComparer.Default);
 
     /// <summary>
     /// Whether a class needs a claim pass: it declares an overload group, or
@@ -82,36 +82,35 @@ public sealed class TsOverloadClaimsRegistry(
         if (TsModuleFunctionClaims.IsModuleFunctionType(type))
             return _context.ModuleFunctionClaims.ClaimOf(root)?.FastPath;
 
-        return type.TypeKind == TypeKind.Interface
-            ? InterfaceFastPathsOf(type).NameAt(root.MemberName, root.Ordinal)
+        if (type.TypeKind == TypeKind.Interface)
+            return InterfaceFastPathsOf(type).NameAt(root.MemberName, root.Ordinal);
+
+        // A branded wrapper over a primitive emits its static groups as the
+        // functions of its companion namespace, named by the companion's
+        // plan (#569); any other wrapper is an ordinary class.
+        return CompanionPlanOf(type) is { } companion
+            ? companion.FastPathAt(root.MemberName, root.Ordinal)
             : For(type).FastPathNameAt(root.MemberName, root.Ordinal);
     }
 
     /// <summary>
-    /// The exported fast path of a branded companion's static overload
-    /// (<see cref="IrMemberOrigin.CompanionOverload"/>), which a generated
-    /// call addresses instead of the dispatcher (#569); <c>null</c> when the
-    /// overload's group keeps the dispatcher call
-    /// (<see cref="IrToTsBrandedBridge.DirectFastPathsOf"/>) or this
-    /// compilation cannot see the declaring type.
+    /// The companion plan of a branded struct, computed on first use from
+    /// its shape; <c>null</c> for a type that emits no companion namespace.
     /// </summary>
-    internal string? CompanionFastPathOf(IrOverloadRef overload) =>
-        IrTypeKeys.Find(overload.DeclaringType, _context.Compilation) is { } type
-            ? CompanionFastPathsOf(type)
-                .GetValueOrDefault(new TsMethodOverloadKey(overload.MemberName, overload.Ordinal))
-            : null;
+    private TsCompanionPlan? CompanionPlanOf(INamedTypeSymbol type)
+    {
+        if (!TypeTransformer.IsBrandedStruct(type))
+            return null;
 
-    private IReadOnlyDictionary<TsMethodOverloadKey, string> CompanionFastPathsOf(
-        INamedTypeSymbol type
-    ) =>
-        _companionFastPaths
+        return _companionPlans
             .GetOrAdd(
                 type.OriginalDefinition,
-                declaration => new Lazy<IReadOnlyDictionary<TsMethodOverloadKey, string>>(() =>
-                    IrToTsBrandedBridge.DirectFastPathsOf(ShapeOf(declaration))
+                declaration => new Lazy<TsCompanionPlan?>(() =>
+                    TsCompanionPlan.Of(ShapeOf(declaration))
                 )
             )
             .Value;
+    }
 
     /// <summary>The fast-path names of an interface, computed on first use.</summary>
     internal TsInterfaceFastPaths InterfaceFastPathsOf(INamedTypeSymbol type) =>

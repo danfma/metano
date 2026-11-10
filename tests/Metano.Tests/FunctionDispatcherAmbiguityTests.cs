@@ -3,12 +3,13 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// <c>MS0063</c> on the function dispatchers (issue #569): the groups of an
-/// <c>[ExportedAsModule]</c> class, of an extension container and of a
-/// branded companion namespace get the two warnings the class dispatchers
-/// get. A companion group either detector finds ambiguous also exports its
-/// per-overload functions, and a call transpiled from C# names the overload
-/// C# bound instead of the dispatcher, which would run another one.
+/// The function dispatchers (issue #569). The groups of a containerless
+/// class, of an extension container and of a branded companion namespace
+/// get the two <c>MS0063</c> warnings the class dispatchers get. Every
+/// dispatched group of a companion namespace exports its per-overload
+/// functions, and a call or method group transpiled from C# names the
+/// function of the overload C# bound instead of the dispatcher, whose
+/// runtime checks cannot tell every pair of overloads apart.
 /// </summary>
 public class FunctionDispatcherAmbiguityTests
 {
@@ -64,13 +65,6 @@ public class FunctionDispatcherAmbiguityTests
         }
         """;
 
-    private static string CatchAllMessageFor(string catchAll, string shadowed) =>
-        $"Overload '{catchAll}' accepts any argument at runtime, so the TypeScript dispatcher "
-        + $"tries it before '{shadowed}', whose argument counts it overlaps: a call C# binds to "
-        + "one of them can reach it instead (ambiguous runtime dispatch). Static call-site "
-        + "dispatch (#25) will resolve it; until then, give the overloads distinct arities or "
-        + "constrain the type parameter.";
-
     private static IReadOnlyList<MetanoDiagnostic> Ambiguity(string source) =>
         TranspileHelper
             .TranspileWithDiagnostics(source)
@@ -91,8 +85,10 @@ public class FunctionDispatcherAmbiguityTests
 
         var location = warning.Location!;
         var compiled = location.SourceTree!.GetText().ToString();
+        var anchorStart = compiled.IndexOf(anchor, StringComparison.Ordinal);
 
-        await Assert.That(location.SourceSpan.Start).IsEqualTo(compiled.IndexOf(anchor));
+        await Assert.That(anchorStart).IsGreaterThanOrEqualTo(0);
+        await Assert.That(location.SourceSpan.Start).IsEqualTo(anchorStart);
     }
 
     [Test]
@@ -108,12 +104,12 @@ public class FunctionDispatcherAmbiguityTests
                     public static string H(UId u) => "uid";
                 }
                 """,
-            Int64BrandedDispatchDiagnosticTests.MessageFor("'Mod.H(long)', 'Mod.H(UId)'"),
+            AmbiguousDispatchMessages.BrandedSixtyFourBit("'Mod.H(long)', 'Mod.H(UId)'"),
             "H(UId u)"
         );
 
     [Test]
-    public Task NoContainerFunctions_BrandedBesideLong_WarnAtTheBrandedOverload() =>
+    public Task NoContainerFunctions_BrandedBesideUlong_WarnAtTheBrandedOverload() =>
         AssertWarnsOnceAt(
             Preamble
                 + """
@@ -125,7 +121,7 @@ public class FunctionDispatcherAmbiguityTests
                     public static string H(ulong l) => "ulong";
                 }
                 """,
-            Int64BrandedDispatchDiagnosticTests.MessageFor("'Bare.H(UId)', 'Bare.H(ulong)'"),
+            AmbiguousDispatchMessages.BrandedSixtyFourBit("'Bare.H(UId)', 'Bare.H(ulong)'"),
             "H(UId u)"
         );
 
@@ -141,7 +137,7 @@ public class FunctionDispatcherAmbiguityTests
                     public static string E(this string s, UId u) => "uid";
                 }
                 """,
-            Int64BrandedDispatchDiagnosticTests.MessageFor(
+            AmbiguousDispatchMessages.BrandedSixtyFourBit(
                 "'Ext.E(string, long)', 'Ext.E(string, UId)'"
             ),
             "E(this string s, UId u)"
@@ -160,7 +156,7 @@ public class FunctionDispatcherAmbiguityTests
                     public static string S(UId u) => "uid";
                 }
                 """,
-            Int64BrandedDispatchDiagnosticTests.MessageFor("'Tag.S(long)', 'Tag.S(UId)'"),
+            AmbiguousDispatchMessages.BrandedSixtyFourBit("'Tag.S(long)', 'Tag.S(UId)'"),
             "S(UId u)"
         );
 
@@ -177,7 +173,7 @@ public class FunctionDispatcherAmbiguityTests
                     public static string Any(int a, int b = 0) => "int";
                 }
                 """,
-            CatchAllMessageFor("Mod.Any<T>(T)", "Mod.Any(int, int)"),
+            AmbiguousDispatchMessages.CatchAll("Mod.Any<T>(T)", "Mod.Any(int, int)"),
             "Any<T>(T value)"
         );
 
@@ -194,8 +190,27 @@ public class FunctionDispatcherAmbiguityTests
                     public static string Any(int a, int b = 0) => "int";
                 }
                 """,
-            CatchAllMessageFor("Tag.Any<T>(T)", "Tag.Any(int, int)"),
+            AmbiguousDispatchMessages.CatchAll("Tag.Any<T>(T)", "Tag.Any(int, int)"),
             "Any<T>(T value)"
+        );
+
+    [Test]
+    public Task CompanionNamespace_OperatorGroup_SaysItsApplicationsAreNotLowered() =>
+        AssertWarnsOnceAt(
+            Preamble
+                + """
+                [Branded]
+                public readonly record struct Ticks(long Value)
+                {
+                    public static Ticks operator +(Ticks a, long b) => new(a.Value + b);
+
+                    public static Ticks operator +(Ticks a, UId b) => new(a.Value + b.Value);
+                }
+                """,
+            AmbiguousDispatchMessages.BrandedSixtyFourBitOperators(
+                "'Ticks.operator +(Ticks, long)', 'Ticks.operator +(Ticks, UId)'"
+            ),
+            "+(Ticks a, long b)"
         );
 
     [Test]
@@ -241,7 +256,7 @@ public class FunctionDispatcherAmbiguityTests
     }
 
     [Test]
-    public async Task CompanionNamespace_AmbiguousGroups_ExportTheirOverloadFunctions()
+    public async Task CompanionNamespace_DispatchedGroups_ExportTheirOverloadFunctions()
     {
         var result = TranspileHelper.Transpile(Preamble + Companion + Calls);
 
@@ -249,13 +264,115 @@ public class FunctionDispatcherAmbiguityTests
     }
 
     [Test]
-    public async Task CallsIntoAnAmbiguousCompanionGroup_NameTheOverloadCSharpBound()
+    public async Task CallsIntoACompanionGroup_NameTheOverloadCSharpBound()
     {
         var result = TranspileHelper.Transpile(Preamble + Companion + Calls);
 
         await TranspileHelper.AssertGolden(
             "companion-direct-overloads-calls.ts",
             result["calls.ts"]
+        );
+    }
+
+    /// <summary>
+    /// The names a call site must agree with the namespace on: a fast path
+    /// that collides with another static method takes a <c>$</c>, a
+    /// <c>[Name]</c> pins an overload's suffix, and an overload that is not
+    /// public keeps its <c>@internal</c> tag on the exported function.
+    /// </summary>
+    private const string Names = """
+        [Branded]
+        public readonly record struct Key(string Value)
+        {
+            public static string X(long l) => "x-long";
+
+            public static string X(UId u) => "x-uid";
+
+            public static string XL(string s) => "xl";
+
+            [Name("viaLong")]
+            public static string Pin(long l) => "long";
+
+            public static string Pin(UId u) => "uid";
+
+            public static string V(long l) => "long";
+
+            internal static string V(UId u) => "internal";
+
+            private static string V(string s) => "private";
+
+            public static string Hidden() => V("s");
+
+            public static string D(long l, int n = 3) => "long" + n;
+
+            public static string D(UId u, int n = 5) => "uid" + n;
+        }
+
+        public class KeyCalls
+        {
+            private int _counter;
+
+            private int Next() => ++_counter;
+
+            private UId NextId() => new(++_counter);
+
+            public string Run() =>
+                Key.X(1L)
+                + Key.X(new UId(1))
+                + Key.XL("s")
+                + Key.Pin(1L)
+                + Key.Pin(new UId(1))
+                + Key.V(new UId(1))
+                + Key.D(new UId(1))
+                + Key.D(n: Next(), u: NextId());
+        }
+        """;
+
+    [Test]
+    public async Task CompanionNamespace_ClaimedNames_KeepCollisionsPinsAndVisibility()
+    {
+        var result = TranspileHelper.Transpile(Preamble + Names);
+
+        await TranspileHelper.AssertGolden("companion-direct-overloads-key.ts", result["key.ts"]);
+    }
+
+    [Test]
+    public async Task CallsIntoACompanionGroup_SpellTheClaimedNamesAndKeepArgumentOrder()
+    {
+        var result = TranspileHelper.Transpile(Preamble + Names);
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-key-calls.ts",
+            result["key-calls.ts"]
+        );
+    }
+
+    [Test]
+    public async Task BrandedWrapperOverAClass_BindsItsClassFastPaths()
+    {
+        var result = TranspileHelper.Transpile(
+            Preamble
+                + """
+                public record Payload(int X);
+
+                [Branded]
+                public readonly record struct Wrap(Payload Value)
+                {
+                    public static string S(long l) => "long";
+
+                    public static string S(UId u) => "uid";
+                }
+
+                public class WrapCalls
+                {
+                    public string Run() => Wrap.S(new UId(1)) + Wrap.S(1L);
+                }
+                """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-class-wrapper-calls.ts",
+            result["wrap-calls.ts"]
         );
     }
 
