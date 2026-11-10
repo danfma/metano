@@ -1791,4 +1791,42 @@ public class DartBackendTests
                     + " + this.defaults(/* default */ null, /* default */ null, c: 2)"
             );
     }
+
+    /// <summary>
+    /// <c>default(BigInteger)</c> is <c>BigInt.zero</c> in Dart, where a bare
+    /// <c>0</c> is an <c>int</c> (#601).
+    /// </summary>
+    [Test]
+    public async Task BigIntegerDefault_PrintsBigIntZero()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using System.Numerics;
+
+            [Transpile]
+            public class Wide
+            {
+                public BigInteger[] Slots() => new BigInteger[2];
+                public BigInteger OrZero(BigInteger? value) => value.GetValueOrDefault();
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+
+        await Assert
+            .That(files["wide.dart"])
+            .IsEqualTo(
+                """
+                class Wide {
+                  List<BigInt> slots() => List<BigInt>.filled(2, BigInt.zero);
+
+                  BigInt orZero(BigInt? value) => value ?? BigInt.zero;
+                }
+
+                """
+            );
+    }
 }

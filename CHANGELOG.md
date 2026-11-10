@@ -72,15 +72,29 @@ the migration list.
   `false`, `new Decimal("0")`, the enum's zero, `UUID.empty`), and the
   `defaultValue` overloads pass their argument: `longs.FirstOrDefault() + 1`
   is `1n` (#601). 2.x returned `null`. An element whose default no literal
-  spells (a user struct, a tuple, a `struct` type parameter, a
-  `[StringEnum]` without a zero member) still gets `null`, now with an
-  `MS0001` warning (#621); so does, without a warning, a type parameter
+  spells (a user struct, a tuple, `KeyValuePair` (so `dict.FirstOrDefault()`),
+  `DateTime`, `DateTimeOffset`, `TimeSpan`, `DateOnly`, `TimeOnly`, an
+  `[InlineWrapper]` struct, a `struct` type parameter, a `[StringEnum]`
+  without a zero member) still gets `null`, now with an `MS0001` warning
+  (#621); so does, without a warning, a type parameter
   that is not constrained to `struct` (unconstrained, `notnull`,
   `IComparable<T>`, `Enum` alone). `ElementAt` / `ElementAtOrDefault` /
   `DefaultIfEmpty` have no lowering yet (#617), `Min` / `Max` / `MinBy` over
   an empty or nullable `number` sequence still differ from .NET (#618), and
   the static call form `Enumerable.FirstOrDefault(xs)` is not lowered
-  (#619).
+  (#619). A default value typed wider than the source element
+  (`dogs.FirstOrDefault(animal)`) runs correctly but does not type-check in
+  the generated TypeScript.
+- `metano-runtime`: `firstOrDefault`, `lastOrDefault` and `singleOrDefault`
+  are overloads typed by their `defaultValue` (it was `T | null = null`):
+  no default gives `T | null`, a `T` default gives `T`, a `T | null` default
+  gives `T | null`. Hand-written calls keep compiling, with or without an
+  explicit element type argument, as long as the element type comes from the
+  surrounding `linq(...)` call or a type argument: the default value no
+  longer infers it, so a detached `firstOrDefault(undefined, 0)` is a term
+  over `unknown` (write `firstOrDefault<number>(undefined, 0)`), and a
+  default of another type is rejected. The declarations use `NoInfer`, so
+  type-checking against `metano-runtime` needs TypeScript 5.4 or later.
 - Known gaps a 2.x project can meet after the upgrade: tuple and spread
   elements that convert to `decimal` are not converted, and the Dart target
   leaves the ones that convert to `double` or `BigInteger` (#606);

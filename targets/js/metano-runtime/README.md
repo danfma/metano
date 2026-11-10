@@ -316,6 +316,9 @@ npm install metano-runtime
 pnpm add metano-runtime
 ```
 
+Type-checking against `metano-runtime` needs TypeScript 5.4 or later: the declarations
+use the `NoInfer` intrinsic.
+
 ## Peer dependencies
 
 - `@js-temporal/polyfill` — required if your transpiled code uses `DateTime`,

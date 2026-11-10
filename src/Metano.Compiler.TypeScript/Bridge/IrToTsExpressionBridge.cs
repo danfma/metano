@@ -1139,11 +1139,7 @@ public static partial class IrToTsExpressionBridge
             var emittedName = Int64LinqTerminals.EmittedName(stage);
             importedHelpers.Add(emittedName);
 
-            IReadOnlyList<TsExpression> stageArgs =
-            [
-                .. stage.Arguments.Select(a => Map(a, context)),
-                .. QueryableArguments(stage, context),
-            ];
+            var stageArgs = StageArguments(stage, context);
 
             // The operator call travels as a helper reference bound to the
             // pipe subpath, so the printer aliases it together with the
@@ -1164,6 +1160,11 @@ public static partial class IrToTsExpressionBridge
 
         return Int64LinqTerminals.EndsInLongCount(chain) ? Int64TsExpressions.BigInt(call) : call;
     }
+
+    private static IReadOnlyList<TsExpression> StageArguments(
+        IrLinqStage stage,
+        IrToTsBridgeContext context
+    ) => [.. stage.Arguments.Select(a => Map(a, context)), .. QueryableArguments(stage, context)];
 
     /// <summary>
     /// The queryable tree of a stage as its trailing argument. An

@@ -1,6 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -15,6 +16,10 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     private const string DefaultValueParameterName = "defaultValue";
+
+    // TODO(#549): the Dart target does not lower LINQ chains, so a warning
+    // about the lowered terminal would describe code it never prints.
+    private bool LowersLinqChains => _target is not TargetLanguage.Dart;
 
     /// <summary>
     /// The arguments of an <c>OrDefault</c> stage: <c>(predicate)</c> when it
@@ -32,18 +37,14 @@ public sealed partial class IrExpressionExtractor
     )
     {
         var defaultValueIndex = stage.ArgumentList.Arguments.IndexOf(argument =>
-            BoundParameterOf(argument, method).Name == DefaultValueParameterName
+            IsDefaultValueArgument(argument, method)
         );
 
         var predicate = PredicateOf(arguments, defaultValueIndex);
-        var elementType = method.TypeArguments[0];
 
         var missValue =
             ExplicitDefaultValue(arguments, defaultValueIndex)
-            ?? ElementMissValue.Of(elementType, BuildOrigin, MapElementType);
-
-        if (missValue is null && LowersLinqChains)
-            ElementMissValue.ReportUnrepresentable(stage, method, elementType);
+            ?? ElementMissValue.Of(method.TypeArguments[0], BuildOrigin, MapElementType);
 
         if (missValue is null or IrLiteral { Kind: IrLiteralKind.Null })
             return predicate is null ? [] : [predicate];
@@ -51,9 +52,35 @@ public sealed partial class IrExpressionExtractor
         return [predicate ?? OmittedArgument(), missValue];
     }
 
-    // TODO(#549): the Dart target does not lower LINQ chains, so a warning
-    // about the lowered terminal would describe code it never prints.
-    private bool LowersLinqChains => _target is not TargetLanguage.Dart;
+    /// <summary>
+    /// Reports an <c>OrDefault</c> stage that returns <c>null</c> on a miss
+    /// because no literal spells <c>default(TSource)</c> and the call passes
+    /// no value of its own.
+    /// </summary>
+    private void WarnWhenMissValueIsUnrepresentable(
+        InvocationExpressionSyntax stage,
+        IMethodSymbol method
+    )
+    {
+        var elementType = method.TypeArguments[0];
+
+        var returnsNullForAValueElement =
+            LowersLinqChains
+            && !PassesDefaultValue(stage, method)
+            && ElementMissValue.Of(elementType, BuildOrigin, MapElementType) is null;
+
+        if (returnsNullForAValueElement)
+            ElementMissValue.ReportUnrepresentable(stage, method, elementType);
+    }
+
+    private bool IsDefaultValueArgument(ArgumentSyntax argument, IMethodSymbol method) =>
+        BoundParameterOf(argument, method).Name == DefaultValueParameterName;
+
+    private bool PassesDefaultValue(InvocationExpressionSyntax stage, IMethodSymbol method) =>
+        stage.ArgumentList.Arguments.Any(argument =>
+            IsDefaultValueArgument(argument, method)
+            && !argument.Expression.IsKind(SyntaxKind.DefaultLiteralExpression)
+        );
 
     private static IrExpression? PredicateOf(
         IReadOnlyList<IrExpression> arguments,

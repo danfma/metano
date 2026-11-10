@@ -1,5 +1,5 @@
 // Compile-time checks of the null-root signatures (FR-034, FR-037), run by
-// `null-root-signatures.test.ts` through `tsgo -p tsconfig.typecheck.json`.
+// `test/typecheck-fixtures.test.ts` through `tsgo -p tsconfig.typecheck.json`.
 // Each `@ts-expect-error` must flag an error, or tsgo fails on it as unused.
 import { JsonSerializer, SerializerContext, type TypeSpec, type ValueSpec } from "#/system/json";
 

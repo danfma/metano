@@ -84,7 +84,11 @@ export function first<T>(
   };
 }
 
-/** `FirstOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`. */
+/**
+ * `FirstOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`
+ * (or `T | null` for a nullable default). `T` comes from the surrounding `linq(...)` call,
+ * never from the default: write `firstOrDefault<number>(undefined, 0)` to build a term standalone.
+ */
 export function firstOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue?: null,
@@ -95,6 +99,11 @@ export function firstOrDefault<T>(
   defaultValue: NoInfer<T>,
   queryable?: QueryableMeta,
 ): FirstOrDefaultTerm<T, T>;
+export function firstOrDefault<T>(
+  predicate: ((item: T) => boolean) | undefined,
+  defaultValue: NoInfer<T> | null,
+  queryable?: QueryableMeta,
+): FirstOrDefaultTerm<T, T | null>;
 export function firstOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,
@@ -131,7 +140,11 @@ export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableM
   };
 }
 
-/** `LastOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`. */
+/**
+ * `LastOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`
+ * (or `T | null` for a nullable default). `T` comes from the surrounding `linq(...)` call,
+ * never from the default: write `lastOrDefault<number>(undefined, 0)` to build a term standalone.
+ */
 export function lastOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue?: null,
@@ -142,6 +155,11 @@ export function lastOrDefault<T>(
   defaultValue: NoInfer<T>,
   queryable?: QueryableMeta,
 ): LastOrDefaultTerm<T, T>;
+export function lastOrDefault<T>(
+  predicate: ((item: T) => boolean) | undefined,
+  defaultValue: NoInfer<T> | null,
+  queryable?: QueryableMeta,
+): LastOrDefaultTerm<T, T | null>;
 export function lastOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,
@@ -160,7 +178,11 @@ export function lastOrDefault<T>(
   };
 }
 
-/** `SingleOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`. */
+/**
+ * `SingleOrDefault`: without a `defaultValue` a miss is `null`; with one, the result is a `T`
+ * (or `T | null` for a nullable default). `T` comes from the surrounding `linq(...)` call,
+ * never from the default: write `singleOrDefault<number>(undefined, 0)` to build a term standalone.
+ */
 export function singleOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue?: null,
@@ -171,6 +193,11 @@ export function singleOrDefault<T>(
   defaultValue: NoInfer<T>,
   queryable?: QueryableMeta,
 ): SingleOrDefaultTerm<T, T>;
+export function singleOrDefault<T>(
+  predicate: ((item: T) => boolean) | undefined,
+  defaultValue: NoInfer<T> | null,
+  queryable?: QueryableMeta,
+): SingleOrDefaultTerm<T, T | null>;
 export function singleOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,

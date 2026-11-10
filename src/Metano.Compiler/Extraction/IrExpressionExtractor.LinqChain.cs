@@ -109,6 +109,10 @@ public sealed partial class IrExpressionExtractor
                 return null;
 
             var args = StageArguments(current, sym!, op);
+
+            if (IrLinqMapping.IsOrDefaultTerminal(op))
+                WarnWhenMissValueIsUnrepresentable(current, sym!);
+
             var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
             stages.Add(new IrLinqStage(op, args, queryable, LinqSixtyFourBitValues.Of(sym!, op)));
 

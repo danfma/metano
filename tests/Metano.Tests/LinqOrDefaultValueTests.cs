@@ -108,14 +108,65 @@ public class LinqOrDefaultValueTests
 
                     public string NameOr(List<string> xs) => xs.FirstOrDefault("none");
 
+                    public string? NameOrFallback(List<string> xs, string? fallback) => xs.FirstOrDefault(fallback);
+
+                    public string? LastOrFallback(List<string> xs, string? fallback) => xs.LastOrDefault(x => x != "a", fallback);
+
                     public Person? Who(List<Person> xs) => xs.LastOrDefault(p => p.Name == "ana");
 
                     public T? Any<T>(List<T> xs) where T : class => xs.FirstOrDefault();
+                }
+                """
+        );
 
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+
+        await TranspileHelper.AssertGolden("linq-or-default-values.ts", result["lookups.ts"]);
+    }
+
+    /// <summary>
+    /// A queryable stage keeps its expression tree in the third slot, after
+    /// the default value, which is <c>undefined</c> when the stage has none.
+    /// </summary>
+    [Test]
+    public async Task QueryableStages_KeepTheTreeAfterTheDefaultValue()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Types
+                + """
+
+                [Transpile]
+                public class Queries
+                {
                     public Person? Queried(IQueryable<Person> xs) => xs.FirstOrDefault(p => p.Name == "ana");
 
                     public int QueriedCount(IQueryable<int> xs) => xs.FirstOrDefault(x => x > 100);
+                }
+                """
+        );
 
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+
+        await TranspileHelper.AssertGolden("linq-or-default-queryable.ts", result["queries.ts"]);
+    }
+
+    /// <summary>
+    /// <c>List&lt;T&gt;.Find</c> coalesces a miss to the same default.
+    /// </summary>
+    [Test]
+    public async Task ListFind_CoalescesToTheTypeDefault()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Types
+                + """
+
+                [Transpile]
+                public class Finders
+                {
                     public int Found(List<int> xs) => xs.Find(x => x > 100);
 
                     public long FoundWide(List<long> xs) => xs.Find(x => x > 100) + 3;
@@ -135,7 +186,7 @@ public class LinqOrDefaultValueTests
             .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
             .IsEmpty();
 
-        await TranspileHelper.AssertGolden("linq-or-default-values.ts", result["lookups.ts"]);
+        await TranspileHelper.AssertGolden("linq-or-default-find.ts", result["finders.ts"]);
     }
 
     /// <summary>
@@ -247,7 +298,11 @@ public class LinqOrDefaultValueTests
     }
 
     private static string CallText(MetanoDiagnostic diagnostic) =>
-        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+        diagnostic.Location is { SourceTree: { } tree } location
+            ? tree.GetText().ToString(location.SourceSpan)
+            : throw new InvalidOperationException(
+                $"The diagnostic '{diagnostic.Message}' has no source location."
+            );
 
     private static string Unrepresentable(string call, string type, string lookup) =>
         $"Warning {DiagnosticCodes.UnsupportedFeature} at '{call}': 'default({type})' has no "

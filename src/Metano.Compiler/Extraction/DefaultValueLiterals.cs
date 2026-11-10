@@ -59,7 +59,7 @@ internal static class DefaultValueLiterals
             or SpecialType.System_UInt16
             or SpecialType.System_Int32
             or SpecialType.System_UInt32 => new IrLiteral(0, IrLiteralKind.Int32),
-            _ when IsBigInteger(type) => new IrLiteral("0", IrLiteralKind.BigInteger),
+            _ when type.IsBigInteger() => new IrLiteral("0", IrLiteralKind.BigInteger),
             _ => new IrLiteral(null, IrLiteralKind.Default),
         };
     }
@@ -88,9 +88,6 @@ internal static class DefaultValueLiterals
         || type is ITypeParameterSymbol { IsValueType: false }
         || type
             is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
-
-    private static bool IsBigInteger(ITypeSymbol type) =>
-        type.ToDisplayString() == "System.Numerics.BigInteger";
 
     private static bool IsGuid(ITypeSymbol type) =>
         type is INamedTypeSymbol { Name: nameof(Guid), ContainingNamespace.Name: "System" }

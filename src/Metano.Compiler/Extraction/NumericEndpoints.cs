@@ -71,8 +71,7 @@ internal static class NumericEndpoints
             SpecialType.System_Single => IrNumericKind.Single,
             SpecialType.System_Double => IrNumericKind.Double,
             SpecialType.System_Decimal => IrNumericKind.Decimal,
-            _ when type?.ToDisplayString() == "System.Numerics.BigInteger" =>
-                IrNumericKind.BigInteger,
+            _ when type.IsBigInteger() => IrNumericKind.BigInteger,
             _ => null,
         };
 }
