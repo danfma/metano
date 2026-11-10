@@ -18,7 +18,7 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 
 | Code | Symbolic name | Meaning |
 | --- | --- | --- |
-| `MS0001` | `UnsupportedFeature` | A C# language feature is not supported by the transpiler. |
+| `MS0001` | `UnsupportedFeature` | A C# language feature is not supported by the transpiler. Among its sources (warning, throwing placeholder): a LINQ overload the runtime operator does not implement, a comparer argument no runtime operator reads, a queryable tree an operator has no slot for, and a `System.Linq` extension method nothing lowers (#648; `Extraction/IrExpressionExtractor.LinqOverloads.cs`). |
 | `MS0002` | `UnresolvedType` | A referenced type could not be resolved or is not transpileable. |
 | `MS0003` | `AmbiguousConstruct` | An ambiguous construct may produce incorrect output. Spec 013 uses it for overload names: the climb's dead end (FR-024, error, `$1` / `$2`), an invalid `[Name]` suffix on an overload (FR-005, error at the attribute's argument; the generated suffix is kept), a `[Name]` on an override or interface implementation that is ignored for its root's (FR-005, FR-025, warning), and a `[Name]` on a constructor outside a dispatched set (FR-005, warning); the Dart target reports the `[Name]` ones too since slice 013g (`Extraction/OverloadGroupNaming.cs`, `Extraction/OverloadSuffixPin.cs`; tests `tests/Metano.Tests/OverloadNamePinTests.cs`). |
 | `MS0004` | `ConflictingAttributes` | Conflicting attributes are present on a single symbol. |

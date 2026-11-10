@@ -2733,6 +2733,15 @@ public sealed partial class IrExpressionExtractor
                 return rewritten;
         }
 
+        // A LINQ extension method nothing lowers would become a member call
+        // on the receiver (`xs.join(...)` reaching `Array.prototype.join`),
+        // and an unchained LINQ call another overload of its operator (#648).
+        if (IsUnloweredLinqCall(symbol))
+            return ReportUnloweredLinqCall(inv, symbol);
+
+        if (UnimplementedUnchainedLinqCallOf(inv, symbol) is { } unimplementedCall)
+            return ReportUnsupportedLinqStages([unimplementedCall]);
+
         var target = ExtractExplicitInvokeDelegate(inv, symbol) ?? Extract(inv.Expression);
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
         ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
