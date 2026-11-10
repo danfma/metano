@@ -163,21 +163,64 @@ export function iteratedNarrowedSum(a: bigint): number {
 }
 
 export function iteratedNarrowedCheckedSum(a: bigint): number {
-  const pairs = ((receiver$temp$0) => {
-    receiver$temp$0.push([a, a] as [bigint, bigint]);
-
-    return receiver$temp$0;
-  })([] as Array<[bigint, bigint]>);
-  let total = 0;
-
   {
+    const pairs = ((receiver$temp$0) => {
+      receiver$temp$0.push([a, a] as [bigint, bigint]);
+
+      return receiver$temp$0;
+    })([] as Array<[bigint, bigint]>);
+    let total = 0;
     for (const pair$element of pairs) {
       const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
       total ^= pair[0] ^ pair[1] >> 1;
     }
-  }
 
-  return total;
+    return total;
+  }
+}
+
+export function literalCastStopsAtTheMissingElement(a: number): number {
+  let calls = 0;
+  const missing = () => {
+    calls++;
+
+    return null;
+  };
+  const next = () => {
+    calls += 100;
+
+    return a;
+  };
+  try {
+    const wide = [BigInt(missing() ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })()), BigInt(next())] as [bigint, bigint];
+
+    return Number(BigInt.asIntN(32, BigInt.asIntN(64, wide[0] + wide[1])));
+  } catch (_err) {
+    return -calls;
+  }
+}
+
+export function literalCastSum(a: number, b: number): bigint {
+  const first = a;
+  const wide = [[BigInt(first ?? (() => {
+    throw new Error("Nullable object must have a value.");
+  })()), BigInt(b)] as [bigint, bigint], BigInt(a)] as [[bigint, bigint], bigint];
+
+  return BigInt.asIntN(64, BigInt.asIntN(64, wide[0][0] + wide[0][1]) + wide[1]);
+}
+
+export function literalCastNarrowed(a: bigint): number {
+  const narrow = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, 5n))] as [number, number];
+
+  return narrow[0] ^ narrow[1] << 4;
+}
+
+export function literalCastNarrowedChecked(a: bigint): number {
+  const narrow = [Number(checkedNarrow(a, 32, true)), Number(checkedNarrow(5n, 32, true))] as [number, number];
+
+  return narrow[0] ^ narrow[1] << 4;
 }
 
 export function nullableLiteralSum(a: number, b: number): bigint {

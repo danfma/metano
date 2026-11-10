@@ -114,7 +114,7 @@ public sealed partial class IrExpressionExtractor
         }
 
         var conversion = converting is var (from, to)
-            ? SpreadElementConversion(spread, from, to)
+            ? SpreadElementConversion(spread, NextSpreadElementName(), from, to)
             : null;
 
         return new IrSpreadExpression(Extract(spread.Expression), source, conversion);
@@ -148,17 +148,17 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The conversion of one spread element from <paramref name="from"/> to
-    /// <paramref name="to"/>, over a fresh element name.
+    /// The conversion of one spread element, bound to
+    /// <paramref name="name"/>, from <paramref name="from"/> to
+    /// <paramref name="to"/>.
     /// </summary>
     private IrSpreadElementConversion SpreadElementConversion(
         SpreadElementSyntax spread,
+        string name,
         ITypeSymbol from,
         ITypeSymbol to
     )
     {
-        var name = NextSpreadElementName();
-
         var converted = ConvertedElement(
             spread,
             new IrIdentifier(name),

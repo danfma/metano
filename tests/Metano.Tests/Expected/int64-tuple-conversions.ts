@@ -136,6 +136,30 @@ export class Pairs {
     return pair == null ? null : [BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint];
   }
 
+  literalUnwrapped(first: number | null, second: number): [bigint, bigint] {
+    return [BigInt(first ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })()), BigInt(second)] as [bigint, bigint];
+  }
+
+  literalNested(first: number | null, second: number): [[bigint, bigint], bigint] {
+    return [[BigInt(first ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })()), BigInt(second)] as [bigint, bigint], BigInt(second)] as [[bigint, bigint], bigint];
+  }
+
+  literalNarrowed(first: bigint): [number, number] {
+    return [Number(BigInt.asIntN(32, first)), Number(BigInt.asIntN(32, 5n))] as [number, number];
+  }
+
+  literalNarrowedChecked(first: bigint): [number, number] {
+    return [Number(checkedNarrow(first, 32, true)), Number(checkedNarrow(5n, 32, true))] as [number, number];
+  }
+
+  literalHoldingATuple(pair: [number, number], last: number): [[bigint, bigint], bigint] {
+    return [[BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint], BigInt(last)] as [[bigint, bigint], bigint];
+  }
+
   nullableLiteral(): [bigint, bigint] | null {
     return [1n, 2n] as [bigint, bigint];
   }

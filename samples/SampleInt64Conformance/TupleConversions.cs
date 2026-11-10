@@ -188,15 +188,76 @@ public static class TupleConversions
 
     public static int IteratedNarrowedCheckedSum(long a)
     {
-        var pairs = new List<(long, long)> { (a, a) };
-        var total = 0;
         checked
         {
+            var pairs = new List<(long, long)> { (a, a) };
+            var total = 0;
+
             foreach ((int, int) pair in pairs)
                 total ^= pair.Item1 ^ (pair.Item2 >> 1);
-        }
 
-        return total;
+            return total;
+        }
+    }
+
+    // The missing element is the row: C# warns about the cast it tests.
+#pragma warning disable CS8629
+    /// <summary>
+    /// A cast tuple literal converts each element where it is written: the
+    /// missing first element throws before the second one runs, so the calls
+    /// counted stop at one.
+    /// </summary>
+    public static int LiteralCastStopsAtTheMissingElement(int a)
+    {
+        var calls = 0;
+
+        Func<int?> missing = () =>
+        {
+            calls++;
+
+            return null;
+        };
+
+        Func<int> next = () =>
+        {
+            calls += 100;
+
+            return a;
+        };
+
+        try
+        {
+            var wide = ((long, long))(missing(), next());
+
+            return (int)(wide.Item1 + wide.Item2);
+        }
+        catch (InvalidOperationException)
+        {
+            return -calls;
+        }
+    }
+#pragma warning restore CS8629
+
+    public static long LiteralCastSum(int a, int b)
+    {
+        int? first = a;
+        var wide = (((long, long), long))((first, b), a);
+
+        return wide.Item1.Item1 + wide.Item1.Item2 + wide.Item2;
+    }
+
+    public static int LiteralCastNarrowed(long a)
+    {
+        var narrow = ((int, int))(a, 5L);
+
+        return narrow.Item1 ^ (narrow.Item2 << 4);
+    }
+
+    public static int LiteralCastNarrowedChecked(long a)
+    {
+        var narrow = checked(((int, int))(a, 5L));
+
+        return narrow.Item1 ^ (narrow.Item2 << 4);
     }
 
     public static long NullableLiteralSum(int a, int b)

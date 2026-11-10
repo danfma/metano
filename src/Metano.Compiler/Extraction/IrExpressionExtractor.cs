@@ -5058,12 +5058,16 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression ExtractCast(CastExpressionSyntax cast)
     {
-        var inner = Extract(cast.Expression);
         var sourceType = _semantic.GetTypeInfo(cast.Expression).Type;
         var targetType = _semantic.GetTypeInfo(cast).Type;
 
         if (sourceType is null || targetType is null)
-            return new IrCastExpression(inner, ExtractTargetType(cast));
+            return new IrCastExpression(Extract(cast.Expression), ExtractTargetType(cast));
+
+        if (ExplicitTupleLiteralConversion(cast, sourceType, targetType) is { } literal)
+            return literal;
+
+        var inner = Extract(cast.Expression);
 
         var unwrapsNullable = IsNullableUnwrapCast(cast, sourceType, targetType);
 
@@ -5076,9 +5080,7 @@ public sealed partial class IrExpressionExtractor
         if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)
             return numeric;
 
-        var isChecked = CheckedContexts.IsChecked(cast, _semantic.Compilation);
-
-        if (ExplicitTupleConversion(cast, isChecked, inner, sourceType, targetType) is { } tuple)
+        if (ExplicitTupleConversion(cast, inner, sourceType, targetType) is { } tuple)
             return tuple;
 
         var truncatesDecimal =
