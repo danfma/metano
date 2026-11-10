@@ -101,7 +101,7 @@ export function firstOrDefault<T>(
 ): FirstOrDefaultTerm<T, T>;
 export function firstOrDefault<T>(
   predicate: ((item: T) => boolean) | undefined,
-  defaultValue: NoInfer<T> | null,
+  defaultValue: NoInfer<T> | null | undefined,
   queryable?: QueryableMeta,
 ): FirstOrDefaultTerm<T, T | null>;
 export function firstOrDefault<T>(
@@ -157,7 +157,7 @@ export function lastOrDefault<T>(
 ): LastOrDefaultTerm<T, T>;
 export function lastOrDefault<T>(
   predicate: ((item: T) => boolean) | undefined,
-  defaultValue: NoInfer<T> | null,
+  defaultValue: NoInfer<T> | null | undefined,
   queryable?: QueryableMeta,
 ): LastOrDefaultTerm<T, T | null>;
 export function lastOrDefault<T>(
@@ -195,7 +195,7 @@ export function singleOrDefault<T>(
 ): SingleOrDefaultTerm<T, T>;
 export function singleOrDefault<T>(
   predicate: ((item: T) => boolean) | undefined,
-  defaultValue: NoInfer<T> | null,
+  defaultValue: NoInfer<T> | null | undefined,
   queryable?: QueryableMeta,
 ): SingleOrDefaultTerm<T, T | null>;
 export function singleOrDefault<T>(

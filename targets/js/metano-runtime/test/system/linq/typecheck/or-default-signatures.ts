@@ -9,11 +9,7 @@ import {
   singleOrDefault,
 } from "#/system/linq";
 
-/** `true` only when `A` and `B` are the same type. */
-type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-
-function expectType<_ extends true>(): void {}
+import { type Equal, expectType } from "../../../typecheck/type-assertions.ts";
 
 declare const numbers: number[];
 declare const wide: bigint[];
@@ -67,6 +63,24 @@ expectType<Equal<typeof nullableLast, number | null>>();
 const nullableSingle = linq(numbers, singleOrDefault(undefined, maybeDefault));
 expectType<Equal<typeof nullableSingle, number | null>>();
 
+// ─── An optional default value yields null when it is missing ─────────────────
+
+function pick(fallback?: number) {
+  return linq(numbers, firstOrDefault((x) => x > 1, fallback));
+}
+
+expectType<Equal<ReturnType<typeof pick>, number | null>>();
+
+declare const undefinedDefault: number | undefined;
+
+const optionalLast = linq(numbers, lastOrDefault(undefined, undefinedDefault));
+expectType<Equal<typeof optionalLast, number | null>>();
+
+declare const looseDefault: number | null | undefined;
+
+const looseSingle = linq(numbers, singleOrDefault((x) => x > 1, looseDefault));
+expectType<Equal<typeof looseSingle, number | null>>();
+
 // ─── A standalone term takes its element type from a type argument ────────────
 
 const detached = firstOrDefault(undefined, 0);
@@ -77,12 +91,12 @@ expectType<Equal<ReturnType<typeof typedDetached.apply>, number>>();
 
 // ─── Known gap: a default value wider than the element type ───────────────────
 
-class Animal {
-  readonly name = "animal";
+interface Animal {
+  readonly name: string;
 }
 
-class Dog extends Animal {
-  readonly breed = "dog";
+interface Dog extends Animal {
+  readonly breed: string;
 }
 
 declare const dogs: Dog[];

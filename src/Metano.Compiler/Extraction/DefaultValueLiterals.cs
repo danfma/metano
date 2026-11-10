@@ -59,7 +59,10 @@ internal static class DefaultValueLiterals
             or SpecialType.System_UInt16
             or SpecialType.System_Int32
             or SpecialType.System_UInt32 => new IrLiteral(0, IrLiteralKind.Int32),
-            _ when type.IsBigInteger() => new IrLiteral("0", IrLiteralKind.BigInteger),
+            _ when type.IsBigInteger() => new IrLiteral(
+                IrLiteral.BigIntegerZeroDigits,
+                IrLiteralKind.BigInteger
+            ),
             _ => new IrLiteral(null, IrLiteralKind.Default),
         };
     }

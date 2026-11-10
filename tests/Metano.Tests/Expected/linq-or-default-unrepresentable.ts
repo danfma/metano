@@ -13,6 +13,14 @@ export class Zeroed {
     return linq(xs, firstOrDefault((p: Point) => p.x > 1));
   }
 
+  atParenthesized(xs: Point[]): Point | null {
+    return linq(xs, firstOrDefault());
+  }
+
+  atForgiven(xs: Point[]): Point | null {
+    return linq(xs, lastOrDefault((p: Point) => p.x > 1));
+  }
+
   pair(xs: [number, number][]): [number, number] | null {
     return linq(xs, lastOrDefault((x: [number, number]) => x[0] > 1));
   }

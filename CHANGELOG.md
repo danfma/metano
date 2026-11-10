@@ -87,14 +87,18 @@ the migration list.
   the generated TypeScript.
 - `metano-runtime`: `firstOrDefault`, `lastOrDefault` and `singleOrDefault`
   are overloads typed by their `defaultValue` (it was `T | null = null`):
-  no default gives `T | null`, a `T` default gives `T`, a `T | null` default
-  gives `T | null`. Hand-written calls keep compiling, with or without an
-  explicit element type argument, as long as the element type comes from the
-  surrounding `linq(...)` call or a type argument: the default value no
-  longer infers it, so a detached `firstOrDefault(undefined, 0)` is a term
-  over `unknown` (write `firstOrDefault<number>(undefined, 0)`), and a
-  default of another type is rejected. The declarations use `NoInfer`, so
-  type-checking against `metano-runtime` needs TypeScript 5.4 or later.
+  no default gives `T | null`, a `T` default gives `T`, and a nullable or
+  optional default (`T | null`, `T | undefined`) gives `T | null`.
+  Hand-written calls inside `linq(...)` keep compiling, with or without an
+  explicit element type argument, with one exception: a default of a wider
+  type than the elements (`linq(dogs, firstOrDefault(undefined, animal))`)
+  needs the explicit type argument (`firstOrDefault<Animal>(undefined,
+  animal)`). The default value no longer infers the element type, so a
+  detached `firstOrDefault(undefined, 0)` is a term over `unknown` (write
+  `firstOrDefault<number>(undefined, 0)`), and a default of an unrelated
+  type is rejected. The declarations use `NoInfer`, so type-checking against
+  `metano-runtime` needs TypeScript 5.4 or later; 5.3 with `skipLibCheck:
+  true` reports nothing and silently reads `NoInfer` as `any`.
 - Known gaps a 2.x project can meet after the upgrade: tuple and spread
   elements that convert to `decimal` are not converted, and the Dart target
   leaves the ones that convert to `double` or `BigInteger` (#606);
