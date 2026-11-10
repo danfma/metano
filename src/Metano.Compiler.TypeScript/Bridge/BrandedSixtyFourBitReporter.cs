@@ -55,7 +55,7 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
             method => method.Parameters
         );
 
-        var isBrandedOperator = primary.Semantics.IsOperator && SymbolHelper.HasBranded(type);
+        var isBrandedOperator = IsBrandedOperator(type, primary.Semantics.IsOperator);
 
         foreach (var group in groups.Where(group => group.Any(added.Contains)))
         {
@@ -75,17 +75,15 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
     /// a static group of a branded companion namespace. Such a dispatcher
     /// inherits nothing, so every overload is one the type declares.
     /// </summary>
-    /// <param name="isBrandedOperator">The group holds the operators or
-    /// conversions of a branded companion.</param>
     public void ReportFunctions(
         INamedTypeSymbol type,
         string name,
-        IReadOnlyList<FunctionOverloadShape> overloads,
-        bool isBrandedOperator
+        IReadOnlyList<FunctionOverloadShape> overloads
     )
     {
         var symbols = type.GetMembers(name).OfType<IMethodSymbol>().ToList();
         var groups = BrandedSixtyFourBitOverloads.Find(overloads, overload => overload.Parameters);
+        var isBrandedOperator = IsBrandedOperator(type, overloads[0].IsOperator);
 
         foreach (var group in groups)
         {
@@ -132,6 +130,14 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
             )
         );
     }
+
+    /// <summary>
+    /// Whether the group holds the operators or conversions of a
+    /// <c>[Branded]</c> / <c>[InlineWrapper]</c> type, whose applications no
+    /// generated code lowers to the declared functions (#599).
+    /// </summary>
+    private static bool IsBrandedOperator(INamedTypeSymbol type, bool isOperatorGroup) =>
+        isOperatorGroup && SymbolHelper.HasBranded(type);
 
     private static string TranspiledCallsNote(bool isBrandedOperator) =>
         isBrandedOperator

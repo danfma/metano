@@ -135,12 +135,7 @@ public sealed partial class IrExpressionExtractor
         type is not null
         && type.UnwrapNullableValueType() is INamedTypeSymbol { IsRecord: true } record
         && SymbolHelper.IsToolchainDeclared(record, _semantic.Compilation.Assembly)
-        && !IsPrimitiveBackedBranded(record);
-
-    internal static bool IsPrimitiveBackedBranded(INamedTypeSymbol record) =>
-        SymbolHelper.HasBranded(record)
-        && SymbolHelper.GetBrandedValueType(record.OriginalDefinition) is { } valueType
-        && IrTypeRefMapper.Map(valueType).IsBrandablePrimitive();
+        && !SymbolHelper.IsPrimitiveBackedBranded(record);
 
     private bool IsNullLiteral(ExpressionSyntax expression) =>
         _semantic.GetConstantValue(expression) is { HasValue: true, Value: null };

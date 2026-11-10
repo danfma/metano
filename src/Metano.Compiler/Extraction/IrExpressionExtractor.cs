@@ -1746,7 +1746,7 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var overloadRef = DispatchedMethodCalls.RefOf(operatorMethod, _target);
+        var overloadRef = DispatchedMethodCalls.RefOf(operatorMethod, _context);
 
         if (overloadRef is null)
             return null;
@@ -2522,11 +2522,7 @@ public sealed partial class IrExpressionExtractor
         if (reference is not IrMemberAccess access)
             return reference;
 
-        var overloadRef = DispatchedMethodCalls.RefOf(
-            method,
-            _target,
-            _context.EmitsBrandedFastPaths
-        );
+        var overloadRef = DispatchedMethodCalls.RefOf(method, _context);
 
         return overloadRef is null
             ? reference
@@ -2920,11 +2916,7 @@ public sealed partial class IrExpressionExtractor
         if (symbol is null or { MethodKind: MethodKind.ReducedExtension })
             return null;
 
-        var overloadRef = DispatchedMethodCalls.RefOf(
-            symbol,
-            _target,
-            _context.EmitsBrandedFastPaths
-        );
+        var overloadRef = DispatchedMethodCalls.RefOf(symbol, _context);
 
         if (overloadRef is null)
             return null;
@@ -3171,9 +3163,7 @@ public sealed partial class IrExpressionExtractor
 
     private static bool IsPrimitiveBackedBrandedValueRead(ISymbol symbol) =>
         SymbolHelper.IsBrandedValueMember(symbol)
-        && SymbolHelper.GetBrandedValueType(symbol.ContainingType.OriginalDefinition)
-            is { } valueType
-        && IrTypeRefMapper.Map(valueType).IsBrandablePrimitive();
+        && SymbolHelper.IsPrimitiveBackedBranded(symbol.ContainingType);
 
     private IrMemberOrigin? BuildOrigin(ISymbol? symbol)
     {
@@ -3636,7 +3626,7 @@ public sealed partial class IrExpressionExtractor
         // FR-018). Any other extension call keeps the helper rewrite.
         var extensionOverloadRef = DispatchedMethodCalls.RefOf(
             extensionCallee.ReducedFrom ?? extensionCallee,
-            _target
+            _context
         );
 
         if (

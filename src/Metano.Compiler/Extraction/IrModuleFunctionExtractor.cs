@@ -484,7 +484,7 @@ public static class IrModuleFunctionExtractor
         );
 
         var body = TryExtractBody(method, context, localNames);
-        var claim = DispatchedMethodCalls.ClaimOf(method, context.Target);
+        var claim = DispatchedMethodCalls.ClaimOf(method, context);
 
         return new IrModuleFunction(
             Name: method.Name,
@@ -791,7 +791,7 @@ public static class IrModuleFunctionExtractor
         var body = context.Compilation is { } compilation
             ? TryExtractBody(method, context, localNames)
             : null;
-        var claim = DispatchedMethodCalls.ClaimOf(method, context.Target);
+        var claim = DispatchedMethodCalls.ClaimOf(method, context);
 
         return new IrModuleFunction(
             Name: method.Name,

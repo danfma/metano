@@ -2337,21 +2337,19 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
     )
     {
-        if (!IsBrandedStruct(type))
+        if (OverloadClaims.CompanionPlanOf(type) is not { } plan)
             return false;
 
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
 
-        if (TsCompanionPlan.Of(ir) is not { } plan)
-            return false;
+        TsOverloadClaims.Report(plan.Findings, type, ReportDiagnostic);
 
-        foreach (var group in plan.Groups.Where(group => group.IsDispatched))
+        foreach (var dispatcher in plan.Groups.OfType<TsCompanionDispatcher>())
         {
             Context.AmbiguousDispatch.ReportFunctions(
                 type,
-                group.MemberName,
-                group.Methods.Select(FunctionOverloadShape.Of).ToList(),
-                isOperatorGroup: group.Methods[0].Semantics.IsOperator
+                dispatcher.MemberName,
+                dispatcher.FastPaths.Select(f => FunctionOverloadShape.Of(f.Method)).ToList()
             );
         }
 
@@ -2359,13 +2357,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         return true;
     }
-
-    /// <summary>
-    /// A <c>[Branded]</c> / <c>[InlineWrapper]</c> struct: the only shape a
-    /// companion namespace is planned for (<see cref="TsCompanionPlan"/>).
-    /// </summary>
-    internal static bool IsBrandedStruct(INamedTypeSymbol type) =>
-        SymbolHelper.HasBranded(type) && type.TypeKind == TypeKind.Struct;
 
     /// <summary>
     /// Routes a JSX component record (<see cref="IrTypeSemantics.IsJsxComponent"/>)

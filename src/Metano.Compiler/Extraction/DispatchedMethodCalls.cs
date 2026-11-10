@@ -27,18 +27,17 @@ internal static class DispatchedMethodCalls
     /// The overload a call to <paramref name="method"/> targets directly;
     /// <c>null</c> when the call keeps the dispatcher.
     /// </summary>
-    /// <param name="emitsBrandedFastPaths">The target's
-    /// <see cref="IrExtractionContext.EmitsBrandedFastPaths"/> capability: a
-    /// method of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type is bound
-    /// only then.</param>
-    public static IrOverloadRef? RefOf(
-        IMethodSymbol? method,
-        TargetLanguage? target,
-        bool emitsBrandedFastPaths = false
-    )
+    /// <param name="context">The extraction it is asked for: its target
+    /// decides which types are emitted, and its
+    /// <see cref="IrExtractionContext.EmitsBrandedFastPath"/> capability
+    /// which methods of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type are
+    /// bound.</param>
+    public static IrOverloadRef? RefOf(IMethodSymbol? method, IrExtractionContext context)
     {
         if (method is null)
             return null;
+
+        var target = context.Target;
 
         var definition = method.OriginalDefinition;
         var containingType = definition.ContainingType;
@@ -52,9 +51,7 @@ internal static class DispatchedMethodCalls
         if (!IsEmittedContainingType(containingType, target))
             return null;
 
-        var isBrandedMethod = SymbolHelper.HasBranded(containingType);
-
-        if (isBrandedMethod && !(emitsBrandedFastPaths && HasBrandedFastPath(definition)))
+        if (KeepsBrandedDispatcher(definition, context))
             return null;
 
         // A containerless class calls only the module functions it emits —
@@ -83,11 +80,13 @@ internal static class DispatchedMethodCalls
     /// </summary>
     public static (IrOverloadRef Ref, IrOverloadName Name, string SignatureText)? ClaimOf(
         IMethodSymbol? method,
-        TargetLanguage? target
+        IrExtractionContext context
     )
     {
-        if (method is null || RefOf(method, target) is not { } reference)
+        if (method is null || RefOf(method, context) is not { } reference)
             return null;
+
+        var target = context.Target;
 
         var definition = method.OriginalDefinition;
         var type = definition.ContainingType;
@@ -131,7 +130,7 @@ internal static class DispatchedMethodCalls
     /// excluded here, and <c>[JsCallable]</c>, which only an interface
     /// carries, through <see cref="MethodOverloadGroups.IsTranspiledInterface"/>.
     /// A <c>[Branded]</c> type is judged per method
-    /// (<see cref="HasBrandedFastPath"/>).
+    /// (<see cref="KeepsBrandedDispatcher"/>).
     /// </summary>
     private static bool IsEmittedContainingType(INamedTypeSymbol type, TargetLanguage? target)
     {
@@ -145,20 +144,22 @@ internal static class DispatchedMethodCalls
     }
 
     /// <summary>
-    /// Whether a target that declares branded fast paths declares one for
-    /// <paramref name="method"/> of a <c>[Branded]</c> / <c>[InlineWrapper]</c>
-    /// type (issue #569). A wrapper over a brandable primitive lowers to a
-    /// companion that holds only the static methods; a wrapper over anything
-    /// else falls back to a class, whose methods all take part. An operator
-    /// or conversion of a branded type is never bound: its applications are
-    /// not lowered to the declared functions (#599).
+    /// Whether a call to <paramref name="method"/> keeps the dispatcher
+    /// because its type is a <c>[Branded]</c> / <c>[InlineWrapper]</c> one
+    /// and the target declares no fast path for the method (issue #569). The
+    /// target answers per method, since which members of a branded type it
+    /// emits is its own lowering; a target without the capability keeps every
+    /// such call on the dispatcher.
     /// </summary>
-    private static bool HasBrandedFastPath(IMethodSymbol method) =>
-        method.MethodKind is MethodKind.Ordinary
-        && (
-            method.IsStatic
-            || !IrExpressionExtractor.IsPrimitiveBackedBranded(method.ContainingType)
-        );
+    private static bool KeepsBrandedDispatcher(IMethodSymbol method, IrExtractionContext context)
+    {
+        if (!SymbolHelper.HasBranded(method.ContainingType))
+            return false;
+
+        var emitsFastPath = context.EmitsBrandedFastPath?.Invoke(method) ?? false;
+
+        return !emitsFastPath;
+    }
 
     /// <summary>
     /// Whether <paramref name="method"/> belongs to a dispatched group

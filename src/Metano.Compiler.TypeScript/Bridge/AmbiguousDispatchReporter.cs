@@ -40,16 +40,13 @@ internal sealed class AmbiguousDispatchReporter(Action<MetanoDiagnostic> reportD
     /// A function dispatcher named <paramref name="name"/> on
     /// <paramref name="type"/>: it has no class scope and inherits nothing.
     /// </summary>
-    /// <param name="isOperatorGroup">The group holds the operators or
-    /// conversions of a branded companion.</param>
     public void ReportFunctions(
         INamedTypeSymbol type,
         string name,
-        IReadOnlyList<FunctionOverloadShape> overloads,
-        bool isOperatorGroup = false
+        IReadOnlyList<FunctionOverloadShape> overloads
     )
     {
         _catchAll.ReportFunctions(type, name, overloads);
-        _brandedSixtyFourBit.ReportFunctions(type, name, overloads, isOperatorGroup);
+        _brandedSixtyFourBit.ReportFunctions(type, name, overloads);
     }
 }

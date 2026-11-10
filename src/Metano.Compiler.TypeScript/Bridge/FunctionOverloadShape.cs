@@ -10,14 +10,25 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// The two <c>MS0063</c> reporters read their dispatchers through this shape
 /// (issue #569).
 /// </summary>
+/// <param name="IsOperator">The overload is a user-defined operator or
+/// conversion, which only a branded companion declares as a function.</param>
 internal sealed record FunctionOverloadShape(
     IReadOnlyList<IrParameter> Parameters,
-    TypeCheckScope Scope
+    TypeCheckScope Scope,
+    bool IsOperator
 )
 {
     public static FunctionOverloadShape Of(IrMethodDeclaration method) =>
-        new(method.Parameters, TypeCheckScope.ForMethod(method, [], typeOverrides: null));
+        new(
+            method.Parameters,
+            TypeCheckScope.ForMethod(method, [], typeOverrides: null),
+            method.Semantics.IsOperator
+        );
 
     public static FunctionOverloadShape Of(IrModuleFunction function) =>
-        new(function.Parameters, new TypeCheckScope(function.TypeParameters ?? [], null));
+        new(
+            function.Parameters,
+            new TypeCheckScope(function.TypeParameters ?? [], null),
+            IsOperator: false
+        );
 }

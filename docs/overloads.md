@@ -158,12 +158,20 @@ calls and method groups name the bound one, so `Tag.S(new UId(1))` runs
 `S(UId)` even though a `UId` is a `bigint` at runtime and the dispatcher would
 pick `S(long)`. A function of an overload that is not public is tagged
 `/** @internal */`. Operators and conversions declared on a branded type are
-not applied through these functions yet (#599), and its constructors get no
-factories.
+not applied through their functions yet (#599), so an overloaded operator or
+conversion group keeps its per-overload functions local to the namespace; and
+a branded type's constructors get no factories.
 
 Generated code only binds a type whose source the compiler can read — the
 current project or a project reference. A type read from a DLL or an npm
-package only keeps the dispatcher call, which is correct, just slower.
+package only keeps the dispatcher call. For a class that is correct, just
+slower, unless the group is one `MS0063` reports. For a branded companion it
+can run another overload than the one C# bound whenever the dispatcher cannot
+tell the argument types apart at runtime (a branded value beside its
+primitive, `long` beside `ulong`, `int` beside `double`), and the consumer's
+compilation reports nothing: `MS0063` is reported where the type is declared.
+Prefer a project reference for a library whose branded types overload static
+methods.
 
 ## The naming rule
 

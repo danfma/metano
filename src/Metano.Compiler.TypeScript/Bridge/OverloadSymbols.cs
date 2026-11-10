@@ -42,7 +42,8 @@ internal static class OverloadSymbols
 
     /// <summary>
     /// The declared overload whose parameters match <paramref name="parameters"/>
-    /// by name and <c>params</c> flag, then, among several, by mapped type.
+    /// by name and <c>params</c> flag, then, among several, by mapped type;
+    /// <c>out</c> parameters are left out of the comparison on both sides.
     /// </summary>
     internal static IMethodSymbol? Of(
         IReadOnlyList<IMethodSymbol> symbols,
@@ -62,9 +63,24 @@ internal static class OverloadSymbols
         IMethodSymbol symbol,
         IReadOnlyList<IrParameter> parameters,
         Func<IParameterSymbol, IrParameter, bool> matches
-    ) =>
-        symbol.Parameters.Length == parameters.Count
-        && symbol.Parameters.Zip(parameters).All(pair => matches(pair.First, pair.Second));
+    )
+    {
+        var inputs = InputsOf(symbol);
+        var declared = InputsOf(parameters);
+
+        return inputs.Count == declared.Count
+            && inputs.Zip(declared).All(pair => matches(pair.First, pair.Second));
+    }
+
+    /// <summary>
+    /// The parameters a dispatcher receives: an <c>out</c> parameter lowers to
+    /// an element of the returned tuple, so the IR overload does not list it.
+    /// </summary>
+    private static List<IParameterSymbol> InputsOf(IMethodSymbol symbol) =>
+        symbol.Parameters.Where(parameter => parameter.RefKind != RefKind.Out).ToList();
+
+    private static List<IrParameter> InputsOf(IReadOnlyList<IrParameter> parameters) =>
+        parameters.Where(parameter => !parameter.IsOut).ToList();
 
     private static bool MatchesByName(IParameterSymbol symbol, IrParameter parameter) =>
         symbol.Name == parameter.Name && symbol.IsParams == parameter.IsParams;

@@ -1,27 +1,40 @@
+using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// What the companion namespace of a <c>[Branded]</c> / <c>[InlineWrapper]</c>
 /// type declares: the primitive it brands, its synthesized members and its
-/// static method groups with the name each function takes. The emission
-/// (<see cref="IrToTsBrandedBridge"/>) and the call sites
-/// (<see cref="TsOverloadClaimsRegistry"/>) both read a plan built here, so a
-/// call names the fast path the namespace exports (issue #569).
+/// static method groups with the name each function takes (issue #569).
 /// <para>
-/// A plan is a function of the type's shape (names, parameters, visibility),
-/// never of a body, so the one built from a shape-only extraction equals the
-/// one built from the full IR.
+/// The claims registry (<see cref="TsOverloadClaimsRegistry"/>) owns the one
+/// plan of a type, built from its shape — names, parameters, visibility,
+/// never a body. Call sites read their fast paths from it, and the emission
+/// binds the same plan to the methods it lowers (<see cref="Bind"/>), so the
+/// namespace declares exactly the names the calls spell.
 /// </para>
 /// </summary>
 internal sealed class TsCompanionPlan
 {
-    private TsCompanionPlan(TsType primitiveType, IReadOnlyList<TsCompanionGroup> groups)
+    /// <summary>The non-validating factory every branded companion synthesizes.</summary>
+    internal const string CreateMember = "create";
+
+    /// <summary>The string conversion a non-string branded companion synthesizes.</summary>
+    internal const string ToStringMember = "toString";
+
+    private TsCompanionPlan(
+        TsType primitiveType,
+        IReadOnlyList<TsCompanionGroup> groups,
+        IReadOnlyList<TsClaimFinding> findings
+    )
     {
         PrimitiveType = primitiveType;
         Groups = groups;
+        Findings = findings;
     }
 
     /// <summary>The TS primitive the brand intersects.</summary>
@@ -31,10 +44,38 @@ internal sealed class TsCompanionPlan
     /// Whether the companion synthesizes <c>toString</c>: over a string it
     /// would be the identity.
     /// </summary>
-    public bool HasToString => PrimitiveType is not TsStringType;
+    public bool HasToString => SynthesizesToString(PrimitiveType);
 
-    /// <summary>The static method groups in member order, none empty.</summary>
+    /// <summary>The static method groups in member order.</summary>
     public IReadOnlyList<TsCompanionGroup> Groups { get; }
+
+    /// <summary>
+    /// The exported fast paths that took a <c>$</c> because their name was
+    /// taken in the namespace (<c>MS0067</c>, spec 013 FR-004).
+    /// </summary>
+    public IReadOnlyList<TsClaimFinding> Findings { get; }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> can have a companion namespace: a
+    /// <c>[Branded]</c> / <c>[InlineWrapper]</c> struct. Its plan
+    /// (<see cref="Of"/>) still answers <c>null</c> when it wraps something a
+    /// brand cannot intersect.
+    /// </summary>
+    public static bool AppliesTo(INamedTypeSymbol type) =>
+        SymbolHelper.HasBranded(type) && type.TypeKind == TypeKind.Struct;
+
+    /// <summary>
+    /// The TypeScript answer to
+    /// <see cref="IrExtractionContext.EmitsBrandedFastPath"/>: an ordinary
+    /// method of a branded type has a fast path a call can name when its
+    /// group dispatches — a static one in the companion namespace of a
+    /// primitive-backed wrapper, which declares no instance member, and any
+    /// method of a wrapper that falls back to a class. Operators and
+    /// conversions are not applied through the declared functions (#599).
+    /// </summary>
+    public static bool EmitsFastPathFor(IMethodSymbol method) =>
+        method.MethodKind is MethodKind.Ordinary
+        && (method.IsStatic || !SymbolHelper.IsPrimitiveBackedBranded(method.ContainingType));
 
     /// <summary>
     /// The plan of <paramref name="ir"/>; <c>null</c> when the type is not
@@ -51,45 +92,72 @@ internal sealed class TsCompanionPlan
             return null;
 
         var primitiveType = IrToTsTypeMapper.Map(underlying);
+        var statics = StaticMethodsOf(ir);
+        var names = new NameClaims(ir.Name, SynthesizedNamesOf(primitiveType), statics);
+        var groups = new List<TsCompanionGroup>();
 
-        var statics = (ir.Members ?? [])
-            .OfType<IrMethodDeclaration>()
-            .Where(method => method.IsStatic)
-            .ToList();
+        foreach (var primary in statics)
+        {
+            var overloads = SurvivingOverloadsOf(primary, ir.Semantics);
 
-        // Namespace functions share one scope: a fast path is claimed against
-        // the synthesized members and every static method's own name.
-        string[] synthesized =
-            primitiveType is TsStringType
-                ? [IrToTsBrandedBridge.CreateMember]
-                : [IrToTsBrandedBridge.CreateMember, IrToTsBrandedBridge.ToStringMember];
+            if (overloads.Count > 0)
+                groups.Add(GroupOf(overloads, names));
+        }
 
-        var takenNames = synthesized
-            .Concat(statics.Select(FunctionNameOf))
-            .ToHashSet(StringComparer.Ordinal);
-
-        var groups = statics
-            .Select(primary => SurvivingOverloadsOf(primary, ir.Semantics))
-            .Where(overloads => overloads.Count > 0)
-            .Select(overloads => GroupOf(overloads, takenNames))
-            .ToList();
-
-        return new TsCompanionPlan(primitiveType, groups);
+        return new TsCompanionPlan(primitiveType, groups, names.Findings);
     }
 
     /// <summary>
-    /// The exported fast path of the static overload declared under
+    /// The fast path of the static overload declared under
     /// <paramref name="memberName"/> at <paramref name="ordinal"/>
-    /// (<see cref="IrOverloadRef"/>); <c>null</c> when the companion
-    /// dispatches no such overload.
+    /// (<see cref="IrOverloadRef"/>) that a call site may name;
+    /// <c>null</c> when the companion exports none for it.
     /// </summary>
     public string? FastPathAt(string memberName, int ordinal) =>
         Groups
-            .SelectMany(group => group.Overloads)
-            .FirstOrDefault(overload =>
-                overload.Method.Name == memberName && overload.Method.DeclarationOrdinal == ordinal
-            )
-            ?.FastPath;
+            .OfType<TsCompanionDispatcher>()
+            .Where(dispatcher => dispatcher.ExportsFastPaths)
+            .SelectMany(dispatcher => dispatcher.FastPaths)
+            .FirstOrDefault(fastPath => IsAt(fastPath.Method, memberName, ordinal))
+            ?.Name;
+
+    /// <summary>
+    /// The groups of this plan over the methods of <paramref name="ir"/> —
+    /// the same type extracted with its bodies — joined by the overload
+    /// identity <see cref="FastPathAt"/> reads, so the emission lowers each
+    /// method under the name the plan claimed for it.
+    /// </summary>
+    public IReadOnlyList<TsCompanionGroup> Bind(IrClassDeclaration ir)
+    {
+        var methods = StaticMethodsOf(ir)
+            .SelectMany(primary => new[] { primary }.Concat(primary.Overloads ?? []))
+            .ToList();
+
+        return Groups.Select(group => group.Over(planned => BoundIn(methods, planned))).ToList();
+    }
+
+    /// <summary>The emitted method with the identity of a planned one.</summary>
+    private static IrMethodDeclaration BoundIn(
+        IReadOnlyList<IrMethodDeclaration> methods,
+        IrMethodDeclaration planned
+    ) =>
+        methods.FirstOrDefault(method => IsAt(method, planned.Name, planned.DeclarationOrdinal))
+        ?? throw new InvalidOperationException(
+            $"The companion plan names '{planned.SignatureText ?? planned.Name}', which the "
+                + "emitted type does not declare."
+        );
+
+    private static bool IsAt(IrMethodDeclaration method, string memberName, int ordinal) =>
+        method.Name == memberName && method.DeclarationOrdinal == ordinal;
+
+    private static bool SynthesizesToString(TsType primitiveType) =>
+        primitiveType is not TsStringType;
+
+    private static IReadOnlyList<string> SynthesizedNamesOf(TsType primitiveType) =>
+        SynthesizesToString(primitiveType) ? [CreateMember, ToStringMember] : [CreateMember];
+
+    private static List<IrMethodDeclaration> StaticMethodsOf(IrClassDeclaration ir) =>
+        (ir.Members ?? []).OfType<IrMethodDeclaration>().Where(method => method.IsStatic).ToList();
 
     /// <summary>
     /// A static method with the overload siblings folded onto
@@ -108,33 +176,31 @@ internal sealed class TsCompanionPlan
     /// <summary>
     /// A single surviving method is one function under its own name; two or
     /// more are a dispatcher under that name plus one fast path each, claimed
-    /// in dispatch order.
+    /// in dispatch order. The fast paths of an operator or conversion group
+    /// stay namespace-local: no generated call names them (#599).
     /// </summary>
     private static TsCompanionGroup GroupOf(
         IReadOnlyList<IrMethodDeclaration> overloads,
-        ISet<string> takenNames
+        NameClaims names
     )
     {
         var functionName = FunctionNameOf(overloads[0]);
 
         if (overloads.Count == 1)
-            return new TsCompanionGroup(
-                functionName,
-                [new TsCompanionOverload(overloads[0], null)]
-            );
+            return new TsCompanionFunction(functionName, overloads[0]);
 
-        var claimed = IrToTsOverloadDispatcherBridge.ClaimNamespaceFastPaths(
-            overloads,
-            functionName,
-            takenNames
-        );
+        var exportsFastPaths = !overloads[0].Semantics.IsOperator;
+        var fastPaths = new List<TsCompanionFastPath>();
 
-        return new TsCompanionGroup(
-            functionName,
-            claimed
-                .Select(claim => new TsCompanionOverload(claim.Overload, claim.FastPath))
-                .ToList()
-        );
+        foreach (var overload in OverloadDispatchOrder.Sort(overloads, m => m.Parameters))
+        {
+            var candidate = OverloadFastPathName.Of(functionName, overload);
+            var name = names.Claim(candidate, overload, isExported: exportsFastPaths);
+
+            fastPaths.Add(new TsCompanionFastPath(overload, name));
+        }
+
+        return new TsCompanionDispatcher(functionName, fastPaths, exportsFastPaths);
     }
 
     /// <summary>
@@ -163,29 +229,111 @@ internal sealed class TsCompanionPlan
     /// </summary>
     private static string FunctionNameOf(IrMethodDeclaration method) =>
         IrToTsNamingPolicy.ToFunctionName(method);
+
+    /// <summary>
+    /// The one scope the functions of a companion namespace share: the
+    /// synthesized members and every static method's own name are taken
+    /// before a fast path claims, and a fast path whose name is taken gets a
+    /// <c>$</c> until it is free. A renamed fast path that is exported is
+    /// reported (<c>MS0067</c>), as a class's is.
+    /// </summary>
+    private sealed class NameClaims
+    {
+        private readonly string _typeName;
+        private readonly HashSet<string> _taken;
+        private readonly List<TsClaimFinding> _findings = [];
+
+        public NameClaims(
+            string typeName,
+            IEnumerable<string> synthesized,
+            IEnumerable<IrMethodDeclaration> statics
+        )
+        {
+            _typeName = typeName;
+
+            _taken = synthesized
+                .Concat(statics.Select(FunctionNameOf))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+
+        public IReadOnlyList<TsClaimFinding> Findings => _findings;
+
+        public string Claim(string candidate, IrMethodDeclaration overload, bool isExported)
+        {
+            var name = TsFreeName.FirstFree(candidate, _taken.Contains);
+
+            _taken.Add(name);
+
+            if (isExported && name != candidate)
+                _findings.Add(RenameOf(candidate, name, overload));
+
+            return name;
+        }
+
+        private TsClaimFinding RenameOf(
+            string candidate,
+            string claimed,
+            IrMethodDeclaration overload
+        )
+        {
+            var signature = DispatchedOverload.SignatureOf(overload);
+
+            return new TsClaimFinding(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.OverloadNameShadowed,
+                $"Fast path '{_typeName}.{candidate}' of '{signature}' is already taken in the "
+                    + $"companion namespace; it is emitted as '{claimed}' (spec 013 FR-004).",
+                new OverloadDeclarationSite(overload.Name, Signature: signature)
+            );
+        }
+    }
 }
 
 /// <summary>
-/// One static method group of a companion namespace: the function name its
-/// single method or its dispatcher takes, and its overloads in dispatch order.
+/// One static method group of a companion namespace, under the function name
+/// its single method or its dispatcher takes.
 /// </summary>
-internal sealed record TsCompanionGroup(
-    string FunctionName,
-    IReadOnlyList<TsCompanionOverload> Overloads
-)
+internal abstract record TsCompanionGroup(string FunctionName)
 {
-    /// <summary>Two or more overloads: a dispatcher plus one fast path each.</summary>
-    public bool IsDispatched => Overloads.Count > 1;
+    /// <summary>The same group over the methods <paramref name="bound"/> maps its own to.</summary>
+    public abstract TsCompanionGroup Over(Func<IrMethodDeclaration, IrMethodDeclaration> bound);
+}
 
-    /// <summary>The C# name the group's methods share.</summary>
-    public string MemberName => Overloads[0].Method.Name;
-
-    public IReadOnlyList<IrMethodDeclaration> Methods =>
-        Overloads.Select(overload => overload.Method).ToList();
+/// <summary>A group of one method: a single exported function.</summary>
+internal sealed record TsCompanionFunction(string FunctionName, IrMethodDeclaration Method)
+    : TsCompanionGroup(FunctionName)
+{
+    public override TsCompanionGroup Over(Func<IrMethodDeclaration, IrMethodDeclaration> bound) =>
+        this with
+        {
+            Method = bound(Method),
+        };
 }
 
 /// <summary>
-/// One static method of a companion group and the fast-path name it claimed;
-/// <c>null</c> for the single method of a group that does not dispatch.
+/// A group of two or more overloads: an exported dispatcher plus one fast
+/// path each, in dispatch order.
 /// </summary>
-internal sealed record TsCompanionOverload(IrMethodDeclaration Method, string? FastPath);
+/// <param name="ExportsFastPaths">Whether the fast paths are exported, so a
+/// generated call names the overload C# bound; an operator or conversion
+/// group keeps them namespace-local.</param>
+internal sealed record TsCompanionDispatcher(
+    string FunctionName,
+    IReadOnlyList<TsCompanionFastPath> FastPaths,
+    bool ExportsFastPaths
+) : TsCompanionGroup(FunctionName)
+{
+    /// <summary>The C# name the group's methods share.</summary>
+    public string MemberName => FastPaths[0].Method.Name;
+
+    public override TsCompanionGroup Over(Func<IrMethodDeclaration, IrMethodDeclaration> bound) =>
+        this with
+        {
+            FastPaths = FastPaths
+                .Select(fastPath => fastPath with { Method = bound(fastPath.Method) })
+                .ToList(),
+        };
+}
+
+/// <summary>One overload of a dispatched companion group and the name it claimed.</summary>
+internal sealed record TsCompanionFastPath(IrMethodDeclaration Method, string Name);

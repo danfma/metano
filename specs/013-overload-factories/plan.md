@@ -377,7 +377,8 @@ targets are located through the core `OverloadDeclarationSite` (the TypeScript `
 gone). Four lists decide what a "keep today's emission" type is, per concept: (a) the core's
 `OverloadEmittedName.PinsOverloadSuffixes` (whether `[Name]` pins: not `[External]`,
 `[JsCallable]`, `[PlainObject]`), (b) the core's `DispatchedMethodCalls.IsEmittedContainingType`
-(whether calls bind: also not branded), (c) the targets' constructor shapes
+(whether calls bind: those three; since #569 a branded type is judged per method by the target's
+`IrExtractionContext.EmitsBrandedFastPath` port, which TypeScript answers and Dart leaves unset), (c) the targets' constructor shapes
 (`TsConstructorSelectorShapes.EmitsSelectors`, `DartTypeShapes.EmitsNamedConstructors`) and (d) the
 targets' member naming (`TsClassMemberTable`, `DartOverloadShape.NamesMembers`). They disagreed for
 Dart on more than one shape: a branded type's kept primary (declared under its `[Name]` while call

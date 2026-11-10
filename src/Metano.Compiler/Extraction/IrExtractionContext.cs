@@ -46,16 +46,19 @@ public sealed record IrExtractionContext(
     public bool EmitsOperatorFastPaths { get; init; }
 
     /// <summary>
-    /// Whether the target declares an addressable fast path per overload of
-    /// a dispatched method group of a <c>[Branded]</c> / <c>[InlineWrapper]</c>
-    /// type (issue #569), so the extractor binds a call or method group into
-    /// such a group to the overload Roslyn resolved, as it does for any
-    /// class. Opt-in: a target that declares one member per group keeps the
-    /// source call. TypeScript sets it (the companion namespace exports
-    /// <c>Tag.sU</c> beside the dispatcher <c>Tag.s</c>); Dart keeps only the
-    /// primary member of such a group and leaves it unset.
+    /// Whether the target declares an addressable fast path for a method of
+    /// a <c>[Branded]</c> / <c>[InlineWrapper]</c> type when its group is
+    /// dispatched (issue #569), so the extractor binds a call or method
+    /// group to the overload Roslyn resolved, as it does for any class. A
+    /// port, like <see cref="EmitsConstructorSelectors"/>: how a branded type
+    /// lowers — and so which of its members exist to be called — is the
+    /// target's own decision. TypeScript answers for the static methods its
+    /// companion namespace exports (<c>Tag.sU</c> beside the dispatcher
+    /// <c>Tag.s</c>) and for the methods of a wrapper it lowers to a class.
+    /// <c>null</c> for a target that declares one member per group: every
+    /// such call keeps the source form (Dart).
     /// </summary>
-    public bool EmitsBrandedFastPaths { get; init; }
+    public Func<IMethodSymbol, bool>? EmitsBrandedFastPath { get; init; }
 
     /// <summary>
     /// A target capability: whether the target keeps C#'s evaluation order
@@ -78,7 +81,7 @@ public sealed record IrExtractionContext(
     /// a second semantic model. The target capabilities
     /// (<see cref="EmitsConstructorSelectors"/>,
     /// <see cref="EmitsOperatorFastPaths"/>,
-    /// <see cref="EmitsBrandedFastPaths"/>,
+    /// <see cref="EmitsBrandedFastPath"/>,
     /// <see cref="KeepsArgumentEvaluationOrder"/>) are dropped on purpose:
     /// each one binds a constructor call, a user-defined operator, a method
     /// call or a call with named arguments, and a C# default value is a constant,

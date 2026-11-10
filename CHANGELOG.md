@@ -174,7 +174,10 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   it fixes calls the dispatcher resolved to another overload (a branded value
   beside its primitive, `long` / `ulong`, `int` / `double`, `object` /
   `string`). The dispatcher is unchanged. A function of a non-public overload
-  is tagged `/** @internal */`.
+  is tagged `/** @internal */`, and a name already taken in the namespace
+  takes `$` with `MS0067`. An overloaded operator or conversion group keeps
+  its per-overload functions local to the namespace: generated code does not
+  apply the operators of a branded type through them yet (#599).
 - `[JsonFactory]` on a method of an overloaded group is now `MS0034` (error):
   `[JsonFactory] From(string)` beside `[Name("num")] From(int)` used to
   generate a descriptor calling the dispatcher.
@@ -187,7 +190,11 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   packages, whose generated code calls its `internal` factories and fast paths.
 - Upgrade packages and consumers together: a 3.0 consumer with a project
   reference calls factories and fast paths a 2.x-built producer lacks; a
-  metadata-only reference keeps the dispatcher calls.
+  metadata-only reference keeps the dispatcher calls. Regenerate library
+  packages first: a consumer transpiled on 3.0 against the generated
+  TypeScript of an older library fails to type-check (TS2339 on the missing
+  member) and throws a `TypeError` at run time, on bound companion calls
+  (`Tag.sU`) as on every other fast path.
 - Dart (experimental): overloaded constructors become named constructors
   (`Dimension.fromSize`) and overloaded methods fast paths (`addX`), with
   direct call sites, instead of the primary overload alone; `[Name]` on an
