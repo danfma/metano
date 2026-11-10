@@ -122,9 +122,7 @@ public static partial class IrToTsExpressionBridge
             IrSwitchExpression sw => MapSwitchExpression(sw, context),
             IrWithExpression w => MapWithExpression(w, context),
             IrArrayCreation creation => MapArrayCreation(creation, context),
-            IrArrayLiteral arr => new TsArrayLiteral(
-                arr.Elements.Select(e => Map(e, context)).ToList()
-            ),
+            IrArrayLiteral arr => MapArrayLiteral(arr, context),
             IrTupleLiteral tuple => MapTupleLiteral(tuple, context),
             IrTupleEqualityExpression equality => MapTupleEquality(equality, context),
             IrSpreadExpression spread => MapSpread(spread, context),

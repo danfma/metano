@@ -302,6 +302,287 @@ public class CollectionExpressionTests
     }
 
     /// <summary>
+    /// TypeScript infers an array literal's element type from its elements,
+    /// so a literal C# types wider keeps the declared type (#590): a typed
+    /// local is annotated (<c>const l: (number | null)[] = [1]</c>, an empty
+    /// <c>const l: number[] = []</c>), and a literal no declaration types —
+    /// a <c>var</c> array creation, a cast, a lambda's result, a nested
+    /// literal — is asserted (<c>[1] as (number | null)[]</c>). A literal whose
+    /// elements say the type, or that a field, parameter, return type or
+    /// assignment target types, stays bare. The golden type-checks under
+    /// <c>tsgo --strict --noImplicitOverride</c>.
+    /// </summary>
+    [Test]
+    public async Task ListLiteral_TypedWiderThanItsElements_KeepsTheDeclaredType()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            #nullable enable
+            using System;
+            using System.Collections.Generic;
+
+            [Transpile]
+            public record Animal(string Name);
+
+            [Transpile]
+            public record Dog(string Name, bool Barks) : Animal(Name);
+
+            [Transpile]
+            public record Cat(string Name, int Lives) : Animal(Name);
+
+            [Transpile]
+            public class Holder
+            {
+                public List<int?> Items { get; set; } = [];
+
+                public List<int?> Initial { get; } = [1];
+            }
+
+            [Transpile]
+            public class Lists
+            {
+                private readonly List<int?> _field = [1];
+                private List<Animal> _pets = [];
+
+                public int NullableLocal()
+                {
+                    List<int?> l = [1];
+                    l.Add(null);
+                    return l.Count;
+                }
+
+                public int PolymorphicLocal(Dog dog, Cat cat)
+                {
+                    List<Animal> l = [dog];
+                    l.Add(cat);
+                    return l.Count;
+                }
+
+                public int EmptyLocal()
+                {
+                    List<int> l = [];
+                    l.Add(1);
+                    return l.Count;
+                }
+
+                public int NullableReference(string? maybe)
+                {
+                    List<string?> named = ["a"];
+                    List<string?> same = [maybe];
+                    named.Add(null);
+                    return named.Count + same.Count;
+                }
+
+                public int SpreadLocal(int[] xs)
+                {
+                    List<int?> l = [.. xs];
+                    l.Add(null);
+                    return l.Count;
+                }
+
+                public int Reassigned()
+                {
+                    IEnumerable<int?> l = [1];
+                    l = [null];
+                    return new List<int?>(l).Count;
+                }
+
+                public int NullableArray()
+                {
+                    int?[] a = [1];
+                    a[0] = null;
+                    return a.Length;
+                }
+
+                public int ArrayCreation(Dog dog, Cat cat)
+                {
+                    var a = new Animal[] { dog };
+                    var same = new[] { dog };
+                    var empty = new int[] { };
+                    a[0] = cat;
+                    return a.Length + same.Length + empty.Length;
+                }
+
+                public int Nested()
+                {
+                    List<List<int?>> l = [[1]];
+                    l[0].Add(null);
+                    return l[0].Count;
+                }
+
+                public int Cast()
+                {
+                    var l = (List<int?>)[1];
+                    l.Add(null);
+                    return l.Count;
+                }
+
+                public int Conditional(bool flag)
+                {
+                    List<int?> l = flag ? [1] : [2, 3];
+                    l.Add(null);
+                    return l.Count;
+                }
+
+                public int Lambda()
+                {
+                    Func<List<int?>> make = () => [1];
+                    var l = make();
+                    l.Add(null);
+                    return l.Count;
+                }
+
+                public int Exact()
+                {
+                    List<int> ints = [1, 2];
+                    List<double> doubles = [1, 2.5];
+                    List<string> names = ["a"];
+                    return ints.Count + doubles.Count + names.Count;
+                }
+
+                public int ReadOnlyViews(Dog dog)
+                {
+                    IReadOnlyCollection<int> counted = [];
+                    IEnumerable<Animal> sequence = [dog];
+                    ICollection<int?> collection = [1];
+                    IReadOnlyList<Animal> read = [dog];
+                    IList<int?> list = [1];
+                    collection.Add(null);
+                    list[0] = null;
+                    var first = read[0].Name.Length;
+                    return counted.Count + collection.Count + read.Count + list.Count + first;
+                }
+
+                public int ErasedCasts()
+                {
+                    List<int?> cast = [(int?)1];
+                    List<int?> defaulted = [default];
+                    cast.Add(null);
+                    defaulted.Add(1);
+                    return cast.Count + defaulted.Count;
+                }
+
+                public int NestedNullability()
+                {
+                    List<(int, string?)> pairs = [(1, "a")];
+                    List<(int, string)> exact = [(1, "a")];
+                    pairs.Add((2, null));
+                    return pairs.Count + exact.Count;
+                }
+
+                public int ForHeader()
+                {
+                    var total = 0;
+
+                    for (List<int?> l = [1]; l.Count < 3; l.Add(null))
+                        total += l.Count;
+
+                    return total;
+                }
+
+                public int Numeric(int[] ints)
+                {
+                    byte[] bytes = [1, 2];
+                    List<long> longs = [1, 2];
+                    List<long> widened = [.. ints];
+                    return bytes.Length + longs.Count + widened.Count;
+                }
+
+                public int Walk(List<int?>? given, int kind)
+                {
+                    List<int?> parenthesized = ([1]);
+                    List<int?> coalesced = given ?? [1];
+                    List<int?> switched = kind switch { 0 => [1], _ => [2, 3] };
+                    Func<List<int?>> block = () =>
+                    {
+                        return [1];
+                    };
+                    var holder = new Holder { Items = [1] };
+                    var lists = new List<List<int?>> { ([1]) };
+                    parenthesized.Add(null);
+                    coalesced.Add(null);
+                    switched.Add(null);
+                    block().Add(null);
+                    holder.Items.Add(null);
+                    holder.Initial.Add(null);
+                    lists[0].Add(null);
+                    return parenthesized.Count + coalesced.Count + switched.Count + lists.Count;
+                }
+
+                public List<int?> Returned() => [1];
+
+                public List<int?> ReturnedFromABlock()
+                {
+                    return [];
+                }
+
+                public int Take(List<int?> l) => l.Count;
+
+                public int Argument() => Take([1]);
+
+                public int Assigned(Dog dog, Cat cat)
+                {
+                    _pets = [dog];
+                    _pets.Add(cat);
+                    _field.Add(null);
+                    return _pets.Count + _field.Count;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+
+        await TranspileHelper.AssertGolden("list-literal-element-types.ts", result["lists.ts"]);
+    }
+
+    /// <summary>
+    /// Dart declares a local with its C# type and takes a literal's type from
+    /// it, so the declared element type changes nothing there (#590).
+    /// </summary>
+    [Test]
+    public async Task ListLiteral_TypedWiderThanItsElements_IsUnchangedInDart()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileDart(
+            """
+            using System.Collections.Generic;
+            using Metano.Annotations;
+
+            [Transpile]
+            public class Lists
+            {
+                public int Nullable()
+                {
+                    List<int?> l = [1];
+                    l.Add(null);
+                    return l.Count;
+                }
+
+                public int Empty()
+                {
+                    List<int> l = [];
+                    return l.Count;
+                }
+
+                public int ReadOnly()
+                {
+                    IReadOnlyCollection<int?> l = [1];
+                    return l.Count;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+
+        await TranspileHelper.AssertGolden("list-literal-element-types.dart", files["lists.dart"]);
+    }
+
+    /// <summary>
     /// Dart's <c>Set</c> and <c>Map</c> constructors take no elements: the
     /// construction goes through the <c>.of</c> / <c>.fromEntries</c>
     /// factories, and a spread prints as Dart's list spread — over a map's

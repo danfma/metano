@@ -72,6 +72,22 @@ public static class IrToTsStatementBridge
     }
 
     /// <summary>
+    /// The TypeScript type of <paramref name="localType"/> when it is an
+    /// array (<c>T[]</c>, <c>T[] | null</c>); <c>null</c> for any other.
+    /// </summary>
+    private static TsType? ArrayShapedTypeOf(IrTypeRef localType, IrToTsBridgeContext context)
+    {
+        var mapped = IrToTsTypeMapper.Map(localType, context.TypeOverrides);
+
+        var isArrayShaped =
+            mapped
+            is TsArrayType
+                or TsUnionType { Types: [TsArrayType, TsNamedType { Name: "null" }] };
+
+        return isArrayShaped ? mapped : null;
+    }
+
+    /// <summary>
     /// A declaration maps as a statement (keeping its type and initializer
     /// for the import walk); an initializer expression maps as a plain
     /// expression, since a header has no room for the statement forms some
@@ -109,14 +125,17 @@ public static class IrToTsStatementBridge
     }
 
     /// <summary>
-    /// One declarator of a <c>let</c> list: <c>name = value</c>, or
-    /// <c>name: T</c> for a typed declaration without an initializer.
+    /// One declarator of a <c>let</c> list: <c>name = value</c>,
+    /// <c>name: T = value</c> for a typed declaration, or <c>name: T</c> for
+    /// one without an initializer.
     /// </summary>
     private static string RenderDeclarator(TsVariableDeclaration declaration) =>
         declaration switch
         {
             { Type: { } type, Initializer: null } =>
                 $"{declaration.Name}{DefiniteAssignmentMark(declaration)}: {Printer.RenderType(type)}",
+            { Type: { } type, Initializer: { } value } =>
+                $"{declaration.Name}: {Printer.RenderType(type)} = {PrintExpression(value)}",
             { Initializer: { } value } => $"{declaration.Name} = {PrintExpression(value)}",
             _ => declaration.Name,
         };
@@ -310,6 +329,23 @@ public static class IrToTsStatementBridge
                 new TsCastExpression(new TsLiteral("null"), IrToTsTypeMapper.Map(declaredType)),
                 Const: vd.IsConst
             ),
+            // An array literal C# types wider than its elements say
+            // (`List<int?> l = [1]`, `List<int> l = []`): a local declared
+            // with an array type carries that type, which TypeScript would
+            // otherwise infer narrower. Any other declared type
+            // (`IReadOnlyCollection<T>` is an `Iterable<T>`) would hide the
+            // array the local holds, so there the literal is asserted.
+            IrVariableDeclaration
+            {
+                Type: { } localType,
+                Initializer: IrArrayLiteral { ElementType: not null } literal,
+            } vd when ArrayShapedTypeOf(localType, context) is { } arrayType =>
+                new TsVariableDeclaration(
+                    IrToTsNamingPolicy.ToLocalName(vd.Name),
+                    IrToTsExpressionBridge.MapBareArrayLiteral(literal, context),
+                    Const: vd.IsConst,
+                    Type: arrayType
+                ),
             IrVariableDeclaration vd => new TsVariableDeclaration(
                 IrToTsNamingPolicy.ToLocalName(vd.Name),
                 vd.Initializer is not null
