@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using static Metano.Compiler.Extraction.LinqOverloadParameters;
 
 namespace Metano.Compiler.Extraction;
 
@@ -27,18 +28,6 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public static class IrLinqMapping
 {
-    /// <summary>
-    /// The position of the queryable tree among the arguments of an
-    /// <c>OrDefault</c> terminal: <c>(predicate, defaultValue, queryable)</c>.
-    /// </summary>
-    public const int OrDefaultQueryableSlot = 2;
-
-    /// <summary>
-    /// The name every .NET LINQ overload gives its <c>IEqualityComparer&lt;T&gt;</c>
-    /// or <c>IComparer&lt;T&gt;</c> parameter. No runtime operator takes one.
-    /// </summary>
-    public const string ComparerParameterName = "comparer";
-
     private static readonly IReadOnlyDictionary<string, IrLinqOperator> _byMethodName =
         new Dictionary<string, IrLinqOperator>(StringComparer.Ordinal)
         {
@@ -138,95 +127,96 @@ public static class IrLinqMapping
         };
 
     // The overloads each runtime operator in `system/linq` implements, each
-    // named by its .NET parameters after the source ("" for none);
-    // `Queryable` names a few differently (`source2`, `item`). The first
-    // value is the position of the operator's `QueryableMeta` parameter.
-    // `LinqRuntimeSignatureTests` checks both against the runtime sources.
+    // named by its .NET parameters after the source; `Queryable` names a few
+    // differently (`source2`, `item`). The first value is the position of
+    // the operator's `QueryableMeta` parameter. `LinqRuntimeSignatureTests`
+    // checks that each declared overload exists in .NET, that the runtime
+    // operator takes as many arguments as it passes and reads its tree at that
+    // slot, and that the tsgo-checked golden `linq-supported-overloads.ts`
+    // calls every declared overload: names and positions, not types.
     private static readonly IReadOnlyDictionary<
         IrLinqOperator,
         IrLinqRuntimeSignature
     > _runtimeSignatures = new Dictionary<IrLinqOperator, IrLinqRuntimeSignature>
     {
-        [IrLinqOperator.Where] = IrLinqRuntimeSignature.Of(1, "predicate"),
-        [IrLinqOperator.Select] = IrLinqRuntimeSignature.Of(1, "selector"),
-        [IrLinqOperator.SelectMany] = IrLinqRuntimeSignature.Of(1, "selector"),
-        [IrLinqOperator.OrderBy] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.OrderByDescending] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.ThenBy] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.ThenByDescending] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.GroupBy] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.Take] = IrLinqRuntimeSignature.Of(null, "count"),
-        [IrLinqOperator.Skip] = IrLinqRuntimeSignature.Of(null, "count"),
-        [IrLinqOperator.TakeWhile] = IrLinqRuntimeSignature.Of(1, "predicate"),
-        [IrLinqOperator.SkipWhile] = IrLinqRuntimeSignature.Of(1, "predicate"),
-        [IrLinqOperator.Distinct] = IrLinqRuntimeSignature.Of(null, ""),
-        [IrLinqOperator.DistinctBy] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.Concat] = IrLinqRuntimeSignature.Of(null, "second", "source2"),
-        [IrLinqOperator.Append] = IrLinqRuntimeSignature.Of(null, "element"),
-        [IrLinqOperator.Prepend] = IrLinqRuntimeSignature.Of(null, "element"),
-        [IrLinqOperator.Reverse] = IrLinqRuntimeSignature.Of(null, ""),
+        [IrLinqOperator.Where] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
+        [IrLinqOperator.Select] = IrLinqRuntimeSignature.Of(1, Named("selector")),
+        [IrLinqOperator.SelectMany] = IrLinqRuntimeSignature.Of(1, Named("selector")),
+        [IrLinqOperator.OrderBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.OrderByDescending] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.ThenBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.ThenByDescending] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.GroupBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.Take] = IrLinqRuntimeSignature.Of(null, Named("count")),
+        [IrLinqOperator.Skip] = IrLinqRuntimeSignature.Of(null, Named("count")),
+        [IrLinqOperator.TakeWhile] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
+        [IrLinqOperator.SkipWhile] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
+        [IrLinqOperator.Distinct] = IrLinqRuntimeSignature.Of(null, Named()),
+        [IrLinqOperator.DistinctBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.Concat] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("second"),
+            Named("source2")
+        ),
+        [IrLinqOperator.Append] = IrLinqRuntimeSignature.Of(null, Named("element")),
+        [IrLinqOperator.Prepend] = IrLinqRuntimeSignature.Of(null, Named("element")),
+        [IrLinqOperator.Reverse] = IrLinqRuntimeSignature.Of(null, Named()),
         [IrLinqOperator.Zip] = IrLinqRuntimeSignature.Of(
             2,
-            "second, resultSelector",
-            "source2, resultSelector"
+            Named("second", "resultSelector"),
+            Named("source2", "resultSelector")
         ),
-        [IrLinqOperator.ToArray] = IrLinqRuntimeSignature.Of(null, ""),
+        [IrLinqOperator.ToArray] = IrLinqRuntimeSignature.Of(null, Named()),
         [IrLinqOperator.ToMap] = IrLinqRuntimeSignature.Of(
             2,
-            "keySelector",
-            "keySelector, elementSelector"
+            Named("keySelector"),
+            Named("keySelector", "elementSelector")
         ),
-        [IrLinqOperator.ToSet] = IrLinqRuntimeSignature.Of(null, ""),
-        [IrLinqOperator.First] = IrLinqRuntimeSignature.Of(1, "", "predicate"),
-        [IrLinqOperator.FirstOrDefault] = IrLinqRuntimeSignature.Of(
-            OrDefaultQueryableSlot,
-            "",
-            "predicate",
-            "defaultValue",
-            "predicate, defaultValue"
-        ),
-        [IrLinqOperator.Last] = IrLinqRuntimeSignature.Of(1, "", "predicate"),
-        [IrLinqOperator.LastOrDefault] = IrLinqRuntimeSignature.Of(
-            OrDefaultQueryableSlot,
-            "",
-            "predicate",
-            "defaultValue",
-            "predicate, defaultValue"
-        ),
-        [IrLinqOperator.Single] = IrLinqRuntimeSignature.Of(1, "", "predicate"),
-        [IrLinqOperator.SingleOrDefault] = IrLinqRuntimeSignature.Of(
-            OrDefaultQueryableSlot,
-            "",
-            "predicate",
-            "defaultValue",
-            "predicate, defaultValue"
-        ),
-        [IrLinqOperator.Any] = IrLinqRuntimeSignature.Of(1, "", "predicate"),
-        [IrLinqOperator.All] = IrLinqRuntimeSignature.Of(1, "predicate"),
-        [IrLinqOperator.Count] = IrLinqRuntimeSignature.Of(1, "", "predicate"),
-        [IrLinqOperator.Sum] = IrLinqRuntimeSignature.Of(1, "", "selector"),
-        [IrLinqOperator.Min] = IrLinqRuntimeSignature.Of(1, "", "selector"),
-        [IrLinqOperator.Max] = IrLinqRuntimeSignature.Of(1, "", "selector"),
-        [IrLinqOperator.MinBy] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.MaxBy] = IrLinqRuntimeSignature.Of(1, "keySelector"),
-        [IrLinqOperator.Average] = IrLinqRuntimeSignature.Of(1, "", "selector"),
-        [IrLinqOperator.Contains] = IrLinqRuntimeSignature.Of(null, "value", "item"),
-        [IrLinqOperator.Aggregate] = IrLinqRuntimeSignature.Of(null, "seed, func"),
+        [IrLinqOperator.ToSet] = IrLinqRuntimeSignature.Of(null, Named()),
+        [IrLinqOperator.First] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
+        [IrLinqOperator.FirstOrDefault] = OrDefaultSignature,
+        [IrLinqOperator.Last] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
+        [IrLinqOperator.LastOrDefault] = OrDefaultSignature,
+        [IrLinqOperator.Single] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
+        [IrLinqOperator.SingleOrDefault] = OrDefaultSignature,
+        [IrLinqOperator.Any] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
+        [IrLinqOperator.All] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
+        [IrLinqOperator.Count] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
+        [IrLinqOperator.Sum] = IrLinqRuntimeSignature.Of(1, Named(), Named("selector")),
+        [IrLinqOperator.Min] = IrLinqRuntimeSignature.Of(1, Named(), Named("selector")),
+        [IrLinqOperator.Max] = IrLinqRuntimeSignature.Of(1, Named(), Named("selector")),
+        [IrLinqOperator.MinBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.MaxBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.Average] = IrLinqRuntimeSignature.Of(1, Named(), Named("selector")),
+        [IrLinqOperator.Contains] = IrLinqRuntimeSignature.Of(null, Named("value"), Named("item")),
+        [IrLinqOperator.Aggregate] = IrLinqRuntimeSignature.Of(null, Named("seed", "func")),
     };
+
+    /// <summary>
+    /// The <c>OrDefault</c> terminals: <c>(predicate, defaultValue, queryable)</c>,
+    /// padding the arguments a stage omits before the tree.
+    /// </summary>
+    private static IrLinqRuntimeSignature OrDefaultSignature =>
+        IrLinqRuntimeSignature
+            .Of(
+                2,
+                Named(),
+                Named("predicate"),
+                Named("defaultValue"),
+                Named("predicate", "defaultValue")
+            )
+            .PaddingOmittedArguments();
 
     /// <summary>
     /// Returns true when <paramref name="symbol"/> is a method on
     /// <c>System.Linq.Enumerable</c> or <c>System.Linq.Queryable</c>
     /// whose name has a pipe-runtime counterpart.
     /// </summary>
-    public static bool TryResolve(IMethodSymbol? symbol, out IrLinqOperator op)
+    public static bool TryResolve([NotNullWhen(true)] IMethodSymbol? symbol, out IrLinqOperator op)
     {
         op = default;
-        if (symbol is null)
-            return false;
-        if (!IsLinqContainer(symbol.ContainingType))
-            return false;
-        return _byMethodName.TryGetValue(symbol.Name, out op);
+
+        return IsLinqMethod(symbol) && _byMethodName.TryGetValue(symbol.Name, out op);
     }
 
     /// <summary>Camel-case identifier the TypeScript bridge emits.</summary>
@@ -272,7 +262,11 @@ public static class IrLinqMapping
     /// and where it reads a queryable tree.
     /// </summary>
     public static IrLinqRuntimeSignature RuntimeSignatureOf(IrLinqOperator op) =>
-        _runtimeSignatures[op];
+        _runtimeSignatures.TryGetValue(op, out var signature)
+            ? signature
+            : throw new InvalidOperationException(
+                $"No runtime signature is declared for the LINQ operator '{op}'."
+            );
 
     /// <summary>The .NET method names that resolve to <paramref name="op"/>.</summary>
     internal static IEnumerable<string> MethodNamesOf(IrLinqOperator op) =>
@@ -285,41 +279,16 @@ public static class IrLinqMapping
     /// </summary>
     public static IrLinqOverloadSupport OverloadSupportOf(IMethodSymbol method, IrLinqOperator op)
     {
-        var signature = _runtimeSignatures[op];
-        var parameters = ParameterNamesOf(method);
+        var signature = RuntimeSignatureOf(op);
+        var overload = LinqOverloadParameters.From(method);
 
-        if (signature.Implements(parameters))
+        if (signature.Implements(overload))
             return IrLinqOverloadSupport.Implemented;
 
-        var withoutComparer = parameters.Where(name => name != ComparerParameterName).ToList();
-
-        var passesComparer = withoutComparer.Count < parameters.Count;
-
-        return passesComparer && signature.Implements(withoutComparer)
+        return overload.PassesComparer && signature.Implements(overload.WithoutComparer())
             ? IrLinqOverloadSupport.IgnoredComparer
             : IrLinqOverloadSupport.Unimplemented;
     }
-
-    /// <summary>
-    /// Whether the runtime operator of <paramref name="op"/> reads the
-    /// queryable tree the stage passes after its
-    /// <paramref name="argumentCount"/> arguments. An <c>OrDefault</c>
-    /// terminal pads the arguments it omits up to its slot.
-    /// </summary>
-    public static bool ReadsQueryableTreeAfter(IrLinqOperator op, int argumentCount)
-    {
-        if (_runtimeSignatures[op].QueryableSlot is not { } slot)
-            return false;
-
-        return IsOrDefaultTerminal(op) ? argumentCount <= slot : argumentCount == slot;
-    }
-
-    /// <summary>
-    /// The parameter names of <paramref name="method"/> after the source, as
-    /// the runtime signatures name an overload.
-    /// </summary>
-    public static IReadOnlyList<string> ParameterNamesOf(IMethodSymbol method) =>
-        [.. (method.ReducedFrom ?? method).Parameters.Skip(1).Select(parameter => parameter.Name)];
 
     /// <summary>
     /// Whether <paramref name="symbol"/> is a method of

@@ -265,6 +265,11 @@ built-in only does reference equality, which would lose C# semantics.
 
 ## LINQ
 
+The fluent `Enumerable.from(...)` form below is the legacy lowering: LINQ chains
+now lower to the `linq(source, op1(...), op2(...))` pipe form of
+`metano-runtime/system/linq`, whose overloads are listed under
+[Supported overloads](#supported-overloads).
+
 When the transpiler detects LINQ extension method chains on any collection type,
 it wraps the sequence in `Enumerable.from(...)` and emits lazy method chains.
 
@@ -340,19 +345,25 @@ are the same overloads):
 | `Contains` | `(value)` |
 | `Aggregate` | `(seed, func)` |
 
-Every other overload reports `MS0001` (a warning) at the call and lowers to an
-expression that throws at run time: for example `Aggregate(func)`,
+Every other overload reports `MS0001` (a warning) at the method name and
+lowers to an expression that throws at run time: for example `Aggregate(func)`,
 `Aggregate(seed, func, resultSelector)`, `GroupBy` with an element or result
 selector, the tuple `Zip(second)`, `Take(range)`, `SelectMany` with a result
 selector (#648). No runtime operator takes a comparer, so a comparer argument
 (`IEqualityComparer<T>` / `IComparer<T>`, as in `OrderBy(k, comparer)`,
 `ToDictionary(k, comparer)`, `Contains(x, comparer)`, `Distinct(comparer)`,
-`Min(comparer)`) reports `MS0001` at the argument. A queryable stage reports when
-its operator has no slot for the expression tree: `queryable.Aggregate(…)`, and
-`queryable.ToDictionary(k)` without an element selector. A `System.Linq` extension
-method with neither a pipe operator nor a declarative mapping (`Join`,
-`GroupJoin`, `ToLookup`, `SequenceEqual`, `Cast`, `OfType`, `ElementAt`, …)
-reports `MS0001` instead of becoming a member call on the receiver (where
+`Min(comparer)`) reports `MS0001` at the argument, unless it is the `null`
+constant (`null`, `default`, `(IComparer<int>?)null`): that asks for the
+default comparison and lowers as the comparer-less overload. A comparer that is
+`null` only at run time still reports. A queryable stage passes its expression
+tree to an operator that reads one, drops it for an operator that reads none
+(`queryable.Aggregate(seed, func)` runs `aggregate(seed, func)`), and reports
+when the tree would land in another argument's slot
+(`queryable.ToDictionary(k)`, where `toMap` would read it as the value
+selector). A `System.Linq` method with neither a pipe operator nor a
+declarative mapping for the overload called (`Join`, `GroupJoin`, `ToLookup`,
+`SequenceEqual`, `Cast`, `OfType`, `ElementAt`, …) reports `MS0001`, in the
+extension and in the static form, instead of becoming a member call (where
 `xs.Join(…)` reached `Array.prototype.join`). The static form
 (`Enumerable.Aggregate(xs, …)`) of an unimplemented overload reports the same
 diagnostic. The Dart target does not lower LINQ chains (#549) and reports none
@@ -360,9 +371,11 @@ of these.
 
 An overload is identified by its parameter names, not by its element types:
 `Sum`, `Min`, `Max` and `Average` over nullable values, and `Min` / `Max` over
-non-numeric elements, count as supported and still differ from .NET (#618).
-`Union`, `Intersect` and `Except` lower through declarative mappings rather than
-pipe operators, so their comparer overloads are not reported.
+non-numeric elements, count as supported and still differ from .NET (#618,
+#657). `Union`, `Intersect` and `Except` are not reported because they have a
+declarative mapping, but that legacy mapping is broken: it emits
+`Enumerable.from(xs).union(ys)` and imports an `Enumerable` the runtime does not
+export, so the module fails to load (#657).
 
 ### Direct method calls (fast path)
 

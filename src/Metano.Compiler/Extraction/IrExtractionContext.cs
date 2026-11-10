@@ -75,13 +75,12 @@ public sealed record IrExtractionContext(
 
     /// <summary>
     /// The port through which a target says whether a declarative mapping
-    /// (<c>[MapMethod]</c>) of its own lowers a call to a BCL method, so the
-    /// extractor reports a <c>System.Linq</c> extension method that nothing
+    /// (<c>[MapMethod]</c>) of its own lowers the overload a call to a BCL
+    /// method binds to, by the same overload filter its BCL mapper applies,
+    /// so the extractor reports a <c>System.Linq</c> method that nothing
     /// lowers instead of leaving it a member call on the receiver (#648).
     /// <c>null</c>, the default, for a target that does not lower LINQ:
-    /// every such call keeps its source form. The answer covers the method
-    /// name, not each overload: a mapping that matches none of the call's
-    /// overloads still counts as lowering it.
+    /// every such call keeps its source form.
     /// </summary>
     public Func<IMethodSymbol, bool>? LowersByDeclarativeMapping { get; init; }
 

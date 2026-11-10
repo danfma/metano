@@ -54,14 +54,59 @@ public sealed partial class IrExpressionExtractor
     /// The walk stops at the first non-LINQ receiver — that becomes the
     /// chain's <see cref="IrLinqChain.Source"/>. Stages are reversed so
     /// they appear in source-to-terminal order in the IR (matches the
-    /// emission shape <c>linq(source, op1, op2, ..., opN)</c>). A chain
-    /// with a stage its runtime operator cannot run reports each such stage
-    /// and lowers to the throwing placeholder (#648).
+    /// emission shape <c>linq(source, op1, op2, ..., opN)</c>).
+    /// <para>
+    /// A chain with a stage its runtime operator cannot run (#648) is decided
+    /// before anything is extracted: each such stage is reported and the
+    /// whole chain lowers to the throwing placeholder, so diagnostics inside
+    /// its other stages and its source surface once the chain is supported.
+    /// A queryable tree the operator has no slot for for that overload is
+    /// known only once the stages are extracted; it replaces the chain the
+    /// same way.
+    /// </para>
     /// </summary>
     private IrExpression? BuildLinqChain(InvocationExpressionSyntax outermost)
     {
-        var stages = new List<IrLinqStage>();
-        var unsupportedStages = new List<UnsupportedLinqStage>();
+        if (WalkLinqChain(outermost) is not { } walk)
+            return null;
+
+        var (sites, sourceSyntax) = walk;
+
+        var unsupportedStages = sites
+            .Select(UnsupportedStageOf)
+            .OfType<UnsupportedLinqStage>()
+            .ToList();
+
+        if (unsupportedStages.Count > 0)
+            return ReportUnsupportedLinqStages(unsupportedStages);
+
+        var stages = sites.Select(ExtractLinqStage).ToList();
+
+        var misplacedTrees = sites
+            .Zip(stages, MisplacedTreeStageOf)
+            .OfType<UnsupportedLinqStage>()
+            .ToList();
+
+        if (misplacedTrees.Count > 0)
+            return ReportUnsupportedLinqStages(misplacedTrees);
+
+        stages.Reverse();
+        var source = Extract(sourceSyntax);
+        // Build-time fusion of adjacent stages (#207). Idempotent on
+        // chains the rules don't match — returns the original instance.
+        return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
+    }
+
+    /// <summary>
+    /// The stages of the chain rooted at <paramref name="outermost"/>,
+    /// outermost first, and the syntax of its source; <c>null</c> when a stage
+    /// is in the static form, which the legacy fluent emission path handles.
+    /// </summary>
+    private (IReadOnlyList<LinqStageSite> Sites, ExpressionSyntax Source)? WalkLinqChain(
+        InvocationExpressionSyntax outermost
+    )
+    {
+        var sites = new List<LinqStageSite>();
         InvocationExpressionSyntax? current = outermost;
         ExpressionSyntax? sourceSyntax = null;
 
@@ -113,21 +158,7 @@ public sealed partial class IrExpressionExtractor
             if (_semantic.GetSymbolInfo(memberAccess.Receiver).Symbol is INamedTypeSymbol)
                 return null;
 
-            // A stage its runtime operator cannot run is not lowered, so its
-            // arguments are not extracted either (#648).
-            if (UnimplementedStageOf(current, sym!, op) is { } unimplemented)
-            {
-                unsupportedStages.Add(unimplemented);
-            }
-            else
-            {
-                var stage = ExtractLinqStage(current, sym!, op, memberAccess);
-
-                if (MisplacedTreeStageOf(current, sym!, stage) is { } misplaced)
-                    unsupportedStages.Add(misplaced);
-
-                stages.Add(stage);
-            }
+            sites.Add(new LinqStageSite(current, sym, op, memberAccess));
 
             // A leading `?.Stage(…)` reads the null-conditional receiver,
             // which is already extracted (and bound): the chain starts there.
@@ -145,42 +176,40 @@ public sealed partial class IrExpressionExtractor
             }
         }
 
-        if (sourceSyntax is null)
-            return null;
-
-        if (unsupportedStages.Count > 0)
-            return ReportUnsupportedLinqStages(unsupportedStages);
-
-        stages.Reverse();
-        var source = Extract(sourceSyntax);
-        // Build-time fusion of adjacent stages (#207). Idempotent on
-        // chains the rules don't match — returns the original instance.
-        return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
+        return sourceSyntax is null ? null : (sites, sourceSyntax);
     }
 
     /// <summary>
     /// One stage of a chain, with its arguments bound to the parameters of
-    /// <paramref name="method"/> and the queryable tree it captures.
+    /// its method and the queryable tree it captures. A <c>null</c> comparer
+    /// is dropped, as the comparer-less overload means the same (#648), and
+    /// so is a tree its runtime operator reads nowhere: the call then runs
+    /// the plain operator, with the value C# computes.
     /// </summary>
-    private IrLinqStage ExtractLinqStage(
-        InvocationExpressionSyntax call,
-        IMethodSymbol method,
-        IrLinqOperator op,
-        QualifiedMemberSyntax memberAccess
-    )
+    private IrLinqStage ExtractLinqStage(LinqStageSite site)
     {
-        var args = StageArguments(call, method, op);
+        var (call, method, op, memberAccess) = site;
+        var written = StageArguments(call, method, op);
+        var args = OmitsNullComparer(site) ? WithoutComparer(written, method) : written;
 
         if (args.HasUnrepresentableMissValue && LowersLinqChains)
             ElementMissValue.ReportUnrepresentable(call, method, method.TypeArguments[0]);
 
         var queryable = TryCaptureQueryableMeta(call, method, memberAccess);
+        var readTree = ReadsNoTree(op) ? null : queryable;
 
-        return new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(method, op))
+        return new IrLinqStage(op, args.Values, readTree, LinqSixtyFourBitValues.Of(method, op))
         {
             EvaluationOrder = args.EvaluationOrder,
         };
     }
+
+    /// <summary>
+    /// Whether the runtime operator of <paramref name="op"/> reads no
+    /// queryable tree on a target that lowers LINQ chains.
+    /// </summary>
+    private bool ReadsNoTree(IrLinqOperator op) =>
+        LowersLinqChains && IrLinqMapping.RuntimeSignatureOf(op).QueryableSlot is null;
 
     /// <summary>
     /// The arguments of a LINQ stage bound to the parameters of

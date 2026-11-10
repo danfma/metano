@@ -1197,9 +1197,9 @@ public static partial class IrToTsExpressionBridge
         if (stage.Queryable is not { } queryable)
             return [];
 
-        var omitted = IrLinqMapping.IsOrDefaultTerminal(stage.Operator)
-            ? Math.Max(0, IrLinqMapping.OrDefaultQueryableSlot - stage.Arguments.Count)
-            : 0;
+        var omitted = IrLinqMapping
+            .RuntimeSignatureOf(stage.Operator)
+            .ArgumentsOmittedBeforeTree(stage.Arguments.Count);
 
         return
         [

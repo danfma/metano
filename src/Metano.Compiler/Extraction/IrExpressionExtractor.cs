@@ -179,6 +179,9 @@ public sealed partial class IrExpressionExtractor
             // those through the rewriter façade would touch 5+ call sites
             // for one rewriter's benefit.
             new Invocation.ExtensionMethodRewriter(TryRewriteExtensionCall),
+            // Must stay last: it reports the LINQ calls none of the entries
+            // above lowered (#648).
+            new Invocation.UnsupportedLinqCallRewriter(RewriteUnsupportedLinqCall),
         };
     }
 
@@ -2732,15 +2735,6 @@ public sealed partial class IrExpressionExtractor
             if (rewriter.Rewrite(invocationContext) is { } rewritten)
                 return rewritten;
         }
-
-        // A LINQ extension method nothing lowers would become a member call
-        // on the receiver (`xs.join(...)` reaching `Array.prototype.join`),
-        // and an unchained LINQ call another overload of its operator (#648).
-        if (IsUnloweredLinqCall(symbol))
-            return ReportUnloweredLinqCall(inv, symbol);
-
-        if (UnimplementedUnchainedLinqCallOf(inv, symbol) is { } unimplementedCall)
-            return ReportUnsupportedLinqStages([unimplementedCall]);
 
         var target = ExtractExplicitInvokeDelegate(inv, symbol) ?? Extract(inv.Expression);
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();

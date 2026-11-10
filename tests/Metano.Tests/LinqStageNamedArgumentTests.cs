@@ -1,5 +1,3 @@
-using Metano.Compiler.Diagnostics;
-
 namespace Metano.Tests;
 
 /// <summary>
@@ -182,9 +180,7 @@ public class LinqStageNamedArgumentTests
                     + "be used. The call throws at run time."
             );
 
-        await Assert
-            .That(report.Location!.SourceTree!.GetText().ToString(report.Location.SourceSpan))
-            .IsEqualTo("Comparer()");
+        await Assert.That(LocatedSource.TextOf(report)).IsEqualTo("Comparer()");
 
         await Assert
             .That(files["stages.ts"])
