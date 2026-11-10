@@ -279,8 +279,9 @@ public sealed partial class IrExpressionExtractor
     /// <para>
     /// Positional argument index is mapped to the parameter slot
     /// directly via <see cref="ResolveStageParameter"/>. Named-argument
-    /// reordering at the call site is not honoured — matches the
-    /// existing <see cref="TryCaptureQueryableMeta"/> convention.
+    /// reordering at the call site is not honoured here, unlike
+    /// <see cref="TryCaptureQueryableMeta"/>, which binds a chain stage's
+    /// lambdas to the parameters they name (#648).
     /// </para>
     /// <para>
     /// Object-creation calls (<c>new T(...)</c>) are not covered —
