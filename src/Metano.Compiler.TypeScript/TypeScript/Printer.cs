@@ -491,6 +491,8 @@ public sealed class Printer(string indent = "  ")
         if (func.Overloads is { Count: > 0 } overloads)
             PrintFunctionOverloadSignatures(func, overloads);
 
+        PrintJSDoc(func.JSDoc);
+
         if (func.Exported)
             _sb.Write("export ");
         if (func.Async)

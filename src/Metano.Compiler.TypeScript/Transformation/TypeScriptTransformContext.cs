@@ -358,6 +358,12 @@ public sealed class TypeScriptTransformContext(
     public Action<MetanoDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
 
     /// <summary>
+    /// The <c>MS0063</c> reporter every dispatcher emission shares: the class
+    /// emitter, the module-function groups and the branded companions.
+    /// </summary>
+    internal AmbiguousDispatchReporter AmbiguousDispatch { get; } = new(reportDiagnostic);
+
+    /// <summary>
     /// Per-export lookup for <c>[NoContainer]</c> static methods: the
     /// emitted (camelCase) function name maps back to its declaring
     /// type's <see cref="IrTranspilableTypeRef"/>. Populated by
@@ -539,6 +545,7 @@ public sealed class TypeScriptTransformContext(
         {
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
+            EmitsBrandedFastPaths = true,
             KeepsArgumentEvaluationOrder = true,
         };
 

@@ -46,6 +46,18 @@ public sealed record IrExtractionContext(
     public bool EmitsOperatorFastPaths { get; init; }
 
     /// <summary>
+    /// Whether the target declares an addressable fast path per overload of
+    /// a dispatched method group of a <c>[Branded]</c> / <c>[InlineWrapper]</c>
+    /// type (issue #569), so the extractor binds a call or method group into
+    /// such a group to the overload Roslyn resolved, as it does for any
+    /// class. Opt-in: a target that declares one member per group keeps the
+    /// source call. TypeScript sets it (the companion namespace exports
+    /// <c>Tag.sU</c> beside the dispatcher <c>Tag.s</c>); Dart keeps only the
+    /// primary member of such a group and leaves it unset.
+    /// </summary>
+    public bool EmitsBrandedFastPaths { get; init; }
+
+    /// <summary>
     /// A target capability: whether the target keeps C#'s evaluation order
     /// for a call, construction or <c>: this(...)</c> chain whose named
     /// arguments are out of parameter order
@@ -66,9 +78,10 @@ public sealed record IrExtractionContext(
     /// a second semantic model. The target capabilities
     /// (<see cref="EmitsConstructorSelectors"/>,
     /// <see cref="EmitsOperatorFastPaths"/>,
+    /// <see cref="EmitsBrandedFastPaths"/>,
     /// <see cref="KeepsArgumentEvaluationOrder"/>) are dropped on purpose:
-    /// each one binds a constructor call, a user-defined operator or a call
-    /// with named arguments, and a C# default value is a constant,
+    /// each one binds a constructor call, a user-defined operator, a method
+    /// call or a call with named arguments, and a C# default value is a constant,
     /// <c>default</c> or a parameterless struct construction, which holds
     /// none of them.
     /// </summary>

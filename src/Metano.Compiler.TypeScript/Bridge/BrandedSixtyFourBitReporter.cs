@@ -12,8 +12,15 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// one), naming all of them. A dispatcher that overrides an inherited one is
 /// judged over the inherited overloads plus the ones the type adds, since its
 /// own arms run before the base's. Function dispatchers (module functions,
-/// extension methods, a branded companion's static methods) are reported the
+/// extension methods, a branded companion's static groups) are reported the
 /// same way through <see cref="ReportFunctions"/>.
+/// <para>
+/// The message says what a call transpiled from C# does: it names the
+/// overload's own fast path, so the ambiguity cannot reach it. The operators
+/// and conversions of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type are
+/// the exception — their applications are not lowered to the declared
+/// functions at all (#599) — and the message says that instead.
+/// </para>
 /// </summary>
 internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> reportDiagnostic)
 {
@@ -48,13 +55,16 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
             method => method.Parameters
         );
 
+        var isBrandedOperator = primary.Semantics.IsOperator && SymbolHelper.HasBranded(type);
+
         foreach (var group in groups.Where(group => group.Any(added.Contains)))
         {
             Report(
                 group.Select(method =>
                     (OverloadSymbols.Of(symbols, method.Parameters), added.Contains(method))
                 ),
-                type
+                type,
+                isBrandedOperator
             );
         }
     }
@@ -65,10 +75,13 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
     /// a static group of a branded companion namespace. Such a dispatcher
     /// inherits nothing, so every overload is one the type declares.
     /// </summary>
+    /// <param name="isBrandedOperator">The group holds the operators or
+    /// conversions of a branded companion.</param>
     public void ReportFunctions(
         INamedTypeSymbol type,
         string name,
-        IReadOnlyList<FunctionOverloadShape> overloads
+        IReadOnlyList<FunctionOverloadShape> overloads,
+        bool isBrandedOperator
     )
     {
         var symbols = type.GetMembers(name).OfType<IMethodSymbol>().ToList();
@@ -78,14 +91,16 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
         {
             Report(
                 group.Select(overload => (OverloadSymbols.Of(symbols, overload.Parameters), true)),
-                type
+                type,
+                isBrandedOperator
             );
         }
     }
 
     private void Report(
         IEnumerable<(IMethodSymbol? Symbol, bool IsAdded)> members,
-        INamedTypeSymbol type
+        INamedTypeSymbol type,
+        bool isBrandedOperator = false
     )
     {
         var ordered = members
@@ -111,13 +126,19 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
                     + "every value the long, ulong and BigInteger arms accept. A call that "
                     + "reaches the dispatcher (hand-written TypeScript, or a consumer reading "
                     + "this type from a DLL or package) can run another overload than the one C# "
-                    + "binds; calls transpiled from C# in this compilation use the overload's "
-                    + "own fast path and are not affected. To make the dispatcher unambiguous, "
+                    + $"binds; {TranspiledCallsNote(isBrandedOperator)} To make the dispatcher unambiguous, "
                     + "give the overloads distinct arities or a distinct non-64-bit parameter.",
                 anchor ?? type.Locations.FirstOrDefault()
             )
         );
     }
+
+    private static string TranspiledCallsNote(bool isBrandedOperator) =>
+        isBrandedOperator
+            ? "an operator or conversion of a branded type applied in C# is not lowered to "
+                + "these functions (#599)."
+            : "calls transpiled from C# in this compilation use the overload's own fast path "
+                + "and are not affected.";
 
     private static bool HasBrandedParameter(IMethodSymbol? symbol) =>
         symbol?.Parameters.Any(parameter => IsBranded(parameter.Type)) ?? false;

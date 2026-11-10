@@ -137,7 +137,7 @@ public sealed partial class IrExpressionExtractor
         && SymbolHelper.IsToolchainDeclared(record, _semantic.Compilation.Assembly)
         && !IsPrimitiveBackedBranded(record);
 
-    private static bool IsPrimitiveBackedBranded(INamedTypeSymbol record) =>
+    internal static bool IsPrimitiveBackedBranded(INamedTypeSymbol record) =>
         SymbolHelper.HasBranded(record)
         && SymbolHelper.GetBrandedValueType(record.OriginalDefinition) is { } valueType
         && IrTypeRefMapper.Map(valueType).IsBrandablePrimitive();

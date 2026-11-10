@@ -4,12 +4,13 @@ namespace Metano.Tests;
 
 /// <summary>
 /// The shapes spec 013 DECIDED-10 keeps out of the overload machinery
-/// (<c>[External]</c>, <c>[Branded]</c>, <c>[InlineWrapper]</c>,
-/// <c>[PlainObject]</c>, <c>[JsCallable]</c>) get no factories, selectors or
-/// fast paths, so a call to their overloaded members must keep the dispatcher
-/// name instead of lowering to a fast path the type never declares
-/// (<c>DispatchedMethodCalls.IsEmittedContainingType</c>, issue #536). A
-/// control class pins that the same call does lower to a fast path.
+/// (<c>[External]</c>, <c>[PlainObject]</c>, <c>[JsCallable]</c>) get no
+/// factories, selectors or fast paths, so a call to their overloaded members
+/// must keep the dispatcher name instead of lowering to a fast path the type
+/// never declares (<c>DispatchedMethodCalls.IsEmittedContainingType</c>,
+/// issue #536). A control class pins that the same call does lower to a fast
+/// path, and so does a <c>[Branded]</c> / <c>[InlineWrapper]</c> companion,
+/// whose static groups export their fast paths since #569.
 /// </summary>
 public class OverloadDirectCallExclusionTests
 {
@@ -111,7 +112,7 @@ public class OverloadDirectCallExclusionTests
     }
 
     [Test]
-    public async Task Branded_KeepsTheDispatcher()
+    public async Task Branded_CallsTheCompanionFastPath()
     {
         var caller = await CallerOf(
             """
@@ -136,7 +137,7 @@ public class OverloadDirectCallExclusionTests
                       constructor() { }
 
                       calls(): number {
-                        return Shape.pick(1) + Shape.pick("a");
+                        return Shape.pickX(1) + Shape.pickS("a");
                       }
                     }
                     """
@@ -145,7 +146,7 @@ public class OverloadDirectCallExclusionTests
     }
 
     [Test]
-    public async Task InlineWrapper_KeepsTheDispatcher()
+    public async Task InlineWrapper_CallsTheCompanionFastPath()
     {
         var caller = await CallerOf(
             """
@@ -170,7 +171,7 @@ public class OverloadDirectCallExclusionTests
                       constructor() { }
 
                       calls(): number {
-                        return Shape.pick(1) + Shape.pick("a");
+                        return Shape.pickX(1) + Shape.pickS("a");
                       }
                     }
                     """

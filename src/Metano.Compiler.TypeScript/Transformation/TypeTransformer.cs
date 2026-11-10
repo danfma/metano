@@ -2103,7 +2103,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var (key, group) in groups)
         {
-            ReportAmbiguousFunctionDispatch(
+            Context.AmbiguousDispatch.ReportFunctions(
                 type,
                 key.Member,
                 group.Select(FunctionOverloadShape.Of).ToList()
@@ -2116,31 +2116,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 bclRegistry
             );
         }
-    }
-
-    /// <summary>
-    /// Reports <c>MS0063</c> for a function dispatcher the two detectors find
-    /// ambiguous: a module-function or extension group, or a static group of
-    /// a branded companion namespace (issue #569). The class emitter reports
-    /// its own constructor and method dispatchers.
-    /// </summary>
-    private void ReportAmbiguousFunctionDispatch(
-        INamedTypeSymbol type,
-        string memberName,
-        IReadOnlyList<FunctionOverloadShape> overloads
-    )
-    {
-        new CatchAllOverloadReporter(Context.ReportDiagnostic).ReportFunctions(
-            type,
-            memberName,
-            overloads
-        );
-
-        new BrandedSixtyFourBitReporter(Context.ReportDiagnostic).ReportFunctions(
-            type,
-            memberName,
-            overloads
-        );
     }
 
     /// <summary>
@@ -2362,22 +2337,35 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
     )
     {
-        if (!SymbolHelper.HasBranded(type) || type.TypeKind != TypeKind.Struct)
+        if (!IsBrandedStruct(type))
             return false;
 
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
 
-        foreach (var group in IrToTsBrandedBridge.DispatchedGroupsOf(ir))
+        if (TsCompanionPlan.Of(ir) is not { } plan)
+            return false;
+
+        foreach (var group in plan.Groups.Where(group => group.IsDispatched))
         {
-            ReportAmbiguousFunctionDispatch(
+            Context.AmbiguousDispatch.ReportFunctions(
                 type,
-                group[0].Name,
-                group.Select(FunctionOverloadShape.Of).ToList()
+                group.MemberName,
+                group.Methods.Select(FunctionOverloadShape.Of).ToList(),
+                isOperatorGroup: group.Methods[0].Semantics.IsOperator
             );
         }
 
-        return IrToTsBrandedBridge.Convert(ir, sink, Context.DeclarativeMappings);
+        IrToTsBrandedBridge.Convert(ir, plan, sink, Context.DeclarativeMappings);
+
+        return true;
     }
+
+    /// <summary>
+    /// A <c>[Branded]</c> / <c>[InlineWrapper]</c> struct: the only shape a
+    /// companion namespace is planned for (<see cref="TsCompanionPlan"/>).
+    /// </summary>
+    internal static bool IsBrandedStruct(INamedTypeSymbol type) =>
+        SymbolHelper.HasBranded(type) && type.TypeKind == TypeKind.Struct;
 
     /// <summary>
     /// Routes a JSX component record (<see cref="IrTypeSemantics.IsJsxComponent"/>)

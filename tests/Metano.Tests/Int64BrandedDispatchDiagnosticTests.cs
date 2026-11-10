@@ -35,15 +35,8 @@ public class Int64BrandedDispatchDiagnosticTests
 
         """;
 
-    internal static string MessageFor(string members) =>
-        $"Overloads {members} share one runtime test: a branded 64-bit type ([Branded] or "
-        + "[InlineWrapper] over long, ulong, nint, nuint or BigInteger) lowers to a bigint, so "
-        + "its dispatcher arm accepts every value the long, ulong and BigInteger arms accept. "
-        + "A call that reaches the dispatcher (hand-written TypeScript, or a consumer reading "
-        + "this type from a DLL or package) can run another overload than the one C# binds; "
-        + "calls transpiled from C# in this compilation use the overload's own fast path and "
-        + "are not affected. To make the dispatcher unambiguous, give the overloads distinct "
-        + "arities or a distinct non-64-bit parameter.";
+    private static string MessageFor(string members) =>
+        AmbiguousDispatchMessages.BrandedSixtyFourBit(members);
 
     private static IReadOnlyList<MetanoDiagnostic> Ambiguity(string source) =>
         TranspileHelper

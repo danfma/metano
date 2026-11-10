@@ -52,11 +52,11 @@ export namespace Tag {
     throw new Error("No matching overload for any");
   }
 
-  function nS(s: string): string {
+  export function nS(s: string): string {
     return "string";
   }
 
-  function nI(i: number): string {
+  export function nI(i: number): string {
     return "int";
   }
 

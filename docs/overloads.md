@@ -104,10 +104,12 @@ when they differ).
 | a method overload | a **fast path** `<method><Suffix>(…)` with the overload's own accessibility, beside the public dispatcher `<method>(…)` |
 | an operator overload | a public static fast path `__<operator><Suffix>(a, b)` beside the operator helper `__<operator>` |
 | an overloaded module function or extension method | an exported fast path `<function><Suffix>(…)` beside the exported dispatcher, re-exported from the barrel |
+| an overloaded static method of a `[Branded]` type | an exported function `<method><Suffix>(…)` in the companion namespace, beside the exported dispatcher `<method>(…)` |
 | `new Dimension(3)` in C# | `Dimension.fromSize(3)` |
 | `: base(size)` | `super(Dimension.byDimensionSize, size)` |
 | `d.Add(1)`, `base.Add(1)`, the method group `d.Add` | `d.addX(1)`, `super.addX(1)`, `d.addX.bind(d)` |
 | `a + b` (user operator) | `Money.__addMoneyInt32(a, b)` |
+| `Tag.S(new UId(1))` on a `[Branded]` type `Tag` | `Tag.sU(UId.create(1n))` |
 
 An omitted optional argument is passed explicitly, with the default of the
 overload C# bound. An abstract class gets selectors but no factories; a derived
@@ -148,6 +150,16 @@ These shapes are not covered:
 - a call to a `[This]` delegate, which lowers to `.call(...)`, and a stage of a
   LINQ chain (`xs.Aggregate(func: F(), seed: G())`) pass named arguments as
   written: out of parameter order they reach the wrong parameters.
+
+A `[Branded]` (or `[InlineWrapper]`) type over a primitive has no class: its
+static methods are functions of a companion namespace. An overloaded group
+there exports one function per overload beside the dispatcher, and generated
+calls and method groups name the bound one, so `Tag.S(new UId(1))` runs
+`S(UId)` even though a `UId` is a `bigint` at runtime and the dispatcher would
+pick `S(long)`. A function of an overload that is not public is tagged
+`/** @internal */`. Operators and conversions declared on a branded type are
+not applied through these functions yet (#599), and its constructors get no
+factories.
 
 Generated code only binds a type whose source the compiler can read — the
 current project or a project reference. A type read from a DLL or an npm

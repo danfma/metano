@@ -110,7 +110,6 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="CompanionOwner">For a <c>[PlainObject]</c> instance method (<see cref="IsPlainObjectInstanceMethod"/>), the declaring type as a value reference, with its cross-package origin: the method lowers to a standalone helper exported from that type's module, so a backend can import the helper from there. <c>null</c> for other members.</param>
 /// <param name="IsInitializerWrite">The access is the target of a member initializer a backend moved into the constructor body (<c>int P { get; set; } = x;</c>). C# runs it as a store to the member's own backing storage, never through a (possibly overridden) accessor, so a backend that keeps storage apart from an accessor writes the storage.</param>
 /// <param name="IsForeignMember">The member comes from a referenced .NET assembly (the BCL or a third-party library) that the toolchain neither transpiles nor binds — no <c>[External]</c>, <c>[Import]</c>, <c>[Emit]</c> or <c>[Name]</c> binding on the member, no <c>[External]</c>, <c>[Import]</c>, <c>[NoContainer]</c> or <c>[ExportFromBcl]</c> binding for its type: the target has no declaration of it, so a backend can lower it only through a declarative mapping.</param>
-/// <param name="CompanionOverload">For a static method of a <c>[Branded]</c> / <c>[InlineWrapper]</c> type that belongs to a dispatched group, the overload Roslyn bound. Such a call keeps the companion's dispatcher (spec 013 DECIDED-10), so <see cref="IrCallExpression.Overload"/> stays unset; a backend whose dispatcher cannot tell the group's overloads apart at runtime addresses the bound overload's own function through this identity (#569). <c>null</c> for every other member.</param>
 /// <param name="IsCompileTimeConstant">The member is a field declared with the C# <c>const</c> modifier — its value is a compile-time constant (see <see cref="IrFieldDeclaration.IsCompileTimeConstant"/>). A backend that keeps a module-scope constant's source name (#390) reads this flag instead of re-reading Roslyn; distinct from locals' <c>IrVariableDeclaration.IsConst</c>, which only means "never reassigned".</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
@@ -133,8 +132,7 @@ public sealed record IrMemberOrigin(
     IrTypeReference? CompanionOwner = null,
     bool IsForeignMember = false,
     bool IsInitializerWrite = false,
-    bool IsCompileTimeConstant = false,
-    IrOverloadRef? CompanionOverload = null
+    bool IsCompileTimeConstant = false
 )
 {
     /// <summary>The access reads a positional element (<see cref="TupleElement"/> is set).</summary>

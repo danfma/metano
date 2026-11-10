@@ -19,5 +19,6 @@ public sealed record TsFunction(
     bool Async = false,
     bool Generator = false,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
-    IReadOnlyList<TsMethodOverload>? Overloads = null
+    IReadOnlyList<TsMethodOverload>? Overloads = null,
+    TsJSDoc? JSDoc = null
 ) : TsTopLevel;

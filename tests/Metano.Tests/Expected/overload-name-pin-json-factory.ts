@@ -7,11 +7,11 @@ export namespace Email {
     return value as Email;
   }
 
-  function fromParse(value: string): Email {
+  export function fromParse(value: string): Email {
     return Email.create(value);
   }
 
-  function fromValue(value: number): Email {
+  export function fromValue(value: number): Email {
     return Email.create(value.toString());
   }
 
