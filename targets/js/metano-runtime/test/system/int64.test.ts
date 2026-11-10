@@ -8,7 +8,7 @@ import {
   checkedInt32,
   checkedInt64,
   checkedNarrow,
-  checkedNarrowInt32,
+  checkedNarrowNumber,
   checkedUInt32,
   checkedUInt64,
   divInt64,
@@ -160,13 +160,30 @@ describe("checkedInt32 / checkedUInt32", () => {
     expect(Object.is(checkedUInt32(-0), 0)).toBe(true);
   });
 
-  test("throw for a value that is not a number C# could hold", () => {
+  test("throw for NaN and the infinities", () => {
     expectOverflow(() => checkedInt32(Number.NaN), OVERFLOW);
+    expectOverflow(() => checkedInt32(Number.POSITIVE_INFINITY), OVERFLOW);
+    expectOverflow(() => checkedInt32(Number.NEGATIVE_INFINITY), OVERFLOW);
+    expectOverflow(() => checkedUInt32(Number.NaN), OVERFLOW);
     expectOverflow(() => checkedUInt32(Number.POSITIVE_INFINITY), OVERFLOW);
+    expectOverflow(() => checkedUInt32(Number.NEGATIVE_INFINITY), OVERFLOW);
+  });
+
+  test("throw for a value beyond the exact integers of a double", () => {
+    expectOverflow(() => checkedInt32(2 ** 53 + 2), OVERFLOW);
+    expectOverflow(() => checkedInt32(-(2 ** 53) - 2), OVERFLOW);
+    expectOverflow(() => checkedUInt32(2 ** 64), OVERFLOW);
+  });
+
+  test("test the range only: a fractional value inside it is returned unchanged", () => {
+    // The helpers take integers; the compiler truncates a double before it reaches them.
+    expect(checkedInt32(1.5)).toBe(1.5);
+    expect(checkedUInt32(0.5)).toBe(0.5);
+    expectOverflow(() => checkedUInt32(-0.5), OVERFLOW);
   });
 });
 
-describe("checkedNarrowInt32", () => {
+describe("checkedNarrowNumber", () => {
   type NarrowRow = [number, Outcome<number>[]];
 
   /** Columns: sbyte, byte, short, ushort (checked casts from int). */
@@ -198,8 +215,28 @@ describe("checkedNarrowInt32", () => {
 
   test.each(rows)("%p narrows as C# checked casts do", (value, outcomes) => {
     targets.forEach(([bits, signed], index) => {
-      expectOutcome(() => checkedNarrowInt32(value, bits, signed), outcomes[index]!, OVERFLOW);
+      expectOutcome(() => checkedNarrowNumber(value, bits, signed), outcomes[index]!, OVERFLOW);
     });
+  });
+
+  test("throws for NaN, the infinities and a value beyond 2^53", () => {
+    targets.forEach(([bits, signed]) => {
+      expectOverflow(() => checkedNarrowNumber(Number.NaN, bits, signed), OVERFLOW);
+      expectOverflow(() => checkedNarrowNumber(Number.POSITIVE_INFINITY, bits, signed), OVERFLOW);
+      expectOverflow(() => checkedNarrowNumber(Number.NEGATIVE_INFINITY, bits, signed), OVERFLOW);
+      expectOverflow(() => checkedNarrowNumber(2 ** 53 + 2, bits, signed), OVERFLOW);
+    });
+  });
+
+  test("gives 0, never -0", () => {
+    targets.forEach(([bits, signed]) => {
+      expect(Object.is(checkedNarrowNumber(-0, bits, signed), 0)).toBe(true);
+    });
+  });
+
+  test("tests the range only: a fractional value inside it is returned unchanged", () => {
+    expect(checkedNarrowNumber(1.5, 8, false)).toBe(1.5);
+    expectOverflow(() => checkedNarrowNumber(255.5, 8, false), OVERFLOW);
   });
 });
 

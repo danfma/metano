@@ -57,12 +57,33 @@ internal static class DartNumericConversions
     /// The selector Dart appends to the value of <paramref name="overflow"/>:
     /// <c>.toSigned(n)</c> / <c>.toUnsigned(n)</c> for a kind narrower than
     /// 64 bits, whose result a Dart <c>int</c> holds unreduced
-    /// (<c>(b + 1).toUnsigned(8)</c>, spec 012 FR-075–FR-077); a checked
-    /// reduction wraps the same way instead of throwing (a documented gap).
-    /// <c>null</c> for a 64-bit kind, which the VM <c>int</c> already wraps.
+    /// (<c>(b + 1).toUnsigned(8)</c>, spec 012 FR-075–FR-077). <c>null</c>,
+    /// so the value prints as it is, for a 64-bit kind, which the VM
+    /// <c>int</c> already wraps, and for checked <c>int</c> / <c>uint</c>
+    /// arithmetic: a checked context is a documented gap in Dart
+    /// (DECIDED-19), so the operation prints as its unchecked form, which
+    /// does not wrap either. A checked store narrower than <c>int</c> keeps
+    /// the narrowing of its unchecked form.
     /// </summary>
     public static string? OverflowSelector(IrIntegerOverflow overflow) =>
-        overflow.Kind.IsSixtyFourBit() ? null : Narrowing(overflow.Kind);
+        overflow.Kind.IsSixtyFourBit() || IsCheckedThirtyTwoBitArithmetic(overflow)
+            ? null
+            : Narrowing(overflow.Kind);
+
+    /// <summary>
+    /// The left operand selector of <paramref name="binary"/>: <c>&gt;&gt;&gt;</c>
+    /// on an <c>int</c> shifts its 32 bits, where a Dart <c>int</c> holds a
+    /// negative value sign-extended to 64, so the operand is read as
+    /// unsigned first (<c>i.toUnsigned(32) &gt;&gt;&gt; n</c>). <c>null</c>
+    /// for any other operator.
+    /// </summary>
+    public static string? LeftOperandSelector(IrBinaryExpression binary) =>
+        binary is { Operator: IrBinaryOp.UnsignedRightShift, NumericKind: IrNumericKind.Int32 }
+            ? Narrowing(IrNumericKind.UInt32)
+            : null;
+
+    private static bool IsCheckedThirtyTwoBitArithmetic(IrIntegerOverflow overflow) =>
+        overflow.Mode is IrOverflowMode.Check && overflow.Kind.IsThirtyTwoBit();
 
     private static string? SelectorChain(IrNumericEndpoint from, IrNumericEndpoint to)
     {
@@ -72,7 +93,7 @@ internal static class DartNumericConversions
         if (to.Kind.IsFloatingPoint())
             return from.Kind.IsFloatingPoint() ? null : ".toDouble()";
 
-        var narrowing = to.Kind.BitWidth() < 64 ? Narrowing(to.Kind) : null;
+        var narrowing = to.Kind.IsThirtyTwoBitOrNarrower() ? Narrowing(to.Kind) : null;
 
         return from.Kind.IsFloatingPoint() ? ".toInt()" + narrowing : narrowing;
     }

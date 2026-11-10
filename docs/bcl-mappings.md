@@ -519,12 +519,12 @@ wrapper type. The compiler makes them behave like C# where C# narrows or reinter
 |----|----|----|
 | `(int)u` | `u \| 0` | `checkedInt32(u)` |
 | `(uint)i` | `i >>> 0` | `checkedUInt32(i)` |
-| `(short)i` | `(i << 16) >> 16` | `checkedNarrowInt32(i, 16, true)` |
-| `(ushort)i` | `i & 0xFFFF` | `checkedNarrowInt32(i, 16, false)` |
-| `(sbyte)i` | `(i << 24) >> 24` | `checkedNarrowInt32(i, 8, true)` |
-| `(byte)i` | `i & 0xFF` | `checkedNarrowInt32(i, 8, false)` |
+| `(short)i` | `(i << 16) >> 16` | `checkedNarrowNumber(i, 16, true)` |
+| `(ushort)i` | `i & 0xFFFF` | `checkedNarrowNumber(i, 16, false)` |
+| `(sbyte)i` | `(i << 24) >> 24` | `checkedNarrowNumber(i, 8, true)` |
+| `(byte)i` | `i & 0xFF` | `checkedNarrowNumber(i, 8, false)` |
 | `(int)b`, `(byte)(i & 0xFF)` | `b`, `i & 255` (the value cannot change) | same |
-| `b += 1;`, `b++;` (`byte b`) | `b = (b + 1) & 0xFF;` | `b = checkedNarrowInt32(b + 1, 8, false);` |
+| `b += 1;`, `b++;` (`byte b`) | `b = (b + 1) & 0xFF;` | `b = checkedNarrowNumber(b + 1, 8, false);` |
 | `u & v`, `u \| v`, `u ^ v`, `~u`, `u << n` (`uint`) | `(u & v) >>> 0`, …, `~u >>> 0`, `(u << n) >>> 0` | same |
 | `u >> n` (`uint`) | `u >>> n` | same |
 | `i >>> n` (`int`) | `(i >>> n) \| 0` | same |
@@ -543,11 +543,39 @@ wrapper type. The compiler makes them behave like C# where C# narrows or reinter
 - **Known gap:** `int` / `uint` arithmetic does not wrap in the default (unchecked)
   context. `int.MaxValue + 1` is `2147483648` where C# gives `int.MinValue`; the value
   stays exact up to 2^53. A `checked` context gives C#'s `OverflowException`.
-  `int.MinValue / -1` returns `2147483648` instead of throwing.
+  `int.MinValue / -1` returns `2147483648` instead of throwing. At the edges of the gap:
+  - An unchecked overflow that feeds checked arithmetic throws. In a project compiled
+    with `CheckForOverflowUnderflow`, `var h = unchecked(a * 31 + 7); return h + 1;` with
+    `a = int.MaxValue` is `2147483625` on .NET and an `OverflowException` here, because
+    `h` was never wrapped. Narrowing the unchecked result through another type wraps it:
+    `unchecked((int)(uint)(a * 31 + 7))` emits `((a * 31 + 7) >>> 0) | 0`, exact while the
+    value stays below 2^53.
+  - A cast to the operand's own type emits nothing and does not wrap: `(int)(i + j)` and
+    `(uint)(u1 - u2)` keep the unwrapped result, while `(uint)(i - j)` and `(int)(u1 + u2)`
+    narrow.
+  - `uint` bit patterns are normalized and `uint` arithmetic is not: `(a - b) | 0u` is
+    C#'s value, `a - b` alone stays negative when it underflows.
+  - `checked(a + a % b)` with `b == 0` throws `OverflowException` where .NET throws
+    `DivideByZeroException` (the native `%` yields `NaN`).
+- A checked conversion of or into a nullable value is checked, for the 64-bit integers too
+  (`checked((byte?)ni)`, `checked((int?)l)`, `checked((int)nl)`, `checked((ulong?)ni)`).
+- **Dictionary entries:** a compound assignment or an increment whose store needs one of
+  these lowerings reports `MS0001` (`'counts[key]++' on a dictionary entry is not
+  supported.`): `counts[key]++` on a `Dictionary<string, int>` in a checked context, any
+  such store on a `byte` / `sbyte` / `short` / `ushort` value, `flags[key] |= mask` on a
+  `uint` value. The read-modify-write lowering does not cover dictionary entries (the
+  read of a missing key would not throw). Read, compute and write the entry in separate
+  statements.
 - Not covered: `char` conversions, `decimal` sources, enum endpoints and `[Queryable]`
-  expression trees keep their earlier lowering.
+  expression trees keep their earlier lowering. Three shapes around them changed anyway:
+  `checked(a - b)` on two values of an enum declared narrower than `int` is checked;
+  `(byte)(int)c` on a `char` emits `c & 0xFF` on a string, which is `0`; and
+  `checked(c + 1)` on a `char` throws `OverflowException`.
 - Dart: an `int` is 64-bit, so the same conversions and stores print
-  `.toSigned(n)` / `.toUnsigned(n)`; a checked context wraps instead of throwing.
+  `.toSigned(n)` / `.toUnsigned(n)` (`(i << n).toSigned(32)`,
+  `(i.toUnsigned(32) >>> n).toSigned(32)`). Dart never throws in a checked context:
+  checked `int` / `uint` arithmetic prints as its unchecked form (`a + b`, no wrap), and
+  a checked conversion or narrow store prints the narrowing of its unchecked form.
 
 ## 64-bit integers (`long` / `ulong`)
 

@@ -7,7 +7,7 @@ namespace SampleInt64Conformance;
 /// The conversion rows of the integers of 32 bits or fewer (spec 012
 /// FR-074, FR-077, issue #639): every pair of source and target among
 /// <c>sbyte</c>, <c>byte</c>, <c>short</c>, <c>ushort</c>, <c>int</c> and
-/// <c>uint</c>, plus <c>long</c>, <c>ulong</c> and <c>double</c> sources,
+/// <c>uint</c>, plus <c>long</c>, <c>ulong</c>, <c>double</c> and <c>float</c> sources,
 /// unchecked and checked. A parameter named <c>source</c> gets the narrowing
 /// boundary operands of tests/Int64Reference (the limits of every width,
 /// one past them, and values with the high bit set).
@@ -230,6 +230,30 @@ public static class NarrowConversions
     public static uint DoubleToUInt(double source) => (uint)source;
 
     public static uint DoubleToUIntChecked(double source) => checked((uint)source);
+
+    public static sbyte FloatToSByte(float source) => (sbyte)source;
+
+    public static sbyte FloatToSByteChecked(float source) => checked((sbyte)source);
+
+    public static byte FloatToByte(float source) => (byte)source;
+
+    public static byte FloatToByteChecked(float source) => checked((byte)source);
+
+    public static short FloatToShort(float source) => (short)source;
+
+    public static short FloatToShortChecked(float source) => checked((short)source);
+
+    public static ushort FloatToUShort(float source) => (ushort)source;
+
+    public static ushort FloatToUShortChecked(float source) => checked((ushort)source);
+
+    public static int FloatToInt(float source) => (int)source;
+
+    public static int FloatToIntChecked(float source) => checked((int)source);
+
+    public static uint FloatToUInt(float source) => (uint)source;
+
+    public static uint FloatToUIntChecked(float source) => checked((uint)source);
 
     public static byte? LiftedIntToByte(int? source) => (byte?)source;
 

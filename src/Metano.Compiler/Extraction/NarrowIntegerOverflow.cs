@@ -6,17 +6,24 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The overflow reductions of the integers of 32 bits or fewer (spec 012
 /// FR-075–FR-077), which the targets hold in a type wider than the C# one
-/// (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>):
+/// (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>). The first, second
+/// and last rules follow from C# alone and hold for every target; the third
+/// encodes a JavaScript fact and is tagged <c>TODO(#549)</c> where it is
+/// decided, until a target capability decides it:
 /// <list type="bullet">
 ///   <item>the value a compound assignment or an increment stores in an
 ///   <c>sbyte</c>, <c>byte</c>, <c>short</c> or <c>ushort</c> is narrowed
 ///   as the conversion C# inserts narrows it (<c>b += 1</c> is
 ///   <c>b = (byte)(b + 1)</c>), wrapped or range-checked;</item>
-///   <item>the <c>uint</c> result of <c>&amp;</c>, <c>|</c>, <c>^</c>,
-///   <c>~</c> and <c>&lt;&lt;</c>, and the <c>int</c> result of
-///   <c>&gt;&gt;&gt;</c>, wrap in either context: they cannot overflow, but
-///   a target whose bitwise operators compute in another signedness reads
-///   them back through the wrap;</item>
+///   <item><c>&lt;&lt;</c> on an <c>int</c> / <c>uint</c> drops the bits
+///   shifted past bit 31 and <c>~</c> on a <c>uint</c> stays unsigned, so
+///   both wrap in either context, as the 64-bit rules of
+///   <see cref="IntegerOverflowLowering"/> do;</item>
+///   <item>the <c>uint</c> result of <c>&amp;</c>, <c>|</c> and <c>^</c> and
+///   the <c>int</c> result of <c>&gt;&gt;&gt;</c> cannot leave their domain
+///   in C#, but JavaScript's 32-bit operators return them in the other
+///   signedness, so they are read back through a wrap (a no-op on a 64-bit
+///   Dart <c>int</c>);</item>
 ///   <item><c>+</c>, <c>-</c>, <c>*</c>, unary <c>-</c>, <c>++</c> and
 ///   <c>--</c> on <c>int</c> / <c>uint</c> are range-checked in a checked
 ///   context. In an unchecked context they are not reduced: the wrap of
@@ -27,9 +34,7 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class NarrowIntegerOverflow
 {
-    private static readonly IntegerRange Int32Range = IntegerRange
-        .Of(IrNumericKind.Int32)
-        .GetValueOrDefault();
+    private static readonly IntegerRange Int32Range = IntegerRange.Of(IrNumericKind.Int32);
 
     /// <summary>
     /// The reduction of a built-in binary operator computing in
@@ -51,12 +56,36 @@ internal static class NarrowIntegerOverflow
                     isChecked,
                     IntegerValueRanges.ExactResult(operatorKind, left, right)
                 ),
+            // TODO(#549): `uint` `&`, `|` and `^` cannot leave the domain in
+            // C#; the read exists because JavaScript returns them as 32
+            // signed bits. A target capability should decide it.
             BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr =>
                 UnsignedBits(kind, IntegerValueRanges.ExactResult(operatorKind, left, right)),
-            BinaryOperatorKind.LeftShift => UnsignedBits(kind, result: null),
+            BinaryOperatorKind.LeftShift => LeftShift(
+                kind,
+                IntegerValueRanges.ExactResult(operatorKind, left, right)
+            ),
+            // TODO(#549): `int` `>>>` cannot leave the domain in C#; the read
+            // exists because JavaScript returns it as 32 unsigned bits.
             BinaryOperatorKind.UnsignedRightShift => SignedBits(kind, left),
             _ => null,
         };
+
+    /// <summary>
+    /// <c>&lt;&lt;</c> drops the bits shifted past bit 31 in either context
+    /// (shifts never check), so its result wraps unless the exact
+    /// <paramref name="result"/> is known to fit: an <c>int</c> in its
+    /// range, a <c>uint</c> below 2^31 (see <see cref="UnsignedBits"/>).
+    /// </summary>
+    private static IntegerOverflowReduction? LeftShift(IrNumericKind kind, IntegerRange? result)
+    {
+        if (kind is IrNumericKind.UInt32)
+            return UnsignedBits(kind, result);
+
+        var fits = result is { } exact && IntegerRange.Of(kind).Contains(exact);
+
+        return fits ? null : IntegerOverflowReduction.Of(kind, isChecked: false);
+    }
 
     /// <summary>
     /// The reduction of <c>target op= value</c> on a target of
@@ -72,7 +101,7 @@ internal static class NarrowIntegerOverflow
         IntegerRange? value
     )
     {
-        if (targetKind.BitWidth() == 32)
+        if (targetKind.IsThirtyTwoBit())
         {
             return BinaryReduction(
                 operatorKind,
@@ -83,7 +112,7 @@ internal static class NarrowIntegerOverflow
             );
         }
 
-        if (StaysInOperandRange(operatorKind, targetKind.IsSigned()))
+        if (StaysInOperandRange(operatorKind, targetKind))
             return null;
 
         return IntegerOverflowReduction.Of(targetKind, isChecked) with
@@ -99,6 +128,11 @@ internal static class NarrowIntegerOverflow
     /// negative <c>short</c>), so it is read back as signed first; a
     /// wrapping store keeps the same low bits either way.
     /// </summary>
+    /// <remarks>
+    /// TODO(#549): the read encodes a JavaScript fact (<c>&gt;&gt;&gt;</c>
+    /// returns 32 unsigned bits); a target whose <c>int</c> result is
+    /// already signed needs none.
+    /// </remarks>
     private static IntegerOverflowReduction? OperatorResultRead(
         BinaryOperatorKind operatorKind,
         bool isChecked
@@ -114,7 +148,7 @@ internal static class NarrowIntegerOverflow
     /// </summary>
     public static IntegerOverflowReduction? IncrementReduction(IrNumericKind kind, bool isChecked)
     {
-        if (kind.BitWidth() < 32)
+        if (kind.IsNarrowerThanInt32())
             return IntegerOverflowReduction.Of(kind, isChecked);
 
         return isChecked ? IntegerOverflowReduction.Of(kind, isChecked: true) : null;
@@ -151,8 +185,7 @@ internal static class NarrowIntegerOverflow
         if (!isChecked)
             return null;
 
-        var fits =
-            result is { } exact && IntegerRange.Of(kind) is { } domain && domain.Contains(exact);
+        var fits = result is { } exact && IntegerRange.Of(kind).Contains(exact);
 
         return fits ? null : IntegerOverflowReduction.Of(kind, isChecked: true);
     }
@@ -162,6 +195,11 @@ internal static class NarrowIntegerOverflow
     /// <paramref name="result"/> is known to keep bit 31 clear, where the
     /// signed and the unsigned reading agree.
     /// </summary>
+    /// <remarks>
+    /// TODO(#549): "bit 31 clear" is the JavaScript bound (its bitwise
+    /// operators return 32 signed bits). By C# alone the bound is the
+    /// <c>uint</c> range.
+    /// </remarks>
     private static IntegerOverflowReduction? UnsignedBits(IrNumericKind kind, IntegerRange? result)
     {
         if (kind is not IrNumericKind.UInt32)
@@ -194,7 +232,7 @@ internal static class NarrowIntegerOverflow
     /// for an unsigned type (<c>sbyte.MinValue / -1</c> is <c>128</c>, and
     /// <c>&gt;&gt;&gt;</c> reads a negative value as a large positive one).
     /// </summary>
-    private static bool StaysInOperandRange(BinaryOperatorKind operatorKind, bool isSigned) =>
+    private static bool StaysInOperandRange(BinaryOperatorKind operatorKind, IrNumericKind kind) =>
         operatorKind switch
         {
             BinaryOperatorKind.And
@@ -202,7 +240,7 @@ internal static class NarrowIntegerOverflow
             or BinaryOperatorKind.ExclusiveOr
             or BinaryOperatorKind.RightShift
             or BinaryOperatorKind.Remainder => true,
-            BinaryOperatorKind.Divide or BinaryOperatorKind.UnsignedRightShift => !isSigned,
+            BinaryOperatorKind.Divide or BinaryOperatorKind.UnsignedRightShift => !kind.IsSigned(),
             _ => false,
         };
 }

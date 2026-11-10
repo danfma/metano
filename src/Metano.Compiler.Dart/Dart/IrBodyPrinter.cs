@@ -337,6 +337,13 @@ public static class IrBodyPrinter
                 PrintArgs(sb, ne.Arguments);
                 sb.Append(')');
                 break;
+            case IrBinaryExpression bin
+                when DartNumericConversions.LeftOperandSelector(bin) is { } leftSelector:
+                PrintOperand(sb, bin.Left, ReceiverRequiresParens(bin.Left));
+                sb.Append(leftSelector);
+                sb.Append(' ').Append(FormatBinaryOp(bin.Operator)).Append(' ');
+                PrintOperand(sb, bin.Right, DartBinaryOperandGrouping.NeedsRightParentheses(bin));
+                break;
             case IrBinaryExpression bin:
                 PrintOperand(sb, bin.Left, DartBinaryOperandGrouping.NeedsLeftParentheses(bin));
                 sb.Append(' ').Append(FormatBinaryOp(bin.Operator)).Append(' ');

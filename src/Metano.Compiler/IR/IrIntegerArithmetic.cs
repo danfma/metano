@@ -43,8 +43,7 @@ public sealed record IrNumericConversion(
     public static bool IsFloatingPointTruncation(IrNumericEndpoint from, IrNumericEndpoint to) =>
         !from.IsEnum
         && from.Kind.IsFloatingPoint()
-        && to.Kind.IsIntegerOrChar()
-        && to.Kind.BitWidth() <= 32;
+        && (to.Kind.IsThirtyTwoBitOrNarrower() || to.Kind is IrNumericKind.Char);
 
     /// <summary>
     /// A conversion between two integers of 32 bits or fewer whose target

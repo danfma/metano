@@ -1,4 +1,4 @@
-import { checkedNarrowInt32, intDiv } from "metano-runtime";
+import { checkedNarrowNumber, intDiv } from "metano-runtime";
 
 export class Small {
   field: number = 0;
@@ -115,9 +115,9 @@ export class Small {
 
   checked(b: number): number {
     {
-      b = checkedNarrowInt32(b + 1, 8, false);
-      b = checkedNarrowInt32(b + 1, 8, false);
-      b = checkedNarrowInt32(b << 1, 8, false);
+      b = checkedNarrowNumber(b + 1, 8, false);
+      b = checkedNarrowNumber(b + 1, 8, false);
+      b = checkedNarrowNumber(b << 1, 8, false);
       b >>= 1;
     }
 
@@ -126,8 +126,8 @@ export class Small {
 
   checkedField(): void {
     {
-      this.field = checkedNarrowInt32(this.field - 1, 8, false);
-      this.field = checkedNarrowInt32(this.field - 1, 8, false);
+      this.field = checkedNarrowNumber(this.field - 1, 8, false);
+      this.field = checkedNarrowNumber(this.field - 1, 8, false);
     }
   }
 

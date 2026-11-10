@@ -1,4 +1,4 @@
-import { checkedInt32, checkedNarrow, checkedNarrowInt32, checkedUInt32, int32FromDouble, int32FromDoubleChecked } from "metano-runtime";
+import { checkedInt32, checkedNarrow, checkedNarrowNumber, checkedUInt32, int32FromDouble, int32FromDoubleChecked } from "metano-runtime";
 
 export class Narrowing {
   constructor() { }
@@ -110,15 +110,15 @@ export class Narrowing {
   }
 
   checked(x: number): number {
-    return checkedNarrowInt32(x, 8, false);
+    return checkedNarrowNumber(x, 8, false);
   }
 
   checkedSigned(x: number): number {
-    return checkedNarrowInt32(x, 8, true);
+    return checkedNarrowNumber(x, 8, true);
   }
 
   checkedUShort(x: number): number {
-    return checkedNarrowInt32(x, 16, false);
+    return checkedNarrowNumber(x, 16, false);
   }
 
   checkedUInt(x: number): number {
@@ -134,7 +134,7 @@ export class Narrowing {
   }
 
   checkedLifted(x: number | null): number | null {
-    return x == null ? null : checkedNarrowInt32(x, 8, false);
+    return x == null ? null : checkedNarrowNumber(x, 8, false);
   }
 
   checkedFromDouble(d: number): number {
@@ -143,6 +143,10 @@ export class Narrowing {
 
   checkedFromLong(l: bigint): number {
     return Number(checkedNarrow(l, 8, false));
+  }
+
+  fromULongProduct(a: bigint, b: bigint): number {
+    return Number(BigInt.asIntN(32, BigInt.asUintN(64, a * b))) & 0xFF;
   }
 
   checkedLiftedFromLong(l: bigint | null): number | null {

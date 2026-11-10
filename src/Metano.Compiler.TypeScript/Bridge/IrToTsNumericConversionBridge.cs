@@ -75,9 +75,12 @@ internal static class IrToTsNumericConversionBridge
         if (to.IsWideIntegerValue())
             return IntoBigInt(from, to, isChecked, value);
 
-        return IrNumericConversion.IsIntegerNarrowing(from, to)
-            ? NarrowIntegerTsExpressions.Reduced(to.Kind, isChecked, value)
-            : value;
+        if (!IrNumericConversion.IsIntegerNarrowing(from, to))
+            return value;
+
+        return isChecked
+            ? NarrowIntegerTsExpressions.Checked(to.Kind, value)
+            : NarrowIntegerTsExpressions.Wrapped(to.Kind, value);
     }
 
     /// <summary>

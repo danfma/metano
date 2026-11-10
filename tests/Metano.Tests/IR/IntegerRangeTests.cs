@@ -6,9 +6,16 @@ namespace Metano.Tests.IR;
 /// <summary>
 /// The value ranges the small-integer lowering reads to emit nothing where a
 /// conversion or a reduction cannot change the value (spec 012 FR-074–FR-077).
+/// An operator whose bound cannot be stated answers <c>null</c>.
 /// </summary>
 public class IntegerRangeTests
 {
+    private static readonly IntegerRange Bytes = IntegerRange.Of(IrNumericKind.Byte);
+    private static readonly IntegerRange Shorts = IntegerRange.Of(IrNumericKind.Int16);
+    private static readonly IntegerRange UnsignedShorts = IntegerRange.Of(IrNumericKind.UInt16);
+    private static readonly IntegerRange Ints = IntegerRange.Of(IrNumericKind.Int32);
+    private static readonly IntegerRange UnsignedLongs = IntegerRange.Of(IrNumericKind.UInt64);
+
     [Test]
     [Arguments(IrNumericKind.SByte, -128L, 127L)]
     [Arguments(IrNumericKind.Byte, 0L, 255L)]
@@ -19,7 +26,7 @@ public class IntegerRangeTests
     [Arguments(IrNumericKind.Int64, long.MinValue, long.MaxValue)]
     public async Task Of_IsTheRangeOfTheIntegerKind(IrNumericKind kind, long min, long max)
     {
-        var range = IntegerRange.Of(kind).GetValueOrDefault();
+        var range = IntegerRange.Of(kind);
 
         await Assert.That(range.Min).IsEqualTo((Int128)min);
         await Assert.That(range.Max).IsEqualTo((Int128)max);
@@ -28,10 +35,8 @@ public class IntegerRangeTests
     [Test]
     public async Task Of_ReadsTheWholeUnsignedSixtyFourBitRange()
     {
-        var range = IntegerRange.Of(IrNumericKind.UInt64).GetValueOrDefault();
-
-        await Assert.That(range.Min).IsEqualTo(Int128.Zero);
-        await Assert.That(range.Max).IsEqualTo((Int128)ulong.MaxValue);
+        await Assert.That(UnsignedLongs.Min).IsEqualTo(Int128.Zero);
+        await Assert.That(UnsignedLongs.Max).IsEqualTo((Int128)ulong.MaxValue);
     }
 
     [Test]
@@ -39,101 +44,94 @@ public class IntegerRangeTests
     [Arguments(IrNumericKind.Double)]
     [Arguments(IrNumericKind.Decimal)]
     [Arguments(IrNumericKind.BigInteger)]
-    public async Task Of_IsNullForAKindThatIsNotAnInteger(IrNumericKind kind)
+    public async Task Of_RejectsAKindThatIsNotAnInteger(IrNumericKind kind)
     {
-        await Assert.That(IntegerRange.Of(kind)).IsNull();
+        await Assert.That(() => IntegerRange.Of(kind)).Throws<ArgumentException>();
     }
 
     [Test]
-    public async Task Arithmetic_CombinesTheBounds()
+    public async Task Plus_AddsTheBounds()
     {
-        var bytes = IntegerRange.Of(IrNumericKind.Byte).GetValueOrDefault();
-        var shorts = IntegerRange.Of(IrNumericKind.Int16).GetValueOrDefault();
+        var sum = Bytes.Plus(Shorts);
 
-        await Assert.That(bytes.Plus(bytes).Max).IsEqualTo((Int128)510);
-        await Assert.That(bytes.Minus(bytes).Min).IsEqualTo((Int128)(-255));
-        await Assert.That(shorts.Times(shorts).Max).IsEqualTo((Int128)1073741824);
-        await Assert.That(shorts.Times(shorts).Min).IsEqualTo((Int128)(-1073709056));
-        await Assert.That(shorts.Negated().Max).IsEqualTo((Int128)32768);
+        await Assert.That(sum.Min).IsEqualTo((Int128)(-32768));
+        await Assert.That(sum.Max).IsEqualTo((Int128)33022);
     }
 
     [Test]
-    public async Task BitwiseOperators_BoundNonNegativeOperands()
+    public async Task Minus_SubtractsTheOppositeBounds()
     {
-        var bytes = IntegerRange.Of(IrNumericKind.Byte).GetValueOrDefault();
-        var unsignedShorts = IntegerRange.Of(IrNumericKind.UInt16).GetValueOrDefault();
-        var mask = IntegerRange.Exactly(0x100);
-        var zero = IntegerRange.Exactly(0);
+        var difference = Bytes.Minus(Bytes);
 
-        await Assert.That(unsignedShorts.BitwiseAnd(bytes).Max).IsEqualTo((Int128)255);
-        await Assert.That(bytes.BitwiseUnion(mask).Max).IsEqualTo((Int128)511);
-        await Assert.That(zero.BitwiseUnion(zero).Max).IsEqualTo(Int128.Zero);
+        await Assert.That(difference.Min).IsEqualTo((Int128)(-255));
+        await Assert.That(difference.Max).IsEqualTo((Int128)255);
+    }
+
+    [Test]
+    public async Task Times_TakesTheExtremeProducts()
+    {
+        var product = Shorts.Times(Shorts);
+
+        await Assert.That(product?.Min).IsEqualTo((Int128)(-1073709056));
+        await Assert.That(product?.Max).IsEqualTo((Int128)1073741824);
     }
 
     /// <summary>
-    /// Rows: the target; columns: whether it holds every value of sbyte,
-    /// byte, short, ushort, int and uint.
+    /// <c>ulong.MaxValue * ulong.MaxValue</c> needs 128 unsigned bits, one
+    /// more than the bounds hold: the product is unknown, not a wrapped bound.
     /// </summary>
     [Test]
-    [Arguments(IrNumericKind.SByte, true, false, false, false, false, false)]
-    [Arguments(IrNumericKind.Byte, false, true, false, false, false, false)]
-    [Arguments(IrNumericKind.Int16, true, true, true, false, false, false)]
-    [Arguments(IrNumericKind.UInt16, false, true, false, true, false, false)]
-    [Arguments(IrNumericKind.Int32, true, true, true, true, true, false)]
-    [Arguments(IrNumericKind.UInt32, false, true, false, true, false, true)]
-    public async Task HoldsEvery_FollowsSignAndWidth(
-        IrNumericKind target,
-        bool holdsSByte,
-        bool holdsByte,
-        bool holdsInt16,
-        bool holdsUInt16,
-        bool holdsInt32,
-        bool holdsUInt32
-    )
+    public async Task Times_IsUnknownWhenABoundDoesNotFit()
     {
-        await Assert.That(target.HoldsEvery(IrNumericKind.SByte)).IsEqualTo(holdsSByte);
-        await Assert.That(target.HoldsEvery(IrNumericKind.Byte)).IsEqualTo(holdsByte);
-        await Assert.That(target.HoldsEvery(IrNumericKind.Int16)).IsEqualTo(holdsInt16);
-        await Assert.That(target.HoldsEvery(IrNumericKind.UInt16)).IsEqualTo(holdsUInt16);
-        await Assert.That(target.HoldsEvery(IrNumericKind.Int32)).IsEqualTo(holdsInt32);
-        await Assert.That(target.HoldsEvery(IrNumericKind.UInt32)).IsEqualTo(holdsUInt32);
+        await Assert.That(UnsignedLongs.Times(UnsignedLongs)).IsNull();
     }
 
     [Test]
-    public async Task IsIntegerNarrowing_LeavesEnumsCharAndWideIntegersAlone()
+    public async Task Negated_SwapsTheBounds()
     {
-        var int32 = new IrNumericEndpoint(IrNumericKind.Int32);
-        var byteKind = new IrNumericEndpoint(IrNumericKind.Byte);
+        var negated = Shorts.Negated();
 
-        await Assert.That(IrNumericConversion.IsIntegerNarrowing(int32, byteKind)).IsTrue();
-        await Assert.That(IrNumericConversion.IsIntegerNarrowing(byteKind, int32)).IsFalse();
-        await Assert.That(IrNumericConversion.IsIntegerNarrowing(int32, int32)).IsFalse();
+        await Assert.That(negated.Min).IsEqualTo((Int128)(-32767));
+        await Assert.That(negated.Max).IsEqualTo((Int128)32768);
+    }
 
-        await Assert
-            .That(
-                IrNumericConversion.IsIntegerNarrowing(
-                    new IrNumericEndpoint(IrNumericKind.Int32, IsEnum: true),
-                    byteKind
-                )
-            )
-            .IsFalse();
+    [Test]
+    public async Task BitwiseAnd_IsBoundedByANonNegativeOperand()
+    {
+        await Assert.That(UnsignedShorts.BitwiseAnd(Bytes)?.Max).IsEqualTo((Int128)255);
+        await Assert.That(Ints.BitwiseAnd(Bytes)?.Max).IsEqualTo((Int128)255);
+        await Assert.That(Bytes.BitwiseAnd(Ints)?.Min).IsEqualTo(Int128.Zero);
+        await Assert.That(Ints.BitwiseAnd(Shorts)).IsNull();
+    }
 
-        await Assert
-            .That(
-                IrNumericConversion.IsIntegerNarrowing(
-                    int32,
-                    new IrNumericEndpoint(IrNumericKind.Char)
-                )
-            )
-            .IsFalse();
+    [Test]
+    public async Task BitwiseUnion_SetsNoBitAboveTheHighestMaximum()
+    {
+        var zero = IntegerRange.Exactly(0);
 
         await Assert
-            .That(
-                IrNumericConversion.IsIntegerNarrowing(
-                    new IrNumericEndpoint(IrNumericKind.Int64),
-                    int32
-                )
-            )
-            .IsFalse();
+            .That(Bytes.BitwiseUnion(IntegerRange.Exactly(0x100))?.Max)
+            .IsEqualTo((Int128)511);
+
+        await Assert.That(zero.BitwiseUnion(zero)?.Max).IsEqualTo(Int128.Zero);
+        await Assert.That(Bytes.BitwiseUnion(Shorts)).IsNull();
+        await Assert.That(Shorts.BitwiseUnion(Bytes)).IsNull();
+    }
+
+    [Test]
+    public async Task ShiftedLeft_ReadsAnUnmaskedCountOnly()
+    {
+        await Assert.That(Bytes.ShiftedLeft(8)?.Max).IsEqualTo((Int128)65280);
+        await Assert.That(Shorts.ShiftedLeft(1)?.Min).IsEqualTo((Int128)(-65536));
+        await Assert.That(Bytes.ShiftedLeft(32)).IsNull();
+        await Assert.That(Bytes.ShiftedLeft(-1)).IsNull();
+    }
+
+    [Test]
+    public async Task Contains_ComparesBothBounds()
+    {
+        await Assert.That(Ints.Contains(Shorts)).IsTrue();
+        await Assert.That(Bytes.Contains(Shorts)).IsFalse();
+        await Assert.That(Shorts.Contains(UnsignedShorts)).IsFalse();
     }
 }
