@@ -62,13 +62,15 @@ export function loadFixture(name: string): Fixture {
   return JSON.parse(readFileSync(join(fixturesDirectory(), name), "utf8")) as Fixture;
 }
 
-/** Every case of `fixture` whose outcome through `twin` differs from .NET's. */
+/** Every case of `fixture` whose outcome through `twin` differs from .NET's, run in fixture order. */
 export async function mismatchesOf(fixture: Fixture, twin: Twin): Promise<Mismatch[]> {
-  const mismatches = await Promise.all(
-    fixture.cases.map((row) => mismatchesOfCase(row, fixture, twin)),
-  );
+  const mismatches: Mismatch[] = [];
 
-  return mismatches.flat();
+  for (const row of fixture.cases) {
+    mismatches.push(...(await mismatchesOfCase(row, fixture, twin)));
+  }
+
+  return mismatches;
 }
 
 /** The mismatch of one case, or none; an async twin function is awaited. */

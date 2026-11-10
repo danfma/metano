@@ -6,13 +6,17 @@
 
 import { FIXTURE_RUNS, loadFixture, mismatchesOf } from "./conformance-runs.ts";
 
-const reports = await Promise.all(
-  FIXTURE_RUNS.map(async ({ name, twin }) => {
-    const fixture = loadFixture(name);
+const reports = [];
 
-    return { name, total: fixture.cases.length, mismatches: await mismatchesOf(fixture, twin) };
-  }),
-);
+for (const { name, twin } of FIXTURE_RUNS) {
+  const fixture = loadFixture(name);
+
+  reports.push({
+    name,
+    total: fixture.cases.length,
+    mismatches: await mismatchesOf(fixture, twin),
+  });
+}
 
 const failures = reports.filter(({ total, mismatches }) => total === 0 || mismatches.length > 0);
 

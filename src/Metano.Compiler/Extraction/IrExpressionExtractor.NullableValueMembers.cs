@@ -88,6 +88,7 @@ public sealed partial class IrExpressionExtractor
     /// (<c>dead_code</c>, <c>dead_null_aware_expression</c>).
     /// </summary>
     private bool IsReadWithoutAGuard(ExpressionSyntax receiverSyntax) =>
+        // TODO(#549): decide by a target capability instead of the Dart special case.
         IsDartTarget
             ? _semantic.GetTypeInfo(receiverSyntax).Nullability.FlowState
                 != NullableFlowState.MaybeNull
