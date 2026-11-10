@@ -315,3 +315,75 @@ export class Chained {
     return new Chained(Chained.byChainedDefault);
   }
 }
+
+import type { Collector } from "./collector";
+import { Trace } from "./trace";
+
+export class ParamsCalls {
+  constructor() { }
+
+  static arrayOmitted(e: Collector): number {
+    return (($arg0, $arg2, $arg1) => e.restA($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+  }
+
+  static arrayOmittedLastFirst(e: Collector): number {
+    return (($arg2, $arg0, $arg1) => e.restA($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("x"), Trace.next("q"));
+  }
+
+  static arrayGiven(e: Collector): number {
+    return (($arg2, $arg0, $arg1, $arg3) => e.restA($arg0, $arg1, $arg2, ...$arg3))(Trace.next("p"), Trace.next("x"), Trace.next("q"), [1, 2]);
+  }
+
+  static listOmitted(e: Collector): number {
+    return (($arg0, $arg2, $arg1) => e.restL($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+  }
+
+  static listPositionalFirst(e: Collector): number {
+    return (($arg0, $arg2, $arg1) => e.restL($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+  }
+
+  static listGiven(e: Collector): number {
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, ...$arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), [Trace.next("r")]);
+  }
+
+  static listPositional(e: Collector): number {
+    return e.restL(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+  }
+
+  static enumerableOmitted(e: Collector): number {
+    return (($arg0, $arg2, $arg1) => e.restE($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+  }
+
+  static enumerableOmittedLastFirst(e: Collector): number {
+    return (($arg2, $arg0, $arg1) => e.restE($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("x"), Trace.next("q"));
+  }
+}
+
+import { NativeBox } from "../native-box";
+import { Trace } from "./trace";
+
+export class AmbientCalls {
+  constructor() { }
+
+  static delegateProperty(box: NativeBox): number {
+    return (($arg1, $arg0) => box.calc($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+  }
+
+  static funcProperty(box: NativeBox): number {
+    return (($arg1, $arg0) => box.compute($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+  }
+
+  static delegatePropertyInvoke(box: NativeBox): number {
+    return (($arg1, $arg0) => box.calc($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+  }
+
+  static make(): NativeBox {
+    Trace.next("n");
+
+    return new NativeBox();
+  }
+
+  static computedReceiver(): number {
+    return (($recv, $arg1, $arg0) => $recv.calc($arg0, $arg1))(AmbientCalls.make(), Trace.next("p"), Trace.next("q"));
+  }
+}

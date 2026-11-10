@@ -156,11 +156,10 @@ internal sealed partial class ExpressionVariableLowering
             var sourceOrder =
                 call.EvaluationOrder ?? Enumerable.Range(0, call.Arguments.Count).ToList();
 
-            var bound = sourceOrder
-                .Select(position =>
-                    (Position: position, Value: Bind(call.Arguments[position].Value))
-                )
-                .ToDictionary(argument => argument.Position, argument => argument.Value);
+            var bound = sourceOrder.ToDictionary(
+                position => position,
+                position => Bind(call.Arguments[position].Value)
+            );
 
             var arguments = call
                 .Arguments.Select((argument, position) => argument with { Value = bound[position] })

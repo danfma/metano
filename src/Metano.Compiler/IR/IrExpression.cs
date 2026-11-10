@@ -290,6 +290,8 @@ public sealed record IrCallExpression(
     /// Whether the call invokes a delegate value: <see cref="Target"/> is
     /// then read whole before the arguments — a member access in it is a
     /// property or field read, not a method whose receiver the call keeps.
+    /// Unset on the <c>.call(receiver, …)</c> rewrite of a <c>[This]</c>
+    /// delegate, whose target is the delegate's <c>call</c> member.
     /// </summary>
     public bool InvokesDelegate { get; init; }
 }

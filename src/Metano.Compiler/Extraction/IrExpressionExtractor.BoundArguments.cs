@@ -121,9 +121,9 @@ public sealed partial class IrExpressionExtractor
     /// no overload (spec 013 FR-017): <paramref name="inParameterOrder"/> are
     /// its arguments, one per parameter, and the result lists their positions
     /// in the order C# evaluates them. <c>null</c> when no argument is named,
-    /// when the written order is parameter order, and when fewer than two
-    /// <see cref="IsEvaluatedInOrder">arguments evaluated in order</see> are
-    /// order-sensitive or none
+    /// when the <see cref="IsEvaluatedInOrder">arguments evaluated in
+    /// order</see> are written in parameter order, and when fewer than two
+    /// of them are order-sensitive or none
     /// <see cref="HasOrderToKeep">has an order to keep</see>: the call then
     /// stays plain. Reports nothing.
     /// </summary>
@@ -137,7 +137,7 @@ public sealed partial class IrExpressionExtractor
 
         var evaluated = written.Where(IsEvaluatedInOrder).ToImmutableArray();
 
-        if (!IsReordered(written) || CountOrderSensitiveArguments(evaluated) < 2)
+        if (!IsReordered(evaluated) || CountOrderSensitiveArguments(evaluated) < 2)
             return null;
 
         return OrderToKeep(
@@ -165,8 +165,15 @@ public sealed partial class IrExpressionExtractor
     /// first, and not an <c>out</c> argument, which evaluates nothing.
     /// </summary>
     private static bool IsEvaluatedInOrder(IArgumentOperation argument) =>
-        argument.Parameter?.RefKind != RefKind.Out
-        && argument is not { ArgumentKind: ArgumentKind.Explicit, Syntax: not ArgumentSyntax };
+        argument.Parameter?.RefKind != RefKind.Out && !IsReducedExtensionReceiver(argument);
+
+    /// <summary>
+    /// The receiver of a reduced extension call, which Roslyn lists as the
+    /// first argument: it hands over the receiver expression where every
+    /// other explicit argument has an <see cref="ArgumentSyntax"/>.
+    /// </summary>
+    private static bool IsReducedExtensionReceiver(IArgumentOperation argument) =>
+        argument is { ArgumentKind: ArgumentKind.Explicit, Syntax: ExpressionSyntax };
 
     /// <summary>
     /// The positions of <paramref name="inParameterOrder"/> in the order C#
@@ -185,16 +192,17 @@ public sealed partial class IrExpressionExtractor
         IReadOnlyList<IrArgument> inParameterOrder
     )
     {
-        var ordinals = written
-            .Where(argument => !IsOmittedParamsArray(argument))
-            .Select(argument => argument.Parameter?.Ordinal ?? -1)
-            .ToList();
+        var passed = written.Where(argument => !IsOmittedParams(argument)).ToList();
+        var ordinals = passed.Select(argument => argument.Parameter?.Ordinal ?? -1).ToList();
 
         IReadOnlyList<int>? order = (inParameterOrder.Count - ordinals.Count) switch
         {
             0 => ordinals,
             1 when inParameterOrder[0].Name is null => [0, .. ordinals.Select(o => o + 1)],
-            -1 when ordinals[0] == 0 => ordinals.Skip(1).Select(o => o - 1).ToList(),
+            -1 when IsReducedExtensionReceiver(passed[0]) => ordinals
+                .Skip(1)
+                .Select(o => o - 1)
+                .ToList(),
             _ => null,
         };
 
@@ -204,15 +212,13 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The empty array Roslyn binds to a <c>params</c> parameter the call
-    /// omits: it passes no element, so it has no normalized argument.
+    /// The empty array or collection Roslyn binds to a <c>params</c>
+    /// parameter the call omits: nothing in it comes from the source, it
+    /// passes no element, so it has no normalized argument.
     /// </summary>
-    private static bool IsOmittedParamsArray(IArgumentOperation argument) =>
-        argument
-            is {
-                ArgumentKind: ArgumentKind.ParamArray,
-                Value: IArrayCreationOperation { Initializer: null or { ElementValues.Length: 0 } }
-            };
+    private static bool IsOmittedParams(IArgumentOperation argument) =>
+        argument.ArgumentKind is ArgumentKind.ParamArray or ArgumentKind.ParamCollection
+        && argument.Value.DescendantsAndSelf().All(operation => operation.IsImplicit);
 
     /// <summary>
     /// The arguments Roslyn bound to a call or construction, in the order C#
@@ -294,8 +300,10 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private static bool IsBaseInitializer(IOperation call) =>
         call.Syntax is PrimaryConstructorBaseTypeSyntax
-        || call.Syntax is ConstructorInitializerSyntax initializer
-            && initializer.IsKind(SyntaxKind.BaseConstructorInitializer);
+        || (
+            call.Syntax is ConstructorInitializerSyntax initializer
+            && initializer.IsKind(SyntaxKind.BaseConstructorInitializer)
+        );
 
     /// <summary>
     /// The order-sensitive evaluations of a call: its arguments and a
@@ -373,10 +381,9 @@ public sealed partial class IrExpressionExtractor
         argument.Parameter is not null
         && argument.ArgumentKind switch
         {
-            // An extension call binds its receiver as the first argument,
-            // handing over the receiver expression instead of an argument
-            // syntax node.
-            ArgumentKind.Explicit => argument.Syntax is ArgumentSyntax or ExpressionSyntax,
+            // An extension call binds its receiver as the first argument.
+            ArgumentKind.Explicit => argument.Syntax is ArgumentSyntax
+                || IsReducedExtensionReceiver(argument),
             ArgumentKind.ParamArray => argument.Value is IArrayCreationOperation,
             ArgumentKind.DefaultValue => true,
             _ => false,

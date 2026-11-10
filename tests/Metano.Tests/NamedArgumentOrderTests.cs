@@ -156,6 +156,103 @@ public class NamedArgumentOrderTests
             }
         }
 
+        [Import("NativeBox", from: "../native-box")]
+        public class NativeBox
+        {
+            public int Bias = 500;
+
+            public NativeBox() { }
+
+            public Op Calc => (f, d) => Bias + f * 10 + d;
+
+            public Func<int, int, int> Compute => (f, d) => Bias + f * 10 + d;
+        }
+
+        [Transpile]
+        public class Collector
+        {
+            public int RestA(int a, int b, int c, params int[] rest) =>
+                a * 100 + b * 10 + c + rest.Length * 1000;
+
+            public int RestL(int a, int b, int c, params System.Collections.Generic.List<int> rest) =>
+                a * 100 + b * 10 + c + rest.Count * 1000;
+
+            public int RestE(
+                int a,
+                int b,
+                int c,
+                params System.Collections.Generic.IEnumerable<int> rest
+            )
+            {
+                var count = 0;
+
+                foreach (var item in rest)
+                    count = count + 1;
+
+                return a * 100 + b * 10 + c + count * 1000;
+            }
+        }
+
+        [Transpile]
+        public class Overloaded
+        {
+            public int First(out int b, int a, int c)
+            {
+                b = a * 10 + c;
+
+                return 7;
+            }
+
+            public int First(out int b, string a, int c)
+            {
+                b = a.Length * 10 + c;
+
+                return 8;
+            }
+
+            public int Mid(int a, out int b, int c)
+            {
+                b = a * 10 + c;
+
+                return 7;
+            }
+
+            public int Mid(string a, out int b, int c)
+            {
+                b = a.Length * 10 + c;
+
+                return 8;
+            }
+
+            public int Last(int a, int c, out int b)
+            {
+                b = a * 10 + c;
+
+                return 7;
+            }
+
+            public int Last(string a, int c, out int b)
+            {
+                b = a.Length * 10 + c;
+
+                return 8;
+            }
+
+            public static int Shared(out int b, int a, int c)
+            {
+                b = a * 10 + c;
+
+                return 7;
+            }
+
+            public static int Shared(out int b, string a, int c)
+            {
+                b = a.Length * 10 + c;
+
+                return 8;
+            }
+        }
+
         [Transpile]
         public class OutHost
         {
@@ -507,6 +604,112 @@ public class NamedArgumentOrderTests
         }
 
         [Transpile]
+        public static class OverloadedOutCalls
+        {
+            public static int FirstInOrder(Overloaded o)
+            {
+                var r = o.First(a: Trace.Next("p"), c: Trace.Next("q"), b: out var x);
+
+                return r * 1000 + x;
+            }
+
+            public static int FirstReordered(Overloaded o)
+            {
+                var r = o.First(c: Trace.Next("p"), a: Trace.Next("q"), b: out var x);
+
+                return r * 1000 + x;
+            }
+
+            public static int MidInOrder(Overloaded o)
+            {
+                var r = o.Mid(a: Trace.Next("p"), c: Trace.Next("q"), b: out var x);
+
+                return r * 1000 + x;
+            }
+
+            public static int MidReordered(Overloaded o)
+            {
+                var r = o.Mid(c: Trace.Next("p"), b: out var x, a: Trace.Next("q"));
+
+                return r * 1000 + x;
+            }
+
+            public static int LastReordered(Overloaded o)
+            {
+                var r = o.Last(c: Trace.Next("p"), a: Trace.Next("q"), b: out var x);
+
+                return r * 1000 + x;
+            }
+
+            public static int StaticInOrder()
+            {
+                var r = Overloaded.Shared(a: Trace.Next("p"), c: Trace.Next("q"), b: out var x);
+
+                return r * 1000 + x;
+            }
+
+            public static int StaticReordered()
+            {
+                var r = Overloaded.Shared(c: Trace.Next("p"), a: Trace.Next("q"), b: out var x);
+
+                return r * 1000 + x;
+            }
+        }
+
+        [Transpile]
+        public static class ParamsCalls
+        {
+            public static int ArrayOmitted(Collector e) =>
+                e.RestA(a: Trace.Next("x"), c: Trace.Next("p"), b: Trace.Next("q"));
+
+            public static int ArrayOmittedLastFirst(Collector e) =>
+                e.RestA(c: Trace.Next("p"), a: Trace.Next("x"), b: Trace.Next("q"));
+
+            public static int ArrayGiven(Collector e) =>
+                e.RestA(c: Trace.Next("p"), a: Trace.Next("x"), b: Trace.Next("q"), rest: new[] { 1, 2 });
+
+            public static int ListOmitted(Collector e) =>
+                e.RestL(a: Trace.Next("x"), c: Trace.Next("p"), b: Trace.Next("q"));
+
+            public static int ListPositionalFirst(Collector e) =>
+                e.RestL(Trace.Next("x"), c: Trace.Next("p"), b: Trace.Next("q"));
+
+            public static int ListGiven(Collector e) =>
+                e.RestL(a: Trace.Next("x"), c: Trace.Next("p"), b: Trace.Next("q"), rest: [Trace.Next("r")]);
+
+            public static int ListPositional(Collector e) =>
+                e.RestL(Trace.Next("x"), Trace.Next("p"), Trace.Next("q"));
+
+            public static int EnumerableOmitted(Collector e) =>
+                e.RestE(a: Trace.Next("x"), c: Trace.Next("p"), b: Trace.Next("q"));
+
+            public static int EnumerableOmittedLastFirst(Collector e) =>
+                e.RestE(c: Trace.Next("p"), a: Trace.Next("x"), b: Trace.Next("q"));
+        }
+
+        [Transpile]
+        public static class AmbientCalls
+        {
+            public static int DelegateProperty(NativeBox box) =>
+                box.Calc(d: Trace.Next("p"), f: Trace.Next("q"));
+
+            public static int FuncProperty(NativeBox box) =>
+                box.Compute(arg2: Trace.Next("p"), arg1: Trace.Next("q"));
+
+            public static int DelegatePropertyInvoke(NativeBox box) =>
+                box.Calc.Invoke(d: Trace.Next("p"), f: Trace.Next("q"));
+
+            public static NativeBox Make()
+            {
+                Trace.Next("n");
+
+                return new NativeBox();
+            }
+
+            public static int ComputedReceiver() => Make().Calc(d: Trace.Next("p"), f: Trace.Next("q"));
+        }
+
+        [Transpile]
         public static class MoreTags
         {
             public static string Tag(string tag)
@@ -553,7 +756,10 @@ public class NamedArgumentOrderTests
     /// null-conditional call, a <c>[PlainObject]</c> literal, an
     /// <c>[Emit]</c> template with and without a receiver, mapped BCL calls
     /// and a BCL exception bind their arguments in source order; a
-    /// <c>: this(...)</c> chain evaluates them as written.
+    /// <c>: this(...)</c> chain evaluates them as written. An omitted
+    /// <c>params</c> array or collection takes no position in the order, and
+    /// a delegate-typed member of an ambient <c>[Import]</c> type stays a
+    /// member call, since its JavaScript side may read <c>this</c>.
     /// </summary>
     [Test]
     public async Task ReorderedNamedArguments_BindInSourceOrder()
@@ -566,7 +772,9 @@ public class NamedArgumentOrderTests
             files["holder.ts"],
             files["derived.ts"],
             files["primary-derived.ts"],
-            files["chained.ts"]
+            files["chained.ts"],
+            files["params-calls.ts"],
+            files["ambient-calls.ts"]
         );
 
         await Assert.That(diagnostics.Select(diagnostic => diagnostic.Code)).IsEmpty();
@@ -599,6 +807,7 @@ public class NamedArgumentOrderTests
     /// them, a <c>void</c> method, an existing local and a statement head.
     /// Arguments left in parameter order once the <c>out</c> ones are gone
     /// (<c>TryGetValue(value: out var v, key: key)</c>) stay plain calls.
+    /// The same holds for a call bound to an overload group.
     /// </summary>
     [Test]
     public async Task OutArguments_LeaveTheOrderOfTheOthers()
@@ -606,6 +815,8 @@ public class NamedArgumentOrderTests
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
 
         await Assert.That(diagnostics.Select(diagnostic => diagnostic.Code)).IsEmpty();
-        await TranspileHelper.AssertGolden("named-argument-out.ts", files["out-calls.ts"]);
+        var outputs = string.Join("\n", files["out-calls.ts"], files["overloaded-out-calls.ts"]);
+
+        await TranspileHelper.AssertGolden("named-argument-out.ts", outputs);
     }
 }

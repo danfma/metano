@@ -139,6 +139,12 @@ public sealed partial class IrExpressionExtractor
         {
             Arguments = call.Arguments.Where(a => a.Value is not OutArgumentSlot).ToList(),
             EvaluationOrder = IrArgumentOrder.Without(call.EvaluationOrder, slots),
+            Overload = call.Overload is { } overload
+                ? overload with
+                {
+                    EvaluationOrder = IrArgumentOrder.Without(overload.EvaluationOrder, slots),
+                }
+                : null,
         };
 
         return new IrOutArgumentCall(

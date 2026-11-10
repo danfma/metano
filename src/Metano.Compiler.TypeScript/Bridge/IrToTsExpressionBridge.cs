@@ -850,11 +850,21 @@ public static partial class IrToTsExpressionBridge
     /// The member access a call invokes as a method, whose receiver is what
     /// C# evaluates first and what the call keeps as <c>this</c>;
     /// <c>null</c> when the callee is a value read whole — a local, a
-    /// computed delegate, or a property or field of delegate type
-    /// (<see cref="IrCallExpression.InvokesDelegate"/>).
+    /// computed delegate, or a delegate-typed property or field
+    /// (<see cref="IrCallExpression.InvokesDelegate"/>) of a type the
+    /// toolchain declares. A delegate-typed member of an ambient type may be
+    /// a JavaScript method that reads <c>this</c>, so it stays a member call.
     /// </summary>
-    private static IrMemberAccess? MethodAccessOf(IrCallExpression call) =>
-        call is { InvokesDelegate: false, Target: IrMemberAccess access } ? access : null;
+    private static IrMemberAccess? MethodAccessOf(IrCallExpression call)
+    {
+        if (call.Target is not IrMemberAccess access)
+            return null;
+
+        var readsDelegateValue =
+            call.InvokesDelegate && access.Origin is { IsTranspiledDataMember: true };
+
+        return readsDelegateValue ? null : access;
+    }
 
     private static TsExpression InSourceOrder(
         IReadOnlyList<TsImmediateBinding> bindings,

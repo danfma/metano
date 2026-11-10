@@ -29,7 +29,7 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// extractor instance because origin building reads
 /// <c>_target</c> for <c>[Name(Target, …)]</c> resolution.
 /// </param>
-/// <param name="NormalizeArguments">
+/// <param name="InParameterOrder">
 /// Reorders named arguments into parameter-declaration order and
 /// fills explicit-default slots for skipped optional parameters; a
 /// list without a named argument comes back unchanged.
@@ -50,7 +50,7 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// <c>[Name(Target, …)]</c> overrides forward this to
 /// <see cref="SymbolHelper.GetNameOverride"/>.
 /// </param>
-// 5-field soft ceiling: `ApplyParamsSpread`/`BuildOrigin`/`NormalizeArguments`
+// 5-field soft ceiling: `ApplyParamsSpread`/`BuildOrigin`/`InParameterOrder`
 // are argument-shape helpers; `MapTypeRef`/`Target` are target-resolution
 // services. Adding a sixth field should trigger a split into two structs
 // (e.g. `ArgumentShapeHelpers` + `TargetResolutionContext`) before the
@@ -58,7 +58,7 @@ namespace Metano.Compiler.Extraction.Invocation;
 public readonly record struct InvocationLoweringHelpers(
     Action<List<IrArgument>, IMethodSymbol?, SeparatedSyntaxList<ArgumentSyntax>> ApplyParamsSpread,
     Func<ISymbol?, IrMemberOrigin?> BuildOrigin,
-    Func<IReadOnlyList<IrArgument>, IMethodSymbol, IReadOnlyList<IrArgument>> NormalizeArguments,
+    Func<IReadOnlyList<IrArgument>, IMethodSymbol, IReadOnlyList<IrArgument>> InParameterOrder,
     Func<ITypeSymbol, IrTypeRef> MapTypeRef,
     TargetLanguage? Target
 )

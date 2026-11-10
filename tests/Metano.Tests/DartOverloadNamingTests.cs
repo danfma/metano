@@ -1505,6 +1505,45 @@ public class DartOverloadNamingTests
         );
     }
 
+    /// <summary>
+    /// An <c>out</c> argument evaluates nothing: when it alone is written
+    /// out of position, the other arguments are in parameter order and the
+    /// call reports nothing.
+    /// </summary>
+    [Test]
+    public async Task OutArgumentAloneOutOfPosition_ReportsNothing()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Host
+            {
+                public int OutFirst(out int b, int a, int c)
+                {
+                    b = a * 10 + c;
+
+                    return 7;
+                }
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Next() => 1;
+
+                public static int Call(Host o)
+                {
+                    var r = o.OutFirst(a: Next(), c: Next(), b: out var x);
+
+                    return r + x;
+                }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>
         diagnostic
             .Location!.SourceTree!.GetText()
