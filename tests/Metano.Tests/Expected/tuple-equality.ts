@@ -59,7 +59,9 @@ export class Comparisons {
   }
 
   static throughValue(a: [[number, number], number] | null, b: [[number, number], number]): boolean {
-    return tupleEquals(a, b, [[], null]);
+    return tupleEquals(a ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })(), b, [[], null]);
   }
 
   static mismatched(a: [number, number], b: [number, bigint]): boolean {

@@ -82,7 +82,7 @@ internal static class ReferenceFixture
             return new FixtureResult(
                 method.Name,
                 argumentTexts,
-                ValueText.Of(method.Invoke(null, Unboxed(arguments)))
+                ValueText.Of(ResultOf(method, arguments))
             );
         }
         catch (TargetInvocationException invocation) when (invocation.InnerException is { } thrown)
@@ -94,6 +94,35 @@ internal static class ReferenceFixture
                 thrown.Message
             );
         }
+    }
+
+    /// <summary>
+    /// What the call returns; for an async twin method, the value its task
+    /// completes with.
+    /// </summary>
+    private static object? ResultOf(MethodInfo method, object?[] arguments)
+    {
+        var returned = method.Invoke(null, Unboxed(arguments));
+
+        return returned is Task task ? CompletedResultOf(task) : returned;
+    }
+
+    /// <summary>
+    /// The result of a completed <c>Task&lt;T&gt;</c>, its exception
+    /// surfacing as the one a synchronous twin method throws.
+    /// </summary>
+    private static object? CompletedResultOf(Task task)
+    {
+        try
+        {
+            task.GetAwaiter().GetResult();
+        }
+        catch (Exception thrown)
+        {
+            throw new TargetInvocationException(thrown);
+        }
+
+        return task.GetType().GetProperty(nameof(Task<object>.Result))?.GetValue(task);
     }
 
     /// <summary>

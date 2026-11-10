@@ -11,9 +11,18 @@ namespace Metano.Compiler.Extraction;
 /// null tests over the receiver instead of member reads that do not exist:
 /// <list type="bullet">
 ///   <item><c>x.HasValue</c> → <c>x != null</c>.</item>
-///   <item><c>x.Value</c> → <c>x</c> where the nullable flow state proves
-///   <c>x</c> non-null, and otherwise <c>x ?? throw new
-///   InvalidOperationException(…)</c>, the exception .NET throws.</item>
+///   <item><c>x.Value</c>, and an explicit conversion to the non-nullable
+///   type (<c>(int)x</c>) → <c>x ?? throw new
+///   InvalidOperationException(…)</c>, the exception .NET throws. The
+///   throw is left out only where the operand is, through parentheses, a
+///   cast to a nullable value type of a non-nullable value
+///   (<c>((int?)5).Value</c>, <c>(int)(int?)x</c>): that value is present
+///   by construction. Nullable analysis does not remove it (#629): its flow
+///   state is optimistic (after <c>x!</c>, for a local a lambda clears, for
+///   a property checked and then cleared by a call) and absent in
+///   nullable-disabled code, so a read it calls safe can still be missing.
+///   Dart is the exception: its analyzer rejects a guard over a promoted
+///   local as dead code, so there the flow state still decides.</item>
 ///   <item><c>x.GetValueOrDefault()</c> → <c>x ?? default(T)</c>, and
 ///   <c>x.GetValueOrDefault(d)</c> → <c>x ?? d</c>.</item>
 /// </list>
@@ -60,17 +69,57 @@ public sealed partial class IrExpressionExtractor
         && targetType.IsValueType
         && !targetType.IsNullableValueType();
 
+    /// <summary>
+    /// The value of a <c>Nullable&lt;T&gt;</c> read or unwrap cast: guarded
+    /// by the .NET throw, unless the target reads
+    /// <paramref name="receiverSyntax"/> without one.
+    /// </summary>
     private IrExpression ValueOrThrowWhenMissing(
         ExpressionSyntax receiverSyntax,
         IrExpression receiver
-    ) => IsProvenNonNull(receiverSyntax) ? receiver : GuardedValueOrThrow(receiver);
+    ) => IsReadWithoutAGuard(receiverSyntax) ? receiver : GuardedValueOrThrow(receiver);
+
+    /// <summary>
+    /// Whether the target reads the value of <paramref name="receiverSyntax"/>
+    /// with no missing-value throw. TypeScript only where the syntax wraps a
+    /// present value (<see cref="WrapsAPresentValue"/>), in every nullable
+    /// context. Dart wherever nullable analysis does not report the receiver
+    /// as maybe-null: its analyzer rejects a guard over a promoted local
+    /// (<c>dead_code</c>, <c>dead_null_aware_expression</c>).
+    /// </summary>
+    private bool IsReadWithoutAGuard(ExpressionSyntax receiverSyntax) =>
+        IsDartTarget
+            ? _semantic.GetTypeInfo(receiverSyntax).Nullability.FlowState
+                != NullableFlowState.MaybeNull
+            : WrapsAPresentValue(receiverSyntax);
+
+    /// <summary>
+    /// Whether <paramref name="expression"/> is, through any parentheses, a
+    /// built-in cast to a nullable value type of a non-nullable value
+    /// (<c>(int?)2</c>, <c>(long?)x</c> over an <c>int</c>): the nullable it
+    /// yields always has a value. Decided from the syntax and the declared
+    /// types alone, never from nullable flow analysis. A user-defined
+    /// conversion operator is not one: it returns whatever its body does.
+    /// </summary>
+    private bool WrapsAPresentValue(ExpressionSyntax expression) =>
+        expression switch
+        {
+            ParenthesizedExpressionSyntax parenthesized => WrapsAPresentValue(
+                parenthesized.Expression
+            ),
+            CastExpressionSyntax cast => _semantic.GetTypeInfo(cast).Type.IsNullableValueType()
+                && _semantic.GetTypeInfo(cast.Expression).Type is { IsValueType: true } operand
+                && !operand.IsNullableValueType()
+                && _semantic.GetSymbolInfo(cast).Symbol is null,
+            _ => false,
+        };
 
     /// <summary>
     /// The value itself, or the .NET throw when it is missing, always
-    /// guarded: the runtime shape of an explicit nullable unwrap whose
-    /// syntax cannot prove the value present — a <c>foreach</c> element
-    /// read into a non-nullable loop variable (issue #488) has no flow
-    /// state to consult.
+    /// guarded: the runtime shape of an explicit nullable unwrap whose value
+    /// is not present by construction — a <c>Value</c> read, an unwrap cast,
+    /// a converted tuple, and a <c>foreach</c> element read into a
+    /// non-nullable loop variable (issue #488).
     /// </summary>
     internal IrExpression GuardedValueOrThrow(IrExpression value) =>
         new IrBinaryExpression(
@@ -155,17 +204,6 @@ public sealed partial class IrExpressionExtractor
                 )
         );
     }
-
-    /// <summary>
-    /// Whether nullable analysis proves the receiver non-null (a
-    /// <c>HasValue</c> or <c>!= null</c> check dominates it). Roslyn's flow
-    /// state is optimistic — a call between the check and the read does not
-    /// invalidate it — so such a read stays unguarded, as Roslyn's own
-    /// warning does. A nullable-disabled context has no flow state; there
-    /// the read is left unguarded too.
-    /// </summary>
-    private bool IsProvenNonNull(ExpressionSyntax receiverSyntax) =>
-        _semantic.GetTypeInfo(receiverSyntax).Nullability.FlowState != NullableFlowState.MaybeNull;
 
     /// <summary>
     /// <c>new InvalidOperationException("Nullable object must have a value.")</c>,

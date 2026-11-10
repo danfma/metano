@@ -80,11 +80,23 @@ export class TodoStore {
     }
 
     if (!(patch.priority == null)) {
-      item = item.with({ priority: patch.priority });
+      item = item.with({
+        priority:
+          patch.priority ??
+          (() => {
+            throw new Error("Nullable object must have a value.");
+          })(),
+      });
     }
 
     if (!(patch.completed == null)) {
-      item = item.with({ completed: patch.completed });
+      item = item.with({
+        completed:
+          patch.completed ??
+          (() => {
+            throw new Error("Nullable object must have a value.");
+          })(),
+      });
     }
 
     const updated = {
