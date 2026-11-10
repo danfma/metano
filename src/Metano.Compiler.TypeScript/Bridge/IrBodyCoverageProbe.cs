@@ -50,13 +50,17 @@ public static class IrBodyCoverageProbe
             IrWhileStatement ws => IsCoveredExpression(ws.Condition) && IsFullyCovered(ws.Body),
             IrDoWhileStatement dw => IsCoveredExpression(dw.Condition) && IsFullyCovered(dw.Body),
             IrTryStatement ts => IsFullyCovered(ts.Body)
-                && (ts.Catches is null || ts.Catches.All(c => IsFullyCovered(c.Body)))
+                && (ts.Catches is null || ts.Catches.All(IsCoveredCatch))
                 && (ts.Finally is null || IsFullyCovered(ts.Finally)),
             IrSwitchStatement sw => IsCoveredExpression(sw.Expression)
                 && sw.Cases.All(c => c.Labels.All(IsCoveredCaseLabel) && IsFullyCovered(c.Body)),
-            IrBreakStatement or IrContinueStatement => true,
+            IrBreakStatement or IrContinueStatement or IrRethrowStatement => true,
             _ => false,
         };
+
+    private static bool IsCoveredCatch(IrCatchClause clause) =>
+        (clause.Filter is null || IsCoveredExpression(clause.Filter))
+        && IsFullyCovered(clause.Body);
 
     private static bool IsCoveredExpression(IrExpression e) =>
         e switch

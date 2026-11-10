@@ -108,7 +108,7 @@ public class BclExceptionConstructionTests
     }
 
     [Test]
-    public async Task TypedCatch_KeepsUntypedCatchClause()
+    public async Task TypedCatch_TestsTheSharedErrorClass()
     {
         var output = TranspileGuard(
             """
@@ -129,9 +129,11 @@ public class BclExceptionConstructionTests
             """
         );
 
-        await Assert.That(output).Contains("} catch (e) {");
-
+        await Assert.That(output).Contains("} catch (e$) {");
+        await Assert.That(output).Contains("if (e$ instanceof Error) {");
+        await Assert.That(output).Contains("const e = e$;");
         await Assert.That(output).Contains("return e.message;");
+        await Assert.That(output).Contains("throw e$;");
     }
 
     [Test]

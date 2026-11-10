@@ -29,6 +29,23 @@ internal sealed record IrToTsBridgeContext(
 )
 {
     /// <summary>
+    /// The parameter of the JS <c>catch</c> the position is lowered into, which
+    /// a <c>throw;</c> rethrows; <c>null</c> outside a catch clause's body.
+    /// </summary>
+    public string? CaughtValue { get; private init; }
+
+    /// <summary>
+    /// The context of a catch clause's body, whose <c>throw;</c> statements
+    /// rethrow <paramref name="caughtValue"/>: the parameter of the JS
+    /// <c>catch</c> the clause lowers into.
+    /// </summary>
+    public IrToTsBridgeContext Rethrowing(string caughtValue) =>
+        this with
+        {
+            CaughtValue = caughtValue,
+        };
+
+    /// <summary>
     /// The context of a position outside class emission (module functions, plain
     /// objects, branded structs, static operators, JSX components, entry-point
     /// bodies): no backing field is ever recognized. Inside a class emission the

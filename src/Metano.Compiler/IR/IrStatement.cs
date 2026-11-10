@@ -94,6 +94,12 @@ public sealed record IrSwitchCase(
 public sealed record IrThrowStatement(IrExpression Expression) : IrStatement;
 
 /// <summary>
+/// A <c>throw;</c> statement: rethrows the exception the innermost enclosing
+/// catch clause caught, whatever the clause's variable holds by then.
+/// </summary>
+public sealed record IrRethrowStatement() : IrStatement;
+
+/// <summary>
 /// A <c>foreach</c> / <c>for..of</c> loop.
 /// </summary>
 public sealed record IrForEachStatement(
@@ -151,11 +157,29 @@ public sealed record IrTryStatement(
 /// <param name="ExceptionType">The caught exception type, if any.</param>
 /// <param name="VariableName">The exception variable name, if any.</param>
 /// <param name="Body">Catch body statements.</param>
+/// <param name="Filter">The <c>when (…)</c> exception filter, if any: the
+/// clause handles the exception only when it holds, and the next clause is
+/// tried otherwise. It may read <paramref name="VariableName"/>.</param>
 public sealed record IrCatchClause(
     IrTypeRef? ExceptionType,
     string? VariableName,
-    IReadOnlyList<IrStatement> Body
-);
+    IReadOnlyList<IrStatement> Body,
+    IrExpression? Filter = null
+)
+{
+    /// <summary>
+    /// Whether the clause's type accepts every exception: a general
+    /// <c>catch</c>, or <c>catch (System.Exception)</c>.
+    /// </summary>
+    public bool CatchesEveryException =>
+        ExceptionType is null or IrNamedTypeRef { Name: "Exception", Namespace: "System" };
+
+    /// <summary>
+    /// Whether the clause handles every exception that reaches it: it accepts
+    /// every exception and has no filter, so no later clause is ever tried.
+    /// </summary>
+    public bool HandlesEveryException => CatchesEveryException && Filter is null;
+}
 
 /// <summary>
 /// A <c>break</c> statement.

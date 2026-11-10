@@ -231,7 +231,7 @@ public static partial class IrToTsExpressionBridge
     /// <c>BigInteger</c> arms apart. Extraction reports MS0001 for a type with
     /// no test, so none reaches this point.
     /// </summary>
-    private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
+    internal static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
         targetType switch
         {
             IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } =>

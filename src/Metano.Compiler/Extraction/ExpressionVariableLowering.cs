@@ -541,7 +541,7 @@ internal sealed partial class ExpressionVariableLowering
     /// Whether <paramref name="expression"/> makes an out-argument call or
     /// declares an <c>is</c>-pattern designator, outside nested lambdas.
     /// </summary>
-    private static bool DeclaresExpressionVariables(IrExpression expression) =>
+    internal static bool DeclaresExpressionVariables(IrExpression expression) =>
         ContainsOutArgumentCall(expression) || IrPatternDesignators.DeclaredIn(expression).Any();
 
     private static bool ContainsOutArgumentCall(IrExpression expression) =>

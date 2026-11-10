@@ -24,6 +24,7 @@ public sealed class IrStatementExtractor(
     private readonly IrTypeOriginResolver? _originResolver = context.OriginResolver;
     private readonly IrExpressionExtractor _expressions = new(semanticModel, context);
     private readonly LocalBindingNames? _inheritedLocalNames = inheritedLocalNames;
+    private readonly UnsupportedCatchClauseReporter _catchClauses = new(semanticModel, context);
 
     /// <summary>
     /// The renames of the body being extracted. Recomputed per body — a
@@ -320,11 +321,7 @@ public sealed class IrStatementExtractor(
                 ret.Expression is not null ? _expressions.Extract(ret.Expression) : null
             ),
             IfStatementSyntax ifs => ExtractIf(ifs),
-            ThrowStatementSyntax th => new IrThrowStatement(
-                th.Expression is not null
-                    ? _expressions.Extract(th.Expression)
-                    : new IrLiteral(null, IrLiteralKind.Null)
-            ),
+            ThrowStatementSyntax th => ExtractThrow(th),
             ForEachStatementSyntax fe => ExtractForEach(fe),
             ForStatementSyntax fs => ExtractFor(fs),
             WhileStatementSyntax wh => new IrWhileStatement(
@@ -506,6 +503,15 @@ public sealed class IrStatementExtractor(
     private static bool IsNumericElementConversion(ForEachStatementInfo info) =>
         info.ElementConversion.IsNumeric || info.ElementConversion.IsNullable;
 
+    /// <summary>
+    /// <c>throw expr;</c>, or the <c>throw;</c> that rethrows the exception of
+    /// the enclosing catch clause.
+    /// </summary>
+    private IrStatement ExtractThrow(ThrowStatementSyntax th) =>
+        th.Expression is { } thrown
+            ? new IrThrowStatement(_expressions.Extract(thrown))
+            : new IrRethrowStatement();
+
     private IrStatement ExtractTry(TryStatementSyntax ts)
     {
         var body = ExtractStatementSequence(ts.Block.Statements);
@@ -513,26 +519,55 @@ public sealed class IrStatementExtractor(
         var finallyBody = ts.Finally is not null
             ? ExtractStatementSequence(ts.Finally.Block.Statements)
             : null;
+
+        _catchClauses.ReportUnsupportedClauses(ts, catches ?? []);
+
         return new IrTryStatement(body, catches, finallyBody);
     }
 
     private IrCatchClause ExtractCatch(CatchClauseSyntax cc)
     {
-        IrTypeRef? exType = null;
-        string? varName = null;
-        if (cc.Declaration is not null)
-        {
-            var sym = _semantic.GetTypeInfo(cc.Declaration.Type).Type;
-            if (sym is not null)
-                exType = IrTypeRefMapper.Map(sym, _originResolver);
-            if (cc.Declaration.Identifier.ValueText.Length > 0)
-                varName = LocalIrName(
-                    _semantic.GetDeclaredSymbol(cc.Declaration),
-                    cc.Declaration.Identifier.ValueText
-                );
-        }
+        var filter = cc.Filter is null ? null : ExtractCatchFilter(cc.Filter);
         var body = ExtractStatementSequence(cc.Block.Statements);
-        return new IrCatchClause(exType, varName, body);
+
+        return new IrCatchClause(
+            CaughtTypeOf(cc.Declaration),
+            CatchVariableOf(cc.Declaration),
+            body,
+            filter
+        );
+    }
+
+    private IrTypeRef? CaughtTypeOf(CatchDeclarationSyntax? declaration) =>
+        declaration is not null && _semantic.GetTypeInfo(declaration.Type).Type is { } type
+            ? MapType(type)
+            : null;
+
+    /// <summary>
+    /// The IR name of the clause's exception variable; <c>null</c> for a
+    /// clause that declares none (<c>catch</c>, <c>catch (Exception)</c>).
+    /// </summary>
+    private string? CatchVariableOf(CatchDeclarationSyntax? declaration) =>
+        declaration is { Identifier.ValueText: { Length: > 0 } name }
+            ? LocalIrName(_semantic.GetDeclaredSymbol(declaration), name)
+            : null;
+
+    /// <summary>
+    /// The clause's <c>when (…)</c> condition. A filter that declares a
+    /// variable or passes an <c>out</c> argument is reported (MS0001) and
+    /// extracts to the unsupported placeholder, since no target places the
+    /// declaration or the <c>out</c> result for the clause.
+    /// </summary>
+    private IrExpression ExtractCatchFilter(CatchFilterClauseSyntax filter)
+    {
+        var condition = _expressions.Extract(filter.FilterExpression);
+
+        if (!ExpressionVariableLowering.DeclaresExpressionVariables(condition))
+            return condition;
+
+        UnsupportedCatchClauseReporter.ReportFilterVariables(filter);
+
+        return new IrUnsupportedExpression("CatchFilterVariable");
     }
 
     private IrStatement ExtractSwitch(SwitchStatementSyntax sw)
