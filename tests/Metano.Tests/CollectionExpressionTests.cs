@@ -264,6 +264,44 @@ public class CollectionExpressionTests
     }
 
     /// <summary>
+    /// A string spread yields the string's <c>char</c>s, its UTF-16 code
+    /// units: <c>...s.split("")</c>. A JS string's own iterator yields code
+    /// points, so <c>[..."h😀i"]</c> has 3 elements where C# has 4 (#588).
+    /// The operand is parenthesized where <c>.split</c> would bind tighter.
+    /// The golden type-checks under <c>tsgo --strict</c>.
+    /// </summary>
+    [Test]
+    public async Task StringSpread_YieldsUtf16CodeUnits()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Letters
+            {
+                public List<char> Of(string text) => [.. text];
+
+                public char[] Framed(string text, string? suffix) =>
+                    ['<', .. text, .. suffix ?? "", .. text + "!", '>'];
+
+                public HashSet<char> Distinct(string text) => [.. text];
+
+                public List<string> Words(string[] words) => [.. words];
+
+                public string Dashed(string[] words) => string.Join("-", words);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+
+        await TranspileHelper.AssertGolden("string-spread-code-units.ts", result["letters.ts"]);
+    }
+
+    /// <summary>
     /// Dart's <c>Set</c> and <c>Map</c> constructors take no elements: the
     /// construction goes through the <c>.of</c> / <c>.fromEntries</c>
     /// factories, and a spread prints as Dart's list spread — over a map's
