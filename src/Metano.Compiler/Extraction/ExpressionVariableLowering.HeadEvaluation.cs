@@ -151,14 +151,32 @@ internal sealed partial class ExpressionVariableLowering
                 }
                 : call.Target;
 
+            // Binding hoists a call ahead of the statement, so the arguments
+            // are visited in the order the source evaluates them.
+            var sourceOrder =
+                call.EvaluationOrder ?? Enumerable.Range(0, call.Arguments.Count).ToList();
+
+            var bound = sourceOrder
+                .Select(position =>
+                    (Position: position, Value: Bind(call.Arguments[position].Value))
+                )
+                .ToDictionary(argument => argument.Position, argument => argument.Value);
+
             var arguments = call
-                .Arguments.Select(argument => argument with { Value = Bind(argument.Value) })
+                .Arguments.Select((argument, position) => argument with { Value = bound[position] })
                 .ToList();
+
+            // Arguments that all read a binding or a constant now have no
+            // order left to keep.
+            var readsPlainValues = arguments.All(argument =>
+                argument.Value is IrIdentifier or IrLiteral
+            );
 
             return call with
             {
                 Target = target,
                 Arguments = arguments,
+                EvaluationOrder = readsPlainValues ? null : call.EvaluationOrder,
             };
         }
 

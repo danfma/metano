@@ -158,10 +158,11 @@ public sealed partial class IrExpressionExtractor
         var helpers = new Invocation.InvocationLoweringHelpers(
             ApplyParamsSpread: ApplyParamsSpread,
             BuildOrigin: BuildOrigin,
-            NormalizeArguments: NormalizeArguments,
+            NormalizeArguments: InParameterOrder,
             MapTypeRef: t => IrTypeRefMapper.Map(t, _originResolver, _target),
             Target: _target
         );
+
         _invocationRewriters = new Invocation.IInvocationRewriter[]
         {
             new Invocation.DelegateInvokeRewriter(helpers),
@@ -422,7 +423,7 @@ public sealed partial class IrExpressionExtractor
         // TODO(#611): named arguments out of parameter order bind their
         // parameters but are evaluated in parameter order: a null delegate
         // evaluates none of them, so they cannot be bound ahead of the call.
-        var passed = HasNamedArgument(args) ? NormalizeArguments(args, method) : args;
+        var passed = InParameterOrder(args, method);
 
         return new IrCallExpression(
             receiver,
@@ -2728,7 +2729,7 @@ public sealed partial class IrExpressionExtractor
             _semantic,
             Extract,
             ExtractArgument,
-            normalized => SourceOrderOf(_semantic.GetOperation(inv), normalized)
+            normalized => ReportedSourceOrderOf(_semantic.GetOperation(inv), normalized)
         );
 
         foreach (var rewriter in _invocationRewriters)
@@ -2785,14 +2786,15 @@ public sealed partial class IrExpressionExtractor
                 TryWrapObjectArgsViaOperation(inv, symbol)
                 ?? WrapInObjectArgsFromArgs(args, symbol);
         }
-        else if (symbol is not null && args.Any(a => a.Name is not null))
+        else
         {
-            args = NormalizeArguments(args, symbol).ToList();
+            args = InParameterOrder(args, symbol).ToList();
         }
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
         {
-            EvaluationOrder = SourceOrderOf(_semantic.GetOperation(inv), args),
+            EvaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), args),
+            InvokesDelegate = symbol is { MethodKind: MethodKind.DelegateInvoke },
         };
     }
 
@@ -3616,8 +3618,7 @@ public sealed partial class IrExpressionExtractor
         // for argument-shape decisions so params spreading and named
         // argument normalization key off the right parameter list.
         ApplyParamsSpread(extensionArgs, extensionCallee, inv.ArgumentList.Arguments);
-        if (extensionArgs.Any(a => a.Name is not null))
-            extensionArgs = NormalizeArguments(extensionArgs, extensionCallee).ToList();
+        extensionArgs = InParameterOrder(extensionArgs, extensionCallee).ToList();
 
         IReadOnlyList<IrTypeRef>? extensionTypeArgs = null;
         if (extensionCallee is { TypeArguments.Length: > 0 })
@@ -3661,7 +3662,7 @@ public sealed partial class IrExpressionExtractor
                 extensionTypeArgs
             ) with
             {
-                EvaluationOrder = SourceOrderOf(_semantic.GetOperation(inv), extensionArgs),
+                EvaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), extensionArgs),
             };
         }
 
@@ -3679,7 +3680,7 @@ public sealed partial class IrExpressionExtractor
             extensionTypeArgs
         ) with
         {
-            EvaluationOrder = SourceOrderOf(_semantic.GetOperation(inv), helperArgs),
+            EvaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), helperArgs),
         };
     }
 
@@ -4494,14 +4495,11 @@ public sealed partial class IrExpressionExtractor
     public IReadOnlyList<IrArgument> ExtractBaseArguments(
         ArgumentListSyntax argumentList,
         IMethodSymbol? baseConstructor
-    )
-    {
-        var args = ExtractInitializerArguments(argumentList, baseConstructor);
-
-        return baseConstructor is not null && HasNamedArgument(args)
-            ? NormalizeArguments(args, baseConstructor)
-            : args;
-    }
+    ) =>
+        InParameterOrder(
+            ExtractInitializerArguments(argumentList, baseConstructor),
+            baseConstructor
+        );
 
     /// <summary>
     /// Marks the trailing argument as a spread when the C# call passes a
@@ -4616,6 +4614,16 @@ public sealed partial class IrExpressionExtractor
         args.Any(argument => argument.Name is not null);
 
     /// <summary>
+    /// <paramref name="args"/> as <paramref name="method"/> receives them:
+    /// <see cref="NormalizeArguments">normalized</see> when one is named,
+    /// unchanged when none is or the method did not resolve.
+    /// </summary>
+    private IReadOnlyList<IrArgument> InParameterOrder(
+        IReadOnlyList<IrArgument> args,
+        IMethodSymbol? method
+    ) => method is not null && HasNamedArgument(args) ? NormalizeArguments(args, method) : args;
+
+    /// <summary>
     /// The construction bound to the factory of the overload Roslyn resolved
     /// (<see cref="DispatchedConstructorCalls.ConstructionTarget"/>), or
     /// <c>null</c> when it keeps its source arguments and the dispatcher.
@@ -4673,8 +4681,8 @@ public sealed partial class IrExpressionExtractor
         // behaves like the source, while backends that can (Dart) keep the
         // name on each IrArgument and render `name: value`. A construction
         // bound to its resolved overload is already positional, without names.
-        if (overload is null && ctor is not null && HasNamedArgument(args))
-            args = NormalizeArguments(args, ctor);
+        if (overload is null)
+            args = InParameterOrder(args, ctor);
 
         var initializer = InitializerOf(creationSyntax);
 
@@ -4694,6 +4702,8 @@ public sealed partial class IrExpressionExtractor
 
         var initializers = keepsInitializer ? ExtractObjectInitializer(creationSyntax) : null;
 
+        var exception = ExtractExceptionConstruction(ctor, args, creationSyntax);
+
         var creation = new IrNewExpression(
             type,
             args,
@@ -4702,14 +4712,14 @@ public sealed partial class IrExpressionExtractor
             IsJsTuple: isJsTuple,
             Initializers: initializers,
             ExternalImports: BuildImportedRenderableImports(typeSymbol),
-            ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax),
+            ExceptionConstruction: exception,
             Origin: BuildOrigin(ctor),
             TypeArguments: ConstructedTypeArguments(typeSymbol),
             Overload: overload
         )
         {
             EvaluationOrder = overload is null
-                ? SourceOrderOf(_semantic.GetOperation(creationSyntax), args)
+                ? ConstructionOrderOf(creationSyntax, args, exception)
                 : null,
         };
 
@@ -4718,6 +4728,26 @@ public sealed partial class IrExpressionExtractor
         return keepsInitializer
             ? constructed
             : ApplyInitializer(constructed, typeSymbol, initializer);
+    }
+
+    /// <summary>
+    /// The source order to keep for a construction's arguments
+    /// (<see cref="SourceOrderOf"/>). An exception construction that binds
+    /// its arguments to temporaries evaluates them in that order on every
+    /// target (<see cref="BindExceptionArguments"/>), so only the other
+    /// constructions report an order the target loses.
+    /// </summary>
+    private IReadOnlyList<int>? ConstructionOrderOf(
+        ExpressionSyntax creationSyntax,
+        IReadOnlyList<IrArgument> args,
+        IrExceptionConstruction? exception
+    )
+    {
+        var creation = _semantic.GetOperation(creationSyntax);
+
+        return exception is { RequiresArgumentTemporaries: true }
+            ? SourceOrderOf(creation, args)
+            : ReportedSourceOrderOf(creation, args);
     }
 
     /// <summary>
@@ -4765,16 +4795,19 @@ public sealed partial class IrExpressionExtractor
     private IrExpression BindArgumentsOnce(
         IrNewExpression creation,
         Func<IrNewExpression, IrExpression> build
-    ) =>
-        BindArgumentsFrom(
-            creation with
-            {
-                EvaluationOrder = null,
-            },
-            creation.EvaluationOrder ?? Enumerable.Range(0, creation.Arguments.Count).ToList(),
-            step: 0,
-            build
-        );
+    )
+    {
+        var sourceOrder =
+            creation.EvaluationOrder ?? Enumerable.Range(0, creation.Arguments.Count).ToList();
+
+        // The temporaries carry the order from here on.
+        var unordered = creation with
+        {
+            EvaluationOrder = null,
+        };
+
+        return BindArgumentsFrom(unordered, sourceOrder, step: 0, build);
+    }
 
     private IrExpression BindArgumentsFrom(
         IrNewExpression creation,

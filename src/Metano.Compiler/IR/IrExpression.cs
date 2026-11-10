@@ -285,6 +285,13 @@ public sealed record IrCallExpression(
     /// call bound to an <see cref="Overload"/>, which carries its own.
     /// </summary>
     public IReadOnlyList<int>? EvaluationOrder { get; init; }
+
+    /// <summary>
+    /// Whether the call invokes a delegate value: <see cref="Target"/> is
+    /// then read whole before the arguments — a member access in it is a
+    /// property or field read, not a method whose receiver the call keeps.
+    /// </summary>
+    public bool InvokesDelegate { get; init; }
 }
 
 /// <summary>

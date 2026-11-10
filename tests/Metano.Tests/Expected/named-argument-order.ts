@@ -1,6 +1,7 @@
 import { Chained } from "./chained";
 import { Derived } from "./derived";
 import { Engine } from "./engine";
+import { scale2 } from "./engine-block";
 import { scale } from "./engine-extensions";
 import type { Holder } from "./holder";
 import { blend } from "./mixer";
@@ -79,6 +80,26 @@ export class SourceOrderCalls {
 
   static thisReceiver(h: Holder): number {
     return h.onThis(new Engine());
+  }
+
+  static delegateProperty(h: Holder): number {
+    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(h.fn, Trace.next("p"), Trace.next("q"));
+  }
+
+  static delegatePropertyInvoke(h: Holder): number {
+    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(h.fn, Trace.next("p"), Trace.next("q"));
+  }
+
+  static delegateField(h: Holder): number {
+    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(h.field, Trace.next("p"), Trace.next("q"));
+  }
+
+  static extensionBlock(h: Holder): number {
+    return (($arg0, $arg2, $arg1) => scale2($arg0, $arg1, $arg2))(h.target, Trace.next("p"), Trace.next("q"));
+  }
+
+  static emitOnReceiver(h: Holder): number {
+    return (($arg0, $arg2, $arg1) => ($arg0.single($arg1, $arg2)))(h.target, Trace.next("p"), Trace.next("q"));
   }
 
   static delegate(): number {
@@ -169,10 +190,13 @@ export class SourceOrderCalls {
 }
 
 import { Engine } from "./engine";
+import type { Op } from "./op";
 import { Trace } from "./trace";
 
 export class Holder {
   auto: number = 3;
+
+  field: Op = (f: number, d: number) => f * 10 + d;
 
   constructor() { }
 
@@ -182,6 +206,12 @@ export class Holder {
 
   get q(): number {
     return Trace.next("q");
+  }
+
+  get fn(): Op {
+    Trace.next("g");
+
+    return (f: number, d: number) => f * 10 + d;
   }
 
   get target(): Engine {

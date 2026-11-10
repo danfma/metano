@@ -130,9 +130,15 @@ public sealed partial class IrExpressionExtractor
             .OrderBy(o => o.ParameterOrdinal)
             .ToList();
 
+        var slots = Enumerable
+            .Range(0, call.Arguments.Count)
+            .Where(position => call.Arguments[position].Value is OutArgumentSlot)
+            .ToList();
+
         var withoutSlots = call with
         {
             Arguments = call.Arguments.Where(a => a.Value is not OutArgumentSlot).ToList(),
+            EvaluationOrder = IrArgumentOrder.Without(call.EvaluationOrder, slots),
         };
 
         return new IrOutArgumentCall(

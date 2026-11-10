@@ -549,7 +549,10 @@ public static class IrConstructorExtractor
 
         return new BaseConstructorCall(arguments, Overload: null)
         {
-            EvaluationOrder = extractor.SourceOrderOf(model.GetOperation(baseCall), arguments),
+            EvaluationOrder = extractor.ReportedSourceOrderOf(
+                model.GetOperation(baseCall),
+                arguments
+            ),
         };
     }
 

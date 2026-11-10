@@ -124,17 +124,20 @@ public static partial class IrToTsExpressionBridge
     private static IrCallExpression WithOutDefaults(IrOutArgumentCall outCall)
     {
         var arguments = outCall.Call.Arguments.ToList();
+        var evaluationOrder = outCall.Call.EvaluationOrder;
 
         foreach (var outArgument in outCall.OutArguments)
         {
             var position = Math.Min(outArgument.ParameterOrdinal, arguments.Count);
 
             arguments.Insert(position, new IrArgument(outArgument.DefaultValue));
+            evaluationOrder = IrArgumentOrder.WithInsertion(evaluationOrder, position);
         }
 
         return outCall.Call with
         {
             Arguments = arguments,
+            EvaluationOrder = evaluationOrder,
         };
     }
 

@@ -158,7 +158,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
         int templateArgumentCount
     )
     {
-        if (context.SourceOrderOf(args) is not { } order)
+        if (context.ReportedSourceOrderOf(args) is not { } order)
             return null;
 
         var receiverSlots = templateArgumentCount - args.Count;
@@ -179,9 +179,8 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             .Invocation.ArgumentList.Arguments.Select(context.ExtractArgument)
             .ToList();
         _helpers.ApplyParamsSpread(args, symbol, context.Invocation.ArgumentList.Arguments);
-        if (args.Any(a => a.Name is not null))
-            return _helpers.NormalizeArguments(args, symbol);
-        return args;
+
+        return _helpers.NormalizeArguments(args, symbol);
     }
 
     private static IrExternalImport ToIrExternalImport(
