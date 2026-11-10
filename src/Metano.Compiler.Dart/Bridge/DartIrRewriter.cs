@@ -127,6 +127,7 @@ public sealed class DartIrRewriter
     private IrCatchClause RewriteCatch(IrCatchClause c) =>
         c with
         {
+            Filter = c.Filter is null ? null : RewriteExpression(c.Filter),
             Body = c.Body.Select(RewriteStatement).ToList(),
         };
 

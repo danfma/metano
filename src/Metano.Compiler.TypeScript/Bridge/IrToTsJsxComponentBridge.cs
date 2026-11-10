@@ -333,6 +333,9 @@ public static class IrToTsJsxComponentBridge
                     .Catches?.Select(c =>
                         c with
                         {
+                            Filter = c.Filter is null
+                                ? null
+                                : Rewrite(c.Filter, propNames, referenced),
                             Body = RewriteList(c.Body, propNames, referenced),
                         }
                     )
@@ -342,7 +345,10 @@ public static class IrToTsJsxComponentBridge
                     : RewriteList(ts.Finally, propNames, referenced),
             },
             // True leaves — no nested expression/statement to descend into.
-            IrBreakStatement or IrContinueStatement or IrYieldBreakStatement => stmt,
+            IrBreakStatement
+            or IrContinueStatement
+            or IrYieldBreakStatement
+            or IrRethrowStatement => stmt,
             // Fail loud instead of silently passing an unhandled node through: a
             // prop read nested inside an un-rewritten node would leak as a `this`
             // reference into the function component (no `this` at runtime). A new

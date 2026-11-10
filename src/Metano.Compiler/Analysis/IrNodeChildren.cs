@@ -109,6 +109,7 @@ public static class IrNodeChildren
             ],
             IrWhileStatement ws => [ws.Condition],
             IrDoWhileStatement dw => [dw.Condition],
+            IrTryStatement ts => (ts.Catches ?? []).Select(c => c.Filter).OfType<IrExpression>(),
             IrSwitchStatement sw =>
             [
                 sw.Expression,

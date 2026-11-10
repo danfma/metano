@@ -57,6 +57,7 @@ public static class IrBodyPrinter
     private static void PrintStatement(StringBuilder sb, IrStatement stmt, int indentLevel)
     {
         var indent = new string(' ', indentLevel * 2);
+
         switch (stmt)
         {
             case IrReturnStatement ret:
@@ -121,6 +122,10 @@ public static class IrBodyPrinter
                 sb.Append(indent).Append("throw ");
                 PrintExpression(sb, th.Expression);
                 sb.AppendLine(";");
+                break;
+
+            case IrRethrowStatement:
+                sb.Append(indent).AppendLine("rethrow;");
                 break;
 
             case IrBreakStatement:

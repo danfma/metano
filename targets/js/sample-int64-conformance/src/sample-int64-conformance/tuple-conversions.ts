@@ -140,8 +140,12 @@ export function nullableIteratedStop(a: number, b: number): bigint {
       count++;
       total = BigInt.asIntN(64, total + pair[0]);
     }
-  } catch (_err) {
-    return BigInt.asIntN(64, total - BigInt(count));
+  } catch (e$) {
+    if (e$ instanceof Error) {
+      return BigInt.asIntN(64, total - BigInt(count));
+    } else {
+      throw e$;
+    }
   }
 
   return total;
@@ -197,8 +201,12 @@ export function literalCastStopsAtTheMissingElement(a: number): number {
     })()), BigInt(next())] as [bigint, bigint];
 
     return Number(BigInt.asIntN(32, BigInt.asIntN(64, wide[0] + wide[1])));
-  } catch (_err) {
-    return -calls;
+  } catch (e$) {
+    if (e$ instanceof Error) {
+      return -calls;
+    } else {
+      throw e$;
+    }
   }
 }
 
@@ -238,8 +246,12 @@ export function literalCastThrowsOnTheMissingLong(a: bigint): number {
     })())] as [number, number];
 
     return wide[1] > 0 ? 1 : 2;
-  } catch (_err) {
-    return -1;
+  } catch (e$) {
+    if (e$ instanceof Error) {
+      return -1;
+    } else {
+      throw e$;
+    }
   }
 }
 

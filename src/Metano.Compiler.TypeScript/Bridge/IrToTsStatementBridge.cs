@@ -193,36 +193,27 @@ public static class IrToTsStatementBridge
     {
         var body = MapBody(ts.Body, context);
 
-        var catches = (ts.Catches ?? [])
-            .Select(c => (Variable: CatchVariableName(c), Body: MapBody(c.Body, context)))
-            .ToList();
+        var handler = ts.Catches is { Count: > 0 } clauses
+            ? IrToTsCatchChainBridge.Map(clauses, context)
+            : null;
 
         var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, context);
-        var catchText = catches.Select(c =>
-            $" catch ({c.Variable}) {{\n{RenderIndentedBody(c.Body)}}}"
-        );
+
+        var catchText = handler is null
+            ? ""
+            : $" catch ({handler.Parameter}) {{\n{RenderIndentedBody(handler.Body)}}}";
+
         var finallyText = finallyBody is null
             ? ""
             : $" finally {{\n{RenderIndentedBody(finallyBody)}}}";
-        var text = $"try {{\n{RenderIndentedBody(body)}}}{string.Concat(catchText)}{finallyText}";
+
+        var text = $"try {{\n{RenderIndentedBody(body)}}}{catchText}{finallyText}";
 
         return new TsRawStatement(text)
         {
-            EmbeddedStatements =
-            [
-                .. body,
-                .. catches.SelectMany(c => c.Body),
-                .. finallyBody ?? [],
-            ],
+            EmbeddedStatements = [.. body, .. handler?.Body ?? [], .. finallyBody ?? []],
         };
     }
-
-    /// <summary>
-    /// The emitted name of a catch clause's variable; a clause without one
-    /// catches under the synthesized <c>_err</c>.
-    /// </summary>
-    private static string CatchVariableName(IrCatchClause clause) =>
-        clause.VariableName is { } name ? IrToTsNamingPolicy.ToLocalName(name) : "_err";
 
     /// <summary>
     /// The emitted name of a deconstruction element; a discard binds nothing.
@@ -233,7 +224,7 @@ public static class IrToTsStatementBridge
     private static string WrapLoop(string header, IReadOnlyList<TsStatement> body) =>
         header + "\n" + RenderIndentedBody(body) + "}";
 
-    private static string RenderIndentedBody(IReadOnlyList<TsStatement> body)
+    internal static string RenderIndentedBody(IReadOnlyList<TsStatement> body)
     {
         var file = new TsSourceFile(
             "frag.ts",
@@ -262,7 +253,7 @@ public static class IrToTsStatementBridge
         return sb.ToString();
     }
 
-    private static string PrintExpression(TsExpression expr)
+    internal static string PrintExpression(TsExpression expr)
     {
         var stmt = new TsRawStatement("__PLACEHOLDER__");
         var file = new TsSourceFile(
@@ -367,6 +358,14 @@ public static class IrToTsStatementBridge
             ),
             IrThrowStatement th => new TsThrowStatement(
                 IrToTsExpressionBridge.Map(th.Expression, context)
+            ),
+            IrRethrowStatement => new TsThrowStatement(
+                new TsIdentifier(
+                    context.CaughtValue
+                        ?? throw new InvalidOperationException(
+                            "A 'throw;' reached the bridge outside a catch clause's body."
+                        )
+                )
             ),
             IrBlockStatement block => new TsBlockStatement(MapBody(block.Statements, context)),
             IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
