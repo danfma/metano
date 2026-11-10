@@ -3,11 +3,7 @@
 // Each `@ts-expect-error` must flag an error, or tsgo fails on it as unused.
 import { JsonSerializer, SerializerContext, type TypeSpec, type ValueSpec } from "#/system/json";
 
-/** `true` only when `A` and `B` are the same type. */
-type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-
-function expectType<_ extends true>(): void {}
+import { type Equal, expectType } from "../../../typecheck/type-assertions.ts";
 
 class Order {
   constructor(readonly id: string) {}

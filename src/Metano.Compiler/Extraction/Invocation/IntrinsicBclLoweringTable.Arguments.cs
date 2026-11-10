@@ -7,8 +7,8 @@ namespace Metano.Compiler.Extraction.Invocation;
 
 /// <summary>
 /// Argument readers shared by the entries that rebuild a BCL call against a
-/// canonical overload (the <c>Rounding</c>, <c>GetValueOrDefault</c> and
-/// <c>StringJoin</c> partials). They read the bound operation, so named
+/// canonical overload (the <c>Rounding</c>, <c>GetValueOrDefault</c>,
+/// <c>StringJoin</c> and <c>ListFind</c> partials). They read the bound operation, so named
 /// arguments land in their declared parameter slot.
 /// </summary>
 public sealed partial class IntrinsicBclLoweringTable

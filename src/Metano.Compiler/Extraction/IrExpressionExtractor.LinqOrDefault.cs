@@ -1,7 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -26,18 +25,20 @@ public sealed partial class IrExpressionExtractor
     /// returns <c>null</c> on a miss, <c>(predicate, defaultValue)</c>
     /// otherwise, the predicate slot holding the omitted-argument marker when
     /// the call has none. A <c>default</c> literal written as the default
-    /// value is <c>default(TSource)</c>, like no argument at all.
+    /// value is <c>default(TSource)</c>, like no argument at all. The result
+    /// says when no literal spells that default, so the stage returns
+    /// <c>null</c> where C# returns a value.
     /// </summary>
     // TODO(#597): a call that names `defaultValue:` before `predicate:` evaluates
     // them predicate-first here; reconcile with the evaluation order of #597.
-    private IReadOnlyList<IrExpression> OrDefaultArguments(
+    private LinqStageArguments OrDefaultArguments(
         InvocationExpressionSyntax stage,
         IMethodSymbol method,
         IReadOnlyList<IrExpression> arguments
     )
     {
         var defaultValueIndex = stage.ArgumentList.Arguments.IndexOf(argument =>
-            IsDefaultValueArgument(argument, method)
+            BoundParameterOf(argument, method).Name == DefaultValueParameterName
         );
 
         var predicate = PredicateOf(arguments, defaultValueIndex);
@@ -47,40 +48,16 @@ public sealed partial class IrExpressionExtractor
             ?? ElementMissValue.Of(method.TypeArguments[0], BuildOrigin, MapElementType);
 
         if (missValue is null or IrLiteral { Kind: IrLiteralKind.Null })
-            return predicate is null ? [] : [predicate];
+            return new LinqStageArguments(
+                predicate is null ? [] : [predicate],
+                HasUnrepresentableMissValue: missValue is null
+            );
 
-        return [predicate ?? OmittedArgument(), missValue];
+        return new LinqStageArguments([predicate ?? OmittedArgument(), missValue]);
     }
 
-    /// <summary>
-    /// Reports an <c>OrDefault</c> stage that returns <c>null</c> on a miss
-    /// because no literal spells <c>default(TSource)</c> and the call passes
-    /// no value of its own.
-    /// </summary>
-    private void WarnWhenMissValueIsUnrepresentable(
-        InvocationExpressionSyntax stage,
-        IMethodSymbol method
-    )
-    {
-        var elementType = method.TypeArguments[0];
-
-        var returnsNullForAValueElement =
-            LowersLinqChains
-            && !PassesDefaultValue(stage, method)
-            && ElementMissValue.Of(elementType, BuildOrigin, MapElementType) is null;
-
-        if (returnsNullForAValueElement)
-            ElementMissValue.ReportUnrepresentable(stage, method, elementType);
-    }
-
-    private bool IsDefaultValueArgument(ArgumentSyntax argument, IMethodSymbol method) =>
-        BoundParameterOf(argument, method).Name == DefaultValueParameterName;
-
-    private bool PassesDefaultValue(InvocationExpressionSyntax stage, IMethodSymbol method) =>
-        stage.ArgumentList.Arguments.Any(argument =>
-            IsDefaultValueArgument(argument, method)
-            && !argument.Expression.IsKind(SyntaxKind.DefaultLiteralExpression)
-        );
+    private IrTypeRef MapElementType(ITypeSymbol elementType) =>
+        IrTypeRefMapper.Map(elementType, _originResolver, _target);
 
     private static IrExpression? PredicateOf(
         IReadOnlyList<IrExpression> arguments,
@@ -89,17 +66,33 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The <c>defaultValue</c> argument, unless it is a <c>default</c>
-    /// literal: that one keeps the opaque marker of an omitted argument.
+    /// literal (also written <c>(default)</c> or <c>default!</c>): that one
+    /// keeps the opaque marker of an omitted argument.
     /// </summary>
     private static IrExpression? ExplicitDefaultValue(
         IReadOnlyList<IrExpression> arguments,
         int defaultValueIndex
     ) =>
-        defaultValueIndex >= 0
-        && arguments[defaultValueIndex] is not IrLiteral { Kind: IrLiteralKind.Default }
+        defaultValueIndex >= 0 && !IsDefaultLiteral(arguments[defaultValueIndex])
             ? arguments[defaultValueIndex]
             : null;
 
-    private IrTypeRef MapElementType(ITypeSymbol elementType) =>
-        IrTypeRefMapper.Map(elementType, _originResolver, _target);
+    private static bool IsDefaultLiteral(IrExpression expression) =>
+        expression
+            is IrLiteral { Kind: IrLiteralKind.Default }
+                or IrUnaryExpression
+                {
+                    Operator: IrUnaryOp.NonNullAssertion,
+                    Operand: IrLiteral { Kind: IrLiteralKind.Default }
+                };
 }
+
+/// <summary>
+/// The arguments a LINQ stage is lowered with, and whether the stage is an
+/// <c>OrDefault</c> terminal that returns <c>null</c> on a miss because no
+/// literal spells the default of its value element.
+/// </summary>
+internal readonly record struct LinqStageArguments(
+    IReadOnlyList<IrExpression> Values,
+    bool HasUnrepresentableMissValue = false
+);

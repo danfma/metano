@@ -110,11 +110,14 @@ public sealed partial class IrExpressionExtractor
 
             var args = StageArguments(current, sym!, op);
 
-            if (IrLinqMapping.IsOrDefaultTerminal(op))
-                WarnWhenMissValueIsUnrepresentable(current, sym!);
+            if (args.HasUnrepresentableMissValue && LowersLinqChains)
+                ElementMissValue.ReportUnrepresentable(current, sym!, sym!.TypeArguments[0]);
 
             var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
-            stages.Add(new IrLinqStage(op, args, queryable, LinqSixtyFourBitValues.Of(sym!, op)));
+
+            stages.Add(
+                new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(sym!, op))
+            );
 
             // A leading `?.Stage(…)` reads the null-conditional receiver,
             // which is already extracted (and bound): the chain starts there.
@@ -142,7 +145,7 @@ public sealed partial class IrExpressionExtractor
         return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
     }
 
-    private IReadOnlyList<IrExpression> StageArguments(
+    private LinqStageArguments StageArguments(
         InvocationExpressionSyntax stage,
         IMethodSymbol method,
         IrLinqOperator op
@@ -152,7 +155,7 @@ public sealed partial class IrExpressionExtractor
 
         return IrLinqMapping.IsOrDefaultTerminal(op)
             ? OrDefaultArguments(stage, method, arguments)
-            : arguments;
+            : new LinqStageArguments(arguments);
     }
 
     /// <summary>

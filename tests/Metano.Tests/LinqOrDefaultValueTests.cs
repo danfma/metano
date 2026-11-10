@@ -8,7 +8,7 @@ namespace Metano.Tests;
 /// non-nullable value type, <c>null</c> for a reference or
 /// <c>Nullable&lt;T&gt;</c> element, or the <c>defaultValue</c> argument of
 /// the .NET 6 overloads. The TypeScript terminals take that value as their
-/// second argument, after the predicate. Both goldens compile under
+/// second argument, after the predicate. The goldens compile under
 /// <c>tsgo --strict --noImplicitOverride</c>.
 /// </summary>
 public class LinqOrDefaultValueTests
@@ -30,6 +30,9 @@ public class LinqOrDefaultValueTests
 
         [Transpile]
         public readonly record struct Point(int X, int Y);
+
+        [Transpile, PlainObject]
+        public record Profile(string? Nick = null);
 
         [Transpile]
         public class Person(string name)
@@ -111,6 +114,12 @@ public class LinqOrDefaultValueTests
                     public string? NameOrFallback(List<string> xs, string? fallback) => xs.FirstOrDefault(fallback);
 
                     public string? LastOrFallback(List<string> xs, string? fallback) => xs.LastOrDefault(x => x != "a", fallback);
+
+                    public string? NickOr(List<string> xs, Profile profile) => xs.LastOrDefault(x => x != "a", profile.Nick);
+
+                    public int ParenthesizedDefault(List<int> xs) => xs.FirstOrDefault(defaultValue: (default));
+
+                    public int ForgivenDefault(List<int> xs) => xs.LastOrDefault(x => x > 1, default!);
 
                     public Person? Who(List<Person> xs) => xs.LastOrDefault(p => p.Name == "ana");
 
@@ -210,6 +219,10 @@ public class LinqOrDefaultValueTests
 
                     public Point? AtDefault(List<Point> xs) => xs.FirstOrDefault(p => p.X > 1, default);
 
+                    public Point? AtParenthesized(List<Point> xs) => xs.FirstOrDefault(defaultValue: (default));
+
+                    public Point? AtForgiven(List<Point> xs) => xs.LastOrDefault(p => p.X > 1, default!);
+
                     public (int A, int B)? Pair(List<(int A, int B)> xs) => xs.LastOrDefault(x => x.A > 1);
 
                     public T? Slot<T>(List<T> xs) where T : struct => xs.SingleOrDefault();
@@ -236,6 +249,16 @@ public class LinqOrDefaultValueTests
                     "xs.FirstOrDefault(p => p.X > 1, default)",
                     "Point",
                     "FirstOrDefault"
+                ),
+                Unrepresentable(
+                    "xs.FirstOrDefault(defaultValue: (default))",
+                    "Point",
+                    "FirstOrDefault"
+                ),
+                Unrepresentable(
+                    "xs.LastOrDefault(p => p.X > 1, default!)",
+                    "Point",
+                    "LastOrDefault"
                 ),
                 Unrepresentable(
                     "xs.LastOrDefault(x => x.A > 1)",

@@ -186,6 +186,15 @@ describe("linq operators", () => {
     expect(linq([] as (number | null)[], firstOrDefault(undefined, 42))).toBe(42);
   });
 
+  test("an undefined default value yields null on a miss", () => {
+    const missing: number | undefined = undefined;
+
+    expect(linq([] as number[], firstOrDefault(undefined, missing))).toBeNull();
+    expect(linq([1, 2, 3], lastOrDefault((x) => x > 10, missing))).toBeNull();
+    expect(linq([1, 2, 3], singleOrDefault((x) => x > 10, missing))).toBeNull();
+    expect(linq([1, 2, 3], firstOrDefault((x) => x > 1, missing))).toBe(2);
+  });
+
   test("last", () => {
     expect(linq([1, 2, 3], last<number>())).toBe(3);
   });

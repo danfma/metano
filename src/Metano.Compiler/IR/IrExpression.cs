@@ -11,7 +11,15 @@ public abstract record IrExpression;
 /// <summary>
 /// A literal value (string, number, boolean, null, etc.).
 /// </summary>
-public sealed record IrLiteral(object? Value, IrLiteralKind Kind) : IrExpression;
+public sealed record IrLiteral(object? Value, IrLiteralKind Kind) : IrExpression
+{
+    /// <summary>
+    /// The <see cref="Value"/> of the <see cref="IrLiteralKind.BigInteger"/>
+    /// literal that spells <c>default(BigInteger)</c>, for a target that
+    /// prints that zero its own way.
+    /// </summary>
+    public const string BigIntegerZeroDigits = "0";
+}
 
 /// <summary>
 /// Categories of literal values.

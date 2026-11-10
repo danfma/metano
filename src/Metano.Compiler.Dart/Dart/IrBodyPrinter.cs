@@ -1159,7 +1159,7 @@ public static class IrBodyPrinter
                 sb.Append("/* default */ null");
                 break;
             // The zero the compiler gives `default(BigInteger)`: a bare `0` is an `int`.
-            case IrLiteralKind.BigInteger when lit.Value is "0":
+            case IrLiteralKind.BigInteger when lit.Value is IrLiteral.BigIntegerZeroDigits:
                 sb.Append("BigInt.zero");
                 break;
             default:

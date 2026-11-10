@@ -5,6 +5,7 @@ import { Color } from "./color";
 import type { Level } from "./level";
 import type { Person } from "./person";
 import { Point } from "./point";
+import type { Profile } from "./profile";
 
 export class Lookups {
   constructor() { }
@@ -135,6 +136,18 @@ export class Lookups {
 
   lastOrFallback(xs: string[], fallback: string | null): string | null {
     return linq(xs, lastOrDefault((x: string) => x !== "a", fallback));
+  }
+
+  nickOr(xs: string[], profile: Profile): string | null {
+    return linq(xs, lastOrDefault((x: string) => x !== "a", profile.nick));
+  }
+
+  parenthesizedDefault(xs: number[]): number {
+    return linq(xs, firstOrDefault(undefined, 0));
+  }
+
+  forgivenDefault(xs: number[]): number {
+    return linq(xs, lastOrDefault((x: number) => x > 1, 0));
   }
 
   who(xs: Person[]): Person | null {
