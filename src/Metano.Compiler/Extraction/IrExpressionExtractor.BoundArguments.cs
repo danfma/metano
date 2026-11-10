@@ -83,13 +83,11 @@ public sealed partial class IrExpressionExtractor
             .OrderBy(argument => argument.ParameterOrdinal)
             .ToList();
 
-        var sourceOrder = EvaluationOrderOf(inParameterOrder);
-
-        var evaluationOrder =
-            sourceOrder is not null
-            && HasOrderToKeep(inParameterOrder.Select(argument => argument.Value), bindable)
-                ? sourceOrder
-                : null;
+        var evaluationOrder = OrderToKeep(
+            EvaluationOrderOf(inParameterOrder),
+            inParameterOrder.Select(argument => argument.Value),
+            bindable
+        );
 
         if (evaluationOrder is not null && call is not null)
             ReportIfEvaluationOrderIsLost(call, bindable);
@@ -101,14 +99,33 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// <see cref="SourceOrderOf"/>, reporting <c>MS0001</c> at the call when
+    /// the target does not keep that order
+    /// (<see cref="ReportIfEvaluationOrderIsLost"/>).
+    /// </summary>
+    internal IReadOnlyList<int>? ReportedSourceOrderOf(
+        IOperation? call,
+        IReadOnlyList<IrArgument> inParameterOrder
+    )
+    {
+        var order = SourceOrderOf(call, inParameterOrder);
+
+        if (order is not null && call is not null && WrittenArgumentsOf(call) is { } written)
+            ReportIfEvaluationOrderIsLost(call, written);
+
+        return order;
+    }
+
+    /// <summary>
     /// The order to keep for the arguments of a call or construction bound to
     /// no overload (spec 013 FR-017): <paramref name="inParameterOrder"/> are
     /// its arguments, one per parameter, and the result lists their positions
     /// in the order C# evaluates them. <c>null</c> when no argument is named,
     /// when the written order is parameter order, and when fewer than two
-    /// arguments are order-sensitive or none
+    /// <see cref="IsEvaluatedInOrder">arguments evaluated in order</see> are
+    /// order-sensitive or none
     /// <see cref="HasOrderToKeep">has an order to keep</see>: the call then
-    /// stays plain.
+    /// stays plain. Reports nothing.
     /// </summary>
     internal IReadOnlyList<int>? SourceOrderOf(
         IOperation? call,
@@ -118,26 +135,72 @@ public sealed partial class IrExpressionExtractor
         if (!HasNamedArgument(inParameterOrder) || WrittenArgumentsOf(call) is not { } written)
             return null;
 
-        if (!IsReordered(written) || CountOrderSensitiveArguments(written) < 2)
+        var evaluated = written.Where(IsEvaluatedInOrder).ToImmutableArray();
+
+        if (!IsReordered(written) || CountOrderSensitiveArguments(evaluated) < 2)
             return null;
 
-        var order = written
+        return OrderToKeep(
+            PositionsInSourceOrder(written, inParameterOrder),
+            inParameterOrder.Where(argument => argument.Value is not OutArgumentSlot),
+            evaluated
+        );
+    }
+
+    /// <summary>
+    /// <paramref name="sourceOrder"/> when it differs from parameter order
+    /// and the arguments <see cref="HasOrderToKeep">have an order to
+    /// keep</see>; <c>null</c> otherwise.
+    /// </summary>
+    private IReadOnlyList<int>? OrderToKeep(
+        IReadOnlyList<int>? sourceOrder,
+        IEnumerable<IrArgument> inParameterOrder,
+        ImmutableArray<IArgumentOperation> arguments
+    ) =>
+        sourceOrder is not null && HasOrderToKeep(inParameterOrder, arguments) ? sourceOrder : null;
+
+    /// <summary>
+    /// An argument whose evaluation a reordering can move: not the receiver
+    /// of a reduced extension call, which C# and every target evaluate
+    /// first, and not an <c>out</c> argument, which evaluates nothing.
+    /// </summary>
+    private static bool IsEvaluatedInOrder(IArgumentOperation argument) =>
+        argument.Parameter?.RefKind != RefKind.Out
+        && argument is not { ArgumentKind: ArgumentKind.Explicit, Syntax: not ArgumentSyntax };
+
+    /// <summary>
+    /// The positions of <paramref name="inParameterOrder"/> in the order C#
+    /// evaluates the <paramref name="written"/> arguments; <c>null</c> when
+    /// the two lists do not line up.
+    /// </summary>
+    /// <remarks>
+    /// They differ by a receiver in two shapes. An extension-block member
+    /// passes its receiver as the first argument where Roslyn keeps it as the
+    /// instance: it is evaluated first. A template of a reduced extension
+    /// call places the receiver itself, where Roslyn lists it as the first
+    /// argument: it leaves the order.
+    /// </remarks>
+    private static IReadOnlyList<int>? PositionsInSourceOrder(
+        ImmutableArray<IArgumentOperation> written,
+        IReadOnlyList<IrArgument> inParameterOrder
+    )
+    {
+        var ordinals = written
             .Where(argument => !IsOmittedParamsArray(argument))
             .Select(argument => argument.Parameter?.Ordinal ?? -1)
             .ToList();
 
-        // One written argument per normalized one: any other shape (a
-        // receiver the call binds elsewhere, an unresolved parameter) has no
-        // position to read here.
-        if (!order.Order().SequenceEqual(Enumerable.Range(0, inParameterOrder.Count)))
-            return null;
+        IReadOnlyList<int>? order = (inParameterOrder.Count - ordinals.Count) switch
+        {
+            0 => ordinals,
+            1 when inParameterOrder[0].Name is null => [0, .. ordinals.Select(o => o + 1)],
+            -1 when ordinals[0] == 0 => ordinals.Skip(1).Select(o => o - 1).ToList(),
+            _ => null,
+        };
 
-        if (!HasOrderToKeep(inParameterOrder, written))
-            return null;
-
-        ReportIfEvaluationOrderIsLost(call!, written);
-
-        return order;
+        return order is not null && order.Order().SequenceEqual(Enumerable.Range(0, order.Count))
+            ? order
+            : null;
     }
 
     /// <summary>
@@ -230,9 +293,9 @@ public sealed partial class IrExpressionExtractor
     /// order has nothing to report.
     /// </summary>
     private static bool IsBaseInitializer(IOperation call) =>
-        call.Syntax
-            is ConstructorInitializerSyntax { RawKind: (int)SyntaxKind.BaseConstructorInitializer }
-                or PrimaryConstructorBaseTypeSyntax;
+        call.Syntax is PrimaryConstructorBaseTypeSyntax
+        || call.Syntax is ConstructorInitializerSyntax initializer
+            && initializer.IsKind(SyntaxKind.BaseConstructorInitializer);
 
     /// <summary>
     /// The order-sensitive evaluations of a call: its arguments and a

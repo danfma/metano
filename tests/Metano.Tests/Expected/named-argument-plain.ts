@@ -1,11 +1,16 @@
 import { boxed } from "./boxes";
 import type { Engine } from "./engine";
+import { scale } from "./engine-extensions";
 import type { Holder } from "./holder";
 import type { Op } from "./op";
 import { Trace } from "./trace";
 
 export class PlainCalls {
   constructor() { }
+
+  static extensionOneSensitive(e: Engine): number {
+    return scale(e, 4, Trace.next("p"));
+  }
 
   static expandedParams(e: Engine): number {
     return e.rest(Trace.next("p"), Trace.next("q"), 7, 8);

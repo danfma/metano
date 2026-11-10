@@ -31,7 +31,8 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// </param>
 /// <param name="NormalizeArguments">
 /// Reorders named arguments into parameter-declaration order and
-/// fills explicit-default slots for skipped optional parameters.
+/// fills explicit-default slots for skipped optional parameters; a
+/// list without a named argument comes back unchanged.
 /// Bound to the extractor's instance method because the
 /// normalization reads symbol metadata that the rewriters never
 /// need to know about directly.

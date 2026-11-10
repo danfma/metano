@@ -130,9 +130,13 @@ and auto-property reads alone, or one such argument beside constants, stay a
 plain call. A call or construction that is not overloaded follows the same
 rule (`(($arg1, $arg0) => e.single($arg0, $arg1))(h.p, h.q)` for
 `e.Single(d: h.P, f: h.Q)`), and it also stays plain when a single argument has
-a side effect beside constants. One shape is not covered: a null-conditional
-delegate call (`op?.Invoke(d: F(), f: G())`, #611) evaluates its arguments in
-parameter order.
+a side effect beside constants. An `out` argument evaluates nothing, so
+`d.TryGetValue(value: out var v, key: key)` stays plain too. These shapes are
+not covered and still evaluate their arguments in parameter order:
+
+- a null-conditional delegate call (`op?.Invoke(d: F(), f: G())`, #611);
+- a call to a `[This]` delegate, which lowers to `.call(...)`;
+- a stage of a LINQ chain (`xs.Aggregate(func: F(), seed: G())`).
 
 Generated code only binds a type whose source the compiler can read — the
 current project or a project reference. A type read from a DLL or an npm

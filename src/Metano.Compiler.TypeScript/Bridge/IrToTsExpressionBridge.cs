@@ -47,7 +47,7 @@ public static partial class IrToTsExpressionBridge
     /// in C#'s order (<c>$arg0</c>): local to the arrow, and no C# identifier
     /// contains a <c>$</c>, so they shadow no user name.
     /// </summary>
-    private const string ConstructionArgumentPrefix = "$arg";
+    private const string BoundArgumentPrefix = "$arg";
 
     /// <summary>
     /// The parameter an out-of-order argument list binds a side-effecting
@@ -771,7 +771,7 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             tpl.Arguments.Select(argument => Map(argument, context)).ToList(),
             tpl.EvaluationOrder,
-            ConstructionArgumentPrefix
+            BoundArgumentPrefix
         );
 
         var template = new TsTemplate(
@@ -787,14 +787,7 @@ public static partial class IrToTsExpressionBridge
             ExternalImports = tpl.ExternalImports ?? [],
         };
 
-        if (ordered.Bindings.Count == 0)
-            return template;
-
-        return TsImmediateInvocation.Of(
-            ordered.Bindings,
-            [new TsReturnStatement(template)],
-            isAsync: false
-        );
+        return BoundBefore(ordered.Bindings, template);
     }
 
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
@@ -820,9 +813,9 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// A call bound to no overload whose named arguments C# evaluates out of
     /// parameter order (spec 013 FR-017): the receiver — or the callee, when
-    /// the call names no member — binds first when it is a computation, then
-    /// the arguments in source order, and the call lowers as any other over
-    /// the bound names.
+    /// the call invokes a delegate value — binds first when it is a
+    /// computation, then the arguments in source order, and the call lowers
+    /// as any other over the bound names.
     /// </summary>
     private static TsExpression MapCallInSourceOrder(
         IrCallExpression call,
@@ -831,8 +824,9 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var ordered = TsEvaluationOrder.Bind(loweredArgs, order, ConstructionArgumentPrefix);
-        var computed = call.Target is IrMemberAccess access ? access.Target : call.Target;
+        var ordered = TsEvaluationOrder.Bind(loweredArgs, order, BoundArgumentPrefix);
+        var method = MethodAccessOf(call);
+        var computed = method is null ? call.Target : method.Target;
 
         if (RemapsPurely(computed))
             return InSourceOrder(ordered.Bindings, call, ordered.Arguments, context);
@@ -841,12 +835,7 @@ public static partial class IrToTsExpressionBridge
 
         var bound = call with
         {
-            Target = call.Target is IrMemberAccess member
-                ? member with
-                {
-                    Target = reference,
-                }
-                : reference,
+            Target = method is null ? reference : method with { Target = reference },
         };
 
         var receiver = new TsImmediateBinding(
@@ -857,17 +846,39 @@ public static partial class IrToTsExpressionBridge
         return InSourceOrder([receiver, .. ordered.Bindings], bound, ordered.Arguments, context);
     }
 
+    /// <summary>
+    /// The member access a call invokes as a method, whose receiver is what
+    /// C# evaluates first and what the call keeps as <c>this</c>;
+    /// <c>null</c> when the callee is a value read whole — a local, a
+    /// computed delegate, or a property or field of delegate type
+    /// (<see cref="IrCallExpression.InvokesDelegate"/>).
+    /// </summary>
+    private static IrMemberAccess? MethodAccessOf(IrCallExpression call) =>
+        call is { InvokesDelegate: false, Target: IrMemberAccess access } ? access : null;
+
     private static TsExpression InSourceOrder(
         IReadOnlyList<TsImmediateBinding> bindings,
         IrCallExpression call,
         IReadOnlyList<TsExpression> arguments,
         IrToTsBridgeContext context
+    ) => BoundBefore(bindings, MapUndispatchedCall(call, arguments, context));
+
+    /// <summary>
+    /// <paramref name="expression"/> behind the <paramref name="bindings"/>
+    /// that evaluate its parts first, as the parameters of an arrow invoked
+    /// on the spot; the expression itself when nothing is bound.
+    /// </summary>
+    private static TsExpression BoundBefore(
+        IReadOnlyList<TsImmediateBinding> bindings,
+        TsExpression expression
     ) =>
-        TsImmediateInvocation.Of(
-            bindings,
-            [new TsReturnStatement(MapUndispatchedCall(call, arguments, context))],
-            isAsync: false
-        );
+        bindings.Count == 0
+            ? expression
+            : TsImmediateInvocation.Of(
+                bindings,
+                [new TsReturnStatement(expression)],
+                isAsync: false
+            );
 
     /// <summary>The lowering of a call that reaches no claimed fast path.</summary>
     private static TsExpression MapUndispatchedCall(
@@ -1800,16 +1811,9 @@ public static partial class IrToTsExpressionBridge
 
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
 
-        if (ne.EvaluationOrder is not { } order)
-            return MapConstruction(ne, args, context);
+        var ordered = TsEvaluationOrder.Bind(args, ne.EvaluationOrder, BoundArgumentPrefix);
 
-        var ordered = TsEvaluationOrder.Bind(args, order, ConstructionArgumentPrefix);
-
-        return TsImmediateInvocation.Of(
-            ordered.Bindings,
-            [new TsReturnStatement(MapConstruction(ne, ordered.Arguments, context))],
-            isAsync: false
-        );
+        return BoundBefore(ordered.Bindings, MapConstruction(ne, ordered.Arguments, context));
     }
 
     /// <summary>
@@ -1950,7 +1954,7 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(call.Arguments, loweredArgs),
             overload.EvaluationOrder,
-            ConstructionArgumentPrefix
+            BoundArgumentPrefix
         );
 
         var superCall = new TsCallExpression(
@@ -1962,14 +1966,7 @@ public static partial class IrToTsExpressionBridge
                 .ToList()
         );
 
-        if (ordered.Bindings.Count == 0)
-            return superCall;
-
-        return TsImmediateInvocation.Of(
-            ordered.Bindings,
-            [new TsReturnStatement(superCall)],
-            isAsync: false
-        );
+        return BoundBefore(ordered.Bindings, superCall);
     }
 
     /// <summary>
@@ -1995,7 +1992,7 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(call.Arguments, loweredArgs),
             overload.EvaluationOrder,
-            ConstructionArgumentPrefix
+            BoundArgumentPrefix
         );
 
         var fastPath = TsOverloadCallSites.MethodFastPathOf(overload.Target);
@@ -2022,27 +2019,11 @@ public static partial class IrToTsExpressionBridge
                 .ToList()
         );
 
-        if (boundReceiver is { } receiver)
-        {
-            var bindings = new List<TsImmediateBinding> { receiver.Binding };
+        IReadOnlyList<TsImmediateBinding> bindings = boundReceiver is { } receiver
+            ? [receiver.Binding, .. ordered.Bindings]
+            : ordered.Bindings;
 
-            bindings.AddRange(ordered.Bindings);
-
-            return TsImmediateInvocation.Of(
-                bindings,
-                [new TsReturnStatement(fastPathCall)],
-                isAsync: false
-            );
-        }
-
-        if (ordered.Bindings.Count == 0)
-            return fastPathCall;
-
-        return TsImmediateInvocation.Of(
-            ordered.Bindings,
-            [new TsReturnStatement(fastPathCall)],
-            isAsync: false
-        );
+        return BoundBefore(bindings, fastPathCall);
     }
 
     /// <summary>
@@ -2166,19 +2147,10 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(ne.Arguments, args),
             ne.Overload?.EvaluationOrder,
-            ConstructionArgumentPrefix
+            BoundArgumentPrefix
         );
 
-        var construction = build(ordered.Arguments);
-
-        if (ordered.Bindings.Count == 0)
-            return construction;
-
-        return TsImmediateInvocation.Of(
-            ordered.Bindings,
-            [new TsReturnStatement(construction)],
-            isAsync: false
-        );
+        return BoundBefore(ordered.Bindings, build(ordered.Arguments));
     }
 
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(

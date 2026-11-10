@@ -1442,6 +1442,9 @@ public class DartOverloadNamingTests
                 ),
             ]);
 
+        // One report per call: no extraction site reports the same call twice.
+        await Assert.That(diagnostics.Count).IsEqualTo(2);
+
         await AssertFile(
             files,
             "use.dart",
@@ -1459,6 +1462,43 @@ public class DartOverloadNamingTests
               static int oneEvaluation(Engine e) => e.single(f: 4, d: Use.next());
 
               static int inOrder(Engine e) => e.single(f: Use.next(), d: Use.next());
+            }
+
+            """
+        );
+    }
+
+    /// <summary>
+    /// A BCL exception construction binds its side-effecting arguments to
+    /// temporaries in source order on every target, so its reordered named
+    /// arguments lose no order and report nothing.
+    /// </summary>
+    [Test]
+    public async Task ReorderedExceptionArguments_BoundInSourceOrder_ReportNothing()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Use
+            {
+                public static string Tag(string tag) => tag;
+
+                public static Exception Make() =>
+                    new ArgumentException(paramName: Tag("p"), message: Tag("q"));
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await AssertFile(
+            files,
+            "use.dart",
+            """
+            class Use {
+              static String tag(String tag) => tag;
+
+              static Exception make() => ((receiver$temp$0) => ((receiver$temp$1) => ArgumentException(message: receiver$temp$1, paramName: receiver$temp$0))(Use.tag('q')))(Use.tag('p'));
             }
 
             """
