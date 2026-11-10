@@ -39,12 +39,6 @@ public sealed record IrNumericConversion(
     /// </summary>
     public bool TruncatesFloatingPoint => IsFloatingPointTruncation(From, To);
 
-    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> truncates a floating-point value (FR-070).</summary>
-    public static bool IsFloatingPointTruncation(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        !from.IsEnum
-        && from.Kind.IsFloatingPoint()
-        && (to.Kind.IsThirtyTwoBitOrNarrower() || to.Kind is IrNumericKind.Char);
-
     /// <summary>
     /// A conversion between two integers of 32 bits or fewer whose target
     /// does not hold every source value (<c>(byte)i</c>, <c>(uint)i</c>,
@@ -53,6 +47,12 @@ public sealed record IrNumericConversion(
     /// a checked one (FR-074). A widening (<c>(int)b</c>) is not one.
     /// </summary>
     public bool NarrowsInteger => IsIntegerNarrowing(From, To);
+
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> truncates a floating-point value (FR-070).</summary>
+    public static bool IsFloatingPointTruncation(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        !from.IsEnum
+        && from.Kind.IsFloatingPoint()
+        && (to.Kind.IsThirtyTwoBitOrNarrower() || to.Kind is IrNumericKind.Char);
 
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> narrows an integer of 32 bits or fewer (FR-074).</summary>
     public static bool IsIntegerNarrowing(IrNumericEndpoint from, IrNumericEndpoint to) =>
