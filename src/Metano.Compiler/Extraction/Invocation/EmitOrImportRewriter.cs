@@ -92,7 +92,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             ExternalImports: externalImports
         )
         {
-            EvaluationOrder = TemplateOrderOf(context, args, templateArgs.Count),
+            EvaluationOrder = ReportedTemplateOrderOf(context, args, templateArgs.Count),
         };
     }
 
@@ -118,7 +118,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             ExternalImports: [ToIrExternalImport(import, emittedName)]
         )
         {
-            EvaluationOrder = TemplateOrderOf(context, args, templateArgs.Count),
+            EvaluationOrder = ReportedTemplateOrderOf(context, args, templateArgs.Count),
         };
     }
 
@@ -150,9 +150,10 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
     /// <summary>
     /// The order the source evaluates the template arguments in, when it has
     /// to be kept: a promoted receiver first, then the call's own arguments
-    /// in their written order.
+    /// in their written order. Reports <c>MS0001</c> when the target loses
+    /// it (<see cref="InvocationRewriteContext.ReportedSourceOrderOf"/>).
     /// </summary>
-    private static IReadOnlyList<int>? TemplateOrderOf(
+    private static IReadOnlyList<int>? ReportedTemplateOrderOf(
         InvocationRewriteContext context,
         IReadOnlyList<IrArgument> args,
         int templateArgumentCount
@@ -180,7 +181,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             .ToList();
         _helpers.ApplyParamsSpread(args, symbol, context.Invocation.ArgumentList.Arguments);
 
-        return _helpers.NormalizeArguments(args, symbol);
+        return _helpers.InParameterOrder(args, symbol);
     }
 
     private static IrExternalImport ToIrExternalImport(

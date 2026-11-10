@@ -130,13 +130,24 @@ and auto-property reads alone, or one such argument beside constants, stay a
 plain call. A call or construction that is not overloaded follows the same
 rule (`(($arg1, $arg0) => e.single($arg0, $arg1))(h.p, h.q)` for
 `e.Single(d: h.P, f: h.Q)`), and it also stays plain when a single argument has
-a side effect beside constants. An `out` argument evaluates nothing, so
-`d.TryGetValue(value: out var v, key: key)` stays plain too. These shapes are
-not covered and still evaluate their arguments in parameter order:
+a side effect beside constants. An `out` argument passes no value, so
+`d.TryGetValue(value: out var v, key: key)` stays plain too. Its target is
+written after the call returns: a target that is itself a computation
+(`out arr[F()]`, `out Get().field`) is evaluated then, not where it is written.
 
-- a null-conditional delegate call (`op?.Invoke(d: F(), f: G())`, #611);
-- a call to a `[This]` delegate, which lowers to `.call(...)`;
-- a stage of a LINQ chain (`xs.Aggregate(func: F(), seed: G())`).
+These shapes are not covered:
+
+- a null-conditional delegate call (`op?.Invoke(d: F(), f: G())`, #611)
+  evaluates its arguments in parameter order;
+- a method expanded by `[Inline]` evaluates its arguments where its body uses
+  them;
+- a BCL call lowered by a built-in rewrite instead of a declarative mapping
+  (`Math.Round(mode: M(), value: V())`, `Math.Round(decimals: D(), d: V())`,
+  `dict.GetValueOrDefault(defaultValue: D(), key: K())`) evaluates its
+  arguments in parameter order;
+- a call to a `[This]` delegate, which lowers to `.call(...)`, and a stage of a
+  LINQ chain (`xs.Aggregate(func: F(), seed: G())`) pass named arguments as
+  written: out of parameter order they reach the wrong parameters.
 
 Generated code only binds a type whose source the compiler can read — the
 current project or a project reference. A type read from a DLL or an npm

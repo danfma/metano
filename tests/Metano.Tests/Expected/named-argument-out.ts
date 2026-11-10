@@ -129,3 +129,52 @@ export class OutCalls {
     return ok ? n : -1;
   }
 }
+
+import { Overloaded } from "./overloaded";
+import { Trace } from "./trace";
+
+export class OverloadedOutCalls {
+  constructor() { }
+
+  static firstInOrder(o: Overloaded): number {
+    const [r, x] = o.firstOutOfInt32Int32Int32(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+
+  static firstReordered(o: Overloaded): number {
+    const [r, x] = (($arg1, $arg0) => o.firstOutOfInt32Int32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+
+  static midInOrder(o: Overloaded): number {
+    const [r, x] = o.midInt32OutOfInt32Int32(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+
+  static midReordered(o: Overloaded): number {
+    const [r, x] = (($arg1, $arg0) => o.midInt32OutOfInt32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+
+  static lastReordered(o: Overloaded): number {
+    const [r, x] = (($arg1, $arg0) => o.lastInt32Int32OutOfInt32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+
+  static staticInOrder(): number {
+    const [r, x] = Overloaded.sharedOutOfInt32Int32Int32(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+
+  static staticReordered(): number {
+    const [r, x] = (($arg1, $arg0) => Overloaded.sharedOutOfInt32Int32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+
+    return r * 1000 + x;
+  }
+}

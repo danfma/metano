@@ -158,7 +158,7 @@ public sealed partial class IrExpressionExtractor
         var helpers = new Invocation.InvocationLoweringHelpers(
             ApplyParamsSpread: ApplyParamsSpread,
             BuildOrigin: BuildOrigin,
-            NormalizeArguments: InParameterOrder,
+            InParameterOrder: InParameterOrder,
             MapTypeRef: t => IrTypeRefMapper.Map(t, _originResolver, _target),
             Target: _target
         );
@@ -425,12 +425,10 @@ public sealed partial class IrExpressionExtractor
         // evaluates none of them, so they cannot be bound ahead of the call.
         var passed = InParameterOrder(args, method);
 
-        return new IrCallExpression(
-            receiver,
-            passed,
-            Origin: BuildOrigin(method),
-            IsOptional: true
-        );
+        return new IrCallExpression(receiver, passed, Origin: BuildOrigin(method), IsOptional: true)
+        {
+            InvokesDelegate = true,
+        };
     }
 
     /// <summary>
@@ -4719,7 +4717,7 @@ public sealed partial class IrExpressionExtractor
         )
         {
             EvaluationOrder = overload is null
-                ? ConstructionOrderOf(creationSyntax, args, exception)
+                ? ReportedConstructionOrderOf(creationSyntax, args, exception)
                 : null,
         };
 
@@ -4732,12 +4730,12 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The source order to keep for a construction's arguments
-    /// (<see cref="SourceOrderOf"/>). An exception construction that binds
-    /// its arguments to temporaries evaluates them in that order on every
-    /// target (<see cref="BindExceptionArguments"/>), so only the other
-    /// constructions report an order the target loses.
+    /// (<see cref="SourceOrderOf"/>), reporting <c>MS0001</c> when the
+    /// target loses it. An exception construction that binds its arguments
+    /// to temporaries evaluates them in that order on every target
+    /// (<see cref="BindExceptionArguments"/>) and reports nothing.
     /// </summary>
-    private IReadOnlyList<int>? ConstructionOrderOf(
+    private IReadOnlyList<int>? ReportedConstructionOrderOf(
         ExpressionSyntax creationSyntax,
         IReadOnlyList<IrArgument> args,
         IrExceptionConstruction? exception
