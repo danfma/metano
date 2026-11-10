@@ -1,4 +1,4 @@
-import { HashSet, tupleEquals } from "metano-runtime";
+import { HashSet, checkedNarrow, tupleEquals } from "metano-runtime";
 
 export function equalsOperator(a: number, b: number): boolean {
   const wide = [BigInt(a), BigInt(b)] as [bigint, bigint];
@@ -117,6 +117,64 @@ export function iteratedSum(a: number, b: number): bigint {
   for (const pair$element of pairs) {
     const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
     total = BigInt.asIntN(64, total + BigInt.asIntN(64, BigInt.asIntN(64, pair[0] - pair[1]) + pair[0]));
+  }
+
+  return total;
+}
+
+export function nullableIteratedStop(a: number, b: number): bigint {
+  const pairs = ((receiver$temp$0) => {
+    receiver$temp$0.push([a, b] as [number, number]);
+    receiver$temp$0.push(null);
+    receiver$temp$0.push([b, a] as [number, number]);
+
+    return receiver$temp$0;
+  })([] as Array<[number, number] | null>);
+  let count = 0;
+  let total = 0n;
+  try {
+    for (const pair$element of pairs) {
+      const pair = ((receiver$temp$1) => [BigInt(receiver$temp$1[0]), BigInt(receiver$temp$1[1])] as [bigint, bigint])(pair$element ?? (() => {
+        throw new Error("Nullable object must have a value.");
+      })());
+      count++;
+      total = BigInt.asIntN(64, total + pair[0]);
+    }
+  } catch (_err) {
+    return BigInt.asIntN(64, total - BigInt(count));
+  }
+
+  return total;
+}
+
+export function iteratedNarrowedSum(a: bigint): number {
+  const pairs = ((receiver$temp$0) => {
+    receiver$temp$0.push([a, a] as [bigint, bigint]);
+
+    return receiver$temp$0;
+  })([] as Array<[bigint, bigint]>);
+  let total = 0;
+  for (const pair$element of pairs) {
+    const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
+    total ^= pair[0] ^ pair[1] >> 1;
+  }
+
+  return total;
+}
+
+export function iteratedNarrowedCheckedSum(a: bigint): number {
+  const pairs = ((receiver$temp$0) => {
+    receiver$temp$0.push([a, a] as [bigint, bigint]);
+
+    return receiver$temp$0;
+  })([] as Array<[bigint, bigint]>);
+  let total = 0;
+
+  {
+    for (const pair$element of pairs) {
+      const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
+      total ^= pair[0] ^ pair[1] >> 1;
+    }
   }
 
   return total;

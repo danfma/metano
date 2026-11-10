@@ -65,6 +65,56 @@ public class Int64TupleSpreadConversionTests
                 return total;
             }
 
+            public int IteratedNarrowed(List<(long, long)> pairs)
+            {
+                var total = 0;
+
+                foreach ((int, int) pair in pairs)
+                    total += pair.Item1 + pair.Item2;
+
+                return total;
+            }
+
+            public int IteratedNarrowedChecked(List<(long, long)> pairs)
+            {
+                var total = 0;
+
+                checked
+                {
+                    foreach ((int, int) pair in pairs)
+                        total += pair.Item1 + pair.Item2;
+                }
+
+                return total;
+            }
+
+            public long IteratedNullable(List<(int, int)?> pairs)
+            {
+                long total = 0;
+
+                foreach ((long, long) pair in pairs)
+                    total += pair.Item1 + pair.Item2;
+
+                return total;
+            }
+
+            public int IteratedLifted(List<(int, int)?> pairs)
+            {
+                var missing = 0;
+
+                foreach ((long, long)? pair in pairs)
+                    missing += pair is null ? 1 : 0;
+
+                return missing;
+            }
+
+            public (long, long) UnwrappedElement((int?, int) pair) => ((long, long))pair;
+
+            public ((long, long), long) UnwrappedNested(((int, int)?, int) pair) =>
+                (((long, long), long))pair;
+
+            public (long, long)? LiftedCast((int, int)? pair) => ((long, long)?)pair;
+
             public (long, long)? NullableLiteral() => (1, 2);
 
             public (long, long)? Forgiven((int, int)? pair) => pair!;
@@ -82,6 +132,16 @@ public class Int64TupleSpreadConversionTests
             public List<(long, long)> ToPairs(List<(int, int)> pairs) => [.. pairs];
 
             public List<long> Same(List<long> longs) => [.. longs];
+        }
+        """;
+
+    /// <summary>A converted string spread, which only TypeScript reports: Dart prints no conversion.</summary>
+    private const string DartOnlySource = """
+
+        [Transpile]
+        public class Codes
+        {
+            public List<long> Of(string text) => [.. text];
         }
         """;
 
@@ -138,6 +198,60 @@ public class Int64TupleSpreadConversionTests
             );
     }
 
+    /// <summary>
+    /// An explicit cast of a nullable tuple to a non-nullable one reads its
+    /// value first, with the .NET throw when it is missing, like the scalar
+    /// cast: nullable analysis does not prove the parameter present.
+    /// </summary>
+    [Test]
+    public async Task ExplicitCastOfANullableTuple_ThrowsWhenMissing()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            #nullable enable
+
+            [Transpile]
+            public class Unwrapping
+            {
+                public (long, long) Of((int, int)? pair) => ((long, long))pair;
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden("int64-tuple-nullable-cast.ts", files["unwrapping.ts"]);
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>A reported string spread takes no element name: the next spread of the body is the first.</summary>
+    [Test]
+    public async Task ConvertedStringSpread_TakesNoElementName()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Codes
+            {
+                public int Of(string text, int[] ints)
+                {
+                    List<long> codes = [.. text];
+                    List<long> longs = [.. ints];
+
+                    return codes.Count + longs.Count;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["codes.ts"])
+            .Contains(
+                "const longs = [...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))];"
+            );
+    }
+
     [Test]
     public async Task TupleConversionOverMoreThanSevenElements_IsReported()
     {
@@ -165,6 +279,51 @@ public class Int64TupleSpreadConversionTests
             );
     }
 
+    /// <summary>
+    /// A <c>foreach</c> converts through its loop variable, so the report
+    /// sits on the variable's type, not on the whole loop.
+    /// </summary>
+    [Test]
+    public async Task TupleForEachOverMoreThanSevenElements_IsReportedAtTheVariableType()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Wide
+            {
+                public long Of(List<(int, int, int, int, int, int, int, int)> rows)
+                {
+                    long total = 0;
+
+                    foreach ((long, long, long, long, long, long, long, long) row in rows)
+                        total += row.Item8;
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var reports = UnsupportedFeatures(diagnostics);
+
+        await Assert.That(reports).HasSingleItem();
+
+        await Assert
+            .That(reports[0].Message)
+            .IsEqualTo(
+                "Expression '(long, long, long, long, long, long, long, long)' (tuple conversion "
+                    + "over more than 7 elements) is not supported by the transpiler."
+            );
+
+        var location = reports[0].Location!;
+
+        await Assert
+            .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
+            .IsEqualTo("(long, long, long, long, long, long, long, long)");
+    }
+
     /// <summary>Dart's <c>int</c> holds both widths, so its records and spreads stay as they are.</summary>
     [Test]
     public async Task Dart_KeepsTheTupleAndTheSpread()
@@ -180,16 +339,6 @@ public class Int64TupleSpreadConversionTests
         await Assert.That(files["codes.dart"]).Contains("[...text.split('')]");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
-
-    /// <summary>A converted string spread, which only TypeScript reports: Dart prints no conversion.</summary>
-    private const string DartOnlySource = """
-
-        [Transpile]
-        public class Codes
-        {
-            public List<long> Of(string text) => [.. text];
-        }
-        """;
 
     private static List<MetanoDiagnostic> UnsupportedFeatures(
         IEnumerable<MetanoDiagnostic> diagnostics
