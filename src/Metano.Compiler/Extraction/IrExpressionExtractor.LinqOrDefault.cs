@@ -29,22 +29,32 @@ public sealed partial class IrExpressionExtractor
     /// says when no literal spells that default, so the stage returns
     /// <c>null</c> where C# returns a value.
     /// </summary>
-    // TODO(#597): a call that names `defaultValue:` before `predicate:` evaluates
-    // them predicate-first here; reconcile with the evaluation order of #597.
+    /// <remarks>
+    /// <paramref name="bound"/> are the call's arguments in the parameter
+    /// order of <paramref name="method"/>, and <paramref name="sourceOrder"/>
+    /// the order C# evaluates them in when it differs and can be observed.
+    /// That order needs two order-sensitive arguments, so it only reaches a
+    /// stage that passes both a predicate and a written default value, which
+    /// are then the stage's arguments one for one.
+    /// </remarks>
     private LinqStageArguments OrDefaultArguments(
-        InvocationExpressionSyntax stage,
         IMethodSymbol method,
-        IReadOnlyList<IrExpression> arguments
+        IReadOnlyList<IrArgument> bound,
+        IReadOnlyList<int>? sourceOrder
     )
     {
-        var defaultValueIndex = stage.ArgumentList.Arguments.IndexOf(argument =>
-            BoundParameterOf(argument, method).Name == DefaultValueParameterName
-        );
+        var arguments = ValuesOf(bound);
+
+        var defaultValueIndex = method
+            .Parameters.Select(parameter => parameter.Name)
+            .ToList()
+            .IndexOf(DefaultValueParameterName);
 
         var predicate = PredicateOf(arguments, defaultValueIndex);
+        var writtenDefault = ExplicitDefaultValue(arguments, defaultValueIndex);
 
         var missValue =
-            ExplicitDefaultValue(arguments, defaultValueIndex)
+            writtenDefault
             ?? ElementMissValue.Of(method.TypeArguments[0], BuildOrigin, MapElementType);
 
         if (missValue is null or IrLiteral { Kind: IrLiteralKind.Null })
@@ -53,7 +63,10 @@ public sealed partial class IrExpressionExtractor
                 HasUnrepresentableMissValue: missValue is null
             );
 
-        return new LinqStageArguments([predicate ?? OmittedArgument(), missValue]);
+        return new LinqStageArguments(
+            [predicate ?? OmittedArgument(), missValue],
+            EvaluationOrder: writtenDefault is null ? null : sourceOrder
+        );
     }
 
     private IrTypeRef MapElementType(ITypeSymbol elementType) =>
@@ -85,14 +98,20 @@ public sealed partial class IrExpressionExtractor
                     Operator: IrUnaryOp.NonNullAssertion,
                     Operand: IrLiteral { Kind: IrLiteralKind.Default }
                 };
+
+    private static IReadOnlyList<IrExpression> ValuesOf(IReadOnlyList<IrArgument> arguments) =>
+        arguments.Select(argument => argument.Value).ToList();
 }
 
 /// <summary>
-/// The arguments a LINQ stage is lowered with, and whether the stage is an
-/// <c>OrDefault</c> terminal that returns <c>null</c> on a miss because no
-/// literal spells the default of its value element.
+/// The arguments a LINQ stage is lowered with, in parameter order; whether
+/// the stage is an <c>OrDefault</c> terminal that returns <c>null</c> on a
+/// miss because no literal spells the default of its value element; and the
+/// positions of the arguments in the order C# evaluates them, when named
+/// arguments set it apart from parameter order and it can be observed.
 /// </summary>
 internal readonly record struct LinqStageArguments(
     IReadOnlyList<IrExpression> Values,
-    bool HasUnrepresentableMissValue = false
+    bool HasUnrepresentableMissValue = false,
+    IReadOnlyList<int>? EvaluationOrder = null
 );

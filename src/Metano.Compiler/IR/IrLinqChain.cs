@@ -78,13 +78,26 @@ public sealed record IrLinqChain(IrExpression Source, IReadOnlyList<IrLinqStage>
 /// expression-tree walker (Phase B / #31; Phase A leaves
 /// <see cref="Queryable"/> null on every stage) and, for a numeric stage
 /// over 64-bit values, their <see cref="IrLinqSixtyFourBitValues"/>.
+/// <see cref="Arguments"/> are bound to the stage method's parameters: one
+/// per parameter the call passes, in parameter order, whatever order named
+/// arguments were written in (#632).
 /// </summary>
 public sealed record IrLinqStage(
     IrLinqOperator Operator,
     IReadOnlyList<IrExpression> Arguments,
     IrQueryableMeta? Queryable = null,
     IrLinqSixtyFourBitValues? SixtyFourBitValues = null
-);
+)
+{
+    /// <summary>
+    /// The positions of <see cref="Arguments"/> in the order C# evaluates
+    /// them, when named arguments set that order apart from parameter order
+    /// and it can be observed (spec 013 FR-017, the rule of
+    /// <see cref="IrCallExpression.EvaluationOrder"/>); <c>null</c> when the
+    /// stage evaluates its arguments as it passes them.
+    /// </summary>
+    public IReadOnlyList<int>? EvaluationOrder { get; init; }
+}
 
 /// <summary>
 /// The 64-bit values a numeric stage works on (spec 012 FR-036, FR-041):

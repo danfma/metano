@@ -117,6 +117,9 @@ public sealed partial class IrExpressionExtractor
 
             stages.Add(
                 new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(sym!, op))
+                {
+                    EvaluationOrder = args.EvaluationOrder,
+                }
             );
 
             // A leading `?.Stage(…)` reads the null-conditional receiver,
@@ -145,23 +148,35 @@ public sealed partial class IrExpressionExtractor
         return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
     }
 
+    /// <summary>
+    /// The arguments of a LINQ stage bound to the parameters of
+    /// <paramref name="method"/> (#632): one per parameter the call passes,
+    /// in parameter order, so a call that names them in another order hands
+    /// each value to its own parameter. The order C# evaluates them in is
+    /// kept beside them when it differs and can be observed
+    /// (<see cref="SourceOrderOf"/>).
+    /// </summary>
     private LinqStageArguments StageArguments(
         InvocationExpressionSyntax stage,
         IMethodSymbol method,
         IrLinqOperator op
     )
     {
-        var arguments = stage.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
+        var written = stage.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        var bound = InParameterOrder(written, method);
+        var sourceOrder = SourceOrderOf(_semantic.GetOperation(stage), bound);
 
         return IrLinqMapping.IsOrDefaultTerminal(op)
-            ? OrDefaultArguments(stage, method, arguments)
-            : new LinqStageArguments(arguments);
+            ? OrDefaultArguments(method, bound, sourceOrder)
+            : new LinqStageArguments(ValuesOf(bound), EvaluationOrder: sourceOrder);
     }
 
     /// <summary>
     /// Detects whether <paramref name="stage"/> opted into expression-tree
     /// capture and, if so, walks the principal lambda's body into an
-    /// <see cref="IrQueryableMeta"/>. Capture triggers are:
+    /// <see cref="IrQueryableMeta"/>: the first capturable lambda in
+    /// parameter order, whatever order named arguments were written in.
+    /// Capture triggers are:
     /// <list type="bullet">
     ///   <item>The chain receiver implements <c>System.Linq.IQueryable&lt;T&gt;</c>.</item>
     ///   <item>The stage method or its argument parameter carries
@@ -184,13 +199,19 @@ public sealed partial class IrExpressionExtractor
         var receiverIsQueryable = ReceiverIsIQueryable(memberAccess.Receiver);
         var methodHasQueryable = HasQueryableAttribute(stageMethod);
 
-        for (var i = 0; i < stage.ArgumentList.Arguments.Count; i++)
+        var argumentsInParameterOrder = stage
+            .ArgumentList.Arguments.Select(argument =>
+                (argument.Expression, ParameterIndex: ParameterIndexOf(argument, stageMethod))
+            )
+            .OrderBy(argument => argument.ParameterIndex);
+
+        foreach (var (expression, parameterIndex) in argumentsInParameterOrder)
         {
-            var argSyntax = stage.ArgumentList.Arguments[i];
-            if (argSyntax.Expression is not LambdaExpressionSyntax lambda)
+            if (expression is not LambdaExpressionSyntax lambda)
                 continue;
 
-            var paramSymbol = ResolveStageParameter(stageMethod, i);
+            var paramSymbol = ResolveStageParameter(stageMethod, parameterIndex);
+
             if (!ShouldCaptureExpressionTree(receiverIsQueryable, methodHasQueryable, paramSymbol))
                 continue;
 
@@ -224,6 +245,18 @@ public sealed partial class IrExpressionExtractor
 
         return null;
     }
+
+    /// <summary>
+    /// The position of the parameter <paramref name="argument"/> binds to,
+    /// among the parameters the call site sees: an argument named out of
+    /// position stands for its own parameter (#632).
+    /// </summary>
+    private int ParameterIndexOf(ArgumentSyntax argument, IMethodSymbol method) =>
+        method.Parameters.IndexOf(
+            BoundParameterOf(argument, method),
+            0,
+            SymbolEqualityComparer.Default
+        );
 
     /// <summary>
     /// Runs the expression-tree walker on every lambda argument whose
