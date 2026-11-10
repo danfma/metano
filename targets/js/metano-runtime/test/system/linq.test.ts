@@ -12,11 +12,13 @@ import {
   first,
   firstOrDefault,
   last,
+  lastOrDefault,
   orderBy,
   orderByDescending,
   linq,
   select,
   selectMany,
+  singleOrDefault,
   skip,
   skipWhile,
   sum,
@@ -142,6 +144,33 @@ describe("linq operators", () => {
     expect(linq([1, 2, 3], first<number>())).toBe(1);
     expect(linq([1, 2, 3], firstOrDefault<number>((x) => x > 10))).toBeNull();
     expect(() => linq([] as number[], first<number>())).toThrow();
+  });
+
+  test("firstOrDefault / lastOrDefault / singleOrDefault return the given default on a miss", () => {
+    const none: number[] = [];
+    const first: number = linq(none, firstOrDefault(undefined, 0));
+    const wide: bigint = linq([] as bigint[], firstOrDefault(undefined, 0n));
+
+    expect(first).toBe(0);
+    expect(wide + 3n).toBe(3n);
+    expect(linq([1, 2, 3], firstOrDefault((x) => x > 10, 42))).toBe(42);
+    expect(linq([1, 2, 3], firstOrDefault((x) => x > 1, 42))).toBe(2);
+    expect(linq(none, lastOrDefault(undefined, 0))).toBe(0);
+    expect(linq([1, 2, 3], lastOrDefault((x) => x > 10, 42))).toBe(42);
+    expect(linq([1, 2, 3], lastOrDefault((x) => x < 3, 42))).toBe(2);
+    expect(linq(none, singleOrDefault(undefined, 0))).toBe(0);
+    expect(linq([1, 2, 3], singleOrDefault((x) => x > 10, 42))).toBe(42);
+    expect(linq([1, 2, 3], singleOrDefault((x) => x === 2, 42))).toBe(2);
+    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow();
+  });
+
+  test("an OrDefault terminal without a default returns null, and a null element is a match", () => {
+    const maybes: (number | null)[] = [null, 4];
+
+    expect(linq([] as number[], lastOrDefault<number>())).toBeNull();
+    expect(linq([] as number[], singleOrDefault<number>())).toBeNull();
+    expect(linq(maybes, firstOrDefault(undefined, 42))).toBeNull();
+    expect(linq([] as (number | null)[], firstOrDefault(undefined, 42))).toBe(42);
   });
 
   test("last", () => {

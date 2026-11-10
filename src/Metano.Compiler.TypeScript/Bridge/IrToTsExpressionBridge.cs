@@ -1138,9 +1138,13 @@ public static partial class IrToTsExpressionBridge
         {
             var emittedName = Int64LinqTerminals.EmittedName(stage);
             importedHelpers.Add(emittedName);
-            var stageArgs = stage.Arguments.Select(a => Map(a, context)).ToList();
+            var stageArgs = stage.Arguments.Select(a => MapLinqStageArgument(a, context)).ToList();
+
             if (stage.Queryable is { } queryable)
+            {
+                stageArgs.AddRange(OmittedDefaultValue(stage));
                 stageArgs.Add(MapQueryableMeta(queryable, context));
+            }
 
             // The operator call travels as a helper reference bound to the
             // pipe subpath, so the printer aliases it together with the
@@ -1161,6 +1165,35 @@ public static partial class IrToTsExpressionBridge
 
         return Int64LinqTerminals.EndsInLongCount(chain) ? Int64TsExpressions.BigInt(call) : call;
     }
+
+    /// <summary>
+    /// A stage argument. The default of an enum that declares no zero member
+    /// arrives as a bare <c>0</c> cast to the enum, which stays a TS assertion
+    /// (<c>0 as Level</c>): TS assigns a literal to an enum only when a member
+    /// has that value.
+    /// </summary>
+    private static TsExpression MapLinqStageArgument(
+        IrExpression argument,
+        IrToTsBridgeContext context
+    ) =>
+        argument
+            is IrCastExpression
+            {
+                Expression: IrLiteral { Kind: IrLiteralKind.Int32 } literal,
+                TargetType: IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } enumType
+            }
+            ? new TsCastExpression(Map(literal, context), IrToTsTypeMapper.Map(enumType))
+            : Map(argument, context);
+
+    /// <summary>
+    /// The <c>defaultValue</c> slot an <c>OrDefault</c> terminal without one
+    /// leaves empty before its queryable tree: the pipe helpers take
+    /// <c>(predicate, defaultValue, queryable)</c>.
+    /// </summary>
+    private static IEnumerable<TsExpression> OmittedDefaultValue(IrLinqStage stage) =>
+        IrLinqMapping.IsOrDefaultTerminal(stage.Operator)
+            ? Enumerable.Repeat(new TsLiteral("undefined"), Math.Max(0, 2 - stage.Arguments.Count))
+            : [];
 
     /// <summary>
     /// Lowers an <see cref="IrQueryableMeta"/> into the runtime

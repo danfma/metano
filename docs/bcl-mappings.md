@@ -300,6 +300,12 @@ const result = Enumerable.from(items)
 `all`, `count`, `sum`, `average`, `min`, `max`, `minBy`, `maxBy`, `contains`,
 `aggregate`
 
+The `OrDefault` terminals take `(predicate?, defaultValue?)`. The compiler passes
+`default(T)` for a non-nullable value element (`xs.FirstOrDefault()` over `int` is
+`firstOrDefault(undefined, 0)`) and the `defaultValue` argument of the .NET 6
+overloads; reference and nullable elements keep the `null` miss. A struct without
+a literal default (a user struct, a tuple) keeps `null` and reports `MS0001`.
+
 ### Direct method calls (fast path)
 
 For simple operations that don't need LINQ wrapping, the transpiler uses the
@@ -308,7 +314,7 @@ native array methods directly:
 | C# | TypeScript |
 |----|----|
 | `list.Contains(x)` | `list.includes(x)` |
-| `list.Find(p)` | `list.find(p)` |
+| `list.Find(p)` | `(list.find(p) ?? null)`, or `?? default(T)` for a value element |
 | `list.IndexOf(x)` | `list.indexOf(x)` |
 
 ## Tasks and async

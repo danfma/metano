@@ -108,7 +108,7 @@ public sealed partial class IrExpressionExtractor
             if (_semantic.GetSymbolInfo(memberAccess.Receiver).Symbol is INamedTypeSymbol)
                 return null;
 
-            var args = current.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
+            var args = StageArguments(current, sym!, op);
             var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
             stages.Add(new IrLinqStage(op, args, queryable, LinqSixtyFourBitValues.Of(sym!, op)));
 
@@ -136,6 +136,19 @@ public sealed partial class IrExpressionExtractor
         // Build-time fusion of adjacent stages (#207). Idempotent on
         // chains the rules don't match — returns the original instance.
         return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
+    }
+
+    private IReadOnlyList<IrExpression> StageArguments(
+        InvocationExpressionSyntax stage,
+        IMethodSymbol method,
+        IrLinqOperator op
+    )
+    {
+        var arguments = stage.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
+
+        return IrLinqMapping.IsOrDefaultTerminal(op)
+            ? OrDefaultArguments(stage, method, arguments)
+            : arguments;
     }
 
     /// <summary>
