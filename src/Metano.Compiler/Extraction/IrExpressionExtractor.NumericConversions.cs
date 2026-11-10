@@ -177,9 +177,10 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The conversion an explicit cast from <paramref name="sourceType"/> to
     /// <paramref name="targetType"/> lowers to: a floating-point value cast
-    /// to a 32-bit or narrower integer (FR-070), and every cast into or out
-    /// of a 64-bit integer or a <c>BigInteger</c>. <c>null</c> when the cast
-    /// keeps its existing lowering.
+    /// to a 32-bit or narrower integer (FR-070), a narrowing between two
+    /// integers of 32 bits or fewer that can change the value (FR-074), and
+    /// every cast into or out of a 64-bit integer or a <c>BigInteger</c>.
+    /// <c>null</c> when the cast keeps its existing lowering.
     /// </summary>
     private IrNumericConversion? ExplicitNumericConversion(
         CastExpressionSyntax cast,
@@ -195,20 +196,52 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        if (!NumericEndpoints.IsLoweredExplicitly(from, to))
+        if (!NumericEndpoints.IsLoweredExplicitly(from, to) || KeepsIntegerValue(cast, from, to))
             return null;
-
-        var isChecked = _semantic.GetOperation(cast) is IConversionOperation { IsChecked: true };
 
         return new IrNumericConversion(
             operand,
             from,
             to,
-            isChecked,
+            IsCheckedCast(cast),
             IsLifted: sourceType.IsNullableValueType(),
             CastType: castType
         );
     }
+
+    /// <summary>
+    /// Whether the explicit conversion of <paramref name="cast"/> is checked.
+    /// Roslyn reports <c>IsChecked</c> for a numeric conversion only, so a
+    /// conversion of a nullable value (<c>(byte?)ni</c>, <c>(int)nl</c>),
+    /// which C# checks through its underlying numeric conversion, reads the
+    /// context of its syntax.
+    /// </summary>
+    private bool IsCheckedCast(CastExpressionSyntax cast) =>
+        _semantic.GetOperation(cast) switch
+        {
+            IConversionOperation { IsChecked: true } => true,
+            IConversionOperation { Conversion.IsNullable: true } => CheckedContexts.IsChecked(
+                cast,
+                _semantic.Compilation
+            ),
+            _ => false,
+        };
+
+    /// <summary>
+    /// A narrowing between two integers of 32 bits or fewer whose operand
+    /// can only produce values the target holds (<c>(byte)(x &amp; 0xFF)</c>):
+    /// the cast cannot change the value, so it lowers to nothing (FR-074).
+    /// </summary>
+    private bool KeepsIntegerValue(
+        CastExpressionSyntax cast,
+        IrNumericEndpoint from,
+        IrNumericEndpoint to
+    ) =>
+        IrNumericConversion.IsIntegerNarrowing(from, to)
+        && IntegerRange.Of(to.Kind) is { } target
+        && IntegerValueRanges.Of(_semantic.GetOperation(Unparenthesized(cast.Expression)))
+            is { } operand
+        && target.Contains(operand);
 
     /// <summary>
     /// A constant cast that lowers to a conversion (<c>(int)3.7</c>) folds to

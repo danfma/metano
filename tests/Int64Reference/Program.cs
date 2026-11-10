@@ -1,5 +1,6 @@
 using System.Globalization;
 using Int64Reference;
+using SampleCheckedConformance;
 using SampleInt64Conformance;
 
 // The twin formats and parses in the invariant culture, as the runtime does.
@@ -40,3 +41,13 @@ ReferenceFixture.Write(Path.Combine(fixtures, "comparisons.json"), typeof(Compar
 ReferenceFixture.Write(Path.Combine(fixtures, "indexing.json"), typeof(Indexing));
 ReferenceFixture.Write(Path.Combine(fixtures, "tuples.json"), typeof(TupleConversions));
 ReferenceFixture.Write(Path.Combine(fixtures, "nullable-unwraps.json"), typeof(NullableUnwraps));
+
+ReferenceFixture.Write(
+    Path.Combine(fixtures, "narrow-integers.json"),
+    typeof(NarrowConversions),
+    typeof(NarrowCompound),
+    typeof(UnsignedBits),
+    typeof(CheckedArithmetic)
+);
+
+ReferenceFixture.Write(Path.Combine(fixtures, "project-checked.json"), typeof(ProjectChecked));

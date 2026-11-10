@@ -4,9 +4,11 @@ namespace Metano.Compiler.IR;
 /// A C# numeric conversion the targets cannot leave implicit (spec 012):
 /// one whose source or target is a 64-bit integer, implicit
 /// (<c>long x = i</c>) or explicit (<c>(int)l</c>); an integer widened into
-/// <c>BigInteger</c> (<c>BigInteger b = i</c>); or a cast of a
+/// <c>BigInteger</c> (<c>BigInteger b = i</c>); a cast of a
 /// floating-point value to a 32-bit or narrower integer
-/// (<see cref="TruncatesFloatingPoint"/>, FR-070). The core decides
+/// (<see cref="TruncatesFloatingPoint"/>, FR-070); or a cast between two
+/// integers of 32 bits or fewer that can change the value
+/// (<see cref="NarrowsInteger"/>, FR-074). The core decides
 /// it from Roslyn's semantic model, so a target renders it from
 /// <see cref="From"/>, <see cref="To"/> and <see cref="IsChecked"/> alone,
 /// without re-deriving operand types.
@@ -43,6 +45,19 @@ public sealed record IrNumericConversion(
         && from.Kind.IsFloatingPoint()
         && to.Kind.IsIntegerOrChar()
         && to.Kind.BitWidth() <= 32;
+
+    /// <summary>
+    /// A conversion between two integers of 32 bits or fewer whose target
+    /// does not hold every source value (<c>(byte)i</c>, <c>(uint)i</c>,
+    /// <c>(int)u</c>, <c>(sbyte)b</c>): C# keeps the low bits of the target's
+    /// width in an unchecked context and throws <c>OverflowException</c> in
+    /// a checked one (FR-074). A widening (<c>(int)b</c>) is not one.
+    /// </summary>
+    public bool NarrowsInteger => IsIntegerNarrowing(From, To);
+
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> narrows an integer of 32 bits or fewer (FR-074).</summary>
+    public static bool IsIntegerNarrowing(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from.IsNarrowIntegerValue() && to.IsNarrowIntegerValue() && !to.Kind.HoldsEvery(from.Kind);
 }
 
 /// <summary>
@@ -55,15 +70,21 @@ public sealed record IrNumericConversion(
 public sealed record IrNumericEndpoint(IrNumericKind Kind, bool IsEnum = false);
 
 /// <summary>
-/// Reduces the unbounded result of <see cref="Value"/> to the domain of
-/// <see cref="Kind"/> (<see cref="IrNumericKind.Int64"/> or
-/// <see cref="IrNumericKind.UInt64"/>): wrapped modulo 2^64 in an unchecked
-/// context, range-checked in a checked one. The core wraps the overflowing
-/// 64-bit operations only (addition, subtraction, multiplication, negation,
-/// left shift, increments and their compound forms).
+/// Reduces the unbounded result of <see cref="Value"/> to the domain of the
+/// integer kind <see cref="Kind"/>: wrapped modulo 2^n (n being the kind's
+/// width) in an unchecked context, range-checked in a checked one. The core
+/// reduces the overflowing 64-bit operations (addition, subtraction,
+/// multiplication, negation, left shift, increments and their compound
+/// forms, spec 012 FR-021 / FR-022) and, for the integers of 32 bits or
+/// fewer (FR-075–FR-077): the value a compound assignment or an increment
+/// stores in an <c>sbyte</c>, <c>byte</c>, <c>short</c> or <c>ushort</c>,
+/// the <c>uint</c> result of a bitwise operator or a left shift, the
+/// <c>int</c> result of <c>&gt;&gt;&gt;</c>, and <c>int</c> / <c>uint</c>
+/// arithmetic in a checked context. Unchecked <c>int</c> / <c>uint</c>
+/// arithmetic is not reduced (a documented gap).
 /// </summary>
 /// <param name="Value">The operation whose result may leave the domain.</param>
-/// <param name="Kind">The 64-bit integer kind of the result.</param>
+/// <param name="Kind">The integer kind of the result.</param>
 /// <param name="Mode">How an out-of-range result is reduced.</param>
 public sealed record IrIntegerOverflow(IrExpression Value, IrNumericKind Kind, IrOverflowMode Mode)
     : IrExpression;
@@ -71,7 +92,7 @@ public sealed record IrIntegerOverflow(IrExpression Value, IrNumericKind Kind, I
 /// <summary>How <see cref="IrIntegerOverflow"/> reduces an out-of-range result.</summary>
 public enum IrOverflowMode
 {
-    /// <summary>An unchecked context: the result wraps modulo 2^64.</summary>
+    /// <summary>An unchecked context: the result wraps modulo 2^n, n being the kind's width.</summary>
     Wrap,
 
     /// <summary>A checked context: the result throws <c>OverflowException</c>.</summary>

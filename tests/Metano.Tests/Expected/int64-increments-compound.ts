@@ -1,4 +1,4 @@
-import { checkedInt64 } from "metano-runtime";
+import { checkedInt32, checkedInt64 } from "metano-runtime";
 
 export class Counter {
   private _field: bigint = 0n;
@@ -110,8 +110,8 @@ export class Counter {
 
   narrow(a: number): number {
     {
-      a++;
-      a += 2;
+      a = checkedInt32(a + 1);
+      a = checkedInt32(a + 2);
     }
 
     return a;

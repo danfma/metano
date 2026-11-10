@@ -25,6 +25,12 @@ export function checkedInt64(value: bigint): bigint;
 export function checkedUInt64(value: bigint): bigint;
 /** Checked narrowing of a 64-bit value to a `bits`-wide integer (8, 16, 32); same message. */
 export function checkedNarrow(value: bigint, bits: 8 | 16 | 32, signed: boolean): bigint;
+/** Returns `value` when it fits `int`; throws OverflowException otherwise. The checked form of `int` arithmetic computed in a `number` (FR-077, #639). */
+export function checkedInt32(value: number): number;
+/** Same for `uint` (0 … 2^32 − 1). */
+export function checkedUInt32(value: number): number;
+/** Checked narrowing of an integer held in a `number` to a `bits`-wide integer (8, 16): the `number` counterpart of `checkedNarrow`; same message. */
+export function checkedNarrowInt32(value: number, bits: 8 | 16, signed: boolean): number;
 /** `Convert.ToXxx(long)`: same range test, message "Value was either too large or too small for an Int32." and its family †. */
 export function convertNarrow(value: bigint, target: "SByte" | "Byte" | "Int16" | "UInt16" | "Int32" | "UInt32" | "Int64" | "UInt64" | "Char"): bigint;
 /** Lifted conversion: `null` and `undefined` give `null`; any other value goes through `convert` once. */

@@ -211,10 +211,21 @@ public static partial class IrToTsExpressionBridge
 
         return new TsBinaryExpression(
             MapOperand(bin.Left, comparesWithLiteral, context),
-            BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
+            OperatorTokenOf(bin),
             MapOperand(bin.Right, comparesWithLiteral, context)
         );
     }
+
+    /// <summary>
+    /// The JS operator of <paramref name="bin"/>. C# shifts a <c>uint</c>
+    /// logically with <c>&gt;&gt;</c>, where JS <c>&gt;&gt;</c> reads its
+    /// operand as 32 signed bits, so a <c>uint</c> right shift is
+    /// <c>&gt;&gt;&gt;</c> (spec 012 FR-076).
+    /// </summary>
+    private static string OperatorTokenOf(IrBinaryExpression bin) =>
+        bin is { Operator: IrBinaryOp.RightShift, NumericKind: IrNumericKind.UInt32 }
+            ? BinaryOperatorToken(IrBinaryOp.UnsignedRightShift)
+            : BinaryOperatorToken(bin.Operator, bin.Left, bin.Right);
 
     /// <summary>
     /// The operand of <c>++</c> / <c>--</c>; a get-only per-class property assigned inside

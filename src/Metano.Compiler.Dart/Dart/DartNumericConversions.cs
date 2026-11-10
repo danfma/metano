@@ -6,8 +6,10 @@ namespace Metano.Compiler.Dart;
 /// <summary>
 /// How Dart prints the numeric IR nodes of spec 012, given that a Dart
 /// <c>int</c> is already a 64-bit two's-complement value (DECIDED-19).
-/// <see cref="IrIntegerOverflow"/> prints as its operand (the VM <c>int</c>
-/// wraps by itself, and a checked context is a documented gap). An
+/// A 64-bit <see cref="IrIntegerOverflow"/> prints as its operand (the VM
+/// <c>int</c> wraps by itself, and a checked context is a documented gap);
+/// one narrower than 64 bits keeps the low bits with a selector
+/// (<see cref="OverflowSelector"/>). An
 /// <see cref="IrNumericConversion"/> that changes the value prints as a
 /// method selector on its operand (<see cref="ConversionSelector"/>); one
 /// Dart does not convert keeps the explicit cast it lowers
@@ -22,7 +24,9 @@ internal static class DartNumericConversions
     public static IrExpression Unwrap(IrExpression expression) =>
         expression switch
         {
-            IrIntegerOverflow overflow => Unwrap(overflow.Value),
+            IrIntegerOverflow overflow when OverflowSelector(overflow) is null => Unwrap(
+                overflow.Value
+            ),
             IrNumericConversion conversion when ConversionSelector(conversion) is null =>
                 conversion.CastType is { } castType
                     ? new IrCastExpression(conversion.Operand, castType)
@@ -48,6 +52,17 @@ internal static class DartNumericConversions
         // A lifted conversion (`int?` → `long?`) short-circuits on `null`.
         return chain is not null && conversion.IsLifted ? "?" + chain : chain;
     }
+
+    /// <summary>
+    /// The selector Dart appends to the value of <paramref name="overflow"/>:
+    /// <c>.toSigned(n)</c> / <c>.toUnsigned(n)</c> for a kind narrower than
+    /// 64 bits, whose result a Dart <c>int</c> holds unreduced
+    /// (<c>(b + 1).toUnsigned(8)</c>, spec 012 FR-075–FR-077); a checked
+    /// reduction wraps the same way instead of throwing (a documented gap).
+    /// <c>null</c> for a 64-bit kind, which the VM <c>int</c> already wraps.
+    /// </summary>
+    public static string? OverflowSelector(IrIntegerOverflow overflow) =>
+        overflow.Kind.IsSixtyFourBit() ? null : Narrowing(overflow.Kind);
 
     private static string? SelectorChain(IrNumericEndpoint from, IrNumericEndpoint to)
     {

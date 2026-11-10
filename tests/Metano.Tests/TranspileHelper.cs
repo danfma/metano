@@ -367,7 +367,7 @@ public static class TranspileHelper
     internal static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileSourceDirectory(string directory)
+    ) TranspileSourceDirectory(string directory, bool checkOverflow = false)
     {
         var trees = Directory
             .GetFiles(directory, "*.cs")
@@ -384,7 +384,10 @@ public static class TranspileHelper
             Path.GetFileName(directory),
             trees,
             BaseReferences,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                checkOverflow: checkOverflow
+            )
         );
 
         ThrowOnErrors(compilation.GetDiagnostics(), $"C# compilation ({directory})");

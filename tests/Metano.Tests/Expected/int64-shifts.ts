@@ -88,7 +88,7 @@ export class Shift {
   }
 
   narrow(i: number, n: number): number {
-    return i << n | i >> 2 | i >>> n;
+    return i << n | i >> 2 | ((i >>> n) | 0);
   }
 
   compound(l: bigint, n: number): bigint {

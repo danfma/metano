@@ -5,8 +5,11 @@ import {
   INT64_MAX,
   INT64_MIN,
   UINT64_MAX,
+  checkedInt32,
   checkedInt64,
   checkedNarrow,
+  checkedNarrowInt32,
+  checkedUInt32,
   checkedUInt64,
   divInt64,
   divUInt64,
@@ -124,6 +127,78 @@ describe("checkedNarrow", () => {
   test.each(rows)("%p narrows as C# checked casts do", (value, outcomes) => {
     targets.forEach(([bits, signed], index) => {
       expectOutcome(() => checkedNarrow(value, bits, signed), outcomes[index]!, OVERFLOW);
+    });
+  });
+});
+
+describe("checkedInt32 / checkedUInt32", () => {
+  test("return the value inside the range", () => {
+    expect(checkedInt32(-2147483648)).toBe(-2147483648);
+    expect(checkedInt32(2147483647)).toBe(2147483647);
+    expect(checkedUInt32(0)).toBe(0);
+    expect(checkedUInt32(4294967295)).toBe(4294967295);
+  });
+
+  test("throw OverflowException one past each end, like checked(int.MaxValue + 1)", () => {
+    expectOverflow(() => checkedInt32(2147483647 + 1), OVERFLOW);
+    expectOverflow(() => checkedInt32(-2147483648 - 1), OVERFLOW);
+    expectOverflow(() => checkedUInt32(0 - 1), OVERFLOW);
+    expectOverflow(() => checkedUInt32(4294967295 + 1), OVERFLOW);
+  });
+
+  test("decide a product too large to be exact in a double", () => {
+    // 2147483647 * 2147483647 is not exact as a double, yet far outside the range.
+    expectOverflow(() => checkedInt32(2147483647 * 2147483647), OVERFLOW);
+    expectOverflow(() => checkedInt32(-2147483648 * 2147483647), OVERFLOW);
+    expectOverflow(() => checkedUInt32(4294967295 * 4294967295), OVERFLOW);
+    expect(checkedInt32(-2147483648 * 1)).toBe(-2147483648);
+    expect(checkedInt32(46341 * -46341 + 3792633)).toBe(-2143695648);
+  });
+
+  test("give 0, never -0, for checked(-x) on zero", () => {
+    expect(Object.is(checkedInt32(-0), 0)).toBe(true);
+    expect(Object.is(checkedUInt32(-0), 0)).toBe(true);
+  });
+
+  test("throw for a value that is not a number C# could hold", () => {
+    expectOverflow(() => checkedInt32(Number.NaN), OVERFLOW);
+    expectOverflow(() => checkedUInt32(Number.POSITIVE_INFINITY), OVERFLOW);
+  });
+});
+
+describe("checkedNarrowInt32", () => {
+  type NarrowRow = [number, Outcome<number>[]];
+
+  /** Columns: sbyte, byte, short, ushort (checked casts from int). */
+  const rows: NarrowRow[] = [
+    [0, [0, 0, 0, 0]],
+    [127, [127, 127, 127, 127]],
+    [128, [THROWS, 128, 128, 128]],
+    [-128, [-128, THROWS, -128, THROWS]],
+    [-129, [THROWS, THROWS, -129, THROWS]],
+    [255, [THROWS, 255, 255, 255]],
+    [256, [THROWS, THROWS, 256, 256]],
+    [32767, [THROWS, THROWS, 32767, 32767]],
+    [32768, [THROWS, THROWS, THROWS, 32768]],
+    [-32768, [THROWS, THROWS, -32768, THROWS]],
+    [-32769, [THROWS, THROWS, THROWS, THROWS]],
+    [65535, [THROWS, THROWS, THROWS, 65535]],
+    [65536, [THROWS, THROWS, THROWS, THROWS]],
+    [2147483647, [THROWS, THROWS, THROWS, THROWS]],
+    [-2147483648, [THROWS, THROWS, THROWS, THROWS]],
+    [-1, [-1, THROWS, -1, THROWS]],
+  ];
+
+  const targets: [8 | 16, boolean][] = [
+    [8, true],
+    [8, false],
+    [16, true],
+    [16, false],
+  ];
+
+  test.each(rows)("%p narrows as C# checked casts do", (value, outcomes) => {
+    targets.forEach(([bits, signed], index) => {
+      expectOutcome(() => checkedNarrowInt32(value, bits, signed), outcomes[index]!, OVERFLOW);
     });
   });
 });

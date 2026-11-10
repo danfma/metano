@@ -93,6 +93,56 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `checked { l <<= 1; }` | — | `l = BigInt.asIntN(64, l << 1n);` (shifts never check; no throw at `long.MaxValue`) |
 | `l /= m;`, `l %= m;`, `l &= m;`, `l >>= n;`, `l >>>= 2;` | `l = divInt64(l, m);`, `l = remInt64(l, m);`, `l &= m;` (the native compound operator, which stores the same unwrapped value), `l = l >> BigInt(n & 63);`, `l = BigInt.asIntN(64, BigInt.asUintN(64, l) >> 2n);` | same (the division helpers check their own cases) |
 
+## Integers of 32 bits or fewer (FR-074–FR-077, #639)
+
+`i` is an `int`, `u` a `uint`, `b` a `byte`, `sb` an `sbyte`, `s` a `short`, `us` a `ushort`; all are
+`number`s. Unchecked rows import nothing.
+
+| C# | unchecked | checked |
+|---|---|---|
+| `(int)u` | `u \| 0` | `checkedInt32(u)` |
+| `(uint)i` | `i >>> 0` | `checkedUInt32(i)` |
+| `(short)i` | `(i << 16) >> 16` | `checkedNarrowInt32(i, 16, true)` |
+| `(ushort)i` | `i & 0xFFFF` | `checkedNarrowInt32(i, 16, false)` |
+| `(sbyte)i` | `(i << 24) >> 24` | `checkedNarrowInt32(i, 8, true)` |
+| `(byte)i` | `i & 0xFF` | `checkedNarrowInt32(i, 8, false)` |
+| `(byte)sb`, `(sbyte)b`, `(ushort)s`, `(uint)sb` | `sb & 0xFF`, `(b << 24) >> 24`, `s & 0xFFFF`, `sb >>> 0` | the helper of the target |
+| `(int)b`, `(uint)us`, `(short)b`, `(int)i` | `b`, `us`, `b`, `i` (the value cannot change) | same |
+| `(byte)(i & 0xFF)` | `i & 255` (the operand fits the target) | same |
+| `(byte)(b1 + b2)` | `(b1 + b2) & 0xFF` | `checkedNarrowInt32(b1 + b2, 8, false)` |
+| `unchecked((uint)-1)`, `unchecked((byte)300)` | `4294967295`, `44` (folded) | — |
+| `(byte?)ni` (`int? ni`) | `ni == null ? null : ni & 0xFF` | `ni == null ? null : checkedNarrowInt32(ni, 8, false)` |
+| `(byte)d` (`double d`) | `int32FromDouble(d) & 0xFF` (FR-070) | `Number(checkedNarrow(BigInt(int32FromDoubleChecked(d)), 8, false))` (FR-070, unchanged) |
+| `(byte)l` (`long l`) | `Number(BigInt.asUintN(8, l))` (FR-012) | `Number(checkedNarrow(l, 8, false))` |
+| `b += 1;`, `b++;` | `b = (b + 1) & 0xFF;` | `b = checkedNarrowInt32(b + 1, 8, false);` |
+| `x = b++;` | `x = ((b = (b + 1) & 0xFF) - 1) & 0xFF;` | `x = (b = checkedNarrowInt32(b + 1, 8, false)) - 1;` |
+| `s *= 3;`, `--sb;` | `s = ((s * 3) << 16) >> 16;`, `sb = ((sb - 1) << 24) >> 24;` | `checkedNarrowInt32(s * 3, 16, true)`, … |
+| `us <<= 4;` | `us = (us << 4) & 0xFFFF;` | `us = checkedNarrowInt32(us << 4, 16, false);` (the store checks, the shift does not) |
+| `s >>>= n;` | `s = ((s >>> n) << 16) >> 16;` | `s = checkedNarrowInt32((s >>> n) \| 0, 16, true);` |
+| `b \|= m;`, `b &= m;`, `b ^= m;`, `us >>= 4;`, `b %= m;` | the native compound operator (the value stays in range) | same |
+| `sb /= d;` / `b /= d;` | `sb = (intDiv(sb, d) << 24) >> 24;` / `b = intDiv(b, d);` | `checkedNarrowInt32(intDiv(sb, d), 8, true)` / same |
+| `this.Field += 200;`, `cells[i]++;` | `this.field = (this.field + 200) & 0xFF;`, `cells[i] = (cells[i] + 1) & 0xFF;` (receiver and index once, FR-024) | with the helper |
+| `u & v`, `u \| v`, `u ^ v` | `(u & v) >>> 0`, … | same (never checks) |
+| `u & 0xFF`, `u & b` | `u & 255`, `u & b` (bit 31 stays clear) | same |
+| `~u` | `~u >>> 0` | same |
+| `u << n` | `(u << n) >>> 0` | same |
+| `u >> n`, `u >>> n` | `u >>> n` | same |
+| `u \|= v;`, `u <<= 1;`, `u >>= 1;` | `u = (u \| v) >>> 0;`, `u = (u << 1) >>> 0;`, `u = u >>> 1;` | same |
+| `1u << 31`, `~0u` | `2147483648`, `4294967295` (folded) | same |
+| `i >> n`, `i << n`, `i & j`, `~i` | `i >> n`, `i << n`, `i & j`, `~i` (JavaScript computes in 32 signed bits) | same |
+| `i >>> n` | `(i >>> n) \| 0` | same |
+| `i + j`, `i - j`, `i * j` | `i + j`, … (**not wrapped: the known gap**) | `checkedInt32(i + j)`, … |
+| `u + v`, `u - v`, `u * v` | `u + v`, … (not wrapped) | `checkedUInt32(u + v)`, … |
+| `-i` | `-i` (not wrapped) | `checkedInt32(-i)` |
+| `i++;`, `i += j;` | `i++;`, `i += j;` | `i = checkedInt32(i + 1);`, `i = checkedInt32(i + j);` |
+| `x = i++;` | `x = i++;` | `x = (i = checkedInt32(i + 1)) - 1;` |
+| `b1 + b2`, `s1 * s2` (promoted to `int`) | `b1 + b2`, `s1 * s2` | same (cannot overflow `int`); `us1 * us2` → `checkedInt32(us1 * us2)` |
+| `i << n` | `i << n` | same (shifts never check) |
+
+Dart (a 64-bit `int`): `(byte)i` → `i.toUnsigned(8)`, `(int)u` → `u.toSigned(32)`, `b += 1` →
+`b = (b + 1).toUnsigned(8)`, `u | v` → `(u | v).toUnsigned(32)`, `u >> n` → `u >> n`; the checked rows
+print the same selectors (they wrap instead of throwing).
+
 ## Operators (FR-027–FR-034)
 
 | C# | TypeScript |

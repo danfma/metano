@@ -150,9 +150,61 @@ the migration list.
 - For authors of other targets: the core always produces
   `IrNumericConversion`, `IrIntegerOverflow`, folded 64-bit literals,
   `IrArrayCreation` with its element default, and the element conversion of
-  an `IrSpreadExpression`; no extraction option turns them off.
+  an `IrSpreadExpression`; no extraction option turns them off. Both nodes
+  also carry the integers of 32 bits or fewer (next section): an
+  `IrNumericConversion` between two of them is a narrowing, and an
+  `IrIntegerOverflow` may name any integer kind.
 - The cost is documented and benchmarked (`bun run bench:int64`); code that
   does not need 64-bit range should keep `int` or `double`.
+
+### ⚠ Integers of 32 bits or fewer narrow and check like C# (spec 012 FR-074–FR-077, #639)
+
+`sbyte`, `byte`, `short`, `ushort`, `int` and `uint` stay JavaScript
+`number`s. 2.x erased every conversion among them and never checked them;
+3.0 lowers them in two layers:
+
+- **Narrowing conversions (unchecked context)** keep the low bits with the
+  native operators, with no runtime call: `(int)u` → `u | 0`, `(uint)i` →
+  `i >>> 0`, `(short)i` → `(i << 16) >> 16`, `(ushort)i` → `i & 0xFFFF`,
+  `(sbyte)i` → `(i << 24) >> 24`, `(byte)i` → `i & 0xFF`. `(uint)-1` is
+  `4294967295` (2.x: `-1`) and `(byte)300` is `44` (2.x: `300`). A
+  conversion that cannot change the value (a widening, the same type, an
+  operand such as `x & 0xFF`) still emits nothing, and a constant is its
+  folded literal.
+- **Compound assignments and `++` / `--` on `sbyte`, `byte`, `short` and
+  `ushort`** store the narrowed value, as the conversion C# inserts does:
+  `b += 1` emits `b = (b + 1) & 0xFF`, on locals, fields, properties,
+  indexers and array elements. `byte b = 255; b++;` is `0` (2.x: `256`).
+- **`uint` bit patterns:** the result of `&`, `|`, `^`, `~` and `<<` on a
+  `uint` is read back as unsigned (`(a | b) >>> 0`; 2.x returned a negative
+  number when bit 31 was set), `>>` on a `uint` is the logical `>>>`, and
+  `>>>` on an `int` yields an `int` (`(i >>> n) | 0`).
+- **Checked contexts** (`checked(...)`, `checked { }`, the project's
+  `CheckForOverflowUnderflow`) now throw `OverflowException` where C# does:
+  a narrowing conversion calls `checkedInt32` / `checkedUInt32` /
+  `checkedNarrowInt32`, and `+`, `-`, `*`, unary `-`, `++`, `--` and their
+  compound forms on `int` / `uint` pass their result through `checkedInt32`
+  / `checkedUInt32` (`i++` becomes `i = checkedInt32(i + 1)`). 2.x never
+  threw. A project compiled with `CheckForOverflowUnderflow` therefore gets
+  a `metano-runtime` call on every such operation; wrap hot code in
+  `unchecked` to keep the plain operators. A checked conversion of a
+  nullable value (`checked((int?)nullableLong)`) is checked too; it was
+  emitted unchecked before.
+- **Known gap:** `int` / `uint` arithmetic does not wrap in the default
+  (unchecked) context. `int.MaxValue + 1` is `2147483648` where C# gives
+  `int.MinValue`; values stay exact up to 2^53. Wrapping every integer
+  expression (`(a + b) | 0`, `Math.imul(a, b)`) is deferred (#639, layer
+  3). `int.MinValue / -1` returns `2147483648` instead of throwing.
+- Not covered: `char` conversions (#501), `decimal` sources (#521, #606),
+  conversions to or from an enum, and `[Queryable]` expression trees keep
+  their earlier lowering. A compound assignment or increment that needs one
+  of these lowerings on a dictionary entry (`counts[key]++` in a checked
+  context, or on a `byte` value) reports `MS0001`, as the 64-bit forms do.
+- `metano-runtime` adds `checkedInt32(value)`, `checkedUInt32(value)` and
+  `checkedNarrowInt32(value, bits, signed)`.
+- Dart: an `int` is 64-bit, so the same conversions and stores print
+  `.toSigned(n)` / `.toUnsigned(n)` (`x.toUnsigned(8)`,
+  `(b + 1).toUnsigned(8)`); a checked context wraps instead of throwing.
 
 ### ⚠ Overload factories, fast paths and direct call sites (spec 013)
 

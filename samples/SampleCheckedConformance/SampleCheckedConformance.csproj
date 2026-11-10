@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The project-level checked context of the spec 012 reference matrix
+    (FR-023, FR-077): the sibling of samples/SampleInt64Conformance compiled
+    with CheckForOverflowUnderflow, which that sample must not set. Like it,
+    this project has no Metano MSBuild transpile step:
+    tests/Metano.Tests/Int64ConformanceSampleTests.cs transpiles it, with the
+    same compilation option, into
+    targets/js/sample-int64-conformance/src/sample-checked-conformance and
+    fails on drift. tests/Int64Reference runs the same methods on .NET to
+    write the fixtures.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <!-- Explicit usings: the TUnit drift test compiles these files as they are. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

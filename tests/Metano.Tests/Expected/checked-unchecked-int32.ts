@@ -1,10 +1,12 @@
+import { checkedInt32 } from "metano-runtime";
+
 export class Counter {
   private _total: number = 0;
 
   constructor() { }
 
   add(a: number, b: number): number {
-    return a + b;
+    return checkedInt32(a + b);
   }
 
   hash(a: number): number {
@@ -14,7 +16,7 @@ export class Counter {
   accumulate(values: number[]): number {
     {
       for (const v of values) {
-        this._total += v;
+        this._total = checkedInt32(this._total + v);
       }
     }
 
@@ -26,7 +28,7 @@ export class Counter {
       let h = a * 17;
 
       {
-        h += 1;
+        h = checkedInt32(h + 1);
       }
 
       return h;
@@ -35,7 +37,7 @@ export class Counter {
 
   doubler(): (arg: number) => number {
     {
-      return (x: number) => x * 2;
+      return (x: number) => checkedInt32(x * 2);
     }
   }
 
@@ -44,6 +46,6 @@ export class Counter {
   }
 
   text(a: number): string {
-    return (a + 1).toString();
+    return checkedInt32(a + 1).toString();
   }
 }

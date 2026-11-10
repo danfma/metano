@@ -8,7 +8,9 @@ namespace Int64Reference;
 /// one and minus one, the 32-bit limits, 2^53 ± 1 (the edge of exact
 /// doubles), the 64-bit limits and 2^63; ±7 for truncating division and the
 /// remainder's sign; shift counts of 32, 63, 64, 70 and −64 (an <c>int</c>
-/// count is masked with 63); a nullable parameter also gets <c>null</c>.
+/// count is masked with 63); the limits of the types narrower than
+/// <c>int</c> and, for a narrowing conversion's <c>source</c>, one past them
+/// (issue #639); a nullable parameter also gets <c>null</c>.
 /// </summary>
 internal static class BoundaryOperands
 {
@@ -60,6 +62,138 @@ internal static class BoundaryOperands
         1U,
         (uint)int.MaxValue + 1,
         uint.MaxValue,
+    ];
+
+    private static readonly object?[] SByteValues =
+    [
+        (sbyte)0,
+        (sbyte)1,
+        (sbyte)-1,
+        sbyte.MaxValue,
+        sbyte.MinValue,
+    ];
+
+    private static readonly object?[] ByteValues =
+    [
+        (byte)0,
+        (byte)1,
+        (byte)127,
+        (byte)128,
+        byte.MaxValue,
+    ];
+
+    private static readonly object?[] Int16Values =
+    [
+        (short)0,
+        (short)1,
+        (short)-1,
+        (short)127,
+        (short)128,
+        (short)-128,
+        (short)-129,
+        (short)255,
+        (short)256,
+        short.MaxValue,
+        short.MinValue,
+    ];
+
+    private static readonly object?[] UInt16Values =
+    [
+        (ushort)0,
+        (ushort)1,
+        (ushort)127,
+        (ushort)128,
+        (ushort)255,
+        (ushort)256,
+        (ushort)32767,
+        (ushort)32768,
+        ushort.MaxValue,
+    ];
+
+    /// <summary>
+    /// The <c>int</c> sources of a narrowing conversion: the limits of every
+    /// narrower type, one past them, and values with the high bit set.
+    /// </summary>
+    private static readonly object?[] Int32SourceValues =
+    [
+        0,
+        1,
+        -1,
+        127,
+        128,
+        -128,
+        -129,
+        255,
+        256,
+        32767,
+        32768,
+        -32768,
+        -32769,
+        65535,
+        65536,
+        int.MaxValue,
+        int.MinValue,
+        0x12345678,
+        unchecked((int)0x89ABCDEF),
+    ];
+
+    private static readonly object?[] UInt32SourceValues =
+    [
+        0U,
+        1U,
+        127U,
+        128U,
+        255U,
+        256U,
+        32767U,
+        32768U,
+        65535U,
+        65536U,
+        (uint)int.MaxValue,
+        (uint)int.MaxValue + 1,
+        uint.MaxValue,
+        0x89ABCDEFU,
+    ];
+
+    private static readonly object?[] Int64SourceValues =
+    [
+        0L,
+        1L,
+        -1L,
+        127L,
+        128L,
+        -129L,
+        255L,
+        256L,
+        32768L,
+        -32769L,
+        65535L,
+        65536L,
+        (long)int.MaxValue,
+        (long)int.MaxValue + 1,
+        (long)int.MinValue,
+        (long)int.MinValue - 1,
+        (long)uint.MaxValue,
+        (long)uint.MaxValue + 1,
+        0x1_0000_00FFL,
+        long.MaxValue,
+        long.MinValue,
+    ];
+
+    private static readonly object?[] UInt64SourceValues =
+    [
+        0UL,
+        1UL,
+        255UL,
+        256UL,
+        65535UL,
+        65536UL,
+        (ulong)int.MaxValue,
+        (ulong)int.MaxValue + 1,
+        (ulong)uint.MaxValue,
+        (ulong)uint.MaxValue + 1,
+        1UL << 63,
+        ulong.MaxValue,
     ];
 
     private static readonly object?[] CharValues = ['\0', 'A', '\uFFFF'];
@@ -301,9 +435,10 @@ internal static class BoundaryOperands
 
     /// <summary>
     /// The operands of <paramref name="parameter"/>: its name picks the
-    /// <c>string</c>, base, index, length, array and boxed operands
-    /// (<c>format</c>, <c>text</c>, <c>fromBase</c>, <c>index</c>,
-    /// <c>length</c>, <c>values</c>, <c>boxed</c>), its type the others.
+    /// <c>string</c>, base, index, length, array, boxed, narrowing-source
+    /// and non-zero operands (<c>format</c>, <c>text</c>, <c>fromBase</c>,
+    /// <c>index</c>, <c>length</c>, <c>values</c>, <c>boxed</c>,
+    /// <c>source</c>, <c>divisor</c>), its type the others.
     /// </summary>
     public static IReadOnlyList<object?> For(ParameterInfo parameter) =>
         parameter.Name switch
@@ -315,8 +450,31 @@ internal static class BoundaryOperands
             "length" => LengthValues,
             "values" => ValuesArrayFor(parameter.ParameterType),
             "boxed" => BoxedValues,
+            "source" => SourceValuesFor(parameter.ParameterType),
+            "divisor" => [.. For(parameter.ParameterType).Where(IsNotZero)],
             _ => For(parameter.ParameterType),
         };
+
+    /// <summary>
+    /// The operands of a narrowing conversion's <c>source</c> parameter: the
+    /// narrowing sets of the 32-bit and 64-bit integers, the type's own
+    /// operands otherwise; a nullable parameter also gets <c>null</c>.
+    /// </summary>
+    private static IReadOnlyList<object?> SourceValuesFor(Type type) =>
+        Nullable.GetUnderlyingType(type) is { } underlying
+            ? [.. SourceValuesFor(underlying), null]
+            : Type.GetTypeCode(type) switch
+            {
+                TypeCode.Int32 => Int32SourceValues,
+                TypeCode.UInt32 => UInt32SourceValues,
+                TypeCode.Int64 => Int64SourceValues,
+                TypeCode.UInt64 => UInt64SourceValues,
+                _ => ValuesOf(type),
+            };
+
+    /// <summary>A <c>divisor</c> operand other than zero, so the rows stay on the stored value.</summary>
+    private static bool IsNotZero(object? operand) =>
+        operand is null || Convert.ToDecimal(operand) != 0m;
 
     /// <summary>The operand arrays of an array parameter of element <paramref name="type"/>.</summary>
     private static IReadOnlyList<object?> ValuesArrayFor(Type type) =>
@@ -333,6 +491,10 @@ internal static class BoundaryOperands
         {
             TypeCode.Int64 => Int64Values,
             TypeCode.UInt64 => UInt64Values,
+            TypeCode.SByte => SByteValues,
+            TypeCode.Byte => ByteValues,
+            TypeCode.Int16 => Int16Values,
+            TypeCode.UInt16 => UInt16Values,
             TypeCode.Int32 => Int32Values,
             TypeCode.UInt32 => UInt32Values,
             TypeCode.Char => CharValues,

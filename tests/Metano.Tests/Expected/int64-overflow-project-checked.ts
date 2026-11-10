@@ -1,4 +1,4 @@
-import { checkedInt64, checkedUInt64 } from "metano-runtime";
+import { checkedInt32, checkedInt64, checkedUInt64 } from "metano-runtime";
 
 export class Project {
   private _total: bigint = 0n;
@@ -29,6 +29,6 @@ export class Project {
   }
 
   narrow(a: number): number {
-    return a + 1;
+    return checkedInt32(a + 1);
   }
 }

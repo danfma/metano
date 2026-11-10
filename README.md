@@ -130,7 +130,11 @@ export class TodoItem {
   `BigInteger`, tasks, strings, math, and console output.
 - Exact 64-bit integers in the TypeScript target: `long` / `ulong` hold
   `bigint` (3.0.0), so ids and tick counts past 2^53 keep every digit, and
-  overflow wraps (or throws under `checked`) exactly where C# does.
+  overflow wraps (or throws under `checked`) exactly where C# does. The
+  integers of 32 bits or fewer stay `number`: narrowing casts, `byte` /
+  `short` stores and `uint` bit patterns follow C#, and `checked` contexts
+  throw `OverflowException` (default-context `int` arithmetic does not
+  wrap).
 - Cross-project package generation with `[EmitPackage]`, generated barrels,
   npm dependency updates, and package-aware imports.
 - `System.Text.Json` source-generation metadata emitted as a TypeScript

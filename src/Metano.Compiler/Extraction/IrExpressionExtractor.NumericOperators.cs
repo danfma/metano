@@ -87,6 +87,16 @@ public sealed partial class IrExpressionExtractor
         (op.IsDivisionOrRemainder() || op.IsShift())
         && IsSixtyFourBit(BuiltInNumericKindOf(operatorSyntax));
 
+    /// <summary>
+    /// Whether <paramref name="op"/> is <c>&gt;&gt;</c> on a <c>uint</c>: C#
+    /// shifts it logically, where a target whose <c>&gt;&gt;=</c> is
+    /// arithmetic on 32 signed bits has no compound operator for it, so
+    /// <c>u &gt;&gt;= n</c> stores the binary form's value, which carries
+    /// its operand kind (FR-076).
+    /// </summary>
+    private bool NeedsLogicalShiftReadModifyWrite(IrBinaryOp op, ExpressionSyntax operatorSyntax) =>
+        op is IrBinaryOp.RightShift && BuiltInNumericKindOf(operatorSyntax) is IrNumericKind.UInt32;
+
     /// <summary>A 64-bit operand kind.</summary>
     private static bool IsSixtyFourBit(IrNumericKind? kind) => kind?.IsSixtyFourBit() == true;
 
