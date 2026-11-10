@@ -51,7 +51,7 @@ export class IssueService {
     priority: IssuePriority,
   ): Promise<OperationResult<Issue>>;
   createAsync(title: string, description: string, type: IssueType): Promise<OperationResult<Issue>>;
-  async createAsync(...args: unknown[]): Promise<unknown> {
+  async createAsync(...args: unknown[]): Promise<OperationResult<Issue>> {
     if (
       args.length === 4 &&
       isString(args[0]) &&
@@ -148,7 +148,7 @@ export class IssueService {
     message: string,
   ): Promise<OperationResult<Issue>>;
   addCommentAsync(issue: Issue, authorId: UserId, message: string): Promise<OperationResult<Issue>>;
-  async addCommentAsync(...args: unknown[]): Promise<unknown> {
+  async addCommentAsync(...args: unknown[]): Promise<OperationResult<Issue>> {
     if (
       args.length === 3 &&
       typeof args[0] === "string" &&

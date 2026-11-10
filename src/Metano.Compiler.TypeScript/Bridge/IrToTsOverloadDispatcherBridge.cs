@@ -332,7 +332,10 @@ public static class IrToTsOverloadDispatcherBridge
     /// <summary>
     /// The one return type a dispatcher implementation can declare for its
     /// overloads' <paramref name="returns"/>: theirs when they all agree and
-    /// none is generic, else the erased one.
+    /// none is generic, else the erased one. Each overload maps its own type
+    /// instance, so equal types are told by their printed form
+    /// (<c>Box&lt;T&gt;</c> and <c>Box&lt;T&gt;</c> hold distinct argument
+    /// lists).
     /// </summary>
     internal static TsType CommonReturnTypeOf(
         IReadOnlyList<TsType> returns,
@@ -340,7 +343,9 @@ public static class IrToTsOverloadDispatcherBridge
         bool isAsync
     )
     {
-        if (!isGeneric && returns.All(t => t.Equals(returns[0])))
+        var printed = returns.Select(Printer.RenderType).Distinct(StringComparer.Ordinal);
+
+        if (!isGeneric && printed.Take(2).Count() == 1)
             return returns[0];
 
         return isAsync
