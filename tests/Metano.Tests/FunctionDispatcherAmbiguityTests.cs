@@ -271,6 +271,24 @@ public class FunctionDispatcherAmbiguityTests
         );
 
     [Test]
+    public Task ConstructorGroup_OutParameters_NameTheRealSignatures() =>
+        AssertWarnsOnceAt(
+            Preamble
+                + """
+                public class BrandCtor
+                {
+                    public BrandCtor(long a, out int r) { r = 1; }
+
+                    public BrandCtor(UId a, out int r) { r = 2; }
+                }
+                """,
+            AmbiguousDispatchMessages.BrandedSixtyFourBit(
+                "'BrandCtor.BrandCtor(long, out int)', 'BrandCtor.BrandCtor(UId, out int)'"
+            ),
+            "BrandCtor(UId a, out int r)"
+        );
+
+    [Test]
     public Task CompanionNamespace_OperatorGroup_SaysItsApplicationsAreNotLowered() =>
         AssertWarnsOnceAt(
             Preamble
@@ -462,6 +480,69 @@ public class FunctionDispatcherAmbiguityTests
         await TranspileHelper.AssertGolden(
             "companion-direct-overloads-operators.ts",
             result["ticks.ts"]
+        );
+    }
+
+    /// <summary>
+    /// A primitive-backed wrapper's companion declares no instance member,
+    /// so a call into an overloaded instance group is not bound: it keeps its
+    /// source arguments (no explicit default) and the member name.
+    /// </summary>
+    [Test]
+    public async Task InstanceGroupOfAPrimitiveBackedWrapper_IsNotBound()
+    {
+        var result = TranspileHelper.Transpile(
+            Preamble
+                + """
+                [Branded]
+                public readonly record struct Tag(string Value)
+                {
+                    public string I(long l, int n = 3) => "long" + n;
+
+                    public string I(UId u, int n = 5) => "uid" + n;
+                }
+
+                public class InstanceCalls
+                {
+                    public string Run(Tag tag) => tag.I(1L) + tag.I(new UId(1));
+                }
+                """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-instance-calls.ts",
+            result["instance-calls.ts"]
+        );
+    }
+
+    /// <summary>
+    /// An operator of a branded type is not bound to a companion function
+    /// (#599): the application keeps the lowering it has without one.
+    /// </summary>
+    [Test]
+    public async Task OperatorOfABrandedType_IsNotBound()
+    {
+        var result = TranspileHelper.Transpile(
+            Preamble
+                + """
+                [Branded]
+                public readonly record struct Ticks(long Value)
+                {
+                    public static Ticks operator +(Ticks a, long b) => new(a.Value + b);
+
+                    public static Ticks operator +(Ticks a, UId b) => new(a.Value + b.Value);
+                }
+
+                public class OperatorCalls
+                {
+                    public Ticks Run(Ticks ticks, UId id) => ticks + 2L + id;
+                }
+                """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-operator-calls.ts",
+            result["operator-calls.ts"]
         );
     }
 
