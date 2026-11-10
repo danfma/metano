@@ -362,11 +362,14 @@ public static partial class IrToTsExpressionBridge
     /// <c>...source</c>, or <c>...Array.from(source, (element) =&gt;
     /// converted)</c> when C# converts each spread element (<c>List&lt;long&gt;
     /// l = [.. ints]</c>): <c>Array.from</c> reads any iterable once and maps
-    /// each element as it copies.
+    /// each element as it copies. A string spreads its UTF-16 code units, as
+    /// C# does (<c>...s.split("")</c>): a string's own iterator yields code
+    /// points.
     /// </summary>
     private static TsExpression MapSpread(IrSpreadExpression spread, IrToTsBridgeContext context)
     {
-        var source = Map(spread.Expression, context);
+        var operand = Map(spread.Expression, context);
+        var source = spread.Source is IrSpreadSource.String ? CodeUnitsOf(operand) : operand;
 
         if (spread.ElementConversion is not { } conversion)
             return new TsSpreadExpression(source);
@@ -383,6 +386,9 @@ public static partial class IrToTsExpressionBridge
 
         return new TsSpreadExpression(mapped);
     }
+
+    private static TsCallExpression CodeUnitsOf(TsExpression text) =>
+        new(new TsPropertyAccess(text, "split"), [new TsStringLiteral("")]);
 
     /// <summary>
     /// A C# tuple is a positional JS array. An array literal infers an array
