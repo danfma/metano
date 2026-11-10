@@ -216,39 +216,29 @@ public static class IrToTsOverloadDispatcherBridge
     /// <c>[Branded]</c> companion) instead of class members, under the names
     /// its plan claimed. The dispatcher branches to the fast paths by bare
     /// name and carries the overload signatures; the fast paths are exported
-    /// too, so a generated call site addresses the overload C# bound (#569).
+    /// too when generated call sites name them (#569).
     /// </summary>
-    /// <param name="group">A dispatched group: two or more overloads in
-    /// dispatch order, each with its claimed fast path.</param>
+    /// <param name="group">A dispatched group: its overloads in dispatch
+    /// order, each with its claimed fast path.</param>
     /// <param name="bclRegistry">
     /// Optional BCL mapping registry threaded through to the body bridge.
     /// </param>
     internal static IReadOnlyList<TsFunction> BuildNamespaceFunctions(
-        TsCompanionGroup group,
+        TsCompanionDispatcher group,
         DeclarativeMappingRegistry? bclRegistry = null
     )
     {
-        if (!group.IsDispatched)
-            throw new ArgumentException(
-                "An overload group needs two or more methods.",
-                nameof(group)
-            );
+        var methods = group.FastPaths.Select(fastPath => fastPath.Method).ToList();
+        var plan = PlanOverloadGroup(methods, typeOverrides: null, sort: false);
 
-        var plan = PlanOverloadGroup(group.Methods, typeOverrides: null, sort: false);
-
-        var fastPathNames = group
-            .Overloads.Select(overload =>
-                overload.FastPath
-                ?? throw new InvalidOperationException(
-                    $"The companion plan claimed no fast path for '{overload.Method.SignatureText}'."
+        var functions = group
+            .FastPaths.Select(fastPath =>
+                BuildFastPathFunction(
+                    fastPath,
+                    group.ExportsFastPaths,
+                    plan.Accessibility,
+                    bclRegistry
                 )
-            )
-            .ToList();
-
-        var functions = plan
-            .Sorted.Select(
-                (method, i) =>
-                    BuildFastPathFunction(method, fastPathNames[i], plan.Accessibility, bclRegistry)
             )
             .ToList();
 
@@ -258,11 +248,11 @@ public static class IrToTsOverloadDispatcherBridge
                 DispatcherParameters(),
                 plan.CommonReturn,
                 BuildDispatcherBody(
-                    plan.Sorted,
-                    fastPathNames,
+                    methods,
+                    group.FastPaths.Select(fastPath => fastPath.Name).ToList(),
                     receiver: null,
                     TypeCheckScope.Empty,
-                    NoMatchingOverload(TypeScriptNaming.ToCamelCaseMember(plan.Sorted[0].Name))
+                    NoMatchingOverload(TypeScriptNaming.ToCamelCaseMember(group.MemberName))
                 ),
                 Exported: true,
                 Async: plan.IsAsync,
@@ -272,32 +262,6 @@ public static class IrToTsOverloadDispatcherBridge
 
         return functions;
     }
-
-    /// <summary>
-    /// The fast-path name each overload of a namespace group claims: in
-    /// dispatch order, against <paramref name="takenNames"/>. Namespace
-    /// functions share one scope, so a name that collides with one of them
-    /// (or with a sibling fast path) gets a <c>$</c> suffix; the chosen names
-    /// are added to the set.
-    /// </summary>
-    /// <param name="functionName">
-    /// Emitted dispatcher name — already reserved-word escaped, since
-    /// namespace function declarations can't use reserved words.
-    /// </param>
-    internal static IReadOnlyList<(
-        IrMethodDeclaration Overload,
-        string FastPath
-    )> ClaimNamespaceFastPaths(
-        IReadOnlyList<IrMethodDeclaration> overloads,
-        string functionName,
-        ISet<string> takenNames
-    ) =>
-        OverloadDispatchOrder
-            .Sort(overloads, method => method.Parameters)
-            .Select(overload =>
-                (overload, ClaimName(OverloadFastPathName.Of(functionName, overload), takenNames))
-            )
-            .ToList();
 
     // ── Phases ───────────────────────────────────────────────────────────
 
@@ -413,16 +377,6 @@ public static class IrToTsOverloadDispatcherBridge
     private static TsExpression DispatchReceiver(bool isStatic, string containingTypeName) =>
         isStatic ? new TsIdentifier(containingTypeName) : new TsIdentifier("this");
 
-    private static string ClaimName(string candidate, ISet<string> takenNames)
-    {
-        var name = candidate;
-
-        while (!takenNames.Add(name))
-            name += "$";
-
-        return name;
-    }
-
     /// <summary>
     /// One overload's fast path, with its overload's own visibility (FR-015):
     /// an override's is its root's, which the extractor already maps
@@ -500,31 +454,37 @@ public static class IrToTsOverloadDispatcherBridge
     /// A namespace fast path is always emitted — the dispatcher branches to it
     /// by bare name — so a body-less overload lowers to the same
     /// not-implemented stub a single companion function gets. It is exported
-    /// for the generated call sites; a namespace has no member accessibility,
-    /// so an overload that is not public in C# is tagged as its dispatcher
-    /// signature is (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>).
+    /// when generated call sites name it; a namespace has no member
+    /// accessibility, so an exported overload that is not public in C# is
+    /// tagged as its dispatcher signature is
+    /// (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>).
     /// </summary>
     private static TsFunction BuildFastPathFunction(
-        IrMethodDeclaration method,
-        string fastPathName,
+        TsCompanionFastPath fastPath,
+        bool exported,
         TsAccessibility groupAccessibility,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
+        var method = fastPath.Method;
         var context = IrToTsBridgeContext.For(bclRegistry);
 
-        return new(
-            fastPathName,
-            FastPathParameters(method, context),
-            IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
-            Exported: true,
-            Async: method.Semantics.IsAsync,
-            TypeParameters: MapTypeParameters(method.TypeParameters),
-            JSDoc: IrToTsVisibilityMapper.SignatureJSDocOf(
+        var jsDoc = exported
+            ? IrToTsVisibilityMapper.SignatureJSDocOf(
                 IrToTsVisibilityMapper.Map(method.Visibility),
                 groupAccessibility
             )
+            : null;
+
+        return new(
+            fastPath.Name,
+            FastPathParameters(method, context),
+            IrToTsTypeMapper.Map(method.ReturnType),
+            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
+            Exported: exported,
+            Async: method.Semantics.IsAsync,
+            TypeParameters: MapTypeParameters(method.TypeParameters),
+            JSDoc: jsDoc
         );
     }
 
@@ -746,8 +706,8 @@ public static class IrToTsOverloadDispatcherBridge
             : IrToTsTypeMapper.MapParameterType(parameter, typeOverrides);
 
     /// <summary>
-    /// A null receiver means the fast path is a namespace-local function
-    /// reachable by bare name.
+    /// A null receiver means the fast path is a function of the dispatcher's
+    /// own namespace, reachable by bare name.
     /// </summary>
     private static TsExpression FastPathCallee(TsExpression? receiver, string fastPathName) =>
         receiver is null

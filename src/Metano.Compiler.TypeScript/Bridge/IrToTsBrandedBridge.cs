@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -30,11 +31,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsBrandedBridge
 {
-    /// <summary>The non-validating factory every branded companion synthesizes.</summary>
-    internal const string CreateMember = "create";
+    /// <inheritdoc cref="TsCompanionPlan.CreateMember"/>
+    internal const string CreateMember = TsCompanionPlan.CreateMember;
 
-    /// <summary>The string conversion a non-string branded companion synthesizes.</summary>
-    internal const string ToStringMember = "toString";
+    /// <inheritdoc cref="TsCompanionPlan.ToStringMember"/>
+    internal const string ToStringMember = TsCompanionPlan.ToStringMember;
 
     internal static void Convert(
         IrClassDeclaration ir,
@@ -91,8 +92,9 @@ public static class IrToTsBrandedBridge
         // User-declared static methods on the wrapper struct. Visibility +
         // [Ignore] + [Emit] filtering already happened in the extractor; we
         // just emit each remaining static method (or overload group) as
-        // exported functions in the companion namespace.
-        foreach (var group in plan.Groups)
+        // exported functions in the companion namespace, under the names the
+        // plan claimed, bound to the methods of this IR.
+        foreach (var group in plan.Bind(ir))
             functions.AddRange(ConvertStaticMethodGroup(group, bclRegistry));
 
         sink.Add(new TsNamespaceDeclaration(tsTypeName, functions));
@@ -107,9 +109,18 @@ public static class IrToTsBrandedBridge
         TsCompanionGroup group,
         DeclarativeMappingRegistry? bclRegistry
     ) =>
-        group.IsDispatched
-            ? IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(group, bclRegistry)
-            : [ConvertStaticMethod(group.Overloads[0].Method, group.FunctionName, bclRegistry)];
+        group switch
+        {
+            TsCompanionDispatcher dispatcher =>
+                IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(dispatcher, bclRegistry),
+            TsCompanionFunction function =>
+            [
+                ConvertStaticMethod(function.Method, function.FunctionName, bclRegistry),
+            ],
+            _ => throw new UnreachableException(
+                $"Unexpected companion group {group.GetType().Name}."
+            ),
+        };
 
     private static TsFunction ConvertStaticMethod(
         IrMethodDeclaration method,

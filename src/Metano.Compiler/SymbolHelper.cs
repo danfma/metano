@@ -1380,6 +1380,18 @@ public static class SymbolHelper
             _ => null,
         };
 
+    /// <summary>
+    /// Whether <paramref name="type"/> is a <c>[Branded]</c> /
+    /// <c>[InlineWrapper]</c> struct whose single value member is a brandable
+    /// primitive (<c>IrPrimitiveExtensions.IsBrandablePrimitive</c>): the
+    /// wrapper a backend can lower to the primitive itself. A wrapper over
+    /// anything else falls back to the regular class/record lowering.
+    /// </summary>
+    public static bool IsPrimitiveBackedBranded(INamedTypeSymbol type) =>
+        HasBranded(type)
+        && GetBrandedValueType(type.OriginalDefinition) is { } valueType
+        && Extraction.IrTypeRefMapper.Map(valueType).IsBrandablePrimitive();
+
     private static bool IsBrandedValueMemberCandidate(ISymbol member) =>
         !member.IsImplicitlyDeclared
         && !member.IsStatic

@@ -65,6 +65,60 @@ public class FunctionDispatcherAmbiguityTests
         }
         """;
 
+    /// <summary>
+    /// The names a call site must agree with the namespace on: a fast path
+    /// that collides with another static method takes a <c>$</c>, a
+    /// <c>[Name]</c> pins an overload's suffix, and an overload that is not
+    /// public keeps its <c>@internal</c> tag on the exported function.
+    /// </summary>
+    private const string Names = """
+        [Branded]
+        public readonly record struct Key(string Value)
+        {
+            public static string X(long l) => "x-long";
+
+            public static string X(UId u) => "x-uid";
+
+            public static string XL(string s) => "xl";
+
+            [Name("viaLong")]
+            public static string Pin(long l) => "long";
+
+            public static string Pin(UId u) => "uid";
+
+            public static string V(long l) => "long";
+
+            internal static string V(UId u) => "internal";
+
+            private static string V(string s) => "private";
+
+            public static string Hidden() => V("s");
+
+            public static string D(long l, int n = 3) => "long" + n;
+
+            public static string D(UId u, int n = 5) => "uid" + n;
+        }
+
+        public class KeyCalls
+        {
+            private int _counter;
+
+            private int Next() => ++_counter;
+
+            private UId NextId() => new(++_counter);
+
+            public string Run() =>
+                Key.X(1L)
+                + Key.X(new UId(1))
+                + Key.XL("s")
+                + Key.Pin(1L)
+                + Key.Pin(new UId(1))
+                + Key.V(new UId(1))
+                + Key.D(new UId(1))
+                + Key.D(n: Next(), u: NextId());
+        }
+        """;
+
     private static IReadOnlyList<MetanoDiagnostic> Ambiguity(string source) =>
         TranspileHelper
             .TranspileWithDiagnostics(source)
@@ -83,7 +137,10 @@ public class FunctionDispatcherAmbiguityTests
         await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert.That(warning.Message).IsEqualTo(message);
 
-        var location = warning.Location!;
+        await Assert.That(warning.Location).IsNotNull();
+        await Assert.That(warning.Location!.SourceTree).IsNotNull();
+
+        var location = warning.Location;
         var compiled = location.SourceTree!.GetText().ToString();
         var anchorStart = compiled.IndexOf(anchor, StringComparison.Ordinal);
 
@@ -195,6 +252,25 @@ public class FunctionDispatcherAmbiguityTests
         );
 
     [Test]
+    public Task CompanionNamespace_OutParameters_NameTheRealSignatures() =>
+        AssertWarnsOnceAt(
+            Preamble
+                + """
+                [Branded]
+                public readonly record struct Tag(string Value)
+                {
+                    public static string Out(long l, out int n) { n = 1; return "long"; }
+
+                    public static string Out(UId u, out int n) { n = 2; return "uid"; }
+                }
+                """,
+            AmbiguousDispatchMessages.BrandedSixtyFourBit(
+                "'Tag.Out(long, out int)', 'Tag.Out(UId, out int)'"
+            ),
+            "Out(UId u, out int n)"
+        );
+
+    [Test]
     public Task CompanionNamespace_OperatorGroup_SaysItsApplicationsAreNotLowered() =>
         AssertWarnsOnceAt(
             Preamble
@@ -274,60 +350,6 @@ public class FunctionDispatcherAmbiguityTests
         );
     }
 
-    /// <summary>
-    /// The names a call site must agree with the namespace on: a fast path
-    /// that collides with another static method takes a <c>$</c>, a
-    /// <c>[Name]</c> pins an overload's suffix, and an overload that is not
-    /// public keeps its <c>@internal</c> tag on the exported function.
-    /// </summary>
-    private const string Names = """
-        [Branded]
-        public readonly record struct Key(string Value)
-        {
-            public static string X(long l) => "x-long";
-
-            public static string X(UId u) => "x-uid";
-
-            public static string XL(string s) => "xl";
-
-            [Name("viaLong")]
-            public static string Pin(long l) => "long";
-
-            public static string Pin(UId u) => "uid";
-
-            public static string V(long l) => "long";
-
-            internal static string V(UId u) => "internal";
-
-            private static string V(string s) => "private";
-
-            public static string Hidden() => V("s");
-
-            public static string D(long l, int n = 3) => "long" + n;
-
-            public static string D(UId u, int n = 5) => "uid" + n;
-        }
-
-        public class KeyCalls
-        {
-            private int _counter;
-
-            private int Next() => ++_counter;
-
-            private UId NextId() => new(++_counter);
-
-            public string Run() =>
-                Key.X(1L)
-                + Key.X(new UId(1))
-                + Key.XL("s")
-                + Key.Pin(1L)
-                + Key.Pin(new UId(1))
-                + Key.V(new UId(1))
-                + Key.D(new UId(1))
-                + Key.D(n: Next(), u: NextId());
-        }
-        """;
-
     [Test]
     public async Task CompanionNamespace_ClaimedNames_KeepCollisionsPinsAndVisibility()
     {
@@ -373,6 +395,111 @@ public class FunctionDispatcherAmbiguityTests
         await TranspileHelper.AssertGolden(
             "companion-direct-overloads-class-wrapper-calls.ts",
             result["wrap-calls.ts"]
+        );
+    }
+
+    [Test]
+    public async Task CompanionNamespace_RenamedExportedFastPath_ReportsMs0067()
+    {
+        var source =
+            Preamble
+            + """
+                [Branded]
+                public readonly record struct UserId(string Value)
+                {
+                    public static string From(string raw) => "string";
+
+                    public static string From(UserId id) => "userid";
+
+                    public static string FromRaw(int n) => "int";
+                }
+                """;
+
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
+
+        var rename = diagnostics.Single(d => d.Code == DiagnosticCodes.OverloadNameShadowed);
+
+        await Assert.That(rename.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
+        await Assert
+            .That(rename.Message)
+            .IsEqualTo(
+                "Fast path 'UserId.fromRaw' of 'From(string raw)' is already taken in the "
+                    + "companion namespace; it is emitted as 'fromRaw$' (spec 013 FR-004)."
+            );
+
+        await Assert.That(rename.Location).IsNotNull();
+        await Assert.That(rename.Location!.SourceTree).IsNotNull();
+
+        var compiled = rename.Location.SourceTree!.GetText().ToString();
+        var declaration = compiled.IndexOf("From(string raw)", StringComparison.Ordinal);
+
+        await Assert.That(declaration).IsGreaterThanOrEqualTo(0);
+        await Assert.That(rename.Location.SourceSpan.Start).IsEqualTo(declaration);
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-renamed.ts",
+            files["user-id.ts"]
+        );
+    }
+
+    [Test]
+    public async Task CompanionNamespace_OperatorGroup_KeepsItsFastPathsLocal()
+    {
+        var result = TranspileHelper.Transpile(
+            Preamble
+                + """
+                [Branded]
+                public readonly record struct Ticks(long Value)
+                {
+                    public static Ticks operator +(Ticks a, long b) => new(a.Value + b);
+
+                    public static Ticks operator +(Ticks a, UId b) => new(a.Value + b.Value);
+                }
+                """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-operators.ts",
+            result["ticks.ts"]
+        );
+    }
+
+    /// <summary>
+    /// The Dart target declares one member per group of a branded type and
+    /// leaves <c>EmitsBrandedFastPath</c> unset: the call keeps its source
+    /// form, named arguments included, instead of a fast-path name Dart
+    /// never declares.
+    /// </summary>
+    [Test]
+    public async Task Dart_KeepsTheSourceCallIntoABrandedGroup()
+    {
+        var (files, _) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct UId(long Value);
+
+            [Branded]
+            public readonly record struct Tag(string Value)
+            {
+                public static string D(long l, int n = 3, string s = "d") => "long";
+
+                public static string D(UId u, int n = 5, string s = "e") => "uid";
+            }
+
+            public class DartCalls
+            {
+                public string Run(UId uid) => Tag.D(u: uid, n: 7);
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "companion-direct-overloads-dart-calls.dart",
+            files["dart_calls.dart"]
         );
     }
 

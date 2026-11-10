@@ -96,10 +96,11 @@ public sealed class TsOverloadClaimsRegistry(
     /// <summary>
     /// The companion plan of a branded struct, computed on first use from
     /// its shape; <c>null</c> for a type that emits no companion namespace.
+    /// The type's emission and every call into it read this one plan.
     /// </summary>
-    private TsCompanionPlan? CompanionPlanOf(INamedTypeSymbol type)
+    internal TsCompanionPlan? CompanionPlanOf(INamedTypeSymbol type)
     {
-        if (!TypeTransformer.IsBrandedStruct(type))
+        if (!TsCompanionPlan.AppliesTo(type))
             return null;
 
         return _companionPlans

@@ -545,7 +545,7 @@ public sealed class TypeScriptTransformContext(
         {
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
-            EmitsBrandedFastPaths = true,
+            EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             KeepsArgumentEvaluationOrder = true,
         };
 
