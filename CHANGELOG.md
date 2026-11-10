@@ -67,13 +67,18 @@ the migration list.
   implementation as `any`, as method dispatchers do; 2.x declared the first
   overload's type, which did not type-check. Overloads that return one type
   keep it.
-- Known gaps a 2.x project can meet after the upgrade: `FirstOrDefault()`
-  and the other `OrDefault` terminals return `null` for a value type, so
-  `longs.FirstOrDefault() + 1` throws `TypeError` where 2.x computed `null
-  + 1` (#601); tuple and spread elements that convert to `decimal` are not
-  converted, and the Dart target leaves the ones that convert to `double`
-  or `BigInteger` (#606); conversion operators of one type still share a
-  dispatcher that only reaches the first (#600).
+- `FirstOrDefault`, `LastOrDefault`, `SingleOrDefault` and `List<T>.Find`
+  return `default(T)` on a miss for a non-nullable value element (`0`, `0n`,
+  `false`, `new Decimal("0")`, the enum's zero, `UUID.empty`), and the
+  `defaultValue` overloads pass their argument: `longs.FirstOrDefault() + 1`
+  is `1n` (#601). 2.x returned `null`. A struct element without a literal
+  default (a user struct, a tuple, a `struct` type parameter) still gets
+  `null`, now with an `MS0001` warning.
+- Known gaps a 2.x project can meet after the upgrade: tuple and spread
+  elements that convert to `decimal` are not converted, and the Dart target
+  leaves the ones that convert to `double` or `BigInteger` (#606);
+  conversion operators of one type still share a dispatcher that only
+  reaches the first (#600).
 - `[MapMethod]` / `[MapProperty]` lose the hidden `WhenInt64IsBigInt` named
   argument (it was honored only in Metano's own mappings).
 - Interop declarations (`[Import]`, `[Emit]`, `[External]`, user

@@ -161,6 +161,17 @@ public static class IrLinqMapping
                 or IrLinqOperator.Contains
                 or IrLinqOperator.Aggregate;
 
+    /// <summary>
+    /// Whether the terminal returns a default value when no element
+    /// qualifies. Its runtime counterpart takes
+    /// <c>(predicate, defaultValue, queryable)</c>.
+    /// </summary>
+    public static bool IsOrDefaultTerminal(IrLinqOperator op) =>
+        op
+            is IrLinqOperator.FirstOrDefault
+                or IrLinqOperator.LastOrDefault
+                or IrLinqOperator.SingleOrDefault;
+
     private static bool IsLinqContainer(INamedTypeSymbol? type)
     {
         if (type is null)

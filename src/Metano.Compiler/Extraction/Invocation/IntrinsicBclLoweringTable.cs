@@ -67,6 +67,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
         SeedMathDecimal(compilation);
         SeedRounding(compilation);
         SeedGetValueOrDefault(compilation);
+        SeedListFind(compilation);
         SeedStringJoin(compilation);
         SeedHashCode(compilation);
         SeedTupleEquality(compilation);

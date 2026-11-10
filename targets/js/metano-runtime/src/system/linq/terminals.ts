@@ -84,11 +84,11 @@ export function first<T>(
   };
 }
 
-export function firstOrDefault<T>(
+export function firstOrDefault<T, D extends T | null = null>(
   predicate?: (item: T) => boolean,
-  defaultValue: T | null = null,
+  defaultValue: D = null as D,
   queryable?: QueryableMeta,
-): FirstOrDefaultTerm<T> {
+): FirstOrDefaultTerm<T, D> {
   return {
     kind: "firstOrDefault",
     predicate,
@@ -120,36 +120,36 @@ export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableM
   };
 }
 
-export function lastOrDefault<T>(
+export function lastOrDefault<T, D extends T | null = null>(
   predicate?: (item: T) => boolean,
-  defaultValue: T | null = null,
+  defaultValue: D = null as D,
   queryable?: QueryableMeta,
-): LastOrDefaultTerm<T> {
+): LastOrDefaultTerm<T, D> {
   return {
     kind: "lastOrDefault",
     predicate,
     defaultValue,
     queryable,
     apply: (source) => {
-      let result: T | null = defaultValue;
+      let result: T | D = defaultValue;
       for (const item of source) if (!predicate || predicate(item)) result = item;
       return result;
     },
   };
 }
 
-export function singleOrDefault<T>(
+export function singleOrDefault<T, D extends T | null = null>(
   predicate?: (item: T) => boolean,
-  defaultValue: T | null = null,
+  defaultValue: D = null as D,
   queryable?: QueryableMeta,
-): SingleOrDefaultTerm<T> {
+): SingleOrDefaultTerm<T, D> {
   return {
     kind: "singleOrDefault",
     predicate,
     defaultValue,
     queryable,
     apply: (source) => {
-      let result: T | null = defaultValue;
+      let result: T | D = defaultValue;
       let count = 0;
       for (const item of source)
         if (!predicate || predicate(item)) {

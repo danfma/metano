@@ -252,10 +252,11 @@ export interface FirstTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
-export interface FirstOrDefaultTerm<T> extends TerminalBase<T, T | null> {
+export interface FirstOrDefaultTerm<T, D extends T | null = T | null>
+  extends TerminalBase<T, T | D> {
   readonly kind: "firstOrDefault";
   readonly predicate?: (item: T) => boolean;
-  readonly defaultValue: T | null;
+  readonly defaultValue: D;
   readonly queryable?: QueryableMeta;
 }
 
@@ -265,10 +266,11 @@ export interface LastTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
-export interface LastOrDefaultTerm<T> extends TerminalBase<T, T | null> {
+export interface LastOrDefaultTerm<T, D extends T | null = T | null>
+  extends TerminalBase<T, T | D> {
   readonly kind: "lastOrDefault";
   readonly predicate?: (item: T) => boolean;
-  readonly defaultValue: T | null;
+  readonly defaultValue: D;
   readonly queryable?: QueryableMeta;
 }
 
@@ -278,10 +280,11 @@ export interface SingleTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
-export interface SingleOrDefaultTerm<T> extends TerminalBase<T, T | null> {
+export interface SingleOrDefaultTerm<T, D extends T | null = T | null>
+  extends TerminalBase<T, T | D> {
   readonly kind: "singleOrDefault";
   readonly predicate?: (item: T) => boolean;
-  readonly defaultValue: T | null;
+  readonly defaultValue: D;
   readonly queryable?: QueryableMeta;
 }
 

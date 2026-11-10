@@ -160,16 +160,13 @@ using Metano.Annotations;
 
 // ─── FindIndex / Find ───────────────────────────────────────
 // list.FindIndex(predicate) → array.findIndex(predicate)
-// list.Find(predicate) → array.find(predicate) ?? null  (C# returns default(T) which
-// is null for reference types; JS Array.find returns undefined which we coalesce so
-// the C# null-check semantics match.)
+// list.Find(predicate) → array.find(predicate) ?? default(T)  (C# returns default(T)
+// on a miss; JS Array.find returns undefined, which is coalesced to the default the
+// compiler passes as `$1`: null for reference and nullable elements, the type's zero
+// for the other value types.)
 
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.FindIndex), JsMethod = "findIndex")]
-[assembly: MapMethod(
-    typeof(List<>),
-    nameof(List<int>.Find),
-    JsTemplate = "($this.find($0) ?? null)"
-)]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Find), JsTemplate = "($this.find($0) ?? $1)")]
 
 // ─── Constructors ───────────────────────────────────────────
 // new List<T>() / new List<T>(capacity) → [] as Array<T>: the capacity is a
