@@ -89,18 +89,23 @@ public class LiftedNullableOperatorTests
 
         await Assert.That(output).Contains("return (o == null ? null : o.items.length + 1) ?? 0;");
         await Assert.That(output).Contains("return o == null ? null : 1 + o.items.length;");
+
         await Assert
             .That(output)
             .Contains("return o == null ? null : o.qty == null ? null : o.qty + 1;");
+
         await Assert
             .That(output)
             .Contains("return (o == null ? null : o.items.length > 1) ?? false;");
+
         await Assert
             .That(output)
             .Contains("return o == null ? null : o.qty == null ? null : -o.qty;");
+
         await Assert
             .That(output)
             .Contains("return o == null ? null : k == null ? null : k + o.items.length;");
+
         await Assert
             .That(output)
             .Contains("return ((o == null ? null : o.items.length > 1) ?? false) || flag;");
@@ -166,6 +171,7 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains("export function plus(a: number | null): number | null {\n  return null;");
+
         await Assert
             .That(output)
             .Contains("export function less(a: number | null): boolean {\n  return false;");
@@ -214,9 +220,11 @@ public class LiftedNullableOperatorTests
         );
 
         await Assert.That(output).Contains("(receiver$temp$0) => receiver$temp$0.qty = ");
+
         await Assert
             .That(output)
             .Contains("receiver$temp$0.qty == null ? null : receiver$temp$0.qty + 1");
+
         await Assert.That(output).Contains("(o.self())");
     }
 
@@ -327,7 +335,7 @@ public class LiftedNullableOperatorTests
     }
 
     [Test]
-    public async Task Value_IsTheValueWhenProvenAndThrowsOtherwise()
+    public async Task Value_ThrowsWhenMissing_EvenAfterACheck()
     {
         var output = TranspileInHelperClass(
             """
@@ -338,7 +346,14 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return x != null && x > 3;");
+        // Nullable analysis does not remove the throw (#629): its flow state
+        // is optimistic, so a checked read keeps the guard too.
+        await Assert
+            .That(output)
+            .Contains(
+                "return x != null && (x ?? (() => {\n    throw new Error(\"Nullable object must have a value.\");\n  })()) > 3;"
+            );
+
         await Assert
             .That(output)
             .Contains(
@@ -361,7 +376,7 @@ public class LiftedNullableOperatorTests
     }
 
     [Test]
-    public async Task Value_InNullableDisabledContext_IsLeftUnguarded()
+    public async Task Value_InNullableDisabledContext_ThrowsWhenMissing()
     {
         var output = TranspileInHelperClass(
             """
@@ -371,7 +386,11 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return o.qty;");
+        await Assert
+            .That(output)
+            .Contains(
+                "return o.qty ?? (() => {\n    throw new Error(\"Nullable object must have a value.\");\n  })();"
+            );
     }
 
     [Test]
@@ -397,6 +416,7 @@ public class LiftedNullableOperatorTests
             .Contains(
                 "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 ?? receiver$temp$1)(o.count()))(a);"
             );
+
         await Assert.That(output).Contains("return (o == null ? null : o.qty ?? 0) ?? -1;");
     }
 
@@ -429,10 +449,13 @@ public class LiftedNullableOperatorTests
 
         await Assert.That(output).Contains("return a == null ? null : a.plus(b);");
         await Assert.That(output).Contains("return a == null ? null : a.neg();");
+
         await Assert
             .That(output)
             .Contains("return a != null && Temporal.PlainDate.compare(a, b) < 0;");
+
         await Assert.That(output).Contains("return a == null;");
+
         await Assert
             .That(output)
             .Contains("o.price = o.price == null ? null : o.price.plus(new Decimal(\"1\"));");

@@ -69,14 +69,24 @@ the migration list.
   numeric conversion (`int?` to `long`) converts to a non-nullable one. A
   cast-literal element is unwrapped whatever nullable analysis says about
   it (only a value wrapped in place, `(int?)2`, converts without the
-  check); the cast of a whole nullable tuple follows the scalar cast, which
-  trusts that analysis (#629). A nullable element whose conversion lowers to nothing (`int?` to `int`, as
+  check), and so is the cast of a whole nullable tuple, which follows the
+  scalar cast (#629, below). A nullable element whose conversion lowers to
+  nothing (`int?` to `int`, as
   in `((int, long))(int?, int)`, or `long?` to `long`, where the `null`
   lands in a `bigint` slot and fails later with a `TypeError`) and a
   nullable nested tuple with no converting element still keep `null`
   (#630). A converted string spread
   (`List<long> codes = [.. text];`) reports `MS0001` in TypeScript; the Dart
   target does not report it (#613).
+- TypeScript: `x.Value` and `(T)x` on a `Nullable<T>` now always carry the
+  missing-value throw, including after a `HasValue` / `!= null` check, after
+  `!`, and in nullable-disabled code. Code that relied on an unguarded read
+  of a missing value now throws `Error('Nullable object must have a
+  value.')`, as .NET does. Use `GetValueOrDefault()` or `??` where a default
+  is intended. Only a value wrapped where it is written (`((int?)5).Value`,
+  `(int)(int?)x`) is read without the check. Dart output is unchanged: it
+  still drops the check where nullable analysis calls the value present
+  (#629).
 - An operator group whose overloads return different types (`int operator
   +(M, int)` beside `long operator +(M, long)`) declares its dispatcher
   implementation as `any`, as method dispatchers do; 2.x declared the first

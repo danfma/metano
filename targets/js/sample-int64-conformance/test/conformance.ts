@@ -1,8 +1,8 @@
 /**
  * The TypeScript half of the spec 012 reference conformance (FR-064): reads a
  * fixture that tests/Int64Reference wrote on .NET and runs every case through
- * the transpiled twin, comparing the result, or the exception's name and
- * message, with what .NET produced. Shared by the bun test and the Node run,
+ * the transpiled twin, comparing the result (the awaited one of an async twin
+ * function), or the exception's name and message, with what .NET produced. Shared by the bun test and the Node run,
  * so it imports nothing runtime-specific beyond `node:fs` / `node:path`.
  */
 
@@ -63,21 +63,32 @@ export function loadFixture(name: string): Fixture {
 }
 
 /** Every case of `fixture` whose outcome through `twin` differs from .NET's. */
-export function mismatchesOf(fixture: Fixture, twin: Twin): Mismatch[] {
-  return fixture.cases.flatMap((row) => {
-    const signature = fixture.signatures[row.case];
-    const twinFunction = twinFunctionOf(twin, exportedNameOf(row.case));
+export async function mismatchesOf(fixture: Fixture, twin: Twin): Promise<Mismatch[]> {
+  const mismatches = await Promise.all(
+    fixture.cases.map((row) => mismatchesOfCase(row, fixture, twin)),
+  );
 
-    if (signature === undefined || !isTwinFunction(twinFunction)) {
-      return [mismatch(row, "a twin function", "no export")];
-    }
+  return mismatches.flat();
+}
 
-    const outcome = invoke(twinFunction, signature, row.args);
+/** The mismatch of one case, or none; an async twin function is awaited. */
+async function mismatchesOfCase(
+  row: FixtureCase,
+  fixture: Fixture,
+  twin: Twin,
+): Promise<Mismatch[]> {
+  const signature = fixture.signatures[row.case];
+  const twinFunction = twinFunctionOf(twin, exportedNameOf(row.case));
 
-    return matches(row, signature.returns, outcome)
-      ? []
-      : [mismatch(row, describeExpected(row), describeOutcome(outcome))];
-  });
+  if (signature === undefined || !isTwinFunction(twinFunction)) {
+    return [mismatch(row, "a twin function", "no export")];
+  }
+
+  const outcome = await invoke(twinFunction, signature, row.args);
+
+  return matches(row, signature.returns, outcome)
+    ? []
+    : [mismatch(row, describeExpected(row), describeOutcome(outcome))];
 }
 
 function fixturesDirectory(): string {
@@ -119,15 +130,15 @@ function exportedNameOf(method: string): string {
   return method.charAt(0).toLowerCase() + method.slice(1);
 }
 
-function invoke(
+async function invoke(
   twinFunction: TwinFunction,
   signature: Signature,
   args: readonly (string | null)[],
-): Outcome {
+): Promise<Outcome> {
   const values = args.map((text, index) => argumentOf(text, signature.parameters[index] ?? ""));
 
   try {
-    return { kind: "returns", value: twinFunction(...values) };
+    return { kind: "returns", value: await twinFunction(...values) };
   } catch (error) {
     return error instanceof Error
       ? { kind: "throws", name: error.name, message: error.message }

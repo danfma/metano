@@ -39,3 +39,4 @@ ReferenceFixture.Write(Path.Combine(fixtures, "comparisons.json"), typeof(Compar
 
 ReferenceFixture.Write(Path.Combine(fixtures, "indexing.json"), typeof(Indexing));
 ReferenceFixture.Write(Path.Combine(fixtures, "tuples.json"), typeof(TupleConversions));
+ReferenceFixture.Write(Path.Combine(fixtures, "nullable-unwraps.json"), typeof(NullableUnwraps));

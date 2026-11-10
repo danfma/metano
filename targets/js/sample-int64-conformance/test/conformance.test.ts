@@ -12,11 +12,14 @@ import * as conversions from "../src/sample-int64-conformance/conversions.ts";
 import { FIXTURE_RUNS, loadFixture, mismatchesOf } from "./conformance-runs.ts";
 
 describe("the transpiled twin matches .NET", () => {
-  test.each(FIXTURE_RUNS.map((run) => [run.name, run] as const))("%s", (_, { name, twin }) => {
+  test.each(FIXTURE_RUNS.map((run) => [run.name, run] as const))("%s", async (_, {
+    name,
+    twin,
+  }) => {
     const fixture = loadFixture(name);
 
     expect(fixture.cases.length).toBeGreaterThan(0);
-    expect(mismatchesOf(fixture, twin)).toEqual([]);
+    expect(await mismatchesOf(fixture, twin)).toEqual([]);
   });
 });
 

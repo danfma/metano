@@ -17,6 +17,7 @@ import * as division from "../src/sample-int64-conformance/division.ts";
 import * as formatting from "../src/sample-int64-conformance/formatting.ts";
 import * as indexing from "../src/sample-int64-conformance/indexing.ts";
 import * as mathStatics from "../src/sample-int64-conformance/math-statics.ts";
+import * as nullableUnwraps from "../src/sample-int64-conformance/nullable-unwraps.ts";
 import * as overflow from "../src/sample-int64-conformance/overflow.ts";
 import * as parsing from "../src/sample-int64-conformance/parsing.ts";
 import * as shifts from "../src/sample-int64-conformance/shifts.ts";
@@ -44,4 +45,5 @@ export const FIXTURE_RUNS: readonly FixtureRun[] = [
   { name: "comparisons.json", twin: [comparisons] },
   { name: "indexing.json", twin: [indexing] },
   { name: "tuples.json", twin: [tupleConversions] },
+  { name: "nullable-unwraps.json", twin: [nullableUnwraps] },
 ];

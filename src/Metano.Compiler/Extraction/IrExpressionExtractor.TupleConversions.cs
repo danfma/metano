@@ -175,9 +175,9 @@ public sealed partial class IrExpressionExtractor
     /// conversion of its types, a nullable one unwrapping with the .NET
     /// throw. Only a value wrapped where it is written (<c>(int?)2</c>,
     /// <c>(int?)x</c> over an <c>int</c>) converts as its underlying type
-    /// with no unwrap: it cannot be missing by construction. Nullable
-    /// analysis is not consulted, because its flow state is optimistic (a
-    /// value read from an <c>await</c> counts as present).
+    /// with no unwrap: it cannot be missing by construction
+    /// (<see cref="WrapsAPresentValue"/>). Nullable analysis is not
+    /// consulted, because its flow state is optimistic (#629).
     /// </summary>
     private IrExpression ConvertedLiteralElement(
         SyntaxNode site,
@@ -217,24 +217,6 @@ public sealed partial class IrExpressionExtractor
             ? ConvertedTupleLiteral(site, literal, target, elements)
             : null;
     }
-
-    /// <summary>
-    /// Whether <paramref name="expression"/> is, through any parentheses, a
-    /// cast to a nullable value type of a non-nullable value
-    /// (<c>(int?)2</c>, <c>(long?)x</c> over an <c>int</c>): the nullable it
-    /// yields always has a value.
-    /// </summary>
-    private bool WrapsAPresentValue(ExpressionSyntax expression) =>
-        expression switch
-        {
-            ParenthesizedExpressionSyntax parenthesized => WrapsAPresentValue(
-                parenthesized.Expression
-            ),
-            CastExpressionSyntax cast => _semantic.GetTypeInfo(cast).Type.IsNullableValueType()
-                && _semantic.GetTypeInfo(cast.Expression).Type is { IsValueType: true } operand
-                && !operand.IsNullableValueType(),
-            _ => false,
-        };
 
     /// <summary>A tuple literal of the tuple type <paramref name="type"/> holding <paramref name="values"/>.</summary>
     private IrTupleLiteral TupleLiteralOfType(
