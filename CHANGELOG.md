@@ -257,6 +257,10 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   (.NET runs it before them), and an exception thrown by a filter propagates
   (.NET treats the filter as false).
 
+### Toolchain
+
+- The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.
+
 ## 2.10.1
 
 _2026-11-03_

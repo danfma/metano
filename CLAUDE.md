@@ -151,7 +151,7 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 | Layer | Technology |
 |-------|-----------|
 | .NET SDK | 10.0 (C# 14, preview features) |
-| Transpiler | Roslyn 5.3.0 (Microsoft.CodeAnalysis) |
+| Transpiler | Roslyn 5.9.0 (Microsoft.CodeAnalysis) |
 | CLI | ConsoleAppFramework |
 | Testing (.NET) | TUnit |
 | Testing (TS) | bun:test |
