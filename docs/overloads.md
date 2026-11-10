@@ -137,6 +137,17 @@ a side effect beside constants. An `out` argument passes no value, so
 written after the call returns: a target that is itself a computation
 (`out arr[F()]`, `out Get().field`) is evaluated then, not where it is written.
 
+A stage of a LINQ chain follows the same rule: its arguments reach the
+parameters they name, so `xs.Aggregate(func: (a, x) => a + x, seed: 0)` emits
+`aggregate(0, (a, x) => a + x)`, and a stage with two or more order-sensitive
+arguments binds them in its own position of the pipe
+(`linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(F(), G()))` for
+`xs.Aggregate(func: F(), seed: G())`), which the pipe evaluates where C#
+evaluates that stage. A queryable stage captures each lambda for the parameter
+it names and keeps its expression tree after the bound arguments. The static
+call form (`Enumerable.Aggregate(xs, func: F(), seed: G())`) has no lowering
+at all (#619).
+
 These shapes are not covered:
 
 - a null-conditional delegate call (`op?.Invoke(d: F(), f: G())`, #611)
@@ -147,9 +158,9 @@ These shapes are not covered:
   (`Math.Round(mode: M(), value: V())`, `Math.Round(decimals: D(), d: V())`,
   `dict.GetValueOrDefault(defaultValue: D(), key: K())`) evaluates its
   arguments in parameter order;
-- a call to a `[This]` delegate, which lowers to `.call(...)`, and a stage of a
-  LINQ chain (`xs.Aggregate(func: F(), seed: G())`) pass named arguments as
-  written: out of parameter order they reach the wrong parameters.
+- a call to a `[This]` delegate, which lowers to `.call(...)`, passes named
+  arguments as written: out of parameter order they reach the wrong
+  parameters (#376).
 
 A `[Branded]` (or `[InlineWrapper]`) type over a primitive has no class: its
 static methods are functions of a companion namespace. An overloaded group

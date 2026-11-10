@@ -1139,21 +1139,16 @@ public static partial class IrToTsExpressionBridge
             var emittedName = Int64LinqTerminals.EmittedName(stage);
             importedHelpers.Add(emittedName);
 
-            var stageArgs = StageArguments(stage, context);
-
             // The operator call travels as a helper reference bound to the
             // pipe subpath, so the printer aliases it together with the
             // `metano-runtime/system/linq` import when a user declaration
             // claims the name (#484).
-            args.Add(
-                new TsCallExpression(
-                    new TsRuntimeHelperReference(
-                        emittedName,
-                        TsRuntimeHelperReference.LinqPipeModule
-                    ),
-                    stageArgs
-                )
+            var pipeOperator = new TsRuntimeHelperReference(
+                emittedName,
+                TsRuntimeHelperReference.LinqPipeModule
             );
+
+            args.Add(MapLinqStage(stage, pipeOperator, context));
         }
 
         var call = new TsLinqCall(args, importedHelpers);
@@ -1161,10 +1156,33 @@ public static partial class IrToTsExpressionBridge
         return Int64LinqTerminals.EndsInLongCount(chain) ? Int64TsExpressions.BigInt(call) : call;
     }
 
-    private static IReadOnlyList<TsExpression> StageArguments(
+    /// <summary>
+    /// One stage as the call of its pipe operator over the stage's arguments,
+    /// which are in parameter order, then its queryable tree. Arguments C#
+    /// evaluates in another order (named ones out of parameter order, #632)
+    /// are bound first, in source order. The pipe evaluates its stages left
+    /// to right, as C# evaluates the chain, so the binding stays in the
+    /// stage's own position.
+    /// </summary>
+    private static TsExpression MapLinqStage(
         IrLinqStage stage,
+        TsRuntimeHelperReference pipeOperator,
         IrToTsBridgeContext context
-    ) => [.. stage.Arguments.Select(a => Map(a, context)), .. QueryableArguments(stage, context)];
+    )
+    {
+        var ordered = TsEvaluationOrder.Bind(
+            stage.Arguments.Select(argument => Map(argument, context)).ToList(),
+            stage.EvaluationOrder,
+            BoundArgumentPrefix
+        );
+
+        var call = new TsCallExpression(
+            pipeOperator,
+            [.. ordered.Arguments, .. QueryableArguments(stage, context)]
+        );
+
+        return BoundBefore(ordered.Bindings, call);
+    }
 
     /// <summary>
     /// The queryable tree of a stage as its trailing argument. An
