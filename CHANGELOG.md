@@ -70,7 +70,11 @@ the migration list.
   +(M, int)` beside `long operator +(M, long)`) declares its dispatcher
   implementation as `any`, as method dispatchers do; 2.x declared the first
   overload's type, which did not type-check. Overloads that return one type
-  keep it.
+  keep it, and method and module dispatchers now tell that the same way: a
+  group whose overloads all return one constructed type
+  (`Task<OperationResult<Issue>>`) declares it on the implementation
+  (`Promise<OperationResult<Issue>>`) where it declared `Promise<unknown>` /
+  `any`.
 - `FirstOrDefault`, `LastOrDefault`, `SingleOrDefault` and `List<T>.Find`
   return `default(T)` on a miss for a non-nullable value element (`0`, `0n`,
   `false`, `new Decimal("0")`, the enum's zero, `UUID.empty`), and the

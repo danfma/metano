@@ -23,6 +23,7 @@ public class MethodOverloadFastPathTests
         // Public dispatcher delegates to fast-paths
         await Assert.That(output).Contains("add(...args: unknown[])");
         await Assert.That(output).Contains("this.addXY(args[0] as number, args[1] as number)");
+
         await Assert
             .That(output)
             .Contains("this.addXYZ(args[0] as number, args[1] as number, args[2] as number)");
@@ -69,6 +70,7 @@ public class MethodOverloadFastPathTests
         var output = result["math-helper.ts"];
         // Static dispatcher uses ClassName.fastPath instead of this.fastPath
         await Assert.That(output).Contains("static addXY");
+
         await Assert
             .That(output)
             .Contains("MathHelper.addXY(args[0] as number, args[1] as number)");
@@ -93,6 +95,7 @@ public class MethodOverloadFastPathTests
         await Assert.That(output).Contains("logMsgLevel(msg: string, level: number): void");
         // Void dispatcher branches: call fast-path then return
         await Assert.That(output).Contains("this.logMsg(args[0] as string)");
+
         await Assert
             .That(output)
             .Contains("this.logMsgLevel(args[0] as string, args[1] as number)");
@@ -117,5 +120,48 @@ public class MethodOverloadFastPathTests
         await Assert.That(output).Contains("static pick<T>(a: T, b: T): T;");
         await Assert.That(output).Contains("static pick(...args: unknown[]): any");
         await Assert.That(output).Contains("Picker.pickAB(args[0] as any, args[1] as any)");
+    }
+
+    /// <summary>
+    /// Overloads that return the same constructed type keep it on the
+    /// dispatcher implementation, as operator and module dispatchers do: each
+    /// overload maps its own type instance, which still is one type.
+    /// </summary>
+    [Test]
+    public async Task FastPath_OverloadsWithTheSameConstructedReturnType_KeepIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+
+            [Transpile]
+            public class Finder
+            {
+                public List<int> Find(int id) => [id];
+
+                public List<int> Find(string name) => [name.Length];
+
+                public async Task<List<int>> FindAsync(int id) => await Task.FromResult(Find(id));
+
+                public async Task<List<int>> FindAsync(string name) =>
+                    await Task.FromResult(Find(name));
+
+                public List<int> Mixed(int id) => [id];
+
+                public List<string> Mixed(string name) => [name];
+            }
+            """
+        );
+
+        var output = result["finder.ts"];
+
+        await Assert.That(output).Contains("find(...args: unknown[]): number[] {");
+
+        await Assert
+            .That(output)
+            .Contains("async findAsync(...args: unknown[]): Promise<number[]> {");
+
+        await Assert.That(output).Contains("mixed(...args: unknown[]): any {");
     }
 }

@@ -209,19 +209,16 @@ public static class IrToTsModuleBridge
             .ToList();
 
     /// <summary>
-    /// The dispatcher implementation's return type: the overloads' shared one
-    /// when they agree and none is generic, else <c>unknown</c> (or a
-    /// <c>Promise</c> for an async group), mirroring the class dispatchers.
+    /// The dispatcher implementation's return type, by the class
+    /// dispatchers' rule: the overloads' shared one when they agree and none
+    /// is generic, else the erased one.
     /// </summary>
     private static TsType CommonReturnTypeOf(IReadOnlyList<IrModuleFunction> sorted, bool isAsync)
     {
         var returns = sorted.Select(fn => IrToTsTypeMapper.Map(fn.ReturnType)).ToList();
         var isGeneric = sorted.Any(fn => fn.TypeParameters is { Count: > 0 });
 
-        if (!isGeneric && returns.All(returnType => returnType.Equals(returns[0])))
-            return returns[0];
-
-        return isAsync ? new TsNamedType("Promise", [new TsNamedType("unknown")]) : new TsAnyType();
+        return IrToTsOverloadDispatcherBridge.CommonReturnTypeOf(returns, isGeneric, isAsync);
     }
 
     /// <summary>
