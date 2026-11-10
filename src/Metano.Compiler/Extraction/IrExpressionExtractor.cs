@@ -1892,7 +1892,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private bool HasRuntimeTypeTest(IrTypeRef type) =>
         _target is not (null or Metano.Annotations.TargetLanguage.TypeScript)
-        || IrRuntimeTypeTest.Of(type) is not IrRuntimeTypeTest.None;
+        || IrRuntimeTypeTest.ExistsFor(type);
 
     private IrExpression ExtractAssignment(AssignmentExpressionSyntax assign)
     {

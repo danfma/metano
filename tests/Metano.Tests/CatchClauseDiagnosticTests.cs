@@ -5,7 +5,8 @@ namespace Metano.Tests;
 /// <summary>
 /// MS0001 for the catch clauses the single-<c>catch</c> lowering cannot keep
 /// faithful (#628): a BCL exception type has no class of its own in
-/// TypeScript (every BCL exception is an <c>Error</c>), so a clause on one
+/// TypeScript (generated code constructs every BCL exception as a plain
+/// <c>Error</c>), so a clause on one
 /// cannot come ahead of a clause for another exception type; a clause on a
 /// type parameter has no runtime test; and a filter cannot declare a
 /// variable or pass an <c>out</c> argument.
@@ -13,15 +14,16 @@ namespace Metano.Tests;
 public class CatchClauseDiagnosticTests
 {
     private const string SharedRuntimeClassReason =
-        "cannot be lowered ahead of a clause for another exception type: a BCL exception type "
-        + "has no class of its own in the target (every BCL exception is a JavaScript 'Error'), "
-        + "so its type test would also take the exceptions the later clauses handle. Catch a "
-        + "transpiled exception type, or make it the last clause.";
+        "cannot be lowered ahead of a clause for another exception type: its exception type is "
+        + "not transpiled, so the target has no class of its own to test (generated code "
+        + "constructs every BCL exception as a plain 'Error') and the clause tests "
+        + "'instanceof Error', which also takes the exceptions the later clauses handle. "
+        + "Telling such types apart is tracked in #651.";
 
     [Test]
     public async Task BclClauseAheadOfAnotherBclType_IsReportedAtTheClause()
     {
-        var warning = Unsupported(
+        var warning = CollectUnsupported(
                 """
                 try { Work(); }
                 catch (InvalidOperationException) { Note(1); }
@@ -45,7 +47,7 @@ public class CatchClauseDiagnosticTests
     [Test]
     public async Task BclClauseAheadOfACatchAll_IsReported()
     {
-        var warning = Unsupported(
+        var warning = CollectUnsupported(
                 """
                 try { Work(); }
                 catch (FormatException e) { Note(e.Message.Length); }
@@ -64,7 +66,7 @@ public class CatchClauseDiagnosticTests
     [Test]
     public async Task BclClauseAheadOfATranspiledType_IsReported()
     {
-        var warning = Unsupported(
+        var warning = CollectUnsupported(
                 """
                 try { Work(); }
                 catch (InvalidOperationException) when (Ready) { Note(1); }
@@ -79,7 +81,7 @@ public class CatchClauseDiagnosticTests
     [Test]
     public async Task EveryBclClauseAheadOfAnotherType_IsReported()
     {
-        var warnings = Unsupported(
+        var warnings = CollectUnsupported(
             """
             try { Work(); }
             catch (InvalidOperationException) { Note(1); }
@@ -138,7 +140,7 @@ public class CatchClauseDiagnosticTests
     )]
     public async Task ClausesTheChainKeepsApart_AreNotReported(string body)
     {
-        await Assert.That(Unsupported(body)).IsEmpty();
+        await Assert.That(CollectUnsupported(body)).IsEmpty();
     }
 
     [Test]
@@ -174,7 +176,7 @@ public class CatchClauseDiagnosticTests
     [Test]
     public async Task FilterPassingAnOutArgument_IsReportedAtTheFilter()
     {
-        var warning = Unsupported(
+        var warning = CollectUnsupported(
                 """
                 var code = 0;
 
@@ -214,14 +216,15 @@ public class CatchClauseDiagnosticTests
             .That(warning.Message)
             .IsEqualTo(
                 "Catch clause '(TFailure)' cannot be lowered: its exception type has no runtime "
-                    + "type test in the target (type parameters are erased)."
+                    + "type test in the target (type parameters are erased), so the clause takes "
+                    + "every exception."
             );
 
         await Assert.That(ReportedText(warning)).IsEqualTo("(TFailure)");
     }
 
     [Test]
-    public async Task DartTarget_ReportsOnlyTheFilterVariable()
+    public async Task DartTarget_ReportsEveryFilter_AndNoTypeRule()
     {
         var (_, diagnostics) = TranspileHelper.TranspileDart(
             "using System;\nusing Metano.Annotations;\n"
@@ -230,18 +233,31 @@ public class CatchClauseDiagnosticTests
                     try { Work(); }
                     catch (InvalidOperationException) { Note(1); }
                     catch (AppException e) when (e.InnerException is AppException inner) { Note(inner.Code); }
+                    catch (AppException) when (Ready) { Note(2); }
                     """
                 )
         );
 
-        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+        var warnings = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .ToList();
 
         await Assert
-            .That(ReportedText(warning))
-            .IsEqualTo("when (e.InnerException is AppException inner)");
+            .That(warnings.Select(d => d.Message))
+            .IsEquivalentTo([
+                "Exception filter 'when (e.InnerException is AppException inner)' cannot be "
+                    + "lowered: exception filters are not lowered for Dart; the clause would run "
+                    + "unconditionally.",
+                "Exception filter 'when (Ready)' cannot be lowered: exception filters are not "
+                    + "lowered for Dart; the clause would run unconditionally.",
+            ]);
+
+        await Assert
+            .That(warnings.Select(ReportedText))
+            .IsEquivalentTo(["when (e.InnerException is AppException inner)", "when (Ready)"]);
     }
 
-    private static IReadOnlyList<MetanoDiagnostic> Unsupported(string body) =>
+    private static IReadOnlyList<MetanoDiagnostic> CollectUnsupported(string body) =>
         Transpile(body)
             .Diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
             .ToList();
@@ -283,14 +299,29 @@ public class CatchClauseDiagnosticTests
             }
             """;
 
-    private static string ReportedText(MetanoDiagnostic diagnostic) =>
-        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+    private static string ReportedText(MetanoDiagnostic diagnostic)
+    {
+        var location = ReportedLocation(diagnostic);
+
+        return location.SourceTree!.GetText().ToString(location.SourceSpan);
+    }
 
     private static string ReportedLineText(MetanoDiagnostic diagnostic)
     {
-        var location = diagnostic.Location!;
+        var location = ReportedLocation(diagnostic);
         var line = location.GetLineSpan().StartLinePosition.Line;
 
         return location.SourceTree!.GetText().Lines[line].ToString().Trim();
+    }
+
+    /// <summary>The diagnostic's location, which must be in source.</summary>
+    private static Microsoft.CodeAnalysis.Location ReportedLocation(MetanoDiagnostic diagnostic)
+    {
+        if (diagnostic.Location is not { SourceTree: not null } location)
+            throw new InvalidOperationException(
+                $"'{diagnostic.Message}' was reported without a source location."
+            );
+
+        return location;
     }
 }

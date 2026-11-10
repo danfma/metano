@@ -279,6 +279,47 @@ public class CatchClauseLoweringTests
                     }
                 }
 
+                public string ExceptionThenGeneral(string kind)
+                {
+                    try
+                    {
+                        Work(kind);
+
+                        return "ok";
+                    }
+                    catch (NotFoundException)
+                    {
+                        return "missing";
+                    }
+                    catch (Exception)
+                    {
+                        return "ex";
+                    }
+                    catch
+                    {
+                        return "general";
+                    }
+                }
+
+                public string TypeParameterFirst<TFailure>(string kind)
+                    where TFailure : Exception
+                {
+                    try
+                    {
+                        Work(kind);
+
+                        return "ok";
+                    }
+                    catch (TFailure)
+                    {
+                        return "failure";
+                    }
+                    catch (Exception)
+                    {
+                        return "ex";
+                    }
+                }
+
                 public void Logged(string kind)
                 {
                     try
@@ -312,14 +353,23 @@ public class CatchClauseLoweringTests
             """
         );
 
-        await Assert.That(result.Diagnostics).IsEmpty();
+        // The clause on a type parameter has no runtime test: reported, and
+        // its arm ends the chain like any clause that takes every value.
+        await Assert
+            .That(result.Diagnostics.Select(d => d.Message))
+            .IsEquivalentTo([
+                "Catch clause '(TFailure)' cannot be lowered: its exception type has no runtime "
+                    + "type test in the target (type parameters are erased), so the clause takes "
+                    + "every exception.",
+            ]);
+
         await TranspileHelper.AssertGolden("catch-clauses.ts", result.Files["catch-clauses.ts"]);
     }
 
     [Test]
     public async Task LoneCatchAllClause_KeepsThePlainCatch()
     {
-        var output = Handler(
+        var output = TranspileHandler(
             """
             try { Work(); }
             catch (Exception failure) { Note(failure is AppException); }
@@ -333,7 +383,7 @@ public class CatchClauseLoweringTests
     [Test]
     public async Task LoneGeneralCatch_RethrowsItsSynthesizedParameter()
     {
-        var output = Handler(
+        var output = TranspileHandler(
             """
             try { Work(); }
             catch { Note(true); throw; }
@@ -347,7 +397,7 @@ public class CatchClauseLoweringTests
     [Test]
     public async Task LoneCatchAllClause_RethrowsTheCaughtValue_WhenTheVariableIsRebound()
     {
-        var output = Handler(
+        var output = TranspileHandler(
             """
             try { Work(); }
             catch (Exception failure)
@@ -367,7 +417,7 @@ public class CatchClauseLoweringTests
     [Test]
     public async Task FilterOnALoneClause_RethrowsWhenItIsFalse()
     {
-        var output = Handler(
+        var output = TranspileHandler(
             """
             try { Work(); }
             catch (AppException failure) when (failure.Code == 1) { Note(true); }
@@ -385,7 +435,7 @@ public class CatchClauseLoweringTests
     [Test]
     public async Task FilteredGeneralCatch_IsAnArmWithoutATypeTest()
     {
-        var output = Handler(
+        var output = TranspileHandler(
             """
             try { Work(); }
             catch when (Ready) { Note(true); }
@@ -395,6 +445,55 @@ public class CatchClauseLoweringTests
 
         await Assert.That(output).Contains("if (this.ready) {");
         await Assert.That(output).Contains("} else if (e$ instanceof AppException) {");
+    }
+
+    [Test]
+    public async Task ClauseThatTakesEverything_EndsTheChain()
+    {
+        var output = TranspileHandler(
+            """
+            try { Work(); }
+            catch (Exception) { Note(true); }
+            catch { Note(false); }
+            """
+        );
+
+        await Assert.That(output).Contains("} catch (e$) {\n      this.note(true);\n    }");
+        await Assert.That(output).DoesNotContain("else");
+        await Assert.That(output).DoesNotContain("this.note(false)");
+    }
+
+    [Test]
+    public async Task CaughtValueName_AvoidsANameAClauseReferences()
+    {
+        var result = TranspileHelper.Transpile(
+            Exceptions
+                + """
+                [Transpile, NoContainer]
+                public static class Helpers
+                {
+                    [Name("e$")]
+                    public static string Helper() => "helper";
+                }
+
+                [Transpile]
+                public class Handler
+                {
+                    public string Run()
+                    {
+                        try { return "ok"; }
+                        catch (AppException) { return Helpers.Helper(); }
+                    }
+                }
+                """
+        );
+
+        var handler = result["handler.ts"];
+
+        await Assert.That(handler).Contains("} catch (e$$) {");
+        await Assert.That(handler).Contains("if (e$$ instanceof AppException) {");
+        await Assert.That(handler).Contains("return e$();");
+        await Assert.That(handler).Contains("throw e$$;");
     }
 
     [Test]
@@ -525,11 +624,45 @@ public class CatchClauseLoweringTests
             .IsEmpty();
     }
 
+    [Test]
+    public async Task DartTarget_ReportsAFilter_AndImportsNothingForIt()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileDart(
+            "using System;\nusing Metano.Annotations;\n"
+                + Exceptions
+                + """
+                [Transpile]
+                public class Handler
+                {
+                    public void Run()
+                    {
+                        try { Work(); }
+                        catch (Exception e) when (e is NotFoundException) { Work(); }
+                    }
+
+                    public void Work() { }
+                }
+                """
+        );
+
+        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert
+            .That(warning.Message)
+            .IsEqualTo(
+                "Exception filter 'when (e is NotFoundException)' cannot be lowered: exception "
+                    + "filters are not lowered for Dart; the clause would run unconditionally."
+            );
+
+        await Assert.That(files["handler.dart"]).Contains("} on Exception catch (e) {");
+        await Assert.That(files["handler.dart"]).DoesNotContain("not_found_exception.dart");
+    }
+
     /// <summary>
     /// The emitted <c>handler.ts</c> of a class whose <c>Run</c> method holds
     /// <paramref name="body"/>.
     /// </summary>
-    private static string Handler(string body) =>
+    private static string TranspileHandler(string body) =>
         TranspileHelper.Transpile(
             Exceptions
                 + $$"""
