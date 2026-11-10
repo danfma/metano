@@ -229,6 +229,34 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   direct call sites, instead of the primary overload alone; `[Name]` on an
   overload pins its suffix there too, and call sites spell a method's `[Name]`.
 
+### ⚠ Catch clauses lower to one `catch` with a chain (spec 011 FR-015, partial; #628)
+
+- A `try` with several catch clauses emits one `catch (e$)` that tests the
+  caught value against each clause in source order; 2.x emitted one `catch`
+  block per clause, which is a JavaScript syntax error.
+- A typed clause now filters: a lone `catch (UserException)` runs only for
+  that class (and the classes derived from it) and rethrows every other
+  value. 2.x caught everything there.
+- A `when` filter is honoured: the clause runs only when it holds, and the
+  next clause is tried otherwise. 2.x ignored the filter.
+- `throw;` rethrows the caught value (2.x emitted `throw null;`), also after
+  the clause's variable was reassigned.
+- A clause on a BCL exception type (`catch (InvalidOperationException)`)
+  tests `instanceof Error`, because generated code constructs every BCL
+  exception as a plain `Error`. It therefore no longer catches a thrown value
+  that is not an `Error` of the current realm (a string, a plain object, a
+  cross-realm `Error` from an iframe, `node:vm` or a Jest sandbox), which
+  `catch (Exception)` and a general `catch` still do, and it still takes
+  every `Error` whatever its C# type (#651).
+- New `MS0001` warnings: a BCL-typed clause ahead of a clause for another
+  exception type (its `instanceof Error` test would take that clause's
+  exceptions); a clause on a type parameter; an exception filter that
+  declares a variable or passes an `out` argument. On Dart, which keeps its
+  `on T catch` clauses, every exception filter is reported.
+- A filter runs after the `finally` blocks between the throw and the clause
+  (.NET runs it before them), and an exception thrown by a filter propagates
+  (.NET treats the filter as false).
+
 ## 2.10.1
 
 _2026-11-03_
