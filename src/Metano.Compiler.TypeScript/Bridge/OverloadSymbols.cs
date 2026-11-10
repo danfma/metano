@@ -42,8 +42,10 @@ internal static class OverloadSymbols
 
     /// <summary>
     /// The declared overload whose parameters match <paramref name="parameters"/>
-    /// by name and <c>params</c> flag, then, among several, by mapped type;
-    /// <c>out</c> parameters are left out of the comparison on both sides.
+    /// by name and <c>params</c> flag, then, among several, by mapped type.
+    /// The full parameter lists are compared first (an IR constructor lists
+    /// its <c>out</c> parameters), then the lists without the <c>out</c>
+    /// parameters (an IR method does not list them).
     /// </summary>
     internal static IMethodSymbol? Of(
         IReadOnlyList<IMethodSymbol> symbols,
@@ -65,16 +67,25 @@ internal static class OverloadSymbols
         Func<IParameterSymbol, IrParameter, bool> matches
     )
     {
-        var inputs = InputsOf(symbol);
-        var declared = InputsOf(parameters);
+        if (Corresponds(symbol.Parameters, parameters, matches))
+            return true;
 
-        return inputs.Count == declared.Count
-            && inputs.Zip(declared).All(pair => matches(pair.First, pair.Second));
+        return Corresponds(InputsOf(symbol), InputsOf(parameters), matches);
     }
 
+    private static bool Corresponds(
+        IReadOnlyList<IParameterSymbol> declared,
+        IReadOnlyList<IrParameter> parameters,
+        Func<IParameterSymbol, IrParameter, bool> matches
+    ) =>
+        declared.Count == parameters.Count
+        && declared.Zip(parameters).All(pair => matches(pair.First, pair.Second));
+
     /// <summary>
-    /// The parameters a dispatcher receives: an <c>out</c> parameter lowers to
-    /// an element of the returned tuple, so the IR overload does not list it.
+    /// The parameters a method dispatcher receives: an <c>out</c> parameter of
+    /// a method lowers to an element of the returned tuple, so the IR method
+    /// does not list it. An IR constructor keeps its <c>out</c> parameters as
+    /// plain ones and matches position by position instead.
     /// </summary>
     private static List<IParameterSymbol> InputsOf(IMethodSymbol symbol) =>
         symbol.Parameters.Where(parameter => parameter.RefKind != RefKind.Out).ToList();
