@@ -60,8 +60,12 @@ the migration list.
   two, and `List<long> l = [.. ints];` (also `HashSet<long>`, `long[]`,
   nested and nullable tuples) emit `[BigInt(p[0]), BigInt(p[1])]` /
   `...Array.from(ints, (e) => BigInt(e))`; a `foreach ((long, long) p in
-  intPairs)` rebuilds each element the same way. A converted string spread
-  (`List<long> codes = [.. text];`) reports `MS0001`.
+  intPairs)` rebuilds each element the same way. In TypeScript, a nullable
+  tuple or element converted explicitly to a non-nullable one (`((long,
+  long))nullablePair`, `foreach ((long, long) p in nullablePairs)`) throws
+  when the value is missing, as .NET does, and a converted string spread
+  (`List<long> codes = [.. text];`) reports `MS0001`; the Dart target does
+  not report that spread (#613).
 - An operator group whose overloads return different types (`int operator
   +(M, int)` beside `long operator +(M, long)`) declares its dispatcher
   implementation as `any`, as method dispatchers do; 2.x declared the first

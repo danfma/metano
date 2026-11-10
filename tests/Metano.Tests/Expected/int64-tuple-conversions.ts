@@ -75,6 +75,67 @@ export class Pairs {
     return total;
   }
 
+  iteratedNarrowed(pairs: [bigint, bigint][]): number {
+    let total = 0;
+    for (const pair$element of pairs) {
+      const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
+      total += pair[0] + pair[1];
+    }
+
+    return total;
+  }
+
+  iteratedNarrowedChecked(pairs: [bigint, bigint][]): number {
+    let total = 0;
+
+    {
+      for (const pair$element of pairs) {
+        const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
+        total += pair[0] + pair[1];
+      }
+    }
+
+    return total;
+  }
+
+  iteratedNullable(pairs: ([number, number] | null)[]): bigint {
+    let total = 0n;
+    for (const pair$element of pairs) {
+      const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
+        throw new Error("Nullable object must have a value.");
+      })());
+      total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
+    }
+
+    return total;
+  }
+
+  iteratedLifted(pairs: ([number, number] | null)[]): number {
+    let missing = 0;
+    for (const pair$element of pairs) {
+      const pair = pair$element == null ? null : [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
+      missing += pair == null ? 1 : 0;
+    }
+
+    return missing;
+  }
+
+  unwrappedElement(pair: [number | null, number]): [bigint, bigint] {
+    return [BigInt(pair[0] ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })()), BigInt(pair[1])] as [bigint, bigint];
+  }
+
+  unwrappedNested(pair: [[number, number] | null, number]): [[bigint, bigint], bigint] {
+    return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair[0] ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })()), BigInt(pair[1])] as [[bigint, bigint], bigint];
+  }
+
+  liftedCast(pair: [number, number] | null): [bigint, bigint] | null {
+    return pair == null ? null : [BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint];
+  }
+
   nullableLiteral(): [bigint, bigint] | null {
     return [1n, 2n] as [bigint, bigint];
   }

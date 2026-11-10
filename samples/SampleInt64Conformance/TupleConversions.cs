@@ -145,6 +145,60 @@ public static class TupleConversions
         return total;
     }
 
+    /// <summary>
+    /// A missing element read into a non-nullable tuple variable throws where
+    /// it is read, before the body runs for it: the count says how many
+    /// elements the body saw.
+    /// </summary>
+    public static long NullableIteratedStop(int a, int b)
+    {
+        var pairs = new List<(int, int)?> { (a, b), null, (b, a) };
+        var count = 0;
+        long total = 0;
+
+        try
+        {
+            // The missing element is the row: C# warns about the read it tests.
+#pragma warning disable CS8629
+            foreach ((long, long) pair in pairs)
+#pragma warning restore CS8629
+            {
+                count++;
+                total += pair.Item1;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            return total - count;
+        }
+
+        return total;
+    }
+
+    public static int IteratedNarrowedSum(long a)
+    {
+        var pairs = new List<(long, long)> { (a, a) };
+        var total = 0;
+
+        foreach ((int, int) pair in pairs)
+            total ^= pair.Item1 ^ (pair.Item2 >> 1);
+
+        return total;
+    }
+
+    public static int IteratedNarrowedCheckedSum(long a)
+    {
+        var pairs = new List<(long, long)> { (a, a) };
+        var total = 0;
+        checked
+        {
+            foreach ((int, int) pair in pairs)
+                total ^= pair.Item1 ^ (pair.Item2 >> 1);
+        }
+
+        return total;
+    }
+
     public static long NullableLiteralSum(int a, int b)
     {
         (long, long)? wide = (a, b);

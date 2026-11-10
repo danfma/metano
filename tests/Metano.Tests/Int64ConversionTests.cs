@@ -136,6 +136,28 @@ public class Int64ConversionTests
         IReadOnlyList<MetanoDiagnostic> Diagnostics
     )> ConversionOutput = new(() => TranspileHelper.TranspileWithDiagnostics(ConversionSource));
 
+    private const string ForEachSource = """
+        [Transpile]
+        public class Loops
+        {
+            public long Sum(int[] ints)
+            {
+                long total = 0;
+                foreach (long x in ints)
+                    total += x;
+                return total;
+            }
+
+            public int Narrow(long[] longs)
+            {
+                var count = 0;
+                foreach (int x in longs)
+                    count += x;
+                return count;
+            }
+        }
+        """;
+
     [Test]
     public async Task ConversionMatrix_MatchesGolden()
     {
@@ -200,7 +222,14 @@ public class Int64ConversionTests
 
         var precision = reports.Single(d => d.Message.Contains("'Big.C'"));
 
-        await Assert.That(precision.Message).Contains("it is emitted as 9007199254740992");
+        await Assert
+            .That(precision.Message)
+            .IsEqualTo(
+                "Enum member 'Big.C' has the value 9007199254740993, which TypeScript enum "
+                    + "members cannot hold exactly; it is emitted as 9007199254740992 (spec 012 "
+                    + "FR-058)."
+            );
+
         await Assert.That(LocatedText(precision)).IsEqualTo("C");
     }
 
@@ -213,7 +242,14 @@ public class Int64ConversionTests
             d.Code == DiagnosticCodes.Int64EnumValuePrecision && d.Message.Contains("'Mask.High'")
         );
 
-        await Assert.That(flags.Message).Contains("beyond the 32 bits");
+        await Assert
+            .That(flags.Message)
+            .IsEqualTo(
+                "Flags enum member 'Mask.High' has the value 1099511627776, beyond the 32 bits "
+                    + "JavaScript bit operators keep on a number; '|', '&' and HasFlag lose it in "
+                    + "TypeScript (spec 012 FR-058)."
+            );
+
         await Assert.That(LocatedText(flags)).IsEqualTo("High");
     }
 
@@ -252,9 +288,11 @@ public class Int64ConversionTests
         await Assert.That(output).Contains("String toChar(int l) => l as String;");
         await Assert.That(output).Contains("double toDouble(int l) => l.toDouble();");
         await Assert.That(output).Contains("int fromDouble(double d) => d.toInt();");
+
         await Assert
             .That(output)
             .Contains("int byteFromDouble(double d) => d.toInt().toUnsigned(8);");
+
         await Assert.That(output).Contains("int? narrowLift(int? nl) => nl?.toSigned(32);");
     }
 
@@ -309,28 +347,6 @@ public class Int64ConversionTests
         IEnumerable<MetanoDiagnostic> diagnostics
     ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
 
-    private const string ForEachSource = """
-        [Transpile]
-        public class Loops
-        {
-            public long Sum(int[] ints)
-            {
-                long total = 0;
-                foreach (long x in ints)
-                    total += x;
-                return total;
-            }
-
-            public int Narrow(long[] longs)
-            {
-                var count = 0;
-                foreach (int x in longs)
-                    count += x;
-                return count;
-            }
-        }
-        """;
-
     /// <summary>
     /// A <c>foreach</c> whose variable converts each element declares the
     /// variable as that conversion (FR-010), so a <c>bigint</c> loop variable
@@ -347,6 +363,33 @@ public class Int64ConversionTests
         await Assert.That(output).Contains("const x = BigInt(x$element);");
         await Assert.That(output).Contains("for (const x$element of longs) {");
         await Assert.That(output).Contains("const x = Number(BigInt.asIntN(32, x$element));");
+    }
+
+    /// <summary>
+    /// A null-forgiving operand converts once: Roslyn reports the implicit
+    /// conversion on <c>i!</c>, not on the <c>i</c> inside it.
+    /// </summary>
+    [Test]
+    public async Task ForgivenScalar_ConvertsOnce()
+    {
+        const string source = """
+            [Transpile]
+            public class Forgiving
+            {
+                public long Widen(int i) => i!;
+
+                public long? WidenLifted(int? i) => i!;
+            }
+            """;
+
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
+
+        var output = files["forgiving.ts"];
+
+        await Assert.That(output).Contains("return BigInt(i);");
+        await Assert.That(output).Contains("return i == null ? null : BigInt(i);");
+        await Assert.That(output).DoesNotContain("BigInt(BigInt(");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
     private static string LocatedText(MetanoDiagnostic diagnostic) =>

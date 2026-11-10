@@ -49,46 +49,35 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// An explicit tuple cast (<c>((int, int))longs</c>) whose elements convert
-    /// numerically, each as the scalar cast would in the cast's checked
-    /// context; <c>null</c> when no element does.
-    /// </summary>
-    private IrExpression? ExplicitTupleConversion(
-        CastExpressionSyntax cast,
-        IrExpression operand,
-        ITypeSymbol sourceType,
-        ITypeSymbol targetType
-    ) => ExplicitTupleConversion((SyntaxNode)cast, operand, sourceType, targetType);
-
-    /// <summary>
     /// <paramref name="value"/> in the explicit tuple conversion C# applies
-    /// at <paramref name="site"/> — a cast, or the element conversion of a
-    /// <c>foreach</c> — in the site's checked context; <c>null</c> when no
-    /// element converts.
+    /// at <paramref name="site"/> — a cast (<c>((int, int))longs</c>), or the
+    /// element conversion of a <c>foreach</c>, reported at its loop variable
+    /// type — with each element converted as the scalar cast would in the
+    /// <paramref name="isChecked"/> context; <c>null</c> when no element
+    /// converts.
     /// </summary>
     internal IrExpression? ExplicitTupleConversion(
         SyntaxNode site,
+        bool isChecked,
         IrExpression value,
         ITypeSymbol sourceType,
         ITypeSymbol targetType
-    )
-    {
-        var isChecked = CheckedContexts.IsChecked(site, _semantic.Compilation);
-
-        return ConvertedTuple(
+    ) =>
+        ConvertedTuple(
             site,
             value,
             sourceType,
             targetType,
             TupleElementConversions.Explicit(isChecked)
         );
-    }
 
     /// <summary>
     /// <paramref name="value"/>, of the tuple type <paramref name="from"/>,
     /// rebuilt as <paramref name="to"/>; <c>null</c> when the types are not
     /// two tuples of one arity or no element converts. A nullable source
-    /// converts lifted: <c>null</c> stays <c>null</c>.
+    /// converts lifted into a nullable target: <c>null</c> stays
+    /// <c>null</c>. Into a non-nullable target — an explicit conversion only
+    /// — it unwraps first, with the .NET throw when the value is missing.
     /// </summary>
     private IrExpression? ConvertedTuple(
         SyntaxNode site,
@@ -104,8 +93,6 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var isLifted = from.IsNullableValueType();
-
         if (source.TupleElements.Length > SymbolHelper.MaxFlatTupleArity)
         {
             return ReportUnsupported(
@@ -114,9 +101,13 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        var unwraps = from.IsNullableValueType() && !to.IsNullableValueType();
+        var isLifted = from.IsNullableValueType() && !unwraps;
+        var present = unwraps ? GuardedValueOrThrow(value) : value;
+
         return BindOnce(
-            value,
-            IrEvaluationTraits.IsSideEffectFree(value),
+            present,
+            IrEvaluationTraits.IsSideEffectFree(present),
             tuple => RebuiltTuple(site, tuple, isLifted, source, target, elements)
         );
     }
@@ -161,7 +152,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// One element read, converted as its own types need: a nested tuple is
     /// rebuilt, a numeric element takes its scalar conversion, any other
-    /// element is the read itself.
+    /// element is the read itself. A nullable numeric element converts
+    /// lifted into a nullable one and unwraps, with the .NET throw, into a
+    /// non-nullable one.
     /// </summary>
     private IrExpression ConvertedElement(
         SyntaxNode site,
@@ -177,12 +170,14 @@ public sealed partial class IrExpressionExtractor
         if (elements.ScalarEndpoints(from, to) is not var (source, target))
             return element;
 
+        var unwraps = UnwrapsNullableValue(from, to);
+
         return new IrNumericConversion(
-            element,
+            unwraps ? GuardedValueOrThrow(element) : element,
             source,
             target,
             elements.IsChecked,
-            IsLifted: from.IsNullableValueType()
+            IsLifted: from.IsNullableValueType() && !unwraps
         );
     }
 

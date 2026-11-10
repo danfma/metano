@@ -96,14 +96,16 @@ public sealed partial class IrExpressionExtractor
     /// <c>..source</c> with the conversion C# applies to each element it
     /// spreads. A converted string spread is reported: C# spreads its UTF-16
     /// code units, which the mapped spread does not iterate. (A dictionary
-    /// spreads key-value pairs, which have no numeric conversion.)
+    /// spreads key-value pairs, which C# never converts: a
+    /// <c>KeyValuePair&lt;int, int&gt;</c> spread into a collection of
+    /// <c>KeyValuePair&lt;long, long&gt;</c> is a compile error.)
     /// </summary>
     private IrExpression ExtractSpread(SpreadElementSyntax spread)
     {
         var source = SpreadSourceOf(spread.Expression);
-        var conversion = SpreadElementConversionOf(spread);
+        var converting = ConvertingSpreadElementTypesOf(spread);
 
-        if (conversion is not null && source is not IrSpreadSource.Iterable)
+        if (converting is not null && source is IrSpreadSource.String)
         {
             return ReportUnsupported(
                 spread,
@@ -111,16 +113,22 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        var conversion = converting is var (from, to)
+            ? SpreadElementConversion(spread, from, to)
+            : null;
+
         return new IrSpreadExpression(Extract(spread.Expression), source, conversion);
     }
 
     /// <summary>
-    /// The conversion from the spread's element type to the element type of
-    /// the collection being built, when it crosses a 64-bit integer (a
-    /// scalar, or a tuple element by element); <c>null</c> otherwise, and
+    /// The spread's element type and the element type of the collection
+    /// being built, when the conversion between them crosses a 64-bit integer
+    /// (a scalar, or a tuple element by element); <c>null</c> otherwise, and
     /// always for Dart, which spreads the source as it is.
     /// </summary>
-    private IrSpreadElementConversion? SpreadElementConversionOf(SpreadElementSyntax spread)
+    private (ITypeSymbol From, ITypeSymbol To)? ConvertingSpreadElementTypesOf(
+        SpreadElementSyntax spread
+    )
     {
         if (_target is Metano.Annotations.TargetLanguage.Dart)
             return null;
@@ -136,13 +144,28 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var implicitly = TupleElementConversions.Implicit;
+        return TupleElementConversions.Implicit.ConvertsElement(from, to) ? (from, to) : null;
+    }
 
-        if (!implicitly.ConvertsElement(from, to))
-            return null;
-
+    /// <summary>
+    /// The conversion of one spread element from <paramref name="from"/> to
+    /// <paramref name="to"/>, over a fresh element name.
+    /// </summary>
+    private IrSpreadElementConversion SpreadElementConversion(
+        SpreadElementSyntax spread,
+        ITypeSymbol from,
+        ITypeSymbol to
+    )
+    {
         var name = NextSpreadElementName();
-        var converted = ConvertedElement(spread, new IrIdentifier(name), from, to, implicitly);
+
+        var converted = ConvertedElement(
+            spread,
+            new IrIdentifier(name),
+            from,
+            to,
+            TupleElementConversions.Implicit
+        );
 
         return new IrSpreadElementConversion(name, converted);
     }

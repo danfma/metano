@@ -421,12 +421,23 @@ public sealed class IrStatementExtractor(
         var info = _semantic.GetForEachStatementInfo(fe);
         var variableType = (_semantic.GetDeclaredSymbol(fe) as ILocalSymbol)?.Type;
 
+        var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
+
         // `foreach ((long, long) pair in intPairs)`: the element conversion is
-        // a tuple one, rebuilt element by element like an explicit cast.
+        // a tuple one, rebuilt element by element like an explicit cast — a
+        // nullable element into a non-nullable variable unwraps with the .NET
+        // throw there too. The loop gives the checked context; a conversion
+        // the targets cannot rebuild is reported at the variable's type.
         if (
             info.ElementType is { } tupleElement
             && variableType is not null
-            && _expressions.ExplicitTupleConversion(fe, element, tupleElement, variableType)
+            && _expressions.ExplicitTupleConversion(
+                fe.Type,
+                isChecked,
+                element,
+                tupleElement,
+                variableType
+            )
                 is { } tuple
         )
             return tuple;
@@ -448,8 +459,6 @@ public sealed class IrStatementExtractor(
 
         if (!NumericEndpoints.IsLoweredExplicitly(from, to))
             return null;
-
-        var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
 
         return new IrNumericConversion(element, from, to, isChecked, IsLifted: elementNullable);
     }

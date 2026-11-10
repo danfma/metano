@@ -5076,7 +5076,9 @@ public sealed partial class IrExpressionExtractor
         if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)
             return numeric;
 
-        if (ExplicitTupleConversion(cast, inner, sourceType, targetType) is { } tuple)
+        var isChecked = CheckedContexts.IsChecked(cast, _semantic.Compilation);
+
+        if (ExplicitTupleConversion(cast, isChecked, inner, sourceType, targetType) is { } tuple)
             return tuple;
 
         var truncatesDecimal =
