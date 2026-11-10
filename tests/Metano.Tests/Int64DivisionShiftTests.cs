@@ -179,7 +179,11 @@ public class Int64DivisionShiftTests
         await Assert.That(shift).Contains("int left(int l, int n) => l << (n & 63);");
         await Assert.That(shift).Contains("int leftMasked(int l) => l << 6;");
         await Assert.That(shift).Contains("int unsigned(int l) => l >>> 2;");
-        await Assert.That(shift).Contains("int narrow(int i, int n) => i << n | i >> 2 | i >>> n;");
+
+        await Assert
+            .That(shift)
+            .Contains("int narrow(int i, int n) => i << n | i >> 2 | (i >>> n).toSigned(32);");
+
         await Assert.That(shift).Contains("l = l << (n & 63);");
         await Assert.That(shift).Contains("l = l >>> (n & 63);");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();

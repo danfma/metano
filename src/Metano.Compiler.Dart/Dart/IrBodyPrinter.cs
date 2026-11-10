@@ -378,6 +378,11 @@ public static class IrBodyPrinter
                 PrintOperand(sb, conversion.Operand, ReceiverRequiresParens(conversion.Operand));
                 sb.Append(selector);
                 break;
+            case IrIntegerOverflow overflow
+                when DartNumericConversions.OverflowSelector(overflow) is { } selector:
+                PrintOperand(sb, overflow.Value, ReceiverRequiresParens(overflow.Value));
+                sb.Append(selector);
+                break;
             case IrIntegerOverflow or IrNumericConversion:
                 PrintExpression(sb, DartNumericConversions.Unwrap(expr));
                 break;

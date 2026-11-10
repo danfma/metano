@@ -17,7 +17,7 @@ export class Converts {
   }
 
   narrow(l: bigint, u: bigint): number {
-    return Number(convertNarrow(l, "Int32")) + Number(convertNarrow(u, "Int16")) + Number(convertNarrow(l, "Byte")) + Number(convertNarrow(l, "SByte")) + Number(convertNarrow(l, "UInt16")) + Number(convertNarrow(u, "UInt32"));
+    return Number(convertNarrow(l, "Int32")) + Number(convertNarrow(u, "Int16")) + Number(convertNarrow(l, "Byte")) + Number(convertNarrow(l, "SByte")) + Number(convertNarrow(l, "UInt16")) + (Number(convertNarrow(u, "UInt32")) | 0);
   }
 
   character(l: bigint): string {

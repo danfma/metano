@@ -52,6 +52,32 @@ public static class IrNumericKindExtensions
             _ => 64,
         };
 
+    /// <summary>
+    /// Whether every value of the integer kind <paramref name="source"/> is a
+    /// value of the integer kind <paramref name="target"/>, so converting
+    /// between them cannot change the value: the same signedness and at
+    /// least the width, or a signed target strictly wider than an unsigned
+    /// source.
+    /// </summary>
+    public static bool HoldsEvery(this IrNumericKind target, IrNumericKind source)
+    {
+        if (!target.IsInteger() || !source.IsInteger())
+            return false;
+
+        if (target.IsSigned() == source.IsSigned())
+            return target.BitWidth() >= source.BitWidth();
+
+        return target.IsSigned() && target.BitWidth() > source.BitWidth();
+    }
+
+    /// <summary>
+    /// An integer value of 32 bits or fewer (<c>sbyte</c>, <c>byte</c>,
+    /// <c>short</c>, <c>ushort</c>, <c>int</c>, <c>uint</c>), not an enum:
+    /// the kinds a double holds exactly.
+    /// </summary>
+    public static bool IsNarrowIntegerValue(this IrNumericEndpoint endpoint) =>
+        !endpoint.IsEnum && endpoint.Kind.IsInteger() && endpoint.Kind.BitWidth() <= 32;
+
     /// <summary>A 64-bit integer value, not an enum over one.</summary>
     public static bool IsSixtyFourBitValue(this IrNumericEndpoint endpoint) =>
         !endpoint.IsEnum && endpoint.Kind.IsSixtyFourBit();

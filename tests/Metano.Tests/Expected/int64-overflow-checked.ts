@@ -1,4 +1,4 @@
-import { checkedInt64, checkedUInt64 } from "metano-runtime";
+import { checkedInt32, checkedInt64, checkedUInt64 } from "metano-runtime";
 
 export class Check {
   constructor() { }
@@ -77,6 +77,6 @@ export class Check {
   }
 
   narrow(a: number, b: number): number {
-    return a + b;
+    return checkedInt32(a + b);
   }
 }

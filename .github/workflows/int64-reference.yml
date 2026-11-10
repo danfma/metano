@@ -14,6 +14,7 @@ on:
     paths:
       - "tests/Int64Reference/**"
       - "samples/SampleInt64Conformance/**"
+      - "samples/SampleCheckedConformance/**"
       - "global.json"
       - "Directory.Build.props"
       - "Directory.Packages.props"
@@ -23,6 +24,7 @@ on:
     paths:
       - "tests/Int64Reference/**"
       - "samples/SampleInt64Conformance/**"
+      - "samples/SampleCheckedConformance/**"
       - "global.json"
       - "Directory.Build.props"
       - "Directory.Packages.props"

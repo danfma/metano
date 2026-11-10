@@ -10,8 +10,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Renders an <see cref="IrNumericConversion"/> per spec 012
 /// contracts/ts-emission.md § Conversions. A floating-point value cast to a
 /// 32-bit or narrower integer truncates through the <c>metano-runtime</c>
-/// helpers (FR-070). Every other conversion crosses the <c>bigint</c> a
-/// 64-bit integer is (FR-011–FR-019).
+/// helpers (FR-070). A narrowing between two integers of 32 bits or fewer
+/// keeps the low bits with the native operators, or range-checks through a
+/// helper in a checked context (FR-074, FR-077). Every other conversion
+/// crosses the <c>bigint</c> a 64-bit integer is (FR-011–FR-019).
 /// </summary>
 internal static class IrToTsNumericConversionBridge
 {
@@ -70,7 +72,12 @@ internal static class IrToTsNumericConversionBridge
         if (from.IsWideIntegerValue())
             return FromBigInt(from, to, isChecked, value);
 
-        return to.IsWideIntegerValue() ? IntoBigInt(from, to, isChecked, value) : value;
+        if (to.IsWideIntegerValue())
+            return IntoBigInt(from, to, isChecked, value);
+
+        return IrNumericConversion.IsIntegerNarrowing(from, to)
+            ? NarrowIntegerTsExpressions.Reduced(to.Kind, isChecked, value)
+            : value;
     }
 
     /// <summary>
@@ -279,33 +286,10 @@ internal static class IrToTsNumericConversionBridge
             (_, true) => Number(
                 Narrowed(BigInt(asInt32), to.Kind.BitWidth(), to.Kind.IsSigned(), isChecked: true)
             ),
-            (IrNumericKind.SByte or IrNumericKind.Int16, false) => SignExtended(
-                asInt32,
-                32 - to.Kind.BitWidth()
-            ),
-            (IrNumericKind.Byte, false) => LowBits(asInt32, "0xFF"),
-            (IrNumericKind.UInt16 or IrNumericKind.Char, false) => LowBits(asInt32, "0xFFFF"),
-            _ => throw new InvalidOperationException(
-                $"'{to.Kind}' is not a narrow integer target of a floating-point truncation."
-            ),
+            (_, false) => NarrowIntegerTsExpressions.Wrapped(to.Kind, asInt32),
         };
 
         return to.Kind is IrNumericKind.Char ? Global("String.fromCharCode", narrowed) : narrowed;
-    }
-
-    private static TsExpression LowBits(TsExpression value, string mask) =>
-        new TsBinaryExpression(value, "&", new TsLiteral(mask));
-
-    /// <summary><c>(value &lt;&lt; shift) &gt;&gt; shift</c>: the low bits, sign-extended.</summary>
-    private static TsExpression SignExtended(TsExpression value, int shift)
-    {
-        var count = new TsLiteral(shift.ToString(CultureInfo.InvariantCulture));
-
-        return new TsBinaryExpression(
-            new TsParenthesized(new TsBinaryExpression(value, "<<", count)),
-            ">>",
-            count
-        );
     }
 
     private static TsExpression Narrowed(TsExpression value, int bits, bool signed, bool isChecked)

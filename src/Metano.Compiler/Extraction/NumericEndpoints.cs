@@ -50,11 +50,14 @@ internal static class NumericEndpoints
     /// <summary>
     /// Whether a conversion from <paramref name="from"/> to
     /// <paramref name="to"/> becomes an <see cref="IrNumericConversion"/>: a
-    /// floating-point truncation (FR-070), and the conversions of
+    /// floating-point truncation (FR-070), a narrowing between two integers
+    /// of 32 bits or fewer (FR-074), and the conversions of
     /// <see cref="CrossesSixtyFourBits"/>.
     /// </summary>
     public static bool IsLoweredExplicitly(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        IrNumericConversion.IsFloatingPointTruncation(from, to) || CrossesSixtyFourBits(from, to);
+        IrNumericConversion.IsFloatingPointTruncation(from, to)
+        || IrNumericConversion.IsIntegerNarrowing(from, to)
+        || CrossesSixtyFourBits(from, to);
 
     private static IrNumericKind? KindOf(ITypeSymbol? type) =>
         type?.SpecialType switch

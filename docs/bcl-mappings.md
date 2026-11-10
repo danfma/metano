@@ -11,7 +11,7 @@ This page lists every mapping the transpiler knows about out of the box.
 |----|----|
 | `string` | `string` |
 | `bool` | `boolean` |
-| `int`, `short`, `byte`, `sbyte`, `uint`, `ushort`, `float`, `double` | `number` |
+| `int`, `short`, `byte`, `sbyte`, `uint`, `ushort`, `float`, `double` | `number` ([integers of 32 bits or fewer](#integers-of-32-bits-or-fewer)) |
 | `long`, `ulong`, `nint`, `nuint` | `bigint` (3.0.0; [64-bit integers](#64-bit-integers-long--ulong); 2.x mapped them to `number`) |
 | `decimal` | `Decimal` (from [`decimal.js`](https://mikemcl.github.io/decimal.js/)) |
 | `BigInteger` | `bigint` |
@@ -508,6 +508,46 @@ Not mapped: `IsNormal`/`IsSubnormal`; method groups such as
 `Func<double, bool> f = double.IsNaN` (templates apply to calls only); and generic
 math calls such as `T.IsNaN(v)` with `T : INumber<T>`, which bind to the generic
 interface rather than to `double`/`float`.
+
+## Integers of 32 bits or fewer
+
+`sbyte`, `byte`, `short`, `ushort`, `int` and `uint` are JavaScript `number`s, with no
+wrapper type. The compiler makes them behave like C# where C# narrows or reinterprets
+(spec 012 FR-074–FR-077, 3.0.0):
+
+| C# | TypeScript (default context) | In a `checked` context |
+|----|----|----|
+| `(int)u` | `u \| 0` | `checkedInt32(u)` |
+| `(uint)i` | `i >>> 0` | `checkedUInt32(i)` |
+| `(short)i` | `(i << 16) >> 16` | `checkedNarrowInt32(i, 16, true)` |
+| `(ushort)i` | `i & 0xFFFF` | `checkedNarrowInt32(i, 16, false)` |
+| `(sbyte)i` | `(i << 24) >> 24` | `checkedNarrowInt32(i, 8, true)` |
+| `(byte)i` | `i & 0xFF` | `checkedNarrowInt32(i, 8, false)` |
+| `(int)b`, `(byte)(i & 0xFF)` | `b`, `i & 255` (the value cannot change) | same |
+| `b += 1;`, `b++;` (`byte b`) | `b = (b + 1) & 0xFF;` | `b = checkedNarrowInt32(b + 1, 8, false);` |
+| `u & v`, `u \| v`, `u ^ v`, `~u`, `u << n` (`uint`) | `(u & v) >>> 0`, …, `~u >>> 0`, `(u << n) >>> 0` | same |
+| `u >> n` (`uint`) | `u >>> n` | same |
+| `i >>> n` (`int`) | `(i >>> n) \| 0` | same |
+| `i + j`, `i - j`, `i * j`, `-i`, `i++` | unchanged: `i + j`, … | `checkedInt32(i + j)`, …, `i = checkedInt32(i + 1)` |
+
+- The native operators import nothing; the `checked…` helpers come from
+  `metano-runtime` and throw `OverflowException` (`Arithmetic operation resulted in an
+  overflow.`). The context is the one C# uses: `checked(...)`, `checked { }` or the
+  `CheckForOverflowUnderflow` project option.
+- Compound assignments and `++` / `--` on `sbyte`, `byte`, `short` and `ushort` store
+  the narrowed value, on locals, fields, properties, indexers and array elements (the
+  receiver and the index are evaluated once). `&=`, `|=`, `^=`, `>>=` and `%=` keep the
+  native compound operator, because they cannot leave the type's range.
+- A conversion from `double` / `float` truncates first (`int32FromDouble(d) & 0xFF`), and
+  one from `long` / `ulong` goes through `bigint` (`Number(BigInt.asUintN(8, l))`).
+- **Known gap:** `int` / `uint` arithmetic does not wrap in the default (unchecked)
+  context. `int.MaxValue + 1` is `2147483648` where C# gives `int.MinValue`; the value
+  stays exact up to 2^53. A `checked` context gives C#'s `OverflowException`.
+  `int.MinValue / -1` returns `2147483648` instead of throwing.
+- Not covered: `char` conversions, `decimal` sources, enum endpoints and `[Queryable]`
+  expression trees keep their earlier lowering.
+- Dart: an `int` is 64-bit, so the same conversions and stores print
+  `.toSigned(n)` / `.toUnsigned(n)`; a checked context wraps instead of throwing.
 
 ## 64-bit integers (`long` / `ulong`)
 

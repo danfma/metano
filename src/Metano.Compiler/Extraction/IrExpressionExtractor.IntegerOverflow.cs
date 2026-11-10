@@ -1,30 +1,48 @@
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// The 64-bit overflow reduction (spec 012 FR-021–FR-026): the result of an operation that can leave the 64-bit
-/// domain is wrapped in an <see cref="IrIntegerOverflow"/>, which
+/// The integer overflow reduction (spec 012 FR-021–FR-026, FR-075–FR-077):
+/// the result of an operation that can leave the domain of its integer type
+/// is wrapped in an <see cref="IrIntegerOverflow"/>, which
 /// <see cref="IntegerOverflowLowering"/> decides from Roslyn. An increment
 /// or a compound assignment stores the reduced value through the
 /// read-modify-write lowering, so its receiver and index are evaluated once.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
-    /// <summary><paramref name="result"/> reduced as <paramref name="operation"/> needs, or unchanged.</summary>
+    /// <summary>
+    /// <paramref name="result"/> reduced as <paramref name="operation"/> needs, or unchanged.
+    /// A constant operation that needs a reduction (<c>1u &lt;&lt; 31</c>,
+    /// <c>~0u</c>) is the value Roslyn folded, which is already reduced.
+    /// </summary>
     private static IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
         IntegerOverflowLowering.ReductionOf(operation) is { } reduction
-            ? reduction.Reduce(result)
+            ? FoldedOperatorConstant(operation) ?? reduction.Reduce(result)
             : result;
 
+    /// <summary>The literal of a built-in operator Roslyn folded to a numeric constant, or <c>null</c>.</summary>
+    private static IrExpression? FoldedOperatorConstant(IOperation? operation) =>
+        operation
+            is (IBinaryOperation or IUnaryOperation)
+                and { ConstantValue: { HasValue: true, Value: { } value } }
+        && IsNumericConstant(value)
+            ? ConstantLiteralOfKind(value, NumericEndpoints.Of(operation.Type))
+            : null;
+
     /// <summary>
-    /// <c>x++</c>, <c>++x</c>, <c>x--</c> or <c>--x</c> on a 64-bit value:
-    /// <c>x = reduce(x ± 1n)</c> (FR-024). A postfix form whose value is used
-    /// yields the previous value as the stored one stepped back,
-    /// <c>reduce((x = reduce(x + 1n)) - 1n)</c>: the step is invertible modulo
-    /// 2^64, and a checked step that did not throw was exact, so no temporary
+    /// <c>x++</c>, <c>++x</c>, <c>x--</c> or <c>--x</c> on a value whose step
+    /// is reduced (a 64-bit integer; an <c>sbyte</c>, <c>byte</c>,
+    /// <c>short</c> or <c>ushort</c>; an <c>int</c> / <c>uint</c> in a checked
+    /// context): <c>x = reduce(x ± 1)</c> (FR-024, FR-075, FR-077). A postfix
+    /// form whose value is used yields the previous value as the stored one
+    /// stepped back, <c>reduce((x = reduce(x + 1)) - 1)</c>: the step is
+    /// invertible modulo the type's width, and a checked step that did not
+    /// throw was exact, so no temporary
     /// (and no immediately invoked function, NFR-004) holds the old value.
     /// </summary>
     private IrExpression? TryExtractReducedIncrement(

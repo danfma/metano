@@ -23,9 +23,11 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Builds <paramref name="target"/> <c>op=</c> <c>right</c>. An integer
-    /// <c>/=</c>, a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c> and a
+    /// <c>/=</c>, a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c>, a
     /// 64-bit compound operator that wraps,
-    /// checks, divides or shifts have no compound operator in the targets
+    /// checks, divides or shifts, and a compound operator on an integer of
+    /// 32 bits or fewer whose stored value is narrowed, wrapped or checked
+    /// (FR-075–FR-077) have no compound operator in the targets
     /// that keeps C# semantics, so each becomes the read-modify-write
     /// <c>target = target op right</c> (see <see cref="BuildReadModifyWrite"/>)
     /// storing the value <see cref="CompoundValue"/> computes.
@@ -50,7 +52,8 @@ public sealed partial class IrExpressionExtractor
     private bool RequiresReadModifyWrite(IrBinaryOp op, AssignmentExpressionSyntax assign) =>
         HasNoTargetCompoundOperator(op)
         || NeedsOverflowReduction(assign)
-        || NeedsSixtyFourBitReadModifyWrite(op, assign);
+        || NeedsSixtyFourBitReadModifyWrite(op, assign)
+        || NeedsLogicalShiftReadModifyWrite(op, assign);
 
     private static bool HasNoTargetCompoundOperator(IrBinaryOp op) =>
         op

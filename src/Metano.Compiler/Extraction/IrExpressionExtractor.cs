@@ -5052,8 +5052,9 @@ public sealed partial class IrExpressionExtractor
     /// C# has no runtime cast — TS is structurally typed and every numeric is
     /// just <c>number</c> or <c>bigint</c>. A numeric cast the targets must
     /// render becomes an <see cref="IrNumericConversion"/> (a floating-point
-    /// value to a narrow integer, and every cast into or out of a 64-bit
-    /// integer or a <c>BigInteger</c>, spec 012 FR-003); a constant one
+    /// value to a narrow integer, a narrowing between two integers of 32
+    /// bits or fewer, and every cast into or out of a 64-bit
+    /// integer or a <c>BigInteger</c>, spec 012 FR-003, FR-074); a constant one
     /// folds. One other cast needs runtime code: a <c>decimal</c> to a 32-bit
     /// or narrower integer (<c>(int|short|byte)decimalExpr</c>) truncates and
     /// reads the number, <c>expr.trunc().toNumber()</c>. All other casts

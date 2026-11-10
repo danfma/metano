@@ -1,4 +1,4 @@
-import { checkedNarrow, tupleEquals } from "metano-runtime";
+import { checkedInt32, checkedNarrow, tupleEquals } from "metano-runtime";
 
 export class Pairs {
   constructor() { }
@@ -91,7 +91,7 @@ export class Pairs {
     {
       for (const pair$element of pairs) {
         const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
-        total += pair[0] + pair[1];
+        total = checkedInt32(total + checkedInt32(pair[0] + pair[1]));
       }
     }
 

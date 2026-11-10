@@ -30,5 +30,6 @@
     <Project Path="samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj" />
     <Project Path="samples/SampleJsonContracts/SampleJsonContracts.csproj" />
     <Project Path="samples/SampleInt64Conformance/SampleInt64Conformance.csproj" />
+    <Project Path="samples/SampleCheckedConformance/SampleCheckedConformance.csproj" />
   </Folder>
 </Solution>

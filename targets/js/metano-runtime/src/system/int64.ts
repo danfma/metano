@@ -72,6 +72,33 @@ export function checkedNarrow(value: bigint, bits: 8 | 16 | 32, signed: boolean)
   return requireRange(value, min, max);
 }
 
+/**
+ * Returns `value` when it fits `int`; throws OverflowException otherwise. `int` arithmetic
+ * in a checked context computes in a `number` and checks the result here: a sum or a
+ * difference of two 32-bit values is exact in a double, and a product too large to be exact
+ * is far outside the range, so the test decides as .NET does.
+ */
+export function checkedInt32(value: number): number {
+  return requireNumberRange(value, INT32_MIN, INT32_MAX);
+}
+
+/** Returns `value` when it fits `uint` (0 … 2^32 − 1); throws OverflowException otherwise. */
+export function checkedUInt32(value: number): number {
+  return requireNumberRange(value, 0, UINT32_MAX);
+}
+
+/**
+ * Checked narrowing of an integer held in a `number` to a `bits`-wide integer (`sbyte` /
+ * `byte`, `short` / `ushort`): returns `value` when it fits, throws OverflowException
+ * otherwise. The `number` counterpart of {@link checkedNarrow}.
+ */
+export function checkedNarrowInt32(value: number, bits: 8 | 16, signed: boolean): number {
+  const min = signed ? -(2 ** (bits - 1)) : 0;
+  const max = signed ? 2 ** (bits - 1) - 1 : 2 ** bits - 1;
+
+  return requireNumberRange(value, min, max);
+}
+
 /** Lifted conversion: `null` and `undefined` give `null`; any other value goes through `convert` once. */
 export function mapNullable<T, R>(value: T | null | undefined, convert: (value: T) => R): R | null {
   return value == null ? null : convert(value);
@@ -314,6 +341,18 @@ function requireRange(value: bigint, min: bigint, max: bigint, message?: string)
   }
 
   return value;
+}
+
+function requireNumberRange(value: number, min: number, max: number): number {
+  const fits = value >= min && value <= max;
+
+  // NaN fails both comparisons, so it throws.
+  if (!fits) {
+    throw new OverflowException();
+  }
+
+  // C# integers have no negative zero: `+ 0` turns the `-0` of `checked(-x)` into `0`.
+  return value + 0;
 }
 
 /** Truncates `value` and saturates it to `[min, max]`; NaN gives `0`, never `-0`. */
