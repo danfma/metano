@@ -129,6 +129,8 @@ public class Int64TupleSpreadConversionTests
             public ((long, long), long) LiteralHoldingATuple((int, int) pair, int last) =>
                 (((long, long), long))(pair, last);
 
+            public (long, long) LiteralWrapped(int second) => ((long, long))((int?)2, (int?)second);
+
             public (long, long) CastLiteralReturned(long a, long b) => ((int, int))(a, b);
 
             public (long, long)? CastLiteralReturnedNullable(long a, long b) => ((int, int))(a, b);
@@ -241,27 +243,76 @@ public class Int64TupleSpreadConversionTests
     }
 
     /// <summary>
-    /// An explicit cast of a nullable tuple to a non-nullable one reads its
-    /// value first, with the .NET throw when it is missing, like the scalar
-    /// cast: nullable analysis does not prove the parameter present.
+    /// Explicit tuple casts under nullable analysis. The cast of a nullable
+    /// tuple reads its value first, with the .NET throw when it is missing.
+    /// A cast-literal element unwraps the same way whatever the analysis
+    /// says — after a check, after <c>!</c>, read from an <c>await</c> — and
+    /// a nullable target slot keeps its lift; only a value wrapped where it
+    /// is written (<c>(int?)2</c>, <c>(int?)x</c>) converts with no unwrap.
     /// </summary>
     [Test]
-    public async Task ExplicitCastOfANullableTuple_ThrowsWhenMissing()
+    public async Task ExplicitTupleCasts_UnderNullableAnalysis_UnwrapOrLift()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             #nullable enable
+            using System.Threading.Tasks;
 
             [Transpile]
             public class Unwrapping
             {
                 public (long, long) Of((int, int)? pair) => ((long, long))pair;
 
-                public (long, long) OfKnownPresent() => ((long, long))(1, (int?)2);
+                public (long, long) OfWrapped(int second) => ((long, long))((int?)2, (int?)second);
+
+                public (long, long) OfWidenedWrap(int second) => ((int, long))(1, ((long?)second));
 
                 public (long, long) OfChecked(int? first, int second) =>
                     first is null ? (0, 0) : ((long, long))(first, second);
 
+                public (long, long) OfForgiven(int? first, int second) =>
+                    ((long, long))(first!, second);
+
+                public async Task<(double, double)> OfAwaited(Task<long?> pending, long first)
+                {
+                    var second = await pending;
+
+                    return ((double, double))(first, second);
+                }
+
+                public async Task<((long, long)?, long)> OfAwaitedTuple(
+                    Task<(int, int)?> pending,
+                    int last
+                )
+                {
+                    var pair = await pending;
+
+                    return (((long, long)?, long))(pair, last);
+                }
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden("int64-tuple-nullable-cast.ts", files["unwrapping.ts"]);
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// A cast literal needs no type of its own: an element without one
+    /// (<c>default</c>, <c>null</c>) takes the target's, and the others
+    /// convert where they are written.
+    /// </summary>
+    [Test]
+    public async Task CastTupleLiteralWithATypelessElement_ConvertsTheOthers()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            #nullable enable
+
+            [Transpile]
+            public class Typeless
+            {
                 public (long, long?) OfDefault(int? first) => ((long, long?))(first, default);
 
                 public (long, (long, string?)) OfNull(int? first, int second) =>
@@ -270,7 +321,7 @@ public class Int64TupleSpreadConversionTests
             """
         );
 
-        await TranspileHelper.AssertGolden("int64-tuple-nullable-cast.ts", files["unwrapping.ts"]);
+        await TranspileHelper.AssertGolden("int64-tuple-typeless-cast.ts", files["typeless.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
