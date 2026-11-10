@@ -12,9 +12,13 @@ namespace Metano.Compiler.Extraction;
 /// <c>(long, long)</c>, nested and nullable tuples included), and a tuple is
 /// one value in the targets, so the conversion rebuilds it — each element is
 /// read by position and goes through the scalar
-/// <see cref="IrNumericConversion"/> its own conversion needs. The source is
-/// evaluated once. A tuple literal is not rebuilt: Roslyn converts its
-/// elements where they are written. Dart keeps the tuple as it is: its
+/// <see cref="IrNumericConversion"/> its own conversion needs. A source with
+/// side effects (a call) is bound to a temporary and evaluated once; a
+/// property read counts as side-effect free and is not bound, so a getter
+/// source is read once per element read (#630). A tuple literal is not
+/// rebuilt: its elements convert where they are written, in source order —
+/// implicitly as Roslyn reports them, and under an explicit cast as the
+/// scalar cast of each element would. Dart keeps the tuple as it is: its
 /// <c>int</c> holds both widths, so a record of them needs no rebuild.
 /// </summary>
 public sealed partial class IrExpressionExtractor
@@ -51,25 +55,117 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// <paramref name="value"/> in the explicit tuple conversion C# applies
     /// at <paramref name="site"/> — a cast (<c>((int, int))longs</c>), or the
-    /// element conversion of a <c>foreach</c>, reported at its loop variable
-    /// type — with each element converted as the scalar cast would in the
-    /// <paramref name="isChecked"/> context; <c>null</c> when no element
-    /// converts.
+    /// loop variable type of a <c>foreach</c> that converts each element —
+    /// with each element converted as the scalar cast would in the site's
+    /// checked context; <c>null</c> when no element converts.
     /// </summary>
     internal IrExpression? ExplicitTupleConversion(
         SyntaxNode site,
-        bool isChecked,
         IrExpression value,
         ITypeSymbol sourceType,
         ITypeSymbol targetType
-    ) =>
-        ConvertedTuple(
-            site,
-            value,
-            sourceType,
-            targetType,
-            TupleElementConversions.Explicit(isChecked)
+    ) => ConvertedTuple(site, value, sourceType, targetType, ExplicitElementConversionsAt(site));
+
+    /// <summary>
+    /// An explicit cast of a tuple literal (<c>((long, long))(a, b)</c>) with
+    /// each element converted where it is written, so the elements evaluate
+    /// and convert in source order as C# does — a missing nullable element
+    /// throws before the next one runs — and each converts once;
+    /// <c>null</c> when the operand is not a literal or no element converts.
+    /// </summary>
+    private IrExpression? ExplicitTupleLiteralConversion(
+        CastExpressionSyntax cast,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    )
+    {
+        var elements = ExplicitElementConversionsAt(cast);
+
+        if (
+            _target is Metano.Annotations.TargetLanguage.Dart
+            || TupleLiteralOf(cast.Expression) is not { } literal
+            || elements.ConvertingTuples(sourceType, targetType) is not var (_, target)
+        )
+            return null;
+
+        return ConvertedTupleLiteral(cast, literal, target, elements);
+    }
+
+    /// <summary>
+    /// <paramref name="literal"/> as the tuple type <paramref name="target"/>,
+    /// element by element; <c>null</c> when it has more elements than a flat
+    /// tuple holds, which the literal's own extraction reports.
+    /// </summary>
+    private IrTupleLiteral? ConvertedTupleLiteral(
+        SyntaxNode site,
+        TupleExpressionSyntax literal,
+        INamedTypeSymbol target,
+        TupleElementConversions elements
+    )
+    {
+        if (literal.Arguments.Count > SymbolHelper.MaxFlatTupleArity)
+            return null;
+
+        var converted = literal
+            .Arguments.Select(
+                (argument, index) =>
+                    ConvertedLiteralElement(
+                        site,
+                        argument.Expression,
+                        target.TupleElements[index].Type,
+                        elements
+                    )
+            )
+            .ToList();
+
+        return new IrTupleLiteral(
+            converted,
+            IrTypeRefMapper.Map(target, _originResolver, _target) as IrTupleTypeRef
         );
+    }
+
+    /// <summary>
+    /// One element of an explicitly cast tuple literal, converted to
+    /// <paramref name="to"/>: a nested literal converts its own elements, an
+    /// element Roslyn converts implicitly is extracted with that conversion,
+    /// and any other takes the explicit conversion of its types.
+    /// </summary>
+    private IrExpression ConvertedLiteralElement(
+        SyntaxNode site,
+        ExpressionSyntax element,
+        ITypeSymbol to,
+        TupleElementConversions elements
+    )
+    {
+        if (
+            TupleLiteralOf(element) is { } nestedLiteral
+            && to.UnwrapNullableValueType() is INamedTypeSymbol { IsTupleType: true } nestedTarget
+            && nestedTarget.TupleElements.Length == nestedLiteral.Arguments.Count
+            && ConvertedTupleLiteral(site, nestedLiteral, nestedTarget, elements) is { } nested
+        )
+            return nested;
+
+        var value = Extract(element);
+        var from = _semantic.GetTypeInfo(element).Type;
+
+        if (from is null || _semantic.GetConversion(element).IsImplicit)
+            return value;
+
+        return ConvertedElement(site, value, from, to, elements);
+    }
+
+    /// <summary>The tuple literal <paramref name="expression"/> is, through any parentheses; <c>null</c> otherwise.</summary>
+    private static TupleExpressionSyntax? TupleLiteralOf(ExpressionSyntax expression) =>
+        expression switch
+        {
+            TupleExpressionSyntax literal => literal,
+            ParenthesizedExpressionSyntax parenthesized => TupleLiteralOf(parenthesized.Expression),
+            _ => null,
+        };
+
+    /// <summary>The explicit-cast element rule in the checked context of <paramref name="site"/>.</summary>
+    private TupleElementConversions ExplicitElementConversionsAt(SyntaxNode site) =>
+        TupleElementConversions.Explicit(CheckedContexts.IsChecked(site, _semantic.Compilation));
 
     /// <summary>
     /// <paramref name="value"/>, of the tuple type <paramref name="from"/>,
@@ -89,6 +185,8 @@ public sealed partial class IrExpressionExtractor
     {
         if (
             _target is Metano.Annotations.TargetLanguage.Dart
+            || from is null
+            || to is null
             || elements.ConvertingTuples(from, to) is not var (source, target)
         )
             return null;
@@ -101,15 +199,31 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        var unwraps = from.IsNullableValueType() && !to.IsNullableValueType();
-        var isLifted = from.IsNullableValueType() && !unwraps;
-        var present = unwraps ? GuardedValueOrThrow(value) : value;
+        var (present, isLifted) = UnwrappedOrLifted(value, from, to);
 
         return BindOnce(
             present,
             IrEvaluationTraits.IsSideEffectFree(present),
             tuple => RebuiltTuple(site, tuple, isLifted, source, target, elements)
         );
+    }
+
+    /// <summary>
+    /// How a value of type <paramref name="from"/> enters its conversion to
+    /// <paramref name="to"/>: a nullable one unwraps, with the .NET throw
+    /// when it is missing, into a non-nullable target and converts lifted
+    /// into a nullable one; any other is the value itself.
+    /// </summary>
+    private (IrExpression Value, bool IsLifted) UnwrappedOrLifted(
+        IrExpression value,
+        ITypeSymbol from,
+        ITypeSymbol to
+    )
+    {
+        if (UnwrapsNullableValue(from, to))
+            return (GuardedValueOrThrow(value), IsLifted: false);
+
+        return (value, IsLifted: from.IsNullableValueType());
     }
 
     private IrExpression RebuiltTuple(
@@ -170,15 +284,9 @@ public sealed partial class IrExpressionExtractor
         if (elements.ScalarEndpoints(from, to) is not var (source, target))
             return element;
 
-        var unwraps = UnwrapsNullableValue(from, to);
+        var (present, isLifted) = UnwrappedOrLifted(element, from, to);
 
-        return new IrNumericConversion(
-            unwraps ? GuardedValueOrThrow(element) : element,
-            source,
-            target,
-            elements.IsChecked,
-            IsLifted: from.IsNullableValueType() && !unwraps
-        );
+        return new IrNumericConversion(present, source, target, elements.IsChecked, isLifted);
     }
 
     /// <summary>

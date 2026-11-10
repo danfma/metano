@@ -115,6 +115,20 @@ public class Int64TupleSpreadConversionTests
 
             public (long, long)? LiftedCast((int, int)? pair) => ((long, long)?)pair;
 
+            public (long, long) LiteralUnwrapped(int? first, int second) =>
+                ((long, long))(first, second);
+
+            public ((long, long), long) LiteralNested(int? first, int second) =>
+                (((long, long), long))((first, second), second);
+
+            public (int, int) LiteralNarrowed(long first) => ((int, int))(first, 5L);
+
+            public (int, int) LiteralNarrowedChecked(long first) =>
+                checked(((int, int))(first, 5L));
+
+            public ((long, long), long) LiteralHoldingATuple((int, int) pair, int last) =>
+                (((long, long), long))(pair, last);
+
             public (long, long)? NullableLiteral() => (1, 2);
 
             public (long, long)? Forgiven((int, int)? pair) => pair!;
@@ -317,10 +331,8 @@ public class Int64TupleSpreadConversionTests
                     + "over more than 7 elements) is not supported by the transpiler."
             );
 
-        var location = reports[0].Location!;
-
         await Assert
-            .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
+            .That(LocatedSource.TextOf(reports[0]))
             .IsEqualTo("(long, long, long, long, long, long, long, long)");
     }
 

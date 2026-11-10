@@ -230,7 +230,7 @@ public class Int64ConversionTests
                     + "FR-058)."
             );
 
-        await Assert.That(LocatedText(precision)).IsEqualTo("C");
+        await Assert.That(LocatedSource.TextOf(precision)).IsEqualTo("C");
     }
 
     [Test]
@@ -250,7 +250,7 @@ public class Int64ConversionTests
                     + "TypeScript (spec 012 FR-058)."
             );
 
-        await Assert.That(LocatedText(flags)).IsEqualTo("High");
+        await Assert.That(LocatedSource.TextOf(flags)).IsEqualTo("High");
     }
 
     [Test]
@@ -343,10 +343,6 @@ public class Int64ConversionTests
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
-    private static List<MetanoDiagnostic> UnsupportedFeatures(
-        IEnumerable<MetanoDiagnostic> diagnostics
-    ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
-
     /// <summary>
     /// A <c>foreach</c> whose variable converts each element declares the
     /// variable as that conversion (FR-010), so a <c>bigint</c> loop variable
@@ -392,6 +388,7 @@ public class Int64ConversionTests
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
-    private static string LocatedText(MetanoDiagnostic diagnostic) =>
-        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+    private static List<MetanoDiagnostic> UnsupportedFeatures(
+        IEnumerable<MetanoDiagnostic> diagnostics
+    ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
 }
