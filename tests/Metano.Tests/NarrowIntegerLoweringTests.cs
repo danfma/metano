@@ -56,6 +56,7 @@ public class NarrowIntegerLoweringTests
             public byte? CheckedLifted(int? x) => checked((byte?)x);
             public byte CheckedFromDouble(double d) => checked((byte)d);
             public byte CheckedFromLong(long l) => checked((byte)l);
+            public byte FromULongProduct(ulong a, ulong b) => (byte)(int)(a * b);
             public int? CheckedLiftedFromLong(long? l) => checked((int?)l);
         }
         """;
@@ -117,6 +118,9 @@ public class NarrowIntegerLoweringTests
             public int IntAnd(int a, int b) => a & b | a ^ b;
             public int IntNot(int a) => ~a;
             public int IntShiftLeft(int a, int n) => a << n;
+            public int IntShiftLeftConstant(byte b) => b << 8;
+            public void IntCompoundShift(int[] cells, int n) { cells[0] <<= n; }
+            public uint ShiftLeftNarrow(byte b) => (uint)b << 8;
             public int IntShiftRight(int a, int n) => a >> n;
             public int IntShiftUnsigned(int a, int n) => a >>> n;
             public int IntShiftUnsignedMasked(int a, int n) => (a & 0xFFFF) >>> n;
@@ -251,35 +255,202 @@ public class NarrowIntegerLoweringTests
     }
 
     /// <summary>
-    /// A Dart <c>int</c> is 64-bit, so a narrowing keeps the low bits with
-    /// <c>toSigned</c> / <c>toUnsigned</c>; a checked context wraps the same
-    /// way instead of throwing (a documented gap).
+    /// The product of two <c>ulong</c>s has no bound the range reading can
+    /// state, so the narrowing that follows it is kept.
     /// </summary>
     [Test]
-    public async Task Dart_NarrowsWithToSignedAndToUnsigned()
+    public async Task Conversions_KeepTheNarrowingAfterAnUnboundedProduct()
     {
-        var (files, diagnostics) = DartTranspileHelper.Transpile(
-            ConversionsSource + CompoundSource + UnsignedBitsSource + CheckedArithmeticSource
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ConversionsSource);
+
+        await Assert
+            .That(BodyOf(files["narrowing.ts"], "fromULongProduct"))
+            .IsEqualTo("return Number(BigInt.asIntN(32, BigInt.asUintN(64, a * b))) & 0xFF;");
+    }
+
+    /// <summary>
+    /// JavaScript's <c>&lt;&lt;</c> computes in 32 signed bits, the wrap C#
+    /// applies to an <c>int</c> shift, so the reduction the core builds for
+    /// it prints as the bare operator and <c>&lt;&lt;=</c> stays compound.
+    /// </summary>
+    [Test]
+    public async Task IntLeftShift_KeepsTheNativeOperator()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(UnsignedBitsSource);
+        var bits = files["bits.ts"];
+
+        await Assert.That(BodyOf(bits, "intShiftLeft")).IsEqualTo("return a << n;");
+        await Assert.That(BodyOf(bits, "intShiftLeftConstant")).IsEqualTo("return b << 8;");
+        await Assert.That(BodyOf(bits, "intCompoundShift")).IsEqualTo("cells[0] <<= n;");
+        await Assert.That(BodyOf(bits, "shiftLeftNarrow")).IsEqualTo("return b << 8;");
+    }
+
+    /// <summary>
+    /// A compound assignment or an increment that needs a reduction stores
+    /// through the read-modify-write lowering, which a dictionary entry does
+    /// not support (the read of a missing key would not throw): it reports
+    /// MS0001 at the expression, as the 64-bit forms do.
+    /// </summary>
+    [Test]
+    [Arguments("counts[key]++", "Dictionary<string, int>")]
+    [Arguments("counts[key] += 2", "Dictionary<string, int>")]
+    public async Task DictionaryEntryInACheckedProject_ReportsUnsupported(
+        string expression,
+        string dictionary
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithOverflowChecks(
+            DictionaryEntrySource(expression, dictionary)
         );
 
+        await AssertReportsTheDictionaryEntry(diagnostics, expression);
+    }
+
+    [Test]
+    [Arguments("counts[key]++", "Dictionary<string, byte>")]
+    [Arguments("counts[key] += 1", "Dictionary<string, byte>")]
+    [Arguments("counts[key] |= 1u << 31", "Dictionary<string, uint>")]
+    public async Task DictionaryEntryOfAReducedStore_ReportsUnsupported(
+        string expression,
+        string dictionary
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            DictionaryEntrySource(expression, dictionary)
+        );
+
+        await AssertReportsTheDictionaryEntry(diagnostics, expression);
+    }
+
+    /// <summary>An <c>int</c> entry in the default context needs no reduction and reports nothing.</summary>
+    [Test]
+    public async Task DictionaryEntryOfAnUnreducedStore_ReportsNothing()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            DictionaryEntrySource("counts[key] += 2", "Dictionary<string, int>")
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// A Dart <c>int</c> is 64-bit, so a narrowing conversion keeps the low
+    /// bits with <c>toSigned</c> / <c>toUnsigned</c>; a checked one prints
+    /// its unchecked form (a checked context is a documented gap in Dart).
+    /// </summary>
+    [Test]
+    public async Task Dart_NarrowsConversionsWithToSignedAndToUnsigned()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(ConversionsSource);
         var narrowing = files["narrowing.dart"];
-        var small = files["small.dart"];
-        var bits = files["bits.dart"];
-        var checks = files["checks.dart"];
 
         await Assert.That(narrowing).Contains("int intToUInt(int x) => x.toUnsigned(32);");
         await Assert.That(narrowing).Contains("int intToShort(int x) => x.toSigned(16);");
         await Assert.That(narrowing).Contains("int sum(int a, int b) => (a + b).toUnsigned(8);");
         await Assert.That(narrowing).Contains("int checked(int x) => x.toUnsigned(8);");
+        await Assert.That(narrowing).Contains("int checkedInt(int x) => x.toSigned(32);");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task Dart_NarrowsTheStoresOfTheTypesNarrowerThanInt()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(CompoundSource);
+        var small = files["small.dart"];
+
         await Assert.That(small).Contains("b = (b + 1).toUnsigned(8);");
         await Assert.That(small).Contains("this.field = (this.field + 200).toUnsigned(8);");
         await Assert.That(small).Contains("s = (s * 3).toSigned(16);");
+        await Assert.That(small).Contains("this.field = (this.field - 1).toUnsigned(8);");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// <c>&lt;&lt;</c> and <c>~</c> are wrapped by the C# rule; <c>&gt;&gt;&gt;</c>
+    /// on an <c>int</c> shifts its 32 bits, so the operand is read as
+    /// unsigned before the shift and the result as signed after it.
+    /// </summary>
+    [Test]
+    public async Task Dart_WrapsShiftsAndComplements()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(UnsignedBitsSource);
+        var bits = files["bits.dart"];
+
         await Assert.That(bits).Contains("int not(int a) => (~a).toUnsigned(32);");
         await Assert.That(bits).Contains("int shiftLeft(int a, int n) => (a << n).toUnsigned(32);");
         await Assert.That(bits).Contains("int shiftRight(int a, int n) => a >> n;");
-        await Assert.That(checks).Contains("int add(int a, int b) => (a + b).toSigned(32);");
+
+        await Assert
+            .That(bits)
+            .Contains("int intShiftLeft(int a, int n) => (a << n).toSigned(32);");
+
+        await Assert.That(bits).Contains("int intShiftLeftConstant(int b) => b << 8;");
+        await Assert.That(bits).Contains("cells[0] = (cells[0] << n).toSigned(32);");
+
+        await Assert
+            .That(bits)
+            .Contains(
+                "int intShiftUnsigned(int a, int n) => (a.toUnsigned(32) >>> n).toSigned(32);"
+            );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// Checked <c>int</c> / <c>uint</c> arithmetic prints as its unchecked
+    /// form, which does not wrap, as checked 64-bit arithmetic does
+    /// (spec 012 DECIDED-19): Dart never throws <c>OverflowException</c>.
+    /// </summary>
+    [Test]
+    public async Task Dart_PrintsCheckedArithmeticUnchecked()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(CheckedArithmeticSource);
+        var checks = files["checks.dart"];
+
+        await Assert.That(checks).Contains("int add(int a, int b) => a + b;");
+        await Assert.That(checks).Contains("int uSub(int a, int b) => a - b;");
+        await Assert.That(checks).Contains("int neg(int a) => -a;");
+        await Assert.That(checks).Contains("a = a + 1;");
+        await Assert.That(checks).Contains("this.total = this.total + 2;");
         await Assert.That(checks).Contains("int plain(int a, int b) => a + b * a - 1;");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    private static string DictionaryEntrySource(string expression, string dictionary) =>
+        $$"""
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Tally
+            {
+                public void Count({{dictionary}} counts, string key)
+                {
+                    {{expression}};
+                }
+            }
+            """;
+
+    private static async Task AssertReportsTheDictionaryEntry(
+        IReadOnlyList<MetanoDiagnostic> diagnostics,
+        string expression
+    )
+    {
+        var unsupported = UnsupportedFeatures(diagnostics).ToList();
+
+        await Assert.That(unsupported.Count).IsEqualTo(1);
+
+        var diagnostic = unsupported[0];
+        var location = diagnostic.Location!;
+
+        await Assert
+            .That(diagnostic.Message)
+            .IsEqualTo($"'{expression}' on a dictionary entry is not supported.");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
+        await Assert
+            .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
+            .IsEqualTo(expression);
     }
 
     /// <summary>The single statement of the method <paramref name="name"/> in <paramref name="source"/>.</summary>
@@ -287,6 +458,9 @@ public class NarrowIntegerLoweringTests
     {
         var lines = source.Split('\n');
         var header = Array.FindIndex(lines, line => line.TrimStart().StartsWith(name + "("));
+
+        if (header < 0)
+            throw new InvalidOperationException($"No method '{name}' in the generated source.");
 
         return lines[header + 1].Trim();
     }

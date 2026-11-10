@@ -1,9 +1,11 @@
 /**
- * Runtime helpers for C#'s 64-bit integers, which the compiler maps to `bigint`:
- * range checks, checked narrowing, lifted conversions, the conversions from
+ * Runtime helpers for C#'s integers. For the 64-bit ones, which the compiler maps to
+ * `bigint`: range checks, checked narrowing, lifted conversions, the conversions from
  * `double`, `decimal` and `BigInteger` with .NET 9+ semantics, and division and
- * remainder with .NET's exceptions. Every export is a function or a constant,
- * so generated code imports only what it calls.
+ * remainder with .NET's exceptions. For the integers of 32 bits or fewer, which stay a
+ * `number`: the range checks of a checked context (`checkedInt32`, `checkedUInt32`,
+ * `checkedNarrowNumber`) and the truncating conversions from `double`. Every export is a
+ * function or a constant, so generated code imports only what it calls.
  */
 import { DivideByZeroException, OverflowException } from "./exceptions/index.ts";
 
@@ -77,12 +79,21 @@ export function checkedNarrow(value: bigint, bits: 8 | 16 | 32, signed: boolean)
  * in a checked context computes in a `number` and checks the result here: a sum or a
  * difference of two 32-bit values is exact in a double, and a product too large to be exact
  * is far outside the range, so the test decides as .NET does.
+ *
+ * `value` must be an integer: the range is tested, the value is not truncated, so a
+ * fractional value inside the range is returned unchanged (`checkedInt32(1.5)` is `1.5`).
+ * A checked `(int)d` from a `double` goes through {@link int32FromDoubleChecked}.
  */
 export function checkedInt32(value: number): number {
   return requireNumberRange(value, INT32_MIN, INT32_MAX);
 }
 
-/** Returns `value` when it fits `uint` (0 … 2^32 − 1); throws OverflowException otherwise. */
+/**
+ * Returns `value` when it fits `uint` (0 … 2^32 − 1); throws OverflowException otherwise.
+ *
+ * `value` must be an integer: it is not truncated (see {@link checkedInt32}). A checked
+ * `(uint)d` from a `double` goes through {@link uint32FromDoubleChecked}.
+ */
 export function checkedUInt32(value: number): number {
   return requireNumberRange(value, 0, UINT32_MAX);
 }
@@ -90,9 +101,12 @@ export function checkedUInt32(value: number): number {
 /**
  * Checked narrowing of an integer held in a `number` to a `bits`-wide integer (`sbyte` /
  * `byte`, `short` / `ushort`): returns `value` when it fits, throws OverflowException
- * otherwise. The `number` counterpart of {@link checkedNarrow}.
+ * otherwise. The `number` counterpart of {@link checkedNarrow}; for 32 bits use
+ * {@link checkedInt32} / {@link checkedUInt32}.
+ *
+ * `value` must be an integer: it is not truncated (see {@link checkedInt32}).
  */
-export function checkedNarrowInt32(value: number, bits: 8 | 16, signed: boolean): number {
+export function checkedNarrowNumber(value: number, bits: 8 | 16, signed: boolean): number {
   const min = signed ? -(2 ** (bits - 1)) : 0;
   const max = signed ? 2 ** (bits - 1) - 1 : 2 ** bits - 1;
 

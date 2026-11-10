@@ -1,4 +1,4 @@
-import { checkedNarrowInt32, intDiv } from "metano-runtime";
+import { checkedNarrowNumber, intDiv } from "metano-runtime";
 
 export function sByteAdd(a: number, b: number): number {
   a = ((a + b) << 24) >> 24;
@@ -38,7 +38,7 @@ export function sByteXor(a: number, b: number): number {
 
 export function sByteAddChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a + b, 8, true);
+    a = checkedNarrowNumber(a + b, 8, true);
   }
 
   return a;
@@ -46,7 +46,7 @@ export function sByteAddChecked(a: number, b: number): number {
 
 export function sByteSubtractChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a - b, 8, true);
+    a = checkedNarrowNumber(a - b, 8, true);
   }
 
   return a;
@@ -54,7 +54,7 @@ export function sByteSubtractChecked(a: number, b: number): number {
 
 export function sByteMultiplyChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a * b, 8, true);
+    a = checkedNarrowNumber(a * b, 8, true);
   }
 
   return a;
@@ -74,7 +74,7 @@ export function sByteRemainder(a: number, divisor: number): number {
 
 export function sByteDivideChecked(a: number, divisor: number): number {
   {
-    a = checkedNarrowInt32(intDiv(a, divisor), 8, true);
+    a = checkedNarrowNumber(intDiv(a, divisor), 8, true);
   }
 
   return a;
@@ -88,7 +88,7 @@ export function sByteShiftLeft(a: number, count: number): number {
 
 export function sByteShiftLeftChecked(a: number, count: number): number {
   {
-    a = checkedNarrowInt32(a << count, 8, true);
+    a = checkedNarrowNumber(a << count, 8, true);
   }
 
   return a;
@@ -116,7 +116,7 @@ export function sByteShiftRightLogical(a: number, count: number): number {
 
 export function sByteShiftRightLogicalChecked(a: number, count: number): number {
   {
-    a = checkedNarrowInt32((a >>> count) | 0, 8, true);
+    a = checkedNarrowNumber((a >>> count) | 0, 8, true);
   }
 
   return a;
@@ -139,12 +139,12 @@ export function sBytePostfixIncrementStored(a: number): number {
 }
 
 export function sBytePrefixIncrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a + 1, 8, true);
+  return a = checkedNarrowNumber(a + 1, 8, true);
 }
 
 export function sBytePostfixIncrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a + 1, 8, true)) - 1;
+    const previous = (a = checkedNarrowNumber(a + 1, 8, true)) - 1;
 
     return previous;
   }
@@ -167,12 +167,12 @@ export function sBytePostfixDecrementStored(a: number): number {
 }
 
 export function sBytePrefixDecrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a - 1, 8, true);
+  return a = checkedNarrowNumber(a - 1, 8, true);
 }
 
 export function sBytePostfixDecrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a - 1, 8, true)) + 1;
+    const previous = (a = checkedNarrowNumber(a - 1, 8, true)) + 1;
 
     return previous;
   }
@@ -216,7 +216,7 @@ export function byteXor(a: number, b: number): number {
 
 export function byteAddChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a + b, 8, false);
+    a = checkedNarrowNumber(a + b, 8, false);
   }
 
   return a;
@@ -224,7 +224,7 @@ export function byteAddChecked(a: number, b: number): number {
 
 export function byteSubtractChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a - b, 8, false);
+    a = checkedNarrowNumber(a - b, 8, false);
   }
 
   return a;
@@ -232,7 +232,7 @@ export function byteSubtractChecked(a: number, b: number): number {
 
 export function byteMultiplyChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a * b, 8, false);
+    a = checkedNarrowNumber(a * b, 8, false);
   }
 
   return a;
@@ -266,7 +266,7 @@ export function byteShiftLeft(a: number, count: number): number {
 
 export function byteShiftLeftChecked(a: number, count: number): number {
   {
-    a = checkedNarrowInt32(a << count, 8, false);
+    a = checkedNarrowNumber(a << count, 8, false);
   }
 
   return a;
@@ -317,12 +317,12 @@ export function bytePostfixIncrementStored(a: number): number {
 }
 
 export function bytePrefixIncrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a + 1, 8, false);
+  return a = checkedNarrowNumber(a + 1, 8, false);
 }
 
 export function bytePostfixIncrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a + 1, 8, false)) - 1;
+    const previous = (a = checkedNarrowNumber(a + 1, 8, false)) - 1;
 
     return previous;
   }
@@ -345,12 +345,12 @@ export function bytePostfixDecrementStored(a: number): number {
 }
 
 export function bytePrefixDecrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a - 1, 8, false);
+  return a = checkedNarrowNumber(a - 1, 8, false);
 }
 
 export function bytePostfixDecrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a - 1, 8, false)) + 1;
+    const previous = (a = checkedNarrowNumber(a - 1, 8, false)) + 1;
 
     return previous;
   }
@@ -394,7 +394,7 @@ export function shortXor(a: number, b: number): number {
 
 export function shortAddChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a + b, 16, true);
+    a = checkedNarrowNumber(a + b, 16, true);
   }
 
   return a;
@@ -402,7 +402,7 @@ export function shortAddChecked(a: number, b: number): number {
 
 export function shortSubtractChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a - b, 16, true);
+    a = checkedNarrowNumber(a - b, 16, true);
   }
 
   return a;
@@ -410,7 +410,7 @@ export function shortSubtractChecked(a: number, b: number): number {
 
 export function shortMultiplyChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a * b, 16, true);
+    a = checkedNarrowNumber(a * b, 16, true);
   }
 
   return a;
@@ -430,7 +430,7 @@ export function shortRemainder(a: number, divisor: number): number {
 
 export function shortDivideChecked(a: number, divisor: number): number {
   {
-    a = checkedNarrowInt32(intDiv(a, divisor), 16, true);
+    a = checkedNarrowNumber(intDiv(a, divisor), 16, true);
   }
 
   return a;
@@ -444,7 +444,7 @@ export function shortShiftLeft(a: number, count: number): number {
 
 export function shortShiftLeftChecked(a: number, count: number): number {
   {
-    a = checkedNarrowInt32(a << count, 16, true);
+    a = checkedNarrowNumber(a << count, 16, true);
   }
 
   return a;
@@ -472,7 +472,7 @@ export function shortShiftRightLogical(a: number, count: number): number {
 
 export function shortShiftRightLogicalChecked(a: number, count: number): number {
   {
-    a = checkedNarrowInt32((a >>> count) | 0, 16, true);
+    a = checkedNarrowNumber((a >>> count) | 0, 16, true);
   }
 
   return a;
@@ -495,12 +495,12 @@ export function shortPostfixIncrementStored(a: number): number {
 }
 
 export function shortPrefixIncrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a + 1, 16, true);
+  return a = checkedNarrowNumber(a + 1, 16, true);
 }
 
 export function shortPostfixIncrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a + 1, 16, true)) - 1;
+    const previous = (a = checkedNarrowNumber(a + 1, 16, true)) - 1;
 
     return previous;
   }
@@ -523,12 +523,12 @@ export function shortPostfixDecrementStored(a: number): number {
 }
 
 export function shortPrefixDecrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a - 1, 16, true);
+  return a = checkedNarrowNumber(a - 1, 16, true);
 }
 
 export function shortPostfixDecrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a - 1, 16, true)) + 1;
+    const previous = (a = checkedNarrowNumber(a - 1, 16, true)) + 1;
 
     return previous;
   }
@@ -572,7 +572,7 @@ export function uShortXor(a: number, b: number): number {
 
 export function uShortAddChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a + b, 16, false);
+    a = checkedNarrowNumber(a + b, 16, false);
   }
 
   return a;
@@ -580,7 +580,7 @@ export function uShortAddChecked(a: number, b: number): number {
 
 export function uShortSubtractChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a - b, 16, false);
+    a = checkedNarrowNumber(a - b, 16, false);
   }
 
   return a;
@@ -588,7 +588,7 @@ export function uShortSubtractChecked(a: number, b: number): number {
 
 export function uShortMultiplyChecked(a: number, b: number): number {
   {
-    a = checkedNarrowInt32(a * b, 16, false);
+    a = checkedNarrowNumber(a * b, 16, false);
   }
 
   return a;
@@ -622,7 +622,7 @@ export function uShortShiftLeft(a: number, count: number): number {
 
 export function uShortShiftLeftChecked(a: number, count: number): number {
   {
-    a = checkedNarrowInt32(a << count, 16, false);
+    a = checkedNarrowNumber(a << count, 16, false);
   }
 
   return a;
@@ -673,12 +673,12 @@ export function uShortPostfixIncrementStored(a: number): number {
 }
 
 export function uShortPrefixIncrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a + 1, 16, false);
+  return a = checkedNarrowNumber(a + 1, 16, false);
 }
 
 export function uShortPostfixIncrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a + 1, 16, false)) - 1;
+    const previous = (a = checkedNarrowNumber(a + 1, 16, false)) - 1;
 
     return previous;
   }
@@ -701,12 +701,12 @@ export function uShortPostfixDecrementStored(a: number): number {
 }
 
 export function uShortPrefixDecrementChecked(a: number): number {
-  return a = checkedNarrowInt32(a - 1, 16, false);
+  return a = checkedNarrowNumber(a - 1, 16, false);
 }
 
 export function uShortPostfixDecrementChecked(a: number): number {
   {
-    const previous = (a = checkedNarrowInt32(a - 1, 16, false)) + 1;
+    const previous = (a = checkedNarrowNumber(a - 1, 16, false)) + 1;
 
     return previous;
   }
@@ -726,8 +726,8 @@ export function sByteFieldCompoundChecked(start: number, amount: number): number
   cells.sByteField = start;
 
   {
-    cells.sByteField = checkedNarrowInt32(cells.sByteField - amount, 8, true);
-    cells.sByteField = checkedNarrowInt32(cells.sByteField - 1, 8, true);
+    cells.sByteField = checkedNarrowNumber(cells.sByteField - amount, 8, true);
+    cells.sByteField = checkedNarrowNumber(cells.sByteField - 1, 8, true);
   }
 
   return cells.sByteField;
@@ -770,7 +770,7 @@ export function byteLiftedIncrement(a: number | null): number | null {
 
 export function shortLiftedDecrementChecked(a: number | null): number | null {
   {
-    a = a == null ? null : checkedNarrowInt32(a - 1, 16, true);
+    a = a == null ? null : checkedNarrowNumber(a - 1, 16, true);
   }
 
   return a;
@@ -820,7 +820,7 @@ export class NarrowCells {
 
   shiftCellChecked(count: number): number {
     {
-      ((receiver$temp$0) => this._cells[receiver$temp$0] = checkedNarrowInt32(this._cells[receiver$temp$0] << count, 16, false))(this.nextCell());
+      ((receiver$temp$0) => this._cells[receiver$temp$0] = checkedNarrowNumber(this._cells[receiver$temp$0] << count, 16, false))(this.nextCell());
     }
 
     return this._cells[1];

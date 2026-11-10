@@ -20,11 +20,23 @@ internal static class NarrowIntegerTsExpressions
 {
     private const string ByteMask = "0xFF";
     private const string UInt16Mask = "0xFFFF";
-    private const int Int32Width = 32;
 
-    /// <summary><paramref name="value"/> reduced to <paramref name="kind"/>: wrapped, or range-checked when <paramref name="isChecked"/>.</summary>
-    public static TsExpression Reduced(IrNumericKind kind, bool isChecked, TsExpression value) =>
-        isChecked ? Checked(kind, value) : Wrapped(kind, value);
+    /// <summary><paramref name="value"/> reduced to <paramref name="kind"/> as <paramref name="mode"/> says: wrapped or range-checked.</summary>
+    public static TsExpression Reduced(
+        IrNumericKind kind,
+        IrOverflowMode mode,
+        TsExpression value
+    ) =>
+        mode switch
+        {
+            IrOverflowMode.Wrap => Wrapped(kind, value),
+            IrOverflowMode.Check => Checked(kind, value),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(mode),
+                mode,
+                $"Unknown overflow mode '{mode}'."
+            ),
+        };
 
     /// <summary>The low bits of <paramref name="value"/>, read as <paramref name="kind"/>.</summary>
     public static TsExpression Wrapped(IrNumericKind kind, TsExpression value) =>
@@ -48,7 +60,7 @@ internal static class NarrowIntegerTsExpressions
             or IrNumericKind.Byte
             or IrNumericKind.Int16
             or IrNumericKind.UInt16 => RuntimeCall(
-                Int64RuntimeHelpers.CheckedNarrowInt32,
+                Int64RuntimeHelpers.CheckedNarrowNumber,
                 value,
                 Literal(kind.BitWidth()),
                 new TsLiteral(kind.IsSigned() ? "true" : "false")
@@ -59,7 +71,7 @@ internal static class NarrowIntegerTsExpressions
     /// <summary><c>(value &lt;&lt; shift) &gt;&gt; shift</c>: the low <paramref name="bits"/> bits, sign-extended.</summary>
     private static TsExpression SignExtended(TsExpression value, int bits)
     {
-        var count = Literal(Int32Width - bits);
+        var count = Literal(IrNumericKind.Int32.BitWidth() - bits);
 
         return new TsBinaryExpression(
             new TsParenthesized(new TsBinaryExpression(Grouped(value), "<<", count)),

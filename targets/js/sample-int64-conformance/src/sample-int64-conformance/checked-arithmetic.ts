@@ -1,4 +1,4 @@
-import { checkedInt32, checkedNarrowInt32, checkedUInt32 } from "metano-runtime";
+import { checkedInt32, checkedNarrowNumber, checkedUInt32 } from "metano-runtime";
 
 export function intAddChecked(a: number, b: number): number {
   return checkedInt32(a + b);
@@ -177,11 +177,11 @@ export function shortNegateChecked(a: number): number {
 }
 
 export function bytesAddNarrowedChecked(a: number, b: number): number {
-  return checkedNarrowInt32(a + b, 8, false);
+  return checkedNarrowNumber(a + b, 8, false);
 }
 
 export function shortsMultiplyNarrowedChecked(a: number, b: number): number {
-  return checkedNarrowInt32(a * b, 16, true);
+  return checkedNarrowNumber(a * b, 16, true);
 }
 
 export function intLiftedAddChecked(a: number | null, b: number | null): number | null {

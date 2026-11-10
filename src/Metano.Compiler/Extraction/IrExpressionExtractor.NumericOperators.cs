@@ -94,6 +94,11 @@ public sealed partial class IrExpressionExtractor
     /// <c>u &gt;&gt;= n</c> stores the binary form's value, which carries
     /// its operand kind (FR-076).
     /// </summary>
+    /// <remarks>
+    /// TODO(#549): this encodes a JavaScript fact (<c>&gt;&gt;=</c> reads 32
+    /// signed bits). A 64-bit Dart <c>int</c> could keep <c>u &gt;&gt;= n</c>;
+    /// a target capability should decide it.
+    /// </remarks>
     private bool NeedsLogicalShiftReadModifyWrite(IrBinaryOp op, ExpressionSyntax operatorSyntax) =>
         op is IrBinaryOp.RightShift && BuiltInNumericKindOf(operatorSyntax) is IrNumericKind.UInt32;
 

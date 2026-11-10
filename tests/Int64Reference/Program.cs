@@ -47,7 +47,8 @@ ReferenceFixture.Write(
     typeof(NarrowConversions),
     typeof(NarrowCompound),
     typeof(UnsignedBits),
-    typeof(CheckedArithmetic)
+    typeof(CheckedArithmetic),
+    typeof(NarrowShapes)
 );
 
 ReferenceFixture.Write(Path.Combine(fixtures, "project-checked.json"), typeof(ProjectChecked));

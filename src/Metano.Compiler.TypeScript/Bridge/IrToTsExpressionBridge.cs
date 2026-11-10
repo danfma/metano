@@ -176,6 +176,9 @@ public static partial class IrToTsExpressionBridge
         )
             return int64Operator;
 
+        if (NativeCompoundLeftShiftOf(bin) is { } compoundShift)
+            return MapBinary(compoundShift, context);
+
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
@@ -215,6 +218,27 @@ public static partial class IrToTsExpressionBridge
             MapOperand(bin.Right, comparesWithLiteral, context)
         );
     }
+
+    /// <summary>
+    /// <c>target &lt;&lt;= count</c> when <paramref name="bin"/> is the
+    /// read-modify-write the core builds for an <c>int</c> <c>&lt;&lt;=</c>
+    /// (<c>target = wrap(target &lt;&lt; count)</c>, the same target node
+    /// read and written): JavaScript's <c>&lt;&lt;=</c> computes in 32 signed
+    /// bits, which is that wrap already (FR-076). <c>null</c> otherwise.
+    /// </summary>
+    private static IrBinaryExpression? NativeCompoundLeftShiftOf(IrBinaryExpression bin) =>
+        bin
+            is {
+                Operator: IrBinaryOp.Assign,
+                Right: IrIntegerOverflow
+                {
+                    Value: IrBinaryExpression { Left: var read, Right: var count }
+                } overflow
+            }
+        && IrToTsIntegerOverflowBridge.IsNativeInt32Wrap(overflow)
+        && ReferenceEquals(read, bin.Left)
+            ? new IrBinaryExpression(bin.Left, IrBinaryOp.LeftShiftAssign, count)
+            : null;
 
     /// <summary>
     /// The JS operator of <paramref name="bin"/>. C# shifts a <c>uint</c>

@@ -1,4 +1,4 @@
-import { checkedInt32, checkedInt64, checkedNarrow, checkedNarrowInt32, checkedUInt32, checkedUInt64, int32FromDoubleChecked } from "metano-runtime";
+import { checkedInt32, checkedInt64, checkedNarrow, checkedNarrowNumber, checkedUInt32, checkedUInt64, int32FromDoubleChecked, intDiv } from "metano-runtime";
 
 export function intAdd(a: number, b: number): number {
   return checkedInt32(a + b);
@@ -45,19 +45,19 @@ export function uIntOr(a: number, b: number): number {
 }
 
 export function intToByte(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function intToSByte(source: number): number {
-  return checkedNarrowInt32(source, 8, true);
+  return checkedNarrowNumber(source, 8, true);
 }
 
 export function intToShort(source: number): number {
-  return checkedNarrowInt32(source, 16, true);
+  return checkedNarrowNumber(source, 16, true);
 }
 
 export function intToUShort(source: number): number {
-  return checkedNarrowInt32(source, 16, false);
+  return checkedNarrowNumber(source, 16, false);
 }
 
 export function intToUInt(source: number): number {
@@ -69,7 +69,7 @@ export function uIntToInt(source: number): number {
 }
 
 export function sByteToByte(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function longToInt(source: bigint): number {
@@ -81,27 +81,27 @@ export function doubleToByte(source: number): number {
 }
 
 export function liftedIntToByte(source: number | null): number | null {
-  return source == null ? null : checkedNarrowInt32(source, 8, false);
+  return source == null ? null : checkedNarrowNumber(source, 8, false);
 }
 
 export function byteAdd(a: number, b: number): number {
-  a = checkedNarrowInt32(a + b, 8, false);
+  a = checkedNarrowNumber(a + b, 8, false);
 
   return a;
 }
 
 export function sByteIncrement(a: number): number {
-  return a = checkedNarrowInt32(a + 1, 8, true);
+  return a = checkedNarrowNumber(a + 1, 8, true);
 }
 
 export function shortPostfixDecrement(a: number): number {
-  const previous = (a = checkedNarrowInt32(a - 1, 16, true)) + 1;
+  const previous = (a = checkedNarrowNumber(a - 1, 16, true)) + 1;
 
-  return checkedNarrowInt32(previous ^ a, 16, true);
+  return checkedNarrowNumber(previous ^ a, 16, true);
 }
 
 export function uShortShiftLeft(a: number, count: number): number {
-  a = checkedNarrowInt32(a << count, 16, false);
+  a = checkedNarrowNumber(a << count, 16, false);
 
   return a;
 }
@@ -122,6 +122,12 @@ export function intAddLambda(a: number, b: number): number {
   const add = (value: number) => checkedInt32(value + b);
 
   return add(a);
+}
+
+export function uncheckedHashNarrowed(a: number): number {
+  const hash = ((a * 31 + 7) >>> 0) | 0;
+
+  return checkedInt32(intDiv(hash, 2) + 1);
 }
 
 export function uncheckedIntToByte(source: number): number {

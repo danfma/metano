@@ -1,4 +1,4 @@
-import { checkedInt32, checkedNarrow, checkedNarrowInt32, checkedUInt32, int32FromDouble, int32FromDoubleChecked, uint32FromDouble, uint32FromDoubleChecked } from "metano-runtime";
+import { checkedInt32, checkedNarrow, checkedNarrowNumber, checkedUInt32, int32FromDouble, int32FromDoubleChecked, uint32FromDouble, uint32FromDoubleChecked } from "metano-runtime";
 
 export function sByteToSByte(source: number): number {
   return source;
@@ -13,7 +13,7 @@ export function sByteToByte(source: number): number {
 }
 
 export function sByteToByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function sByteToShort(source: number): number {
@@ -29,7 +29,7 @@ export function sByteToUShort(source: number): number {
 }
 
 export function sByteToUShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, false);
+  return checkedNarrowNumber(source, 16, false);
 }
 
 export function sByteToInt(source: number): number {
@@ -53,7 +53,7 @@ export function byteToSByte(source: number): number {
 }
 
 export function byteToSByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, true);
+  return checkedNarrowNumber(source, 8, true);
 }
 
 export function byteToByte(source: number): number {
@@ -101,7 +101,7 @@ export function shortToSByte(source: number): number {
 }
 
 export function shortToSByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, true);
+  return checkedNarrowNumber(source, 8, true);
 }
 
 export function shortToByte(source: number): number {
@@ -109,7 +109,7 @@ export function shortToByte(source: number): number {
 }
 
 export function shortToByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function shortToShort(source: number): number {
@@ -125,7 +125,7 @@ export function shortToUShort(source: number): number {
 }
 
 export function shortToUShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, false);
+  return checkedNarrowNumber(source, 16, false);
 }
 
 export function shortToInt(source: number): number {
@@ -149,7 +149,7 @@ export function uShortToSByte(source: number): number {
 }
 
 export function uShortToSByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, true);
+  return checkedNarrowNumber(source, 8, true);
 }
 
 export function uShortToByte(source: number): number {
@@ -157,7 +157,7 @@ export function uShortToByte(source: number): number {
 }
 
 export function uShortToByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function uShortToShort(source: number): number {
@@ -165,7 +165,7 @@ export function uShortToShort(source: number): number {
 }
 
 export function uShortToShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, true);
+  return checkedNarrowNumber(source, 16, true);
 }
 
 export function uShortToUShort(source: number): number {
@@ -197,7 +197,7 @@ export function intToSByte(source: number): number {
 }
 
 export function intToSByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, true);
+  return checkedNarrowNumber(source, 8, true);
 }
 
 export function intToByte(source: number): number {
@@ -205,7 +205,7 @@ export function intToByte(source: number): number {
 }
 
 export function intToByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function intToShort(source: number): number {
@@ -213,7 +213,7 @@ export function intToShort(source: number): number {
 }
 
 export function intToShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, true);
+  return checkedNarrowNumber(source, 16, true);
 }
 
 export function intToUShort(source: number): number {
@@ -221,7 +221,7 @@ export function intToUShort(source: number): number {
 }
 
 export function intToUShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, false);
+  return checkedNarrowNumber(source, 16, false);
 }
 
 export function intToInt(source: number): number {
@@ -245,7 +245,7 @@ export function uIntToSByte(source: number): number {
 }
 
 export function uIntToSByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, true);
+  return checkedNarrowNumber(source, 8, true);
 }
 
 export function uIntToByte(source: number): number {
@@ -253,7 +253,7 @@ export function uIntToByte(source: number): number {
 }
 
 export function uIntToByteChecked(source: number): number {
-  return checkedNarrowInt32(source, 8, false);
+  return checkedNarrowNumber(source, 8, false);
 }
 
 export function uIntToShort(source: number): number {
@@ -261,7 +261,7 @@ export function uIntToShort(source: number): number {
 }
 
 export function uIntToShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, true);
+  return checkedNarrowNumber(source, 16, true);
 }
 
 export function uIntToUShort(source: number): number {
@@ -269,7 +269,7 @@ export function uIntToUShort(source: number): number {
 }
 
 export function uIntToUShortChecked(source: number): number {
-  return checkedNarrowInt32(source, 16, false);
+  return checkedNarrowNumber(source, 16, false);
 }
 
 export function uIntToInt(source: number): number {
@@ -432,12 +432,60 @@ export function doubleToUIntChecked(source: number): number {
   return uint32FromDoubleChecked(source);
 }
 
+export function floatToSByte(source: number): number {
+  return (int32FromDouble(source) << 24) >> 24;
+}
+
+export function floatToSByteChecked(source: number): number {
+  return Number(checkedNarrow(BigInt(int32FromDoubleChecked(source)), 8, true));
+}
+
+export function floatToByte(source: number): number {
+  return int32FromDouble(source) & 0xFF;
+}
+
+export function floatToByteChecked(source: number): number {
+  return Number(checkedNarrow(BigInt(int32FromDoubleChecked(source)), 8, false));
+}
+
+export function floatToShort(source: number): number {
+  return (int32FromDouble(source) << 16) >> 16;
+}
+
+export function floatToShortChecked(source: number): number {
+  return Number(checkedNarrow(BigInt(int32FromDoubleChecked(source)), 16, true));
+}
+
+export function floatToUShort(source: number): number {
+  return int32FromDouble(source) & 0xFFFF;
+}
+
+export function floatToUShortChecked(source: number): number {
+  return Number(checkedNarrow(BigInt(int32FromDoubleChecked(source)), 16, false));
+}
+
+export function floatToInt(source: number): number {
+  return int32FromDouble(source);
+}
+
+export function floatToIntChecked(source: number): number {
+  return int32FromDoubleChecked(source);
+}
+
+export function floatToUInt(source: number): number {
+  return uint32FromDouble(source);
+}
+
+export function floatToUIntChecked(source: number): number {
+  return uint32FromDoubleChecked(source);
+}
+
 export function liftedIntToByte(source: number | null): number | null {
   return source == null ? null : source & 0xFF;
 }
 
 export function liftedIntToByteChecked(source: number | null): number | null {
-  return source == null ? null : checkedNarrowInt32(source, 8, false);
+  return source == null ? null : checkedNarrowNumber(source, 8, false);
 }
 
 export function liftedIntToUInt(source: number | null): number | null {
@@ -445,7 +493,7 @@ export function liftedIntToUInt(source: number | null): number | null {
 }
 
 export function liftedUIntToShortChecked(source: number | null): number | null {
-  return source == null ? null : checkedNarrowInt32(source, 16, true);
+  return source == null ? null : checkedNarrowNumber(source, 16, true);
 }
 
 export function liftedLongToIntChecked(source: bigint | null): number | null {

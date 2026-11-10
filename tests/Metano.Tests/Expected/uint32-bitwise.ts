@@ -80,6 +80,18 @@ export class Bits {
     return a << n;
   }
 
+  intShiftLeftConstant(b: number): number {
+    return b << 8;
+  }
+
+  intCompoundShift(cells: number[], n: number): void {
+    cells[0] <<= n;
+  }
+
+  shiftLeftNarrow(b: number): number {
+    return b << 8;
+  }
+
   intShiftRight(a: number, n: number): number {
     return a >> n;
   }

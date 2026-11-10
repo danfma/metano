@@ -101,6 +101,17 @@ public static class ProjectChecked
         return add(a);
     }
 
+    /// <summary>
+    /// An unchecked hash narrowed through <c>uint</c>, so the value a checked
+    /// operation reads later is the wrapped one in every target.
+    /// </summary>
+    public static int UncheckedHashNarrowed(int a)
+    {
+        var hash = unchecked((int)(uint)(a * 31 + 7));
+
+        return hash / 2 + 1;
+    }
+
     public static byte UncheckedIntToByte(int source) => unchecked((byte)source);
 
     public static uint UncheckedIntToUInt(int source) => unchecked((uint)source);

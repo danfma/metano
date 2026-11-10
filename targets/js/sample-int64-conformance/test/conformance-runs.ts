@@ -22,6 +22,7 @@ import * as indexing from "../src/sample-int64-conformance/indexing.ts";
 import * as mathStatics from "../src/sample-int64-conformance/math-statics.ts";
 import * as narrowCompound from "../src/sample-int64-conformance/narrow-compound.ts";
 import * as narrowConversions from "../src/sample-int64-conformance/narrow-conversions.ts";
+import * as narrowShapes from "../src/sample-int64-conformance/narrow-shapes.ts";
 import * as nullableUnwraps from "../src/sample-int64-conformance/nullable-unwraps.ts";
 import * as overflow from "../src/sample-int64-conformance/overflow.ts";
 import * as parsing from "../src/sample-int64-conformance/parsing.ts";
@@ -54,7 +55,7 @@ export const FIXTURE_RUNS: readonly FixtureRun[] = [
   { name: "nullable-unwraps.json", twin: [nullableUnwraps] },
   {
     name: "narrow-integers.json",
-    twin: [narrowConversions, narrowCompound, unsignedBits, checkedArithmetic],
+    twin: [narrowConversions, narrowCompound, unsignedBits, checkedArithmetic, narrowShapes],
   },
   { name: "project-checked.json", twin: [projectChecked] },
 ];

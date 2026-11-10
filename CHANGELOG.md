@@ -182,29 +182,67 @@ the migration list.
 - **Checked contexts** (`checked(...)`, `checked { }`, the project's
   `CheckForOverflowUnderflow`) now throw `OverflowException` where C# does:
   a narrowing conversion calls `checkedInt32` / `checkedUInt32` /
-  `checkedNarrowInt32`, and `+`, `-`, `*`, unary `-`, `++`, `--` and their
+  `checkedNarrowNumber`, and `+`, `-`, `*`, unary `-`, `++`, `--` and their
   compound forms on `int` / `uint` pass their result through `checkedInt32`
   / `checkedUInt32` (`i++` becomes `i = checkedInt32(i + 1)`). 2.x never
   threw. A project compiled with `CheckForOverflowUnderflow` therefore gets
-  a `metano-runtime` call on every such operation; wrap hot code in
-  `unchecked` to keep the plain operators. A checked conversion of a
-  nullable value (`checked((int?)nullableLong)`) is checked too; it was
-  emitted unchecked before.
+  a `metano-runtime` call on every such operation. An `unchecked` block
+  keeps the plain operators, but its results are not wrapped (the known gap
+  below), so do not let a value that may have overflowed there reach a
+  checked operation.
+- **Checked conversions of nullable values** are checked now, for the
+  64-bit integers too. Roslyn reports the checked flag for a plain numeric
+  conversion only, so these were all emitted unchecked before:
+  `checked((byte?)ni)`, `checked((int?)l)`, `checked((int)nl)`,
+  `checked((int?)nullableDouble)`, `checked((ulong?)ni)`,
+  `checked((long?)nullableULong)`, `checked((ulong?)nl)`.
 - **Known gap:** `int` / `uint` arithmetic does not wrap in the default
   (unchecked) context. `int.MaxValue + 1` is `2147483648` where C# gives
   `int.MinValue`; values stay exact up to 2^53. Wrapping every integer
   expression (`(a + b) | 0`, `Math.imul(a, b)`) is deferred (#639, layer
-  3). `int.MinValue / -1` returns `2147483648` instead of throwing.
+  3). `int.MinValue / -1` returns `2147483648` instead of throwing. At the
+  edges of the gap:
+  - an unchecked overflow that feeds checked arithmetic throws: in a
+    `CheckForOverflowUnderflow` project, `var h = unchecked(a * 31 + 7);
+    return h + 1;` with `a = int.MaxValue` is `2147483625` on .NET and an
+    `OverflowException` here, because `h` was never wrapped. Narrow the
+    unchecked result through another type to wrap it
+    (`unchecked((int)(uint)(a * 31 + 7))` emits `((a * 31 + 7) >>> 0) | 0`,
+    exact while the value stays below 2^53);
+  - a cast to the operand's own type emits nothing and does not wrap:
+    `(int)(i + j)` and `(uint)(u1 - u2)` keep the unwrapped result, while
+    `(uint)(i - j)` and `(int)(u1 + u2)` narrow;
+  - `uint` bit patterns are normalized and `uint` arithmetic is not:
+    `(a - b) | 0u` is C#'s value, `a - b` alone stays negative when it
+    underflows;
+  - `checked(a + a % b)` with `b == 0` throws `OverflowException` where
+    .NET throws `DivideByZeroException` (the native `%` yields `NaN`).
+- **Dictionary entries:** a compound assignment or an increment whose store
+  needs one of these lowerings reports `MS0001` (`'counts[key]++' on a
+  dictionary entry is not supported.`): `counts[key]++` or `counts[key] +=
+  2` on a `Dictionary<string, int>` in a checked context, any such store on
+  a `byte` / `sbyte` / `short` / `ushort` value, `flags[key] |= mask` on a
+  `uint` value. The 64-bit forms already did. 2.x emitted
+  `counts.get(key)++` for these, which is not valid JavaScript; an `int`
+  entry in the default context still does. Read, compute and write the
+  entry in separate statements.
 - Not covered: `char` conversions (#501), `decimal` sources (#521, #606),
   conversions to or from an enum, and `[Queryable]` expression trees keep
-  their earlier lowering. A compound assignment or increment that needs one
-  of these lowerings on a dictionary entry (`counts[key]++` in a checked
-  context, or on a `byte` value) reports `MS0001`, as the 64-bit forms do.
+  their earlier lowering, with three visible exceptions: `checked(a - b)`
+  on two values of an enum declared narrower than `int` is checked (C#
+  types the difference as the underlying integer); `(byte)(int)c` on a
+  `char` emits `c & 0xFF` on a string, which is `0`; and `checked(c + 1)`
+  on a `char` now throws `OverflowException` where it returned a
+  concatenated string. The last two wait for #501.
 - `metano-runtime` adds `checkedInt32(value)`, `checkedUInt32(value)` and
-  `checkedNarrowInt32(value, bits, signed)`.
+  `checkedNarrowNumber(value, bits, signed)`.
 - Dart: an `int` is 64-bit, so the same conversions and stores print
   `.toSigned(n)` / `.toUnsigned(n)` (`x.toUnsigned(8)`,
-  `(b + 1).toUnsigned(8)`); a checked context wraps instead of throwing.
+  `(b + 1).toUnsigned(8)`, `(i << n).toSigned(32)`,
+  `(i.toUnsigned(32) >>> n).toSigned(32)`). Dart never throws in a checked
+  context: checked `int` / `uint` arithmetic prints as its unchecked form
+  (`checked(a + b)` → `a + b`, no wrap), and a checked conversion or narrow
+  store prints the narrowing of its unchecked form.
 
 ### ⚠ Overload factories, fast paths and direct call sites (spec 013)
 

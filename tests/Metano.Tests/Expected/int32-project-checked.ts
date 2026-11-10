@@ -1,4 +1,4 @@
-import { checkedInt32, checkedNarrowInt32 } from "metano-runtime";
+import { checkedInt32, checkedNarrowNumber } from "metano-runtime";
 
 export class Project {
   constructor() { }
@@ -8,11 +8,11 @@ export class Project {
   }
 
   narrow(x: number): number {
-    return checkedNarrowInt32(x, 8, false);
+    return checkedNarrowNumber(x, 8, false);
   }
 
   step(b: number): number {
-    b = checkedNarrowInt32(b + 1, 8, false);
+    b = checkedNarrowNumber(b + 1, 8, false);
 
     return b;
   }

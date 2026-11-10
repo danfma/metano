@@ -102,25 +102,25 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 |---|---|---|
 | `(int)u` | `u \| 0` | `checkedInt32(u)` |
 | `(uint)i` | `i >>> 0` | `checkedUInt32(i)` |
-| `(short)i` | `(i << 16) >> 16` | `checkedNarrowInt32(i, 16, true)` |
-| `(ushort)i` | `i & 0xFFFF` | `checkedNarrowInt32(i, 16, false)` |
-| `(sbyte)i` | `(i << 24) >> 24` | `checkedNarrowInt32(i, 8, true)` |
-| `(byte)i` | `i & 0xFF` | `checkedNarrowInt32(i, 8, false)` |
+| `(short)i` | `(i << 16) >> 16` | `checkedNarrowNumber(i, 16, true)` |
+| `(ushort)i` | `i & 0xFFFF` | `checkedNarrowNumber(i, 16, false)` |
+| `(sbyte)i` | `(i << 24) >> 24` | `checkedNarrowNumber(i, 8, true)` |
+| `(byte)i` | `i & 0xFF` | `checkedNarrowNumber(i, 8, false)` |
 | `(byte)sb`, `(sbyte)b`, `(ushort)s`, `(uint)sb` | `sb & 0xFF`, `(b << 24) >> 24`, `s & 0xFFFF`, `sb >>> 0` | the helper of the target |
 | `(int)b`, `(uint)us`, `(short)b`, `(int)i` | `b`, `us`, `b`, `i` (the value cannot change) | same |
 | `(byte)(i & 0xFF)` | `i & 255` (the operand fits the target) | same |
-| `(byte)(b1 + b2)` | `(b1 + b2) & 0xFF` | `checkedNarrowInt32(b1 + b2, 8, false)` |
+| `(byte)(b1 + b2)` | `(b1 + b2) & 0xFF` | `checkedNarrowNumber(b1 + b2, 8, false)` |
 | `unchecked((uint)-1)`, `unchecked((byte)300)` | `4294967295`, `44` (folded) | — |
-| `(byte?)ni` (`int? ni`) | `ni == null ? null : ni & 0xFF` | `ni == null ? null : checkedNarrowInt32(ni, 8, false)` |
+| `(byte?)ni` (`int? ni`) | `ni == null ? null : ni & 0xFF` | `ni == null ? null : checkedNarrowNumber(ni, 8, false)` |
 | `(byte)d` (`double d`) | `int32FromDouble(d) & 0xFF` (FR-070) | `Number(checkedNarrow(BigInt(int32FromDoubleChecked(d)), 8, false))` (FR-070, unchanged) |
 | `(byte)l` (`long l`) | `Number(BigInt.asUintN(8, l))` (FR-012) | `Number(checkedNarrow(l, 8, false))` |
-| `b += 1;`, `b++;` | `b = (b + 1) & 0xFF;` | `b = checkedNarrowInt32(b + 1, 8, false);` |
-| `x = b++;` | `x = ((b = (b + 1) & 0xFF) - 1) & 0xFF;` | `x = (b = checkedNarrowInt32(b + 1, 8, false)) - 1;` |
-| `s *= 3;`, `--sb;` | `s = ((s * 3) << 16) >> 16;`, `sb = ((sb - 1) << 24) >> 24;` | `checkedNarrowInt32(s * 3, 16, true)`, … |
-| `us <<= 4;` | `us = (us << 4) & 0xFFFF;` | `us = checkedNarrowInt32(us << 4, 16, false);` (the store checks, the shift does not) |
-| `s >>>= n;` | `s = ((s >>> n) << 16) >> 16;` | `s = checkedNarrowInt32((s >>> n) \| 0, 16, true);` |
+| `b += 1;`, `b++;` | `b = (b + 1) & 0xFF;` | `b = checkedNarrowNumber(b + 1, 8, false);` |
+| `x = b++;` | `x = ((b = (b + 1) & 0xFF) - 1) & 0xFF;` | `x = (b = checkedNarrowNumber(b + 1, 8, false)) - 1;` |
+| `s *= 3;`, `--sb;` | `s = ((s * 3) << 16) >> 16;`, `sb = ((sb - 1) << 24) >> 24;` | `checkedNarrowNumber(s * 3, 16, true)`, … |
+| `us <<= 4;` | `us = (us << 4) & 0xFFFF;` | `us = checkedNarrowNumber(us << 4, 16, false);` (the store checks, the shift does not) |
+| `s >>>= n;` | `s = ((s >>> n) << 16) >> 16;` | `s = checkedNarrowNumber((s >>> n) \| 0, 16, true);` |
 | `b \|= m;`, `b &= m;`, `b ^= m;`, `us >>= 4;`, `b %= m;` | the native compound operator (the value stays in range) | same |
-| `sb /= d;` / `b /= d;` | `sb = (intDiv(sb, d) << 24) >> 24;` / `b = intDiv(b, d);` | `checkedNarrowInt32(intDiv(sb, d), 8, true)` / same |
+| `sb /= d;` / `b /= d;` | `sb = (intDiv(sb, d) << 24) >> 24;` / `b = intDiv(b, d);` | `checkedNarrowNumber(intDiv(sb, d), 8, true)` / same |
 | `this.Field += 200;`, `cells[i]++;` | `this.field = (this.field + 200) & 0xFF;`, `cells[i] = (cells[i] + 1) & 0xFF;` (receiver and index once, FR-024) | with the helper |
 | `u & v`, `u \| v`, `u ^ v` | `(u & v) >>> 0`, … | same (never checks) |
 | `u & 0xFF`, `u & b` | `u & 255`, `u & b` (bit 31 stays clear) | same |
@@ -129,7 +129,10 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `u >> n`, `u >>> n` | `u >>> n` | same |
 | `u \|= v;`, `u <<= 1;`, `u >>= 1;` | `u = (u \| v) >>> 0;`, `u = (u << 1) >>> 0;`, `u = u >>> 1;` | same |
 | `1u << 31`, `~0u` | `2147483648`, `4294967295` (folded) | same |
-| `i >> n`, `i << n`, `i & j`, `~i` | `i >> n`, `i << n`, `i & j`, `~i` (JavaScript computes in 32 signed bits) | same |
+| `i >> n`, `i & j`, `~i` | `i >> n`, `i & j`, `~i` | same |
+| `i << n`, `i <<= n;` | `i << n`, `i <<= n;` (the core wraps the shift; JavaScript's `<<` computes in 32 signed bits, which is that wrap) | same |
+| `(int)(i + j)`, `(uint)(u - v)` (the operand's own type) | `i + j`, `u - v` (no conversion, **not wrapped**) | `checkedInt32(i + j)`, `checkedUInt32(u - v)` (the arithmetic is checked) |
+| `counts[key]++;` (`Dictionary<string, int>`) | `counts.get(key)++` (invalid, as before; no reduction is needed) | `MS0001` (`'counts[key]++' on a dictionary entry is not supported.`) |
 | `i >>> n` | `(i >>> n) \| 0` | same |
 | `i + j`, `i - j`, `i * j` | `i + j`, … (**not wrapped: the known gap**) | `checkedInt32(i + j)`, … |
 | `u + v`, `u - v`, `u * v` | `u + v`, … (not wrapped) | `checkedUInt32(u + v)`, … |
@@ -140,8 +143,11 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `i << n` | `i << n` | same (shifts never check) |
 
 Dart (a 64-bit `int`): `(byte)i` → `i.toUnsigned(8)`, `(int)u` → `u.toSigned(32)`, `b += 1` →
-`b = (b + 1).toUnsigned(8)`, `u | v` → `(u | v).toUnsigned(32)`, `u >> n` → `u >> n`; the checked rows
-print the same selectors (they wrap instead of throwing).
+`b = (b + 1).toUnsigned(8)`, `u | v` → `(u | v).toUnsigned(32)`, `i << n` → `(i << n).toSigned(32)`,
+`i >>> n` → `(i.toUnsigned(32) >>> n).toSigned(32)`, `u >> n` → `u >> n`. Dart never throws in a
+checked context (DECIDED-19): checked `int` / `uint` arithmetic prints as its unchecked form
+(`checked(i + j)` → `i + j`), and a checked conversion or narrow store prints the narrowing of its
+unchecked form (`checked((byte)i)` → `i.toUnsigned(8)`).
 
 ## Operators (FR-027–FR-034)
 

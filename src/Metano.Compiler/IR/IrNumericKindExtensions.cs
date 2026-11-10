@@ -35,6 +35,22 @@ public static class IrNumericKindExtensions
     public static bool IsSixtyFourBit(this IrNumericKind kind) =>
         kind is IrNumericKind.Int64 or IrNumericKind.UInt64;
 
+    /// <summary><c>int</c> or <c>uint</c>: the kinds C# promotes narrower integer operands to.</summary>
+    public static bool IsThirtyTwoBit(this IrNumericKind kind) =>
+        kind is IrNumericKind.Int32 or IrNumericKind.UInt32;
+
+    /// <summary><c>sbyte</c>, <c>byte</c>, <c>short</c> or <c>ushort</c>: an integer C# computes in <c>int</c>.</summary>
+    public static bool IsNarrowerThanInt32(this IrNumericKind kind) =>
+        kind
+            is IrNumericKind.SByte
+                or IrNumericKind.Byte
+                or IrNumericKind.Int16
+                or IrNumericKind.UInt16;
+
+    /// <summary>An integer of 32 bits or fewer (not <c>char</c>).</summary>
+    public static bool IsThirtyTwoBitOrNarrower(this IrNumericKind kind) =>
+        kind.IsThirtyTwoBit() || kind.IsNarrowerThanInt32();
+
     /// <summary><c>float</c> or <c>double</c>.</summary>
     public static bool IsFloatingPoint(this IrNumericKind kind) =>
         kind is IrNumericKind.Single or IrNumericKind.Double;
@@ -76,7 +92,7 @@ public static class IrNumericKindExtensions
     /// the kinds a double holds exactly.
     /// </summary>
     public static bool IsNarrowIntegerValue(this IrNumericEndpoint endpoint) =>
-        !endpoint.IsEnum && endpoint.Kind.IsInteger() && endpoint.Kind.BitWidth() <= 32;
+        !endpoint.IsEnum && endpoint.Kind.IsThirtyTwoBitOrNarrower();
 
     /// <summary>A 64-bit integer value, not an enum over one.</summary>
     public static bool IsSixtyFourBitValue(this IrNumericEndpoint endpoint) =>

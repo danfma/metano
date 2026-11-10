@@ -182,7 +182,10 @@ public class Int64DivisionShiftTests
 
         await Assert
             .That(shift)
-            .Contains("int narrow(int i, int n) => i << n | i >> 2 | (i >>> n).toSigned(32);");
+            .Contains(
+                "int narrow(int i, int n) => "
+                    + "(i << n).toSigned(32) | i >> 2 | (i.toUnsigned(32) >>> n).toSigned(32);"
+            );
 
         await Assert.That(shift).Contains("l = l << (n & 63);");
         await Assert.That(shift).Contains("l = l >>> (n & 63);");
