@@ -25,13 +25,13 @@ public sealed partial class IrExpressionExtractor
         var operation = _semantic.GetOperation(coll) as ICollectionExpressionOperation;
 
         if (operation?.Type is not INamedTypeSymbol target)
-            return new IrArrayLiteral(ExtractCollectionElements(coll));
+            return ListLiteralOf(coll, operation);
 
         if (IsSetTarget(target))
             return NewCollectionOf(new IrSetTypeRef(ToIrTypeArgument(target, 0)), coll);
 
         if (!IsMapTarget(target))
-            return new IrArrayLiteral(ExtractCollectionElements(coll));
+            return ListLiteralOf(coll, operation);
 
         if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(operation))
             return ReportUnsupported(
@@ -46,6 +46,19 @@ public sealed partial class IrExpressionExtractor
 
         return NewCollectionOf(mapType, coll);
     }
+
+    /// <summary>
+    /// The array literal of a list or array target, with the element type the
+    /// target declares where the elements alone do not say it.
+    /// </summary>
+    private IrArrayLiteral ListLiteralOf(
+        CollectionExpressionSyntax coll,
+        ICollectionExpressionOperation? operation
+    ) =>
+        new(
+            ExtractCollectionElements(coll),
+            operation is null ? null : DeclaredElementType(coll, operation.Type, operation.Elements)
+        );
 
     /// <summary>
     /// <c>new T()</c> for an empty collection expression; otherwise

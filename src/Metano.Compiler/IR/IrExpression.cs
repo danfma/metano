@@ -644,9 +644,16 @@ public sealed record IrLambdaExpression(
 // -- Collection literals --
 
 /// <summary>
-/// Array/list literal: <c>[a, b, c]</c>.
+/// Array/list literal: <c>[a, b, c]</c>. <see cref="ElementType"/> is the
+/// element type C# gives the literal, set only where a target that infers a
+/// literal's type from its elements would get a narrower one and no
+/// declaration around the literal says it (<c>List&lt;int?&gt; l = [1]</c>,
+/// <c>List&lt;Animal&gt; l = [dog]</c>, <c>List&lt;int&gt; l = []</c>).
 /// </summary>
-public sealed record IrArrayLiteral(IReadOnlyList<IrExpression> Elements) : IrExpression;
+public sealed record IrArrayLiteral(
+    IReadOnlyList<IrExpression> Elements,
+    IrTypeRef? ElementType = null
+) : IrExpression;
 
 /// <summary>
 /// <c>new T[length]</c> without an initializer: <see cref="Length"/>

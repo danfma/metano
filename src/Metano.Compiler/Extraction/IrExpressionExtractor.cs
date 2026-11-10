@@ -279,13 +279,13 @@ public sealed partial class IrExpressionExtractor
                 receiver,
                 elementBinding.ArgumentList
             ),
-            ArrayCreationExpressionSyntax arr when arr.Initializer is not null =>
-                new IrArrayLiteral(arr.Initializer.Expressions.Select(Extract).ToList()),
+            ArrayCreationExpressionSyntax arr when arr.Initializer is not null => ArrayLiteralOf(
+                arr,
+                arr.Initializer
+            ),
             ArrayCreationExpressionSyntax sized when TryExtractSizedArray(sized) is { } creation =>
                 creation,
-            ImplicitArrayCreationExpressionSyntax iarr => new IrArrayLiteral(
-                iarr.Initializer.Expressions.Select(Extract).ToList()
-            ),
+            ImplicitArrayCreationExpressionSyntax iarr => ArrayLiteralOf(iarr, iarr.Initializer),
             // C# language keywords used as expressions — `string.Concat(…)`,
             // `int.Parse(…)`, etc. Resolve to the underlying BCL type so the
             // member-access lookup that wraps the expression can route to the
