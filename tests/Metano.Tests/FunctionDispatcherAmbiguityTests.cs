@@ -289,6 +289,26 @@ public class FunctionDispatcherAmbiguityTests
         );
 
     [Test]
+    public Task MethodGroup_OutOverloadDeclaredFirst_NamesTheValueParameterOverloads() =>
+        AssertWarnsOnceAt(
+            Preamble
+                + """
+                public class Out3
+                {
+                    public string M(long a, out int r) { r = 1; return "lo"; }
+
+                    public string M(long a, int r) => "li";
+
+                    public string M(UId a, int r) => "ui";
+                }
+                """,
+            AmbiguousDispatchMessages.BrandedSixtyFourBit(
+                "'Out3.M(long, int)', 'Out3.M(UId, int)'"
+            ),
+            "M(UId a, int r)"
+        );
+
+    [Test]
     public Task CompanionNamespace_OperatorGroup_SaysItsApplicationsAreNotLowered() =>
         AssertWarnsOnceAt(
             Preamble
@@ -486,7 +506,9 @@ public class FunctionDispatcherAmbiguityTests
     /// <summary>
     /// A primitive-backed wrapper's companion declares no instance member,
     /// so a call into an overloaded instance group is not bound: it keeps its
-    /// source arguments (no explicit default) and the member name.
+    /// source arguments (no explicit default) and the member name. The golden
+    /// pins today's output, which is broken until #623: the companion does
+    /// not declare instance methods.
     /// </summary>
     [Test]
     public async Task InstanceGroupOfAPrimitiveBackedWrapper_IsNotBound()
