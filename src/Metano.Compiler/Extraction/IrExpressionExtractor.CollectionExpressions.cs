@@ -130,7 +130,7 @@ public sealed partial class IrExpressionExtractor
         SpreadElementSyntax spread
     )
     {
-        if (_target is Metano.Annotations.TargetLanguage.Dart)
+        if (KeepsTuplesUnconverted)
             return null;
 
         if (

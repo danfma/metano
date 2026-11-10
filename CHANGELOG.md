@@ -68,8 +68,10 @@ the migration list.
   ones included) or a nullable numeric element that crosses a lowered
   numeric conversion (`int?` to `long`) converts to a non-nullable one. A
   nullable element whose conversion lowers to nothing (`int?` to `int`, as
-  in `((int, long))(int?, int)`) and a nullable nested tuple with no
-  converting element still keep `null` (#630). A converted string spread
+  in `((int, long))(int?, int)`, or `long?` to `long`, where the `null`
+  lands in a `bigint` slot and fails later with a `TypeError`) and a
+  nullable nested tuple with no converting element still keep `null`
+  (#630). A converted string spread
   (`List<long> codes = [.. text];`) reports `MS0001` in TypeScript; the Dart
   target does not report it (#613).
 - An operator group whose overloads return different types (`int operator

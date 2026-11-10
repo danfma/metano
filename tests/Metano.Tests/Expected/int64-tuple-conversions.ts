@@ -160,6 +160,42 @@ export class Pairs {
     return [[BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint], BigInt(last)] as [[bigint, bigint], bigint];
   }
 
+  castLiteralReturned(a: bigint, b: bigint): [bigint, bigint] {
+    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]);
+  }
+
+  castLiteralReturnedNullable(a: bigint, b: bigint): [bigint, bigint] | null {
+    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]);
+  }
+
+  castLiteralAssigned(a: bigint, b: bigint): [bigint, bigint] {
+    const wide = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]);
+
+    return wide;
+  }
+
+  castLiteralArgument(a: bigint, b: bigint): bigint {
+    return this.sum(((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]));
+  }
+
+  castLiteralElement(a: bigint, b: bigint): [bigint, bigint][] {
+    return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number])];
+  }
+
+  castLiteralArm(narrow: boolean, a: bigint, b: bigint): [bigint, bigint] {
+    return narrow ? ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]) : [a, b] as [bigint, bigint];
+  }
+
+  castLiteralNested(a: bigint, b: bigint): [[bigint, bigint], number] {
+    return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]), 3] as [[bigint, bigint], number];
+  }
+
+  castTupleAssigned(pair: [bigint, bigint]): [bigint, bigint] {
+    const wide = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, pair[0])), Number(BigInt.asIntN(32, pair[1]))] as [number, number]);
+
+    return wide;
+  }
+
   nullableLiteral(): [bigint, bigint] | null {
     return [1n, 2n] as [bigint, bigint];
   }
