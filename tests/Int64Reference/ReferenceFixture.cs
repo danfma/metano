@@ -104,15 +104,27 @@ internal static class ReferenceFixture
     {
         var returned = method.Invoke(null, Unboxed(arguments));
 
-        return returned is Task task ? CompletedResultOf(task) : returned;
+        return returned is Task task ? AwaitedResultOf(task, method) : returned;
     }
 
     /// <summary>
-    /// The result of a completed <c>Task&lt;T&gt;</c>, its exception
-    /// surfacing as the one a synchronous twin method throws.
+    /// Blocks until the <c>Task&lt;T&gt;</c> an async twin method returned
+    /// completes and reads its result, its exception surfacing as the one a
+    /// synchronous twin method throws. A twin declared as a result-less
+    /// <c>Task</c> has no value to compare and is rejected.
     /// </summary>
-    private static object? CompletedResultOf(Task task)
+    private static object? AwaitedResultOf(Task task, MethodInfo method)
     {
+        var result = method.ReturnType.GetProperty(nameof(Task<object>.Result));
+
+        if (result is null)
+        {
+            throw new NotSupportedException(
+                $"'{method.Name}' returns '{method.ReturnType.Name}': an async twin method "
+                    + "must return Task<T>."
+            );
+        }
+
         try
         {
             task.GetAwaiter().GetResult();
@@ -122,7 +134,7 @@ internal static class ReferenceFixture
             throw new TargetInvocationException(thrown);
         }
 
-        return task.GetType().GetProperty(nameof(Task<object>.Result))?.GetValue(task);
+        return result.GetValue(task);
     }
 
     /// <summary>

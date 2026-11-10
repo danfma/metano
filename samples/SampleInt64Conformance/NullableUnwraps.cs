@@ -10,9 +10,10 @@ namespace SampleInt64Conformance;
 /// wherever nullable analysis calls the value present — after an
 /// <c>await</c>, after <c>!</c>, and in nullable-disabled code. Each row
 /// reports the throw as <c>null</c>, because the targets raise their own
-/// error type for it, and adds to the value as a <c>double</c>, so an
-/// unguarded read shows as a number (<c>null + 1</c> is <c>1</c> in
-/// JavaScript) instead of failing some other way.
+/// error type for it. The <c>Value</c> rows add to the value as a
+/// <c>double</c> and the cast row converts to one, so an unguarded read
+/// shows as a number (<c>null + 1</c> is <c>1</c> and <c>Number(null)</c>
+/// is <c>0</c> in JavaScript) instead of failing some other way.
 /// </summary>
 [NoContainer]
 public static class NullableUnwraps

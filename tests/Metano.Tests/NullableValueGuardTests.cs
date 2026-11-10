@@ -84,6 +84,8 @@ public class NullableValueGuardTests
 
             public static int WrappedConstant() => ((int?)5).Value;
 
+            public static int RewrappedNullable(int? n) => ((int?)n).Value;
+
         #nullable disable
             public static int Disabled(int? n) => n.Value;
         #nullable restore
@@ -108,6 +110,22 @@ public class NullableValueGuardTests
             public static int Read(Meters m) => ((int?)m).Value;
 
             public static int Cast(Meters m) => (int)(int?)m;
+
+            public static (long, long) Pair(Meters m) => ((long, long))((int?)m, 1);
+        }
+        """;
+
+    private const string UnboxingSource = """
+        #nullable enable
+        #pragma warning disable CS8629
+        using Metano.Annotations;
+
+        [Transpile, NoContainer]
+        public static class Unboxing
+        {
+            public static int Read(object o) => ((int?)(object)o).Value;
+
+            public static int Cast(object o) => (int)(int?)(object)o;
         }
         """;
 
@@ -143,12 +161,14 @@ public class NullableValueGuardTests
         }
         """;
 
-    private static readonly string Unwraps = TranspileHelper.Transpile(Source)["unwraps.ts"];
+    private static readonly Lazy<string> Unwraps = new(() =>
+        TranspileHelper.Transpile(Source)["unwraps.ts"]
+    );
 
     [Test]
     public async Task CheckedLocal_KeepsTheGuard() =>
         await Assert
-            .That(Unwraps)
+            .That(Unwraps.Value)
             .Contains(
                 "  if (n != null) {\n    return n ?? (() => {\n      throw new Error(\"Nullable object must have a value.\");\n    })();\n  }"
             );
@@ -167,7 +187,7 @@ public class NullableValueGuardTests
 
     [Test]
     public async Task PropertyClearedByACall_KeepsTheGuard() =>
-        await Assert.That(Unwraps).Contains("    h.clear();\n\n    return h.p ?? (() => {");
+        await Assert.That(Unwraps.Value).Contains("    h.clear();\n\n    return h.p ?? (() => {");
 
     [Test]
     public async Task NullableDisabledRead_KeepsTheGuard() =>
@@ -178,9 +198,7 @@ public class NullableValueGuardTests
     [Test]
     public async Task AwaitedValue_KeepsTheGuard() =>
         await Assert
-            .That(
-                BodyOf("async function awaited(pending: Promise<number | null>): Promise<number>")
-            )
+            .That(BodyOf("awaited(pending: Promise<number | null>): Promise<number>"))
             .Contains($"  return n{Guard};");
 
     [Test]
@@ -213,6 +231,29 @@ public class NullableValueGuardTests
     }
 
     /// <summary>
+    /// A cast to <c>T?</c> wraps a present value only over a non-nullable
+    /// value type: over a nullable operand it is an identity conversion, and
+    /// over an <c>object</c> it unboxes a reference that may be <c>null</c>.
+    /// </summary>
+    [Test]
+    public async Task CastToNullableOfAValueThatMayBeMissing_KeepsTheGuard()
+    {
+        var unboxing = TranspileHelper.Transpile(UnboxingSource)["unboxing.ts"];
+
+        await Assert
+            .That(BodyOf("rewrappedNullable(n: number | null): number"))
+            .IsEqualTo($"  return n{Guard};");
+
+        await Assert
+            .That(unboxing)
+            .Contains($"export function read(o: Object): number {{\n  return o{Guard};\n}}");
+
+        await Assert
+            .That(unboxing)
+            .Contains($"export function cast(o: Object): number {{\n  return o{Guard};\n}}");
+    }
+
+    /// <summary>
     /// A user-defined conversion operator to <c>T?</c> returns whatever its
     /// body does, so its result is not a value wrapped where it is written.
     /// </summary>
@@ -230,30 +271,52 @@ public class NullableValueGuardTests
             .Contains($"export function cast(m: Meters): number {{\n  return m{Guard};\n}}");
     }
 
-    [Test]
-    public async Task EveryUnwrap_MatchesTheGoldenOutput() =>
-        await TranspileHelper.AssertGolden("nullable-value-guards.ts", Unwraps);
-
     /// <summary>
-    /// Dart is unchanged by #629: a read nullable analysis does not report
-    /// as maybe-null stays bare, and the golden pins the output of the
-    /// predicate that was there before.
+    /// The cast tuple literal shares the predicate: an element converted by
+    /// a user-defined operator to <c>T?</c> unwraps with the throw.
     /// </summary>
     [Test]
-    public async Task Dart_DecidesFromTheFlowState_AsBefore()
+    public async Task UserDefinedConversionInACastTupleLiteral_KeepsTheGuard()
+    {
+        var conversions = TranspileHelper.Transpile(UserDefinedConversionSource)["conversions.ts"];
+
+        await Assert.That(conversions).Contains($"  return [BigInt(m{Guard}), ");
+    }
+
+    [Test]
+    public async Task EveryUnwrap_MatchesTheGoldenOutput() =>
+        await TranspileHelper.AssertGolden("nullable-value-guards.ts", Unwraps.Value);
+
+    /// <summary>
+    /// Dart decides from the nullable flow state: a read that analysis does
+    /// not report as maybe-null (checked, suppressed, nullable-disabled) is
+    /// bare, and one it does report carries the throw.
+    /// </summary>
+    [Test]
+    public async Task Dart_OmitsTheGuardWhereFlowStateIsNotMaybeNull()
     {
         var (files, _) = DartTranspileHelper.Transpile(DartSource);
 
         await TranspileHelper.AssertGolden("nullable-value-guards.dart", files["unwraps.dart"]);
     }
 
-    /// <summary>The body of the exported function whose signature is <paramref name="signature"/>.</summary>
+    /// <summary>
+    /// The body of the exported function whose signature, from its name to
+    /// its return type, is <paramref name="signature"/>; fails when the
+    /// output declares no such function.
+    /// </summary>
     private static string BodyOf(string signature)
     {
-        var start = Unwraps.IndexOf(signature + " {\n", StringComparison.Ordinal);
-        var bodyStart = start + signature.Length + " {\n".Length;
-        var end = Unwraps.IndexOf("\n}\n", bodyStart, StringComparison.Ordinal);
+        var output = Unwraps.Value;
+        var opening = signature + " {\n";
+        var start = output.IndexOf(opening, StringComparison.Ordinal);
 
-        return start < 0 ? "" : Unwraps[bodyStart..end];
+        if (start < 0)
+            throw new InvalidOperationException($"No function '{signature}' in:\n{output}");
+
+        var bodyStart = start + opening.Length;
+        var end = output.IndexOf("\n}\n", bodyStart, StringComparison.Ordinal);
+
+        return output[bodyStart..end];
     }
 }

@@ -78,6 +78,12 @@ export function wrappedConstant(): number {
   return 5;
 }
 
+export function rewrappedNullable(n: number | null): number {
+  return n ?? (() => {
+    throw new Error("Nullable object must have a value.");
+  })();
+}
+
 export function disabled(n: number | null): number {
   return n ?? (() => {
     throw new Error("Nullable object must have a value.");
