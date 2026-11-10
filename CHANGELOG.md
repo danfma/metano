@@ -67,7 +67,10 @@ the migration list.
   long))nullablePair`, `foreach ((long, long) p in nullablePairs)`, nested
   ones included) or a nullable numeric element that crosses a lowered
   numeric conversion (`int?` to `long`) converts to a non-nullable one. A
-  nullable element whose conversion lowers to nothing (`int?` to `int`, as
+  cast-literal element is unwrapped whatever nullable analysis says about
+  it (only a value wrapped in place, `(int?)2`, converts without the
+  check); the cast of a whole nullable tuple follows the scalar cast, which
+  trusts that analysis (#629). A nullable element whose conversion lowers to nothing (`int?` to `int`, as
   in `((int, long))(int?, int)`, or `long?` to `long`, where the `null`
   lands in a `bigint` slot and fails later with a `TypeError`) and a
   nullable nested tuple with no converting element still keep `null`

@@ -7,23 +7,37 @@ export class Unwrapping {
     })());
   }
 
-  ofKnownPresent(): [bigint, bigint] {
-    return [1n, BigInt(2)] as [bigint, bigint];
+  ofWrapped(second: number): [bigint, bigint] {
+    return [BigInt(2), BigInt(second)] as [bigint, bigint];
+  }
+
+  ofWidenedWrap(second: number): [bigint, bigint] {
+    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), receiver$temp$0[1]] as [bigint, bigint])([1, BigInt(second)] as [number, bigint]);
   }
 
   ofChecked(first: number | null, second: number): [bigint, bigint] {
-    return first == null ? [0n, 0n] as [bigint, bigint] : [BigInt(first), BigInt(second)] as [bigint, bigint];
+    return first == null ? [0n, 0n] as [bigint, bigint] : [BigInt(first ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })()), BigInt(second)] as [bigint, bigint];
   }
 
-  ofDefault(first: number | null): [bigint, bigint | null] {
+  ofForgiven(first: number | null, second: number): [bigint, bigint] {
     return [BigInt(first ?? (() => {
       throw new Error("Nullable object must have a value.");
-    })()), null] as [bigint, bigint | null];
+    })()), BigInt(second)] as [bigint, bigint];
   }
 
-  ofNull(first: number | null, second: number): [bigint, [bigint, string | null]] {
-    return [BigInt(first ?? (() => {
+  async ofAwaited(pending: Promise<bigint | null>, first: bigint): Promise<[number, number]> {
+    const second = await pending;
+
+    return [Number(first), Number(second ?? (() => {
       throw new Error("Nullable object must have a value.");
-    })()), [BigInt(second), null] as [bigint, string | null]] as [bigint, [bigint, string | null]];
+    })())] as [number, number];
+  }
+
+  async ofAwaitedTuple(pending: Promise<[number, number] | null>, last: number): Promise<[[bigint, bigint] | null, bigint]> {
+    const pair = await pending;
+
+    return [pair == null ? null : [BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint], BigInt(last)] as [[bigint, bigint] | null, bigint];
   }
 }

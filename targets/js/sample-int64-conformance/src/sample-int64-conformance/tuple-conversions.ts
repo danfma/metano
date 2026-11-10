@@ -223,6 +223,32 @@ export function literalCastNarrowedChecked(a: bigint): number {
   return narrow[0] ^ narrow[1] << 4;
 }
 
+export function literalCastKeepsTheMissingTuple(a: number): bigint {
+  const missing = () => null;
+  const wide = [((receiver$temp$0) => receiver$temp$0 == null ? null : [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(missing()), BigInt(a)] as [[bigint, bigint] | null, bigint];
+
+  return wide[0] == null ? wide[1] : -1n;
+}
+
+export function literalCastThrowsOnTheMissingLong(a: bigint): number {
+  const missing = () => null;
+  try {
+    const wide = [Number(a), Number(missing() ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })())] as [number, number];
+
+    return wide[1] > 0 ? 1 : 2;
+  } catch (_err) {
+    return -1;
+  }
+}
+
+export function literalCastOfWrappedValues(a: number): bigint {
+  const wide = [BigInt(2), BigInt(a)] as [bigint, bigint];
+
+  return BigInt.asIntN(64, wide[0] + wide[1]);
+}
+
 export function literalCastWithDefault(a: number): bigint {
   const first = a;
   const wide = [BigInt(first ?? (() => {

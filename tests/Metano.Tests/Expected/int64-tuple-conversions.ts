@@ -160,6 +160,10 @@ export class Pairs {
     return [[BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint], BigInt(last)] as [[bigint, bigint], bigint];
   }
 
+  literalWrapped(second: number): [bigint, bigint] {
+    return [BigInt(2), BigInt(second)] as [bigint, bigint];
+  }
+
   castLiteralReturned(a: bigint, b: bigint): [bigint, bigint] {
     return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]);
   }

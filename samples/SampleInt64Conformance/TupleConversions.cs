@@ -260,6 +260,44 @@ public static class TupleConversions
         return narrow.Item1 ^ (narrow.Item2 << 4);
     }
 
+    /// <summary>
+    /// A missing nullable tuple element read into a nullable slot stays
+    /// missing: the conversion lifts instead of unwrapping.
+    /// </summary>
+    public static long LiteralCastKeepsTheMissingTuple(int a)
+    {
+        Func<(int, int)?> missing = () => null;
+        var wide = (((long, long)?, long))(missing(), a);
+
+        return wide.Item1 is null ? wide.Item2 : -1;
+    }
+
+    // The missing element is the row: C# warns about the cast it tests.
+#pragma warning disable CS8629
+    public static int LiteralCastThrowsOnTheMissingLong(long a)
+    {
+        Func<long?> missing = () => null;
+
+        try
+        {
+            var wide = ((double, double))(a, missing());
+
+            return wide.Item2 > 0 ? 1 : 2;
+        }
+        catch (InvalidOperationException)
+        {
+            return -1;
+        }
+    }
+#pragma warning restore CS8629
+
+    public static long LiteralCastOfWrappedValues(int a)
+    {
+        var wide = ((long, long))((int?)2, (int?)a);
+
+        return wide.Item1 + wide.Item2;
+    }
+
     public static long LiteralCastWithDefault(int a)
     {
         int? first = a;
