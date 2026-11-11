@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -169,6 +171,40 @@ public class DecimalIntegrationTests
 
         var output = result["calc.ts"];
         await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
+    }
+
+    /// <summary>
+    /// <c>decimal.Parse(s, provider)</c> parses in the invariant culture, the
+    /// only one Metano formats in, so it checks .NET's grammar as
+    /// <c>decimal.Parse(s)</c> does; a <c>NumberStyles</c> overload accepts
+    /// exponents, as decimal.js's own grammar does, and keeps
+    /// <c>new Decimal(s)</c>. Neither reports <c>MS0001</c>.
+    /// </summary>
+    [Test]
+    public async Task DecimalParseOverloads_KeepTheirGrammar()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Globalization;
+
+            [Transpile]
+            public class Calc
+            {
+                public decimal Invariant(string s) => decimal.Parse(s, CultureInfo.InvariantCulture);
+
+                public decimal Float(string s) => decimal.Parse(s, NumberStyles.Float);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+
+        await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
+        await Assert.That(output).Contains("return new Decimal(s);");
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
     }
 
     [Test]

@@ -1,5 +1,6 @@
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction.Invocation;
 
@@ -123,56 +124,81 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     /// of the BCL argument shapes (string, span, IFormatProvider).
     /// TODO(#549): this shape is decimal.js's, a TypeScript fact in the core. A target
     /// that maps <c>decimal.Parse</c> declaratively keeps the call for its
-    /// mapping (TypeScript checks .NET's grammar and throws
-    /// <c>FormatException</c> through a runtime helper, #651).
+    /// mapping of the culture-free overloads, <c>(string)</c> and
+    /// <c>(string, IFormatProvider)</c>, which the entry binds to the
+    /// <c>(string)</c> one (TypeScript checks .NET's <c>NumberStyles.Number</c>
+    /// grammar and throws <c>FormatException</c> through a runtime helper,
+    /// #651); a <c>NumberStyles</c> or span overload keeps <c>new Decimal(s)</c>,
+    /// whose grammar (decimal.js) accepts exponents as <c>NumberStyles.Float</c> does.
     /// </summary>
     private void SeedDecimalParse(Compilation compilation)
     {
         var decimalType = compilation.GetSpecialType(SpecialType.System_Decimal);
+        var stringType = compilation.GetSpecialType(SpecialType.System_String);
+        var formatProvider = compilation.GetTypeByMetadataName("System.IFormatProvider");
 
-        foreach (
-            var method in decimalType
-                .GetMembers("Parse")
-                .OfType<IMethodSymbol>()
-                .Where(m => m.IsStatic && m.Parameters.Length >= 1)
-        )
+        var parseOverloads = decimalType
+            .GetMembers("Parse")
+            .OfType<IMethodSymbol>()
+            .Where(m => m.IsStatic && m.Parameters.Length >= 1)
+            .ToList();
+
+        var textParse = parseOverloads.FirstOrDefault(m => TakesOnly(m, stringType));
+
+        // The target's own mapping of `decimal.Parse(string)` takes the
+        // culture-free overloads; asked once, as it does not depend on the call.
+        var mapsTextParse =
+            textParse is not null && _lowersByDeclarativeMapping?.Invoke(textParse, 1) is true;
+
+        foreach (var method in parseOverloads)
         {
-            _entries[method.OriginalDefinition] = ctx =>
-            {
-                if (
-                    _lowersByDeclarativeMapping?.Invoke(method, EmittedArgumentCount(ctx, method))
-                    is true
-                )
-                    return null;
+            var isCultureFree =
+                TakesOnly(method, stringType) || TakesOnly(method, stringType, formatProvider);
 
-                var arg = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
-
-                return new IrNewExpression(
-                    new IrPrimitiveTypeRef(IrPrimitive.Decimal),
-                    [new IrArgument(arg)]
-                );
-            };
+            _entries[method.OriginalDefinition] =
+                mapsTextParse && isCultureFree
+                    ? ctx => TextParseCall(ctx, textParse!)
+                    : DecimalConstruction;
         }
     }
 
     /// <summary>
-    /// The number of arguments the plain call lowering passes for the call
-    /// in <paramref name="context"/>, which the target's mapping port counts
-    /// (#665): the written ones, or one per parameter of
-    /// <paramref name="method"/> when one is named.
+    /// <c>decimal.Parse(text)</c> bound to the <c>(string)</c> overload: an
+    /// <c>IFormatProvider</c> argument is dropped unextracted, as the
+    /// invariant culture is the only one Metano formats in.
     /// </summary>
-    private int EmittedArgumentCount(InvocationRewriteContext context, IMethodSymbol method)
+    private IrExpression TextParseCall(InvocationRewriteContext ctx, IMethodSymbol textParse)
     {
-        IReadOnlyList<IrArgument> written =
-        [
-            .. context.Invocation.ArgumentList.Arguments.Select(argument => new IrArgument(
-                new IrLiteral(null, IrLiteralKind.Null),
-                argument.NameColon?.Name.Identifier.ValueText
-            )),
-        ];
+        var text = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
 
-        return _helpers.InParameterOrder(written, method).Count;
+        // The written receiver keeps the BCL export's origin, so a project
+        // type of the same name does not bind it (issue #477).
+        var receiver = ctx.Invocation.Expression is MemberAccessExpressionSyntax written
+            ? ctx.Recurse(written.Expression)
+            : new IrTypeReference(textParse.ContainingType.Name);
+
+        return new IrCallExpression(
+            new IrMemberAccess(receiver, textParse.Name),
+            [new IrArgument(text)],
+            Origin: _helpers.BuildOrigin(textParse)
+        );
     }
+
+    private static IrExpression DecimalConstruction(InvocationRewriteContext ctx)
+    {
+        var arg = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
+
+        return new IrNewExpression(
+            new IrPrimitiveTypeRef(IrPrimitive.Decimal),
+            [new IrArgument(arg)]
+        );
+    }
+
+    private static bool TakesOnly(IMethodSymbol method, params ITypeSymbol?[] parameterTypes) =>
+        method.Parameters.Length == parameterTypes.Length
+        && method
+            .Parameters.Zip(parameterTypes)
+            .All(pair => SymbolEqualityComparer.Default.Equals(pair.First.Type, pair.Second));
 
     /// <summary>
     /// <c>Math.{Floor,Ceiling,Truncate,Abs}(decimal)</c> → receiver's
