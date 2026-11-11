@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isNullOrEmpty, isNullOrWhiteSpace, stringReplace } from "#/system/strings.ts";
+import { alignValue, isNullOrEmpty, isNullOrWhiteSpace, stringReplace } from "#/system/strings.ts";
 
 /** Every BMP code point .NET 10's `char.IsWhiteSpace` accepts. */
 const dotnetWhiteSpace = [
@@ -81,5 +81,23 @@ describe("stringReplace", () => {
     expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(
       "Value cannot be null. (Parameter 'oldValue')",
     );
+  });
+});
+
+/** C#'s `{value,alignment}` hole on .NET 10: `[{"ab",5}][{"ab",-5}][{null,4}][{12345,3}]`. */
+describe("alignValue", () => {
+  test("pads the hole's text with spaces, on the right when the alignment is negative", () => {
+    expect(alignValue("ab", 5)).toBe("   ab");
+    expect(alignValue("ab", -5)).toBe("ab   ");
+    expect(alignValue(true, 6)).toBe("  true");
+  });
+
+  test("a null value pads the empty string", () => {
+    expect(alignValue(null, 4)).toBe("    ");
+    expect(alignValue(undefined, -2)).toBe("  ");
+  });
+
+  test("text longer than the alignment is not truncated", () => {
+    expect(alignValue(12345, 3)).toBe("12345");
   });
 });
