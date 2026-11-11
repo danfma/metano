@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { DivideByZeroException } from "#/system/exceptions/index.ts";
 import { intDiv } from "#/system/integer-division.ts";
 
 /** Expected values were produced by C# `/` over `int` and `long` operands on .NET 10. */
@@ -21,7 +22,8 @@ describe("intDiv", () => {
     expect(intDiv(dividend, divisor)).toBe(quotient);
   });
 
-  test("throws the DivideByZeroException message on a zero divisor", () => {
+  test("throws a DivideByZeroException with .NET's message on a zero divisor", () => {
+    expect(() => intDiv(7, 0)).toThrow(DivideByZeroException);
     expect(() => intDiv(7, 0)).toThrow("Attempted to divide by zero.");
     expect(() => intDiv(0, 0)).toThrow("Attempted to divide by zero.");
   });

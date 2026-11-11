@@ -10,6 +10,21 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsTypeMapper
 {
+    /// <summary>
+    /// The runtime classes of the BCL exceptions for the running transform,
+    /// which name a BCL exception in type position (spec 011 FR-014).
+    /// <see cref="AsyncLocal{T}"/> keeps the slot per execution context so
+    /// parallel test runs don't race; outside a transform no class is mapped
+    /// and every exception names the built-in <c>Error</c>.
+    /// </summary>
+    private static readonly AsyncLocal<BclExceptionClasses?> _exceptionClasses = new();
+
+    internal static BclExceptionClasses ExceptionClasses
+    {
+        get => _exceptionClasses.Value ?? BclExceptionClasses.Empty;
+        set => _exceptionClasses.Value = value;
+    }
+
     public static TsType Map(IrTypeRef type, IrToTsTypeOverrides? overrides = null) =>
         overrides?.TryResolve(type) is { } overridden ? overridden : MapCore(type, overrides);
 
@@ -125,10 +140,9 @@ public static class IrToTsTypeMapper
     private static TsType MapNamed(IrNamedTypeRef named, IrToTsTypeOverrides? overrides)
     {
         // BCL exceptions (System.Exception and its non-transpilable
-        // subclasses) have no TS declaration; their runtime values are
-        // `Error` instances, so the type position names the built-in too.
-        if (IsBclException(named))
-            return new TsNamedType("Error");
+        // subclasses) have no TS declaration; they name their runtime class.
+        if (BclExceptionClasses.IsBclException(named))
+            return ExceptionClasses.ClassOf(named).TypeReference();
 
         var name = ModuleLocalNaming.Flatten(named.Name, named.PrivateNestedSegments);
 
@@ -155,14 +169,6 @@ public static class IrToTsTypeMapper
 
         return new TsNamedType(name, args, origin, originalName);
     }
-
-    /// <summary>
-    /// Whether <paramref name="named"/> is an exception type without a TS
-    /// declaration (<c>System.Exception</c> and its BCL / non-transpilable
-    /// subclasses), whose runtime values are JS <c>Error</c> instances.
-    /// </summary>
-    internal static bool IsBclException(IrNamedTypeRef named) =>
-        named.Semantics is { Kind: IrNamedTypeKind.Exception, IsTranspilable: false };
 
     /// <summary>
     /// Resolves the cross-package <see cref="TsTypeOrigin"/> for a type reference, or

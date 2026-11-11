@@ -20,7 +20,7 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 ///   if (e$ instanceof NotFoundException) {
 ///     const e = e$;
 ///     …
-///   } else if (e$ instanceof Error &amp;&amp; ((e) =&gt; e.message === "x")(e$)) {
+///   } else if (e$ instanceof InvalidOperationException &amp;&amp; ((e) =&gt; e.message === "x")(e$)) {
 ///     const e = e$;
 ///     …
 ///   } else {
@@ -31,10 +31,10 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 /// <list type="bullet">
 ///   <item><b>Type test.</b> The same test an <c>is</c> pattern on the clause's
 ///   type lowers to (<see cref="IrToTsExpressionBridge.BuildTypeTest"/>):
-///   <c>instanceof</c> the class of a transpiled exception, and
-///   <c>instanceof Error</c> for a BCL exception type, which has no class of
-///   its own. A general <c>catch</c> and <c>catch (Exception)</c> take every
-///   value and need no test.</item>
+///   <c>instanceof</c> the class of a transpiled exception, or the runtime
+///   class of a BCL exception (<see cref="BclExceptionClasses"/>). A general
+///   <c>catch</c> and <c>catch (Exception)</c> take every value and need no
+///   test.</item>
 ///   <item><b>Filter.</b> A <c>when</c> condition joins the type test with
 ///   <c>&amp;&amp;</c>, so a clause whose filter is false falls through to the
 ///   next clause. A filter that reads the clause's variable binds it through
@@ -51,14 +51,15 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 /// every exception keeps the plain <c>catch (e) { … }</c> shape, its variable
 /// being the handler's parameter.
 /// <para>
-/// An interim, partial delivery of spec 011 FR-015. Known deviations:
-/// generated code constructs every BCL exception as a plain <c>Error</c>, so
-/// the BCL-type test is coarse (#651; extraction reports MS0001 where that
-/// would take a later clause's exceptions, see
-/// <c>UnsupportedCatchClauseReporter</c>); an exception thrown by a filter
-/// propagates, where .NET swallows it and treats the filter as false; and a
-/// filter runs after the <c>finally</c> blocks between the throw and the
-/// clause, where .NET runs it before them.
+/// An interim, partial delivery of spec 011 FR-015. Known deviations: a
+/// thrown value is not normalized (<c>toException</c>), so a JavaScript
+/// <c>TypeError</c> matches no <c>NullReferenceException</c> clause and the
+/// variable of a catch-all arm is the raw value; an exception thrown by a
+/// filter propagates, where .NET swallows it and treats the filter as false;
+/// and a filter runs after the <c>finally</c> blocks between the throw and
+/// the clause, where .NET runs it before them. A clause on an exception
+/// without a runtime class is reported (MS0045, see
+/// <c>UnsupportedCatchClauseReporter</c>).
 /// </para>
 /// </summary>
 internal static class IrToTsCatchChainBridge

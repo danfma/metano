@@ -267,9 +267,7 @@ public class TupleLiteralTests
     {
         var result = TranspileHelper.Transpile(TupleEqualitySurface);
 
-        await Assert
-            .That(result["comparisons.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("tuple-equality.ts"));
+        await TranspileHelper.AssertGolden("tuple-equality.ts", result["comparisons.ts"]);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 import { isInt32, isString } from "metano-runtime";
+import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 
 export type EpisodeSlug = string & { readonly __brand: "EpisodeSlug" };
 
@@ -9,7 +10,7 @@ export namespace EpisodeSlug {
 
   export function fromValue(value: string): EpisodeSlug {
     if (value.trim().length === 0) {
-      throw new Error("empty");
+      throw new ArgumentException("empty");
     }
 
     return EpisodeSlug.create(value.trim());

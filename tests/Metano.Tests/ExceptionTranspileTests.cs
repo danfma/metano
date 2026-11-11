@@ -12,8 +12,10 @@ public class ExceptionTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("custom-exception.ts");
-        await Assert.That(result["invalid-amount-error.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "custom-exception.ts",
+            result["invalid-amount-error.ts"]
+        );
     }
 
     [Test]
@@ -27,8 +29,10 @@ public class ExceptionTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("primary-ctor-exception.ts");
-        await Assert.That(result["duplicate-entry-exception.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "primary-ctor-exception.ts",
+            result["duplicate-entry-exception.ts"]
+        );
     }
 
     [Test]
@@ -61,7 +65,7 @@ public class ExceptionTranspileTests
     }
 
     [Test]
-    public async Task ThrowNonTranspiledException_UsesError()
+    public async Task ThrowNonTranspiledException_UsesTheRuntimeClass()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -78,8 +82,8 @@ public class ExceptionTranspileTests
         );
 
         var output = result["guard.ts"];
-        // Non-transpiled exception → Error
-        await Assert.That(output).Contains("new Error(\"bad\")");
+        // Non-transpiled exception → its metano-runtime class (spec 011 FR-014)
+        await Assert.That(output).Contains("new ArgumentException(\"bad\")");
     }
 
     [Test]
@@ -122,7 +126,9 @@ public class ExceptionTranspileTests
 
         var output = result["quota-exceeded-exception.ts"];
 
-        await Assert.That(output).Contains("export class QuotaExceededException extends Error {");
+        await Assert
+            .That(output)
+            .Contains("export class QuotaExceededException extends Exception {");
 
         await Assert
             .That(output)
@@ -156,10 +162,13 @@ public class ExceptionTranspileTests
 
         var output = result["app/stale-state-exception.ts"];
 
+        // The runtime class applies .NET's default message itself.
         await Assert
             .That(output)
-            .Contains("super(\"Operation is not valid due to the current state of the object.\");");
+            .Contains("export class StaleStateException extends InvalidOperationException {");
 
+        await Assert.That(output).Contains("super();");
+        await Assert.That(output).DoesNotContain("Operation is not valid");
         await Assert.That(output).Contains("this.version = version;");
     }
 
@@ -187,8 +196,8 @@ public class ExceptionTranspileTests
 
         var output = result["app/sync-exception.ts"];
 
-        await Assert.That(output).Contains("export class SyncException extends Error {");
-        await Assert.That(output).Contains("super(message, { cause: inner });");
+        await Assert.That(output).Contains("export class SyncException extends Exception {");
+        await Assert.That(output).Contains("super(message, inner);");
         await Assert.That(output).Contains("super(message);");
 
         await Assert
@@ -269,7 +278,8 @@ public class ExceptionTranspileTests
         var output = result["retry-exception.ts"];
 
         await Assert.That(output).Contains("readonly #baseMessage: string;");
-        await Assert.That(output).Contains("super(\"ignored\", { cause: inner });");
+        await Assert.That(output).Contains("super(\"ignored\", inner);");
+
         await Assert
             .That(output)
             .Contains(
@@ -420,12 +430,14 @@ public class ExceptionTranspileTests
             """
         );
 
-        await Assert
-            .That(result["app/overload-override-exception.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("exception-overload-message-override.ts"));
+        await TranspileHelper.AssertGolden(
+            "exception-overload-message-override.ts",
+            result["app/overload-override-exception.ts"]
+        );
 
-        await Assert
-            .That(result["app/labelled-slot-exception.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("exception-ancestor-message-override.ts"));
+        await TranspileHelper.AssertGolden(
+            "exception-ancestor-message-override.ts",
+            result["app/labelled-slot-exception.ts"]
+        );
     }
 }

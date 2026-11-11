@@ -546,6 +546,7 @@ public sealed class TypeScriptTransformContext(
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
+            HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
             KeepsArgumentEvaluationOrder = true,
             FormatStrings = TsFormatStrings.Instance,
             LowersByDeclarativeMapping = (method, argumentCount) =>
@@ -577,6 +578,18 @@ public sealed class TypeScriptTransformContext(
             TypeMapping!.BclExportMap,
             TypeMapping.CrossPackageDependencies
         );
+
+    private BclExceptionClasses? _exceptionClasses;
+
+    /// <summary>
+    /// The runtime classes of the BCL exceptions, read from the
+    /// <c>[ExportFromBcl]</c> entries in scope (spec 011 FR-014): the one
+    /// resolver behind the type position, <c>extends</c>, construction, the
+    /// type tests and the extraction port
+    /// <see cref="IrExtractionContext.HasExceptionRuntimeClass"/>.
+    /// </summary>
+    public BclExceptionClasses ExceptionClasses =>
+        _exceptionClasses ??= new BclExceptionClasses(TypeMapping!.BclExportMap);
 
     private IrTypeOriginResolver? _originResolver;
 

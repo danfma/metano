@@ -1,6 +1,7 @@
 import { isString } from "metano-runtime";
+import { Exception } from "metano-runtime/system/exceptions/exception";
 
-export class OverloadOverrideException extends Error {
+export class OverloadOverrideException extends Exception {
   protected static readonly byOverloadOverrideExceptionDefault: unique symbol = Symbol("OverloadOverrideException()");
 
   protected static readonly byOverloadOverrideExceptionMessage: unique symbol = Symbol("OverloadOverrideException(string message)");
@@ -9,12 +10,12 @@ export class OverloadOverrideException extends Error {
 
   readonly #baseMessage: string;
 
-  readonly origin: Error | null = null;
+  readonly origin: Exception | null = null;
 
   constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionDefault);
   constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionMessage, message: string);
-  constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionMessageInner, message: string, inner: Error);
-  constructor(message: string, inner: Error);
+  constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionMessageInner, message: string, inner: Exception);
+  constructor(message: string, inner: Exception);
   constructor(message: string);
   constructor();
   constructor(...args: unknown[]) {
@@ -37,7 +38,7 @@ export class OverloadOverrideException extends Error {
 
     if (typeof args[0] === "symbol" && args[0] === OverloadOverrideException.byOverloadOverrideExceptionMessageInner) {
       const message = args[1] as string;
-      const inner = args[2] as Error;
+      const inner = args[2] as Exception;
       const __chain0Arg0 = message;
 
       {
@@ -54,7 +55,7 @@ export class OverloadOverrideException extends Error {
 
     if (args.length === 2 && isString(args[0]) && typeof args[1] === "object") {
       const message = args[0] as string;
-      const inner = args[1] as Error;
+      const inner = args[1] as Exception;
       const __chain0Arg0 = message;
 
       {
@@ -101,7 +102,7 @@ export class OverloadOverrideException extends Error {
     return new OverloadOverrideException(OverloadOverrideException.byOverloadOverrideExceptionMessage, message);
   }
 
-  static fromMessageInner(message: string, inner: Error): OverloadOverrideException {
+  static fromMessageInner(message: string, inner: Exception): OverloadOverrideException {
     return new OverloadOverrideException(OverloadOverrideException.byOverloadOverrideExceptionMessageInner, message, inner);
   }
 }

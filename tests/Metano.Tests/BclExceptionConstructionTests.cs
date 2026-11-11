@@ -3,9 +3,11 @@ namespace Metano.Tests;
 /// <summary>
 /// BCL exception constructions (<c>new ArgumentException(...)</c>, the
 /// <c>: base(...)</c> call of a user exception deriving from a BCL exception)
-/// lower to the JS <c>Error(message, { cause })</c> shape with every argument
-/// mapped by its constructor-parameter role, emulating how .NET composes
-/// <c>Exception.Message</c> (#246).
+/// lower to the construction of the exception's <c>metano-runtime</c> class
+/// with every argument mapped by its constructor-parameter role (#246, spec
+/// 011 FR-014, #651). The runtime classes compose <c>Exception.Message</c> as
+/// .NET does; the compiler composes it only for <c>System.Exception</c>'s base
+/// call and for an exception without a runtime class.
 /// </summary>
 public class BclExceptionConstructionTests
 {
@@ -16,7 +18,13 @@ public class BclExceptionConstructionTests
             "public static void Check(string value) { throw new ArgumentException(\"msg\", nameof(value)); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"msg (Parameter 'value')\");");
+        await Assert.That(output).Contains("throw new ArgumentException(\"msg\", \"value\");");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "import { ArgumentException } from \"metano-runtime/system/exceptions/argument-exception\";"
+            );
     }
 
     [Test]
@@ -26,9 +34,7 @@ public class BclExceptionConstructionTests
             "public static void Check(string value) { throw new ArgumentNullException(nameof(value)); }"
         );
 
-        await Assert
-            .That(output)
-            .Contains("throw new Error(\"Value cannot be null. (Parameter 'value')\");");
+        await Assert.That(output).Contains("throw new ArgumentNullException(\"value\");");
     }
 
     [Test]
@@ -38,7 +44,9 @@ public class BclExceptionConstructionTests
             "public static void Check(string value) { throw new ArgumentNullException(nameof(value), \"custom\"); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"custom (Parameter 'value')\");");
+        await Assert
+            .That(output)
+            .Contains("throw new ArgumentNullException(\"value\", \"custom\");");
     }
 
     [Test]
@@ -50,9 +58,7 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(output)
-            .Contains(
-                "throw new Error(`too big (Parameter 'value')\\nActual value was ${value}.`);"
-            );
+            .Contains("throw new ArgumentOutOfRangeException(\"value\", value, \"too big\");");
     }
 
     [Test]
@@ -62,7 +68,7 @@ public class BclExceptionConstructionTests
             "public static void Check(string value) { throw new ArgumentException(paramName: nameof(value), message: \"named\"); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"named (Parameter 'value')\");");
+        await Assert.That(output).Contains("throw new ArgumentException(\"named\", \"value\");");
     }
 
     [Test]
@@ -72,7 +78,7 @@ public class BclExceptionConstructionTests
             "public static void Wrap(Exception inner) { throw new Exception(\"outer\", inner); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"outer\", { cause: inner });");
+        await Assert.That(output).Contains("throw new Exception(\"outer\", inner);");
     }
 
     [Test]
@@ -82,7 +88,7 @@ public class BclExceptionConstructionTests
             "public static void Fail() { throw new InvalidOperationException(\"nope\"); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"nope\");");
+        await Assert.That(output).Contains("throw new InvalidOperationException(\"nope\");");
     }
 
     [Test]
@@ -92,23 +98,29 @@ public class BclExceptionConstructionTests
             "public static void Check(string message, string name) { throw new ArgumentException(message, name); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(`${message} (Parameter '${name}')`);");
+        await Assert.That(output).Contains("throw new ArgumentException(message, name);");
     }
 
     [Test]
-    public async Task ExceptionTypedParameterAndLocal_MapToError()
+    public async Task ExceptionTypedParameterAndLocal_MapToTheRuntimeClass()
     {
         var output = TranspileGuard(
             "public static Exception Rethrow(Exception error) { Exception local = error; return local; }"
         );
 
-        await Assert.That(output).Contains("static rethrow(error: Error): Error {");
+        await Assert.That(output).Contains("static rethrow(error: Exception): Exception {");
         await Assert.That(output).Contains("const local = error;");
-        await Assert.That(output).DoesNotContain(": Exception");
+        await Assert.That(output).DoesNotContain(": Error");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "import type { Exception } from \"metano-runtime/system/exceptions/exception\";"
+            );
     }
 
     [Test]
-    public async Task TypedCatch_TestsTheSharedErrorClass()
+    public async Task TypedCatch_TestsTheRuntimeClass()
     {
         var output = TranspileGuard(
             """
@@ -130,7 +142,7 @@ public class BclExceptionConstructionTests
         );
 
         await Assert.That(output).Contains("} catch (e$) {");
-        await Assert.That(output).Contains("if (e$ instanceof Error) {");
+        await Assert.That(output).Contains("if (e$ instanceof ArgumentException) {");
         await Assert.That(output).Contains("const e = e$;");
         await Assert.That(output).Contains("return e.message;");
         await Assert.That(output).Contains("throw e$;");
@@ -154,7 +166,11 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(result["invalid-slug-exception.ts"])
-            .Contains("super(`Invalid slug (Parameter '${slug}')`);");
+            .Contains("export class InvalidSlugException extends ArgumentException {");
+
+        await Assert
+            .That(result["invalid-slug-exception.ts"])
+            .Contains("super(\"Invalid slug\", slug);");
     }
 
     [Test]
@@ -172,8 +188,8 @@ public class BclExceptionConstructionTests
 
         var output = result["load-failed-exception.ts"];
 
-        await Assert.That(output).Contains("constructor(message: string, inner: Error)");
-        await Assert.That(output).Contains("super(message, { cause: inner });");
+        await Assert.That(output).Contains("constructor(message: string, inner: Exception)");
+        await Assert.That(output).Contains("super(message, inner);");
     }
 
     [Test]
@@ -183,21 +199,17 @@ public class BclExceptionConstructionTests
             "public static void Check(string value) { throw new ArgumentException(null, nameof(value)); }"
         );
 
-        await Assert
-            .That(output)
-            .Contains(
-                "throw new Error(\"Value does not fall within the expected range. (Parameter 'value')\");"
-            );
+        await Assert.That(output).Contains("throw new ArgumentException(undefined, \"value\");");
     }
 
     [Test]
-    public async Task EmptyParamNameLiteral_OmitsParameterSuffix()
+    public async Task EmptyParamNameLiteral_ReachesTheRuntimeClass()
     {
         var output = TranspileGuard(
             "public static void Check() { throw new ArgumentException(\"msg\", \"\"); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"msg\");");
+        await Assert.That(output).Contains("throw new ArgumentException(\"msg\", \"\");");
     }
 
     [Test]
@@ -207,7 +219,9 @@ public class BclExceptionConstructionTests
             "public static void Load(string path) { throw new System.IO.FileNotFoundException(\"missing\", path); }"
         );
 
-        await Assert.That(output).Contains("throw new Error(\"missing\");");
+        await Assert
+            .That(output)
+            .Contains("throw new Exception(\"System.IO.FileNotFoundException: missing\");");
     }
 
     [Test]
@@ -226,7 +240,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => ((receiver$temp$1) => new Error(receiver$temp$0))(Guard.locate()))(Guard.describe());"
+                "throw ((receiver$temp$0) => ((receiver$temp$1) => new Exception(`System.IO.FileNotFoundException: ${receiver$temp$0}`))(Guard.locate()))(Guard.describe());"
             );
     }
 
@@ -246,7 +260,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => ((receiver$temp$1) => new Error(`${receiver$temp$1} (Parameter '${receiver$temp$0}')`))(Guard.describe()))(Guard.name());"
+                "throw ((receiver$temp$0) => ((receiver$temp$1) => new ArgumentOutOfRangeException(receiver$temp$0, undefined, receiver$temp$1))(Guard.describe()))(Guard.name());"
             );
     }
 
@@ -263,7 +277,9 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(output)
-            .Contains("throw new Error(`too big (Parameter '${Guard.name()}')`);");
+            .Contains(
+                "throw new ArgumentOutOfRangeException(Guard.name(), undefined, \"too big\");"
+            );
     }
 
     [Test]
@@ -279,7 +295,9 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(output)
-            .Contains("throw ((receiver$temp$0) => new Error(\"missing\"))(Guard.locate());");
+            .Contains(
+                "throw ((receiver$temp$0) => new Exception(\"System.IO.FileNotFoundException: missing\"))(Guard.locate());"
+            );
     }
 
     [Test]
@@ -289,11 +307,7 @@ public class BclExceptionConstructionTests
             "public static void Use() { throw new ObjectDisposedException(\"Connection\"); }"
         );
 
-        await Assert
-            .That(output)
-            .Contains(
-                "throw new Error(`Cannot access a disposed object.\\nObject name: 'Connection'.`);"
-            );
+        await Assert.That(output).Contains("throw new ObjectDisposedException(\"Connection\");");
     }
 
     [Test]
@@ -313,7 +327,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(result["optional-message-exception.ts"])
             .Contains(
-                "super(message ?? \"Exception of type 'OptionalMessageException' was thrown.\", { cause: inner });"
+                "super(message ?? \"Exception of type 'OptionalMessageException' was thrown.\", inner);"
             );
     }
 
@@ -408,11 +422,8 @@ public class BclExceptionConstructionTests
             """
         );
 
-        await Assert.That(output).Contains("throw new Error(\"Value cannot be null.\");");
-
-        await Assert
-            .That(output)
-            .Contains("throw new Error(\"Cannot access a disposed object.\");");
+        await Assert.That(output).Contains("throw new ArgumentNullException();");
+        await Assert.That(output).Contains("throw new ObjectDisposedException();");
     }
 
     [Test]
@@ -430,13 +441,17 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(output)
-            .Contains("throw new Error(\"Unable to find the specified file.\");");
+            .Contains(
+                "throw new Exception(\"System.IO.FileNotFoundException: Unable to find the specified file.\");"
+            );
 
-        await Assert.That(output).Contains("throw new Error(\"A task was canceled.\");");
+        await Assert.That(output).Contains("throw new TaskCanceledException();");
 
         await Assert
             .That(output)
-            .Contains("throw new Error(\"Attempted to read past the end of the stream.\");");
+            .Contains(
+                "throw new Exception(\"System.IO.EndOfStreamException: Attempted to read past the end of the stream.\");"
+            );
     }
 
     [Test]
@@ -487,16 +502,15 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "return await (async (receiver$temp$0) => ((receiver$temp$1) => new Error(`${receiver$temp$1} (Parameter '${receiver$temp$0}')`))(await Guard.describe()))(await Guard.name());"
+                "return await (async (receiver$temp$0) => ((receiver$temp$1) => new ArgumentOutOfRangeException(receiver$temp$0, undefined, receiver$temp$1))(await Guard.describe()))(await Guard.name());"
             );
     }
 
     [Test]
-    public async Task BclExceptionTypeTests_ClassifyAsInstanceofError()
+    public async Task BclExceptionTypeTests_TestTheRuntimeClass()
     {
-        // A BCL exception type maps to `Error`, so the runtime type test (#279)
-        // classifies it as `instanceof` of that class for both `is` and `as`.
-        // Documented limitation: the test cannot tell BCL exception types apart.
+        // A BCL exception type maps to its runtime class, so the runtime type
+        // test (#279) is `instanceof` of that class for both `is` and `as`.
         var output = TranspileGuard(
             """
             public static bool IsArgument(object o) => o is ArgumentException;
@@ -505,9 +519,9 @@ public class BclExceptionConstructionTests
             """
         );
 
-        await Assert.That(output).Contains("return o instanceof Error;");
-        await Assert.That(output).Contains("instanceof Error ?");
-        await Assert.That(output).DoesNotContain("ArgumentException");
+        await Assert.That(output).Contains("return o instanceof ArgumentException;");
+        await Assert.That(output).Contains("instanceof ArgumentException ?");
+        await Assert.That(output).DoesNotContain("instanceof Error");
     }
 
     private static string TranspileGuard(string members)

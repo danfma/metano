@@ -1,3 +1,4 @@
+import { ArgumentOutOfRangeException } from "metano-runtime/system/exceptions/argument-out-of-range-exception";
 import type { Clip } from "./clip";
 import { ImageClip } from "./image-clip";
 import { SilenceClip } from "./silence-clip";
@@ -19,7 +20,7 @@ export class ClipDescription {
         return `silence ${silence.seconds}`;
       }
 
-      throw new Error("Specified argument was out of the range of valid values. (Parameter 'clip')");
+      throw new ArgumentOutOfRangeException("clip");
     })(clip);
   }
 }

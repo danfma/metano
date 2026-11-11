@@ -3,11 +3,10 @@
  * `System.Text.Json.JsonException`: a value of the wrong JSON kind, a missing
  * required property, an invalid enum value, or a document nested deeper than
  * the maximum depth. Messages carry no `Path` / `LineNumber` suffix
- * (DECIDED-5).
+ * (DECIDED-5). The class is the runtime's `system/exceptions` one (spec 011
+ * FR-013), so it is an `Exception` and still an `Error`.
  */
-export class JsonException extends Error {
-  override readonly name = "JsonException";
-}
+export { JsonException } from "../exceptions/json-exception.ts";
 
 /**
  * Thrown for a polymorphic contract that cannot handle a payload or a value,

@@ -5,8 +5,11 @@ set -euo pipefail
 #
 # Packs targets/js/metano-runtime, installs the tarball into a throwaway
 # `"type": "module"` project outside the Bun workspace, then:
-#   1. imports the public entry points (and file-level deep imports) from
-#      plain Node ESM, and checks directory subpaths are not exported;
+#   1. imports the public entry points (and file-level deep imports, such as
+#      the per-class exception modules generated code imports) from plain
+#      Node ESM, checks that an exception the root barrel throws is the class
+#      a per-class module exports, and checks directory subpaths are not
+#      exported;
 #   2. scans the packed JavaScript and declarations for extensionless
 #      relative specifiers;
 #   3. type-checks the entry points under NodeNext resolution with both the
@@ -96,6 +99,7 @@ import { SerializerContext } from "metano-runtime/system/json";
 import { linq } from "metano-runtime/system/linq";
 import { UUID } from "metano-runtime/system/uuid.js";
 import { UUID as ExtensionlessUUID } from "metano-runtime/system/uuid";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 // @ts-expect-error — root: isInt32 returns boolean, not string.
 export const rootIsTyped: string = isInt32(1);
@@ -111,6 +115,9 @@ export const deepImportIsTyped: number = UUID;
 
 // @ts-expect-error — extensionless deep import: same check.
 export const extensionlessDeepImportIsTyped: number = ExtensionlessUUID;
+
+// @ts-expect-error — per-class exception module, as generated code imports it.
+export const exceptionModuleIsTyped: number = InvalidOperationException;
 TS
 }
 
@@ -139,6 +146,8 @@ const expectedExports = [
   ["metano-runtime/system/linq", "linq"],
   ["metano-runtime/system/uuid.js", "UUID"],
   ["metano-runtime/system/uuid", "UUID"],
+  ["metano-runtime/system/exceptions/invalid-operation-exception", "InvalidOperationException"],
+  ["metano-runtime/system/exceptions/divide-by-zero-exception", "DivideByZeroException"],
 ];
 
 for (const [specifier, exportName] of expectedExports) {
@@ -150,6 +159,22 @@ for (const [specifier, exportName] of expectedExports) {
 
   console.log(`ok   ${specifier} (${Object.keys(loadedModule).length} exports)`);
 }
+
+const { intDiv } = await import("metano-runtime");
+const { DivideByZeroException } = await import("metano-runtime/system/exceptions/divide-by-zero-exception");
+const thrown = (() => {
+  try {
+    intDiv(1, 0);
+  } catch (error) {
+    return error;
+  }
+})();
+
+if (!(thrown instanceof DivideByZeroException) || !(thrown instanceof Error)) {
+  throw new Error("the root barrel's intDiv does not throw the per-class DivideByZeroException");
+}
+
+console.log("ok   the root barrel throws the per-class exception classes");
 JS
 }
 

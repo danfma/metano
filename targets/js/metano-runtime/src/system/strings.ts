@@ -3,6 +3,9 @@
  * closest JavaScript built-in.
  */
 
+import { ArgumentException } from "./exceptions/argument-exception.ts";
+import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
+
 /**
  * The single characters .NET's `char.IsWhiteSpace` accepts besides the ranges tested in
  * {@link isDotNetWhiteSpace}. JavaScript's `trim()` and `\s` disagree with .NET on two
@@ -77,11 +80,11 @@ export function stringReplace(
   // Generated code is not always type-checked against this signature (a C# `null!`
   // argument reaches here), so the C# null check stays.
   if (oldValue == null) {
-    throw new Error("Value cannot be null. (Parameter 'oldValue')");
+    throw new ArgumentNullException("oldValue");
   }
 
   if (oldValue.length === 0) {
-    throw new Error("The value cannot be an empty string. (Parameter 'oldValue')");
+    throw new ArgumentException("The value cannot be an empty string.", "oldValue");
   }
 
   return value.split(oldValue).join(newValue ?? "");

@@ -296,8 +296,10 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("switch-expression-designators.ts");
-        await Assert.That(result["media/clip-description.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "switch-expression-designators.ts",
+            result["media/clip-description.ts"]
+        );
     }
 
     [Test]

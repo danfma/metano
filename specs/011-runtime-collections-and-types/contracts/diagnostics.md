@@ -24,7 +24,7 @@
 **MS0045 — UnanswerableRuntimeTypeTest** (Error). Replaces today's MS0001 warning + placeholder for runtime tests.
 
 1. The tested type is a delegate, a pointer or `void`.
-2. The tested type is a non-transpilable class with no runtime class (`[External]` without a constructor, a BCL type outside FR-013 / FR-001 / the temporal set), including a BCL exception outside FR-013's list at a `catch` / `is` / `as` site (FR-014: no widening to `Exception`).
+2. The tested type is a non-transpilable class with no runtime class (`[External]` without a constructor, a BCL type outside FR-013 / FR-001 / the temporal set), including a BCL exception outside FR-013's list at a `catch` / `is` / `as` site (FR-014: no widening to `Exception`). *Implemented for the BCL exceptions by #651* (`Extraction/ExceptionRuntimeClassReporter.cs`, through the `IrExtractionContext.HasExceptionRuntimeClass` port; also at a type pattern and a switch arm); the other cases still report MS0001.
 3. A `[PlainObject]` for which `TypeGuardBuilder` produces no guard.
 4. An interface from a referenced package whose descriptor the package did not emit (OD-6 (b) only).
 

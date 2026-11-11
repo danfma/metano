@@ -19,6 +19,14 @@ export class Exception extends Error {
     this.innerException = innerException ?? null;
   }
 
+  /**
+   * The .NET full name of the class, which {@link toString} prints: `System.<name>`
+   * unless a class outside the `System` namespace overrides it.
+   */
+  protected get fullTypeName(): string {
+    return `System.${this.name}`;
+  }
+
   /** The JavaScript `stack`, which plays the role of .NET's `StackTrace`. */
   get stackTrace(): string | null {
     return this.stack ?? null;
@@ -29,7 +37,7 @@ export class Exception extends Error {
    * it. The stack trace is not appended (see {@link stackTrace}).
    */
   override toString(): string {
-    const fullName = `System.${this.name}`;
+    const fullName = this.fullTypeName;
     const head = this.message ? `${fullName}: ${this.message}` : fullName;
 
     if (this.innerException == null) {

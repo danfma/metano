@@ -1,4 +1,5 @@
 import { checkedInt32, checkedNarrow, checkedNarrowNumber, checkedUInt32, int32FromDouble, int32FromDoubleChecked } from "metano-runtime";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Narrowing {
   constructor() { }
@@ -105,7 +106,7 @@ export class Narrowing {
 
   unwrapped(x: number | null): number {
     return (x ?? (() => {
-      throw new Error("Nullable object must have a value.");
+      throw new InvalidOperationException("Nullable object must have a value.");
     })()) & 0xFF;
   }
 

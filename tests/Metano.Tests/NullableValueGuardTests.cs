@@ -14,7 +14,7 @@ namespace Metano.Tests;
 public class NullableValueGuardTests
 {
     private const string Guard =
-        " ?? (() => {\n    throw new Error(\"Nullable object must have a value.\");\n  })()";
+        " ?? (() => {\n    throw new InvalidOperationException(\"Nullable object must have a value.\");\n  })()";
 
     private const string Source = """
         #nullable enable
@@ -170,7 +170,7 @@ public class NullableValueGuardTests
         await Assert
             .That(Unwraps.Value)
             .Contains(
-                "  if (n != null) {\n    return n ?? (() => {\n      throw new Error(\"Nullable object must have a value.\");\n    })();\n  }"
+                "  if (n != null) {\n    return n ?? (() => {\n      throw new InvalidOperationException(\"Nullable object must have a value.\");\n    })();\n  }"
             );
 
     [Test]

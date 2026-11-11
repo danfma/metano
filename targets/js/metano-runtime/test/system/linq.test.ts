@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { InvalidOperationException } from "#/system/exceptions/index.ts";
 import {
   aggregate,
   all,
@@ -143,7 +144,10 @@ describe("linq operators", () => {
   test("first / firstOrDefault", () => {
     expect(linq([1, 2, 3], first<number>())).toBe(1);
     expect(linq([1, 2, 3], firstOrDefault<number>((x) => x > 10))).toBeNull();
-    expect(() => linq([] as number[], first<number>())).toThrow();
+    expect(() => linq([] as number[], first<number>())).toThrow(
+      new InvalidOperationException("Sequence contains no elements"),
+    );
+    expect(() => linq([] as number[], first<number>())).toThrow(InvalidOperationException);
   });
 
   test("firstOrDefault / lastOrDefault / singleOrDefault return the given default on a miss", () => {
@@ -162,7 +166,10 @@ describe("linq operators", () => {
     expect(linq(none, singleOrDefault(undefined, 0))).toBe(0);
     expect(linq([1, 2, 3], singleOrDefault((x) => x > 10, 42))).toBe(42);
     expect(linq([1, 2, 3], singleOrDefault((x) => x === 2, 42))).toBe(2);
-    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow();
+    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(InvalidOperationException);
+    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(
+      "Sequence contains more than one matching element",
+    );
   });
 
   test("a falsy element is returned as the match, not replaced by the default", () => {

@@ -1945,14 +1945,13 @@ public static partial class IrToTsExpressionBridge
             return new TsArrayLiteral(args);
         if (ne.Type is IrNamedTypeRef named && named.Semantics is { } s)
         {
-            // BCL exception types (InvalidOperationException, …) have no
-            // runtime class on the TS side — map them to the builtin `Error`,
-            // rebuilding its (message, { cause }) arguments from the
-            // constructor-parameter roles. Transpilable exception subclasses
-            // keep their generated identity.
-            if (IrToTsTypeMapper.IsBclException(named))
+            // BCL exception types (InvalidOperationException, …) construct
+            // their runtime class from the constructor-parameter roles (spec
+            // 011 FR-014). Transpilable exception subclasses keep their
+            // generated identity.
+            if (BclExceptionClasses.IsBclException(named))
             {
-                return MapBclExceptionCreation(ne, args, context);
+                return MapBclExceptionCreation(ne, named, args, context);
             }
 
             // [Branded] structs compile to companion objects with a
@@ -2343,12 +2342,16 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapBclExceptionCreation(
         IrNewExpression ne,
+        IrNamedTypeRef exceptionType,
         IReadOnlyList<TsExpression> positionalArgs,
         IrToTsBridgeContext context
     ) =>
         ne.ExceptionConstruction is { } construction
-            ? IrToTsExceptionConstructionBridge.MapNewError(ne, construction, context)
-            : new TsNewExpression(new TsIdentifier("Error"), positionalArgs);
+            ? IrToTsExceptionConstructionBridge.MapNewException(ne, construction, context)
+            : new TsNewExpression(
+                IrToTsTypeMapper.ExceptionClasses.ClassOf(exceptionType).ValueReference(),
+                positionalArgs
+            );
 
     private static TsExpression MapLiteral(IrLiteral lit) =>
         lit.Kind switch

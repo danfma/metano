@@ -27,16 +27,16 @@ internal static partial class IrToTsClassBridge
     /// the extractor leaves unset), or the base is a non-transpilable named
     /// type — TypeScript can't extend something that doesn't have a class
     /// emitted for it. One case differs: a non-transpilable exception base (the
-    /// BCL hierarchy) extends the JS <c>Error</c> built-in, so user exceptions
-    /// keep <c>instanceof Error</c> semantics.
+    /// BCL hierarchy) extends its runtime class (spec 011 FR-014; see
+    /// <see cref="BclExceptionClasses"/>), so user exceptions keep the .NET
+    /// hierarchy and <c>instanceof Error</c>.
     /// </summary>
     public static TsType? BuildExtends(IrClassDeclaration ir) =>
         ir.BaseType switch
         {
             null => null,
-            IrNamedTypeRef named when IrToTsTypeMapper.IsBclException(named) => new TsNamedType(
-                "Error"
-            ),
+            IrNamedTypeRef named when BclExceptionClasses.IsBclException(named) =>
+                IrToTsTypeMapper.Map(named),
             IrNamedTypeRef { Semantics.IsTranspilable: false } => null,
             _ => IrToTsTypeMapper.Map(ir.BaseType),
         };

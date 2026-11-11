@@ -37,7 +37,6 @@ public class ExpressionTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("if-else-throw.ts");
-        await Assert.That(result["pair.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("if-else-throw.ts", result["pair.ts"]);
     }
 }

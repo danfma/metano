@@ -9,6 +9,9 @@
  * digit count and a {@link MidpointRounding} mode.
  */
 
+import { ArgumentException } from "./exceptions/argument-exception.ts";
+import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
+
 /**
  * Mirror of `System.MidpointRounding`. The numeric values match the .NET enum, so a
  * value read from serialized C# data keeps its meaning.
@@ -28,6 +31,12 @@ const MAX_DOUBLE_ROUNDING_DIGITS = 15;
 
 /** `decimal.Round(decimal, int)` accepts 0 to 28 fractional digits. */
 const MAX_DECIMAL_ROUNDING_DIGITS = 28;
+
+/** The message of the `ArgumentOutOfRangeException` for a `Math.Round(double, int)` digit count. */
+const DOUBLE_DIGITS_MESSAGE = "Rounding digits must be between 0 and 15, inclusive.";
+
+/** The message of the `ArgumentOutOfRangeException` for a `decimal.Round(decimal, int)` digit count. */
+const DECIMAL_DIGITS_MESSAGE = "Decimal can only round to between 0 and 28 digits of precision.";
 
 /** Magnitude from which every double is already an integer at 15 digits of scale. */
 const DOUBLE_ROUND_LIMIT = 1e16;
@@ -71,16 +80,16 @@ export interface DecimalRoundable<D> {
  * there), so parity is pinned to the .NET 10 algorithm; revisit this helper when the
  * supported target framework moves past .NET 10.
  *
- * @throws RangeError when `digits` is outside 0–15 or `mode` is not a
- *   {@link MidpointRounding} value, the cases where .NET throws
- *   `ArgumentOutOfRangeException` / `ArgumentException`.
+ * @throws ArgumentOutOfRangeException when `digits` is outside 0–15, and
+ *   ArgumentException when `mode` is not a {@link MidpointRounding} value, with
+ *   .NET's messages.
  */
 export function roundNumber(
   value: number,
   digits = 0,
   mode: MidpointRounding = MidpointRounding.ToEven,
 ): number {
-  assertDigits(digits, MAX_DOUBLE_ROUNDING_DIGITS);
+  assertDigits(digits, MAX_DOUBLE_ROUNDING_DIGITS, "digits", DOUBLE_DIGITS_MESSAGE);
   assertMode(mode);
 
   if (!(Math.abs(value) < DOUBLE_ROUND_LIMIT)) return value;
@@ -97,15 +106,16 @@ export function roundNumber(
  * `decimal.Round`. `decimal.js` rounds the exact decimal value, so no binary
  * representation error is involved.
  *
- * @throws RangeError when `digits` is outside 0–28 or `mode` is not a
- *   {@link MidpointRounding} value.
+ * @throws ArgumentOutOfRangeException when `digits` is outside 0–28, and
+ *   ArgumentException when `mode` is not a {@link MidpointRounding} value, with
+ *   .NET's messages.
  */
 export function roundDecimal<D extends DecimalRoundable<D>>(
   value: D,
   digits = 0,
   mode: MidpointRounding = MidpointRounding.ToEven,
 ): D {
-  assertDigits(digits, MAX_DECIMAL_ROUNDING_DIGITS);
+  assertDigits(digits, MAX_DECIMAL_ROUNDING_DIGITS, "decimals", DECIMAL_DIGITS_MESSAGE);
   assertMode(mode);
 
   return value.toDecimalPlaces(digits, DECIMAL_JS_ROUNDING[mode]);
@@ -153,12 +163,15 @@ function copySignOfZero(value: number): number {
   return value < 0 || Object.is(value, -0) ? -0 : 0;
 }
 
-function assertDigits(digits: number, max: number): void {
+function assertDigits(digits: number, max: number, paramName: string, message: string): void {
   if (!Number.isInteger(digits) || digits < 0 || digits > max)
-    throw new RangeError(`Rounding digits must be an integer between 0 and ${max}.`);
+    throw new ArgumentOutOfRangeException(paramName, undefined, message);
 }
 
 function assertMode(mode: number): asserts mode is MidpointRounding {
   if (!Number.isInteger(mode) || mode < 0 || mode >= MIDPOINT_ROUNDING_MODE_COUNT)
-    throw new RangeError(`The value '${mode}' is not a valid MidpointRounding mode.`);
+    throw new ArgumentException(
+      `The value '${mode}' is not valid for this usage of the type MidpointRounding.`,
+      "mode",
+    );
 }

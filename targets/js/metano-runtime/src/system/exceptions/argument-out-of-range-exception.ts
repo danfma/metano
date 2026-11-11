@@ -4,13 +4,27 @@ import { ArgumentException } from "./argument-exception.ts";
 const ARGUMENT_OUT_OF_RANGE_EXCEPTION_MESSAGE =
   "Specified argument was out of the range of valid values.";
 
-/** Mirrors `System.ArgumentOutOfRangeException`: an argument outside the values a member accepts. */
+/**
+ * Mirrors `System.ArgumentOutOfRangeException`: an argument outside the values
+ * a member accepts. As on .NET, a non-`null` actual value is appended to the
+ * message on a new line (`Actual value was <value>.`), formatted with
+ * JavaScript's `String`.
+ */
 export class ArgumentOutOfRangeException extends ArgumentException {
   override readonly name: string = "ArgumentOutOfRangeException";
   readonly actualValue: unknown;
 
-  constructor(paramName?: string | null, actualValue?: unknown, message?: string | null) {
-    super(message ?? ARGUMENT_OUT_OF_RANGE_EXCEPTION_MESSAGE, paramName);
+  constructor(
+    paramName?: string | null,
+    actualValue?: unknown,
+    message?: string | null,
+    innerException?: Error | null,
+  ) {
+    super(message ?? ARGUMENT_OUT_OF_RANGE_EXCEPTION_MESSAGE, paramName, innerException);
     this.actualValue = actualValue ?? null;
+
+    if (actualValue != null) {
+      this.message = `${this.message}\nActual value was ${String(actualValue)}.`;
+    }
   }
 }

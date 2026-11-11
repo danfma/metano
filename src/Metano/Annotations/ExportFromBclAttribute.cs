@@ -11,6 +11,13 @@ namespace Metano.Annotations;
 public sealed class ExportFromBclAttribute(Type type) : Attribute
 {
     public Type Type { get; } = type;
+
+    /// <summary>
+    /// The module the exported name is imported from: a package name
+    /// (<c>decimal.js</c>) or a module specifier inside one
+    /// (<c>metano-runtime/system/exceptions/exception</c>, so a program
+    /// imports only the module it uses). Empty when the name needs no import.
+    /// </summary>
     public string FromPackage { get; init; } = "";
     public string ExportedName { get; init; } = "";
 

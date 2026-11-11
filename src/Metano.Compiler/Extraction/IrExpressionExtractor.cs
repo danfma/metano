@@ -31,6 +31,7 @@ public sealed partial class IrExpressionExtractor
 
     private readonly SemanticModel _semantic;
     private readonly IrExtractionContext _context;
+    private readonly ExceptionRuntimeClassReporter _exceptionClasses;
 
     // Shorthands for the two context inputs read at dozens of type-mapping
     // sites across the partial files.
@@ -134,6 +135,7 @@ public sealed partial class IrExpressionExtractor
     {
         _semantic = semanticModel;
         _context = context;
+        _exceptionClasses = new ExceptionRuntimeClassReporter(context);
         _originResolver = context.OriginResolver;
         _target = context.Target;
         _localNames = localNames;
@@ -835,18 +837,39 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// A type test, or — when the target has no runtime test for
-    /// <paramref name="type"/> — an MS0001 report and an
+    /// <paramref name="type"/> — a report and an
     /// <see cref="IrUnsupportedPattern"/>, so no backend lowers a test against
-    /// a type that does not exist at runtime.
+    /// a type that does not exist at runtime (see <see cref="UntestablePattern"/>).
     /// </summary>
     private IrPattern ExtractTypePattern(
         SyntaxNode pattern,
         IrTypeRef type,
         IrPatternDesignator? designator = null
-    ) =>
-        HasRuntimeTypeTest(type)
-            ? new IrTypePattern(type, designator)
-            : ReportUnsupportedPattern(pattern);
+    ) => UntestablePattern(pattern, type) ?? new IrTypePattern(type, designator);
+
+    /// <summary>
+    /// The placeholder a type test in <paramref name="pattern"/> lowers to when
+    /// the target cannot answer it — <c>MS0045</c> for an exception without a
+    /// runtime class (<see cref="ExceptionRuntimeClassReporter"/>), <c>MS0001</c>
+    /// for any other type without a runtime test — or <c>null</c> when it can.
+    /// </summary>
+    private IrPattern? UntestablePattern(SyntaxNode pattern, IrTypeRef type)
+    {
+        if (_exceptionClasses.ReportsUnanswerableTest(MatchedType(pattern), pattern))
+            return new IrUnsupportedPattern(pattern.Kind().ToString());
+
+        return HasRuntimeTypeTest(type) ? null : ReportUnsupportedPattern(pattern);
+    }
+
+    /// <summary>The type a type, declaration or recursive pattern tests for.</summary>
+    private ITypeSymbol? MatchedType(SyntaxNode pattern) =>
+        _semantic.GetOperation(pattern) switch
+        {
+            ITypePatternOperation typePattern => typePattern.MatchedType,
+            IDeclarationPatternOperation declaration => declaration.MatchedType,
+            IRecursivePatternOperation recursive => recursive.MatchedType,
+            _ => null,
+        };
 
     private static IrUnsupportedPattern ReportUnsupportedPattern(SyntaxNode pattern)
     {
@@ -967,8 +990,8 @@ public sealed partial class IrExpressionExtractor
             : (IrTypeRef?)null;
         var designator = ResolveOptionalDesignator(recursive.Designation);
 
-        if (type is not null && !HasRuntimeTypeTest(type))
-            return ReportUnsupportedPattern(recursive);
+        if (type is not null && UntestablePattern(recursive, type) is { } untestable)
+            return untestable;
 
         // Positional pattern — `(x, y)` or `Point(x, y)` — decomposes a
         // tuple or calls Deconstruct on a record. Property patterns land on
@@ -1845,12 +1868,21 @@ public sealed partial class IrExpressionExtractor
     /// reuses its own <c>is</c> lowering. A nullable target (<c>int?</c>,
     /// <c>Person?</c>) tests its underlying type, and a non-stable <c>x</c>
     /// is bound once. A target with no runtime type test reports MS0001
-    /// instead.
+    /// instead, and an exception without a runtime class MS0045
+    /// (<see cref="ExceptionRuntimeClassReporter"/>).
     /// </summary>
     private IrExpression ExtractAsCast(BinaryExpressionSyntax asCast, TypeSyntax typeSyntax)
     {
         var castType = ResolvePatternType(typeSyntax);
         var testedType = castType is IrNullableTypeRef nullable ? nullable.Inner : castType;
+
+        if (
+            _exceptionClasses.ReportsUnanswerableTest(
+                _semantic.GetTypeInfo(typeSyntax).Type,
+                asCast
+            )
+        )
+            return new IrUnsupportedExpression(asCast.Kind().ToString());
 
         if (!HasRuntimeTypeTest(testedType))
             return ReportUnsupported(
@@ -1876,6 +1908,14 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ExtractIsTypeTest(BinaryExpressionSyntax isTest, TypeSyntax typeSyntax)
     {
         var type = ResolvePatternType(typeSyntax);
+
+        if (
+            _exceptionClasses.ReportsUnanswerableTest(
+                _semantic.GetTypeInfo(typeSyntax).Type,
+                isTest
+            )
+        )
+            return new IrUnsupportedExpression(isTest.Kind().ToString());
 
         if (!HasRuntimeTypeTest(type))
             return ReportUnsupported(
@@ -4831,24 +4871,34 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Classifies the arguments of a <c>new</c> of a BCL exception by
-    /// constructor-parameter role (see <see cref="IrExceptionConstructionExtractor"/>).
-    /// Returns <c>null</c> for every other construction.
+    /// constructor-parameter role (see <see cref="IrExceptionConstructionExtractor"/>),
+    /// reporting a construction of one the target has no runtime class for
+    /// (<see cref="ExceptionRuntimeClassReporter"/>). Returns <c>null</c> for
+    /// every other construction.
     /// </summary>
     private IrExceptionConstruction? ExtractExceptionConstruction(
         IMethodSymbol? ctor,
         IReadOnlyList<IrArgument> args,
         ExpressionSyntax creationSyntax
-    ) =>
-        ctor is null
-            ? null
-            : IrExceptionConstructionExtractor.Extract(
-                ctor,
-                args,
-                ctor.ContainingType,
-                _target,
-                (creationSyntax as BaseObjectCreationExpressionSyntax)?.ArgumentList,
-                _semantic
-            );
+    )
+    {
+        if (ctor is null)
+            return null;
+
+        var construction = IrExceptionConstructionExtractor.Extract(
+            ctor,
+            args,
+            ctor.ContainingType,
+            _target,
+            (creationSyntax as BaseObjectCreationExpressionSyntax)?.ArgumentList,
+            _semantic
+        );
+
+        if (construction is not null)
+            _exceptionClasses.ReportConstruction(ctor.ContainingType, creationSyntax);
+
+        return construction;
+    }
 
     /// <summary>
     /// When the constructed type is an <em>imported</em> JSX renderable — it is

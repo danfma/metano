@@ -510,6 +510,19 @@ Assembly-level mapping from a .NET BCL type to an npm package. Used by the
     Version = "^10.6.0")]
 ```
 
+`FromPackage` may also be a module specifier inside a package. The shipped
+exception mappings use one per class, so a program imports only the exception
+modules it uses, and an exception type mapped this way constructs, extends,
+names and tests the exported class (see the Exceptions section of
+[bcl-mappings.md](bcl-mappings.md)):
+
+```csharp
+[assembly: ExportFromBcl(
+    typeof(InvalidOperationException),
+    ExportedName = "InvalidOperationException",
+    FromPackage = "metano-runtime/system/exceptions/invalid-operation-exception")]
+```
+
 ### `[Emit("$0.foo($1, $2)")]`
 
 Inlines JavaScript at the call site, with `$0` = the receiver and `$1, $2, …` =

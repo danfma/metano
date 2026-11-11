@@ -5,8 +5,7 @@
  * where C# gives `3`.
  */
 
-/** The message .NET's `DivideByZeroException` carries by default. */
-const DIVIDE_BY_ZERO_MESSAGE = "Attempted to divide by zero.";
+import { DivideByZeroException } from "./exceptions/divide-by-zero-exception.ts";
 
 /**
  * Divides `dividend` by `divisor` and truncates the quotient toward zero, as C# does
@@ -17,7 +16,7 @@ const DIVIDE_BY_ZERO_MESSAGE = "Attempted to divide by zero.";
  * throwing `OverflowException`, and a `long` quotient beyond `Number.MAX_SAFE_INTEGER`
  * loses precision, like every other `long` value mapped to `number`.
  *
- * @throws Error with .NET's `DivideByZeroException` message when `divisor` is zero,
+ * @throws DivideByZeroException, with .NET's message, when `divisor` is zero,
  *   where a bare `Math.trunc(dividend / divisor)` would yield `Infinity` or `NaN`.
  */
 export function intDiv(dividend: number, divisor: number): number;
@@ -34,7 +33,7 @@ export function intDiv(
   }
 
   if (divisor === 0) {
-    throw new Error(DIVIDE_BY_ZERO_MESSAGE);
+    throw new DivideByZeroException();
   }
 
   // C# integers have no negative zero: `+ 0` turns the `-0` of `-1 / 3` into `0`.

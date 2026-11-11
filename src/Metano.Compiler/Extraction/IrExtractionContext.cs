@@ -61,6 +61,20 @@ public sealed record IrExtractionContext(
     public Func<IMethodSymbol, bool>? EmitsBrandedFastPath { get; init; }
 
     /// <summary>
+    /// The port through which a target says whether it gives an exception type
+    /// without a declaration of its own (a BCL one, mostly) a runtime class
+    /// that tells it apart (spec 011 FR-014): TypeScript answers from its
+    /// <c>[ExportFromBcl]</c> mapping of the <c>metano-runtime</c> exception
+    /// classes. Where it answers <c>false</c>, the extractor reports
+    /// <c>MS0001</c> at a construction (the target throws its
+    /// <c>Exception</c>) and <c>MS0045</c> at a type test (<c>is</c>,
+    /// <c>as</c>, a pattern, a <c>catch</c> clause), which would otherwise take
+    /// every exception. <c>null</c>, the default, for a target that tests
+    /// every exception type natively (Dart): nothing is reported.
+    /// </summary>
+    public Func<INamedTypeSymbol, bool>? HasExceptionRuntimeClass { get; init; }
+
+    /// <summary>
     /// A target capability: whether the target keeps C#'s evaluation order
     /// for a call, construction or <c>: this(...)</c> chain whose named
     /// arguments are out of parameter order
@@ -115,11 +129,13 @@ public sealed record IrExtractionContext(
     /// <see cref="EmitsOperatorFastPaths"/>,
     /// <see cref="EmitsBrandedFastPath"/>,
     /// <see cref="KeepsArgumentEvaluationOrder"/>,
+    /// <see cref="HasExceptionRuntimeClass"/>,
     /// <see cref="FormatStrings"/>) are dropped on purpose: each one binds a
     /// constructor call, a user-defined operator, a method call, a call with
-    /// named arguments or a formatted value, and a C# default value is a
-    /// constant, <c>default</c> or a parameterless struct construction, which
-    /// holds none of them.
+    /// named arguments or a formatted value, or answers for an exception
+    /// construction or type test, and a C# default value is a constant,
+    /// <c>default</c> or a parameterless struct construction, which holds
+    /// none of them.
     /// </summary>
     public IrExtractionContext ForConstantDefault() => new(OriginResolver);
 

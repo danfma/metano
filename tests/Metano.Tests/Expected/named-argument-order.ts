@@ -1,3 +1,4 @@
+import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 import { Chained } from "./chained";
 import { Derived } from "./derived";
 import { Engine } from "./engine";
@@ -185,7 +186,7 @@ export class SourceOrderCalls {
   }
 
   static bclException(): number {
-    return ((receiver$temp$0) => ((receiver$temp$1) => new Error(`${receiver$temp$1} (Parameter '${receiver$temp$0}')`))(SourceOrderCalls.tag("q")))(SourceOrderCalls.tag("p")).message.length;
+    return ((receiver$temp$0) => ((receiver$temp$1) => new ArgumentException(receiver$temp$1, receiver$temp$0))(SourceOrderCalls.tag("q")))(SourceOrderCalls.tag("p")).message.length;
   }
 }
 

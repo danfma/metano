@@ -1,4 +1,5 @@
 import { checkedInt32, checkedNarrow, tupleEquals } from "metano-runtime";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Pairs {
   constructor() { }
@@ -102,7 +103,7 @@ export class Pairs {
     let total = 0n;
     for (const pair$element of pairs) {
       const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
-        throw new Error("Nullable object must have a value.");
+        throw new InvalidOperationException("Nullable object must have a value.");
       })());
       total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
     }
@@ -122,13 +123,13 @@ export class Pairs {
 
   unwrappedElement(pair: [number | null, number]): [bigint, bigint] {
     return [BigInt(pair[0] ?? (() => {
-      throw new Error("Nullable object must have a value.");
+      throw new InvalidOperationException("Nullable object must have a value.");
     })()), BigInt(pair[1])] as [bigint, bigint];
   }
 
   unwrappedNested(pair: [[number, number] | null, number]): [[bigint, bigint], bigint] {
     return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair[0] ?? (() => {
-      throw new Error("Nullable object must have a value.");
+      throw new InvalidOperationException("Nullable object must have a value.");
     })()), BigInt(pair[1])] as [[bigint, bigint], bigint];
   }
 
@@ -138,13 +139,13 @@ export class Pairs {
 
   literalUnwrapped(first: number | null, second: number): [bigint, bigint] {
     return [BigInt(first ?? (() => {
-      throw new Error("Nullable object must have a value.");
+      throw new InvalidOperationException("Nullable object must have a value.");
     })()), BigInt(second)] as [bigint, bigint];
   }
 
   literalNested(first: number | null, second: number): [[bigint, bigint], bigint] {
     return [[BigInt(first ?? (() => {
-      throw new Error("Nullable object must have a value.");
+      throw new InvalidOperationException("Nullable object must have a value.");
     })()), BigInt(second)] as [bigint, bigint], BigInt(second)] as [[bigint, bigint], bigint];
   }
 

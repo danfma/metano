@@ -864,6 +864,77 @@ both runtimes; the exact JSON path costs 2–3× the `number` round trip. The di
 compares one helper call plus one inline division per element against one `number`
 division per element, so the ratio reads per-operation, not per-case.
 
+## Exceptions
+
+Each BCL exception below is a `metano-runtime` class (spec 011 FR-013, FR-014), one module
+per class under `metano-runtime/system/exceptions/`, bound to its C# type by an
+`[ExportFromBcl]` entry in `Metano/Runtime/Exceptions.cs`. Every class extends `Exception`,
+which extends `Error`, so `instanceof Error` holds for all of them.
+
+| C# | TypeScript class | Constructor (roles, in order) |
+|----|------------------|-------------------------------|
+| `Exception` | `Exception` | `(message, innerException)` |
+| `SystemException` | `SystemException : Exception` | `(message, innerException)` |
+| `InvalidOperationException` | `InvalidOperationException : SystemException` | `(message, innerException)` |
+| `ArgumentException` | `ArgumentException : SystemException` | `(message, paramName, innerException)` |
+| `ArgumentNullException` | `ArgumentNullException : ArgumentException` | `(paramName, message, innerException)` |
+| `ArgumentOutOfRangeException` | `ArgumentOutOfRangeException : ArgumentException` | `(paramName, actualValue, message, innerException)` |
+| `KeyNotFoundException` | `KeyNotFoundException : SystemException` | `(message, innerException)` |
+| `IndexOutOfRangeException` | `IndexOutOfRangeException : SystemException` | `(message, innerException)` |
+| `FormatException` | `FormatException : SystemException` | `(message, innerException)` |
+| `ArithmeticException` | `ArithmeticException : SystemException` | `(message, innerException)` |
+| `OverflowException` | `OverflowException : ArithmeticException` | `(message, innerException)` |
+| `DivideByZeroException` | `DivideByZeroException : ArithmeticException` | `(message, innerException)` |
+| `NotSupportedException` | `NotSupportedException : SystemException` | `(message, innerException)` |
+| `NotImplementedException` | `NotImplementedException : SystemException` | `(message, innerException)` |
+| `InvalidCastException` | `InvalidCastException : SystemException` | `(message, innerException)` |
+| `NullReferenceException` | `NullReferenceException : SystemException` | `(message, innerException)` |
+| `MissingMethodException` | `MissingMethodException : SystemException` | `(message, innerException)` |
+| `ObjectDisposedException` | `ObjectDisposedException : InvalidOperationException` | `(objectName, message, innerException)` |
+| `OperationCanceledException` | `OperationCanceledException : SystemException` | `(message, innerException)` |
+| `TaskCanceledException` | `TaskCanceledException : OperationCanceledException` | `(message, innerException)` |
+| `System.Text.Json.JsonException` | `JsonException : Exception` | `(message, innerException)` |
+
+- **Construction.** `new X(...)` emits `new X(...)` with a value import from the class's
+  module. Each argument is classified by the role of the C# constructor parameter it binds
+  to (positional or named) and passed in the runtime constructor's order, with `undefined`
+  for a role omitted ahead of one that is passed: `new ArgumentOutOfRangeException("p",
+  "m")` is `new ArgumentOutOfRangeException("p", undefined, "m")`. A `null` literal counts
+  as absent. Other parameters (`JsonException`'s `path`, a `CancellationToken`) are dropped;
+  side-effecting arguments are still evaluated once, in source order.
+- **Message.** The runtime class composes `message` as .NET does: the default message when
+  none is given (or it is `null`), ` (Parameter 'name')` after a non-empty parameter name,
+  `\nActual value was X.` after a non-`null` actual value (formatted with `String`),
+  `\nObject name: 'x'.` after a non-empty object name. A user exception deriving from
+  `System.Exception` without a message passes .NET's `Exception of type 'Ns.Type' was
+  thrown.` (the runtime cannot know the derived class's C# name).
+- **Members.** `Message` is `message`; `InnerException` reads `cause` and `StackTrace` reads
+  `stack` (so both also work on a plain JavaScript `Error`); `ParamName`, `ActualValue` and
+  `ObjectName` are `paramName`, `actualValue` and `objectName`. `ToString()` prints .NET's
+  `System.InvalidOperationException: message` format, with the inner exception after it.
+- **Type position, `extends`, type tests.** A BCL exception in a signature names its class
+  (`error: Exception`), a user exception deriving from one extends it (`class
+  InvalidSlugException extends ArgumentException`), and `is` / `as` / type patterns / switch
+  arms test `instanceof` it. `catch (X)` clauses test it too (the single-`catch` chain of
+  spec 011 FR-015, see [`docs/architecture.md`](architecture.md)); `catch (Exception)` and a
+  general `catch` take every thrown value, including one that is not an `Error`.
+- **Other exceptions.** A BCL exception without an entry (`TimeoutException`,
+  `IOException`, …) has no runtime class: constructing it reports `MS0001` and emits
+  `new Exception("System.TimeoutException: <message>")`, a user exception deriving from it
+  extends `Exception` (with the C# type's default message), and an `is` / `as` / pattern /
+  `catch` clause on it is the `MS0045` error, since testing `Exception` would take every
+  exception. A project can bind one to its own JavaScript class with
+  `[assembly: ExportFromBcl(typeof(TimeoutException), ExportedName = "TimeoutError",
+  FromPackage = "my-errors")]`; its constructor then takes `(message, innerException)`.
+- **Runtime helpers** throw these classes with .NET's messages (spec 011 FR-016): integer
+  division by zero, number parsing, checked conversions, `string.Replace`, `Dictionary.Add`,
+  the LINQ terminals, `Math.Round` / `decimal.Round` and the JSON serializer.
+- **Known deviations.** `error.name` of a user exception is the name of the runtime class it
+  derives from, and its `ToString()` names that class too; a `TypeError` thrown by
+  JavaScript (a member access on `null`) is not a `NullReferenceException`, and a thrown
+  value that is not an `Exception` is not wrapped (both are spec 011 FR-015's
+  `toException`, not implemented yet). Dart keeps its native exception types.
+
 ## Console
 
 | C# | TypeScript |

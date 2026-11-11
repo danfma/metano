@@ -94,7 +94,13 @@ public static class IrExceptionConstructionExtractor
         SemanticModel? model = null
     )
     {
-        if (constructor is null || !LacksTargetDeclaration(constructor.ContainingType, target))
+        if (
+            constructor is null
+            || !ExceptionRuntimeClassReporter.LacksTargetDeclaration(
+                constructor.ContainingType,
+                target
+            )
+        )
             return null;
 
         var roles = arguments
@@ -102,6 +108,7 @@ public static class IrExceptionConstructionExtractor
             .ToList();
 
         return new IrExceptionConstruction(
+            constructor.ContainingType.OriginalDefinition.ToDisplayString(),
             roles,
             DefaultMessageOf(constructor.ContainingType, callingType),
             MessageMayBeNull: MessageMayBeNull(sourceArguments, model),
@@ -133,13 +140,6 @@ public static class IrExceptionConstructionExtractor
             _ => true,
         };
     }
-
-    private static bool LacksTargetDeclaration(
-        INamedTypeSymbol exceptionType,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        IrTypeRefMapper.IsExceptionType(exceptionType)
-        && !IrTypeRefMapper.IsTranspilableType(exceptionType, target);
 
     private static IParameterSymbol? BoundParameter(
         IMethodSymbol constructor,

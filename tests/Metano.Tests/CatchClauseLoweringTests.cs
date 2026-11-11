@@ -537,7 +537,7 @@ public class CatchClauseLoweringTests
 
         await Assert.That(client).Contains("import { QuotaException } from \"errors-lib");
         await Assert.That(client).Contains("if (e$ instanceof QuotaException) {");
-        await Assert.That(client).Contains("} else if (e$ instanceof Error) {");
+        await Assert.That(client).Contains("} else if (e$ instanceof InvalidOperationException) {");
     }
 
     [Test]

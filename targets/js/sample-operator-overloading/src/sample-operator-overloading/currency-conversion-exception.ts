@@ -1,7 +1,9 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { isString } from "metano-runtime";
+import { Exception } from "metano-runtime/system/exceptions/exception";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
-export class CurrencyConversionException extends Error {
+export class CurrencyConversionException extends Exception {
   protected static readonly byCurrencyConversionExceptionFromCodeToCode: unique symbol = Symbol(
     "CurrencyConversionException(string fromCode, string toCode)",
   );
@@ -20,9 +22,9 @@ export class CurrencyConversionException extends Error {
     overload: typeof CurrencyConversionException.byCurrencyConversionExceptionFromCodeToCodeReason,
     fromCode: string,
     toCode: string,
-    reason: Error,
+    reason: Exception,
   );
-  constructor(fromCode: string, toCode: string, reason: Error);
+  constructor(fromCode: string, toCode: string, reason: Exception);
   constructor(fromCode: string, toCode: string);
   constructor(...args: unknown[]) {
     if (
@@ -33,13 +35,13 @@ export class CurrencyConversionException extends Error {
       const toCode = args[2] as string;
       const __chain0Arg0 = fromCode;
       const __chain0Arg1 = toCode;
-      const __chain0Arg2 = new Error("No exchange rate available");
+      const __chain0Arg2 = new InvalidOperationException("No exchange rate available");
 
       {
         const fromCode = __chain0Arg0;
         const toCode = __chain0Arg1;
         const reason = __chain0Arg2;
-        super(`Cannot convert ${fromCode} to ${toCode}`, { cause: reason });
+        super(`Cannot convert ${fromCode} to ${toCode}`, reason);
         this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
         Reflect.deleteProperty(this, "message");
       }
@@ -53,8 +55,8 @@ export class CurrencyConversionException extends Error {
     ) {
       const fromCode = args[1] as string;
       const toCode = args[2] as string;
-      const reason = args[3] as Error;
-      super(`Cannot convert ${fromCode} to ${toCode}`, { cause: reason });
+      const reason = args[3] as Exception;
+      super(`Cannot convert ${fromCode} to ${toCode}`, reason);
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
 
@@ -69,8 +71,8 @@ export class CurrencyConversionException extends Error {
     ) {
       const fromCode = args[0] as string;
       const toCode = args[1] as string;
-      const reason = args[2] as Error;
-      super(`Cannot convert ${fromCode} to ${toCode}`, { cause: reason });
+      const reason = args[2] as Exception;
+      super(`Cannot convert ${fromCode} to ${toCode}`, reason);
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
 
@@ -82,13 +84,13 @@ export class CurrencyConversionException extends Error {
       const toCode = args[1] as string;
       const __chain0Arg0 = fromCode;
       const __chain0Arg1 = toCode;
-      const __chain0Arg2 = new Error("No exchange rate available");
+      const __chain0Arg2 = new InvalidOperationException("No exchange rate available");
 
       {
         const fromCode = __chain0Arg0;
         const toCode = __chain0Arg1;
         const reason = __chain0Arg2;
-        super(`Cannot convert ${fromCode} to ${toCode}`, { cause: reason });
+        super(`Cannot convert ${fromCode} to ${toCode}`, reason);
         this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
         Reflect.deleteProperty(this, "message");
       }
@@ -114,7 +116,7 @@ export class CurrencyConversionException extends Error {
   static fromFromCodeToCodeReason(
     fromCode: string,
     toCode: string,
-    reason: Error,
+    reason: Exception,
   ): CurrencyConversionException {
     return new CurrencyConversionException(
       CurrencyConversionException.byCurrencyConversionExceptionFromCodeToCodeReason,

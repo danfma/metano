@@ -5,22 +5,32 @@ using Metano.Compiler.TypeScript.AST;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Lowers the arguments of an <see cref="IrExceptionConstruction"/> (a BCL
-/// exception <c>new</c>, or the base call of a user exception deriving from
-/// one) into the arguments of the JS <c>Error(message, { cause })</c>
-/// constructor, and keeps a class's <c>Message</c> override visible.
+/// Lowers an <see cref="IrExceptionConstruction"/> (a BCL exception <c>new</c>,
+/// or the base call of a user exception deriving from one) to the construction
+/// of its runtime class (spec 011 FR-014, <see cref="BclExceptionClasses"/>),
+/// and keeps a class's <c>Message</c> override visible.
 /// <para>
-/// The message emulates how .NET composes <c>Exception.Message</c>:
+/// Arguments by class:
 /// <list type="bullet">
-///   <item>the <c>message</c> argument, or the type's default message when it
-///     is absent or a <c>null</c> literal — and, when nullable analysis says
-///     the argument may be <c>null</c>, <c>message ?? default</c>;</item>
-///   <item><c>"\nObject name: 'x'."</c> for an <c>objectName</c>;</item>
-///   <item><c>" (Parameter 'name')"</c> for a <c>paramName</c>;</item>
-///   <item><c>"\nActual value was X."</c> for an <c>actualValue</c>.</item>
+///   <item>A mapped class receives the arguments by role, in its
+///   constructor's order, and composes <c>Message</c> as .NET does itself (default message, <c>" (Parameter 'name')"</c>,
+///   <c>"\nActual value was X."</c>, <c>"\nObject name: 'x'."</c>):
+///   <c>new ArgumentOutOfRangeException("p", undefined, "m")</c>.</item>
+///   <item>The base call of a user exception deriving from
+///   <c>System.Exception</c>, and an unmapped exception (which constructs the
+///   root <c>Exception</c>), pass a message this bridge composes and the inner
+///   exception. <c>System.Exception</c>'s default message names the user
+///   class, which the runtime cannot know; an unmapped exception's
+///   <c>new</c> starts the message with its type name
+///   (<c>"System.TimeoutException: late"</c>), the one trace of its identity
+///   left.</item>
 /// </list>
-/// Suffixes are omitted for a <c>null</c> (or, for names, empty) literal. The
-/// <c>innerException</c> becomes <c>{ cause }</c>.
+/// A composed message is the <c>message</c> argument, or the type's default
+/// message when it is absent or a <c>null</c> literal — and, when nullable
+/// analysis says the argument may be <c>null</c>, <c>message ?? default</c> —
+/// followed by the suffixes of the roles the root class does not take, omitted
+/// for a <c>null</c> (or, for names, empty) literal. A <c>null</c> literal
+/// counts as an absent argument everywhere.
 /// </para>
 /// <para>
 /// <c>Message</c> overrides: the native <c>Error</c> constructor installs an own
@@ -32,8 +42,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>base.Message</c> reads lower to that field.
 /// </para>
 /// <para>
-/// Evaluation order: the message composition reads the arguments in role
-/// order and ignores unmapped ones. When that would change when or whether a
+/// Evaluation order: the role-ordered arguments reorder the source ones and
+/// drop unmapped ones. When that would change when or whether a
 /// side-effecting argument runs
 /// (<see cref="IrExceptionConstruction.RequiresArgumentTemporaries"/>), the
 /// arguments are evaluated once, in source order, first: the extractor
@@ -41,16 +51,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// temporaries before <c>super</c>, which cannot move into a let IIFE.
 /// </para>
 /// <para>
-/// Known deviations: a non-literal <c>paramName</c>, <c>objectName</c> or
-/// <c>actualValue</c> that is <c>null</c> / empty at runtime is not
-/// suppressed, and an actual value is formatted with JS (not .NET)
-/// <c>ToString</c> rules. When a <c>Message</c> override supplies the message,
-/// the <c>stack</c> header (captured by the native constructor) keeps the base
-/// message, not the overridden one. Type tests stay coarse: generated code
-/// constructs every BCL exception as a plain <c>Error</c> (#651), so
-/// <c>o is ArgumentException</c> and a
-/// <c>catch (ArgumentException)</c> clause both test <c>instanceof Error</c>
-/// (see <see cref="IrToTsCatchChainBridge"/>).
+/// Known deviations: in a composed message, a non-literal <c>paramName</c>,
+/// <c>objectName</c> or <c>actualValue</c> that is <c>null</c> / empty at
+/// runtime is not suppressed, and an actual value is formatted with JS (not
+/// .NET) <c>ToString</c> rules, as the runtime classes also do. When a
+/// <c>Message</c> override supplies the message, the <c>stack</c> header
+/// (captured by the native constructor) keeps the base message, not the
+/// overridden one.
 /// </para>
 /// </summary>
 public static class IrToTsExceptionConstructionBridge
@@ -191,11 +198,11 @@ public static class IrToTsExceptionConstructionBridge
     }
 
     /// <summary>
-    /// Lowers <c>new BclException(...)</c> to <c>new Error(...)</c>. The
-    /// extractor has already let-bound any side-effecting arguments the
-    /// role-ordered lowering would reorder or drop.
+    /// Lowers <c>new BclException(...)</c> to the construction of its runtime
+    /// class. The extractor has already let-bound any side-effecting arguments
+    /// the role-ordered lowering would reorder or drop.
     /// </summary>
-    internal static TsExpression MapNewError(
+    internal static TsExpression MapNewException(
         IrNewExpression creation,
         IrExceptionConstruction construction,
         IrToTsBridgeContext context
@@ -203,16 +210,21 @@ public static class IrToTsExceptionConstructionBridge
     {
         var operands = ErrorOperands.Bind(construction, creation.Arguments, context);
 
+        var exceptionClass = IrToTsTypeMapper.ExceptionClasses.ClassOf(
+            construction.ExceptionTypeName
+        );
+
         return new TsNewExpression(
-            new TsIdentifier("Error"),
-            BuildErrorArguments(construction, operands)
+            exceptionClass.ValueReference(),
+            BuildArguments(construction, operands, exceptionClass, isBaseCall: false)
         );
     }
 
     /// <summary>
     /// The <c>super(...)</c> call of a constructor whose base is a BCL
-    /// exception: role-mapped <c>Error</c> arguments, preceded by source-order
-    /// temporaries when <see cref="IrExceptionConstruction.RequiresArgumentTemporaries"/>.
+    /// exception: the arguments of its runtime class (the class's
+    /// <c>extends</c>), preceded by source-order temporaries when
+    /// <see cref="IrExceptionConstruction.RequiresArgumentTemporaries"/>.
     /// </summary>
     internal static TsBaseConstructorCall MapBaseExceptionCall(
         IrConstructorDeclaration ctor,
@@ -222,32 +234,94 @@ public static class IrToTsExceptionConstructionBridge
     {
         var operands = ErrorOperands.Bind(construction, ctor.BaseArguments ?? [], context);
 
+        var exceptionClass = IrToTsTypeMapper.ExceptionClasses.ClassOf(
+            construction.ExceptionTypeName
+        );
+
         return new TsBaseConstructorCall(
             operands.Temporaries,
-            BuildErrorArguments(construction, operands)
+            BuildArguments(construction, operands, exceptionClass, isBaseCall: true)
         );
     }
 
-    private static IReadOnlyList<TsExpression> BuildErrorArguments(
+    /// <summary>
+    /// The constructor arguments of <paramref name="exceptionClass"/>: the
+    /// supplied value of each of its roles, in order, with <c>undefined</c>
+    /// for a role omitted ahead of a supplied one and nothing after the last.
+    /// A class that composes its own message receives the roles as written; one
+    /// that does not (see <see cref="ComposesItsMessage"/>) a composed message,
+    /// which starts with the type name of an unmapped exception in a
+    /// <c>new</c> (a base call keeps the identity of the user class making it).
+    /// </summary>
+    private static IReadOnlyList<TsExpression> BuildArguments(
         IrExceptionConstruction construction,
-        ErrorOperands operands
+        ErrorOperands operands,
+        TsExceptionClass exceptionClass,
+        bool isBaseCall
     )
     {
-        var message = ComposeMessage(construction, operands);
+        var composesItsMessage = ComposesItsMessage(construction.ExceptionTypeName, isBaseCall);
 
-        var cause = operands.SuppliedValueOf(IrExceptionArgumentRole.InnerException);
+        var message = composesItsMessage
+            ? null
+            : ComposeMessage(construction, operands, namesUnmappedType: !isBaseCall);
 
-        if (cause is null)
-            return message is null ? [] : [message];
+        var values = exceptionClass
+            .ConstructorRoles.Select(role =>
+                role is IrExceptionArgumentRole.Message && !composesItsMessage
+                    ? message
+                    : ArgumentFor(role, operands, exceptionClass)
+            )
+            .ToList();
 
-        var options = new TsObjectLiteral([new TsObjectProperty("cause", cause.Lowered)]);
+        var passed = values.FindLastIndex(value => value is not null) + 1;
 
-        return [message ?? new TsIdentifier("undefined"), options];
+        return values.Take(passed).Select(value => value ?? new TsIdentifier("undefined")).ToList();
     }
 
+    /// <summary>
+    /// Whether the class an exception type lowers to composes .NET's message
+    /// from the roles itself: a mapped class — except for the base call of a
+    /// user exception deriving from <c>System.Exception</c>, whose default
+    /// message names the user class, which the runtime cannot know.
+    /// </summary>
+    private static bool ComposesItsMessage(string exceptionTypeName, bool isBaseCall) =>
+        IrToTsTypeMapper.ExceptionClasses.IsMapped(exceptionTypeName)
+        && !(isBaseCall && exceptionTypeName == BclExceptionClasses.RootExceptionTypeName);
+
+    /// <summary>
+    /// The value passed for <paramref name="role"/>: the supplied argument, the
+    /// inner exception wrapped as the <c>{ cause }</c> option for the built-in
+    /// <c>Error</c>, or <c>null</c> when the construction does not supply it.
+    /// </summary>
+    private static TsExpression? ArgumentFor(
+        IrExceptionArgumentRole role,
+        ErrorOperands operands,
+        TsExceptionClass exceptionClass
+    )
+    {
+        if (operands.SuppliedValueOf(role) is not { } operand)
+            return null;
+
+        if (
+            role is IrExceptionArgumentRole.InnerException
+            && exceptionClass.TakesInnerExceptionAsCause
+        )
+            return new TsObjectLiteral([new TsObjectProperty("cause", operand.Lowered)]);
+
+        return operand.Lowered;
+    }
+
+    /// <summary>
+    /// The message of a class that does not compose its own: the base message,
+    /// prefixed with the type name of an unmapped exception when
+    /// <paramref name="namesUnmappedType"/>, followed by the suffix of each
+    /// role such a class does not take.
+    /// </summary>
     private static TsExpression? ComposeMessage(
         IrExceptionConstruction construction,
-        ErrorOperands operands
+        ErrorOperands operands,
+        bool namesUnmappedType
     )
     {
         var composer = new ErrorMessageComposer();
@@ -255,12 +329,42 @@ public static class IrToTsExceptionConstructionBridge
         var paramName = operands.SuppliedValueOf(IrExceptionArgumentRole.ParamName);
         var actualValue = operands.SuppliedValueOf(IrExceptionArgumentRole.ActualValue);
 
+        if (namesUnmappedType)
+            AppendTypeName(composer, construction, operands);
+
         AppendBaseMessage(composer, construction, operands);
         AppendNamedSuffix(composer, objectName, "\nObject name: '", "'.");
         AppendNamedSuffix(composer, paramName, " (Parameter '", "')");
         AppendActualValue(composer, actualValue);
 
         return composer.Build();
+    }
+
+    /// <summary>
+    /// <c>"System.TimeoutException: "</c> (or the bare name when there is no
+    /// message to follow it) for an exception without a runtime class of its
+    /// own: the root <c>Exception</c> it constructs keeps its name only in the
+    /// message (spec 011 FR-014).
+    /// </summary>
+    private static void AppendTypeName(
+        ErrorMessageComposer composer,
+        IrExceptionConstruction construction,
+        ErrorOperands operands
+    )
+    {
+        var typeName = construction.ExceptionTypeName;
+
+        if (typeName == BclExceptionClasses.RootExceptionTypeName)
+            return;
+
+        if (IrToTsTypeMapper.ExceptionClasses.IsMapped(typeName))
+            return;
+
+        var hasMessage =
+            construction.DefaultMessage is not null
+            || operands.SuppliedValueOf(IrExceptionArgumentRole.Message) is not null;
+
+        composer.AppendText(hasMessage ? typeName + ": " : typeName);
     }
 
     private static void AppendBaseMessage(
@@ -296,9 +400,7 @@ public static class IrToTsExceptionConstructionBridge
         new TsBinaryExpression(
             message.Lowered,
             "??",
-            construction.DefaultMessage is { } defaultMessage
-                ? new TsStringLiteral(defaultMessage)
-                : new TsIdentifier("undefined")
+            new TsStringLiteral(construction.DefaultMessage ?? "")
         );
 
     private static void AppendNamedSuffix(

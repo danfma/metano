@@ -1,11 +1,12 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
+import { Exception } from "metano-runtime/system/exceptions/exception";
 
 export class Pair {
   constructor(readonly a: number, readonly b: number) { }
 
   static check(pair: Pair): void {
     if (pair.a !== pair.b) {
-      throw new Error("mismatch");
+      throw new Exception("mismatch");
     }
   }
 
