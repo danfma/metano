@@ -298,15 +298,19 @@ Product requirements added after the migration (normative; each one is traced by
 
 - **FR-051** (numeric format strings and interpolation clauses, #323, #308): A format clause
   or an alignment clause of an interpolation hole (`{value,alignment:format}`), and
-  `ToString(format)` / `ToString(format, provider)` on a number, MUST NOT be dropped
-  silently. Each backend either honors the clause with .NET invariant-culture parity or
+  `ToString(format)` / `ToString(format, provider)` of a BCL type, MUST NOT be dropped
+  silently, and what printed .NET's text for every value before this requirement MUST keep
+  printing it. Each backend either honors the clause with .NET invariant-culture parity or
   reports it. Legacy FR-014 (string interpolation) and #308 (the formatting policy) are
   the context.
   1. *IR.* The core MUST carry the format string, the constant alignment and the value's
      numeric kind (looking through `Nullable<T>`, not an enum) on the interpolation hole,
      target-agnostic. A hole with a clause carries its value unchanged (a `null` included);
-     a hole without one keeps the null-safe concatenation operand. A format C# ignores for
-     the value's type (`string`, `bool`, `char`) is dropped.
+     a hole without one keeps the null-safe concatenation operand. A format C# ignores is
+     dropped: composite formatting passes it only to an `IFormattable`, so a static type
+     that does not implement it (a `string`, a `bool`, a user class, record or struct)
+     ignores it, and `char` ignores it too; `object`, an interface and a type parameter keep
+     it, since the run-time type decides. An alignment still applies.
   2. *TypeScript.* A hole with a clause MUST lower to one `metano-runtime` call inside the
      template literal, dispatched statically by the value's C# type: `formatInteger(value,
      bits, format, alignment?)` for `sbyte`, `byte`, `short`, `ushort`, `int` and `uint`;
@@ -324,12 +328,25 @@ Product requirements added after the migration (normative; each one is traced by
      format .NET rejects throws the same `FormatException`. Parity is verified against
      .NET by the reference fixture `tests/Int64Reference/fixtures/number-formatting.json`
      under Bun and Node.
-  3. *Unsupported clauses.* A clause the target's runtime does not format as .NET does
-     MUST report `MS0001` (warning) at the hole, or at the format argument of
-     `ToString(format)`, and lower to the throwing placeholder: in TypeScript, a constant
-     custom numeric format (`0.00`, `#,##0`), a constant `B` on an integer, and any format,
-     constant or not, on a type without a formatter (`decimal`, `float`, date and time
-     types, `Guid`, an enum, a user `IFormattable` type, `object`, a type parameter). A
+  3. *Formats without a formatter.* A hole is `value.ToString(format)`. Where no formatter
+     takes the format, the hole MUST lower, in order: to the clause-free hole when the
+     target declares that its clause-free text is .NET's text for that format for every
+     value (TypeScript: a `Guid`'s `D`, a numeric enum's `D`, a `[StringEnum]`'s `G` / `F`
+     with no renamed member, a `DateOnly`'s `O`, a `BigInteger`'s `G` / `R`); through the
+     declarative mapping of the type's `ToString(string)` when one lowers it, for a
+     non-nullable value (so a hole and the call cannot disagree; `Guid` maps `N`, `B`,
+     `P`); otherwise it is unsupported (rule 4). `ToString(format)` and
+     `ToString(format, provider)` of any BCL type (a number, an enum, a date or time,
+     `Guid`, `IFormattable.ToString` on a type parameter) follow the same rule: an existing
+     declarative mapping lowers it, a default-text format becomes the clause-free hole, and
+     anything else is unsupported. A user type's own `ToString(string)` is not affected.
+  4. *Unsupported clauses.* A clause the target does not format as .NET does MUST report
+     `MS0001` (warning) at the hole, or at the format argument of `ToString(format)`, and
+     lower to the throwing placeholder (in a static field initializer the module then
+     throws when imported): in TypeScript, a constant custom numeric format (`0.00`,
+     `#,##0`), a constant `B` on an integer, and any other format on a type rule 3 does not
+     cover (`decimal`, `float`, `Half`, the other date and time formats, an enum's other
+     formats, a user `IFormattable` type, `object`, a type parameter), constant or not. A
      `ToString(format)` whose format is not a constant, on an integer or a `double`, MUST
      call the formatter with the format expression (receiver and format each evaluated
      once, in C# order), which decides at run time: a `null` format is `G`, as
@@ -340,16 +357,18 @@ Product requirements added after the migration (normative; each one is traced by
      FR-037; unifying it with `MS0001` is #662). Which formats a target honors is the
      target's own fact, declared through the extraction context's numeric-format port; a
      target that declares none (Dart today, and any future target) fails closed: every
-     hole with a clause, and `ToString(format)` on a 32-bit-or-narrower integer, `double`
-     or `float`, constant or not, reports, naming the target.
-  4. *Default conversion unchanged.* A hole without a clause, and `ToString()` without a
+     hole with a clause (other than a dropped format) and every BCL `ToString(format)`,
+     constant or not, reports, naming the target.
+  5. *Default conversion unchanged.* A hole without a clause, and `ToString()` without a
      format, MUST emit exactly what they emitted before; the default conversion of `bool`,
      `double` and `float` stays the rest of #308.
-  5. *Out of scope.* This requirement does not cover `string.Format` composite formatting
+     An alignment over a clause-free text that still differs from .NET's (a `bool`, an
+     enum, a `decimal`'s trailing zeros; #308, #662) pads that text.
+  6. *Out of scope.* This requirement does not cover `string.Format` composite formatting
      (`string.Format("{0:F2}", d)`, which keeps its unmapped call and its `MS0001`) or
-     `FormattableString`, both tracked in #662. It does not cover custom numeric format
-     patterns either (reported, rule 3), nor `ToString(format)` on `decimal` and
-     `BigInteger`, which keeps its source form on both targets.
+     `FormattableString`, both tracked in #662, nor custom numeric format patterns
+     (reported, rule 4). Known silent gap: `Guid`'s `X` and an invalid `Guid` format reach
+     the fallback `Guid.ToString` mapping, which prints the hyphenated text.
 
 ### Key Entities
 

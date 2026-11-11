@@ -99,3 +99,34 @@ using Metano.Annotations;
     JsTemplate = "$this.toString()",
     WhenParameterTypes = [typeof(IFormatProvider)]
 )]
+
+// nint.ToString(format) / nuint.ToString(format): `nint` and `nuint` are 64-bit `bigint`
+// values (#529), formatted as `long` / `ulong` are (baseline FR-051).
+[assembly: MapMethod(
+    typeof(nint),
+    nameof(nint.ToString),
+    JsTemplate = "formatInt64($this, $0)",
+    RuntimeImports = "formatInt64",
+    WhenParameterTypes = [typeof(string)]
+)]
+[assembly: MapMethod(
+    typeof(nint),
+    nameof(nint.ToString),
+    JsTemplate = "formatInt64($this, $0)",
+    RuntimeImports = "formatInt64",
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider)]
+)]
+[assembly: MapMethod(
+    typeof(nuint),
+    nameof(nuint.ToString),
+    JsTemplate = "formatInt64($this, $0)",
+    RuntimeImports = "formatInt64",
+    WhenParameterTypes = [typeof(string)]
+)]
+[assembly: MapMethod(
+    typeof(nuint),
+    nameof(nuint.ToString),
+    JsTemplate = "formatInt64($this, $0)",
+    RuntimeImports = "formatInt64",
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider)]
+)]

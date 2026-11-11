@@ -819,9 +819,10 @@ public sealed record IrInterpolationText(string Text) : IrInterpolationPart;
 /// value, <c>null</c> included, so a target's formatter MUST accept
 /// <c>null</c> and print it as the empty string, as C# does (baseline
 /// FR-051.1). A hole without a clause carries the null-safe operand of a
-/// concatenation. A
-/// <see cref="FormatSpecifier"/> C# ignores for the value's type (a
-/// <c>string</c>, <c>bool</c> or <c>char</c>) is dropped.
+/// concatenation. A <see cref="FormatSpecifier"/> C# ignores (on a value
+/// that is not <c>IFormattable</c>, or a <c>char</c>) is dropped, and so is
+/// one the target prints as the clause-free text; a hole lowered through the
+/// type's <c>ToString(string)</c> mapping carries that call as its value.
 /// </summary>
 public sealed record IrInterpolationExpression(
     IrExpression Expression,

@@ -73,6 +73,7 @@ export namespace UUID {
 |----|----|
 | `Guid.NewGuid()` | `UUID.newUuid()` |
 | `Guid.NewGuid().ToString("N")` | `UUID.newUuid().replace(/-/g, "")` (compact form) |
+| `g.ToString("B")` / `g.ToString("P")` | `("{" + g + "}")` / `("(" + g + ")")` (also `b`, `p`, `n`) |
 | `Guid.Parse(s)` | `UUID.create(s)` |
 | `Guid.TryParse(s, out var g)` | `const [ok, g] = UUID.tryParse(s)` (`D`/`N`/`B`/`P` formats, normalized to lowercase `D`; `UUID.empty` on failure) |
 | `Guid.Empty` | `UUID.empty` |
@@ -554,7 +555,7 @@ standard numeric format strings in the invariant culture, with the same output a
   invariant pattern (`12.50 %`).
 - **Rounding.** A `double` rounds its exact binary value half to even, as .NET Core 3.0+
   does: `2.675` is `2.67499999…`, so `F2` prints `2.67`, and `0.125` is exact, so `F2`
-  prints `0.12` (`toFixed` gives `2.68` and `0.13`). An integer rounds half away from zero
+  prints `0.12` (`toFixed` gives `0.13`, rounding that exact midpoint up). An integer rounds half away from zero
   (`25` with `E0` is `3E+001`). A negative value that rounds to zero keeps its sign
   (`-0.001` with `F2` is `-0.00`). `G` and `R` without a precision print the shortest
   round-trip digits, in .NET's notation (`1E-05`, `1E+21`); `NaN` and the infinities print
@@ -562,16 +563,41 @@ standard numeric format strings in the invariant culture, with the same output a
 - **Alignment.** The width counts UTF-16 code units; a positive alignment pads on the left,
   a negative one on the right, and a longer text is not truncated. An alignment without a
   format pads the text the hole prints without the clause, so a `double` or a `bool` keeps
-  the JavaScript text (`1e-7`, `true`) until the default conversion changes (#308).
-- **Ignored formats.** C# ignores a format on a `string`, `bool` or `char`, and so does
-  the output (`$"{b:X}"` is `${b}`).
+  the JavaScript text (`1e-7`, `true`) until the default conversion changes (#308); the
+  same holds for an enum (its name or number as the target holds it) and a `decimal`
+  (decimal.js drops trailing zeros: `1.10m` prints `1.1`; #662).
+- **Ignored formats.** C# passes a format only to an `IFormattable` value, so a format on
+  any static type that does not implement it — `string`, `bool`, a user class, record or
+  struct — is ignored, and so is one on a `char`; the output prints the clause-free hole
+  (`$"{plain:X}"` is `${plain}`). `object`, an interface and a type parameter keep the
+  format, because the run-time type decides: it reports.
+- **A format that is the default text.** Where the clause-free text already is .NET's text
+  for the format, for every value, the hole and `ToString(format)` print it: a `Guid`'s
+  `D`, a numeric enum's `D`, a `[StringEnum]`'s `G` / `F` (when no member is renamed), a
+  `DateOnly`'s `O` and a `BigInteger`'s `G` / `R`, in either letter case
+  (`c.ToString("D")` becomes `` `${c}` ``). The TypeScript target declares this list
+  (`TsNumericFormats.PrintsAsDefaultText`).
+- **Through the type's mapping.** A hole is `value.ToString(format)`: where a declarative
+  mapping lowers that call, the hole lowers through it, so the two cannot disagree. `Guid`
+  maps `N` / `n` (no hyphens), `B` / `b` (braces), `P` / `p` (parentheses), and every
+  other format to the hyphenated text. A nullable value does not take this path (a `null`
+  would reach the mapping); it reports unless the format is the default text.
 - **Reported (`MS0001`, warning; the hole or call throws `Unsupported expression:
   UnsupportedFormat` at run time).** A custom numeric format (`0.00`, `#,##0`), the
-  integers' `B`, a format on `decimal`, `float` (its value is not held at single precision,
-  so the digits would differ), `DateTime` / `DateOnly` / `TimeSpan`, `Guid`, an enum, a
-  user `IFormattable` type, `object` or a type parameter (constant or not). The 64-bit
-  integers keep `MS0066` for their unsupported formats (see below). A letter .NET rejects
-  (`D` on a `double`, `Q`) is not reported: the formatter throws the same `FormatException`.
+  integers' `B`, and any format no formatter, default text or mapping covers: on `decimal`,
+  `float` and `Half` (their values are not held at their own precision, so the digits would
+  differ), `DateTime` / `DateTimeOffset` / `TimeOnly` / `TimeSpan` and the other `DateOnly`
+  formats, an enum's other formats, a user `IFormattable` type, `object` or a type
+  parameter. The same rule covers `ToString(format)` and `ToString(format, provider)` of any
+  BCL type, reported at the format argument (`m.ToString("F2")` on a `decimal`,
+  `dt.ToString("O")`, `c.ToString("G")` on an enum, `v.ToString("D2", null)` with
+  `T : IFormattable`), unless a declarative mapping lowers it; a user type's own
+  `ToString(string)` is its own method and is left alone. The 64-bit integers, `nint` and
+  `nuint` included, keep `MS0066` for their unsupported formats (see below). A letter .NET
+  rejects (`D` on a `double`, `Q`) is not reported: the formatter throws the same
+  `FormatException`. The placeholder throws where the expression is evaluated: an
+  unsupported clause in a static field initializer makes the module throw when it is
+  imported.
 - **A format known only at run time.** `n.ToString(format)` with a variable format on an
   integer or a `double` calls the formatter (`formatInteger(n, 32, format)`,
   `formatDouble(d, format)`), as `formatInt64` does for `long`, and the formatter decides:
@@ -581,15 +607,19 @@ standard numeric format strings in the invariant culture, with the same output a
   double in TypeScript.`), and an invalid one throws `FormatException`
   (`Format specifier was invalid.`). Only a constant unsupported format reports at
   compile time.
-- **Dart.** No clause is honored yet: every hole with a format or alignment clause, and
-  `ToString(format)` on a 32-bit-or-narrower integer, `double` or `float`, reports `MS0001`
-  and throws `UnsupportedError`.
+- **Dart.** No clause is honored yet: every hole with a format or alignment clause (other
+  than an ignored format), and every BCL `ToString(format)`, reports `MS0001` and throws
+  `UnsupportedError`.
+- **`char` arithmetic.** `{c + 1:D3}` over a `char` operand throws: `char` arithmetic is not
+  lowered yet (#501).
 - **Unchanged.** A hole without a clause, and `ToString()` without a format, keep the
   native JavaScript conversion.
 - **Not covered yet.** `string.Format` composite formatting (`string.Format("{0:F2}", d)`
   keeps its unmapped call and `MS0001`) and `FormattableString` (both #662); custom numeric
-  patterns (reported above); `ToString(format)` on `decimal` and `BigInteger`, which is
-  emitted as written.
+  patterns (reported above). One format still prints silently wrong text: `Guid`'s `X`
+  (and an invalid `Guid` format, which .NET rejects), which the `Guid.ToString` fallback
+  mapping prints as the hyphenated text, in a hole and in a call (no issue yet; the
+  mapping port cannot see the literal filters, #657).
 
 ## Floating point (`double` / `float`)
 
@@ -769,7 +799,7 @@ directly.
 
 | C# | TypeScript |
 |----|----|
-| `l.ToString("N0")`, `$"{l,8}"`, `$"{l:X}"` | `formatInt64(l, "N0")`, `formatInt64(l, null, 8)`, `formatInt64(l, "X")` (`G D N F E P C X R` in the invariant culture, see [Number formatting](#number-formatting-format-strings-and-interpolation-clauses); `B` or a custom format reports `MS0066` and throws) |
+| `l.ToString("N0")`, `$"{l,8}"`, `$"{l:X}"` (also `nint` / `nuint`) | `formatInt64(l, "N0")`, `formatInt64(l, null, 8)`, `formatInt64(l, "X")` (`G D N F E P C X R` in the invariant culture, see [Number formatting](#number-formatting-format-strings-and-interpolation-clauses); `B` or a custom format reports `MS0066` and throws) |
 | `long.Parse(s)` / `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)` / `parseUInt64(s, 515)` |
 | `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` |
 | `Convert.ToInt64(d)` / `(s)` / `(s, 16)` | `convertDoubleToInt64(d)` / `convertStringToInt64(s)` / `convertStringToInt64(s, 16)` |

@@ -1,4 +1,5 @@
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Extraction;
 
@@ -8,7 +9,8 @@ namespace Metano.Compiler.Extraction;
 /// #323), so the extractor reports an interpolation clause or a
 /// <c>ToString(format)</c> the target would otherwise drop or get wrong. The
 /// core decides only C# semantics: which values are numeric, which formats
-/// C# ignores, and which values are constants.
+/// C# ignores, which <c>ToString(format)</c> calls belong to the BCL, and
+/// which values are constants.
 /// </summary>
 public interface INumericFormatCapability
 {
@@ -26,4 +28,14 @@ public interface INumericFormatCapability
     /// <c>FormatException</c> included.
     /// </summary>
     bool Formats(IrNumericKind kind, string format);
+
+    /// <summary>
+    /// Whether the target's clause-free text of a value of
+    /// <paramref name="type"/> (a hole without a clause) is, for every value,
+    /// the text .NET prints for the constant <paramref name="format"/>, so a
+    /// hole or a <c>ToString(format)</c> with that format can print it
+    /// unformatted (a numeric enum's <c>D</c> where the target holds the
+    /// number, for example).
+    /// </summary>
+    bool PrintsAsDefaultText(ITypeSymbol type, string format);
 }

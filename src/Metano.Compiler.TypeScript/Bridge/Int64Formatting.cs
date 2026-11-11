@@ -23,6 +23,10 @@ internal static class Int64Formatting
 
     private const string UInt64TypeName = "ulong";
 
+    private const string NativeIntTypeName = "nint";
+
+    private const string NativeUIntTypeName = "nuint";
+
     /// <summary>The styles <c>int64-parsing.ts</c> implements.</summary>
     private static readonly HashSet<int> SupportedNumberStyles =
     [
@@ -82,7 +86,11 @@ internal static class Int64Formatting
     }
 
     private static bool IsSixtyFourBitMember(IrMemberOrigin? origin) =>
-        origin?.DeclaringTypeFullName is Int64TypeName or UInt64TypeName;
+        origin?.DeclaringTypeFullName
+            is Int64TypeName
+                or UInt64TypeName
+                or NativeIntTypeName
+                or NativeUIntTypeName;
 
     private static void ReportIfUnsupportedFormat(string? format)
     {
