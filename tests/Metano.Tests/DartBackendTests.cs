@@ -1858,4 +1858,38 @@ public class DartBackendTests
         await Assert.That(dart).Contains("dollar() => '\\$';");
         await Assert.That(dart).Contains("quote() => '\\'';");
     }
+
+    /// <summary>
+    /// A call to a method with a <c>[CallerArgumentExpression]</c> parameter
+    /// passes the caller's text, as C# does (baseline FR-051); Dart has no
+    /// <c>undefined</c>, so an omitted default before it passes the default.
+    /// </summary>
+    [Test]
+    public async Task CallerArgumentExpression_PassesTheCallerText()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            using System.Runtime.CompilerServices;
+
+            [Transpile]
+            public enum Level { Low, High }
+
+            [Transpile]
+            public static class Probe
+            {
+                public static string Text(
+                    int value,
+                    Level level = Level.High,
+                    [CallerArgumentExpression(nameof(value))] string? text = null
+                ) => text ?? "";
+
+                public static string Run(int count) => Text(count + 1);
+            }
+            """
+        );
+
+        await Assert
+            .That(files["probe.dart"])
+            .Contains("Probe.text(count + 1, Level.high, 'count + 1')");
+    }
 }

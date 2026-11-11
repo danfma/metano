@@ -28,7 +28,16 @@ export class ArgumentOutOfRangeException extends ArgumentException {
   }
 }
 
-/** `message` followed by .NET's `\nActual value was <value>.` line when the value is not `null`. */
+/**
+ * `message` followed by .NET's `\nActual value was <value>.` line when the value is not
+ * `null`, formatted with JavaScript's `String` (`-0` keeps its sign, as on .NET).
+ */
 function withActualValue(message: string, actualValue: unknown): string {
-  return actualValue == null ? message : `${message}\nActual value was ${String(actualValue)}.`;
+  if (actualValue == null) {
+    return message;
+  }
+
+  const text = Object.is(actualValue, -0) ? "-0" : String(actualValue);
+
+  return `${message}\nActual value was ${text}.`;
 }

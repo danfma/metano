@@ -319,8 +319,20 @@ public sealed record IrCallExpression(
 /// <c>params</c> slot as a single array, so backends emit them with the
 /// spread prefix.
 /// </para>
+/// <para>
+/// <see cref="IsOmittedDefault"/> tags a parameter's default the call does not
+/// write, filled only to reach a later argument (a
+/// <c>[CallerArgumentExpression]</c> text): a target whose callee applies its
+/// own default for a missing argument (TypeScript's <c>undefined</c>) may pass
+/// that instead of <see cref="Value"/>.
+/// </para>
 /// </summary>
-public sealed record IrArgument(IrExpression Value, string? Name = null, bool IsSpread = false);
+public sealed record IrArgument(
+    IrExpression Value,
+    string? Name = null,
+    bool IsSpread = false,
+    bool IsOmittedDefault = false
+);
 
 /// <summary>
 /// Which <c>System.Object</c> member a <see cref="IrBaseObjectMemberCall"/>
