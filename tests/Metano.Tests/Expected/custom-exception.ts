@@ -7,7 +7,11 @@ export class InvalidAmountError extends Exception {
     super(message);
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "InvalidAmountError";
+  }
+
+  protected override get $typeNamespace(): string {
     return "";
   }
 }

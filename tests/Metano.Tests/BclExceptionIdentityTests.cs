@@ -498,15 +498,58 @@ public class BclExceptionIdentityTests
             .That(currency)
             .Contains(
                 """
-                  protected override get typeNamespace(): string {
+                  protected override get $typeName(): string {
+                    return "UnsupportedCurrencyException";
+                  }
+
+                  protected override get $typeNamespace(): string {
                     return "Shop";
                   }
                 """
             );
 
+        var renamed = files["shop/renamed-error.ts"];
+
         await Assert
-            .That(files["shop/renamed-error.ts"])
+            .That(renamed)
             .Contains("override readonly name: string = \"RenamedException\";");
+
+        await Assert.That(renamed).Contains("return \"RenamedException\";");
+    }
+
+    /// <summary>
+    /// The runtime's identity hooks carry a <c>$</c> no C# member name can, so
+    /// a user member named <c>TypeNamespace</c> or <c>TypeName</c> keeps its
+    /// own emitted name, and one that emits as <c>name</c> replaces only the
+    /// JavaScript <c>name</c> field: <c>toString()</c> still reads the hooks.
+    /// </summary>
+    [Test]
+    public async Task UserMembersNamedLikeTheIdentity_DoNotReplaceTheHooks()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace Shop
+            {
+                [Transpile]
+                public class LookupException : Exception
+                {
+                    public string TypeNamespace => "user";
+                    public string TypeName => "user";
+                    public string Name { get; } = "user";
+                }
+            }
+            """
+        );
+
+        var output = files["shop/lookup-exception.ts"];
+
+        await Assert.That(output).Contains("get typeNamespace(): string");
+        await Assert.That(output).Contains("get typeName(): string");
+        await Assert.That(output).Contains("protected override get $typeName(): string");
+        await Assert.That(output).Contains("protected override get $typeNamespace(): string");
+        await Assert.That(output).DoesNotContain("override readonly name: string");
     }
 
     [Test]

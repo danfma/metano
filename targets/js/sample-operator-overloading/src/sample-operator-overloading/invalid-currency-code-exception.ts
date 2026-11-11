@@ -8,7 +8,11 @@ export class InvalidCurrencyCodeException extends ArgumentException {
     super(`Unknown currency code '${code}'`, "code");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "InvalidCurrencyCodeException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "SampleOperatorOverloading";
   }
 }

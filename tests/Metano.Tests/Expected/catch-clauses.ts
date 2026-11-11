@@ -9,7 +9,11 @@ export class AppException extends Exception {
     this.code = code;
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "AppException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "";
   }
 }
@@ -21,7 +25,11 @@ export class NotFoundException extends AppException {
     super(message, 404);
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "NotFoundException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "";
   }
 }

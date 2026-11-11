@@ -11,7 +11,7 @@ export class KeyNotFoundException extends SystemException {
     super(message ?? KEY_NOT_FOUND_EXCEPTION_MESSAGE, innerException);
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeNamespace(): string {
     return "System.Collections.Generic";
   }
 }

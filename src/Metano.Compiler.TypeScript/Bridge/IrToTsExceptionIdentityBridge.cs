@@ -7,13 +7,17 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// The .NET identity of a user exception class (#651): its C# type name as
-/// <c>name</c> and its namespace as the runtime <c>Exception</c>'s
-/// <c>typeNamespace</c>, which <c>toString()</c> joins into .NET's full type
-/// name.
+/// <c>name</c> and as the runtime <c>Exception</c>'s <c>$typeName</c>, and its
+/// namespace as <c>$typeNamespace</c>, which <c>toString()</c> joins into
+/// .NET's full type name.
 /// <code>
 /// override readonly name: string = "UnsupportedCurrencyException";
 ///
-/// protected override get typeNamespace(): string {
+/// protected override get $typeName(): string {
+///   return "UnsupportedCurrencyException";
+/// }
+///
+/// protected override get $typeNamespace(): string {
 ///   return "Shop";
 /// }
 /// </code>
@@ -31,19 +35,29 @@ namespace Metano.Compiler.TypeScript.Bridge;
 internal static class IrToTsExceptionIdentityBridge
 {
     private const string NameMember = "name";
-    private const string NamespaceMember = "typeNamespace";
+    private const string TypeNameHook = "$typeName";
+    private const string NamespaceHook = "$typeNamespace";
 
     /// <summary>
     /// The identity members of <paramref name="type"/> when <paramref name="ir"/>
-    /// is an exception class; none for any other class, or when the class
-    /// declares a member that emits as <c>name</c> itself.
+    /// is an exception class, none for any other class: the runtime's
+    /// <c>$typeName</c> and <c>$typeNamespace</c> hooks, whose <c>$</c> no C#
+    /// member name can carry, and the JavaScript <c>name</c>, unless the class
+    /// declares a member that emits as <c>name</c> itself (it keeps that member;
+    /// <c>toString()</c> still reads the hooks).
     /// </summary>
     public static IReadOnlyList<TsClassMember> Members(INamedTypeSymbol type, IrClassDeclaration ir)
     {
-        if (!ir.Semantics.IsException || DeclaresName(ir))
+        if (!ir.Semantics.IsException)
             return [];
 
-        return [NameField(type.MetadataName), NamespaceGetter(DotNetNamespaceOf(type))];
+        var hooks = new List<TsClassMember>
+        {
+            Hook(TypeNameHook, type.MetadataName),
+            Hook(NamespaceHook, DotNetNamespaceOf(type)),
+        };
+
+        return DeclaresName(ir) ? hooks : [NameField(type.MetadataName), .. hooks];
     }
 
     /// <summary>
@@ -97,11 +111,11 @@ internal static class IrToTsExceptionIdentityBridge
             Override: true
         );
 
-    private static TsGetterMember NamespaceGetter(string typeNamespace) =>
+    private static TsGetterMember Hook(string hook, string value) =>
         new(
-            NamespaceMember,
+            hook,
             new TsStringType(),
-            [new TsReturnStatement(new TsStringLiteral(typeNamespace))],
+            [new TsReturnStatement(new TsStringLiteral(value))],
             Override: true,
             Accessibility: TsAccessibility.Protected
         );

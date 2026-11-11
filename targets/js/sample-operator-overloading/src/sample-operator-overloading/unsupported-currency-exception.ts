@@ -12,7 +12,11 @@ export class UnsupportedCurrencyException extends InvalidCurrencyCodeException {
     Reflect.deleteProperty(this, "message");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "UnsupportedCurrencyException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "SampleOperatorOverloading";
   }
 

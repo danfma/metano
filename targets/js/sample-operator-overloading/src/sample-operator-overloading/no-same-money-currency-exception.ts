@@ -9,7 +9,11 @@ export class NoSameMoneyCurrencyException extends Exception {
     super(`Not same currency. Money has ${provided}, but expected ${expected}`);
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "NoSameMoneyCurrencyException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "SampleOperatorOverloading";
   }
 }

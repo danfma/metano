@@ -11,7 +11,11 @@ export class LabelledSlotException extends InvalidSlotException {
     Reflect.deleteProperty(this, "message");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "LabelledSlotException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "App";
   }
 

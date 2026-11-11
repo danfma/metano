@@ -17,7 +17,11 @@ export class InvalidAmountException extends ArgumentOutOfRangeException {
     super("amount", amount, "The amount must be positive.");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "InvalidAmountException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "Billing";
   }
 }
@@ -65,7 +69,11 @@ export class LedgerException extends Exception {
     throw new Error("No matching constructor");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "LedgerException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "Billing";
   }
 
@@ -85,7 +93,11 @@ export class StaleLedgerException extends InvalidOperationException {
     super();
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "StaleLedgerException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "Billing";
   }
 }
