@@ -152,17 +152,36 @@ public sealed partial class IrExpressionExtractor
         LowersLinqChains
         && IrLinqMapping.IsLinqMethod(symbol)
         && !IrLinqMapping.TryResolve(symbol, out _)
-        && !LowersByTargetMapping(call, symbol);
+        && !LowersByTargetMapping(symbol, EmittedArgumentCount(call, symbol));
 
     /// <summary>
     /// Whether a declarative mapping of the target lowers the overload
-    /// <paramref name="method"/> binds to, with the arguments
-    /// <paramref name="call"/> writes; <c>true</c> when the target declares
-    /// no mappings port, so its calls are never reported.
+    /// <paramref name="method"/> binds to when the call passes
+    /// <paramref name="argumentCount"/> arguments; <c>true</c> when the
+    /// target declares no mappings port, so its calls are never reported.
     /// </summary>
-    private bool LowersByTargetMapping(InvocationExpressionSyntax call, IMethodSymbol method) =>
-        _context.LowersByDeclarativeMapping?.Invoke(method, call.ArgumentList.Arguments.Count)
-        ?? true;
+    private bool LowersByTargetMapping(IMethodSymbol method, int argumentCount) =>
+        _context.LowersByDeclarativeMapping?.Invoke(method, argumentCount) ?? true;
+
+    /// <summary>
+    /// The number of arguments the plain call lowering passes for
+    /// <paramref name="call"/>, which the target's BCL mapper counts: the
+    /// written ones, or, when one is named, one per parameter of
+    /// <paramref name="method"/> with the omitted ones filled by their
+    /// defaults (<see cref="InParameterOrder"/>).
+    /// </summary>
+    private int EmittedArgumentCount(InvocationExpressionSyntax call, IMethodSymbol method)
+    {
+        IReadOnlyList<IrArgument> written =
+        [
+            .. call.ArgumentList.Arguments.Select(argument => new IrArgument(
+                new IrLiteral(null, IrLiteralKind.Null),
+                argument.NameColon?.Name.Identifier.ValueText
+            )),
+        ];
+
+        return InParameterOrder(written, method).Count;
+    }
 
     /// <summary>
     /// The argument <paramref name="call"/> passes as its comparer, or

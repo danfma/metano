@@ -386,22 +386,43 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 - C# 14 converts an array (and a string) to a span implicitly, so
   `array.Contains(x)`, `array.SequenceEqual(other)` and the other span
   extensions bind to `System.MemoryExtensions` instead of `System.Linq`. They
-  used to transpile silently to member calls a JavaScript array does not have
-  (`array.contains(x)`, `array.sequenceEqual(other)`), which failed `tsc` and
-  threw at run time.
+  were emitted by name, with no diagnostic. Most became member calls a
+  JavaScript array does not have (`array.contains(x)`,
+  `array.sequenceEqual(other)`), which failed `tsc` and threw at run time.
+  Some ran with a wrong result: `array.Sort()` sorted numbers as strings
+  (`[10, 9, 100]` gave `10,100,9`), `array.LastIndexOf(x, null)` read the
+  `null` comparer as a start index and returned `-1`, and
+  `array.IndexOf(otherArray)` looked for the array as an element.
 - Fixed: `array.Contains(x)` emits `array.includes(x)`, the output of
-  `List<T>.Contains`; `array.IndexOf(x)` and `array.LastIndexOf(x)` keep
-  emitting `indexOf` / `lastIndexOf`, now through a declarative mapping.
-- Behaviour change: every other `MemoryExtensions` call (a comparer or
-  `StringComparison` overload, `SequenceEqual`, `StartsWith`, `EndsWith`,
-  `Sort`, `BinarySearch`, `IndexOfAny`, `ContainsAny`, `Count(value)`,
-  `AsSpan`, …, also on a string such as `text.Count('a')`) reports `MS0001` (a
+  `List<T>.Contains`. A comparer that is omitted or the `null` constant
+  (`null`, `default`, a cast or a `const`) on `Contains` / `IndexOf` /
+  `LastIndexOf` is dropped (`array.IndexOf(4, null)` emits
+  `array.indexOf(4)`), also when a named argument is written
+  (`nullables.Contains(value: x)` emits `nullables.includes(x)`).
+- Unchanged, now through declarative mappings: `array.IndexOf(x)` /
+  `LastIndexOf(x)` (`indexOf` / `lastIndexOf`), the searches of a
+  `ReadOnlySpan<char>` over a string (`StartsWith`, `EndsWith`, `IndexOf`,
+  `LastIndexOf` with a char or a string, the parameterless `Trim` /
+  `TrimStart` / `TrimEnd`, which become the string methods), and
+  `Span<T>.Reverse()` (`reverse()`, in place). `array.Reverse()` binds
+  `Enumerable.Reverse` and is unchanged.
+- Behaviour change: every other `MemoryExtensions` call reports `MS0001` (a
   warning) at the method name and emits an expression that throws
-  `Unsupported expression: UnloweredSpanCall` at run time.
+  `Unsupported expression: UnloweredSpanCall` at run time: a comparer that is
+  not the `null` constant, a `StringComparison` overload, `SequenceEqual`,
+  `Sort` (previously wrong for numbers, see above), `BinarySearch`,
+  `IndexOfAny`, `ContainsAny`, `Count(value)`, `AsSpan`, `Trim(c)`, the static
+  form, a string receiver such as `text.Count('a')`, and the string searches
+  (`StartsWith`, `EndsWith`, the `Trim` family, the subsequence `IndexOf` /
+  `LastIndexOf`) on an array (`char[]` included) or a `Span<char>`, which
+  lower to JavaScript arrays (`array.IndexOf(otherArray)`,
+  `chars.IndexOf("bc")`).
+- A lookup over a tuple element (`pairs.Contains((3, 4))`) lowers to
+  `includes` and reports `MS0001`, as the `List<(int, int)>` lookup does: the
+  tuples lower to arrays, compared by reference.
 - Known limitations, shared with `List<T>`: `includes` and `indexOf` compare
-  records by reference, and `indexOf` / `lastIndexOf` do not find `NaN`. The
-  subsequence overload `array.IndexOf(otherArray)` still emits
-  `array.indexOf(otherArray)`.
+  records, record structs, `decimal` and `DateTime` values by reference, and
+  `indexOf` / `lastIndexOf` do not find `NaN`.
 - Dart output and diagnostics are unchanged.
 
 ### Toolchain

@@ -76,17 +76,18 @@ public sealed record IrExtractionContext(
     /// <summary>
     /// The port through which a target says whether a declarative mapping
     /// (<c>[MapMethod]</c>) of its own lowers the overload a call to a BCL
-    /// method binds to when the call writes the given number of arguments
-    /// (an omitted optional argument is not counted, as the BCL mapper does
-    /// not count it), by the same overload filter its BCL mapper applies, so
-    /// the extractor reports a <c>System.Linq</c> or
-    /// <c>System.MemoryExtensions</c> method that nothing lowers instead of
-    /// leaving it a member call on the receiver (#648, #657). <c>null</c>,
-    /// the default, for a target that reports none of these calls: every
-    /// such call keeps its source form.
+    /// method binds to when the extracted call passes the given number of
+    /// arguments (the count of the IR arguments its BCL mapper filters on:
+    /// the written ones, or one per parameter when an argument is named), by
+    /// the same overload filter its BCL mapper applies, so the extractor
+    /// reports a <c>System.Linq</c> or <c>System.MemoryExtensions</c> method
+    /// that nothing lowers instead of leaving it a member call on the
+    /// receiver (#648, #657). <c>null</c>, the default, for a target that
+    /// reports none of these calls: every such call keeps its source form.
     /// <para>
     /// TODO(#657): the answer ignores <c>WhenArg0StringEquals</c>, which the
-    /// mapper tests on the lowered arguments. It describes a TypeScript
+    /// mapper tests on the lowered arguments, so a call whose only entries
+    /// carry that filter counts as lowered. It describes a TypeScript
     /// decision and belongs to that target together with the runtime
     /// signature table.
     /// </para>
