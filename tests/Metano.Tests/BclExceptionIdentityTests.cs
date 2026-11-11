@@ -210,9 +210,8 @@ public class BclExceptionIdentityTests
             .That(warnings[0].Message)
             .IsEqualTo(
                 "'new TimeoutException(\"late\")' constructs 'System.TimeoutException', which has no "
-                    + "runtime class in the target: it is emitted as 'Exception' with the type name "
-                    + "in its message, so catch clauses and type tests cannot tell it apart (spec 011 "
-                    + "FR-014)."
+                    + "runtime class in the target: the exception loses its type, so catch clauses "
+                    + "and type tests cannot tell it apart from other exceptions (spec 011 FR-014)."
             );
     }
 
@@ -350,6 +349,160 @@ public class BclExceptionIdentityTests
                 )
             )
             .IsEmpty();
+    }
+
+    [Test]
+    public async Task DispatcherOnBclExceptions_TestsTheirRuntimeClasses()
+    {
+        var output = TranspileGuard(
+            """
+            public static string Handle(ArgumentException e) => "argument";
+
+            public static string Handle(InvalidOperationException e) => "state";
+
+            public static string Wait(TimeoutException e) => "timeout";
+
+            public static string Wait(string reason) => reason;
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("if (args.length === 1 && args[0] instanceof ArgumentException) {");
+
+        await Assert
+            .That(output)
+            .Contains("if (args.length === 1 && args[0] instanceof InvalidOperationException) {");
+
+        // An unmapped exception has no runtime class: its arm keeps the object check.
+        await Assert
+            .That(output)
+            .Contains("if (args.length === 1 && typeof args[0] === \"object\") {");
+    }
+
+    [Test]
+    public async Task NestedExceptionMappedByTheProject_ResolvesTheSameClassEverywhere()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [assembly: ExportFromBcl(typeof(Legacy.Errors.StaleException), ExportedName = "StaleError", FromPackage = "legacy-errors")]
+
+            namespace Legacy
+            {
+                public static class Errors
+                {
+                    public class StaleException : Exception
+                    {
+                        public StaleException(string message) : base(message) { }
+                    }
+                }
+            }
+
+            [Transpile]
+            public class RetryException : Legacy.Errors.StaleException
+            {
+                public RetryException() : base("retry") { }
+            }
+
+            [Transpile]
+            public static class Guard
+            {
+                public static Legacy.Errors.StaleException Make() => new Legacy.Errors.StaleException("stale");
+
+                public static bool IsStale(object o) => o is Legacy.Errors.StaleException;
+            }
+            """
+        );
+
+        var guard = files["guard.ts"];
+
+        await Assert.That(guard).Contains("import { StaleError } from \"legacy-errors\";");
+        await Assert.That(guard).Contains("static make(): StaleError {");
+        await Assert.That(guard).Contains("return new StaleError(\"stale\");");
+        await Assert.That(guard).Contains("return o instanceof StaleError;");
+        await Assert.That(files["retry-exception.ts"]).Contains("extends StaleError {");
+
+        await Assert
+            .That(
+                diagnostics.Where(d =>
+                    d.Code
+                        is DiagnosticCodes.UnsupportedFeature
+                            or DiagnosticCodes.UnanswerableRuntimeTypeTest
+                )
+            )
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task RoleTheMappedClassDoesNotTake_IsFoldedIntoTheMessage()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [assembly: ExportFromBcl(typeof(ArgumentNullException), ExportedName = "NullArgument", FromPackage = "my-errors")]
+
+            [Transpile]
+            public static class Guard
+            {
+                public static Exception Missing(string name) => new ArgumentNullException(name);
+
+                public static Exception Plain() => new ArgumentNullException();
+            }
+            """
+        );
+
+        var output = files["guard.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("return new NullArgument(`Value cannot be null. (Parameter '${name}')`);");
+
+        await Assert.That(output).Contains("return new NullArgument();");
+    }
+
+    [Test]
+    public async Task UserException_DeclaresItsDotNetIdentity()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace Shop
+            {
+                [Transpile]
+                public class UnsupportedCurrencyException : ArgumentException
+                {
+                    public UnsupportedCurrencyException(string code) : base("Unsupported " + code, "code") { }
+                }
+
+                [Transpile, Name("RenamedError")]
+                public class RenamedException : Exception { }
+            }
+            """
+        );
+
+        var currency = files["shop/unsupported-currency-exception.ts"];
+
+        await Assert
+            .That(currency)
+            .Contains("override readonly name: string = \"UnsupportedCurrencyException\";");
+
+        await Assert
+            .That(currency)
+            .Contains(
+                """
+                  protected override get typeNamespace(): string {
+                    return "Shop";
+                  }
+                """
+            );
+
+        await Assert
+            .That(files["shop/renamed-error.ts"])
+            .Contains("override readonly name: string = \"RenamedException\";");
     }
 
     private static string TranspileGuard(string members) =>

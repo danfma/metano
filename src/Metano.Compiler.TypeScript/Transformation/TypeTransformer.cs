@@ -457,14 +457,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
         var previousOverloadClaims = TsOverloadCallSites.Claims;
         var previousBclOverrides = IrToTsTypeMapper.BclOverrides;
-        var previousExceptionClasses = IrToTsTypeMapper.ExceptionClasses;
+        var previousExceptionClasses = IrToTsTypeMapper.ExceptionClassesScope;
 
         try
         {
             TsOverloadCallSites.Claims = OverloadClaims;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
-            IrToTsTypeMapper.ExceptionClasses = Context.ExceptionClasses;
+            IrToTsTypeMapper.ExceptionClassesScope = Context.ExceptionClasses;
 
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
@@ -548,7 +548,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrTypeRefMapper.NamedDelegatePredicate = previousDelegatePredicate;
             TsOverloadCallSites.Claims = previousOverloadClaims;
             IrToTsTypeMapper.BclOverrides = previousBclOverrides;
-            IrToTsTypeMapper.ExceptionClasses = previousExceptionClasses;
+            IrToTsTypeMapper.ExceptionClassesScope = previousExceptionClasses;
         }
 
         // Generate index.ts barrel files per namespace folder

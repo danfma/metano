@@ -32,7 +32,7 @@ internal sealed class UnsupportedCatchClauseReporter(
 )
 {
     private readonly SemanticModel _semantic = semantic;
-    private readonly ExceptionRuntimeClassReporter _exceptionClasses = new(context);
+    private readonly ExceptionRuntimeClassReporter _exceptionClassReporter = new(context);
 
     // TODO(#549): these raw target checks become target capabilities.
     private readonly bool _erasesStaticTypes = context.Target is null or TargetLanguage.TypeScript;
@@ -50,15 +50,11 @@ internal sealed class UnsupportedCatchClauseReporter(
     {
         foreach (var (declared, clause) in statement.Catches.Zip(clauses))
         {
-            if (
-                _exceptionClasses.ReportsUnanswerableTest(
-                    CaughtSymbolOf(declared),
-                    ClauseHead(declared)
-                )
-            )
-                continue;
+            var caught = CaughtSymbolOf(declared);
 
-            if (_erasesStaticTypes && !HasRuntimeTypeTest(clause))
+            if (caught is not null && _exceptionClassReporter.LacksRuntimeClass(caught))
+                _exceptionClassReporter.ReportUnanswerableTest(caught, ClauseHead(declared));
+            else if (_erasesStaticTypes && !HasRuntimeTypeTest(clause))
                 ReportUntestableType(declared);
         }
     }

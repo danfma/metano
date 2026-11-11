@@ -20,11 +20,19 @@ export class Exception extends Error {
   }
 
   /**
-   * The .NET full name of the class, which {@link toString} prints: `System.<name>`
-   * unless a class outside the `System` namespace overrides it.
+   * The .NET namespace of the class: `System`, unless a class declared in
+   * another namespace overrides it. Generated exception classes override it
+   * (and `name`) with their C# namespace and type name.
    */
+  protected get typeNamespace(): string {
+    return "System";
+  }
+
+  /** The .NET full name of the class, `<namespace>.<name>`, which {@link toString} prints. */
   protected get fullTypeName(): string {
-    return `System.${this.name}`;
+    const typeNamespace = this.typeNamespace;
+
+    return typeNamespace ? `${typeNamespace}.${this.name}` : this.name;
   }
 
   /** The JavaScript `stack`, which plays the role of .NET's `StackTrace`. */

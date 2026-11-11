@@ -11,7 +11,7 @@ export class TaskCanceledException extends OperationCanceledException {
     super(message ?? TASK_CANCELED_EXCEPTION_MESSAGE, innerException);
   }
 
-  protected override get fullTypeName(): string {
-    return "System.Threading.Tasks.TaskCanceledException";
+  protected override get typeNamespace(): string {
+    return "System.Threading.Tasks";
   }
 }

@@ -423,7 +423,8 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Exception,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                ExportKey: BclExportReader.ExportKey(named)
             );
 
         // JSX recognition mirrors the declaration-side IrTypeSemantics flags
@@ -585,6 +586,18 @@ public static class IrTypeRefMapper
             return pp.Primitive;
         return null;
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is an exception with no declaration on
+    /// the target side: a BCL exception, or one from another non-transpilable
+    /// assembly. Its constructions are classified by argument role
+    /// (<see cref="IrExceptionConstructionExtractor"/>) and the target lowers
+    /// them to its own class for the type.
+    /// </summary>
+    internal static bool IsExceptionWithoutTargetDeclaration(
+        INamedTypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    ) => IsExceptionType(type) && !IsTranspilableType(type, target);
 
     internal static bool IsExceptionType(INamedTypeSymbol type)
     {

@@ -209,14 +209,11 @@ public static class IrToTsExceptionConstructionBridge
     )
     {
         var operands = ErrorOperands.Bind(construction, creation.Arguments, context);
-
-        var exceptionClass = IrToTsTypeMapper.ExceptionClasses.ClassOf(
-            construction.ExceptionTypeName
-        );
+        var exceptionClass = ClassOf(construction);
 
         return new TsNewExpression(
             exceptionClass.ValueReference(),
-            BuildArguments(construction, operands, exceptionClass, isBaseCall: false)
+            BuildArguments(construction, operands, exceptionClass, ConstructionSite.New)
         );
     }
 
@@ -233,44 +230,39 @@ public static class IrToTsExceptionConstructionBridge
     )
     {
         var operands = ErrorOperands.Bind(construction, ctor.BaseArguments ?? [], context);
-
-        var exceptionClass = IrToTsTypeMapper.ExceptionClasses.ClassOf(
-            construction.ExceptionTypeName
-        );
+        var exceptionClass = ClassOf(construction);
 
         return new TsBaseConstructorCall(
             operands.Temporaries,
-            BuildArguments(construction, operands, exceptionClass, isBaseCall: true)
+            BuildArguments(construction, operands, exceptionClass, ConstructionSite.BaseCall)
         );
     }
+
+    private static TsExceptionClass ClassOf(IrExceptionConstruction construction) =>
+        IrToTsTypeMapper.ExceptionClasses.ClassOf(construction.ExceptionTypeName);
 
     /// <summary>
     /// The constructor arguments of <paramref name="exceptionClass"/>: the
     /// supplied value of each of its roles, in order, with <c>undefined</c>
     /// for a role omitted ahead of a supplied one and nothing after the last.
-    /// A class that composes its own message receives the roles as written; one
-    /// that does not (see <see cref="ComposesItsMessage"/>) a composed message,
-    /// which starts with the type name of an unmapped exception in a
-    /// <c>new</c> (a base call keeps the identity of the user class making it).
+    /// The message role carries the composed message when
+    /// <see cref="MessagePlan.Of"/> says the bridge composes it.
     /// </summary>
     private static IReadOnlyList<TsExpression> BuildArguments(
         IrExceptionConstruction construction,
         ErrorOperands operands,
         TsExceptionClass exceptionClass,
-        bool isBaseCall
+        ConstructionSite site
     )
     {
-        var composesItsMessage = ComposesItsMessage(construction.ExceptionTypeName, isBaseCall);
-
-        var message = composesItsMessage
-            ? null
-            : ComposeMessage(construction, operands, namesUnmappedType: !isBaseCall);
+        var plan = MessagePlan.Of(construction, operands, exceptionClass, site);
+        var message = plan.Composes ? ComposeMessage(construction, operands, plan) : null;
 
         var values = exceptionClass
             .ConstructorRoles.Select(role =>
-                role is IrExceptionArgumentRole.Message && !composesItsMessage
+                role is IrExceptionArgumentRole.Message && plan.Composes
                     ? message
-                    : ArgumentFor(role, operands, exceptionClass)
+                    : operands.SuppliedValueOf(role)?.Lowered
             )
             .ToList();
 
@@ -280,71 +272,46 @@ public static class IrToTsExceptionConstructionBridge
     }
 
     /// <summary>
-    /// Whether the class an exception type lowers to composes .NET's message
-    /// from the roles itself: a mapped class — except for the base call of a
-    /// user exception deriving from <c>System.Exception</c>, whose default
-    /// message names the user class, which the runtime cannot know.
-    /// </summary>
-    private static bool ComposesItsMessage(string exceptionTypeName, bool isBaseCall) =>
-        IrToTsTypeMapper.ExceptionClasses.IsMapped(exceptionTypeName)
-        && !(isBaseCall && exceptionTypeName == BclExceptionClasses.RootExceptionTypeName);
-
-    /// <summary>
-    /// The value passed for <paramref name="role"/>: the supplied argument, the
-    /// inner exception wrapped as the <c>{ cause }</c> option for the built-in
-    /// <c>Error</c>, or <c>null</c> when the construction does not supply it.
-    /// </summary>
-    private static TsExpression? ArgumentFor(
-        IrExceptionArgumentRole role,
-        ErrorOperands operands,
-        TsExceptionClass exceptionClass
-    )
-    {
-        if (operands.SuppliedValueOf(role) is not { } operand)
-            return null;
-
-        if (
-            role is IrExceptionArgumentRole.InnerException
-            && exceptionClass.TakesInnerExceptionAsCause
-        )
-            return new TsObjectLiteral([new TsObjectProperty("cause", operand.Lowered)]);
-
-        return operand.Lowered;
-    }
-
-    /// <summary>
-    /// The message of a class that does not compose its own: the base message,
-    /// prefixed with the type name of an unmapped exception when
-    /// <paramref name="namesUnmappedType"/>, followed by the suffix of each
-    /// role such a class does not take.
+    /// The message of a construction whose class does not compose it: the
+    /// type name when <see cref="MessagePlan.NamesType"/>, the base message,
+    /// then the .NET suffix of each <see cref="MessagePlan.Folded"/> role.
     /// </summary>
     private static TsExpression? ComposeMessage(
         IrExceptionConstruction construction,
         ErrorOperands operands,
-        bool namesUnmappedType
+        MessagePlan plan
     )
     {
         var composer = new ErrorMessageComposer();
-        var objectName = operands.SuppliedValueOf(IrExceptionArgumentRole.ObjectName);
-        var paramName = operands.SuppliedValueOf(IrExceptionArgumentRole.ParamName);
-        var actualValue = operands.SuppliedValueOf(IrExceptionArgumentRole.ActualValue);
 
-        if (namesUnmappedType)
+        if (plan.NamesType)
             AppendTypeName(composer, construction, operands);
 
         AppendBaseMessage(composer, construction, operands);
-        AppendNamedSuffix(composer, objectName, "\nObject name: '", "'.");
-        AppendNamedSuffix(composer, paramName, " (Parameter '", "')");
-        AppendActualValue(composer, actualValue);
+        AppendNamedSuffix(
+            composer,
+            plan.FoldedValueOf(IrExceptionArgumentRole.ObjectName, operands),
+            "\nObject name: '",
+            "'."
+        );
+        AppendNamedSuffix(
+            composer,
+            plan.FoldedValueOf(IrExceptionArgumentRole.ParamName, operands),
+            " (Parameter '",
+            "')"
+        );
+        AppendActualValue(
+            composer,
+            plan.FoldedValueOf(IrExceptionArgumentRole.ActualValue, operands)
+        );
 
         return composer.Build();
     }
 
     /// <summary>
     /// <c>"System.TimeoutException: "</c> (or the bare name when there is no
-    /// message to follow it) for an exception without a runtime class of its
-    /// own: the root <c>Exception</c> it constructs keeps its name only in the
-    /// message (spec 011 FR-014).
+    /// message to follow it): the root <c>Exception</c> an unmapped exception
+    /// constructs keeps its name only in the message (spec 011 FR-014).
     /// </summary>
     private static void AppendTypeName(
         ErrorMessageComposer composer,
@@ -354,17 +321,82 @@ public static class IrToTsExceptionConstructionBridge
     {
         var typeName = construction.ExceptionTypeName;
 
-        if (typeName == BclExceptionClasses.RootExceptionTypeName)
-            return;
-
-        if (IrToTsTypeMapper.ExceptionClasses.IsMapped(typeName))
-            return;
-
         var hasMessage =
             construction.DefaultMessage is not null
             || operands.SuppliedValueOf(IrExceptionArgumentRole.Message) is not null;
 
         composer.AppendText(hasMessage ? typeName + ": " : typeName);
+    }
+
+    /// <summary>Where an exception construction stands.</summary>
+    private enum ConstructionSite
+    {
+        /// <summary><c>new X(...)</c>.</summary>
+        New,
+
+        /// <summary>The <c>: base(...)</c> call of a user exception deriving from <c>X</c>.</summary>
+        BaseCall,
+    }
+
+    /// <summary>
+    /// The one decision of who writes an exception's message, taken once per
+    /// construction.
+    /// </summary>
+    /// <param name="Composes">Whether this bridge composes the message rather
+    /// than the class: an unmapped exception (which constructs the root
+    /// <c>Exception</c>), the base call of a user exception deriving from
+    /// <c>System.Exception</c> (its default message names the user class,
+    /// which the runtime cannot know), and a construction passing a role its
+    /// mapped class does not take.</param>
+    /// <param name="NamesType">Whether the message starts with the type name:
+    /// the <c>new</c> of an unmapped exception.</param>
+    /// <param name="Folded">The suffix roles (<c>paramName</c>,
+    /// <c>actualValue</c>, <c>objectName</c>) the construction supplies but the
+    /// class does not take, which the composed message carries as .NET's text
+    /// (<c>" (Parameter 'p')"</c>, …) instead of dropping them.</param>
+    private sealed record MessagePlan(
+        bool Composes,
+        bool NamesType,
+        IReadOnlySet<IrExceptionArgumentRole> Folded
+    )
+    {
+        private static readonly IrExceptionArgumentRole[] SuffixRoles =
+        [
+            IrExceptionArgumentRole.ObjectName,
+            IrExceptionArgumentRole.ParamName,
+            IrExceptionArgumentRole.ActualValue,
+        ];
+
+        public static MessagePlan Of(
+            IrExceptionConstruction construction,
+            ErrorOperands operands,
+            TsExceptionClass exceptionClass,
+            ConstructionSite site
+        )
+        {
+            var typeName = construction.ExceptionTypeName;
+            var isMapped = IrToTsTypeMapper.ExceptionClasses.IsMapped(typeName);
+
+            var folded = SuffixRoles
+                .Where(role =>
+                    operands.SuppliedValueOf(role) is not null && !exceptionClass.Takes(role)
+                )
+                .ToHashSet();
+
+            var namesUserClass =
+                site is ConstructionSite.BaseCall
+                && typeName == BclExceptionClasses.RootExceptionTypeName;
+
+            return new MessagePlan(
+                Composes: !isMapped || namesUserClass || folded.Count > 0,
+                NamesType: !isMapped && site is ConstructionSite.New,
+                folded
+            );
+        }
+
+        /// <summary>The supplied operand of <paramref name="role"/> when it is folded.</summary>
+        public ErrorOperand? FoldedValueOf(IrExceptionArgumentRole role, ErrorOperands operands) =>
+            Folded.Contains(role) ? operands.SuppliedValueOf(role) : null;
     }
 
     private static void AppendBaseMessage(

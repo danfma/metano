@@ -129,6 +129,8 @@ public sealed class IrToTsClassEmitter(
             );
         }
 
+        classMembers.AddRange(IrToTsExceptionIdentityBridge.Members(type, ir));
+
         if (keepsBaseMessage)
         {
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());

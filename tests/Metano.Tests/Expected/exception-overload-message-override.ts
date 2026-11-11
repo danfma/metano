@@ -8,6 +8,8 @@ export class OverloadOverrideException extends Exception {
 
   protected static readonly byOverloadOverrideExceptionMessageInner: unique symbol = Symbol("OverloadOverrideException(string message, Exception inner)");
 
+  override readonly name: string = "OverloadOverrideException";
+
   readonly #baseMessage: string;
 
   readonly origin: Exception | null = null;
@@ -53,7 +55,7 @@ export class OverloadOverrideException extends Exception {
       return;
     }
 
-    if (args.length === 2 && isString(args[0]) && typeof args[1] === "object") {
+    if (args.length === 2 && isString(args[0]) && args[1] instanceof Exception) {
       const message = args[0] as string;
       const inner = args[1] as Exception;
       const __chain0Arg0 = message;
@@ -88,6 +90,10 @@ export class OverloadOverrideException extends Exception {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  protected override get typeNamespace(): string {
+    return "App";
   }
 
   override get message(): string {

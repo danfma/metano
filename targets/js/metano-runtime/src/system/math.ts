@@ -164,14 +164,16 @@ function copySignOfZero(value: number): number {
 }
 
 function assertDigits(digits: number, max: number, paramName: string, message: string): void {
-  if (!Number.isInteger(digits) || digits < 0 || digits > max)
+  if (!Number.isInteger(digits) || digits < 0 || digits > max) {
     throw new ArgumentOutOfRangeException(paramName, undefined, message);
+  }
 }
 
 function assertMode(mode: number): asserts mode is MidpointRounding {
-  if (!Number.isInteger(mode) || mode < 0 || mode >= MIDPOINT_ROUNDING_MODE_COUNT)
+  if (!Number.isInteger(mode) || mode < 0 || mode >= MIDPOINT_ROUNDING_MODE_COUNT) {
     throw new ArgumentException(
       `The value '${mode}' is not valid for this usage of the type MidpointRounding.`,
       "mode",
     );
+  }
 }

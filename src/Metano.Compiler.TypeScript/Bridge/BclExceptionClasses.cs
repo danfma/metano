@@ -17,19 +17,29 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// exception without one is <em>unmapped</em>: it lowers to the class of
 /// <c>System.Exception</c> (the <see cref="Root"/>), so a construction
 /// still throws an <c>Exception</c>, and its type tests are reported (MS0045).
-/// When nothing maps <c>System.Exception</c> either, the root is the built-in
-/// <c>Error</c>.
+/// Every exception type is keyed by <see cref="BclExportReader.ExportKey"/>,
+/// the key the extraction port, <see cref="IrNamedTypeSemantics.ExportKey"/>
+/// and <see cref="IrExceptionConstruction.ExceptionTypeName"/> share.
 /// </para>
 /// <para>
-/// The constructor roles of the runtime classes mirror .NET's parameter order:
-/// <c>(message, innerException)</c>, except for the argument and disposal
-/// families, whose own roles come first.
+/// Constructor roles: a class from the runtime's exception modules
+/// (<see cref="RuntimeExceptionModules"/>) takes the roles of the
+/// <c>metano-runtime</c> constructor for its CLR type, which mirror .NET's
+/// parameter order (<c>RuntimeExceptionConstructorTests</c> compares them with
+/// the runtime sources); any other mapped class, a project's own, takes
+/// <c>(message, innerException)</c>.
 /// </para>
 /// </summary>
 public sealed class BclExceptionClasses
 {
-    /// <summary>The C# display name of the root of the exception hierarchy.</summary>
+    /// <summary>The key of the root of the exception hierarchy.</summary>
     public const string RootExceptionTypeName = "System.Exception";
+
+    /// <summary>
+    /// The module-specifier prefix of the <c>metano-runtime</c> exception
+    /// classes, whose constructors <see cref="RuntimeConstructorRoles"/> describes.
+    /// </summary>
+    public const string RuntimeExceptionModules = "metano-runtime/system/exceptions/";
 
     private static readonly IReadOnlyList<IrExceptionArgumentRole> MessageAndInnerException =
     [
@@ -37,31 +47,35 @@ public sealed class BclExceptionClasses
         IrExceptionArgumentRole.InnerException,
     ];
 
+    /// <summary>
+    /// The constructor roles of the runtime classes whose constructor is not
+    /// <c>(message, innerException)</c>, keyed by the CLR type they mirror.
+    /// </summary>
     private static readonly Dictionary<
         string,
         IReadOnlyList<IrExceptionArgumentRole>
-    > ConstructorRolesByClass = new(StringComparer.Ordinal)
+    > RuntimeConstructorRolesByType = new(StringComparer.Ordinal)
     {
-        ["ArgumentException"] =
+        ["System.ArgumentException"] =
         [
             IrExceptionArgumentRole.Message,
             IrExceptionArgumentRole.ParamName,
             IrExceptionArgumentRole.InnerException,
         ],
-        ["ArgumentNullException"] =
+        ["System.ArgumentNullException"] =
         [
             IrExceptionArgumentRole.ParamName,
             IrExceptionArgumentRole.Message,
             IrExceptionArgumentRole.InnerException,
         ],
-        ["ArgumentOutOfRangeException"] =
+        ["System.ArgumentOutOfRangeException"] =
         [
             IrExceptionArgumentRole.ParamName,
             IrExceptionArgumentRole.ActualValue,
             IrExceptionArgumentRole.Message,
             IrExceptionArgumentRole.InnerException,
         ],
-        ["ObjectDisposedException"] =
+        ["System.ObjectDisposedException"] =
         [
             IrExceptionArgumentRole.ObjectName,
             IrExceptionArgumentRole.Message,
@@ -71,22 +85,20 @@ public sealed class BclExceptionClasses
 
     private readonly IReadOnlyDictionary<string, IrBclExport> _exports;
 
-    public BclExceptionClasses(IReadOnlyDictionary<string, IrBclExport> exports)
-    {
+    public BclExceptionClasses(IReadOnlyDictionary<string, IrBclExport> exports) =>
         _exports = exports;
-        Root = Resolve(RootExceptionTypeName) ?? TsExceptionClass.BuiltInError;
-    }
 
     /// <summary>
-    /// The resolver with no mapping: every exception lowers to the built-in
-    /// <c>Error</c> (a bridge driven outside a transform).
+    /// The class of <c>System.Exception</c>, which unmapped exceptions lower
+    /// to. <c>Metano/Runtime/Exceptions.cs</c> maps it in every compilation
+    /// that references the Metano annotations; its absence is an internal error.
     /// </summary>
-    public static BclExceptionClasses Empty { get; } = new(new Dictionary<string, IrBclExport>());
-
-    /// <summary>
-    /// The class of <c>System.Exception</c>, which unmapped exceptions lower to.
-    /// </summary>
-    public TsExceptionClass Root { get; }
+    public TsExceptionClass Root =>
+        Resolve(RootExceptionTypeName)
+        ?? throw new InvalidOperationException(
+            "Internal error: no [ExportFromBcl] maps System.Exception, so BCL exceptions have "
+                + "no runtime class; the compilation must reference the Metano assembly."
+        );
 
     /// <summary>
     /// Whether <paramref name="type"/> is an exception without a TypeScript
@@ -100,16 +112,19 @@ public sealed class BclExceptionClasses
     /// The class a BCL exception type lowers to: its mapped class, or the
     /// <see cref="Root"/> when it is unmapped.
     /// </summary>
-    public TsExceptionClass ClassOf(IrNamedTypeRef type) => ClassOf(DisplayName(type));
+    public TsExceptionClass ClassOf(IrNamedTypeRef type) => ClassOf(KeyOf(type));
 
     /// <summary>
-    /// The class of the exception type whose C# display name is
-    /// <paramref name="exceptionTypeName"/>, or the <see cref="Root"/>.
+    /// The class of the exception type keyed <paramref name="exceptionTypeName"/>,
+    /// or the <see cref="Root"/>.
     /// </summary>
     public TsExceptionClass ClassOf(string exceptionTypeName) => Resolve(exceptionTypeName) ?? Root;
 
+    /// <summary>Whether a BCL exception type has a mapped class of its own.</summary>
+    public bool IsMapped(IrNamedTypeRef type) => IsMapped(KeyOf(type));
+
     /// <summary>
-    /// Whether the exception type named <paramref name="exceptionTypeName"/>
+    /// Whether the exception type keyed <paramref name="exceptionTypeName"/>
     /// has a mapped class of its own.
     /// </summary>
     public bool IsMapped(string exceptionTypeName) => Resolve(exceptionTypeName) is not null;
@@ -118,8 +133,7 @@ public sealed class BclExceptionClasses
     /// The extraction port: whether a non-transpilable exception type has a
     /// mapped class of its own, so a type test can tell it apart.
     /// </summary>
-    public bool HasRuntimeClass(INamedTypeSymbol type) =>
-        IsMapped(type.OriginalDefinition.ToDisplayString());
+    public bool HasRuntimeClass(INamedTypeSymbol type) => IsMapped(BclExportReader.ExportKey(type));
 
     private TsExceptionClass? Resolve(string exceptionTypeName)
     {
@@ -129,16 +143,40 @@ public sealed class BclExceptionClasses
         return new TsExceptionClass(
             export.ExportedName,
             OriginOf(export.FromPackage),
-            ConstructorRolesByClass.GetValueOrDefault(export.ExportedName, MessageAndInnerException)
+            ConstructorRolesOf(exceptionTypeName, export)
         );
     }
 
     /// <summary>
-    /// The C# display name of a named type reference (<c>System.ArgumentException</c>),
-    /// the key <c>[ExportFromBcl]</c> entries are read under.
+    /// The roles of a mapped class's constructor: the runtime's for a class
+    /// from its exception modules, <c>(message, innerException)</c> for any
+    /// other class.
     /// </summary>
-    private static string DisplayName(IrNamedTypeRef type) =>
-        type.Namespace is { Length: > 0 } ns ? $"{ns}.{type.Name}" : type.Name;
+    private static IReadOnlyList<IrExceptionArgumentRole> ConstructorRolesOf(
+        string exceptionTypeName,
+        IrBclExport export
+    ) =>
+        export.FromPackage.StartsWith(RuntimeExceptionModules, StringComparison.Ordinal)
+            ? RuntimeConstructorRoles(exceptionTypeName)
+            : MessageAndInnerException;
+
+    /// <summary>
+    /// The roles the <c>metano-runtime</c> class mirroring the CLR type keyed
+    /// <paramref name="exceptionTypeName"/> takes, in order.
+    /// </summary>
+    public static IReadOnlyList<IrExceptionArgumentRole> RuntimeConstructorRoles(
+        string exceptionTypeName
+    ) =>
+        RuntimeConstructorRolesByType.GetValueOrDefault(
+            exceptionTypeName,
+            MessageAndInnerException
+        );
+
+    private static string KeyOf(IrNamedTypeRef type) =>
+        type.Semantics?.ExportKey
+        ?? throw new InvalidOperationException(
+            $"Internal error: the exception type '{type.Name}' carries no export key."
+        );
 
     /// <summary>
     /// The import origin of a class: its <c>FromPackage</c> module specifier

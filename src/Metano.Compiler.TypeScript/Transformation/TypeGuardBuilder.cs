@@ -772,11 +772,10 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             // would accept plain JS numbers no C# decimal ever produces. The
             // node's own origin (#477) is the test — a project type named
             // Decimal has none and falls to its guard below.
-            TsNamedType { Name: var n, Origin: not null } named when IsBclExportedClass(n) =>
-                Required(
-                    InstanceofCheck(fieldAccess, named.Name, named.Origin),
-                    GuardTestKind.Object
-                ),
+            TsNamedType { Origin: not null } named when IsBclExportedClass(named) => Required(
+                InstanceofCheck(fieldAccess, named.Name, named.Origin),
+                GuardTestKind.Object
+            ),
 
             // Transpilable named type with its own guard → call it. The guard
             // may test an enum value or an object, so its kind is presence only.
@@ -835,13 +834,21 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     private bool HasGuard(string tsName) => _context.TryResolveGuardImport($"is{tsName}", out _);
 
     /// <summary>
-    /// Whether <paramref name="tsName"/> names a class an
-    /// <c>[ExportFromBcl]</c> mapping binds a BCL type to (decimal → decimal.js
-    /// <c>Decimal</c>): a runtime constructor value the generated file imports,
-    /// testable with <c>instanceof</c>.
+    /// Whether <paramref name="named"/> is a class an <c>[ExportFromBcl]</c>
+    /// mapping binds a BCL type to (decimal → decimal.js <c>Decimal</c>, a BCL
+    /// exception → its runtime class): a runtime constructor value the
+    /// generated file imports, testable with <c>instanceof</c>. The name and
+    /// the import origin must both be the entry's, as the type mapper and
+    /// <see cref="Bridge.BclExceptionClasses"/> produce them. An unmapped BCL
+    /// exception is named as the root <c>Exception</c>, so its field test is
+    /// <c>instanceof Exception</c>: a structural guard, not a C# type test,
+    /// so it reports nothing (spec 011 FR-014 covers <c>is</c> / <c>as</c> /
+    /// <c>catch</c>).
     /// </summary>
-    private bool IsBclExportedClass(string tsName) =>
-        _context.BclExportMap.Values.Any(e => e.ExportedName == tsName);
+    private bool IsBclExportedClass(TsNamedType named) =>
+        _context.BclExportMap.Values.Any(entry =>
+            entry.ExportedName == named.Name && entry.FromPackage == named.Origin?.PackageName
+        );
 
     private static GuardFieldTest Required(TsExpression check, GuardTestKind kind) =>
         new(check, kind, AcceptsAbsent: false);

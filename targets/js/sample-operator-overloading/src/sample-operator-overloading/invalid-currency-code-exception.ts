@@ -2,7 +2,13 @@
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 
 export class InvalidCurrencyCodeException extends ArgumentException {
+  override readonly name: string = "InvalidCurrencyCodeException";
+
   constructor(code: string) {
     super(`Unknown currency code '${code}'`, "code");
+  }
+
+  protected override get typeNamespace(): string {
+    return "SampleOperatorOverloading";
   }
 }

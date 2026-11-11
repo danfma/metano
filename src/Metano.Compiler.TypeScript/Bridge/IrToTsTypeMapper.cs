@@ -14,16 +14,23 @@ public static class IrToTsTypeMapper
     /// The runtime classes of the BCL exceptions for the running transform,
     /// which name a BCL exception in type position (spec 011 FR-014).
     /// <see cref="AsyncLocal{T}"/> keeps the slot per execution context so
-    /// parallel test runs don't race; outside a transform no class is mapped
-    /// and every exception names the built-in <c>Error</c>.
+    /// parallel test runs don't race. Reading it outside a transform is an
+    /// internal error: no bridge may lower an exception without the mapping.
     /// </summary>
     private static readonly AsyncLocal<BclExceptionClasses?> _exceptionClasses = new();
 
-    internal static BclExceptionClasses ExceptionClasses
+    internal static BclExceptionClasses? ExceptionClassesScope
     {
-        get => _exceptionClasses.Value ?? BclExceptionClasses.Empty;
+        get => _exceptionClasses.Value;
         set => _exceptionClasses.Value = value;
     }
+
+    internal static BclExceptionClasses ExceptionClasses =>
+        _exceptionClasses.Value
+        ?? throw new InvalidOperationException(
+            "Internal error: a BCL exception was lowered outside a TypeScript transform, so "
+                + "the runtime exception classes are unknown."
+        );
 
     public static TsType Map(IrTypeRef type, IrToTsTypeOverrides? overrides = null) =>
         overrides?.TryResolve(type) is { } overridden ? overridden : MapCore(type, overrides);

@@ -92,7 +92,7 @@ public static class BclExportReader
     /// definition, so an unbound <c>typeof(List&lt;&gt;)</c> argument and a constructed
     /// <c>List&lt;int&gt;</c> reference both key as <c>List&lt;T&gt;</c>.
     /// </summary>
-    private static string ExportKey(INamedTypeSymbol type) =>
+    public static string ExportKey(INamedTypeSymbol type) =>
         type.OriginalDefinition.ToDisplayString();
 
     private static string? NamedArgument(AttributeData attribute, string name) =>

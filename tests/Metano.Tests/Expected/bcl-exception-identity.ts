@@ -11,8 +11,14 @@ import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-f
 import { ObjectDisposedException } from "metano-runtime/system/exceptions/object-disposed-exception";
 
 export class InvalidAmountException extends ArgumentOutOfRangeException {
+  override readonly name: string = "InvalidAmountException";
+
   constructor(amount: Decimal) {
     super("amount", amount, "The amount must be positive.");
+  }
+
+  protected override get typeNamespace(): string {
+    return "Billing";
   }
 }
 
@@ -20,6 +26,8 @@ export class LedgerException extends Exception {
   protected static readonly byLedgerExceptionDefault: unique symbol = Symbol("LedgerException()");
 
   protected static readonly byLedgerExceptionMessageInner: unique symbol = Symbol("LedgerException(string message, Exception inner)");
+
+  override readonly name: string = "LedgerException";
 
   constructor(overload: typeof LedgerException.byLedgerExceptionDefault);
   constructor(overload: typeof LedgerException.byLedgerExceptionMessageInner, message: string, inner: Exception);
@@ -40,7 +48,7 @@ export class LedgerException extends Exception {
       return;
     }
 
-    if (args.length === 2 && isString(args[0]) && typeof args[1] === "object") {
+    if (args.length === 2 && isString(args[0]) && args[1] instanceof Exception) {
       const message = args[0] as string;
       const inner = args[1] as Exception;
       super(message, inner);
@@ -57,6 +65,10 @@ export class LedgerException extends Exception {
     throw new Error("No matching constructor");
   }
 
+  protected override get typeNamespace(): string {
+    return "Billing";
+  }
+
   static fromDefault(): LedgerException {
     return new LedgerException(LedgerException.byLedgerExceptionDefault);
   }
@@ -67,8 +79,14 @@ export class LedgerException extends Exception {
 }
 
 export class StaleLedgerException extends InvalidOperationException {
+  override readonly name: string = "StaleLedgerException";
+
   constructor() {
     super();
+  }
+
+  protected override get typeNamespace(): string {
+    return "Billing";
   }
 }
 

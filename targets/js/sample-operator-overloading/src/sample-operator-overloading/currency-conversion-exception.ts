@@ -11,6 +11,8 @@ export class CurrencyConversionException extends Exception {
   protected static readonly byCurrencyConversionExceptionFromCodeToCodeReason: unique symbol =
     Symbol("CurrencyConversionException(string fromCode, string toCode, Exception reason)");
 
+  override readonly name: string = "CurrencyConversionException";
+
   readonly #baseMessage: string;
 
   constructor(
@@ -67,7 +69,7 @@ export class CurrencyConversionException extends Exception {
       args.length === 3 &&
       isString(args[0]) &&
       isString(args[1]) &&
-      typeof args[2] === "object"
+      args[2] instanceof Exception
     ) {
       const fromCode = args[0] as string;
       const toCode = args[1] as string;
@@ -99,6 +101,10 @@ export class CurrencyConversionException extends Exception {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  protected override get typeNamespace(): string {
+    return "SampleOperatorOverloading";
   }
 
   override get message(): string {

@@ -182,6 +182,13 @@ internal static class IrTypeCheckBuilder
             IrNamedTypeKind.NumericEnum => RuntimeIs("isInt32", value),
             IrNamedTypeKind.Interface => TypeofObject(value),
             IrNamedTypeKind.Branded => BrandedCheck(named, value),
+            // A mapped BCL exception tests its runtime class (spec 011
+            // FR-014); an unmapped one has none and keeps the typeof check.
+            IrNamedTypeKind.Exception when IsMappedBclException(named) => new TsBinaryExpression(
+                value,
+                "instanceof",
+                IrToTsTypeMapper.ExceptionClasses.ClassOf(named).ValueReference()
+            ),
             // Classes / records / structs / exceptions — use instanceof when
             // the type is in our compilation (and thus has a runtime class);
             // otherwise fall back to typeof object so we don't reference an
@@ -196,6 +203,10 @@ internal static class IrTypeCheckBuilder
             null => new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name)),
             _ => TypeofObject(value),
         };
+
+    private static bool IsMappedBclException(IrNamedTypeRef named) =>
+        BclExceptionClasses.IsBclException(named)
+        && IrToTsTypeMapper.ExceptionClasses.IsMapped(named);
 
     private static TsExpression StringEnumCheck(IrNamedTypeRef named, TsExpression value)
     {
