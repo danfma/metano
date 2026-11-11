@@ -7,7 +7,11 @@ export class DuplicateEntryException extends Exception {
     super(`Duplicate entry: ${name}`);
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "DuplicateEntryException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "";
   }
 }

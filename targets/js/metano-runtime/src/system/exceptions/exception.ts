@@ -21,18 +21,17 @@ export class Exception extends Error {
 
   /**
    * The .NET namespace of the class: `System`, unless a class declared in
-   * another namespace overrides it. Generated exception classes override it
-   * (and `name`) with their C# namespace and type name.
+   * another namespace overrides it. Generated exception classes override it and
+   * {@link $typeName} with their C# namespace and type name. The `$` keeps the
+   * hooks apart from any member a C# class can declare.
    */
-  protected get typeNamespace(): string {
+  protected get $typeNamespace(): string {
     return "System";
   }
 
-  /** The .NET full name of the class, `<namespace>.<name>`, which {@link toString} prints. */
-  protected get fullTypeName(): string {
-    const typeNamespace = this.typeNamespace;
-
-    return typeNamespace ? `${typeNamespace}.${this.name}` : this.name;
+  /** The .NET type name of the class: its `name`, unless a generated class overrides it. */
+  protected get $typeName(): string {
+    return this.name;
   }
 
   /** The JavaScript `stack`, which plays the role of .NET's `StackTrace`. */
@@ -45,7 +44,8 @@ export class Exception extends Error {
    * it. The stack trace is not appended (see {@link stackTrace}).
    */
   override toString(): string {
-    const fullName = this.fullTypeName;
+    const typeNamespace = this.$typeNamespace;
+    const fullName = typeNamespace ? `${typeNamespace}.${this.$typeName}` : this.$typeName;
     const head = this.message ? `${fullName}: ${this.message}` : fullName;
 
     if (this.innerException == null) {

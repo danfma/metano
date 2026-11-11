@@ -23,7 +23,7 @@ class NamedException extends Exception {
     this.#typeNamespace = typeNamespace;
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeNamespace(): string {
     return this.#typeNamespace;
   }
 }

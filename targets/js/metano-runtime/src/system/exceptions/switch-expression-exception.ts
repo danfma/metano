@@ -24,7 +24,7 @@ export class SwitchExpressionException extends InvalidOperationException {
     this.unmatchedValue = unmatchedValue ?? null;
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeNamespace(): string {
     return "System.Runtime.CompilerServices";
   }
 }

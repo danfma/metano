@@ -98,7 +98,11 @@ export class CurrencyConversionException extends Exception {
     throw new Error("No matching constructor");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "CurrencyConversionException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "SampleOperatorOverloading";
   }
 

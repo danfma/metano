@@ -92,7 +92,11 @@ export class OverloadOverrideException extends Exception {
     throw new Error("No matching constructor");
   }
 
-  protected override get typeNamespace(): string {
+  protected override get $typeName(): string {
+    return "OverloadOverrideException";
+  }
+
+  protected override get $typeNamespace(): string {
     return "App";
   }
 
