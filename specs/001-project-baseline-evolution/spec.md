@@ -310,7 +310,11 @@ Product requirements added after the migration (normative; each one is traced by
      dropped: composite formatting passes it only to an `IFormattable`, so a static type
      that does not implement it (a `string`, a `bool`, a user class, record or struct)
      ignores it, and `char` ignores it too; `object`, an interface and a type parameter keep
-     it, since the run-time type decides. An alignment still applies.
+     it, since the run-time type decides. The rule reads the static type: it is exact for a
+     sealed class, a struct and a record struct, while for a non-sealed class whose run-time
+     value implements `IFormattable` (`Open x = new DerivedFmt(); $"{x:X}"`) .NET calls the
+     derived `ToString(format, provider)` and the output prints the default text. An
+     alignment still applies.
   2. *TypeScript.* A hole with a clause MUST lower to one `metano-runtime` call inside the
      template literal, dispatched statically by the value's C# type: `formatInteger(value,
      bits, format, alignment?)` for `sbyte`, `byte`, `short`, `ushort`, `int` and `uint`;
@@ -333,11 +337,13 @@ Product requirements added after the migration (normative; each one is traced by
      target declares that its clause-free text is .NET's text for that format for every
      value (TypeScript: a `Guid`'s `D`, a numeric enum's `D`, a `[StringEnum]`'s `G` / `F`
      with no renamed member, a `DateOnly`'s `O` and its `yyyy-MM-dd`, the same ISO text, a
-     `BigInteger`'s `G` / `R`); through the
+     `BigInteger`'s `G` / `R` / `D` without a precision); through the
      declarative mapping of the type's `ToString(string)` when one lowers it, for a
      non-nullable value (so a hole and the call cannot disagree; `Guid` maps `N`, `B`,
      `P`); otherwise it is unsupported (rule 4). `ToString(format)` and
-     `ToString(format, provider)` of any BCL type (a number, an enum, a date or time,
+     `ToString(format, provider)`, the instance overloads whose first parameter is the
+     format (a static `ToString`, such as `Convert.ToString(string)`, is not a format call),
+     of any BCL type (a number, an enum, a date or time,
      `Guid`, `IFormattable.ToString` on a type parameter) follow the same rule: an existing
      declarative mapping lowers it, a default-text format becomes the clause-free hole, and
      anything else is unsupported. A user type's own `ToString(string)` is not affected.
@@ -370,7 +376,8 @@ Product requirements added after the migration (normative; each one is traced by
      (`string.Format("{0:F2}", d)`, which keeps its unmapped call and its `MS0001`) or
      `FormattableString`, both tracked in #662, nor custom numeric format patterns
      (reported, rule 4), including the ones that equal the default text for every value of
-     a narrow type (`{b:#,##0}` on `sbyte` / `byte`), which stay reported. Known silent gap:
+     a narrow type (`{b:#,##0}` on `sbyte` / `byte`) or a `DateOnly` (`{d:yyyy'-'MM'-'dd}`,
+     quoted separators), which stay reported. Known silent gap:
      `Guid`'s `X` and an invalid `Guid` format reach the fallback `Guid.ToString` mapping,
      which prints the hyphenated text; restricting the fallback needs the mapping port to
      see literal filters (#657).

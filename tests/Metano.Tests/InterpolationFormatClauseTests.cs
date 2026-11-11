@@ -430,6 +430,8 @@ public class InterpolationFormatClauseTests
     [Arguments("DateOnly d", "d", "yyyy-MM-dd")]
     [Arguments("System.Numerics.BigInteger b", "b", "G")]
     [Arguments("System.Numerics.BigInteger b", "b", "r")]
+    [Arguments("System.Numerics.BigInteger b", "b", "D")]
+    [Arguments("System.Numerics.BigInteger b", "b", "d")]
     public async Task HoleAndCall_PrintTheSameText(string parameter, string value, string format)
     {
         var (holeFiles, holeDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
@@ -446,6 +448,103 @@ public class InterpolationFormatClauseTests
         await Assert.That(UnsupportedFeatures(holeDiagnostics)).IsEmpty();
         await Assert.That(UnsupportedFeatures(callDiagnostics)).IsEmpty();
         await Assert.That(hole == call || hole == $"`${{{call}}}`").IsTrue();
+    }
+
+    /// <summary>
+    /// <c>BigInteger</c>'s <c>D</c> with a precision pads, which the
+    /// clause-free text does not: it keeps reporting.
+    /// </summary>
+    [Test]
+    public async Task BigIntegerPaddedDecimal_Reports()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body("System.Numerics.BigInteger b", "$\"{b:D3}\"")
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(1);
+    }
+
+    /// <summary>
+    /// A static <c>ToString</c> with a leading <c>string</c> parameter
+    /// (<c>Convert.ToString(string)</c>) is not a format call: it keeps the
+    /// unmapped-call report it had before.
+    /// </summary>
+    [Test]
+    public async Task StaticToString_IsNotAFormatCall()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body("string s", "Convert.ToString(s)")
+        );
+
+        var report = UnsupportedFeatures(diagnostics).Single();
+
+        await Assert.That(report.Message).Contains("has no declarative mapping");
+        await Assert.That(report.Message).DoesNotContain("The format");
+    }
+
+    /// <summary>
+    /// A conditional-access call names the receiver's type, not the type that
+    /// declares <c>ToString</c>.
+    /// </summary>
+    [Test]
+    public async Task ConditionalAccessToString_NamesTheReceiverType()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body("Color? c", "c?.ToString(\"G\") ?? \"\"")
+        );
+
+        await Assert
+            .That(UnsupportedFeatures(diagnostics).Single().Message)
+            .IsEqualTo(
+                "The format 'G' is not supported for 'Color' in TypeScript; the call throws at run time."
+            );
+    }
+
+    /// <summary>
+    /// A transpiled library referenced as a compiled image (the build's
+    /// <c>&lt;Reference HintPath&gt;</c> shape) keeps its own
+    /// <c>ToString(string)</c> and <c>IFormattable.ToString</c>: the calls are
+    /// its methods, emitted with the type's import, never governed by the
+    /// BCL format rule.
+    /// </summary>
+    [Test]
+    public async Task TranspiledLibraryToString_IsNotGoverned()
+    {
+        var files = TranspileHelper.TranspileWithLibraryImage(
+            """
+            using System;
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("shop-lib")]
+
+            namespace Shop;
+
+            public sealed class Price
+            {
+                public string ToString(string format) => format;
+            }
+
+            public sealed class Fmt : IFormattable
+            {
+                public string ToString(string? format, IFormatProvider? provider) => "fmt";
+            }
+            """,
+            """
+            [Transpile]
+            public class Till
+            {
+                public string Run(Shop.Price p, Shop.Fmt f) => p.ToString("X") + f.ToString("Y", null);
+            }
+            """
+        );
+
+        var till = files["till.ts"];
+
+        await Assert.That(till).Contains("from \"shop-lib");
+        await Assert.That(till).Contains("Price");
+        await Assert.That(till).Contains("Fmt");
+        await Assert.That(till).DoesNotContain("Unsupported expression");
     }
 
     /// <summary>

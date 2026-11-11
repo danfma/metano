@@ -475,7 +475,7 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   type that is not `IFormattable` (a `string`, `bool`, `char`, user class,
   record or struct) is ignored, as in C#; a `Guid`'s `D`, a numeric enum's `D`,
   a `[StringEnum]`'s `G` / `F`, a `DateOnly`'s `O` and `yyyy-MM-dd` and a
-  `BigInteger`'s `G` / `R` print the clause-free text; a hole on a type whose `ToString(string)` has
+  `BigInteger`'s `G` / `R` / `D` print the clause-free text; a hole on a type whose `ToString(string)` has
   a declarative mapping lowers through it (`{g:N}` is `g.ToString("N")`).
 - `ToString(format)` of any other BCL type used to be emitted as written,
   printing the wrong text (`12.5m.ToString("F2")` printed `12.5`) or throwing
@@ -486,7 +486,11 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `formatInt64`; `Guid` gains `B` / `P` (and `b`, `p`, `n`). A user type's own
   `ToString(string)` is unchanged. `Guid`'s `X` still prints the hyphenated
   text through the fallback mapping (#657). Custom patterns stay reported, even
-  where they equal the default text (`{b:#,##0}` on a `sbyte` / `byte`).
+  where they equal the default text (`{b:#,##0}` on a `sbyte` / `byte`,
+  `{d:yyyy'-'MM'-'dd}` on a `DateOnly`). A static `ToString`
+  (`Convert.ToString(s)`) is not a format call. The format-ignored rule reads
+  the static type: a non-sealed class whose run-time value is `IFormattable`
+  prints its default text.
 - `long` / `ulong` gain `E`, `P` and `C` (they reported `MS0066` and threw),
   `R5` formats as `G5`, as in .NET, and a `long?` hole with a clause now
   formats instead of dropping the clause.

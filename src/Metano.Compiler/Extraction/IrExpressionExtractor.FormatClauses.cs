@@ -133,7 +133,8 @@ public sealed partial class IrExpressionExtractor
             return ReportUnsupportedFormat(argument.GetLocation(), UnsupportedCallMessage());
 
         var receiver = (call.Expression as MemberAccessExpressionSyntax)?.Expression;
-        var type = TypeOf(receiver) ?? symbol.ContainingType;
+        var type = ReceiverTypeOf(receiver ?? ConditionalReceiverOf(call)) ?? symbol.ContainingType;
+
         var format = _semantic.GetConstantValue(argument.Expression);
 
         if (!format.HasValue)
@@ -278,6 +279,10 @@ public sealed partial class IrExpressionExtractor
     private static bool HasFormatter(IrNumericKind? kind, IFormatStringCapability formats) =>
         kind is { } numericKind && formats.HasFormatter(numericKind);
 
+    /// <summary>The static type of a call's receiver, looking through <c>Nullable&lt;T&gt;</c>.</summary>
+    private ITypeSymbol? ReceiverTypeOf(ExpressionSyntax? receiver) =>
+        TypeOf(receiver)?.UnwrapNullableValueType();
+
     private ITypeSymbol? TypeOf(ExpressionSyntax? expression) =>
         expression is null ? null : _semantic.GetTypeInfo(expression).Type;
 
@@ -337,8 +342,10 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Whether <paramref name="symbol"/> is a <c>ToString</c> overload taking
-    /// a format declared by a BCL type (<see cref="RoslynTypeQueries.IsBclAssembly"/>):
+    /// Whether <paramref name="symbol"/> is an instance <c>ToString</c>
+    /// overload whose first parameter is the <c>format</c>, declared by a BCL
+    /// type (a static <c>ToString</c>, such as <c>Convert.ToString(string)</c>,
+    /// is not a format call) (<see cref="RoslynTypeQueries.IsBclAssembly"/>):
     /// a number's, an enum's (<c>Enum.ToString(string)</c>), a date or time's,
     /// <c>Guid</c>'s, or <c>IFormattable.ToString</c> on a type parameter. A
     /// user type's own <c>ToString(string)</c>, in this compilation or in any
@@ -348,9 +355,27 @@ public sealed partial class IrExpressionExtractor
         symbol
             is {
                 Name: nameof(ToString),
-                Parameters: [{ Type.SpecialType: SpecialType.System_String }, ..]
+                IsStatic: false,
+                Parameters: [
+                    { Name: FormatParameterName, Type.SpecialType: SpecialType.System_String },
+                    ..,
+                ]
             }
         && symbol.ContainingAssembly.IsBclAssembly();
+
+    /// <summary>
+    /// The receiver of <c>value?.ToString(format)</c> (the conditional
+    /// access's operand), for the type the report names; <c>null</c> for any
+    /// other call.
+    /// </summary>
+    private static ExpressionSyntax? ConditionalReceiverOf(InvocationExpressionSyntax call) =>
+        call
+            is {
+                Expression: MemberBindingExpressionSyntax,
+                Parent: ConditionalAccessExpressionSyntax access
+            }
+            ? access.Expression
+            : null;
 
     /// <summary>The argument passed as <c>ToString</c>'s <c>format</c>, by name or first by position.</summary>
     private static ArgumentSyntax? FormatArgumentOf(InvocationExpressionSyntax call)
