@@ -40,11 +40,16 @@ public sealed partial class IrExpressionExtractor
         var right = Extract(assign.Right);
 
         if (MapCompoundAssignmentOperator(assign) is { } op && RequiresReadModifyWrite(op, assign))
+        {
+            if (NativeCompoundShiftKindOf(target, op, assign) is { } kind)
+                return new IrBinaryExpression(target, MapAssignmentOp(assign.Kind()), right, kind);
+
             return BuildReadModifyWrite(
                 target,
                 assign,
                 readTarget => CompoundValue(assign, readTarget, op, right)
             );
+        }
 
         return new IrBinaryExpression(target, MapAssignmentOp(assign.Kind()), right);
     }

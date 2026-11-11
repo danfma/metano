@@ -6,10 +6,12 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The overflow reductions of the integers of 32 bits or fewer (spec 012
 /// FR-075–FR-077), which the targets hold in a type wider than the C# one
-/// (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>). The first, second
-/// and last rules follow from C# alone and hold for every target; the third
-/// encodes a JavaScript fact and is tagged <c>TODO(#549)</c> where it is
-/// decided, until a target capability decides it:
+/// (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>). The rules follow
+/// from C# and from holding the value in a wider type, and hold for every
+/// target, except the read of <c>uint</c> <c>&amp;</c>, <c>|</c> and
+/// <c>^</c>, which encodes a JavaScript fact and is tagged
+/// <c>TODO(#549)</c> where it is decided, until a target capability decides
+/// it:
 /// <list type="bullet">
 ///   <item>the value a compound assignment or an increment stores in an
 ///   <c>sbyte</c>, <c>byte</c>, <c>short</c> or <c>ushort</c> is narrowed
@@ -19,11 +21,13 @@ namespace Metano.Compiler.Extraction;
 ///   shifted past bit 31 and <c>~</c> on a <c>uint</c> stays unsigned, so
 ///   both wrap in either context, as the 64-bit rules of
 ///   <see cref="IntegerOverflowLowering"/> do;</item>
-///   <item>the <c>uint</c> result of <c>&amp;</c>, <c>|</c> and <c>^</c> and
-///   the <c>int</c> result of <c>&gt;&gt;&gt;</c> cannot leave their domain
-///   in C#, but JavaScript's 32-bit operators return them in the other
-///   signedness, so they are read back through a wrap (a no-op on a 64-bit
-///   Dart <c>int</c>);</item>
+///   <item>the <c>int</c> result of <c>&gt;&gt;&gt;</c> is the shifted
+///   32-bit pattern, which a wider type reads back as signed through a
+///   wrap;</item>
+///   <item>the <c>uint</c> result of <c>&amp;</c>, <c>|</c> and <c>^</c>
+///   cannot leave its domain in C#, but JavaScript's 32-bit operators
+///   return it as signed, so it is read back through a wrap (a no-op on a
+///   64-bit Dart <c>int</c>);</item>
 ///   <item><c>+</c>, <c>-</c>, <c>*</c>, unary <c>-</c>, <c>++</c> and
 ///   <c>--</c> on <c>int</c> / <c>uint</c> are range-checked in a checked
 ///   context. In an unchecked context they are not reduced: the wrap of
@@ -65,8 +69,10 @@ internal static class NarrowIntegerOverflow
                 kind,
                 IntegerValueRanges.ExactResult(operatorKind, left, right)
             ),
-            // TODO(#549): `int` `>>>` cannot leave the domain in C#; the read
-            // exists because JavaScript returns it as 32 unsigned bits.
+            // `int` `>>>` shifts the 32-bit pattern, whose result every target
+            // holding it in a wider type reads back as signed (a count of 0
+            // keeps bit 31 set): JavaScript's `>>>` returns 32 unsigned bits,
+            // and Dart shifts the pattern read as unsigned.
             BinaryOperatorKind.UnsignedRightShift => SignedBits(kind, left),
             _ => null,
         };
@@ -129,9 +135,9 @@ internal static class NarrowIntegerOverflow
     /// wrapping store keeps the same low bits either way.
     /// </summary>
     /// <remarks>
-    /// TODO(#549): the read encodes a JavaScript fact (<c>&gt;&gt;&gt;</c>
-    /// returns 32 unsigned bits); a target whose <c>int</c> result is
-    /// already signed needs none.
+    /// The read is the one <see cref="SignedBits"/> gives the binary
+    /// <c>&gt;&gt;&gt;</c>: every target that holds the 32-bit pattern in a
+    /// wider type needs it.
     /// </remarks>
     private static IntegerOverflowReduction? OperatorResultRead(
         BinaryOperatorKind operatorKind,

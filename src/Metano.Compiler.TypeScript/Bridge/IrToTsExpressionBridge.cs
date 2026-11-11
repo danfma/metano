@@ -176,9 +176,6 @@ public static partial class IrToTsExpressionBridge
         )
             return int64Operator;
 
-        if (NativeCompoundLeftShiftOf(bin) is { } compoundShift)
-            return MapBinary(compoundShift, context);
-
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
@@ -193,7 +190,7 @@ public static partial class IrToTsExpressionBridge
         {
             return new TsBinaryExpression(
                 PerClassBackingFields.StorageAccess(backingField),
-                BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
+                OperatorTokenOf(bin),
                 Map(bin.Right, context)
             );
         }
@@ -220,36 +217,21 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// <c>target &lt;&lt;= count</c> when <paramref name="bin"/> is the
-    /// read-modify-write the core builds for an <c>int</c> <c>&lt;&lt;=</c>
-    /// (<c>target = wrap(target &lt;&lt; count)</c>, the same target node
-    /// read and written): JavaScript's <c>&lt;&lt;=</c> computes in 32 signed
-    /// bits, which is that wrap already (FR-076). <c>null</c> otherwise.
-    /// </summary>
-    private static IrBinaryExpression? NativeCompoundLeftShiftOf(IrBinaryExpression bin) =>
-        bin
-            is {
-                Operator: IrBinaryOp.Assign,
-                Right: IrIntegerOverflow
-                {
-                    Value: IrBinaryExpression { Left: var read, Right: var count }
-                } overflow
-            }
-        && IrToTsIntegerOverflowBridge.IsNativeInt32Wrap(overflow)
-        && ReferenceEquals(read, bin.Left)
-            ? new IrBinaryExpression(bin.Left, IrBinaryOp.LeftShiftAssign, count)
-            : null;
-
-    /// <summary>
     /// The JS operator of <paramref name="bin"/>. C# shifts a <c>uint</c>
     /// logically with <c>&gt;&gt;</c>, where JS <c>&gt;&gt;</c> reads its
     /// operand as 32 signed bits, so a <c>uint</c> right shift is
-    /// <c>&gt;&gt;&gt;</c> (spec 012 FR-076).
+    /// <c>&gt;&gt;&gt;</c> and its compound form <c>&gt;&gt;&gt;=</c>
+    /// (spec 012 FR-076).
     /// </summary>
     private static string OperatorTokenOf(IrBinaryExpression bin) =>
-        bin is { Operator: IrBinaryOp.RightShift, NumericKind: IrNumericKind.UInt32 }
-            ? BinaryOperatorToken(IrBinaryOp.UnsignedRightShift)
-            : BinaryOperatorToken(bin.Operator, bin.Left, bin.Right);
+        bin switch
+        {
+            { Operator: IrBinaryOp.RightShift, NumericKind: IrNumericKind.UInt32 } =>
+                BinaryOperatorToken(IrBinaryOp.UnsignedRightShift),
+            { Operator: IrBinaryOp.RightShiftAssign, NumericKind: IrNumericKind.UInt32 } =>
+                BinaryOperatorToken(IrBinaryOp.UnsignedRightShiftAssign),
+            _ => BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
+        };
 
     /// <summary>
     /// The operand of <c>++</c> / <c>--</c>; a get-only per-class property assigned inside

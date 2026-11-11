@@ -563,17 +563,23 @@ wrapper type. The compiler makes them behave like C# where C# narrows or reinter
   these lowerings reports `MS0001` (`'counts[key]++' on a dictionary entry is not
   supported.`): `counts[key]++` on a `Dictionary<string, int>` in a checked context, any
   such store on a `byte` / `sbyte` / `short` / `ushort` value, `flags[key] |= mask` on a
-  `uint` value. The read-modify-write lowering does not cover dictionary entries (the
-  read of a missing key would not throw). Read, compute and write the entry in separate
+  `uint` value, and in any context `d[k] <<= 1` / `d[k] >>>= 1` on an `int` value and
+  `d[k] >>= 1` on a `uint` value. The read-modify-write lowering does not cover
+  dictionary entries (the read of a missing key would not throw). A store on an `int`
+  entry that needs no lowering (`counts[key]++` in the default context) is not reported
+  and still emits code that is not valid JavaScript, as before. Read, compute and write the entry in separate
   statements.
 - Not covered: `char` conversions, `decimal` sources, enum endpoints and `[Queryable]`
   expression trees keep their earlier lowering. Three shapes around them changed anyway:
   `checked(a - b)` on two values of an enum declared narrower than `int` is checked;
-  `(byte)(int)c` on a `char` emits `c & 0xFF` on a string, which is `0`; and
+  `(byte)(int)c` on a `char` emits `c & 0xFF` on a string, which is `0` and does not
+  type-check (TS2362 under `--strict`); and
   `checked(c + 1)` on a `char` throws `OverflowException`.
 - Dart: an `int` is 64-bit, so the same conversions and stores print
   `.toSigned(n)` / `.toUnsigned(n)` (`(i << n).toSigned(32)`,
-  `(i.toUnsigned(32) >>> n).toSigned(32)`). Dart never throws in a checked context:
+  `(i.toUnsigned(32) >>> n).toSigned(32)`). A 32-bit shift count is not masked there, so
+  a variable count of 32 or more differs from C# (`a << 32` is `0`, C# gives `a`). Dart
+  never throws in a checked context:
   checked `int` / `uint` arithmetic prints as its unchecked form (`a + b`, no wrap), and
   a checked conversion or narrow store prints the narrowing of its unchecked form.
 
