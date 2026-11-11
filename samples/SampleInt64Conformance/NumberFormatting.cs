@@ -3,15 +3,14 @@ using Metano.Annotations;
 namespace SampleInt64Conformance;
 
 /// <summary>
-/// The interpolation format and alignment clauses, and <c>ToString</c> with a
-/// constant format, on the numbers held in a JS <c>number</c> (baseline
-/// FR-051, #323): each hole calls the runtime formatter of its value's type.
-/// The runtime formatters themselves run over every format operand through
-/// <c>tests/Int64Reference/RuntimeFormatting.cs</c>; a format that is not a
-/// constant reports MS0001 when transpiled, so those rows have no transpiled
-/// twin. An alignment without a format pads the text the hole prints without
-/// the clause, which for a <c>double</c> is still JavaScript's (#308), so the
-/// <c>double</c> holes below all carry a format.
+/// The interpolation format and alignment clauses and <c>ToString(format)</c>
+/// on the numbers held in a JS <c>number</c> (baseline FR-051, #323): each
+/// hole and call reaches the runtime formatter of its value's type. The
+/// <c>Format…</c> methods take the format as a parameter, so it is decided at
+/// run time and every format operand (a <c>null</c> one included) runs
+/// through the transpiled call. An alignment without a format pads the text
+/// the hole prints without the clause, which for a <c>double</c> is still
+/// JavaScript's (#308), so the <c>double</c> holes below all carry a format.
 /// </summary>
 [NoContainer]
 public static class NumberFormatting
@@ -43,4 +42,25 @@ public static class NumberFormatting
 
     public static string FormatInt32Constant(int formatted) =>
         formatted.ToString("D3") + "|" + formatted.ToString("X8");
+
+    public static string FormatDouble(double formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
+
+    public static string FormatInt32(int formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
+
+    public static string FormatUInt32(uint formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
+
+    public static string FormatInt16(short formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
+
+    public static string FormatUInt16(ushort formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
+
+    public static string FormatSByte(sbyte formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
+
+    public static string FormatByte(byte formatted, string numberFormat) =>
+        formatted.ToString(numberFormat);
 }

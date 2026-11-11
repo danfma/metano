@@ -51,8 +51,9 @@ public sealed partial class IrExpressionExtractor
     /// (<see cref="Invocation.UnsupportedFormatCallRewriter"/>):
     /// <c>ToString(format)</c> or <c>ToString(format, provider)</c> on a
     /// 32-bit or narrower integer, a <c>double</c> or a <c>float</c> whose
-    /// format the target does not format as .NET does — a format that is not
-    /// a constant included — reports and becomes the placeholder; <c>null</c>
+    /// constant format the target does not format as .NET does reports and
+    /// becomes the placeholder, as does any format on a <c>float</c>; a format
+    /// known only at run time is left to the runtime formatter; <c>null</c>
     /// for any other call, which the declarative mapping lowers. The 64-bit
     /// integers keep their own check (MS0066, spec 012 FR-037).
     /// </summary>
@@ -70,12 +71,8 @@ public sealed partial class IrExpressionExtractor
         var type = symbol.ContainingType;
         var format = _semantic.GetConstantValue(argument.Expression);
 
-        if (HonorsFormatClauses && !format.HasValue)
-            return ReportUnsupportedFormat(
-                argument.GetLocation(),
-                $"A format that is not a constant is not supported for '{DisplayNameOf(type)}' in "
-                    + "TypeScript; the call throws at run time."
-            );
+        if (!format.HasValue)
+            return RewriteRunTimeFormatCall(argument, type);
 
         var constantFormat = format.Value as string ?? "";
 
@@ -93,6 +90,34 @@ public sealed partial class IrExpressionExtractor
         && _semantic.GetConstantValue(clause.Value) is { HasValue: true, Value: int alignment }
             ? alignment
             : null;
+
+    /// <summary>
+    /// <c>ToString(format)</c> whose format is known only at run time:
+    /// <c>null</c> where the runtime formatter decides it (an integer or a
+    /// <c>double</c> in TypeScript, which throws <c>FormatException</c> or
+    /// <c>NotSupportedException</c> for a format it does not implement, as
+    /// <c>formatInt64</c> does), the reported placeholder otherwise.
+    /// </summary>
+    private IrUnsupportedExpression? RewriteRunTimeFormatCall(
+        ArgumentSyntax argument,
+        ITypeSymbol type
+    )
+    {
+        var hasFormatter =
+            HonorsFormatClauses
+            && FormattedKindOf(type) is { } kind
+            && NumericFormatSupport.HasFormatter(kind);
+
+        if (hasFormatter)
+            return null;
+
+        var message = HonorsFormatClauses
+            ? $"Format strings are not supported for '{DisplayNameOf(type)}' in TypeScript; "
+                + "the call throws at run time."
+            : UnsupportedFormatMessage(type, "", "call");
+
+        return ReportUnsupportedFormat(argument.GetLocation(), message);
+    }
 
     /// <summary>
     /// Why the target cannot honor a hole's clauses, or <c>null</c> when it

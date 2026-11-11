@@ -4,9 +4,10 @@
 // `formatDouble`. Both implement .NET's invariant-culture standard numeric formats, as
 // `formatInt64` does for `long` / `ulong` (Int64.cs) and as an interpolation hole's format
 // clause does. The provider is ignored (#308) and, as in every provider overload, not
-// evaluated. The core reports a format the runtime does not implement, and a format that is
-// not a constant, before these mappings run (MS0001); `float` has no mapping, so its
-// ToString(format) always reports.
+// evaluated. The core reports a constant format the runtime does not implement before these
+// mappings run (MS0001); a format known only at run time reaches the formatter, which throws
+// FormatException or NotSupportedException for what it does not implement, and a null one
+// formats as `G`. `float` has no mapping, so its ToString(format) always reports.
 
 using Metano.Annotations;
 

@@ -326,13 +326,19 @@ Product requirements added after the migration (normative; each one is traced by
      under Bun and Node.
   3. *Unsupported clauses.* A clause the target's runtime does not format as .NET does
      MUST report `MS0001` (warning) at the hole, or at the format argument of
-     `ToString(format)`, and lower to the throwing placeholder: in TypeScript, a custom
-     numeric format (`0.00`, `#,##0`), the integers' `B`, a format on any other type
-     (`decimal`, `float`, date and time types, `Guid`, an enum, a user `IFormattable`
-     type, `object`, a type parameter) and a `ToString(format)` whose format is not a
-     constant. The 64-bit integers keep `MS0066` for their unsupported formats (spec 012
+     `ToString(format)`, and lower to the throwing placeholder: in TypeScript, a constant
+     custom numeric format (`0.00`, `#,##0`), a constant `B` on an integer, and any format,
+     constant or not, on a type without a formatter (`decimal`, `float`, date and time
+     types, `Guid`, an enum, a user `IFormattable` type, `object`, a type parameter). A
+     `ToString(format)` whose format is not a constant, on an integer or a `double`, MUST
+     call the formatter with the format expression (receiver and format each evaluated
+     once, in C# order), which decides at run time: a `null` format is `G`, as
+     `ToString((string?)null)` is on .NET; a custom format or `B` throws
+     `NotSupportedException` naming the format (`The format '0.00' is not supported for
+     double in TypeScript.`); a format .NET rejects throws .NET's `FormatException`. The
+     64-bit integers keep `MS0066` for their unsupported constant formats (spec 012
      FR-037). Dart honors no clause yet: every hole with a clause, and `ToString(format)`
-     on a 32-bit-or-narrower integer, `double` or `float`, reports.
+     on a 32-bit-or-narrower integer, `double` or `float`, constant or not, reports.
   4. *Default conversion unchanged.* A hole without a clause, and `ToString()` without a
      format, MUST emit exactly what they emitted before; the default conversion of `bool`,
      `double` and `float` stays the rest of #308.

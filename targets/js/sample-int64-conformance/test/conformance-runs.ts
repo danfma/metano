@@ -2,8 +2,7 @@
  * The fixtures of the spec 012 reference conformance and the transpiled twin
  * modules each runs against, shared by the bun test and the Node run so the
  * two cannot drift apart. `project-checked.json` runs against the sibling
- * twin, compiled with `CheckForOverflowUnderflow`; `number-formatting.json`
- * also runs against the hand-written runtime formatter twin. Relative imports: Node 24 rejects `#/` subpath
+ * twin, compiled with `CheckForOverflowUnderflow`. Relative imports: Node 24 rejects `#/` subpath
  * specifiers.
  */
 
@@ -33,7 +32,6 @@ import * as tupleConversions from "../src/sample-int64-conformance/tuple-convers
 import * as unsignedBits from "../src/sample-int64-conformance/unsigned-bits.ts";
 
 import type { Twin } from "./conformance.ts";
-import { runtimeFormatters } from "./runtime-formatters.ts";
 
 export { loadFixture, mismatchesOf } from "./conformance.ts";
 
@@ -52,7 +50,7 @@ export const FIXTURE_RUNS: readonly FixtureRun[] = [
     name: "formatting.json",
     twin: [formatting, parsing, convertCalls, DecimalConvertCalls],
   },
-  { name: "number-formatting.json", twin: [numberFormatting, runtimeFormatters] },
+  { name: "number-formatting.json", twin: [numberFormatting] },
   { name: "comparisons.json", twin: [comparisons] },
   { name: "indexing.json", twin: [indexing] },
   { name: "tuples.json", twin: [tupleConversions] },
