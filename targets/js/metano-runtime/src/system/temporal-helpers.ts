@@ -136,7 +136,8 @@ export function plainTime(
 /**
  * `new DateTime(year, month, day, hour, minute, second, millisecond)`: the
  * `Temporal.PlainDateTime`, or .NET's `ArgumentOutOfRangeException` for a
- * component out of range.
+ * component out of range, checked in .NET's order (the date, the time, the
+ * millisecond).
  */
 export function plainDateTime(
   year: number,
@@ -147,22 +148,23 @@ export function plainDateTime(
   second = 0,
   millisecond = 0,
 ): Temporal.PlainDateTime {
-  assertTime(hour, minute, second, millisecond);
-
   if (!isRepresentableDate(year, month, day)) {
     throw new ArgumentOutOfRangeException(null, undefined, UNREPRESENTABLE_DATE_MESSAGE);
   }
 
+  assertTime(hour, minute, second, millisecond);
+
   return new Temporal.PlainDateTime(year, month, day, hour, minute, second, millisecond);
 }
 
+/** .NET's order: the hour, minute and second first, then the millisecond. */
 function assertTime(hour: number, minute: number, second: number, millisecond: number): void {
-  if (!isInRange(millisecond, 999)) {
-    throw new ArgumentOutOfRangeException("millisecond", undefined, MILLISECOND_MESSAGE);
-  }
-
   if (!isInRange(hour, 23) || !isInRange(minute, 59) || !isInRange(second, 59)) {
     throw new ArgumentOutOfRangeException(null, undefined, UNREPRESENTABLE_TIME_MESSAGE);
+  }
+
+  if (!isInRange(millisecond, 999)) {
+    throw new ArgumentOutOfRangeException("millisecond", undefined, MILLISECOND_MESSAGE);
   }
 }
 
