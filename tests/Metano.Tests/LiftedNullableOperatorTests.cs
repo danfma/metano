@@ -286,14 +286,18 @@ public class LiftedNullableOperatorTests
         await Assert.That(output).Contains("return `q=${o.qty ?? \"\"};${s ?? \"\"}`;");
     }
 
+    /// <summary>
+    /// A hole with a clause passes the value as it is: the runtime formatter
+    /// prints a <c>null</c> as <c>""</c> (baseline FR-051).
+    /// </summary>
     [Test]
-    public async Task InterpolationWithFormatClause_StillFormatsNullAsEmptyString()
+    public async Task InterpolationWithFormatClause_FormatsNullThroughTheFormatter()
     {
         var output = TranspileInHelperClass(
             "public static string Show(Order o) => $\"q={o.Qty:D2}\";"
         );
 
-        await Assert.That(output).Contains("return `q=${o.qty ?? \"\"}`;");
+        await Assert.That(output).Contains("return `q=${formatInteger(o.qty, 32, \"D2\")}`;");
     }
 
     [Test]

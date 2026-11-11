@@ -179,6 +179,9 @@ public sealed partial class IrExpressionExtractor
             // those through the rewriter façade would touch 5+ call sites
             // for one rewriter's benefit.
             new Invocation.ExtensionMethodRewriter(TryRewriteExtensionCall),
+            // Reports `ToString(format)` on a number whose format the runtime
+            // does not format as .NET does (#323).
+            new Invocation.UnsupportedFormatCallRewriter(RewriteUnsupportedFormatCall),
             // These two must stay last: they report the LINQ (#648) and
             // MemoryExtensions (#657) calls none of the entries above lowered.
             new Invocation.UnsupportedLinqCallRewriter(RewriteUnsupportedLinqCall),
@@ -3518,21 +3521,6 @@ public sealed partial class IrExpressionExtractor
         }
         return new IrStringInterpolation(parts);
     }
-
-    private IrInterpolationExpression ExtractInterpolationExpression(InterpolationSyntax hole) =>
-        new(
-            ExtractInterpolationHole(hole),
-            hole.FormatClause?.FormatStringToken.ValueText,
-            InterpolationAlignment(hole),
-            SixtyFourBitKindOf(hole.Expression)
-        );
-
-    /// <summary>The constant alignment of a hole (<c>{x,8}</c>), or <c>null</c> without one.</summary>
-    private int? InterpolationAlignment(InterpolationSyntax hole) =>
-        hole.AlignmentClause is { } clause
-        && _semantic.GetConstantValue(clause.Value) is { HasValue: true, Value: int alignment }
-            ? alignment
-            : null;
 
     /// <summary>The kind of a non-nullable <c>long</c> or <c>ulong</c> value, or <c>null</c>.</summary>
     private IrNumericKind? SixtyFourBitKindOf(ExpressionSyntax expression)

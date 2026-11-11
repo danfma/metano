@@ -299,6 +299,8 @@ internal static class BoundaryOperands
         "G19",
         "G20",
         "R",
+        "R5",
+        "r3",
         "D",
         "D8",
         "d3",
@@ -314,9 +316,182 @@ internal static class BoundaryOperands
         "X0",
         "x4",
         "X20",
+        "E",
+        "e2",
+        "E0",
+        "P",
+        "P0",
+        "p3",
+        "C",
+        "C0",
+        "c4",
         "Q",
         "Z",
         "D1000000000",
+    ];
+
+    /// <summary>
+    /// The standard numeric formats of <c>double</c> and the integers held in
+    /// a JS <c>number</c> (baseline FR-051): every letter with and without a
+    /// precision, both cases, precisions past a double's 17 digits, and
+    /// formats .NET rejects for one of the two families (<c>D</c> and
+    /// <c>X</c> for <c>double</c>). The custom formats, and the integers'
+    /// <c>B</c>, which the runtime rejects with NotSupportedException
+    /// (MS0001), diverge by design and are covered by the runtime tests.
+    /// </summary>
+    private static readonly object?[] NumberFormatValues =
+    [
+        null,
+        "",
+        "G",
+        "g",
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G5",
+        "G15",
+        "G16",
+        "G17",
+        "g20",
+        "G30",
+        "R",
+        "r",
+        "R5",
+        "r3",
+        "F",
+        "F0",
+        "F1",
+        "F2",
+        "f3",
+        "F10",
+        "F20",
+        "F40",
+        "N",
+        "N0",
+        "n1",
+        "N3",
+        "E",
+        "E0",
+        "e1",
+        "E2",
+        "E16",
+        "E20",
+        "E40",
+        "P",
+        "P0",
+        "p1",
+        "P4",
+        "C",
+        "C0",
+        "c3",
+        "D",
+        "D0",
+        "D5",
+        "d12",
+        "X",
+        "x",
+        "X8",
+        "x2",
+        "Z",
+        "q3",
+        "D1000000000",
+    ];
+
+    /// <summary>
+    /// The <c>double</c> operands of the formatters (baseline FR-051): zeros,
+    /// the midpoints that are exact (<c>0.125</c>, <c>2.5</c>: half to even)
+    /// and those that only look like one (<c>2.675</c>, <c>1.005</c>: below
+    /// it), values on both sides of every notation switch (<c>1E-05</c>,
+    /// <c>0.0001</c>, 15 to 17 digits, <c>1E+21</c>), the extremes, a
+    /// subnormal, powers of two whose shortest digits are asymmetric, a
+    /// widened <c>float</c>, and the non-finite values.
+    /// </summary>
+    private static readonly object?[] FormattedDoubleValues =
+    [
+        0.0,
+        -0.0,
+        1.0,
+        -1.0,
+        0.5,
+        1.5,
+        2.5,
+        -0.5,
+        -2.5,
+        0.125,
+        0.375,
+        0.625,
+        -0.125,
+        2.675,
+        1.005,
+        1.45,
+        9.995,
+        0.045,
+        0.015,
+        0.005,
+        0.025,
+        0.95,
+        0.05,
+        99.5,
+        999.5,
+        123.456,
+        -123.456,
+        0.1,
+        0.2,
+        0.1 + 0.2,
+        1.0 / 3,
+        2.0 / 3,
+        -0.001,
+        1e-7,
+        1e-5,
+        0.0001,
+        0.00012345,
+        12345.6789,
+        1234567.891,
+        100.0,
+        1e15,
+        1e16,
+        1e17,
+        123456789012345678.0,
+        9007199254740993.0,
+        4294967296.0,
+        1e21,
+        1e22,
+        1e23,
+        8.41e21,
+        1e100,
+        1e-100,
+        1152921504606846976.0,
+        1180591620717411303424.0,
+        8.98846567431158e307,
+        (double)0.1f,
+        double.MaxValue,
+        double.MinValue,
+        double.Epsilon,
+        2.2250738585072014e-308,
+        4.35e-310,
+        double.NaN,
+        double.PositiveInfinity,
+        double.NegativeInfinity,
+    ];
+
+    /// <summary>
+    /// The <c>int</c> operands of the formatters: the boundary operands plus
+    /// the values whose rounding to fewer significant digits carries or meets
+    /// a midpoint (<c>25</c> → <c>3E+001</c>, half away from zero).
+    /// </summary>
+    private static readonly object?[] FormattedInt32Values =
+    [
+        .. Int32Values,
+        7,
+        25,
+        -25,
+        125,
+        255,
+        999,
+        12345,
+        1250000,
+        -1234567,
     ];
 
     /// <summary>
@@ -435,15 +610,18 @@ internal static class BoundaryOperands
 
     /// <summary>
     /// The operands of <paramref name="parameter"/>: its name picks the
-    /// <c>string</c>, base, index, length, array, boxed, narrowing-source
-    /// and non-zero operands (<c>format</c>, <c>text</c>, <c>fromBase</c>,
-    /// <c>index</c>, <c>length</c>, <c>values</c>, <c>boxed</c>,
-    /// <c>source</c>, <c>divisor</c>), its type the others.
+    /// <c>string</c>, base, index, length, array, boxed, narrowing-source,
+    /// non-zero and formatter operands (<c>format</c>, <c>numberFormat</c>,
+    /// <c>text</c>, <c>fromBase</c>, <c>index</c>, <c>length</c>,
+    /// <c>values</c>, <c>boxed</c>, <c>source</c>, <c>divisor</c>,
+    /// <c>formatted</c>), its type the others.
     /// </summary>
     public static IReadOnlyList<object?> For(ParameterInfo parameter) =>
         parameter.Name switch
         {
             "format" => FormatValues,
+            "numberFormat" => NumberFormatValues,
+            "formatted" => FormattedValuesFor(parameter.ParameterType),
             "text" => TextValues,
             "fromBase" => BaseValues,
             "index" => IndexValues,
@@ -469,6 +647,21 @@ internal static class BoundaryOperands
                 TypeCode.UInt32 => UInt32SourceValues,
                 TypeCode.Int64 => Int64SourceValues,
                 TypeCode.UInt64 => UInt64SourceValues,
+                _ => ValuesOf(type),
+            };
+
+    /// <summary>
+    /// The operands of a formatter's <c>formatted</c> parameter: the richer
+    /// sets of <c>double</c> and <c>int</c>, the type's own operands
+    /// otherwise; a nullable parameter also gets <c>null</c>.
+    /// </summary>
+    private static IReadOnlyList<object?> FormattedValuesFor(Type type) =>
+        Nullable.GetUnderlyingType(type) is { } underlying
+            ? [.. FormattedValuesFor(underlying), null]
+            : Type.GetTypeCode(type) switch
+            {
+                TypeCode.Double => FormattedDoubleValues,
+                TypeCode.Int32 => FormattedInt32Values,
                 _ => ValuesOf(type),
             };
 

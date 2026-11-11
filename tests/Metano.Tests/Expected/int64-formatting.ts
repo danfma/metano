@@ -1,4 +1,4 @@
-import { compareInt64, formatInt64, objectEquals, parseInt64, parseUInt64, tryParseInt64, tryParseUInt64 } from "metano-runtime";
+import { compareInt64, formatInt64, formatInteger, objectEquals, parseInt64, parseUInt64, tryParseInt64, tryParseUInt64 } from "metano-runtime";
 
 export class Text {
   constructor() { }
@@ -16,11 +16,11 @@ export class Text {
   }
 
   nullableHole(l: bigint | null): string {
-    return `${l ?? ""}`;
+    return `${formatInt64(l, "N0")}`;
   }
 
   intHole(i: number): string {
-    return `${i}`;
+    return `${formatInteger(i, 32, "X")}`;
   }
 
   parse(s: string): bigint {

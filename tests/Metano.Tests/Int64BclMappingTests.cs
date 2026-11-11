@@ -111,7 +111,7 @@ public class Int64BclMappingTests
         [Transpile]
         public class Unsupported
         {
-            public string Currency(long l) => l.ToString("C");
+            public string Binary(long l) => l.ToString("B");
             public string Custom(long l) => $"{l:#,##0}";
             public string Invalid(long l) => l.ToString("Q");
             public long Float(string s) => long.Parse(s, NumberStyles.Float);
@@ -329,7 +329,7 @@ public class Int64BclMappingTests
             .ToList();
 
         await Assert.That(messages).Count().IsEqualTo(3);
-        await Assert.That(messages[0]).StartsWith("Format 'C' is not supported");
+        await Assert.That(messages[0]).StartsWith("Format 'B' is not supported");
         await Assert.That(messages[1]).StartsWith("Format '#,##0' is not supported");
         await Assert.That(messages[2]).StartsWith("NumberStyles value 167 is not supported");
 
@@ -337,7 +337,7 @@ public class Int64BclMappingTests
             .That(diagnostics.Where(d => d.Code == UnsupportedFormat))
             .All(d => d.Severity == MetanoDiagnosticSeverity.Warning);
 
-        await Assert.That(files["unsupported.ts"]).Contains("return formatInt64(l, \"C\");");
+        await Assert.That(files["unsupported.ts"]).Contains("return formatInt64(l, \"B\");");
         await Assert.That(files["unsupported.ts"]).Contains("return parseInt64(s, 167);");
 
         await Assert
