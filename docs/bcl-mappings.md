@@ -125,6 +125,7 @@ automatically whenever any Temporal mapping is used.
 | `array.IndexOf(item, null)` (a `null` constant comparer, also `Contains` / `LastIndexOf`) | `array.indexOf(item)` |
 | `span.StartsWith(s)` / `EndsWith(s)` / `IndexOf(s)` / `LastIndexOf(s)` / `Trim()` / `TrimStart()` / `TrimEnd()` on a `ReadOnlySpan<char>` | the string method of the same name |
 | `span.Reverse()` on a `Span<T>` | `span.reverse()` (in place) |
+| `array.Sort(comparison)` / `span.Sort(comparison)` | `array.sort(comparison)` (in place) |
 | any other `MemoryExtensions` call | `MS0001`, throws at run time |
 
 C# 14 converts an array (and a string) to `ReadOnlySpan<T>` / `Span<T>`
@@ -135,31 +136,48 @@ the string a `ReadOnlySpan<char>` was converted from.
 
 - `Contains` / `IndexOf` / `LastIndexOf` with the value alone lower to the
   `List<T>` methods. A comparer that is omitted or the `null` constant
-  (`null`, `default`, a cast, a `const`) is dropped, also when a named argument
-  is written (`nullables.Contains(value: x)` → `nullables.includes(x)`; an
+  (`null`, `default`, a cast, a `const`) is dropped from every
+  `MemoryExtensions` call, also when a named argument is written (`nullables.Contains(value: x)` → `nullables.includes(x)`; an
   `int?[]` receiver binds the comparer overload because `int?` is not
   `IEquatable<T>`).
 - The string searches (`StartsWith`, `EndsWith`, the parameterless `Trim`
   family, the subsequence `IndexOf` / `LastIndexOf`) lower to the string
-  methods only on a `string` or `ReadOnlySpan<char>` receiver. On an array
+  methods only on a `string` or `ReadOnlySpan<char>` receiver (a cast such as
+  `((string)o).StartsWith(span)` counts as a `string`). On an array
   (`char[]` included) or a `Span<char>` they report: `array.IndexOf(otherArray)`
   and `chars.IndexOf("bc")` search for a sequence, which `Array.indexOf` does
   not.
 - Every other `MemoryExtensions` call reports `MS0001` and emits an expression
   that throws: a comparer that is not the `null` constant, a `StringComparison`
-  overload, `SequenceEqual`, `Sort`, `BinarySearch`, `IndexOfAny`,
+  overload, `SequenceEqual`, the parameterless `Sort()` (its previous
+  `array.sort()` compared the elements as strings: right for `char[]` and
+  `bool[]`, wrong for numbers from 10 up, `long`, `decimal`, `string`, string
+  enums, `bool?` and `Guid`; pass a comparison instead, such as
+  `(x, y) => x - y` for numbers or `(x, y) => x < y ? -1 : x > y ? 1 : 0` for
+  `char`), `Sort(comparer)`, `BinarySearch`, `IndexOfAny`,
   `ContainsAny`, `Count(value)`, `AsSpan`, `Trim(c)`, the static form
   `MemoryExtensions.Contains(array, x)`, and a string receiver such as
   `text.Count('a')`.
 - A lookup over a tuple element (`pairs.Contains((3, 4))`) lowers and reports
-  `MS0001`, as on `List<(int, int)>`.
+  `MS0001`, as on `List<(int, int)>`; a tuple search the rules above report is
+  reported once.
 
 `includes` / `indexOf` / `lastIndexOf` compare like `List<T>.Contains` /
 `IndexOf`: by value for numbers, `bigint`s and strings, by reference for
 records, record structs, `decimal` and `DateTime` values (C# compares them by
 value), and `indexOf` / `lastIndexOf` do not find `NaN` (C# finds it;
-`includes` does). A `ReadOnlySpan<char>` over a `char[]` lowers to an array,
-on which the string searches do not exist.
+`includes` does). `sort(comparison)` is stable where .NET's sort is not.
+
+Known limitations, emitted with no diagnostic (as before #657):
+
+- A `ReadOnlySpan<char>` over a `char[]` lowers to an array. Its
+  `StartsWith`, `EndsWith` and `Trim` family throw (`Array` has none of
+  them), and `IndexOf("ab")` / `LastIndexOf("ab")` call `Array.indexOf`,
+  which looks for the string as an element and returns `-1`.
+- A string searched for a `char[]` (`text.IndexOf(chars)`,
+  `text.StartsWith(chars)`) passes the array to the string method, which
+  compares with its string form (`"c,a"`) and answers wrongly.
+- A `Memory<T>.Span` receiver throws: `Memory<T>` is not mapped.
 
 ### Immutable collections
 

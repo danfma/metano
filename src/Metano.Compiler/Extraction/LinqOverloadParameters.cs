@@ -10,12 +10,6 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public readonly record struct LinqOverloadParameters
 {
-    /// <summary>
-    /// The name every .NET LINQ overload gives its <c>IEqualityComparer&lt;T&gt;</c>
-    /// or <c>IComparer&lt;T&gt;</c> parameter.
-    /// </summary>
-    public const string ComparerParameterName = "comparer";
-
     private readonly ImmutableArray<string> _names;
 
     private LinqOverloadParameters(ImmutableArray<string> names) => _names = names;
@@ -29,11 +23,12 @@ public readonly record struct LinqOverloadParameters
             : _names;
 
     /// <summary>Whether the overload takes a comparer.</summary>
-    public bool PassesComparer => Names.Contains(ComparerParameterName, StringComparer.Ordinal);
+    public bool PassesComparer =>
+        Names.Contains(IrExpressionExtractor.ComparerParameterName, StringComparer.Ordinal);
 
     /// <summary>The same overload without its comparer parameter.</summary>
     public LinqOverloadParameters WithoutComparer() =>
-        new([.. Names.Where(name => name != ComparerParameterName)]);
+        new([.. Names.Where(name => name != IrExpressionExtractor.ComparerParameterName)]);
 
     public bool Equals(LinqOverloadParameters other) =>
         Names.SequenceEqual(other.Names, StringComparer.Ordinal);

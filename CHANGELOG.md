@@ -390,39 +390,59 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   JavaScript array does not have (`array.contains(x)`,
   `array.sequenceEqual(other)`), which failed `tsc` and threw at run time.
   Some ran with a wrong result: `array.Sort()` sorted numbers as strings
-  (`[10, 9, 100]` gave `10,100,9`), `array.LastIndexOf(x, null)` read the
-  `null` comparer as a start index and returned `-1`, and
+  (`[10, 9, 100]` gave `10,100,9`), `array.LastIndexOf(x, null)` and
+  `text.EndsWith(x, null)` read the `null` comparer as a position, and
   `array.IndexOf(otherArray)` looked for the array as an element.
 - Fixed: `array.Contains(x)` emits `array.includes(x)`, the output of
   `List<T>.Contains`. A comparer that is omitted or the `null` constant
-  (`null`, `default`, a cast or a `const`) on `Contains` / `IndexOf` /
-  `LastIndexOf` is dropped (`array.IndexOf(4, null)` emits
-  `array.indexOf(4)`), also when a named argument is written
-  (`nullables.Contains(value: x)` emits `nullables.includes(x)`).
+  (`null`, `default`, a cast or a `const`) is dropped from every
+  `MemoryExtensions` call (`array.IndexOf(4, null)` emits `array.indexOf(4)`,
+  `text.EndsWith('b', null)` emits `text.endsWith("b")`), also when a named
+  argument is written (`nullables.Contains(value: x)` emits
+  `nullables.includes(x)`).
 - Unchanged, now through declarative mappings: `array.IndexOf(x)` /
   `LastIndexOf(x)` (`indexOf` / `lastIndexOf`), the searches of a
   `ReadOnlySpan<char>` over a string (`StartsWith`, `EndsWith`, `IndexOf`,
   `LastIndexOf` with a char or a string, the parameterless `Trim` /
-  `TrimStart` / `TrimEnd`, which become the string methods), and
-  `Span<T>.Reverse()` (`reverse()`, in place). `array.Reverse()` binds
-  `Enumerable.Reverse` and is unchanged.
+  `TrimStart` / `TrimEnd`, which become the string methods; also on a
+  `string` receiver written as a cast, `((string)o).StartsWith(span)`),
+  `Span<T>.Reverse()` (`reverse()`, in place) and `array.Sort(comparison)` /
+  `span.Sort(comparison)` (`sort(comparison)`, as `List<T>.Sort`).
+  `array.Reverse()` binds `Enumerable.Reverse` and is unchanged.
 - Behaviour change: every other `MemoryExtensions` call reports `MS0001` (a
   warning) at the method name and emits an expression that throws
   `Unsupported expression: UnloweredSpanCall` at run time: a comparer that is
   not the `null` constant, a `StringComparison` overload, `SequenceEqual`,
-  `Sort` (previously wrong for numbers, see above), `BinarySearch`,
+  the parameterless `Sort()`, `Sort(comparer)`, `BinarySearch`,
   `IndexOfAny`, `ContainsAny`, `Count(value)`, `AsSpan`, `Trim(c)`, the static
   form, a string receiver such as `text.Count('a')`, and the string searches
   (`StartsWith`, `EndsWith`, the `Trim` family, the subsequence `IndexOf` /
   `LastIndexOf`) on an array (`char[]` included) or a `Span<char>`, which
   lower to JavaScript arrays (`array.IndexOf(otherArray)`,
   `chars.IndexOf("bc")`).
+- `Sort()` reports for every element type. Its previous output,
+  `array.sort()`, compared the elements as strings: right for `char[]` and
+  `bool[]` arrays, which now report, and wrong for numbers from 10 up,
+  `long`, `decimal`, `string` (culture order), string enums, `bool?` and
+  `Guid`. A sort that picks the right default comparison by element type
+  belongs in a runtime helper and is a follow-up. Workaround: pass the
+  comparison, `a.Sort((x, y) => x - y)` for numbers,
+  `a.Sort((x, y) => x < y ? -1 : x > y ? 1 : 0)` for `char`,
+  `a.Sort((x, y) => x == y ? 0 : x ? 1 : -1)` for `bool`.
 - A lookup over a tuple element (`pairs.Contains((3, 4))`) lowers to
   `includes` and reports `MS0001`, as the `List<(int, int)>` lookup does: the
   tuples lower to arrays, compared by reference.
 - Known limitations, shared with `List<T>`: `includes` and `indexOf` compare
-  records, record structs, `decimal` and `DateTime` values by reference, and
-  `indexOf` / `lastIndexOf` do not find `NaN`.
+  records, record structs, `decimal` and `DateTime` values by reference,
+  `indexOf` / `lastIndexOf` do not find `NaN`, and `sort(comparison)` is
+  stable where .NET's sort is not.
+- Known limitations, emitted with no diagnostic as before: a
+  `ReadOnlySpan<char>` over a `char[]` lowers to an array, so its
+  `StartsWith` / `EndsWith` / `Trim` throw and `IndexOf("ab")` /
+  `LastIndexOf("ab")` return `-1`; a string searched for a `char[]`
+  (`text.IndexOf(chars)`, `text.StartsWith(chars)`) compares with the
+  array's string form and answers wrongly; a `Memory<T>.Span` receiver
+  throws (`Memory<T>` is not mapped).
 - Dart output and diagnostics are unchanged.
 
 ### Toolchain

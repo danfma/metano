@@ -27,6 +27,8 @@ public class SpanExtensionCallTests
         {
             private const IEqualityComparer<int>? NoComparer = null;
 
+            private static int Descending(int x, int y) => y - x;
+
         """;
 
     [Test]
@@ -75,6 +77,8 @@ public class SpanExtensionCallTests
     [Arguments("int?[] xs", "xs.LastIndexOf(value: (int?)null)", "xs.lastIndexOf(null)")]
     [Arguments("int?[] xs, int x", "xs.Contains(x, comparer: null)", "xs.includes(x)")]
     [Arguments("int?[] xs, int x", "xs.Contains(comparer: null, value: x)", "xs.includes(x)")]
+    [Arguments("string s", "s.StartsWith('b', null)", "s.startsWith(\"b\")")]
+    [Arguments("string s", "s.EndsWith('b', comparer: null)", "s.endsWith(\"b\")")]
     public async Task NullComparer_LowersAsTheValueOverload(
         string parameters,
         string call,
@@ -109,6 +113,17 @@ public class SpanExtensionCallTests
     [Arguments("sp.TrimStart()", "sp.trimStart()")]
     [Arguments("sp.TrimEnd()", "sp.trimEnd()")]
     [Arguments("Span<int> s = xs; s.Reverse()", "s.reverse()")]
+    [Arguments("xs.Sort((x, y) => y - x)", "xs.sort((x: number, y: number) => y - x)")]
+    [Arguments(
+        "Span<int> s = xs; s.Sort((x, y) => y - x)",
+        "s.sort((x: number, y: number) => y - x)"
+    )]
+    [Arguments("xs.Sort(Descending)", "xs.sort(Calls.descending)")]
+    [Arguments("object o = sp.ToString(); ((string)o).StartsWith(sp)", "o.startsWith(sp)")]
+    [Arguments(
+        "object o = sp.ToString(); (o as string)!.IndexOf(sp)",
+        "(typeof o === \"string\" ? o : null)!.indexOf(sp)"
+    )]
     public async Task SpanOverStringOrArray_LowersToTheJavaScriptMethod(
         string statement,
         string expected
@@ -150,6 +165,31 @@ public class SpanExtensionCallTests
             .Contains("return pairs.includes([3, 4] as [number, number]);");
     }
 
+    /// <summary>
+    /// A tuple search the span rule reports is reported once, by the span
+    /// rule: the tuple comparison is moot for a call that throws.
+    /// </summary>
+    [Test]
+    [Arguments("pairs.Contains(t, same)", "Contains")]
+    [Arguments("MemoryExtensions.Contains(pairs, t)", "Contains")]
+    [Arguments("pairs.IndexOf(others)", "IndexOf")]
+    public async Task ReportedTupleSearch_ReportsOnce(string call, string method)
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Calling(
+                "(int, int)[] pairs, (int, int)[] others, (int, int) t, "
+                    + "IEqualityComparer<(int, int)> same",
+                call
+            )
+        );
+
+        var report = UnsupportedFeatures(diagnostics).Single();
+
+        await Assert
+            .That(report.Message)
+            .StartsWith($"The span method 'MemoryExtensions.{method}'");
+    }
+
     [Test]
     [Arguments("List<int> xs, int x", "xs.Contains(x)", "xs.includes(x)")]
     [Arguments("List<int> xs, int x", "xs.IndexOf(x)", "xs.indexOf(x)")]
@@ -182,6 +222,8 @@ public class SpanExtensionCallTests
     [Arguments("int[] xs, int[] ys", "xs.EndsWith(ys)")]
     [Arguments("int[] xs, int x", "xs.EndsWith(x)")]
     [Arguments("int[] xs", "xs.Sort()")]
+    [Arguments("char[] cs", "cs.Sort()")]
+    [Arguments("int[] xs", "xs.Sort(Comparer<int>.Default)")]
     [Arguments("int[] xs, int x", "xs.BinarySearch(x)")]
     [Arguments("int[] xs, int x", "xs.IndexOfAny(x, x)")]
     [Arguments("int[] xs, int[] ys", "xs.IndexOfAny(ys)")]

@@ -83,7 +83,7 @@ public partial class LinqRuntimeSignatureTests
                 await Assert
                     .That(
                         values.Any(value =>
-                            value.Name == LinqOverloadParameters.ComparerParameterName
+                            value.Name == IrExpressionExtractor.ComparerParameterName
                         )
                     )
                     .IsTrue()
