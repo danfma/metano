@@ -332,7 +332,8 @@ Product requirements added after the migration (normative; each one is traced by
      takes the format, the hole MUST lower, in order: to the clause-free hole when the
      target declares that its clause-free text is .NET's text for that format for every
      value (TypeScript: a `Guid`'s `D`, a numeric enum's `D`, a `[StringEnum]`'s `G` / `F`
-     with no renamed member, a `DateOnly`'s `O`, a `BigInteger`'s `G` / `R`); through the
+     with no renamed member, a `DateOnly`'s `O` and its `yyyy-MM-dd`, the same ISO text, a
+     `BigInteger`'s `G` / `R`); through the
      declarative mapping of the type's `ToString(string)` when one lowers it, for a
      non-nullable value (so a hole and the call cannot disagree; `Guid` maps `N`, `B`,
      `P`); otherwise it is unsupported (rule 4). `ToString(format)` and
@@ -367,8 +368,11 @@ Product requirements added after the migration (normative; each one is traced by
   6. *Out of scope.* This requirement does not cover `string.Format` composite formatting
      (`string.Format("{0:F2}", d)`, which keeps its unmapped call and its `MS0001`) or
      `FormattableString`, both tracked in #662, nor custom numeric format patterns
-     (reported, rule 4). Known silent gap: `Guid`'s `X` and an invalid `Guid` format reach
-     the fallback `Guid.ToString` mapping, which prints the hyphenated text.
+     (reported, rule 4), including the ones that equal the default text for every value of
+     a narrow type (`{b:#,##0}` on `sbyte` / `byte`), which stay reported. Known silent gap:
+     `Guid`'s `X` and an invalid `Guid` format reach the fallback `Guid.ToString` mapping,
+     which prints the hyphenated text; restricting the fallback needs the mapping port to
+     see literal filters (#657).
 
 ### Key Entities
 

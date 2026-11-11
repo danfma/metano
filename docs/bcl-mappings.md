@@ -574,7 +574,8 @@ standard numeric format strings in the invariant culture, with the same output a
 - **A format that is the default text.** Where the clause-free text already is .NET's text
   for the format, for every value, the hole and `ToString(format)` print it: a `Guid`'s
   `D`, a numeric enum's `D`, a `[StringEnum]`'s `G` / `F` (when no member is renamed), a
-  `DateOnly`'s `O` and a `BigInteger`'s `G` / `R`, in either letter case
+  `DateOnly`'s `O` and the custom `yyyy-MM-dd` (exactly; the same ISO text), and a
+  `BigInteger`'s `G` / `R`, the standard letters in either case
   (`c.ToString("D")` becomes `` `${c}` ``). The TypeScript target declares this list
   (`TsNumericFormats.PrintsAsDefaultText`).
 - **Through the type's mapping.** A hole is `value.ToString(format)`: where a declarative
