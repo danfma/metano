@@ -8,8 +8,8 @@
 // `as`, patterns and `catch` test `instanceof` on it. `FromPackage` is the class's module
 // specifier, so a program that throws one exception loads (and bundles) that module only.
 // A BCL exception without an entry here has no runtime class: a construction reports
-// MS0001 and emits the runtime `Exception` with the type name in its message, and a type
-// test reports MS0045.
+// MS0001 and emits the runtime `Exception` carrying the C# type name as its identity
+// (`namedException`), and a type test reports MS0045.
 //
 // The runtime classes extend `Error`, so `Message` lines up by camelCase (`message`); the
 // inner exception travels as the ES2022 `cause` option and the stack trace as `stack`.

@@ -826,8 +826,10 @@ public sealed class Printer(string indent = "  ")
 
                 if (field.Static)
                     _sb.Write("static ");
+
                 if (field.Override)
                     _sb.Write("override ");
+
                 if (field.Readonly)
                     _sb.Write("readonly ");
                 _sb.Write(field.Name);

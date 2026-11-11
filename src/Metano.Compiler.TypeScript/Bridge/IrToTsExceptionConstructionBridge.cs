@@ -13,17 +13,18 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Arguments by class:
 /// <list type="bullet">
 ///   <item>A mapped class receives the arguments by role, in its
-///   constructor's order, and composes <c>Message</c> as .NET does itself (default message, <c>" (Parameter 'name')"</c>,
+///   constructor's order, and composes <c>Message</c> as .NET does itself
+///   (default message, <c>" (Parameter 'name')"</c>,
 ///   <c>"\nActual value was X."</c>, <c>"\nObject name: 'x'."</c>):
 ///   <c>new ArgumentOutOfRangeException("p", undefined, "m")</c>.</item>
 ///   <item>The base call of a user exception deriving from
-///   <c>System.Exception</c>, and an unmapped exception (which constructs the
-///   root <c>Exception</c>), pass a message this bridge composes and the inner
-///   exception. <c>System.Exception</c>'s default message names the user
-///   class, which the runtime cannot know; an unmapped exception's
-///   <c>new</c> starts the message with its type name
-///   (<c>"System.TimeoutException: late"</c>), the one trace of its identity
-///   left.</item>
+///   <c>System.Exception</c>, an unmapped exception (which constructs the
+///   root <c>Exception</c>, its <c>new</c> through
+///   <c>namedException("System.IO", "IOException", message, inner)</c>, so
+///   the C# type survives as its identity), and a construction passing a role
+///   its class does not take, pass a message this bridge composes and the
+///   inner exception. <c>System.Exception</c>'s default message names the user
+///   class, which the runtime cannot know.</item>
 /// </list>
 /// A composed message is the <c>message</c> argument, or the type's default
 /// message when it is absent or a <c>null</c> literal — and, when nullable
@@ -210,6 +211,7 @@ public static class IrToTsExceptionConstructionBridge
     {
         var operands = ErrorOperands.Bind(construction, creation.Arguments, context);
         var exceptionClass = ClassOf(construction);
+
         var arguments = BuildArguments(
             construction,
             operands,
@@ -311,18 +313,21 @@ public static class IrToTsExceptionConstructionBridge
         var composer = new ErrorMessageComposer();
 
         AppendBaseMessage(composer, construction, operands);
+
         AppendNamedSuffix(
             composer,
             plan.FoldedValueOf(IrExceptionArgumentRole.ObjectName, operands),
             "\nObject name: '",
             "'."
         );
+
         AppendNamedSuffix(
             composer,
             plan.FoldedValueOf(IrExceptionArgumentRole.ParamName, operands),
             " (Parameter '",
             "')"
         );
+
         AppendActualValue(
             composer,
             plan.FoldedValueOf(IrExceptionArgumentRole.ActualValue, operands)
