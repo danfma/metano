@@ -190,6 +190,27 @@ public class NarrowIntegerLoweringTests
         }
         """;
 
+    private const string AwaitedStoreSource = """
+        using System.Threading.Tasks;
+
+        [Transpile]
+        public class Stores
+        {
+            public int Signed;
+            public uint Unsigned;
+            public long Wide;
+
+            public Stores Next() => this;
+            public Task<int> CountAsync() => Task.FromResult(1);
+            public Task<long> WideAsync() => Task.FromResult(1L);
+
+            public async Task ShiftLeft(Stores h) { h.Next().Signed <<= await CountAsync(); }
+            public async Task ShiftRight(Stores h) { h.Next().Unsigned >>= await CountAsync(); }
+            public async Task Add(Stores h) { h.Next().Wide += await WideAsync(); }
+            public void Plain(Stores h, int n) { h.Next().Signed <<= n; }
+        }
+        """;
+
     private const string ProjectCheckedSource = """
         [Transpile]
         public class Project
@@ -485,6 +506,48 @@ public class NarrowIntegerLoweringTests
         await Assert.That(checks).Contains("a = a + 1;");
         await Assert.That(checks).Contains("this.total = this.total + 2;");
         await Assert.That(checks).Contains("int plain(int a, int b) => a + b * a - 1;");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// A store bound to a receiver evaluated once whose value awaits: Dart
+    /// rejects <c>await</c> in a closure that is not async, so the binding
+    /// is an async closure whose call is awaited.
+    /// </summary>
+    [Test]
+    public async Task Dart_AwaitsABoundStoreWhoseValueAwaits()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(AwaitedStoreSource);
+        var stores = files["stores.dart"];
+
+        await Assert
+            .That(stores)
+            .Contains(
+                "await ((receiver$temp$0) async => receiver$temp$0.signed = "
+                    + "(receiver$temp$0.signed << await this.countAsync()).toSigned(32))(h.next());"
+            );
+
+        await Assert
+            .That(stores)
+            .Contains(
+                "await ((receiver$temp$0) async => receiver$temp$0.unsigned = "
+                    + "receiver$temp$0.unsigned >> await this.countAsync())(h.next());"
+            );
+
+        await Assert
+            .That(stores)
+            .Contains(
+                "await ((receiver$temp$0) async => receiver$temp$0.wide = "
+                    + "receiver$temp$0.wide + await this.wideAsync())(h.next());"
+            );
+
+        await Assert
+            .That(stores)
+            .Contains(
+                "((receiver$temp$0) => receiver$temp$0.signed = "
+                    + "(receiver$temp$0.signed << n).toSigned(32))(h.next());"
+            );
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 

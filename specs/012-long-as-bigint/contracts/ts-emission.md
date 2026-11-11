@@ -148,8 +148,9 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 Dart (a 64-bit `int`): `(byte)i` → `i.toUnsigned(8)`, `(int)u` → `u.toSigned(32)`, `b += 1` →
 `b = (b + 1).toUnsigned(8)`, `u | v` → `(u | v).toUnsigned(32)`, `i << n` → `(i << n).toSigned(32)`,
 `i >>> n` → `(i.toUnsigned(32) >>> n).toSigned(32)`, `u >> n` → `u >> n`, `i <<= n` →
-`i = (i << n).toSigned(32)`, `u >>= n` → `u = u >> n`. A 32-bit shift count is not masked, so a
-variable count of 32 or more differs from C# (`a << 32` is `0`, C# gives `a`). Dart never throws in a
+`i = (i << n).toSigned(32)`, `u >>= n` → `u = u >> n`. A 32-bit shift count is not masked, so
+any count outside 0..31, constant or not, differs from C# unless the whole shift is a constant
+expression (`a << 32` is `0`, C# gives `a`); a negative count throws `ArgumentError`. Dart never throws in a
 checked context (DECIDED-19): checked `int` / `uint` arithmetic prints as its unchecked form
 (`checked(i + j)` → `i + j`), and a checked conversion or narrow store prints the narrowing of its
 unchecked form (`checked((byte)i)` → `i.toUnsigned(8)`).

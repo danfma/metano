@@ -486,8 +486,12 @@ public sealed record IrMemberInit(
 /// The operand kind of a built-in numeric operator (spec 012 FR-027,
 /// FR-028), so a target picks the division helper or converts a shift count
 /// without re-deriving types: the promoted left operand's kind (a shift's
-/// count stays <c>int</c>); <c>null</c> for any other operator, including
-/// enum and user-defined ones.
+/// count stays <c>int</c>). A compound shift the target's own operator
+/// computes as C# does carries it too (<c>i &lt;&lt;= n</c> on an
+/// <c>int</c>, <c>u &gt;&gt;= n</c> on a <c>uint</c>, spec 012 FR-076), so
+/// the target picks the operator; that node is built for the TypeScript
+/// target only. <c>null</c> for any other operator, including enum and
+/// user-defined ones, and for every other compound assignment.
 /// </param>
 public sealed record IrBinaryExpression(
     IrExpression Left,

@@ -6,12 +6,12 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The overflow reductions of the integers of 32 bits or fewer (spec 012
 /// FR-075–FR-077), which the targets hold in a type wider than the C# one
-/// (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>). The rules follow
-/// from C# and from holding the value in a wider type, and hold for every
-/// target, except the read of <c>uint</c> <c>&amp;</c>, <c>|</c> and
-/// <c>^</c>, which encodes a JavaScript fact and is tagged
-/// <c>TODO(#549)</c> where it is decided, until a target capability decides
-/// it:
+/// (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>). The stores, the
+/// wraps of <c>&lt;&lt;</c> and <c>~</c> and the checked arithmetic follow
+/// from C# alone. The reads of <c>int</c> <c>&gt;&gt;&gt;</c> and of
+/// <c>uint</c> <c>&amp;</c>, <c>|</c> and <c>^</c> encode how those targets
+/// represent the value and are tagged <c>TODO(#549)</c> where they are
+/// decided, until a target capability decides them:
 /// <list type="bullet">
 ///   <item>the value a compound assignment or an increment stores in an
 ///   <c>sbyte</c>, <c>byte</c>, <c>short</c> or <c>ushort</c> is narrowed
@@ -69,10 +69,12 @@ internal static class NarrowIntegerOverflow
                 kind,
                 IntegerValueRanges.ExactResult(operatorKind, left, right)
             ),
-            // `int` `>>>` shifts the 32-bit pattern, whose result every target
-            // holding it in a wider type reads back as signed (a count of 0
-            // keeps bit 31 set): JavaScript's `>>>` returns 32 unsigned bits,
-            // and Dart shifts the pattern read as unsigned.
+            // TODO(#549): `int` `>>>` shifts the 32-bit pattern, whose result a
+            // target holding it in a wider type reads back as signed (a count
+            // of 0 keeps bit 31 set): JavaScript's `>>>` returns 32 unsigned
+            // bits, and Dart shifts the pattern read as unsigned. That is a
+            // fact of those representations: a target with a native 32-bit
+            // `int` needs no read, so a target capability should decide it.
             BinaryOperatorKind.UnsignedRightShift => SignedBits(kind, left),
             _ => null,
         };
@@ -135,9 +137,11 @@ internal static class NarrowIntegerOverflow
     /// wrapping store keeps the same low bits either way.
     /// </summary>
     /// <remarks>
-    /// The read is the one <see cref="SignedBits"/> gives the binary
-    /// <c>&gt;&gt;&gt;</c>: every target that holds the 32-bit pattern in a
-    /// wider type needs it.
+    /// TODO(#549): the read is the one <see cref="SignedBits"/> gives the
+    /// binary <c>&gt;&gt;&gt;</c>. A target that holds the 32-bit pattern in
+    /// a wider type (a JavaScript <c>number</c>, a 64-bit Dart <c>int</c>)
+    /// needs it; one with a native 32-bit <c>int</c> does not, so a target
+    /// capability should decide it.
     /// </remarks>
     private static IntegerOverflowReduction? OperatorResultRead(
         BinaryOperatorKind operatorKind,

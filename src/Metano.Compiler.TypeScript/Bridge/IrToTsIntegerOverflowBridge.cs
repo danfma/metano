@@ -43,7 +43,7 @@ internal static class IrToTsIntegerOverflowBridge
     /// JavaScript's <c>&lt;&lt;</c> computes in 32 signed bits, which is that
     /// wrap already, so the shift is emitted as it is (FR-076).
     /// </summary>
-    public static bool IsNativeInt32Wrap(IrIntegerOverflow overflow) =>
+    private static bool IsNativeInt32Wrap(IrIntegerOverflow overflow) =>
         overflow
             is {
                 Kind: IrNumericKind.Int32,
