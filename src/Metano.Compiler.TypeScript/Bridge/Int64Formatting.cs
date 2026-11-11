@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -12,18 +11,17 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// (FR-037, FR-038): an interpolation hole over a <c>long</c> or
 /// <c>ulong</c> with a format or an alignment calls <c>formatInt64</c>, and
 /// <c>MS0066</c> warns about a constant format or <c>NumberStyles</c> the
-/// runtime does not implement. The supported sets mirror
+/// runtime does not implement. TODO(#662): the core reports the other
+/// numbers' unsupported formats as located MS0001
+/// (<see cref="TsNumericFormats"/>); unifying the two drops this report. The supported sets mirror
 /// <c>metano-runtime</c>'s <c>int64-format.ts</c> and
 /// <c>int64-parsing.ts</c>.
 /// </summary>
-internal static partial class Int64Formatting
+internal static class Int64Formatting
 {
     private const string Int64TypeName = "long";
 
     private const string UInt64TypeName = "ulong";
-
-    /// <summary>The standard format .NET defines for integers that <c>formatInt64</c> does not implement (binary).</summary>
-    private const char UnsupportedStandardFormat = 'B';
 
     /// <summary>The styles <c>int64-parsing.ts</c> implements.</summary>
     private static readonly HashSet<int> SupportedNumberStyles =
@@ -98,19 +96,13 @@ internal static partial class Int64Formatting
     }
 
     /// <summary>
-    /// A valid .NET format that <c>formatInt64</c> rejects: a custom format
-    /// (anything but a letter and an optional precision) or the
-    /// unimplemented standard letter. An invalid standard letter (<c>Q</c>)
-    /// is not reported: .NET throws <c>FormatException</c> for it too.
+    /// A valid .NET format that <c>formatInt64</c> rejects, by the integer
+    /// rule of <see cref="TsNumericFormats.FormatsInteger"/>. An invalid
+    /// standard letter (<c>Q</c>) is not reported: .NET throws
+    /// <c>FormatException</c> for it too.
     /// </summary>
-    private static bool IsUnsupportedFormat(string format)
-    {
-        if (format.Length == 0)
-            return false;
-
-        return !StandardFormat().IsMatch(format)
-            || char.ToUpperInvariant(format[0]) == UnsupportedStandardFormat;
-    }
+    private static bool IsUnsupportedFormat(string format) =>
+        !TsNumericFormats.FormatsInteger(format);
 
     /// <summary>
     /// Reports <c>MS0066</c> for a constant <c>NumberStyles</c> (the second
@@ -139,7 +131,4 @@ internal static partial class Int64Formatting
                 message
             )
         );
-
-    [GeneratedRegex("^[A-Za-z][0-9]*$")]
-    private static partial Regex StandardFormat();
 }

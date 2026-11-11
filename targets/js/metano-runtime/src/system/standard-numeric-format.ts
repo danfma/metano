@@ -102,15 +102,6 @@ export function unsupportedFormat(format: string, values: string): NotSupportedE
   );
 }
 
-/** `text` padded with spaces to `alignment` code units: on the left, or on the right when negative. */
-export function aligned(text: string, alignment: number | undefined): string {
-  if (alignment === undefined) {
-    return text;
-  }
-
-  return alignment < 0 ? text.padEnd(-alignment) : text.padStart(alignment);
-}
-
 /**
  * `value` in the standard format shared by every numeric type — `F`, `N`,
  * `E`, `P` and `C` — or `null` for another letter, which the caller formats
@@ -195,23 +186,26 @@ export function roundedAt(value: DecimalDigits, keep: number, rounding: Rounding
   }
 
   if (keep < 0) {
-    return withDigits(value, "", 0);
+    return decimalDigits(value.negative, "", 0);
   }
 
   const kept = digits.slice(0, keep);
 
   return roundsUp(digits, keep, rounding)
     ? incremented(value, kept)
-    : withDigits(value, kept, value.scale);
+    : decimalDigits(value.negative, kept, value.scale);
 }
 
-/** `value` with `digits` at `scale`, trailing zeros dropped; zero has no digits and scale 0. */
-export function withDigits(value: DecimalDigits, digits: string, scale: number): DecimalDigits {
+/**
+ * The value `±0.digits × 10^scale`, trailing zeros dropped; zero has no
+ * digits and scale 0, and keeps `negative`.
+ */
+export function decimalDigits(negative: boolean, digits: string, scale: number): DecimalDigits {
   const significant = digits.replace(/0+$/, "");
 
   return significant === ""
-    ? { negative: value.negative, digits: "", scale: 0 }
-    : { negative: value.negative, digits: significant, scale };
+    ? { negative, digits: "", scale: 0 }
+    : { negative, digits: significant, scale };
 }
 
 /** `text` with the minus sign of a negative `value` (a negative zero included). */
@@ -280,6 +274,7 @@ function scientific(
   const rounded = roundedAt(value, decimals + 1, rounding);
   const exponent = rounded.digits === "" ? 0 : rounded.scale - 1;
   const first = rounded.digits[0] ?? "0";
+
   const mantissa =
     decimals === 0 ? first : `${first}.${rounded.digits.slice(1).padEnd(decimals, "0")}`;
 
@@ -288,7 +283,11 @@ function scientific(
 
 /** `P[n]`: the magnitude times 100 (its digits two places on), grouped, before the ` %`. */
 function percentDigits(value: DecimalDigits, precision: number | null, rounding: Rounding): string {
-  const hundredfold = withDigits(value, value.digits, value.scale + PERCENT_SCALE_SHIFT);
+  const hundredfold = decimalDigits(
+    value.negative,
+    value.digits,
+    value.scale + PERCENT_SCALE_SHIFT,
+  );
 
   return fixedPoint(hundredfold, precision ?? DEFAULT_DECIMALS, rounding, true);
 }
@@ -331,5 +330,5 @@ function roundsUp(digits: string, keep: number, rounding: Rounding): boolean {
 function incremented(value: DecimalDigits, kept: string): DecimalDigits {
   const next = (BigInt(kept === "" ? "0" : kept) + 1n).toString();
 
-  return withDigits(value, next, value.scale + next.length - kept.length);
+  return decimalDigits(value.negative, next, value.scale + next.length - kept.length);
 }

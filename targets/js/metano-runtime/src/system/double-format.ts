@@ -8,8 +8,8 @@
  * without a precision print the shortest round-trip digits.
  */
 import {
-  aligned,
   type DecimalDigits,
+  decimalDigits,
   formatCommonStandard,
   generalNotation,
   generalWithPrecision,
@@ -17,8 +17,8 @@ import {
   parseStandardFormat,
   type StandardFormat,
   unsupportedFormat,
-  withDigits,
 } from "./standard-numeric-format.ts";
+import { alignText } from "./strings.ts";
 
 /** A double's exact expansion rounds half to even, as .NET's Dragon4 does. */
 const DOUBLE_ROUNDING = "halfToEven";
@@ -59,7 +59,7 @@ export function formatDouble(
 ): string {
   const text = value == null ? "" : formatValue(value, format ?? "");
 
-  return aligned(text, alignment);
+  return alignText(text, alignment);
 }
 
 function formatValue(value: number, format: string): string {
@@ -126,10 +126,11 @@ function roundTrip(value: number, exponentLetter: string): string {
  */
 function shortestDigits(value: number): DecimalDigits {
   const negative = isNegative(value);
+
   const [, head = "", tail = "", exponent = "0"] =
     EXPONENTIAL_TEXT.exec(Math.abs(value).toExponential()) ?? [];
 
-  return withDigits({ negative, digits: "", scale: 0 }, head + tail, Number(exponent) + 1);
+  return decimalDigits(negative, head + tail, Number(exponent) + 1);
 }
 
 /**
@@ -144,12 +145,12 @@ function exactDigits(value: number): DecimalDigits {
   if (exponent >= 0) {
     const integer = (mantissa << BigInt(exponent)).toString();
 
-    return withDigits({ negative, digits: "", scale: 0 }, integer, integer.length);
+    return decimalDigits(negative, integer, integer.length);
   }
 
   const scaled = (mantissa * 5n ** BigInt(-exponent)).toString();
 
-  return withDigits({ negative, digits: "", scale: 0 }, scaled, scaled.length + exponent);
+  return decimalDigits(negative, scaled, scaled.length + exponent);
 }
 
 /** The integer `mantissa` and the `exponent` with `magnitude = mantissa × 2^exponent`. */

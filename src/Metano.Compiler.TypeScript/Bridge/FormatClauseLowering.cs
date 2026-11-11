@@ -26,15 +26,15 @@ internal static class FormatClauseLowering
     /// <summary>The runtime call for a hole with a clause; <c>null</c> for a hole without one.</summary>
     public static TsExpression? TryLowerHole(IrInterpolationExpression hole, TsExpression value)
     {
-        if (!hole.HasClause)
-            return null;
-
         if (Int64Formatting.TryFormatHole(hole, value) is { } sixtyFourBit)
             return sixtyFourBit;
 
-        return hole.FormatSpecifier is { } format
-            ? FormatNumber(hole, value, format)
-            : RuntimeCall(AlignValue, value, Number(hole.Alignment!.Value));
+        return hole switch
+        {
+            { FormatSpecifier: { } format } => FormatNumber(hole, value, format),
+            { Alignment: { } alignment } => RuntimeCall(AlignValue, value, Number(alignment)),
+            _ => null,
+        };
     }
 
     private static TsExpression FormatNumber(
@@ -60,7 +60,12 @@ internal static class FormatClauseLowering
         };
     }
 
-    /// <summary>The bit width <c>formatInteger</c> prints a negative hex value on, or <c>null</c>.</summary>
+    /// <summary>
+    /// The bit width <c>formatInteger</c> prints a negative hex value on, or
+    /// <c>null</c>. The same widths are spelled in the <c>ToString(format)</c>
+    /// templates of <c>src/Metano/Runtime/NumericFormatting.cs</c>; keep the
+    /// two in step.
+    /// </summary>
     private static int? BitsOf(IrNumericKind kind) =>
         kind switch
         {

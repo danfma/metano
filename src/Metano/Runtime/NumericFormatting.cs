@@ -8,6 +8,8 @@
 // mappings run (MS0001); a format known only at run time reaches the formatter, which throws
 // FormatException or NotSupportedException for what it does not implement, and a null one
 // formats as `G`. `float` has no mapping, so its ToString(format) always reports.
+// The bit widths below are the ones `FormatClauseLowering.BitsOf`
+// (src/Metano.Compiler.TypeScript/Bridge) passes for an interpolation hole; keep the two in step.
 
 using Metano.Annotations;
 

@@ -586,6 +586,10 @@ standard numeric format strings in the invariant culture, with the same output a
   and throws `UnsupportedError`.
 - **Unchanged.** A hole without a clause, and `ToString()` without a format, keep the
   native JavaScript conversion.
+- **Not covered yet.** `string.Format` composite formatting (`string.Format("{0:F2}", d)`
+  keeps its unmapped call and `MS0001`) and `FormattableString` (both #662); custom numeric
+  patterns (reported above); `ToString(format)` on `decimal` and `BigInteger`, which is
+  emitted as written.
 
 ## Floating point (`double` / `float`)
 

@@ -815,10 +815,11 @@ public sealed record IrInterpolationText(string Text) : IrInterpolationPart;
 /// through <c>Nullable&lt;T&gt;</c> (not an enum's underlying kind), so a
 /// target that formats numbers itself can honor the format and the alignment
 /// with the formatter of the value's type (baseline FR-051, spec 012 FR-037);
-/// <c>null</c> for a non-numeric value. A hole with a clause carries its
-/// value as it is, <c>null</c> included: the target's formatter prints a
-/// <c>null</c> as the empty string, as C# does. A hole without a clause
-/// carries the null-safe operand of a concatenation. A
+/// <c>null</c> for a non-numeric value. A hole with a clause carries its raw
+/// value, <c>null</c> included, so a target's formatter MUST accept
+/// <c>null</c> and print it as the empty string, as C# does (baseline
+/// FR-051.1). A hole without a clause carries the null-safe operand of a
+/// concatenation. A
 /// <see cref="FormatSpecifier"/> C# ignores for the value's type (a
 /// <c>string</c>, <c>bool</c> or <c>char</c>) is dropped.
 /// </summary>
