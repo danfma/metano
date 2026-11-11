@@ -116,6 +116,19 @@ describe("formatInteger", () => {
     expect(formatInteger(null, 32, null, 4)).toBe("    ");
   });
 
+  test("a null format at run time is G, as ToString((string?)null) is on .NET", () => {
+    expect(formatInteger(-1234567, 32, null)).toBe("-1234567");
+  });
+
+  test("an unimplemented format names itself in the NotSupportedException", () => {
+    expect(() => formatInteger(5, 32, "B")).toThrow(
+      new NotSupportedException("The format 'B' is not supported for integers in TypeScript."),
+    );
+    expect(() => formatInteger(5, 32, "0.00")).toThrow(
+      new NotSupportedException("The format '0.00' is not supported for integers in TypeScript."),
+    );
+  });
+
   test("valid .NET formats outside the implemented set throw NotSupportedException", () => {
     for (const format of ["B", "#,##0", "0.00", "F2 "]) {
       expect(() => formatInteger(1, 32, format)).toThrow(NotSupportedException);

@@ -57,6 +57,12 @@ public class InterpolationFormatClauseTests
         [Transpile]
         public class Holes
         {
+            private int _count;
+
+            private int Next() => ++_count;
+
+            private string Pick() => _count > 1 ? "D2" : "X";
+
         """;
 
     [Test]
@@ -173,16 +179,10 @@ public class InterpolationFormatClauseTests
         "The format 'B' is not supported for 'int' in TypeScript; the call throws at run time."
     )]
     [Arguments(
-        "i.ToString(format)",
-        "int i, string format",
+        "f.ToString(format)",
+        "float f, string format",
         "format",
-        "A format that is not a constant is not supported for 'int' in TypeScript; the call throws at run time."
-    )]
-    [Arguments(
-        "d.ToString(format, null)",
-        "double d, string format",
-        "format",
-        "A format that is not a constant is not supported for 'double' in TypeScript; the call throws at run time."
+        "Format strings are not supported for 'float' in TypeScript; the call throws at run time."
     )]
     public async Task UnsupportedToStringFormat_ReportsAtTheFormat(
         string expression,
@@ -200,6 +200,51 @@ public class InterpolationFormatClauseTests
         await Assert.That(report.Message).IsEqualTo(message);
         await Assert.That(LocatedSource.TextOf(report)).IsEqualTo(argument);
         await Assert.That(files["holes.ts"]).Contains(Placeholder);
+    }
+
+    /// <summary>
+    /// A format known only at run time reaches the formatter, as
+    /// <c>formatInt64</c> does for <c>long</c>: it throws
+    /// <c>FormatException</c> or <c>NotSupportedException</c> for a format it
+    /// does not implement and formats a <c>null</c> one as <c>G</c>. The
+    /// receiver and the format are each evaluated once, in C# order.
+    /// </summary>
+    [Test]
+    [Arguments("i.ToString(format)", "int i, string format", "formatInteger(i, 32, format)")]
+    [Arguments("b.ToString(format)", "byte b, string? format", "formatInteger(b, 8, format)")]
+    [Arguments("s.ToString(format)", "short s, string format", "formatInteger(s, 16, format)")]
+    [Arguments("d.ToString(format, null)", "double d, string format", "formatDouble(d, format)")]
+    [Arguments(
+        "Next().ToString(Pick())",
+        "int unused",
+        "formatInteger(this.next(), 32, this.pick())"
+    )]
+    public async Task RunTimeFormat_CallsTheFormatter(
+        string expression,
+        string parameter,
+        string lowered
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["holes.ts"]).Contains($"return {lowered};");
+    }
+
+    [Test]
+    public async Task Dart_ReportsARunTimeFormat()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            Body("int i, string format", "i.ToString(format)")
+        );
+
+        await Assert
+            .That(UnsupportedFeatures(diagnostics).Single().Message)
+            .IsEqualTo(
+                "Numeric format strings are not supported in Dart; the call throws at run time."
+            );
     }
 
     [Test]

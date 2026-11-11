@@ -569,10 +569,18 @@ standard numeric format strings in the invariant culture, with the same output a
   UnsupportedFormat` at run time).** A custom numeric format (`0.00`, `#,##0`), the
   integers' `B`, a format on `decimal`, `float` (its value is not held at single precision,
   so the digits would differ), `DateTime` / `DateOnly` / `TimeSpan`, `Guid`, an enum, a
-  user `IFormattable` type, `object` or a type parameter, and `ToString(format)` whose format
-  is not a constant. The 64-bit integers keep `MS0066` for their unsupported formats (see
-  below). A letter .NET rejects (`D` on a `double`, `Q`) is not reported: the formatter
-  throws the same `FormatException`.
+  user `IFormattable` type, `object` or a type parameter (constant or not). The 64-bit
+  integers keep `MS0066` for their unsupported formats (see below). A letter .NET rejects
+  (`D` on a `double`, `Q`) is not reported: the formatter throws the same `FormatException`.
+- **A format known only at run time.** `n.ToString(format)` with a variable format on an
+  integer or a `double` calls the formatter (`formatInteger(n, 32, format)`,
+  `formatDouble(d, format)`), as `formatInt64` does for `long`, and the formatter decides:
+  a `null` format is `G` (as `ToString((string?)null)` is on .NET, so a `double` prints
+  .NET's `1E-07`, not JavaScript's `1e-7`), a custom format or the integers' `B` throws
+  `NotSupportedException` naming the format (`The format '0.00' is not supported for
+  double in TypeScript.`), and an invalid one throws `FormatException`
+  (`Format specifier was invalid.`). Only a constant unsupported format reports at
+  compile time.
 - **Dart.** No clause is honored yet: every hole with a format or alignment clause, and
   `ToString(format)` on a 32-bit-or-narrower integer, `double` or `float`, reports `MS0001`
   and throws `UnsupportedError`.

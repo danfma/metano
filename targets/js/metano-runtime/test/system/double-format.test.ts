@@ -73,6 +73,17 @@ describe("formatDouble", () => {
     expect(formatDouble(null, "F2", 3)).toBe("   ");
   });
 
+  test("a null format at run time is G, as ToString((string?)null) is on .NET", () => {
+    expect(formatDouble(1e-7, null)).toBe("1E-07");
+    expect(formatDouble(0.1 + 0.2, undefined)).toBe("0.30000000000000004");
+  });
+
+  test("a custom format names itself in the NotSupportedException", () => {
+    expect(() => formatDouble(1.5, "0.00")).toThrow(
+      new NotSupportedException("The format '0.00' is not supported for double in TypeScript."),
+    );
+  });
+
   test("custom formats throw NotSupportedException", () => {
     for (const format of ["0.00", "#,##0", "F2,5", " F2"]) {
       expect(() => formatDouble(1.5, format)).toThrow(NotSupportedException);

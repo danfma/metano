@@ -465,8 +465,11 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   hole or the format argument and emits an expression that throws
   `Unsupported expression: UnsupportedFormat`: a custom numeric format
   (`0.00`, `#,##0`), the integers' `B`, a format on `decimal`, `float`, a date
-  or time, `Guid`, an enum, an `IFormattable` type or `object`, and a
-  `ToString(format)` whose format is not a constant.
+  or time, `Guid`, an enum, an `IFormattable` type or `object`. A
+  `ToString(format)` whose format is not a constant calls the formatter on an
+  integer or a `double`, which decides at run time: a `null` format is `G`, a
+  custom format or `B` throws `NotSupportedException` naming the format, an
+  invalid one `FormatException`.
 - `long` / `ulong` gain `E`, `P` and `C` (they reported `MS0066` and threw),
   `R5` formats as `G5`, as in .NET, and a `long?` hole with a clause now
   formats instead of dropping the clause.

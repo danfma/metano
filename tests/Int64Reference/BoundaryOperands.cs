@@ -335,9 +335,10 @@ internal static class BoundaryOperands
     /// a JS <c>number</c> (baseline FR-051): every letter with and without a
     /// precision, both cases, precisions past a double's 17 digits, and
     /// formats .NET rejects for one of the two families (<c>D</c> and
-    /// <c>X</c> for <c>double</c>). The custom formats, and the integers'
-    /// <c>B</c>, which the runtime rejects with NotSupportedException
-    /// (MS0001), diverge by design and are covered by the runtime tests.
+    /// <c>X</c> for <c>double</c>), and <c>null</c>, which is <c>G</c>. The
+    /// custom formats, and the integers' <c>B</c>, which the runtime rejects
+    /// with NotSupportedException (a constant one reports MS0001), diverge by
+    /// design and are covered by the runtime tests.
     /// </summary>
     private static readonly object?[] NumberFormatValues =
     [
