@@ -42,9 +42,23 @@ public sealed partial class IrExpressionExtractor
             IrTypeRefMapper.Map(array.ElementType, _originResolver, _target),
             Extract(size),
             elementDefault,
-            SixtyFourBitKindOf(size)
+            SixtyFourBitKindOf(size),
+            IsNonNegativeConstant(size)
         );
     }
+
+    /// <summary>
+    /// Whether <paramref name="size"/> folds to a constant of at least zero (a
+    /// <c>char</c> constant always does; the others are integers).
+    /// </summary>
+    private bool IsNonNegativeConstant(ExpressionSyntax size) =>
+        _semantic.GetConstantValue(size) is { HasValue: true, Value: var value }
+        && value switch
+        {
+            null => false,
+            char => true,
+            _ => Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture) >= 0,
+        };
 
     /// <summary>
     /// A default every slot can share: not the opaque struct marker, and not

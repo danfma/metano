@@ -708,13 +708,16 @@ public sealed record IrArrayLiteral(
 /// literal or an immutable value, so every slot may share it).
 /// <see cref="LengthKind"/> is the length's kind when it is a 64-bit
 /// integer, which a target that indexes with another type converts (spec
-/// 012 FR-004, FR-036).
+/// 012 FR-004, FR-036). <see cref="LengthIsNonNegativeConstant"/> says the
+/// length is a compile-time constant of at least zero, so no target needs to
+/// check it.
 /// </summary>
 public sealed record IrArrayCreation(
     IrTypeRef ElementType,
     IrExpression Length,
     IrExpression ElementDefault,
-    IrNumericKind? LengthKind = null
+    IrNumericKind? LengthKind = null,
+    bool LengthIsNonNegativeConstant = false
 ) : IrExpression;
 
 /// <summary>

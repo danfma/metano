@@ -54,6 +54,32 @@ public class SizedArrayCreationTests
     }
 
     /// <summary>
+    /// A length the compiler folds to a non-negative constant cannot fail
+    /// .NET's check, so it skips the runtime's <c>arrayLength</c> even when
+    /// written as a named constant.
+    /// </summary>
+    [Test]
+    public async Task ConstantLength_SkipsTheLengthCheck()
+    {
+        var arrays = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Arrays
+            {
+                private const int Size = 3;
+
+                public int[] Named() => new int[Size];
+
+                public int[] Folded() => new int[Size * 2];
+            }
+            """
+        )["arrays.ts"];
+
+        await Assert.That(arrays).DoesNotContain("arrayLength");
+        await Assert.That(arrays).Contains("return new Array<number>(Arrays.size).fill(0);");
+    }
+
+    /// <summary>
     /// <c>default(T)</c> is <c>0</c> for <c>T = int</c> and <c>null</c> for a
     /// class, so an unconstrained (or <c>struct</c>) type-parameter element
     /// has no slot value to share and stays <c>MS0001</c>.
