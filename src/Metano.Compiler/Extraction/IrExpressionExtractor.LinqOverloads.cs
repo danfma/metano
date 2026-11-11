@@ -184,29 +184,6 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The argument <paramref name="call"/> passes as its comparer, or
-    /// <c>null</c> when it passes none.
-    /// </summary>
-    private ExpressionSyntax? ComparerArgumentOf(
-        InvocationExpressionSyntax call,
-        IMethodSymbol method
-    ) =>
-        call
-            .ArgumentList.Arguments.FirstOrDefault(argument =>
-                BoundParameterOf(argument, method).Name
-                == LinqOverloadParameters.ComparerParameterName
-            )
-            ?.Expression;
-
-    /// <summary>
-    /// Whether <paramref name="expression"/> is the <c>null</c> constant:
-    /// <c>null</c> or <c>default</c>, in parentheses or cast to the comparer
-    /// type.
-    /// </summary>
-    private bool IsNullConstant(ExpressionSyntax expression) =>
-        _semantic.GetConstantValue(expression) is { HasValue: true, Value: null };
-
-    /// <summary>
     /// <paramref name="arguments"/> without the comparer of
     /// <paramref name="method"/>, the last parameter of every LINQ overload
     /// that takes one, and with its position dropped from the evaluation
@@ -220,7 +197,7 @@ public sealed partial class IrExpressionExtractor
         var comparer = method
             .Parameters.Select(parameter => parameter.Name)
             .ToList()
-            .IndexOf(LinqOverloadParameters.ComparerParameterName);
+            .IndexOf(ComparerParameterName);
 
         var order = arguments
             .EvaluationOrder?.Where(position => position != comparer)

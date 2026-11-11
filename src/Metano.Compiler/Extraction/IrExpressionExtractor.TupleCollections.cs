@@ -47,13 +47,22 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Reports MS0001 at <paramref name="node"/> when <paramref name="method"/>
     /// is a collection lookup over a tuple element or key
-    /// (<see cref="TupleSensitiveMembersByType"/>).
+    /// (<see cref="TupleSensitiveMembersByType"/>). The span searches report
+    /// from <see cref="RewriteUnloweredSpanCall"/>, which knows whether the
+    /// call lowers at all.
+    /// TODO(#549): the divergence is the TypeScript representation of a
+    /// tuple (an array compared by reference), but the check runs for every
+    /// target.
     /// </summary>
-    private void ReportTupleValueLookup(SyntaxNode node, IMethodSymbol? method)
+    private static void ReportTupleValueLookup(SyntaxNode node, IMethodSymbol? method)
     {
-        if (method is null || !ComparesTupleByValue(method))
+        if (method is null || !ComparesTupleElementInCollection(method))
             return;
 
+        ReportTupleComparison(node, method);
+    }
+
+    private static void ReportTupleComparison(SyntaxNode node, IMethodSymbol method) =>
         ReportUnsupportedFeature(
             node,
             $"Expression '{node}' compares C# tuples by value in {LookupOwnerOf(method)}; "
@@ -61,10 +70,6 @@ public sealed partial class IrExpressionExtractor
                 + "reference, so equal tuples are not found. Use a record as the element or "
                 + "key instead."
         );
-    }
-
-    private bool ComparesTupleByValue(IMethodSymbol method) =>
-        ComparesTupleElementInCollection(method) || ComparesTupleElementInSpan(method);
 
     private static bool ComparesTupleElementInCollection(IMethodSymbol method) =>
         method.ContainingType
@@ -72,17 +77,6 @@ public sealed partial class IrExpressionExtractor
         && type.ContainingNamespace?.ToDisplayString() == GenericCollectionsNamespace
         && TupleSensitiveMembersByType.TryGetValue(type.Name, out var members)
         && members.Contains(method.Name);
-
-    /// <summary>
-    /// The value searches of <c>System.MemoryExtensions</c> that C# 14 binds
-    /// for an array (<c>pairs.Contains((3, 4))</c>, #657), over a tuple
-    /// element, for a target that lowers them (one with a mappings port).
-    /// </summary>
-    private bool ComparesTupleElementInSpan(IMethodSymbol method) =>
-        _context.LowersByDeclarativeMapping is not null
-        && IsMemoryExtensionsCall(method)
-        && ValueSearchMethods.Contains(method.Name)
-        && method.TypeArguments is [INamedTypeSymbol { IsTupleType: true }, ..];
 
     private static string LookupOwnerOf(IMethodSymbol method) =>
         IsMemoryExtensionsCall(method) ? "an array or span" : $"a {method.ContainingType.Name}";
