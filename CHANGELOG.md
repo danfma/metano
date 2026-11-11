@@ -222,16 +222,20 @@ the migration list.
   dictionary entry is not supported.`): `counts[key]++` or `counts[key] +=
   2` on a `Dictionary<string, int>` in a checked context, any such store on
   a `byte` / `sbyte` / `short` / `ushort` value, `flags[key] |= mask` on a
-  `uint` value. The 64-bit forms already did. 2.x emitted
-  `counts.get(key)++` for these, which is not valid JavaScript; an `int`
-  entry in the default context still does. Read, compute and write the
+  `uint` value. The 64-bit forms already did. The compound shifts report it in
+  the default context too: `d[k] <<= 1` and `d[k] >>>= 1` on an `int`
+  value, `d[k] >>= 1` on a `uint` value. 2.x emitted `counts.get(key)++`
+  for all of these, which is not valid JavaScript; a store on an `int`
+  entry that needs no lowering (`counts[key]++`, `+=` in the default
+  context) still does. Read, compute and write the
   entry in separate statements.
 - Not covered: `char` conversions (#501), `decimal` sources (#521, #606),
   conversions to or from an enum, and `[Queryable]` expression trees keep
   their earlier lowering, with three visible exceptions: `checked(a - b)`
   on two values of an enum declared narrower than `int` is checked (C#
   types the difference as the underlying integer); `(byte)(int)c` on a
-  `char` emits `c & 0xFF` on a string, which is `0`; and `checked(c + 1)`
+  `char` emits `c & 0xFF` on a string, which is `0` and does not type-check
+  (TS2362 under `--strict`); and `checked(c + 1)`
   on a `char` now throws `OverflowException` where it returned a
   concatenated string. The last two wait for #501.
 - `metano-runtime` adds `checkedInt32(value)`, `checkedUInt32(value)` and
@@ -239,7 +243,9 @@ the migration list.
 - Dart: an `int` is 64-bit, so the same conversions and stores print
   `.toSigned(n)` / `.toUnsigned(n)` (`x.toUnsigned(8)`,
   `(b + 1).toUnsigned(8)`, `(i << n).toSigned(32)`,
-  `(i.toUnsigned(32) >>> n).toSigned(32)`). Dart never throws in a checked
+  `(i.toUnsigned(32) >>> n).toSigned(32)`). A 32-bit shift count is not
+  masked there, so a variable count of 32 or more differs from C# (`a <<
+  32` is `0`, C# gives `a`). Dart never throws in a checked
   context: checked `int` / `uint` arithmetic prints as its unchecked form
   (`checked(a + b)` → `a + b`, no wrap), and a checked conversion or narrow
   store prints the narrowing of its unchecked form.

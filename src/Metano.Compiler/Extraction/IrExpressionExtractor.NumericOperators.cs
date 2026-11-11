@@ -58,6 +58,13 @@ public sealed partial class IrExpressionExtractor
     /// <c>6</c>, <c>l &lt;&lt; -1</c> by <c>63</c>). Any other right operand
     /// is unchanged.
     /// </summary>
+    /// <remarks>
+    /// TODO(#549): the count of a 32-bit shift is left as it is because
+    /// JavaScript reads its low 5 bits, as C# does. A 64-bit Dart <c>int</c>
+    /// does not (<c>1 &lt;&lt; 33</c> is <c>2</c> in C# and <c>0</c> after
+    /// <c>.toSigned(32)</c> in Dart); a target capability should decide
+    /// whether the count is masked with <c>31</c>.
+    /// </remarks>
     private IrExpression ShiftCountOf(IrBinaryOp op, IrNumericKind? kind, OperatorOperand count)
     {
         if (!op.IsShift() || !IsSixtyFourBit(kind))
@@ -101,6 +108,50 @@ public sealed partial class IrExpressionExtractor
     /// </remarks>
     private bool NeedsLogicalShiftReadModifyWrite(IrBinaryOp op, ExpressionSyntax operatorSyntax) =>
         op is IrBinaryOp.RightShift && BuiltInNumericKindOf(operatorSyntax) is IrNumericKind.UInt32;
+
+    /// <summary>
+    /// The operand kind of a compound shift the target's own compound
+    /// operator computes as C# does, so it stays that operator, which
+    /// evaluates its target once by itself, instead of a read-modify-write
+    /// that binds the receiver: <c>i &lt;&lt;= n</c> on an <c>int</c>
+    /// (JavaScript's <c>&lt;&lt;=</c> wraps to 32 signed bits) and
+    /// <c>u &gt;&gt;= n</c> on a <c>uint</c> (JavaScript has the logical
+    /// <c>&gt;&gt;&gt;=</c>). The node carries the kind, so the target picks
+    /// the operator. <c>null</c> for any other compound operator, for every
+    /// one on a target without such operators, and for a dictionary entry,
+    /// which no compound operator can store to: it keeps the
+    /// read-modify-write, which reports it as unsupported.
+    /// </summary>
+    /// <remarks>
+    /// TODO(#549): both are JavaScript facts. A 64-bit Dart <c>int</c> needs
+    /// the stored value wrapped, so it keeps the read-modify-write; a target
+    /// capability should decide instead of the target check.
+    /// </remarks>
+    private IrNumericKind? NativeCompoundShiftKindOf(
+        IrExpression target,
+        IrBinaryOp op,
+        AssignmentExpressionSyntax assign
+    )
+    {
+        var hasNativeOperator =
+            _target is null or Metano.Annotations.TargetLanguage.TypeScript
+            && target is not IrElementAccess { TargetType: IrMapTypeRef };
+
+        if (!hasNativeOperator)
+            return null;
+
+        var storesAnInt32Wrap =
+            IntegerOverflowLowering.ReductionOf(_semantic.GetOperation(assign)) is
+            { Kind: IrNumericKind.Int32, Mode: IrOverflowMode.Wrap, Operator: null };
+
+        return op switch
+        {
+            IrBinaryOp.LeftShift when storesAnInt32Wrap => IrNumericKind.Int32,
+            IrBinaryOp.RightShift when NeedsLogicalShiftReadModifyWrite(op, assign) =>
+                IrNumericKind.UInt32,
+            _ => null,
+        };
+    }
 
     /// <summary>A 64-bit operand kind.</summary>
     private static bool IsSixtyFourBit(IrNumericKind? kind) => kind?.IsSixtyFourBit() == true;

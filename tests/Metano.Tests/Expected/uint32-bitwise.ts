@@ -64,7 +64,7 @@ export class Bits {
     this.flags = (this.flags & b) >>> 0;
     this.flags = (this.flags ^ b) >>> 0;
     this.flags = (this.flags << 1) >>> 0;
-    this.flags = this.flags >>> 1;
+    this.flags >>>= 1;
     this.flags &= 255;
   }
 

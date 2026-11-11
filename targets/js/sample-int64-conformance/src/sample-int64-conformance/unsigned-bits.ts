@@ -89,7 +89,7 @@ export function intShiftRight(a: number, count: number): number {
 }
 
 export function uIntCompoundShiftRight(a: number, count: number): number {
-  a = a >>> count;
+  a >>>= count;
 
   return a;
 }
@@ -177,7 +177,7 @@ export function uIntFieldCompound(start: number, mask: number): number {
   flags.value = (flags.value | mask) >>> 0;
   flags.value = (flags.value << 1) >>> 0;
   flags.value = (flags.value ^ mask) >>> 0;
-  flags.value = flags.value >>> 3;
+  flags.value >>>= 3;
   flags.value = (flags.value & ~mask >>> 0) >>> 0;
 
   return flags.value;

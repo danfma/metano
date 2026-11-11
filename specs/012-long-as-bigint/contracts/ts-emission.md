@@ -127,12 +127,15 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `~u` | `~u >>> 0` | same |
 | `u << n` | `(u << n) >>> 0` | same |
 | `u >> n`, `u >>> n` | `u >>> n` | same |
-| `u \|= v;`, `u <<= 1;`, `u >>= 1;` | `u = (u \| v) >>> 0;`, `u = (u << 1) >>> 0;`, `u = u >>> 1;` | same |
+| `u \|= v;`, `u <<= 1;`, `u >>= 1;` | `u = (u \| v) >>> 0;`, `u = (u << 1) >>> 0;`, `u >>>= 1;` | same |
 | `1u << 31`, `~0u` | `2147483648`, `4294967295` (folded) | same |
 | `i >> n`, `i & j`, `~i` | `i >> n`, `i & j`, `~i` | same |
 | `i << n`, `i <<= n;` | `i << n`, `i <<= n;` (the core wraps the shift; JavaScript's `<<` computes in 32 signed bits, which is that wrap) | same |
 | `(int)(i + j)`, `(uint)(u - v)` (the operand's own type) | `i + j`, `u - v` (no conversion, **not wrapped**) | `checkedInt32(i + j)`, `checkedUInt32(u - v)` (the arithmetic is checked) |
-| `counts[key]++;` (`Dictionary<string, int>`) | `counts.get(key)++` (invalid, as before; no reduction is needed) | `MS0001` (`'counts[key]++' on a dictionary entry is not supported.`) |
+| `counts[key]++;` (`Dictionary<string, int>`) | not lowered by this section (no reduction is needed; the pre-existing emission of a dictionary-entry store is not valid JavaScript) | `MS0001` (`'counts[key]++' on a dictionary entry is not supported.`) |
+| `d[k] <<= 1;`, `d[k] >>>= 1;` (`int` value), `d[k] >>= 1;` (`uint` value) | `MS0001` (`'d[k] <<= 1' on a dictionary entry is not supported.`) | same |
+| `h.Next().I <<= n;`, `h.Ints[k++] <<= n;` | `h.next().i <<= n;`, `h.ints[k++] <<= n;` (the native operator evaluates its target once; no receiver is bound) | same |
+| `1 << 31`, `v + (1 << 32)`, `1 << 4` (`int`) | `-2147483648`, `v + 1` (folded: the result leaves `int`, or C# masks the count), `1 << 4` | same |
 | `i >>> n` | `(i >>> n) \| 0` | same |
 | `i + j`, `i - j`, `i * j` | `i + j`, … (**not wrapped: the known gap**) | `checkedInt32(i + j)`, … |
 | `u + v`, `u - v`, `u * v` | `u + v`, … (not wrapped) | `checkedUInt32(u + v)`, … |
@@ -144,7 +147,9 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 
 Dart (a 64-bit `int`): `(byte)i` → `i.toUnsigned(8)`, `(int)u` → `u.toSigned(32)`, `b += 1` →
 `b = (b + 1).toUnsigned(8)`, `u | v` → `(u | v).toUnsigned(32)`, `i << n` → `(i << n).toSigned(32)`,
-`i >>> n` → `(i.toUnsigned(32) >>> n).toSigned(32)`, `u >> n` → `u >> n`. Dart never throws in a
+`i >>> n` → `(i.toUnsigned(32) >>> n).toSigned(32)`, `u >> n` → `u >> n`, `i <<= n` →
+`i = (i << n).toSigned(32)`, `u >>= n` → `u = u >> n`. A 32-bit shift count is not masked, so a
+variable count of 32 or more differs from C# (`a << 32` is `0`, C# gives `a`). Dart never throws in a
 checked context (DECIDED-19): checked `int` / `uint` arithmetic prints as its unchecked form
 (`checked(i + j)` → `i + j`), and a checked conversion or narrow store prints the narrowing of its
 unchecked form (`checked((byte)i)` → `i.toUnsigned(8)`).

@@ -157,6 +157,39 @@ public class NarrowIntegerLoweringTests
         }
         """;
 
+    private const string CompoundShiftSource = """
+        using System.Threading.Tasks;
+
+        [Transpile]
+        public class Cells
+        {
+            public int Signed;
+            public uint Unsigned;
+            public byte Small;
+            public int[] Slots = new int[4];
+            public int Tracked { get; set; }
+
+            public Cells Next() => this;
+            public int NextIndex() => 1;
+            public int NextCount(int n) => n;
+            public Task<int> CountAsync() => Task.FromResult(1);
+
+            public void Field(Cells h, int n) { h.Next().Signed <<= n; }
+            public void Element(Cells h, int k, int n) { h.Next().Slots[k++] <<= n; }
+            public void IndexAndCount(Cells h, int n) { h.Slots[h.NextIndex()] <<= h.NextCount(n); }
+            public void Property(Cells h, int n) { h.Next().Tracked <<= n; }
+            public void ArrayReceiver(Cells[] hs) { hs[0].Slots[1] <<= 2; }
+            public async Task Awaited(Cells h) { h.Next().Signed <<= await CountAsync(); }
+            public void RightShift(Cells h, int n) { h.Next().Signed >>= n; }
+            public void UnsignedRightShift(Cells h, int n) { h.Next().Unsigned >>= n; }
+            public void UnsignedField(int n) { Unsigned >>= n; }
+            public int Value(Cells h, int n) => h.Next().Signed <<= n;
+            public void LogicalShiftKeepsTheBinding(Cells h, int n) { h.Next().Signed >>>= n; }
+            public void UnsignedLeftShiftKeepsTheBinding(Cells h, int n) { h.Next().Unsigned <<= n; }
+            public void NarrowLeftShiftKeepsTheBinding(Cells h, int n) { h.Next().Small <<= n; }
+        }
+        """;
+
     private const string ProjectCheckedSource = """
         [Transpile]
         public class Project
@@ -286,6 +319,42 @@ public class NarrowIntegerLoweringTests
     }
 
     /// <summary>
+    /// <c>&lt;&lt;=</c> on an <c>int</c> and <c>&gt;&gt;=</c> on a
+    /// <c>uint</c> stay JavaScript's own compound operators, which evaluate
+    /// their target once, so no receiver is bound; a store that needs a
+    /// reduction around the read-modify-write keeps the binding.
+    /// </summary>
+    [Test]
+    public async Task CompoundShifts_KeepTheNativeOperatorAndBindNoReceiver()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CompoundShiftSource);
+        var cells = files["cells.ts"];
+
+        await TranspileHelper.AssertGolden("int32-compound-shifts.ts", cells);
+        await Assert.That(BodyOf(cells, "field")).IsEqualTo("h.next().signed <<= n;");
+        await Assert.That(BodyOf(cells, "element")).IsEqualTo("h.next().slots[k++] <<= n;");
+
+        await Assert
+            .That(BodyOf(cells, "indexAndCount"))
+            .IsEqualTo("h.slots[h.nextIndex()] <<= h.nextCount(n);");
+
+        await Assert.That(BodyOf(cells, "property")).IsEqualTo("h.next().tracked <<= n;");
+        await Assert.That(BodyOf(cells, "arrayReceiver")).IsEqualTo("hs[0].slots[1] <<= 2;");
+
+        await Assert
+            .That(BodyOf(cells, "awaited"))
+            .IsEqualTo("h.next().signed <<= await this.countAsync();");
+
+        await Assert.That(BodyOf(cells, "rightShift")).IsEqualTo("h.next().signed >>= n;");
+
+        await Assert
+            .That(BodyOf(cells, "unsignedRightShift"))
+            .IsEqualTo("h.next().unsigned >>>= n;");
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
     /// A compound assignment or an increment that needs a reduction stores
     /// through the read-modify-write lowering, which a dictionary entry does
     /// not support (the read of a missing key would not throw): it reports
@@ -310,6 +379,9 @@ public class NarrowIntegerLoweringTests
     [Arguments("counts[key]++", "Dictionary<string, byte>")]
     [Arguments("counts[key] += 1", "Dictionary<string, byte>")]
     [Arguments("counts[key] |= 1u << 31", "Dictionary<string, uint>")]
+    [Arguments("counts[key] <<= 1", "Dictionary<string, int>")]
+    [Arguments("counts[key] >>>= 1", "Dictionary<string, int>")]
+    [Arguments("counts[key] >>= 1", "Dictionary<string, uint>")]
     public async Task DictionaryEntryOfAReducedStore_ReportsUnsupported(
         string expression,
         string dictionary
@@ -457,7 +529,11 @@ public class NarrowIntegerLoweringTests
     private static string BodyOf(string source, string name)
     {
         var lines = source.Split('\n');
-        var header = Array.FindIndex(lines, line => line.TrimStart().StartsWith(name + "("));
+
+        var header = Array.FindIndex(
+            lines,
+            line => line.Trim().StartsWith(name + "(") || line.Trim().StartsWith($"async {name}(")
+        );
 
         if (header < 0)
             throw new InvalidOperationException($"No method '{name}' in the generated source.");
