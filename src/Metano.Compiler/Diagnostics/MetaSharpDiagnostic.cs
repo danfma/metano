@@ -388,6 +388,15 @@ public static class DiagnosticCodes
     /// rules live on <c>PackageRootResolver</c> (#334).</summary>
     public const string PackageRootOutsideWorkspace = "MS0044";
 
+    /// <summary>MS0045 — a runtime type test the target cannot answer (spec 011
+    /// contracts/diagnostics.md). Implemented reason: an <c>is</c> / <c>as</c> /
+    /// pattern / <c>catch</c> clause against a non-transpilable exception type with no
+    /// runtime class (a BCL exception outside the <c>[ExportFromBcl]</c> mapping of spec
+    /// 011 FR-013): the test is not widened to <c>Exception</c>, which would take too
+    /// much (FR-014). An error, at the test or clause. The other reasons of the
+    /// contract still report MS0001 until spec 011's runtime descriptors land.</summary>
+    public const string UnanswerableRuntimeTypeTest = "MS0045";
+
     /// <summary>MS0059 — the <c>--source-condition</c> (MSBuild
     /// <c>MetanoSourceCondition</c>) value is not a usable package.json export condition
     /// name: it contains a character other than letters, digits, <c>-</c>, <c>_</c>,

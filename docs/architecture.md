@@ -254,43 +254,52 @@ Each shape has a dedicated IR → TS lowering, named consistently:
 - **`IrToTsPlainObjectBridge`** — `[PlainObject]` records → TS interface
   without a class wrapper.
 - **`IrToTsBrandedBridge`** — `[Branded]` structs → branded primitive types.
-- **`IrToTsExceptionConstructionBridge`** — lowers the *arguments* of a BCL
-  exception construction (`new ArgumentException(...)`, or a user exception's
-  base / `: this(...)`-chained call) to `Error(message, { cause })`, composing
-  the message from the constructor-parameter roles of `IrExceptionConstruction`
-  the way .NET does. Side-effecting arguments are evaluated once in source
-  order: the extractor let-binds them for `new` (the shared evaluate-once
-  machinery), a base call declares `const` temporaries before `super`. It emits no declaration: user exceptions go through
-  `IrToTsClassEmitter` and extend `Error`; BCL exception types map to `Error`
-  in type positions. Known limitations: since generated code constructs
-  every BCL exception as a plain `Error` (#651), `IrRuntimeTypeTest`
-  classifies it as `Instanceof`, so
-  `o is ArgumentException` and `o as ArgumentException` both test
-  `instanceof Error` (true for any error), and so does a `catch` clause on a BCL
-  exception type (see `IrToTsCatchChainBridge`); the
-  `System.Exception` default message names the class that makes the call
-  (formatted like .NET's `Type.ToString()`), not the runtime most-derived
-  class; `AggregateException` inner-exception lists are not mapped.
+- **`BclExceptionClasses`** — the one answer to "which JavaScript class does
+  this BCL exception lower to" (spec 011 FR-014, #651), fed by the
+  `[ExportFromBcl]` entries in scope (`Metano/Runtime/Exceptions.cs` maps the
+  `metano-runtime` exception hierarchy, one module per class). The type
+  mapper (type position), `extends`, construction and the type tests read it;
+  so does the core, through the `IrExtractionContext.HasExceptionRuntimeClass`
+  port, to report an exception without a class (`MS0001` at a construction,
+  `MS0045` at an `is` / `as` / pattern / `catch` clause,
+  `ExceptionRuntimeClassReporter`). An unmapped exception lowers to the class
+  of `System.Exception`.
+- **`IrToTsExceptionConstructionBridge`** — lowers a BCL exception
+  construction (`new ArgumentException(...)`, or a user exception's base /
+  `: this(...)`-chained call) to its runtime class, passing the arguments by
+  the constructor-parameter roles of `IrExceptionConstruction` in the runtime
+  constructor's order; the runtime class composes the message as .NET does.
+  The bridge composes it only for a user exception's base call into
+  `System.Exception` (whose default message names the user class) and for an
+  unmapped exception, whose `new` emits `new Exception("System.TimeoutException:
+  …")`. Side-effecting arguments are evaluated once in source order: the
+  extractor let-binds them for `new` (the shared evaluate-once machinery), a
+  base call declares `const` temporaries before `super`. It emits no
+  declaration: user exceptions go through `IrToTsClassEmitter` and extend the
+  runtime class. Known limitations: the `System.Exception` default message
+  names the class that makes the call (formatted like .NET's
+  `Type.ToString()`), not the runtime most-derived class; a user exception's
+  `name` is that of the runtime class it derives from; `AggregateException`
+  inner-exception lists are not mapped.
 - **`IrToTsCatchChainBridge`** — the catch clauses of a `try` (spec 011
   FR-015, partial; #628). JS has one untyped `catch`, so the clauses lower to
   a single `catch (e$)` holding an `if` / `else if` chain in source order:
   each arm joins the clause's type test (the `is` test of its type:
-  `instanceof` the class of a transpiled exception, `instanceof Error` for a
+  `instanceof` the class of a transpiled exception or the runtime class of a
   BCL one; none for a general `catch` or `catch (Exception)`) with its `when`
   filter, and declares the clause's variable (`const e = e$;`) when its body
   reads it. The first clause that takes every value ends the chain; otherwise
   it ends in `else { throw e$; }`. `throw;` rethrows `e$`. A lone clause that
   takes every exception keeps the plain `catch (e) { … }`. Extraction reports
-  MS0001 (`UnsupportedCatchClauseReporter`) for a BCL-typed clause ahead of a
-  clause for another exception type (its coarse test would take that clause's
-  exceptions), for a clause on a type parameter, for a filter that declares a
-  variable or passes an `out` argument, and on Dart, which keeps its native
-  `on T catch` clauses, for every filter. Known deviations: generated code
-  constructs every BCL exception as a plain `Error`, so a BCL-typed clause in
-  last position takes every `Error` (#651); an exception thrown by a filter
-  propagates (.NET treats the filter as false); a filter runs after the
-  `finally` blocks between the throw and the clause (.NET runs it before
-  them).
+  (`UnsupportedCatchClauseReporter`) `MS0045` for a clause on an exception
+  without a runtime class, and `MS0001` for a clause on a type parameter, for
+  a filter that declares a variable or passes an `out` argument, and on Dart,
+  which keeps its native `on T catch` clauses, for every filter. Known
+  deviations: a thrown value is not normalized (`toException`), so a
+  JavaScript `TypeError` is no `NullReferenceException` and the variable of a
+  catch-all arm is the raw value; an exception thrown by a filter propagates
+  (.NET treats the filter as false); a filter runs after the `finally` blocks
+  between the throw and the clause (.NET runs it before them).
 - **`IrToTsModuleBridge`** — `[NoContainer]` / legacy
   `[ExportedAsModule]` static classes + top-level statements → flat top-level
   functions.

@@ -67,14 +67,24 @@ public class InterpolatedStringEscapeTests
             {
                 public void Fail(string name) =>
                     throw new ArgumentException($"bad `{name}` ${{x}}", nameof(name));
+
+                public void Late(string name) =>
+                    throw new TimeoutException($"bad `{name}` ${{x}}");
             }
             """
         );
 
-        // Printed JS: `${`bad \`${name}\` \${x}`} (Parameter 'name')`
+        // Printed JS: new ArgumentException(`bad \`${name}\` \${x}`, "name")
         await Assert
             .That(result["greeter.ts"])
-            .Contains("`${`bad \\`${name}\\` \\${x}`} (Parameter 'name')`");
+            .Contains("new ArgumentException(`bad \\`${name}\\` \\${x}`, \"name\")");
+
+        // A message the compiler composes (an exception without a runtime class)
+        // nests the interpolation in its own template literal.
+        // Printed JS: `System.TimeoutException: ${`bad \`${name}\` \${x}`}`
+        await Assert
+            .That(result["greeter.ts"])
+            .Contains("`System.TimeoutException: ${`bad \\`${name}\\` \\${x}`}`");
     }
 
     private static string TranspileMethodBody(string body)

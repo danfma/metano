@@ -2,6 +2,7 @@
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
 import { isString } from "metano-runtime";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
@@ -130,7 +131,9 @@ export class Issue {
     const previousStatus = this.status;
 
     if (!IssueWorkflow.canTransition(previousStatus, nextStatus)) {
-      throw new Error(`Cannot transition issue from ${previousStatus} to ${nextStatus}.`);
+      throw new InvalidOperationException(
+        `Cannot transition issue from ${previousStatus} to ${nextStatus}.`,
+      );
     }
 
     this.status = nextStatus;

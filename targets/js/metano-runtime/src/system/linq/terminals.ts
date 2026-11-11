@@ -10,6 +10,7 @@
  * as soon as the answer is known.
  */
 import { HashSet } from "../collections/hash-set.ts";
+import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";
 import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type {
@@ -79,7 +80,7 @@ export function first<T>(
     queryable,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return item;
-      throw new Error("Sequence contains no matching element");
+      throw noElementException(predicate);
     },
   };
 }
@@ -134,7 +135,7 @@ export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableM
           result = item;
           found = true;
         }
-      if (!found) throw new Error("Sequence contains no matching element");
+      if (!found) throw noElementException(predicate);
       return result!;
     },
   };
@@ -214,7 +215,7 @@ export function singleOrDefault<T>(
       for (const item of source)
         if (!predicate || predicate(item)) {
           result = item;
-          if (++count > 1) throw new Error("Sequence contains more than one matching element");
+          if (++count > 1) throw moreThanOneElementException(predicate);
         }
       return result;
     },
@@ -235,9 +236,9 @@ export function single<T>(
       for (const item of source)
         if (!predicate || predicate(item)) {
           result = item;
-          if (++count > 1) throw new Error("Sequence contains more than one matching element");
+          if (++count > 1) throw moreThanOneElementException(predicate);
         }
-      if (count === 0) throw new Error("Sequence contains no matching element");
+      if (count === 0) throw noElementException(predicate);
       return result!;
     },
   };
@@ -348,7 +349,7 @@ export function minBy<T, K>(
           found = true;
         }
       }
-      if (!found) throw new Error("Sequence contains no elements");
+      if (!found) throw new InvalidOperationException("Sequence contains no elements");
       return result!;
     },
   };
@@ -374,7 +375,7 @@ export function maxBy<T, K>(
           found = true;
         }
       }
-      if (!found) throw new Error("Sequence contains no elements");
+      if (!found) throw new InvalidOperationException("Sequence contains no elements");
       return result!;
     },
   };
@@ -395,7 +396,7 @@ export function average<T>(
         total += selector ? selector(item) : (item as unknown as number);
         n++;
       }
-      if (n === 0) throw new Error("Sequence contains no elements");
+      if (n === 0) throw new InvalidOperationException("Sequence contains no elements");
       return total / n;
     },
   };
@@ -423,4 +424,20 @@ export function aggregate<T, A>(seed: A, accumulator: (acc: A, item: T) => A): A
       return result;
     },
   };
+}
+
+/** .NET's exception for a sequence with no element, or with none that matches `predicate`. */
+function noElementException(predicate: unknown): InvalidOperationException {
+  return new InvalidOperationException(
+    predicate ? "Sequence contains no matching element" : "Sequence contains no elements",
+  );
+}
+
+/** .NET's exception for a sequence with more than one element (that matches `predicate`). */
+function moreThanOneElementException(predicate: unknown): InvalidOperationException {
+  return new InvalidOperationException(
+    predicate
+      ? "Sequence contains more than one matching element"
+      : "Sequence contains more than one element",
+  );
 }

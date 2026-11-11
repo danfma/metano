@@ -1,4 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
+
 export type Title = string & { readonly __brand: "Title" };
 
 export namespace Title {
@@ -10,7 +12,7 @@ export namespace Title {
     const trimmed = value.trim();
 
     if (trimmed.length === 0) {
-      throw new Error("blank");
+      throw new ArgumentException("blank");
     }
 
     return Title.create(trimmed);

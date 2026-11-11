@@ -83,6 +83,7 @@ export class SourceOrderCalls {
   }
 }
 
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import { Engine } from "./engine";
 import { Label } from "./label";
 import { Trace } from "./trace";
@@ -140,12 +141,12 @@ export class Holder {
 
   get throwA(): number {
     Trace.next("A");
-    throw new Error("A");
+    throw new InvalidOperationException("A");
   }
 
   get throwB(): number {
     Trace.next("B");
-    throw new Error("B");
+    throw new InvalidOperationException("B");
   }
 
   onThis(e: Engine): number {

@@ -208,9 +208,7 @@ public class OutArgumentTranspileTests
     {
         var result = TranspileHelper.Transpile(CallSitesSource);
 
-        await Assert
-            .That(result["glossary.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("out-argument-call-sites.ts"));
+        await TranspileHelper.AssertGolden("out-argument-call-sites.ts", result["glossary.ts"]);
     }
 
     [Test]

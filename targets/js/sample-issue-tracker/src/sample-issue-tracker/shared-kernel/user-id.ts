@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { UUID, isNullOrWhiteSpace } from "metano-runtime";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export type UserId = string & { readonly __brand: "UserId" };
 
@@ -19,7 +20,7 @@ export namespace UserId {
 
   export function from(value: string): UserId {
     if (isNullOrWhiteSpace(value)) {
-      throw new Error("A user id cannot be blank.");
+      throw new InvalidOperationException("A user id cannot be blank.");
     }
 
     return UserId.create(value.trim());

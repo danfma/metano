@@ -1,5 +1,6 @@
 import { bigIntegerFromDecimal, bigIntegerFromDouble, decimalTextFromBigInteger, doubleFromBigInteger, int32FromBigInteger, int64FromBigInteger, narrowFromBigInteger, uint32FromBigInteger } from "metano-runtime";
 import { Decimal } from "decimal.js";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Big {
   constructor() { }
@@ -58,7 +59,7 @@ export class Big {
 
   unwrapped(b: bigint | null): number {
     return int32FromBigInteger(b ?? (() => {
-      throw new Error("Nullable object must have a value.");
+      throw new InvalidOperationException("Nullable object must have a value.");
     })());
   }
 }

@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { BuildContext } from "./build-context";
 import { Widget } from "./widget";
 
@@ -19,7 +20,7 @@ export abstract class StatefulWidget<TState> extends Widget {
 
   render(): HTMLElement {
     if (this._context == null) {
-      throw new Error("Widget not bound to a context.");
+      throw new InvalidOperationException("Widget not bound to a context.");
     }
 
     return this.build(this._context).render();

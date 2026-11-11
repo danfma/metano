@@ -1,5 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
+
 export type SnowflakeId = bigint & { readonly __brand: "SnowflakeId" };
 
 export namespace SnowflakeId {
@@ -13,7 +15,7 @@ export namespace SnowflakeId {
 
   export function from(value: bigint): SnowflakeId {
     if (value <= 0n) {
-      throw new Error("A snowflake id must be positive.");
+      throw new InvalidOperationException("A snowflake id must be positive.");
     }
 
     return SnowflakeId.create(value);

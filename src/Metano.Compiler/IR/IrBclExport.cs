@@ -7,8 +7,9 @@ namespace Metano.Compiler.IR;
 /// <c>decimal.js</c> on the TypeScript target.
 /// </summary>
 /// <param name="ExportedName">Identifier emitted in the target source.</param>
-/// <param name="FromPackage">Package name the identifier is imported
-/// from.</param>
+/// <param name="FromPackage">Package name, or module specifier inside a
+/// package (<c>metano-runtime/system/exceptions/exception</c>), the identifier
+/// is imported from.</param>
 /// <param name="Version">Semver specifier the backend merges into its
 /// package manifest, or <see langword="null"/> when the
 /// <c>[ExportFromBcl]</c> attribute did not specify a version (backends

@@ -464,9 +464,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(BigIntegerSource);
 
-        await Assert
-            .That(files["big.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-big-integer.ts"));
+        await TranspileHelper.AssertGolden("int64-big-integer.ts", files["big.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }

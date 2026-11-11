@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ArgumentException, ArgumentNullException } from "#/system/exceptions/index.ts";
 import { addEntry, getValueOrDefault, tryGetValue } from "#/system/collections/dictionary-helpers.ts";
 
 describe("getValueOrDefault", () => {
@@ -58,6 +59,7 @@ describe("addEntry", () => {
   test("throws on a duplicate key without overwriting the stored value", () => {
     const map = new Map([[1, "a"]]);
 
+    expect(() => addEntry(map, 1, "b")).toThrow(ArgumentException);
     expect(() => addEntry(map, 1, "b")).toThrow(
       "An item with the same key has already been added. Key: 1",
     );
@@ -73,6 +75,7 @@ describe("addEntry", () => {
   test("throws on a null key", () => {
     const map = new Map<string | null, number>();
 
+    expect(() => addEntry(map, null, 1)).toThrow(ArgumentNullException);
     expect(() => addEntry(map, null, 1)).toThrow("Value cannot be null. (Parameter 'key')");
     expect(map.size).toBe(0);
   });

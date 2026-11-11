@@ -18,10 +18,15 @@ namespace Metano.Compiler.IR;
 /// rewriters transform the arguments without leaving this fact stale.
 /// </para>
 /// <para>
-/// Backends rebuild the target-native error construction from the roles,
-/// emulating how .NET composes <c>Exception.Message</c>.
+/// Backends rebuild the target-native error construction from the roles:
+/// passing them to a runtime class that composes <c>Exception.Message</c> as
+/// .NET does, or emulating that composition themselves.
 /// </para>
 /// </summary>
+/// <param name="ExceptionTypeName">The C# display name of the constructed
+/// exception type (<c>System.ArgumentException</c>), which backends resolve to
+/// their class for it — for a base call, the base the user exception
+/// derives from.</param>
 /// <param name="ArgumentRoles">The role of each argument, aligned by index with
 /// the owning argument list.</param>
 /// <param name="DefaultMessage">The message .NET reports when no message (or a
@@ -39,6 +44,7 @@ namespace Metano.Compiler.IR;
 /// extractor already let-binds them for <c>new</c> (clearing the flag); a
 /// backend honours it for base-constructor calls.</param>
 public sealed record IrExceptionConstruction(
+    string ExceptionTypeName,
     IReadOnlyList<IrExceptionArgumentRole> ArgumentRoles,
     string? DefaultMessage = null,
     bool MessageMayBeNull = false,

@@ -1,4 +1,7 @@
-export class AppException extends Error {
+import { Exception } from "metano-runtime/system/exceptions/exception";
+import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
+
+export class AppException extends Exception {
   constructor(message: string, readonly code: number) {
     super(message);
     this.code = code;
@@ -28,7 +31,7 @@ export class Handlers {
     }
 
     if (kind === "invalid") {
-      throw new Error(kind);
+      throw new InvalidOperationException(kind);
     }
   }
 
@@ -215,7 +218,7 @@ export class Handlers {
     } catch (e$) {
       if (e$ instanceof AppException) {
         return "app";
-      } else if (e$ instanceof Error) {
+      } else if (e$ instanceof InvalidOperationException) {
         const e = e$;
 
         return "invalid:" + e.message;
@@ -239,7 +242,7 @@ export class Handlers {
     }
   }
 
-  typeParameterFirst<TFailure extends Error>(kind: string): string {
+  typeParameterFirst<TFailure extends Exception>(kind: string): string {
     try {
       this.work(kind);
 

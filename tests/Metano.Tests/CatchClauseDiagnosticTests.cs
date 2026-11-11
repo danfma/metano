@@ -3,96 +3,64 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// MS0001 for the catch clauses the single-<c>catch</c> lowering cannot keep
-/// faithful (#628): a BCL exception type has no class of its own in
-/// TypeScript (generated code constructs every BCL exception as a plain
-/// <c>Error</c>), so a clause on one
-/// cannot come ahead of a clause for another exception type; a clause on a
-/// type parameter has no runtime test; and a filter cannot declare a
-/// variable or pass an <c>out</c> argument.
+/// The diagnostics of the catch clauses the single-<c>catch</c> lowering
+/// cannot keep faithful (#628, #651): MS0045 for a clause on an exception type
+/// with no runtime class (a BCL exception outside the runtime mapping, spec
+/// 011 FR-014), MS0001 for a clause on a type parameter (no runtime test) and
+/// for a filter that declares a variable or passes an <c>out</c> argument.
+/// Clauses on mapped BCL exceptions test their runtime class, so the chain
+/// keeps them apart in any order.
 /// </summary>
 public class CatchClauseDiagnosticTests
 {
-    private const string SharedRuntimeClassReason =
-        "cannot be lowered ahead of a clause for another exception type: its exception type is "
-        + "not transpiled, so the target has no class of its own to test (generated code "
-        + "constructs every BCL exception as a plain 'Error') and the clause tests "
-        + "'instanceof Error', which also takes the exceptions the later clauses handle. "
-        + "Telling such types apart is tracked in #651.";
-
     [Test]
-    public async Task BclClauseAheadOfAnotherBclType_IsReportedAtTheClause()
+    public async Task ClauseOnAnUnmappedBclException_IsAnErrorAtTheClause()
     {
-        var warning = CollectUnsupported(
-                """
-                try { Work(); }
-                catch (InvalidOperationException) { Note(1); }
-                catch (OverflowException) { Note(2); }
-                """
-            )
-            .Single();
-
-        await Assert
-            .That(warning.Message)
-            .IsEqualTo($"Catch clause '(InvalidOperationException)' {SharedRuntimeClassReason}");
-
-        await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
-        await Assert.That(ReportedText(warning)).IsEqualTo("(InvalidOperationException)");
-
-        await Assert
-            .That(ReportedLineText(warning))
-            .IsEqualTo("catch (InvalidOperationException) { Note(1); }");
-    }
-
-    [Test]
-    public async Task BclClauseAheadOfACatchAll_IsReported()
-    {
-        var warning = CollectUnsupported(
-                """
-                try { Work(); }
-                catch (FormatException e) { Note(e.Message.Length); }
-                catch (Exception) { Note(2); }
-                """
-            )
-            .Single();
-
-        await Assert
-            .That(warning.Message)
-            .IsEqualTo($"Catch clause '(FormatException e)' {SharedRuntimeClassReason}");
-
-        await Assert.That(ReportedText(warning)).IsEqualTo("(FormatException e)");
-    }
-
-    [Test]
-    public async Task BclClauseAheadOfATranspiledType_IsReported()
-    {
-        var warning = CollectUnsupported(
-                """
-                try { Work(); }
-                catch (InvalidOperationException) when (Ready) { Note(1); }
-                catch (AppException) { Note(2); }
-                """
-            )
-            .Single();
-
-        await Assert.That(ReportedText(warning)).IsEqualTo("(InvalidOperationException)");
-    }
-
-    [Test]
-    public async Task EveryBclClauseAheadOfAnotherType_IsReported()
-    {
-        var warnings = CollectUnsupported(
+        var (_, diagnostics) = Transpile(
             """
             try { Work(); }
-            catch (InvalidOperationException) { Note(1); }
-            catch (FormatException) { Note(2); }
-            catch (OverflowException) { Note(3); }
+            catch (TimeoutException) { Note(1); }
+            catch (InvalidOperationException) { Note(2); }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnanswerableRuntimeTypeTest);
+
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(ReportedText(error)).IsEqualTo("(TimeoutException)");
+
+        await Assert
+            .That(error.Message)
+            .IsEqualTo(
+                "'(TimeoutException)' cannot be lowered: 'System.TimeoutException' has no runtime "
+                    + "class in the target, so no type test can tell it apart from other "
+                    + "exceptions, and testing for 'Exception' instead would take them all (spec "
+                    + "011 FR-014). Catch or test a base type the runtime defines, or a transpiled "
+                    + "exception of your own."
+            );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task LoneClauseOnAnUnmappedBclException_IsReported()
+    {
+        var (_, diagnostics) = Transpile(
+            """
+            try { Work(); }
+            catch (System.IO.IOException e) { Note(e.Message.Length); }
             """
         );
 
         await Assert
-            .That(warnings.Select(ReportedText))
-            .IsEquivalentTo(["(InvalidOperationException)", "(FormatException)"]);
+            .That(
+                diagnostics
+                    .Where(d => d.Code == DiagnosticCodes.UnanswerableRuntimeTypeTest)
+                    .Select(ReportedText)
+            )
+            .IsEquivalentTo(["(System.IO.IOException e)"]);
     }
 
     [Test]
@@ -138,9 +106,48 @@ public class CatchClauseDiagnosticTests
             catch { Note(3); }
             """
     )]
+    [Arguments(
+        """
+            try { Work(); }
+            catch (InvalidOperationException) { Note(1); }
+            catch (OverflowException) { Note(2); }
+            """
+    )]
+    [Arguments(
+        """
+            try { Work(); }
+            catch (FormatException e) { Note(e.Message.Length); }
+            catch (Exception) { Note(2); }
+            """
+    )]
+    [Arguments(
+        """
+            try { Work(); }
+            catch (InvalidOperationException) when (Ready) { Note(1); }
+            catch (AppException) { Note(2); }
+            """
+    )]
+    [Arguments(
+        """
+            try { Work(); }
+            catch (InvalidOperationException) { Note(1); }
+            catch (FormatException) { Note(2); }
+            catch (OverflowException) { Note(3); }
+            """
+    )]
     public async Task ClausesTheChainKeepsApart_AreNotReported(string body)
     {
-        await Assert.That(CollectUnsupported(body)).IsEmpty();
+        var diagnostics = Transpile(body).Diagnostics;
+
+        await Assert
+            .That(
+                diagnostics.Where(d =>
+                    d.Code
+                        is DiagnosticCodes.UnsupportedFeature
+                            or DiagnosticCodes.UnanswerableRuntimeTypeTest
+                )
+            )
+            .IsEmpty();
     }
 
     [Test]
@@ -232,6 +239,7 @@ public class CatchClauseDiagnosticTests
                     """
                     try { Work(); }
                     catch (InvalidOperationException) { Note(1); }
+                    catch (TimeoutException) { Note(3); }
                     catch (AppException e) when (e.InnerException is AppException inner) { Note(inner.Code); }
                     catch (AppException) when (Ready) { Note(2); }
                     """
@@ -255,6 +263,11 @@ public class CatchClauseDiagnosticTests
         await Assert
             .That(warnings.Select(ReportedText))
             .IsEquivalentTo(["when (e.InnerException is AppException inner)", "when (Ready)"]);
+
+        // Dart tests every exception type natively: no clause needs a runtime class.
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnanswerableRuntimeTypeTest))
+            .IsEmpty();
     }
 
     private static IReadOnlyList<MetanoDiagnostic> CollectUnsupported(string body) =>
@@ -304,14 +317,6 @@ public class CatchClauseDiagnosticTests
         var location = ReportedLocation(diagnostic);
 
         return location.SourceTree!.GetText().ToString(location.SourceSpan);
-    }
-
-    private static string ReportedLineText(MetanoDiagnostic diagnostic)
-    {
-        var location = ReportedLocation(diagnostic);
-        var line = location.GetLineSpan().StartLinePosition.Line;
-
-        return location.SourceTree!.GetText().Lines[line].ToString().Trim();
     }
 
     /// <summary>The diagnostic's location, which must be in source.</summary>

@@ -187,8 +187,8 @@ internal static partial class IrToTsClassBridge
     /// </list>
     /// </summary>
     /// <summary>
-    /// The base-constructor call of <paramref name="ctor"/>: role-mapped
-    /// <c>Error</c> arguments when the base is a BCL exception (see
+    /// The base-constructor call of <paramref name="ctor"/>: the role-mapped
+    /// arguments of its runtime class when the base is a BCL exception (see
     /// <see cref="IrToTsExceptionConstructionBridge"/>); the base overload's
     /// selector before the bound arguments when the base call resolved into a
     /// dispatched set (<c>super(Money.byMoneyAmount, amount)</c>, spec 013

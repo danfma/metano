@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 import { CurrencyConversionException } from "#/sample-operator-overloading/currency-conversion-exception";
 import { InvalidCurrencyCodeException } from "#/sample-operator-overloading/invalid-currency-code-exception";
 import { UnsupportedCurrencyException } from "#/sample-operator-overloading/unsupported-currency-exception";
@@ -7,8 +8,10 @@ describe("Currency exceptions", () => {
   test("ArgumentException base appends the parameter name like .NET", () => {
     const error = new InvalidCurrencyCodeException("XYZ");
 
+    expect(error).toBeInstanceOf(ArgumentException);
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Unknown currency code 'XYZ' (Parameter 'code')");
+    expect(error.paramName).toBe("code");
   });
 
   test("Message override two levels below the BCL base reads the inherited message", () => {
@@ -19,8 +22,9 @@ describe("Currency exceptions", () => {
     expect(error.message).toBe(
       "Unsupported currency. Unknown currency code 'JPY' (Parameter 'code')",
     );
-    expect(String(error)).toBe(
-      "Error: Unsupported currency. Unknown currency code 'JPY' (Parameter 'code')",
+    // `toString()` is the runtime Exception's .NET format, over the overridden message.
+    expect(String(error)).toEndWith(
+      ": Unsupported currency. Unknown currency code 'JPY' (Parameter 'code')",
     );
   });
 

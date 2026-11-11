@@ -339,20 +339,84 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 - `throw;` rethrows the caught value (2.x emitted `throw null;`), also after
   the clause's variable was reassigned.
 - A clause on a BCL exception type (`catch (InvalidOperationException)`)
-  tests `instanceof Error`, because generated code constructs every BCL
-  exception as a plain `Error`. It therefore no longer catches a thrown value
-  that is not an `Error` of the current realm (a string, a plain object, a
+  tests `instanceof` the exception's `metano-runtime` class (see the next
+  section, #651). It therefore does not catch a thrown value that is not an
+  instance of that class (a string, a plain object, a plain `Error`, a
   cross-realm `Error` from an iframe, `node:vm` or a Jest sandbox), which
-  `catch (Exception)` and a general `catch` still do, and it still takes
-  every `Error` whatever its C# type (#651).
-- New `MS0001` warnings: a BCL-typed clause ahead of a clause for another
-  exception type (its `instanceof Error` test would take that clause's
-  exceptions); a clause on a type parameter; an exception filter that
-  declares a variable or passes an `out` argument. On Dart, which keeps its
-  `on T catch` clauses, every exception filter is reported.
+  `catch (Exception)` and a general `catch` still do.
+- New `MS0001` warnings: a clause on a type parameter; an exception filter
+  that declares a variable or passes an `out` argument. On Dart, which keeps
+  its `on T catch` clauses, every exception filter is reported. A clause on
+  a BCL exception type without a runtime class is the `MS0045` error of the
+  next section.
 - A filter runs after the `finally` blocks between the throw and the clause
   (.NET runs it before them), and an exception thrown by a filter propagates
   (.NET treats the filter as false).
+
+### ⚠ BCL exceptions are `metano-runtime` classes (spec 011 FR-013, FR-014, FR-016; #651)
+
+- `new InvalidOperationException("x")` emits `new InvalidOperationException("x")`
+  imported from its own module
+  (`metano-runtime/system/exceptions/invalid-operation-exception`); 2.x emitted
+  `new Error("x")`. The arguments pass by role in the runtime constructor's
+  order, and the runtime class composes `message` as .NET does
+  (`new ArgumentException("bad", "p")`, not `new Error("bad (Parameter 'p')")`;
+  `new ArgumentOutOfRangeException("p", undefined, "m")` for .NET's
+  `(paramName, message)` overload). The inner exception is the second
+  constructor argument instead of the `{ cause }` option, and is still exposed
+  as `cause`.
+- The mapped set is the runtime's exception hierarchy: `Exception`,
+  `SystemException`, `InvalidOperationException`, `ArgumentException`,
+  `ArgumentNullException`, `ArgumentOutOfRangeException`,
+  `KeyNotFoundException`, `IndexOutOfRangeException`, `FormatException`,
+  `ArithmeticException`, `OverflowException`, `DivideByZeroException`,
+  `NotSupportedException`, `NotImplementedException`, `InvalidCastException`,
+  `NullReferenceException`, `MissingMethodException`,
+  `ObjectDisposedException`, `OperationCanceledException`,
+  `TaskCanceledException` and `System.Text.Json.JsonException`, declared with
+  `[ExportFromBcl]` in `Metano/Runtime/Exceptions.cs` (a project can map
+  another exception to its own class the same way).
+- A user exception deriving from a BCL exception extends its runtime class
+  (`class InvalidSlugException extends ArgumentException`), and a BCL
+  exception in type position names it (`error: Exception`, 2.x
+  `error: Error`). Hand-written TypeScript that passes a plain `Error` where
+  a C# `Exception` parameter is expected no longer type-checks: pass an
+  `Exception` (`new Exception(error.message, error)` wraps one).
+- `error.name` is the runtime class name (`"InvalidOperationException"`;
+  2.x `"Error"` for every exception, built-in or user-defined). A user
+  exception inherits the name of the runtime class it derives from
+  (`"ArgumentException"` for `InvalidSlugException`), not its own C# name.
+  `String(error)` / `error.toString()` is .NET's format,
+  `System.InvalidOperationException: x` (2.x `Error: x`).
+- `instanceof Error` stays `true` for every exception. `is` / `as` / type
+  patterns and `catch` clauses test `instanceof` the runtime class, so they
+  tell BCL exceptions apart: `ex is ArgumentException` is `false` for an
+  `InvalidOperationException`, `catch (OverflowException)` no longer takes
+  the `FormatException` that `long.Parse("zz")` throws, and a BCL-typed clause
+  ahead of another clause no longer reports `MS0001`. `is Exception` /
+  `as Exception` test the runtime `Exception`, so they are `false` for a
+  plain JavaScript `Error`; `catch (Exception)` and a general `catch` still
+  take every thrown value.
+- A BCL exception outside the mapped set (`TimeoutException`, `IOException`,
+  …) reports `MS0001` where it is constructed and is emitted as the runtime
+  `Exception` with its type name in the message
+  (`new Exception("System.TimeoutException: late")`); a user exception
+  deriving from one extends `Exception`. An `is` / `as` / pattern / `catch`
+  clause on one is the new `MS0045` error (`UnanswerableRuntimeTypeTest`):
+  testing `Exception` instead would take every exception.
+- The runtime throws its own classes everywhere it reproduces a .NET
+  failure: 32-bit integer division by zero (`DivideByZeroException`),
+  `string.Replace` with a null or empty old value, `Dictionary.Add` with a
+  null or duplicate key (`ArgumentNullException` / `ArgumentException`), the
+  LINQ terminals (`InvalidOperationException`, now with .NET's messages:
+  `First()` on an empty sequence says `Sequence contains no elements`, not
+  `… no matching element`) and `Math.Round` / `decimal.Round` with an invalid
+  digit count or mode (`ArgumentOutOfRangeException` / `ArgumentException`
+  with .NET's messages, 2.x `RangeError`). `JsonException` extends
+  `Exception` (2.x `Error`) and lives in
+  `metano-runtime/system/exceptions/json-exception` (still exported from
+  `metano-runtime/system/json`).
+- Dart output is unchanged.
 
 ### ⚠ Unimplemented LINQ overloads report `MS0001` (baseline FR-017, partial; #648)
 

@@ -1,4 +1,5 @@
 import { tryGetValue, tryParseInt32 } from "metano-runtime";
+import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-found-exception";
 
 export class Glossary {
   private readonly _words: Map<string, string> = new Map<string, string>();
@@ -15,7 +16,7 @@ export class Glossary {
     const [$found0, text] = tryGetValue(this._words, key, null);
 
     return $found0 ? text : (() => {
-      throw new Error(key);
+      throw new KeyNotFoundException(key);
     })();
   }
 

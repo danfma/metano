@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ArgumentException, ArgumentNullException } from "#/system/exceptions/index.ts";
 import {
   alignText,
   alignValue,
@@ -77,13 +78,15 @@ describe("stringReplace", () => {
     },
   );
 
-  test("throws the ArgumentException message on an empty old value", () => {
+  test("throws an ArgumentException with .NET's message on an empty old value", () => {
+    expect(() => stringReplace("ab", "", "z")).toThrow(ArgumentException);
     expect(() => stringReplace("ab", "", "z")).toThrow(
       "The value cannot be an empty string. (Parameter 'oldValue')",
     );
   });
 
-  test("throws the ArgumentNullException message on a null old value", () => {
+  test("throws an ArgumentNullException with .NET's message on a null old value", () => {
+    expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(ArgumentNullException);
     expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(
       "Value cannot be null. (Parameter 'oldValue')",
     );

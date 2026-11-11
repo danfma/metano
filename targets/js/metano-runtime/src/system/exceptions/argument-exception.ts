@@ -18,7 +18,10 @@ export class ArgumentException extends SystemException {
   }
 }
 
-/** `message` followed by .NET's ` (Parameter '<name>')` suffix when there is a parameter name. */
+/**
+ * `message` followed by .NET's ` (Parameter '<name>')` suffix when there is a
+ * parameter name; a `null` or empty name adds nothing, as on .NET.
+ */
 function withParameterName(message: string, paramName: string | null | undefined): string {
-  return paramName == null ? message : `${message} (Parameter '${paramName}')`;
+  return paramName ? `${message} (Parameter '${paramName}')` : message;
 }
