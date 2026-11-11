@@ -283,7 +283,7 @@ public class InterpolationFormatClauseTests
 
     /// <summary>
     /// A format the target prints as the clause-free text for every value
-    /// (<c>INumericFormatCapability.PrintsAsDefaultText</c>) keeps the
+    /// (<c>IFormatStringCapability.PrintsAsDefaultText</c>) keeps the
     /// clause-free hole, as on main; the call becomes the same hole.
     /// </summary>
     [Test]
@@ -401,6 +401,113 @@ public class InterpolationFormatClauseTests
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
         await Assert.That(files["holes.ts"]).Contains(lowered);
+    }
+
+    /// <summary>
+    /// A hole and the call take one decision order (formatter, mapping,
+    /// default text, report), so for every default-text fact and every mapped
+    /// format of the TypeScript target they print the same text: the hole is
+    /// the call's expression in a template literal, or both are the same
+    /// clause-free hole.
+    /// </summary>
+    [Test]
+    [Arguments("Guid g", "g", "D")]
+    [Arguments("Guid g", "g", "d")]
+    [Arguments("Guid g", "g", "N")]
+    [Arguments("Guid g", "g", "n")]
+    [Arguments("Guid g", "g", "B")]
+    [Arguments("Guid g", "g", "b")]
+    [Arguments("Guid g", "g", "P")]
+    [Arguments("Guid g", "g", "p")]
+    [Arguments("Color c", "c", "D")]
+    [Arguments("Color c", "c", "d")]
+    [Arguments("Mode m", "m", "G")]
+    [Arguments("Mode m", "m", "g")]
+    [Arguments("Mode m", "m", "F")]
+    [Arguments("Mode m", "m", "f")]
+    [Arguments("DateOnly d", "d", "O")]
+    [Arguments("DateOnly d", "d", "o")]
+    [Arguments("DateOnly d", "d", "yyyy-MM-dd")]
+    [Arguments("System.Numerics.BigInteger b", "b", "G")]
+    [Arguments("System.Numerics.BigInteger b", "b", "r")]
+    public async Task HoleAndCall_PrintTheSameText(string parameter, string value, string format)
+    {
+        var (holeFiles, holeDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, $"$\"{{{value}:{format}}}\"")
+        );
+
+        var (callFiles, callDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, $"{value}.ToString(\"{format}\")")
+        );
+
+        var hole = ReturnedExpressionOf(holeFiles["holes.ts"]);
+        var call = ReturnedExpressionOf(callFiles["holes.ts"]);
+
+        await Assert.That(UnsupportedFeatures(holeDiagnostics)).IsEmpty();
+        await Assert.That(UnsupportedFeatures(callDiagnostics)).IsEmpty();
+        await Assert.That(hole == call || hole == $"`${{{call}}}`").IsTrue();
+    }
+
+    /// <summary>
+    /// A type from a referenced library (a compiled image, not a BCL
+    /// assembly) keeps its own <c>ToString(string)</c>: the call is emitted
+    /// as written, never governed by the BCL format rule.
+    /// </summary>
+    [Test]
+    public async Task LibraryTypeToString_IsNotGoverned()
+    {
+        var files = TranspileHelper.TranspileWithLibraryImage(
+            """
+            namespace Vendor;
+
+            public sealed class Ticket
+            {
+                public string ToString(string format) => format;
+            }
+            """,
+            """
+            [Transpile]
+            public class Reader
+            {
+                public string Run(Vendor.Ticket t) => t.ToString("X");
+            }
+            """
+        );
+
+        await Assert.That(files["reader.ts"]).Contains("return t.toString(\"X\");");
+        await Assert.That(files["reader.ts"]).DoesNotContain("Unsupported expression");
+    }
+
+    /// <summary>
+    /// The 64-bit integers' formats are the capability's answer (MS0066 for
+    /// an unsupported constant one, TODO(#662)), not a core exception: no
+    /// MS0001 in TypeScript; Dart, which declares no capability, reports.
+    /// </summary>
+    [Test]
+    [Arguments("l.ToString(\"B\")", "long l", 1)]
+    [Arguments("u.ToString(\"X\")", "ulong u", 0)]
+    [Arguments("l.ToString(format)", "long l, string format", 0)]
+    [Arguments("$\"{l:#,##0}\"", "long l", 1)]
+    [Arguments("$\"{u,8:N0}\"", "ulong u", 0)]
+    public async Task SixtyFourBitFormats_KeepTheirDiagnostics(
+        string expression,
+        string parameter,
+        int int64FormatReports
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        var (_, dartDiagnostics) = DartTranspileHelper.Transpile(Body(parameter, expression));
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedInt64Format))
+            .IsEqualTo(int64FormatReports);
+
+        await Assert.That(UnsupportedFeatures(dartDiagnostics).Count()).IsEqualTo(1);
     }
 
     [Test]

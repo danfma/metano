@@ -96,9 +96,9 @@ export function invalidFormat(): FormatException {
 }
 
 /** The `NotSupportedException` for a valid .NET format the runtime does not implement. */
-export function unsupportedFormat(format: string, values: string): NotSupportedException {
+export function unsupportedFormat(format: string, typeName: string): NotSupportedException {
   return new NotSupportedException(
-    `The format '${format}' is not supported for ${values} in TypeScript.`,
+    `The format '${format}' is not supported for ${typeName} in TypeScript.`,
   );
 }
 

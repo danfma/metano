@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { alignValue, isNullOrEmpty, isNullOrWhiteSpace, stringReplace } from "#/system/strings.ts";
+import {
+  alignText,
+  alignValue,
+  isNullOrEmpty,
+  isNullOrWhiteSpace,
+  stringReplace,
+} from "#/system/strings.ts";
 
 /** Every BMP code point .NET 10's `char.IsWhiteSpace` accepts. */
 const dotnetWhiteSpace = [
@@ -99,5 +105,22 @@ describe("alignValue", () => {
 
   test("text longer than the alignment is not truncated", () => {
     expect(alignValue(12345, 3)).toBe("12345");
+  });
+});
+
+describe("alignText", () => {
+  test("pads to the alignment, on the left when positive and on the right when negative", () => {
+    expect(alignText("ab", 5)).toBe("   ab");
+    expect(alignText("ab", -5)).toBe("ab   ");
+  });
+
+  test("an undefined alignment leaves the text as it is", () => {
+    expect(alignText(" ab ")).toBe(" ab ");
+    expect(alignText("", undefined)).toBe("");
+  });
+
+  test("a zero or shorter alignment does not truncate", () => {
+    expect(alignText("abc", 0)).toBe("abc");
+    expect(alignText("abc", -2)).toBe("abc");
   });
 });

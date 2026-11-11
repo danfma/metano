@@ -23,8 +23,8 @@ const INTEGER_ROUNDING = "halfAwayFromZero";
 
 /**
  * `value.ToString(format)` for an integer whose hex digits are its two's
- * complement on `bits` bits; `values` names the integers in the exceptions.
- * `""` is `G`.
+ * complement on `bits` bits; `typeName` is how the exceptions name the
+ * integers (`"64-bit integers"`). `""` is `G`.
  *
  * @throws NotSupportedException for `B` or a custom format.
  * @throws FormatException for an invalid format.
@@ -33,7 +33,7 @@ export function formatIntegerText(
   value: bigint,
   format: string,
   bits: number,
-  values: string,
+  typeName: string,
 ): string {
   if (format === "") {
     return value.toString();
@@ -42,10 +42,10 @@ export function formatIntegerText(
   const standard = parseStandardFormat(format);
 
   if (standard === null) {
-    throw unsupportedFormat(format, values);
+    throw unsupportedFormat(format, typeName);
   }
 
-  return formatStandard(value, standard, bits) ?? rejected(format, standard, values);
+  return formatStandard(value, standard, bits) ?? rejected(format, standard, typeName);
 }
 
 /** The text of `value` in a standard format, or `null` when the letter is not an integer format. */
@@ -96,6 +96,8 @@ function hexadecimal(
 }
 
 /** `B` is a valid integer format the runtime does not implement; any other letter is invalid. */
-function rejected(format: string, standard: StandardFormat, values: string): never {
-  throw standard.letter.toUpperCase() === "B" ? unsupportedFormat(format, values) : invalidFormat();
+function rejected(format: string, standard: StandardFormat, typeName: string): never {
+  throw standard.letter.toUpperCase() === "B"
+    ? unsupportedFormat(format, typeName)
+    : invalidFormat();
 }

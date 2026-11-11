@@ -4,15 +4,17 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// The port through which a target says which .NET numeric format strings
-/// its runtime formats with invariant-culture parity (baseline FR-051,
-/// #323), so the extractor reports an interpolation clause or a
-/// <c>ToString(format)</c> the target would otherwise drop or get wrong. The
-/// core decides only C# semantics: which values are numeric, which formats
-/// C# ignores, which <c>ToString(format)</c> calls belong to the BCL, and
-/// which values are constants.
+/// The port through which a target says which .NET format strings it honors
+/// (baseline FR-051, #323): the standard numeric formats its runtime
+/// formatters implement with invariant-culture parity, and the formats of any
+/// BCL type (a <c>Guid</c>, an enum, a date, a <c>BigInteger</c>) whose .NET
+/// text is the target's clause-free text. The extractor reports an
+/// interpolation clause or a <c>ToString(format)</c> the target would
+/// otherwise drop or get wrong. The core decides only C# semantics: which
+/// values are numeric, which formats C# ignores, which <c>ToString(format)</c>
+/// calls belong to the BCL, and which values are constants.
 /// </summary>
-public interface INumericFormatCapability
+public interface IFormatStringCapability
 {
     /// <summary>
     /// Whether the target has a runtime formatter for values of
