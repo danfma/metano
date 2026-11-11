@@ -3,11 +3,15 @@
  * `ArgumentException.ThrowIfNullOrEmpty` / `ThrowIfNullOrWhiteSpace` and the
  * `ArgumentOutOfRangeException.ThrowIf*` family. They throw what .NET throws, with its
  * messages. The compiler maps each guard here declaratively (`Metano/Runtime/Exceptions.cs`)
- * and passes the `[CallerArgumentExpression]` text C# supplies as `paramName`. They are
- * module functions rather than static members, so the exception classes need not import
- * each other in a cycle.
+ * and passes the `[CallerArgumentExpression]` text C# supplies as `paramName`; it maps the
+ * comparison guards only for the `T` these functions compare as .NET does (numbers,
+ * `char`, `bool`, the date and time types) and reports `MS0001` for any
+ * other `T` (a `string`, whose .NET comparison is culture-sensitive, a `Guid`, a user
+ * type). They are module functions rather than static members, so the exception classes
+ * need not import each other in a cycle.
  */
 
+import type { Temporal } from "@js-temporal/polyfill";
 import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
@@ -20,14 +24,39 @@ const EMPTY_STRING_MESSAGE = "The value cannot be an empty string.";
 const WHITE_SPACE_MESSAGE =
   "The value cannot be an empty string or composed entirely of whitespace.";
 
+/** A `decimal.js` value, which compares through `cmp`. */
+type DecimalValue = { cmp(other: never): number };
+
+/** A Temporal value, whose class compares two of them (`Temporal.PlainDate.compare`). */
+type TemporalValue =
+  | Temporal.PlainDate
+  | Temporal.PlainTime
+  | Temporal.PlainDateTime
+  | Temporal.ZonedDateTime
+  | Temporal.Instant
+  | Temporal.Duration;
+
+/** The static `compare` of a Temporal value's class. */
+type TemporalClass = { compare(left: TemporalValue, right: TemporalValue): number };
+
 /**
- * A value `ArgumentOutOfRangeException.ThrowIf*` compares: a JavaScript number or bigint,
- * or a `decimal.js` value, which compares through `cmp`.
+ * A value the sign guards (`ThrowIfZero`, `ThrowIfNegative`, `ThrowIfNegativeOrZero`)
+ * test: a number, a bigint, a `char` (a one-character string) or a `decimal.js` value.
  */
-export type ComparableNumber = number | bigint | { cmp(other: never): number };
+export type SignedValue = number | bigint | string | DecimalValue;
+
+/**
+ * A value the ordered guards compare as .NET's `IComparable<T>.CompareTo` does: a number
+ * (a `NaN` is less than every other number and equal to itself), a bigint, a boolean, a
+ * `char`, a `decimal.js` value or a Temporal value.
+ */
+export type OrderedValue = number | bigint | boolean | string | DecimalValue | TemporalValue;
 
 /** Mirrors `ArgumentNullException.ThrowIfNull(argument, paramName)`. */
-export function throwIfNull(argument: unknown, paramName?: string | null): void {
+export function throwIfNull<T>(
+  argument: T,
+  paramName?: string | null,
+): asserts argument is NonNullable<T> {
   if (argument == null) {
     throw new ArgumentNullException(paramName);
   }
@@ -37,7 +66,7 @@ export function throwIfNull(argument: unknown, paramName?: string | null): void 
 export function throwIfNullOrEmpty(
   argument: string | null | undefined,
   paramName?: string | null,
-): void {
+): asserts argument is string {
   throwIfNull(argument, paramName);
 
   if (argument === "") {
@@ -49,7 +78,7 @@ export function throwIfNullOrEmpty(
 export function throwIfNullOrWhiteSpace(
   argument: string | null | undefined,
   paramName?: string | null,
-): void {
+): asserts argument is string {
   throwIfNull(argument, paramName);
 
   if (isNullOrWhiteSpace(argument)) {
@@ -57,126 +86,175 @@ export function throwIfNullOrWhiteSpace(
   }
 }
 
-/** Mirrors `ArgumentOutOfRangeException.ThrowIfZero(value, paramName)`. */
-export function throwIfZero(value: ComparableNumber, paramName?: string | null): void {
-  if (compareToZero(value) === 0) {
+/** Mirrors `ArgumentOutOfRangeException.ThrowIfZero(value, paramName)`; `-0` is zero, `NaN` is not. */
+export function throwIfZero(value: SignedValue, paramName?: string | null): void {
+  if (isZero(value)) {
     throw outOfRange(value, paramName, "must be a non-zero value.");
   }
 }
 
-/** Mirrors `ArgumentOutOfRangeException.ThrowIfNegative(value, paramName)`. */
-export function throwIfNegative(value: ComparableNumber, paramName?: string | null): void {
-  if (compareToZero(value) < 0) {
+/**
+ * Mirrors `ArgumentOutOfRangeException.ThrowIfNegative(value, paramName)`. .NET tests the
+ * sign bit (`double.IsNegative`), so `-0` and `NaN` are negative too.
+ */
+export function throwIfNegative(value: SignedValue, paramName?: string | null): void {
+  if (isNegative(value)) {
     throw outOfRange(value, paramName, "must be a non-negative value.");
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value, paramName)`. */
-export function throwIfNegativeOrZero(value: ComparableNumber, paramName?: string | null): void {
-  if (compareToZero(value) <= 0) {
+export function throwIfNegativeOrZero(value: SignedValue, paramName?: string | null): void {
+  if (isNegative(value) || isZero(value)) {
     throw outOfRange(value, paramName, "must be a non-negative and non-zero value.");
   }
 }
 
-/** Mirrors `ArgumentOutOfRangeException.ThrowIfEqual(value, other, paramName)`. */
-export function throwIfEqual<T extends ComparableNumber>(
-  value: T,
-  other: T,
-  paramName?: string | null,
-): void {
-  if (compare(value, other) === 0) {
-    throw outOfRange(value, paramName, `must not be equal to '${String(other)}'.`);
+/**
+ * Mirrors `ArgumentOutOfRangeException.ThrowIfEqual(value, other, paramName)`, with
+ * `EqualityComparer<T>.Default`: `NaN` equals `NaN`, `-0` equals `0`, and a value with an
+ * `equals` method (a record, a `decimal.js` or Temporal value) is asked.
+ */
+export function throwIfEqual<T>(value: T, other: T, paramName?: string | null): void {
+  if (areEqual(value, other)) {
+    throw outOfRange(value, paramName, `must not be equal to '${text(other)}'.`);
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfNotEqual(value, other, paramName)`. */
-export function throwIfNotEqual<T extends ComparableNumber>(
-  value: T,
-  other: T,
-  paramName?: string | null,
-): void {
-  if (compare(value, other) !== 0) {
-    throw outOfRange(value, paramName, `must be equal to '${String(other)}'.`);
+export function throwIfNotEqual<T>(value: T, other: T, paramName?: string | null): void {
+  if (!areEqual(value, other)) {
+    throw outOfRange(value, paramName, `must be equal to '${text(other)}'.`);
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfGreaterThan(value, other, paramName)`. */
-export function throwIfGreaterThan<T extends ComparableNumber>(
+export function throwIfGreaterThan<T extends OrderedValue>(
   value: T,
   other: T,
   paramName?: string | null,
 ): void {
   if (compare(value, other) > 0) {
-    throw outOfRange(value, paramName, `must be less than or equal to '${String(other)}'.`);
+    throw outOfRange(value, paramName, `must be less than or equal to '${text(other)}'.`);
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(value, other, paramName)`. */
-export function throwIfGreaterThanOrEqual<T extends ComparableNumber>(
+export function throwIfGreaterThanOrEqual<T extends OrderedValue>(
   value: T,
   other: T,
   paramName?: string | null,
 ): void {
   if (compare(value, other) >= 0) {
-    throw outOfRange(value, paramName, `must be less than '${String(other)}'.`);
+    throw outOfRange(value, paramName, `must be less than '${text(other)}'.`);
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfLessThan(value, other, paramName)`. */
-export function throwIfLessThan<T extends ComparableNumber>(
+export function throwIfLessThan<T extends OrderedValue>(
   value: T,
   other: T,
   paramName?: string | null,
 ): void {
   if (compare(value, other) < 0) {
-    throw outOfRange(value, paramName, `must be greater than or equal to '${String(other)}'.`);
+    throw outOfRange(value, paramName, `must be greater than or equal to '${text(other)}'.`);
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, other, paramName)`. */
-export function throwIfLessThanOrEqual<T extends ComparableNumber>(
+export function throwIfLessThanOrEqual<T extends OrderedValue>(
   value: T,
   other: T,
   paramName?: string | null,
 ): void {
   if (compare(value, other) <= 0) {
-    throw outOfRange(value, paramName, `must be greater than '${String(other)}'.`);
+    throw outOfRange(value, paramName, `must be greater than '${text(other)}'.`);
   }
 }
 
 /** .NET's `<paramName> ('<value>') <rule>` exception, with the value as `actualValue`. */
 function outOfRange(
-  value: ComparableNumber,
+  value: unknown,
   paramName: string | null | undefined,
   rule: string,
 ): ArgumentOutOfRangeException {
   return new ArgumentOutOfRangeException(
     paramName,
     value,
-    `${String(paramName)} ('${String(value)}') ${rule}`,
+    `${String(paramName)} ('${text(value)}') ${rule}`,
   );
 }
 
-/**
- * The sign of `value - other`: `NaN` when either is a `NaN` number, so every ordered
- * test is false, as .NET's comparisons are.
- */
-function compare(value: ComparableNumber, other: ComparableNumber): number {
-  if (typeof value === "object") {
-    return value.cmp(other as never);
-  }
-
-  const primitive = other as number | bigint;
-
-  if (value === primitive) {
-    return 0;
-  }
-
-  return value < primitive ? -1 : value > primitive ? 1 : Number.NaN;
+/** A value as the message quotes it: JavaScript's `String`, except that `-0` keeps its sign as on .NET. */
+function text(value: unknown): string {
+  return Object.is(value, -0) ? "-0" : String(value);
 }
 
-function compareToZero(value: ComparableNumber): number {
-  return typeof value === "object"
-    ? value.cmp(0 as never)
-    : compare(value, typeof value === "bigint" ? 0n : 0);
+function isZero(value: SignedValue): boolean {
+  if (typeof value === "object") {
+    return value.cmp(0 as never) === 0;
+  }
+
+  if (typeof value === "string") {
+    return value.charCodeAt(0) === 0;
+  }
+
+  return value === 0 || value === 0n;
+}
+
+function isNegative(value: SignedValue): boolean {
+  if (typeof value === "object") {
+    return value.cmp(0 as never) < 0;
+  }
+
+  if (typeof value === "number") {
+    return value < 0 || Object.is(value, -0) || Number.isNaN(value);
+  }
+
+  return typeof value === "bigint" && value < 0n;
+}
+
+/** `EqualityComparer<T>.Default.Equals(value, other)` for the values generated code holds. */
+function areEqual(value: unknown, other: unknown): boolean {
+  if (value === other) {
+    return true;
+  }
+
+  if (typeof value === "number" && typeof other === "number") {
+    return Number.isNaN(value) && Number.isNaN(other);
+  }
+
+  const equals = (value as { equals?: unknown } | null)?.equals;
+
+  return typeof equals === "function" && equals.call(value, other) === true;
+}
+
+/** The sign of `IComparable<T>.CompareTo(value, other)`, as .NET orders each kind. */
+function compare(value: OrderedValue, other: OrderedValue): number {
+  if (typeof value === "number") {
+    return compareNumbers(value, other as number);
+  }
+
+  if (typeof value === "object") {
+    return "cmp" in value
+      ? value.cmp(other as never)
+      : (value.constructor as unknown as TemporalClass).compare(value, other as TemporalValue);
+  }
+
+  const primitive = other as bigint | boolean | string;
+
+  return value === primitive ? 0 : value < primitive ? -1 : 1;
+}
+
+/** `double.CompareTo`: `NaN` is less than every other number and equal to itself; `-0` equals `0`. */
+function compareNumbers(value: number, other: number): number {
+  if (Number.isNaN(value)) {
+    return Number.isNaN(other) ? 0 : -1;
+  }
+
+  if (Number.isNaN(other)) {
+    return 1;
+  }
+
+  return value === other ? 0 : value < other ? -1 : 1;
 }

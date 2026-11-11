@@ -2873,7 +2873,11 @@ public sealed partial class IrExpressionExtractor
         }
         else
         {
-            args = WithCallerArgumentExpressions(inv, InParameterOrder(args, symbol), symbol);
+            args = WithCallerArgumentExpressions(
+                _semantic.GetOperation(inv),
+                InParameterOrder(args, symbol),
+                symbol
+            );
         }
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
@@ -2884,55 +2888,81 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// <paramref name="args"/> followed by the <c>[CallerArgumentExpression]</c>
-    /// texts C# supplies for the trailing parameters the call omits
+    /// <paramref name="args"/> with the <c>[CallerArgumentExpression]</c> texts
+    /// C# supplies for the parameters the call omits
     /// (<c>ArgumentNullException.ThrowIfNull(name)</c> passes <c>"name"</c> as
-    /// <c>paramName</c>), each omitted parameter ahead of one taking its explicit
-    /// default. An argument the call writes wins. A call whose omitted
-    /// parameters capture no expression keeps <paramref name="args"/>.
+    /// <c>paramName</c>), read from Roslyn's bound <paramref name="operation"/>.
+    /// A positional call gains its omitted trailing parameters up to the last
+    /// capturing one, each other omitted parameter marked
+    /// <see cref="IrArgument.IsOmittedDefault"/> with its default; a named or
+    /// reordered call, already one argument per parameter
+    /// (<see cref="InParameterOrder"/>), has the capturing defaults replaced.
+    /// An argument the call writes wins. Extension calls bind by parameter
+    /// name, so the receiver's slot does not shift them.
     /// </summary>
     private List<IrArgument> WithCallerArgumentExpressions(
-        InvocationExpressionSyntax inv,
+        IOperation? operation,
         IEnumerable<IrArgument> args,
         IMethodSymbol? method
     )
     {
-        var written = args.ToList();
+        var bound = args.ToList();
+        var parameters = method?.Parameters ?? [];
+        var lastCapturing = parameters.ToList().FindLastIndex(CapturesCallerArgumentExpression);
 
-        if (method is null || method.IsExtensionMethod || written.Any(a => a.Name is not null))
-            return written;
+        if (
+            lastCapturing < 0
+            || parameters.Skip(bound.Count).Take(lastCapturing + 1).Any(p => p.IsParams)
+        )
+            return bound;
 
-        var omitted = method.Parameters.Skip(written.Count).ToList();
-        var lastCapturing = omitted.FindLastIndex(CapturesCallerArgumentExpression);
+        if (BoundArgumentsOf(operation) is not { } boundArguments)
+            return bound;
 
-        if (lastCapturing < 0 || omitted.Take(lastCapturing + 1).Any(p => p.IsParams))
-            return written;
-
-        if (_semantic.GetOperation(inv) is not IInvocationOperation operation)
-            return written;
-
-        var supplied = operation
-            .Arguments.Where(argument =>
+        var supplied = boundArguments
+            .Where(argument =>
                 argument is { ArgumentKind: ArgumentKind.DefaultValue, Parameter: not null }
             )
-            .ToDictionary(argument => argument.Parameter!.Ordinal, argument => argument.Value);
+            .ToDictionary(argument => argument.Parameter!.Name, argument => argument.Value);
 
-        var filled = omitted
-            .Take(lastCapturing + 1)
-            .Select(parameter => new IrArgument(CallerSuppliedValueOf(parameter, supplied)));
+        for (var index = 0; index <= lastCapturing; index++)
+        {
+            var parameter = parameters[index];
+            var callerText = CallerTextOf(parameter, supplied);
 
-        return [.. written, .. filled];
+            if (index >= bound.Count)
+                bound.Add(
+                    callerText
+                        ?? new IrArgument(BuildDefaultArgument(parameter), IsOmittedDefault: true)
+                );
+            else if (callerText is not null)
+                bound[index] = callerText;
+        }
+
+        return bound;
     }
 
-    private IrExpression CallerSuppliedValueOf(
+    private static IReadOnlyList<IArgumentOperation>? BoundArgumentsOf(IOperation? operation) =>
+        operation switch
+        {
+            IInvocationOperation invocation => invocation.Arguments,
+            IObjectCreationOperation creation => creation.Arguments,
+            _ => null,
+        };
+
+    /// <summary>
+    /// The caller text C# supplied for <paramref name="parameter"/>, when it
+    /// captures one and the call omitted it.
+    /// </summary>
+    private static IrArgument? CallerTextOf(
         IParameterSymbol parameter,
-        IReadOnlyDictionary<int, IOperation> supplied
+        IReadOnlyDictionary<string, IOperation> supplied
     ) =>
         CapturesCallerArgumentExpression(parameter)
-        && supplied.GetValueOrDefault(parameter.Ordinal)?.ConstantValue
+        && supplied.GetValueOrDefault(parameter.Name)?.ConstantValue
             is { HasValue: true, Value: string text }
-            ? new IrLiteral(text, IrLiteralKind.String)
-            : BuildDefaultArgument(parameter);
+            ? new IrArgument(new IrLiteral(text, IrLiteralKind.String))
+            : null;
 
     private static bool CapturesCallerArgumentExpression(IParameterSymbol parameter) =>
         parameter
@@ -4809,7 +4839,13 @@ public sealed partial class IrExpressionExtractor
         // name on each IrArgument and render `name: value`. A construction
         // bound to its resolved overload is already positional, without names.
         if (overload is null)
-            args = InParameterOrder(args, ctor);
+        {
+            args = WithCallerArgumentExpressions(
+                _semantic.GetOperation(creationSyntax),
+                InParameterOrder(args, ctor),
+                ctor
+            );
+        }
 
         var initializer = InitializerOf(creationSyntax);
 
@@ -5161,8 +5197,13 @@ public sealed partial class IrExpressionExtractor
         if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
         {
             var member = DefaultValueLiterals.FindEnumMember(enumType, value);
+
             if (member is not null)
-                return new IrMemberAccess(TypeReferenceTo(enumType), member.Name);
+                return new IrMemberAccess(
+                    TypeReferenceTo(enumType),
+                    member.Name,
+                    BuildOrigin(member)
+                );
         }
         return value switch
         {

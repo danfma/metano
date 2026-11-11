@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
 import {
   throwIfEqual,
@@ -42,7 +43,11 @@ describe("argument guards", () => {
 
   const comparisons: [string, () => void, string][] = [
     ["throwIfZero", () => throwIfZero(0, "zero"), "zero ('0') must be a non-zero value."],
-    ["throwIfNegative", () => throwIfNegative(-3, "neg"), "neg ('-3') must be a non-negative value."],
+    [
+      "throwIfNegative",
+      () => throwIfNegative(-3, "neg"),
+      "neg ('-3') must be a non-negative value.",
+    ],
     [
       "throwIfNegativeOrZero",
       () => throwIfNegativeOrZero(0, "zero"),
@@ -94,8 +99,68 @@ describe("argument guards", () => {
     expect(() => throwIfLessThan(new Decimal("1.5"), new Decimal("2.5"), "d")).toThrow(
       "d ('1.5') must be greater than or equal to '2.5'.",
     );
-    expect(() => throwIfNegative(Number.NaN, "n")).not.toThrow();
-    expect(() => throwIfGreaterThan(Number.NaN, 0, "n")).not.toThrow();
-    expect(() => throwIfNegative(-0, "z")).not.toThrow();
+  });
+
+  // Outcomes printed by .NET 10: the sign guards test the sign bit, the ordered ones
+  // follow double.CompareTo (NaN is the least value) and the equality ones double.Equals.
+  test.each<[string, () => void, boolean]>([
+    ["ThrowIfNegative(NaN)", () => throwIfNegative(Number.NaN, "n"), true],
+    ["ThrowIfNegative(-0)", () => throwIfNegative(-0, "n"), true],
+    ["ThrowIfNegativeOrZero(NaN)", () => throwIfNegativeOrZero(Number.NaN, "n"), true],
+    ["ThrowIfNegativeOrZero(-0)", () => throwIfNegativeOrZero(-0, "n"), true],
+    ["ThrowIfZero(-0)", () => throwIfZero(-0, "n"), true],
+    ["ThrowIfZero(NaN)", () => throwIfZero(Number.NaN, "n"), false],
+    ["ThrowIfEqual(NaN, NaN)", () => throwIfEqual(Number.NaN, Number.NaN, "n"), true],
+    ["ThrowIfNotEqual(NaN, NaN)", () => throwIfNotEqual(Number.NaN, Number.NaN, "n"), false],
+    ["ThrowIfEqual(0, -0)", () => throwIfEqual(0, -0, "n"), true],
+    ["ThrowIfGreaterThan(NaN, 0)", () => throwIfGreaterThan(Number.NaN, 0, "n"), false],
+    ["ThrowIfLessThan(NaN, 0)", () => throwIfLessThan(Number.NaN, 0, "n"), true],
+    ["ThrowIfLessThan(0, NaN)", () => throwIfLessThan(0, Number.NaN, "n"), false],
+    [
+      "ThrowIfGreaterThanOrEqual(NaN, NaN)",
+      () => throwIfGreaterThanOrEqual(Number.NaN, Number.NaN, "n"),
+      true,
+    ],
+  ])("%s throws as on .NET", (_, call, throws) => {
+    if (throws) {
+      expect(call).toThrow(ArgumentOutOfRangeException);
+    } else {
+      expect(call).not.toThrow();
+    }
+  });
+
+  test("-0 keeps its sign in the message, as on .NET", () => {
+    expect(() => throwIfNegative(-0, "z")).toThrow(
+      "z ('-0') must be a non-negative value. (Parameter 'z')\nActual value was -0.",
+    );
+  });
+
+  test("other kinds compare as .NET does", () => {
+    expect(() => throwIfGreaterThan("b", "a", "c")).toThrow(
+      "c ('b') must be less than or equal to 'a'.",
+    );
+    expect(() => throwIfZero("\0", "c")).toThrow(ArgumentOutOfRangeException);
+    expect(() => throwIfGreaterThan(true, false, "b")).toThrow(ArgumentOutOfRangeException);
+    expect(() => throwIfGreaterThan(false, true, "b")).not.toThrow();
+
+    const later = Temporal.PlainDate.from("2020-02-01");
+    const earlier = Temporal.PlainDate.from("2020-01-01");
+
+    expect(() => throwIfGreaterThan(later, earlier, "d")).toThrow(ArgumentOutOfRangeException);
+    expect(() => throwIfLessThan(later, earlier, "d")).not.toThrow();
+
+    const record = { x: 1, equals: (other: { x: number }) => other.x === 1 };
+
+    expect(() => throwIfEqual(record, { x: 1, equals: () => true }, "r")).toThrow(
+      ArgumentOutOfRangeException,
+    );
+    expect(() => throwIfNotEqual("a", "a", "s")).not.toThrow();
+  });
+
+  test("the null guards narrow their argument", () => {
+    const text: string | null = "x";
+
+    throwIfNull(text, "text");
+    expect(text.length).toBe(1);
   });
 });

@@ -979,13 +979,17 @@ public static partial class IrToTsExpressionBridge
                 .Where(n => n is not null)
                 .Cast<string>()
                 .ToList();
-            var mapped = IrToTsBclMapper.TryMapCall(
-                call,
-                loweredReceiver,
-                loweredArgs,
-                typeArgNames ?? [],
-                context.Bcl
-            );
+
+            var mapped = IrToTsArgumentGuards.Admits(call)
+                ? IrToTsBclMapper.TryMapCall(
+                    call,
+                    loweredReceiver,
+                    loweredArgs,
+                    typeArgNames ?? [],
+                    context.Bcl
+                )
+                : null;
+
             if (mapped is not null)
                 return mapped;
 
@@ -1123,6 +1127,11 @@ public static partial class IrToTsExpressionBridge
 
     internal static TsExpression MapArgument(IrArgument arg, IrToTsBridgeContext context)
     {
+        // An omitted default filled only to reach a later argument: the callee
+        // applies its own default for `undefined`, and the call stays minimal.
+        if (arg.IsOmittedDefault)
+            return new TsIdentifier("undefined");
+
         var value = Map(arg.Value, context);
         return arg.IsSpread ? new TsSpreadExpression(value) : value;
     }
