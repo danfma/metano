@@ -20,6 +20,9 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
     /// <summary>The integer format .NET defines that the runtime does not implement (binary).</summary>
     private const char UnimplementedIntegerFormat = 'B';
 
+    /// <summary>The custom date pattern that is a <c>DateOnly</c>'s ISO text.</summary>
+    private const string IsoDatePattern = "yyyy-MM-dd";
+
     private TsNumericFormats() { }
 
     public static TsNumericFormats Instance { get; } = new();
@@ -65,9 +68,12 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
     /// (the <c>UUID</c> string), a numeric enum's <c>D</c> (the enum holds the
     /// number), a <c>[StringEnum]</c>'s <c>G</c> / <c>F</c> when no member is
     /// renamed (it holds the member name), a <c>DateOnly</c>'s <c>O</c>
-    /// (<c>Temporal.PlainDate</c> prints <c>yyyy-MM-dd</c>) and a
+    /// (<c>Temporal.PlainDate</c> prints <c>yyyy-MM-dd</c>) and the one custom
+    /// pattern listed, <c>DateOnly</c>'s <c>yyyy-MM-dd</c> (case-sensitive:
+    /// <c>mm</c> is minutes), which is that same ISO text for every
+    /// <c>DateOnly</c> (years 1 to 9999 print four digits), and a
     /// <c>BigInteger</c>'s <c>G</c> / <c>R</c> (a <c>bigint</c>'s digits).
-    /// Both letter cases mean the same there.
+    /// Both letter cases of a standard format mean the same there.
     /// </summary>
     public bool PrintsAsDefaultText(ITypeSymbol type, string format)
     {
@@ -79,7 +85,7 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
         return type.ToDisplayString() switch
         {
             "System.Guid" => letter is "D",
-            "System.DateOnly" => letter is "O",
+            "System.DateOnly" => letter is "O" || format is IsoDatePattern,
             "System.Numerics.BigInteger" => letter is "G" or "R",
             _ => false,
         };

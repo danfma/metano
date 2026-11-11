@@ -97,4 +97,8 @@ using Metano.Annotations;
 // Guid.ToString() / Guid.ToString(other-format) → identity (the value is already
 // a branded string at runtime). Acts as the fallback for any call that doesn't
 // match a more specific WhenArg0StringEquals filter above.
+// TODO(#657): the fallback should cover only ToString() and the "D" forms, so `X` and an
+// invalid format report MS0001 (baseline FR-051.6); restricting it needs the extractor's
+// LowersByDeclarativeMapping port to see WhenArg0StringEquals filters, or those calls
+// would lose their mapping and print as written.
 [assembly: MapMethod(typeof(Guid), nameof(Guid.ToString), JsTemplate = "$this")]
