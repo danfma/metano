@@ -1187,19 +1187,21 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// The queryable tree of a stage as its trailing argument. An
     /// <c>OrDefault</c> terminal takes it after its <c>defaultValue</c>, so a
-    /// stage without one leaves that slot <c>undefined</c>.
+    /// stage without one leaves that slot <c>undefined</c>. An operator that
+    /// reads no tree (<c>aggregate</c>) gets none: the call runs the plain
+    /// operator, with the value C# computes (#648).
     /// </summary>
     private static IEnumerable<TsExpression> QueryableArguments(
         IrLinqStage stage,
         IrToTsBridgeContext context
     )
     {
-        if (stage.Queryable is not { } queryable)
+        var signature = IrLinqMapping.RuntimeSignatureOf(stage.Operator);
+
+        if (stage.Queryable is not { } queryable || signature.QueryableSlot is null)
             return [];
 
-        var omitted = IrLinqMapping
-            .RuntimeSignatureOf(stage.Operator)
-            .ArgumentsOmittedBeforeTree(stage.Arguments.Count);
+        var omitted = signature.ArgumentsOmittedBeforeTree(stage.Arguments.Count);
 
         return
         [

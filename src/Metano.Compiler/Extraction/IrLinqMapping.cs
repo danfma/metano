@@ -132,8 +132,10 @@ public static class IrLinqMapping
     // the operator's `QueryableMeta` parameter. `LinqRuntimeSignatureTests`
     // checks that each declared overload exists in .NET, that the runtime
     // operator takes as many arguments as it passes and reads its tree at that
-    // slot, and that the tsgo-checked golden `linq-supported-overloads.ts`
-    // calls every declared overload: names and positions, not types.
+    // slot, and that the golden `linq-supported-overloads.ts` calls every
+    // declared overload: names and positions, not types.
+    // TODO(#657): the table describes the TypeScript runtime; it belongs to
+    // the TypeScript target, behind a port, not to the core.
     private static readonly IReadOnlyDictionary<
         IrLinqOperator,
         IrLinqRuntimeSignature

@@ -18,11 +18,11 @@ namespace Metano.Tests;
 /// <c>QueryableMeta</c> at the declared slot; the 64-bit terminals of
 /// <c>int64-terminals.ts</c>, which replace <c>sum</c> / <c>average</c> /
 /// <c>min</c> / <c>max</c> for 64-bit values, take the same arguments. These
-/// are counts and positions, not types or roles: that every declared
-/// overload is called with the right arguments is checked by the golden
-/// <c>linq-supported-overloads.ts</c>, which must call each one (asserted
-/// here) and compiles under <c>tsgo --strict --noImplicitOverride</c> (a
-/// gate, outside this suite).
+/// are counts and positions, not types or roles. The golden
+/// <c>linq-supported-overloads.ts</c> must call every declared overload
+/// (asserted here) and pins the emitted calls byte for byte; no workflow
+/// type-checks it, so a wrong declaration whose call is emitted but
+/// ill-typed is caught only when a maintainer runs <c>tsgo</c> on it.
 /// </summary>
 public partial class LinqRuntimeSignatureTests
 {

@@ -81,6 +81,14 @@ public sealed record IrExtractionContext(
     /// lowers instead of leaving it a member call on the receiver (#648).
     /// <c>null</c>, the default, for a target that does not lower LINQ:
     /// every such call keeps its source form.
+    /// <para>
+    /// TODO(#657): the answer counts the overload's declared parameters,
+    /// where the TypeScript BCL mapper counts the written arguments (they
+    /// differ for an omitted optional or a <c>params</c> argument), and it
+    /// ignores <c>WhenArg0StringEquals</c>, which the mapper tests on the
+    /// lowered arguments. It describes a TypeScript decision and belongs to
+    /// that target together with the runtime signature table.
+    /// </para>
     /// </summary>
     public Func<IMethodSymbol, bool>? LowersByDeclarativeMapping { get; init; }
 

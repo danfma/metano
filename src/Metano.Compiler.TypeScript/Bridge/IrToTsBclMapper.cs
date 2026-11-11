@@ -79,6 +79,10 @@ public static class IrToTsBclMapper
             if (!candidate.HasJsMapping)
                 continue;
 
+            // TODO(#657): the extractor's `LowersByDeclarativeMapping` port
+            // asks the same question with the declared parameter count and
+            // without the `WhenArg0StringEquals` filter below; one shared
+            // per-overload predicate should answer both.
             if (!candidate.MatchesOverload(loweredArgs.Count, call.Origin.ParameterTypes))
                 continue;
 

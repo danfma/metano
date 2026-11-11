@@ -219,6 +219,12 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.MinBy(x => x, null)", "xs.MinBy(x => x)")]
     [Arguments("xs.Max(comparer: null)", "xs.Max()")]
     [Arguments("xs.OrderBy(comparer: null, keySelector: x => x)", "xs.OrderBy(x => x)")]
+    [Arguments("xs.OrderBy(x => x, default(IComparer<int>))", "xs.OrderBy(x => x)")]
+    [Arguments("xs.Distinct(default(IEqualityComparer<int>))", "xs.Distinct()")]
+    [Arguments(
+        "xs.ToDictionary(x => x, comparer: default(IEqualityComparer<int>))",
+        "xs.ToDictionary(x => x)"
+    )]
     public async Task NullComparer_LowersAsTheComparerLessOverload(string call, string comparerLess)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
@@ -389,6 +395,28 @@ public class LinqUnimplementedOverloadTests
             .That(files["calls.ts"])
             .Contains(
                 "return linq(q, firstOrDefault((x: number) => x > 1, this.next(), {\n      tree: {\n        kind: \"binary\",\n        op: \">\","
+            );
+    }
+
+    /// <summary>
+    /// A queryable stage with two lambdas named out of parameter order binds
+    /// each lambda to its own parameter and passes the tree of the first one
+    /// in parameter order (the key selector) at the operator's slot. A
+    /// lambda is not order-sensitive, so no argument is bound in source
+    /// order; no supported stage has two order-sensitive arguments beside a
+    /// lambda, so a tree never follows arguments bound that way.
+    /// </summary>
+    [Test]
+    public async Task QueryableStage_WithReorderedLambdas_PassesTheTreeOfItsKeySelector()
+    {
+        var files = TranspileHelper.Transpile(
+            Queryable("q.ToDictionary(elementSelector: x => x * 2, keySelector: x => x + 1)")
+        );
+
+        await Assert
+            .That(files["calls.ts"])
+            .Contains(
+                "return linq(q, toMap((x: number) => x + 1, (x: number) => x * 2, {\n      tree: {\n        kind: \"binary\",\n        op: \"+\","
             );
     }
 

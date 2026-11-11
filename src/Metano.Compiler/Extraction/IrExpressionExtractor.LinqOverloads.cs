@@ -77,7 +77,7 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The report for a comparer the runtime operator would ignore, or
     /// <c>null</c> when the comparer is the <c>null</c> constant, which the
-    /// comparer-less overload means (<see cref="OmitsNullComparer"/>).
+    /// comparer-less overload means (<see cref="NullComparerArgumentOf"/>).
     /// </summary>
     private UnsupportedLinqStage? IgnoredComparerStageOf(
         InvocationExpressionSyntax call,
@@ -96,16 +96,19 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Whether <paramref name="site"/> passes the <c>null</c> constant as a
-    /// comparer the runtime operator does not take, so it lowers as the
-    /// comparer-less overload.
+    /// The argument <paramref name="site"/> passes as a comparer the runtime
+    /// operator does not take when it is the <c>null</c> constant, so the
+    /// stage lowers as the comparer-less overload without extracting it;
+    /// <c>null</c> otherwise.
     /// </summary>
-    private bool OmitsNullComparer(LinqStageSite site) =>
+    private ArgumentSyntax? NullComparerArgumentOf(LinqStageSite site) =>
         LowersLinqChains
         && IrLinqMapping.OverloadSupportOf(site.Method, site.Op)
             is IrLinqOverloadSupport.IgnoredComparer
-        && ComparerArgumentOf(site.Call, site.Method) is { } comparer
-        && IsNullConstant(comparer);
+        && ComparerArgumentOf(site.Call, site.Method) is { Parent: ArgumentSyntax comparer } value
+        && IsNullConstant(value)
+            ? comparer
+            : null;
 
     /// <summary>
     /// The report for <paramref name="stage"/> when it captures a queryable
@@ -117,7 +120,9 @@ public sealed partial class IrExpressionExtractor
     private UnsupportedLinqStage? MisplacedTreeStageOf(LinqStageSite site, IrLinqStage stage) =>
         LowersLinqChains
         && stage.Queryable is not null
-        && !IrLinqMapping.RuntimeSignatureOf(stage.Operator).ReadsTreeAfter(stage.Arguments.Count)
+        && IrLinqMapping
+            .RuntimeSignatureOf(stage.Operator)
+            .MisplacesTreeAfter(stage.Arguments.Count)
             ? new UnsupportedLinqStage(
                 MethodNameLocationOf(site.Call),
                 MisplacedQueryableTreeMessage(site.Method, stage.Operator)
@@ -204,6 +209,13 @@ public sealed partial class IrExpressionExtractor
             EvaluationOrder = order,
         };
     }
+
+    /// <summary>
+    /// The <c>null</c> literal in place of <paramref name="argument"/>, under
+    /// its name, without extracting it.
+    /// </summary>
+    private static IrArgument SkippedArgument(ArgumentSyntax argument) =>
+        new(new IrLiteral(null, IrLiteralKind.Null), argument.NameColon?.Name.Identifier.ValueText);
 
     /// <summary>
     /// Reports MS0001 for each stage of a chain the runtime operators cannot
