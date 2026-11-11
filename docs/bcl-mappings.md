@@ -120,6 +120,28 @@ automatically whenever any Temporal mapping is used.
 | `List<T>.Count` | `list.length` |
 | `List<T>.Remove(item)` | `listRemove(list, item)` (runtime helper) |
 | `List<T>.ToArray()` | `list.slice()` |
+| `array.Contains(item)` (`MemoryExtensions`) | `array.includes(item)` |
+| `array.IndexOf(item)` / `array.LastIndexOf(item)` (`MemoryExtensions`) | `array.indexOf(item)` / `array.lastIndexOf(item)` |
+| any other `MemoryExtensions` call | `MS0001`, throws at run time |
+
+C# 14 converts an array (and a string) to `ReadOnlySpan<T>` / `Span<T>`
+implicitly, so these calls on a `T[]` bind to the span extensions of
+`System.MemoryExtensions`, not to `System.Linq.Enumerable`
+(`src/Metano/Runtime/Spans.cs`). Only the overloads that take the value alone
+are mapped, to the `List<T>` lowering; an `int?[]` receiver binds the comparer
+overload with the comparer omitted and lowers the same way. Every other
+`MemoryExtensions` call reports `MS0001` and emits an expression that throws:
+a comparer or `StringComparison` overload, `SequenceEqual`, `StartsWith`,
+`EndsWith`, `Sort`, `BinarySearch`, `IndexOfAny`, `ContainsAny`,
+`Count(value)`, `AsSpan`, the static form `MemoryExtensions.Contains(array, x)`,
+and a string receiver such as `text.Count('a')`.
+
+`includes` / `indexOf` / `lastIndexOf` compare like `List<T>.Contains` /
+`IndexOf`: by value for numbers, `bigint`s and strings, by reference for
+records (C# compares records by value), and `indexOf` / `lastIndexOf` do not
+find `NaN` (C# finds it; `includes` does). The subsequence overload
+`array.IndexOf(otherArray)` also writes one argument and still lowers to
+`array.indexOf(otherArray)`, which looks for the array as an element.
 
 ### Immutable collections
 

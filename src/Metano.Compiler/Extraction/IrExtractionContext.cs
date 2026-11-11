@@ -76,21 +76,22 @@ public sealed record IrExtractionContext(
     /// <summary>
     /// The port through which a target says whether a declarative mapping
     /// (<c>[MapMethod]</c>) of its own lowers the overload a call to a BCL
-    /// method binds to, by the same overload filter its BCL mapper applies,
-    /// so the extractor reports a <c>System.Linq</c> method that nothing
-    /// lowers instead of leaving it a member call on the receiver (#648).
-    /// <c>null</c>, the default, for a target that does not lower LINQ:
-    /// every such call keeps its source form.
+    /// method binds to when the call writes the given number of arguments
+    /// (an omitted optional argument is not counted, as the BCL mapper does
+    /// not count it), by the same overload filter its BCL mapper applies, so
+    /// the extractor reports a <c>System.Linq</c> or
+    /// <c>System.MemoryExtensions</c> method that nothing lowers instead of
+    /// leaving it a member call on the receiver (#648, #657). <c>null</c>,
+    /// the default, for a target that reports none of these calls: every
+    /// such call keeps its source form.
     /// <para>
-    /// TODO(#657): the answer counts the overload's declared parameters,
-    /// where the TypeScript BCL mapper counts the written arguments (they
-    /// differ for an omitted optional or a <c>params</c> argument), and it
-    /// ignores <c>WhenArg0StringEquals</c>, which the mapper tests on the
-    /// lowered arguments. It describes a TypeScript decision and belongs to
-    /// that target together with the runtime signature table.
+    /// TODO(#657): the answer ignores <c>WhenArg0StringEquals</c>, which the
+    /// mapper tests on the lowered arguments. It describes a TypeScript
+    /// decision and belongs to that target together with the runtime
+    /// signature table.
     /// </para>
     /// </summary>
-    public Func<IMethodSymbol, bool>? LowersByDeclarativeMapping { get; init; }
+    public Func<IMethodSymbol, int, bool>? LowersByDeclarativeMapping { get; init; }
 
     /// <summary>
     /// The context of a constant parameter default: the origin resolver

@@ -36,7 +36,7 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? symbol
     )
     {
-        if (IsUnloweredLinqCall(symbol))
+        if (IsUnloweredLinqCall(call, symbol))
             return ReportUnloweredLinqCall(call, symbol);
 
         if (UnchainedStageOf(call, symbol) is { } unsupported)
@@ -145,19 +145,24 @@ public sealed partial class IrExpressionExtractor
     /// extension or the static form, that neither the pipe operators nor a
     /// declarative mapping of the target lower.
     /// </summary>
-    private bool IsUnloweredLinqCall([NotNullWhen(true)] IMethodSymbol? symbol) =>
+    private bool IsUnloweredLinqCall(
+        InvocationExpressionSyntax call,
+        [NotNullWhen(true)] IMethodSymbol? symbol
+    ) =>
         LowersLinqChains
         && IrLinqMapping.IsLinqMethod(symbol)
         && !IrLinqMapping.TryResolve(symbol, out _)
-        && !LowersByTargetMapping(symbol);
+        && !LowersByTargetMapping(call, symbol);
 
     /// <summary>
     /// Whether a declarative mapping of the target lowers the overload
-    /// <paramref name="method"/> binds to; <c>true</c> when the target
-    /// declares no mappings port, so its calls are never reported.
+    /// <paramref name="method"/> binds to, with the arguments
+    /// <paramref name="call"/> writes; <c>true</c> when the target declares
+    /// no mappings port, so its calls are never reported.
     /// </summary>
-    private bool LowersByTargetMapping(IMethodSymbol method) =>
-        _context.LowersByDeclarativeMapping?.Invoke(method) ?? true;
+    private bool LowersByTargetMapping(InvocationExpressionSyntax call, IMethodSymbol method) =>
+        _context.LowersByDeclarativeMapping?.Invoke(method, call.ArgumentList.Arguments.Count)
+        ?? true;
 
     /// <summary>
     /// The argument <paramref name="call"/> passes as its comparer, or

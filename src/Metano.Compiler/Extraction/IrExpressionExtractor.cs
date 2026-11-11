@@ -179,9 +179,10 @@ public sealed partial class IrExpressionExtractor
             // those through the rewriter façade would touch 5+ call sites
             // for one rewriter's benefit.
             new Invocation.ExtensionMethodRewriter(TryRewriteExtensionCall),
-            // Must stay last: it reports the LINQ calls none of the entries
-            // above lowered (#648).
+            // These two must stay last: they report the LINQ (#648) and
+            // MemoryExtensions (#657) calls none of the entries above lowered.
             new Invocation.UnsupportedLinqCallRewriter(RewriteUnsupportedLinqCall),
+            new Invocation.UnsupportedSpanCallRewriter(RewriteUnloweredSpanCall),
         };
     }
 
