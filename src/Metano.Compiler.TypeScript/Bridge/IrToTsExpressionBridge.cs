@@ -492,7 +492,7 @@ public static partial class IrToTsExpressionBridge
             [
                 CheckedArrayLength(
                     AsArrayIndex(Map(creation.Length, context), creation.LengthKind),
-                    creation.Length
+                    creation
                 ),
             ],
             ArrayElementTypeArguments(creation)
@@ -510,8 +510,8 @@ public static partial class IrToTsExpressionBridge
     /// length throws .NET's <c>OverflowException</c>, where
     /// <c>new Array(-1)</c> throws a <c>RangeError</c> (#651).
     /// </summary>
-    private static TsExpression CheckedArrayLength(TsExpression length, IrExpression source) =>
-        source is IrLiteral { Value: int constant } && constant >= 0
+    private static TsExpression CheckedArrayLength(TsExpression length, IrArrayCreation creation) =>
+        creation.LengthIsNonNegativeConstant
             ? length
             : new TsCallExpression(new TsRuntimeHelperReference("arrayLength"), [length]);
 
