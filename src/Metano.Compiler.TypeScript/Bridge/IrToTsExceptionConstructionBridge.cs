@@ -210,10 +210,37 @@ public static class IrToTsExceptionConstructionBridge
     {
         var operands = ErrorOperands.Bind(construction, creation.Arguments, context);
         var exceptionClass = ClassOf(construction);
+        var arguments = BuildArguments(
+            construction,
+            operands,
+            exceptionClass,
+            ConstructionSite.New
+        );
 
-        return new TsNewExpression(
-            exceptionClass.ValueReference(),
-            BuildArguments(construction, operands, exceptionClass, ConstructionSite.New)
+        if (!IrToTsTypeMapper.ExceptionClasses.IsMapped(construction.ExceptionTypeName))
+            return NamedException(construction.ExceptionTypeName, arguments);
+
+        return new TsNewExpression(exceptionClass.ValueReference(), arguments);
+    }
+
+    /// <summary>
+    /// <c>namedException("System.IO", "IOException", message, inner)</c>: the
+    /// root <c>Exception</c> an unmapped exception lowers to, with the message
+    /// C# passed and the C# type as its <c>name</c> and <c>toString()</c> prefix
+    /// (spec 011 FR-014).
+    /// </summary>
+    private static TsExpression NamedException(
+        string exceptionTypeName,
+        IReadOnlyList<TsExpression> rootArguments
+    )
+    {
+        var separator = exceptionTypeName.LastIndexOf('.');
+        var typeNamespace = separator < 0 ? "" : exceptionTypeName[..separator];
+        var typeName = exceptionTypeName[(separator + 1)..];
+
+        return new TsCallExpression(
+            new TsRuntimeHelperReference("namedException"),
+            [new TsStringLiteral(typeNamespace), new TsStringLiteral(typeName), .. rootArguments]
         );
     }
 
@@ -272,9 +299,8 @@ public static class IrToTsExceptionConstructionBridge
     }
 
     /// <summary>
-    /// The message of a construction whose class does not compose it: the
-    /// type name when <see cref="MessagePlan.NamesType"/>, the base message,
-    /// then the .NET suffix of each <see cref="MessagePlan.Folded"/> role.
+    /// The message of a construction whose class does not compose it: the base
+    /// message, then the .NET suffix of each <see cref="MessagePlan.Folded"/> role.
     /// </summary>
     private static TsExpression? ComposeMessage(
         IrExceptionConstruction construction,
@@ -283,9 +309,6 @@ public static class IrToTsExceptionConstructionBridge
     )
     {
         var composer = new ErrorMessageComposer();
-
-        if (plan.NamesType)
-            AppendTypeName(composer, construction, operands);
 
         AppendBaseMessage(composer, construction, operands);
         AppendNamedSuffix(
@@ -308,26 +331,6 @@ public static class IrToTsExceptionConstructionBridge
         return composer.Build();
     }
 
-    /// <summary>
-    /// <c>"System.TimeoutException: "</c> (or the bare name when there is no
-    /// message to follow it): the root <c>Exception</c> an unmapped exception
-    /// constructs keeps its name only in the message (spec 011 FR-014).
-    /// </summary>
-    private static void AppendTypeName(
-        ErrorMessageComposer composer,
-        IrExceptionConstruction construction,
-        ErrorOperands operands
-    )
-    {
-        var typeName = construction.ExceptionTypeName;
-
-        var hasMessage =
-            construction.DefaultMessage is not null
-            || operands.SuppliedValueOf(IrExceptionArgumentRole.Message) is not null;
-
-        composer.AppendText(hasMessage ? typeName + ": " : typeName);
-    }
-
     /// <summary>Where an exception construction stands.</summary>
     private enum ConstructionSite
     {
@@ -348,17 +351,11 @@ public static class IrToTsExceptionConstructionBridge
     /// <c>System.Exception</c> (its default message names the user class,
     /// which the runtime cannot know), and a construction passing a role its
     /// mapped class does not take.</param>
-    /// <param name="NamesType">Whether the message starts with the type name:
-    /// the <c>new</c> of an unmapped exception.</param>
     /// <param name="Folded">The suffix roles (<c>paramName</c>,
     /// <c>actualValue</c>, <c>objectName</c>) the construction supplies but the
     /// class does not take, which the composed message carries as .NET's text
     /// (<c>" (Parameter 'p')"</c>, …) instead of dropping them.</param>
-    private sealed record MessagePlan(
-        bool Composes,
-        bool NamesType,
-        IReadOnlySet<IrExceptionArgumentRole> Folded
-    )
+    private sealed record MessagePlan(bool Composes, IReadOnlySet<IrExceptionArgumentRole> Folded)
     {
         private static readonly IrExceptionArgumentRole[] SuffixRoles =
         [
@@ -389,7 +386,6 @@ public static class IrToTsExceptionConstructionBridge
 
             return new MessagePlan(
                 Composes: !isMapped || namesUserClass || folded.Count > 0,
-                NamesType: !isMapped && site is ConstructionSite.New,
                 folded
             );
         }

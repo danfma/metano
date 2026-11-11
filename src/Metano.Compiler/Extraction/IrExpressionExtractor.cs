@@ -169,7 +169,11 @@ public sealed partial class IrExpressionExtractor
         {
             new Invocation.DelegateInvokeRewriter(helpers),
             new Invocation.DictionaryKeysContainsRewriter(helpers),
-            new Invocation.IntrinsicBclLoweringTable(semanticModel.Compilation, helpers),
+            new Invocation.IntrinsicBclLoweringTable(
+                semanticModel.Compilation,
+                helpers,
+                context.LowersByDeclarativeMapping
+            ),
             new Invocation.EmitOrImportRewriter(helpers),
             // Bespoke callback (not via helpers) — inline expansion is tied
             // to the extractor's mutable recursion-guard state; see the
@@ -2866,7 +2870,7 @@ public sealed partial class IrExpressionExtractor
         }
         else
         {
-            args = InParameterOrder(args, symbol).ToList();
+            args = WithCallerArgumentExpressions(inv, InParameterOrder(args, symbol), symbol);
         }
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
@@ -2875,6 +2879,65 @@ public sealed partial class IrExpressionExtractor
             InvokesDelegate = symbol is { MethodKind: MethodKind.DelegateInvoke },
         };
     }
+
+    /// <summary>
+    /// <paramref name="args"/> followed by the <c>[CallerArgumentExpression]</c>
+    /// texts C# supplies for the trailing parameters the call omits
+    /// (<c>ArgumentNullException.ThrowIfNull(name)</c> passes <c>"name"</c> as
+    /// <c>paramName</c>), each omitted parameter ahead of one taking its explicit
+    /// default. An argument the call writes wins. A call whose omitted
+    /// parameters capture no expression keeps <paramref name="args"/>.
+    /// </summary>
+    private List<IrArgument> WithCallerArgumentExpressions(
+        InvocationExpressionSyntax inv,
+        IEnumerable<IrArgument> args,
+        IMethodSymbol? method
+    )
+    {
+        var written = args.ToList();
+
+        if (method is null || method.IsExtensionMethod || written.Any(a => a.Name is not null))
+            return written;
+
+        var omitted = method.Parameters.Skip(written.Count).ToList();
+        var lastCapturing = omitted.FindLastIndex(CapturesCallerArgumentExpression);
+
+        if (lastCapturing < 0 || omitted.Take(lastCapturing + 1).Any(p => p.IsParams))
+            return written;
+
+        if (_semantic.GetOperation(inv) is not IInvocationOperation operation)
+            return written;
+
+        var supplied = operation
+            .Arguments.Where(argument =>
+                argument is { ArgumentKind: ArgumentKind.DefaultValue, Parameter: not null }
+            )
+            .ToDictionary(argument => argument.Parameter!.Ordinal, argument => argument.Value);
+
+        var filled = omitted
+            .Take(lastCapturing + 1)
+            .Select(parameter => new IrArgument(CallerSuppliedValueOf(parameter, supplied)));
+
+        return [.. written, .. filled];
+    }
+
+    private IrExpression CallerSuppliedValueOf(
+        IParameterSymbol parameter,
+        Dictionary<int, IOperation> supplied
+    ) =>
+        CapturesCallerArgumentExpression(parameter)
+        && supplied.GetValueOrDefault(parameter.Ordinal)?.ConstantValue
+            is { HasValue: true, Value: string text }
+            ? new IrLiteral(text, IrLiteralKind.String)
+            : BuildDefaultArgument(parameter);
+
+    private static bool CapturesCallerArgumentExpression(IParameterSymbol parameter) =>
+        parameter
+            .GetAttributes()
+            .Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString()
+                == "System.Runtime.CompilerServices.CallerArgumentExpressionAttribute"
+            );
 
     /// <summary>
     /// A <c>base.M(...)</c> call Roslyn resolved into a dispatched method

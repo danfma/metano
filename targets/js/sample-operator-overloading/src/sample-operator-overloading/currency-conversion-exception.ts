@@ -65,12 +65,7 @@ export class CurrencyConversionException extends Exception {
       return;
     }
 
-    if (
-      args.length === 3 &&
-      isString(args[0]) &&
-      isString(args[1]) &&
-      args[2] instanceof Exception
-    ) {
+    if (args.length === 3 && isString(args[0]) && isString(args[1]) && args[2] instanceof Error) {
       const fromCode = args[0] as string;
       const toCode = args[1] as string;
       const reason = args[2] as Exception;

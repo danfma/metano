@@ -33,7 +33,7 @@ public class SizedArrayCreationTests
 
         await Assert
             .That(arrays)
-            .Contains("return new Array<Decimal>(n).fill(new Decimal(\"0\"));");
+            .Contains("return new Array<Decimal>(arrayLength(n)).fill(new Decimal(\"0\"));");
     }
 
     [Test]
@@ -50,7 +50,7 @@ public class SizedArrayCreationTests
     {
         var arrays = TranspileHelper.Transpile(Source)["arrays.ts"];
 
-        await Assert.That(arrays).Contains("return new Array(n).fill(null);");
+        await Assert.That(arrays).Contains("return new Array(arrayLength(n)).fill(null);");
     }
 
     /// <summary>

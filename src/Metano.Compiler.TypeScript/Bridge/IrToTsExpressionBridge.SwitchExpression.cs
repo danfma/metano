@@ -18,6 +18,9 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private const string ScrutineeParameterName = "$s";
 
+    private const string SwitchExpressionExceptionTypeName =
+        "System.Runtime.CompilerServices.SwitchExpressionException";
+
     /// <summary>
     /// Lowers a C# <c>switch</c> expression. When the arm chain ends with a
     /// bare discard (<c>_ =&gt; value</c>, no when-clause), every earlier
@@ -121,7 +124,7 @@ public static partial class IrToTsExpressionBridge
         );
 
         var tail = catchAll is null
-            ? [BuildNonExhaustiveSwitchThrow()]
+            ? [BuildNonExhaustiveSwitchThrow(scrutinee)]
             : LowerSwitchArmBody(catchAll, scrutinee, context);
 
         return BuildSwitchIife(sw, [.. conditionalStatements, .. tail], context);
@@ -147,11 +150,18 @@ public static partial class IrToTsExpressionBridge
         (arm.WhenClause is not null && IrEvaluationTraits.ContainsAwait(arm.WhenClause))
         || IrEvaluationTraits.ContainsAwait(arm.Result);
 
-    private static TsThrowStatement BuildNonExhaustiveSwitchThrow() =>
+    /// <summary>
+    /// The throw of a switch expression no arm matched: .NET's
+    /// <c>SwitchExpressionException</c> (an <c>InvalidOperationException</c>)
+    /// with the unmatched value, which the runtime class names in its message.
+    /// </summary>
+    private static TsThrowStatement BuildNonExhaustiveSwitchThrow(TsExpression scrutinee) =>
         new(
             new TsNewExpression(
-                new TsIdentifier("Error"),
-                [new TsStringLiteral("Non-exhaustive switch expression")]
+                IrToTsTypeMapper
+                    .ExceptionClasses.ClassOf(SwitchExpressionExceptionTypeName)
+                    .ValueReference(),
+                [new TsIdentifier("undefined"), new TsIdentifier("undefined"), scrutinee]
             )
         );
 

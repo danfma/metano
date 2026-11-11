@@ -1594,10 +1594,19 @@ public static class SymbolHelper
     private static bool HasHandWrittenTypeBinding(INamedTypeSymbol type) =>
         HasExternal(type) || HasImport(type) || type.IsContainerless();
 
+    /// <summary>
+    /// Whether the target has a declaration of <paramref name="type"/>'s
+    /// members. An <c>[ExportFromBcl]</c> exception type binds its runtime
+    /// class for construction and type tests only (spec 011 FR-014): its static
+    /// members stay foreign, so one without a declarative mapping is reported.
+    /// </summary>
     private static bool IsKnownToToolchain(INamedTypeSymbol type, Compilation compilation) =>
         IsDeclaredIn(type, compilation.Assembly)
         || IsTranspiledPackageType(type)
-        || BclExportReader.IsExported(type, compilation);
+        || (
+            BclExportReader.IsExported(type, compilation)
+            && !Extraction.IrTypeRefMapper.IsExceptionType(type)
+        );
 
     private static bool HasHandWrittenBinding(ISymbol member) =>
         HasExternal(member) || HasImport(member) || HasEmit(member) || HasName(member);

@@ -93,3 +93,87 @@ export function plainDateTimeFromTicks(ticks: bigint): Temporal.PlainDateTime {
 
   return date.toPlainDateTime().add(timeOfDay);
 }
+
+/** .NET's message for a date whose year, month and day do not exist. */
+const UNREPRESENTABLE_DATE_MESSAGE =
+  "Year, Month, and Day parameters describe an un-representable DateTime.";
+
+/** .NET's message for a time whose hour, minute and second do not exist. */
+const UNREPRESENTABLE_TIME_MESSAGE =
+  "Hour, Minute, and Second parameters describe an un-representable DateTime.";
+
+/** .NET's message for a millisecond outside 0–999. */
+const MILLISECOND_MESSAGE = "Valid values are between 0 and 999, inclusive.";
+
+/**
+ * `new DateOnly(year, month, day)`: the `Temporal.PlainDate`, or .NET's
+ * `ArgumentOutOfRangeException` for a date outside 0001-01-01–9999-12-31 or one
+ * that does not exist, where the Temporal constructor throws a `RangeError`.
+ */
+export function plainDate(year: number, month: number, day: number): Temporal.PlainDate {
+  if (!isRepresentableDate(year, month, day)) {
+    throw new ArgumentOutOfRangeException(null, undefined, UNREPRESENTABLE_DATE_MESSAGE);
+  }
+
+  return new Temporal.PlainDate(year, month, day);
+}
+
+/**
+ * `new TimeOnly(hour, minute, second, millisecond)`: the `Temporal.PlainTime`, or
+ * .NET's `ArgumentOutOfRangeException` for a component out of range.
+ */
+export function plainTime(
+  hour: number,
+  minute: number,
+  second = 0,
+  millisecond = 0,
+): Temporal.PlainTime {
+  assertTime(hour, minute, second, millisecond);
+
+  return new Temporal.PlainTime(hour, minute, second, millisecond);
+}
+
+/**
+ * `new DateTime(year, month, day, hour, minute, second, millisecond)`: the
+ * `Temporal.PlainDateTime`, or .NET's `ArgumentOutOfRangeException` for a
+ * component out of range.
+ */
+export function plainDateTime(
+  year: number,
+  month: number,
+  day: number,
+  hour = 0,
+  minute = 0,
+  second = 0,
+  millisecond = 0,
+): Temporal.PlainDateTime {
+  assertTime(hour, minute, second, millisecond);
+
+  if (!isRepresentableDate(year, month, day)) {
+    throw new ArgumentOutOfRangeException(null, undefined, UNREPRESENTABLE_DATE_MESSAGE);
+  }
+
+  return new Temporal.PlainDateTime(year, month, day, hour, minute, second, millisecond);
+}
+
+function assertTime(hour: number, minute: number, second: number, millisecond: number): void {
+  if (!isInRange(millisecond, 999)) {
+    throw new ArgumentOutOfRangeException("millisecond", undefined, MILLISECOND_MESSAGE);
+  }
+
+  if (!isInRange(hour, 23) || !isInRange(minute, 59) || !isInRange(second, 59)) {
+    throw new ArgumentOutOfRangeException(null, undefined, UNREPRESENTABLE_TIME_MESSAGE);
+  }
+}
+
+function isRepresentableDate(year: number, month: number, day: number): boolean {
+  if (!isInRange(year, 9999) || year < 1 || !isInRange(month, 12) || month < 1 || day < 1) {
+    return false;
+  }
+
+  return Number.isInteger(day) && day <= new Temporal.PlainYearMonth(year, month).daysInMonth;
+}
+
+function isInRange(value: number, max: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= max;
+}

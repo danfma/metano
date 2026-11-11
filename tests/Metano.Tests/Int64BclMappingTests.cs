@@ -350,9 +350,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CollectionSource);
 
-        await Assert
-            .That(files["collections.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-collections.ts"));
+        await TranspileHelper.AssertGolden("int64-collections.ts", files["collections.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -362,9 +360,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(TicksSource);
 
-        await Assert
-            .That(files["clock.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-ticks-console.ts"));
+        await TranspileHelper.AssertGolden("int64-ticks-console.ts", files["clock.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }

@@ -86,7 +86,9 @@ public class InvocationRewriterCanaryTests
 
         var output = result["calc.ts"];
 
-        await Assert.That(output).Contains("new Decimal(s)");
+        // The TypeScript mapping of decimal.Parse wins over the intrinsic
+        // lowering (#651): the runtime checks .NET's grammar.
+        await Assert.That(output).Contains("new Decimal(parseDecimalText(s))");
     }
 
     [Test]

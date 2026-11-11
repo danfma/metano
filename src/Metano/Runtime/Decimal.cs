@@ -33,10 +33,17 @@ using Metano.Annotations;
 [assembly: MapProperty(typeof(decimal), nameof(decimal.MinusOne), JsTemplate = "new Decimal(-1)")]
 
 // ─── Parsing ────────────────────────────────────────────────
-// decimal.Parse(s) → new Decimal(s). decimal.js's constructor accepts strings directly
-// and throws on malformed input, matching the FormatException semantics.
+// decimal.Parse(s) → new Decimal(parseDecimalText(s)). The runtime helper checks .NET's
+// `NumberStyles.Number` grammar and range and throws FormatException / OverflowException /
+// ArgumentNullException as .NET does; decimal.js's own `DecimalError` would escape a
+// `catch (FormatException)`.
 
-[assembly: MapMethod(typeof(decimal), nameof(decimal.Parse), JsTemplate = "new Decimal($0)")]
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.Parse),
+    JsTemplate = "new Decimal(parseDecimalText($0))",
+    RuntimeImports = "parseDecimalText"
+)]
 
 // ─── Comparison / conversion ────────────────────────────────
 // d.CompareTo(other) → d.cmp(other) — decimal.js returns -1/0/1 just like

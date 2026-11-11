@@ -19,7 +19,7 @@ public class CatchClauseDiagnosticTests
         var (_, diagnostics) = Transpile(
             """
             try { Work(); }
-            catch (TimeoutException) { Note(1); }
+            catch (System.IO.IOException) { Note(1); }
             catch (InvalidOperationException) { Note(2); }
             """
         );
@@ -27,12 +27,12 @@ public class CatchClauseDiagnosticTests
         var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnanswerableRuntimeTypeTest);
 
         await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert.That(ReportedText(error)).IsEqualTo("(TimeoutException)");
+        await Assert.That(ReportedText(error)).IsEqualTo("(System.IO.IOException)");
 
         await Assert
             .That(error.Message)
             .IsEqualTo(
-                "'(TimeoutException)' cannot be lowered: 'System.TimeoutException' has no runtime "
+                "'(System.IO.IOException)' cannot be lowered: 'System.IO.IOException' has no runtime "
                     + "class in the target, so no type test can tell it apart from other "
                     + "exceptions, and testing for 'Exception' instead would take them all (spec "
                     + "011 FR-014). Catch or test a base type the runtime defines, or a transpiled "
@@ -239,7 +239,7 @@ public class CatchClauseDiagnosticTests
                     """
                     try { Work(); }
                     catch (InvalidOperationException) { Note(1); }
-                    catch (TimeoutException) { Note(3); }
+                    catch (System.IO.IOException) { Note(3); }
                     catch (AppException e) when (e.InnerException is AppException inner) { Note(inner.Code); }
                     catch (AppException) when (Ready) { Note(2); }
                     """

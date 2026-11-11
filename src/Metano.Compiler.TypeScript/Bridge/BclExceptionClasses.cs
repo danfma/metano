@@ -120,6 +120,19 @@ public sealed class BclExceptionClasses
     /// </summary>
     public TsExceptionClass ClassOf(string exceptionTypeName) => Resolve(exceptionTypeName) ?? Root;
 
+    /// <summary>
+    /// The class a runtime type test (<c>is</c>, <c>as</c>, a pattern, a
+    /// dispatcher arm) against <paramref name="type"/> checks with
+    /// <c>instanceof</c>: its class, except that <c>System.Exception</c> itself
+    /// checks the built-in <c>Error</c>. Until <c>toException</c> normalizes
+    /// caught values (spec 011 FR-015), a JavaScript error such as a
+    /// <c>TypeError</c> is a C# <c>Exception</c>, as .NET's own runtime errors are.
+    /// </summary>
+    public TsExpression TestedClassOf(IrNamedTypeRef type) =>
+        KeyOf(type) == RootExceptionTypeName
+            ? new TsIdentifier("Error")
+            : ClassOf(type).ValueReference();
+
     /// <summary>Whether a BCL exception type has a mapped class of its own.</summary>
     public bool IsMapped(IrNamedTypeRef type) => IsMapped(KeyOf(type));
 

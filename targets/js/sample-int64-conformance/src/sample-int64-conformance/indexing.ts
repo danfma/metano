@@ -1,3 +1,5 @@
+import { arrayLength } from "metano-runtime";
+
 export function elementAt(values: bigint[], index: bigint): bigint {
   return values[Number(index)];
 }
@@ -11,9 +13,9 @@ export function longLengthOf(values: bigint[]): bigint {
 }
 
 export function sizedLongs(length: bigint): bigint[] {
-  return new Array<bigint>(Number(length)).fill(0n);
+  return new Array<bigint>(arrayLength(Number(length))).fill(0n);
 }
 
 export function sizedInts(length: number): number[] {
-  return new Array<number>(length).fill(0);
+  return new Array<number>(arrayLength(length)).fill(0);
 }

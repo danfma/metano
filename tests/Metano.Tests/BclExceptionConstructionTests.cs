@@ -221,7 +221,9 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(output)
-            .Contains("throw new Exception(\"System.IO.FileNotFoundException: missing\");");
+            .Contains(
+                "throw namedException(\"System.IO\", \"FileNotFoundException\", \"missing\");"
+            );
     }
 
     [Test]
@@ -240,7 +242,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => ((receiver$temp$1) => new Exception(`System.IO.FileNotFoundException: ${receiver$temp$0}`))(Guard.locate()))(Guard.describe());"
+                "throw ((receiver$temp$0) => ((receiver$temp$1) => namedException(\"System.IO\", \"FileNotFoundException\", receiver$temp$0))(Guard.locate()))(Guard.describe());"
             );
     }
 
@@ -296,7 +298,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => new Exception(\"System.IO.FileNotFoundException: missing\"))(Guard.locate());"
+                "throw ((receiver$temp$0) => namedException(\"System.IO\", \"FileNotFoundException\", \"missing\"))(Guard.locate());"
             );
     }
 
@@ -442,7 +444,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw new Exception(\"System.IO.FileNotFoundException: Unable to find the specified file.\");"
+                "throw namedException(\"System.IO\", \"FileNotFoundException\", \"Unable to find the specified file.\");"
             );
 
         await Assert.That(output).Contains("throw new TaskCanceledException();");
@@ -450,7 +452,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw new Exception(\"System.IO.EndOfStreamException: Attempted to read past the end of the stream.\");"
+                "throw namedException(\"System.IO\", \"EndOfStreamException\", \"Attempted to read past the end of the stream.\");"
             );
     }
 

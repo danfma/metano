@@ -63,3 +63,71 @@ using Metano.Annotations;
     RuntimeImports = "plainDateTimeFromTicks",
     WhenParameterTypes = [typeof(long)]
 )]
+
+// Constructors from components (#651): the runtime factories check .NET's ranges and throw
+// its `ArgumentOutOfRangeException`, where the Temporal constructors throw a `RangeError` (or
+// accept year 0) that a `catch (ArgumentOutOfRangeException)` would not take.
+[assembly: MapMethod(
+    typeof(DateOnly),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDate($0, $1, $2)",
+    RuntimeImports = "plainDate",
+    WhenParameterTypes = [typeof(int), typeof(int), typeof(int)]
+)]
+[assembly: MapMethod(
+    typeof(TimeOnly),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainTime($0, $1)",
+    RuntimeImports = "plainTime",
+    WhenParameterTypes = [typeof(int), typeof(int)]
+)]
+[assembly: MapMethod(
+    typeof(TimeOnly),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainTime($0, $1, $2)",
+    RuntimeImports = "plainTime",
+    WhenParameterTypes = [typeof(int), typeof(int), typeof(int)]
+)]
+[assembly: MapMethod(
+    typeof(TimeOnly),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainTime($0, $1, $2, $3)",
+    RuntimeImports = "plainTime",
+    WhenParameterTypes = [typeof(int), typeof(int), typeof(int), typeof(int)]
+)]
+[assembly: MapMethod(
+    typeof(DateTime),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDateTime($0, $1, $2)",
+    RuntimeImports = "plainDateTime",
+    WhenParameterTypes = [typeof(int), typeof(int), typeof(int)]
+)]
+[assembly: MapMethod(
+    typeof(DateTime),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDateTime($0, $1, $2, $3, $4, $5)",
+    RuntimeImports = "plainDateTime",
+    WhenParameterTypes = [
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+    ]
+)]
+[assembly: MapMethod(
+    typeof(DateTime),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDateTime($0, $1, $2, $3, $4, $5, $6)",
+    RuntimeImports = "plainDateTime",
+    WhenParameterTypes = [
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+    ]
+)]

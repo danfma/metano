@@ -153,11 +153,11 @@ public static class IrExceptionConstructionExtractor
         return index < constructor.Parameters.Length ? constructor.Parameters[index] : null;
     }
 
-    private static IrExceptionArgumentRole RoleOf(IParameterSymbol? parameter) =>
+    internal static IrExceptionArgumentRole RoleOf(IParameterSymbol? parameter) =>
         parameter?.Name switch
         {
             MessageParameterName => IrExceptionArgumentRole.Message,
-            "innerException" => IrExceptionArgumentRole.InnerException,
+            "innerException" or "inner" => IrExceptionArgumentRole.InnerException,
             "paramName" => IrExceptionArgumentRole.ParamName,
             "actualValue" => IrExceptionArgumentRole.ActualValue,
             "objectName" => IrExceptionArgumentRole.ObjectName,
