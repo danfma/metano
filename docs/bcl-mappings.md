@@ -122,26 +122,44 @@ automatically whenever any Temporal mapping is used.
 | `List<T>.ToArray()` | `list.slice()` |
 | `array.Contains(item)` (`MemoryExtensions`) | `array.includes(item)` |
 | `array.IndexOf(item)` / `array.LastIndexOf(item)` (`MemoryExtensions`) | `array.indexOf(item)` / `array.lastIndexOf(item)` |
+| `array.IndexOf(item, null)` (a `null` constant comparer, also `Contains` / `LastIndexOf`) | `array.indexOf(item)` |
+| `span.StartsWith(s)` / `EndsWith(s)` / `IndexOf(s)` / `LastIndexOf(s)` / `Trim()` / `TrimStart()` / `TrimEnd()` on a `ReadOnlySpan<char>` | the string method of the same name |
+| `span.Reverse()` on a `Span<T>` | `span.reverse()` (in place) |
 | any other `MemoryExtensions` call | `MS0001`, throws at run time |
 
 C# 14 converts an array (and a string) to `ReadOnlySpan<T>` / `Span<T>`
 implicitly, so these calls on a `T[]` bind to the span extensions of
 `System.MemoryExtensions`, not to `System.Linq.Enumerable`
-(`src/Metano/Runtime/Spans.cs`). Only the overloads that take the value alone
-are mapped, to the `List<T>` lowering; an `int?[]` receiver binds the comparer
-overload with the comparer omitted and lowers the same way. Every other
-`MemoryExtensions` call reports `MS0001` and emits an expression that throws:
-a comparer or `StringComparison` overload, `SequenceEqual`, `StartsWith`,
-`EndsWith`, `Sort`, `BinarySearch`, `IndexOfAny`, `ContainsAny`,
-`Count(value)`, `AsSpan`, the static form `MemoryExtensions.Contains(array, x)`,
-and a string receiver such as `text.Count('a')`.
+(`src/Metano/Runtime/Spans.cs`). A span lowers to what it views: an array, or
+the string a `ReadOnlySpan<char>` was converted from.
+
+- `Contains` / `IndexOf` / `LastIndexOf` with the value alone lower to the
+  `List<T>` methods. A comparer that is omitted or the `null` constant
+  (`null`, `default`, a cast, a `const`) is dropped, also when a named argument
+  is written (`nullables.Contains(value: x)` → `nullables.includes(x)`; an
+  `int?[]` receiver binds the comparer overload because `int?` is not
+  `IEquatable<T>`).
+- The string searches (`StartsWith`, `EndsWith`, the parameterless `Trim`
+  family, the subsequence `IndexOf` / `LastIndexOf`) lower to the string
+  methods only on a `string` or `ReadOnlySpan<char>` receiver. On an array
+  (`char[]` included) or a `Span<char>` they report: `array.IndexOf(otherArray)`
+  and `chars.IndexOf("bc")` search for a sequence, which `Array.indexOf` does
+  not.
+- Every other `MemoryExtensions` call reports `MS0001` and emits an expression
+  that throws: a comparer that is not the `null` constant, a `StringComparison`
+  overload, `SequenceEqual`, `Sort`, `BinarySearch`, `IndexOfAny`,
+  `ContainsAny`, `Count(value)`, `AsSpan`, `Trim(c)`, the static form
+  `MemoryExtensions.Contains(array, x)`, and a string receiver such as
+  `text.Count('a')`.
+- A lookup over a tuple element (`pairs.Contains((3, 4))`) lowers and reports
+  `MS0001`, as on `List<(int, int)>`.
 
 `includes` / `indexOf` / `lastIndexOf` compare like `List<T>.Contains` /
 `IndexOf`: by value for numbers, `bigint`s and strings, by reference for
-records (C# compares records by value), and `indexOf` / `lastIndexOf` do not
-find `NaN` (C# finds it; `includes` does). The subsequence overload
-`array.IndexOf(otherArray)` also writes one argument and still lowers to
-`array.indexOf(otherArray)`, which looks for the array as an element.
+records, record structs, `decimal` and `DateTime` values (C# compares them by
+value), and `indexOf` / `lastIndexOf` do not find `NaN` (C# finds it;
+`includes` does). A `ReadOnlySpan<char>` over a `char[]` lowers to an array,
+on which the string searches do not exist.
 
 ### Immutable collections
 

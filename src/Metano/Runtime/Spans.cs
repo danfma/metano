@@ -1,28 +1,29 @@
 // Declarative BCL → JavaScript mappings for System.MemoryExtensions.
 //
-// C# 14 converts an array to ReadOnlySpan<T> / Span<T> implicitly (first-class spans), so
-// `array.Contains(x)`, `array.IndexOf(x)` or `array.SequenceEqual(other)` bind to the span
-// extensions of MemoryExtensions rather than to System.Linq.Enumerable. A span lowers to
-// the same JavaScript array as the array it views, so an overload whose JS array method
-// compares as the List<T> mapping does lowers to that method. Every other
-// MemoryExtensions call — a comparer or StringComparison overload, SequenceEqual,
-// StartsWith, Sort, BinarySearch, IndexOfAny, ContainsAny, Count, … — has no mapping and
-// reports MS0001 (the extractor's unlowered-span-call check) instead of emitting a member
-// call JavaScript arrays do not have.
+// C# 14 converts an array (and a string) to ReadOnlySpan<T> / Span<T> implicitly
+// (first-class spans), so `array.Contains(x)`, `array.IndexOf(x)` or
+// `array.SequenceEqual(other)` bind to the span extensions of MemoryExtensions rather than
+// to System.Linq.Enumerable. A span lowers to the value it views: an array, or a string
+// for a ReadOnlySpan<char> over a string. An overload whose JavaScript method of the same
+// name computes what C# computes lowers to it. Every other MemoryExtensions call — a
+// comparer or StringComparison overload, SequenceEqual, Sort, BinarySearch, IndexOfAny,
+// ContainsAny, Count, … — has no mapping and reports MS0001 (the extractor's
+// unlowered-span-call check) instead of emitting a member call that does not exist.
 //
-// WhenArgCount = 1 selects the overload that takes the value alone. An int?[] receiver
-// binds the comparer overload (its element is not IEquatable<T>) with the comparer
-// omitted, which still writes one argument and keeps the default comparison.
+// WhenArgCount selects the overload by the arguments the call passes. The extractor
+// drops a comparer that is omitted or the `null` constant from Contains / IndexOf /
+// LastIndexOf (an int?[] receiver binds the comparer overload, its element is not
+// IEquatable<T>), so those calls lower as the value overload too.
 
 using Metano.Annotations;
 
 // ─── Contains / IndexOf / LastIndexOf ───────────────────────
 // The same lowering as List<T>.Contains / IndexOf (see Lists.cs): `includes` compares by
 // SameValueZero (NaN finds NaN, like double.Equals), `indexOf` / `lastIndexOf` by `===`.
-// Neither compares records by value. The span-valued IndexOf / LastIndexOf overload
-// (`array.IndexOf(otherArray)`, a subsequence search) also writes one argument; the
-// filter cannot tell it from the value overload, so it lowers to `indexOf` as it did
-// before this mapping.
+// Neither compares records, record structs, decimals or DateTimes by value. On a string
+// receiver they are the string methods, which search a char or a substring. The
+// subsequence overload (`array.IndexOf(otherArray)`) also passes one argument; the
+// extractor reports it unless the receiver is a string.
 
 [assembly: MapMethod(
     typeof(MemoryExtensions),
@@ -41,4 +42,52 @@ using Metano.Annotations;
     nameof(MemoryExtensions.LastIndexOf),
     JsMethod = "lastIndexOf",
     WhenArgCount = 1
+)]
+
+// ─── String searches on a ReadOnlySpan<char> ────────────────
+// `span.StartsWith("ab")`, `span.EndsWith('c')` and the parameterless Trim family exist
+// for a span of chars and lower to the string methods. The extractor reports them on a
+// receiver that is not a string in JavaScript (an array, char[] included, or a
+// Span<char>), where the string method does not exist.
+
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.StartsWith),
+    JsMethod = "startsWith",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.EndsWith),
+    JsMethod = "endsWith",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.Trim),
+    JsMethod = "trim",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.TrimStart),
+    JsMethod = "trimStart",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.TrimEnd),
+    JsMethod = "trimEnd",
+    WhenArgCount = 0
+)]
+
+// ─── Reverse ────────────────────────────────────────────────
+// `span.Reverse()` on a Span<T> reverses the viewed array in place, as Array.reverse
+// does. `array.Reverse()` binds Enumerable.Reverse(T[]) (a LINQ stage), not this method.
+
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.Reverse),
+    JsMethod = "reverse",
+    WhenArgCount = 0
 )]
