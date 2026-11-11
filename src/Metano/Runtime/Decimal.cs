@@ -33,7 +33,9 @@ using Metano.Annotations;
 [assembly: MapProperty(typeof(decimal), nameof(decimal.MinusOne), JsTemplate = "new Decimal(-1)")]
 
 // ─── Parsing ────────────────────────────────────────────────
-// decimal.Parse(s) → new Decimal(parseDecimalText(s)). The runtime helper checks .NET's
+// decimal.Parse(s) → new Decimal(parseDecimalText(s)), also for decimal.Parse(s, provider), which
+// the extractor binds to this overload. The NumberStyles / span overloads keep new Decimal(s).
+// The runtime helper checks .NET's
 // `NumberStyles.Number` grammar and range and throws FormatException / OverflowException /
 // ArgumentNullException as .NET does; decimal.js's own `DecimalError` would escape a
 // `catch (FormatException)`.
@@ -41,6 +43,7 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(decimal),
     nameof(decimal.Parse),
+    WhenParameterTypes = [typeof(string)],
     JsTemplate = "new Decimal(parseDecimalText($0))",
     RuntimeImports = "parseDecimalText"
 )]
