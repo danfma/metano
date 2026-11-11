@@ -17,8 +17,9 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// shares the overload queries with the chain walker.
 /// </para>
 /// <para>
-/// Slot order: LAST. Every rewriter that lowers a call must come before it,
-/// so a call one of them lowers is never reported.
+/// Slot order: LAST, beside <see cref="UnsupportedSpanCallRewriter"/>. Every
+/// rewriter that lowers a call must come before it, so a call one of them
+/// lowers is never reported.
 /// </para>
 /// </summary>
 public sealed class UnsupportedLinqCallRewriter(

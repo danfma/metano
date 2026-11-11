@@ -381,6 +381,29 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `aggregate`, which reads none (it ran, with a `TS2554` type error).
 - Dart output and diagnostics are unchanged.
 
+### ⚠ Array calls that C# 14 binds to `MemoryExtensions` (baseline FR-016; #657)
+
+- C# 14 converts an array (and a string) to a span implicitly, so
+  `array.Contains(x)`, `array.SequenceEqual(other)` and the other span
+  extensions bind to `System.MemoryExtensions` instead of `System.Linq`. They
+  used to transpile silently to member calls a JavaScript array does not have
+  (`array.contains(x)`, `array.sequenceEqual(other)`), which failed `tsc` and
+  threw at run time.
+- Fixed: `array.Contains(x)` emits `array.includes(x)`, the output of
+  `List<T>.Contains`; `array.IndexOf(x)` and `array.LastIndexOf(x)` keep
+  emitting `indexOf` / `lastIndexOf`, now through a declarative mapping.
+- Behaviour change: every other `MemoryExtensions` call (a comparer or
+  `StringComparison` overload, `SequenceEqual`, `StartsWith`, `EndsWith`,
+  `Sort`, `BinarySearch`, `IndexOfAny`, `ContainsAny`, `Count(value)`,
+  `AsSpan`, …, also on a string such as `text.Count('a')`) reports `MS0001` (a
+  warning) at the method name and emits an expression that throws
+  `Unsupported expression: UnloweredSpanCall` at run time.
+- Known limitations, shared with `List<T>`: `includes` and `indexOf` compare
+  records by reference, and `indexOf` / `lastIndexOf` do not find `NaN`. The
+  subsequence overload `array.IndexOf(otherArray)` still emits
+  `array.indexOf(otherArray)`.
+- Dart output and diagnostics are unchanged.
+
 ### Toolchain
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.
