@@ -1190,7 +1190,7 @@ public static class IrBodyPrinter
                 sb.Append('\'').Append(EscapeString((string)lit.Value!)).Append('\'');
                 break;
             case IrLiteralKind.Char:
-                sb.Append('\'').Append(lit.Value).Append('\'');
+                sb.Append('\'').Append(EscapeString(lit.Value!.ToString()!)).Append('\'');
                 break;
             case IrLiteralKind.Default:
                 sb.Append("/* default */ null");
@@ -1211,8 +1211,16 @@ public static class IrBodyPrinter
         origin
             is { IsStatic: true, IsDeclaringTypeNoContainer: true, IsTranspiledDataMember: false };
 
+    /// <summary>
+    /// The text of a Dart single-quoted string literal: a <c>$</c> is escaped
+    /// too, or Dart would read it as an interpolation.
+    /// </summary>
     private static string EscapeString(string s) =>
-        s.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
+        s.Replace("\\", "\\\\")
+            .Replace("'", "\\'")
+            .Replace("$", "\\$")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r");
 
     /// <summary>
     /// A positional element read of a C# tuple, which Dart models as a record:

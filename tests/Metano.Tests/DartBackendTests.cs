@@ -1829,4 +1829,33 @@ public class DartBackendTests
                 """
             );
     }
+
+    /// <summary>
+    /// Dart reads <c>$</c> in a string literal as an interpolation, so a
+    /// literal one (in a string or a <c>char</c>) is escaped, as are a quote
+    /// and a backslash in a <c>char</c>.
+    /// </summary>
+    [Test]
+    public async Task DollarSign_InALiteral_IsEscaped()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Prices
+            {
+                public static string Label() => "$5 total";
+
+                public static char Dollar() => '$';
+
+                public static char Quote() => '\'';
+            }
+            """
+        );
+
+        var dart = files["prices.dart"];
+
+        await Assert.That(dart).Contains("label() => '\\$5 total';");
+        await Assert.That(dart).Contains("dollar() => '\\$';");
+        await Assert.That(dart).Contains("quote() => '\\'';");
+    }
 }
