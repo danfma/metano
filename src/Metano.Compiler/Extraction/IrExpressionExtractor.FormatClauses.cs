@@ -14,14 +14,18 @@ namespace Metano.Compiler.Extraction;
 /// formats it honors; a clause it cannot honor reports MS0001 at the hole or
 /// the format argument and lowers to the throwing placeholder, so no clause
 /// is dropped silently. Without the port every clause reports (fail closed).
-/// The format of a <c>string</c>, <c>bool</c> or <c>char</c> is dropped,
-/// because C# ignores it too.
+/// A format on a value C# does not pass it to (one that is not
+/// <c>IFormattable</c>, and <c>char</c>) is dropped, because C# ignores it
+/// too.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
     private const string UnsupportedFormatKind = "UnsupportedFormat";
 
     private const string FormatParameterName = "format";
+
+    /// <summary>The arguments of the <c>value.ToString("format")</c> a hole lowers through: the format.</summary>
+    private const int MappedFormatArgumentCount = 1;
 
     /// <summary>Where an unsupported format sits, for the wording of its report.</summary>
     private enum FormattedConstruct
@@ -44,30 +48,90 @@ public sealed partial class IrExpressionExtractor
         if (format is null && alignment is null)
             return new IrInterpolationExpression(ExtractInterpolationHole(hole), NumericKind: kind);
 
-        if (UnsupportedClauseMessage(type, kind, format) is { } message)
+        if (NumericFormats is not { } formats)
             return new IrInterpolationExpression(
-                ReportUnsupportedFormat(hole.GetLocation(), message)
+                ReportUnsupportedFormat(hole.GetLocation(), UnsupportedClauseMessage())
             );
 
-        return new IrInterpolationExpression(Extract(hole.Expression), format, alignment, kind);
+        if (format is null || FormatsAsDotNet(kind, format))
+            return new IrInterpolationExpression(Extract(hole.Expression), format, alignment, kind);
+
+        return type is null
+            ? new IrInterpolationExpression(
+                ReportUnsupportedFormat(
+                    hole.GetLocation(),
+                    UnsupportedFormatMessage(type, format, FormattedConstruct.Hole)
+                )
+            )
+            : ExtractUnformattedHole(hole, type, format, alignment, formats);
+    }
+
+    /// <summary>
+    /// A hole whose format no runtime formatter takes, lowered as C# defines
+    /// it, <c>value.ToString(format)</c>: the clause-free hole when the
+    /// target already prints that format as its default text
+    /// (<see cref="INumericFormatCapability.PrintsAsDefaultText"/>), the
+    /// type's own <c>ToString(format)</c> mapping when a declarative mapping
+    /// lowers it (so a hole and the call cannot disagree), the reported
+    /// placeholder otherwise. The alignment still pads the text.
+    /// </summary>
+    private IrInterpolationExpression ExtractUnformattedHole(
+        InterpolationSyntax hole,
+        ITypeSymbol type,
+        string format,
+        int? alignment,
+        INumericFormatCapability formats
+    )
+    {
+        var value = type.UnwrapNullableValueType();
+
+        if (HasFormatter(FormattedKindOf(value), formats))
+            return new IrInterpolationExpression(
+                ReportUnsupportedFormat(
+                    hole.GetLocation(),
+                    UnsupportedFormatMessage(type, format, FormattedConstruct.Hole)
+                )
+            );
+
+        if (formats.PrintsAsDefaultText(value, format))
+            return alignment is null
+                ? new IrInterpolationExpression(ExtractInterpolationHole(hole))
+                : new IrInterpolationExpression(Extract(hole.Expression), Alignment: alignment);
+
+        var isNullable = type.IsNullableValueType() || type.IsReferenceType;
+
+        if (!isNullable && MappedToStringWithFormat(value) is { } toString)
+            return new IrInterpolationExpression(
+                MappedFormatCall(Extract(hole.Expression), toString, format),
+                Alignment: alignment
+            );
+
+        return new IrInterpolationExpression(
+            ReportUnsupportedFormat(
+                hole.GetLocation(),
+                UnsupportedFormatMessage(type, format, FormattedConstruct.Hole)
+            )
+        );
     }
 
     /// <summary>
     /// The last-but-one invocation rewriter
     /// (<see cref="Invocation.UnsupportedFormatCallRewriter"/>):
-    /// <c>ToString(format)</c> or <c>ToString(format, provider)</c> on a
-    /// number it governs (<see cref="IsNumericToStringWithFormat"/>) whose
-    /// constant format the target does not format as .NET does, or whose
-    /// value has no formatter, reports and becomes the placeholder; a format
-    /// known only at run time is left to the target's formatter; <c>null</c>
-    /// for any other call, which the declarative mapping lowers.
+    /// <c>ToString(format)</c> or <c>ToString(format, provider)</c> of a BCL
+    /// type (<see cref="IsBclToStringWithFormat"/>) on a value whose format
+    /// the target does not format as .NET does reports and becomes the
+    /// placeholder; a format known only at run time is left to the target's
+    /// formatter; a format the target prints as its default text becomes the
+    /// clause-free hole; <c>null</c> for any other call, which an existing
+    /// declarative mapping, or the 64-bit integers' own check (MS0066),
+    /// lowers.
     /// </summary>
     internal IrExpression? RewriteUnsupportedFormatCall(
         InvocationExpressionSyntax call,
         IMethodSymbol? symbol
     )
     {
-        if (!IsNumericToStringWithFormat(symbol))
+        if (!IsBclToStringWithFormat(symbol))
             return null;
 
         if (FormatArgumentOf(call) is not { } argument)
@@ -76,20 +140,38 @@ public sealed partial class IrExpressionExtractor
         if (NumericFormats is not { } formats)
             return ReportUnsupportedFormat(argument.GetLocation(), UnsupportedCallMessage());
 
-        var type = symbol.ContainingType;
+        var receiver = (call.Expression as MemberAccessExpressionSyntax)?.Expression;
+        var type = TypeOf(receiver) ?? symbol.ContainingType;
+        var kind = FormattedKindOf(type);
+
+        if (kind is IrNumericKind.Int64 or IrNumericKind.UInt64)
+            return null;
+
         var format = _semantic.GetConstantValue(argument.Expression);
 
         if (!format.HasValue)
-            return RewriteRunTimeFormatCall(argument, type, formats);
+            return RewriteRunTimeFormatCall(argument, type, kind, formats);
 
         var constantFormat = format.Value as string ?? "";
 
-        return FormatsAsDotNet(FormattedKindOf(type), constantFormat)
-            ? null
-            : ReportUnsupportedFormat(
-                argument.GetLocation(),
-                UnsupportedFormatMessage(type, constantFormat, FormattedConstruct.Call)
-            );
+        if (FormatsAsDotNet(kind, constantFormat))
+            return null;
+
+        if (
+            !HasFormatter(kind, formats)
+            && LowersByDeclarativeMapping(symbol, EmittedArgumentCount(call, symbol))
+        )
+            return null;
+
+        if (receiver is not null && formats.PrintsAsDefaultText(type, constantFormat))
+            return new IrStringInterpolation([
+                new IrInterpolationExpression(ConcatenationOperand(receiver)),
+            ]);
+
+        return ReportUnsupportedFormat(
+            argument.GetLocation(),
+            UnsupportedFormatMessage(type, constantFormat, FormattedConstruct.Call)
+        );
     }
 
     /// <summary>The constant alignment of a hole (<c>{x,8}</c>), or <c>null</c> without one.</summary>
@@ -103,15 +185,17 @@ public sealed partial class IrExpressionExtractor
     /// <c>ToString(format)</c> whose format is known only at run time:
     /// <c>null</c> where the target's formatter decides it (it throws
     /// <c>FormatException</c> or <c>NotSupportedException</c> for a format it
-    /// does not implement), the reported placeholder otherwise.
+    /// does not implement) or a declarative mapping lowers the call, the
+    /// reported placeholder otherwise.
     /// </summary>
     private IrUnsupportedExpression? RewriteRunTimeFormatCall(
         ArgumentSyntax argument,
         ITypeSymbol type,
+        IrNumericKind? kind,
         INumericFormatCapability formats
     )
     {
-        if (FormattedKindOf(type) is { } kind && formats.HasFormatter(kind))
+        if (HasFormatter(kind, formats))
             return null;
 
         return ReportUnsupportedFormat(
@@ -122,21 +206,73 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Why the target cannot honor a hole's clauses, or <c>null</c> when it
-    /// can: an alignment pads any value, a format needs a formatter for the
-    /// value's numeric kind that implements it.
+    /// The <c>ToString(string)</c> of <paramref name="type"/> (or of a base
+    /// type, such as <c>Enum.ToString(string)</c>) when a declarative mapping
+    /// of the target lowers it; <c>null</c> otherwise.
     /// </summary>
-    private string? UnsupportedClauseMessage(ITypeSymbol? type, IrNumericKind? kind, string? format)
+    private IMethodSymbol? MappedToStringWithFormat(ITypeSymbol type)
     {
-        if (NumericFormats is null)
-            return "Format and alignment clauses of an interpolation hole are not supported in "
-                + $"{TargetName}; the hole throws at run time.";
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var toString = current
+                .GetMembers(nameof(ToString))
+                .OfType<IMethodSymbol>()
+                .FirstOrDefault(method =>
+                    method.Parameters is [{ Type.SpecialType: SpecialType.System_String }]
+                );
 
-        if (format is null || FormatsAsDotNet(kind, format))
-            return null;
+            if (toString is not null)
+                return LowersByDeclarativeMapping(toString, MappedFormatArgumentCount)
+                    ? toString
+                    : null;
+        }
 
-        return UnsupportedFormatMessage(type, format, FormattedConstruct.Hole);
+        return null;
     }
+
+    /// <summary>
+    /// <c>value.ToString("format")</c> as the call extraction builds it, so
+    /// the target's mapping of the call lowers it.
+    /// </summary>
+    private IrCallExpression MappedFormatCall(
+        IrExpression value,
+        IMethodSymbol toString,
+        string format
+    )
+    {
+        var origin = BuildOrigin(toString);
+
+        return new IrCallExpression(
+            new IrMemberAccess(value, toString.Name, origin),
+            [new IrArgument(new IrLiteral(format, IrLiteralKind.String))],
+            Origin: origin
+        );
+    }
+
+    /// <summary>
+    /// Whether a runtime formatter decides the formats of <paramref name="kind"/>:
+    /// then it alone does, and a format it does not take reports rather than
+    /// reaching a mapping of the same formatter.
+    /// </summary>
+    private static bool HasFormatter(IrNumericKind? kind, INumericFormatCapability formats) =>
+        kind is { } numericKind && formats.HasFormatter(numericKind);
+
+    private ITypeSymbol? TypeOf(ExpressionSyntax? expression) =>
+        expression is null ? null : _semantic.GetTypeInfo(expression).Type;
+
+    /// <summary>
+    /// Whether a declarative mapping of the target lowers
+    /// <paramref name="method"/> called with <paramref name="argumentCount"/>
+    /// arguments, the count the call emits (<see cref="EmittedArgumentCount"/>);
+    /// <c>false</c> without the port, so the call reports.
+    /// </summary>
+    private bool LowersByDeclarativeMapping(IMethodSymbol method, int argumentCount) =>
+        _context.LowersByDeclarativeMapping?.Invoke(method, argumentCount) ?? false;
+
+    /// <summary>Why the target cannot honor a hole's clauses: it declares no format capability.</summary>
+    private string UnsupportedClauseMessage() =>
+        "Format and alignment clauses of an interpolation hole are not supported in "
+        + $"{TargetName}; the hole throws at run time.";
 
     /// <summary>
     /// Whether the target formats a value of <paramref name="kind"/> with the
@@ -157,7 +293,7 @@ public sealed partial class IrExpressionExtractor
         + $"the {NameOf(construct)} throws at run time.";
 
     private string UnsupportedCallMessage() =>
-        $"Numeric format strings are not supported in {TargetName}; the call throws at run time.";
+        $"Format strings are not supported in {TargetName}; the call throws at run time.";
 
     private static IrUnsupportedExpression ReportUnsupportedFormat(
         Location location,
@@ -178,31 +314,18 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Whether <paramref name="symbol"/> is a <c>ToString</c> overload taking
-    /// a format on a number whose formats this policy governs: the integers
-    /// of 32 bits or fewer, <c>double</c> and <c>float</c>.
-    /// <para>
-    /// TODO(#662): <c>long</c> / <c>ulong</c> are left out because the
-    /// TypeScript bridge reports their formats as MS0066, without a location;
-    /// unifying the two diagnostics brings them under this port.
-    /// <c>decimal</c> and <c>BigInteger</c> are not governed yet: their
-    /// <c>ToString(format)</c> keeps its source form on both targets.
-    /// </para>
+    /// a format declared by a BCL type (in metadata): a number's, an enum's
+    /// (<c>Enum.ToString(string)</c>), a date or time's, <c>Guid</c>'s, or
+    /// <c>IFormattable.ToString</c> on a type parameter. A user type's own
+    /// <c>ToString(string)</c> is its own method and is left alone.
     /// </summary>
-    private static bool IsNumericToStringWithFormat([NotNullWhen(true)] IMethodSymbol? symbol) =>
+    private static bool IsBclToStringWithFormat([NotNullWhen(true)] IMethodSymbol? symbol) =>
         symbol
             is {
                 Name: nameof(ToString),
                 Parameters: [{ Type.SpecialType: SpecialType.System_String }, ..]
             }
-        && symbol.ContainingType.SpecialType
-            is SpecialType.System_SByte
-                or SpecialType.System_Byte
-                or SpecialType.System_Int16
-                or SpecialType.System_UInt16
-                or SpecialType.System_Int32
-                or SpecialType.System_UInt32
-                or SpecialType.System_Double
-                or SpecialType.System_Single;
+        && symbol.Locations.All(location => location.IsInMetadata);
 
     /// <summary>The argument passed as <c>ToString</c>'s <c>format</c>, by name or first by position.</summary>
     private static ArgumentSyntax? FormatArgumentOf(InvocationExpressionSyntax call)
@@ -218,12 +341,33 @@ public sealed partial class IrExpressionExtractor
     private static IrNumericKind? FormattedKindOf(ITypeSymbol? type) =>
         NumericEndpoints.Of(type) is { IsEnum: false } endpoint ? endpoint.Kind : null;
 
-    /// <summary>Whether C# ignores a format for a value of <paramref name="type"/>: a <c>string</c>, <c>bool</c> or <c>char</c>.</summary>
-    private static bool IgnoresFormat(ITypeSymbol? type) =>
-        type?.UnwrapNullableValueType().SpecialType
-            is SpecialType.System_String
-                or SpecialType.System_Boolean
-                or SpecialType.System_Char;
+    /// <summary>
+    /// Whether C# ignores a format for a value of <paramref name="type"/>:
+    /// composite formatting passes the format only to an
+    /// <c>IFormattable</c>, so a static type that does not implement it (a
+    /// <c>string</c>, a <c>bool</c>, a user class, record or struct) prints
+    /// its <c>ToString()</c>; <c>char</c> implements it and ignores the
+    /// format. <c>object</c>, an interface and a type parameter keep it: the
+    /// run-time type decides.
+    /// </summary>
+    private static bool IgnoresFormat(ITypeSymbol? type)
+    {
+        if (type?.UnwrapNullableValueType() is not { } value)
+            return false;
+
+        if (value.SpecialType is SpecialType.System_Char)
+            return true;
+
+        var runTimeTypeDecides =
+            value is ITypeParameterSymbol or IDynamicTypeSymbol or IErrorTypeSymbol
+            || value.TypeKind is TypeKind.Interface
+            || value.SpecialType is SpecialType.System_Object;
+
+        return !runTimeTypeDecides && !ImplementsIFormattable(value);
+    }
+
+    private static bool ImplementsIFormattable(ITypeSymbol type) =>
+        type.AllInterfaces.Any(contract => contract.ToDisplayString() == "System.IFormattable");
 
     private static string NameOf(FormattedConstruct construct) =>
         construct switch

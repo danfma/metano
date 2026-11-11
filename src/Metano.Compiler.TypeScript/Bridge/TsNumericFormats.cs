@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
+using Metano.Annotations;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -58,6 +60,32 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
         };
 
     /// <summary>
+    /// The formats whose .NET text is, for every value, what a clause-free
+    /// template-literal hole prints in TypeScript: a <c>Guid</c>'s <c>D</c>
+    /// (the <c>UUID</c> string), a numeric enum's <c>D</c> (the enum holds the
+    /// number), a <c>[StringEnum]</c>'s <c>G</c> / <c>F</c> when no member is
+    /// renamed (it holds the member name), a <c>DateOnly</c>'s <c>O</c>
+    /// (<c>Temporal.PlainDate</c> prints <c>yyyy-MM-dd</c>) and a
+    /// <c>BigInteger</c>'s <c>G</c> / <c>R</c> (a <c>bigint</c>'s digits).
+    /// Both letter cases mean the same there.
+    /// </summary>
+    public bool PrintsAsDefaultText(ITypeSymbol type, string format)
+    {
+        var letter = format.ToUpperInvariant();
+
+        if (type.TypeKind is TypeKind.Enum)
+            return EnumPrintsAsDefaultText(type, letter);
+
+        return type.ToDisplayString() switch
+        {
+            "System.Guid" => letter is "D",
+            "System.DateOnly" => letter is "O",
+            "System.Numerics.BigInteger" => letter is "G" or "R",
+            _ => false,
+        };
+    }
+
+    /// <summary>
     /// Whether the integer formatters implement <paramref name="format"/>:
     /// the empty format, or one letter and an optional precision other than
     /// <c>B</c>. A custom format (<c>0.00</c>, <c>#,##0</c>) is not.
@@ -65,6 +93,18 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
     public static bool FormatsInteger(string format) =>
         format.Length == 0
         || IsStandard(format) && char.ToUpperInvariant(format[0]) != UnimplementedIntegerFormat;
+
+    private static bool EnumPrintsAsDefaultText(ITypeSymbol type, string letter)
+    {
+        if (!type.HasStringEnum())
+            return letter is "D";
+
+        var holdsMemberNames = type.GetMembers()
+            .OfType<IFieldSymbol>()
+            .All(member => member.GetNameOverride(TargetLanguage.TypeScript) is null);
+
+        return holdsMemberNames && letter is "G" or "F";
+    }
 
     private static bool IsStandard(string format) => StandardFormat().IsMatch(format);
 

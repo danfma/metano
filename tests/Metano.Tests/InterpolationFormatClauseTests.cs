@@ -48,10 +48,21 @@ public class InterpolationFormatClauseTests
         [Transpile]
         public enum Color { Red }
 
+        [Transpile, StringEnum]
+        public enum Mode { Fast }
+
+        [Transpile]
+        public sealed class Plain { public override string ToString() => "plain"; }
+
+        [Transpile]
+        public record struct Pair(int A);
+
         [Transpile]
         public sealed class Money : IFormattable
         {
             public string ToString(string? format, IFormatProvider? provider) => "money";
+
+            public string ToString(string format) => "money:" + format;
         }
 
         [Transpile]
@@ -105,8 +116,10 @@ public class InterpolationFormatClauseTests
     [Arguments("$\"{f:F2}\"", "float f", "F2", "float")]
     [Arguments("$\"{t:yyyy-MM-dd}\"", "DateTime t", "yyyy-MM-dd", "DateTime")]
     [Arguments("$\"{t:yyyy-MM-dd}\"", "DateOnly t", "yyyy-MM-dd", "DateOnly")]
-    [Arguments("$\"{g:N}\"", "Guid g", "N", "Guid")]
-    [Arguments("$\"{c:D}\"", "Color c", "D", "Color")]
+    [Arguments("$\"{g:N}\"", "Guid? g", "N", "Guid?")]
+    [Arguments("$\"{c:X}\"", "Color c", "X", "Color")]
+    [Arguments("$\"{h:G}\"", "Half h", "G", "Half")]
+    [Arguments("$\"{v:D2}\"", "IComparable v", "D2", "IComparable")]
     [Arguments("$\"{m:C}\"", "Money m", "C", "Money")]
     [Arguments("$\"{o:D2}\"", "object o", "D2", "object")]
     [Arguments("$\"{d:0.00}\"", "double d", "0.00", "double")]
@@ -242,9 +255,150 @@ public class InterpolationFormatClauseTests
 
         await Assert
             .That(UnsupportedFeatures(diagnostics).Single().Message)
+            .IsEqualTo("Format strings are not supported in Dart; the call throws at run time.");
+    }
+
+    /// <summary>
+    /// C# passes a format only to an <c>IFormattable</c>: on any other static
+    /// type (a sealed class, a record struct) the format is ignored and the
+    /// hole prints <c>ToString()</c>, as on main; an alignment still pads.
+    /// </summary>
+    [Test]
+    [Arguments("$\"{p:X}\"", "Plain p", "return `${p}`;")]
+    [Arguments("$\"{p:D2}\"", "Pair p", "return `${p}`;")]
+    [Arguments("$\"{p,6:X}\"", "Plain p", "return `${alignValue(p, 6)}`;")]
+    public async Task FormatOnANonFormattableType_IsIgnored(
+        string expression,
+        string parameter,
+        string lowered
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["holes.ts"]).Contains(lowered);
+    }
+
+    /// <summary>
+    /// A format the target prints as the clause-free text for every value
+    /// (<c>INumericFormatCapability.PrintsAsDefaultText</c>) keeps the
+    /// clause-free hole, as on main; the call becomes the same hole.
+    /// </summary>
+    [Test]
+    [Arguments("$\"{c:D}\"", "Color c", "return `${c}`;")]
+    [Arguments("$\"{m:G}\"", "Mode m", "return `${m}`;")]
+    [Arguments("$\"{d:O}\"", "DateOnly d", "return `${d}`;")]
+    [Arguments("$\"{g:D}\"", "Guid g", "return `${g}`;")]
+    [Arguments("$\"{g:D}\"", "Guid? g", "return `${g ?? \"\"}`;")]
+    [Arguments("$\"{b:R}\"", "System.Numerics.BigInteger b", "return `${b}`;")]
+    [Arguments("$\"[{c,4:D}]\"", "Color c", "return `[${alignValue(c, 4)}]`;")]
+    [Arguments("c.ToString(\"D\")", "Color c", "return `${c}`;")]
+    [Arguments("d.ToString(\"O\", null)", "DateOnly d", "return `${d}`;")]
+    public async Task DefaultTextFormat_KeepsTheClauseFreeHole(
+        string expression,
+        string parameter,
+        string lowered
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["holes.ts"]).Contains(lowered);
+    }
+
+    /// <summary>
+    /// A hole is <c>value.ToString(format)</c>: on a type whose
+    /// <c>ToString(string)</c> a declarative mapping lowers (<c>Guid</c>), the
+    /// hole lowers through the same mapping as the call.
+    /// </summary>
+    [Test]
+    [Arguments("$\"{g:N}\"", "g.ToString(\"N\")")]
+    [Arguments("$\"{g:B}\"", "g.ToString(\"B\")")]
+    [Arguments("$\"{g:p}\"", "g.ToString(\"p\")")]
+    public async Task HoleOnAMappedToString_LowersThroughTheMapping(string hole, string call)
+    {
+        var holeOutput = TranspileHelper.Transpile(Body("Guid g", hole))["holes.ts"];
+        var callOutput = TranspileHelper.Transpile(Body("Guid g", call))["holes.ts"];
+
+        await Assert
+            .That(ReturnedExpressionOf(holeOutput))
+            .IsEqualTo($"`${{{ReturnedExpressionOf(callOutput)}}}`");
+    }
+
+    /// <summary>
+    /// <c>ToString(format)</c> of a BCL type that no mapping and no formatter
+    /// lowers reports at the format, instead of keeping a call that throws
+    /// or prints the wrong text; <c>nint</c> calls <c>formatInt64</c> as
+    /// <c>long</c> does; a user type's own <c>ToString(string)</c> is untouched.
+    /// </summary>
+    [Test]
+    [Arguments("m.ToString(\"F2\")", "decimal m", "\"F2\"", "decimal")]
+    [Arguments("t.ToString(\"O\")", "DateTime t", "\"O\"", "DateTime")]
+    [Arguments("c.ToString(\"G\")", "Color c", "\"G\"", "Color")]
+    [Arguments("b.ToString(\"X\")", "System.Numerics.BigInteger b", "\"X\"", "BigInteger")]
+    [Arguments("s.ToString(\"c\")", "TimeSpan s", "\"c\"", "TimeSpan")]
+    public async Task BclToStringWithoutLowering_ReportsAtTheFormat(
+        string expression,
+        string parameter,
+        string argument,
+        string type
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        var report = UnsupportedFeatures(diagnostics).Single();
+
+        await Assert
+            .That(report.Message)
             .IsEqualTo(
-                "Numeric format strings are not supported in Dart; the call throws at run time."
+                $"The format '{argument[1..^1]}' is not supported for '{type}' in TypeScript; "
+                    + "the call throws at run time."
             );
+
+        await Assert.That(LocatedSource.TextOf(report)).IsEqualTo(argument);
+        await Assert.That(files["holes.ts"]).Contains(Placeholder);
+    }
+
+    [Test]
+    public async Task FormattableTypeParameterToString_Reports()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Host
+                + """
+                    public string Run<T>(T v) where T : IFormattable => v.ToString("D2", null);
+                }
+                """
+        );
+
+        await Assert
+            .That(UnsupportedFeatures(diagnostics).Single().Message)
+            .IsEqualTo(
+                "The format 'D2' is not supported for 'T' in TypeScript; the call throws at run time."
+            );
+    }
+
+    [Test]
+    [Arguments("n.ToString(\"D2\")", "nint n", "return formatInt64(n, \"D2\");")]
+    [Arguments("n.ToString(format)", "nuint n, string format", "return formatInt64(n, format);")]
+    [Arguments("m.ToString(\"X\")", "Money m", "return m.toStringFormat(\"X\");")]
+    public async Task LoweredToStringWithFormat_IsNotReported(
+        string expression,
+        string parameter,
+        string lowered
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["holes.ts"]).Contains(lowered);
     }
 
     [Test]
@@ -284,9 +438,7 @@ public class InterpolationFormatClauseTests
 
         await Assert
             .That(report.Message)
-            .IsEqualTo(
-                "Numeric format strings are not supported in Dart; the call throws at run time."
-            );
+            .IsEqualTo("Format strings are not supported in Dart; the call throws at run time.");
 
         await Assert
             .That(files["holes.dart"])
@@ -310,6 +462,13 @@ public class InterpolationFormatClauseTests
                 public string Run({{parameters}}) => {{expression}};
             }
             """;
+
+    private static string ReturnedExpressionOf(string file)
+    {
+        var start = file.LastIndexOf("return ", StringComparison.Ordinal) + "return ".Length;
+
+        return file[start..file.IndexOf(';', start)];
+    }
 
     private static IEnumerable<MetanoDiagnostic> UnsupportedFeatures(
         IEnumerable<MetanoDiagnostic> diagnostics

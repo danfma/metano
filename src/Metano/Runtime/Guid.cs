@@ -57,6 +57,43 @@ using Metano.Annotations;
     JsTemplate = "$this.replace(/-/g, \"\")"
 )]
 
+// Guid.ToString("n") / ("B") / ("b") / ("P") / ("p") (baseline FR-051, #323): the compact,
+// braced and parenthesized forms; .NET reads the letter case-insensitively.
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.ToString),
+    WhenArg0StringEquals = "n",
+    JsTemplate = "$this.replace(/-/g, \"\")"
+)]
+
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.ToString),
+    WhenArg0StringEquals = "B",
+    JsTemplate = "(\"{\" + $this + \"}\")"
+)]
+
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.ToString),
+    WhenArg0StringEquals = "b",
+    JsTemplate = "(\"{\" + $this + \"}\")"
+)]
+
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.ToString),
+    WhenArg0StringEquals = "P",
+    JsTemplate = "(\"(\" + $this + \")\")"
+)]
+
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.ToString),
+    WhenArg0StringEquals = "p",
+    JsTemplate = "(\"(\" + $this + \")\")"
+)]
+
 // Guid.ToString() / Guid.ToString(other-format) → identity (the value is already
 // a branded string at runtime). Acts as the fallback for any call that doesn't
 // match a more specific WhenArg0StringEquals filter above.

@@ -463,24 +463,40 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   does. See [docs/bcl-mappings.md](docs/bcl-mappings.md#number-formatting-format-strings-and-interpolation-clauses).
 - A clause the runtime does not format now reports `MS0001` (a warning) at the
   hole or the format argument and emits an expression that throws
-  `Unsupported expression: UnsupportedFormat`: a custom numeric format
-  (`0.00`, `#,##0`), the integers' `B`, a format on `decimal`, `float`, a date
-  or time, `Guid`, an enum, an `IFormattable` type or `object`. A
-  `ToString(format)` whose format is not a constant calls the formatter on an
-  integer or a `double`, which decides at run time: a `null` format is `G`, a
-  custom format or `B` throws `NotSupportedException` naming the format, an
-  invalid one `FormatException`.
+  `Unsupported expression: UnsupportedFormat` where it is evaluated (in a
+  static field initializer, when the module is imported): a custom numeric
+  format (`0.00`, `#,##0`), the integers' `B`, and any other format on
+  `decimal`, `float`, `Half`, a date or time, an enum, an `IFormattable` type,
+  `object` or a type parameter. A `ToString(format)` whose format is not a
+  constant calls the formatter on an integer or a `double`, which decides at
+  run time: a `null` format is `G`, a custom format or `B` throws
+  `NotSupportedException` naming the format, an invalid one `FormatException`.
+- Formats that already printed .NET's text keep printing it: a format on a
+  type that is not `IFormattable` (a `string`, `bool`, `char`, user class,
+  record or struct) is ignored, as in C#; a `Guid`'s `D`, a numeric enum's `D`,
+  a `[StringEnum]`'s `G` / `F`, a `DateOnly`'s `O` and a `BigInteger`'s `G` /
+  `R` print the clause-free text; a hole on a type whose `ToString(string)` has
+  a declarative mapping lowers through it (`{g:N}` is `g.ToString("N")`).
+- `ToString(format)` of any other BCL type used to be emitted as written,
+  printing the wrong text (`12.5m.ToString("F2")` printed `12.5`) or throwing
+  `RangeError` / `TypeError` (`BigInteger`, an enum, `nint`, `DateTime`,
+  `v.ToString("D2", null)` with `T : IFormattable`) without a diagnostic. It now
+  follows the hole's rule: a mapping or a default-text format lowers it, the
+  rest reports `MS0001` at the format argument. `nint` / `nuint` call
+  `formatInt64`; `Guid` gains `B` / `P` (and `b`, `p`, `n`). A user type's own
+  `ToString(string)` is unchanged. `Guid`'s `X` still prints the hyphenated
+  text through the fallback mapping.
 - `long` / `ulong` gain `E`, `P` and `C` (they reported `MS0066` and threw),
   `R5` formats as `G5`, as in .NET, and a `long?` hole with a clause now
   formats instead of dropping the clause.
 - A hole with a clause passes a nullable value to the formatter, which prints
-  `null` as `""`, as the null-safe hole did; a format on a `string`, `bool`
-  or `char` is still ignored, as in C#. A hole without a clause, and
+  `null` as `""`, as the null-safe hole did. A hole without a clause, and
   `ToString()` without a format, emit exactly what they emitted before (the
-  default conversion of `bool` and `double` stays #308).
-- Dart honors no clause yet: a hole with a clause, and `ToString(format)` on
-  an integer of 32 bits or fewer, a `double` or a `float`, report `MS0001` and
-  throw `UnsupportedError` instead of dropping the clause (or emitting
+  default conversion of `bool`, enums, `decimal` and `double` stays #308 /
+  #662, and an alignment pads that text).
+- Dart honors no clause yet: a hole with a clause (other than an ignored
+  format), and every BCL `ToString(format)`, report `MS0001` and throw
+  `UnsupportedError` instead of dropping the clause (or emitting
   `n.toString('D2')`).
 
 ### Toolchain
