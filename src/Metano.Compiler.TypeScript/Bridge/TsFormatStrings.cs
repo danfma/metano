@@ -13,7 +13,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>formatInt64</c> (<c>integer-format.ts</c>, <c>int64-format.ts</c>) for
 /// the integers, <c>formatDouble</c> (<c>double-format.ts</c>) for
 /// <c>double</c>. The single place the supported-format rule is spelled on
-/// the TypeScript side: <see cref="Int64Formatting"/> reads it too.
+/// the TypeScript side: <see cref="Int64Formatting"/> reads it too. It also
+/// answers which formats are a type's default text here
+/// (<see cref="PrintsAsDefaultText"/>: <c>Guid</c>, enums, <c>DateOnly</c>,
+/// <c>BigInteger</c>), so the hole or call prints with no formatter.
 /// </summary>
 internal sealed partial class TsFormatStrings : IFormatStringCapability
 {

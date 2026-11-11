@@ -104,7 +104,10 @@ public static class RoslynTypeQueries
     /// library: the core library (<c>System.Private.CoreLib</c>,
     /// <c>mscorlib</c>, <c>netstandard</c>) or a <c>System</c> /
     /// <c>System.*</c> reference assembly. A third-party library or package
-    /// is not, whatever it references.
+    /// is not, whatever it references. The rule reads the assembly NAME, so a
+    /// third-party assembly named <c>System.*</c> (for example
+    /// <c>System.Reactive</c>) counts as base class library; callers that
+    /// report on a BCL member then report for it too, never silently.
     /// </summary>
     public static bool IsBclAssembly(this IAssemblySymbol? assembly) =>
         assembly?.Name is { } name
