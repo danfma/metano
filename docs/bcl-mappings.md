@@ -150,9 +150,11 @@ the string a `ReadOnlySpan<char>` was converted from.
 - Every other `MemoryExtensions` call reports `MS0001` and emits an expression
   that throws: a comparer that is not the `null` constant, a `StringComparison`
   overload, `SequenceEqual`, the parameterless `Sort()` (its previous
-  `array.sort()` compared the elements as strings: right for `char[]` and
-  `bool[]`, wrong for numbers from 10 up, `long`, `decimal`, `string`, string
-  enums, `bool?` and `Guid`; pass a comparison instead, such as
+  `array.sort()` compared the elements as strings: right on the inputs tried
+  for `char[]`, `bool[]`, `DateOnly`, `DateTime`, `TimeOnly` and small numeric
+  enums, wrong for numbers from 10 up, `long`, `decimal`, `string`, string
+  enums, `bool?` and `Guid`; every element type reports until the runtime
+  sort helper lands, #663; pass a comparison instead, such as
   `(x, y) => x - y` for numbers or `(x, y) => x < y ? -1 : x > y ? 1 : 0` for
   `char`), `Sort(comparer)`, `BinarySearch`, `IndexOfAny`,
   `ContainsAny`, `Count(value)`, `AsSpan`, `Trim(c)`, the static form

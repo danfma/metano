@@ -224,6 +224,7 @@ public class SpanExtensionCallTests
     [Arguments("int[] xs", "xs.Sort()")]
     [Arguments("char[] cs", "cs.Sort()")]
     [Arguments("int[] xs", "xs.Sort(Comparer<int>.Default)")]
+    [Arguments("int[] xs", "xs.Sort((IComparer<int>?)null)")]
     [Arguments("int[] xs, int x", "xs.BinarySearch(x)")]
     [Arguments("int[] xs, int x", "xs.IndexOfAny(x, x)")]
     [Arguments("int[] xs, int[] ys", "xs.IndexOfAny(ys)")]

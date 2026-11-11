@@ -197,7 +197,7 @@ public sealed partial class IrExpressionExtractor
         var comparer = method
             .Parameters.Select(parameter => parameter.Name)
             .ToList()
-            .IndexOf(ComparerParameterName);
+            .IndexOf(ComparerParameter.Name);
 
         var order = arguments
             .EvaluationOrder?.Where(position => position != comparer)

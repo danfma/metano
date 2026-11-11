@@ -23,12 +23,11 @@ public readonly record struct LinqOverloadParameters
             : _names;
 
     /// <summary>Whether the overload takes a comparer.</summary>
-    public bool PassesComparer =>
-        Names.Contains(IrExpressionExtractor.ComparerParameterName, StringComparer.Ordinal);
+    public bool PassesComparer => Names.Contains(ComparerParameter.Name, StringComparer.Ordinal);
 
     /// <summary>The same overload without its comparer parameter.</summary>
     public LinqOverloadParameters WithoutComparer() =>
-        new([.. Names.Where(name => name != IrExpressionExtractor.ComparerParameterName)]);
+        new([.. Names.Where(name => name != ComparerParameter.Name)]);
 
     public bool Equals(LinqOverloadParameters other) =>
         Names.SequenceEqual(other.Names, StringComparer.Ordinal);

@@ -421,11 +421,13 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   lower to JavaScript arrays (`array.IndexOf(otherArray)`,
   `chars.IndexOf("bc")`).
 - `Sort()` reports for every element type. Its previous output,
-  `array.sort()`, compared the elements as strings: right for `char[]` and
-  `bool[]` arrays, which now report, and wrong for numbers from 10 up,
-  `long`, `decimal`, `string` (culture order), string enums, `bool?` and
-  `Guid`. A sort that picks the right default comparison by element type
-  belongs in a runtime helper and is a follow-up. Workaround: pass the
+  `array.sort()`, compared the elements as strings: it happened to sort
+  right, on the inputs tried, for `char[]` and `bool[]` arrays, the temporal
+  types (`DateOnly`, `DateTime`, `TimeOnly`) and small numeric enums, and
+  was wrong for numbers from 10 up, `long`, `decimal`, `string` (culture
+  order), string enums, `bool?` and `Guid`. All of them report until the
+  runtime sort helper that picks the default comparison by element type
+  lands (#663). Workaround: pass the
   comparison, `a.Sort((x, y) => x - y)` for numbers,
   `a.Sort((x, y) => x < y ? -1 : x > y ? 1 : 0)` for `char`,
   `a.Sort((x, y) => x == y ? 0 : x ? 1 : -1)` for `bool`.
