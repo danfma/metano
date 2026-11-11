@@ -44,9 +44,25 @@ public sealed class TypeScriptTransformContext(
     Action<MetanoDiagnostic> reportDiagnostic
 )
 {
+    private IReadOnlyDictionary<string, IrTranspilableTypeRef>? _extensionHelperFunctions;
+    private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? _importAliasOverrides;
+    private BclExportTypeOverrides? _bclOverrides;
+    private BclExceptionClasses? _exceptionClasses;
+    private IrTypeOriginResolver? _originResolver;
+
     public Compilation Compilation { get; } = compilation;
     public IAssemblySymbol? CurrentAssembly { get; } = currentAssembly;
     public bool AssemblyWideTranspile { get; } = assemblyWideTranspile;
+
+    /// <summary>
+    /// The runtime classes of the BCL exceptions, read from the
+    /// <c>[ExportFromBcl]</c> entries in scope (spec 011 FR-014): the one
+    /// resolver behind the type position, <c>extends</c>, construction, the
+    /// type tests and the extraction port
+    /// <see cref="IrExtractionContext.HasExceptionRuntimeClass"/>.
+    /// </summary>
+    public BclExceptionClasses ExceptionClasses =>
+        _exceptionClasses ??= new BclExceptionClasses(TypeMapping!.BclExportMap);
 
     /// <summary>
     /// Frontend-built projection of every current-assembly top-level
@@ -76,8 +92,6 @@ public sealed class TypeScriptTransformContext(
     /// </summary>
     public IReadOnlyDictionary<string, IrTranspilableTypeRef> ExtensionHelperFunctions =>
         _extensionHelperFunctions ??= BuildExtensionHelperFunctions();
-
-    private IReadOnlyDictionary<string, IrTranspilableTypeRef>? _extensionHelperFunctions;
 
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
@@ -411,8 +425,6 @@ public sealed class TypeScriptTransformContext(
             TargetLanguage.TypeScript
         );
 
-    private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? _importAliasOverrides;
-
     /// <summary>
     /// The barrel-scope claims of the module-function fast paths (spec 013
     /// FR-032), computed once per transform and shared by the module
@@ -562,8 +574,6 @@ public sealed class TypeScriptTransformContext(
                 ),
         };
 
-    private BclExportTypeOverrides? _bclOverrides;
-
     /// <summary>
     /// Shared <see cref="IrToTsTypeOverrides"/> that applies <c>[ExportFromBcl]</c>
     /// mappings (decimal → Decimal from decimal.js, etc.) when lowering an
@@ -578,20 +588,6 @@ public sealed class TypeScriptTransformContext(
             TypeMapping!.BclExportMap,
             TypeMapping.CrossPackageDependencies
         );
-
-    private BclExceptionClasses? _exceptionClasses;
-
-    /// <summary>
-    /// The runtime classes of the BCL exceptions, read from the
-    /// <c>[ExportFromBcl]</c> entries in scope (spec 011 FR-014): the one
-    /// resolver behind the type position, <c>extends</c>, construction, the
-    /// type tests and the extraction port
-    /// <see cref="IrExtractionContext.HasExceptionRuntimeClass"/>.
-    /// </summary>
-    public BclExceptionClasses ExceptionClasses =>
-        _exceptionClasses ??= new BclExceptionClasses(TypeMapping!.BclExportMap);
-
-    private IrTypeOriginResolver? _originResolver;
 
     /// <summary>
     /// Shared <see cref="IrTypeOriginResolver"/> that records cross-assembly
