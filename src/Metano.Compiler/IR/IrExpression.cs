@@ -811,17 +811,27 @@ public sealed record IrInterpolationText(string Text) : IrInterpolationPart;
 /// <summary>
 /// An expression segment within an interpolated string:
 /// <c>{Expression,Alignment:FormatSpecifier}</c>.
-/// <see cref="SixtyFourBitKind"/> is the hole's numeric kind when its value
-/// is a (non-nullable) <c>long</c> or <c>ulong</c>, so a target that formats
-/// those values itself can honor the format and the alignment (spec 012
-/// FR-037); <c>null</c> otherwise.
+/// <see cref="NumericKind"/> is the numeric kind of the hole's value, looking
+/// through <c>Nullable&lt;T&gt;</c> (not an enum's underlying kind), so a
+/// target that formats numbers itself can honor the format and the alignment
+/// with the formatter of the value's type (baseline FR-051, spec 012 FR-037);
+/// <c>null</c> for a non-numeric value. A hole with a clause carries its
+/// value as it is, <c>null</c> included: the target's formatter prints a
+/// <c>null</c> as the empty string, as C# does. A hole without a clause
+/// carries the null-safe operand of a concatenation. A
+/// <see cref="FormatSpecifier"/> C# ignores for the value's type (a
+/// <c>string</c>, <c>bool</c> or <c>char</c>) is dropped.
 /// </summary>
 public sealed record IrInterpolationExpression(
     IrExpression Expression,
     string? FormatSpecifier = null,
     int? Alignment = null,
-    IrNumericKind? SixtyFourBitKind = null
-) : IrInterpolationPart;
+    IrNumericKind? NumericKind = null
+) : IrInterpolationPart
+{
+    /// <summary>Whether the hole has a format or an alignment clause.</summary>
+    public bool HasClause => FormatSpecifier is not null || Alignment is not null;
+}
 
 // -- Pattern matching --
 

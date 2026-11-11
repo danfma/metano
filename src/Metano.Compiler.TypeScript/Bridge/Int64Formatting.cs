@@ -22,8 +22,8 @@ internal static partial class Int64Formatting
 
     private const string UInt64TypeName = "ulong";
 
-    /// <summary>The standard formats .NET defines for integers that <c>formatInt64</c> does not implement.</summary>
-    private static readonly HashSet<char> UnsupportedStandardFormats = ['B', 'C', 'E', 'P'];
+    /// <summary>The standard format .NET defines for integers that <c>formatInt64</c> does not implement (binary).</summary>
+    private const char UnsupportedStandardFormat = 'B';
 
     /// <summary>The styles <c>int64-parsing.ts</c> implements.</summary>
     private static readonly HashSet<int> SupportedNumberStyles =
@@ -35,16 +35,15 @@ internal static partial class Int64Formatting
     ];
 
     /// <summary>
-    /// <c>formatInt64(value, format, alignment)</c> for a 64-bit hole with a
-    /// format or an alignment, reporting <c>MS0066</c> for an unsupported
-    /// constant format; <c>null</c> for any other hole, which keeps the plain
-    /// template-literal hole.
+    /// <c>formatInt64(value, format, alignment)</c> for a hole over a
+    /// <c>long</c> or <c>ulong</c> (or their nullable forms) with a format or
+    /// an alignment, reporting <c>MS0066</c> for an unsupported constant
+    /// format; <c>null</c> for any other hole.
     /// </summary>
     public static TsExpression? TryFormatHole(IrInterpolationExpression hole, TsExpression value)
     {
         var formatsItself =
-            hole.SixtyFourBitKind is not null
-            && (hole.FormatSpecifier is not null || hole.Alignment is not null);
+            hole.NumericKind is IrNumericKind.Int64 or IrNumericKind.UInt64 && hole.HasClause;
 
         if (!formatsItself)
             return null;
@@ -100,8 +99,8 @@ internal static partial class Int64Formatting
 
     /// <summary>
     /// A valid .NET format that <c>formatInt64</c> rejects: a custom format
-    /// (anything but a letter and an optional precision) or one of the
-    /// unimplemented standard letters. An invalid standard letter (<c>Q</c>)
+    /// (anything but a letter and an optional precision) or the
+    /// unimplemented standard letter. An invalid standard letter (<c>Q</c>)
     /// is not reported: .NET throws <c>FormatException</c> for it too.
     /// </summary>
     private static bool IsUnsupportedFormat(string format)
@@ -110,7 +109,7 @@ internal static partial class Int64Formatting
             return false;
 
         return !StandardFormat().IsMatch(format)
-            || UnsupportedStandardFormats.Contains(char.ToUpperInvariant(format[0]));
+            || char.ToUpperInvariant(format[0]) == UnsupportedStandardFormat;
     }
 
     /// <summary>

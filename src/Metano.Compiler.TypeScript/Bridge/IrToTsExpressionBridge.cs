@@ -1811,6 +1811,7 @@ public static partial class IrToTsExpressionBridge
         var quasis = new List<string>();
         var expressions = new List<TsExpression>();
         var pendingText = new System.Text.StringBuilder();
+
         foreach (var part in interp.Parts)
         {
             switch (part)
@@ -1825,11 +1826,13 @@ public static partial class IrToTsExpressionBridge
                     // hole needs no grouping of its own.
                     var value = Map(expr.Expression, context);
 
-                    expressions.Add(Int64Formatting.TryFormatHole(expr, value) ?? value);
+                    expressions.Add(FormatClauseLowering.TryLowerHole(expr, value) ?? value);
                     break;
             }
         }
+
         quasis.Add(pendingText.ToString());
+
         return new TsTemplateLiteral(quasis, expressions);
     }
 

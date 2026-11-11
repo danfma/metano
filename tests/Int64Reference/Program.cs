@@ -34,6 +34,12 @@ ReferenceFixture.Write(
     typeof(DecimalConvertCalls)
 );
 
+ReferenceFixture.Write(
+    Path.Combine(fixtures, "number-formatting.json"),
+    typeof(NumberFormatting),
+    typeof(RuntimeFormatting)
+);
+
 ReferenceFixture.Write(Path.Combine(fixtures, "aggregates.json"), typeof(Aggregates));
 
 ReferenceFixture.Write(Path.Combine(fixtures, "comparisons.json"), typeof(Comparisons));
