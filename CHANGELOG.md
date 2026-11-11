@@ -257,7 +257,7 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   (.NET runs it before them), and an exception thrown by a filter propagates
   (.NET treats the filter as false).
 
-### ⚠ Unimplemented LINQ overloads report `MS0001` (legacy FR-015–FR-018, partial; #648)
+### ⚠ Unimplemented LINQ overloads report `MS0001` (baseline FR-017, partial; #648)
 
 - A LINQ call the runtime operators do not implement used to transpile
   silently and run with a wrong result or throw; it now reports `MS0001` (a

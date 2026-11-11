@@ -298,6 +298,10 @@ const result = Enumerable.from(items)
 `distinctBy`, `groupBy`, `concat`, `reverse`, `zip`, `append`, `prepend`, `union`,
 `intersect`, `except`
 
+`union`, `intersect` and `except` have no pipe operator: they still go through
+this legacy fluent form, which imports an `Enumerable` the runtime does not
+export, so the module fails to load (#657).
+
 ### Terminal operators
 
 `toArray`, `toMap` (from `ToDictionary`), `toSet` (from `ToHashSet`), `first`,
@@ -318,7 +322,8 @@ notnull`, `where T : IComparable<T>`, `where T : Enum` alone) also yields `null`
 without a warning. `ElementAt`, `ElementAtOrDefault` and `DefaultIfEmpty` have no
 lowering (#617); `Min` / `Max` over an empty or nullable `number` sequence differ
 from .NET (#618); the static call form `Enumerable.FirstOrDefault(xs)` is not
-lowered (#619).
+lowered as a pipe (#619): it still goes through the broken legacy fluent path
+(`Enumerable.from(Enumerable).firstOrDefault(xs)`), tracked in #657.
 
 ### Supported overloads
 

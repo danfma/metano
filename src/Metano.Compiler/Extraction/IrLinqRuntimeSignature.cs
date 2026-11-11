@@ -7,6 +7,10 @@ namespace Metano.Compiler.Extraction;
 /// tree lands: after the stage's arguments, or, for an operator that pads
 /// the arguments a stage omits (the <c>OrDefault</c> terminals), at its slot.
 /// </summary>
+/// <remarks>
+/// TODO(#657): this describes the TypeScript runtime; it belongs to the
+/// TypeScript target, behind a port, not to the core.
+/// </remarks>
 public sealed record IrLinqRuntimeSignature
 {
     private IrLinqRuntimeSignature(
@@ -52,6 +56,15 @@ public sealed record IrLinqRuntimeSignature
     public bool ReadsTreeAfter(int argumentCount) =>
         QueryableSlot is { } slot
         && argumentCount + ArgumentsOmittedBeforeTree(argumentCount) == slot;
+
+    /// <summary>
+    /// Whether the operator reads a tree, but not where a stage passing
+    /// <paramref name="argumentCount"/> arguments puts it, so it would read
+    /// the tree as another argument. An operator that reads no tree is
+    /// passed none.
+    /// </summary>
+    public bool MisplacesTreeAfter(int argumentCount) =>
+        QueryableSlot is not null && !ReadsTreeAfter(argumentCount);
 
     /// <summary>
     /// The same signature, padding the arguments a stage omits up to its

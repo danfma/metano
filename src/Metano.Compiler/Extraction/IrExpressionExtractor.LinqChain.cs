@@ -113,6 +113,7 @@ public sealed partial class IrExpressionExtractor
         while (current is not null)
         {
             var sym = _semantic.GetSymbolInfo(current).Symbol as IMethodSymbol;
+
             if (!IrLinqMapping.TryResolve(sym, out var op))
             {
                 // AsQueryable is BCL ceremony to lift an IEnumerable into
@@ -124,16 +125,19 @@ public sealed partial class IrExpressionExtractor
                 if (IsAsQueryable(sym))
                 {
                     var asqInner = ResolveAsQueryableInner(current);
+
                     if (asqInner is null)
                     {
                         sourceSyntax = current;
                         break;
                     }
+
                     if (asqInner is InvocationExpressionSyntax asqInv)
                     {
                         current = asqInv;
                         continue;
                     }
+
                     sourceSyntax = asqInner;
                     break;
                 }
@@ -182,34 +186,27 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// One stage of a chain, with its arguments bound to the parameters of
     /// its method and the queryable tree it captures. A <c>null</c> comparer
-    /// is dropped, as the comparer-less overload means the same (#648), and
-    /// so is a tree its runtime operator reads nowhere: the call then runs
-    /// the plain operator, with the value C# computes.
+    /// is dropped, as the comparer-less overload means the same (#648). The
+    /// tree is kept even when the target's operator reads none: whether to
+    /// pass it is the target's decision.
     /// </summary>
     private IrLinqStage ExtractLinqStage(LinqStageSite site)
     {
         var (call, method, op, memberAccess) = site;
-        var written = StageArguments(call, method, op);
-        var args = OmitsNullComparer(site) ? WithoutComparer(written, method) : written;
+        var nullComparer = NullComparerArgumentOf(site);
+        var written = StageArguments(call, method, op, nullComparer);
+        var args = nullComparer is null ? written : WithoutComparer(written, method);
 
         if (args.HasUnrepresentableMissValue && LowersLinqChains)
             ElementMissValue.ReportUnrepresentable(call, method, method.TypeArguments[0]);
 
         var queryable = TryCaptureQueryableMeta(call, method, memberAccess);
-        var readTree = ReadsNoTree(op) ? null : queryable;
 
-        return new IrLinqStage(op, args.Values, readTree, LinqSixtyFourBitValues.Of(method, op))
+        return new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(method, op))
         {
             EvaluationOrder = args.EvaluationOrder,
         };
     }
-
-    /// <summary>
-    /// Whether the runtime operator of <paramref name="op"/> reads no
-    /// queryable tree on a target that lowers LINQ chains.
-    /// </summary>
-    private bool ReadsNoTree(IrLinqOperator op) =>
-        LowersLinqChains && IrLinqMapping.RuntimeSignatureOf(op).QueryableSlot is null;
 
     /// <summary>
     /// The arguments of a LINQ stage bound to the parameters of
@@ -217,15 +214,22 @@ public sealed partial class IrExpressionExtractor
     /// in parameter order, so a call that names them in another order hands
     /// each value to its own parameter. The order C# evaluates them in is
     /// kept beside them when it differs and can be observed
-    /// (<see cref="SourceOrderOf"/>).
+    /// (<see cref="SourceOrderOf"/>). A <paramref name="skipped"/> argument
+    /// is not extracted: it holds the <c>null</c> literal in its place.
     /// </summary>
     private LinqStageArguments StageArguments(
         InvocationExpressionSyntax stage,
         IMethodSymbol method,
-        IrLinqOperator op
+        IrLinqOperator op,
+        ArgumentSyntax? skipped = null
     )
     {
-        var written = stage.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        var written = stage
+            .ArgumentList.Arguments.Select(argument =>
+                argument == skipped ? SkippedArgument(argument) : ExtractArgument(argument)
+            )
+            .ToList();
+
         var bound = InParameterOrder(written, method);
         var sourceOrder = SourceOrderOf(_semantic.GetOperation(stage), bound);
 
