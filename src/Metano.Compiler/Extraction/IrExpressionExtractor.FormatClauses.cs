@@ -153,7 +153,7 @@ public sealed partial class IrExpressionExtractor
         );
     }
 
-    /// <summary>The constant alignment of a hole    /// <summary>The constant alignment of a hole (<c>{x,8}</c>), or <c>null</c> without one.</summary>
+    /// <summary>The constant alignment of a hole (<c>{x,8}</c>), or <c>null</c> without one.</summary>
     private int? InterpolationAlignment(InterpolationSyntax hole) =>
         hole.AlignmentClause is { } clause
         && _semantic.GetConstantValue(clause.Value) is { HasValue: true, Value: int alignment }
@@ -417,7 +417,7 @@ public sealed partial class IrExpressionExtractor
     }
 
     private static bool ImplementsIFormattable(ITypeSymbol type) =>
-        type.AllInterfaces.Any(contract => contract.ToDisplayString() == "System.IFormattable");
+        type.AllInterfaces.Any(contract => contract.ToDisplayString() == FormattableInterfaceName);
 
     private static string NameOf(FormattedConstruct construct) =>
         construct switch
