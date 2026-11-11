@@ -894,46 +894,74 @@ which extends `Error`, so `instanceof Error` holds for all of them.
 | `OperationCanceledException` | `OperationCanceledException : SystemException` | `(message, innerException)` |
 | `TaskCanceledException` | `TaskCanceledException : OperationCanceledException` | `(message, innerException)` |
 | `System.Text.Json.JsonException` | `JsonException : Exception` | `(message, innerException)` |
+| `TimeoutException` | `TimeoutException : SystemException` | `(message, innerException)` |
+| `System.Runtime.CompilerServices.SwitchExpressionException` | `SwitchExpressionException : InvalidOperationException` | `(message, innerException)` |
 
 - **Construction.** `new X(...)` emits `new X(...)` with a value import from the class's
   module. Each argument is classified by the role of the C# constructor parameter it binds
-  to (positional or named) and passed in the runtime constructor's order, with `undefined`
-  for a role omitted ahead of one that is passed: `new ArgumentOutOfRangeException("p",
-  "m")` is `new ArgumentOutOfRangeException("p", undefined, "m")`. A `null` literal counts
-  as absent. Other parameters (`JsonException`'s `path`, a `CancellationToken`) are dropped;
-  side-effecting arguments are still evaluated once, in source order.
+  to (positional or named; `inner` counts as `innerException`) and passed in the runtime
+  constructor's order, with `undefined` for a role omitted ahead of one that is passed:
+  `new ArgumentOutOfRangeException("p", "m")` is
+  `new ArgumentOutOfRangeException("p", undefined, "m")`. A `null` literal counts as absent.
+  Other parameters (`JsonException`'s `path`, a `CancellationToken`, `InvalidCastException`'s
+  `errorCode`) are dropped; side-effecting arguments are still evaluated once, in source order.
 - **Message.** The runtime class composes `message` as .NET does: the default message when
   none is given (or it is `null`), ` (Parameter 'name')` after a non-empty parameter name,
-  `\nActual value was X.` after a non-`null` actual value (formatted with `String`),
-  `\nObject name: 'x'.` after a non-empty object name. A user exception deriving from
-  `System.Exception` without a message passes .NET's `Exception of type 'Ns.Type' was
-  thrown.` (the runtime cannot know the derived class's C# name).
+  `\nActual value was X.` after a non-`null` actual value (formatted with `String`, so `true`
+  where .NET writes `True`), `\nObject name: 'x'.` after a non-empty object name. A user
+  exception deriving from `System.Exception` without a message passes .NET's
+  `Exception of type 'Ns.Type' was thrown.` (the runtime cannot know the derived class's C#
+  name); a class deriving from that one without a constructor of its own keeps its base's
+  text (.NET names the most-derived class).
 - **Members.** `Message` is `message`; `InnerException` reads `cause` and `StackTrace` reads
   `stack` (so both also work on a plain JavaScript `Error`); `ParamName`, `ActualValue` and
   `ObjectName` are `paramName`, `actualValue` and `objectName`. `ToString()` prints .NET's
-  `System.InvalidOperationException: message` format, with the inner exception after it.
+  `System.InvalidOperationException: message` format, with the inner exception after it. A
+  user exception declares its C# type name as `name` and its namespace as `typeNamespace`, so
+  `ToString()` prints `Shop.UnsupportedCurrencyException: …` as .NET does (a nested class
+  joins its containing classes with `.` where .NET writes `+`; a generic one keeps its open
+  name, ``Box`1``, without the type arguments).
 - **Type position, `extends`, type tests.** A BCL exception in a signature names its class
   (`error: Exception`), a user exception deriving from one extends it (`class
   InvalidSlugException extends ArgumentException`), and `is` / `as` / type patterns / switch
-  arms test `instanceof` it. `catch (X)` clauses test it too (the single-`catch` chain of
-  spec 011 FR-015, see [`docs/architecture.md`](architecture.md)); `catch (Exception)` and a
-  general `catch` take every thrown value, including one that is not an `Error`.
-- **Other exceptions.** A BCL exception without an entry (`TimeoutException`,
-  `IOException`, …) has no runtime class: constructing it reports `MS0001` and emits
-  `new Exception("System.TimeoutException: <message>")`, a user exception deriving from it
-  extends `Exception` (with the C# type's default message), and an `is` / `as` / pattern /
-  `catch` clause on it is the `MS0045` error, since testing `Exception` would take every
-  exception. A project can bind one to its own JavaScript class with
-  `[assembly: ExportFromBcl(typeof(TimeoutException), ExportedName = "TimeoutError",
-  FromPackage = "my-errors")]`; its constructor then takes `(message, innerException)`.
+  arms / overload-dispatcher arms test `instanceof` it. `catch (X)` clauses test it too (the
+  single-`catch` chain of spec 011 FR-015, see [`docs/architecture.md`](architecture.md));
+  `catch (Exception)` and a general `catch` take every thrown value, including one that is not
+  an `Error`. Interim, until `toException`: a test on `System.Exception` itself is
+  `instanceof Error`, so a JavaScript error (a `TypeError`) is an `Exception`. A `[GenerateGuard]`
+  field typed as a BCL exception tests `instanceof` its class (an unmapped one, `Exception`).
+- **Argument guards.** `ArgumentNullException.ThrowIfNull`, `ArgumentException.ThrowIfNullOrEmpty`
+  / `ThrowIfNullOrWhiteSpace` and the `ArgumentOutOfRangeException.ThrowIf*` comparisons
+  (`ThrowIfZero`, `ThrowIfNegative`, `ThrowIfNegativeOrZero`, `ThrowIfEqual`,
+  `ThrowIfNotEqual`, `ThrowIfGreaterThan`, `ThrowIfGreaterThanOrEqual`, `ThrowIfLessThan`,
+  `ThrowIfLessThanOrEqual`) lower to runtime functions with .NET's messages; the parameter
+  name is the `[CallerArgumentExpression]` text C# supplies, or the one the call passes.
+  `ObjectDisposedException.ThrowIf` and every other static member of an exception type
+  without a mapping report `MS0001`.
+- **Other exceptions.** A BCL exception without an entry (`IOException`,
+  `UnauthorizedAccessException`, …) has no runtime class: constructing it reports `MS0001`
+  and emits `namedException("System.IO", "IOException", message, inner)`, a runtime
+  `Exception` whose message is .NET's and whose `name` / `ToString()` report the C# type; a
+  user exception deriving from it extends `Exception` (with the C# type's default message)
+  and reports `MS0001` at its base list; an `is` / `as` / pattern / `catch` clause on it is the
+  `MS0045` error, since testing `Exception` would take every exception; an overload-dispatcher
+  arm keeps the object check. A project can bind one to its own JavaScript class with
+  `[assembly: ExportFromBcl(typeof(IOException), ExportedName = "IoError", FromPackage =
+  "my-errors")]`: a class outside `metano-runtime/system/exceptions/` takes
+  `(message, innerException)`, and a role it does not take (`paramName`, `actualValue`,
+  `objectName`) is written into the message as .NET's text (` (Parameter 'p')`, …). A
+  `Version` on such an entry is ignored when `FromPackage` is a module specifier.
 - **Runtime helpers** throw these classes with .NET's messages (spec 011 FR-016): integer
-  division by zero, number parsing, checked conversions, `string.Replace`, `Dictionary.Add`,
-  the LINQ terminals, `Math.Round` / `decimal.Round` and the JSON serializer.
-- **Known deviations.** `error.name` of a user exception is the name of the runtime class it
-  derives from, and its `ToString()` names that class too; a `TypeError` thrown by
-  JavaScript (a member access on `null`) is not a `NullReferenceException`, and a thrown
-  value that is not an `Exception` is not wrapped (both are spec 011 FR-015's
-  `toException`, not implemented yet). Dart keeps its native exception types.
+  division by zero, number parsing and `decimal.Parse`, checked conversions, `string.Replace`,
+  `Dictionary.Add`, the LINQ terminals, `Math.Round` / `decimal.Round`, the `DateOnly` /
+  `TimeOnly` / `DateTime` component constructors, a negative array length, a non-exhaustive
+  switch expression (`SwitchExpressionException`) and the JSON serializer.
+- **Known deviations.** A `TypeError` thrown by JavaScript (a member access on `null`) is not
+  a `NullReferenceException`, so a typed clause does not take it (it reaches
+  `catch (Exception)`), and a thrown value that is not an `Exception` is not wrapped (both are
+  spec 011 FR-015's `toException`, not implemented yet). Indexers out of range, a missing
+  dictionary key and several `string` / LINQ argument checks throw nothing or a JavaScript
+  error (spec 011 FR-016 lists them). Dart keeps its native exception types.
 
 ## Console
 

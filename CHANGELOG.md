@@ -358,65 +358,85 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 - `new InvalidOperationException("x")` emits `new InvalidOperationException("x")`
   imported from its own module
   (`metano-runtime/system/exceptions/invalid-operation-exception`); 2.x emitted
-  `new Error("x")`. The arguments pass by role in the runtime constructor's
-  order, and the runtime class composes `message` as .NET does
-  (`new ArgumentException("bad", "p")`, not `new Error("bad (Parameter 'p')")`;
-  `new ArgumentOutOfRangeException("p", undefined, "m")` for .NET's
-  `(paramName, message)` overload). The inner exception is the second
-  constructor argument instead of the `{ cause }` option, and is still exposed
-  as `cause`.
-- The mapped set is the runtime's exception hierarchy: `Exception`,
-  `SystemException`, `InvalidOperationException`, `ArgumentException`,
-  `ArgumentNullException`, `ArgumentOutOfRangeException`,
-  `KeyNotFoundException`, `IndexOutOfRangeException`, `FormatException`,
-  `ArithmeticException`, `OverflowException`, `DivideByZeroException`,
+  `new Error("x")`. The arguments pass by role in the runtime constructor's order, and the
+  runtime class composes `message` as .NET does (`new ArgumentException("bad", "p")`, not
+  `new Error("bad (Parameter 'p')")`; `new ArgumentOutOfRangeException("p", undefined, "m")`
+  for .NET's `(paramName, message)` overload). The inner exception is the second constructor
+  argument instead of the `{ cause }` option, and is still exposed as `cause`; a parameter
+  named `inner` (`NotImplementedException`, `MissingMethodException`) now counts, where 2.x
+  dropped it.
+- The mapped set is the runtime's exception hierarchy: `Exception`, `SystemException`,
+  `InvalidOperationException`, `ArgumentException`, `ArgumentNullException`,
+  `ArgumentOutOfRangeException`, `KeyNotFoundException`, `IndexOutOfRangeException`,
+  `FormatException`, `ArithmeticException`, `OverflowException`, `DivideByZeroException`,
   `NotSupportedException`, `NotImplementedException`, `InvalidCastException`,
-  `NullReferenceException`, `MissingMethodException`,
-  `ObjectDisposedException`, `OperationCanceledException`,
-  `TaskCanceledException` and `System.Text.Json.JsonException`, declared with
-  `[ExportFromBcl]` in `Metano/Runtime/Exceptions.cs` (a project can map
-  another exception to its own class the same way).
+  `NullReferenceException`, `MissingMethodException`, `ObjectDisposedException`,
+  `OperationCanceledException`, `TaskCanceledException`, `TimeoutException`,
+  `System.Text.Json.JsonException` and `SwitchExpressionException`, declared with
+  `[ExportFromBcl]` in `Metano/Runtime/Exceptions.cs` (a project can map another exception to
+  its own class the same way; such a class takes `(message, innerException)`).
 - A user exception deriving from a BCL exception extends its runtime class
-  (`class InvalidSlugException extends ArgumentException`), and a BCL
-  exception in type position names it (`error: Exception`, 2.x
-  `error: Error`). Hand-written TypeScript that passes a plain `Error` where
-  a C# `Exception` parameter is expected no longer type-checks: pass an
-  `Exception` (`new Exception(error.message, error)` wraps one).
-- `error.name` is the runtime class name (`"InvalidOperationException"`;
-  2.x `"Error"` for every exception, built-in or user-defined). A user
-  exception inherits the name of the runtime class it derives from
-  (`"ArgumentException"` for `InvalidSlugException`), not its own C# name.
-  `String(error)` / `error.toString()` is .NET's format,
-  `System.InvalidOperationException: x` (2.x `Error: x`).
-- `instanceof Error` stays `true` for every exception. `is` / `as` / type
-  patterns and `catch` clauses test `instanceof` the runtime class, so they
-  tell BCL exceptions apart: `ex is ArgumentException` is `false` for an
-  `InvalidOperationException`, `catch (OverflowException)` no longer takes
-  the `FormatException` that `long.Parse("zz")` throws, and a BCL-typed clause
-  ahead of another clause no longer reports `MS0001`. `is Exception` /
-  `as Exception` test the runtime `Exception`, so they are `false` for a
-  plain JavaScript `Error`; `catch (Exception)` and a general `catch` still
-  take every thrown value.
-- A BCL exception outside the mapped set (`TimeoutException`, `IOException`,
-  …) reports `MS0001` where it is constructed and is emitted as the runtime
-  `Exception` with its type name in the message
-  (`new Exception("System.TimeoutException: late")`); a user exception
-  deriving from one extends `Exception`. An `is` / `as` / pattern / `catch`
-  clause on one is the new `MS0045` error (`UnanswerableRuntimeTypeTest`):
+  (`class InvalidSlugException extends ArgumentException`), and a BCL exception in type
+  position names it (`error: Exception`, 2.x `error: Error`). Hand-written TypeScript that
+  passes a plain `Error` where a C# `Exception` parameter is typed no longer type-checks
+  (`new Exception(error.message, error)` wraps one); at run time an overload dispatcher still
+  accepts it.
+- `error.name` is the C# type name (`"InvalidOperationException"`, and a user exception's own
+  name, `"UnsupportedCurrencyException"`; 2.x `"Error"` for every exception), and
+  `String(error)` / `error.toString()` is .NET's format with the full type name
+  (`Shop.UnsupportedCurrencyException: …`, 2.x `Error: …`). Generated exception classes declare
+  `override readonly name` and a `typeNamespace` getter for this.
+- `instanceof Error` stays `true` for every exception. `is` / `as` / type patterns, switch arms,
+  overload dispatchers and `catch` clauses test `instanceof` the runtime class, so they tell
+  BCL exceptions apart: `ex is ArgumentException` is `false` for an
+  `InvalidOperationException`, `catch (OverflowException)` no longer takes the
+  `FormatException` that `long.Parse("zz")` throws, and a BCL-typed clause ahead of another
+  clause no longer reports `MS0001`. Tests on `System.Exception` itself stay
+  `instanceof Error`, so a JavaScript error is an `Exception`; `catch (Exception)` and a general
+  `catch` still take every thrown value.
+- **A typed clause no longer takes a JavaScript error.** In 2.x every BCL-typed clause tested
+  `instanceof Error`, so `catch (NullReferenceException)` around a `null` dereference took the
+  `TypeError` by accident; now it reaches `catch (Exception)` or a general `catch` instead.
+  The normalization that will map it (`toException`, spec 011 FR-015) is the next slice.
+- A BCL exception outside the mapped set (`IOException`, …) reports `MS0001` where it is
+  constructed and is emitted as `namedException("System.IO", "IOException", message, inner)`:
+  a runtime `Exception` whose `Message` is .NET's (2.x too) and whose `name` / `toString()`
+  report the C# type. A user exception deriving from one extends `Exception` and reports
+  `MS0001` at its base list (its .NET ancestors' clauses do not take it). An `is` / `as` /
+  pattern / `catch` clause on one is the new `MS0045` error (`UnanswerableRuntimeTypeTest`):
   testing `Exception` instead would take every exception.
-- The runtime throws its own classes everywhere it reproduces a .NET
-  failure: 32-bit integer division by zero (`DivideByZeroException`),
-  `string.Replace` with a null or empty old value, `Dictionary.Add` with a
-  null or duplicate key (`ArgumentNullException` / `ArgumentException`), the
-  LINQ terminals (`InvalidOperationException`, now with .NET's messages:
-  `First()` on an empty sequence says `Sequence contains no elements`, not
-  `… no matching element`) and `Math.Round` / `decimal.Round` with an invalid
-  digit count or mode (`ArgumentOutOfRangeException` / `ArgumentException`
-  with .NET's messages, 2.x `RangeError`). `JsonException` extends
-  `Exception` (2.x `Error`) and lives in
-  `metano-runtime/system/exceptions/json-exception` (still exported from
-  `metano-runtime/system/json`).
-- Dart output is unchanged.
+- The argument guards lower to runtime functions with .NET's messages and the
+  `[CallerArgumentExpression]` parameter name: `ArgumentNullException.ThrowIfNull`,
+  `ArgumentException.ThrowIfNullOrEmpty` / `ThrowIfNullOrWhiteSpace` and the
+  `ArgumentOutOfRangeException.ThrowIf*` comparisons. Any other static member of an exception
+  type (`ObjectDisposedException.ThrowIf`) reports `MS0001`, as in 2.x.
+- The runtime throws its own classes everywhere it reproduces a .NET failure: 32-bit integer
+  division by zero (`DivideByZeroException`), `decimal.Parse` (`FormatException` /
+  `OverflowException`, 2.x decimal.js's `DecimalError`, and no overflow check), the `DateOnly`
+  / `TimeOnly` / `DateTime` component constructors (`ArgumentOutOfRangeException`, 2.x
+  Temporal's `RangeError`, which also accepted year 0), a negative array length
+  (`OverflowException`, 2.x `RangeError`), a non-exhaustive switch expression
+  (`SwitchExpressionException`, an `InvalidOperationException`, with .NET's message and the
+  unmatched value; 2.x `Error("Non-exhaustive switch expression")`), `string.Replace` with a
+  null or empty old value, `Dictionary.Add` with a null or duplicate key
+  (`ArgumentNullException` / `ArgumentException`), the LINQ terminals
+  (`InvalidOperationException`, now with .NET's messages: `First()` on an empty sequence says
+  `Sequence contains no elements`, not `… no matching element`) and `Math.Round` /
+  `decimal.Round` with an invalid digit count or mode (`ArgumentOutOfRangeException` /
+  `ArgumentException` with .NET's messages, 2.x `RangeError`). `JsonException` extends
+  `Exception` (2.x `Error`) and lives in `metano-runtime/system/exceptions/json-exception`
+  (still exported from `metano-runtime/system/json`).
+- Still pending (they throw nothing or a JavaScript error, as in 2.x, so a typed clause does not
+  take them): indexers out of range (`List<T>`, arrays, `string`), a `Dictionary` indexer on a
+  missing key, `Substring` / `PadLeft` / `new string(c, n)` with bad arguments,
+  `Enumerable.Range` / `Repeat` / `ElementAt` / `Max` on bad input, `Guid.Parse`, decimal
+  division by zero and narrowing conversions of a `decimal`; the unmapped parsers
+  (`int.Parse`, `double.Parse`, `Enum.Parse`, `DateTime.Parse`, `DateOnly.Parse`,
+  `TimeSpan.Parse`, `Convert.ToInt32(string)`) report `MS0001`.
+- Dart output is unchanged except where the call itself changed for every target: a call to a
+  method with a `[CallerArgumentExpression]` parameter now passes the caller's text
+  (`ArgumentNullException.throwIfNull(x, 'x')`), and an exception constructor whose inner
+  parameter is named `inner` no longer binds its arguments to temporaries.
 
 ### ⚠ Unimplemented LINQ overloads report `MS0001` (baseline FR-017, partial; #648)
 

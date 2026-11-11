@@ -257,30 +257,37 @@ Each shape has a dedicated IR → TS lowering, named consistently:
 - **`BclExceptionClasses`** — the one answer to "which JavaScript class does
   this BCL exception lower to" (spec 011 FR-014, #651), fed by the
   `[ExportFromBcl]` entries in scope (`Metano/Runtime/Exceptions.cs` maps the
-  `metano-runtime` exception hierarchy, one module per class). The type
-  mapper (type position), `extends`, construction and the type tests read it;
-  so does the core, through the `IrExtractionContext.HasExceptionRuntimeClass`
-  port, to report an exception without a class (`MS0001` at a construction,
-  `MS0045` at an `is` / `as` / pattern / `catch` clause,
-  `ExceptionRuntimeClassReporter`). An unmapped exception lowers to the class
-  of `System.Exception`.
+  `metano-runtime` exception hierarchy, one module per class) and keyed by
+  `BclExportReader.ExportKey`, which `IrNamedTypeSemantics.ExportKey` and
+  `IrExceptionConstruction.ExceptionTypeName` carry. The type mapper (type
+  position), `extends`, construction, the `is` / `as` / pattern / `catch`
+  tests and the overload-dispatcher checks read it (`TestedClassOf` gives
+  `Error` for `System.Exception` itself until `toException`); so does the
+  core, through the `IrExtractionContext.HasExceptionRuntimeClass` port, to
+  report an exception without a class (`MS0001` at a construction, `MS0045`
+  at an `is` / `as` / pattern / `catch` clause, `ExceptionRuntimeClassReporter`).
+  It also holds the constructor roles of the runtime classes, checked against
+  the runtime sources by `RuntimeExceptionConstructorTests`. Lowering an
+  exception outside a transform is an internal error.
 - **`IrToTsExceptionConstructionBridge`** — lowers a BCL exception
   construction (`new ArgumentException(...)`, or a user exception's base /
   `: this(...)`-chained call) to its runtime class, passing the arguments by
   the constructor-parameter roles of `IrExceptionConstruction` in the runtime
   constructor's order; the runtime class composes the message as .NET does.
-  The bridge composes it only for a user exception's base call into
-  `System.Exception` (whose default message names the user class) and for an
-  unmapped exception, whose `new` emits `new Exception("System.TimeoutException:
-  …")`. Side-effecting arguments are evaluated once in source order: the
-  extractor let-binds them for `new` (the shared evaluate-once machinery), a
-  base call declares `const` temporaries before `super`. It emits no
-  declaration: user exceptions go through `IrToTsClassEmitter` and extend the
-  runtime class. Known limitations: the `System.Exception` default message
-  names the class that makes the call (formatted like .NET's
-  `Type.ToString()`), not the runtime most-derived class; a user exception's
-  `name` is that of the runtime class it derives from; `AggregateException`
-  inner-exception lists are not mapped.
+  One `MessagePlan` per construction decides when the bridge composes it
+  instead: a user exception's base call into `System.Exception` (whose default
+  message names the user class), an unmapped exception (whose `new` emits
+  `namedException(namespace, name, message, inner)`), and a role the mapped
+  class does not take, folded in as .NET's text. Side-effecting arguments are
+  evaluated once in source order: the extractor let-binds them for `new` (the
+  shared evaluate-once machinery), a base call declares `const` temporaries
+  before `super`. It emits no declaration: user exceptions go through
+  `IrToTsClassEmitter`, extend the runtime class and declare their .NET
+  identity (`IrToTsExceptionIdentityBridge`: `name` and `typeNamespace`).
+  Known limitations: the `System.Exception` default message names the class
+  that makes the call (formatted like .NET's `Type.ToString()`), not the
+  runtime most-derived class; `AggregateException` inner-exception lists are
+  not mapped.
 - **`IrToTsCatchChainBridge`** — the catch clauses of a `try` (spec 011
   FR-015, partial; #628). JS has one untyped `catch`, so the clauses lower to
   a single `catch (e$)` holding an `if` / `else if` chain in source order:

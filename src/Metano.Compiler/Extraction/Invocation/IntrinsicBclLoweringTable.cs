@@ -128,6 +128,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     private void SeedDecimalParse(Compilation compilation)
     {
         var decimalType = compilation.GetSpecialType(SpecialType.System_Decimal);
+
         foreach (
             var method in decimalType
                 .GetMembers("Parse")

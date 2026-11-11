@@ -333,6 +333,7 @@ public class IrToTsBodyBridgeTests
         await Assert.That(ts).Contains("(($s) => {");
         await Assert.That(ts).Contains("if ($s === 0)");
         await Assert.That(ts).Contains("return 10;");
+
         await Assert
             .That(ts)
             .Contains("throw new SwitchExpressionException(undefined, undefined, $s);");
@@ -374,6 +375,7 @@ public class IrToTsBodyBridgeTests
         // The bridges lower BCL exceptions through the runtime classes the
         // transformer installs for a transform (spec 011 FR-014).
         var previousExceptionClasses = IrToTsTypeMapper.ExceptionClassesScope;
+
         IrToTsTypeMapper.ExceptionClassesScope = new BclExceptionClasses(
             Metano.Compiler.BclExportReader.Read(compilation)
         );

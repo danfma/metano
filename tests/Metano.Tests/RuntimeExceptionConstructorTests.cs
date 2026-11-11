@@ -30,6 +30,23 @@ public partial class RuntimeExceptionConstructorTests
         ["objectName"] = IrExceptionArgumentRole.ObjectName,
     };
 
+    /// <summary>
+    /// Parameters of the mapped .NET constructors that no runtime class takes,
+    /// so a construction drops them (still evaluating a side-effecting one).
+    /// </summary>
+    private static readonly HashSet<string> DroppedDotNetParameters =
+    [
+        "path",
+        "lineNumber",
+        "bytePositionInLine",
+        "token",
+        "task",
+        "errorCode",
+        "className",
+        "methodName",
+        "unmatchedValue",
+    ];
+
     public static IEnumerable<(string TypeKey, IrBclExport Export)> ShippedExceptionMappings() =>
         BclExportReader
             .Read(
@@ -77,23 +94,6 @@ public partial class RuntimeExceptionConstructorTests
             .Because($"the compiler's role order for {export.ExportedName}");
     }
 
-    /// <summary>
-    /// Parameters of the mapped .NET constructors that no runtime class takes,
-    /// so a construction drops them (still evaluating a side-effecting one).
-    /// </summary>
-    private static readonly HashSet<string> DroppedDotNetParameters =
-    [
-        "path",
-        "lineNumber",
-        "bytePositionInLine",
-        "token",
-        "task",
-        "errorCode",
-        "className",
-        "methodName",
-        "unmatchedValue",
-    ];
-
     [Test]
     [MethodDataSource(nameof(ShippedExceptionMappings))]
     public async Task EveryDotNetConstructorParameter_HasARoleOrIsDropped(
@@ -134,6 +134,7 @@ public partial class RuntimeExceptionConstructorTests
     private static IReadOnlyList<string> RuntimeConstructorParameters(IrBclExport export)
     {
         var source = File.ReadAllText(RuntimeModulePath(export));
+
         var classStart = source.IndexOf(
             $"export class {export.ExportedName} ",
             StringComparison.Ordinal
