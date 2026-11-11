@@ -354,9 +354,10 @@ Product requirements added after the migration (normative; each one is traced by
      `ToString((string?)null)` is on .NET; a custom format or `B` throws
      `NotSupportedException` naming the format (`The format '0.00' is not supported for
      double in TypeScript.`); a format .NET rejects throws .NET's `FormatException`. The
-     64-bit integers keep `MS0066` for their unsupported constant formats (spec 012
-     FR-037; unifying it with `MS0001` is #662). Which formats a target honors is the
-     target's own fact, declared through the extraction context's numeric-format port; a
+     64-bit integers (`long`, `ulong`, `nint`, `nuint`) keep `MS0066` for their unsupported
+     constant formats (spec 012 FR-037; unifying it with `MS0001` is #662). Which formats
+     a target honors is the target's own fact, declared through the extraction context's
+     format-string port; a
      target that declares none (Dart today, and any future target) fails closed: every
      hole with a clause (other than a dropped format) and every BCL `ToString(format)`,
      constant or not, reports, naming the target.

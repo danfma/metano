@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The TypeScript target's <see cref="INumericFormatCapability"/>
+/// The TypeScript target's <see cref="IFormatStringCapability"/>
 /// (baseline FR-051): the .NET standard numeric format strings
 /// <c>metano-runtime</c>'s formatters implement — <c>formatInteger</c> and
 /// <c>formatInt64</c> (<c>integer-format.ts</c>, <c>int64-format.ts</c>) for
@@ -15,7 +15,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>double</c>. The single place the supported-format rule is spelled on
 /// the TypeScript side: <see cref="Int64Formatting"/> reads it too.
 /// </summary>
-internal sealed partial class TsNumericFormats : INumericFormatCapability
+internal sealed partial class TsFormatStrings : IFormatStringCapability
 {
     /// <summary>The integer format .NET defines that the runtime does not implement (binary).</summary>
     private const char UnimplementedIntegerFormat = 'B';
@@ -23,9 +23,15 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
     /// <summary>The custom date pattern that is a <c>DateOnly</c>'s ISO text.</summary>
     private const string IsoDatePattern = "yyyy-MM-dd";
 
-    private TsNumericFormats() { }
+    private const string GuidTypeName = "System.Guid";
 
-    public static TsNumericFormats Instance { get; } = new();
+    private const string DateOnlyTypeName = "System.DateOnly";
+
+    private const string BigIntegerTypeName = "System.Numerics.BigInteger";
+
+    private TsFormatStrings() { }
+
+    public static TsFormatStrings Instance { get; } = new();
 
     /// <summary>
     /// The integers (not <c>char</c>) and <c>double</c>. <c>float</c> has
@@ -84,9 +90,9 @@ internal sealed partial class TsNumericFormats : INumericFormatCapability
 
         return type.ToDisplayString() switch
         {
-            "System.Guid" => letter is "D",
-            "System.DateOnly" => letter is "O" || format is IsoDatePattern,
-            "System.Numerics.BigInteger" => letter is "G" or "R",
+            GuidTypeName => letter is "D",
+            DateOnlyTypeName => letter is "O" || format is IsoDatePattern,
+            BigIntegerTypeName => letter is "G" or "R",
             _ => false,
         };
     }

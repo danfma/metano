@@ -10,6 +10,8 @@ namespace Metano.Compiler;
 /// </summary>
 public static class RoslynTypeQueries
 {
+    private const string SystemAssemblyPrefix = "System.";
+
     private static readonly string[] DictionaryTypeNames =
     [
         "System.Collections.Generic.Dictionary",
@@ -97,6 +99,20 @@ public static class RoslynTypeQueries
     /// derive from or implement them): the dictionary types the
     /// declarative BCL mappings cover.
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="assembly"/> is part of the .NET base class
+    /// library: the core library (<c>System.Private.CoreLib</c>,
+    /// <c>mscorlib</c>, <c>netstandard</c>) or a <c>System</c> /
+    /// <c>System.*</c> reference assembly. A third-party library or package
+    /// is not, whatever it references.
+    /// </summary>
+    public static bool IsBclAssembly(this IAssemblySymbol? assembly) =>
+        assembly?.Name is { } name
+        && (
+            name is "System" or "mscorlib" or "netstandard"
+            || name.StartsWith(SystemAssemblyPrefix, StringComparison.Ordinal)
+        );
+
     public static bool IsBclDictionaryDefinition(this INamedTypeSymbol type) =>
         type.ContainingType is null
         && type.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic"

@@ -9,13 +9,16 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <summary>
 /// The formatting and parsing side of spec 012's 64-bit BCL mappings
 /// (FR-037, FR-038): an interpolation hole over a <c>long</c> or
-/// <c>ulong</c> with a format or an alignment calls <c>formatInt64</c>, and
-/// <c>MS0066</c> warns about a constant format or <c>NumberStyles</c> the
-/// runtime does not implement. TODO(#662): the core reports the other
-/// numbers' unsupported formats as located MS0001
-/// (<see cref="TsNumericFormats"/>); unifying the two drops this report. The supported sets mirror
-/// <c>metano-runtime</c>'s <c>int64-format.ts</c> and
-/// <c>int64-parsing.ts</c>.
+/// <c>ulong</c> (and <c>nint</c> / <c>nuint</c>) with a format or an
+/// alignment calls <c>formatInt64</c>, and <c>MS0066</c> warns about a
+/// constant format or <c>NumberStyles</c> the runtime does not implement.
+/// The supported sets mirror <c>metano-runtime</c>'s <c>int64-format.ts</c>
+/// and <c>int64-parsing.ts</c>.
+/// <para>
+/// TODO(#662): the core reports the other numbers' unsupported formats as a
+/// located MS0001 (<see cref="TsFormatStrings"/>); unifying the two
+/// diagnostics drops this report.
+/// </para>
 /// </summary>
 internal static class Int64Formatting
 {
@@ -105,12 +108,12 @@ internal static class Int64Formatting
 
     /// <summary>
     /// A valid .NET format that <c>formatInt64</c> rejects, by the integer
-    /// rule of <see cref="TsNumericFormats.FormatsInteger"/>. An invalid
+    /// rule of <see cref="TsFormatStrings.FormatsInteger"/>. An invalid
     /// standard letter (<c>Q</c>) is not reported: .NET throws
     /// <c>FormatException</c> for it too.
     /// </summary>
     private static bool IsUnsupportedFormat(string format) =>
-        !TsNumericFormats.FormatsInteger(format);
+        !TsFormatStrings.FormatsInteger(format);
 
     /// <summary>
     /// Reports <c>MS0066</c> for a constant <c>NumberStyles</c> (the second

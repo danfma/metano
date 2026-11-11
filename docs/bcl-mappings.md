@@ -577,7 +577,7 @@ standard numeric format strings in the invariant culture, with the same output a
   `DateOnly`'s `O` and the custom `yyyy-MM-dd` (exactly; the same ISO text), and a
   `BigInteger`'s `G` / `R`, the standard letters in either case
   (`c.ToString("D")` becomes `` `${c}` ``). The TypeScript target declares this list
-  (`TsNumericFormats.PrintsAsDefaultText`).
+  (`TsFormatStrings.PrintsAsDefaultText`).
 - **Through the type's mapping.** A hole is `value.ToString(format)`: where a declarative
   mapping lowers that call, the hole lowers through it, so the two cannot disagree. `Guid`
   maps `N` / `n` (no hyphens), `B` / `b` (braces), `P` / `p` (parentheses), and every
@@ -619,8 +619,8 @@ standard numeric format strings in the invariant culture, with the same output a
   keeps its unmapped call and `MS0001`) and `FormattableString` (both #662); custom numeric
   patterns (reported above). One format still prints silently wrong text: `Guid`'s `X`
   (and an invalid `Guid` format, which .NET rejects), which the `Guid.ToString` fallback
-  mapping prints as the hyphenated text, in a hole and in a call (no issue yet; the
-  mapping port cannot see the literal filters, #657).
+  mapping prints as the hyphenated text, in a hole and in a call (tracked in #657: the
+  mapping port cannot see the literal filters).
 
 ## Floating point (`double` / `float`)
 

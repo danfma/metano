@@ -95,14 +95,15 @@ public sealed record IrExtractionContext(
     public Func<IMethodSymbol, int, bool>? LowersByDeclarativeMapping { get; init; }
 
     /// <summary>
-    /// The port through which a target says which numeric format strings
-    /// its runtime formats (baseline FR-051, #323). <c>null</c>, the default,
+    /// The port through which a target says which format strings it honors
+    /// (baseline FR-051, #323): its runtime's numeric formatters and the
+    /// formats a BCL type prints as its clause-free text. <c>null</c>, the default,
     /// fails closed: the extractor reports every interpolation format or
     /// alignment clause and every <c>ToString(format)</c> it governs, naming
     /// <see cref="Target"/>. TypeScript sets it (<c>metano-runtime</c>'s
     /// formatters); Dart honors no clause yet and leaves it unset.
     /// </summary>
-    public INumericFormatCapability? NumericFormats { get; init; }
+    public IFormatStringCapability? FormatStrings { get; init; }
 
     /// <summary>
     /// The context of a constant parameter default: the origin resolver
@@ -114,7 +115,7 @@ public sealed record IrExtractionContext(
     /// <see cref="EmitsOperatorFastPaths"/>,
     /// <see cref="EmitsBrandedFastPath"/>,
     /// <see cref="KeepsArgumentEvaluationOrder"/>,
-    /// <see cref="NumericFormats"/>) are dropped on purpose: each one binds a
+    /// <see cref="FormatStrings"/>) are dropped on purpose: each one binds a
     /// constructor call, a user-defined operator, a method call, a call with
     /// named arguments or a formatted value, and a C# default value is a
     /// constant, <c>default</c> or a parameterless struct construction, which
