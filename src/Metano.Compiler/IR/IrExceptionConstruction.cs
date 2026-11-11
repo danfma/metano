@@ -23,10 +23,12 @@ namespace Metano.Compiler.IR;
 /// .NET does, or emulating that composition themselves.
 /// </para>
 /// </summary>
-/// <param name="ExceptionTypeName">The C# display name of the constructed
-/// exception type (<c>System.ArgumentException</c>), which backends resolve to
-/// their class for it — for a base call, the base the user exception
-/// derives from.</param>
+/// <param name="ExceptionTypeName">The key of the constructed exception type
+/// (<see cref="Metano.Compiler.BclExportReader.ExportKey"/>, its C# display
+/// name: <c>System.ArgumentException</c>), which backends resolve to their
+/// class for it — for a base call, the base the user exception derives from.
+/// It equals <see cref="IrNamedTypeSemantics.ExportKey"/> of the type's
+/// references.</param>
 /// <param name="ArgumentRoles">The role of each argument, aligned by index with
 /// the owning argument list.</param>
 /// <param name="DefaultMessage">The message .NET reports when no message (or a

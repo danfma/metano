@@ -166,7 +166,9 @@ describe("linq operators", () => {
     expect(linq(none, singleOrDefault(undefined, 0))).toBe(0);
     expect(linq([1, 2, 3], singleOrDefault((x) => x > 10, 42))).toBe(42);
     expect(linq([1, 2, 3], singleOrDefault((x) => x === 2, 42))).toBe(2);
-    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(InvalidOperationException);
+    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(
+      InvalidOperationException,
+    );
     expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(
       "Sequence contains more than one matching element",
     );

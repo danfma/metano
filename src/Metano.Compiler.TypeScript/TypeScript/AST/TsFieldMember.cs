@@ -12,6 +12,9 @@ namespace Metano.Compiler.TypeScript.AST;
 /// a parameter property or an accessor.</param>
 /// <param name="JSDoc">The JSDoc comment printed ahead of the member — the
 /// <c>/** @internal *&#47;</c> tag of the assembly-wide visibility band.</param>
+/// <param name="Override">The field redeclares a base member
+/// (<c>override readonly name: string = "…";</c>), which
+/// <c>noImplicitOverride</c> requires to say so.</param>
 public sealed record TsFieldMember(
     string Name,
     TsType Type,
@@ -22,5 +25,6 @@ public sealed record TsFieldMember(
     TsAccessibility Accessibility = TsAccessibility.Public,
     bool DefinitelyAssigned = false,
     bool Abstract = false,
-    TsJSDoc? JSDoc = null
+    TsJSDoc? JSDoc = null,
+    bool Override = false
 ) : TsClassMember;

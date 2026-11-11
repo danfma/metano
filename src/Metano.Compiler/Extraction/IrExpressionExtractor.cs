@@ -31,7 +31,7 @@ public sealed partial class IrExpressionExtractor
 
     private readonly SemanticModel _semantic;
     private readonly IrExtractionContext _context;
-    private readonly ExceptionRuntimeClassReporter _exceptionClasses;
+    private readonly ExceptionRuntimeClassReporter _exceptionClassReporter;
 
     // Shorthands for the two context inputs read at dozens of type-mapping
     // sites across the partial files.
@@ -135,7 +135,7 @@ public sealed partial class IrExpressionExtractor
     {
         _semantic = semanticModel;
         _context = context;
-        _exceptionClasses = new ExceptionRuntimeClassReporter(context);
+        _exceptionClassReporter = new ExceptionRuntimeClassReporter(context);
         _originResolver = context.OriginResolver;
         _target = context.Target;
         _localNames = localNames;
@@ -855,10 +855,27 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrPattern? UntestablePattern(SyntaxNode pattern, IrTypeRef type)
     {
-        if (_exceptionClasses.ReportsUnanswerableTest(MatchedType(pattern), pattern))
-            return new IrUnsupportedPattern(pattern.Kind().ToString());
+        if (
+            MatchedType(pattern) is { } matched
+            && _exceptionClassReporter.LacksRuntimeClass(matched)
+        )
+            return ReportUnanswerableExceptionPattern(matched, pattern);
 
         return HasRuntimeTypeTest(type) ? null : ReportUnsupportedPattern(pattern);
+    }
+
+    /// <summary>
+    /// Reports <c>MS0045</c> for a pattern testing an exception without a
+    /// runtime class and returns the placeholder it lowers to.
+    /// </summary>
+    private IrUnsupportedPattern ReportUnanswerableExceptionPattern(
+        ITypeSymbol exceptionType,
+        SyntaxNode pattern
+    )
+    {
+        _exceptionClassReporter.ReportUnanswerableTest(exceptionType, pattern);
+
+        return new IrUnsupportedPattern(pattern.Kind().ToString());
     }
 
     /// <summary>The type a type, declaration or recursive pattern tests for.</summary>
@@ -1876,20 +1893,8 @@ public sealed partial class IrExpressionExtractor
         var castType = ResolvePatternType(typeSyntax);
         var testedType = castType is IrNullableTypeRef nullable ? nullable.Inner : castType;
 
-        if (
-            _exceptionClasses.ReportsUnanswerableTest(
-                _semantic.GetTypeInfo(typeSyntax).Type,
-                asCast
-            )
-        )
-            return new IrUnsupportedExpression(asCast.Kind().ToString());
-
-        if (!HasRuntimeTypeTest(testedType))
-            return ReportUnsupported(
-                asCast,
-                asCast.Kind().ToString(),
-                NoRuntimeTypeTestMessage("Expression", asCast)
-            );
+        if (UntestableTypeTest(asCast, typeSyntax, testedType) is { } untestable)
+            return untestable;
 
         return BindValueOnce(
             Extract(asCast.Left),
@@ -1909,22 +1914,53 @@ public sealed partial class IrExpressionExtractor
     {
         var type = ResolvePatternType(typeSyntax);
 
-        if (
-            _exceptionClasses.ReportsUnanswerableTest(
-                _semantic.GetTypeInfo(typeSyntax).Type,
-                isTest
-            )
-        )
-            return new IrUnsupportedExpression(isTest.Kind().ToString());
-
-        if (!HasRuntimeTypeTest(type))
-            return ReportUnsupported(
-                isTest,
-                isTest.Kind().ToString(),
-                NoRuntimeTypeTestMessage("Expression", isTest)
-            );
+        if (UntestableTypeTest(isTest, typeSyntax, type) is { } untestable)
+            return untestable;
 
         return new IrIsPatternExpression(Extract(isTest.Left), new IrTypePattern(type));
+    }
+
+    /// <summary>
+    /// The placeholder an <c>x is T</c> / <c>x as T</c> <paramref name="test"/>
+    /// lowers to when the target cannot test <paramref name="testedType"/> —
+    /// reported as <c>MS0045</c> for an exception without a runtime class
+    /// (<see cref="ExceptionRuntimeClassReporter"/>), <c>MS0001</c> for any
+    /// other type without a runtime test — or <c>null</c> when it can.
+    /// </summary>
+    private IrUnsupportedExpression? UntestableTypeTest(
+        BinaryExpressionSyntax test,
+        TypeSyntax typeSyntax,
+        IrTypeRef testedType
+    )
+    {
+        if (
+            _semantic.GetTypeInfo(typeSyntax).Type is { } written
+            && _exceptionClassReporter.LacksRuntimeClass(written)
+        )
+            return ReportUnanswerableExceptionTest(written, test);
+
+        if (HasRuntimeTypeTest(testedType))
+            return null;
+
+        return ReportUnsupported(
+            test,
+            test.Kind().ToString(),
+            NoRuntimeTypeTestMessage("Expression", test)
+        );
+    }
+
+    /// <summary>
+    /// Reports <c>MS0045</c> for a test against an exception without a
+    /// runtime class and returns the placeholder it lowers to.
+    /// </summary>
+    private IrUnsupportedExpression ReportUnanswerableExceptionTest(
+        ITypeSymbol exceptionType,
+        BinaryExpressionSyntax test
+    )
+    {
+        _exceptionClassReporter.ReportUnanswerableTest(exceptionType, test);
+
+        return new IrUnsupportedExpression(test.Kind().ToString());
     }
 
     private static string NoRuntimeTypeTestMessage(string construct, SyntaxNode node) =>
@@ -4895,7 +4931,7 @@ public sealed partial class IrExpressionExtractor
         );
 
         if (construction is not null)
-            _exceptionClasses.ReportConstruction(ctor.ContainingType, creationSyntax);
+            _exceptionClassReporter.ReportConstruction(ctor.ContainingType, creationSyntax);
 
         return construction;
     }

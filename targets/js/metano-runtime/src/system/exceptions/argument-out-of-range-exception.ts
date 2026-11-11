@@ -22,9 +22,13 @@ export class ArgumentOutOfRangeException extends ArgumentException {
   ) {
     super(message ?? ARGUMENT_OUT_OF_RANGE_EXCEPTION_MESSAGE, paramName, innerException);
     this.actualValue = actualValue ?? null;
-
-    if (actualValue != null) {
-      this.message = `${this.message}\nActual value was ${String(actualValue)}.`;
-    }
+    // The actual value follows the parameter suffix the base appends, so it
+    // can only be added once the base message exists.
+    this.message = withActualValue(this.message, actualValue);
   }
+}
+
+/** `message` followed by .NET's `\nActual value was <value>.` line when the value is not `null`. */
+function withActualValue(message: string, actualValue: unknown): string {
+  return actualValue == null ? message : `${message}\nActual value was ${String(actualValue)}.`;
 }

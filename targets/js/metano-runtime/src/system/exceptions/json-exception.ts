@@ -16,7 +16,7 @@ export class JsonException extends Exception {
     super(message ?? JSON_EXCEPTION_MESSAGE, innerException);
   }
 
-  protected override get fullTypeName(): string {
-    return "System.Text.Json.JsonException";
+  protected override get typeNamespace(): string {
+    return "System.Text.Json";
   }
 }

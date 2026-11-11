@@ -2,15 +2,27 @@ import { Exception } from "metano-runtime/system/exceptions/exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class AppException extends Exception {
+  override readonly name: string = "AppException";
+
   constructor(message: string, readonly code: number) {
     super(message);
     this.code = code;
   }
+
+  protected override get typeNamespace(): string {
+    return "";
+  }
 }
 
 export class NotFoundException extends AppException {
+  override readonly name: string = "NotFoundException";
+
   constructor(message: string) {
     super(message, 404);
+  }
+
+  protected override get typeNamespace(): string {
+    return "";
   }
 }
 

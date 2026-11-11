@@ -108,6 +108,12 @@ public sealed record IrNamedTypeRef(
 /// a dispatched set (two or more declared constructors, spec 013 D1) with no
 /// parameterless one, so C#'s implicit parameterless constructor — the
 /// zero value — joins the set as one more overload (spec 013 FR-027).</param>
+/// <param name="ExportKey">For an exception type, the key its
+/// <c>[ExportFromBcl]</c> entry is read under
+/// (<see cref="Metano.Compiler.BclExportReader.ExportKey"/>), so a backend
+/// resolves its runtime class by the same key as the extraction and
+/// <see cref="IrExceptionConstruction.ExceptionTypeName"/>; <c>null</c> for
+/// every other kind.</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,
@@ -125,7 +131,8 @@ public sealed record IrNamedTypeSemantics(
     int? JsTupleArity = null,
     bool IsDefaultConstructible = false,
     bool IsValueType = false,
-    bool HasImplicitParameterlessOverload = false
+    bool HasImplicitParameterlessOverload = false,
+    string? ExportKey = null
 );
 
 /// <summary>

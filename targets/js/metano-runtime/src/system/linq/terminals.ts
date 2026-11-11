@@ -80,7 +80,7 @@ export function first<T>(
     queryable,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return item;
-      throw noElementException(predicate);
+      throw noElementException(predicate != null);
     },
   };
 }
@@ -135,7 +135,7 @@ export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableM
           result = item;
           found = true;
         }
-      if (!found) throw noElementException(predicate);
+      if (!found) throw noElementException(predicate != null);
       return result!;
     },
   };
@@ -215,7 +215,7 @@ export function singleOrDefault<T>(
       for (const item of source)
         if (!predicate || predicate(item)) {
           result = item;
-          if (++count > 1) throw moreThanOneElementException(predicate);
+          if (++count > 1) throw moreThanOneElementException(predicate != null);
         }
       return result;
     },
@@ -236,9 +236,9 @@ export function single<T>(
       for (const item of source)
         if (!predicate || predicate(item)) {
           result = item;
-          if (++count > 1) throw moreThanOneElementException(predicate);
+          if (++count > 1) throw moreThanOneElementException(predicate != null);
         }
-      if (count === 0) throw noElementException(predicate);
+      if (count === 0) throw noElementException(predicate != null);
       return result!;
     },
   };
@@ -426,17 +426,17 @@ export function aggregate<T, A>(seed: A, accumulator: (acc: A, item: T) => A): A
   };
 }
 
-/** .NET's exception for a sequence with no element, or with none that matches `predicate`. */
-function noElementException(predicate: unknown): InvalidOperationException {
+/** .NET's exception for a sequence with no element, or with none that matches its predicate. */
+function noElementException(hasPredicate: boolean): InvalidOperationException {
   return new InvalidOperationException(
-    predicate ? "Sequence contains no matching element" : "Sequence contains no elements",
+    hasPredicate ? "Sequence contains no matching element" : "Sequence contains no elements",
   );
 }
 
-/** .NET's exception for a sequence with more than one element (that matches `predicate`). */
-function moreThanOneElementException(predicate: unknown): InvalidOperationException {
+/** .NET's exception for a sequence with more than one element (that matches its predicate). */
+function moreThanOneElementException(hasPredicate: boolean): InvalidOperationException {
   return new InvalidOperationException(
-    predicate
+    hasPredicate
       ? "Sequence contains more than one matching element"
       : "Sequence contains more than one element",
   );

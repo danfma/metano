@@ -96,7 +96,7 @@ public static class IrExceptionConstructionExtractor
     {
         if (
             constructor is null
-            || !ExceptionRuntimeClassReporter.LacksTargetDeclaration(
+            || !IrTypeRefMapper.IsExceptionWithoutTargetDeclaration(
                 constructor.ContainingType,
                 target
             )
@@ -108,7 +108,7 @@ public static class IrExceptionConstructionExtractor
             .ToList();
 
         return new IrExceptionConstruction(
-            constructor.ContainingType.OriginalDefinition.ToDisplayString(),
+            BclExportReader.ExportKey(constructor.ContainingType),
             roles,
             DefaultMessageOf(constructor.ContainingType, callingType),
             MessageMayBeNull: MessageMayBeNull(sourceArguments, model),
