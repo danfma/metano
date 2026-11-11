@@ -296,6 +296,47 @@ Product requirements added after the migration (normative; each one is traced by
   ambiguous. Traced by the "Method overload dispatch" and "Constructor overload dispatch" rows of
   the feature-support matrix.
 
+- **FR-051** (numeric format strings and interpolation clauses, #323, #308): A format clause
+  or an alignment clause of an interpolation hole (`{value,alignment:format}`), and
+  `ToString(format)` / `ToString(format, provider)` on a number, MUST NOT be dropped
+  silently. Each backend either honors the clause with .NET invariant-culture parity or
+  reports it. Legacy FR-014 (string interpolation) and #308 (the formatting policy) are
+  the context.
+  1. *IR.* The core MUST carry the format string, the constant alignment and the value's
+     numeric kind (looking through `Nullable<T>`, not an enum) on the interpolation hole,
+     target-agnostic. A hole with a clause carries its value unchanged (a `null` included);
+     a hole without one keeps the null-safe concatenation operand. A format C# ignores for
+     the value's type (`string`, `bool`, `char`) is dropped.
+  2. *TypeScript.* A hole with a clause MUST lower to one `metano-runtime` call inside the
+     template literal, dispatched statically by the value's C# type: `formatInteger(value,
+     bits, format, alignment?)` for `sbyte`, `byte`, `short`, `ushort`, `int` and `uint`;
+     `formatInt64` for `long` / `ulong` (spec 012 FR-037); `formatDouble(value, format,
+     alignment?)` for `double`; `alignValue(value, alignment)` for an alignment without a
+     format, which pads the text the hole prints without the clause. `ToString(format)` on
+     the same types MUST call the same formatter (the provider is ignored and not
+     evaluated). The formatters MUST produce .NET's invariant-culture output for the
+     standard formats `G[n]`, `R`, `F[n]`, `N[n]`, `E[n]`, `P[n]`, `C[n]`, and `D[n]` /
+     `X[n]` for the integers, with any precision and both letter cases: a `double` rounds
+     its exact binary value half to even (.NET Core 3.0+), an integer rounds half away from
+     zero, a negative value rounding to zero keeps its sign, `NaN` and the infinities
+     print as .NET prints them, a `null` value prints as `""`, an alignment pads with
+     spaces counting UTF-16 code units (left when positive, right when negative), and a
+     format .NET rejects throws the same `FormatException`. Parity is verified against
+     .NET by the reference fixture `tests/Int64Reference/fixtures/number-formatting.json`
+     under Bun and Node.
+  3. *Unsupported clauses.* A clause the target's runtime does not format as .NET does
+     MUST report `MS0001` (warning) at the hole, or at the format argument of
+     `ToString(format)`, and lower to the throwing placeholder: in TypeScript, a custom
+     numeric format (`0.00`, `#,##0`), the integers' `B`, a format on any other type
+     (`decimal`, `float`, date and time types, `Guid`, an enum, a user `IFormattable`
+     type, `object`, a type parameter) and a `ToString(format)` whose format is not a
+     constant. The 64-bit integers keep `MS0066` for their unsupported formats (spec 012
+     FR-037). Dart honors no clause yet: every hole with a clause, and `ToString(format)`
+     on a 32-bit-or-narrower integer, `double` or `float`, reports.
+  4. *Default conversion unchanged.* A hole without a clause, and `ToString()` without a
+     format, MUST emit exactly what they emitted before; the default conversion of `bool`,
+     `double` and `float` stays the rest of #308.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

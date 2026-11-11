@@ -447,6 +447,39 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   throws (`Memory<T>` is not mapped).
 - Dart output and diagnostics are unchanged.
 
+### ⚠ Interpolation format and alignment clauses are honored or reported (baseline FR-051; #323)
+
+- A format or alignment clause of an interpolation hole used to be dropped
+  silently (`$"{n:D2}"` printed `3`, `$"{price:F2}"` the raw number, `{x,8}`
+  no padding). TypeScript now calls one `metano-runtime` formatter per hole,
+  picked by the value's type: `formatInteger(n, 32, "D2")`,
+  `formatDouble(price, "F2")`, `formatInt64(l, "E2")`, and
+  `alignValue(x, 8)` for an alignment alone. `ToString(format)` on `int`,
+  the narrower integers and `double` calls the same formatter (it emitted
+  `n.toString("D2")`, a `RangeError` at run time). The standard formats
+  `G R F N E P C` (+ `D X` on integers) print what .NET prints in the
+  invariant culture, any precision; a `double` rounds its exact value half to
+  even (`2.675` with `F2` is `2.67`, `0.125` is `0.12`), as .NET Core 3.0+
+  does. See [docs/bcl-mappings.md](docs/bcl-mappings.md#number-formatting-format-strings-and-interpolation-clauses).
+- A clause the runtime does not format now reports `MS0001` (a warning) at the
+  hole or the format argument and emits an expression that throws
+  `Unsupported expression: UnsupportedFormat`: a custom numeric format
+  (`0.00`, `#,##0`), the integers' `B`, a format on `decimal`, `float`, a date
+  or time, `Guid`, an enum, an `IFormattable` type or `object`, and a
+  `ToString(format)` whose format is not a constant.
+- `long` / `ulong` gain `E`, `P` and `C` (they reported `MS0066` and threw),
+  `R5` formats as `G5`, as in .NET, and a `long?` hole with a clause now
+  formats instead of dropping the clause.
+- A hole with a clause passes a nullable value to the formatter, which prints
+  `null` as `""`, as the null-safe hole did; a format on a `string`, `bool`
+  or `char` is still ignored, as in C#. A hole without a clause, and
+  `ToString()` without a format, emit exactly what they emitted before (the
+  default conversion of `bool` and `double` stays #308).
+- Dart honors no clause yet: a hole with a clause, and `ToString(format)` on
+  an integer of 32 bits or fewer, a `double` or a `float`, report `MS0001` and
+  throw `UnsupportedError` instead of dropping the clause (or emitting
+  `n.toString('D2')`).
+
 ### Toolchain
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.

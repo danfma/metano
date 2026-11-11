@@ -531,6 +531,54 @@ algorithm: .NET 11 rounds the exact binary value instead (`Math.Round(2.675, 2)`
 there). `MidpointRounding` maps to
 the runtime `MidpointRounding` object, which keeps the .NET member names and values.
 
+## Number formatting (format strings and interpolation clauses)
+
+A format or alignment clause of an interpolation hole (`$"{n,8:D2}"`) and `ToString(format)`
+on a number call one `metano-runtime` formatter, picked by the value's static C# type, so a
+project that writes no clause imports none (baseline FR-051). The formatters implement .NET's
+standard numeric format strings in the invariant culture, with the same output as .NET 10.
+
+| C# | TypeScript |
+|----|----|
+| `$"{n:D2}"`, `n.ToString("D2")` (`int n`) | `formatInteger(n, 32, "D2")` |
+| `$"{s:X}"` (`short s`) / `$"{b:x2}"` (`sbyte b`) | `formatInteger(s, 16, "X")` / `formatInteger(b, 8, "x2")` |
+| `$"{d,10:F2}"`, `d.ToString("F2", provider)` (`double d`) | `formatDouble(d, "F2", 10)`, `formatDouble(d, "F2")` |
+| `$"{l:E2}"` (`long l`) | `formatInt64(l, "E2")` |
+| `$"{n:D2}"` (`int? n`) | `formatInteger(n, 32, "D2")` (a `null` prints `""`, as in C#) |
+| `$"{x,8}"`, `$"{x,-8}"` (any type, no format) | `alignValue(x, 8)`, `alignValue(x, -8)` |
+
+- **Supported formats.** `G[n]`, `R`, `F[n]`, `N[n]`, `E[n]`, `P[n]` and `C[n]` for every
+  integer type and `double`, plus `D[n]` and `X[n]` for the integers; upper and lower case
+  where .NET distinguishes them (`e`, `g`, `x`); any precision .NET accepts. `C` uses the
+  invariant currency symbol `¤` (`¤1,234.50`, a negative value in parentheses), `P` the
+  invariant pattern (`12.50 %`).
+- **Rounding.** A `double` rounds its exact binary value half to even, as .NET Core 3.0+
+  does: `2.675` is `2.67499999…`, so `F2` prints `2.67`, and `0.125` is exact, so `F2`
+  prints `0.12` (`toFixed` gives `2.68` and `0.13`). An integer rounds half away from zero
+  (`25` with `E0` is `3E+001`). A negative value that rounds to zero keeps its sign
+  (`-0.001` with `F2` is `-0.00`). `G` and `R` without a precision print the shortest
+  round-trip digits, in .NET's notation (`1E-05`, `1E+21`); `NaN` and the infinities print
+  `NaN`, `Infinity`, `-Infinity` in every format.
+- **Alignment.** The width counts UTF-16 code units; a positive alignment pads on the left,
+  a negative one on the right, and a longer text is not truncated. An alignment without a
+  format pads the text the hole prints without the clause, so a `double` or a `bool` keeps
+  the JavaScript text (`1e-7`, `true`) until the default conversion changes (#308).
+- **Ignored formats.** C# ignores a format on a `string`, `bool` or `char`, and so does
+  the output (`$"{b:X}"` is `${b}`).
+- **Reported (`MS0001`, warning; the hole or call throws `Unsupported expression:
+  UnsupportedFormat` at run time).** A custom numeric format (`0.00`, `#,##0`), the
+  integers' `B`, a format on `decimal`, `float` (its value is not held at single precision,
+  so the digits would differ), `DateTime` / `DateOnly` / `TimeSpan`, `Guid`, an enum, a
+  user `IFormattable` type, `object` or a type parameter, and `ToString(format)` whose format
+  is not a constant. The 64-bit integers keep `MS0066` for their unsupported formats (see
+  below). A letter .NET rejects (`D` on a `double`, `Q`) is not reported: the formatter
+  throws the same `FormatException`.
+- **Dart.** No clause is honored yet: every hole with a format or alignment clause, and
+  `ToString(format)` on a 32-bit-or-narrower integer, `double` or `float`, reports `MS0001`
+  and throws `UnsupportedError`.
+- **Unchanged.** A hole without a clause, and `ToString()` without a format, keep the
+  native JavaScript conversion.
+
 ## Floating point (`double` / `float`)
 
 `double` and `float` both lower to `number`, so their static helpers and special
@@ -709,7 +757,7 @@ directly.
 
 | C# | TypeScript |
 |----|----|
-| `l.ToString("N0")`, `$"{l,8}"`, `$"{l:X}"` | `formatInt64(l, "N0")`, `formatInt64(l, null, 8)`, `formatInt64(l, "X")` (`G D N F X R` in the invariant culture; a custom format reports `MS0066` and throws) |
+| `l.ToString("N0")`, `$"{l,8}"`, `$"{l:X}"` | `formatInt64(l, "N0")`, `formatInt64(l, null, 8)`, `formatInt64(l, "X")` (`G D N F E P C X R` in the invariant culture, see [Number formatting](#number-formatting-format-strings-and-interpolation-clauses); `B` or a custom format reports `MS0066` and throws) |
 | `long.Parse(s)` / `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)` / `parseUInt64(s, 515)` |
 | `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` |
 | `Convert.ToInt64(d)` / `(s)` / `(s, 16)` | `convertDoubleToInt64(d)` / `convertStringToInt64(s)` / `convertStringToInt64(s, 16)` |

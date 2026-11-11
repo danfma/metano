@@ -112,6 +112,11 @@ export function hashInt64(value: bigint): number;             // Number(BigInt.a
 export function formatInt64(value: bigint, format?: string | null, alignment?: number): string;
 ```
 
+Extended by baseline FR-051 (#323): `value` also accepts `null` (prints `""`), `R[n]` is `G[n]`,
+and `E[n]`, `P[n]`, `C[n]` are implemented; only `B` and the custom formats throw
+`NotSupportedException`. The integers held in a `number` share the implementation through
+`formatInteger(value, bits, format, alignment)`.
+
 Reference outputs (R2): `formatInt64(1234567n, "N0")` → `1,234,567`; `"N2"` → `1,234,567.00`;
 `formatInt64(-1n, "X")` → `FFFFFFFFFFFFFFFF`; `formatInt64(255n, "x4")` → `00ff`;
 `formatInt64(255n, "X20")` → `000000000000000000FF`; `formatInt64(-1234n, "D8")` → `-00001234`;
