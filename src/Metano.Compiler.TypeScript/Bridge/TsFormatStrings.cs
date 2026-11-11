@@ -78,7 +78,8 @@ internal sealed partial class TsFormatStrings : IFormatStringCapability
     /// pattern listed, <c>DateOnly</c>'s <c>yyyy-MM-dd</c> (case-sensitive:
     /// <c>mm</c> is minutes), which is that same ISO text for every
     /// <c>DateOnly</c> (years 1 to 9999 print four digits), and a
-    /// <c>BigInteger</c>'s <c>G</c> / <c>R</c> (a <c>bigint</c>'s digits).
+    /// <c>BigInteger</c>'s <c>G</c> / <c>R</c> / <c>D</c> without a precision (a
+    /// <c>bigint</c>'s digits).
     /// Both letter cases of a standard format mean the same there.
     /// </summary>
     public bool PrintsAsDefaultText(ITypeSymbol type, string format)
@@ -92,7 +93,7 @@ internal sealed partial class TsFormatStrings : IFormatStringCapability
         {
             GuidTypeName => letter is "D",
             DateOnlyTypeName => letter is "O" || format is IsoDatePattern,
-            BigIntegerTypeName => letter is "G" or "R",
+            BigIntegerTypeName => letter is "G" or "R" or "D",
             _ => false,
         };
     }

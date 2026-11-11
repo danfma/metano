@@ -570,12 +570,15 @@ standard numeric format strings in the invariant culture, with the same output a
   any static type that does not implement it — `string`, `bool`, a user class, record or
   struct — is ignored, and so is one on a `char`; the output prints the clause-free hole
   (`$"{plain:X}"` is `${plain}`). `object`, an interface and a type parameter keep the
-  format, because the run-time type decides: it reports.
+  format, because the run-time type decides: it reports. The rule reads the static type, so
+  it is exact for a sealed class, a struct and a record struct; for a non-sealed class whose
+  run-time value implements `IFormattable` (`Open x = new DerivedFmt(); $"{x:X}"`), .NET calls
+  the derived `ToString(format, provider)` while the output prints the default text.
 - **A format that is the default text.** Where the clause-free text already is .NET's text
   for the format, for every value, the hole and `ToString(format)` print it: a `Guid`'s
   `D`, a numeric enum's `D`, a `[StringEnum]`'s `G` / `F` (when no member is renamed), a
   `DateOnly`'s `O` and the custom `yyyy-MM-dd` (exactly; the same ISO text), and a
-  `BigInteger`'s `G` / `R`, the standard letters in either case
+  `BigInteger`'s `G` / `R` / `D` (no precision), the standard letters in either case
   (`c.ToString("D")` becomes `` `${c}` ``). The TypeScript target declares this list
   (`TsFormatStrings.PrintsAsDefaultText`).
 - **Through the type's mapping.** A hole is `value.ToString(format)`: where a declarative
@@ -593,7 +596,8 @@ standard numeric format strings in the invariant culture, with the same output a
   BCL type, reported at the format argument (`m.ToString("F2")` on a `decimal`,
   `dt.ToString("O")`, `c.ToString("G")` on an enum, `v.ToString("D2", null)` with
   `T : IFormattable`), unless a declarative mapping lowers it; a user type's own
-  `ToString(string)` is its own method and is left alone. The 64-bit integers, `nint` and
+  `ToString(string)`, in this project or a referenced library, is its own method and is left
+  alone, and a static `ToString` (`Convert.ToString(s)`) is not a format call. The 64-bit integers, `nint` and
   `nuint` included, keep `MS0066` for their unsupported formats (see below). A letter .NET
   rejects (`D` on a `double`, `Q`) is not reported: the formatter throws the same
   `FormatException`. The placeholder throws where the expression is evaluated: an
@@ -617,7 +621,8 @@ standard numeric format strings in the invariant culture, with the same output a
   native JavaScript conversion.
 - **Not covered yet.** `string.Format` composite formatting (`string.Format("{0:F2}", d)`
   keeps its unmapped call and `MS0001`) and `FormattableString` (both #662); custom numeric
-  patterns (reported above). One format still prints silently wrong text: `Guid`'s `X`
+  patterns (reported above), even those that equal the default text for every value
+  (`{b:#,##0}` on `sbyte` / `byte`, `{d:yyyy'-'MM'-'dd}` on `DateOnly`). One format still prints silently wrong text: `Guid`'s `X`
   (and an invalid `Guid` format, which .NET rejects), which the `Guid.ToString` fallback
   mapping prints as the hyphenated text, in a hole and in a call (tracked in #657: the
   mapping port cannot see the literal filters).
