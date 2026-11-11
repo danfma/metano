@@ -21,6 +21,7 @@
 // (TS2871) once a caller adds its own `?? fallback`.
 
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Metano.Annotations;
@@ -129,6 +130,96 @@ using Metano.Annotations;
     typeof(JsonException),
     ExportedName = "JsonException",
     FromPackage = "metano-runtime/system/exceptions/json-exception"
+)]
+[assembly: ExportFromBcl(
+    typeof(TimeoutException),
+    ExportedName = "TimeoutException",
+    FromPackage = "metano-runtime/system/exceptions/timeout-exception"
+)]
+[assembly: ExportFromBcl(
+    typeof(SwitchExpressionException),
+    ExportedName = "SwitchExpressionException",
+    FromPackage = "metano-runtime/system/exceptions/switch-expression-exception"
+)]
+
+// The argument guards (`ThrowIfNull`, `ThrowIfNullOrEmpty`, the `ThrowIf*` comparisons) lower
+// to the runtime's `argument-guards` functions; the extractor passes the
+// `[CallerArgumentExpression]` text C# supplies as their last argument. An exported
+// exception type binds its class, not its static members, so any other static member of
+// these types (`ObjectDisposedException.ThrowIf`, which needs .NET's type names) reports
+// MS0001.
+[assembly: MapMethod(
+    typeof(ArgumentNullException),
+    nameof(ArgumentNullException.ThrowIfNull),
+    WhenParameterTypes = [typeof(object), typeof(string)],
+    JsTemplate = "throwIfNull($0, $1)",
+    RuntimeImports = "throwIfNull"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentException),
+    nameof(ArgumentException.ThrowIfNullOrEmpty),
+    JsTemplate = "throwIfNullOrEmpty($0, $1)",
+    RuntimeImports = "throwIfNullOrEmpty"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentException),
+    nameof(ArgumentException.ThrowIfNullOrWhiteSpace),
+    JsTemplate = "throwIfNullOrWhiteSpace($0, $1)",
+    RuntimeImports = "throwIfNullOrWhiteSpace"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfZero),
+    JsTemplate = "throwIfZero($0, $1)",
+    RuntimeImports = "throwIfZero"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfNegative),
+    JsTemplate = "throwIfNegative($0, $1)",
+    RuntimeImports = "throwIfNegative"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfNegativeOrZero),
+    JsTemplate = "throwIfNegativeOrZero($0, $1)",
+    RuntimeImports = "throwIfNegativeOrZero"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfEqual),
+    JsTemplate = "throwIfEqual($0, $1, $2)",
+    RuntimeImports = "throwIfEqual"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfNotEqual),
+    JsTemplate = "throwIfNotEqual($0, $1, $2)",
+    RuntimeImports = "throwIfNotEqual"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfGreaterThan),
+    JsTemplate = "throwIfGreaterThan($0, $1, $2)",
+    RuntimeImports = "throwIfGreaterThan"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual),
+    JsTemplate = "throwIfGreaterThanOrEqual($0, $1, $2)",
+    RuntimeImports = "throwIfGreaterThanOrEqual"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfLessThan),
+    JsTemplate = "throwIfLessThan($0, $1, $2)",
+    RuntimeImports = "throwIfLessThan"
+)]
+[assembly: MapMethod(
+    typeof(ArgumentOutOfRangeException),
+    nameof(ArgumentOutOfRangeException.ThrowIfLessThanOrEqual),
+    JsTemplate = "throwIfLessThanOrEqual($0, $1, $2)",
+    RuntimeImports = "throwIfLessThanOrEqual"
 )]
 [assembly: MapProperty(
     typeof(Exception),

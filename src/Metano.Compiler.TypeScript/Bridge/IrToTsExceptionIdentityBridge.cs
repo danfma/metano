@@ -1,3 +1,4 @@
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Microsoft.CodeAnalysis;
@@ -44,6 +45,43 @@ internal static class IrToTsExceptionIdentityBridge
 
         return [NameField(type.MetadataName), NamespaceGetter(DotNetNamespaceOf(type))];
     }
+
+    /// <summary>
+    /// The <c>MS0001</c> of a user exception whose BCL base has no runtime
+    /// class: it extends the root <c>Exception</c>, so tests for the base's
+    /// ancestors (<c>catch (SystemException)</c>) miss it; <c>null</c> for any
+    /// other class.
+    /// </summary>
+    public static MetanoDiagnostic? UnmappedBaseDiagnostic(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir
+    )
+    {
+        if (
+            ir.BaseType is not IrNamedTypeRef baseType
+            || !BclExceptionClasses.IsBclException(baseType)
+            || IrToTsTypeMapper.ExceptionClasses.IsMapped(baseType)
+        )
+            return null;
+
+        var site = BaseListEntryOf(type);
+
+        return new MetanoDiagnostic(
+            MetanoDiagnosticSeverity.Warning,
+            DiagnosticCodes.UnsupportedFeature,
+            $"'{type.Name}' derives from '{type.BaseType!.ToDisplayString()}', which has no runtime "
+                + "class in TypeScript: it extends 'Exception', so catch clauses and type tests for "
+                + "the base's own ancestors do not take it (spec 011 FR-014).",
+            site?.GetLocation() ?? type.Locations.FirstOrDefault()
+        );
+    }
+
+    private static SyntaxNode? BaseListEntryOf(INamedTypeSymbol type) =>
+        type
+            .DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.TypeDeclarationSyntax>()
+            .Select(declaration => declaration.BaseList?.Types.FirstOrDefault())
+            .FirstOrDefault(entry => entry is not null);
 
     private static bool DeclaresName(IrClassDeclaration ir) =>
         (ir.Members ?? []).Any(member =>

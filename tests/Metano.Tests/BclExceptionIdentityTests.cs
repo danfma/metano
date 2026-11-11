@@ -174,7 +174,7 @@ public class BclExceptionIdentityTests
             [Transpile]
             public static class Guard
             {
-                public static void Wait() { throw new TimeoutException("late"); }
+                public static void Wait() { throw new System.IO.IOException("late"); }
 
                 public static void Load(string path) { throw new System.IO.FileNotFoundException(null, path); }
             }
@@ -187,20 +187,23 @@ public class BclExceptionIdentityTests
             .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
             .ToList();
 
+        // The message stays .NET's; the type name is the exception's identity.
         await Assert
             .That(output)
-            .Contains("throw new Exception(\"System.TimeoutException: late\");");
+            .Contains("throw namedException(\"System.IO\", \"IOException\", \"late\");");
 
         await Assert
             .That(output)
             .Contains(
-                "throw new Exception(\"System.IO.FileNotFoundException: Unable to find the specified file.\");"
+                "throw namedException(\"System.IO\", \"FileNotFoundException\", \"Unable to find the specified file.\");"
             );
+
+        await Assert.That(output).Contains("import { namedException } from \"metano-runtime\";");
 
         await Assert
             .That(warnings.Select(ReportedText))
             .IsEquivalentTo([
-                "new TimeoutException(\"late\")",
+                "new System.IO.IOException(\"late\")",
                 "new System.IO.FileNotFoundException(null, path)",
             ]);
 
@@ -209,7 +212,7 @@ public class BclExceptionIdentityTests
         await Assert
             .That(warnings[0].Message)
             .IsEqualTo(
-                "'new TimeoutException(\"late\")' constructs 'System.TimeoutException', which has no "
+                "'new System.IO.IOException(\"late\")' constructs 'System.IO.IOException', which has no "
                     + "runtime class in the target: the exception loses its type, so catch clauses "
                     + "and type tests cannot tell it apart from other exceptions (spec 011 FR-014)."
             );
@@ -223,7 +226,7 @@ public class BclExceptionIdentityTests
             using System;
 
             [Transpile]
-            public class GatewayTimeoutException : TimeoutException
+            public class GatewayTimeoutException : System.IO.IOException
             {
                 public GatewayTimeoutException() { }
             }
@@ -236,29 +239,30 @@ public class BclExceptionIdentityTests
             .That(output)
             .Contains("export class GatewayTimeoutException extends Exception {");
 
-        await Assert.That(output).Contains("super(\"The operation has timed out.\");");
+        await Assert.That(output).Contains("super(\"I/O error occurred.\");");
 
-        await Assert
-            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
-            .IsEmpty();
+        // It no longer is a SystemException, so the derivation is reported at the base list.
+        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert.That(ReportedText(warning)).IsEqualTo("System.IO.IOException");
     }
 
     [Test]
     [Arguments(
-        "public static bool Test(object o) => o is TimeoutException;",
-        "o is TimeoutException"
+        "public static bool Test(object o) => o is System.IO.IOException;",
+        "o is System.IO.IOException"
     )]
     [Arguments(
-        "public static TimeoutException? Test(object o) => o as TimeoutException;",
-        "o as TimeoutException"
+        "public static System.IO.IOException? Test(object o) => o as System.IO.IOException;",
+        "o as System.IO.IOException"
     )]
     [Arguments(
-        "public static bool Test(object o) => o is TimeoutException t && t.Message.Length > 0;",
-        "TimeoutException t"
+        "public static bool Test(object o) => o is System.IO.IOException t && t.Message.Length > 0;",
+        "System.IO.IOException t"
     )]
     [Arguments(
-        "public static int Test(object o) => o switch { TimeoutException => 1, _ => 0 };",
-        "TimeoutException"
+        "public static int Test(object o) => o switch { System.IO.IOException => 1, _ => 0 };",
+        "System.IO.IOException"
     )]
     public async Task TypeTestOnAnUnmappedBclException_IsAnMs0045Error(string member, string site)
     {
@@ -281,7 +285,7 @@ public class BclExceptionIdentityTests
 
         await Assert
             .That(error.Message)
-            .StartsWith($"'{site}' cannot be lowered: 'System.TimeoutException'");
+            .StartsWith($"'{site}' cannot be lowered: 'System.IO.IOException'");
     }
 
     [Test]
@@ -360,7 +364,7 @@ public class BclExceptionIdentityTests
 
             public static string Handle(InvalidOperationException e) => "state";
 
-            public static string Wait(TimeoutException e) => "timeout";
+            public static string Wait(System.IO.IOException e) => "io";
 
             public static string Wait(string reason) => reason;
             """
@@ -503,6 +507,115 @@ public class BclExceptionIdentityTests
         await Assert
             .That(files["shop/renamed-error.ts"])
             .Contains("override readonly name: string = \"RenamedException\";");
+    }
+
+    [Test]
+    public async Task ArgumentGuards_PassTheCallerArgumentExpression()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile]
+            public static class Guard
+            {
+                public static void Check(string? name, string text, int count, int limit)
+                {
+                    ArgumentNullException.ThrowIfNull(name);
+                    ArgumentNullException.ThrowIfNull(name, "custom");
+                    ArgumentException.ThrowIfNullOrWhiteSpace(text);
+                    ArgumentOutOfRangeException.ThrowIfNegative(count);
+                    ArgumentOutOfRangeException.ThrowIfGreaterThan(count, limit);
+                }
+            }
+            """
+        );
+
+        var output = files["guard.ts"];
+
+        await Assert.That(output).Contains("throwIfNull(name, \"name\");");
+        await Assert.That(output).Contains("throwIfNull(name, \"custom\");");
+        await Assert.That(output).Contains("throwIfNullOrWhiteSpace(text, \"text\");");
+        await Assert.That(output).Contains("throwIfNegative(count, \"count\");");
+        await Assert.That(output).Contains("throwIfGreaterThan(count, limit, \"count\");");
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task UnmappedStaticMemberOfAMappedException_IsStillReported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile]
+            public class Connection
+            {
+                public bool Closed { get; set; }
+
+                public void Use() => ObjectDisposedException.ThrowIf(Closed, this);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => d.Message))
+            .Contains(message => message.Contains("System.ObjectDisposedException.ThrowIf"));
+    }
+
+    [Test]
+    public async Task RootExceptionTests_AcceptAnyJavaScriptError()
+    {
+        var output = TranspileGuard(
+            """
+            public static bool IsException(object o) => o is Exception;
+
+            public static string Kind(Exception e) =>
+                e switch
+                {
+                    ArgumentException => "argument",
+                    Exception x => "exception:" + x.Message,
+                };
+            """
+        );
+
+        await Assert.That(output).Contains("return o instanceof Error;");
+        await Assert.That(output).Contains("if ($s instanceof ArgumentException) {");
+        await Assert.That(output).Contains("if ($s instanceof Error) {");
+    }
+
+    [Test]
+    public async Task InnerParameterNamedInner_IsTheInnerException()
+    {
+        var output = TranspileGuard(
+            """
+            public static Exception Todo(Exception cause) => new NotImplementedException("m", cause);
+
+            public static Exception Missing(Exception cause) => new MissingMethodException("m", cause);
+            """
+        );
+
+        await Assert.That(output).Contains("return new NotImplementedException(\"m\", cause);");
+        await Assert.That(output).Contains("return new MissingMethodException(\"m\", cause);");
+    }
+
+    [Test]
+    public async Task TimeoutException_IsMapped()
+    {
+        var output = TranspileGuard(
+            "public static Exception Late() => new TimeoutException(\"late\");"
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "import { TimeoutException } from \"metano-runtime/system/exceptions/timeout-exception\";"
+            );
+
+        await Assert.That(output).Contains("return new TimeoutException(\"late\");");
     }
 
     private static string TranspileGuard(string members) =>

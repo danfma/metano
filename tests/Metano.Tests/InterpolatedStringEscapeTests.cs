@@ -62,6 +62,8 @@ public class InterpolatedStringEscapeTests
             """
             using System;
 
+            [assembly: ExportFromBcl(typeof(ArgumentNullException), ExportedName = "NullArgument", FromPackage = "my-errors")]
+
             [Transpile]
             public class Greeter
             {
@@ -69,7 +71,7 @@ public class InterpolatedStringEscapeTests
                     throw new ArgumentException($"bad `{name}` ${{x}}", nameof(name));
 
                 public void Late(string name) =>
-                    throw new TimeoutException($"bad `{name}` ${{x}}");
+                    throw new ArgumentNullException(nameof(name), $"bad `{name}` ${{x}}");
             }
             """
         );
@@ -79,12 +81,13 @@ public class InterpolatedStringEscapeTests
             .That(result["greeter.ts"])
             .Contains("new ArgumentException(`bad \\`${name}\\` \\${x}`, \"name\")");
 
-        // A message the compiler composes (an exception without a runtime class)
-        // nests the interpolation in its own template literal.
-        // Printed JS: `System.TimeoutException: ${`bad \`${name}\` \${x}`}`
+        // A message the compiler composes (a project's own class that takes no
+        // parameter name, which the compiler folds in) nests the interpolation
+        // in its own template literal.
+        // Printed JS: `${`bad \`${name}\` \${x}`} (Parameter 'name')`
         await Assert
             .That(result["greeter.ts"])
-            .Contains("`System.TimeoutException: ${`bad \\`${name}\\` \\${x}`}`");
+            .Contains("`${`bad \\`${name}\\` \\${x}`} (Parameter 'name')`");
     }
 
     private static string TranspileMethodBody(string body)

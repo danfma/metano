@@ -55,7 +55,7 @@ export class OverloadOverrideException extends Exception {
       return;
     }
 
-    if (args.length === 2 && isString(args[0]) && args[1] instanceof Exception) {
+    if (args.length === 2 && isString(args[0]) && args[1] instanceof Error) {
       const message = args[0] as string;
       const inner = args[1] as Exception;
       const __chain0Arg0 = message;

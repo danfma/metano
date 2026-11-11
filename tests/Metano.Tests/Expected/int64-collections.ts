@@ -1,3 +1,4 @@
+import { arrayLength } from "metano-runtime";
 import { averageInt64, averageNullableInt64, count, linq, maxInt64Of, maxNullableInt64Of, minInt64Of, minUInt64Of, sum, sumInt64 } from "metano-runtime/system/linq";
 import type { Item } from "./item";
 
@@ -28,23 +29,23 @@ export class Collections {
   }
 
   zeros(n: number): bigint[] {
-    return new Array<bigint>(n).fill(0n);
+    return new Array<bigint>(arrayLength(n)).fill(0n);
   }
 
   byLongLength(n: bigint): number[] {
-    return new Array<number>(Number(n)).fill(0);
+    return new Array<number>(arrayLength(Number(n))).fill(0);
   }
 
   strings(n: number): string[] {
-    return new Array(n).fill(null);
+    return new Array(arrayLength(n)).fill(null);
   }
 
   flags(n: number): boolean[] {
-    return new Array<boolean>(n).fill(false);
+    return new Array<boolean>(arrayLength(n)).fill(false);
   }
 
   items(n: number): Item[] {
-    return new Array(n).fill(null);
+    return new Array(arrayLength(n)).fill(null);
   }
 
   count(xs: number[]): bigint {

@@ -44,6 +44,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     > _entries;
 
     private readonly InvocationLoweringHelpers _helpers;
+    private readonly Func<IMethodSymbol, int, bool>? _lowersByDeclarativeMapping;
 
     /// <summary>
     /// Builds the per-compilation table. The Roslyn semantic model
@@ -53,11 +54,20 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     /// <see cref="IrExpressionExtractor"/> instance so the lookup
     /// keys always belong to the active compilation. The
     /// <paramref name="helpers"/> façade supplies origin building and
-    /// type mapping to the overload-normalizing entries.
+    /// type mapping to the overload-normalizing entries;
+    /// <paramref name="lowersByDeclarativeMapping"/> is the target port
+    /// (<see cref="IrExtractionContext.LowersByDeclarativeMapping"/>) through
+    /// which a target's own mapping of a method takes precedence over an
+    /// entry.
     /// </summary>
-    public IntrinsicBclLoweringTable(Compilation compilation, InvocationLoweringHelpers helpers)
+    public IntrinsicBclLoweringTable(
+        Compilation compilation,
+        InvocationLoweringHelpers helpers,
+        Func<IMethodSymbol, int, bool>? lowersByDeclarativeMapping = null
+    )
     {
         _helpers = helpers;
+        _lowersByDeclarativeMapping = lowersByDeclarativeMapping;
 
         _entries = new Dictionary<IMethodSymbol, Func<InvocationRewriteContext, IrExpression?>>(
             SymbolEqualityComparer.Default
@@ -110,7 +120,10 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     /// <summary>
     /// <c>decimal.Parse(s)</c> → <c>new Decimal(s)</c>. Covers every
     /// <c>Parse</c> overload — the runtime constructor accepts any
-    /// of the BCL argument shapes (string, span, IFormatProvider).
+    /// of the BCL argument shapes (string, span, IFormatProvider). A target
+    /// that maps <c>decimal.Parse</c> declaratively keeps the call for its
+    /// mapping (TypeScript checks .NET's grammar and throws
+    /// <c>FormatException</c> through a runtime helper, #651).
     /// </summary>
     private void SeedDecimalParse(Compilation compilation)
     {
@@ -124,6 +137,12 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
         {
             _entries[method.OriginalDefinition] = ctx =>
             {
+                if (
+                    _lowersByDeclarativeMapping?.Invoke(method, EmittedArgumentCount(ctx, method))
+                    is true
+                )
+                    return null;
+
                 var arg = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
                 return new IrNewExpression(
                     new IrPrimitiveTypeRef(IrPrimitive.Decimal),
@@ -131,6 +150,25 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
                 );
             };
         }
+    }
+
+    /// <summary>
+    /// The number of arguments the plain call lowering passes for the call
+    /// in <paramref name="context"/>, which the target's mapping port counts
+    /// (#665): the written ones, or one per parameter of
+    /// <paramref name="method"/> when one is named.
+    /// </summary>
+    private int EmittedArgumentCount(InvocationRewriteContext context, IMethodSymbol method)
+    {
+        IReadOnlyList<IrArgument> written =
+        [
+            .. context.Invocation.ArgumentList.Arguments.Select(argument => new IrArgument(
+                new IrLiteral(null, IrLiteralKind.Null),
+                argument.NameColon?.Name.Identifier.ValueText
+            )),
+        ];
+
+        return _helpers.InParameterOrder(written, method).Count;
     }
 
     /// <summary>

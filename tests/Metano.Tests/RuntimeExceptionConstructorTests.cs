@@ -51,7 +51,7 @@ public partial class RuntimeExceptionConstructorTests
     {
         var mapped = ShippedExceptionMappings().Select(mapping => mapping.Export.ExportedName);
 
-        await Assert.That(mapped.Count()).IsEqualTo(21);
+        await Assert.That(mapped.Count()).IsEqualTo(23);
     }
 
     [Test]
@@ -61,7 +61,11 @@ public partial class RuntimeExceptionConstructorTests
         IrBclExport export
     )
     {
+        // A trailing parameter no C# constructor role feeds (the unmatched value
+        // of SwitchExpressionException, which only generated code passes) is not
+        // part of the role order.
         var declared = RuntimeConstructorParameters(export)
+            .TakeWhile(RolesByParameterName.ContainsKey)
             .Select(name => RolesByParameterName[name])
             .ToList();
 
@@ -71,6 +75,56 @@ public partial class RuntimeExceptionConstructorTests
             .That(string.Join(", ", passed))
             .IsEqualTo(string.Join(", ", declared))
             .Because($"the compiler's role order for {export.ExportedName}");
+    }
+
+    /// <summary>
+    /// Parameters of the mapped .NET constructors that no runtime class takes,
+    /// so a construction drops them (still evaluating a side-effecting one).
+    /// </summary>
+    private static readonly HashSet<string> DroppedDotNetParameters =
+    [
+        "path",
+        "lineNumber",
+        "bytePositionInLine",
+        "token",
+        "task",
+        "errorCode",
+        "className",
+        "methodName",
+        "unmatchedValue",
+    ];
+
+    [Test]
+    [MethodDataSource(nameof(ShippedExceptionMappings))]
+    public async Task EveryDotNetConstructorParameter_HasARoleOrIsDropped(
+        string typeKey,
+        IrBclExport export
+    )
+    {
+        var compilation = CSharpCompilation.Create(
+            "RuntimeExceptionConstructorTests",
+            references: TranspileHelper.BaseReferences
+        );
+
+        var type =
+            compilation.GetTypeByMetadataName(typeKey)
+            ?? throw new InvalidOperationException($"No {typeKey} in the reference assemblies.");
+
+        var unclassified = type
+            .InstanceConstructors.Where(constructor =>
+                constructor.DeclaredAccessibility is Microsoft.CodeAnalysis.Accessibility.Public
+            )
+            .SelectMany(constructor => constructor.Parameters)
+            .Where(parameter =>
+                Metano.Compiler.Extraction.IrExceptionConstructionExtractor.RoleOf(parameter)
+                    is IrExceptionArgumentRole.Unmapped
+                && !DroppedDotNetParameters.Contains(parameter.Name)
+            )
+            .Select(parameter => parameter.Name)
+            .Distinct()
+            .ToList();
+
+        await Assert.That(unclassified).IsEmpty().Because($"{export.ExportedName}'s constructors");
     }
 
     /// <summary>

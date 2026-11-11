@@ -168,7 +168,7 @@ public class DecimalIntegrationTests
         );
 
         var output = result["calc.ts"];
-        await Assert.That(output).Contains("return new Decimal(s);");
+        await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
     }
 
     [Test]

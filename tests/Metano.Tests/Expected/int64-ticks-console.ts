@@ -1,5 +1,5 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { durationFromTicks, durationTicks, plainDateTimeFromTicks, plainDateTimeTicks } from "metano-runtime";
+import { durationFromTicks, durationTicks, plainDateTime, plainDateTimeFromTicks, plainDateTimeTicks } from "metano-runtime";
 
 export class Clock {
   constructor() { }
@@ -21,7 +21,7 @@ export class Clock {
   }
 
   parts(): Temporal.PlainDateTime {
-    return new Temporal.PlainDateTime(2026, 1, 1);
+    return plainDateTime(2026, 1, 1);
   }
 
   print(l: bigint, u: bigint, i: number): void {

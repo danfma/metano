@@ -19,3 +19,7 @@ export * from "./object-disposed-exception.ts";
 export * from "./operation-canceled-exception.ts";
 export * from "./task-canceled-exception.ts";
 export * from "./json-exception.ts";
+export * from "./timeout-exception.ts";
+export * from "./switch-expression-exception.ts";
+export * from "./named-exception.ts";
+export * from "./argument-guards.ts";

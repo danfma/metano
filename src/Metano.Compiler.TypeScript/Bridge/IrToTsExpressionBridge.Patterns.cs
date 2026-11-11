@@ -253,6 +253,13 @@ public static partial class IrToTsExpressionBridge
                     [value]
                 ),
                 IrRuntimeTypeTest.ArrayTuple { Arity: var arity } => ArrayTupleTest(value, arity),
+                IrRuntimeTypeTest.Instanceof
+                    when targetType is IrNamedTypeRef named
+                        && BclExceptionClasses.IsBclException(named) => new TsBinaryExpression(
+                    value,
+                    "instanceof",
+                    IrToTsTypeMapper.ExceptionClasses.TestedClassOf(named)
+                ),
                 IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
                 _ => throw NoRuntimeTypeTest(targetType),
             },

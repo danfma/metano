@@ -187,7 +187,7 @@ internal static class IrTypeCheckBuilder
             IrNamedTypeKind.Exception when IsMappedBclException(named) => new TsBinaryExpression(
                 value,
                 "instanceof",
-                IrToTsTypeMapper.ExceptionClasses.ClassOf(named).ValueReference()
+                IrToTsTypeMapper.ExceptionClasses.TestedClassOf(named)
             ),
             // Classes / records / structs / exceptions — use instanceof when
             // the type is in our compilation (and thus has a runtime class);

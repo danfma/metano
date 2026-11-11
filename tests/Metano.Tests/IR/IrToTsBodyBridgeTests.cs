@@ -333,7 +333,9 @@ public class IrToTsBodyBridgeTests
         await Assert.That(ts).Contains("(($s) => {");
         await Assert.That(ts).Contains("if ($s === 0)");
         await Assert.That(ts).Contains("return 10;");
-        await Assert.That(ts).Contains("throw new Error(\"Non-exhaustive switch expression\")");
+        await Assert
+            .That(ts)
+            .Contains("throw new SwitchExpressionException(undefined, undefined, $s);");
     }
 
     // -- helpers --
@@ -369,7 +371,16 @@ public class IrToTsBodyBridgeTests
             .ExtractBody(methodSyntax.Body, methodSyntax.ExpressionBody, methodSymbol.ReturnsVoid)
             .Statements;
 
+        // The bridges lower BCL exceptions through the runtime classes the
+        // transformer installs for a transform (spec 011 FR-014).
+        var previousExceptionClasses = IrToTsTypeMapper.ExceptionClassesScope;
+        IrToTsTypeMapper.ExceptionClassesScope = new BclExceptionClasses(
+            Metano.Compiler.BclExportReader.Read(compilation)
+        );
+
         var tsBody = IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry));
+
+        IrToTsTypeMapper.ExceptionClassesScope = previousExceptionClasses;
 
         var methodMember = new TsMethodMember(
             methodSymbol.Name[0..1].ToLowerInvariant() + methodSymbol.Name[1..],

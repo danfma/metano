@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
-import { Exception } from "metano-runtime/system/exceptions/exception";
 import { CurrencyConversionException } from "#/sample-operator-overloading/currency-conversion-exception";
 import { InvalidCurrencyCodeException } from "#/sample-operator-overloading/invalid-currency-code-exception";
 import { UnsupportedCurrencyException } from "#/sample-operator-overloading/unsupported-currency-exception";
@@ -38,9 +37,9 @@ describe("Currency exceptions", () => {
   });
 
   test("explicit reason becomes the cause", () => {
-    // The overload dispatcher tests `instanceof Exception` for the C# `Exception`
-    // parameter, so a plain JavaScript `Error` matches no overload.
-    const reason = new Exception("rate feed offline");
+    // The overload dispatcher tests `instanceof Error` for the C# `Exception`
+    // parameter, so a plain JavaScript `Error` is accepted as the reason.
+    const reason = new Error("rate feed offline");
 
     const error = new CurrencyConversionException("EUR", "USD", reason);
 

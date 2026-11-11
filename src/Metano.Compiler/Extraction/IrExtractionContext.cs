@@ -96,8 +96,10 @@ public sealed record IrExtractionContext(
     /// the same overload filter its BCL mapper applies, so the extractor
     /// reports a <c>System.Linq</c> or <c>System.MemoryExtensions</c> method
     /// that nothing lowers instead of leaving it a member call on the
-    /// receiver (#648, #657). <c>null</c>, the default, for a target that
-    /// reports none of these calls: every such call keeps its source form.
+    /// receiver (#648, #657), and an intrinsic lowering (<c>decimal.Parse</c>)
+    /// yields to the target's own mapping (#651). <c>null</c>, the default,
+    /// for a target that reports none of these calls: every such call keeps
+    /// its source form.
     /// <para>
     /// TODO(#657): the answer ignores <c>WhenArg0StringEquals</c>, which the
     /// mapper tests on the lowered arguments, so a call whose only entries

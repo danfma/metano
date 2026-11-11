@@ -131,6 +131,9 @@ public sealed class IrToTsClassEmitter(
 
         classMembers.AddRange(IrToTsExceptionIdentityBridge.Members(type, ir));
 
+        if (IrToTsExceptionIdentityBridge.UnmappedBaseDiagnostic(type, ir) is { } unmappedBase)
+            _context.ReportDiagnostic(unmappedBase);
+
         if (keepsBaseMessage)
         {
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());

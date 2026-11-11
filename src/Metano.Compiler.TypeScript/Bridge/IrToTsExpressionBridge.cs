@@ -489,7 +489,12 @@ public static partial class IrToTsExpressionBridge
     {
         var array = new TsNewExpression(
             new TsIdentifier("Array"),
-            [AsArrayIndex(Map(creation.Length, context), creation.LengthKind)],
+            [
+                CheckedArrayLength(
+                    AsArrayIndex(Map(creation.Length, context), creation.LengthKind),
+                    creation.Length
+                ),
+            ],
             ArrayElementTypeArguments(creation)
         );
 
@@ -498,6 +503,17 @@ public static partial class IrToTsExpressionBridge
             [ArrayElementDefault(creation, context)]
         );
     }
+
+    /// <summary>
+    /// The length of <c>new T[length]</c>, through the runtime's
+    /// <c>arrayLength</c> unless it is a non-negative constant: a negative
+    /// length throws .NET's <c>OverflowException</c>, where
+    /// <c>new Array(-1)</c> throws a <c>RangeError</c> (#651).
+    /// </summary>
+    private static TsExpression CheckedArrayLength(TsExpression length, IrExpression source) =>
+        source is IrLiteral { Value: int constant } && constant >= 0
+            ? length
+            : new TsCallExpression(new TsRuntimeHelperReference("arrayLength"), [length]);
 
     private static IReadOnlyList<TsType>? ArrayElementTypeArguments(IrArrayCreation creation) =>
         creation.ElementDefault is IrLiteral { Kind: IrLiteralKind.Null }
