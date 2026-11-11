@@ -406,6 +406,60 @@ export async function receiverShiftedByAwaitedCount(start: number, count: number
   return `${cells.signed}|${cells.evaluations}`;
 }
 
+export function receiverUnsignedElementShiftedRight(start: number, count: number): string {
+  const cells = ((receiver$temp$0) => {
+    receiver$temp$0.unsignedSlots = [start, start];
+
+    return receiver$temp$0;
+  })(new ShiftCells(0));
+  let index = 0;
+  cells.next().unsignedSlots[index++] >>>= count;
+
+  return `${cells.unsignedSlots[0]}|${cells.evaluations}|${index}`;
+}
+
+export function receiverUnsignedPropertyShiftedRight(start: number, count: number): string {
+  const cells = ((receiver$temp$0) => {
+    receiver$temp$0.unsigned = start;
+
+    return receiver$temp$0;
+  })(new ShiftCells(0));
+  cells.next().trackedUnsigned >>>= count;
+
+  return `${cells.unsigned}|${cells.evaluations}|${cells.reads}|${cells.writes}`;
+}
+
+export async function receiverUnsignedShiftedRightByAwaitedCount(start: number, count: number): Promise<string> {
+  const cells = ((receiver$temp$0) => {
+    receiver$temp$0.unsigned = start;
+
+    return receiver$temp$0;
+  })(new ShiftCells(0));
+  cells.next().unsigned >>>= await Promise.resolve(count);
+
+  return `${cells.unsigned}|${cells.evaluations}`;
+}
+
+export function unsignedShiftedRightValue(start: number, count: number): string {
+  const cells = ((receiver$temp$0) => {
+    receiver$temp$0.unsigned = start;
+
+    return receiver$temp$0;
+  })(new ShiftCells(0));
+  const value = cells.next().unsigned >>>= count;
+
+  return `${value}|${cells.unsigned}|${cells.evaluations}`;
+}
+
+export function unsignedShiftLoop(start: number): number {
+  let steps = 0;
+  for (let remaining = start; remaining !== 0; remaining >>>= 1) {
+    steps++;
+  }
+
+  return steps;
+}
+
 export function concatenatedChecked(source: number): string {
   return "v=" + checkedNarrowNumber(source, 8, false) + ";";
 }
@@ -449,6 +503,8 @@ export class ShiftCells {
 
   slots: number[];
 
+  unsignedSlots: number[] = new Array<number>(2).fill(0);
+
   evaluations: number = 0;
 
   indexEvaluations: number = 0;
@@ -473,6 +529,17 @@ export class ShiftCells {
   set tracked(value: number) {
     this.writes++;
     this.signed = value;
+  }
+
+  get trackedUnsigned(): number {
+    this.reads++;
+
+    return this.unsigned;
+  }
+
+  set trackedUnsigned(value: number) {
+    this.writes++;
+    this.unsigned = value;
   }
 
   next(): ShiftCells {

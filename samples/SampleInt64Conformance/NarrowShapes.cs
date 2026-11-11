@@ -357,6 +357,59 @@ public static class NarrowShapes
         return $"{cells.Signed}|{cells.Evaluations}";
     }
 
+    /// <summary>The stored element, the receiver evaluations and the index after its increment.</summary>
+    public static string ReceiverUnsignedElementShiftedRight(uint start, int count)
+    {
+        var cells = new ShiftCells(0) { UnsignedSlots = new[] { start, start } };
+        var index = 0;
+
+        cells.Next().UnsignedSlots[index++] >>= count;
+
+        return $"{cells.UnsignedSlots[0]}|{cells.Evaluations}|{index}";
+    }
+
+    /// <summary>The stored property value, the receiver evaluations and the getter and setter calls.</summary>
+    public static string ReceiverUnsignedPropertyShiftedRight(uint start, int count)
+    {
+        var cells = new ShiftCells(0) { Unsigned = start };
+
+        cells.Next().TrackedUnsigned >>= count;
+
+        return $"{cells.Unsigned}|{cells.Evaluations}|{cells.Reads}|{cells.Writes}";
+    }
+
+    public static async Task<string> ReceiverUnsignedShiftedRightByAwaitedCount(
+        uint start,
+        int count
+    )
+    {
+        var cells = new ShiftCells(0) { Unsigned = start };
+
+        cells.Next().Unsigned >>= await Task.FromResult(count);
+
+        return $"{cells.Unsigned}|{cells.Evaluations}";
+    }
+
+    /// <summary>The value of the compound shift used as an expression, and the stored one.</summary>
+    public static string UnsignedShiftedRightValue(uint start, int count)
+    {
+        var cells = new ShiftCells(0) { Unsigned = start };
+        var value = cells.Next().Unsigned >>= count;
+
+        return $"{value}|{cells.Unsigned}|{cells.Evaluations}";
+    }
+
+    /// <summary>The iterations a <c>uint</c> takes to shift down to zero, one bit per step.</summary>
+    public static int UnsignedShiftLoop(uint start)
+    {
+        var steps = 0;
+
+        for (var remaining = start; remaining != 0; remaining >>= 1)
+            steps++;
+
+        return steps;
+    }
+
     public static string ConcatenatedChecked(int source) => "v=" + checked((byte)source) + ";";
 
     public static string InterpolatedChecked(int a, int b) =>
@@ -421,6 +474,8 @@ public class ShiftCells
 
     public int[] Slots;
 
+    public uint[] UnsignedSlots = new uint[2];
+
     public ShiftCells(int seed)
     {
         Signed = seed;
@@ -449,6 +504,21 @@ public class ShiftCells
         {
             Writes++;
             Signed = value;
+        }
+    }
+
+    public uint TrackedUnsigned
+    {
+        get
+        {
+            Reads++;
+
+            return Unsigned;
+        }
+        set
+        {
+            Writes++;
+            Unsigned = value;
         }
     }
 

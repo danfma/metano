@@ -95,16 +95,18 @@ public sealed partial class IrExpressionExtractor
         && IsSixtyFourBit(BuiltInNumericKindOf(operatorSyntax));
 
     /// <summary>
-    /// Whether <paramref name="op"/> is <c>&gt;&gt;</c> on a <c>uint</c>: C#
-    /// shifts it logically, where a target whose <c>&gt;&gt;=</c> is
-    /// arithmetic on 32 signed bits has no compound operator for it, so
-    /// <c>u &gt;&gt;= n</c> stores the binary form's value, which carries
-    /// its operand kind (FR-076).
+    /// Whether <paramref name="op"/> is <c>&gt;&gt;</c> on a <c>uint</c>,
+    /// which C# shifts logically: its compound form does not take the plain
+    /// compound-assignment path, whose node carries no operand kind. The
+    /// TypeScript target keeps it as the compound node with its kind
+    /// (<see cref="NativeCompoundShiftKindOf"/>, emitted <c>&gt;&gt;&gt;=</c>);
+    /// any other target, and a dictionary entry, store the binary form's
+    /// value through the read-modify-write (FR-076).
     /// </summary>
     /// <remarks>
-    /// TODO(#549): this encodes a JavaScript fact (<c>&gt;&gt;=</c> reads 32
-    /// signed bits). A 64-bit Dart <c>int</c> could keep <c>u &gt;&gt;= n</c>;
-    /// a target capability should decide it.
+    /// TODO(#549): only Dart takes the read-modify-write today, and a 64-bit
+    /// Dart <c>int</c> could keep <c>u &gt;&gt;= n</c> as it is; a target
+    /// capability should decide it.
     /// </remarks>
     private bool NeedsLogicalShiftReadModifyWrite(IrBinaryOp op, ExpressionSyntax operatorSyntax) =>
         op is IrBinaryOp.RightShift && BuiltInNumericKindOf(operatorSyntax) is IrNumericKind.UInt32;
@@ -124,8 +126,10 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     /// <remarks>
     /// TODO(#549): both are JavaScript facts. A 64-bit Dart <c>int</c> needs
-    /// the stored value wrapped, so it keeps the read-modify-write; a target
-    /// capability should decide instead of the target check.
+    /// the stored value wrapped, so it keeps the read-modify-write, and the
+    /// Dart printer does not read <c>NumericKind</c> on a compound operator,
+    /// so this node must not reach Dart; a target capability should decide
+    /// instead of the target check.
     /// </remarks>
     private IrNumericKind? NativeCompoundShiftKindOf(
         IrExpression target,

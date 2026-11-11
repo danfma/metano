@@ -271,15 +271,7 @@ public static class IrBodyPrinter
                 PrintSlice(sb, slice);
                 break;
             case IrLetExpression let:
-                // `((name) => body)(value)` — evaluates the value once and
-                // scopes the binding to the body, like the TypeScript IIFE.
-                sb.Append("((")
-                    .Append(IrToDartNamingPolicy.ToParameterName(let.Name))
-                    .Append(')');
-                PrintClosureBody(sb, let.Body);
-                sb.Append(")(");
-                PrintExpression(sb, let.Value);
-                sb.Append(')');
+                PrintLet(sb, let);
                 break;
             case IrSequenceExpression sequence:
                 // Dart has no comma operator: `(() { effect; return result; })()`.
@@ -538,6 +530,9 @@ public static class IrBodyPrinter
     {
         var printed = DartNumericConversions.Unwrap(expression);
 
+        if (IsAwaitedLet(printed))
+            return true;
+
         return printed
                 is IrBinaryExpression
                     or IrUnaryExpression { IsPrefix: true }
@@ -549,6 +544,10 @@ public static class IrBodyPrinter
                     or IrLambdaExpression
             || DartNumericLiterals.IsNegative(printed);
     }
+
+    /// <summary>A let-binding whose body awaits, which prints as an <c>await</c> expression (see <see cref="PrintLet"/>).</summary>
+    private static bool IsAwaitedLet(IrExpression expression) =>
+        expression is IrLetExpression let && IrEvaluationTraits.ContainsAwait(let.Body);
 
     /// <summary>
     /// Dart renders <c>x is Foo</c> natively. A type-with-designator (<c>x is Foo f</c>)
@@ -1019,6 +1018,27 @@ public static class IrBodyPrinter
 
         if (parenthesize)
             sb.Append(')');
+    }
+
+    /// <summary>
+    /// <c>((name) =&gt; body)(value)</c>: evaluates the value once and scopes
+    /// the binding to the body, like the TypeScript IIFE. A body that awaits
+    /// needs an async closure, whose call is awaited in turn
+    /// (<c>await ((name) async =&gt; body)(value)</c>): Dart rejects
+    /// <c>await</c> inside a closure that is not async.
+    /// </summary>
+    private static void PrintLet(StringBuilder sb, IrLetExpression let)
+    {
+        var awaits = IsAwaitedLet(let);
+
+        sb.Append(awaits ? "await ((" : "((")
+            .Append(IrToDartNamingPolicy.ToParameterName(let.Name))
+            .Append(awaits ? ") async" : ")");
+
+        PrintClosureBody(sb, let.Body);
+        sb.Append(")(");
+        PrintExpression(sb, let.Value);
+        sb.Append(')');
     }
 
     /// <summary>
