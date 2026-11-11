@@ -295,6 +295,15 @@ Product requirements added after the migration (normative; each one is traced by
   locally (for example 010 FR-042, the union companion namespace), so the bare number is
   ambiguous. Traced by the "Method overload dispatch" and "Constructor overload dispatch" rows of
   the feature-support matrix.
+- **FR-051** (caller argument expressions): A call to a method or constructor with a
+  `[CallerArgumentExpression("p")]` parameter that the call leaves out MUST pass the source text
+  of the call's argument for `p`, positional or named, in every target, as the C# compiler
+  does; this covers the argument guards (`ArgumentNullException.ThrowIfNull(x)` passes `"x"`).
+  An argument written for the caller-expression parameter itself keeps the call's own value. A defaulted parameter the call omits before the caller-expression parameter
+  is passed as `undefined` in TypeScript, so the callee applies its default, and as its default
+  value in Dart. Limitation: a transpiled extension method called with extension syntax
+  (`x.Ext()`, lowered to a module function) does not get the text. Traced by the "Caller
+  argument expressions" row of the feature-support matrix.
 
 - **FR-051** (numeric format strings and interpolation clauses, #323, #308): A format clause
   or an alignment clause of an interpolation hole (`{value,alignment:format}`), and

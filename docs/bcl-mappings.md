@@ -37,7 +37,8 @@ package. Operators are lowered to method calls:
 | `a == b` | `a.equals(b)` |
 | `a > b` | `a.greaterThan(b)` |
 | `decimal.Zero` | `new Decimal(0)` |
-| `decimal.Parse("1.5")` | `new Decimal("1.5")` |
+| `decimal.Parse(s)` / `decimal.Parse(s, provider)` | `new Decimal(parseDecimalText(s))` (runtime: .NET's `NumberStyles.Number` grammar, `FormatException` / `OverflowException`; the provider is ignored) |
+| `decimal.Parse(s, styles)` (and the span overloads) | `new Decimal(s)` (decimal.js's grammar, which accepts exponents like `NumberStyles.Float`; a malformed text throws decimal.js's `DecimalError`) |
 | `(decimal)42` | `new Decimal(42)` |
 | Decimal literal `1.5m` | `new Decimal("1.5")` |
 | `Math.Round(d)` / `decimal.Round(d, digits, mode)` | `roundDecimal(d)` / `roundDecimal(d, digits, mode)` (runtime) |
@@ -917,7 +918,8 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   `stack` (so both also work on a plain JavaScript `Error`); `ParamName`, `ActualValue` and
   `ObjectName` are `paramName`, `actualValue` and `objectName`. `ToString()` prints .NET's
   `System.InvalidOperationException: message` format, with the inner exception after it. A
-  user exception declares its C# type name as `name` and its namespace as `typeNamespace`, so
+  user exception declares its C# type name as `name` and overrides the runtime's `$typeName` /
+  `$typeNamespace` hooks (a `$` no C# member can carry) with its type name and namespace, so
   `ToString()` prints `Shop.UnsupportedCurrencyException: …` as .NET does (a nested class
   joins its containing classes with `.` where .NET writes `+`; a generic one keeps its open
   name, ``Box`1``, without the type arguments).
@@ -940,6 +942,15 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   `ThrowIfNotEqual`, `ThrowIfGreaterThan`, `ThrowIfGreaterThanOrEqual`, `ThrowIfLessThan`,
   `ThrowIfLessThanOrEqual`) lower to runtime functions with .NET's messages; the parameter
   name is the `[CallerArgumentExpression]` text C# supplies, or the one the call passes.
+  `throwIfNull` and the string guards assert their argument non-null. The sign guards map for
+  the numbers generated code holds (and `char`), testing the sign bit as .NET does (`-0` and
+  `NaN` are negative); the ordered guards map for those, `bool` and the date and time types,
+  with `double.CompareTo`'s `NaN` order; the equality guards map for every `T`, with
+  `EqualityComparer<T>.Default`'s rules (`NaN` equals `NaN`, records and decimals compare by
+  value). A comparison guard over another `T` (`string`, ordered by culture on .NET, `Guid`,
+  `Complex`, a user type) reports `MS0001`. The message quotes values as JavaScript prints
+  them, so a `bool`, a date, a record or a `decimal` reads differently from .NET's
+  (`true` / `True`).
   `ObjectDisposedException.ThrowIf` and every other static member of an exception type
   without a mapping report `MS0001`.
 - **Other exceptions.** A BCL exception without an entry (`IOException`,

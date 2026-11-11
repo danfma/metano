@@ -283,7 +283,8 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   shared evaluate-once machinery), a base call declares `const` temporaries
   before `super`. It emits no declaration: user exceptions go through
   `IrToTsClassEmitter`, extend the runtime class and declare their .NET
-  identity (`IrToTsExceptionIdentityBridge`: `name` and `typeNamespace`).
+  identity (`IrToTsExceptionIdentityBridge`: `name` and the runtime's `$typeName` /
+  `$typeNamespace` hooks).
   Known limitations: the `System.Exception` default message names the class
   that makes the call (formatted like .NET's `Type.ToString()`), not the
   runtime most-derived class; `AggregateException` inner-exception lists are

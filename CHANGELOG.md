@@ -385,7 +385,8 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   name, `"UnsupportedCurrencyException"`; 2.x `"Error"` for every exception), and
   `String(error)` / `error.toString()` is .NET's format with the full type name
   (`Shop.UnsupportedCurrencyException: …`, 2.x `Error: …`). Generated exception classes declare
-  `override readonly name` and a `typeNamespace` getter for this.
+  `override readonly name` (unless they declare a `Name` member of their own) and override the
+  runtime's `$typeName` / `$typeNamespace` getters for this.
 - `instanceof Error` stays `true` for every exception. `is` / `as` / type patterns, switch arms,
   overload dispatchers and `catch` clauses test `instanceof` the runtime class, so they tell
   BCL exceptions apart: `ex is ArgumentException` is `false` for an
@@ -411,11 +412,15 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 - The argument guards lower to runtime functions with .NET's messages and the
   `[CallerArgumentExpression]` parameter name: `ArgumentNullException.ThrowIfNull`,
   `ArgumentException.ThrowIfNullOrEmpty` / `ThrowIfNullOrWhiteSpace` and the
-  `ArgumentOutOfRangeException.ThrowIf*` comparisons. Any other static member of an exception
+  `ArgumentOutOfRangeException.ThrowIf*` comparisons. A comparison guard maps only for the
+  values the runtime compares as .NET does (numbers and `char`; for the ordered ones also `bool`
+  and the date and time types; any `T` for `ThrowIfEqual` / `ThrowIfNotEqual`); over another `T`
+  (`string`, `Guid`, a user type) it reports `MS0001`. Any other static member of an exception
   type (`ObjectDisposedException.ThrowIf`) reports `MS0001`, as in 2.x.
 - The runtime throws its own classes everywhere it reproduces a .NET failure: 32-bit integer
-  division by zero (`DivideByZeroException`), `decimal.Parse` (`FormatException` /
-  `OverflowException`, 2.x decimal.js's `DecimalError`, and no overflow check), the `DateOnly`
+  division by zero (`DivideByZeroException`), `decimal.Parse(s)` and `decimal.Parse(s, provider)`
+  (`FormatException` / `OverflowException`, 2.x decimal.js's `DecimalError`, and no overflow
+  check; the `NumberStyles` and span overloads keep 2.x's `new Decimal(s)`), the `DateOnly`
   / `TimeOnly` / `DateTime` component constructors (`ArgumentOutOfRangeException`, 2.x
   Temporal's `RangeError`, which also accepted year 0), a negative array length
   (`OverflowException`, 2.x `RangeError`), a non-exhaustive switch expression
@@ -437,9 +442,16 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   (`int.Parse`, `double.Parse`, `Enum.Parse`, `DateTime.Parse`, `DateOnly.Parse`,
   `TimeSpan.Parse`, `Convert.ToInt32(string)`) report `MS0001`.
 - Dart output is unchanged except where the call itself changed for every target: a call to a
-  method with a `[CallerArgumentExpression]` parameter now passes the caller's text
-  (`ArgumentNullException.throwIfNull(x, 'x')`), and an exception constructor whose inner
-  parameter is named `inner` no longer binds its arguments to temporaries.
+  method or constructor with a `[CallerArgumentExpression]` parameter now passes the caller's
+  text (`ArgumentNullException.throwIfNull(x, 'x')`), and an exception constructor whose inner
+  parameter is named `inner` no longer binds its arguments to temporaries. A `$` in a Dart
+  string or `char` literal is now escaped (2.x emitted it bare, which Dart reads as an
+  interpolation).
+- A call to a method or constructor with a `[CallerArgumentExpression]` parameter (baseline
+  FR-051) passes the caller's argument text, as C# does; an omitted default before that
+  parameter is passed as `undefined` in TypeScript, so the callee's own default applies. 2.x
+  passed `null`, and wrote a skipped enum default with a lower-cased member name
+  (`Level.high`).
 
 ### ⚠ Unimplemented LINQ overloads report `MS0001` (baseline FR-017, partial; #648)
 
