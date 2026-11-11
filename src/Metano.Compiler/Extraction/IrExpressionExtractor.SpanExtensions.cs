@@ -89,12 +89,11 @@ public sealed partial class IrExpressionExtractor
 
         var emittedCount = EmittedArgumentCount(call, symbol);
 
-        var comparerLess = MeansComparerLessOverload(call, symbol)
+        var comparerLessArguments = MeansComparerLessOverload(call, symbol)
             ? ComparerLessArguments(call, symbol)
             : null;
 
-        var argumentCount = comparerLess?.Count ?? emittedCount;
-        var dropsComparerArgument = argumentCount != emittedCount;
+        var argumentCount = comparerLessArguments?.Count ?? emittedCount;
 
         if (!LowersSpanCall(call, symbol, argumentCount))
             return ReportUnloweredSpanCall(call, symbol);
@@ -102,7 +101,9 @@ public sealed partial class IrExpressionExtractor
         if (ComparesTupleElementInSpan(symbol))
             ReportTupleComparison(call, symbol);
 
-        return dropsComparerArgument ? ComparerLessCall(call, symbol, comparerLess!) : null;
+        return comparerLessArguments is { } kept && kept.Count != emittedCount
+            ? ComparerLessCall(call, symbol, kept)
+            : null;
     }
 
     private bool LowersSpanCall(
@@ -202,7 +203,7 @@ public sealed partial class IrExpressionExtractor
                 .ArgumentList.Arguments.Select(argument =>
                     (Argument: argument, Parameter: BoundParameterOf(argument, method))
                 )
-                .Where(bound => bound.Parameter.Name != ComparerParameterName)
+                .Where(bound => bound.Parameter.Name != ComparerParameter.Name)
                 .OrderBy(bound => bound.Parameter.Ordinal)
                 .Select(bound => bound.Argument),
         ];
@@ -210,10 +211,10 @@ public sealed partial class IrExpressionExtractor
     private IrCallExpression ComparerLessCall(
         InvocationExpressionSyntax call,
         IMethodSymbol method,
-        IReadOnlyList<ArgumentSyntax> comparerLess
+        IReadOnlyList<ArgumentSyntax> comparerLessArguments
     )
     {
-        var arguments = comparerLess
+        var arguments = comparerLessArguments
             .Select(argument => ExtractArgument(argument) with { Name = null })
             .ToList();
 

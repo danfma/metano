@@ -82,7 +82,11 @@ public static class IrToTsBclMapper
             // TODO(#657): the extractor's `LowersByDeclarativeMapping` port
             // applies this overload filter to the same argument count but
             // not the `WhenArg0StringEquals` filter below; one shared
-            // per-overload predicate should answer both.
+            // per-overload predicate should answer both. When the extractor
+            // drops a null comparer, the port receives the comparer-less
+            // argument count but the parameter types of the overload that
+            // still has the comparer; one per-overload predicate (count,
+            // parameter types and `WhenArg0StringEquals`) must replace both.
             if (!candidate.MatchesOverload(loweredArgs.Count, call.Origin.ParameterTypes))
                 continue;
 

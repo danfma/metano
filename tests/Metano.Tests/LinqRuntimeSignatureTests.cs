@@ -81,11 +81,7 @@ public partial class LinqRuntimeSignatureTests
             if (overload.PassesComparer)
             {
                 await Assert
-                    .That(
-                        values.Any(value =>
-                            value.Name == IrExpressionExtractor.ComparerParameterName
-                        )
-                    )
+                    .That(values.Any(value => value.Name == ComparerParameter.Name))
                     .IsTrue()
                     .Because(shape);
             }
