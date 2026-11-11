@@ -39,8 +39,8 @@ Example: `'Lib.Count()' returns 'long', which is a bigint in TypeScript; the imp
 **MS0066 — UnsupportedInt64Format** (Warning). FR-037, FR-038.
 
 1. A constant format string passed to `ToString` on a 64-bit value, or used in an interpolation hole over
-   one, is a valid .NET numeric format outside the set `formatInt64` implements (`C`, `P`, `E`, `B`, a
-   custom format such as `#,##0`). The call throws `NotSupportedException` at run time.
+   one, is a valid .NET numeric format outside the set `formatInt64` implements (`B` or a custom format
+   such as `#,##0`; `C`, `P` and `E` are implemented since baseline FR-051). The call throws `NotSupportedException` at run time.
 2. A constant `NumberStyles` passed to `long.Parse` / `TryParse` (or the `ulong` ones) is not one of
    `Integer`, `HexNumber`, `Integer | AllowThousands`, `Number`. The call is emitted with the folded flags
    value and throws `NotSupportedException` at run time.
