@@ -337,11 +337,19 @@ Product requirements added after the migration (normative; each one is traced by
      `NotSupportedException` naming the format (`The format '0.00' is not supported for
      double in TypeScript.`); a format .NET rejects throws .NET's `FormatException`. The
      64-bit integers keep `MS0066` for their unsupported constant formats (spec 012
-     FR-037). Dart honors no clause yet: every hole with a clause, and `ToString(format)`
-     on a 32-bit-or-narrower integer, `double` or `float`, constant or not, reports.
+     FR-037; unifying it with `MS0001` is #662). Which formats a target honors is the
+     target's own fact, declared through the extraction context's numeric-format port; a
+     target that declares none (Dart today, and any future target) fails closed: every
+     hole with a clause, and `ToString(format)` on a 32-bit-or-narrower integer, `double`
+     or `float`, constant or not, reports, naming the target.
   4. *Default conversion unchanged.* A hole without a clause, and `ToString()` without a
      format, MUST emit exactly what they emitted before; the default conversion of `bool`,
      `double` and `float` stays the rest of #308.
+  5. *Out of scope.* This requirement does not cover `string.Format` composite formatting
+     (`string.Format("{0:F2}", d)`, which keeps its unmapped call and its `MS0001`) or
+     `FormattableString`, both tracked in #662. It does not cover custom numeric format
+     patterns either (reported, rule 3), nor `ToString(format)` on `decimal` and
+     `BigInteger`, which keeps its source form on both targets.
 
 ### Key Entities
 

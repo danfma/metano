@@ -9,12 +9,13 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The format and alignment clauses of interpolation holes
 /// (<c>{n,8:D2}</c>) and the format of <c>ToString(format)</c> on the
-/// numbers (baseline FR-051, #323). A clause the target honors stays on the
-/// <see cref="IrInterpolationExpression"/>; one it cannot honor reports
-/// MS0001 at the hole or the format argument and lowers to the throwing
-/// placeholder, so no clause is dropped silently. The format of a
-/// <c>string</c>, <c>bool</c> or <c>char</c> is dropped, because C# ignores
-/// it too.
+/// numbers (baseline FR-051, #323). The target's
+/// <see cref="IrExtractionContext.NumericFormats"/> port decides which
+/// formats it honors; a clause it cannot honor reports MS0001 at the hole or
+/// the format argument and lowers to the throwing placeholder, so no clause
+/// is dropped silently. Without the port every clause reports (fail closed).
+/// The format of a <c>string</c>, <c>bool</c> or <c>char</c> is dropped,
+/// because C# ignores it too.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
@@ -22,11 +23,16 @@ public sealed partial class IrExpressionExtractor
 
     private const string FormatParameterName = "format";
 
-    /// <summary>
-    /// Whether the target formats numbers with .NET's standard format strings:
-    /// TypeScript, through <c>metano-runtime</c>. Dart honors no clause yet.
-    /// </summary>
-    private bool HonorsFormatClauses => _target is not Metano.Annotations.TargetLanguage.Dart;
+    /// <summary>Where an unsupported format sits, for the wording of its report.</summary>
+    private enum FormattedConstruct
+    {
+        Hole,
+        Call,
+    }
+
+    private INumericFormatCapability? NumericFormats => _context.NumericFormats;
+
+    private string TargetName => _target?.ToString() ?? "this target";
 
     private IrInterpolationExpression ExtractInterpolationExpression(InterpolationSyntax hole)
     {
@@ -50,12 +56,11 @@ public sealed partial class IrExpressionExtractor
     /// The last-but-one invocation rewriter
     /// (<see cref="Invocation.UnsupportedFormatCallRewriter"/>):
     /// <c>ToString(format)</c> or <c>ToString(format, provider)</c> on a
-    /// 32-bit or narrower integer, a <c>double</c> or a <c>float</c> whose
-    /// constant format the target does not format as .NET does reports and
-    /// becomes the placeholder, as does any format on a <c>float</c>; a format
-    /// known only at run time is left to the runtime formatter; <c>null</c>
-    /// for any other call, which the declarative mapping lowers. The 64-bit
-    /// integers keep their own check (MS0066, spec 012 FR-037).
+    /// number it governs (<see cref="IsNumericToStringWithFormat"/>) whose
+    /// constant format the target does not format as .NET does, or whose
+    /// value has no formatter, reports and becomes the placeholder; a format
+    /// known only at run time is left to the target's formatter; <c>null</c>
+    /// for any other call, which the declarative mapping lowers.
     /// </summary>
     internal IrExpression? RewriteUnsupportedFormatCall(
         InvocationExpressionSyntax call,
@@ -68,11 +73,14 @@ public sealed partial class IrExpressionExtractor
         if (FormatArgumentOf(call) is not { } argument)
             return null;
 
+        if (NumericFormats is not { } formats)
+            return ReportUnsupportedFormat(argument.GetLocation(), UnsupportedCallMessage());
+
         var type = symbol.ContainingType;
         var format = _semantic.GetConstantValue(argument.Expression);
 
         if (!format.HasValue)
-            return RewriteRunTimeFormatCall(argument, type);
+            return RewriteRunTimeFormatCall(argument, type, formats);
 
         var constantFormat = format.Value as string ?? "";
 
@@ -80,7 +88,7 @@ public sealed partial class IrExpressionExtractor
             ? null
             : ReportUnsupportedFormat(
                 argument.GetLocation(),
-                UnsupportedFormatMessage(type, constantFormat, "call")
+                UnsupportedFormatMessage(type, constantFormat, FormattedConstruct.Call)
             );
     }
 
@@ -93,65 +101,63 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>ToString(format)</c> whose format is known only at run time:
-    /// <c>null</c> where the runtime formatter decides it (an integer or a
-    /// <c>double</c> in TypeScript, which throws <c>FormatException</c> or
-    /// <c>NotSupportedException</c> for a format it does not implement, as
-    /// <c>formatInt64</c> does), the reported placeholder otherwise.
+    /// <c>null</c> where the target's formatter decides it (it throws
+    /// <c>FormatException</c> or <c>NotSupportedException</c> for a format it
+    /// does not implement), the reported placeholder otherwise.
     /// </summary>
     private IrUnsupportedExpression? RewriteRunTimeFormatCall(
         ArgumentSyntax argument,
-        ITypeSymbol type
+        ITypeSymbol type,
+        INumericFormatCapability formats
     )
     {
-        var hasFormatter =
-            HonorsFormatClauses
-            && FormattedKindOf(type) is { } kind
-            && NumericFormatSupport.HasFormatter(kind);
-
-        if (hasFormatter)
+        if (FormattedKindOf(type) is { } kind && formats.HasFormatter(kind))
             return null;
 
-        var message = HonorsFormatClauses
-            ? $"Format strings are not supported for '{DisplayNameOf(type)}' in TypeScript; "
+        return ReportUnsupportedFormat(
+            argument.GetLocation(),
+            $"Format strings are not supported for '{DisplayNameOf(type)}' in {TargetName}; "
                 + "the call throws at run time."
-            : UnsupportedFormatMessage(type, "", "call");
-
-        return ReportUnsupportedFormat(argument.GetLocation(), message);
+        );
     }
 
     /// <summary>
     /// Why the target cannot honor a hole's clauses, or <c>null</c> when it
-    /// can: an alignment pads any value, a format needs a runtime formatter
-    /// for the value's numeric kind that implements it.
+    /// can: an alignment pads any value, a format needs a formatter for the
+    /// value's numeric kind that implements it.
     /// </summary>
     private string? UnsupportedClauseMessage(ITypeSymbol? type, IrNumericKind? kind, string? format)
     {
-        if (!HonorsFormatClauses)
+        if (NumericFormats is null)
             return "Format and alignment clauses of an interpolation hole are not supported in "
-                + "Dart; the hole throws at run time.";
+                + $"{TargetName}; the hole throws at run time.";
 
         if (format is null || FormatsAsDotNet(kind, format))
             return null;
 
-        return UnsupportedFormatMessage(type, format, "hole");
+        return UnsupportedFormatMessage(type, format, FormattedConstruct.Hole);
     }
 
     /// <summary>
-    /// Whether the target's runtime formats a value of <paramref name="kind"/>
-    /// with the constant <paramref name="format"/> as .NET does, an invalid
-    /// format included, which both reject with the same <c>FormatException</c>.
+    /// Whether the target formats a value of <paramref name="kind"/> with the
+    /// constant <paramref name="format"/> as .NET does.
     /// </summary>
     private bool FormatsAsDotNet(IrNumericKind? kind, string format) =>
-        HonorsFormatClauses
+        NumericFormats is { } formats
         && kind is { } numericKind
-        && NumericFormatSupport.HasFormatter(numericKind)
-        && NumericFormatSupport.Supports(numericKind, format);
+        && formats.HasFormatter(numericKind)
+        && formats.Formats(numericKind, format);
 
-    private string UnsupportedFormatMessage(ITypeSymbol? type, string format, string construct) =>
-        HonorsFormatClauses
-            ? $"The format '{format}' is not supported for '{DisplayNameOf(type)}' in TypeScript; "
-                + $"the {construct} throws at run time."
-            : $"Numeric format strings are not supported in Dart; the {construct} throws at run time.";
+    private string UnsupportedFormatMessage(
+        ITypeSymbol? type,
+        string format,
+        FormattedConstruct construct
+    ) =>
+        $"The format '{format}' is not supported for '{DisplayNameOf(type)}' in {TargetName}; "
+        + $"the {NameOf(construct)} throws at run time.";
+
+    private string UnsupportedCallMessage() =>
+        $"Numeric format strings are not supported in {TargetName}; the call throws at run time.";
 
     private static IrUnsupportedExpression ReportUnsupportedFormat(
         Location location,
@@ -170,6 +176,18 @@ public sealed partial class IrExpressionExtractor
         return new IrUnsupportedExpression(UnsupportedFormatKind);
     }
 
+    /// <summary>
+    /// Whether <paramref name="symbol"/> is a <c>ToString</c> overload taking
+    /// a format on a number whose formats this policy governs: the integers
+    /// of 32 bits or fewer, <c>double</c> and <c>float</c>.
+    /// <para>
+    /// TODO(#662): <c>long</c> / <c>ulong</c> are left out because the
+    /// TypeScript bridge reports their formats as MS0066, without a location;
+    /// unifying the two diagnostics brings them under this port.
+    /// <c>decimal</c> and <c>BigInteger</c> are not governed yet: their
+    /// <c>ToString(format)</c> keeps its source form on both targets.
+    /// </para>
+    /// </summary>
     private static bool IsNumericToStringWithFormat([NotNullWhen(true)] IMethodSymbol? symbol) =>
         symbol
             is {
@@ -206,6 +224,14 @@ public sealed partial class IrExpressionExtractor
             is SpecialType.System_String
                 or SpecialType.System_Boolean
                 or SpecialType.System_Char;
+
+    private static string NameOf(FormattedConstruct construct) =>
+        construct switch
+        {
+            FormattedConstruct.Hole => "hole",
+            FormattedConstruct.Call => "call",
+            _ => throw new ArgumentOutOfRangeException(nameof(construct)),
+        };
 
     private static string DisplayNameOf(ITypeSymbol? type) =>
         type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) ?? "object";

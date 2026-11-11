@@ -547,6 +547,7 @@ public sealed class TypeScriptTransformContext(
             EmitsOperatorFastPaths = true,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             KeepsArgumentEvaluationOrder = true,
+            NumericFormats = TsNumericFormats.Instance,
             LowersByDeclarativeMapping = (method, argumentCount) =>
                 DeclarativeMappings.HasJsMappingFor(
                     method.ContainingType.GetStableFullName(),
