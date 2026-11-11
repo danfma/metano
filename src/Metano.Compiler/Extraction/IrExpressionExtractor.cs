@@ -29,6 +29,9 @@ public sealed partial class IrExpressionExtractor
         null
     );
 
+    private const string CallerArgumentExpressionAttribute =
+        "System.Runtime.CompilerServices.CallerArgumentExpressionAttribute";
+
     private readonly SemanticModel _semantic;
     private readonly IrExtractionContext _context;
     private readonly ExceptionRuntimeClassReporter _exceptionClassReporter;
@@ -2923,7 +2926,7 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression CallerSuppliedValueOf(
         IParameterSymbol parameter,
-        Dictionary<int, IOperation> supplied
+        IReadOnlyDictionary<int, IOperation> supplied
     ) =>
         CapturesCallerArgumentExpression(parameter)
         && supplied.GetValueOrDefault(parameter.Ordinal)?.ConstantValue
@@ -2935,8 +2938,7 @@ public sealed partial class IrExpressionExtractor
         parameter
             .GetAttributes()
             .Any(attribute =>
-                attribute.AttributeClass?.ToDisplayString()
-                == "System.Runtime.CompilerServices.CallerArgumentExpressionAttribute"
+                attribute.AttributeClass?.ToDisplayString() == CallerArgumentExpressionAttribute
             );
 
     /// <summary>

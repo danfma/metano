@@ -213,8 +213,8 @@ public class BclExceptionIdentityTests
             .That(warnings[0].Message)
             .IsEqualTo(
                 "'new System.IO.IOException(\"late\")' constructs 'System.IO.IOException', which has no "
-                    + "runtime class in the target: the exception loses its type, so catch clauses "
-                    + "and type tests cannot tell it apart from other exceptions (spec 011 FR-014)."
+                    + "runtime class in the target: it keeps its name, but catch clauses and type "
+                    + "tests cannot tell it apart from other exceptions (spec 011 FR-014)."
             );
     }
 
@@ -616,6 +616,56 @@ public class BclExceptionIdentityTests
             );
 
         await Assert.That(output).Contains("return new TimeoutException(\"late\");");
+    }
+
+    [Test]
+    public async Task NonExhaustiveSwitch_ThrowsSwitchExpressionExceptionWithTheValue()
+    {
+        var output = TranspileGuard(
+            "public static int Pick(object o) => o switch { string => 1 };"
+        );
+
+        await Assert.That(output).Contains("throw new SwitchExpressionException($s);");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "import { SwitchExpressionException } from \"metano-runtime/system/exceptions/switch-expression-exception\";"
+            );
+    }
+
+    [Test]
+    public async Task NonExhaustiveSwitch_OnARemappedClass_WritesTheValueIntoTheMessage()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            [assembly: ExportFromBcl(typeof(System.Runtime.CompilerServices.SwitchExpressionException), ExportedName = "NoMatch", FromPackage = "my-errors")]
+
+            [Transpile]
+            public static class Guard
+            {
+                public static int Pick(object o) => o switch { string => 1 };
+            }
+            """
+        );
+
+        await Assert
+            .That(files["guard.ts"])
+            .Contains(
+                "throw new NoMatch($s == null ? \"Non-exhaustive switch expression failed to match its input.\" : `Non-exhaustive switch expression failed to match its input.\\nUnmatched value was ${$s}.`);"
+            );
+    }
+
+    [Test]
+    public async Task SwitchExpressionExceptionConstruction_PassesTheUnmatchedValueFirst()
+    {
+        var output = TranspileGuard(
+            "public static Exception NoMatch(object value) => new System.Runtime.CompilerServices.SwitchExpressionException(value);"
+        );
+
+        await Assert.That(output).Contains("return new SwitchExpressionException(value);");
     }
 
     private static string TranspileGuard(string members) =>

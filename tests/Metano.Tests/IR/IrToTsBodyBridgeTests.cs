@@ -334,9 +334,7 @@ public class IrToTsBodyBridgeTests
         await Assert.That(ts).Contains("if ($s === 0)");
         await Assert.That(ts).Contains("return 10;");
 
-        await Assert
-            .That(ts)
-            .Contains("throw new SwitchExpressionException(undefined, undefined, $s);");
+        await Assert.That(ts).Contains("throw new SwitchExpressionException($s);");
     }
 
     // -- helpers --
@@ -374,15 +372,10 @@ public class IrToTsBodyBridgeTests
 
         // The bridges lower BCL exceptions through the runtime classes the
         // transformer installs for a transform (spec 011 FR-014).
-        var previousExceptionClasses = IrToTsTypeMapper.ExceptionClassesScope;
-
-        IrToTsTypeMapper.ExceptionClassesScope = new BclExceptionClasses(
-            Metano.Compiler.BclExportReader.Read(compilation)
+        var tsBody = WithExceptionClasses(
+            compilation,
+            () => IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry))
         );
-
-        var tsBody = IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry));
-
-        IrToTsTypeMapper.ExceptionClassesScope = previousExceptionClasses;
 
         var methodMember = new TsMethodMember(
             methodSymbol.Name[0..1].ToLowerInvariant() + methodSymbol.Name[1..],
@@ -399,5 +392,30 @@ public class IrToTsBodyBridgeTests
         var start = printed.IndexOf('\n') + 1;
         var end = printed.LastIndexOf('}');
         return printed[start..end].Trim();
+    }
+
+    /// <summary>
+    /// Runs <paramref name="lower"/> with the runtime exception classes of
+    /// <paramref name="compilation"/> installed, as a transform does.
+    /// </summary>
+    private static T WithExceptionClasses<T>(
+        Microsoft.CodeAnalysis.Compilation compilation,
+        Func<T> lower
+    )
+    {
+        var previous = IrToTsTypeMapper.ExceptionClassesScope;
+
+        try
+        {
+            IrToTsTypeMapper.ExceptionClassesScope = new BclExceptionClasses(
+                Metano.Compiler.BclExportReader.Read(compilation)
+            );
+
+            return lower();
+        }
+        finally
+        {
+            IrToTsTypeMapper.ExceptionClassesScope = previous;
+        }
     }
 }

@@ -1603,10 +1603,19 @@ public static class SymbolHelper
     private static bool IsKnownToToolchain(INamedTypeSymbol type, Compilation compilation) =>
         IsDeclaredIn(type, compilation.Assembly)
         || IsTranspiledPackageType(type)
-        || (
-            BclExportReader.IsExported(type, compilation)
-            && !Extraction.IrTypeRefMapper.IsExceptionType(type)
-        );
+        || BindsExportedMembers(type, compilation);
+
+    /// <summary>
+    /// Whether an <c>[ExportFromBcl]</c> binds <paramref name="type"/> to a
+    /// JavaScript class whose members stand for the type's (decimal.js
+    /// <c>Decimal</c>). An exception type is bound for construction and type
+    /// tests only.
+    /// TODO(#549): the real rule is whether the mapped class implements the
+    /// type's statics, a target fact that belongs on the mapping or a port.
+    /// </summary>
+    private static bool BindsExportedMembers(INamedTypeSymbol type, Compilation compilation) =>
+        BclExportReader.IsExported(type, compilation)
+        && !Extraction.IrTypeRefMapper.IsExceptionType(type);
 
     private static bool HasHandWrittenBinding(ISymbol member) =>
         HasExternal(member) || HasImport(member) || HasEmit(member) || HasName(member);

@@ -16,6 +16,17 @@ const MAX_DATE_TIME_TICKS = 3_155_378_975_999_999_999n;
 const DATE_TIME_TICKS_MESSAGE =
   "Ticks must be between DateTime.MinValue.Ticks and DateTime.MaxValue.Ticks.";
 
+/** .NET's message for a date whose year, month and day do not exist. */
+const UNREPRESENTABLE_DATE_MESSAGE =
+  "Year, Month, and Day parameters describe an un-representable DateTime.";
+
+/** .NET's message for a time whose hour, minute and second do not exist. */
+const UNREPRESENTABLE_TIME_MESSAGE =
+  "Hour, Minute, and Second parameters describe an un-representable DateTime.";
+
+/** .NET's message for a millisecond outside 0–999. */
+const MILLISECOND_MESSAGE = "Valid values are between 0 and 999, inclusive.";
+
 /** The time units of a duration, from days down to nanoseconds, with their size in nanoseconds. */
 const TIME_UNITS = [
   ["days", 86_400_000_000_000n],
@@ -93,17 +104,6 @@ export function plainDateTimeFromTicks(ticks: bigint): Temporal.PlainDateTime {
 
   return date.toPlainDateTime().add(timeOfDay);
 }
-
-/** .NET's message for a date whose year, month and day do not exist. */
-const UNREPRESENTABLE_DATE_MESSAGE =
-  "Year, Month, and Day parameters describe an un-representable DateTime.";
-
-/** .NET's message for a time whose hour, minute and second do not exist. */
-const UNREPRESENTABLE_TIME_MESSAGE =
-  "Hour, Minute, and Second parameters describe an un-representable DateTime.";
-
-/** .NET's message for a millisecond outside 0–999. */
-const MILLISECOND_MESSAGE = "Valid values are between 0 and 999, inclusive.";
 
 /**
  * `new DateOnly(year, month, day)`: the `Temporal.PlainDate`, or .NET's

@@ -895,7 +895,7 @@ which extends `Error`, so `instanceof Error` holds for all of them.
 | `TaskCanceledException` | `TaskCanceledException : OperationCanceledException` | `(message, innerException)` |
 | `System.Text.Json.JsonException` | `JsonException : Exception` | `(message, innerException)` |
 | `TimeoutException` | `TimeoutException : SystemException` | `(message, innerException)` |
-| `System.Runtime.CompilerServices.SwitchExpressionException` | `SwitchExpressionException : InvalidOperationException` | `(message, innerException)` |
+| `System.Runtime.CompilerServices.SwitchExpressionException` | `SwitchExpressionException : InvalidOperationException` | `(unmatchedValue, message, innerException)` |
 
 - **Construction.** `new X(...)` emits `new X(...)` with a value import from the class's
   module. Each argument is classified by the role of the C# constructor parameter it binds
@@ -929,7 +929,11 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   `catch (Exception)` and a general `catch` take every thrown value, including one that is not
   an `Error`. Interim, until `toException`: a test on `System.Exception` itself is
   `instanceof Error`, so a JavaScript error (a `TypeError`) is an `Exception`. A `[GenerateGuard]`
-  field typed as a BCL exception tests `instanceof` its class (an unmapped one, `Exception`).
+  field typed as a BCL exception tests `instanceof` its class (`Error` for `System.Exception`
+  and for an unmapped type, which names the root: a structural widening). An overload
+  dispatcher tries its arms in declaration order, so with `F(Exception)` declared before
+  `F(ArgumentException)` a call from hand-written JavaScript takes the first arm for an
+  `ArgumentException` too (C# calls bind statically; user classes behave the same in 2.x).
 - **Argument guards.** `ArgumentNullException.ThrowIfNull`, `ArgumentException.ThrowIfNullOrEmpty`
   / `ThrowIfNullOrWhiteSpace` and the `ArgumentOutOfRangeException.ThrowIf*` comparisons
   (`ThrowIfZero`, `ThrowIfNegative`, `ThrowIfNegativeOrZero`, `ThrowIfEqual`,

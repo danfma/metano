@@ -393,7 +393,10 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `FormatException` that `long.Parse("zz")` throws, and a BCL-typed clause ahead of another
   clause no longer reports `MS0001`. Tests on `System.Exception` itself stay
   `instanceof Error`, so a JavaScript error is an `Exception`; `catch (Exception)` and a general
-  `catch` still take every thrown value.
+  `catch` still take every thrown value. Known limitation: an overload dispatcher tries its arms in declaration
+  order, so with `F(Exception)` declared before `F(ArgumentException)` a call from hand-written
+  JavaScript takes the first arm for an `ArgumentException` (C# calls bind statically; user
+  classes behave the same in 2.x).
 - **A typed clause no longer takes a JavaScript error.** In 2.x every BCL-typed clause tested
   `instanceof Error`, so `catch (NullReferenceException)` around a `null` dereference took the
   `TypeError` by accident; now it reaches `catch (Exception)` or a general `catch` instead.

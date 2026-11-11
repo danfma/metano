@@ -14,11 +14,19 @@ namespace Metano.Compiler.TypeScript.AST;
 /// when a user declaration claims the name (issue #484). The rest of a dotted
 /// name stays compiler-authored.
 /// </para>
+/// <para>
+/// <see cref="InstanceofTarget"/> is non-null when the bridge resolved the
+/// value a runtime test of the type checks with <c>instanceof</c> (a BCL
+/// exception's runtime class, the built-in <c>Error</c> for
+/// <c>System.Exception</c>), so a structural guard tests it rather than
+/// deciding again.
+/// </para>
 /// </summary>
 public sealed record TsNamedType(
     string Name,
     IReadOnlyList<TsType>? TypeArguments = null,
     TsTypeOrigin? Origin = null,
     string? OriginalName = null,
-    string? RuntimeHelperBinding = null
+    string? RuntimeHelperBinding = null,
+    TsExpression? InstanceofTarget = null
 ) : TsType;

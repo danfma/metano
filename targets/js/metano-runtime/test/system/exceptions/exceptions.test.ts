@@ -19,8 +19,10 @@ import {
   ObjectDisposedException,
   OperationCanceledException,
   OverflowException,
+  SwitchExpressionException,
   SystemException,
   TaskCanceledException,
+  TimeoutException,
 } from "#/system/exceptions/index.ts";
 import { JsonException as JsonErrorsJsonException } from "#/system/json/errors.ts";
 
@@ -294,5 +296,30 @@ describe("exception hierarchy (spec 011 FR-013)", () => {
   test("JsonException is the class the JSON serializer throws", () => {
     expect(JsonErrorsJsonException).toBe(JsonException);
     expect(new JsonException("bad").toString()).toBe("System.Text.Json.JsonException: bad");
+  });
+});
+
+describe("TimeoutException and SwitchExpressionException", () => {
+  test("TimeoutException is a SystemException with .NET's default message", () => {
+    const exception = new TimeoutException();
+
+    expect(exception).toBeInstanceOf(SystemException);
+    expect(exception.toString()).toBe("System.TimeoutException: The operation has timed out.");
+  });
+
+  test("SwitchExpressionException names the unmatched value as .NET does", () => {
+    const exception = new SwitchExpressionException(5);
+
+    expect(exception).toBeInstanceOf(InvalidOperationException);
+    expect(exception.message).toBe(
+      "Non-exhaustive switch expression failed to match its input.\nUnmatched value was 5.",
+    );
+    expect(exception.unmatchedValue).toBe(5);
+    expect(new SwitchExpressionException(null).message).toBe(
+      "Non-exhaustive switch expression failed to match its input.",
+    );
+    expect(exception.toString()).toStartWith(
+      "System.Runtime.CompilerServices.SwitchExpressionException: ",
+    );
   });
 });

@@ -71,6 +71,12 @@ public static class IrToTsExceptionConstructionBridge
 
     private const string TemporaryPrefix = "__baseArg";
 
+    private const string SwitchExpressionExceptionTypeName =
+        "System.Runtime.CompilerServices.SwitchExpressionException";
+
+    private const string SwitchExpressionDefaultMessage =
+        "Non-exhaustive switch expression failed to match its input.";
+
     /// <summary>
     /// Whether the class currently being emitted overrides <c>Message</c> —
     /// set per class by <see cref="EnterClass"/>. <see cref="AsyncLocal{T}"/>
@@ -211,19 +217,69 @@ public static class IrToTsExceptionConstructionBridge
     {
         var operands = ErrorOperands.Bind(construction, creation.Arguments, context);
         var exceptionClass = ClassOf(construction);
+        var plan = MessagePlan.Of(construction, operands, exceptionClass, ConstructionSite.New);
+        var arguments = BuildArguments(construction, operands, exceptionClass, plan);
 
-        var arguments = BuildArguments(
-            construction,
-            operands,
-            exceptionClass,
-            ConstructionSite.New
-        );
-
-        if (!IrToTsTypeMapper.ExceptionClasses.IsMapped(construction.ExceptionTypeName))
-            return NamedException(construction.ExceptionTypeName, arguments);
+        if (!plan.IsMapped && creation.Type is IrNamedTypeRef unmapped)
+            return NamedException(unmapped.Namespace ?? "", unmapped.Name, arguments);
 
         return new TsNewExpression(exceptionClass.ValueReference(), arguments);
     }
+
+    /// <summary>
+    /// The throw of a switch expression no arm matched: .NET's
+    /// <c>SwitchExpressionException</c> with the unmatched value. The runtime
+    /// class takes the value as its first role and names it in its message; a
+    /// class of a project's own mapping, or the root an unmapped type lowers
+    /// to, receives .NET's message with the value already written into it.
+    /// </summary>
+    internal static TsExpression MapNonExhaustiveSwitch(TsExpression unmatchedValue)
+    {
+        var classes = IrToTsTypeMapper.ExceptionClasses;
+        var exceptionClass = classes.ClassOf(SwitchExpressionExceptionTypeName);
+
+        if (exceptionClass.Takes(IrExceptionArgumentRole.UnmatchedValue))
+        {
+            return new TsNewExpression(
+                exceptionClass.ValueReference(),
+                PositionalArguments(
+                    exceptionClass,
+                    role => role is IrExceptionArgumentRole.UnmatchedValue ? unmatchedValue : null
+                )
+            );
+        }
+
+        var message = SwitchExpressionMessage(unmatchedValue);
+
+        var arguments = PositionalArguments(
+            exceptionClass,
+            role => role is IrExceptionArgumentRole.Message ? message : null
+        );
+
+        if (!classes.IsMapped(SwitchExpressionExceptionTypeName))
+            return NamedException(
+                "System.Runtime.CompilerServices",
+                "SwitchExpressionException",
+                arguments
+            );
+
+        return new TsNewExpression(exceptionClass.ValueReference(), arguments);
+    }
+
+    /// <summary>
+    /// .NET's message for an unmatched value: <c>Non-exhaustive switch
+    /// expression failed to match its input.</c>, followed by
+    /// <c>\nUnmatched value was X.</c> when the value is not <c>null</c>.
+    /// </summary>
+    private static TsExpression SwitchExpressionMessage(TsExpression unmatchedValue) =>
+        new TsConditionalExpression(
+            new TsBinaryExpression(unmatchedValue, "==", new TsLiteral("null")),
+            new TsStringLiteral(SwitchExpressionDefaultMessage),
+            new TsTemplateLiteral(
+                [SwitchExpressionDefaultMessage + "\nUnmatched value was ", "."],
+                [unmatchedValue]
+            )
+        );
 
     /// <summary>
     /// <c>namedException("System.IO", "IOException", message, inner)</c>: the
@@ -232,19 +288,14 @@ public static class IrToTsExceptionConstructionBridge
     /// (spec 011 FR-014).
     /// </summary>
     private static TsExpression NamedException(
-        string exceptionTypeName,
+        string typeNamespace,
+        string typeName,
         IReadOnlyList<TsExpression> rootArguments
-    )
-    {
-        var separator = exceptionTypeName.LastIndexOf('.');
-        var typeNamespace = separator < 0 ? "" : exceptionTypeName[..separator];
-        var typeName = exceptionTypeName[(separator + 1)..];
-
-        return new TsCallExpression(
+    ) =>
+        new TsCallExpression(
             new TsRuntimeHelperReference("namedException"),
             [new TsStringLiteral(typeNamespace), new TsStringLiteral(typeName), .. rootArguments]
         );
-    }
 
     /// <summary>
     /// The <c>super(...)</c> call of a constructor whose base is a BCL
@@ -261,9 +312,16 @@ public static class IrToTsExceptionConstructionBridge
         var operands = ErrorOperands.Bind(construction, ctor.BaseArguments ?? [], context);
         var exceptionClass = ClassOf(construction);
 
+        var plan = MessagePlan.Of(
+            construction,
+            operands,
+            exceptionClass,
+            ConstructionSite.BaseCall
+        );
+
         return new TsBaseConstructorCall(
             operands.Temporaries,
-            BuildArguments(construction, operands, exceptionClass, ConstructionSite.BaseCall)
+            BuildArguments(construction, operands, exceptionClass, plan)
         );
     }
 
@@ -275,26 +333,37 @@ public static class IrToTsExceptionConstructionBridge
     /// supplied value of each of its roles, in order, with <c>undefined</c>
     /// for a role omitted ahead of a supplied one and nothing after the last.
     /// The message role carries the composed message when
-    /// <see cref="MessagePlan.Of"/> says the bridge composes it.
+    /// <paramref name="plan"/> says the bridge composes it.
     /// </summary>
     private static IReadOnlyList<TsExpression> BuildArguments(
         IrExceptionConstruction construction,
         ErrorOperands operands,
         TsExceptionClass exceptionClass,
-        ConstructionSite site
+        MessagePlan plan
     )
     {
-        var plan = MessagePlan.Of(construction, operands, exceptionClass, site);
         var message = plan.Composes ? ComposeMessage(construction, operands, plan) : null;
 
-        var values = exceptionClass
-            .ConstructorRoles.Select(role =>
+        return PositionalArguments(
+            exceptionClass,
+            role =>
                 role is IrExceptionArgumentRole.Message && plan.Composes
                     ? message
                     : operands.SuppliedValueOf(role)?.Lowered
-            )
-            .ToList();
+        );
+    }
 
+    /// <summary>
+    /// The value of each of <paramref name="exceptionClass"/>'s roles, in its
+    /// constructor's order, with <c>undefined</c> for a role omitted ahead of
+    /// a passed one and nothing after the last.
+    /// </summary>
+    private static IReadOnlyList<TsExpression> PositionalArguments(
+        TsExceptionClass exceptionClass,
+        Func<IrExceptionArgumentRole, TsExpression?> valueOf
+    )
+    {
+        var values = exceptionClass.ConstructorRoles.Select(valueOf).ToList();
         var passed = values.FindLastIndex(value => value is not null) + 1;
 
         return values.Take(passed).Select(value => value ?? new TsIdentifier("undefined")).ToList();
@@ -328,9 +397,16 @@ public static class IrToTsExceptionConstructionBridge
             "')"
         );
 
-        AppendActualValue(
+        AppendValueLine(
             composer,
-            plan.FoldedValueOf(IrExceptionArgumentRole.ActualValue, operands)
+            plan.FoldedValueOf(IrExceptionArgumentRole.ActualValue, operands),
+            "\nActual value was "
+        );
+
+        AppendValueLine(
+            composer,
+            plan.FoldedValueOf(IrExceptionArgumentRole.UnmatchedValue, operands),
+            "\nUnmatched value was "
         );
 
         return composer.Build();
@@ -356,17 +432,25 @@ public static class IrToTsExceptionConstructionBridge
     /// <c>System.Exception</c> (its default message names the user class,
     /// which the runtime cannot know), and a construction passing a role its
     /// mapped class does not take.</param>
+    /// <param name="IsMapped">Whether the type has a mapped class of its own;
+    /// an unmapped one constructs the root through <c>namedException</c>.</param>
     /// <param name="Folded">The suffix roles (<c>paramName</c>,
-    /// <c>actualValue</c>, <c>objectName</c>) the construction supplies but the
-    /// class does not take, which the composed message carries as .NET's text
-    /// (<c>" (Parameter 'p')"</c>, …) instead of dropping them.</param>
-    private sealed record MessagePlan(bool Composes, IReadOnlySet<IrExceptionArgumentRole> Folded)
+    /// <c>actualValue</c>, <c>objectName</c>, <c>unmatchedValue</c>) the
+    /// construction supplies but the class does not take, which the composed
+    /// message carries as .NET's text (<c>" (Parameter 'p')"</c>, …) instead
+    /// of dropping them.</param>
+    private sealed record MessagePlan(
+        bool Composes,
+        bool IsMapped,
+        IReadOnlySet<IrExceptionArgumentRole> Folded
+    )
     {
         private static readonly IrExceptionArgumentRole[] SuffixRoles =
         [
             IrExceptionArgumentRole.ObjectName,
             IrExceptionArgumentRole.ParamName,
             IrExceptionArgumentRole.ActualValue,
+            IrExceptionArgumentRole.UnmatchedValue,
         ];
 
         public static MessagePlan Of(
@@ -391,6 +475,7 @@ public static class IrToTsExceptionConstructionBridge
 
             return new MessagePlan(
                 Composes: !isMapped || namesUserClass || folded.Count > 0,
+                isMapped,
                 folded
             );
         }
@@ -451,13 +536,18 @@ public static class IrToTsExceptionConstructionBridge
         composer.AppendText(suffix);
     }
 
-    private static void AppendActualValue(ErrorMessageComposer composer, ErrorOperand? actualValue)
+    /// <summary><paramref name="prefix"/>, the value and <c>.</c>, as .NET writes an actual or unmatched value.</summary>
+    private static void AppendValueLine(
+        ErrorMessageComposer composer,
+        ErrorOperand? value,
+        string prefix
+    )
     {
-        if (actualValue is null)
+        if (value is null)
             return;
 
-        composer.AppendText("\nActual value was ");
-        composer.AppendValue(actualValue);
+        composer.AppendText(prefix);
+        composer.AppendValue(value);
         composer.AppendText(".");
     }
 

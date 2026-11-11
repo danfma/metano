@@ -36,10 +36,15 @@ export function parseDecimalText(text: string | null | undefined): string {
   }
 
   const parts = NUMBER.exec(text.replace(/\0+$/, ""));
-  const [, leadingSign = "", body = "", trailingSign = ""] = parts ?? [];
 
-  if (parts === null || (leadingSign !== "" && trailingSign !== "")) {
-    throw new FormatException(`The input string '${text}' was not in a correct format.`);
+  if (parts === null) {
+    throw formatException(text);
+  }
+
+  const [, leadingSign = "", body = "", trailingSign = ""] = parts;
+
+  if (leadingSign !== "" && trailingSign !== "") {
+    throw formatException(text);
   }
 
   const [integer = "", fraction = ""] = body.replaceAll(",", "").split(".");
@@ -51,4 +56,8 @@ export function parseDecimalText(text: string | null | undefined): string {
   const sign = leadingSign === "-" || trailingSign === "-" ? "-" : "";
 
   return `${sign}${integer || "0"}${fraction ? `.${fraction}` : ""}`;
+}
+
+function formatException(text: string): FormatException {
+  return new FormatException(`The input string '${text}' was not in a correct format.`);
 }

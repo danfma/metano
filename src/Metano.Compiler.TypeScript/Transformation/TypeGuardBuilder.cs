@@ -772,6 +772,14 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             // would accept plain JS numbers no C# decimal ever produces. The
             // node's own origin (#477) is the test — a project type named
             // Decimal has none and falls to its guard below.
+            // A BCL exception: the test its resolved runtime class carries
+            // (`instanceof Error` for System.Exception, and for an unmapped
+            // type, which names the root: a structural widening, documented).
+            TsNamedType { InstanceofTarget: { } target } => Required(
+                new TsBinaryExpression(fieldAccess, "instanceof", target),
+                GuardTestKind.Object
+            ),
+
             TsNamedType { Origin: not null } named when IsBclExportedClass(named) => Required(
                 InstanceofCheck(fieldAccess, named.Name, named.Origin),
                 GuardTestKind.Object
@@ -835,15 +843,12 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
     /// <summary>
     /// Whether <paramref name="named"/> is a class an <c>[ExportFromBcl]</c>
-    /// mapping binds a BCL type to (decimal → decimal.js <c>Decimal</c>, a BCL
-    /// exception → its runtime class): a runtime constructor value the
-    /// generated file imports, testable with <c>instanceof</c>. The name and
-    /// the import origin must both be the entry's, as the type mapper and
-    /// <see cref="Bridge.BclExceptionClasses"/> produce them. An unmapped BCL
-    /// exception is named as the root <c>Exception</c>, so its field test is
-    /// <c>instanceof Exception</c>: a structural guard, not a C# type test,
-    /// so it reports nothing (spec 011 FR-014 covers <c>is</c> / <c>as</c> /
-    /// <c>catch</c>).
+    /// mapping binds a BCL value type to (decimal → decimal.js <c>Decimal</c>):
+    /// a runtime constructor value the generated file imports, testable with
+    /// <c>instanceof</c>. The name and the import origin must both be the
+    /// entry's, as the type mapper produces them. BCL exceptions are tested
+    /// earlier, through the <see cref="TsNamedType.InstanceofTarget"/> their
+    /// resolver attaches.
     /// </summary>
     private bool IsBclExportedClass(TsNamedType named) =>
         _context.BclExportMap.Values.Any(entry =>

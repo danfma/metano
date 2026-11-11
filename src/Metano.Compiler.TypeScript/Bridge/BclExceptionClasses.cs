@@ -18,7 +18,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>System.Exception</c> (the <see cref="Root"/>), so a construction
 /// still throws an <c>Exception</c>, and its type tests are reported (MS0045).
 /// Every exception type is keyed by <see cref="BclExportReader.ExportKey"/>,
-/// the key the extraction port, <see cref="IrNamedTypeSemantics.ExportKey"/>
+/// the key the extraction port, <see cref="IrNamedTypeSemantics.ClrTypeName"/>
 /// and <see cref="IrExceptionConstruction.ExceptionTypeName"/> share.
 /// </para>
 /// <para>
@@ -75,6 +75,12 @@ public sealed class BclExceptionClasses
             IrExceptionArgumentRole.Message,
             IrExceptionArgumentRole.InnerException,
         ],
+        ["System.Runtime.CompilerServices.SwitchExpressionException"] =
+        [
+            IrExceptionArgumentRole.UnmatchedValue,
+            IrExceptionArgumentRole.Message,
+            IrExceptionArgumentRole.InnerException,
+        ],
         ["System.ObjectDisposedException"] =
         [
             IrExceptionArgumentRole.ObjectName,
@@ -121,17 +127,20 @@ public sealed class BclExceptionClasses
     public TsExceptionClass ClassOf(string exceptionTypeName) => Resolve(exceptionTypeName) ?? Root;
 
     /// <summary>
-    /// The class a runtime type test (<c>is</c>, <c>as</c>, a pattern, a
-    /// dispatcher arm) against <paramref name="type"/> checks with
-    /// <c>instanceof</c>: its class, except that <c>System.Exception</c> itself
-    /// checks the built-in <c>Error</c>. Until <c>toException</c> normalizes
-    /// caught values (spec 011 FR-015), a JavaScript error such as a
-    /// <c>TypeError</c> is a C# <c>Exception</c>, as .NET's own runtime errors are.
+    /// The runtime type test (<c>is</c>, <c>as</c>, a pattern, a dispatcher
+    /// arm) of a mapped BCL exception: <c>instanceof</c> its class, or the
+    /// built-in <c>Error</c> for <c>System.Exception</c> itself
+    /// (<see cref="TsExceptionClass.InstanceofTest"/>). An unmapped type has no
+    /// test (extraction reports MS0045, a dispatcher keeps its object check);
+    /// reaching here with one is an internal error.
     /// </summary>
-    public TsExpression TestedClassOf(IrNamedTypeRef type) =>
-        KeyOf(type) == RootExceptionTypeName
-            ? new TsIdentifier("Error")
-            : ClassOf(type).ValueReference();
+    public TsExpression InstanceofTest(TsExpression value, IrNamedTypeRef type) =>
+        IsMapped(type)
+            ? ClassOf(type).InstanceofTest(value)
+            : throw new InvalidOperationException(
+                $"Internal error: '{type.Name}' has no runtime class, so no type test can tell "
+                    + "it apart; extraction must report MS0045 first."
+            );
 
     /// <summary>Whether a BCL exception type has a mapped class of its own.</summary>
     public bool IsMapped(IrNamedTypeRef type) => IsMapped(KeyOf(type));
@@ -156,7 +165,8 @@ public sealed class BclExceptionClasses
         return new TsExceptionClass(
             export.ExportedName,
             OriginOf(export.FromPackage),
-            ConstructorRolesOf(exceptionTypeName, export)
+            ConstructorRolesOf(exceptionTypeName, export),
+            IsRoot: exceptionTypeName == RootExceptionTypeName
         );
     }
 
@@ -186,7 +196,7 @@ public sealed class BclExceptionClasses
         );
 
     private static string KeyOf(IrNamedTypeRef type) =>
-        type.Semantics?.ExportKey
+        type.Semantics?.ClrTypeName
         ?? throw new InvalidOperationException(
             $"Internal error: the exception type '{type.Name}' carries no export key."
         );

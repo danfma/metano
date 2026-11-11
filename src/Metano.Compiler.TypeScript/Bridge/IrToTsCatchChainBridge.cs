@@ -115,13 +115,24 @@ internal static class IrToTsCatchChainBridge
 
     /// <summary>
     /// The clause's type test; <c>null</c> for a clause that takes every
-    /// exception, and for a type extraction reported as untestable (MS0001).
+    /// exception, and for a type extraction reported as untestable (MS0001,
+    /// or MS0045 for an exception without a runtime class).
     /// </summary>
     private static TsExpression? MapTypeTest(IrCatchClause clause, string caught) =>
         clause is { CatchesEveryException: false, ExceptionType: { } type }
         && IrRuntimeTypeTest.ExistsFor(type)
+        && !IsUnmappedException(type)
             ? IrToTsExpressionBridge.BuildTypeTest(new TsIdentifier(caught), type)
             : null;
+
+    /// <summary>
+    /// A BCL exception without a runtime class, whose clause extraction
+    /// reported (MS0045): no test can tell it apart.
+    /// </summary>
+    private static bool IsUnmappedException(IrTypeRef type) =>
+        type is IrNamedTypeRef named
+        && BclExceptionClasses.IsBclException(named)
+        && !IrToTsTypeMapper.ExceptionClasses.IsMapped(named);
 
     private static TsExpression? MapFilter(
         IrCatchClause clause,

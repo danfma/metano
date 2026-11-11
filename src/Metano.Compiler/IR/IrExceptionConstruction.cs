@@ -27,7 +27,7 @@ namespace Metano.Compiler.IR;
 /// (<see cref="Metano.Compiler.BclExportReader.ExportKey"/>, its C# display
 /// name: <c>System.ArgumentException</c>), which backends resolve to their
 /// class for it — for a base call, the base the user exception derives from.
-/// It equals <see cref="IrNamedTypeSemantics.ExportKey"/> of the type's
+/// It equals <see cref="IrNamedTypeSemantics.ClrTypeName"/> of the type's
 /// references.</param>
 /// <param name="ArgumentRoles">The role of each argument, aligned by index with
 /// the owning argument list.</param>
@@ -95,6 +95,11 @@ public enum IrExceptionArgumentRole
     /// (<c>ArgumentOutOfRangeException</c>); .NET appends
     /// <c>"Actual value was X."</c> on a new line.</summary>
     ActualValue,
+
+    /// <summary><c>unmatchedValue</c>: the value no arm of a switch expression
+    /// matched (<c>SwitchExpressionException</c>); .NET appends
+    /// <c>"Unmatched value was X."</c> on a new line.</summary>
+    UnmatchedValue,
 
     /// <summary><c>objectName</c>: the disposed object
     /// (<c>ObjectDisposedException</c>); .NET appends
