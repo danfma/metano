@@ -108,10 +108,12 @@ public sealed record IrNamedTypeRef(
 /// a dispatched set (two or more declared constructors, spec 013 D1) with no
 /// parameterless one, so C#'s implicit parameterless constructor — the
 /// zero value — joins the set as one more overload (spec 013 FR-027).</param>
-/// <param name="ExportKey">For an exception type, the key its
-/// <c>[ExportFromBcl]</c> entry is read under
-/// (<see cref="Metano.Compiler.BclExportReader.ExportKey"/>), so a backend
-/// resolves its runtime class by the same key as the extraction and
+/// <param name="ClrTypeName">The C# display name of the type's original
+/// definition (<c>System.ArgumentException</c>,
+/// <see cref="Metano.Compiler.BclExportReader.ExportKey"/>), the key its
+/// <c>[ExportFromBcl]</c> entry is read under. Set only for
+/// <see cref="IrNamedTypeKind.Exception"/> types, so a backend resolves an
+/// exception's runtime class by the same key as the extraction and
 /// <see cref="IrExceptionConstruction.ExceptionTypeName"/>; <c>null</c> for
 /// every other kind.</param>
 public sealed record IrNamedTypeSemantics(
@@ -132,7 +134,7 @@ public sealed record IrNamedTypeSemantics(
     bool IsDefaultConstructible = false,
     bool IsValueType = false,
     bool HasImplicitParameterlessOverload = false,
-    string? ExportKey = null
+    string? ClrTypeName = null
 );
 
 /// <summary>

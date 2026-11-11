@@ -184,11 +184,8 @@ internal static class IrTypeCheckBuilder
             IrNamedTypeKind.Branded => BrandedCheck(named, value),
             // A mapped BCL exception tests its runtime class (spec 011
             // FR-014); an unmapped one has none and keeps the typeof check.
-            IrNamedTypeKind.Exception when IsMappedBclException(named) => new TsBinaryExpression(
-                value,
-                "instanceof",
-                IrToTsTypeMapper.ExceptionClasses.TestedClassOf(named)
-            ),
+            IrNamedTypeKind.Exception when IsMappedBclException(named) =>
+                IrToTsTypeMapper.ExceptionClasses.InstanceofTest(value, named),
             // Classes / records / structs / exceptions — use instanceof when
             // the type is in our compilation (and thus has a runtime class);
             // otherwise fall back to typeof object so we don't reference an

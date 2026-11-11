@@ -162,6 +162,7 @@ for (const [specifier, exportName] of expectedExports) {
 
 const { intDiv } = await import("metano-runtime");
 const { DivideByZeroException } = await import("metano-runtime/system/exceptions/divide-by-zero-exception");
+
 const thrown = (() => {
   try {
     intDiv(1, 0);

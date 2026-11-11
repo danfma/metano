@@ -424,7 +424,7 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
-                ExportKey: BclExportReader.ExportKey(named)
+                ClrTypeName: BclExportReader.ExportKey(named)
             );
 
         // JSX recognition mirrors the declaration-side IrTypeSemantics flags

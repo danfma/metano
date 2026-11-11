@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
 import {
-  ArgumentException,
-  ArgumentNullException,
-  ArgumentOutOfRangeException,
   throwIfEqual,
   throwIfGreaterThan,
   throwIfGreaterThanOrEqual,
@@ -16,6 +13,11 @@ import {
   throwIfNullOrEmpty,
   throwIfNullOrWhiteSpace,
   throwIfZero,
+} from "#/system/argument-guards.ts";
+import {
+  ArgumentException,
+  ArgumentNullException,
+  ArgumentOutOfRangeException,
 } from "#/system/exceptions/index.ts";
 
 /** Messages printed by .NET 10 for the same calls. */

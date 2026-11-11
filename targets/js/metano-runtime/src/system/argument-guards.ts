@@ -8,10 +8,10 @@
  * each other in a cycle.
  */
 
-import { isNullOrWhiteSpace } from "../strings.ts";
-import { ArgumentException } from "./argument-exception.ts";
-import { ArgumentNullException } from "./argument-null-exception.ts";
-import { ArgumentOutOfRangeException } from "./argument-out-of-range-exception.ts";
+import { ArgumentException } from "./exceptions/argument-exception.ts";
+import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
+import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
+import { isNullOrWhiteSpace } from "./strings.ts";
 
 /** The message of `ArgumentException.ThrowIfNullOrEmpty` for an empty string. */
 const EMPTY_STRING_MESSAGE = "The value cannot be an empty string.";

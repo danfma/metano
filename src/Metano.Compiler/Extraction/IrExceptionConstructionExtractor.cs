@@ -62,6 +62,8 @@ public static class IrExceptionConstructionExtractor
         ["System.IO.DriveNotFoundException"] =
             "Could not find the drive. The drive might not be ready or might not be mapped.",
         ["System.Threading.Tasks.TaskCanceledException"] = "A task was canceled.",
+        ["System.Runtime.CompilerServices.SwitchExpressionException"] =
+            "Non-exhaustive switch expression failed to match its input.",
         ["System.Text.Json.JsonException"] =
             "Exception of type 'System.Text.Json.JsonException' was thrown.",
     };
@@ -154,13 +156,22 @@ public static class IrExceptionConstructionExtractor
     }
 
     internal static IrExceptionArgumentRole RoleOf(IParameterSymbol? parameter) =>
-        parameter?.Name switch
+        RoleOfParameterNamed(parameter?.Name);
+
+    /// <summary>
+    /// The role of a constructor parameter named <paramref name="name"/>, the
+    /// name the BCL uses consistently across the exception hierarchy (and the
+    /// runtime classes mirror).
+    /// </summary>
+    internal static IrExceptionArgumentRole RoleOfParameterNamed(string? name) =>
+        name switch
         {
             MessageParameterName => IrExceptionArgumentRole.Message,
             "innerException" or "inner" => IrExceptionArgumentRole.InnerException,
             "paramName" => IrExceptionArgumentRole.ParamName,
             "actualValue" => IrExceptionArgumentRole.ActualValue,
             "objectName" => IrExceptionArgumentRole.ObjectName,
+            "unmatchedValue" => IrExceptionArgumentRole.UnmatchedValue,
             _ => IrExceptionArgumentRole.Unmapped,
         };
 

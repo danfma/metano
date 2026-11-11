@@ -258,7 +258,7 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   this BCL exception lower to" (spec 011 FR-014, #651), fed by the
   `[ExportFromBcl]` entries in scope (`Metano/Runtime/Exceptions.cs` maps the
   `metano-runtime` exception hierarchy, one module per class) and keyed by
-  `BclExportReader.ExportKey`, which `IrNamedTypeSemantics.ExportKey` and
+  `BclExportReader.ExportKey`, which `IrNamedTypeSemantics.ClrTypeName` and
   `IrExceptionConstruction.ExceptionTypeName` carry. The type mapper (type
   position), `extends`, construction, the `is` / `as` / pattern / `catch`
   tests and the overload-dispatcher checks read it (`TestedClassOf` gives

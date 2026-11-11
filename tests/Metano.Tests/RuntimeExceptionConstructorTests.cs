@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
 using Metano.Compiler;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.Bridge;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace Metano.Tests;
@@ -11,24 +13,21 @@ namespace Metano.Tests;
 /// <c>metano-runtime</c> exception class (<see cref="BclExceptionClasses"/>,
 /// spec 011 FR-014), checked against the constructor the runtime source
 /// declares: <c>paramName</c> and <c>message</c> are both <c>string | null</c>,
-/// so a swapped order would pass <c>tsc</c> and the goldens. Each
-/// <c>[ExportFromBcl]</c> entry of <c>Metano/Runtime/Exceptions.cs</c> must also
-/// name a class its module exports.
+/// so a swapped order would pass <c>tsc</c> and the goldens. Both sides read
+/// a parameter's role through the extractor's own
+/// <see cref="IrExceptionConstructionExtractor.RoleOfParameterNamed"/>. Every
+/// exception class of the runtime must be mapped, and every parameter of a
+/// mapped .NET constructor must have a role or be one the runtime drops.
 /// </summary>
 public partial class RuntimeExceptionConstructorTests
 {
     private const string SolutionFile = "Metano.slnx";
 
-    private static readonly Dictionary<string, IrExceptionArgumentRole> RolesByParameterName = new(
-        StringComparer.Ordinal
-    )
-    {
-        ["message"] = IrExceptionArgumentRole.Message,
-        ["innerException"] = IrExceptionArgumentRole.InnerException,
-        ["paramName"] = IrExceptionArgumentRole.ParamName,
-        ["actualValue"] = IrExceptionArgumentRole.ActualValue,
-        ["objectName"] = IrExceptionArgumentRole.ObjectName,
-    };
+    /// <summary>
+    /// The runtime module that is not an exception class of its own: the
+    /// factory of the stand-in for an unmapped exception type.
+    /// </summary>
+    private const string NamedExceptionModule = "named-exception.ts";
 
     /// <summary>
     /// Parameters of the mapped .NET constructors that no runtime class takes,
@@ -44,17 +43,11 @@ public partial class RuntimeExceptionConstructorTests
         "errorCode",
         "className",
         "methodName",
-        "unmatchedValue",
     ];
 
     public static IEnumerable<(string TypeKey, IrBclExport Export)> ShippedExceptionMappings() =>
         BclExportReader
-            .Read(
-                CSharpCompilation.Create(
-                    "RuntimeExceptionConstructorTests",
-                    references: TranspileHelper.BaseReferences
-                )
-            )
+            .Read(ReferenceCompilation())
             .Where(entry =>
                 entry.Value.FromPackage.StartsWith(
                     BclExceptionClasses.RuntimeExceptionModules,
@@ -66,9 +59,19 @@ public partial class RuntimeExceptionConstructorTests
     [Test]
     public async Task EveryRuntimeExceptionClass_IsMapped()
     {
-        var mapped = ShippedExceptionMappings().Select(mapping => mapping.Export.ExportedName);
+        var mapped = ShippedExceptionMappings()
+            .Select(mapping => mapping.Export.ExportedName)
+            .Order(StringComparer.Ordinal);
 
-        await Assert.That(mapped.Count()).IsEqualTo(23);
+        var defined = Directory
+            .GetFiles(RuntimeExceptionsDirectory(), "*exception.ts")
+            .Where(path => Path.GetFileName(path) != NamedExceptionModule)
+            .Select(path =>
+                ExportedClassPattern().Match(File.ReadAllText(path)).Groups["name"].Value
+            )
+            .Order(StringComparer.Ordinal);
+
+        await Assert.That(string.Join(", ", mapped)).IsEqualTo(string.Join(", ", defined));
     }
 
     [Test]
@@ -78,12 +81,8 @@ public partial class RuntimeExceptionConstructorTests
         IrBclExport export
     )
     {
-        // A trailing parameter no C# constructor role feeds (the unmatched value
-        // of SwitchExpressionException, which only generated code passes) is not
-        // part of the role order.
         var declared = RuntimeConstructorParameters(export)
-            .TakeWhile(RolesByParameterName.ContainsKey)
-            .Select(name => RolesByParameterName[name])
+            .Select(name => RoleOfRuntimeParameter(export, name))
             .ToList();
 
         var passed = BclExceptionClasses.RuntimeConstructorRoles(typeKey);
@@ -101,22 +100,17 @@ public partial class RuntimeExceptionConstructorTests
         IrBclExport export
     )
     {
-        var compilation = CSharpCompilation.Create(
-            "RuntimeExceptionConstructorTests",
-            references: TranspileHelper.BaseReferences
-        );
-
         var type =
-            compilation.GetTypeByMetadataName(typeKey)
+            ReferenceCompilation().GetTypeByMetadataName(typeKey)
             ?? throw new InvalidOperationException($"No {typeKey} in the reference assemblies.");
 
         var unclassified = type
             .InstanceConstructors.Where(constructor =>
-                constructor.DeclaredAccessibility is Microsoft.CodeAnalysis.Accessibility.Public
+                constructor.DeclaredAccessibility is Accessibility.Public
             )
             .SelectMany(constructor => constructor.Parameters)
             .Where(parameter =>
-                Metano.Compiler.Extraction.IrExceptionConstructionExtractor.RoleOf(parameter)
+                IrExceptionConstructionExtractor.RoleOf(parameter)
                     is IrExceptionArgumentRole.Unmapped
                 && !DroppedDotNetParameters.Contains(parameter.Name)
             )
@@ -127,9 +121,32 @@ public partial class RuntimeExceptionConstructorTests
         await Assert.That(unclassified).IsEmpty().Because($"{export.ExportedName}'s constructors");
     }
 
+    private static CSharpCompilation ReferenceCompilation() =>
+        CSharpCompilation.Create(
+            "RuntimeExceptionConstructorTests",
+            references: TranspileHelper.BaseReferences
+        );
+
+    /// <summary>
+    /// The role of a runtime constructor parameter; a parameter without one
+    /// is a contract the compiler cannot pass, so the test fails loudly.
+    /// </summary>
+    private static IrExceptionArgumentRole RoleOfRuntimeParameter(IrBclExport export, string name)
+    {
+        var role = IrExceptionConstructionExtractor.RoleOfParameterNamed(name);
+
+        if (role is IrExceptionArgumentRole.Unmapped)
+            throw new InvalidOperationException(
+                $"{export.ExportedName}'s constructor parameter '{name}' has no role."
+            );
+
+        return role;
+    }
+
     /// <summary>
     /// The parameter names of the constructor of <paramref name="export"/>'s
-    /// class in its runtime module.
+    /// class in its runtime module, split at the top-level commas of the
+    /// parameter list (a function type or a parenthesised default stays whole).
     /// </summary>
     private static IReadOnlyList<string> RuntimeConstructorParameters(IrBclExport export)
     {
@@ -145,18 +162,74 @@ public partial class RuntimeExceptionConstructorTests
                 $"{export.FromPackage} exports no {export.ExportedName}."
             );
 
-        var constructor = ConstructorPattern().Match(source, classStart);
+        var open = source.IndexOf("constructor(", classStart, StringComparison.Ordinal);
 
-        if (!constructor.Success)
+        if (open < 0)
             throw new InvalidOperationException($"{export.ExportedName} declares no constructor.");
 
-        return ParameterNamePattern()
-            .Matches(constructor.Groups["parameters"].Value)
-            .Select(match => match.Groups["name"].Value)
+        return TopLevelSegments(source, open + "constructor(".Length)
+            .Select(segment => ParameterNameOf(export, segment))
             .ToList();
     }
 
+    private static string ParameterNameOf(IrBclExport export, string segment)
+    {
+        var match = ParameterNamePattern().Match(segment);
+
+        if (!match.Success)
+            throw new InvalidOperationException(
+                $"Cannot read the parameter '{segment}' of {export.ExportedName}'s constructor."
+            );
+
+        return match.Groups["name"].Value;
+    }
+
+    /// <summary>
+    /// The comma-separated segments from <paramref name="start"/> up to the
+    /// parenthesis that closes the list, ignoring commas nested in brackets.
+    /// </summary>
+    private static List<string> TopLevelSegments(string source, int start)
+    {
+        var segments = new List<string>();
+        var depth = 0;
+        var segmentStart = start;
+
+        for (var index = start; index < source.Length; index++)
+        {
+            var character = source[index];
+
+            if (character is ')' && depth == 0)
+            {
+                var last = source[segmentStart..index].Trim();
+
+                if (last.Length > 0)
+                    segments.Add(last);
+
+                return segments;
+            }
+
+            if (character is '(' or '[' or '{' or '<')
+                depth++;
+            else if (character is ')' or ']' or '}' or '>' && depth > 0)
+                depth--;
+            else if (character is ',' && depth == 0)
+            {
+                segments.Add(source[segmentStart..index].Trim());
+                segmentStart = index + 1;
+            }
+        }
+
+        throw new InvalidOperationException("Unterminated constructor parameter list.");
+    }
+
     private static string RuntimeModulePath(IrBclExport export)
+    {
+        var module = export.FromPackage[BclExceptionClasses.RuntimeExceptionModules.Length..];
+
+        return Path.Combine(RuntimeExceptionsDirectory(), module + ".ts");
+    }
+
+    private static string RuntimeExceptionsDirectory()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
 
@@ -166,21 +239,20 @@ public partial class RuntimeExceptionConstructorTests
         if (root is null)
             throw new InvalidOperationException($"No {SolutionFile} above the test binaries.");
 
-        var module = export.FromPackage["metano-runtime/".Length..];
-
         return Path.Combine(
             root.FullName,
             "targets",
             "js",
             "metano-runtime",
             "src",
-            module + ".ts"
+            "system",
+            "exceptions"
         );
     }
 
-    [GeneratedRegex(@"constructor\((?<parameters>[^)]*)\)", RegexOptions.Singleline)]
-    private static partial Regex ConstructorPattern();
+    [GeneratedRegex(@"export class (?<name>\w+) ")]
+    private static partial Regex ExportedClassPattern();
 
-    [GeneratedRegex(@"(?<name>\w+)\??\s*:")]
+    [GeneratedRegex(@"^(?<name>\w+)\??\s*:")]
     private static partial Regex ParameterNamePattern();
 }

@@ -120,7 +120,8 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     /// <summary>
     /// <c>decimal.Parse(s)</c> → <c>new Decimal(s)</c>. Covers every
     /// <c>Parse</c> overload — the runtime constructor accepts any
-    /// of the BCL argument shapes (string, span, IFormatProvider). A target
+    /// of the BCL argument shapes (string, span, IFormatProvider).
+    /// TODO(#549): this shape is decimal.js's, a TypeScript fact in the core. A target
     /// that maps <c>decimal.Parse</c> declaratively keeps the call for its
     /// mapping (TypeScript checks .NET's grammar and throws
     /// <c>FormatException</c> through a runtime helper, #651).
@@ -145,6 +146,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
                     return null;
 
                 var arg = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
+
                 return new IrNewExpression(
                     new IrPrimitiveTypeRef(IrPrimitive.Decimal),
                     [new IrArgument(arg)]

@@ -10,9 +10,9 @@ namespace Metano.Compiler.Extraction;
 /// a target that sets no port tests every exception natively, and nothing is
 /// reported.
 /// <list type="bullet">
-///   <item>A construction reports <c>MS0001</c> (a warning): the target
-///   cannot keep the type's identity, so it is lost to catch clauses and type
-///   tests.</item>
+///   <item>A construction reports <c>MS0001</c> (a warning): the exception
+///   keeps its name and <c>ToString()</c> text, but catch clauses and type
+///   tests cannot tell it apart from other exceptions.</item>
 ///   <item>A type test — <c>is</c>, <c>as</c>, a type pattern, a <c>catch</c>
 ///   clause — reports <c>MS0045</c> (an error): widened to <c>Exception</c>,
 ///   it would take every exception.</item>
@@ -45,8 +45,8 @@ internal sealed class ExceptionRuntimeClassReporter(IrExtractionContext context)
             MetanoDiagnosticSeverity.Warning,
             DiagnosticCodes.UnsupportedFeature,
             $"'{construction}' constructs '{exceptionType.ToDisplayString()}', which has no runtime "
-                + "class in the target: the exception loses its type, so catch clauses and type "
-                + "tests cannot tell it apart from other exceptions (spec 011 FR-014).",
+                + "class in the target: it keeps its name, but catch clauses and type tests cannot "
+                + "tell it apart from other exceptions (spec 011 FR-014).",
             construction
         );
     }

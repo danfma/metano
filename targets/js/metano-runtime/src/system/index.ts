@@ -23,3 +23,4 @@ export * from "./number-parsing.ts";
 export * from "./strings.ts";
 export * from "./decimal-parsing.ts";
 export * from "./array-length.ts";
+export * from "./argument-guards.ts";
