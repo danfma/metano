@@ -12,6 +12,7 @@ export * from "./integer-division.ts";
 export * from "./int64.ts";
 export * from "./int64-math.ts";
 export * from "./int64-format.ts";
+export * from "./double-format.ts";
 export * from "./int64-parsing.ts";
 export * from "./int64-convert.ts";
 export * from "./big-integer.ts";

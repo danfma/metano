@@ -2,6 +2,7 @@
  * Runtime helpers for `System.String` members whose C# semantics differ from the
  * closest JavaScript built-in.
  */
+import { aligned } from "./standard-numeric-format.ts";
 
 /**
  * The single characters .NET's `char.IsWhiteSpace` accepts besides the ranges tested in
@@ -85,4 +86,14 @@ export function stringReplace(
   }
 
   return value.split(oldValue).join(newValue ?? "");
+}
+
+/**
+ * C#'s interpolation hole `{value,alignment}` without a format: the text the
+ * hole prints without the clause, padded with spaces to `alignment` UTF-16
+ * code units — on the left, or on the right when the alignment is negative.
+ * A `null` value prints as the empty string, as in C#.
+ */
+export function alignValue(value: unknown, alignment: number): string {
+  return aligned(value == null ? "" : String(value), alignment);
 }
