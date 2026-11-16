@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
@@ -1496,6 +1497,7 @@ public sealed class ImportCollector(
         var valueNames = sink.ValueNames;
         var templateRuntimeHelpers = sink.TemplateRuntimeHelpers;
         var crossPackageOrigins = sink.CrossPackageOrigins;
+
         switch (expr)
         {
             case TsTypeReference typeRef:
@@ -1723,16 +1725,25 @@ public sealed class ImportCollector(
                 // `$T0`/`$T1` placeholders embed generic type-argument names
                 // verbatim into the template body — those names must be
                 // resolved as referenced identifiers so the import collector
-                // can pull in the matching declaration. PascalCase guard skips
-                // primitive type aliases (`string`, `number`, `boolean`) that
-                // don't need import lines.
-                foreach (var typeArg in template.TypeArgumentNames)
+                // can pull in the matching declaration. A type argument the
+                // template does not embed is never printed, so it imports
+                // nothing (a `[PlainObject]` one has no value to import, #651).
+                // PascalCase guard skips primitive type aliases (`string`,
+                // `number`, `boolean`) that don't need import lines.
+                foreach (
+                    var (typeArg, index) in template.TypeArgumentNames.Select((n, i) => (n, i))
+                )
                 {
                     if (typeArg.Length == 0 || !char.IsUpper(typeArg[0]))
                         continue;
+
+                    if (!EmbedsTypeArgument(template.Template, index))
+                        continue;
+
                     names.Add(typeArg);
                     valueNames.Add(typeArg);
                 }
+
                 // Runtime helper identifiers carried alongside the template (e.g.,
                 // "dayNumber", "listRemove", "immutableInsert") from
                 // [MapMethod(..., RuntimeImports = "...")] declarations. The walker can't
@@ -1753,6 +1764,13 @@ public sealed class ImportCollector(
                 break;
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="template"/> embeds the <c>$T&lt;index&gt;</c>
+    /// placeholder (and not only a longer one, <c>$T10</c> for index 1).
+    /// </summary>
+    private static bool EmbedsTypeArgument(string template, int index) =>
+        Regex.IsMatch(template, $@"\$T{index}(?!\d)");
 
     /// <summary>
     /// Walks a JSX element so component / helper names and any expressions

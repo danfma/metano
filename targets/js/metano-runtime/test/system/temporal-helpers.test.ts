@@ -131,6 +131,7 @@ describe("date and time constructors", () => {
     expect(() => plainDateTime(2020, 13, 1, 25, 0, 0)).toThrow(date);
     expect(() => plainDateTime(2020, 1, 1, 25, 0, 0, 1000)).toThrow(time);
     expect(() => plainTime(25, 0, 0, 1000)).toThrow(time);
+
     expect(() => plainTime(1, 0, 0, 1000)).toThrow(
       "Valid values are between 0 and 999, inclusive. (Parameter 'millisecond')",
     );

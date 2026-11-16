@@ -15,6 +15,8 @@ import type { Temporal } from "@js-temporal/polyfill";
 import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
+import { messageValue } from "./exceptions/message-value.ts";
+import { valueEquals } from "./equality.ts";
 import { isNullOrWhiteSpace } from "./strings.ts";
 
 /** The message of `ArgumentException.ThrowIfNullOrEmpty` for an empty string. */
@@ -25,7 +27,7 @@ const WHITE_SPACE_MESSAGE =
   "The value cannot be an empty string or composed entirely of whitespace.";
 
 /** A `decimal.js` value, which compares through `cmp`. */
-type DecimalValue = { cmp(other: never): number };
+type DecimalValue = { cmp(other: never): number; isNegative(): boolean };
 
 /** A Temporal value, whose class compares two of them (`Temporal.PlainDate.compare`). */
 type TemporalValue =
@@ -116,15 +118,15 @@ export function throwIfNegativeOrZero(value: SignedValue, paramName?: string | n
  * `equals` method (a record, a `decimal.js` or Temporal value) is asked.
  */
 export function throwIfEqual<T>(value: T, other: T, paramName?: string | null): void {
-  if (areEqual(value, other)) {
-    throw outOfRange(value, paramName, `must not be equal to '${text(other)}'.`);
+  if (valueEquals(value, other)) {
+    throw outOfRange(value, paramName, `must not be equal to '${messageValue(other)}'.`);
   }
 }
 
 /** Mirrors `ArgumentOutOfRangeException.ThrowIfNotEqual(value, other, paramName)`. */
 export function throwIfNotEqual<T>(value: T, other: T, paramName?: string | null): void {
-  if (!areEqual(value, other)) {
-    throw outOfRange(value, paramName, `must be equal to '${text(other)}'.`);
+  if (!valueEquals(value, other)) {
+    throw outOfRange(value, paramName, `must be equal to '${messageValue(other)}'.`);
   }
 }
 
@@ -135,7 +137,7 @@ export function throwIfGreaterThan<T extends OrderedValue>(
   paramName?: string | null,
 ): void {
   if (compare(value, other) > 0) {
-    throw outOfRange(value, paramName, `must be less than or equal to '${text(other)}'.`);
+    throw outOfRange(value, paramName, `must be less than or equal to '${messageValue(other)}'.`);
   }
 }
 
@@ -146,7 +148,7 @@ export function throwIfGreaterThanOrEqual<T extends OrderedValue>(
   paramName?: string | null,
 ): void {
   if (compare(value, other) >= 0) {
-    throw outOfRange(value, paramName, `must be less than '${text(other)}'.`);
+    throw outOfRange(value, paramName, `must be less than '${messageValue(other)}'.`);
   }
 }
 
@@ -157,7 +159,11 @@ export function throwIfLessThan<T extends OrderedValue>(
   paramName?: string | null,
 ): void {
   if (compare(value, other) < 0) {
-    throw outOfRange(value, paramName, `must be greater than or equal to '${text(other)}'.`);
+    throw outOfRange(
+      value,
+      paramName,
+      `must be greater than or equal to '${messageValue(other)}'.`,
+    );
   }
 }
 
@@ -168,11 +174,14 @@ export function throwIfLessThanOrEqual<T extends OrderedValue>(
   paramName?: string | null,
 ): void {
   if (compare(value, other) <= 0) {
-    throw outOfRange(value, paramName, `must be greater than '${text(other)}'.`);
+    throw outOfRange(value, paramName, `must be greater than '${messageValue(other)}'.`);
   }
 }
 
-/** .NET's `<paramName> ('<value>') <rule>` exception, with the value as `actualValue`. */
+/**
+ * .NET's `<paramName> ('<value>') <rule>` exception, with the value as `actualValue`; a
+ * `null` parameter name leaves the name empty, as .NET does.
+ */
 function outOfRange(
   value: unknown,
   paramName: string | null | undefined,
@@ -181,13 +190,8 @@ function outOfRange(
   return new ArgumentOutOfRangeException(
     paramName,
     value,
-    `${String(paramName)} ('${text(value)}') ${rule}`,
+    `${paramName ?? ""} ('${messageValue(value)}') ${rule}`,
   );
-}
-
-/** A value as the message quotes it: JavaScript's `String`, except that `-0` keeps its sign as on .NET. */
-function text(value: unknown): string {
-  return Object.is(value, -0) ? "-0" : String(value);
 }
 
 function isZero(value: SignedValue): boolean {
@@ -202,9 +206,10 @@ function isZero(value: SignedValue): boolean {
   return value === 0 || value === 0n;
 }
 
+/** .NET tests the sign bit: `-0` (a `double` or a `decimal`) and `NaN` are negative. */
 function isNegative(value: SignedValue): boolean {
   if (typeof value === "object") {
-    return value.cmp(0 as never) < 0;
+    return value.isNegative();
   }
 
   if (typeof value === "number") {
@@ -212,21 +217,6 @@ function isNegative(value: SignedValue): boolean {
   }
 
   return typeof value === "bigint" && value < 0n;
-}
-
-/** `EqualityComparer<T>.Default.Equals(value, other)` for the values generated code holds. */
-function areEqual(value: unknown, other: unknown): boolean {
-  if (value === other) {
-    return true;
-  }
-
-  if (typeof value === "number" && typeof other === "number") {
-    return Number.isNaN(value) && Number.isNaN(other);
-  }
-
-  const equals = (value as { equals?: unknown } | null)?.equals;
-
-  return typeof equals === "function" && equals.call(value, other) === true;
 }
 
 /** The sign of `IComparable<T>.CompareTo(value, other)`, as .NET orders each kind. */
@@ -241,9 +231,7 @@ function compare(value: OrderedValue, other: OrderedValue): number {
       : (value.constructor as unknown as TemporalClass).compare(value, other as TemporalValue);
   }
 
-  const primitive = other as bigint | boolean | string;
-
-  return value === primitive ? 0 : value < primitive ? -1 : 1;
+  return threeWay(value, other as bigint | boolean | string);
 }
 
 /** `double.CompareTo`: `NaN` is less than every other number and equal to itself; `-0` equals `0`. */
@@ -256,5 +244,10 @@ function compareNumbers(value: number, other: number): number {
     return 1;
   }
 
+  return threeWay(value, other);
+}
+
+/** `-1`, `0` or `1` as `value` is less than, equal to or greater than `other`. */
+function threeWay<T extends number | bigint | boolean | string>(value: T, other: T): number {
   return value === other ? 0 : value < other ? -1 : 1;
 }

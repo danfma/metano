@@ -6,7 +6,8 @@ const RUNTIME_DIR = join(import.meta.dir, "..");
 
 // Signatures are types only, so tsgo checks them. `tsconfig.typecheck.json` covers every
 // `typecheck/` folder under `test/`: the null-root signatures of the JSON serializer
-// (FR-034 / FR-037) and the `OrDefault` LINQ terminals (#601).
+// (FR-034 / FR-037), the `OrDefault` LINQ terminals (#601) and the argument guards'
+// `asserts` narrowing (#651).
 test("tsgo accepts every typecheck fixture", () => {
   const run = spawnSync(process.execPath, ["x", "tsgo", "-p", "tsconfig.typecheck.json"], {
     cwd: RUNTIME_DIR,

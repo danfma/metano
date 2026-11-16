@@ -32,12 +32,15 @@ describe("argument guards", () => {
   test("throwIfNullOrEmpty and throwIfNullOrWhiteSpace", () => {
     expect(() => throwIfNullOrEmpty(null, "s")).toThrow(ArgumentNullException);
     expect(() => throwIfNullOrEmpty("", "e")).toThrow(ArgumentException);
+
     expect(() => throwIfNullOrEmpty("", "e")).toThrow(
       "The value cannot be an empty string. (Parameter 'e')",
     );
+
     expect(() => throwIfNullOrWhiteSpace("  ", "w")).toThrow(
       "The value cannot be an empty string or composed entirely of whitespace. (Parameter 'w')",
     );
+
     expect(() => throwIfNullOrWhiteSpace(" a ", "w")).not.toThrow();
   });
 
@@ -89,6 +92,7 @@ describe("argument guards", () => {
       expect(exception.message).toBe(
         `${message} (Parameter '${paramName}')\nActual value was ${value}.`,
       );
+
       expect(exception.paramName).toBe(paramName!);
       expect(String(exception.actualValue)).toBe(value!);
     }
@@ -96,9 +100,20 @@ describe("argument guards", () => {
 
   test("comparisons accept bigint and decimal.js values and pass NaN", () => {
     expect(() => throwIfNegative(-1n, "big")).toThrow("big ('-1') must be a non-negative value.");
+
     expect(() => throwIfLessThan(new Decimal("1.5"), new Decimal("2.5"), "d")).toThrow(
       "d ('1.5') must be greater than or equal to '2.5'.",
     );
+  });
+
+  test("a decimal negative zero is negative and zero, as on .NET", () => {
+    expect(() => throwIfNegative(new Decimal("-0.0"), "d")).toThrow(ArgumentOutOfRangeException);
+    expect(() => throwIfZero(new Decimal("-0.0"), "d")).toThrow(ArgumentOutOfRangeException);
+    expect(() => throwIfNegative(new Decimal("0.0"), "d")).not.toThrow();
+  });
+
+  test("a null parameter name leaves the name empty, as on .NET", () => {
+    expect(() => throwIfZero(0, null)).toThrow(" ('0') must be a non-zero value.");
   });
 
   // Outcomes printed by .NET 10: the sign guards test the sign bit, the ordered ones
@@ -133,12 +148,14 @@ describe("argument guards", () => {
     expect(() => throwIfNegative(-0, "z")).toThrow(
       "z ('-0') must be a non-negative value. (Parameter 'z')\nActual value was -0.",
     );
+
   });
 
   test("other kinds compare as .NET does", () => {
     expect(() => throwIfGreaterThan("b", "a", "c")).toThrow(
       "c ('b') must be less than or equal to 'a'.",
     );
+
     expect(() => throwIfZero("\0", "c")).toThrow(ArgumentOutOfRangeException);
     expect(() => throwIfGreaterThan(true, false, "b")).toThrow(ArgumentOutOfRangeException);
     expect(() => throwIfGreaterThan(false, true, "b")).not.toThrow();
@@ -154,13 +171,30 @@ describe("argument guards", () => {
     expect(() => throwIfEqual(record, { x: 1, equals: () => true }, "r")).toThrow(
       ArgumentOutOfRangeException,
     );
+
     expect(() => throwIfNotEqual("a", "a", "s")).not.toThrow();
   });
 
-  test("the null guards narrow their argument", () => {
-    const text: string | null = "x";
-
-    throwIfNull(text, "text");
-    expect(text.length).toBe(1);
+  // EqualityComparer<T>.Default outcomes printed by .NET 10 for the kinds the compiler
+  // maps the equality guards for: tuples (arrays) and [PlainObject] records by value,
+  // a TimeSpan (a Temporal.Duration) by its length, null equal to null.
+  test.each<[string, unknown, unknown, boolean]>([
+    ["tuples", [1, 2], [1, 2], true],
+    ["nested tuples", [[1, 2], "a"], [[1, 2], "a"], true],
+    ["different tuples", [1, 2], [1, 3], false],
+    ["[PlainObject] records", { name: "a", age: 1 }, { name: "a", age: 1 }, true],
+    ["durations", Temporal.Duration.from({ minutes: 5 }), Temporal.Duration.from({ seconds: 300 }), true],
+    ["different durations", Temporal.Duration.from({ minutes: 5 }), Temporal.Duration.from({ minutes: 6 }), false],
+    ["dates", Temporal.PlainDate.from("2024-01-02"), Temporal.PlainDate.from("2024-01-02"), true],
+    ["decimals", new Decimal("1.0"), new Decimal("1"), true],
+    ["nulls", null, null, true],
+  ])("throwIfEqual compares %s as .NET does", (_, value, other, equal) => {
+    if (equal) {
+      expect(() => throwIfEqual(value, other, "v")).toThrow(ArgumentOutOfRangeException);
+      expect(() => throwIfNotEqual(value, other, "v")).not.toThrow();
+    } else {
+      expect(() => throwIfEqual(value, other, "v")).not.toThrow();
+      expect(() => throwIfNotEqual(value, other, "v")).toThrow(ArgumentOutOfRangeException);
+    }
   });
 });

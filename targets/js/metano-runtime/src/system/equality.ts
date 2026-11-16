@@ -23,6 +23,7 @@ import { hashInt64 } from "./int64.ts";
  * 4. `NaN` equals `NaN` (unlike the `===` operator).
  * 5. Other primitives use `===`.
  * 6. Objects with a custom `equals(other)` method delegate to it (record classes).
+ *    A `Temporal.Duration` (a `TimeSpan`), which has none, compares by its length.
  * 7. `Array`s compare element-wise in order.
  * 8. `Map`s compare by size, then by key→value pairs (order-independent on the keys).
  * 9. `Set`s compare by size, then by membership (order-independent).
@@ -50,6 +51,10 @@ export function equals(a: unknown, b: unknown): boolean {
   // Custom equals contract from record/value classes.
   if ("equals" in a && typeof (a as { equals?: unknown }).equals === "function") {
     return (a as { equals(other: unknown): boolean }).equals(b);
+  }
+
+  if (isDuration(a)) {
+    return isDuration(b) && a.constructor.compare(a, b) === 0;
   }
 
   if (Array.isArray(a)) {
@@ -258,6 +263,13 @@ export function tupleEquals(tuple: unknown, other: unknown, shape?: TupleShape):
       ? objectEquals(element, other[index])
       : tupleEquals(element, other[index], elementShape);
   });
+}
+
+/** A `Temporal.Duration` and its class's `compare`, recognized without loading the polyfill. */
+function isDuration(
+  value: unknown,
+): value is { constructor: { compare(left: unknown, right: unknown): number } } {
+  return Object.prototype.toString.call(value) === "[object Temporal.Duration]";
 }
 
 function hasEqualsMethod(value: object): value is { equals(other: unknown): boolean } {
