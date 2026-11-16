@@ -703,6 +703,11 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   (`./lib/*` in a Vite app), and a hand-written entry that is not a string is kept as written.
 - The `hello-world`, `sample-counter-v5` and `sample-queryable-sqlite` TypeScript builds are
   fixed, and CI builds every sample.
+- **⚠ Target API:** `ITranspilerTarget.AdoptCachedOutput` takes the restored state as one
+  `CachedTargetOutput` record (`Files`, `PackageDependencies`, `ModuleSideEffectFiles`):
+  `AdoptCachedOutput(IrCompilation ir, Compilation? compilation, CachedTargetOutput cached)`.
+  A custom target that overrides it reads `cached.Files` and `cached.PackageDependencies`
+  instead of the 2.x `files` and `packageDependencies` parameters.
 
 ## 2.10.1
 

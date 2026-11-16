@@ -191,16 +191,14 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public void AdoptCachedOutput(
         IrCompilation ir,
         Compilation? compilation,
-        IReadOnlyList<GeneratedFile> files,
-        IReadOnlyDictionary<string, string> packageDependencies,
-        IReadOnlyList<string> moduleSideEffectFiles
+        CachedTargetOutput cached
     )
     {
         var roslynCompilation = RequireRoslynCompilation(compilation);
-        var sideEffectFiles = moduleSideEffectFiles.ToHashSet(StringComparer.Ordinal);
+        var sideEffectFiles = cached.ModuleSideEffectFiles.ToHashSet(StringComparer.Ordinal);
 
-        var reusedFiles = files
-            .Select(file => new TsSourceFile(file.RelativePath, [])
+        var reusedFiles = cached
+            .Files.Select(file => new TsSourceFile(file.RelativePath, [])
             {
                 HasModuleSideEffects = sideEffectFiles.Contains(file.RelativePath),
             })
@@ -210,8 +208,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             ir,
             roslynCompilation,
             reusedFiles,
-            packageDependencies,
-            files
+            cached.PackageDependencies,
+            cached.Files
         );
     }
 
