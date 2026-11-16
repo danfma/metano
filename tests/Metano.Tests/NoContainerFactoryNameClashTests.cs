@@ -135,7 +135,7 @@ public class NoContainerFactoryNameClashTests
             [Transpile, NoContainer]
             public static class Codecs
             {
-                [Name("Enumerable")]
+                [Name("Grouping")]
                 public static int Wrap(int x) => x;
             }
             """

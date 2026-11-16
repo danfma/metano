@@ -1136,7 +1136,7 @@ public static partial class IrToTsExpressionBridge
         return arg.IsSpread ? new TsSpreadExpression(value) : value;
     }
 
-    private static TsType? LowerLambdaParameterType(IrParameter p)
+    private static TsType? LowerLambdaParameterType(IrParameter p, IrToTsBridgeContext context)
     {
         // [External] ambient shapes have no emitted declaration in the
         // consumer's tree, so the lambda parameter type annotation is
@@ -1159,7 +1159,7 @@ public static partial class IrToTsExpressionBridge
             && (sem.IsIgnored || sem.IsExternal || sem.RendersAsJsxElement)
         )
             return null;
-        return IrToTsTypeMapper.Map(p.Type);
+        return IrToTsTypeMapper.Map(p.Type, context.TypeOverrides);
     }
 
     /// <summary>
@@ -1220,7 +1220,11 @@ public static partial class IrToTsExpressionBridge
 
         var call = new TsCallExpression(
             pipeOperator,
-            [.. ordered.Arguments, .. QueryableArguments(stage, context)]
+            [
+                .. LinqAggregateTerminals.LeadingArguments(stage),
+                .. ordered.Arguments,
+                .. QueryableArguments(stage, context),
+            ]
         );
 
         return BoundBefore(ordered.Bindings, call);
@@ -1540,7 +1544,7 @@ public static partial class IrToTsExpressionBridge
         var mappedParameters = lambda
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                LowerLambdaParameterType(p)
+                LowerLambdaParameterType(p, context)
             ))
             .ToList();
         var parameters = DeduplicateParameterNames(

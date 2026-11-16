@@ -29,6 +29,9 @@ public enum IrLinqOperator
     Distinct,
     DistinctBy,
     Concat,
+    Union,
+    Intersect,
+    Except,
     Append,
     Prepend,
     Reverse,
@@ -77,7 +80,9 @@ public sealed record IrLinqChain(IrExpression Source, IReadOnlyList<IrLinqStage>
 /// an optional <see cref="IrQueryableMeta"/> populated by the
 /// expression-tree walker (Phase B / #31; Phase A leaves
 /// <see cref="Queryable"/> null on every stage) and, for a numeric stage
-/// over 64-bit values, their <see cref="IrLinqSixtyFourBitValues"/>.
+/// over 64-bit values, their <see cref="IrLinqSixtyFourBitValues"/>, and for
+/// the other <c>Sum</c> / <c>Average</c> / <c>Min</c> / <c>Max</c> /
+/// <c>MinBy</c> / <c>MaxBy</c> stages their <see cref="IrLinqAggregateValues"/>.
 /// <see cref="Arguments"/> are bound to the stage method's parameters: one
 /// per parameter the call passes, in parameter order, whatever order named
 /// arguments were written in (#632).
@@ -86,7 +91,8 @@ public sealed record IrLinqStage(
     IrLinqOperator Operator,
     IReadOnlyList<IrExpression> Arguments,
     IrQueryableMeta? Queryable = null,
-    IrLinqSixtyFourBitValues? SixtyFourBitValues = null
+    IrLinqSixtyFourBitValues? SixtyFourBitValues = null,
+    IrLinqAggregateValues? AggregateValues = null
 )
 {
     /// <summary>
@@ -107,6 +113,21 @@ public sealed record IrLinqStage(
 /// them apart from other numbers can pick its terminal.
 /// </summary>
 public sealed record IrLinqSixtyFourBitValues(IrNumericKind Kind, bool IsNullable);
+
+/// <summary>
+/// What a <c>Sum</c>, <c>Average</c>, <c>Min</c>, <c>Max</c>, <c>MinBy</c> or
+/// <c>MaxBy</c> stage over values that are not 64-bit integers needs to
+/// match .NET (#618, #657): a target that represents <c>decimal</c> apart
+/// from other numbers picks its own sum and average, and one whose
+/// <c>null</c> is not an empty sequence's error picks its nullable variant.
+/// </summary>
+/// <param name="IsDecimal">The stage aggregates <c>decimal</c> values.</param>
+/// <param name="EmptyIsNull">
+/// An empty sequence, or one with no value, gives <c>null</c> instead of
+/// throwing: the result is a <c>Nullable&lt;T&gt;</c> or a reference type (the
+/// element type, for <c>MinBy</c> / <c>MaxBy</c>).
+/// </param>
+public sealed record IrLinqAggregateValues(bool IsDecimal, bool EmptyIsNull);
 
 /// <summary>
 /// Compiler-side bundle threaded into a stage's

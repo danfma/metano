@@ -15,13 +15,6 @@ namespace Metano.Compiler.TypeScript.Transformation;
 internal static class DeclarativeMappingRendering
 {
     /// <summary>
-    /// The root binding of every declared wrap receiver today
-    /// (<c>Enumerable.from</c>) — a <c>metano-runtime</c> helper the import
-    /// collector owns.
-    /// </summary>
-    private const string WrapperRoot = "Enumerable";
-
-    /// <summary>
     /// Whether a mapping entry's optional arg-literal filter matches the given call
     /// site. An entry without a filter matches anything; an entry with
     /// <see cref="DeclarativeMappingEntry.WhenArg0StringEquals"/> only matches when
@@ -56,15 +49,7 @@ internal static class DeclarativeMappingRendering
         var root = wrapReceiver[..dot];
         var member = wrapReceiver[(dot + 1)..];
 
-        // The only wrapper today is the runtime's `Enumerable` — a helper the
-        // import collector owns, so its root reference prints deferred like
-        // the rest (aliased when a user declaration claims the name, #484).
-        TsExpression rootReference =
-            root is WrapperRoot
-                ? new TsRuntimeHelperReference(WrapperRoot)
-                : new TsIdentifier(root);
-
-        return new TsCallExpression(new TsPropertyAccess(rootReference, member), [source]);
+        return new TsCallExpression(new TsPropertyAccess(new TsIdentifier(root), member), [source]);
     }
 
     /// <summary>

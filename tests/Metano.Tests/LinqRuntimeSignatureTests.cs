@@ -35,6 +35,7 @@ public partial class LinqRuntimeSignatureTests
         "operators.ts",
         "terminals.ts",
         "int64-terminals.ts",
+        "decimal-terminals.ts",
     ];
 
     private static readonly Lazy<string> RuntimeSourceText = new(ReadRuntimeSourceText);

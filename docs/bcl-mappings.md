@@ -327,13 +327,11 @@ built-in only does reference equality, which would lose C# semantics.
 
 ## LINQ
 
-The fluent `Enumerable.from(...)` form below is the legacy lowering: LINQ chains
-now lower to the `linq(source, op1(...), op2(...))` pipe form of
+LINQ chains lower to the `linq(source, op1(...), op2(...))` pipe form of
 `metano-runtime/system/linq`, whose overloads are listed under
-[Supported overloads](#supported-overloads).
-
-When the transpiler detects LINQ extension method chains on any collection type,
-it wraps the sequence in `Enumerable.from(...)` and emits lazy method chains.
+[Supported overloads](#supported-overloads). The static call form
+(`Enumerable.Where(xs, p)`, `Enumerable.Count(xs)`) lowers to the same pipe
+(#657); a static call that names an argument reports `MS0001`.
 
 ```csharp
 // C#
@@ -346,11 +344,13 @@ var result = items
 
 ```typescript
 // TypeScript
-const result = Enumerable.from(items)
-  .where((i) => i.isActive)
-  .orderByDescending((i) => i.score)
-  .take(10)
-  .toArray();
+const result = linq(
+  items,
+  where((i) => i.isActive),
+  orderByDescending((i) => i.score),
+  take(10),
+  toArray(),
+);
 ```
 
 ### Composition operators
@@ -360,9 +360,8 @@ const result = Enumerable.from(items)
 `distinctBy`, `groupBy`, `concat`, `reverse`, `zip`, `append`, `prepend`, `union`,
 `intersect`, `except`
 
-`union`, `intersect` and `except` have no pipe operator: they still go through
-this legacy fluent form, which imports an `Enumerable` the runtime does not
-export, so the module fails to load (#657).
+`union`, `intersect` and `except` yield distinct elements compared by value, in
+.NET's order (#657).
 
 ### Terminal operators
 
@@ -382,10 +381,19 @@ default no literal spells (a user struct, a tuple, `KeyValuePair` (so
 type parameter that is not constrained to `struct` (unconstrained, `where T :
 notnull`, `where T : IComparable<T>`, `where T : Enum` alone) also yields `null`,
 without a warning. `ElementAt`, `ElementAtOrDefault` and `DefaultIfEmpty` have no
-lowering (#617); `Min` / `Max` over an empty or nullable `number` sequence differ
-from .NET (#618); the static call form `Enumerable.FirstOrDefault(xs)` is not
-lowered as a pipe (#619): it still goes through the broken legacy fluent path
-(`Enumerable.from(Enumerable).firstOrDefault(xs)`), tracked in #657.
+lowering (#617).
+
+`Sum`, `Average`, `Min`, `Max`, `MinBy` and `MaxBy` are chosen by the element type
+(FR-056, #618, #657): `min` / `max` / `minBy` / `maxBy` throw
+`InvalidOperationException` on an empty sequence, and the `Nullable` variants
+(`minNullable`, `maxByNullable`, `averageNullable`, ...) skip nulls and give `null`
+for a `Nullable<T>` or reference result; `decimal` uses `sumDecimal` /
+`averageDecimal` / `averageNullableDecimal` (decimal.js precision, so an average that
+.NET computes to 28 digits has decimal.js's 20 by default). `double` `NaN` wins `Min`
+and loses `Max`, as in .NET. Divergence: strings (and every `Min` / `Max` / `MinBy` /
+`MaxBy` over strings) order by code unit, where .NET's default comparer is
+culture-sensitive (`["b","A","a","B"].Min()` is `"a"` on .NET, `"A"` here; #663).
+`Sum` of `int` is not overflow-checked.
 
 ### Supported overloads
 
@@ -436,13 +444,8 @@ extension and in the static form, instead of becoming a member call (where
 diagnostic. The Dart target does not lower LINQ chains (#549) and reports none
 of these.
 
-An overload is identified by its parameter names, not by its element types:
-`Sum`, `Min`, `Max` and `Average` over nullable values, and `Min` / `Max` over
-non-numeric elements, count as supported and still differ from .NET (#618,
-#657). `Union`, `Intersect` and `Except` are not reported because they have a
-declarative mapping, but that legacy mapping is broken: it emits
-`Enumerable.from(xs).union(ys)` and imports an `Enumerable` the runtime does not
-export, so the module fails to load (#657).
+An overload is identified by its parameter names, not by its element types: the
+aggregates pick their runtime variant by element type (see above).
 
 ### Direct method calls (fast path)
 

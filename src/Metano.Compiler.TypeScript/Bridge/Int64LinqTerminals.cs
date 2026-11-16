@@ -15,7 +15,7 @@ internal static class Int64LinqTerminals
     public static string EmittedName(IrLinqStage stage)
     {
         if (stage.SixtyFourBitValues is not { } values)
-            return IrLinqMapping.EmittedName(stage.Operator);
+            return LinqAggregateTerminals.EmittedName(stage);
 
         return (stage.Operator, values.IsNullable, values.Kind) switch
         {

@@ -1,5 +1,6 @@
 import { HashSet } from "metano-runtime";
-import { aggregate, all, any, append, average, concat, contains, count, distinct, distinctBy, first, firstOrDefault, groupBy, last, lastOrDefault, linq, max, maxBy, min, minBy, orderBy, orderByDescending, prepend, reverse, select, selectMany, single, singleOrDefault, skip, skipWhile, sum, take, takeWhile, thenBy, thenByDescending, toArray, toMap, toSet, where, zip } from "metano-runtime/system/linq";
+import { aggregate, all, any, append, average, averageDecimal, averageNullable, averageNullableDecimal, concat, contains, count, distinct, distinctBy, except, first, firstOrDefault, groupBy, intersect, last, lastOrDefault, linq, max, maxBy, maxNullable, min, minBy, minNullable, orderBy, orderByDescending, prepend, reverse, select, selectMany, single, singleOrDefault, skip, skipWhile, sum, sumDecimal, take, takeWhile, thenBy, thenByDescending, toArray, toMap, toSet, union, where, zip } from "metano-runtime/system/linq";
+import { Decimal } from "decimal.js";
 
 export class Supported {
   constructor() { }
@@ -38,6 +39,14 @@ export class Supported {
 
   concat(xs: number[], ys: number[]): Object {
     return linq(xs, concat(ys), append(4), prepend(0), reverse());
+  }
+
+  setOperations(xs: number[], ys: number[]): Object {
+    return linq(xs, union(ys), intersect(ys), except(ys));
+  }
+
+  staticForm(xs: number[]): Object {
+    return linq(xs, where((x: number) => x > 1), count()) + linq(xs, count());
   }
 
   zip(xs: number[], ys: number[]): Object {
@@ -96,6 +105,10 @@ export class Supported {
     return linq(xs, sum()) + linq(xs, sum((x: number) => x * 2)) + linq(xs, min()) + linq(xs, min((x: number) => -x)) + linq(xs, max()) + linq(xs, max((x: number) => -x)) + linq(xs, average()) + linq(xs, average((x: number) => x * 2));
   }
 
+  decimals(ms: Decimal[], nms: (Decimal | null)[], ss: string[], ns: (number | null)[]): Object {
+    return [linq(ms, sumDecimal(Decimal)), linq(ms, averageDecimal()), linq(ms, min((m: Decimal) => m.neg())), linq(nms, sumDecimal(Decimal)), linq(nms, averageNullableDecimal()), linq(ss, minNullable()), linq(ss, maxNullable()), linq(ns, minNullable()), linq(ns, averageNullable())];
+  }
+
   extremes(xs: number[]): number {
     return linq(xs, minBy((x: number) => -x)) + linq(xs, maxBy((x: number) => -x));
   }
@@ -145,7 +158,7 @@ export class Supported {
           type: { name: "number" },
         },
       },
-    }), concat(ys), zip(ys, (a: number, b: number) => a + b, {
+    }), concat(ys), union(ys), intersect(ys), except(ys), zip(ys, (a: number, b: number) => a + b, {
       tree: {
         kind: "binary",
         op: "+",

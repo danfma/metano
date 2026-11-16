@@ -10,6 +10,12 @@ Pre-release notes for the 3.0.0 breaking changes that are already merged;
 the release regenerates the released sections, and these notes carry forward
 the migration list.
 
+### LINQ aggregates and set operators (spec FR-056 to FR-058)
+
+- `Min` / `Max` / `MinBy` / `MaxBy` over empty or nullable sequences, and `Sum` / `Average` / `Min` / `Max` over `decimal`, `string` and other non-`number` elements, now match .NET (an empty `Max()` throws instead of `-Infinity`; `[null, 4].Min()` is `4`; `decimal` sums are decimal.js sums). Strings order by code unit, not by culture (#618, #657).
+- `Union`, `Intersect`, `Except` and the static call form `Enumerable.Where(xs, p)` lower to the pipe form; the legacy `Enumerable.from(...)` mappings are gone (#657, #619).
+- A lambda parameter of type `decimal` is annotated `Decimal`, no longer `number`.
+
 ### ⚠ 64-bit integers become `bigint` (spec 012)
 
 - `long` / `ulong` (and `nint` / `nuint`) map to TypeScript `bigint` instead

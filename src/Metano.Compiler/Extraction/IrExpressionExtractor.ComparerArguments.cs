@@ -13,15 +13,15 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// The argument <paramref name="call"/> passes as its comparer, or
-    /// <c>null</c> when it passes none.
+    /// The argument among <paramref name="arguments"/> that a call passes as
+    /// its comparer, or <c>null</c> when it passes none.
     /// </summary>
     private ExpressionSyntax? ComparerArgumentOf(
-        InvocationExpressionSyntax call,
+        IEnumerable<ArgumentSyntax> arguments,
         IMethodSymbol method
     ) =>
-        call
-            .ArgumentList.Arguments.FirstOrDefault(argument =>
+        arguments
+            .FirstOrDefault(argument =>
                 BoundParameterOf(argument, method).Name == ComparerParameter.Name
             )
             ?.Expression;

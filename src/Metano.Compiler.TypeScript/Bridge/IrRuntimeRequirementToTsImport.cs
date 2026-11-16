@@ -82,7 +82,6 @@ public static class IrRuntimeRequirementToTsImport
             "TupleEquals" => ("metano-runtime", "tupleEquals", false),
             "RecordCopy" => ("metano-runtime", "copyRecordWith", false),
             "IntegerDivision" => ("metano-runtime", "intDiv", false),
-            "Enumerable" => ("metano-runtime", "Enumerable", false),
             "HashSet" => ("metano-runtime", "HashSet", false),
             "UUID" => ("metano-runtime", "UUID", false),
             "Grouping" => ("metano-runtime", "Grouping", true),

@@ -42,6 +42,9 @@ public sealed partial class IrExpressionExtractor
         if (UnchainedStageOf(call, symbol) is { } unsupported)
             return ReportUnsupportedLinqStages([unsupported]);
 
+        if (IsUnfoldedStaticLinqStage(symbol))
+            return ReportUnloweredLinqCall(call, symbol);
+
         return null;
     }
 
@@ -52,10 +55,11 @@ public sealed partial class IrExpressionExtractor
     /// lower LINQ chains.
     /// </summary>
     private UnsupportedLinqStage? UnsupportedStageOf(LinqStageSite site) =>
-        UnsupportedStageOf(site.Call, site.Method, site.Op);
+        UnsupportedStageOf(site.Call, site.Arguments, site.Method, site.Op);
 
     private UnsupportedLinqStage? UnsupportedStageOf(
         InvocationExpressionSyntax call,
+        IReadOnlyList<ArgumentSyntax> arguments,
         IMethodSymbol method,
         IrLinqOperator op
     )
@@ -69,7 +73,11 @@ public sealed partial class IrExpressionExtractor
                 MethodNameLocationOf(call),
                 UnimplementedOverloadMessage(method, op)
             ),
-            IrLinqOverloadSupport.IgnoredComparer => IgnoredComparerStageOf(call, method),
+            IrLinqOverloadSupport.IgnoredComparer => IgnoredComparerStageOf(
+                call,
+                arguments,
+                method
+            ),
             _ => null,
         };
     }
@@ -81,10 +89,11 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private UnsupportedLinqStage? IgnoredComparerStageOf(
         InvocationExpressionSyntax call,
+        IReadOnlyList<ArgumentSyntax> arguments,
         IMethodSymbol method
     )
     {
-        var comparer = ComparerArgumentOf(call, method);
+        var comparer = ComparerArgumentOf(arguments, method);
 
         if (comparer is not null && IsNullConstant(comparer))
             return null;
@@ -105,7 +114,8 @@ public sealed partial class IrExpressionExtractor
         LowersLinqChains
         && IrLinqMapping.OverloadSupportOf(site.Method, site.Op)
             is IrLinqOverloadSupport.IgnoredComparer
-        && ComparerArgumentOf(site.Call, site.Method) is { Parent: ArgumentSyntax comparer } value
+        && ComparerArgumentOf(site.Arguments, site.Method)
+            is { Parent: ArgumentSyntax comparer } value
         && IsNullConstant(value)
             ? comparer
             : null;
@@ -138,7 +148,19 @@ public sealed partial class IrExpressionExtractor
     private UnsupportedLinqStage? UnchainedStageOf(
         InvocationExpressionSyntax call,
         IMethodSymbol? symbol
-    ) => IrLinqMapping.TryResolve(symbol, out var op) ? UnsupportedStageOf(call, symbol, op) : null;
+    ) =>
+        IrLinqMapping.TryResolve(symbol, out var op)
+            ? UnsupportedStageOf(call, call.ArgumentList.Arguments, symbol, op)
+            : null;
+
+    /// <summary>
+    /// Whether <paramref name="symbol"/> is a mapped LINQ method that reached
+    /// the plain call lowering: the chain walker folds every call of a stage
+    /// into a chain but a static one it cannot (<see cref="StaticStageOf"/>),
+    /// which no declarative mapping lowers either.
+    /// </summary>
+    private bool IsUnfoldedStaticLinqStage([NotNullWhen(true)] IMethodSymbol? symbol) =>
+        LowersLinqChains && IrLinqMapping.TryResolve(symbol, out _);
 
     /// <summary>
     /// Whether <paramref name="symbol"/> is a LINQ method, called in the
@@ -305,13 +327,19 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// One LINQ call of a chain: its syntax, the method it binds to, the
-    /// operator that method resolves to and the member access naming it.
+    /// operator that method resolves to, the expression it reads its
+    /// elements from, and the arguments it passes after that source. The
+    /// extension form <c>xs.Where(p)</c> and the static form
+    /// <c>Enumerable.Where(xs, p)</c> are the same site: for the static one
+    /// <see cref="Method"/> is the reduced method, as the compiler binds the
+    /// extension form.
     /// </summary>
     private readonly record struct LinqStageSite(
         InvocationExpressionSyntax Call,
         IMethodSymbol Method,
         IrLinqOperator Op,
-        QualifiedMemberSyntax MemberAccess
+        ExpressionSyntax Receiver,
+        IReadOnlyList<ArgumentSyntax> Arguments
     );
 
     /// <summary>

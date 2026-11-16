@@ -47,6 +47,9 @@ public static class IrLinqMapping
             ["Distinct"] = IrLinqOperator.Distinct,
             ["DistinctBy"] = IrLinqOperator.DistinctBy,
             ["Concat"] = IrLinqOperator.Concat,
+            ["Union"] = IrLinqOperator.Union,
+            ["Intersect"] = IrLinqOperator.Intersect,
+            ["Except"] = IrLinqOperator.Except,
             ["Append"] = IrLinqOperator.Append,
             ["Prepend"] = IrLinqOperator.Prepend,
             ["Reverse"] = IrLinqOperator.Reverse,
@@ -100,6 +103,9 @@ public static class IrLinqMapping
             [IrLinqOperator.Distinct] = "distinct",
             [IrLinqOperator.DistinctBy] = "distinctBy",
             [IrLinqOperator.Concat] = "concat",
+            [IrLinqOperator.Union] = "union",
+            [IrLinqOperator.Intersect] = "intersect",
+            [IrLinqOperator.Except] = "except",
             [IrLinqOperator.Append] = "append",
             [IrLinqOperator.Prepend] = "prepend",
             [IrLinqOperator.Reverse] = "reverse",
@@ -156,6 +162,17 @@ public static class IrLinqMapping
         [IrLinqOperator.Distinct] = IrLinqRuntimeSignature.Of(null, Named()),
         [IrLinqOperator.DistinctBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
         [IrLinqOperator.Concat] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("second"),
+            Named("source2")
+        ),
+        [IrLinqOperator.Union] = IrLinqRuntimeSignature.Of(null, Named("second"), Named("source2")),
+        [IrLinqOperator.Intersect] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("second"),
+            Named("source2")
+        ),
+        [IrLinqOperator.Except] = IrLinqRuntimeSignature.Of(
             null,
             Named("second"),
             Named("source2")
