@@ -377,7 +377,7 @@ public static class IrTypeRefMapper
                     StringEnumValues: values,
                     IsTranspilable: IsTranspilableType(named, target),
                     IsIgnored: SymbolHelper.HasIgnore(named, target),
-                    EnumDefaultMember: ExtractEnumDefaultMember(named, target),
+                    EnumZeroMember: ExtractEnumZeroMember(named, target),
                     IsValueType: true
                 );
             }
@@ -385,7 +385,7 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.NumericEnum,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                EnumDefaultMember: ExtractEnumDefaultMember(named, target),
+                EnumZeroMember: ExtractEnumZeroMember(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
                 IsValueType: true
             );
@@ -584,36 +584,20 @@ public static class IrTypeRefMapper
         && !SymbolHelper.HasImport(named);
 
     /// <summary>
-    /// Picks the member that <c>default(E)</c> resolves to. For numeric enums
-    /// that's the member with the smallest constant value (typically 0); for
-    /// string enums Roslyn doesn't expose ordering on the value, so we fall
-    /// back to the source-declaration order. Returns <c>null</c> when the
-    /// enum has no constant members (a malformed declaration).
+    /// The member that <c>default(E)</c> resolves to: the one whose constant is
+    /// <c>0</c>, whatever the underlying type and the declaration order, also
+    /// for a <c>[StringEnum]</c> (#409). <c>null</c> when the enum declares no
+    /// zero member, where <c>default(E)</c> is a bare <c>0</c> no member names.
     /// </summary>
-    private static IrEnumMemberInfo? ExtractEnumDefaultMember(
+    private static IrEnumMemberInfo? ExtractEnumZeroMember(
         INamedTypeSymbol enumType,
         Metano.Annotations.TargetLanguage? target
     )
     {
-        var members = enumType.GetMembers().OfType<IFieldSymbol>().Where(f => f.IsConst).ToList();
-        if (members.Count == 0)
+        if (DefaultValueLiterals.FindEnumMember(enumType, 0) is not { } zero)
             return null;
 
-        var first = SymbolHelper.HasStringEnum(enumType)
-            ? members[0]
-            : members
-                .OrderBy(f =>
-                    f.ConstantValue switch
-                    {
-                        int i => (long)i,
-                        long l => l,
-                        _ => long.MaxValue,
-                    }
-                )
-                .First();
-
-        var emittedName = SymbolHelper.GetNameOverride(first, target);
-        return new IrEnumMemberInfo(first.Name, emittedName);
+        return new IrEnumMemberInfo(zero.Name, SymbolHelper.GetNameOverride(zero, target));
     }
 
     /// <summary>

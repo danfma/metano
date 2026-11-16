@@ -245,6 +245,12 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
         expression switch
         {
+            LiteralExpressionSyntax { RawKind: (int)SyntaxKind.DefaultLiteralExpression } lit =>
+                DefaultValueOf(lit, _semantic.GetTypeInfo(lit).ConvertedType),
+            DefaultExpressionSyntax defaultExpr => DefaultValueOf(
+                defaultExpr,
+                _semantic.GetTypeInfo(defaultExpr).Type
+            ),
             LiteralExpressionSyntax lit => ExtractLiteral(lit),
             IdentifierNameSyntax id => ExtractIdentifierName(id),
             GenericNameSyntax generic => ExtractGenericName(generic),
@@ -1693,7 +1699,6 @@ public sealed partial class IrExpressionExtractor
             SyntaxKind.NumericLiteralExpression => ClassifyNumericInContext(lit, value),
             SyntaxKind.StringLiteralExpression => new IrLiteral(value, IrLiteralKind.String),
             SyntaxKind.CharacterLiteralExpression => new IrLiteral(value, IrLiteralKind.Char),
-            SyntaxKind.DefaultLiteralExpression => ExtractDefaultLiteral(lit),
             _ => new IrLiteral(value, IrLiteralKind.Default),
         };
     }
@@ -1734,30 +1739,6 @@ public sealed partial class IrExpressionExtractor
 
         return ClassifyNumeric(value);
     }
-
-    /// <summary>
-    /// C#'s target-typed <c>default</c> carries no surface type — the runtime
-    /// value depends on what the compiler infers at the call site. Mirrors
-    /// the legacy <c>ExpressionTransformer</c> behavior: when the inferred
-    /// type is a reference type, type parameter, or nullable, emit a real
-    /// <c>null</c> literal (so consumers see <c>null</c> instead of
-    /// <c>undefined</c>). Value-type / struct contexts keep the opaque
-    /// <see cref="IrLiteralKind.Default"/> so backends can pick a sensible
-    /// per-target default.
-    /// </summary>
-    private IrLiteral ExtractDefaultLiteral(LiteralExpressionSyntax lit)
-    {
-        var type = _semantic.GetTypeInfo(lit).ConvertedType;
-        if (
-            type is not null
-            && (type.IsReferenceType || type is ITypeParameterSymbol || IsNullableType(type))
-        )
-            return new IrLiteral(null, IrLiteralKind.Null);
-        return new IrLiteral(null, IrLiteralKind.Default);
-    }
-
-    private static bool IsNullableType(ITypeSymbol type) =>
-        type.NullableAnnotation == NullableAnnotation.Annotated || type.IsNullableValueType();
 
     private static IrLiteral ClassifyNumeric(object? value) =>
         value switch

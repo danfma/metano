@@ -29,10 +29,10 @@ public class AutoInitDefaultTests
     }
 
     [Test]
-    public async Task EnumWithNonZeroFirstMember_PicksFirstMember()
+    public async Task EnumWithoutAZeroMember_DefaultsToTheZeroValue()
     {
-        // Even when the user assigns explicit numeric values, the "first member" is
-        // still the one with the smallest value (typically the one declared first).
+        // C#'s default(E) is 0 even when no member has that value (#409), so the
+        // field holds the zero asserted to the enum, never the lowest member.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -46,7 +46,73 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["ticket.ts"]).Contains("level: Priority = Priority.Low");
+        await Assert.That(result["ticket.ts"]).Contains("level: Priority = 0 as Priority");
+    }
+
+    /// <summary>
+    /// The field default is the member whose value is 0, whatever its
+    /// position and the underlying type (#409): not the lowest member.
+    /// </summary>
+    [Test]
+    public async Task EnumWithNegativeMember_DefaultsToTheZeroMember()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public enum H : long { N = -1, Z = 0, P = 1 }
+
+            [Transpile]
+            public class Holder
+            {
+                public H Level { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(result["holder.ts"]).Contains("level: H = H.Z");
+    }
+
+    [Test]
+    public async Task StringEnumWithExplicitValues_DefaultsToTheZeroMember()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum]
+            public enum S { P = 2, Q = 0 }
+
+            [Transpile]
+            public class Holder
+            {
+                public S Tone { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(result["holder.ts"]).Contains("tone: S = S.Q");
+    }
+
+    /// <summary>
+    /// A <c>[StringEnum]</c> without a zero member has no string standing for
+    /// C#'s <c>0</c>: the field gets no initializer (documented, no diagnostic).
+    /// </summary>
+    [Test]
+    public async Task StringEnumWithoutAZeroMember_LeavesTheFieldUninitialized()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum]
+            public enum S { P = 2, Q = 3 }
+
+            [Transpile]
+            public class Holder
+            {
+                public S Tone { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(result["holder.ts"]).Contains("tone: S;");
+        await Assert.That(result["holder.ts"]).DoesNotContain("S.P");
     }
 
     [Test]

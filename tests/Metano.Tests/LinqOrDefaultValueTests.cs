@@ -203,7 +203,8 @@ public class LinqOrDefaultValueTests
     /// tuple, a <c>struct</c>-constrained type parameter, a
     /// <c>[StringEnum]</c> without a zero member) keeps the <c>null</c> miss,
     /// and each call reports <c>MS0001</c> as a warning, on the call. The
-    /// <c>defaultValue</c> overloads are the way to choose the value.
+    /// <c>defaultValue</c> overloads are the way to choose the value, and a
+    /// <c>default</c> written as that value reports the unresolved literal too.
     /// </summary>
     [Test]
     public async Task ElementsWithoutALiteralDefault_KeepNullAndWarn()
@@ -269,6 +270,9 @@ public class LinqOrDefaultValueTests
                 Unrepresentable("xs.FirstOrDefault()", "Tone", "FirstOrDefault"),
                 Unrepresentable("xs.Find(p => p.X > 1)", "Point", "Find"),
                 Unrepresentable("xs.Find(t => t != Tone.Loud)", "Tone", "Find"),
+                UnresolvedDefaultLiteral("Point"),
+                UnresolvedDefaultLiteral("Point"),
+                UnresolvedDefaultLiteral("Point"),
             ]);
 
         await TranspileHelper.AssertGolden(
@@ -326,6 +330,10 @@ public class LinqOrDefaultValueTests
             : throw new InvalidOperationException(
                 $"The diagnostic '{diagnostic.Message}' has no source location."
             );
+
+    private static string UnresolvedDefaultLiteral(string type) =>
+        $"Warning {DiagnosticCodes.UnsupportedFeature} at 'default': 'default({type})' has no "
+        + "literal in the target: it is left as an unresolved placeholder.";
 
     private static string Unrepresentable(string call, string type, string lookup) =>
         $"Warning {DiagnosticCodes.UnsupportedFeature} at '{call}': 'default({type})' has no "

@@ -95,9 +95,11 @@ internal static partial class IrToTsClassBridge
     ///   <item>numeric primitives → <c>0</c></item>
     ///   <item>boolean → <c>false</c></item>
     ///   <item>decimal → <c>new Decimal("0")</c></item>
-    ///   <item>enums → first member (numeric: smallest value; string: first
-    ///     declared). String enums use the source-name key; numeric enums
-    ///     honor a target <c>[Name]</c> override on the member.</item>
+    ///   <item>enums → the member whose value is <c>0</c>, as C#'s
+    ///     <c>default(E)</c> is. String enums use the source-name key; numeric
+    ///     enums honor a target <c>[Name]</c> override on the member. A numeric
+    ///     enum without a zero member gets <c>0 as E</c>; a <c>[StringEnum]</c>
+    ///     without one gets no initializer, as no string stands for it.</item>
     ///   <item>default-constructible transpiled structs → <c>new S()</c>, the
     ///     zero-initialized instance C# stores. Only a struct that declares no
     ///     constructor qualifies, so no user constructor body runs; a struct
@@ -134,30 +136,10 @@ internal static partial class IrToTsClassBridge
         if (
             type is IrNamedTypeRef
             {
-                Semantics:
-                {
-                    Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
-                    EnumDefaultMember: { } defaultMember,
-                } enumSemantics,
+                Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum
             } namedEnum
         )
-        {
-            // String enums key the runtime object on the source-cased name —
-            // a [Name(target, ...)] rename would produce an invalid property
-            // access (`MyEnum.in-progress`). Numeric enums honor the override.
-            var memberName =
-                enumSemantics.Kind == IrNamedTypeKind.StringEnum
-                    ? defaultMember.Name
-                    : defaultMember.EmittedName ?? defaultMember.Name;
-
-            return new TsPropertyAccess(
-                IrToTsExpressionBridge.TypeValueReference(
-                    namedEnum.Name,
-                    IrToTsTypeMapper.TryResolveOrigin(namedEnum)
-                ),
-                memberName
-            );
-        }
+            return EnumDefault(namedEnum);
 
         if (type is IrNamedTypeRef { Semantics.IsDefaultConstructible: true })
             return IrToTsExpressionBridge.Map(
@@ -166,6 +148,32 @@ internal static partial class IrToTsClassBridge
             );
 
         return null;
+    }
+
+    private static TsExpression? EnumDefault(IrNamedTypeRef namedEnum)
+    {
+        var semantics = namedEnum.Semantics!;
+
+        if (semantics.EnumZeroMember is not { } zeroMember)
+            return semantics.Kind == IrNamedTypeKind.NumericEnum
+                ? new TsCastExpression(new TsLiteral("0"), IrToTsTypeMapper.Map(namedEnum))
+                : null;
+
+        // String enums key the runtime object on the source-cased name —
+        // a [Name(target, ...)] rename would produce an invalid property
+        // access (`MyEnum.in-progress`). Numeric enums honor the override.
+        var memberName =
+            semantics.Kind == IrNamedTypeKind.StringEnum
+                ? zeroMember.Name
+                : zeroMember.EmittedName ?? zeroMember.Name;
+
+        return new TsPropertyAccess(
+            IrToTsExpressionBridge.TypeValueReference(
+                namedEnum.Name,
+                IrToTsTypeMapper.TryResolveOrigin(namedEnum)
+            ),
+            memberName
+        );
     }
 
     /// <summary>

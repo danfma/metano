@@ -161,7 +161,7 @@ public sealed record IrNamedTypeSemantics(
     IrPrimitive? BrandedUnderlyingPrimitive = null,
     bool IsTranspilable = false,
     bool IsIgnored = false,
-    IrEnumMemberInfo? EnumDefaultMember = null,
+    IrEnumMemberInfo? EnumZeroMember = null,
     bool IsExternal = false,
     string? JsxNativeElementTag = null,
     bool IsJsxComponent = false,
@@ -179,10 +179,11 @@ public sealed record IrNamedTypeSemantics(
 );
 
 /// <summary>
-/// Identifies the default member of an enum referenced from another type. Used
+/// Identifies the zero member of an enum referenced from another type. Used
 /// by backends that need to render <c>default(MyEnum)</c> as a member access:
 /// the runtime semantics of <c>default(E)</c> is the member with constant
-/// value <c>0</c> (or the first declared member for <c>[StringEnum]</c>),
+/// value <c>0</c>, whatever the enum's kind (an enum that declares none has no
+/// such member),
 /// and resolving that requires looking inside the enum's members — which the
 /// referencing type doesn't otherwise have access to.
 /// </summary>
