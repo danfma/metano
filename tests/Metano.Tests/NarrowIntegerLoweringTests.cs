@@ -593,9 +593,8 @@ public class NarrowIntegerLoweringTests
     {
         var lines = source.Split('\n');
 
-        var header = Array.FindIndex(
-            lines,
-            line => line.Trim().StartsWith(name + "(") || line.Trim().StartsWith($"async {name}(")
+        var header = Array.FindIndex(lines, line =>
+            line.Trim().StartsWith(name + "(") || line.Trim().StartsWith($"async {name}(")
         );
 
         if (header < 0)

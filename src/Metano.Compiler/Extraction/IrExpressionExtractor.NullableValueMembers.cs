@@ -190,19 +190,12 @@ public sealed partial class IrExpressionExtractor
 
         // The receiver is read before the default's side effects run, so only
         // a literal receiver can skip its binding.
-        return BindOnce(
-            receiver,
-            isReusable: receiver is IrLiteral,
-            boundReceiver =>
-                BindOnce(
-                    defaultValue,
-                    isReusable: false,
-                    boundDefault => new IrBinaryExpression(
-                        boundReceiver,
-                        IrBinaryOp.NullCoalescing,
-                        boundDefault
-                    )
-                )
+        return BindOnce(receiver, isReusable: receiver is IrLiteral, boundReceiver =>
+            BindOnce(defaultValue, isReusable: false, boundDefault => new IrBinaryExpression(
+                boundReceiver,
+                IrBinaryOp.NullCoalescing,
+                boundDefault
+            ))
         );
     }
 

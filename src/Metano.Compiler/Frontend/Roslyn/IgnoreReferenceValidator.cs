@@ -81,14 +81,11 @@ internal sealed class IgnoreReferenceValidator
             diagnostics
         );
 
-        CSharpSourceFrontend.CollectTopLevelTypes(
-            compilation.Assembly.GlobalNamespace,
-            type =>
-            {
-                if (validator.IsPolicedType(type, assemblyWideTranspile))
-                    validator.ScanType(type);
-            }
-        );
+        CSharpSourceFrontend.CollectTopLevelTypes(compilation.Assembly.GlobalNamespace, type =>
+        {
+            if (validator.IsPolicedType(type, assemblyWideTranspile))
+                validator.ScanType(type);
+        });
     }
 
     /// <summary>

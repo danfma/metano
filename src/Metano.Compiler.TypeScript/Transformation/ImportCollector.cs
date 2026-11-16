@@ -45,8 +45,7 @@ public sealed class ImportCollector(
     private static readonly StringComparer Ordinal = StringComparer.Ordinal;
 
     private readonly TypeScriptTransformContext _context = context;
-    private readonly TypeMappingContext _typeMappingContext =
-        context.TypeMapping
+    private readonly TypeMappingContext _typeMappingContext = context.TypeMapping
         ?? throw new InvalidOperationException(
             "ImportCollector requires TypeScriptTransformContext.TypeMapping to be set."
         );
@@ -1807,8 +1806,8 @@ public sealed class ImportCollector(
 
         var root = RootSegment(typeReference.Name);
 
-        var canonical =
-            IrToTsTypeMapper.UsingAliases?.AliasToCanonical.GetValueOrDefault(root) ?? root;
+        var canonical = IrToTsTypeMapper.UsingAliases?.AliasToCanonical.GetValueOrDefault(root)
+            ?? root;
 
         if (!TsTemplateLexer.NamesIdentifier(template, canonical))
             return;

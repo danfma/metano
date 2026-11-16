@@ -484,9 +484,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression JoinWithAnd(IReadOnlyList<TsExpression> tests) =>
         tests
             .Skip(1)
-            .Aggregate(
-                tests[0],
-                (accumulated, test) => new TsBinaryExpression(accumulated, "&&", test)
+            .Aggregate(tests[0], (accumulated, test) =>
+                new TsBinaryExpression(accumulated, "&&", test)
             );
 
     private static TsExpression PropertyPatternMemberAccess(

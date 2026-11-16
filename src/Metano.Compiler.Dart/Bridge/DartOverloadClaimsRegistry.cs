@@ -33,10 +33,9 @@ public sealed class DartOverloadClaimsRegistry : IDartOverloadNames
     /// <summary>The claims of <paramref name="type"/>, computed on first use.</summary>
     public DartOverloadClaims ClaimsOf(INamedTypeSymbol type) =>
         _claims
-            .GetOrAdd(
-                type.OriginalDefinition,
-                declaration => new Lazy<DartOverloadClaims>(() => Compute(declaration))
-            )
+            .GetOrAdd(type.OriginalDefinition, declaration => new Lazy<DartOverloadClaims>(() =>
+                Compute(declaration)
+            ))
             .Value;
 
     /// <summary>

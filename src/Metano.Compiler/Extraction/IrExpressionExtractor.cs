@@ -234,8 +234,7 @@ public sealed partial class IrExpressionExtractor
         // A 64-bit constant folds to one literal, and a constant inside
         // checked / unchecked takes Roslyn's wrapped value; see
         // IrExpressionExtractor.NumericConversions.cs and .CheckedContext.cs.
-        var value =
-            FoldedInt64Constant(expression)
+        var value = FoldedInt64Constant(expression)
             ?? FoldedCheckedContextConstant(expression)
             ?? FoldedNumberStylesConstant(expression)
             ?? ExtractUnbound(expression);
@@ -535,8 +534,7 @@ public sealed partial class IrExpressionExtractor
         // with a setter. Build the helper call directly so the inner
         // assignment also benefits from the `$set` lowering; the
         // surrounding null check stays exactly as the legacy form.
-        var memberWrite =
-            TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
+        var memberWrite = TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
             ?? TryExtractNullableBooleanCompoundAssignment(assign, rebound)
             ?? TryExtractLiftedCompoundAssignment(assign, rebound)
             ?? BuildCompoundAssignment(rebound, assign);
@@ -1903,14 +1901,11 @@ public sealed partial class IrExpressionExtractor
         if (UntestableTypeTest(asCast, typeSyntax, testedType) is { } untestable)
             return untestable;
 
-        return BindValueOnce(
-            Extract(asCast.Left),
-            value => new IrConditionalExpression(
-                new IrIsPatternExpression(value, new IrTypePattern(testedType)),
-                new IrCastExpression(value, castType),
-                new IrLiteral(null, IrLiteralKind.Null)
-            )
-        );
+        return BindValueOnce(Extract(asCast.Left), value => new IrConditionalExpression(
+            new IrIsPatternExpression(value, new IrTypePattern(testedType)),
+            new IrCastExpression(value, castType),
+            new IrLiteral(null, IrLiteralKind.Null)
+        ));
     }
 
     /// <summary>
@@ -2867,8 +2862,7 @@ public sealed partial class IrExpressionExtractor
 
         if (symbol is not null && SymbolHelper.HasObjectArgs(symbol))
         {
-            args =
-                TryWrapObjectArgsViaOperation(inv, symbol)
+            args = TryWrapObjectArgsViaOperation(inv, symbol)
                 ?? WrapInObjectArgsFromArgs(args, symbol);
         }
         else
@@ -4292,29 +4286,23 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IReadOnlyList<IrExpression>, IrExpression> buildNewValue
     )
     {
-        return BindReceiverOnce(
-            receiver,
-            target =>
-            {
-                var setterArgs = new List<IrArgument>(indexArgs.Count + 2)
-                {
-                    new IrArgument(target),
-                };
+        return BindReceiverOnce(receiver, target =>
+        {
+            var setterArgs = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(target) };
 
-                foreach (var idx in indexArgs)
-                    setterArgs.Add(new IrArgument(idx));
+            foreach (var idx in indexArgs)
+                setterArgs.Add(new IrArgument(idx));
 
-                setterArgs.Add(new IrArgument(buildNewValue(target, indexArgs)));
+            setterArgs.Add(new IrArgument(buildNewValue(target, indexArgs)));
 
-                return BuildExtensionHelperCall(
-                    helperContainer,
-                    setterName,
-                    emittedSetterName,
-                    setterArgs,
-                    typeArguments: null
-                );
-            }
-        );
+            return BuildExtensionHelperCall(
+                helperContainer,
+                setterName,
+                emittedSetterName,
+                setterArgs,
+                typeArguments: null
+            );
+        });
     }
 
     /// <summary>
@@ -4402,16 +4390,14 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IrExpression> buildNewValue
     )
     {
-        return BindReceiverOnce(
-            receiver,
-            target =>
-                BuildExtensionHelperCall(
-                    helperContainer,
-                    setterName,
-                    emittedSetterName,
-                    [new IrArgument(target), new IrArgument(buildNewValue(target))],
-                    typeArguments: null
-                )
+        return BindReceiverOnce(receiver, target =>
+            BuildExtensionHelperCall(
+                helperContainer,
+                setterName,
+                emittedSetterName,
+                [new IrArgument(target), new IrArgument(buildNewValue(target))],
+                typeArguments: null
+            )
         );
     }
 
@@ -4973,13 +4959,11 @@ public sealed partial class IrExpressionExtractor
         if (creation.ExceptionConstruction is not { RequiresArgumentTemporaries: true } exception)
             return creation;
 
-        return BindArgumentsOnce(
-            creation,
-            bound =>
-                bound with
-                {
-                    ExceptionConstruction = exception with { RequiresArgumentTemporaries = false },
-                }
+        return BindArgumentsOnce(creation, bound =>
+            bound with
+            {
+                ExceptionConstruction = exception with { RequiresArgumentTemporaries = false },
+            }
         );
     }
 
@@ -5011,14 +4995,11 @@ public sealed partial class IrExpressionExtractor
         Func<IrNewExpression, IrExpression> build
     )
     {
-        var sourceOrder =
-            creation.EvaluationOrder ?? Enumerable.Range(0, creation.Arguments.Count).ToList();
+        var sourceOrder = creation.EvaluationOrder
+            ?? Enumerable.Range(0, creation.Arguments.Count).ToList();
 
         // The temporaries carry the order from here on.
-        var unordered = creation with
-        {
-            EvaluationOrder = null,
-        };
+        var unordered = creation with { EvaluationOrder = null };
 
         return BindArgumentsFrom(unordered, sourceOrder, step: 0, build);
     }
@@ -5035,10 +5016,8 @@ public sealed partial class IrExpressionExtractor
 
         var index = order[step];
 
-        return BindValueOnce(
-            creation.Arguments[index].Value,
-            bound =>
-                BindArgumentsFrom(WithArgumentValue(creation, index, bound), order, step + 1, build)
+        return BindValueOnce(creation.Arguments[index].Value, bound =>
+            BindArgumentsFrom(WithArgumentValue(creation, index, bound), order, step + 1, build)
         );
     }
 

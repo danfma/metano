@@ -117,8 +117,7 @@ internal static class IrToTsConstructorFactoryBridge
             [selectors.ReferenceTo(overload), .. parameters.Select(ForwardedArgument)]
         );
 
-        var factoryName =
-            names.Factory
+        var factoryName = names.Factory
             ?? throw new InvalidOperationException(
                 $"The claim pass named no factory for '{DispatchedOverload.SignatureOf(overload)}'."
             );

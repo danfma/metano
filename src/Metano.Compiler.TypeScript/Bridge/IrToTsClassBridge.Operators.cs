@@ -103,9 +103,8 @@ internal static partial class IrToTsClassBridge
 
         // The three input lists are kept parallel, so the sorted index works
         // on all of them.
-        var indices = OverloadDispatchOrder.Sort(
-            Enumerable.Range(0, overloads.Count),
-            i => overloads[i].Parameters
+        var indices = OverloadDispatchOrder.Sort(Enumerable.Range(0, overloads.Count), i =>
+            overloads[i].Parameters
         );
 
         // Operator overloads can differ in return type (`int` and `long`

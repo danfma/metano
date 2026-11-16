@@ -72,10 +72,8 @@ public static class IrClassExtractor
 
         OverridablePropertyConstructionReads.Report(type, compilation, target);
 
-        var members = ExtractWithCaptureContext(
-            captureScan,
-            deferInitializers,
-            () => ExtractMembers(type, context)
+        var members = ExtractWithCaptureContext(captureScan, deferInitializers, () =>
+            ExtractMembers(type, context)
         );
         members.AddRange(captureScan.SynthesizedFields);
 

@@ -550,8 +550,7 @@ public sealed partial class IrExpressionExtractor
     /// <summary>The elements an expanded <c>params</c> call passes, one argument each.</summary>
     private IEnumerable<IrArgument> ExpandedParamsElementsOf(IArgumentOperation argument)
     {
-        var elements =
-            ((IArrayCreationOperation)argument.Value).Initializer?.ElementValues
+        var elements = ((IArrayCreationOperation)argument.Value).Initializer?.ElementValues
             ?? ImmutableArray<IOperation>.Empty;
 
         return elements.Select(element => new IrArgument(Extract(ElementSyntaxOf(element))));

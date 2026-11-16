@@ -305,8 +305,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // synthetic-Program flag + the separate EntryPoint record carry the
         // routing metadata that used to live on the target-side
         // `_syntheticEntryPoint` field.
-        var transpilableTypeEntries =
-            ir.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
+        var transpilableTypeEntries = ir.TranspilableTypeEntries
+            ?? Array.Empty<IrTranspilableTypeEntry>();
         var transpilableTypes = transpilableTypeEntries.Select(e => e.Symbol).ToList();
 
         // Clone the frontend-produced TranspilableTypes map so the
@@ -510,26 +510,22 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var perGroupResults = new TsSourceFile?[groups.Count];
             perGroupEmissions = new GroupEmission[groups.Count];
             var skippedGroupCount = 0;
-            Parallel.For(
-                0,
-                groups.Count,
-                index =>
-                {
-                    if (
-                        TransformGroupOrReuseFromCache(
-                            index,
-                            groups,
-                            cachedGroups,
-                            perGroupClosure,
-                            perGroupResults,
-                            perGroupEmissions
-                        )
+            Parallel.For(0, groups.Count, index =>
+            {
+                if (
+                    TransformGroupOrReuseFromCache(
+                        index,
+                        groups,
+                        cachedGroups,
+                        perGroupClosure,
+                        perGroupResults,
+                        perGroupEmissions
                     )
-                    {
-                        Interlocked.Increment(ref skippedGroupCount);
-                    }
+                )
+                {
+                    Interlocked.Increment(ref skippedGroupCount);
                 }
-            );
+            });
             for (var i = 0; i < perGroupResults.Length; i++)
             {
                 if (perGroupResults[i] is { } file)
@@ -742,8 +738,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // Process nested types — the non-private ones go to a companion namespace
         // (declaration merging makes `Outer.Inner` read just like in C#), the private
         // ones to the module-level collection.
-        var collectedModuleLocal =
-            moduleLocal ?? new ModuleLocalDeclarations(type, Context.Compilation);
+        var collectedModuleLocal = moduleLocal
+            ?? new ModuleLocalDeclarations(type, Context.Compilation);
 
         TransformNestedTypes(type, sink, collectedModuleLocal);
 

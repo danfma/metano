@@ -295,8 +295,7 @@ public class StjConformanceFixtureTests
     {
         var context = Contexts[row.Context];
 
-        var property =
-            context.GetType().GetProperty(PascalCase(row.Getter))
+        var property = context.GetType().GetProperty(PascalCase(row.Getter))
             ?? throw new InvalidOperationException(
                 $"no STJ property '{PascalCase(row.Getter)}' on {context.GetType().Name} (case {row.Id})"
             );

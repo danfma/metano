@@ -67,18 +67,11 @@ public sealed partial class IrExpressionExtractor
 
         var inverseOperator = StepOperatorOf(InverseOf(op));
 
-        return BindTargetOnce(
-            target,
-            node,
-            readTarget =>
-                PreviousValue(
-                    reduction,
-                    new IrBinaryExpression(
-                        WriteInPlace(readTarget, Increment),
-                        inverseOperator,
-                        one
-                    )
-                )
+        return BindTargetOnce(target, node, readTarget =>
+            PreviousValue(
+                reduction,
+                new IrBinaryExpression(WriteInPlace(readTarget, Increment), inverseOperator, one)
+            )
         );
     }
 

@@ -103,19 +103,12 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        return BuildReadModifyWrite(
-            target,
-            assign,
-            readTarget =>
-                LiftBooleanLogic(
-                    new OperatorOperand(
-                        readTarget,
-                        IsNullableValueOperand(assign.Left),
-                        assign.Left
-                    ),
-                    OperandOf(assign.Right),
-                    op
-                )
+        return BuildReadModifyWrite(target, assign, readTarget =>
+            LiftBooleanLogic(
+                new OperatorOperand(readTarget, IsNullableValueOperand(assign.Left), assign.Left),
+                OperandOf(assign.Right),
+                op
+            )
         );
     }
 
@@ -124,10 +117,8 @@ public sealed partial class IrExpressionExtractor
         OperatorOperand right,
         IrBinaryOp op
     ) =>
-        BindOperandsInOrder(
-            left,
-            right,
-            (boundLeft, boundRight) => ThreeValuedLogic(boundLeft, boundRight, op)
+        BindOperandsInOrder(left, right, (boundLeft, boundRight) =>
+            ThreeValuedLogic(boundLeft, boundRight, op)
         );
 
     /// <summary>

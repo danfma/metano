@@ -43,9 +43,8 @@ public static class IrReferencedNames
         var wanted = names.ToHashSet(StringComparer.Ordinal);
 
         return wanted.Count > 0
-            && Reads(
-                expression,
-                node => IsIdentifierIn(node, wanted) || IsThisMemberIn(node, wanted)
+            && Reads(expression, node =>
+                IsIdentifierIn(node, wanted) || IsThisMemberIn(node, wanted)
             );
     }
 
@@ -60,9 +59,8 @@ public static class IrReferencedNames
         var wanted = names.ToHashSet(StringComparer.Ordinal);
 
         return wanted.Count > 0
-            && Reads(
-                expression,
-                node => IsIdentifierIn(node, wanted) || IsEmittedMemberIn(node, wanted)
+            && Reads(expression, node =>
+                IsIdentifierIn(node, wanted) || IsEmittedMemberIn(node, wanted)
             );
     }
 
@@ -79,9 +77,8 @@ public static class IrReferencedNames
 
         return wanted.Count > 0
             && statements.Any(statement =>
-                Reads(
-                    statement,
-                    node => IsIdentifierIn(node, wanted) || IsEmittedMemberIn(node, wanted)
+                Reads(statement, node =>
+                    IsIdentifierIn(node, wanted) || IsEmittedMemberIn(node, wanted)
                 )
             );
     }

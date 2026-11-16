@@ -50,8 +50,7 @@ public static class IrTestHelper
     public static IrTypeRef MapType(string csharpSource, string typeName)
     {
         var compilation = Compile(csharpSource);
-        var type =
-            compilation.GetTypeByMetadataName(typeName)
+        var type = compilation.GetTypeByMetadataName(typeName)
             ?? throw new InvalidOperationException($"Type '{typeName}' not found");
         return IrTypeRefMapper.Map(type);
     }

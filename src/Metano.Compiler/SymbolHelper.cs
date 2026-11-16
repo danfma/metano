@@ -1773,11 +1773,9 @@ public static class SymbolHelper
     public static bool HasSameParameters(IMethodSymbol method, IMethodSymbol other) =>
         method.Parameters.Length == other.Parameters.Length
         && method
-            .Parameters.Zip(
-                other.Parameters,
-                (parameter, otherParameter) =>
-                    parameter.RefKind == otherParameter.RefKind
-                    && SymbolEqualityComparer.Default.Equals(parameter.Type, otherParameter.Type)
+            .Parameters.Zip(other.Parameters, (parameter, otherParameter) =>
+                parameter.RefKind == otherParameter.RefKind
+                && SymbolEqualityComparer.Default.Equals(parameter.Type, otherParameter.Type)
             )
             .All(same => same);
 }

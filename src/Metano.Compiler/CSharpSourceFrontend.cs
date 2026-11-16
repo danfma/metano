@@ -371,31 +371,22 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // like `[Ignore, Name("HTMLElement")] HtmlElement` would surface as
         // `HtmlElement` in generated TS, losing the rename that makes the
         // stub interoperate with lib.dom.d.ts.
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-                Visit(
-                    type,
-                    sym =>
-                    {
-                        if (
-                            SymbolHelper.IsTranspilable(sym, assemblyWideTranspile, currentAssembly)
-                        )
-                            RegisterSymbol(sym);
-                        else if (
-                            sym.DeclaredAccessibility == Accessibility.Public
-                            && (
-                                SymbolHelper.GetImport(sym) is not null
-                                || SymbolHelper.HasIgnore(sym)
-                                || SymbolHelper.HasIgnore(sym, target)
-                                || SymbolHelper.HasExternal(sym)
-                                || SymbolHelper.HasNoContainer(sym)
-                            )
-                        )
-                            RegisterSymbol(sym);
-                    }
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type => Visit(type, sym =>
+            {
+                if (SymbolHelper.IsTranspilable(sym, assemblyWideTranspile, currentAssembly))
+                    RegisterSymbol(sym);
+                else if (
+                    sym.DeclaredAccessibility == Accessibility.Public
+                    && (
+                        SymbolHelper.GetImport(sym) is not null
+                        || SymbolHelper.HasIgnore(sym)
+                        || SymbolHelper.HasIgnore(sym, target)
+                        || SymbolHelper.HasExternal(sym)
+                        || SymbolHelper.HasNoContainer(sym)
+                    )
                 )
-        );
+                    RegisterSymbol(sym);
+            }));
 
         // Referenced assemblies that opted into transpilation with an
         // [EmitPackage] for the active target. Mirrors the
@@ -410,21 +401,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // registered under the same rationale.
         foreach (var (asm, _) in EnumerateTranspilableReferencedAssemblies(compilation, target))
         {
-            CollectTopLevelTypes(
-                asm.GlobalNamespace,
-                type =>
-                    Visit(
-                        type,
-                        sym =>
-                        {
-                            if (sym.DeclaredAccessibility != Accessibility.Public)
-                                return;
-                            if (SymbolHelper.HasIgnore(sym))
-                                return;
-                            RegisterSymbol(sym);
-                        }
-                    )
-            );
+            CollectTopLevelTypes(asm.GlobalNamespace, type => Visit(type, sym =>
+                {
+                    if (sym.DeclaredAccessibility != Accessibility.Public)
+                        return;
+                    if (SymbolHelper.HasIgnore(sym))
+                        return;
+                    RegisterSymbol(sym);
+                }));
         }
 
         return map;
@@ -450,17 +434,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         var keys = new HashSet<string>(StringComparer.Ordinal);
         var currentAssembly = compilation.Assembly;
 
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-            {
-                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
-                    return;
-                if (!SymbolHelper.HasGenerateGuard(type))
-                    return;
-                keys.Add(type.GetCrossAssemblyOriginKey());
-            }
-        );
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+        {
+            if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                return;
+            if (!SymbolHelper.HasGenerateGuard(type))
+                return;
+            keys.Add(type.GetCrossAssemblyOriginKey());
+        });
 
         return keys;
     }
@@ -515,15 +496,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 map[tsName] = entry;
         }
 
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-            {
-                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
-                    return;
-                Register(type);
-            }
-        );
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+        {
+            if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                return;
+            Register(type);
+        });
 
         if (
             assemblyWideTranspile
@@ -554,23 +532,20 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var currentAssembly = compilation.Assembly;
 
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-            {
-                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
-                    return;
-                if (!seen.Add(type))
-                    return;
-                entries.Add(
-                    new IrTranspilableTypeEntry(
-                        Symbol: type,
-                        Key: type.GetCrossAssemblyOriginKey(),
-                        IsSyntheticProgram: false
-                    )
-                );
-            }
-        );
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+        {
+            if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                return;
+            if (!seen.Add(type))
+                return;
+            entries.Add(
+                new IrTranspilableTypeEntry(
+                    Symbol: type,
+                    Key: type.GetCrossAssemblyOriginKey(),
+                    IsSyntheticProgram: false
+                )
+            );
+        });
 
         // Synthetic Program appended last, matching the retired
         // DiscoverTranspilableTypes ordering. De-dupe against `seen` so an
@@ -611,19 +586,16 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         var currentAssembly = compilation.Assembly;
         var seen = new HashSet<Location>();
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-            {
-                if (
-                    !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
-                    || SymbolHelper.HasIgnore(type, target)
-                )
-                    return;
-                CheckJsxComponentRenderReturn(type, diagnostics, seen);
-                ScanJsxRenderablePositions(type, compilation, diagnostics, seen);
-            }
-        );
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+        {
+            if (
+                !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
+                || SymbolHelper.HasIgnore(type, target)
+            )
+                return;
+            CheckJsxComponentRenderReturn(type, diagnostics, seen);
+            ScanJsxRenderablePositions(type, compilation, diagnostics, seen);
+        });
     }
 
     /// <summary>
@@ -651,8 +623,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             return;
         if (SymbolHelper.IsMarkedJsxElementType(render.ReturnType))
             return;
-        var location =
-            render.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax().GetLocation()
+        var location = render.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax().GetLocation()
             ?? type.Locations.FirstOrDefault()
             ?? Location.None;
         if (!seen.Add(location))
@@ -746,41 +717,38 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+        {
+            if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                return;
+            foreach (var syntaxRef in type.DeclaringSyntaxReferences)
             {
-                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
-                    return;
-                foreach (var syntaxRef in type.DeclaringSyntaxReferences)
+                var syntax = syntaxRef.GetSyntax();
+                var model = compilation.GetSemanticModel(syntax.SyntaxTree);
+                foreach (
+                    var creation in syntax
+                        .DescendantNodes()
+                        .OfType<ObjectCreationExpressionSyntax>()
+                )
                 {
-                    var syntax = syntaxRef.GetSyntax();
-                    var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-                    foreach (
-                        var creation in syntax
-                            .DescendantNodes()
-                            .OfType<ObjectCreationExpressionSyntax>()
-                    )
+                    if (model.GetTypeInfo(creation.Type).Type is ITypeParameterSymbol param)
                     {
-                        if (model.GetTypeInfo(creation.Type).Type is ITypeParameterSymbol param)
-                        {
-                            diagnostics.Add(
-                                new MetanoDiagnostic(
-                                    MetanoDiagnosticSeverity.Error,
-                                    DiagnosticCodes.GenericNewConstraint,
-                                    $"'new {param.Name}()' is not transpilable: TypeScript erases "
-                                        + $"generic parameters at runtime, so the constructor is "
-                                        + $"not callable. Refactor the API to take an instance or "
-                                        + $"a 'Func<{param.Name}>' factory and invoke it at the "
-                                        + $"use site.",
-                                    creation.GetLocation()
-                                )
-                            );
-                        }
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.GenericNewConstraint,
+                                $"'new {param.Name}()' is not transpilable: TypeScript erases "
+                                    + $"generic parameters at runtime, so the constructor is "
+                                    + $"not callable. Refactor the API to take an instance or "
+                                    + $"a 'Func<{param.Name}>' factory and invoke it at the "
+                                    + $"use site.",
+                                creation.GetLocation()
+                            )
+                        );
                     }
                 }
             }
-        );
+        });
     }
 
     private static void ValidateOptionalAttribute(
@@ -790,9 +758,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type => VisitTypeForOptional(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForOptional(type, assemblyWideTranspile, currentAssembly, diagnostics)
         );
     }
 
@@ -907,10 +874,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-                VisitTypeForDiscriminator(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForDiscriminator(type, assemblyWideTranspile, currentAssembly, diagnostics)
         );
     }
 
@@ -1021,9 +986,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type => VisitTypeForExternal(type, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForExternal(type, diagnostics)
         );
     }
 
@@ -1118,9 +1082,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type => VisitTypeForJsTuple(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForJsTuple(type, assemblyWideTranspile, currentAssembly, diagnostics)
         );
     }
 
@@ -1260,10 +1223,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-                VisitTypeForJsCallable(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForJsCallable(type, assemblyWideTranspile, currentAssembly, diagnostics)
         );
     }
 
@@ -1366,9 +1327,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type => VisitTypeForInline(type, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForInline(type, diagnostics)
         );
         DetectInlineCycles(compilation, diagnostics);
     }
@@ -1387,36 +1347,33 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         List<MetanoDiagnostic> diagnostics
     )
     {
-        CollectTopLevelTypes(
-            compilation.Assembly.GlobalNamespace,
-            type =>
+        CollectTopLevelTypes(compilation.Assembly.GlobalNamespace, type =>
+        {
+            foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
-                foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
+                if (!SymbolHelper.HasEmit(member))
+                    continue;
+                foreach (var parameter in member.Parameters)
                 {
-                    if (!SymbolHelper.HasEmit(member))
+                    if (parameter.RefKind == RefKind.None)
                         continue;
-                    foreach (var parameter in member.Parameters)
-                    {
-                        if (parameter.RefKind == RefKind.None)
-                            continue;
-                        diagnostics.Add(
-                            new MetanoDiagnostic(
-                                MetanoDiagnosticSeverity.Error,
-                                DiagnosticCodes.InvalidEmit,
-                                $"[Emit] on {FormatMemberPath(member)} cannot accept "
-                                    + $"parameter '{parameter.Name}' declared with "
-                                    + $"'{parameter.RefKind.ToString().ToLowerInvariant()}'. "
-                                    + $"The TS / Dart targets pass arguments by value, so "
-                                    + $"the pass-by-reference contract would silently break "
-                                    + $"at the lowered call site. Drop the modifier or move "
-                                    + $"the mutation into a helper.",
-                                parameter.Locations.FirstOrDefault()
-                            )
-                        );
-                    }
+                    diagnostics.Add(
+                        new MetanoDiagnostic(
+                            MetanoDiagnosticSeverity.Error,
+                            DiagnosticCodes.InvalidEmit,
+                            $"[Emit] on {FormatMemberPath(member)} cannot accept "
+                                + $"parameter '{parameter.Name}' declared with "
+                                + $"'{parameter.RefKind.ToString().ToLowerInvariant()}'. "
+                                + $"The TS / Dart targets pass arguments by value, so "
+                                + $"the pass-by-reference contract would silently break "
+                                + $"at the lowered call site. Drop the modifier or move "
+                                + $"the mutation into a helper.",
+                            parameter.Locations.FirstOrDefault()
+                        )
+                    );
                 }
             }
-        );
+        });
     }
 
     /// <summary>
@@ -1431,9 +1388,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var inlineMembers = new List<ISymbol>();
-        CollectTopLevelTypes(
-            compilation.Assembly.GlobalNamespace,
-            type => CollectInlineMembers(type, inlineMembers)
+        CollectTopLevelTypes(compilation.Assembly.GlobalNamespace, type =>
+            CollectInlineMembers(type, inlineMembers)
         );
 
         foreach (var member in inlineMembers)
@@ -1835,9 +1791,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type => VisitTypeForThis(type, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForThis(type, diagnostics)
         );
     }
 
@@ -1940,9 +1895,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         // Field-level check: decorated field initializer must reduce
         // to a Roslyn constant.
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type => VisitTypeForConstantFields(type, compilation, diagnostics)
+        CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
+            VisitTypeForConstantFields(type, compilation, diagnostics)
         );
 
         // Call-site check: walk every invocation + object-creation
@@ -2513,14 +2467,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         )
         {
             var assemblyTypes = new List<INamedTypeSymbol>();
-            CollectTopLevelTypes(
-                asm.GlobalNamespace,
-                type =>
-                {
-                    if (type.DeclaredAccessibility == Accessibility.Public)
-                        assemblyTypes.Add(type);
-                }
-            );
+            CollectTopLevelTypes(asm.GlobalNamespace, type =>
+            {
+                if (type.DeclaredAccessibility == Accessibility.Public)
+                    assemblyTypes.Add(type);
+            });
 
             // Filter the same way the legacy CollectTypesFromNamespace does — anything
             // that wouldn't be discovered for emission must not influence the assembly
@@ -2658,39 +2609,36 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         List<MetanoDiagnostic> diagnostics
     )
     {
-        CollectTopLevelTypes(
-            assembly.GlobalNamespace,
-            type =>
-            {
-                if (type.DeclaredAccessibility != Accessibility.Public)
-                    return;
+        CollectTopLevelTypes(assembly.GlobalNamespace, type =>
+        {
+            if (type.DeclaredAccessibility != Accessibility.Public)
+                return;
 
-                var import = SymbolHelper.GetImport(type);
-                if (import is null)
-                    return;
+            var import = SymbolHelper.GetImport(type);
+            if (import is null)
+                return;
 
-                var entry = new IrExternalImport(
-                    Name: import.Name,
-                    From: import.From,
-                    IsDefault: import.AsDefault,
-                    Version: import.Version
-                );
+            var entry = new IrExternalImport(
+                Name: import.Name,
+                From: import.From,
+                IsDefault: import.AsDefault,
+                Version: import.Version
+            );
 
-                // Register under the C# source name first so it remains
-                // the canonical lookup key for callers that only know the
-                // C# identifier.
-                TryRegisterImport(type.Name, entry, type, map, diagnostics);
+            // Register under the C# source name first so it remains
+            // the canonical lookup key for callers that only know the
+            // C# identifier.
+            TryRegisterImport(type.Name, entry, type, map, diagnostics);
 
-                // Additionally register the per-target [Name(target, …)]
-                // alias so the backend can resolve an import by the
-                // emitted identifier without re-reading Roslyn. Skip when
-                // the alias collapses to the source name (no-op) or is
-                // absent.
-                var targetName = SymbolHelper.GetNameOverride(type, target);
-                if (targetName is not null && targetName != type.Name)
-                    TryRegisterImport(targetName, entry, type, map, diagnostics);
-            }
-        );
+            // Additionally register the per-target [Name(target, …)]
+            // alias so the backend can resolve an import by the
+            // emitted identifier without re-reading Roslyn. Skip when
+            // the alias collapses to the source name (no-op) or is
+            // absent.
+            var targetName = SymbolHelper.GetNameOverride(type, target);
+            if (targetName is not null && targetName != type.Name)
+                TryRegisterImport(targetName, entry, type, map, diagnostics);
+        });
     }
 
     /// <summary>

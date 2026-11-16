@@ -99,8 +99,7 @@ public static class PackageRootResolver
     {
         var candidates = SelfAndAncestors(outputDirectory).ToList();
 
-        var markedRoot =
-            candidates.FirstOrDefault(IsRepositoryRoot)
+        var markedRoot = candidates.FirstOrDefault(IsRepositoryRoot)
             ?? candidates.FirstOrDefault(IsSolutionDirectory);
 
         if (markedRoot is not null)

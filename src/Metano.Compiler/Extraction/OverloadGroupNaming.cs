@@ -137,13 +137,11 @@ internal static class OverloadGroupNaming
             );
 
         return symbol
-            .Parameters.Zip(
-                parameters,
-                (parameterSymbol, parameter) =>
-                    parameter with
-                    {
-                        NamingSpelling = IrNamingSpellingExtractor.Extract(parameterSymbol),
-                    }
+            .Parameters.Zip(parameters, (parameterSymbol, parameter) =>
+                parameter with
+                {
+                    NamingSpelling = IrNamingSpellingExtractor.Extract(parameterSymbol),
+                }
             )
             .ToList();
     }

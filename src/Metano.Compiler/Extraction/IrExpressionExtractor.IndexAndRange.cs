@@ -150,9 +150,8 @@ public sealed partial class IrExpressionExtractor
 
         return isWriteTarget
             ? Access(receiver, offset)
-            : BindReceiverOnce(
-                receiver,
-                target => BindValueOnce(offset, boundOffset => Access(target, boundOffset))
+            : BindReceiverOnce(receiver, target =>
+                BindValueOnce(offset, boundOffset => Access(target, boundOffset))
             );
     }
 
@@ -176,22 +175,15 @@ public sealed partial class IrExpressionExtractor
         if (start is not { FromEnd: true } && end is not { FromEnd: true })
             return new IrSliceExpression(receiver, start?.Value, end?.Value, targetType);
 
-        return BindReceiverOnce(
-            receiver,
-            target =>
-                BindBoundOnce(
-                    start,
-                    boundStart =>
-                        BindBoundOnce(
-                            end,
-                            boundEnd => new IrSliceExpression(
-                                target,
-                                ResolveRangeBound(boundStart, target, length),
-                                ResolveRangeBound(boundEnd, target, length),
-                                targetType
-                            )
-                        )
-                )
+        return BindReceiverOnce(receiver, target =>
+            BindBoundOnce(start, boundStart =>
+                BindBoundOnce(end, boundEnd => new IrSliceExpression(
+                    target,
+                    ResolveRangeBound(boundStart, target, length),
+                    ResolveRangeBound(boundEnd, target, length),
+                    targetType
+                ))
+            )
         );
     }
 

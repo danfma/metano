@@ -21,9 +21,8 @@ public sealed record CounterGroup : JsxComponent
                     ClassName = "counters",
                     Children =
                     [
-                        Solid.For(
-                            Enumerable.Range(0, countersCount()).ToList(),
-                            (_, _) => new Counter()
+                        Solid.For(Enumerable.Range(0, countersCount()).ToList(), (_, _) =>
+                            new Counter()
                         ),
                     ],
                 },

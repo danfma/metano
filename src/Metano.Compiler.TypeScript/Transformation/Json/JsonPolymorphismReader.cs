@@ -39,11 +39,10 @@ internal static class JsonPolymorphismReader
         if (registrations.Count == 0 && polymorphicAttribute is null)
             return null;
 
-        var options =
-            polymorphicAttribute?.NamedArguments.ToDictionary(
-                argument => argument.Key,
-                argument => argument.Value.Value
-            ) ?? [];
+        var options = polymorphicAttribute?.NamedArguments.ToDictionary(
+            argument => argument.Key,
+            argument => argument.Value.Value
+        ) ?? [];
 
         var discriminator =
             options.GetValueOrDefault(DiscriminatorOption) as string

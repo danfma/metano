@@ -352,19 +352,19 @@ public class PackageJsonCacheReuseTests
                         : "";
 
                 return $$"""
-                using Metano.Annotations;
-                using Acme.Shared;
+                    using Metano.Annotations;
+                    using Acme.Shared;
 
-                {{assemblyAttributes}}
+                    {{assemblyAttributes}}
 
-                namespace Acme.Todo.Group{{index}}
-                {
-                    public record Item{{index}}(Tag Tag)
+                    namespace Acme.Todo.Group{{index}}
                     {
-                        public string Describe() => "{{label}}";
+                        public record Item{{index}}(Tag Tag)
+                        {
+                            public string Describe() => "{{label}}";
+                        }
                     }
-                }
-                """;
+                    """;
             })
             .ToList();
     }

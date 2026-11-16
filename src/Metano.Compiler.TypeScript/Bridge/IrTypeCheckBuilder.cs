@@ -170,9 +170,8 @@ internal static class IrTypeCheckBuilder
     internal static TsExpression? AllOf(IReadOnlyList<TsExpression?> checks) =>
         checks
             .OfType<TsExpression>()
-            .Aggregate(
-                (TsExpression?)null,
-                (all, check) => all is null ? check : new TsBinaryExpression(all, "&&", check)
+            .Aggregate((TsExpression?)null, (all, check) =>
+                all is null ? check : new TsBinaryExpression(all, "&&", check)
             );
 
     private static TsExpression NamedTypeCheck(IrNamedTypeRef named, TsExpression value) =>

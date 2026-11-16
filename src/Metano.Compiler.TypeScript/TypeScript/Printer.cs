@@ -1691,14 +1691,10 @@ public sealed class Printer(string indent = "  ")
     /// </summary>
     private void WriteTemplateLiteral(string chunk, IReadOnlyList<string> runtimeImports)
     {
-        var deferred = runtimeImports.Aggregate(
-            chunk,
-            (current, helper) =>
-                Regex.Replace(
-                    current,
-                    $@"(?<![\w$.]){Regex.Escape(helper)}(?![\w$])",
-                    _ => DeferredHelperNames.Wrap(helper)
-                )
+        var deferred = runtimeImports.Aggregate(chunk, (current, helper) =>
+            Regex.Replace(current, $@"(?<![\w$.]){Regex.Escape(helper)}(?![\w$])", _ =>
+                DeferredHelperNames.Wrap(helper)
+            )
         );
 
         _sb.Write(deferred);
@@ -1807,33 +1803,30 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintParameters(IReadOnlyList<TsParameter> parameters)
     {
-        _sb.WriteList(
-            parameters,
-            p =>
+        _sb.WriteList(parameters, p =>
+        {
+            if (p.Rest)
+                _sb.Write("...");
+            _sb.Write(p.Name);
+            // `?` and `= expr` both convey optionality, but TS
+            // forbids combining them — bias toward the default
+            // expression when both are set so the call site sees
+            // the seeded value instead of `undefined`.
+            if (p.Optional && p.DefaultValue is null)
+                _sb.Write("?");
+            // Null Type → skip the annotation entirely (used by lambdas whose source
+            // parameter is an [External] type, so TypeScript can infer from context).
+            if (p.Type is not null)
             {
-                if (p.Rest)
-                    _sb.Write("...");
-                _sb.Write(p.Name);
-                // `?` and `= expr` both convey optionality, but TS
-                // forbids combining them — bias toward the default
-                // expression when both are set so the call site sees
-                // the seeded value instead of `undefined`.
-                if (p.Optional && p.DefaultValue is null)
-                    _sb.Write("?");
-                // Null Type → skip the annotation entirely (used by lambdas whose source
-                // parameter is an [External] type, so TypeScript can infer from context).
-                if (p.Type is not null)
-                {
-                    _sb.Write(": ");
-                    PrintType(p.Type);
-                }
-                if (p.DefaultValue is not null)
-                {
-                    _sb.Write(" = ");
-                    PrintExpression(p.DefaultValue);
-                }
+                _sb.Write(": ");
+                PrintType(p.Type);
             }
-        );
+            if (p.DefaultValue is not null)
+            {
+                _sb.Write(" = ");
+                PrintExpression(p.DefaultValue);
+            }
+        });
     }
 
     private void PrintTypeParameters(IReadOnlyList<TsTypeParameter>? typeParams)
@@ -1841,18 +1834,15 @@ public sealed class Printer(string indent = "  ")
         if (typeParams is not { Count: > 0 })
             return;
         _sb.Write("<");
-        _sb.WriteList(
-            typeParams,
-            tp =>
+        _sb.WriteList(typeParams, tp =>
+        {
+            _sb.Write(tp.Name);
+            if (tp.Constraint is not null)
             {
-                _sb.Write(tp.Name);
-                if (tp.Constraint is not null)
-                {
-                    _sb.Write(" extends ");
-                    PrintType(tp.Constraint);
-                }
+                _sb.Write(" extends ");
+                PrintType(tp.Constraint);
             }
-        );
+        });
         _sb.Write(">");
     }
 

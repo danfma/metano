@@ -240,18 +240,16 @@ public static class IrToTsExceptionConstructionBridge
         {
             return new TsNewExpression(
                 exceptionClass.ValueReference(),
-                PositionalArguments(
-                    exceptionClass,
-                    role => role is IrExceptionArgumentRole.UnmatchedValue ? unmatchedValue : null
+                PositionalArguments(exceptionClass, role =>
+                    role is IrExceptionArgumentRole.UnmatchedValue ? unmatchedValue : null
                 )
             );
         }
 
         var message = SwitchExpressionMessage(unmatchedValue);
 
-        var arguments = PositionalArguments(
-            exceptionClass,
-            role => role is IrExceptionArgumentRole.Message ? message : null
+        var arguments = PositionalArguments(exceptionClass, role =>
+            role is IrExceptionArgumentRole.Message ? message : null
         );
 
         if (!classes.IsMapped(SwitchExpressionExceptionTypeName))
@@ -346,12 +344,10 @@ public static class IrToTsExceptionConstructionBridge
     {
         var message = plan.Composes ? ComposeMessage(construction, operands, plan) : null;
 
-        return PositionalArguments(
-            exceptionClass,
-            role =>
-                role is IrExceptionArgumentRole.Message && plan.Composes
-                    ? message
-                    : operands.SuppliedValueOf(role)?.Lowered
+        return PositionalArguments(exceptionClass, role =>
+            role is IrExceptionArgumentRole.Message && plan.Composes
+                ? message
+                : operands.SuppliedValueOf(role)?.Lowered
         );
     }
 

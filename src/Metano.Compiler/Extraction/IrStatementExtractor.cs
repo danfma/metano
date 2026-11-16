@@ -641,8 +641,7 @@ public sealed class IrStatementExtractor(
         if (declaration.Type.IsVar)
             return null;
 
-        var typeSymbol =
-            (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
+        var typeSymbol = (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
             ?? _semantic.GetTypeInfo(declaration.Type).Type;
 
         return typeSymbol is null ? null : IrTypeRefMapper.Map(typeSymbol, _originResolver);

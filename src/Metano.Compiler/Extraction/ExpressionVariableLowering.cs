@@ -129,9 +129,8 @@ internal sealed partial class ExpressionVariableLowering
     private static IrExpression AndAll(IReadOnlyList<IrExpression> conjuncts) =>
         conjuncts
             .Skip(1)
-            .Aggregate(
-                conjuncts[0],
-                (left, right) => new IrBinaryExpression(left, IrBinaryOp.LogicalAnd, right)
+            .Aggregate(conjuncts[0], (left, right) =>
+                new IrBinaryExpression(left, IrBinaryOp.LogicalAnd, right)
             );
 
     private static bool StartsWithOutArgumentCall(IrExpression conjunct) =>

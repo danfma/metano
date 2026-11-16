@@ -151,10 +151,8 @@ internal sealed class TsOverloadClaimPass
         var suffix = DispatchedOverload.SuffixOf(overload);
         var firstCollision = ConstructorCollisionOf(ConstructorNamesOf(suffix, suffix, factory));
 
-        var claimed = TsFreeName.FirstFree(
-            suffix,
-            candidate =>
-                ConstructorCollisionOf(ConstructorNamesOf(suffix, candidate, factory)) is not null
+        var claimed = TsFreeName.FirstFree(suffix, candidate =>
+            ConstructorCollisionOf(ConstructorNamesOf(suffix, candidate, factory)) is not null
         );
 
         var names = ConstructorNamesOf(suffix, claimed, factory);
@@ -353,8 +351,8 @@ internal sealed class TsOverloadClaimPass
         string baseName
     )
     {
-        var name =
-            _input.RootFastPathOf(anchor.Root) ?? baseName + DispatchedOverload.SuffixOf(overload);
+        var name = _input.RootFastPathOf(anchor.Root)
+            ?? baseName + DispatchedOverload.SuffixOf(overload);
 
         if (_userMembers.Instances.GetValueOrDefault(name) is { } declaredBy)
         {
@@ -379,9 +377,8 @@ internal sealed class TsOverloadClaimPass
         var candidate = baseName + DispatchedOverload.SuffixOf(overload);
         var firstCollision = FastPathCollisionOf(candidate, isStatic);
 
-        var claimed = TsFreeName.FirstFree(
-            candidate,
-            name => HolderOfFastPath(name, isStatic) is not null
+        var claimed = TsFreeName.FirstFree(candidate, name =>
+            HolderOfFastPath(name, isStatic) is not null
         );
 
         if (firstCollision is not null)

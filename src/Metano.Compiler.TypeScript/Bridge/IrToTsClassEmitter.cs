@@ -246,13 +246,13 @@ public sealed class IrToTsClassEmitter(
             // crashing here would abort the whole transpile for an otherwise
             // valid type, and silently dropping the type would hide the gap.
             return TryBuildConstructorDispatcherFromIr(
-                    ir,
-                    new DispatcherBaseCall(extendsType, keepsBaseMessage),
-                    selectors,
-                    implicitParameterlessBody,
-                    groupAccessibility,
-                    lowering
-                )
+                ir,
+                new DispatcherBaseCall(extendsType, keepsBaseMessage),
+                selectors,
+                implicitParameterlessBody,
+                groupAccessibility,
+                lowering
+            )
                 ?? EmitUnsupportedConstructor(
                     type,
                     $"Constructor overload group on '{type.Name}' contains constructs that the IR "

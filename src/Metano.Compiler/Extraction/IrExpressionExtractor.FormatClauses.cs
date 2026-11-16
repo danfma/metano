@@ -139,8 +139,7 @@ public sealed partial class IrExpressionExtractor
         if (FormatStrings is not { } formats)
             return ReportUnsupportedFormat(argument.GetLocation(), UnsupportedCallMessage());
 
-        var receiver =
-            (call.Expression as MemberAccessExpressionSyntax)?.Expression
+        var receiver = (call.Expression as MemberAccessExpressionSyntax)?.Expression
             ?? ConditionalReceiverOf(call);
 
         var type = ReceiverTypeOf(receiver) ?? symbol.ContainingType;
@@ -389,8 +388,8 @@ public sealed partial class IrExpressionExtractor
         var arguments = call.ArgumentList.Arguments;
 
         return arguments.FirstOrDefault(argument =>
-                argument.NameColon?.Name.Identifier.ValueText == FormatParameterName
-            ) ?? arguments.FirstOrDefault(argument => argument.NameColon is null);
+            argument.NameColon?.Name.Identifier.ValueText == FormatParameterName
+        ) ?? arguments.FirstOrDefault(argument => argument.NameColon is null);
     }
 
     /// <summary>The numeric kind of a value, looking through <c>Nullable&lt;T&gt;</c>; <c>null</c> for an enum or a non-numeric type.</summary>

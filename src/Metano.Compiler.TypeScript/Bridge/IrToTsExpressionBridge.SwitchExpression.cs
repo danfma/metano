@@ -52,14 +52,12 @@ public static partial class IrToTsExpressionBridge
         return sw
             .Arms.Take(sw.Arms.Count - 1)
             .Reverse()
-            .Aggregate(
-                fallback,
-                (otherwise, arm) =>
-                    new TsConditionalExpression(
-                        BuildArmCondition(scrutinee, arm, context),
-                        Map(arm.Result, context),
-                        otherwise
-                    )
+            .Aggregate(fallback, (otherwise, arm) =>
+                new TsConditionalExpression(
+                    BuildArmCondition(scrutinee, arm, context),
+                    Map(arm.Result, context),
+                    otherwise
+                )
             );
     }
 

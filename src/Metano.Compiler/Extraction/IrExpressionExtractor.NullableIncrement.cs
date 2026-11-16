@@ -51,13 +51,10 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix,
         Func<IrExpression, IrExpression> increment
     ) =>
-        BindTargetOnce(
-            target,
-            node,
-            readTarget =>
-                isPrefix || IsValueUnused(node)
-                    ? WriteInPlace(readTarget, increment)
-                    : WriteAndYieldPrevious(readTarget, increment)
+        BindTargetOnce(target, node, readTarget =>
+            isPrefix || IsValueUnused(node)
+                ? WriteInPlace(readTarget, increment)
+                : WriteAndYieldPrevious(readTarget, increment)
         );
 
     /// <summary>
@@ -89,14 +86,10 @@ public sealed partial class IrExpressionExtractor
         IrExpression target,
         Func<IrExpression, IrExpression> compute
     ) =>
-        BindOnce(
-            target,
-            isReusable: false,
-            previous => new IrSequenceExpression(
-                [new IrBinaryExpression(target, IrBinaryOp.Assign, compute(previous))],
-                previous
-            )
-        );
+        BindOnce(target, isReusable: false, previous => new IrSequenceExpression(
+            [new IrBinaryExpression(target, IrBinaryOp.Assign, compute(previous))],
+            previous
+        ));
 
     private static bool IsValueUnused(ExpressionSyntax node) =>
         node.Parent is ExpressionStatementSyntax
