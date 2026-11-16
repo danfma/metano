@@ -455,11 +455,11 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   interpolation).
 - The runtime's value equality (`valueEquals` / `valueHashCode`) now tells `TimeSpan` values
   apart: before, any two durations compared equal and hashed alike. This changes a record's or
-  `[PlainObject]` record's `equals` and `==`, and `Distinct` / `HashSet` over records, when they
-  hold a `TimeSpan`: equal lengths are equal (`PT5M` and `PT300S`), and a duration with weeks,
-  months or years, read from ISO text, compares field by field. A `Dictionary` / `HashSet` keyed
-  by a record or a `TimeSpan` itself still compares keys by reference (the runtime collections
-  of spec 011 change that).
+  `[PlainObject]` record's `equals` and `==`, and `HashSet<Record>` and `Distinct` over records
+  (which compare by value), when the records hold a `TimeSpan`: equal lengths are equal (`PT5M`
+  and `PT300S`), and a duration with weeks, months or years, read from ISO text, compares field
+  by field. Unchanged, by reference: `Dictionary<Record, _>` keys, and `HashSet` / `Dictionary` /
+  `Distinct` over bare `TimeSpan`s (the runtime collections of spec 011 change that).
 - A `[MapMethod]` template's generic type argument is imported only when the template embeds
   it as `$T<n>`, and its receiver only when the template embeds `$this` or names the
   receiver's type; before, a guard's `[PlainObject]` type argument was imported as a value
