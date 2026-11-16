@@ -622,14 +622,16 @@ public static class TranspileHelper
     /// Cross-package variant that references the library as a compiled PE image, the way
     /// the build does (no source symbols or syntax): the full implementation assembly, or a
     /// reference assembly that strips private members (<paramref name="referenceAssembly"/>).
+    /// The library assembly is named <paramref name="libraryAssemblyName"/>.
     /// </summary>
     public static Dictionary<string, string> TranspileWithLibraryImage(
         string librarySource,
         string consumerSource,
-        bool referenceAssembly = false
+        bool referenceAssembly = false,
+        string libraryAssemblyName = "TestLibrary"
     )
     {
-        var libCompilation = CompileLibrary(librarySource);
+        var libCompilation = CompileLibrary(librarySource, libraryAssemblyName);
         using var stream = new MemoryStream();
 
         var emitted = libCompilation.Emit(

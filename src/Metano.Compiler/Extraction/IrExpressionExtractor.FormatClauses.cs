@@ -29,6 +29,12 @@ public sealed partial class IrExpressionExtractor
 
     private const string FormattableInterfaceName = "System.IFormattable";
 
+    /// <summary>The type names of the reports: minimally qualified, a nullable reference type without its <c>?</c>.</summary>
+    private static readonly SymbolDisplayFormat TypeNameFormat =
+        SymbolDisplayFormat.MinimallyQualifiedFormat.RemoveMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
+        );
+
     /// <summary>Where an unsupported format sits, for the wording of its report.</summary>
     private enum FormattedConstruct
     {
@@ -38,7 +44,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// A <c>ToString(format)</c> call: the method it binds to, its format
-    /// argument, its receiver (when written as a member access), the
+    /// argument, its receiver (a member access's operand, or the bound
+    /// receiver of a <c>?.</c> call), the
     /// receiver's static type and the number of arguments the call emits.
     /// </summary>
     private sealed record FormatCallSite(
@@ -132,8 +139,11 @@ public sealed partial class IrExpressionExtractor
         if (FormatStrings is not { } formats)
             return ReportUnsupportedFormat(argument.GetLocation(), UnsupportedCallMessage());
 
-        var receiver = (call.Expression as MemberAccessExpressionSyntax)?.Expression;
-        var type = ReceiverTypeOf(receiver ?? ConditionalReceiverOf(call)) ?? symbol.ContainingType;
+        var receiver =
+            (call.Expression as MemberAccessExpressionSyntax)?.Expression
+            ?? ConditionalReceiverOf(call);
+
+        var type = ReceiverTypeOf(receiver) ?? symbol.ContainingType;
 
         var format = _semantic.GetConstantValue(argument.Expression);
 
@@ -181,9 +191,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         if (site.Receiver is { } receiver && formats.PrintsAsDefaultText(site.ReceiverType, format))
-            return new IrStringInterpolation([
-                new IrInterpolationExpression(ConcatenationOperand(receiver)),
-            ]);
+            return new IrStringInterpolation([new IrInterpolationExpression(Extract(receiver))]);
 
         return UnsupportedCall(site, format);
     }
@@ -365,8 +373,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The receiver of <c>value?.ToString(format)</c> (the conditional
-    /// access's operand), for the type the report names; <c>null</c> for any
-    /// other call.
+    /// access's operand, which the continuation extracts as the bound,
+    /// non-null receiver); <c>null</c> for any other call.
     /// </summary>
     private static ExpressionSyntax? ConditionalReceiverOf(InvocationExpressionSyntax call) =>
         call
@@ -428,5 +436,5 @@ public sealed partial class IrExpressionExtractor
         };
 
     private static string DisplayNameOf(ITypeSymbol? type) =>
-        type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) ?? "object";
+        type?.ToDisplayString(TypeNameFormat) ?? "object";
 }

@@ -346,7 +346,14 @@ Product requirements added after the migration (normative; each one is traced by
      of any BCL type (a number, an enum, a date or time,
      `Guid`, `IFormattable.ToString` on a type parameter) follow the same rule: an existing
      declarative mapping lowers it, a default-text format becomes the clause-free hole, and
-     anything else is unsupported. A user type's own `ToString(string)` is not affected.
+     anything else is unsupported, and a `value?.ToString(format)` takes the same steps on
+     the bound receiver (`null` when the value is `null`). An empty or `null` constant
+     format is the type's own default format, as in .NET (`G` for an enum or a
+     `BigInteger`, `D` for a `Guid`, the short date for a `DateOnly`). A user type's own
+     `ToString(string)` is not affected; neither is a type compiled from source or a
+     transpiled library, whatever its assembly name: only an assembly read from metadata,
+     named `System` / `System.*` (or the core library) and not carrying
+     `[TranspileAssembly]` / `[EmitPackage]`, is a BCL assembly.
   4. *Unsupported clauses.* A clause the target does not format as .NET does MUST report
      `MS0001` (warning) at the hole, or at the format argument of `ToString(format)`, and
      lower to the throwing placeholder (in a static field initializer the module then
@@ -377,7 +384,8 @@ Product requirements added after the migration (normative; each one is traced by
      `FormattableString`, both tracked in #662, nor custom numeric format patterns
      (reported, rule 4), including the ones that equal the default text for every value of
      a narrow type (`{b:#,##0}` on `sbyte` / `byte`) or a `DateOnly` (`{d:yyyy'-'MM'-'dd}`,
-     quoted separators), which stay reported. Known silent gap:
+     quoted separators), and `BigInteger`'s `D0` / `D1` (equal to `D` for every value),
+     which stay reported. Known silent gap:
      `Guid`'s `X` and an invalid `Guid` format reach the fallback `Guid.ToString` mapping,
      which prints the hyphenated text; restricting the fallback needs the mapping port to
      see literal filters (#657).

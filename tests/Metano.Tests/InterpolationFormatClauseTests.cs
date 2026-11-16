@@ -120,6 +120,7 @@ public class InterpolationFormatClauseTests
     [Arguments("$\"{c:X}\"", "Color c", "X", "Color")]
     [Arguments("$\"{h:G}\"", "Half h", "G", "Half")]
     [Arguments("$\"{v:D2}\"", "IComparable v", "D2", "IComparable")]
+    [Arguments("$\"{v:D2}\"", "IComparable? v", "D2", "IComparable")]
     [Arguments("$\"{m:C}\"", "Money m", "C", "Money")]
     [Arguments("$\"{o:D2}\"", "object o", "D2", "object")]
     [Arguments("$\"{d:0.00}\"", "double d", "0.00", "double")]
@@ -505,10 +506,12 @@ public class InterpolationFormatClauseTests
     /// <c>&lt;Reference HintPath&gt;</c> shape) keeps its own
     /// <c>ToString(string)</c> and <c>IFormattable.ToString</c>: the calls are
     /// its methods, emitted with the type's import, never governed by the
-    /// BCL format rule.
+    /// BCL format rule, whatever the library's assembly name.
     /// </summary>
     [Test]
-    public async Task TranspiledLibraryToString_IsNotGoverned()
+    [Arguments("TestLibrary")]
+    [Arguments("System.Acme")]
+    public async Task TranspiledLibraryToString_IsNotGoverned(string libraryAssemblyName)
     {
         var files = TranspileHelper.TranspileWithLibraryImage(
             """
@@ -536,7 +539,8 @@ public class InterpolationFormatClauseTests
             {
                 public string Run(Shop.Price p, Shop.Fmt f) => p.ToString("X") + f.ToString("Y", null);
             }
-            """
+            """,
+            libraryAssemblyName: libraryAssemblyName
         );
 
         var till = files["till.ts"];
@@ -545,6 +549,111 @@ public class InterpolationFormatClauseTests
         await Assert.That(till).Contains("Price");
         await Assert.That(till).Contains("Fmt");
         await Assert.That(till).DoesNotContain("Unsupported expression");
+    }
+
+    /// <summary>
+    /// The project's own <c>ToString(string format)</c> is never governed,
+    /// even when its assembly name starts with <c>System.</c>: an assembly
+    /// compiled from source is not base class library.
+    /// </summary>
+    [Test]
+    public async Task ProjectNamedLikeTheBcl_KeepsItsOwnToString()
+    {
+        var directory = Directory
+            .CreateTempSubdirectory("metano-323-")
+            .CreateSubdirectory("System.MyApp");
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Price.cs"),
+                """
+                using Metano.Annotations;
+
+                [Transpile]
+                public sealed class Price
+                {
+                    public string ToString(string format) => format;
+
+                    public string Label() => ToString("X") + this.ToString("Y");
+                }
+                """
+            );
+
+            var (files, diagnostics) = TranspileHelper.TranspileSourceDirectory(directory.FullName);
+
+            await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+            await Assert.That(files["price.ts"]).DoesNotContain("Unsupported expression");
+        }
+        finally
+        {
+            directory.Parent!.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A <c>?.</c> call takes the same steps as the plain one (mapping,
+    /// default text) on the bound receiver, and an empty or <c>null</c>
+    /// format is the type's own default format, as in .NET.
+    /// </summary>
+    [Test]
+    [Arguments("Guid? g", "g?.ToString(\"N\")", "return g == null ? null : g.replace(/-/g, \"\");")]
+    [Arguments("Guid? g", "g?.ToString(\"D\")", "return g == null ? null : g;")]
+    [Arguments(
+        "System.Numerics.BigInteger? b",
+        "b?.ToString(\"D\")",
+        "return b == null ? null : `${b}`;"
+    )]
+    [Arguments("DateOnly? d", "d?.ToString(\"O\")", "return d == null ? null : `${d}`;")]
+    [Arguments("DateOnly? d", "d?.ToString(\"yyyy-MM-dd\")", "return d == null ? null : `${d}`;")]
+    [Arguments("Mode? m", "m?.ToString(\"G\")", "return m == null ? null : `${m}`;")]
+    [Arguments("Mode? m", "m?.ToString(\"F\")", "return m == null ? null : `${m}`;")]
+    [Arguments("Color? c", "c?.ToString(\"D\")", "return c == null ? null : `${c}`;")]
+    [Arguments("Mode m", "m.ToString(\"\")", "return `${m}`;")]
+    [Arguments("Mode m", "m.ToString((string?)null)", "return `${m}`;")]
+    [Arguments("Guid g", "g.ToString(\"\")", "return g;")]
+    [Arguments("System.Numerics.BigInteger b", "b.ToString(\"\")", "return `${b}`;")]
+    public async Task ConditionalOrEmptyFormat_PrintsLikeThePlainCall(
+        string parameter,
+        string expression,
+        string lowered
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Host
+                + $$"""
+                    public string? Run({{parameter}}) => {{expression}};
+                }
+                """
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["holes.ts"]).Contains(lowered);
+    }
+
+    /// <summary>
+    /// An empty format is the type's default, so where that default is not
+    /// the clause-free text (an enum's <c>G</c> holds the name, a
+    /// <c>DateOnly</c>'s short date) it still reports.
+    /// </summary>
+    [Test]
+    [Arguments("Color c", "c.ToString(\"\")", "Color")]
+    [Arguments("DateOnly d", "d.ToString(\"\")", "DateOnly")]
+    public async Task EmptyFormatWithoutDefaultText_Reports(
+        string parameter,
+        string expression,
+        string type
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body(parameter, expression)
+        );
+
+        await Assert
+            .That(UnsupportedFeatures(diagnostics).Single().Message)
+            .IsEqualTo(
+                $"The format '' is not supported for '{type}' in TypeScript; the call throws at run time."
+            );
     }
 
     /// <summary>

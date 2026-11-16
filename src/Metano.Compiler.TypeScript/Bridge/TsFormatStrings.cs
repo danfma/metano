@@ -83,11 +83,12 @@ internal sealed partial class TsFormatStrings : IFormatStringCapability
     /// <c>DateOnly</c> (years 1 to 9999 print four digits), and a
     /// <c>BigInteger</c>'s <c>G</c> / <c>R</c> / <c>D</c> without a precision (a
     /// <c>bigint</c>'s digits).
-    /// Both letter cases of a standard format mean the same there.
+    /// Both letter cases of a standard format mean the same there, and an
+    /// empty format is the type's own default (<see cref="EmptyFormatOf"/>).
     /// </summary>
     public bool PrintsAsDefaultText(ITypeSymbol type, string format)
     {
-        var letter = format.ToUpperInvariant();
+        var letter = (format.Length == 0 ? EmptyFormatOf(type) : format).ToUpperInvariant();
 
         if (type.TypeKind is TypeKind.Enum)
             return EnumPrintsAsDefaultText(type, letter);
@@ -109,6 +110,20 @@ internal sealed partial class TsFormatStrings : IFormatStringCapability
     public static bool FormatsInteger(string format) =>
         format.Length == 0
         || IsStandard(format) && char.ToUpperInvariant(format[0]) != UnimplementedIntegerFormat;
+
+    /// <summary>
+    /// What an empty (or <c>null</c>) format means for <paramref name="type"/>
+    /// in .NET: its <c>ToString()</c> format, <c>D</c> for a <c>Guid</c>, the
+    /// short date <c>d</c> for a <c>DateOnly</c> (not its ISO text), <c>G</c>
+    /// for an enum and a <c>BigInteger</c>.
+    /// </summary>
+    private static string EmptyFormatOf(ITypeSymbol type) =>
+        type.ToDisplayString() switch
+        {
+            GuidTypeName => "D",
+            DateOnlyTypeName => "d",
+            _ => "G",
+        };
 
     private static bool EnumPrintsAsDefaultText(ITypeSymbol type, string letter)
     {

@@ -597,7 +597,12 @@ standard numeric format strings in the invariant culture, with the same output a
   `dt.ToString("O")`, `c.ToString("G")` on an enum, `v.ToString("D2", null)` with
   `T : IFormattable`), unless a declarative mapping lowers it; a user type's own
   `ToString(string)`, in this project or a referenced library, is its own method and is left
-  alone, and a static `ToString` (`Convert.ToString(s)`) is not a format call. The 64-bit integers, `nint` and
+  alone, and a static `ToString` (`Convert.ToString(s)`) is not a format call. A BCL type is
+  one from an assembly read from metadata, named `System` / `System.*` (or the core library),
+  that does not carry `[TranspileAssembly]` / `[EmitPackage]`: a project or transpiled library
+  named `System.*` keeps its own methods. `value?.ToString(format)` takes the same steps as
+  the plain call, and an empty or `null` format is the type's default format, as in .NET
+  (`mode.ToString("")` prints the member name). The 64-bit integers, `nint` and
   `nuint` included, keep `MS0066` for their unsupported formats (see below). A letter .NET
   rejects (`D` on a `double`, `Q`) is not reported: the formatter throws the same
   `FormatException`. The placeholder throws where the expression is evaluated: an
@@ -622,7 +627,8 @@ standard numeric format strings in the invariant culture, with the same output a
 - **Not covered yet.** `string.Format` composite formatting (`string.Format("{0:F2}", d)`
   keeps its unmapped call and `MS0001`) and `FormattableString` (both #662); custom numeric
   patterns (reported above), even those that equal the default text for every value
-  (`{b:#,##0}` on `sbyte` / `byte`, `{d:yyyy'-'MM'-'dd}` on `DateOnly`). One format still prints silently wrong text: `Guid`'s `X`
+  (`{b:#,##0}` on `sbyte` / `byte`, `{d:yyyy'-'MM'-'dd}` on `DateOnly`, `BigInteger`'s
+  `D0` / `D1`). One format still prints silently wrong text: `Guid`'s `X`
   (and an invalid `Guid` format, which .NET rejects), which the `Guid.ToString` fallback
   mapping prints as the hyphenated text, in a hole and in a call (tracked in #657: the
   mapping port cannot see the literal filters).
