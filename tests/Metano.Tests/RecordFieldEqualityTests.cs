@@ -169,9 +169,11 @@ public class RecordFieldEqualityTests
         );
 
         await Assert.That(Count(files["k-tol.ts"], "equals(")).IsEqualTo(1);
+
         await Assert
             .That(files["k-tol.ts"])
             .Contains("equals(other: KTol, tol: number): boolean {");
+
         await Assert.That(files["k-tol.ts"]).Contains("hashCode(): number {");
         await Assert.That(files["k-entry.ts"]).DoesNotContain("hashCode(): number");
         await Assert.That(files["k-entry.ts"]).Contains("equals(other: any): boolean {");
