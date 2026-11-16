@@ -284,51 +284,92 @@ export function count<T>(
   };
 }
 
-export function sum<T>(selector?: (item: T) => number, queryable?: QueryableMeta): SumTerm<T> {
+/**
+ * `Sum()` / `Sum(selector)` over `int`, `double`, … and their nullable forms: nulls count as
+ * zero, an empty sequence is `0`. The `decimal` and 64-bit sums are `sumDecimal` and `sumInt64`.
+ */
+export function sum<T>(
+  selector?: (item: T) => number | null,
+  queryable?: QueryableMeta,
+): SumTerm<T> {
   return {
     kind: "sum",
     selector,
     queryable,
     apply: (source) => {
       let total = 0;
-      for (const item of source) total += selector ? selector(item) : (item as unknown as number);
+      for (const item of source)
+        total += (selector ? selector(item) : (item as number | null)) ?? 0;
       return total;
     },
   };
 }
 
-export function min<T>(selector?: (item: T) => number, queryable?: QueryableMeta): MinTerm<T> {
+/**
+ * `Min()` / `Min(selector)` over a sequence of non-nullable values: numbers, strings, `decimal`s,
+ * dates, anything ordered. Nulls are skipped; a `NaN` wins, as in .NET.
+ *
+ * @throws InvalidOperationException for an empty sequence.
+ */
+export function min<T, R = T>(selector?: (item: T) => R, queryable?: QueryableMeta): MinTerm<T, R> {
   return {
     kind: "min",
     selector,
     queryable,
-    apply: (source) => {
-      let result = Number.POSITIVE_INFINITY;
-      for (const item of source) {
-        const v = selector ? selector(item) : (item as unknown as number);
-        if (v < result) result = v;
-      }
-      return result;
-    },
+    apply: (source) => requireValue(smallest(valuesOf(source, selector))) as R,
   };
 }
 
-export function max<T>(selector?: (item: T) => number, queryable?: QueryableMeta): MaxTerm<T> {
+/**
+ * `Min()` / `Min(selector)` over `int?`, `string`, a class, …: nulls are skipped and
+ * `null` is the result when no value is left.
+ */
+export function minNullable<T, R = T>(
+  selector?: (item: T) => R | null,
+  queryable?: QueryableMeta,
+): MinTerm<T, NonNullable<R> | null> {
+  return {
+    kind: "min",
+    selector,
+    queryable,
+    apply: (source) => (smallest(valuesOf(source, selector)) ?? null) as NonNullable<R> | null,
+  };
+}
+
+/**
+ * `Max()` / `Max(selector)` over a sequence of non-nullable values. Nulls are skipped; a `NaN`
+ * loses to any other value, as in .NET.
+ *
+ * @throws InvalidOperationException for an empty sequence.
+ */
+export function max<T, R = T>(selector?: (item: T) => R, queryable?: QueryableMeta): MaxTerm<T, R> {
   return {
     kind: "max",
     selector,
     queryable,
-    apply: (source) => {
-      let result = Number.NEGATIVE_INFINITY;
-      for (const item of source) {
-        const v = selector ? selector(item) : (item as unknown as number);
-        if (v > result) result = v;
-      }
-      return result;
-    },
+    apply: (source) => requireValue(largest(valuesOf(source, selector))) as R,
   };
 }
 
+/** `Max()` / `Max(selector)` over `int?`, `string`, a class, …: `null` when no value is left. */
+export function maxNullable<T, R = T>(
+  selector?: (item: T) => R | null,
+  queryable?: QueryableMeta,
+): MaxTerm<T, NonNullable<R> | null> {
+  return {
+    kind: "max",
+    selector,
+    queryable,
+    apply: (source) => (largest(valuesOf(source, selector)) ?? null) as NonNullable<R> | null,
+  };
+}
+
+/**
+ * `MinBy(keySelector)` over a value-typed element: the first element with the smallest key.
+ * A `null` key is skipped; when every key is null the first element is the result.
+ *
+ * @throws InvalidOperationException for an empty sequence.
+ */
 export function minBy<T, K>(
   keySelector: (item: T) => K,
   queryable?: QueryableMeta,
@@ -337,24 +378,28 @@ export function minBy<T, K>(
     kind: "minBy",
     keySelector,
     queryable,
-    apply: (source) => {
-      let result: T | undefined;
-      let minKey: K | undefined;
-      let found = false;
-      for (const item of source) {
-        const key = keySelector(item);
-        if (!found || compareKeys(key, minKey as K) < 0) {
-          result = item;
-          minKey = key;
-          found = true;
-        }
-      }
-      if (!found) throw new InvalidOperationException("Sequence contains no elements");
-      return result!;
-    },
+    apply: (source) => requireValue(extremeBy(source, keySelector, -1)),
   };
 }
 
+/** `MinBy(keySelector)` over a reference or nullable element: `null` for an empty sequence. */
+export function minByNullable<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): MinByTerm<T, K, T | null> {
+  return {
+    kind: "minBy",
+    keySelector,
+    queryable,
+    apply: (source) => extremeBy(source, keySelector, -1) ?? null,
+  };
+}
+
+/**
+ * `MaxBy(keySelector)` over a value-typed element: the first element with the largest key.
+ *
+ * @throws InvalidOperationException for an empty sequence.
+ */
 export function maxBy<T, K>(
   keySelector: (item: T) => K,
   queryable?: QueryableMeta,
@@ -363,24 +408,29 @@ export function maxBy<T, K>(
     kind: "maxBy",
     keySelector,
     queryable,
-    apply: (source) => {
-      let result: T | undefined;
-      let maxKey: K | undefined;
-      let found = false;
-      for (const item of source) {
-        const key = keySelector(item);
-        if (!found || compareKeys(key, maxKey as K) > 0) {
-          result = item;
-          maxKey = key;
-          found = true;
-        }
-      }
-      if (!found) throw new InvalidOperationException("Sequence contains no elements");
-      return result!;
-    },
+    apply: (source) => requireValue(extremeBy(source, keySelector, 1)),
   };
 }
 
+/** `MaxBy(keySelector)` over a reference or nullable element: `null` for an empty sequence. */
+export function maxByNullable<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): MaxByTerm<T, K, T | null> {
+  return {
+    kind: "maxBy",
+    keySelector,
+    queryable,
+    apply: (source) => extremeBy(source, keySelector, 1) ?? null,
+  };
+}
+
+/**
+ * `Average()` / `Average(selector)` over `int`, `double`, …: the sum as a `number`, divided by
+ * the count. The `decimal` and 64-bit averages are `averageDecimal` and `averageInt64`.
+ *
+ * @throws InvalidOperationException for an empty sequence.
+ */
 export function average<T>(
   selector?: (item: T) => number,
   queryable?: QueryableMeta,
@@ -389,16 +439,20 @@ export function average<T>(
     kind: "average",
     selector,
     queryable,
-    apply: (source) => {
-      let total = 0;
-      let n = 0;
-      for (const item of source) {
-        total += selector ? selector(item) : (item as unknown as number);
-        n++;
-      }
-      if (n === 0) throw new InvalidOperationException("Sequence contains no elements");
-      return total / n;
-    },
+    apply: (source) => requireValue(averageOf(valuesOf(source, selector) as Iterable<number>)),
+  };
+}
+
+/** `Average()` / `Average(selector)` over `int?`, `double?`, …: nulls skipped; `null` when none is left. */
+export function averageNullable<T>(
+  selector?: (item: T) => number | null,
+  queryable?: QueryableMeta,
+): AverageTerm<T, number | null> {
+  return {
+    kind: "average",
+    selector,
+    queryable,
+    apply: (source) => averageOf(valuesOf(source, selector) as Iterable<number>),
   };
 }
 
@@ -425,6 +479,112 @@ export function aggregate<T, A>(seed: A, accumulator: (acc: A, item: T) => A): A
     },
   };
 }
+
+/** The non-null values of `source`, through `selector` when there is one. */
+function* valuesOf<T>(
+  source: Iterable<T>,
+  selector: ((item: T) => unknown) | undefined,
+): Iterable<unknown> {
+  for (const item of source) {
+    const value = selector ? selector(item) : item;
+
+    if (value != null) yield value;
+  }
+}
+
+/** `value` for a sequence that had one, .NET's exception for one that had none. */
+function requireValue<R>(value: R | undefined | null): R {
+  if (value === undefined || value === null)
+    throw new InvalidOperationException(NO_ELEMENTS_MESSAGE);
+  return value;
+}
+
+/**
+ * The smallest of `values`; `undefined` when there are none. `double.NaN` wins over every other
+ * value wherever it stands, as in `Enumerable.Min`; `-0` and `0` keep the first one met.
+ */
+function smallest(values: Iterable<unknown>): unknown {
+  let result: unknown;
+
+  for (const value of values) {
+    if (isNaNValue(value)) return value;
+    if (result === undefined || compareKeys(value, result) < 0) result = value;
+  }
+
+  return result;
+}
+
+/**
+ * The largest of `values`; `undefined` when there are none. `double.NaN` is the result only
+ * when it is all there is, as in `Enumerable.Max`.
+ */
+function largest(values: Iterable<unknown>): unknown {
+  let result: unknown;
+
+  for (const value of values) {
+    if (result === undefined || isNaNValue(result) || compareKeys(value, result) > 0) {
+      result = value;
+    }
+  }
+
+  return result;
+}
+
+function isNaNValue(value: unknown): boolean {
+  return typeof value === "number" && Number.isNaN(value);
+}
+
+/**
+ * The element of `source` with the smallest (`direction` -1) or largest (1) key, the first one
+ * on a tie, as `MinBy` / `MaxBy` pick it. A `null` key is skipped; the first element stands in
+ * when every key is null. `undefined` for an empty sequence.
+ */
+function extremeBy<T, K>(
+  source: Iterable<T>,
+  keySelector: (item: T) => K,
+  direction: -1 | 1,
+): T | undefined {
+  let first: T | undefined;
+  let hasFirst = false;
+  let result: T | undefined;
+  let resultKey: K | undefined;
+  let hasResult = false;
+
+  for (const item of source) {
+    if (!hasFirst) {
+      first = item;
+      hasFirst = true;
+    }
+
+    const key = keySelector(item);
+
+    if (key == null) continue;
+
+    if (!hasResult || compareKeys(key, resultKey as K) * direction > 0) {
+      result = item;
+      resultKey = key;
+      hasResult = true;
+    }
+  }
+
+  return hasResult ? result : first;
+}
+
+/** The sum as a `number` divided by the count of `values`; `null` when there are none. */
+function averageOf(values: Iterable<number>): number | null {
+  let total = 0;
+  let count = 0;
+
+  for (const value of values) {
+    total += value;
+    count++;
+  }
+
+  return count === 0 ? null : total / count;
+}
+
+/** .NET's message for `Average`, `Min`, `Max`, `MinBy` and `MaxBy` over an empty sequence. */
+const NO_ELEMENTS_MESSAGE = "Sequence contains no elements";
 
 /** .NET's exception for a sequence with no element, or with none that matches its predicate. */
 function noElementException(hasPredicate: boolean): InvalidOperationException {

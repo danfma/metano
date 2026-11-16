@@ -33,6 +33,9 @@ export type OperatorKind =
   | "distinct"
   | "distinctBy"
   | "concat"
+  | "union"
+  | "intersect"
+  | "except"
   | "append"
   | "prepend"
   | "reverse"
@@ -137,6 +140,24 @@ export interface ConcatOp<T> extends OperatorBase<T, T> {
   readonly other: Iterable<T>;
 }
 
+/** `Union`: the distinct elements of the source, then those of `other` it lacks. */
+export interface UnionOp<T> extends OperatorBase<T, T> {
+  readonly kind: "union";
+  readonly other: Iterable<T>;
+}
+
+/** `Intersect`: the distinct elements of the source that `other` holds too. */
+export interface IntersectOp<T> extends OperatorBase<T, T> {
+  readonly kind: "intersect";
+  readonly other: Iterable<T>;
+}
+
+/** `Except`: the distinct elements of the source that `other` lacks. */
+export interface ExceptOp<T> extends OperatorBase<T, T> {
+  readonly kind: "except";
+  readonly other: Iterable<T>;
+}
+
 export interface AppendOp<T> extends OperatorBase<T, T> {
   readonly kind: "append";
   readonly element: T;
@@ -210,6 +231,9 @@ export type AnyOperator =
   | DistinctOp<unknown>
   | DistinctByOp<unknown, unknown>
   | ConcatOp<unknown>
+  | UnionOp<unknown>
+  | IntersectOp<unknown>
+  | ExceptOp<unknown>
   | AppendOp<unknown>
   | PrependOp<unknown>
   | ReverseOp<unknown>
@@ -318,39 +342,51 @@ export interface CountTerm<T> extends TerminalBase<T, number> {
   readonly queryable?: QueryableMeta;
 }
 
-export interface SumTerm<T> extends TerminalBase<T, number> {
+/**
+ * `Sum`: `R` is `number`, or the decimal.js value of a `decimal` sum. A `null` the
+ * selector (or the source) yields counts as zero, as for `int?`.
+ */
+export interface SumTerm<T, R = number> extends TerminalBase<T, R> {
   readonly kind: "sum";
-  readonly selector?: (item: T) => number;
+  readonly selector?: (item: T) => R | null;
   readonly queryable?: QueryableMeta;
 }
 
-export interface MinTerm<T> extends TerminalBase<T, number> {
+/**
+ * `Min`: `R` is the type of the values, or `R | null` when an empty sequence
+ * or one of nulls gives `null` (a nullable or reference-typed result).
+ */
+export interface MinTerm<T, R = number> extends TerminalBase<T, R> {
   readonly kind: "min";
-  readonly selector?: (item: T) => number;
+  readonly selector?: (item: T) => unknown;
   readonly queryable?: QueryableMeta;
 }
 
-export interface MaxTerm<T> extends TerminalBase<T, number> {
+/** `Max`: `R` is the type of the values, or `R | null` as for {@link MinTerm}. */
+export interface MaxTerm<T, R = number> extends TerminalBase<T, R> {
   readonly kind: "max";
-  readonly selector?: (item: T) => number;
+  readonly selector?: (item: T) => unknown;
   readonly queryable?: QueryableMeta;
 }
 
-export interface MinByTerm<T, K> extends TerminalBase<T, T> {
+/** `MinBy`: the element with the smallest key; `null` for an empty sequence of a nullable element type. */
+export interface MinByTerm<T, K, R = T> extends TerminalBase<T, R> {
   readonly kind: "minBy";
   readonly keySelector: (item: T) => K;
   readonly queryable?: QueryableMeta;
 }
 
-export interface MaxByTerm<T, K> extends TerminalBase<T, T> {
+/** `MaxBy`: the element with the largest key; `null` for an empty sequence of a nullable element type. */
+export interface MaxByTerm<T, K, R = T> extends TerminalBase<T, R> {
   readonly kind: "maxBy";
   readonly keySelector: (item: T) => K;
   readonly queryable?: QueryableMeta;
 }
 
-export interface AverageTerm<T> extends TerminalBase<T, number> {
+/** `Average`: `R` is `number`, or the decimal.js value of a `decimal` average; `R | null` for nullable values. */
+export interface AverageTerm<T, R = number> extends TerminalBase<T, R> {
   readonly kind: "average";
-  readonly selector?: (item: T) => number;
+  readonly selector?: (item: T) => unknown;
   readonly queryable?: QueryableMeta;
 }
 
@@ -410,12 +446,12 @@ export type AnyTerminal =
   | AnyTerm<unknown>
   | AllTerm<unknown>
   | CountTerm<unknown>
-  | SumTerm<unknown>
-  | MinTerm<unknown>
-  | MaxTerm<unknown>
-  | MinByTerm<unknown, unknown>
-  | MaxByTerm<unknown, unknown>
-  | AverageTerm<unknown>
+  | SumTerm<unknown, unknown>
+  | MinTerm<unknown, unknown>
+  | MaxTerm<unknown, unknown>
+  | MinByTerm<unknown, unknown, unknown>
+  | MaxByTerm<unknown, unknown, unknown>
+  | AverageTerm<unknown, unknown>
   | SumInt64Term<unknown>
   | AverageInt64Term<unknown, number | null>
   | MinInt64Term<unknown, bigint | null>

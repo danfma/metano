@@ -20,6 +20,8 @@ import type {
   ConcatOp,
   DistinctByOp,
   DistinctOp,
+  ExceptOp,
+  IntersectOp,
   OrderByDescendingOp,
   OrderByOp,
   PrependOp,
@@ -30,6 +32,7 @@ import type {
   SkipWhileOp,
   TakeOp,
   TakeWhileOp,
+  UnionOp,
   ThenByDescendingOp,
   ThenByOp,
   WhereOp,
@@ -247,6 +250,70 @@ export function concat<T>(other: Iterable<T>): ConcatOp<T> {
       *[Symbol.iterator]() {
         for (const item of source) yield item;
         for (const item of other) yield item;
+      },
+    }),
+  };
+}
+
+/** `Union(second)`: the distinct elements of the source, then those of `other` it lacks. */
+export function union<T>(other: Iterable<T>): UnionOp<T> {
+  return {
+    kind: "union",
+    other,
+    apply: (source) => ({
+      *[Symbol.iterator]() {
+        const seen = new HashSet<T>();
+
+        for (const item of source) {
+          if (!seen.has(item)) {
+            seen.add(item);
+            yield item;
+          }
+        }
+
+        for (const item of other) {
+          if (!seen.has(item)) {
+            seen.add(item);
+            yield item;
+          }
+        }
+      },
+    }),
+  };
+}
+
+/** `Intersect(second)`: the distinct elements of the source that `other` holds too, in source order. */
+export function intersect<T>(other: Iterable<T>): IntersectOp<T> {
+  return {
+    kind: "intersect",
+    other,
+    apply: (source) => ({
+      *[Symbol.iterator]() {
+        const remaining = new HashSet<T>(other);
+
+        for (const item of source) {
+          if (remaining.delete(item)) yield item;
+        }
+      },
+    }),
+  };
+}
+
+/** `Except(second)`: the distinct elements of the source that `other` lacks, in source order. */
+export function except<T>(other: Iterable<T>): ExceptOp<T> {
+  return {
+    kind: "except",
+    other,
+    apply: (source) => ({
+      *[Symbol.iterator]() {
+        const excluded = new HashSet<T>(other);
+
+        for (const item of source) {
+          if (!excluded.has(item)) {
+            excluded.add(item);
+            yield item;
+          }
+        }
       },
     }),
   };
