@@ -432,7 +432,7 @@ your own `JsonConverter`.
 | `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` | ✅ | camelCase names, case-insensitive property names and numbers read from strings, as in .NET ([details](#web-defaults)) |
 | `[JsonSourceGenerationOptions]` with `PropertyNameCaseInsensitive`, `NumberHandling = AllowReadingFromString` or `AllowOutOfOrderMetadataProperties` | ✅ | Mirrored in the context's `readOptions` ([details](#web-defaults)); the other `NumberHandling` flags (`WriteAsString`, `AllowNamedFloatingPointLiterals`) are not |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
-| `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)). `Condition = Never` keeps it; `WhenWritingNull`, `WhenWritingDefault`, `WhenWriting` and `WhenReading` keep it too, always written and read, and warn `MS0037` |
+| `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)). `Condition = Never` keeps it; `WhenWritingNull` (and `WhenWritingDefault` on a nullable member) keeps it and leaves it out of the written JSON when it is `null` (`omitWhenNull`); `WhenWritingDefault` on a non-nullable member, `WhenWriting` and `WhenReading` keep it too, always written and read, and warn `MS0037` |
 | `[JsonInclude]` | ✅ | Serializes a field or an `internal` / `protected internal` property ([details](#member-selection)); on a member the source generator cannot reach, warns `MS0037` |
 | `[JsonPropertyOrder(n)]` | ✅ | Emitted as the property's `order`; the runtime sorts the whole hierarchy by it ([details](#member-selection)) |
 | `JsonKnownNamingPolicy.CamelCase` | ✅ | `FirstName` → `firstName` |
@@ -603,8 +603,8 @@ Everything else System.Text.Json offers is either mirrored or reported with
 warning `MS0037` (`UnmirroredJsonOption`) at the option or attribute, so no
 option or attribute is ignored silently (the remaining differences are the
 documented divergences of spec 009): the unmirrored `[JsonSourceGenerationOptions]`
-options set to a non-default value (`DefaultIgnoreCondition`,
-`IgnoreReadOnlyProperties`, `IgnoreReadOnlyFields`, `IncludeFields`,
+options set to a non-default value (`DefaultIgnoreCondition` other than `Never` and
+`WhenWritingNull`, which the generated context mirrors; `IgnoreReadOnlyProperties`, `IgnoreReadOnlyFields`, `IncludeFields`,
 `UseStringEnumConverter`, `Converters`, `ReferenceHandler`,
 `DictionaryKeyPolicy`, `ReadCommentHandling`, `AllowTrailingCommas`,
 `AllowDuplicateProperties`, `UnmappedMemberHandling`, `UnknownTypeHandling`,
@@ -1002,7 +1002,10 @@ writes or accepts, so a payload exchanged with a 2.x build can differ:
 - **Conditional `[JsonIgnore]`** (`WhenWritingNull`, `WhenWritingDefault`,
   `WhenWriting`, `WhenReading`): 2.x left these members out; 3.0 writes and
   reads them (warning `MS0037`), so a payload without a non-nullable one throws
-  `Missing required property: "Count"`.
+  `Missing required property: "Count"`. `WhenWritingNull` (the member's, or the
+  context's `DefaultIgnoreCondition`) is mirrored since #667: a `null` member
+  is left out of the written JSON, as System.Text.Json does, and the warning is
+  gone.
 - **`JsonSerializerDefaults.Web`**: 2.x ignored it; 3.0 writes camelCase names
   (`FirstName` → `firstName`) and reads case-insensitively, numbers from
   strings included ([Web defaults](#web-defaults)).

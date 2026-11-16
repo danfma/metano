@@ -220,13 +220,21 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     /// <summary>
     /// <c>[JsonIgnore]</c> with a conditional <c>Condition</c>
     /// (<c>WhenWritingNull</c>, <c>WhenWritingDefault</c>, <c>WhenWriting</c>,
-    /// <c>WhenReading</c>): the context writes and reads the member always.
+    /// <c>WhenReading</c>): the context writes and reads the member always,
+    /// except that <c>WhenWritingNull</c> (and <c>WhenWritingDefault</c> on a
+    /// nullable member, whose default is <c>null</c>) omits a <c>null</c> on
+    /// write.
     /// </summary>
     private static MetanoDiagnostic? IgnoreConditionWarningOf(ISymbol member, string name)
     {
         var condition = JsonSerializationAttributes.IgnoreConditionOf(member);
 
         if (condition is null or JsonIgnoreCondition.Always or JsonIgnoreCondition.Never)
+            return null;
+
+        if (
+            JsonPropertyCollector.OmitsNullOnWrite(condition.Value, JsonMemberAccess.TypeOf(member))
+        )
             return null;
 
         return UnmirroredJsonWarning.Create(

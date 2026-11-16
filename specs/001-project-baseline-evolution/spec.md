@@ -427,6 +427,17 @@ Product requirements added after the migration (normative; each one is traced by
   `xs.X(...)`, including when nested in a chain. A static call that names an argument reports
   MS0001. The legacy fluent `Enumerable.from(...)` mappings no longer exist.
 
+- **FR-068** (JSON `JsonIgnoreCondition.WhenWritingNull`, #667): The generated
+  `JsonSerializerContext` MUST leave a `null` member out of the written JSON when System.Text.Json
+  would: the context's `DefaultIgnoreCondition = WhenWritingNull`, and a member's own
+  `[JsonIgnore(Condition = WhenWritingNull)]` (or `WhenWritingDefault` on a nullable member, whose
+  default is `null`), the member's condition taking precedence (`Never` keeps writing it). The
+  property spec carries `omitWhenNull: true` and only a nullable member does; reading is
+  unaffected. `MS0037` MUST NOT report these; `WhenWritingDefault` on a non-nullable member and a
+  context-wide `DefaultIgnoreCondition = WhenWritingDefault` stay reported. Traced by the
+  "Naming policies, `JsonSerializerDefaults.Web` and read options" and "STJ member selection" rows
+  of the feature-support matrix.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

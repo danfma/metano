@@ -58,7 +58,7 @@ public class JsonUnmirroredOptionTests
 
     [Test]
     [Arguments(
-        "DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull",
+        "DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault",
         "DefaultIgnoreCondition"
     )]
     [Arguments("IgnoreReadOnlyProperties = true", "IgnoreReadOnlyProperties")]
@@ -144,6 +144,7 @@ public class JsonUnmirroredOptionTests
     [Arguments("DefaultBufferSize = 1024")]
     [Arguments("GenerationMode = JsonSourceGenerationMode.Metadata")]
     [Arguments("DefaultIgnoreCondition = JsonIgnoreCondition.Never")]
+    [Arguments("DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull")]
     [Arguments("IncludeFields = false")]
     [Arguments("AllowDuplicateProperties = true")]
     [Arguments("ReferenceHandler = JsonKnownReferenceHandler.Unspecified")]

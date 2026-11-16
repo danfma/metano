@@ -643,6 +643,16 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `UnsupportedError` instead of dropping the clause (or emitting
   `n.toString('D2')`).
 
+### JSON: `JsonIgnoreCondition.WhenWritingNull` is mirrored (baseline FR-068; #667)
+
+- A context with `DefaultIgnoreCondition = WhenWritingNull`, and a member with
+  `[JsonIgnore(Condition = WhenWritingNull)]` (or `WhenWritingDefault` on a nullable member,
+  whose default is `null`), leave a `null` member out of the written JSON, as System.Text.Json
+  does; `[JsonIgnore(Condition = Never)]` keeps writing it under such a context. The property
+  spec gains `omitWhenNull: true`; reading is unchanged. `MS0037` no longer reports these;
+  `WhenWritingDefault` on a non-nullable member (a `0` or `false` default) and a context-wide
+  `DefaultIgnoreCondition = WhenWritingDefault` still do.
+
 ### Toolchain
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.

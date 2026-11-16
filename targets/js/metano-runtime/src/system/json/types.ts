@@ -201,6 +201,12 @@ export interface PropertySpec {
   /** Property is optional — null is accepted on deserialize */
   readonly optional?: boolean;
   /**
+   * The property is left out of the JSON when it is null
+   * (`JsonIgnoreCondition.WhenWritingNull`, from the member's `[JsonIgnore]`
+   * or the context's `DefaultIgnoreCondition`). Reading is unaffected.
+   */
+  readonly omitWhenNull?: boolean;
+  /**
    * `[JsonPropertyOrder]`: the wire order sorts every property of the
    * contract by it, stably, absent counting as `0` (FR-046, slice S6b).
    */

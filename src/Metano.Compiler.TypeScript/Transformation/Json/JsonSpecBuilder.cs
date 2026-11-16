@@ -637,10 +637,15 @@ internal sealed class JsonSpecBuilder
 
     /// <summary>
     /// Builds a property spec object literal:
-    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true, order?: n }</c>,
-    /// where <c>order</c> is a non-zero <c>[JsonPropertyOrder]</c>: the
-    /// runtime sorts the whole base chain by it (FR-046).
+    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true, omitWhenNull?: true, order?: n }</c>,
+    /// where <c>omitWhenNull</c> leaves a <c>null</c> member out of the JSON
+    /// (<c>JsonIgnoreCondition.WhenWritingNull</c>) and <c>order</c> is a
+    /// non-zero <c>[JsonPropertyOrder]</c>: the runtime sorts the whole base
+    /// chain by it (FR-046).
     /// </summary>
+    private static bool OmitsNull(JsonSerializableProperty property) =>
+        property.OmitsNull && JsonTypeClassifier.IsNullable(property.Type);
+
     private TsObjectLiteral BuildPropertySpec(JsonSerializableProperty property)
     {
         var type = property.Type;
@@ -652,6 +657,9 @@ internal sealed class JsonSpecBuilder
             new TsObjectProperty("type", _descriptors.Build(type)),
             JsonTypeClassifier.IsNullable(type)
                 ? new TsObjectProperty("optional", new TsLiteral("true"))
+                : null,
+            OmitsNull(property)
+                ? new TsObjectProperty("omitWhenNull", new TsLiteral("true"))
                 : null,
             property.Order == 0
                 ? null

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.TypeScript.Bridge;
@@ -12,12 +13,14 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 internal sealed class JsonPropertyCollector(
     TypeScriptTransformContext context,
     JsonContractAdmission admission,
-    Func<string, string>? namingPolicy
+    Func<string, string>? namingPolicy,
+    JsonIgnoreCondition defaultIgnoreCondition = JsonIgnoreCondition.Never
 )
 {
     private readonly TypeScriptTransformContext _context = context;
     private readonly JsonContractAdmission _admission = admission;
     private readonly Func<string, string>? _namingPolicy = namingPolicy;
+    private readonly JsonIgnoreCondition _defaultIgnoreCondition = defaultIgnoreCondition;
 
     /// <summary>
     /// System.Text.Json's member rules, judged from the context's assembly
@@ -324,9 +327,36 @@ internal sealed class JsonPropertyCollector(
             JsonMemberAccess.TypeOf(member),
             jsonName,
             TsNameOf(member),
-            JsonSerializationAttributes.OrderOf(member)
+            JsonSerializationAttributes.OrderOf(member),
+            OmitsNullOnWrite(member)
         );
     }
+
+    /// <summary>
+    /// Whether the member is left out of the JSON when it is <c>null</c>: its
+    /// own <c>[JsonIgnore(Condition = …)]</c> decides, else the context's
+    /// <c>DefaultIgnoreCondition</c>.
+    /// </summary>
+    private bool OmitsNullOnWrite(ISymbol member)
+    {
+        var condition = JsonSerializationAttributes.IgnoreConditionOf(member)
+            ?? _defaultIgnoreCondition;
+
+        return OmitsNullOnWrite(condition, JsonMemberAccess.TypeOf(member));
+    }
+
+    /// <summary>
+    /// <c>WhenWritingNull</c> omits a <c>null</c> member; <c>WhenWritingDefault</c>
+    /// does too when the member's type is nullable, since <c>null</c> is its
+    /// default (a <c>0</c> or <c>false</c> default is not mirrored).
+    /// </summary>
+    public static bool OmitsNullOnWrite(JsonIgnoreCondition condition, ITypeSymbol type) =>
+        condition switch
+        {
+            JsonIgnoreCondition.WhenWritingNull => true,
+            JsonIgnoreCondition.WhenWritingDefault => JsonTypeClassifier.IsNullable(type),
+            _ => false,
+        };
 
     private static string TsNameOf(ISymbol member) =>
         IrToTsNamingPolicy.ToDataMemberName(
@@ -367,5 +397,6 @@ internal sealed record JsonSerializableProperty(
     ITypeSymbol Type,
     string JsonName,
     string TsName,
-    int Order
+    int Order,
+    bool OmitsNull
 );
