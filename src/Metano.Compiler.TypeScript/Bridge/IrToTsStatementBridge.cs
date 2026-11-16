@@ -37,8 +37,8 @@ public static class IrToTsStatementBridge
 
         return new TsRawStatement(WrapLoop(header, body))
         {
-            EmbeddedStatements = body,
             EmbeddedExpressions = [collection],
+            EmbeddedScopes = [new TsEmbeddedScope([loopVariable], body)],
         };
     }
 
@@ -62,11 +62,13 @@ public static class IrToTsStatementBridge
 
         return new TsRawStatement(WrapLoop(header, body))
         {
-            EmbeddedStatements = [.. initializers, .. body],
-            EmbeddedExpressions =
+            EmbeddedScopes =
             [
-                .. condition is null ? [] : new[] { condition },
-                .. incrementors,
+                new TsEmbeddedScope(
+                    [],
+                    [.. initializers, .. body],
+                    [.. condition is null ? [] : new[] { condition }, .. incrementors]
+                ),
             ],
         };
     }
@@ -211,7 +213,10 @@ public static class IrToTsStatementBridge
 
         return new TsRawStatement(text)
         {
-            EmbeddedStatements = [.. body, .. handler?.Body ?? [], .. finallyBody ?? []],
+            EmbeddedStatements = [.. body, .. finallyBody ?? []],
+            EmbeddedScopes = handler is null
+                ? []
+                : [new TsEmbeddedScope([handler.Parameter], handler.Body)],
         };
     }
 

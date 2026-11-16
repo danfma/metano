@@ -556,17 +556,16 @@ public sealed class IrStatementExtractor(
     /// <summary>
     /// The clause's <c>when (…)</c> condition. A filter no target can place
     /// (it declares a variable or passes an <c>out</c> argument) extracts to
-    /// the unsupported placeholder; the reporter decides what MS0001 says for
-    /// the target.
+    /// the unsupported placeholder; the reporter then decides what MS0001 says
+    /// for the target, for the clauses a chain keeps.
     /// </summary>
     private IrExpression ExtractCatchFilter(CatchFilterClauseSyntax filter)
     {
         var condition = _expressions.Extract(filter.FilterExpression);
-        var bindsVariables = ExpressionVariableLowering.DeclaresExpressionVariables(condition);
 
-        _catchClauses.ReportUnsupportedFilter(filter, bindsVariables);
-
-        return bindsVariables ? new IrUnsupportedExpression("CatchFilterVariable") : condition;
+        return ExpressionVariableLowering.DeclaresExpressionVariables(condition)
+            ? new IrUnsupportedExpression(UnsupportedCatchClauseReporter.FilterVariablesKind)
+            : condition;
     }
 
     private IrStatement ExtractSwitch(SwitchStatementSyntax sw)

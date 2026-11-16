@@ -31,6 +31,9 @@ internal sealed class UnsupportedCatchClauseReporter(
     IrExtractionContext context
 )
 {
+    /// <summary>The <see cref="IrUnsupportedExpression.Kind"/> of a filter that binds variables.</summary>
+    public const string FilterVariablesKind = "CatchFilterVariable";
+
     private readonly SemanticModel _semantic = semantic;
     private readonly ExceptionRuntimeClassReporter _exceptionClassReporter = new(context);
 
@@ -39,38 +42,64 @@ internal sealed class UnsupportedCatchClauseReporter(
     private readonly bool _lowersFilters = context.Target is not TargetLanguage.Dart;
 
     /// <summary>
-    /// Reports the clauses of <paramref name="statement"/> whose type test the
-    /// target cannot express; <paramref name="clauses"/> are its extracted
-    /// clauses, in the same order.
+    /// Reports the clauses of <paramref name="statement"/> whose filter or type
+    /// test the target cannot express; <paramref name="clauses"/> are its
+    /// extracted clauses, in the same order. The clauses after the first one
+    /// that handles every exception are never tried, so they report nothing.
     /// </summary>
     public void ReportUnsupportedClauses(
         TryStatementSyntax statement,
         IReadOnlyList<IrCatchClause> clauses
     )
     {
-        foreach (var (declared, clause) in statement.Catches.Zip(clauses))
+        foreach (var (declared, clause) in ReachableClauses(statement.Catches.Zip(clauses)))
         {
-            var caught = CaughtSymbolOf(declared);
+            if (declared.Filter is { } filter)
+                ReportUnsupportedFilter(filter, clause);
 
-            if (caught is not null && _exceptionClassReporter.LacksRuntimeClass(caught))
-                _exceptionClassReporter.ReportUnanswerableTest(caught, ClauseHead(declared));
-            else if (_erasesStaticTypes && !HasRuntimeTypeTest(clause))
-                ReportUntestableType(declared);
+            ReportUnsupportedType(declared, clause);
         }
     }
 
     /// <summary>
     /// Reports <paramref name="filter"/> when the target cannot lower it:
-    /// any filter on a target that keeps none, otherwise one that
-    /// <paramref name="bindsVariables"/> (declares a variable or passes an
+    /// any filter on a target that keeps none, otherwise one extracted as the
+    /// unsupported placeholder (it declares a variable or passes an
     /// <c>out</c> argument).
     /// </summary>
-    public void ReportUnsupportedFilter(CatchFilterClauseSyntax filter, bool bindsVariables)
+    private void ReportUnsupportedFilter(CatchFilterClauseSyntax filter, IrCatchClause clause)
     {
         if (!_lowersFilters)
             ReportDroppedFilter(filter);
-        else if (bindsVariables)
+        else if (clause.Filter is IrUnsupportedExpression { Kind: FilterVariablesKind })
             ReportFilterVariables(filter);
+    }
+
+    private void ReportUnsupportedType(CatchClauseSyntax declared, IrCatchClause clause)
+    {
+        var caught = CaughtSymbolOf(declared);
+
+        if (caught is not null && _exceptionClassReporter.LacksRuntimeClass(caught))
+            _exceptionClassReporter.ReportUnanswerableTest(caught, ClauseHead(declared));
+        else if (_erasesStaticTypes && !HasRuntimeTypeTest(clause))
+            ReportUntestableType(declared, clause);
+    }
+
+    /// <summary>
+    /// The clauses C# can reach: the first unconditional one takes every
+    /// exception, so the ones after it are never tried.
+    /// </summary>
+    private static IEnumerable<(CatchClauseSyntax Declared, IrCatchClause Clause)> ReachableClauses(
+        IEnumerable<(CatchClauseSyntax Declared, IrCatchClause Clause)> clauses
+    )
+    {
+        foreach (var reachable in clauses)
+        {
+            yield return reachable;
+
+            if (reachable.Clause.IsUnconditional)
+                yield break;
+        }
     }
 
     private ITypeSymbol? CaughtSymbolOf(CatchClauseSyntax clause) =>
@@ -91,12 +120,16 @@ internal sealed class UnsupportedCatchClauseReporter(
                 + "method that does it from the filter instead."
         );
 
-    private static void ReportUntestableType(CatchClauseSyntax clause) =>
+    private static void ReportUntestableType(CatchClauseSyntax declared, IrCatchClause clause) =>
         Report(
-            ClauseHead(clause),
-            $"Catch clause '{ClauseHead(clause)}' cannot be lowered: its exception type has no "
+            ClauseHead(declared),
+            $"Catch clause '{ClauseHead(declared)}' cannot be lowered: its exception type has no "
                 + "runtime type test in the target (type parameters are erased), so the clause "
-                + "takes every exception."
+                + (
+                    clause.Filter is null
+                        ? "takes every exception."
+                        : "takes every exception its filter accepts."
+                )
         );
 
     private static void Report(SyntaxNode node, string message) =>

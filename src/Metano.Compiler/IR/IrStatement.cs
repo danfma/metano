@@ -171,14 +171,14 @@ public sealed record IrCatchClause(
     /// Whether the clause's type accepts every exception: a general
     /// <c>catch</c>, or <c>catch (System.Exception)</c>.
     /// </summary>
-    public bool CatchesEveryException =>
+    public bool AcceptsEveryExceptionType =>
         ExceptionType is null or IrNamedTypeRef { Name: "Exception", Namespace: "System" };
 
     /// <summary>
     /// Whether the clause handles every exception that reaches it: it accepts
     /// every exception and has no filter, so no later clause is ever tried.
     /// </summary>
-    public bool HandlesEveryException => CatchesEveryException && Filter is null;
+    public bool IsUnconditional => AcceptsEveryExceptionType && Filter is null;
 }
 
 /// <summary>

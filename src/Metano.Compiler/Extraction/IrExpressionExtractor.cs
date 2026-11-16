@@ -1543,7 +1543,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrTypeReference TypeReferenceTo(INamedTypeSymbol type) =>
         new(
-            QualifiedNestedName(type) ?? type.Name,
+            QualifiedNestedName(type) ?? EmittedTopLevelName(type, type.Name),
             CrossAssemblyOriginOf(type),
             IrTypeRefMapper.PrivateNestedSegmentCount(type)
         );
@@ -1559,11 +1559,19 @@ public sealed partial class IrExpressionExtractor
             return new(spelling);
 
         return new(
-            QualifiedNestedName(type) ?? spelling,
+            QualifiedNestedName(type) ?? EmittedTopLevelName(type, spelling),
             CrossAssemblyOriginOf(type),
             IrTypeRefMapper.PrivateNestedSegmentCount(type)
         );
     }
+
+    /// <summary>
+    /// The name a top-level type is declared under: its <c>[Name]</c> override, as in a
+    /// type position. A <paramref name="spelling"/> that is not the type's own name (a
+    /// <c>using</c> alias) is kept, since the alias machinery resolves it by that text.
+    /// </summary>
+    private string EmittedTopLevelName(INamedTypeSymbol type, string spelling) =>
+        spelling == type.Name ? SymbolHelper.GetNameOverride(type, _target) ?? spelling : spelling;
 
     /// <summary>
     /// The cross-assembly origin of <paramref name="type"/> — the same lookup the

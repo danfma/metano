@@ -26,4 +26,12 @@ public sealed record TsRawStatement(string Text) : TsStatement
     /// incrementor, a <c>foreach</c> collection). Never printed.
     /// </summary>
     public IReadOnlyList<TsExpression> EmbeddedExpressions { get; init; } = [];
+
+    /// <summary>
+    /// The parts of <see cref="Text"/> that run inside a name the text binds itself
+    /// (a <c>foreach</c> body, a <c>catch</c> block), apart from
+    /// <see cref="EmbeddedStatements"/> and <see cref="EmbeddedExpressions"/>, which
+    /// bind nothing. Never printed.
+    /// </summary>
+    public IReadOnlyList<TsEmbeddedScope> EmbeddedScopes { get; init; } = [];
 }
