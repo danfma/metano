@@ -681,6 +681,12 @@ Placeholders:
 - `$0, $1, …` — arguments
 - `$T0, $T1, …` — generic type arguments
 
+A template imports what it prints: a type argument only through its `$T<n>`, the receiver only
+through `$this`. A template without `$this` that names the receiver's type as an identifier
+(`new Decimal(parseDecimalText($0))` for `decimal.Parse`) gets a value import of that type's
+canonical exported name, never a `using` alias of it; any other name a template uses must come
+from `RuntimeImports`.
+
 ### `[assembly: MapProperty(typeof(T), "PropertyName", JsProperty = "jsName")]`
 
 Same idea for properties.

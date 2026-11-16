@@ -416,7 +416,7 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   values the runtime compares as .NET does: the sign guards for numbers and `char` (the sign
   bit: `-0`, a `decimal` `-0.0m` and `NaN` are negative); the ordered ones also for `bool` and
   the date and time types; `ThrowIfEqual` / `ThrowIfNotEqual` for those, strings, `Guid`,
-  enums, transpiled, non-generic records and structs whose fields are such values all the way down (`[PlainObject]` ones included) and tuples of them,
+  enums, transpiled, non-generic structs, record structs and sealed records whose fields are such values all the way down, read from source, with no `double` / `float` field (`[PlainObject]` ones included) and tuples of them,
   compared by value. Over another `T` (an ordered `string` or `Guid`, a class, an array,
   `object`, `DateTimeOffset` for equality, a type parameter, a record or struct holding one,
   a generic record) it reports `MS0001`. Known gap: `Guid.Parse` keeps the text's letter case,
@@ -453,10 +453,13 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   parameter is named `inner` no longer binds its arguments to temporaries. A `$` in a Dart
   string or `char` literal is now escaped (2.x emitted it bare, which Dart reads as an
   interpolation).
-- Value equality of records, `[PlainObject]` records, `HashSet` / `Dictionary` keys and
-  `Distinct` now tells `TimeSpan` members apart: before, any two durations compared equal (and
-  hashed alike); now equal lengths are equal (`PT5M` and `PT300S`), and a duration with weeks,
-  months or years, read from ISO text, compares field by field.
+- The runtime's value equality (`valueEquals` / `valueHashCode`) now tells `TimeSpan` values
+  apart: before, any two durations compared equal and hashed alike. This changes a record's or
+  `[PlainObject]` record's `equals` and `==`, and `Distinct` / `HashSet` over records, when they
+  hold a `TimeSpan`: equal lengths are equal (`PT5M` and `PT300S`), and a duration with weeks,
+  months or years, read from ISO text, compares field by field. A `Dictionary` / `HashSet` keyed
+  by a record or a `TimeSpan` itself still compares keys by reference (the runtime collections
+  of spec 011 change that).
 - A `[MapMethod]` template's generic type argument is imported only when the template embeds
   it as `$T<n>`, and its receiver only when the template embeds `$this` or names the
   receiver's type; before, a guard's `[PlainObject]` type argument was imported as a value

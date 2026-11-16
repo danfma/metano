@@ -120,11 +120,10 @@ All attributes live in the `Metano.Annotations` namespace inside the `src/Metano
 | Attribute | Target | Purpose |
 |-----------|--------|---------|
 | `[Transpile]` | Type | Marks type for transpilation |
-| `[assembly: TranspileAssembly]` | Assembly | Transpiles all public types (opt-out with `[NoTranspile]`) |
-| `[NoTranspile]` | Type | Excludes from transpilation |
+| `[assembly: TranspileAssembly]` | Assembly | Transpiles all public types (opt-out with `[Ignore]`) |
 | `[StringEnum]` | Enum | Generates TS string union instead of numeric enum |
 | `[Name("x")]` | Any | Overrides name in TS output |
-| `[Ignore]` | Member | Omits member from output |
+| `[Ignore]` | Type/Member | .NET-only: never transpiled (all targets, or one via `[Ignore(TargetLanguage.X)]`); a reference from transpilable code reports MS0013 (ADR-0015) |
 | `[ExportedAsModule]` | Static class | Emits top-level functions instead of class |
 | `[GenerateGuard]` | Type | Generates `isTypeName()` type guard function. Pair with TS-only `[StrictUnionGuard]` on the abstract base to dispatch per-variant shape validation via the runtime `UnionGuardRegistry` (avoids the ESM cycle that would arise from value-importing variants on the base). |
 | `[ExportFromBcl]` | Assembly | Maps BCL type to JS package (with optional `Version`) |
@@ -132,7 +131,7 @@ All attributes live in the `Metano.Annotations` namespace inside the `src/Metano
 | `[Emit("$0.foo($1)")]` | Method | Inlines JS at call site with argument placeholders |
 | `[InlineWrapper]` | Struct | Value wrapper that lowers to a branded primitive |
 | `[JsonFactory]` | Method | On a `[Branded]` type's static method: the generated `JsonSerializerContext` descriptor calls it (`create: Type.from`) instead of the non-validating `create`, so C# validation also runs on JSON input (TS-only; invalid shapes → MS0034) |
-| `[NoEmit]` | Type | Discoverable in C# but no .ts file emitted (ambient/declaration-only) |
+| `[External]` | Static class | Ambient, runtime-provided shape: no file emitted (TS-only, `Metano.Annotations.TypeScript`; → MS0012) |
 | `[ModuleEntryPoint]` | Method | Method body becomes top-level executable code in the module |
 | `[ExportVarFromBody]` | Method | Promotes a local var from the entry point to a module export |
 | `[PlainObject]` | Record/Class | Emits as TS interface (no class wrapper); `new T(args)` → object literal |
