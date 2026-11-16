@@ -946,9 +946,12 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   the numbers generated code holds (and `char`), testing the sign bit as .NET does (`-0` and
   `NaN` are negative); the ordered guards map for those, `bool` and the date and time types,
   with `double.CompareTo`'s `NaN` order; the equality guards map for those, strings, `Guid`,
-  enums, transpiled, non-generic records and structs whose fields are such values all the way down (`[PlainObject]` ones included) and tuples of them,
+  enums, transpiled, non-generic structs, record structs and sealed records whose fields are such values all the way down, read from source, with no `double` / `float` field (`[PlainObject]` ones included) and tuples of them,
   with `EqualityComparer<T>.Default`'s rules through the runtime's `valueEquals` (`NaN` equals
-  `NaN`, `0` equals `-0`, records, tuples, decimals and `TimeSpan`s compare by value). A
+  `NaN`, `0` equals `-0`, records, tuples and decimals compare by value, and two `TimeSpan`s are
+  equal when they last as long, `PT5M` and `PT300S`; a duration read from ISO text with
+  weeks, months or years, `P1W`, compares field by field, and `valueHashCode` hashes the same
+  quantity). A
   comparison guard over another `T` (an ordered `string`, culture-sensitive on .NET, or `Guid`;
   `Complex`; a class or an array, which .NET compares by reference; `DateTimeOffset` for
   equality, whose Temporal value also compares the time zone; a type parameter) reports
@@ -1027,7 +1030,10 @@ If none of the built-in mappings fit, you have several escape hatches:
 ### 1. `[MapMethod]` / `[MapProperty]` — declarative
 
 Add assembly-level mappings to define new BCL lowerings without touching the
-compiler. See [Attributes Reference](attributes.md#declarative-bcl-mappings).
+compiler. See [Attributes Reference](attributes.md#declarative-bcl-mappings). A template
+imports what it prints: a template without `$this` that names the receiver's type as an
+identifier (`new Decimal(parseDecimalText($0))`) gets a value import of that type's canonical
+exported name; a runtime helper it names must be listed in `RuntimeImports`.
 
 ### 2. `[Emit]` — inline JS at call sites
 
