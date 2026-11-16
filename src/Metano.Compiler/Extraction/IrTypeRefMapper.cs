@@ -17,6 +17,12 @@ namespace Metano.Compiler.Extraction;
 public static class IrTypeRefMapper
 {
     /// <summary>
+    /// The deepest chain of constructed types an equality walk follows before it
+    /// gives up (a generic that grows without end).
+    /// </summary>
+    private const int MaxEqualityWalkDepth = 32;
+
+    /// <summary>
     /// Backends opt into named-alias delegate emission by setting this
     /// predicate; <c>null</c> keeps the mapper on the inline-function
     /// fallback path.
@@ -651,7 +657,8 @@ public static class IrTypeRefMapper
             );
 
         // Only a primitive, an enum or a value type can be a leaf. An array, a
-        // class, a delegate, a type parameter or a generic type compares by
+        // class, a delegate, a type parameter (one a generic record's own
+        // definition leaves open) or a generic type compares by
         // reference or by an equality its definition does not fix, and mapping
         // one would also map the types it names, which may lead back here.
         if (!IsLeafCandidate(type))
@@ -756,15 +763,20 @@ public static class IrTypeRefMapper
         Metano.Annotations.TargetLanguage? target
     )
     {
-        var definition = type.OriginalDefinition;
-
-        if (!HasVisibleFieldwiseEquality(definition))
+        if (!HasVisibleFieldwiseEquality(type.OriginalDefinition))
             return false;
 
-        if (!visiting.Add(definition))
+        // A constructed type is visited as itself: Box<Box<Account>> must walk
+        // the inner Box, which a visit of the Box definition would skip. An
+        // instantiation that grows without end (Node<T> holding a
+        // Node<Node<T>>) is not a value the walk can settle.
+        if (visiting.Count >= MaxEqualityWalkDepth)
+            return false;
+
+        if (!visiting.Add(type))
             return true;
 
-        return InstanceFieldsOf(definition)
+        return InstanceFieldsOf(type)
             .All(field => CollectEqualityLeaves(field.Type, leaves, visiting, target));
     }
 
