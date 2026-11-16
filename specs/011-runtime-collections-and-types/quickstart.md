@@ -76,10 +76,10 @@ for s in sample-todo sample-issue-tracker sample-todo-service sample-runtime-typ
 ## Benchmark (stage 011c, review artifact)
 
 ```bash
-cd targets/js/metano-runtime && bun run bench
+cd targets/js/metano-runtime && bun run bench && bun run bench:node
 ```
 
-Record the table in `docs/runtime-types.md`; every NFR-001 budget must hold before 011c merges.
+Record both tables, with the Bun and Node.js versions, in `docs/runtime-types.md`; every NFR-001 budget must hold on both engines before 011c merges (the indexed `get` / `set` case is the one the spike missed on Node, research R16).
 
 ## Verify the zero-cost invariant (stages 011b / 011d)
 

@@ -1,6 +1,6 @@
 # Contract: `metano-runtime/system/collections`
 
-**Normative for**: FR-001–FR-012, FR-016, NFR-001, NFR-006–NFR-009. Every member below has a runtime test (FR-041). Names follow OD-2 (C#-like camelCase). Exceptions are the classes of [contracts/runtime-types.md](./runtime-types.md) § Exceptions, imported per class from `system/exceptions/*`. `RuntimeType` and `UnknownType` come from `metano-runtime/system/reflection`; the collection descriptor factories live here (`descriptors.ts`).
+**Normative for**: FR-001–FR-012, FR-016, FR-054–FR-057, NFR-001, NFR-006–NFR-009. The 3.0.0 scope is `List`, `HashSet`, `Dictionary`, `Queue`, `Stack`, their interfaces and the dictionary views (FR-054); the sections marked *deferred* land in stage 011h. Every member below has a runtime test (FR-041). Names follow OD-2 (C#-like camelCase). Exceptions are the classes of [contracts/runtime-types.md](./runtime-types.md) § Exceptions, imported per class from `system/exceptions/*`. `RuntimeType` and `UnknownType` come from `metano-runtime/system/reflection`; the collection descriptor factories live here (`descriptors.ts`).
 
 ## Equality (`default-comparer.ts`, D18)
 
@@ -68,6 +68,10 @@ export interface IReadOnlySet<T> extends IReadOnlyCollection<T> {
   overlaps(other: Iterable<T>): boolean;
   setEquals(other: Iterable<T>): boolean;
 }
+// A mutable view of a List's backing array (FR-056): element reads and writes, no length or order change.
+export interface Span<T> extends ReadonlyArray<T> {
+  [index: number]: T;
+}
 export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
   add(item: T): boolean;               // C# ISet<T>.Add returns bool
   unionWith(other: Iterable<T>): void;
@@ -116,8 +120,11 @@ export class List<T> implements IList<T> {
   convertAll<U>(converter: (item: T) => U): List<U>;
   binarySearch(item: T, comparison?: (a: T, b: T) => number): number;   // ~insertionPoint when absent, as .NET
   sort(comparison?: (a: T, b: T) => number): void;  reverse(): void;
-  toArray(): T[];                                             // copy; ToArray() / ToJsArray()
-  asReadOnly(): ReadOnlyList<T>;
+  toArray(): T[];                                             // detached shallow copy (slice of the backing array); ToArray() / ToJsArray() (FR-055)
+  asJsArray(): T[];                                           // the backing array itself; AsJsArray() (FR-056)
+  asSpan(): Span<T>;                                          // the backing array itself; AsSpan() / CollectionsMarshal.AsSpan(list)
+  asReadOnlySpan(): ReadonlyArray<T>;                         // the backing array itself; AsReadOnlySpan()
+  asReadOnly(): ReadOnlyList<T>;                              // deferred to 011h (FR-054); MS0001 until then
   toJSON(): T[];
   [Symbol.iterator](): Iterator<T>;
 }
@@ -127,14 +134,15 @@ export class List<T> implements IList<T> {
 - A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. `asArray(list)` (reflection helper) returns its backing array.
 - `contains` / `indexOf` / `remove` / `lastIndexOf` / `binarySearch` use `defaultEquals` with a `===` fast path for primitives.
 - `sort()` without a comparison uses `Comparer<T>.Default` semantics for numbers, strings, booleans, temporal values (by tag) and `IComparable` implementers (`compareTo`); otherwise throws `InvalidOperationException` (`Failed to compare two elements in the array.`).
-- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` (one integer compare per `next()`).
+- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` and the backing array's `length` recorded at the start (two integer compares per `next()`), so a length change made through `asJsArray()` is detected too (FR-057); element writes through a view bump nothing, as span writes in .NET.
+- **One backing array for life** (FR-057): `_items` is assigned once (in the constructor, or by `adopt`) and every member mutates it in place (`clear` sets `length = 0`, `sort` / `reverse` are in place); `count` reads `_items.length`. `asJsArray()`, `asSpan()` and `asReadOnlySpan()` return `_items` itself (`list.asSpan() === list.asJsArray()`), so they never go stale (unlike a .NET span after a reallocation, documented). Nothing polices a view at run time: `Span<T>` and `ReadonlyArray<T>` restrict what typed TS may do, a cast does not; a write past the end through `asJsArray()` leaves holes that `get` returns as `undefined` (documented).
 - Memory: one backing array plus `count` = the array's `length`; no per-element structures. A C# `List<T>` member not listed here (for example `Capacity`, `TrimExcess`, `EnsureCapacity`, `ForEach` with index) reports `MS0001` at the call site (FR-001).
 
-### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`)
+### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`) — deferred to stage 011h (FR-054)
 
 A view over an `IList<T>` or a native array: `IReadOnlyList<T>` members only, `count` live, `toJSON`. `Array.asReadOnly(arr)` and `list.asReadOnly()` build it.
 
-### `ImmutableList<T>` (`ImmutableList<T>`, `ImmutableArray<T>`, OD-17)
+### `ImmutableList<T>` (`ImmutableList<T>`, `ImmutableArray<T>`, OD-17) — deferred to stage 011h (FR-054)
 
 `IReadOnlyList<T>` plus `add`, `addRange`, `insert`, `remove`, `removeAt`, `removeAll`, `set`, `clear`, `sort` returning a **new** `ImmutableList<T>` (copy-on-write over one array); `static empty<T>()` (a memoized empty instance) and `static of(...)` / `from(...)`; `toJSON`.
 
@@ -169,15 +177,15 @@ export class ValueCollection<V> implements IReadOnlyCollection<V> { readonly cou
 
 ### `HashSet<T>` (reworked)
 
-Today's class (`hash-set.ts`) keeps its storage and gains the `ISet<T>` surface: `add(): boolean`, `remove(): boolean`, `contains`, `count`, `clear`, the set algebra of `ISet<T>` / `IReadOnlySet<T>`, a `comparer` constructor argument, `static of` / `from`, `toArray`, `toJSON`, `_version`. Removed: `size`, `has`, `delete`, `values()`, `forEach` (breaking, migration notes). `system/equality.equals` is **not** taught about `HashSet` or `Dictionary`: a record with a collection field compares it by reference, as .NET does (D18).
+Today's class (`hash-set.ts`) keeps its storage and gains the `ISet<T>` surface: `add(): boolean`, `remove(): boolean`, `contains`, `count`, `clear`, the set algebra of `ISet<T>` / `IReadOnlySet<T>`, a `comparer` constructor argument, `static of` / `from`, `toArray` (a detached copy, FR-055), `toJSON`, `_version`. No view: .NET has no span over a set (FR-056). Removed: `size`, `has`, `delete`, `values()`, `forEach` (breaking, migration notes). `system/equality.equals` is **not** taught about `HashSet` or `Dictionary`: a record with a collection field compares it by reference, as .NET does (D18).
 
 ### `Queue<T>`
 
-Ring buffer: `enqueue`, `dequeue` (throws `InvalidOperationException`, `Queue empty.`), `peek`, `tryDequeue(): readonly [true, T] | readonly [false, null]`, `tryPeek`, `count`, `contains`, `clear`, `toArray`, `toJSON`, iteration front-to-back, `_version`. `dequeue` is O(1) amortised (today `shift` is O(n)).
+Ring buffer: `enqueue`, `dequeue` (throws `InvalidOperationException`, `Queue empty.`), `peek`, `tryDequeue(): readonly [true, T] | readonly [false, null]`, `tryPeek`, `count`, `contains`, `clear`, `toArray` (a detached copy, front to back, FR-055), `toJSON`, iteration front-to-back, `_version`. `dequeue` is O(1) amortised (today `shift` is O(n)).
 
 ### `Stack<T>`
 
-`push`, `pop` (throws `InvalidOperationException`, `Stack empty.`), `peek`, `tryPop`, `tryPeek`, `count`, `contains`, `clear`, `toArray` (top first), `toJSON` (top first), iteration **top-first** (C# semantics; `Enumerators.cs` left `Stack` unmapped for this reason), `_version`.
+`push`, `pop` (throws `InvalidOperationException`, `Stack empty.`), `peek`, `tryPop`, `tryPeek`, `count`, `contains`, `clear`, `toArray` (a detached copy, top first, FR-055), `toJSON` (top first), iteration **top-first** (C# semantics; `Enumerators.cs` left `Stack` unmapped for this reason), `_version`.
 
 ## Helpers (`helpers.ts`)
 
@@ -187,11 +195,11 @@ export function isIterable(value: unknown): value is Iterable<unknown>;  // Symb
 export function asArray(value: unknown): unknown[] | null;               // native array, or the backing array of a fixed-size adopted List, else null
 ```
 
-`addEntry`, `listRemove`, `tryGetValue`, `getValueOrDefault` (free functions) and `ImmutableCollection` are **removed**; their callers are the class members above.
+`addEntry`, `listRemove`, `tryGetValue`, `getValueOrDefault` (free functions) are **removed**; their callers are the class members above. `ImmutableCollection` stays for the deferred immutable types until stage 011h removes it (#361 turns it into flat exports for 3.0.0).
 
 ## Descriptor factories (`descriptors.ts`, FR-017)
 
-`listType(elem)`, `dictionaryType(key, value)`, `hashSetType(elem)`, `queueType(elem)`, `stackType(elem)`, `immutableListType(elem)`, `readOnlyListType(elem)`, and the interface descriptors `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType`, each memoized on argument identity and carrying `variance` (`invariant` for classes, `covariant` for the `out` parameters of the read-only interfaces and `IEnumerable<out T>`). Importing `List` alone does not pull them (separate module; measured).
+`listType(elem)`, `dictionaryType(key, value)`, `hashSetType(elem)`, `queueType(elem)`, `stackType(elem)`, `immutableListType(elem)` and `readOnlyListType(elem)` (these two with stage 011h), and the interface descriptors `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType`, each memoized on argument identity and carrying `variance` (`invariant` for classes, `covariant` for the `out` parameters of the read-only interfaces and `IEnumerable<out T>`). Importing `List` alone does not pull them (separate module; measured).
 
 ## Type-argument descriptors (FR-008)
 
@@ -211,5 +219,6 @@ Passed only when the compilation asks a runtime question about that collection k
 | `Dictionary` primitive keys | ≤ 1.5× `Map` | native `Map` fast path |
 | `Dictionary` record keys | ≤ 3× `Map` (which cannot do it) | hashing is new semantics |
 | `Queue.dequeue` | O(1) | ring buffer (today O(n)) |
+| Engines | Bun **and** Node.js; the larger ratio counts | NFR-001 (D22); the spike's plain-method indexer measured 4.7× on Node, 1.28× on Bun (research R16) |
 | `List` alone, minified + gz | ≤ 2.5 KB | measured 1.67 KB with the full surface (research R13) |
 | `Dictionary` / `HashSet` / `Queue` / `Stack` alone | ≤ 3.0 / 1.6 / 1.2 / 1.2 KB | NFR-008 |

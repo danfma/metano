@@ -1,6 +1,6 @@
 # Contract: TypeScript emission (goldens)
 
-**Normative for**: FR-007, FR-009, FR-010, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 golden bundle check: compiled with tsgo and bundled as a side-effect-only import with packages external, nothing but its external `import` statements remains.
+**Normative for**: FR-007, FR-009, FR-010, FR-054–FR-056, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 golden bundle check: compiled with tsgo and bundled as a side-effect-only import with packages external, nothing but its external `import` statements remains.
 
 ## Collections (`collections-basic.ts`)
 
@@ -42,6 +42,34 @@ const shared = List.adopt(copy);
 ```
 
 No reflection import: this compilation asks no runtime question about any collection kind (FR-008). The golden `collections-type-arguments.ts` adds one `o is List<string>` to the same source and pins the result: `List.of([1, 2], [Int32Type])`, `new Queue<number>()` unchanged (no question about `Queue`), `Dictionary.assign([["a", new Point(1, 2)]], [StringType, UnknownType])` (`Point` is not reached), and `import { Int32Type, StringType, UnknownType } from "metano-runtime/system/reflection"`.
+
+## Array interop (`collections-array-interop.ts`, FR-055, FR-056)
+
+```csharp
+var xs = new List<int> { 3, 1, 2 };
+int[] copy = xs.ToArray();
+JsArray<int> live = xs.AsJsArray();
+Span<int> span = xs.AsSpan();
+ReadOnlySpan<int> ro = xs.AsReadOnlySpan();
+Span<int> marshal = CollectionsMarshal.AsSpan(xs);
+span[0] = 9;
+JsArray<int> forJs = xs.ToArray(); // T[] → JsArray<T> is free (FR-004)
+```
+
+```ts
+import { List } from "metano-runtime/system/collections";
+
+const xs = List.of([3, 1, 2]);
+const copy = xs.toArray();
+const live = xs.asJsArray();
+const span = xs.asSpan();
+const ro = xs.asReadOnlySpan();
+const marshal = xs.asSpan();
+span[0] = 9;
+const forJs = xs.toArray();
+```
+
+Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The golden `collections-deferred-conversion.ts` pins `IReadOnlyList<int> r = ImmutableList.Create(1, 2);`: `MS0001` at the conversion (FR-054).
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 

@@ -59,7 +59,7 @@ Example: `'o is UserDto' is structural: 'NamedDto' { Name, Age } also satisfies 
 **MS0051 — TargetSpecificInterop** (Error).
 
 1. `Js.Code` (any `Metano.Interop.Js` member) reached by a non-TypeScript emission.
-2. `JsArray<T>` referenced (signature or body) by a non-TypeScript emission.
+2. `JsArray<T>` referenced (signature or body) by a non-TypeScript emission, including a call to `InteropExtensions.AsJsArray()`, which returns one (FR-056).
 3. A `Metano.Interop.Dart` member (reserved) reached by a non-Dart emission.
 
 The containing member or type carrying `[Ignore(<that target>)]` suppresses the reason (the member is not emitted there).

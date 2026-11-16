@@ -189,3 +189,20 @@ Also [V] on `main`: `targets/js/metano-runtime/package.json` `exports` carry no 
 - **Plain objects carry no marker** [M]: compared with Kotlin/JS, where external interfaces and `@JsPlainObject` types have no runtime identity. A marker would make `GetType()` provenance-dependent, `structuredClone` drops symbol keys, spread copies them, and `toEqual` compares them (FR-020).
 - **`$runtimeType` stays a string key** [V, R13]: a `Symbol` key was considered and rejected because esbuild keeps classes with computed-symbol members.
 - **`TypeError` → `NullReferenceException`** [M]: `toException` wraps with `cause` set to the original, and a bare `throw;` rethrows the original (FR-052).
+
+## R16 — Spike: a runtime `List<T>` end to end (2026-11)
+
+A throwaway spike (branch `spike/011-runtime-list`, not merged; probes in `samples/SpikeProbe`, harness in `targets/js/spike-probe/`) implemented a runtime `List<T>` that wraps a native JS array, mapped the `List<T>` family to it in the compiler, regenerated the samples, migrated the hand-written consumer tests of `sample-todo` and `sample-issue-tracker`, and measured the result. Its decision document lives outside the repository; the conclusions that ground D20–D23 are summarized here.
+
+| Question | Result | Consequence |
+|---|---|---|
+| Fidelity | 10 of the 13 probed C# / TS divergences of a list are fixed by the runtime class [V, spike]; the silent wrong values of today's native-array mapping include `Sort()` ordering numbers as text, `Contains` comparing records by reference and an out-of-range index reading `undefined` | D1 stands; the scope is narrowed to the five most used collections (D20, FR-054). |
+| Consumer impact | Hand-written TS that treats a list as an array breaks, some uses only at run time: `items[0]` and `items.length` are `undefined`, `toHaveLength` fails, `structuredClone(list)` gives an object without the elements, SolidJS `<For each>` rejects a non-array (the spike changed the binding to take `T[]`) [V, spike] | The migration notes list each case and its replacement (D23); interop is an explicit conversion, never an implicit one (D21). |
+| Bundle cost | +1.9 KB gzip per program that uses `List`, 0 when unused [V, spike] | Within the 2.5 KB budget of NFR-008. |
+| Performance | Indexed read + write over 1e6 numbers (`list.get(i)` / `list.set(i, v)` vs `a[i]`): **4.7× on Node, 1.28× on Bun**, against the 2.0× limit of NFR-001 [V, spike; `performance.now()`, 3 warm-ups, 15 timed runs, ratio of medians] | The gate holds and now names both engines (D22); the 011c indexer design must meet it on V8. An experiment on indexer variants runs separately. |
+
+[V] A TS interface `Span<T> extends ReadonlyArray<T> { [index: number]: T }` type-checks under `tsgo --strict` as FR-056 requires (probe of 2026-11-16): a `number[]` is assignable to it, element writes compile, and `push`, a `length` assignment and `sort` are rejected (TS2339 / TS2540), while a `ReadonlyArray<T>` rejects element writes (TS2542).
+
+[V] .NET: `CollectionsMarshal.AsSpan<T>(List<T>? list)` (`System.Runtime.InteropServices`, .NET 5+) returns a `Span<T>` over the list's current buffer, an empty span for `null`; the documentation warns that items must not be added or removed while the span is in use (a growth that reallocates leaves the span on the old buffer [I]). No `List<T>.AsSpan()` instance member exists, hence the Metano extension of FR-056 whose .NET body calls it.
+
+**Conclusion**: a runtime `List<T>` over one backing array delivers the fidelity D1 promised at a measured bundle cost, makes zero-copy views free (FR-056, FR-057), breaks hand-written array-style consumers in ways the migration notes must name, and misses the indexer budget on V8 in its plain-method form, which stage 011c must fix rather than the budget absorb.
