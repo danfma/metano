@@ -782,16 +782,24 @@ the rows of `tests/BclReference`.
   reports `MS0001`. An enum field's implicit initializer is the member whose value is `0`
   (`0 as E` when there is none), not the lowest member; a `[StringEnum]` field without a zero
   member has no initializer (#409).
-- The generated record `equals` compares `double` / `float` and type-parameter fields through
-  `valueEquals` (`NaN` equals itself, `Box<TimeSpan>` and `Box<decimal>` compare by value); a
-  generic record holding a class now compares that class structurally, as a non-generic
-  record with a class field already did (#674). The `ThrowIfEqual` / `ThrowIfNotEqual` guards
-  now admit sealed generic records and records with a `double` / `float` field.
+- The generated record `equals` compares `double` / `float` fields through `valueEquals` (`NaN`
+  equals itself). A field whose static type does not say how it compares (a type parameter,
+  `object`, an interface, a class) goes through the new runtime `defaultEquals`, .NET's
+  `EqualityComparer<T>.Default`: the value's own `equals` (records, `Decimal`, user overrides),
+  a `TimeSpan` by length, `NaN` equal to itself, else reference equality, so `Box<TimeSpan>`
+  and `Box<decimal>` compare by value and `Box<SomeClass>` / `Box<int[]>` by reference as on
+  .NET. Known gap: a tuple or array-backed value in a `T` position compares by reference
+  (2.x: `===`, the same). Fields of a known class type, which 2.x compared structurally,
+  now compare by reference unless the class declares `Equals` (#674). The `ThrowIfEqual` /
+  `ThrowIfNotEqual` guards now admit sealed generic records and records with a `double` /
+  `float` field.
 - The null guard of a string concatenation, an interpolation hole, a list pattern's subject
   and an exception's `message` follows the declared type of the operand, not the optimistic
   flow state: `"a" + s! + "b"` and a field checked and then cleared by a call keep
   `s ?? ""`, and nullable-disabled code guards every reference operand, so its output gains
-  `?? ""` where 2.x printed `null` (#649).
+  `?? ""` where 2.x printed `null` (#649). Known limitation: an `[Emit]` template that
+  produces a never-nullish expression (`typeof $0`) and returns a `string` in nullable-disabled
+  code gets the guard, which tsgo rejects as TS2869.
 
 ### Toolchain
 
