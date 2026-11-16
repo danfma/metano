@@ -295,7 +295,7 @@ Product requirements added after the migration (normative; each one is traced by
   locally (for example 010 FR-042, the union companion namespace), so the bare number is
   ambiguous. Traced by the "Method overload dispatch" and "Constructor overload dispatch" rows of
   the feature-support matrix.
-- **FR-051** (caller argument expressions): A call to a method or constructor with a
+- **FR-052** (caller argument expressions): A call to a method or constructor with a
   `[CallerArgumentExpression("p")]` parameter that the call leaves out MUST pass the source text
   of the call's argument for `p`, positional or named, in every target, as the C# compiler
   does; this covers the argument guards (`ArgumentNullException.ThrowIfNull(x)` passes `"x"`).
