@@ -13,6 +13,7 @@ public static class IrToDartEnumBridge
     public static void Convert(IrEnumDeclaration ir, List<DartTopLevel> statements)
     {
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
+
         var values = ir
             .Members.Select(m =>
             {
@@ -27,13 +28,10 @@ public static class IrToDartEnumBridge
                 var rawValue =
                     IrToDartNamingPolicy.FindNameOverride(m.Attributes)
                     ?? (m.Value is string s ? s : m.Name);
-                return new DartEnumValue(memberName, $"'{EscapeDartString(rawValue)}'");
+                return new DartEnumValue(memberName, $"'{DartStringLiteral.Escape(rawValue)}'");
             })
             .ToList();
 
         statements.Add(new DartEnum(name, values));
     }
-
-    private static string EscapeDartString(string value) =>
-        value.Replace("\\", "\\\\").Replace("'", "\\'");
 }

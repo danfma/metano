@@ -1137,12 +1137,13 @@ public static class IrBodyPrinter
         // `${expr}` form always works — stick with it for consistency and to avoid
         // ambiguity when the expression is a member access or call.
         sb.Append('\'');
+
         foreach (var part in interp.Parts)
         {
             switch (part)
             {
                 case IrInterpolationText text:
-                    sb.Append(EscapeInterpolationText(text.Text));
+                    sb.Append(DartStringLiteral.Escape(text.Text));
                     break;
                 case IrInterpolationExpression expr:
                     sb.Append("${");
@@ -1151,11 +1152,9 @@ public static class IrBodyPrinter
                     break;
             }
         }
+
         sb.Append('\'');
     }
-
-    private static string EscapeInterpolationText(string s) =>
-        s.Replace("\\", "\\\\").Replace("'", "\\'").Replace("$", "\\$");
 
     /// <summary>
     /// Dart supports named arguments natively (<c>foo(x, priority: p)</c>),
@@ -1187,10 +1186,13 @@ public static class IrBodyPrinter
                 sb.Append((bool)lit.Value! ? "true" : "false");
                 break;
             case IrLiteralKind.String:
-                sb.Append('\'').Append(EscapeString((string)lit.Value!)).Append('\'');
+                sb.Append('\'').Append(DartStringLiteral.Escape((string)lit.Value!)).Append('\'');
                 break;
             case IrLiteralKind.Char:
-                sb.Append('\'').Append(EscapeString(lit.Value!.ToString()!)).Append('\'');
+                sb.Append('\'')
+                    .Append(DartStringLiteral.Escape(lit.Value!.ToString()!))
+                    .Append('\'');
+
                 break;
             case IrLiteralKind.Default:
                 sb.Append("/* default */ null");
@@ -1210,17 +1212,6 @@ public static class IrBodyPrinter
     private static bool IsContainerlessFunction(IrMemberOrigin origin) =>
         origin
             is { IsStatic: true, IsDeclaringTypeNoContainer: true, IsTranspiledDataMember: false };
-
-    /// <summary>
-    /// The text of a Dart single-quoted string literal: a <c>$</c> is escaped
-    /// too, or Dart would read it as an interpolation.
-    /// </summary>
-    private static string EscapeString(string s) =>
-        s.Replace("\\", "\\\\")
-            .Replace("'", "\\'")
-            .Replace("$", "\\$")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r");
 
     /// <summary>
     /// A positional element read of a C# tuple, which Dart models as a record:
@@ -1264,7 +1255,7 @@ public static class IrBodyPrinter
                 break;
 
             default:
-                sb.Append('\'').Append(EscapeString(baseCall.TypeName)).Append('\'');
+                sb.Append('\'').Append(DartStringLiteral.Escape(baseCall.TypeName)).Append('\'');
                 break;
         }
     }
