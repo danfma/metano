@@ -65,24 +65,84 @@ public class ArgumentGuardLoweringTests
             );
     }
 
+    /// <summary>
+    /// The equality guards map for the kinds the runtime's <c>valueEquals</c>
+    /// compares as <c>EqualityComparer&lt;T&gt;.Default</c> does.
+    /// </summary>
     [Test]
-    public async Task EqualityGuard_OverAnyKind_IsMapped()
+    [Arguments("string", "\"none\"")]
+    [Arguments("Level", "Level.High")]
+    [Arguments("(int, string)", "(1, \"a\")")]
+    [Arguments("((int, int), string)", "((1, 2), \"a\")")]
+    [Arguments("TimeSpan", "limit")]
+    [Arguments("DateOnly", "limit")]
+    [Arguments("decimal", "limit")]
+    [Arguments("Guid", "limit")]
+    [Arguments("Person", "limit")]
+    [Arguments("Point", "limit")]
+    [Arguments("Plain", "limit")]
+    [Arguments("int?", "null")]
+    public async Task EqualityGuard_OverAValueKind_IsMapped(string type, string other)
     {
         var (files, diagnostics) = TranspileGuards(
-            """
-            public static void Text(string value) => ArgumentOutOfRangeException.ThrowIfEqual(value, "none");
+            $"public static void Check({type} value, {type} limit) => ArgumentOutOfRangeException.ThrowIfEqual(value, {other});"
+        );
 
-            public static void Rank(Level value) => ArgumentOutOfRangeException.ThrowIfNotEqual(value, Level.High);
+        await Assert.That(files["guard.ts"]).Contains("throwIfEqual(value, ");
+        await Assert.That(Unsupported(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// A class or an array compares by reference on .NET, which the runtime's
+    /// value equality cannot tell from a structural match, and a
+    /// <c>DateTimeOffset</c> compares instants where its Temporal value also
+    /// compares the time zone: the guard keeps no mapping and reports
+    /// <c>MS0001</c>.
+    /// </summary>
+    [Test]
+    [Arguments("Account")]
+    [Arguments("int[]")]
+    [Arguments("object")]
+    [Arguments("DateTimeOffset")]
+    [Arguments("(int, Account)")]
+    public async Task EqualityGuard_OverAReferenceKind_IsReported(string type)
+    {
+        var (_, diagnostics) = TranspileGuards(
+            $"public static void Check({type} value, {type} limit) => ArgumentOutOfRangeException.ThrowIfNotEqual(value, limit);"
+        );
+
+        await Assert
+            .That(Unsupported(diagnostics))
+            .Contains(message =>
+                message.Contains("System.ArgumentOutOfRangeException.ThrowIfNotEqual")
+            );
+    }
+
+    /// <summary>
+    /// A guard's type argument is not printed, so a <c>[PlainObject]</c> one,
+    /// an interface at run time, is not imported as a value (TS1484 under
+    /// <c>verbatimModuleSyntax</c>, and a module Node cannot load).
+    /// </summary>
+    [Test]
+    public async Task EqualityGuard_OverAPlainObject_ImportsNoValue()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [Transpile, PlainObject]
+            public record Plain(string Name, int Age);
+
+            [Transpile]
+            public static class Guard
+            {
+                public static void Check(Plain value, Plain limit) =>
+                    ArgumentOutOfRangeException.ThrowIfEqual(value, limit);
+            }
             """
         );
 
-        await Assert.That(files["guard.ts"]).Contains("throwIfEqual(value, \"none\", \"value\");");
-
-        await Assert
-            .That(files["guard.ts"])
-            .Contains("throwIfNotEqual(value, Level.High, \"value\");");
-
-        await Assert.That(Unsupported(diagnostics)).IsEmpty();
+        await Assert.That(files["guard.ts"]).Contains("import type { Plain } from \"./plain\";");
     }
 
     /// <summary>
@@ -193,8 +253,22 @@ public class ArgumentGuardLoweringTests
     ) TranspileGuards(string members) =>
         TranspileHelper.TranspileWithDiagnostics(
             $$"""
+            using Metano.Annotations;
+
             [Transpile]
             public enum Level { Low, High }
+
+            [Transpile]
+            public record Person(string Name);
+
+            [Transpile]
+            public readonly record struct Point(int X, int Y);
+
+            [Transpile, PlainObject]
+            public record Plain(string Name);
+
+            [Transpile]
+            public class Account { }
 
             [Transpile]
             public static class Guard

@@ -311,13 +311,17 @@ describe("TimeoutException and SwitchExpressionException", () => {
     const exception = new SwitchExpressionException(5);
 
     expect(exception).toBeInstanceOf(InvalidOperationException);
+
     expect(exception.message).toBe(
       "Non-exhaustive switch expression failed to match its input.\nUnmatched value was 5.",
     );
+
     expect(exception.unmatchedValue).toBe(5);
+
     expect(new SwitchExpressionException(null).message).toBe(
       "Non-exhaustive switch expression failed to match its input.",
     );
+
     expect(exception.toString()).toStartWith(
       "System.Runtime.CompilerServices.SwitchExpressionException: ",
     );
