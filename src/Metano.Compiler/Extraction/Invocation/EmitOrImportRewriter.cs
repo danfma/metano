@@ -182,7 +182,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
             .ToList();
         _helpers.ApplyParamsSpread(args, symbol, context.Invocation.ArgumentList.Arguments);
 
-        return _helpers.InParameterOrder(args, symbol);
+        return context.WithCallerArguments(_helpers.InParameterOrder(args, symbol), symbol);
     }
 
     private static IrExternalImport ToIrExternalImport(

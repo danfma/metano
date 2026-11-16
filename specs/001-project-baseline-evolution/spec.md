@@ -402,10 +402,16 @@ Product requirements added after the migration (normative; each one is traced by
   that is not `[Emit]`, nor bound elsewhere by `[Import]` or `[External]` on itself or its type) is passed `undefined`;
   any other callee (one of those, a delegate, an interface, abstract, virtual or override
   member, whose runtime implementation may declare a different default) is passed the value.
-  Dart always passes the value. Not filled yet: a transpiled extension method called with
-  extension syntax (`x.Ext()`, lowered to a module function), a `base(...)` / `this(...)`
-  constructor initializer, an explicit delegate `.Invoke(...)` and an `[Emit]` callee. Traced by the "Caller
-  argument expressions" row of the feature-support matrix.
+  Dart always passes the value. The text is filled for every call shape: an extension method
+  called with extension syntax (`x.Ext()`, lowered to a module function), a `base(...)` /
+  `this(...)` constructor initializer (a `this(...)` chain passes it as an argument named after
+  the parameter), an explicit delegate `.Invoke(...)` or `?.Invoke(...)` and an `[Emit]`
+  callee, whose template never prints an unfilled `$N`. A parameter of a transpiled
+  struct type whose default is `default` (`Point p = default`) receives `new Point()` in the
+  callee and in a named call that skips it, when the struct declares no constructor (so
+  the target's parameterless one runs); a struct with a declared or primary constructor keeps the
+  opaque default (`undefined`). Traced by the "Caller argument expressions" row of the
+  feature-support matrix.
 - **FR-062** (import resolution, #655, #675, #504): The import collector MUST resolve an
   identifier to an export of another module only when nothing in scope binds it: a parameter,
   a declared local, a `foreach` variable, a `catch` parameter or a chain's caught value shadows

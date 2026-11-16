@@ -486,9 +486,9 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   parameter is passed as `undefined` in TypeScript when the callee is a transpiled,
   non-virtual method or constructor that applies the same default itself, and as the default
   the call site sees otherwise (an `[Import]` / `[External]` callee, a delegate, an interface
-  or virtual member, whose implementation may declare another default). Not filled yet:
-  extension syntax on a transpiled extension method, `base(...)` / `this(...)` initializers,
-  an explicit `.Invoke(...)` and `[Emit]` callees. 2.x
+  or virtual member, whose implementation may declare another default). The text is also
+  filled for extension syntax on a transpiled extension method, `base(...)` / `this(...)`
+  initializers, an explicit `.Invoke(...)` and `[Emit]` callees (#676). 2.x
   passed `null`, and wrote a skipped enum default with a lower-cased member name
   (`Level.high`).
 
@@ -746,6 +746,14 @@ the rows of `tests/BclReference`.
   A project that declares its own `ExportFromBcl` for `decimal` keeps decimal.js. A quotient
   keeps 29 significant digits where .NET keeps 28 decimal places, and overflow past
   `decimal.MaxValue` does not throw (part b of #465 stays open).
+
+### Calls, arguments and dispatch fixes (wave 3.0, group E1)
+
+- A parameter of a transpiled struct type with the default `default` (`Point p = default`) is
+  `p: Point = new Point()` in the callee, and a named call that skips it passes `new Point()`,
+  where 2.x wrote `p: Point = undefined` and passed `null` (both fail `tsgo --strict`). Only a
+  struct that declares no constructor qualifies; one with a declared or primary constructor keeps
+  `undefined` (#676).
 
 ### Toolchain
 
