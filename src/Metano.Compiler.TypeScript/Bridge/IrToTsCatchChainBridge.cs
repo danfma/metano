@@ -142,8 +142,7 @@ internal static class IrToTsCatchChainBridge
         ReachableClauses(clauses).Any(ObservesNormalizedValue);
 
     private static bool ObservesNormalizedValue(IrCatchClause clause) =>
-        clause.ExceptionType is not null
-        && (!clause.HandlesEveryException || ReadsVariable(clause));
+        clause.ExceptionType is not null && (!clause.IsUnconditional || ReadsVariable(clause));
 
     private static bool ReadsVariable(IrCatchClause clause) =>
         clause.VariableName is { } name && IrReferencedNames.AnyIn(clause.Body, [name]);
@@ -155,7 +154,7 @@ internal static class IrToTsCatchChainBridge
         {
             yield return clause;
 
-            if (clause.HandlesEveryException)
+            if (clause.IsUnconditional)
                 yield break;
         }
     }
@@ -164,7 +163,7 @@ internal static class IrToTsCatchChainBridge
     {
         var parameter = clause.VariableName is { } name
             ? IrToTsNamingPolicy.ToLocalName(name)
-            : UnnamedCaughtValue;
+            : FreeUnnamedCaughtValueName(clause);
 
         return new TsCatchHandler(
             parameter,
@@ -190,16 +189,22 @@ internal static class IrToTsCatchChainBridge
     }
 
     /// <summary>
-    /// The clause's type test; <c>null</c> for a clause that takes every
-    /// exception, and for a type extraction reported as untestable (MS0001,
-    /// or MS0045 for an exception without a runtime class).
+    /// The clause's type test, <c>null</c> when it has none: the clause takes
+    /// every exception (<see cref="NarrowedType"/>), or its type cannot be
+    /// tested at runtime, which extraction reported (MS0001, or MS0045 for an
+    /// exception without a runtime class) and the arm then takes every value.
     /// </summary>
     private static TsExpression? MapTypeTest(IrCatchClause clause, string caught) =>
-        clause is { CatchesEveryException: false, ExceptionType: { } type }
-        && IrRuntimeTypeTest.ExistsFor(type)
-        && !IsUnmappedException(type)
+        NarrowedType(clause) is { } type && CanBeTested(type)
             ? IrToTsExpressionBridge.BuildTypeTest(new TsIdentifier(caught), type)
             : null;
+
+    /// <summary>The type the clause narrows to; <c>null</c> for one that takes every exception.</summary>
+    private static IrTypeRef? NarrowedType(IrCatchClause clause) =>
+        clause.AcceptsEveryExceptionType ? null : clause.ExceptionType;
+
+    private static bool CanBeTested(IrTypeRef type) =>
+        IrRuntimeTypeTest.ExistsFor(type) && !IsUnmappedException(type);
 
     /// <summary>
     /// A BCL exception without a runtime class, whose clause extraction
@@ -259,9 +264,7 @@ internal static class IrToTsCatchChainBridge
     /// takes every exception, and its variable can stand for the caught value.
     /// </summary>
     private static bool KeepsPlainCatch(IrCatchClause clause) =>
-        clause.HandlesEveryException
-        && !RethrowsAfterRebinding(clause)
-        && !NeedsNormalization([clause]);
+        clause.IsUnconditional && !RethrowsAfterRebinding(clause) && !NeedsNormalization([clause]);
 
     /// <summary>
     /// Whether the clause's body rebinds the clause's variable and has a
@@ -280,11 +283,48 @@ internal static class IrToTsCatchChainBridge
     private static string FreeName(string name, IReadOnlyList<IrCatchClause> clauses) =>
         TsFreeName.FirstFree(name, candidate => clauses.Any(clause => Names(clause, candidate)));
 
+    /// <summary>
+    /// <c>_err</c>, marked again (<c>_err$</c>, …) while the clause's body
+    /// reads or declares it, so the parameter of a lone general <c>catch</c>
+    /// is neither captured by a local nor redeclared by one.
+    /// </summary>
+    private static string FreeUnnamedCaughtValueName(IrCatchClause clause) =>
+        TsFreeName.FirstFree(UnnamedCaughtValue, candidate =>
+            Names(clause, candidate) || DeclaresLocal(clause.Body, candidate)
+        );
+
     private static bool Names(IrCatchClause clause, string name) =>
-        IrReferencedNames.AnyReadOrEmittedMemberIn(clause.Body, [name])
+        IrReferencedNames.AnyReadOrEmittedNameIn(clause.Body, [name])
+        || IsEmittedTypeName(clause.ExceptionType, name)
         || (
-            clause.Filter is { } filter
-            && IrReferencedNames.AnyReadOrEmittedMemberIn(filter, [name])
+            clause.Filter is { } filter && IrReferencedNames.AnyReadOrEmittedNameIn(filter, [name])
+        );
+
+    /// <summary>
+    /// Whether the clause's own exception type is emitted under
+    /// <paramref name="name"/> (a type renamed with <c>[Name]</c>), which the
+    /// arm's type test names.
+    /// </summary>
+    private static bool IsEmittedTypeName(IrTypeRef? type, string name) =>
+        type is IrNamedTypeRef named && named.Name == name;
+
+    /// <summary>
+    /// Whether the statements declare, at their own level, a local that is
+    /// emitted as <paramref name="name"/>; the block of a <c>catch</c> cannot
+    /// redeclare the handler's parameter.
+    /// </summary>
+    private static bool DeclaresLocal(IEnumerable<IrStatement> body, string name) =>
+        body.Any(statement =>
+            statement switch
+            {
+                IrVariableDeclaration declaration => IrToTsNamingPolicy.ToLocalName(
+                    declaration.Name
+                ) == name,
+                IrTupleDeconstruction deconstruction => deconstruction.Elements.Any(element =>
+                    element.Name is { } bound && IrToTsNamingPolicy.ToLocalName(bound) == name
+                ),
+                _ => false,
+            }
         );
 
     /// <summary>

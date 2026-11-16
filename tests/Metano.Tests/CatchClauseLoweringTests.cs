@@ -501,6 +501,51 @@ public class CatchClauseLoweringTests
     }
 
     [Test]
+    public async Task CaughtValueName_AvoidsATypeRenamedToIt()
+    {
+        var result = TranspileHelper.Transpile(
+            Exceptions
+                + """
+                [Transpile, Name("e$")]
+                public class Renamed
+                {
+                    public string Inst() => "inst";
+                }
+
+                [Transpile]
+                public class Handler
+                {
+                    public string Run()
+                    {
+                        try { return "ok"; }
+                        catch (AppException) { return new Renamed().Inst(); }
+                    }
+                }
+                """
+        );
+
+        var handler = result["handler.ts"];
+
+        await Assert.That(handler).Contains("} catch (e$$) {");
+        await Assert.That(handler).Contains("return new e$().inst();");
+        await Assert.That(handler).Contains("import { e$ } from \"./e$\";");
+    }
+
+    [Test]
+    public async Task LoneGeneralCatch_ParameterAvoidsALocalNamedLikeIt()
+    {
+        var output = TranspileHandler(
+            """
+            try { Work(); }
+            catch { var _err = "local"; Note(_err.Length > 0); throw; }
+            """
+        );
+
+        await Assert.That(output).Contains("} catch (_err$) {");
+        await Assert.That(output).Contains("throw _err$;");
+    }
+
+    [Test]
     public async Task ClauseOnACrossPackageException_ImportsItsClass()
     {
         var result = TranspileHelper.TranspileWithLibrary(

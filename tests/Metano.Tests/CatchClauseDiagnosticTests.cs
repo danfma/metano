@@ -231,6 +231,48 @@ public class CatchClauseDiagnosticTests
     }
 
     [Test]
+    public async Task ClauseOnATypeParameterWithAFilter_SaysTheFilterDecides()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Handler
+            {
+                public bool Ready { get; set; }
+
+                public void Run<TFailure>() where TFailure : Exception
+                {
+                    try { Work(); }
+                    catch (TFailure) when (Ready) { Work(); }
+                }
+
+                public void Work() { }
+            }
+            """
+        );
+
+        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert
+            .That(warning.Message)
+            .EndsWith("so the clause takes every exception its filter accepts.");
+    }
+
+    [Test]
+    public async Task ClauseTheChainDrops_IsNotReported()
+    {
+        var warnings = CollectUnsupported(
+            """
+            try { Work(); }
+            catch (Exception) { Note(1); }
+            catch when (int.TryParse("1", out var parsed)) { Note(parsed); }
+            """
+        );
+
+        await Assert.That(warnings).IsEmpty();
+    }
+
+    [Test]
     public async Task DartTarget_ReportsEveryFilter_AndNoTypeRule()
     {
         var (_, diagnostics) = TranspileHelper.TranspileDart(

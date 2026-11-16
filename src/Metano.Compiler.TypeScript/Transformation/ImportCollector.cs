@@ -1221,13 +1221,11 @@ public sealed class ImportCollector(
                 break;
             case TsFunction func:
                 CollectFromTypeParameters(func.TypeParameters, sink);
-                foreach (var param in func.Parameters)
+                CollectFromParameters(Signature(func.Parameters), sink, () =>
                 {
-                    sink.ShadowingNames.Add(param.Name);
-                    CollectFromParameter(param.Type, param.DefaultValue, sink);
-                }
-                CollectFromType(func.ReturnType, sink);
-                CollectFromStatements(func.Body, sink);
+                    CollectFromType(func.ReturnType, sink);
+                    CollectFromStatements(func.Body, sink);
+                });
                 break;
             case TsConstObject constObj:
                 foreach (var (_, value) in constObj.Entries)
@@ -1259,12 +1257,9 @@ public sealed class ImportCollector(
                         CollectFromType(iface, sink);
                 if (cls.Constructor is not null)
                 {
-                    foreach (var p in cls.Constructor.Parameters)
-                    {
-                        sink.ShadowingNames.Add(p.Name);
-                        CollectFromParameter(p.Type, p.DefaultValue, sink);
-                    }
-                    CollectFromStatements(cls.Constructor.Body, sink);
+                    CollectFromParameters(Signature(cls.Constructor.Parameters), sink, () =>
+                        CollectFromStatements(cls.Constructor.Body, sink)
+                    );
                 }
                 foreach (var member in cls.Members)
                 {
@@ -1272,13 +1267,11 @@ public sealed class ImportCollector(
                     {
                         case TsMethodMember m:
                             CollectFromTypeParameters(m.TypeParameters, sink);
-                            foreach (var p in m.Parameters)
+                            CollectFromParameters(Signature(m.Parameters), sink, () =>
                             {
-                                sink.ShadowingNames.Add(p.Name);
-                                CollectFromParameter(p.Type, p.DefaultValue, sink);
-                            }
-                            CollectFromType(m.ReturnType, sink);
-                            CollectFromStatements(m.Body, sink);
+                                CollectFromType(m.ReturnType, sink);
+                                CollectFromStatements(m.Body, sink);
+                            });
                             // Collect from overload signatures too
                             if (m.Overloads is not null)
                                 foreach (var overload in m.Overloads)
@@ -1427,9 +1420,55 @@ public sealed class ImportCollector(
         ImportCollectionSink sink
     )
     {
-        foreach (var stmt in statements)
-            CollectFromStatement(stmt, sink);
+        sink.WithBoundNames(statements.SelectMany(DeclaredNames), () =>
+        {
+            foreach (var stmt in statements)
+                CollectFromStatement(stmt, sink);
+        });
     }
+
+    /// <summary>
+    /// The names a statement declares in its own list (a block scopes them over the
+    /// whole list, so a use before the declaration is the local too).
+    /// </summary>
+    private static IEnumerable<string> DeclaredNames(TsStatement statement) =>
+        statement switch
+        {
+            TsVariableDeclaration declaration => [declaration.Name],
+            TsDestructuringDeclaration destructuring => destructuring.Names.OfType<string>(),
+            _ => [],
+        };
+
+    /// <summary>
+    /// Walks a function's parameters and, through <paramref name="walkBody"/>, its body,
+    /// with the parameter names bound for both: a default value or a body that reads a
+    /// parameter reads the local, never an export of that name.
+    /// </summary>
+    private void CollectFromParameters(
+        IReadOnlyList<(string Name, TsType? Type, TsExpression? DefaultValue)> parameters,
+        ImportCollectionSink sink,
+        Action walkBody
+    )
+    {
+        foreach (var parameter in parameters)
+            sink.ShadowingNames.Add(parameter.Name);
+
+        sink.WithBoundNames(parameters.Select(parameter => parameter.Name), () =>
+        {
+            foreach (var parameter in parameters)
+                CollectFromParameter(parameter.Type, parameter.DefaultValue, sink);
+
+            walkBody();
+        });
+    }
+
+    private static IReadOnlyList<(string, TsType?, TsExpression?)> Signature(
+        IEnumerable<TsParameter> parameters
+    ) => [.. parameters.Select(p => (p.Name, p.Type, p.DefaultValue))];
+
+    private static IReadOnlyList<(string, TsType?, TsExpression?)> Signature(
+        IEnumerable<TsConstructorParam> parameters
+    ) => [.. parameters.Select(p => (p.Name, (TsType?)p.Type, p.DefaultValue))];
 
     private void CollectFromStatement(TsStatement stmt, ImportCollectionSink sink)
     {
@@ -1487,6 +1526,9 @@ public sealed class ImportCollector(
                 foreach (var embedded in raw.EmbeddedExpressions)
                     CollectFromExpression(embedded, sink);
 
+                foreach (var scope in raw.EmbeddedScopes)
+                    CollectFromEmbeddedScope(scope, sink);
+
                 break;
             case TsDestructuringDeclaration destructuring:
                 // The destructured initializer can carry an [Import]-facade
@@ -1501,6 +1543,28 @@ public sealed class ImportCollector(
                 CollectFromExpression(destructuring.Initializer, sink);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Whether a bare identifier read for a member (<c>Name.member</c>) names a type used
+    /// as a value: spelled like a type (PascalCase) or a project type emitted under a
+    /// <c>[Name]</c> override of another spelling (<c>e$</c>).
+    /// </summary>
+    private bool NamesTypeValue(string name) =>
+        name.Length > 0 && (char.IsUpper(name[0]) || _context.TranspilableTypes.ContainsKey(name));
+
+    private void CollectFromEmbeddedScope(TsEmbeddedScope scope, ImportCollectionSink sink)
+    {
+        foreach (var name in scope.BoundNames)
+            sink.ShadowingNames.Add(name);
+
+        sink.WithBoundNames(scope.BoundNames, () =>
+        {
+            CollectFromStatements(scope.Statements, sink);
+
+            foreach (var expression in scope.ScopedExpressions)
+                CollectFromExpression(expression, sink);
+        });
     }
 
     private void CollectFromExpression(TsExpression expr, ImportCollectionSink sink)
@@ -1536,6 +1600,9 @@ public sealed class ImportCollector(
                 }
 
                 break;
+            case TsIdentifier bareId when sink.IsLocallyBound(bareId.Name):
+                // A parameter, local, loop variable or caught value: never an export.
+                break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
                 // types used as values (e.g., enum objects passed to descriptor specs).
@@ -1560,7 +1627,11 @@ public sealed class ImportCollector(
                 }
                 break;
             case TsNewExpression newExpr:
-                if (newExpr.Callee is TsIdentifier id)
+                if (newExpr.Callee is TsIdentifier localId && sink.IsLocallyBound(localId.Name))
+                {
+                    // A constructor held in a local: nothing to import.
+                }
+                else if (newExpr.Callee is TsIdentifier id)
                 {
                     names.Add(id.Name);
                     valueNames.Add(id.Name); // used as value (constructor call)
@@ -1595,7 +1666,14 @@ public sealed class ImportCollector(
                 break;
             case TsCallExpression call:
                 // Function calls may reference guard functions (e.g., isCurrency)
-                if (call.Callee is TsIdentifier callId)
+                if (
+                    call.Callee is TsIdentifier localCallee
+                    && sink.IsLocallyBound(localCallee.Name)
+                )
+                {
+                    // A call through a local: nothing to import.
+                }
+                else if (call.Callee is TsIdentifier callId)
                 {
                     names.Add(callId.Name);
                     valueNames.Add(callId.Name);
@@ -1613,7 +1691,8 @@ public sealed class ImportCollector(
                 // Static method calls like Enumerable.from(...)
                 else if (
                     call.Callee is TsPropertyAccess { Object: TsIdentifier { Name: var rootName } }
-                    && char.IsUpper(rootName[0])
+                    && NamesTypeValue(rootName)
+                    && !sink.IsLocallyBound(rootName)
                 )
                 {
                     names.Add(rootName);
@@ -1636,8 +1715,8 @@ public sealed class ImportCollector(
                 // Static member access like IssuePriority.High → collect the type as value
                 if (
                     access.Object is TsIdentifier { Name: var propObjName }
-                    && propObjName.Length > 0
-                    && char.IsUpper(propObjName[0])
+                    && NamesTypeValue(propObjName)
+                    && !sink.IsLocallyBound(propObjName)
                 )
                 {
                     names.Add(propObjName);
@@ -1688,7 +1767,10 @@ public sealed class ImportCollector(
                     sink.ShadowingNames.Add(p.Name);
                     CollectFromType(p.Type, sink);
                 }
-                CollectFromStatements(arrow.Body, sink);
+
+                sink.WithBoundNames(arrow.Parameters.Select(p => p.Name), () =>
+                    CollectFromStatements(arrow.Body, sink)
+                );
                 break;
             case TsNamedFunctionExpression namedFunction:
                 // Bound only inside its own body, but that body is exactly
@@ -1696,7 +1778,11 @@ public sealed class ImportCollector(
                 sink.ShadowingNames.Add(namedFunction.Name);
                 foreach (var p in namedFunction.Parameters)
                     sink.ShadowingNames.Add(p.Name);
-                CollectFromStatements(namedFunction.Body, sink);
+
+                sink.WithBoundNames(
+                    namedFunction.Parameters.Select(p => p.Name).Append(namedFunction.Name),
+                    () => CollectFromStatements(namedFunction.Body, sink)
+                );
                 break;
             case TsElementAccess elemAccess:
                 CollectFromExpression(elemAccess.Object, sink);
@@ -1919,4 +2005,37 @@ internal sealed record ImportCollectionSink(
     List<IrExternalImport> TemplateExternals,
     HashSet<string> LinqPipeHelpers,
     Dictionary<string, SortedSet<string>> OwnersByModuleExport
-);
+)
+{
+    private readonly Stack<IReadOnlySet<string>> _boundScopes = new();
+
+    /// <summary>
+    /// Whether <paramref name="name"/> is bound by an enclosing function, block,
+    /// <c>foreach</c> or <c>catch</c> of the node being walked: such a name is a
+    /// local, whatever another module exports under it.
+    /// </summary>
+    public bool IsLocallyBound(string name) =>
+        _boundScopes.Any(scope => scope.Contains(RootOf(name)));
+
+    /// <summary>Runs <paramref name="walk"/> with <paramref name="names"/> bound.</summary>
+    public void WithBoundNames(IEnumerable<string> names, Action walk)
+    {
+        _boundScopes.Push(names.ToHashSet(StringComparer.Ordinal));
+
+        try
+        {
+            walk();
+        }
+        finally
+        {
+            _boundScopes.Pop();
+        }
+    }
+
+    private static string RootOf(string name)
+    {
+        var dot = name.IndexOf('.');
+
+        return dot < 0 ? name : name[..dot];
+    }
+}

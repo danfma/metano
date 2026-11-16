@@ -343,9 +343,10 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 - A `when` filter is honoured: the clause runs only when it holds, and the
   next clause is tried otherwise. 2.x ignored the filter.
 - `throw;` rethrows the caught value (2.x emitted `throw null;`), also after
-  the clause's variable was reassigned.
-- A clause on a BCL exception type (`catch (InvalidOperationException)`)
-  tests `instanceof` the exception's `metano-runtime` class (see the next
+  the clause's variable was reassigned; Dart prints it as `rethrow;`.
+- A clause on an exception type that is not transpiled (a BCL exception such
+  as `catch (InvalidOperationException)`, or one of another library) tests
+  `instanceof` the exception's `metano-runtime` class (see the next
   section, #651). It therefore does not catch a thrown value that is not an
   instance of that class (a string, a plain object, a plain `Error`, a
   cross-realm `Error` from an iframe, `node:vm` or a Jest sandbox), which
