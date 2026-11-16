@@ -127,6 +127,7 @@ public static class IrClassExtractor
         )
         {
             ConstructedRoots = MultiplyConstructedInterfaces.RootsOf(type, context),
+            StaticInitializer = IrStaticConstructorExtractor.Extract(type, context),
         };
     }
 

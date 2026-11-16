@@ -1128,6 +1128,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsMethodMember method => ContainsJsxInStatements(method.Body),
             TsGetterMember getter => ContainsJsxInStatements(getter.Body),
             TsSetterMember setter => ContainsJsxInStatements(setter.Body),
+            TsStaticBlock block => ContainsJsxInStatements(block.Body),
             TsFieldMember { Initializer: { } init } => ContainsJsxInExpression(init),
             _ => false,
         };
