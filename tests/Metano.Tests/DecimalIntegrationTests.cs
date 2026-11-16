@@ -207,6 +207,35 @@ public class DecimalIntegrationTests
             .IsEmpty();
     }
 
+    /// <summary>
+    /// A <c>using</c> alias of <c>System.Decimal</c> names the call's receiver
+    /// only: the lowered parse imports decimal.js's <c>Decimal</c> alone, not
+    /// the alias as a name of its own.
+    /// </summary>
+    [Test]
+    [Arguments("D")]
+    [Arguments("Money")]
+    public async Task DecimalParse_ThroughAnAlias_ImportsOnlyDecimal(string alias)
+    {
+        var result = TranspileHelper.Transpile(
+            $$"""
+            using {{alias}} = System.Decimal;
+
+            [Transpile]
+            public class Calc
+            {
+                public decimal FromString(string s) => {{alias}}.Parse(s);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+
+        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
+        await Assert.That(output).DoesNotContain($"{alias},");
+    }
+
     [Test]
     public async Task DecimalCompareTo_LowersToCmp()
     {
