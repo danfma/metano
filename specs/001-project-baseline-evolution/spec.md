@@ -412,30 +412,42 @@ Product requirements added after the migration (normative; each one is traced by
   the target's parameterless one runs); a struct with a declared or primary constructor keeps the
   opaque default (`undefined`). Traced by the "Caller argument expressions" row of the
   feature-support matrix.
-- **FR-062** (import resolution, #655, #675, #504): The import collector MUST resolve an
-  identifier to an export of another module only when nothing in scope binds it: a parameter,
-  a declared local, a `foreach` variable, a `catch` parameter or a chain's caught value shadows
-  an export of the same name, so no spurious import (and no import cycle) follows. Every
-  `using` alias a file spells MUST bind an import (`Widget as W1`, `Widget as W2`), also beside
-  an `[ImportAlias]` pin of the same type, and the type binds under its own name only where the
-  file spells it so; a `[NoContainer]` factory named like an aliased type imports beside it. A
-  type used as a value from a synthesized default (an enum's zero member) imports through its
-  package origin. A template text MUST declare the receiver's type with the `$Type` placeholder
-  (the exported name, never an alias, imported as a value) instead of naming it: the scan of the
-  template text is retired, and Metano's own BCL mappings use the placeholder. Two project
-  types printed under one name that one file refers to MUST report `MS0070` at the second
-  reference (an import by alias is a follow-up). Traced by the "Import resolution" row of the
-  feature-support matrix.
-- **FR-063** (side-effect modules, #356, #368): The generated `package.json#sideEffects` MUST
-  list the modules that run code when merely imported (a `[ModuleEntryPoint]` module, a
-  `[StrictUnionGuard]` variant registration), as their `dist` `.js` and source `.ts` paths, and
-  be `false` when there is none, so a bundler keeps a side-effect-only import of them. A flat
-  `false` the writer wrote earlier is upgraded; a hand-written value keeps its entries. Traced by
-  the "Packaging" row of the feature-support matrix.
-- **FR-064** (explicit type arguments, #675): A call that writes its type arguments
-  (`Guard.ThrowIfEqual<Shape>(circle, square)`) to a transpiled generic method MUST keep them in
-  TypeScript, which would otherwise infer the type from the first operand only. A call whose
-  callee is a BCL or untranspiled member keeps the callee's own signature.
+
+- **FR-053** (string members with .NET arguments, #661): A `System.String` member whose
+  JavaScript namesake reads its arguments differently or clamps where .NET throws — `Substring`,
+  `Remove`, `Insert`, `PadLeft` / `PadRight`, `ToCharArray(start, length)`, `IndexOf` /
+  `LastIndexOf` with a start index, count or `StringComparison`, `StartsWith` / `EndsWith` /
+  `Contains` with a `StringComparison`, `Trim` / `TrimStart` / `TrimEnd` with characters, `Split`
+  with characters, a count or `StringSplitOptions`, and `string.Join(separator, values, start,
+  count)` — MUST lower in TypeScript to a `metano-runtime` helper that returns .NET's value for
+  valid arguments, evaluates each argument once and throws .NET's `ArgumentOutOfRangeException`
+  / `ArgumentNullException` (type, parameter name and message) for invalid ones. Comparisons
+  are ordinal; the culture-sensitive `StringComparison` members behave as their ordinal
+  counterparts. The helpers MUST agree with rows recorded from real .NET under Bun and Node
+  (`tests/BclReference`). Not covered: `AsSpan` / `Slice` on strings and spans, culture-aware
+  comparison. Traced by the "String members with .NET arguments" row of the feature-support
+  matrix.
+
+- **FR-054** (construction and parsing members, #673, #668): `new TimeSpan(...)` from
+  components, `TimeSpan.Zero` and the single-argument `TimeSpan.FromX`, `new DateTimeOffset(...)`
+  from components, a `DateTime` or ticks plus an offset, `Guid.Parse`, `decimal.TryParse`, and
+  `Parse` / `TryParse` of `int`, `uint`, `short`, `ushort`, `byte`, `sbyte` and `Parse` of
+  `double`, `float` and `bool` MUST lower in TypeScript to `metano-runtime` functions with .NET's
+  value and exceptions (`ArgumentOutOfRangeException`, `ArgumentException`, `OverflowException`,
+  `FormatException`, `ArgumentNullException`): a `TimeSpan` built from components or units is the
+  duration .NET builds (never `new Temporal.Duration(0, 5, 0)`), `Guid.Parse` returns the lowercase
+  `D` text, and an integer `Parse` rejects what `Number.parseInt` would half-read (`"12abc"`).
+  A constant `NumberStyles` the integer parsers do not implement reports `MS0066`. The runtime
+  functions MUST agree with rows recorded from real .NET (`tests/BclReference`). Not covered:
+  the .NET 9 multi-unit `TimeSpan.FromX(a, b)` forms, `DateTimeOffset(DateTime)` without an
+  offset, the `X` GUID format, the `ReadOnlySpan<char>` forms of `Parse`.
+
+- **FR-055** (decimal precision and rounding, #465 part a): The class the TypeScript target
+  generates for `decimal` MUST be decimal.js configured for `System.Decimal` — 29 significant
+  digits, half-to-even rounding — exported by `metano-runtime/system/decimal`, so no generated
+  code relies on decimal.js's global defaults. Known differences remain documented in the
+  "`decimal` specifics" section of `docs/bcl-mappings.md` (quotient digits, scale floor, overflow,
+  trailing zeros); the exact-scale, overflow and rounding-mode parity of #465 is not claimed.
 
 - **FR-056** (LINQ aggregates by element type, #618, #657): `Sum`, `Average`, `Min`, `Max`,
   `MinBy` and `MaxBy` in TypeScript MUST give what .NET gives for the element type. `Min` / `Max`
@@ -457,64 +469,61 @@ Product requirements added after the migration (normative; each one is traced by
   `xs.X(...)`, including when nested in a chain. A static call that names an argument reports
   MS0001. The legacy fluent `Enumerable.from(...)` mappings no longer exist.
 
-- **FR-068** (JSON `JsonIgnoreCondition.WhenWritingNull`, #667): The generated
-  `JsonSerializerContext` MUST leave a `null` member out of the written JSON when System.Text.Json
-  would: the context's `DefaultIgnoreCondition = WhenWritingNull`, and a member's own
-  `[JsonIgnore(Condition = WhenWritingNull)]` (or `WhenWritingDefault` on a nullable member, whose
-  default is `null`), the member's condition taking precedence (`Never` keeps writing it). The
-  property spec carries `omitWhenNull: true` and only a nullable member does; reading is
-  unaffected. `MS0037` MUST NOT report these; `WhenWritingDefault` on a non-nullable member and a
-  context-wide `DefaultIgnoreCondition = WhenWritingDefault` stay reported. Traced by the
-  "Naming policies, `JsonSerializerDefaults.Web` and read options" and "STJ member selection" rows
-  of the feature-support matrix.
+- **FR-059** (target-typed `default`, #627, #372, #612, #409): A `default` literal and
+  `default(T)` MUST lower to the default value of the type the compiler converts them to, at
+  every position (a local initializer, a conditional arm, a `??` operand, an argument, a
+  collection element): `false`, `0`, `0n`, `"\u0000"`, `new Decimal("0")`, `null` for a
+  reference or nullable type, the zero-valued member of an enum (a `0` asserted to the enum
+  when it declares none). A type with no literal for its default (a user struct, a tuple, a
+  `[StringEnum]` without a zero member) MUST report `MS0001` and keep the target's placeholder.
+  The implicit initializer of an enum field MUST be the same value, never the lowest member;
+  a `[StringEnum]` field without a zero member gets no initializer.
 
-- **FR-069** (indexer reads under `noUncheckedIndexedAccess`, #670): The TypeScript backend MUST
-  emit an array, `List<T>` or `string` element read so that the generated code type-checks under
-  `strict` with `noUncheckedIndexedAccess`: `a[i]!` for a `T` element and `(a[i] ?? null)` for a
-  nullable one, never an assertion that removes the element's own `null`; a write target stays
-  assignable (`a[i] = v`, `a[i] ??= v`; `a[i]! += v` and `a[i]!++` for operations that read it
-  first); the final step of a native optional chain stays unchecked. A `Dictionary` read is not
-  covered. Traced by the "Indexer reads" row of the feature-support matrix.
+- **FR-060** (record field equality, #674): The generated `equals` of a record MUST compare a
+  field as .NET's `EqualityComparer<T>.Default` does. A field of a type that compares by value
+  with `===` (integers, `string`, `bool`, enums, branded values) uses `===`; a `double` /
+  `float`, `decimal`, the date and time types, `Guid`, tuples and transpiled record and struct
+  types use the runtime's `valueEquals`; a field whose static type does not say (a type
+  parameter, `object`, an interface, a class) uses the runtime's `defaultEquals`: its own
+  `equals` when it has one, `NaN` equal to itself, else reference equality. An equality guard
+  (`ArgumentOutOfRangeException.ThrowIfEqual` / `ThrowIfNotEqual`) admits a sealed generic
+  record, and a record with a `double` / `float` field, when every type argument and field is a
+  value of the first kind or one the runtime compares as .NET does.
 
-- **FR-070** (Dart `[StringEnum]` shape, #677): The Dart backend MUST emit a `[StringEnum]` as an
-  enhanced enum whose members keep their C# names as identifiers (camelCase), carry the string
-  value (a Dart-specific `[Name(Dart, "...")]`, else the `[Name]` value, else the C# name) and
-  whose enum declares `final String value;` and `const E(this.value);`; a numeric enum declares
-  neither. Traced by the "String enums" row of the feature-support matrix.
+- **FR-061** (null guards by declared type, #649): The null guard of a string concatenation,
+  an interpolation hole, a list pattern's subject and an exception's `message` argument MUST
+  follow the declared nullability of the operand, not Roslyn's flow state, which is optimistic
+  after `x!`, after a call that clears a checked field or a lambda-cleared local, and absent in
+  nullable-disabled code. The guard stays unless the operand cannot be `null` by construction
+  (a constant, an interpolated string, a concatenation, an object creation, a value type, or a
+  symbol declared non-nullable in a nullable-enabled context).
 
-- **FR-053** (string members with .NET arguments, #661): A `System.String` member whose
-  JavaScript namesake reads its arguments differently or clamps where .NET throws — `Substring`,
-  `Remove`, `Insert`, `PadLeft` / `PadRight`, `ToCharArray(start, length)`, `IndexOf` /
-  `LastIndexOf` with a start index, count or `StringComparison`, `StartsWith` / `EndsWith` /
-  `Contains` with a `StringComparison`, `Trim` / `TrimStart` / `TrimEnd` with characters, `Split`
-  with characters, a count or `StringSplitOptions`, and `string.Join(separator, values, start,
-  count)` — MUST lower in TypeScript to a `metano-runtime` helper that returns .NET's value for
-  valid arguments, evaluates each argument once and throws .NET's `ArgumentOutOfRangeException`
-  / `ArgumentNullException` (type, parameter name and message) for invalid ones. Comparisons
-  are ordinal; the culture-sensitive `StringComparison` members behave as their ordinal
-  counterparts. The helpers MUST agree with rows recorded from real .NET under Bun and Node
-  (`tests/BclReference`). Not covered: `AsSpan` / `Slice` on strings and spans, culture-aware
-  comparison. Traced by the "String members with .NET arguments" row of the feature-support
-  matrix.
-- **FR-054** (construction and parsing members, #673, #668): `new TimeSpan(...)` from
-  components, `TimeSpan.Zero` and the single-argument `TimeSpan.FromX`, `new DateTimeOffset(...)`
-  from components, a `DateTime` or ticks plus an offset, `Guid.Parse`, `decimal.TryParse`, and
-  `Parse` / `TryParse` of `int`, `uint`, `short`, `ushort`, `byte`, `sbyte` and `Parse` of
-  `double`, `float` and `bool` MUST lower in TypeScript to `metano-runtime` functions with .NET's
-  value and exceptions (`ArgumentOutOfRangeException`, `ArgumentException`, `OverflowException`,
-  `FormatException`, `ArgumentNullException`): a `TimeSpan` built from components or units is the
-  duration .NET builds (never `new Temporal.Duration(0, 5, 0)`), `Guid.Parse` returns the lowercase
-  `D` text, and an integer `Parse` rejects what `Number.parseInt` would half-read (`"12abc"`).
-  A constant `NumberStyles` the integer parsers do not implement reports `MS0066`. The runtime
-  functions MUST agree with rows recorded from real .NET (`tests/BclReference`). Not covered:
-  the .NET 9 multi-unit `TimeSpan.FromX(a, b)` forms, `DateTimeOffset(DateTime)` without an
-  offset, the `X` GUID format, the `ReadOnlySpan<char>` forms of `Parse`.
-- **FR-055** (decimal precision and rounding, #465 part a): The class the TypeScript target
-  generates for `decimal` MUST be decimal.js configured for `System.Decimal` — 29 significant
-  digits, half-to-even rounding — exported by `metano-runtime/system/decimal`, so no generated
-  code relies on decimal.js's global defaults. Known differences remain documented in the
-  "`decimal` specifics" section of `docs/bcl-mappings.md` (quotient digits, scale floor, overflow,
-  trailing zeros); the exact-scale, overflow and rounding-mode parity of #465 is not claimed.
+- **FR-062** (import resolution, #655, #675, #504): The import collector MUST resolve an
+  identifier to an export of another module only when nothing in scope binds it: a parameter,
+  a declared local, a `foreach` variable, a `catch` parameter or a chain's caught value shadows
+  an export of the same name, so no spurious import (and no import cycle) follows. Every
+  `using` alias a file spells MUST bind an import (`Widget as W1`, `Widget as W2`), also beside
+  an `[ImportAlias]` pin of the same type, and the type binds under its own name only where the
+  file spells it so; a `[NoContainer]` factory named like an aliased type imports beside it. A
+  type used as a value from a synthesized default (an enum's zero member) imports through its
+  package origin. A template text MUST declare the receiver's type with the `$Type` placeholder
+  (the exported name, never an alias, imported as a value) instead of naming it: the scan of the
+  template text is retired, and Metano's own BCL mappings use the placeholder. Two project
+  types printed under one name that one file refers to MUST report `MS0070` at the second
+  reference (an import by alias is a follow-up). Traced by the "Import resolution" row of the
+  feature-support matrix.
+
+- **FR-063** (side-effect modules, #356, #368): The generated `package.json#sideEffects` MUST
+  list the modules that run code when merely imported (a `[ModuleEntryPoint]` module, a
+  `[StrictUnionGuard]` variant registration), as their `dist` `.js` and source `.ts` paths, and
+  be `false` when there is none, so a bundler keeps a side-effect-only import of them. A flat
+  `false` the writer wrote earlier is upgraded; a hand-written value keeps its entries. Traced by
+  the "Packaging" row of the feature-support matrix.
+
+- **FR-064** (explicit type arguments, #675): A call that writes its type arguments
+  (`Guard.ThrowIfEqual<Shape>(circle, square)`) to a transpiled generic method MUST keep them in
+  TypeScript, which would otherwise infer the type from the first operand only. A call whose
+  callee is a BCL or untranspiled member keeps the callee's own signature.
 
 - **FR-065** (explicit reference downcasts, #669): An explicit reference conversion
   (`(Derived)value`, `(IShape)obj`, `(string)obj`) MUST give the TypeScript result the target
@@ -559,32 +568,31 @@ Product requirements added after the migration (normative; each one is traced by
   extension syntax (`x.Ext()`, lowered to a module function), a `base(...)` / `this(...)`
   constructor initializer, an explicit delegate `.Invoke(...)` and an `[Emit]` callee. Traced by the "Caller
   argument expressions" row of the feature-support matrix.
-- **FR-059** (target-typed `default`, #627, #372, #612, #409): A `default` literal and
-  `default(T)` MUST lower to the default value of the type the compiler converts them to, at
-  every position (a local initializer, a conditional arm, a `??` operand, an argument, a
-  collection element): `false`, `0`, `0n`, `"\u0000"`, `new Decimal("0")`, `null` for a
-  reference or nullable type, the zero-valued member of an enum (a `0` asserted to the enum
-  when it declares none). A type with no literal for its default (a user struct, a tuple, a
-  `[StringEnum]` without a zero member) MUST report `MS0001` and keep the target's placeholder.
-  The implicit initializer of an enum field MUST be the same value, never the lowest member;
-  a `[StringEnum]` field without a zero member gets no initializer.
-- **FR-060** (record field equality, #674): The generated `equals` of a record MUST compare a
-  field as .NET's `EqualityComparer<T>.Default` does. A field of a type that compares by value
-  with `===` (integers, `string`, `bool`, enums, branded values) uses `===`; a `double` /
-  `float`, `decimal`, the date and time types, `Guid`, tuples and transpiled record and struct
-  types use the runtime's `valueEquals`; a field whose static type does not say (a type
-  parameter, `object`, an interface, a class) uses the runtime's `defaultEquals`: its own
-  `equals` when it has one, `NaN` equal to itself, else reference equality. An equality guard
-  (`ArgumentOutOfRangeException.ThrowIfEqual` / `ThrowIfNotEqual`) admits a sealed generic
-  record, and a record with a `double` / `float` field, when every type argument and field is a
-  value of the first kind or one the runtime compares as .NET does.
-- **FR-061** (null guards by declared type, #649): The null guard of a string concatenation,
-  an interpolation hole, a list pattern's subject and an exception's `message` argument MUST
-  follow the declared nullability of the operand, not Roslyn's flow state, which is optimistic
-  after `x!`, after a call that clears a checked field or a lambda-cleared local, and absent in
-  nullable-disabled code. The guard stays unless the operand cannot be `null` by construction
-  (a constant, an interpolated string, a concatenation, an object creation, a value type, or a
-  symbol declared non-nullable in a nullable-enabled context).
+
+- **FR-068** (JSON `JsonIgnoreCondition.WhenWritingNull`, #667): The generated
+  `JsonSerializerContext` MUST leave a `null` member out of the written JSON when System.Text.Json
+  would: the context's `DefaultIgnoreCondition = WhenWritingNull`, and a member's own
+  `[JsonIgnore(Condition = WhenWritingNull)]` (or `WhenWritingDefault` on a nullable member, whose
+  default is `null`), the member's condition taking precedence (`Never` keeps writing it). The
+  property spec carries `omitWhenNull: true` and only a nullable member does; reading is
+  unaffected. `MS0037` MUST NOT report these; `WhenWritingDefault` on a non-nullable member and a
+  context-wide `DefaultIgnoreCondition = WhenWritingDefault` stay reported. Traced by the
+  "Naming policies, `JsonSerializerDefaults.Web` and read options" and "STJ member selection" rows
+  of the feature-support matrix.
+
+- **FR-069** (indexer reads under `noUncheckedIndexedAccess`, #670): The TypeScript backend MUST
+  emit an array, `List<T>` or `string` element read so that the generated code type-checks under
+  `strict` with `noUncheckedIndexedAccess`: `a[i]!` for a `T` element and `(a[i] ?? null)` for a
+  nullable one, never an assertion that removes the element's own `null`; a write target stays
+  assignable (`a[i] = v`, `a[i] ??= v`; `a[i]! += v` and `a[i]!++` for operations that read it
+  first); the final step of a native optional chain stays unchecked. A `Dictionary` read is not
+  covered. Traced by the "Indexer reads" row of the feature-support matrix.
+
+- **FR-070** (Dart `[StringEnum]` shape, #677): The Dart backend MUST emit a `[StringEnum]` as an
+  enhanced enum whose members keep their C# names as identifiers (camelCase), carry the string
+  value (a Dart-specific `[Name(Dart, "...")]`, else the `[Name]` value, else the C# name) and
+  whose enum declares `final String value;` and `const E(this.value);`; a numeric enum declares
+  neither. Traced by the "String enums" row of the feature-support matrix.
 
 ### Key Entities
 
