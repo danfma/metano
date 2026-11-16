@@ -12,6 +12,8 @@ public static class RoslynTypeQueries
 {
     private const string SystemAssemblyPrefix = "System.";
 
+    private const string EmitPackageAttributeName = "EmitPackage";
+
     private static readonly string[] DictionaryTypeNames =
     [
         "System.Collections.Generic.Dictionary",
@@ -88,9 +90,31 @@ public static class RoslynTypeQueries
         return DictionaryTypeNames.Any(name => HasGenericNamePrefix(fullName, name));
     }
 
+    private static bool HasBclName(string name) =>
+        name is "System" or "mscorlib" or "netstandard"
+        || name.StartsWith(SystemAssemblyPrefix, StringComparison.Ordinal);
+
     private static bool HasGenericNamePrefix(string fullName, string name) =>
         fullName.StartsWith(name, StringComparison.Ordinal)
         && (fullName.Length == name.Length || fullName[name.Length] is '<' or '`');
+
+    /// <summary>
+    /// Whether <paramref name="assembly"/> is part of the .NET base class
+    /// library, by name: the core library (<c>System.Private.CoreLib</c>,
+    /// <c>mscorlib</c>, <c>netstandard</c>) or a <c>System</c> /
+    /// <c>System.*</c> assembly read from metadata. An assembly compiled from
+    /// source (the project itself, a project reference) and an assembly that
+    /// Metano transpiles (<c>[TranspileAssembly]</c> or <c>[EmitPackage]</c>)
+    /// never are, whatever their name. A third-party package named
+    /// <c>System.*</c> that carries neither attribute (for example
+    /// <c>System.Reactive</c>) counts as base class library; callers that
+    /// report on a BCL member then report for it too, never silently.
+    /// </summary>
+    public static bool IsBclAssembly(this IAssemblySymbol? assembly) =>
+        assembly is not (null or ISourceAssemblySymbol)
+        && HasBclName(assembly.Name)
+        && !assembly.HasTranspileAssembly()
+        && !assembly.HasAttribute(EmitPackageAttributeName);
 
     /// <summary>
     /// True for <c>Dictionary&lt;K,V&gt;</c>, <c>IDictionary&lt;K,V&gt;</c> and
@@ -99,23 +123,6 @@ public static class RoslynTypeQueries
     /// derive from or implement them): the dictionary types the
     /// declarative BCL mappings cover.
     /// </summary>
-    /// <summary>
-    /// Whether <paramref name="assembly"/> is part of the .NET base class
-    /// library: the core library (<c>System.Private.CoreLib</c>,
-    /// <c>mscorlib</c>, <c>netstandard</c>) or a <c>System</c> /
-    /// <c>System.*</c> reference assembly. A third-party library or package
-    /// is not, whatever it references. The rule reads the assembly NAME, so a
-    /// third-party assembly named <c>System.*</c> (for example
-    /// <c>System.Reactive</c>) counts as base class library; callers that
-    /// report on a BCL member then report for it too, never silently.
-    /// </summary>
-    public static bool IsBclAssembly(this IAssemblySymbol? assembly) =>
-        assembly?.Name is { } name
-        && (
-            name is "System" or "mscorlib" or "netstandard"
-            || name.StartsWith(SystemAssemblyPrefix, StringComparison.Ordinal)
-        );
-
     public static bool IsBclDictionaryDefinition(this INamedTypeSymbol type) =>
         type.ContainingType is null
         && type.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic"

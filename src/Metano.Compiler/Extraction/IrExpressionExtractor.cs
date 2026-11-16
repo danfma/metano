@@ -179,8 +179,8 @@ public sealed partial class IrExpressionExtractor
             // those through the rewriter façade would touch 5+ call sites
             // for one rewriter's benefit.
             new Invocation.ExtensionMethodRewriter(TryRewriteExtensionCall),
-            // Reports `ToString(format)` on a number whose format the runtime
-            // does not format as .NET does (#323).
+            // Governs `ToString(format)` of a BCL type: reports a format the
+            // target does not format as .NET does (#323).
             new Invocation.UnsupportedFormatCallRewriter(RewriteUnsupportedFormatCall),
             // These two must stay last: they report the LINQ (#648) and
             // MemoryExtensions (#657) calls none of the entries above lowered.

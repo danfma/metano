@@ -487,7 +487,9 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `ToString(string)` is unchanged. `Guid`'s `X` still prints the hyphenated
   text through the fallback mapping (#657). Custom patterns stay reported, even
   where they equal the default text (`{b:#,##0}` on a `sbyte` / `byte`,
-  `{d:yyyy'-'MM'-'dd}` on a `DateOnly`). A static `ToString`
+  `{d:yyyy'-'MM'-'dd}` on a `DateOnly`, `BigInteger`'s `D0` / `D1`).
+  `value?.ToString(format)` and an empty or `null` format behave as the plain
+  call with the type's default format. A static `ToString`
   (`Convert.ToString(s)`) is not a format call. The format-ignored rule reads
   the static type: a non-sealed class whose run-time value is `IFormattable`
   prints its default text.
