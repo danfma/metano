@@ -340,9 +340,7 @@ public class Int64BclMappingTests
         await Assert.That(files["unsupported.ts"]).Contains("return formatInt64(l, \"B\");");
         await Assert.That(files["unsupported.ts"]).Contains("return parseInt64(s, 167);");
 
-        await Assert
-            .That(files["unsupported.ts"])
-            .Contains("Int32.parse(s, NumberStyles.HexNumber)");
+        await Assert.That(files["unsupported.ts"]).Contains("return parseInt32(s, 515);");
     }
 
     [Test]
@@ -447,7 +445,7 @@ public class Int64BclMappingTests
         await Assert.That(output).Contains("List<int>.filled(n, 0)");
         await Assert.That(output).Contains("List<bool>.filled(n, false)");
         await Assert.That(output).DoesNotContain("filled(n, null)");
-        await Assert.That(output).Contains("NumberStyles.hexNumber");
+        await Assert.That(output).Contains("Int32.parse(s, 515)");
         await Assert.That(output).Contains("Unsupported expression: ArrayCreationExpression");
     }
 

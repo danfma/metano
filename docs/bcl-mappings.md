@@ -514,7 +514,25 @@ native array methods directly:
 | `string.Join(sep, items)` (array, `List<T>`, `IReadOnlyList<T>`, …) | `items.join(sep)` |
 | `string.Join(sep, items)` (other `IEnumerable<T>`) | `[...items].join(sep)` |
 | `string.Join(sep, a, b, c)` (`params`) | `[a, b, c].join(sep)` |
-| `int.Parse(s)` | `Number.parseInt(s, 10)` |
+| `int.Parse(s)` | `parseInt32(s)` (see [Parsing numbers](#parsing-numbers-and-booleans)) |
+
+The members of the table above that a JavaScript method of the same name reads differently
+go through `metano-runtime` helpers (baseline FR-053, #661): C#'s `Substring(start, length)`
+takes a length where `substring(start, end)` takes an end index (`"abcdef".Substring(1, 2)` is
+`"bc"`, `substring(1, 2)` is `"b"`), `substring` clamps and swaps bad arguments where C# throws,
+`Trim(char)` would trim white space instead, `Split(c, count)` keeps the rest of the string in
+its last piece where `split(c, limit)` drops it, and `indexOf(t, comparison)` would read the
+enum as a position. Each helper reads its arguments once and throws what .NET throws
+(`ArgumentOutOfRangeException` and `ArgumentNullException`, with .NET's messages and parameter
+names), checked against real .NET by `tests/BclReference` (bun and Node). Comparisons are
+ordinal: the culture-sensitive `StringComparison` members behave as their ordinal
+counterparts, and the ignore-case ones fold each UTF-16 code unit to upper case, as
+`OrdinalIgnoreCase` does. `StringComparison` and `StringSplitOptions` lower to runtime
+mirrors of the enums. `Trim()`, `Split(char)`, `IndexOf(t)` and the other forms of the same
+names that agree with JavaScript keep the plain method (`Trim()` trims U+0085, which .NET
+treats as white space and JavaScript does not, and U+FEFF the other way round, as noted below
+for `IsNullOrWhiteSpace`). `Split(params char[])` takes up to four expanded characters; the
+span, culture and `AsSpan`/`Slice` forms are not mapped.
 
 Each element is converted the way JS `Array.prototype.join` converts it, which is the
 same conversion string interpolation and `ToString()` use elsewhere in the generated

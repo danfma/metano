@@ -28,16 +28,16 @@ public sealed partial class IrExpressionExtractor
     private const string NumberStylesTypeName = "System.Globalization.NumberStyles";
 
     /// <summary>
-    /// A constant <c>System.Globalization.NumberStyles</c> argument of
-    /// <c>long</c> / <c>ulong</c> <c>Parse</c> / <c>TryParse</c>
-    /// (<c>HexNumber</c>, <c>Integer | AllowThousands</c>) folded to its flags
-    /// value (spec 012 FR-038): the BCL enum has no counterpart in the
-    /// targets, and the 64-bit parsers take the flags as a number.
+    /// A constant <c>System.Globalization.NumberStyles</c> argument of an
+    /// integer <c>Parse</c> / <c>TryParse</c> (<c>HexNumber</c>,
+    /// <c>Integer | AllowThousands</c>) folded to its flags value (spec 012
+    /// FR-038, #668): the BCL enum has no counterpart in the targets, and the
+    /// integer parsers take the flags as a number.
     /// <c>null</c> for any other expression.
     /// </summary>
     private IrLiteral? FoldedNumberStylesConstant(ExpressionSyntax expression)
     {
-        if (!IsSixtyFourBitParserArgument(expression))
+        if (!IsIntegerParserArgument(expression))
             return null;
 
         var isNumberStyles =
@@ -50,13 +50,20 @@ public sealed partial class IrExpressionExtractor
             : null;
     }
 
-    private bool IsSixtyFourBitParserArgument(ExpressionSyntax expression) =>
+    private bool IsIntegerParserArgument(ExpressionSyntax expression) =>
         expression.Parent is ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax call }
         && _semantic.GetSymbolInfo(call).Symbol
             is IMethodSymbol
             {
                 Name: "Parse" or "TryParse",
-                ContainingType.SpecialType: SpecialType.System_Int64 or SpecialType.System_UInt64,
+                ContainingType.SpecialType: SpecialType.System_Int64
+                    or SpecialType.System_UInt64
+                    or SpecialType.System_Int32
+                    or SpecialType.System_UInt32
+                    or SpecialType.System_Int16
+                    or SpecialType.System_UInt16
+                    or SpecialType.System_Byte
+                    or SpecialType.System_SByte,
             };
 
     /// <summary>

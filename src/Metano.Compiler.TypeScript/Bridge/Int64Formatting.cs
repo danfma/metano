@@ -30,6 +30,9 @@ internal static class Int64Formatting
 
     private const string NativeUIntTypeName = "nuint";
 
+    /// <summary>The arguments of <c>TryParse(string, NumberStyles, IFormatProvider, out T)</c>.</summary>
+    private const int StyledTryParseArgumentCount = 4;
+
     /// <summary>The styles <c>int64-parsing.ts</c> implements.</summary>
     private static readonly HashSet<int> SupportedNumberStyles =
     [
@@ -73,6 +76,13 @@ internal static class Int64Formatting
     /// </summary>
     public static void ReportUnsupportedFormatOrStyle(IrCallExpression call)
     {
+        if (IsNarrowIntegerMember(call.Origin))
+        {
+            ReportNarrowIntegerStyle(call);
+
+            return;
+        }
+
         if (!IsSixtyFourBitMember(call.Origin))
             return;
 
@@ -83,10 +93,39 @@ internal static class Int64Formatting
                 ReportIfUnsupportedFormat(format);
                 break;
             case "Parse" or "TryParse":
-                ReportIfUnsupportedStyle(call.Arguments);
+                ReportIfUnsupportedStyle(call.Arguments, "64-bit integers");
                 break;
         }
     }
+
+    /// <summary>
+    /// <c>MS0066</c> for a constant <c>NumberStyles</c> that the parsers of the integers of 32
+    /// bits or fewer (<c>number-parsing.ts</c>, which shares the 64-bit grammar) do not
+    /// implement (#668).
+    /// </summary>
+    private static void ReportNarrowIntegerStyle(IrCallExpression call)
+    {
+        // `TryParse(string, out T)` fills its `out` slot with the literal `default`, which is
+        // not a style: only the four-argument form has one.
+        var takesStyle = call.Origin!.MemberName switch
+        {
+            "Parse" => true,
+            "TryParse" => call.Arguments.Count == StyledTryParseArgumentCount,
+            _ => false,
+        };
+
+        if (takesStyle)
+            ReportIfUnsupportedStyle(call.Arguments, "integers");
+    }
+
+    private static bool IsNarrowIntegerMember(IrMemberOrigin? origin) =>
+        origin?.DeclaringTypeFullName
+            is "int"
+                or "uint"
+                or "short"
+                or "ushort"
+                or "byte"
+                or "sbyte";
 
     private static bool IsSixtyFourBitMember(IrMemberOrigin? origin) =>
         origin?.DeclaringTypeFullName
@@ -120,7 +159,10 @@ internal static class Int64Formatting
     /// argument, folded to its flags value by the core) the runtime does not
     /// implement.
     /// </summary>
-    private static void ReportIfUnsupportedStyle(IReadOnlyList<IrArgument> arguments)
+    private static void ReportIfUnsupportedStyle(
+        IReadOnlyList<IrArgument> arguments,
+        string integers
+    )
     {
         if (arguments is not [_, { Value: IrLiteral { Value: int style } }, ..])
             return;
@@ -129,7 +171,7 @@ internal static class Int64Formatting
             return;
 
         Report(
-            $"NumberStyles value {style} is not supported for 64-bit integers in TypeScript; "
+            $"NumberStyles value {style} is not supported for {integers} in TypeScript; "
                 + "the call throws NotSupportedException at run time (spec 012 FR-038)."
         );
     }

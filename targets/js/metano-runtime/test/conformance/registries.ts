@@ -8,6 +8,7 @@
 
 import { tryParseDecimal } from "../../dist/system/decimal-parsing.js";
 import * as dateTimeOffsets from "../../dist/system/date-time-offset.js";
+import * as numberParsing from "../../dist/system/number-parsing.js";
 import * as stringMembers from "../../dist/system/string-members.js";
 import * as timeSpans from "../../dist/system/time-span.js";
 import { durationTicks, plainDateTimeTicks } from "../../dist/system/temporal-helpers.js";
@@ -67,6 +68,23 @@ export const temporalRegistry: RowRegistry = {
     ),
   dateTimeOffsetFromTicks: (ticks: bigint, offsetMinutes: number) =>
     describeOffset(dateTimeOffsets.dateTimeOffsetFromTicks(ticks, offsetOf(offsetMinutes))),
+};
+
+export const numberParsingRegistry: RowRegistry = {
+  parseInt32: numberParsing.parseInt32,
+  parseUInt32: numberParsing.parseUInt32,
+  parseInt16: numberParsing.parseInt16,
+  parseUInt16: numberParsing.parseUInt16,
+  parseByte: numberParsing.parseByte,
+  parseSByte: numberParsing.parseSByte,
+  tryParseInt32: numberParsing.tryParseInt32,
+  tryParseUInt32: numberParsing.tryParseUInt32,
+  tryParseInt16: numberParsing.tryParseInt16,
+  tryParseUInt16: numberParsing.tryParseUInt16,
+  tryParseByte: numberParsing.tryParseByte,
+  tryParseSByte: numberParsing.tryParseSByte,
+  parseFloat64: numberParsing.parseFloat64,
+  parseBoolean: numberParsing.parseBoolean,
 };
 
 export const parsingRegistry: RowRegistry = {

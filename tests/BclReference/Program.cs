@@ -28,3 +28,8 @@ var parsing = new FixtureWriter();
 
 ParsingRows.AddTo(parsing);
 parsing.Write(Path.Combine(fixtures, "parsing.json"));
+
+var numberParsing = new FixtureWriter();
+
+NumberParsingRows.AddTo(numberParsing);
+numberParsing.Write(Path.Combine(fixtures, "number-parsing.json"));
