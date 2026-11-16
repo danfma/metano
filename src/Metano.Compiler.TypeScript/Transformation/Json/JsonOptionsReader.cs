@@ -23,6 +23,27 @@ internal static class JsonOptionsReader
 
     private const string OutOfOrderMetadataOption = "AllowOutOfOrderMetadataProperties";
 
+    private const string DefaultIgnoreConditionOption = "DefaultIgnoreCondition";
+
+    /// <summary>
+    /// The <c>DefaultIgnoreCondition</c> of <paramref name="contextType"/>:
+    /// <c>Never</c> (System.Text.Json's default, under <c>General</c> and
+    /// <c>Web</c> alike) unless the attribute names one. A member without a
+    /// <c>[JsonIgnore]</c> of its own follows it.
+    /// </summary>
+    public static JsonIgnoreCondition DefaultIgnoreConditionOf(INamedTypeSymbol contextType)
+    {
+        if (
+            OptionsAttributeOf(contextType) is not { } attribute
+            || !NamedOptionsOf(attribute).TryGetValue(DefaultIgnoreConditionOption, out var named)
+        )
+        {
+            return JsonIgnoreCondition.Never;
+        }
+
+        return (JsonIgnoreCondition)(named as int? ?? 0);
+    }
+
     /// <summary>
     /// The JSON naming policy of <paramref name="contextType"/>, or <c>null</c>
     /// when names stay as declared. A <c>PropertyNamingPolicy</c> value outside

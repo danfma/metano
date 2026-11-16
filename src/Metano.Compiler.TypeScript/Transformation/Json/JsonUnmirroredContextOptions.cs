@@ -15,8 +15,10 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <see cref="JsonOptionsReader"/>:
 /// <list type="bullet">
 ///   <item>mirrored: <c>PropertyNamingPolicy</c>, <c>PropertyNameCaseInsensitive</c>,
-///     <c>AllowOutOfOrderMetadataProperties</c> and the
-///     <c>AllowReadingFromString</c> flag of <c>NumberHandling</c>;</item>
+///     <c>AllowOutOfOrderMetadataProperties</c>, the
+///     <c>AllowReadingFromString</c> flag of <c>NumberHandling</c> and
+///     <c>DefaultIgnoreCondition = WhenWritingNull</c> (see
+///     <see cref="JsonPropertyCollector"/>);</item>
 ///   <item>never reported, because they do not change the JSON value:
 ///     <c>WriteIndented</c>, <c>IndentCharacter</c>, <c>IndentSize</c>,
 ///     <c>NewLine</c> (formatting belongs to the caller's
@@ -35,6 +37,8 @@ internal static class JsonUnmirroredContextOptions
 
     private const string MaxDepthOption = "MaxDepth";
 
+    private const string DefaultIgnoreConditionOption = "DefaultIgnoreCondition";
+
     /// <summary>
     /// The depth limit the runtime enforces (DECIDED-20 b); <c>0</c> means
     /// the same default in System.Text.Json.
@@ -51,7 +55,6 @@ internal static class JsonUnmirroredContextOptions
         object
     >
     {
-        ["DefaultIgnoreCondition"] = (int)JsonIgnoreCondition.Never,
         ["IgnoreReadOnlyProperties"] = false,
         ["IgnoreReadOnlyFields"] = false,
         ["IncludeFields"] = false,
@@ -105,9 +108,17 @@ internal static class JsonUnmirroredContextOptions
             NumberHandlingOption => UnmirroredNumberHandlingFlagsOf(value),
             ConvertersOption => value.Values.IsDefaultOrEmpty ? [] : [option],
             MaxDepthOption => value.Value is 0 or MirroredMaxDepth ? [] : [option],
+            DefaultIgnoreConditionOption => IsMirroredIgnoreCondition(value) ? [] : [option],
             _ when IsNonDefaultUnmirrored(option, value) => [option],
             _ => [],
         };
+
+    /// <summary>
+    /// <c>Never</c> (the default) and <c>WhenWritingNull</c> (the generated
+    /// context omits a <c>null</c> member on write) are mirrored.
+    /// </summary>
+    private static bool IsMirroredIgnoreCondition(TypedConstant value) =>
+        value.Value is (int)JsonIgnoreCondition.Never or (int)JsonIgnoreCondition.WhenWritingNull;
 
     /// <summary>
     /// Whether <paramref name="option"/> is an unmirrored single-valued option

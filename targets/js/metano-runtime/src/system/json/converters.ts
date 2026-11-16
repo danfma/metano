@@ -769,6 +769,10 @@ function propertyWriterOf(
     for (const { property, converter } of propertyPlans) {
       const tsValue = source[property.ts];
 
+      if (tsValue == null && property.omitWhenNull) {
+        continue;
+      }
+
       if (tsValue == null && property.optional) {
         result[property.json] = null;
         continue;

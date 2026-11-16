@@ -399,17 +399,8 @@ public class JsonMemberOptionsTests
 
         await Assert.That(TsNamesOf(files[ContextPath])).IsEqualTo("shown, note");
 
-        await Assert
-            .That(UnmirroredMessagesOf(diagnostics))
-            .IsEqualTo(
-                string.Join(
-                    "\n",
-                    [
-                        "'Flags.Note' has [JsonIgnore(Condition = WhenWritingNull)]: the TypeScript "
-                            + "context always writes and reads it.",
-                    ]
-                )
-            );
+        // WhenWritingNull is mirrored (omitWhenNull): JsonIgnoreConditionTests.
+        await Assert.That(UnmirroredMessagesOf(diagnostics)).IsEqualTo("");
     }
 
     [Test]

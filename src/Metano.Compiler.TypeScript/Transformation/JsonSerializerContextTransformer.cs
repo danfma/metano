@@ -195,7 +195,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         var properties = new JsonPropertyCollector(
             _context,
             admission,
-            JsonOptionsReader.NamingPolicyOf(contextType)
+            JsonOptionsReader.NamingPolicyOf(contextType),
+            JsonOptionsReader.DefaultIgnoreConditionOf(contextType)
         );
 
         var names = JsonTypeInfoNames.Create(_context, roots, report);
