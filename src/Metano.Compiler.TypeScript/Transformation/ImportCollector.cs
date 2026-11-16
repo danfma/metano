@@ -146,6 +146,7 @@ public sealed class ImportCollector(
         // spelling), which `spelledCanonically` records before the substitution.
         var spelledCanonically = referencedTypes.ToHashSet(Ordinal);
         var aliasBindings = new Dictionary<string, List<(string Alias, bool IsValue)>>(Ordinal);
+
         if (IrToTsTypeMapper.UsingAliases is { } activeScope)
         {
             foreach (var name in referencedTypes.ToList())
@@ -1280,12 +1281,15 @@ public sealed class ImportCollector(
                 break;
             case TsClass cls:
                 CollectFromTypeParameters(cls.TypeParameters, sink);
+
                 if (cls.Extends is not null)
                 {
                     CollectFromType(cls.Extends, sink);
+
                     if (cls.Extends is TsNamedType extendsNamed)
                         valueNames.Add(extendsNamed.Name);
                 }
+
                 if (cls.Implements is not null)
                     foreach (var iface in cls.Implements)
                         CollectFromType(iface, sink);

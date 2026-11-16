@@ -318,10 +318,17 @@ public static class TranspilerHost
         out CachedTargetOutput cached
     )
     {
-        cached = new CachedTargetOutput([], new Dictionary<string, string>(), []);
+        cached = new CachedTargetOutput(
+            [],
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            []
+        );
+
         var cache = TranspilationCache.TryRead(outputDir);
+
         if (cache is null)
             return false;
+
         if (!string.Equals(cache.Target, targetLanguage, StringComparison.Ordinal))
             return false;
         if (
