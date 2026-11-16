@@ -174,6 +174,36 @@ public class DeclarativeMappingTests
         await Assert.That(output).Contains("metano-runtime");
     }
 
+    /// <summary>
+    /// <c>Clear()</c> on an immutable list or array lowers to
+    /// <c>ImmutableCollection.clear()</c>, whose template does not print the
+    /// receiver: the mapping declares the helper it names, so it is imported
+    /// whatever the receiver is.
+    /// </summary>
+    [Test]
+    public async Task DeclarativeImmutableClear_ImportsTheNamespaceHelper()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using System.Collections.Immutable;
+
+            [Transpile]
+            public static class History
+            {
+                public static int Cleared() => ImmutableList<int>.Empty.Clear().Count;
+
+                public static ImmutableArray<int> Reset(ImmutableArray<int> items) => items.Clear();
+            }
+            """
+        )["history.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("import { ImmutableCollection } from \"metano-runtime\";");
+
+        await Assert.That(output).Contains("ImmutableCollection.clear()");
+    }
+
     [Test]
     public async Task DeclarativeImmutableListRemoveAt_LowersToNamespaceHelper()
     {

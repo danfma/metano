@@ -55,7 +55,8 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableList<>),
     nameof(ImmutableList<int>.Clear),
-    JsTemplate = "ImmutableCollection.clear()"
+    JsTemplate = "ImmutableCollection.clear()",
+    RuntimeImports = "ImmutableCollection"
 )]
 
 [assembly: MapProperty(
@@ -120,7 +121,8 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableArray<>),
     nameof(ImmutableArray<int>.Clear),
-    JsTemplate = "ImmutableCollection.clear()"
+    JsTemplate = "ImmutableCollection.clear()",
+    RuntimeImports = "ImmutableCollection"
 )]
 
 [assembly: MapProperty(
