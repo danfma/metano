@@ -5396,8 +5396,7 @@ public sealed partial class IrExpressionExtractor
         return new IrCastExpression(
             inner,
             ExtractTargetType(cast),
-            IsReferenceDowncast: IsTypedReferenceDowncast(cast, targetType),
-            ChecksAtRuntime: ChecksReferenceDowncast(cast, targetType)
+            ReferenceConversion: ReferenceConversionOf(cast, targetType)
         );
     }
 }

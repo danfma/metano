@@ -536,8 +536,9 @@ Product requirements added after the migration (normative; each one is traced by
   analysis already types it (the cast sits where an earlier `operand is T` of the same operand
   holds, through `&&`, `?:` or `if`), for an upcast, and for a cast to a type that mentions a
   type parameter inside an `[Inline]` expansion; it only asserts, without importing the class,
-  in a type the target derives from (an import cycle that fails at load) and inside an `[Inline]`
-  expansion. Unboxing casts (`(int)obj`) are not reference conversions and keep the bare
+  in a type the target derives from (an import cycle that fails at load), where the class import
+  would close a cycle of value imports through other modules (the TypeScript target reads its
+  generated import graph), and inside an `[Inline]` expansion. Unboxing casts (`(int)obj`) are not reference conversions and keep the bare
   operand. Traced by the "Explicit reference downcasts" row of the feature-support matrix.
 
 - **FR-066** (static constructors, #426): A type's static constructor MUST run in C# order:

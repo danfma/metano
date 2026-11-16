@@ -763,7 +763,10 @@ the rows of `tests/BclReference`.
   parameter, `string`) is asserted (`o as IMarker`). 2.x emitted the bare operand, which failed
   to type-check at the first member read and let a wrong cast continue with `undefined`
   members. A cast that an earlier `x is T` already guards, and an upcast, keep the bare operand
-  (FR-065, #669).
+  (FR-065, #669). A cast whose class import would close a cycle of value imports (inside a
+  type the target derives from, or through a third module: `Node.describe` → `Printer.print`
+  → `(Leaf)n` with `Leaf : Node`) is asserted (`n as Leaf`) instead of checked, since the
+  import would fail when the modules load; such a cast does not throw `InvalidCastException`.
 - A static constructor's body, dropped before with no diagnostic, lowers to a class
   `static { }` block that runs after the static fields (FR-066, #426); Dart and `[NoContainer]`
   classes report `MS0001`. A `static readonly` field the static constructor writes is emitted

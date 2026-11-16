@@ -1,3 +1,4 @@
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -5,35 +6,35 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Which explicit reference conversions (<c>(Derived)value</c>) a target
-/// that erases static types has to type, and check, itself (#669). A cast the
-/// source has already guarded with a type test keeps the bare operand, which the
-/// target's own flow analysis narrows.
+/// The facts of an explicit reference conversion (<c>(Derived)value</c>, #669)
+/// a target that erases static types needs to type, and check, the result
+/// itself: whether a type test already narrows the operand, whether the target
+/// type derives from the enclosing one, whether the cast belongs to an
+/// <c>[Inline]</c> expansion, and whether the target names a type parameter.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// Whether the cast is an explicit reference conversion whose result the
-    /// target types: not one an earlier type test of the same operand already
-    /// narrows (<c>o is Money &amp;&amp; ((Money)o).Cents == 0</c>), and not one
-    /// to a type that mentions a type parameter inside an <c>[Inline]</c>
-    /// expansion, which lands in the caller, where the callee's type parameter
-    /// is not in scope.
+    /// The facts of the cast when it is an explicit reference conversion;
+    /// <c>null</c> for any other conversion.
     /// </summary>
-    private bool IsTypedReferenceDowncast(CastExpressionSyntax cast, ITypeSymbol targetType) =>
-        _semantic.ClassifyConversion(cast.Expression, targetType)
-            is { IsReference: true, IsExplicit: true }
-        && !(_inlineExpanding.Count > 0 && MentionsTypeParameter(targetType))
-        && !IsNarrowedByTypeTest(cast, targetType);
+    private IrReferenceConversion? ReferenceConversionOf(
+        CastExpressionSyntax cast,
+        ITypeSymbol targetType
+    )
+    {
+        var conversion = _semantic.ClassifyConversion(cast.Expression, targetType);
 
-    /// <summary>
-    /// Whether the typed downcast may reference the target's runtime class to
-    /// check the cast. Not inside an <c>[Inline]</c> expansion, whose caller's
-    /// enclosing type is out of sight, and not in a type the target derives
-    /// from (<see cref="DerivesFromEnclosingType"/>).
-    /// </summary>
-    private bool ChecksReferenceDowncast(CastExpressionSyntax cast, ITypeSymbol targetType) =>
-        _inlineExpanding.Count == 0 && !DerivesFromEnclosingType(targetType, cast);
+        if (conversion is not { IsReference: true, IsExplicit: true })
+            return null;
+
+        return new IrReferenceConversion(
+            IsNarrowedByTypeTest: IsNarrowedByTypeTest(cast, targetType),
+            TargetDerivesFromEnclosingType: DerivesFromEnclosingType(targetType, cast),
+            InInlineExpansion: _inlineExpanding.Count > 0,
+            TargetMentionsTypeParameter: MentionsTypeParameter(targetType)
+        );
+    }
 
     private static bool MentionsTypeParameter(ITypeSymbol type) =>
         type switch
@@ -47,9 +48,7 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Whether <paramref name="targetType"/> extends a type that encloses
     /// <paramref name="at"/> (a method of <c>Shape</c> casting to its subclass
-    /// <c>Circle</c>): the target's module imports the enclosing one to extend
-    /// it, so the enclosing module cannot import the target's class back to
-    /// check the cast without a load-time import cycle.
+    /// <c>Circle</c>).
     /// </summary>
     private bool DerivesFromEnclosingType(ITypeSymbol targetType, SyntaxNode at)
     {

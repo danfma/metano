@@ -294,7 +294,9 @@ public static partial class IrToTsExpressionBridge
     /// value to <c>any[]</c>, never to the tuple, so unlike a class (narrowed
     /// by <c>instanceof</c>) or a guarded shape (narrowed by its type
     /// predicate) the cast stays a TS assertion for the result to type-check.
-    /// So does a cast the compiler synthesized as an assertion.
+    /// So does a cast the compiler synthesized as an assertion. An explicit
+    /// reference conversion is typed, and checked where it can be
+    /// (<see cref="ReferenceCastLowering"/>).
     /// </summary>
     private static TsExpression MapCast(IrCastExpression cast, IrToTsBridgeContext context)
     {
@@ -306,7 +308,11 @@ public static partial class IrToTsExpressionBridge
         if (cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple)
             return new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType));
 
-        return cast.IsReferenceDowncast ? MapReferenceDowncast(cast, value, testedType) : value;
+        return
+            cast.ReferenceConversion is { } conversion
+            && ReferenceCastLowering.TypesResult(conversion)
+            ? MapReferenceDowncast(cast, conversion, value, testedType)
+            : value;
     }
 
     /// <summary>
@@ -314,22 +320,27 @@ public static partial class IrToTsExpressionBridge
     /// (TypeScript keeps the static type of the operand otherwise, so every
     /// member access through it fails to type-check). A target with a runtime
     /// class (a transpiled class or record, a mapped BCL exception) is
-    /// checked as .NET checks it: the <c>castTo</c> helper lets <c>null</c>
-    /// through and throws <c>InvalidCastException</c> for any other type. A
-    /// target with no class to test (an interface, a type parameter, a
-    /// <c>string</c>) is only asserted.
+    /// checked as .NET checks it, when <see cref="ReferenceCastLowering"/>
+    /// lets this module import the class: the <c>castTo</c> helper lets
+    /// <c>null</c> through and throws <c>InvalidCastException</c> for any
+    /// other type. Any other target (an interface, a type parameter, a
+    /// <c>string</c>, a class this module cannot import) is only asserted.
     /// </summary>
     private static TsExpression MapReferenceDowncast(
         IrCastExpression cast,
+        IrReferenceConversion conversion,
         TsExpression value,
         IrTypeRef testedType
     )
     {
         var targetType = IrToTsTypeMapper.Map(cast.TargetType);
+        var runtimeClass = ReferenceCastLowering.MayImportTargetClass(conversion)
+            ? RuntimeClassOf(testedType)
+            : null;
 
-        return cast.ChecksAtRuntime && RuntimeClassOf(testedType) is { } runtimeClass
+        return runtimeClass is not null && ReferenceCastLowering.Checks(runtimeClass)
             ? new TsCallExpression(
-                new TsRuntimeHelperReference("castTo"),
+                new TsRuntimeHelperReference(ReferenceCastLowering.CastHelper),
                 [value, runtimeClass],
                 TypeArguments: [targetType]
             )
