@@ -166,7 +166,7 @@ public class NullConditionalMappingTranspileTests
         );
 
         await Assert.That(output).Contains("return items?.[0] ?? null;");
-        await Assert.That(output).Contains("return names?.[0].length ?? null;");
+        await Assert.That(output).Contains("return names == null ? null : names[0]!.length;");
         await Assert.That(output).Contains("return scores?.get(\"k\") ?? null;");
     }
 
@@ -190,7 +190,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1])(value.substring(1));"
+                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)(value.substring(1));"
             );
 
         await Assert
@@ -216,7 +216,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : $receiver[$receiver.length - 1])(find(items));"
+                "return (($receiver) => $receiver == null ? null : $receiver[$receiver.length - 1]!)(find(items));"
             );
 
         await Assert
@@ -228,7 +228,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1])(order.getNext());"
+                "return (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1]!)(order.getNext());"
             );
 
         await Assert.That(output).DoesNotContain("?.[$receiver");
@@ -246,7 +246,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1])($receiver.next))(order.getNext());"
+                "return (($receiver) => $receiver == null ? null : (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1]!)($receiver.next))(order.getNext());"
             );
     }
 

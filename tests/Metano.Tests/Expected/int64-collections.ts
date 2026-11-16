@@ -14,14 +14,14 @@ export class Collections {
   }
 
   index(values: number[], l: bigint, u: bigint): number {
-    return values[Number(l)] + values[Number(u)];
+    return values[Number(l)]! + values[Number(u)]!;
   }
 
   write(values: bigint[], l: bigint): void {
     values[Number(l)] = 1n;
-    values[Number(l)] = BigInt.asIntN(64, values[Number(l)] + 2n);
-    ((receiver$temp$0) => values[receiver$temp$0] = BigInt.asIntN(64, values[receiver$temp$0] * 3n))(this.next());
-    this.slots[Number(l)] = BigInt.asIntN(64, this.slots[Number(l)] + 1n);
+    values[Number(l)] = BigInt.asIntN(64, values[Number(l)]! + 2n);
+    ((receiver$temp$0) => values[receiver$temp$0] = BigInt.asIntN(64, values[receiver$temp$0]! * 3n))(this.next());
+    this.slots[Number(l)] = BigInt.asIntN(64, this.slots[Number(l)]! + 1n);
   }
 
   length(values: number[]): bigint {

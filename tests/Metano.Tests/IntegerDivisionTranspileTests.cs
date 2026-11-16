@@ -235,9 +235,9 @@ public class IntegerDivisionTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => cells[receiver$temp$0] = intDiv(cells[receiver$temp$0], 2))(index++);"
+                "((receiver$temp$0) => cells[receiver$temp$0] = intDiv(cells[receiver$temp$0]!, 2))(index++);"
             );
-        await Assert.That(output).Contains("cells[index] = intDiv(cells[index], 2);");
+        await Assert.That(output).Contains("cells[index] = intDiv(cells[index]!, 2);");
     }
 
     [Test]

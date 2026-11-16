@@ -85,7 +85,7 @@ export class Bits {
   }
 
   intCompoundShift(cells: number[], n: number): void {
-    cells[0] <<= n;
+    cells[0]! <<= n;
   }
 
   shiftLeftNarrow(b: number): number {

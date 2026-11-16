@@ -373,16 +373,16 @@ export function receiverByteShiftedLeft(start: number, count: number): string {
 export function receiverElementShifted(start: number, count: number): string {
   const cells = new ShiftCells(start);
   let index = 0;
-  cells.next().slots[index++] <<= count;
+  cells.next().slots[index++]! <<= count;
 
-  return `${cells.slots[0]}|${cells.evaluations}|${index}`;
+  return `${cells.slots[0]!}|${cells.evaluations}|${index}`;
 }
 
 export function indexAndCountEvaluatedOnce(start: number, count: number): string {
   const cells = new ShiftCells(start);
-  cells.slots[cells.nextIndex()] <<= cells.nextCount(count);
+  cells.slots[cells.nextIndex()]! <<= cells.nextCount(count);
 
-  return `${cells.slots[1]}|${cells.indexEvaluations}|${cells.countEvaluations}`;
+  return `${cells.slots[1]!}|${cells.indexEvaluations}|${cells.countEvaluations}`;
 }
 
 export function receiverPropertyShifted(start: number, count: number): string {
@@ -394,9 +394,9 @@ export function receiverPropertyShifted(start: number, count: number): string {
 
 export function arrayElementReceiverShifted(start: number): string {
   const all = [new ShiftCells(start), new ShiftCells(start)];
-  all[0].slots[1] <<= 2;
+  all[0]!.slots[1]! <<= 2;
 
-  return `${all[0].slots[1]}|${all[1].slots[1]}`;
+  return `${all[0]!.slots[1]!}|${all[1]!.slots[1]!}`;
 }
 
 export async function receiverShiftedByAwaitedCount(start: number, count: number): Promise<string> {
@@ -413,9 +413,9 @@ export function receiverUnsignedElementShiftedRight(start: number, count: number
     return receiver$temp$0;
   })(new ShiftCells(0));
   let index = 0;
-  cells.next().unsignedSlots[index++] >>>= count;
+  cells.next().unsignedSlots[index++]! >>>= count;
 
-  return `${cells.unsignedSlots[0]}|${cells.evaluations}|${index}`;
+  return `${cells.unsignedSlots[0]!}|${cells.evaluations}|${index}`;
 }
 
 export function receiverUnsignedPropertyShiftedRight(start: number, count: number): string {

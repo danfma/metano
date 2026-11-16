@@ -335,7 +335,7 @@ public class NarrowIntegerLoweringTests
 
         await Assert.That(BodyOf(bits, "intShiftLeft")).IsEqualTo("return a << n;");
         await Assert.That(BodyOf(bits, "intShiftLeftConstant")).IsEqualTo("return b << 8;");
-        await Assert.That(BodyOf(bits, "intCompoundShift")).IsEqualTo("cells[0] <<= n;");
+        await Assert.That(BodyOf(bits, "intCompoundShift")).IsEqualTo("cells[0]! <<= n;");
         await Assert.That(BodyOf(bits, "shiftLeftNarrow")).IsEqualTo("return b << 8;");
     }
 
@@ -353,14 +353,14 @@ public class NarrowIntegerLoweringTests
 
         await TranspileHelper.AssertGolden("int32-compound-shifts.ts", cells);
         await Assert.That(BodyOf(cells, "field")).IsEqualTo("h.next().signed <<= n;");
-        await Assert.That(BodyOf(cells, "element")).IsEqualTo("h.next().slots[k++] <<= n;");
+        await Assert.That(BodyOf(cells, "element")).IsEqualTo("h.next().slots[k++]! <<= n;");
 
         await Assert
             .That(BodyOf(cells, "indexAndCount"))
-            .IsEqualTo("h.slots[h.nextIndex()] <<= h.nextCount(n);");
+            .IsEqualTo("h.slots[h.nextIndex()]! <<= h.nextCount(n);");
 
         await Assert.That(BodyOf(cells, "property")).IsEqualTo("h.next().tracked <<= n;");
-        await Assert.That(BodyOf(cells, "arrayReceiver")).IsEqualTo("hs[0].slots[1] <<= 2;");
+        await Assert.That(BodyOf(cells, "arrayReceiver")).IsEqualTo("hs[0]!.slots[1]! <<= 2;");
 
         await Assert
             .That(BodyOf(cells, "awaited"))

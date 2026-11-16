@@ -438,6 +438,14 @@ Product requirements added after the migration (normative; each one is traced by
   "Naming policies, `JsonSerializerDefaults.Web` and read options" and "STJ member selection" rows
   of the feature-support matrix.
 
+- **FR-069** (indexer reads under `noUncheckedIndexedAccess`, #670): The TypeScript backend MUST
+  emit an array, `List<T>` or `string` element read so that the generated code type-checks under
+  `strict` with `noUncheckedIndexedAccess`: `a[i]!` for a `T` element and `(a[i] ?? null)` for a
+  nullable one, never an assertion that removes the element's own `null`; a write target stays
+  assignable (`a[i] = v`, `a[i] ??= v`; `a[i]! += v` and `a[i]!++` for operations that read it
+  first); the final step of a native optional chain stays unchecked. A `Dictionary` read is not
+  covered. Traced by the "Indexer reads" row of the feature-support matrix.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

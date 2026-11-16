@@ -210,7 +210,9 @@ public static partial class IrToTsExpressionBridge
         var comparesWithLiteral = ComparesWithLiteral(bin);
 
         return new TsBinaryExpression(
-            MapOperand(bin.Left, comparesWithLiteral, context),
+            bin.Operator.IsAssignment()
+                ? MapPlace(bin.Left, context, ReadsTarget(bin.Operator))
+                : MapOperand(bin.Left, comparesWithLiteral, context),
             OperatorTokenOf(bin),
             MapOperand(bin.Right, comparesWithLiteral, context)
         );
@@ -241,15 +243,17 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapMutatedOperand(
         IrUnaryExpression unary,
         IrToTsBridgeContext context
-    ) =>
-        unary
-            is {
-                Operator: IrUnaryOp.Increment or IrUnaryOp.Decrement,
-                Operand: IrMemberAccess member
-            }
-        && context.ClassFields.TryBackingFieldWrite(member) is { } backingField
+    )
+    {
+        if (unary.Operator is not (IrUnaryOp.Increment or IrUnaryOp.Decrement))
+            return Map(unary.Operand, context);
+
+        return
+            unary.Operand is IrMemberAccess member
+            && context.ClassFields.TryBackingFieldWrite(member) is { } backingField
             ? PerClassBackingFields.StorageAccess(backingField)
-            : Map(unary.Operand, context);
+            : MapPlace(unary.Operand, context, readsElement: true);
+    }
 
     /// <summary>
     /// A write to an <c>init</c>-only property through a receiver other than
@@ -470,10 +474,78 @@ public static partial class IrToTsExpressionBridge
     {
         var target = MapNullTolerant(ea.Target, context);
         var index = AsArrayIndex(Map(ea.Index, context), ea.IndexKind);
+
         if (ea.TargetType is IrMapTypeRef)
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
-        return new TsElementAccess(target, index);
+
+        return CheckedElementRead(new TsElementAccess(target, index), ea.TargetType);
     }
+
+    /// <summary>
+    /// A write target (<c>a[i] = v</c>, <c>a[i] += v</c>, <c>a[i]++</c>, an
+    /// <c>out</c> destination): an element access stays assignable, so
+    /// <see cref="CheckedElementRead"/> does not turn it into an expression.
+    /// An operation that reads the element first (a compound assignment other
+    /// than <c>??=</c>, <c>++</c>, <c>--</c>) asserts it, as TypeScript
+    /// allows (<c>a[i]! += v</c>). Any other expression maps as usual.
+    /// </summary>
+    private static TsExpression MapPlace(
+        IrExpression place,
+        IrToTsBridgeContext context,
+        bool readsElement = false
+    )
+    {
+        if (place is not IrElementAccess { TargetType: not IrMapTypeRef } ea)
+            return Map(place, context);
+
+        var element = MapUncheckedElementAccess(ea, context);
+
+        return readsElement && !IsNullableElement(ea.TargetType)
+            ? CheckedElementRead(element, ea.TargetType)
+            : element;
+    }
+
+    private static bool ReadsTarget(IrBinaryOp op) =>
+        op is not (IrBinaryOp.Assign or IrBinaryOp.NullCoalescingAssign);
+
+    private static bool IsNullableElement(IrTypeRef? collectionType) =>
+        collectionType is IrArrayTypeRef { ElementType: IrNullableTypeRef };
+
+    /// <summary>
+    /// <c>a[i]</c> as JavaScript reads it, <c>undefined</c> past the end
+    /// included: for a write target, and for a nullable element whose
+    /// <c>undefined</c> reads like its <c>null</c> (the left of <c>??</c>,
+    /// a comparison with <c>null</c>).
+    /// </summary>
+    private static TsExpression MapUncheckedElementAccess(
+        IrElementAccess ea,
+        IrToTsBridgeContext context
+    ) =>
+        new TsElementAccess(
+            MapNullTolerant(ea.Target, context),
+            AsArrayIndex(Map(ea.Index, context), ea.IndexKind)
+        );
+
+    /// <summary>
+    /// The read of an array, list or string element typed as C# types it.
+    /// Under <c>noUncheckedIndexedAccess</c> <c>a[i]</c> is
+    /// <c>T | undefined</c>, which does not type-check where C# has a
+    /// <c>T</c> (a throw replaces the missing element there): <c>a[i]!</c>
+    /// for a <c>T</c> element, and <c>(a[i] ?? null)</c> for a nullable one,
+    /// whose own <c>null</c> a <c>!</c> would strip from the type (#670).
+    /// </summary>
+    private static TsExpression CheckedElementRead(TsExpression read, IrTypeRef? collectionType) =>
+        collectionType switch
+        {
+            IrArrayTypeRef when IsNullableElement(collectionType) => new TsBinaryExpression(
+                read,
+                "??",
+                new TsLiteral("null")
+            ),
+            IrArrayTypeRef or IrPrimitiveTypeRef { Primitive: IrPrimitive.String } =>
+                new TsPostfixUnaryExpression(read, "!"),
+            _ => read,
+        };
 
     /// <summary>
     /// <c>new Array&lt;T&gt;(length).fill(default)</c> for <c>new T[length]</c>;

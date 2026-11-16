@@ -71,9 +71,9 @@ export class Lists {
 
   nested(): number {
     const l = [[1] as (number | null)[]];
-    l[0].push(null);
+    l[0]!.push(null);
 
-    return l[0].length;
+    return l[0]!.length;
   }
 
   cast(): number {
@@ -114,7 +114,7 @@ export class Lists {
     const list: (number | null)[] = [1];
     collection.push(null);
     list[0] = null;
-    const first = read[0].name.length;
+    const first = read[0]!.name.length;
 
     return counted.length + collection.length + read.length + list.length + first;
   }
@@ -174,7 +174,7 @@ export class Lists {
     block().push(null);
     holder.items.push(null);
     holder.initial.push(null);
-    lists[0].push(null);
+    lists[0]!.push(null);
 
     return parenthesized.length + coalesced.length + switched.length + lists.length;
   }

@@ -51,8 +51,7 @@ public class IndexAndRangeTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("index-and-range.ts");
-        await Assert.That(result["sequences.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("index-and-range.ts", result["sequences.ts"]);
     }
 
     [Test]
@@ -75,7 +74,7 @@ public class IndexAndRangeTests
         await Assert
             .That(result["sequences.ts"])
             .Contains(
-                "return await (async (receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0[receiver$temp$0.length - receiver$temp$1])(await offset))(Sequences.make());"
+                "return await (async (receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0[receiver$temp$0.length - receiver$temp$1]!)(await offset))(Sequences.make());"
             );
     }
 
@@ -97,7 +96,7 @@ public class IndexAndRangeTests
         await Assert
             .That(result["feed.ts"])
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1])"
+                "return ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)"
                     + "(this.load());"
             );
     }
@@ -158,7 +157,7 @@ public class IndexAndRangeTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => this.items[this.items.length - receiver$temp$0])"
+                "return ((receiver$temp$0) => this.items[this.items.length - receiver$temp$0]!)"
                     + "(this.popL());"
             );
         await Assert
@@ -207,8 +206,8 @@ public class IndexAndRangeTests
 
         var output = result["buffer.ts"];
         await Assert.That(output).Contains("values[values.length - 1] = 5;");
-        await Assert.That(output).Contains("values[values.length - 2] += 1;");
-        await Assert.That(output).Contains("values[values.length - 1]++;");
+        await Assert.That(output).Contains("values[values.length - 2]! += 1;");
+        await Assert.That(output).Contains("values[values.length - 1]!++;");
     }
 
     [Test]
@@ -393,8 +392,8 @@ public class IndexAndRangeTests
         await Assert
             .That(files["feeds.ts"])
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1])"
-                    + "(groups[0]);"
+                "return ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)"
+                    + "(groups[0]!);"
             );
     }
 

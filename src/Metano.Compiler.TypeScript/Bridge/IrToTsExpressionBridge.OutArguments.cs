@@ -86,7 +86,7 @@ public static partial class IrToTsExpressionBridge
             IrOutLocalDeclaration local => new TsIdentifier(
                 IrToTsNamingPolicy.ToLocalName(local.Name)
             ),
-            IrOutAssignment assignment => Map(assignment.Destination, context),
+            IrOutAssignment assignment => MapPlace(assignment.Destination, context),
             _ => new TsArrayHole(),
         };
 

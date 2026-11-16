@@ -133,7 +133,11 @@ public static partial class IrToTsExpressionBridge
         var optionalChain =
             isReceiverItself ? loweredReceiver
             : CanChainOptionally(access, repeatsReceiver)
-                ? TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
+                ? TryChainOptionally(
+                    WithoutElementCheck(whenNotNull),
+                    receiverReference,
+                    loweredReceiver
+                )
             : null;
 
         return new LoweredNullConditional(
@@ -155,6 +159,27 @@ public static partial class IrToTsExpressionBridge
     private static bool CanChainOptionally(IrNullConditionalAccess access, bool repeatsReceiver) =>
         repeatsReceiver
         || IrEvaluationTraits.CountConditionalReceiverReads(access.WhenNotNull) == 1;
+
+    /// <summary>
+    /// The chain's final <c>a?.[i]</c> without the check of
+    /// <see cref="CheckedElementRead"/> (<c>!</c>, or <c>?? null</c> for a
+    /// nullable element): a native chain ends in <c>undefined</c> where the
+    /// receiver is null and is normalized to <c>null</c> as a whole, and an
+    /// <c>!</c> there would strip the <c>undefined</c> of the short-circuit
+    /// from its type (#670).
+    /// </summary>
+    private static TsExpression WithoutElementCheck(TsExpression step) =>
+        step switch
+        {
+            TsPostfixUnaryExpression { Operator: "!", Operand: TsElementAccess element } => element,
+            TsBinaryExpression
+            {
+                Operator: "??",
+                Left: TsElementAccess element,
+                Right: TsLiteral
+            } => element,
+            _ => step,
+        };
 
     private static TsExpression MapWithConditionalReceiver(
         IrExpression whenNotNull,
@@ -320,7 +345,9 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     ) =>
         new(
-            MapNullTolerant(coalesce.Left, context),
+            coalesce.Left is IrElementAccess { TargetType: IrArrayTypeRef } ea
+                ? MapUncheckedElementAccess(ea, context)
+                : MapNullTolerant(coalesce.Left, context),
             "??",
             MapOperand(coalesce.Right, rightToleratesUndefined, context)
         );

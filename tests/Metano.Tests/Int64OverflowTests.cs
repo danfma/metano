@@ -233,9 +233,7 @@ public class Int64OverflowTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(UncheckedSource);
 
-        await Assert
-            .That(files["wrap.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-overflow-unchecked.ts"));
+        await TranspileHelper.AssertGolden("int64-overflow-unchecked.ts", files["wrap.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -245,9 +243,7 @@ public class Int64OverflowTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(CheckedSource);
 
-        await Assert
-            .That(files["check.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-overflow-checked.ts"));
+        await TranspileHelper.AssertGolden("int64-overflow-checked.ts", files["check.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -263,9 +259,10 @@ public class Int64OverflowTests
             ProjectCheckedSource
         );
 
-        await Assert
-            .That(files["project.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-overflow-project-checked.ts"));
+        await TranspileHelper.AssertGolden(
+            "int64-overflow-project-checked.ts",
+            files["project.ts"]
+        );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -275,9 +272,7 @@ public class Int64OverflowTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(IncrementsSource);
 
-        await Assert
-            .That(files["counter.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-increments-compound.ts"));
+        await TranspileHelper.AssertGolden("int64-increments-compound.ts", files["counter.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -394,9 +389,7 @@ public class Int64OverflowTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExtensionSource);
 
-        await Assert
-            .That(files["uses.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-extension-members.ts"));
+        await TranspileHelper.AssertGolden("int64-extension-members.ts", files["uses.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
