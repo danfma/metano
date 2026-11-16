@@ -66,6 +66,12 @@ jobs:
       - name: metano-runtime
         run: cd targets/js/metano-runtime && bun run build && bun test
 
+      # The conformance rows recorded from .NET 10 (tests/BclReference) run
+      # under Node as well: Bun and V8 differ on number printing and module
+      # loading.
+      - name: metano-runtime conformance under Node
+        run: cd targets/js/metano-runtime && node test/conformance/run-node.ts
+
       # Packs metano-runtime and loads the tarball from plain Node ESM +
       # NodeNext TypeScript, the way npm consumers see it (#249).
       - name: metano-runtime packaging smoke test
