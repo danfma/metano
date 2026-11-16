@@ -612,6 +612,7 @@ public class OverloadFactoryGoldenTests
             .ToList();
 
         await Assert.That(unrepresentable.Count).IsEqualTo(1);
+
         await Assert
             .That(unrepresentable[0])
             .IsEqualTo(
@@ -705,6 +706,7 @@ public class OverloadFactoryGoldenTests
         // The value-constrained T and the ValueTask; never the Task.
         await Assert.That(unrepresentable.Count).IsEqualTo(2);
         await Assert.That(unrepresentable.Count(m => m.Contains("ValueTask"))).IsEqualTo(1);
+
         await Assert
             .That(unrepresentable.Any(m => m.Contains("'System.Threading.Tasks.Task'")))
             .IsFalse();

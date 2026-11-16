@@ -211,6 +211,7 @@ public class OverloadNamingGoldenTests
         await Assert
             .That(files["generic.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("overload-names-dead-end.ts"));
+
         await Assert.That(deadEnd.Message).Contains("'Int32$1' and 'Int32$2'");
     }
 }
