@@ -15,9 +15,10 @@ public abstract record IrTypeDeclaration(
 /// <summary>
 /// A class, struct, or record declaration.
 /// </summary>
-/// <param name="EqualityMembers">For records, the instance members the record
-/// itself declares that C#'s synthesized value equality compares, in
-/// declaration order; <c>null</c> for non-records. Members of a record base are
+/// <param name="EqualityMembers">For records and structs, the instance members
+/// the type itself declares that C#'s value equality compares (a record's
+/// synthesized <c>Equals</c>, a struct's <c>ValueType.Equals</c>), in
+/// declaration order; <c>null</c> for any other type. Members of a record base are
 /// not repeated: like C#'s <c>base.Equals</c>, backends chain to the emitted
 /// base's equality / hash code for them.</param>
 public sealed record IrClassDeclaration(

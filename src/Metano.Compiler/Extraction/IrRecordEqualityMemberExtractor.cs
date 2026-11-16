@@ -5,8 +5,8 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Resolves the members a C# record's synthesized value equality compares at
-/// its own level: every instance field the record declares — an
+/// Resolves the members a C# record's synthesized value equality, or a plain
+/// struct's inherited <c>ValueType.Equals</c>, compares at its own level: every instance field the record declares — an
 /// auto-property's backing field stands for the property. Like the
 /// compiler-generated <c>Equals</c>, which calls <c>base.Equals</c> before
 /// comparing its own fields, a backend compares the members of a record base
@@ -19,7 +19,7 @@ public static class IrRecordEqualityMemberExtractor
 {
     /// <summary>
     /// The equality members of <paramref name="type"/>, or <c>null</c> when
-    /// it is not a record.
+    /// it is neither a record nor a struct.
     /// </summary>
     public static IReadOnlyList<IrRecordEqualityMember>? Extract(
         INamedTypeSymbol type,
@@ -27,7 +27,7 @@ public static class IrRecordEqualityMemberExtractor
         TargetLanguage? target
     )
     {
-        if (!type.IsRecord)
+        if (!type.IsRecord && type.TypeKind != TypeKind.Struct)
             return null;
 
         return DeclaredMembers(type, target)

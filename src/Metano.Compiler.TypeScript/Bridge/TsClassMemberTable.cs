@@ -38,7 +38,7 @@ internal sealed class TsClassMemberTable
 
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
         {
-            foreach (var name in IrToTsRecordSynthesisBridge.SynthesizedMemberNames)
+            foreach (var name in IrToTsRecordSynthesisBridge.SynthesizedMemberNames(ir))
                 table.Declare(isStatic: false, name, ir.Name);
         }
 

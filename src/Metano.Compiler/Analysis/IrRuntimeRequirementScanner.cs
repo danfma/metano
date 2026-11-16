@@ -99,27 +99,19 @@ public static class IrRuntimeRequirementScanner
             foreach (var nested in c.NestedTypes)
                 ScanType(nested, acc);
 
-        // Records carry value-equality semantics that require a hashing helper.
-        // [PlainObject] records are emitted as bare interfaces / object literals,
-        // [JsTuple] records as bare array-tuple aliases, and [Branded] records as
-        // bare branded-primitive aliases (`string & { __brand }`) — none synthesize
-        // equals/hashCode/with, so the helper isn't needed. JSX components are
-        // emitted as function components (no class, no equals/hashCode/with) so
-        // they likewise need no hashing helper.
-        if (
-            c.Semantics.IsRecord
-            && !c.Semantics.IsPlainObject
-            && !c.Semantics.IsJsTuple
-            && !c.Semantics.IsBranded
-            && !c.Semantics.IsJsxComponent
-        )
+        // Records and plain structs carry value equality, whose synthesized
+        // hashCode needs the hashing helper (IrValueEqualitySynthesis says
+        // which types are emitted as classes that synthesize it).
+        if (IrValueEqualitySynthesis.SynthesizesEquality(c))
         {
-            // A record that declares its own GetHashCode / Equals gets no
+            // A type that declares its own GetHashCode / Equals gets no
             // synthesized hashCode / equals, so nothing would use the helper.
             if (!IrRecordEqualityOverrides.DeclaresHashCode(c))
                 acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
 
-            acc.Add(new IrRuntimeRequirement("RecordCopy", IrRuntimeCategory.RecordCopy));
+            if (IrValueEqualitySynthesis.SynthesizesRecordMembers(c))
+                acc.Add(new IrRuntimeRequirement("RecordCopy", IrRuntimeCategory.RecordCopy));
+
             // The synthesized `equals` falls back to `valueEquals` for
             // every equality member whose type is not an integer, string,
             // boolean, enum or branded value (a double and a type parameter
@@ -128,7 +120,7 @@ public static class IrRuntimeRequirementScanner
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
             // line lands only when a non-strict field actually exists.
-            if (!IrRecordEqualityOverrides.DeclaresEquals(c))
+            if (!IrValueEqualitySynthesis.DeclaresEquals(c))
                 AddEqualityHelpers(c, acc);
         }
     }

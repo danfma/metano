@@ -403,9 +403,7 @@ public class OverloadFactoryGoldenTests
 
         var outputs = string.Join("\n", result["pt.ts"], result["tick.ts"], result["use.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-struct.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-struct.ts", outputs);
     }
 
     [Test]
@@ -605,9 +603,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(files["day.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-struct-defaults.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-struct-defaults.ts", files["day.ts"]);
 
         var unrepresentable = diagnostics
             .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)

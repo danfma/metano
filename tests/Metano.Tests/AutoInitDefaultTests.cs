@@ -313,9 +313,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert
-            .That(result["segment.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("struct-member-defaults.ts"));
+        await TranspileHelper.AssertGolden("struct-member-defaults.ts", result["segment.ts"]);
     }
 
     [Test]

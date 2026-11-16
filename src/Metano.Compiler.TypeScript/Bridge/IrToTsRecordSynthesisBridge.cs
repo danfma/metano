@@ -7,9 +7,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Given an <see cref="IrClassDeclaration"/> that passes
-/// <see cref="ShouldSynthesize"/> (a record that isn't
-/// <c>[PlainObject]</c>), produces the three helpers C# records are
-/// expected to carry in their emitted TypeScript shape:
+/// <see cref="ShouldSynthesize"/> (a record or a plain struct emitted as a
+/// class, <see cref="IrValueEqualitySynthesis"/>), produces the helpers C#
+/// records are expected to carry in their emitted TypeScript shape (a plain
+/// struct gets <c>equals</c> and <c>hashCode</c>, its
+/// <c>ValueType.Equals</c>):
 /// <list type="bullet">
 ///   <item><c>equals(other: any): boolean</c> — exact-runtime-type check
 ///   (same prototype) plus a short-circuiting <c>&amp;&amp;</c> chain
@@ -27,20 +29,36 @@ public static class IrToTsRecordSynthesisBridge
     private const string EqualsMethodName = "equals";
     private const string WithMethodName = "with";
 
-    /// <summary>
-    /// The instance members <see cref="Generate"/> declares, which a class's
-    /// claim pass treats as user members (spec 013 FR-004).
-    /// </summary>
-    internal static IReadOnlyList<string> SynthesizedMemberNames { get; } =
-    [EqualsMethodName, IrToTsNamingPolicy.HashCodeMethodName, WithMethodName];
+    private static readonly IReadOnlyList<string> RecordMemberNames =
+    [
+        EqualsMethodName,
+        IrToTsNamingPolicy.HashCodeMethodName,
+        WithMethodName,
+    ];
+
+    private static readonly IReadOnlyList<string> StructMemberNames =
+    [
+        EqualsMethodName,
+        IrToTsNamingPolicy.HashCodeMethodName,
+    ];
 
     /// <summary>
-    /// Whether the class should receive synthesized <c>equals</c>/<c>hashCode</c>/<c>with</c>.
-    /// Records yes; <c>[PlainObject]</c> records no (those emit as bare
-    /// object literals with no class wrapper).
+    /// The instance members <see cref="Generate"/> declares on
+    /// <paramref name="ir"/>, which a class's claim pass treats as user
+    /// members (spec 013 FR-004).
+    /// </summary>
+    internal static IReadOnlyList<string> SynthesizedMemberNames(IrClassDeclaration ir) =>
+        IrValueEqualitySynthesis.SynthesizesRecordMembers(ir)
+            ? RecordMemberNames
+            : StructMemberNames;
+
+    /// <summary>
+    /// Whether the class should receive synthesized members: a record
+    /// (<c>equals</c> / <c>hashCode</c> / <c>with</c>) or a plain struct
+    /// (<c>equals</c> / <c>hashCode</c>) emitted as a class.
     /// </summary>
     public static bool ShouldSynthesize(IrClassDeclaration ir) =>
-        ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject;
+        IrValueEqualitySynthesis.SynthesizesEquality(ir);
 
     /// <summary>
     /// Synthesizes <c>equals</c> / <c>hashCode</c> over
@@ -61,11 +79,11 @@ public static class IrToTsRecordSynthesisBridge
         var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
         var overridesBase = IrToTsClassBridge.BuildExtends(ir) is not null;
 
-        TsMethodMember[] members =
-        [
-            .. SynthesizedEquality(ir, fields, overridesBase),
-            GenerateWith(ir),
-        ];
+        var with = IrValueEqualitySynthesis.SynthesizesRecordMembers(ir)
+            ? [GenerateWith(ir)]
+            : Array.Empty<TsMethodMember>();
+
+        TsMethodMember[] members = [.. SynthesizedEquality(ir, fields, overridesBase), .. with];
 
         return members.Select(m => m with { Override = overridesBase }).ToList();
     }
@@ -81,7 +99,7 @@ public static class IrToTsRecordSynthesisBridge
         bool overridesBase
     )
     {
-        if (!IrRecordEqualityOverrides.DeclaresEquals(ir))
+        if (!IrValueEqualitySynthesis.DeclaresEquals(ir))
             yield return GenerateEquals(fields, overridesBase);
 
         if (!IrRecordEqualityOverrides.DeclaresHashCode(ir))
