@@ -658,9 +658,17 @@ public sealed class Printer(string indent = "  ")
         var fields = tsClass.Members.Where(m => m is TsFieldMember).ToList();
         var accessors = tsClass.Members.Where(m => m is TsGetterMember or TsSetterMember).ToList();
         var methods = tsClass.Members.Where(m => m is TsMethodMember).ToList();
+        var staticBlocks = tsClass.Members.Where(m => m is TsStaticBlock).ToList();
         var others = tsClass
             .Members.Where(m =>
-                m is not (TsFieldMember or TsGetterMember or TsSetterMember or TsMethodMember)
+                m
+                    is not (
+                        TsFieldMember
+                        or TsGetterMember
+                        or TsSetterMember
+                        or TsMethodMember
+                        or TsStaticBlock
+                    )
             )
             .ToList();
 
@@ -685,6 +693,10 @@ public sealed class Printer(string indent = "  ")
 
             // Fields first
             PrintGroup(fields);
+
+            // Static blocks run after the static fields above (C# runs the
+            // static constructor after the static field initializers).
+            PrintGroup(staticBlocks);
 
             // Constructor
             if (tsClass.Constructor is not null)
@@ -791,6 +803,12 @@ public sealed class Printer(string indent = "  ")
     {
         switch (member)
         {
+            case TsStaticBlock staticBlock:
+                _sb.Write("static");
+                PrintBody(staticBlock.Body);
+                _sb.WriteLn();
+                break;
+
             case TsGetterMember getter:
                 PrintJSDoc(getter.JSDoc);
                 PrintAccessibility(getter.Accessibility);

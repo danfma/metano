@@ -43,6 +43,14 @@ public sealed record IrClassDeclaration(
     public IReadOnlyList<IrConstructedRoot>? ConstructedRoots { get; init; }
 
     /// <summary>
+    /// The body of the type's static constructor (<c>static C() { … }</c>),
+    /// which C# runs after the static field initializers; <c>null</c> when the
+    /// type declares none. A target that can run code at type initialization
+    /// (a TypeScript <c>static { }</c> block) lowers it; any other reports it.
+    /// </summary>
+    public IReadOnlyList<IrStatement>? StaticInitializer { get; init; }
+
+    /// <summary>
     /// The constructed root <paramref name="method"/> is anchored on: a branch
     /// of that root's runtime dispatcher, not a fast path; <c>null</c> otherwise.
     /// </summary>

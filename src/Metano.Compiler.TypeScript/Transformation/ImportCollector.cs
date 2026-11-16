@@ -1317,6 +1317,9 @@ public sealed class ImportCollector(
                             CollectFromType(g.ReturnType, sink);
                             CollectFromStatements(g.Body, sink);
                             break;
+                        case TsStaticBlock block:
+                            CollectFromStatements(block.Body, sink);
+                            break;
                         case TsFieldMember f:
                             CollectFromType(f.Type, sink);
                             if (f.Initializer is not null)

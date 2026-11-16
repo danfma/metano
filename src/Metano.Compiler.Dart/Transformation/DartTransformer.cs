@@ -187,6 +187,7 @@ public sealed class DartTransformer
 
                     ReportUnnamedOverloads(classIr, type.Name, classClaims.Shape);
                     ReportMultiplyConstructedInterfaces(type);
+                    ReportStaticConstructor(type, classIr);
                     ReportChainedConstructorsWithBodies(type, classIr, classClaims.Shape);
                     IrToDartClassBridge.Convert(classIr, classClaims, statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
@@ -302,6 +303,26 @@ public sealed class DartTransformer
                 )
             );
         }
+    }
+
+    /// <summary>
+    /// Reports a static constructor, whose body the Dart target does not lower
+    /// (Dart has no type initialization hook; #426).
+    /// </summary>
+    private void ReportStaticConstructor(INamedTypeSymbol type, IrClassDeclaration classIr)
+    {
+        if (classIr.StaticInitializer is null)
+            return;
+
+        ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Dart target: the static constructor of '{type.Name}' is not supported; its body "
+                    + "is dropped.",
+                IrStaticConstructorExtractor.DeclaredBy(type)?.Locations.FirstOrDefault()
+            )
+        );
     }
 
     /// <summary>

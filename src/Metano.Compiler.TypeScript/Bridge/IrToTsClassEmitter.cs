@@ -165,6 +165,15 @@ public sealed class IrToTsClassEmitter(
         EmitDeferredOperatorsAndMethods(type, ir, claims, classMembers, lowering);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
 
+        if (ir.StaticInitializer is { } staticInitializer)
+        {
+            classMembers.Add(
+                new TsStaticBlock(
+                    IrToTsStatementBridge.MapBody(staticInitializer, lowering).ToList()
+                )
+            );
+        }
+
         statements.Add(
             new TsClass(
                 typeName,
