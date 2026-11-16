@@ -63,6 +63,9 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsFloatingPointTruncation(from, to))
             return FloatingPointToNarrowInteger(to, isChecked, value);
 
+        if (IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to))
+            return DecimalToBinaryFloatingPoint(to, value);
+
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
 
@@ -81,6 +84,21 @@ internal static class IrToTsNumericConversionBridge
         return isChecked
             ? NarrowIntegerTsExpressions.Checked(to.Kind, value)
             : NarrowIntegerTsExpressions.Wrapped(to.Kind, value);
+    }
+
+    /// <summary>
+    /// <c>(double)m</c> reads the nearest <c>number</c> of the
+    /// <c>Decimal</c>, <c>m.toNumber()</c>; <c>(float)m</c> rounds that to
+    /// single precision, <c>Math.fround(m.toNumber())</c>.
+    /// </summary>
+    private static TsExpression DecimalToBinaryFloatingPoint(
+        IrNumericEndpoint to,
+        TsExpression value
+    )
+    {
+        var asDouble = new TsCallExpression(new TsPropertyAccess(value, "toNumber"), []);
+
+        return to.Kind is IrNumericKind.Single ? Global("Math.fround", asDouble) : asDouble;
     }
 
     /// <summary>

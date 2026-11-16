@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatDouble } from "#/system/double-format.ts";
+import { formatDouble, formatSingle } from "#/system/double-format.ts";
 import { FormatException, NotSupportedException } from "#/system/exceptions/index.ts";
 
 /**
@@ -94,5 +94,19 @@ describe("formatDouble", () => {
     expect(() => formatDouble(1.5, "D")).toThrow(new FormatException("Format specifier was invalid."));
     expect(() => formatDouble(1.5, "X")).toThrow(FormatException);
     expect(() => formatDouble(1.5, "F1000000000")).toThrow(FormatException);
+  });
+
+  test("a value that is not a number throws instead of printing a wrong text", () => {
+    const decimalLike = { valueOf: () => 1.25 } as unknown as number;
+
+    expect(() => formatDouble(decimalLike)).toThrow(TypeError);
+    expect(() => formatSingle(decimalLike)).toThrow(TypeError);
+  });
+
+  test("null and undefined stay the empty text of a null double? / float?", () => {
+    expect(formatDouble(null)).toBe("");
+    expect(formatDouble(undefined)).toBe("");
+    expect(formatSingle(null)).toBe("");
+    expect(formatSingle(undefined)).toBe("");
   });
 });

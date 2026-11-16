@@ -133,6 +133,28 @@ public class DefaultTextTranspileTests
         await Assert.That(output).Contains("formatDouble(d, \"F1\")");
     }
 
+    [Test]
+    public async Task DecimalCastToBinaryFloatingPoint_ReadsTheNumberBeforeFormatting()
+    {
+        var output = TranspileText(
+            """
+            public static string A(decimal m, decimal? n)
+            {
+                double d = (double)m;
+                return "v" + (double)m + "|" + (float)m + "|" + (d + 1) + "|" + (double?)n;
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("const d = m.toNumber();");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return \"v\" + formatDouble(m.toNumber()) + \"|\" + formatSingle(Math.fround(m.toNumber())) + \"|\" + formatDouble(d + 1) + \"|\" + formatDouble(n == null ? null : n.toNumber());"
+            );
+    }
+
     private static string TranspileText(string members) =>
         TranspileHelper.Transpile(
             $$"""
