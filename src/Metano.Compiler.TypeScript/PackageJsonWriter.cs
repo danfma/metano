@@ -148,11 +148,6 @@ public static class PackageJsonWriter
         // or `sideEffects` value back on every regeneration.
         WriteIfMissing(root, "type", "module");
 
-        SeedOrUpgradeSideEffects(
-            root,
-            BuildSideEffectModules(files, srcRelative, distDirRelativeToPackageRoot, outputPrefix)
-        );
-
         // Imports follow the same write-if-missing rule as the
         // scalar fields above: the transpiler seeds its alias keys
         // (`#` and `#/*` by default, or `#<alias>` and `#<alias>/*`
@@ -164,6 +159,16 @@ public static class PackageJsonWriter
         // when it still holds the transpiler's own mapping, which then
         // gains any condition introduced since (e.g. `source`).
         SeedOrUpgradeImports(root, imports, sourceCondition);
+
+        // After the imports: a consumer who retargeted the compiled tree
+        // (`#/*` → `./lib/*`) has the side-effect modules listed there too.
+        var distBase = DistBase(distDirRelativeToPackageRoot, outputPrefix);
+        var compiledBase = CompiledModuleBase(root, importAlias) ?? distBase;
+
+        SeedOrUpgradeSideEffects(
+            root,
+            BuildSideEffectModules(files, srcRelative, compiledBase, distBase)
+        );
 
         // Exports merge additively — see `MergeTranspilerManagedExports`
         // for the shape-detection rule and the deep-merge contract. Run
@@ -289,20 +294,19 @@ public static class PackageJsonWriter
     /// <summary>
     /// The package-relative paths of the modules that run code when merely imported (a
     /// <c>[ModuleEntryPoint]</c> module, a strict-union-guard variant): both the compiled
-    /// <c>.js</c> and the <c>.ts</c> source, since a bundler matches <c>sideEffects</c>
-    /// against whichever the resolution picked (#368).
+    /// <c>.js</c> under <paramref name="compiledBase"/> and the <c>.ts</c> source, since a
+    /// bundler matches <c>sideEffects</c> against whichever the resolution picked (#368).
+    /// Entries under <paramref name="distBase"/>, the writer's default compiled tree, are
+    /// its own too, so a retargeted package drops what an earlier run listed there.
     /// </summary>
     private static SideEffectModules BuildSideEffectModules(
         IReadOnlyList<TsSourceFile> files,
         string srcRelative,
-        string distRelative,
-        string outputPrefix
+        string compiledBase,
+        string distBase
     )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
-        var dist = NormalizePath(distRelative).TrimEnd('/');
-        var prefix = outputPrefix.TrimEnd('/');
-        var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
         var targets = new List<string>();
         var emitted = new HashSet<string>(StringComparer.Ordinal);
 
@@ -310,7 +314,7 @@ public static class PackageJsonWriter
         {
             var fileName = NormalizePath(file.FileName);
             var withoutExt = fileName[..fileName.LastIndexOf('.')];
-            var paths = new[] { $"./{distBase}/{withoutExt}.js", SourceTarget(src, fileName) };
+            var paths = new[] { $"./{compiledBase}/{withoutExt}.js", SourceTarget(src, fileName) };
 
             emitted.UnionWith(paths);
 
@@ -320,11 +324,57 @@ public static class PackageJsonWriter
 
         targets.Sort(StringComparer.Ordinal);
 
-        var ownedTrees =
-            src.Length > 0 ? new[] { $"./{distBase}/", $"./{src}/" } : new[] { $"./{distBase}/" };
+        string[] ownedTrees =
+        [
+            .. new[] { compiledBase, distBase, src }
+                .Where(tree => tree.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .Select(tree => $"./{tree}/"),
+        ];
 
         return new SideEffectModules(targets, emitted, ownedTrees);
     }
+
+    /// <summary>The compiled tree the writer maps its import alias to: the dist directory, under the output prefix.</summary>
+    private static string DistBase(string distRelative, string outputPrefix)
+    {
+        var dist = NormalizePath(distRelative).TrimEnd('/');
+        var prefix = outputPrefix.TrimEnd('/');
+
+        return prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
+    }
+
+    /// <summary>
+    /// The compiled tree the package's own <c>#/*</c> import (or the configured alias)
+    /// resolves to: its <c>import</c> condition, or the plain string target, without the
+    /// trailing <c>/*</c> or <c>/*.js</c> (<c>"./lib/*"</c> is <c>lib</c>). <c>null</c>
+    /// when the entry has no such target, so the writer's dist directory applies.
+    /// </summary>
+    private static string? CompiledModuleBase(JsonObject root, string? importAlias)
+    {
+        var starKey = $"{PathNaming.NormalizeImportAliasPrefix(importAlias)}/*";
+
+        var target = root["imports"]?[starKey] switch
+        {
+            JsonValue plain => StringOf(plain),
+            JsonObject conditions => StringOf(conditions["import"]),
+            _ => null,
+        };
+
+        var stripped = target switch
+        {
+            not null when target.EndsWith("/*.js", StringComparison.Ordinal) => target[
+                ..^"/*.js".Length
+            ],
+            not null when target.EndsWith("/*", StringComparison.Ordinal) => target[..^"/*".Length],
+            _ => null,
+        };
+
+        return stripped is null ? null : NormalizePath(stripped);
+    }
+
+    private static string? StringOf(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     /// <summary>
     /// Seeds <c>sideEffects</c> as the list of side-effect modules (or <c>false</c> when
@@ -344,16 +394,17 @@ public static class PackageJsonWriter
         if (existing is not null && previous is null && !isFlatFalse)
             return;
 
+        // An entry that is not a string is the consumer's (bundlers ignore it); it
+        // stays as written instead of failing the run.
         var kept = (previous ?? [])
-            .Select(entry => entry?.GetValue<string>())
-            .OfType<string>()
-            .Where(entry => !modules.Owns(entry));
-        var merged = kept.Concat(modules.Targets).ToList();
+            .Where(entry => StringOf(entry) is not { } path || !modules.Owns(path))
+            .Select(entry => entry?.DeepClone());
+
+        var merged = kept.Concat(modules.Targets.Select(path => (JsonNode?)JsonValue.Create(path)))
+            .ToList();
 
         root["sideEffects"] =
-            merged.Count == 0
-                ? JsonValue.Create(false)
-                : new JsonArray([.. merged.Select(entry => (JsonNode?)JsonValue.Create(entry))]);
+            merged.Count == 0 ? JsonValue.Create(false) : new JsonArray([.. merged]);
     }
 
     /// <summary>

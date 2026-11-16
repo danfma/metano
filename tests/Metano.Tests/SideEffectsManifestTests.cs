@@ -129,6 +129,58 @@ public class SideEffectsManifestTests
             .IsEquivalentTo(["./styles.css", "./dist/program.js", "./src/program.ts"]);
     }
 
+    /// <summary>
+    /// A package whose own <c>#/*</c> import points at another compiled tree
+    /// (<c>./lib</c>, a Vite app's <c>outDir</c>) lists the side-effect module there; the
+    /// entry an earlier run wrote under the default <c>./dist</c> is replaced.
+    /// </summary>
+    [Test]
+    public async Task RetargetedCompiledTree_ListsTheModuleUnderIt()
+    {
+        var root = CreateTempDir();
+
+        File.WriteAllText(
+            Path.Combine(root, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "sideEffects": ["./dist/program.js", "./src/program.ts"],
+              "imports": { "#/*": { "types": "./lib/*", "import": "./lib/*", "default": "./src/*" } }
+            }
+            """
+        );
+        Write(root, EntryPointFiles());
+
+        await Assert
+            .That(SideEffectsOf(root))
+            .IsEquivalentTo(["./lib/program.js", "./src/program.ts"]);
+    }
+
+    [Test]
+    public async Task HandWrittenEntryThatIsNotAString_IsKept()
+    {
+        var root = CreateTempDir();
+
+        File.WriteAllText(
+            Path.Combine(root, "package.json"),
+            """{ "name": "consumer", "sideEffects": ["./styles.css", 42] }"""
+        );
+        Write(root, EntryPointFiles());
+
+        var entries = ((JsonArray)ReadJson(root)["sideEffects"]!)
+            .Select(entry => entry!.ToJsonString())
+            .ToList();
+
+        await Assert
+            .That(entries)
+            .IsEquivalentTo([
+                "\"./styles.css\"",
+                "42",
+                "\"./dist/program.js\"",
+                "\"./src/program.ts\"",
+            ]);
+    }
+
     [Test]
     public async Task ListShrinksBackToFalse_WhenTheEntryPointDisappears()
     {
