@@ -245,6 +245,20 @@ internal static class StringRows
             ["Abc", "", 4],
             ["Abc", null, 4]
         );
+
+        rows.Each(
+            "stringReplace",
+            a => ((string)a[0]!).Replace((string)a[1]!, (string?)a[2], Comparison(a[3]!)),
+            ["aXbxX", "x", "-", 5],
+            ["aXbxX", "x", "-", 4],
+            ["aXbxX", "x", "-", 3],
+            ["aXbxX", "x", "-", 0],
+            ["aXbxX", "X", null, 1],
+            ["aXbxX", "xx", "$&", 5],
+            ["\u00C0\u00E0B", "\u00E0", "_", 5],
+            ["abc", "", "z", 4],
+            ["abc", null, "z", 5]
+        );
     }
 
     private static void AddTrim(FixtureWriter rows)

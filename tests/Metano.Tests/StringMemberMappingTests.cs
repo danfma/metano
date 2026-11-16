@@ -32,6 +32,28 @@ public class StringMemberMappingTests
     }
 
     [Test]
+    public async Task ReplaceWithAComparison_PassesTheComparisonToTheHelper()
+    {
+        var output = TranspileText(
+            """
+            public static string Folded(string s) =>
+                s.Replace("x", "-", System.StringComparison.OrdinalIgnoreCase);
+            public static string IgnoringCase(string s, bool fold) => s.Replace("x", "-", fold, null);
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return stringReplace(s, \"x\", \"-\", fold ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);"
+            );
+
+        await Assert
+            .That(output)
+            .Contains("return stringReplace(s, \"x\", \"-\", StringComparison.OrdinalIgnoreCase);");
+    }
+
+    [Test]
     public async Task NullOrEmptyChecks_LowerToNullSafeHelpers()
     {
         var output = TranspileText(
