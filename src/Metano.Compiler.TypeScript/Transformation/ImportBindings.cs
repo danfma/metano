@@ -50,10 +50,8 @@ internal sealed class ImportBindings
 
         foreach (var group in _order.GroupBy(binding => binding.Name))
         {
-            var listed = group.FirstOrDefault(binding => binding.Alias is null);
-
-            if (listed.Name is null)
-                listed = group.First();
+            // The plain binding when there is one, else the first alias (OrderBy is stable).
+            var listed = group.OrderBy(binding => binding.Alias is not null).First();
 
             names.Add(group.Key);
 
@@ -76,15 +74,7 @@ internal sealed class ImportBindings
 
         var allTypeOnly = _typeOnly.Values.All(typeOnly => typeOnly);
 
-        // Values first, then type-only names, each alphabetical: `{ Value, type Type }`.
-        names.Sort(
-            (left, right) =>
-                typeOnlyNames.Contains(left) != typeOnlyNames.Contains(right)
-                    ? typeOnlyNames.Contains(left)
-                        ? 1
-                        : -1
-                    : string.CompareOrdinal(left, right)
-        );
+        ImportCollector.SortValuesFirst(names, typeOnlyNames);
 
         return new TsImport(
             names.ToArray(),
