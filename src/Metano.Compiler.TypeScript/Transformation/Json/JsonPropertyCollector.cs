@@ -328,7 +328,7 @@ internal sealed class JsonPropertyCollector(
             jsonName,
             TsNameOf(member),
             JsonSerializationAttributes.OrderOf(member),
-            OmitsNullOnWrite(member)
+            MemberOmitsNullOnWrite(member)
         );
     }
 
@@ -337,12 +337,12 @@ internal sealed class JsonPropertyCollector(
     /// own <c>[JsonIgnore(Condition = …)]</c> decides, else the context's
     /// <c>DefaultIgnoreCondition</c>.
     /// </summary>
-    private bool OmitsNullOnWrite(ISymbol member)
+    private bool MemberOmitsNullOnWrite(ISymbol member)
     {
         var condition = JsonSerializationAttributes.IgnoreConditionOf(member)
             ?? _defaultIgnoreCondition;
 
-        return OmitsNullOnWrite(condition, JsonMemberAccess.TypeOf(member));
+        return ConditionOmitsNullOnWrite(condition, JsonMemberAccess.TypeOf(member));
     }
 
     /// <summary>
@@ -350,7 +350,7 @@ internal sealed class JsonPropertyCollector(
     /// does too when the member's type is nullable, since <c>null</c> is its
     /// default (a <c>0</c> or <c>false</c> default is not mirrored).
     /// </summary>
-    public static bool OmitsNullOnWrite(JsonIgnoreCondition condition, ITypeSymbol type) =>
+    public static bool ConditionOmitsNullOnWrite(JsonIgnoreCondition condition, ITypeSymbol type) =>
         condition switch
         {
             JsonIgnoreCondition.WhenWritingNull => true,

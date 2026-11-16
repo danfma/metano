@@ -1227,9 +1227,7 @@ public sealed class ImportCollector(
 
     private void CollectFromTopLevel(TsTopLevel node, ImportCollectionSink sink)
     {
-        var names = sink.Names;
         var valueNames = sink.ValueNames;
-        var crossPackageOrigins = sink.CrossPackageOrigins;
 
         switch (node)
         {
@@ -1517,8 +1515,6 @@ public sealed class ImportCollector(
     private void CollectFromStatement(TsStatement stmt, ImportCollectionSink sink)
     {
         var names = sink.Names;
-        var valueNames = sink.ValueNames;
-        var crossPackageOrigins = sink.CrossPackageOrigins;
 
         switch (stmt)
         {
@@ -1607,7 +1603,7 @@ public sealed class ImportCollector(
         {
             CollectFromStatements(scope.Statements, sink);
 
-            foreach (var expression in scope.ScopedExpressions)
+            foreach (var expression in scope.Expressions)
                 CollectFromExpression(expression, sink);
         });
     }
@@ -2026,20 +2022,41 @@ public sealed class ImportCollector(
 /// point (<see cref="ImportCollector.Collect"/>) drains the buckets after the walk
 /// to build the file's import lines.
 /// </summary>
-internal sealed record ImportCollectionSink(
-    HashSet<string> Names,
-    HashSet<string> ValueNames,
-    HashSet<string> RuntimeHelperReferences,
-    HashSet<string> RuntimeHelperTypeReferences,
-    HashSet<string> TemplateRuntimeHelpers,
-    HashSet<string> ShadowingNames,
-    Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
-    List<IrExternalImport> TemplateExternals,
-    HashSet<string> LinqPipeHelpers,
-    Dictionary<string, SortedSet<string>> OwnersByModuleExport
+internal sealed class ImportCollectionSink(
+    HashSet<string> names,
+    HashSet<string> valueNames,
+    HashSet<string> runtimeHelperReferences,
+    HashSet<string> runtimeHelperTypeReferences,
+    HashSet<string> templateRuntimeHelpers,
+    HashSet<string> shadowingNames,
+    Dictionary<string, TsTypeOrigin> crossPackageOrigins,
+    List<IrExternalImport> templateExternals,
+    HashSet<string> linqPipeHelpers,
+    Dictionary<string, SortedSet<string>> ownersByModuleExport
 )
 {
     private readonly Stack<IReadOnlySet<string>> _boundScopes = new();
+
+    public HashSet<string> Names { get; } = names;
+
+    public HashSet<string> ValueNames { get; } = valueNames;
+
+    public HashSet<string> RuntimeHelperReferences { get; } = runtimeHelperReferences;
+
+    public HashSet<string> RuntimeHelperTypeReferences { get; } = runtimeHelperTypeReferences;
+
+    public HashSet<string> TemplateRuntimeHelpers { get; } = templateRuntimeHelpers;
+
+    public HashSet<string> ShadowingNames { get; } = shadowingNames;
+
+    public Dictionary<string, TsTypeOrigin> CrossPackageOrigins { get; } = crossPackageOrigins;
+
+    public List<IrExternalImport> TemplateExternals { get; } = templateExternals;
+
+    public HashSet<string> LinqPipeHelpers { get; } = linqPipeHelpers;
+
+    public Dictionary<string, SortedSet<string>> OwnersByModuleExport { get; } =
+        ownersByModuleExport;
 
     /// <summary>
     /// Whether <paramref name="name"/> is bound by an enclosing function, block,

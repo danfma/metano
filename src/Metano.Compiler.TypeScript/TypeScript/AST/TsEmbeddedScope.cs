@@ -11,13 +11,15 @@ namespace Metano.Compiler.TypeScript.AST;
 /// <param name="BoundNames">The names the raw text declares for this scope, beyond the
 /// ones its <paramref name="Statements"/> declare themselves.</param>
 /// <param name="Statements">The statements rendered inside the scope.</param>
-/// <param name="Expressions">The expressions rendered inside the scope (a <c>for</c>
-/// condition and incrementors, which read the loop's own declarations).</param>
 public sealed record TsEmbeddedScope(
     IReadOnlyList<string> BoundNames,
-    IReadOnlyList<TsStatement> Statements,
-    IReadOnlyList<TsExpression>? Expressions = null
+    IReadOnlyList<TsStatement> Statements
 )
 {
-    public IReadOnlyList<TsExpression> ScopedExpressions => Expressions ?? [];
+    /// <summary>
+    /// The expressions rendered inside the scope (a <c>for</c> condition and
+    /// incrementors, which read the loop's own declarations); empty for a scope that
+    /// renders statements only.
+    /// </summary>
+    public IReadOnlyList<TsExpression> Expressions { get; init; } = [];
 }

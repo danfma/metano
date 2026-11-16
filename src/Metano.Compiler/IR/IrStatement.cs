@@ -179,6 +179,21 @@ public sealed record IrCatchClause(
     /// every exception and has no filter, so no later clause is ever tried.
     /// </summary>
     public bool IsUnconditional => AcceptsEveryExceptionType && Filter is null;
+
+    /// <summary>
+    /// The clauses C# can reach, in order: up to the first unconditional one,
+    /// which takes every exception, so the ones after it are never tried.
+    /// </summary>
+    public static IEnumerable<IrCatchClause> Reachable(IEnumerable<IrCatchClause> clauses)
+    {
+        foreach (var clause in clauses)
+        {
+            yield return clause;
+
+            if (clause.IsUnconditional)
+                yield break;
+        }
+    }
 }
 
 /// <summary>
