@@ -171,6 +171,50 @@ public class ReferenceDowncastTests
         await Assert.That(files["shape.ts"]).Contains("import type { Circle }");
     }
 
+    /// <summary>
+    /// A cast whose class import would close a cycle of value imports through
+    /// a third module (<c>node</c> → <c>printer</c> → <c>leaf</c> → <c>node</c>)
+    /// only types the result: loading <c>node</c> first would otherwise run
+    /// <c>class Leaf extends Node</c> before <c>Node</c> exists. A cast in a
+    /// module off the cycle keeps its check.
+    /// </summary>
+    [Test]
+    public async Task DowncastWhoseImportClosesACycle_OnlyTypesTheResult()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public abstract class Node
+            {
+                public string Describe() => Printer.Print(this);
+            }
+
+            [Transpile]
+            public static class Printer
+            {
+                public static string Print(Node n) => "leaf:" + ((Leaf)n).Text;
+            }
+
+            [Transpile]
+            public class Leaf : Node
+            {
+                public string Text = "t";
+            }
+
+            [Transpile]
+            public static class Reader
+            {
+                public static string Read(Node n) => ((Leaf)n).Text;
+            }
+            """
+        );
+
+        await Assert.That(files["printer.ts"]).Contains("(n as Leaf).text");
+        await Assert.That(files["printer.ts"]).DoesNotContain("castTo");
+        await Assert.That(files["printer.ts"]).Contains("import type { Leaf } from \"./leaf\";");
+        await Assert.That(files["reader.ts"]).Contains("castTo<Leaf>(n, Leaf).text");
+    }
+
     private static string TranspileUse(string members) =>
         TranspileHelper.Transpile(
             $$"""

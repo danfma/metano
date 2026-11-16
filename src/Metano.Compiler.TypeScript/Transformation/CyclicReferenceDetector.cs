@@ -34,49 +34,13 @@ public static class CyclicReferenceDetector
         if (files.Count == 0)
             return;
 
-        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
-
-        // Build the file index keyed by the kebab-cased relative path WITHOUT the .ts
-        // extension. For index files we also register the directory barrel alias:
-        //
-        // - `index.ts`                → `#`
-        // - `issues/domain/index.ts`  → `#/issues/domain`
-        var byImportKey = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var file in files)
-        {
-            var key = StripTsExtension(file.FileName);
-            byImportKey[key] = key;
-
-            if (Path.GetFileName(key).Equals("index", StringComparison.Ordinal))
-            {
-                var parent = Path.GetDirectoryName(key)?.Replace('\\', '/') ?? "";
-                if (parent.Length == 0)
-                    byImportKey[""] = key;
-                else
-                    byImportKey[parent] = key;
-            }
-        }
-
-        // Build the import graph. Edges point from a file to every file it imports via
-        // the local package aliases (`#` or `#/...`) or relative paths (`./...`).
-        var graph = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var file in files)
-        {
-            var key = StripTsExtension(file.FileName);
-            var targets = new List<string>();
-            foreach (var stmt in file.Statements)
-            {
-                if (stmt is not TsImport import)
-                    continue;
-                if (
-                    !TryNormalizeLocalImport(import.From, key, aliasPrefix, out var targetImportKey)
-                )
-                    continue;
-                if (byImportKey.TryGetValue(targetImportKey, out var canonicalTarget))
-                    targets.Add(canonicalTarget);
-            }
-            graph[key] = targets;
-        }
+        var importGraph = LocalImportGraph.AllImports(files, importAlias);
+        var aliasPrefix = importGraph.AliasPrefix;
+        var graph = importGraph.Files.ToDictionary(
+            file => file,
+            file => importGraph.TargetsOf(file),
+            StringComparer.Ordinal
+        );
 
         // Iterative DFS with a stack of (node, child-iterator) frames. The "onStack" set
         // tracks the current DFS path; visited tracks fully-explored nodes.
@@ -104,7 +68,7 @@ public static class CyclicReferenceDetector
 
     private static void DfsVisit(
         string node,
-        Dictionary<string, List<string>> graph,
+        Dictionary<string, IReadOnlyList<string>> graph,
         HashSet<string> visited,
         HashSet<string> onStack,
         List<string> pathStack,
@@ -189,39 +153,6 @@ public static class CyclicReferenceDetector
         );
     }
 
-    private static bool TryNormalizeLocalImport(
-        string from,
-        string importerKey,
-        string aliasPrefix,
-        out string key
-    )
-    {
-        if (from == aliasPrefix)
-        {
-            key = "";
-            return true;
-        }
-
-        var aliasSubpathPrefix = aliasPrefix + "/";
-        if (from.StartsWith(aliasSubpathPrefix, StringComparison.Ordinal))
-        {
-            key = from[aliasSubpathPrefix.Length..];
-            return true;
-        }
-
-        // Relative imports (./foo) — resolve against the importer's directory.
-        if (from.StartsWith("./", StringComparison.Ordinal))
-        {
-            var dir = Path.GetDirectoryName(importerKey)?.Replace('\\', '/') ?? "";
-            var relative = from[2..];
-            key = dir.Length > 0 ? dir + "/" + relative : relative;
-            return true;
-        }
-
-        key = "";
-        return false;
-    }
-
     private static string ToDisplayImportPath(string key, string aliasPrefix)
     {
         if (key == "index")
@@ -230,7 +161,4 @@ public static class CyclicReferenceDetector
             return aliasPrefix + "/" + key[..^"/index".Length];
         return aliasPrefix + "/" + key;
     }
-
-    private static string StripTsExtension(string fileName) =>
-        fileName.EndsWith(".ts", StringComparison.Ordinal) ? fileName[..^3] : fileName;
 }
