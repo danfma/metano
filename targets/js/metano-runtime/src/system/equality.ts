@@ -23,7 +23,8 @@ import { hashInt64 } from "./int64.ts";
  * 4. `NaN` equals `NaN` (unlike the `===` operator).
  * 5. Other primitives use `===`.
  * 6. Objects with a custom `equals(other)` method delegate to it (record classes).
- *    A `Temporal.Duration` (a `TimeSpan`), which has none, compares by its length.
+ *    A `Temporal.Duration` (a `TimeSpan`), which has none, compares by its length, or
+ *    field by field when it carries calendar units; it never equals a non-duration.
  * 7. `Array`s compare element-wise in order.
  * 8. `Map`s compare by size, then by key→value pairs (order-independent on the keys).
  * 9. `Set`s compare by size, then by membership (order-independent).
@@ -53,8 +54,8 @@ export function equals(a: unknown, b: unknown): boolean {
     return (a as { equals(other: unknown): boolean }).equals(b);
   }
 
-  if (isDuration(a)) {
-    return isDuration(b) && a.constructor.compare(a, b) === 0;
+  if (isDuration(a) || isDuration(b)) {
+    return isDuration(a) && isDuration(b) && durationsEqual(a, b);
   }
 
   if (Array.isArray(a)) {
@@ -132,6 +133,10 @@ export function hashCode(value: unknown): number {
   if (value == null) return 0;
 
   if (typeof value === "object") {
+    if (isDuration(value)) {
+      return durationHashCode(value);
+    }
+
     // Custom hashCode contract from record/value classes.
     if ("hashCode" in value && typeof (value as { hashCode?: unknown }).hashCode === "function") {
       return (value as { hashCode(): number }).hashCode();
@@ -265,11 +270,72 @@ export function tupleEquals(tuple: unknown, other: unknown, shape?: TupleShape):
   });
 }
 
-/** A `Temporal.Duration` and its class's `compare`, recognized without loading the polyfill. */
-function isDuration(
-  value: unknown,
-): value is { constructor: { compare(left: unknown, right: unknown): number } } {
+/** The `Temporal.Duration` members {@link equals} and {@link hashCode} read. */
+type Duration = {
+  readonly years: number;
+  readonly months: number;
+  readonly weeks: number;
+  readonly days: number;
+  readonly hours: number;
+  readonly minutes: number;
+  readonly seconds: number;
+  readonly milliseconds: number;
+  readonly microseconds: number;
+  readonly nanoseconds: number;
+  total(unit: "nanoseconds"): number;
+  readonly constructor: { compare(left: Duration, right: Duration): number };
+};
+
+/** A `Temporal.Duration` (a C# `TimeSpan`), recognized without loading the polyfill. */
+function isDuration(value: unknown): value is Duration {
   return Object.prototype.toString.call(value) === "[object Temporal.Duration]";
+}
+
+/**
+ * Whether a duration carries calendar units, which Temporal cannot total or compare
+ * without a reference date. A `TimeSpan` never does; one read from ISO text (`"P1W"`)
+ * can.
+ */
+function hasCalendarUnits(duration: Duration): boolean {
+  return duration.years !== 0 || duration.months !== 0 || duration.weeks !== 0;
+}
+
+const DURATION_FIELDS = [
+  "years",
+  "months",
+  "weeks",
+  "days",
+  "hours",
+  "minutes",
+  "seconds",
+  "milliseconds",
+  "microseconds",
+  "nanoseconds",
+] as const;
+
+/**
+ * Two durations are equal when they last as long (`PT5M` equals `PT300S`), as two
+ * `TimeSpan`s are; one with calendar units compares field by field instead.
+ */
+function durationsEqual(a: Duration, b: Duration): boolean {
+  if (hasCalendarUnits(a) || hasCalendarUnits(b)) {
+    return DURATION_FIELDS.every((field) => a[field] === b[field]);
+  }
+
+  return a.constructor.compare(a, b) === 0;
+}
+
+/** Hashes the quantity {@link durationsEqual} compares: the length, or the fields. */
+function durationHashCode(duration: Duration): number {
+  if (hasCalendarUnits(duration)) {
+    const hc = new HashCode();
+
+    for (const field of DURATION_FIELDS) hc.add(duration[field]);
+
+    return hc.toHashCode();
+  }
+
+  return HashCode.combine(duration.total("nanoseconds"));
 }
 
 function hasEqualsMethod(value: object): value is { equals(other: unknown): boolean } {
