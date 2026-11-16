@@ -35,5 +35,13 @@ public sealed record TsImport(
     bool IsDefault = false,
     IReadOnlySet<string>? TypeOnlyNames = null,
     bool IsNamespace = false,
-    IReadOnlyDictionary<string, string>? Aliases = null
+    IReadOnlyDictionary<string, string>? Aliases = null,
+    IReadOnlyList<TsImportAlias>? ExtraAliases = null
 ) : TsTopLevel;
+
+/// <summary>
+/// A further <c>Original as Local</c> binding of a name a <see cref="TsImport"/>
+/// already lists (<c>import { Decimal, Decimal as Money }</c>): one export bound
+/// under its own name and a <c>using</c> alias in one file.
+/// </summary>
+public sealed record TsImportAlias(string Original, string Local, bool TypeOnly);

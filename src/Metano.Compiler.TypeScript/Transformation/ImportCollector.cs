@@ -230,7 +230,7 @@ public sealed class ImportCollector(
         {
             // The dedicated UUID line and any helper-bucket line carrying UUID
             // merge into one import below (MergeImportsByPath dedupes by
-            // name), so the buckets stay untouched.
+            // name and alias), so the buckets stay untouched.
             imports.Add(new TsImport(["UUID"], RuntimeModuleName));
             runtimeImported.Add("UUID");
         }
@@ -344,8 +344,9 @@ public sealed class ImportCollector(
         }
 
         // An origin staged under a `using` alias imports its export under the
-        // alias: `import { Decimal as D } from "decimal.js"`, on a line of its
-        // own so the canonical name can still be imported plainly beside it.
+        // alias: `import { Decimal as D } from "decimal.js"`. The merge below
+        // keeps it beside a plain import of the canonical name
+        // (`import { Decimal, Decimal as D }`).
         foreach (var aliased in aliasedOrigins)
         {
             _typeMappingContext.ConfirmCrossPackageDependency(aliased.Origin.PackageName);
@@ -1140,27 +1141,55 @@ public sealed class ImportCollector(
             var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
             var allTypeOnly = true;
 
+            // Bindings merge by (name, alias): `Decimal` and `Decimal as Money`
+            // are two bindings of one export, and both survive. A name is
+            // listed once; its first alias rides on it unless the plain name
+            // is bound too, and every further alias is an extra binding.
+            var plainNames = new HashSet<string>(StringComparer.Ordinal);
+            var extraAliases = new List<TsImportAlias>();
+
             foreach (var item in items)
             {
                 foreach (var name in item.Names)
                 {
-                    if (allNames.Contains(name))
-                        continue;
-                    allNames.Add(name);
-
                     var isTypeOnly =
                         item.TypeOnly
                         || (item.TypeOnlyNames is not null && item.TypeOnlyNames.Contains(name));
-                    if (isTypeOnly)
-                        typeOnlyNames.Add(name);
-                }
+                    var local = item.Aliases?.GetValueOrDefault(name);
 
-                if (item.Aliases is not null)
-                    foreach (var (original, local) in item.Aliases)
-                        aliases[original] = local;
+                    if (!allNames.Contains(name))
+                    {
+                        allNames.Add(name);
+
+                        if (isTypeOnly)
+                            typeOnlyNames.Add(name);
+                    }
+
+                    if (local is null)
+                    {
+                        plainNames.Add(name);
+                        continue;
+                    }
+
+                    if (aliases.TryGetValue(name, out var listed) && listed != local)
+                        AddExtraAlias(extraAliases, new TsImportAlias(name, local, isTypeOnly));
+                    else
+                        aliases[name] = local;
+                }
 
                 if (!item.TypeOnly)
                     allTypeOnly = false;
+            }
+
+            // A name bound plainly too keeps its alias as an extra binding.
+            foreach (var name in plainNames.Where(aliases.ContainsKey).ToList())
+            {
+                AddExtraAlias(
+                    extraAliases,
+                    new TsImportAlias(name, aliases[name], typeOnlyNames.Contains(name))
+                );
+
+                aliases.Remove(name);
             }
 
             // Names that appear as value in ANY import are not type-only.
@@ -1189,12 +1218,23 @@ public sealed class ImportCollector(
                     TypeOnlyNames: !finalAllTypeOnly && typeOnlyNames.Count > 0
                         ? typeOnlyNames
                         : null,
-                    Aliases: aliases.Count > 0 ? aliases : null
+                    Aliases: aliases.Count > 0 ? aliases : null,
+                    ExtraAliases: extraAliases.Count > 0 ? extraAliases : null
                 )
             );
         }
 
         return merged;
+    }
+
+    private static void AddExtraAlias(List<TsImportAlias> extraAliases, TsImportAlias binding)
+    {
+        if (
+            !extraAliases.Any(existing =>
+                existing.Original == binding.Original && existing.Local == binding.Local
+            )
+        )
+            extraAliases.Add(binding);
     }
 
     /// <summary>
