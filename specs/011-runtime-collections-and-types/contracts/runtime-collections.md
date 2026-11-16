@@ -145,12 +145,12 @@ export class List<T> implements IList<T> {
       if ($l._version !== $v || $a.length !== $n) throwModified(); // every MoveNext, the final one included
       if ($i === $n) break;
       const x = $a[$i];
-      /* body: a `break`, `return`, `throw` or `goto` leaves without a further check */
+      /* body: a `break`, `return` or `throw` leaves without a further check */
     }
   }
   ```
 
-  `continue` in the body reaches the next step's check. With FR-058's constant defined as `false`, the check line is eliminated. The design that meets NFR-001 (one unsigned bounds compare, cold `throwOOR` / `throwModified`, constructor field order) is in plan.md § Benchmark plan and research R17.
+  `continue` in the body reaches the next step's check. `goto` is not lowered by Metano: inside a `foreach` it reports `MS0001` and the method body becomes a stub; if `goto` is supported later, it also leaves without a further check. With FR-058's constant defined as `false`, the check line is eliminated. The design that meets NFR-001 (one unsigned bounds compare, cold `throwOOR` / `throwModified`, constructor field order) is in plan.md § Benchmark plan and research R17.
 - A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. `asArray(list)` (reflection helper) returns its backing array.
 - `contains` / `indexOf` / `remove` / `lastIndexOf` / `binarySearch` use `defaultEquals` with a `===` fast path for primitives.
 - `sort()` without a comparison uses `Comparer<T>.Default` semantics for numbers, strings, booleans, temporal values (by tag) and `IComparable` implementers (`compareTo`); otherwise throws `InvalidOperationException` (`Failed to compare two elements in the array.`).

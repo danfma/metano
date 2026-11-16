@@ -125,7 +125,7 @@ let sum = 0;
 }
 ```
 
-`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). Each check line carries FR-058's inline guard (`(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity. A `foreach` over any other `IEnumerable<T>` stays `for..of`. Further goldens pin the remaining exits and the null receiver: `list-foreach-throw.ts` (a `throw` from the body leaves with no further check), `list-foreach-goto.ts` (a `goto` out of the body, in whatever form the existing `goto` lowering emits, leaves with no further check) and `list-foreach-null-receiver.ts` (`$l._items` on `null` throws a `TypeError`, which a typed catch sees as `NullReferenceException` through FR-052's `toException`, as C# throws `NullReferenceException`).
+`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). Each check line carries FR-058's inline guard (`(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity. A `foreach` over any other `IEnumerable<T>` stays `for..of`. Further goldens pin the remaining exits and the null receiver: `list-foreach-throw.ts` (a `throw` from the body leaves with no further check) and `list-foreach-null-receiver.ts` (`$l._items` on `null` throws a `TypeError`, which a typed catch sees as `NullReferenceException` through FR-052's `toException`, as C# throws `NullReferenceException`).
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 
