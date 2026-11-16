@@ -39,6 +39,12 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// <seealso cref="Metano.Compiler.Mappings.DeclarativeMappingRegistry"/>
 public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
 {
+    /// <summary>
+    /// The arguments a lowered <c>decimal.Parse</c> call passes: the text
+    /// alone, whichever culture-free overload was written.
+    /// </summary>
+    private const int TextParseArgumentCount = 1;
+
     private readonly Dictionary<
         IMethodSymbol,
         Func<InvocationRewriteContext, IrExpression?>
@@ -148,7 +154,8 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
         // The target's own mapping of `decimal.Parse(string)` takes the
         // culture-free overloads; asked once, as it does not depend on the call.
         var mapsTextParse =
-            textParse is not null && _lowersByDeclarativeMapping?.Invoke(textParse, 1) is true;
+            textParse is not null
+            && _lowersByDeclarativeMapping?.Invoke(textParse, TextParseArgumentCount) is true;
 
         foreach (var method in parseOverloads)
         {
@@ -157,7 +164,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
 
             _entries[method.OriginalDefinition] =
                 mapsTextParse && isCultureFree
-                    ? ctx => TextParseCall(ctx, textParse!)
+                    ? context => TextParseCall(context, textParse!)
                     : DecimalConstruction;
         }
     }
@@ -167,30 +174,49 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     /// <c>IFormatProvider</c> argument is dropped unextracted, as the
     /// invariant culture is the only one Metano formats in.
     /// </summary>
-    private IrExpression TextParseCall(InvocationRewriteContext ctx, IMethodSymbol textParse)
+    private IrExpression TextParseCall(InvocationRewriteContext context, IMethodSymbol textParse)
     {
-        var text = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
-
-        // The written receiver keeps the BCL export's origin, so a project
-        // type of the same name does not bind it (issue #477).
-        var receiver = ctx.Invocation.Expression is MemberAccessExpressionSyntax written
-            ? ctx.Recurse(written.Expression)
-            : new IrTypeReference(textParse.ContainingType.Name);
+        var text = context.Recurse(context.Invocation.ArgumentList.Arguments[0].Expression);
 
         return new IrCallExpression(
-            new IrMemberAccess(receiver, textParse.Name),
+            new IrMemberAccess(DecimalReceiver(context, textParse), textParse.Name),
             [new IrArgument(text)],
             Origin: _helpers.BuildOrigin(textParse)
         );
     }
 
-    private static IrExpression DecimalConstruction(InvocationRewriteContext ctx)
+    /// <summary>
+    /// The receiver of a <c>decimal.Parse</c> call: the written one, extracted
+    /// for the BCL export's origin, so a project type of the same name does not
+    /// bind it (issue #477), under the type's own name, so a
+    /// <c>using D = System.Decimal;</c> alias does not name the import.
+    /// </summary>
+    private static IrTypeReference DecimalReceiver(
+        InvocationRewriteContext context,
+        IMethodSymbol textParse
+    )
     {
-        var arg = ctx.Recurse(ctx.Invocation.ArgumentList.Arguments[0].Expression);
+        var typeName = textParse.ContainingType.Name;
+
+        var written = context.Invocation.Expression is MemberAccessExpressionSyntax access
+            ? context.Recurse(access.Expression)
+            : null;
+
+        return written is IrTypeReference reference
+            ? reference with
+            {
+                Name = typeName,
+            }
+            : new IrTypeReference(typeName);
+    }
+
+    private static IrExpression DecimalConstruction(InvocationRewriteContext context)
+    {
+        var argument = context.Recurse(context.Invocation.ArgumentList.Arguments[0].Expression);
 
         return new IrNewExpression(
             new IrPrimitiveTypeRef(IrPrimitive.Decimal),
-            [new IrArgument(arg)]
+            [new IrArgument(argument)]
         );
     }
 
