@@ -366,7 +366,14 @@ public sealed class Printer(string indent = "  ")
                     rendered = "type " + rendered;
                 parts[i] = rendered;
             }
-            _sb.Write(string.Join(", ", parts));
+
+            var extraParts = (import.ExtraAliases ?? []).Select(extra =>
+                extra.TypeOnly && !import.TypeOnly
+                    ? $"type {extra.Original} as {extra.Local}"
+                    : $"{extra.Original} as {extra.Local}"
+            );
+
+            _sb.Write(string.Join(", ", parts.Concat(extraParts)));
             _sb.Write(" }");
         }
         _sb.Write(" from ");

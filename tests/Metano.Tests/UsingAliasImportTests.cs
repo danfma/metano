@@ -444,4 +444,35 @@ public class UsingAliasImportTests
         await Assert.That(output).DoesNotContain("AE");
         await Assert.That(output).DoesNotContain("argument-exception");
     }
+
+    /// <summary>
+    /// One export bound under its own name and under a <c>using</c> alias in
+    /// one file keeps both bindings: decimal.js's pass-through statics print
+    /// the alias, a literal prints <c>Decimal</c>.
+    /// </summary>
+    [Test]
+    public async Task UsingAlias_AndTheCanonicalName_BothStayBound()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using Money = System.Decimal;
+
+            [Transpile]
+            public static class Prices
+            {
+                public static decimal Abs(decimal price) => Money.Abs(price);
+
+                public static decimal Floor() => Money.Floor(2.7m);
+
+                public static decimal Max(decimal price) => Money.Max(price, 3m);
+            }
+            """
+        )["prices.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("import { Decimal, Decimal as Money } from \"decimal.js\";");
+
+        await Assert.That(output).Contains("Money.floor(new Decimal(\"2.7\"))");
+    }
 }
