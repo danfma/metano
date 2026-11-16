@@ -247,9 +247,14 @@ internal static partial class IrToTsClassBridge
         );
     }
 
-    /// <summary><c>get;</c> and <c>get; init;</c> map to a <c>readonly</c> member.</summary>
+    /// <summary>
+    /// <c>get;</c> and <c>get; init;</c> map to a <c>readonly</c> member, unless the
+    /// static constructor writes it: the class's <c>static { }</c> block cannot
+    /// assign a read-only static property (TS2540).
+    /// </summary>
     private static bool IsReadOnly(IrPropertyDeclaration prop) =>
-        prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit;
+        prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit
+        && prop.Semantics?.IsAssignedByStaticConstructor != true;
 
     /// <summary>
     /// Lowers an <see cref="IrMethodDeclaration"/> into a <see cref="TsMethodMember"/>.

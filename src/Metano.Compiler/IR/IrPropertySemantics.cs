@@ -28,6 +28,10 @@ namespace Metano.Compiler.IR;
 /// so the backend declares the backing field. The core-computed single source of that
 /// decision (<c>OverrideChains.EmitsPerClassStorage</c>).</param>
 /// <param name="InheritedAccessor">The accessor of the nearest overridden property up the chain, declared by a class the toolchain emits (this compilation or a transpiled package), that this override leaves to its base.</param>
+/// <param name="IsAssignedByStaticConstructor">A static get-only auto-property that the static
+/// constructor of its type writes. C# allows that write; a backend that lowers the constructor
+/// to a class initializer whose language rejects writing a read-only member declares it
+/// mutable.</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,
@@ -39,7 +43,8 @@ public sealed record IrPropertySemantics(
     bool IsRequired = false,
     bool OwnsPerClassStorage = false,
     bool EmitsPerClassStorage = false,
-    IrInheritedAccessor InheritedAccessor = IrInheritedAccessor.None
+    IrInheritedAccessor InheritedAccessor = IrInheritedAccessor.None,
+    bool IsAssignedByStaticConstructor = false
 );
 
 /// <summary>

@@ -93,6 +93,33 @@ public class StaticConstructorTests
     }
 
     [Test]
+    public async Task GetOnlyStaticProperty_TheStaticConstructorWrites_IsMutable()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class RoSingle
+            {
+                public static RoSingle Instance { get; }
+                public static int P { get; }
+                public static int Untouched { get; } = 3;
+                public int V = 4;
+
+                static RoSingle()
+                {
+                    Instance = new RoSingle();
+                    P = 9;
+                }
+            }
+            """
+        )["ro-single.ts"];
+
+        await Assert.That(output).Contains("static instance: RoSingle;");
+        await Assert.That(output).Contains("static p: number = 0;");
+        await Assert.That(output).Contains("static readonly untouched: number = 3;");
+    }
+
+    [Test]
     public async Task TypeWithoutAStaticConstructor_EmitsNoStaticBlock()
     {
         var output = TranspileHelper.Transpile(
