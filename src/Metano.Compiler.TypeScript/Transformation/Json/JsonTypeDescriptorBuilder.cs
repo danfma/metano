@@ -275,9 +275,8 @@ internal sealed class JsonTypeDescriptorBuilder(
 
         return segments
             .Skip(1)
-            .Aggregate<string, TsExpression>(
-                new TsIdentifier(segments[0]),
-                (target, segment) => new TsPropertyAccess(target, segment)
+            .Aggregate<string, TsExpression>(new TsIdentifier(segments[0]), (target, segment) =>
+                new TsPropertyAccess(target, segment)
             );
     }
 

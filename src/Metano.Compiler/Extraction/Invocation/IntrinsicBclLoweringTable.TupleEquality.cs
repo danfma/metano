@@ -156,8 +156,7 @@ public sealed partial class IntrinsicBclLoweringTable
         var firstType = ctx.SemanticModel.GetTypeInfo(first.Expression).Type;
         var secondType = ctx.SemanticModel.GetTypeInfo(second.Expression).Type;
 
-        var tuple =
-            TupleEqualitySymbols.UnderlyingTupleOf(firstType)
+        var tuple = TupleEqualitySymbols.UnderlyingTupleOf(firstType)
             ?? TupleEqualitySymbols.UnderlyingTupleOf(secondType);
 
         if (tuple is null)

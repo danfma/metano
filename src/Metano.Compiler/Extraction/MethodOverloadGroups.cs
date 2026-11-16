@@ -194,8 +194,7 @@ internal static class MethodOverloadGroups
                 InterfaceOverloadGroup.Of(type, definition.Name, target).IndexOf(definition)
             );
 
-        var member =
-            GroupOf(definition, target)?.MemberOf(definition)
+        var member = GroupOf(definition, target)?.MemberOf(definition)
             ?? throw new InvalidOperationException(
                 $"'{definition.ToDisplayString()}' is not a grouped method of its type."
             );
@@ -497,8 +496,7 @@ internal static class MethodOverloadGroups
             return OverloadGroupNaming.SuffixesOf(members, target)[members.IndexOf(definition)];
         }
 
-        var group =
-            GroupOf(definition, target)
+        var group = GroupOf(definition, target)
             ?? throw new InvalidOperationException(
                 $"'{definition.ToDisplayString()}' is not a grouped method of its type."
             );

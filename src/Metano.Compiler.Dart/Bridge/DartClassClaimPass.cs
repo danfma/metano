@@ -199,9 +199,8 @@ internal sealed class DartClassClaimPass
     {
         var candidate = CandidateOf(overload);
 
-        var claimed = DartFreeName.FirstFree(
-            candidate,
-            name => IsTakenForFastPath(name, overload.IsStatic)
+        var claimed = DartFreeName.FirstFree(candidate, name =>
+            IsTakenForFastPath(name, overload.IsStatic)
         );
 
         if (claimed != candidate)

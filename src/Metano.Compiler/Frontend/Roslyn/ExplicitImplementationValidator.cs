@@ -53,14 +53,11 @@ internal sealed class ExplicitImplementationValidator
             diagnostics
         );
 
-        CSharpSourceFrontend.CollectTopLevelTypes(
-            compilation.Assembly.GlobalNamespace,
-            type =>
-            {
-                if (validator.IsPolicedType(type))
-                    validator.ScanType(type);
-            }
-        );
+        CSharpSourceFrontend.CollectTopLevelTypes(compilation.Assembly.GlobalNamespace, type =>
+        {
+            if (validator.IsPolicedType(type))
+                validator.ScanType(type);
+        });
     }
 
     /// <summary>

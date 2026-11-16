@@ -104,24 +104,18 @@ public sealed class TsOverloadClaimsRegistry(
             return null;
 
         return _companionPlans
-            .GetOrAdd(
-                type.OriginalDefinition,
-                declaration => new Lazy<TsCompanionPlan?>(() =>
-                    TsCompanionPlan.Of(ShapeOf(declaration))
-                )
-            )
+            .GetOrAdd(type.OriginalDefinition, declaration => new Lazy<TsCompanionPlan?>(() =>
+                TsCompanionPlan.Of(ShapeOf(declaration))
+            ))
             .Value;
     }
 
     /// <summary>The fast-path names of an interface, computed on first use.</summary>
     internal TsInterfaceFastPaths InterfaceFastPathsOf(INamedTypeSymbol type) =>
         _interfaceClaims
-            .GetOrAdd(
-                type.OriginalDefinition,
-                declaration => new Lazy<TsInterfaceFastPaths>(() =>
-                    TsInterfaceFastPaths.Of(InterfaceShapeOf(declaration))
-                )
-            )
+            .GetOrAdd(type.OriginalDefinition, declaration => new Lazy<TsInterfaceFastPaths>(() =>
+                TsInterfaceFastPaths.Of(InterfaceShapeOf(declaration))
+            ))
             .Value;
 
     /// <summary>
@@ -137,10 +131,9 @@ public sealed class TsOverloadClaimsRegistry(
     /// <summary>The claims of <paramref name="type"/>, computed on first use.</summary>
     internal TsOverloadClaims For(INamedTypeSymbol type) =>
         _claims
-            .GetOrAdd(
-                type.OriginalDefinition,
-                declaration => new Lazy<TsOverloadClaims>(() => Compute(declaration))
-            )
+            .GetOrAdd(type.OriginalDefinition, declaration => new Lazy<TsOverloadClaims>(() =>
+                Compute(declaration)
+            ))
             .Value;
 
     private TsOverloadClaims Compute(INamedTypeSymbol type)

@@ -57,12 +57,12 @@ public sealed partial class IrExpressionExtractor
         var typeInfo = _semantic.GetTypeInfo(expression);
 
         return ConvertedTuple(
-                expression,
-                value,
-                typeInfo.Type,
-                typeInfo.ConvertedType,
-                TupleElementConversions.Implicit
-            ) ?? value;
+            expression,
+            value,
+            typeInfo.Type,
+            typeInfo.ConvertedType,
+            TupleElementConversions.Implicit
+        ) ?? value;
     }
 
     /// <summary>
@@ -262,10 +262,8 @@ public sealed partial class IrExpressionExtractor
 
         var (operand, isLifted) = UnwrappedOrLifted(value, from, to);
 
-        return BindOnce(
-            operand,
-            IrEvaluationTraits.IsSideEffectFree(operand),
-            tuple => RebuiltTuple(site, tuple, isLifted, source, target, elements)
+        return BindOnce(operand, IrEvaluationTraits.IsSideEffectFree(operand), tuple =>
+            RebuiltTuple(site, tuple, isLifted, source, target, elements)
         );
     }
 

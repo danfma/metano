@@ -2006,15 +2006,11 @@ public static partial class IrToTsExpressionBridge
             var factoryCallee = new TsPropertyAccess(MapNewTarget(ne.Type), factory);
             var typeArguments = ConstructedTypeArgumentsOf(ne.Type, context);
 
-            return InEvaluationOrder(
-                ne,
-                args,
-                ordered => new TsCallExpression(
-                    factoryCallee,
-                    ordered,
-                    TypeArguments: typeArguments
-                )
-            );
+            return InEvaluationOrder(ne, args, ordered => new TsCallExpression(
+                factoryCallee,
+                ordered,
+                TypeArguments: typeArguments
+            ));
         }
 
         // A runtime collection (`new HashSet<number | null>([1])`) carries the
@@ -2024,11 +2020,11 @@ public static partial class IrToTsExpressionBridge
             ? ConstructedTypeArgumentsOf(ne.Type, context)
             : null;
 
-        return InEvaluationOrder(
-            ne,
-            args,
-            ordered => new TsNewExpression(MapNewTarget(ne.Type), ordered, collectionTypeArguments)
-        );
+        return InEvaluationOrder(ne, args, ordered => new TsNewExpression(
+            MapNewTarget(ne.Type),
+            ordered,
+            collectionTypeArguments
+        ));
     }
 
     /// <summary>The overload a <c>base.M(...)</c> call was bound to; <c>null</c> for any other call.</summary>

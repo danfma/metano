@@ -372,9 +372,8 @@ public class IrToTsBodyBridgeTests
 
         // The bridges lower BCL exceptions through the runtime classes the
         // transformer installs for a transform (spec 011 FR-014).
-        var tsBody = WithExceptionClasses(
-            compilation,
-            () => IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry))
+        var tsBody = WithExceptionClasses(compilation, () =>
+            IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry))
         );
 
         var methodMember = new TsMethodMember(

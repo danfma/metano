@@ -103,9 +103,8 @@ public static class IrToTsRecordSynthesisBridge
             ? SuperCall(EqualsMethodName, new TsIdentifier("other"))
             : SameRecordTypeTest();
 
-        var condition = fields.Aggregate(
-            baseCondition,
-            (accumulated, field) => new TsBinaryExpression(accumulated, "&&", FieldEquality(field))
+        var condition = fields.Aggregate(baseCondition, (accumulated, field) =>
+            new TsBinaryExpression(accumulated, "&&", FieldEquality(field))
         );
 
         return new TsMethodMember(

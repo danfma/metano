@@ -177,8 +177,7 @@ public class ToolchainKeyTests
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
-        using var process =
-            Process.Start(startInfo)
+        using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("dotnet could not be started.");
 
         using var timeout = new CancellationTokenSource(MsBuildTimeout);

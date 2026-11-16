@@ -68,8 +68,8 @@ internal static class IrToTsStructDefaultConstructorBridge
         Action<MetanoDiagnostic> report
     )
     {
-        var value =
-            DefaultValueOf(storage.Type, typeParameters) ?? Unrepresentable(storage, type, report);
+        var value = DefaultValueOf(storage.Type, typeParameters)
+            ?? Unrepresentable(storage, type, report);
 
         return Assignment(storage, value);
     }
@@ -174,8 +174,7 @@ internal static class IrToTsStructDefaultConstructorBridge
     )
     {
         var member = type.GetMembers(storage.MemberName).FirstOrDefault();
-        var typeName =
-            TypeOf(member)?.ToDisplayString()
+        var typeName = TypeOf(member)?.ToDisplayString()
             ?? Printer.RenderType(IrToTsTypeMapper.Map(storage.Type));
 
         report(

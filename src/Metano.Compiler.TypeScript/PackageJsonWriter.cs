@@ -135,8 +135,8 @@ public static class PackageJsonWriter
         {
             root = new JsonObject
             {
-                ["name"] =
-                    authoritativePackageName ?? Path.GetFileName(packageRoot.TrimEnd('/', '\\')),
+                ["name"] = authoritativePackageName
+                    ?? Path.GetFileName(packageRoot.TrimEnd('/', '\\')),
                 ["private"] = true,
             };
         }

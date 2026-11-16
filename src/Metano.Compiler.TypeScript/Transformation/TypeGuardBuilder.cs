@@ -681,8 +681,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 if (SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
                     continue;
 
-                var name =
-                    SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+                var name = SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
                     ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = MapType(member.Type);
 
@@ -704,8 +703,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 if (SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
                     continue;
 
-                var name =
-                    SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+                var name = SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
                     ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = MapType(member.Type);
 

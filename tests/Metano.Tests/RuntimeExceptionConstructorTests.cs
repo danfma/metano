@@ -100,8 +100,7 @@ public partial class RuntimeExceptionConstructorTests
         IrBclExport export
     )
     {
-        var type =
-            ReferenceCompilation().GetTypeByMetadataName(typeKey)
+        var type = ReferenceCompilation().GetTypeByMetadataName(typeKey)
             ?? throw new InvalidOperationException($"No {typeKey} in the reference assemblies.");
 
         var unclassified = type

@@ -88,10 +88,11 @@ public sealed partial class IrExpressionExtractor
         // A missing nullable number stays missing, as the lifted comparison
         // sees it; `new Decimal(null)` would throw.
         return type.IsNullableValueType()
-            ? BindValueOnce(
-                value,
-                bound => new IrConditionalExpression(IsNull(bound), NullLiteral, ToDecimal(bound))
-            )
+            ? BindValueOnce(value, bound => new IrConditionalExpression(
+                IsNull(bound),
+                NullLiteral,
+                ToDecimal(bound)
+            ))
             : ToDecimal(value);
     }
 
@@ -323,9 +324,8 @@ public sealed partial class IrExpressionExtractor
     ) =>
         bindings
             .Reverse()
-            .Aggregate(
-                body,
-                (inner, binding) => new IrLetExpression(binding.Name, binding.Value, inner)
+            .Aggregate(body, (inner, binding) =>
+                new IrLetExpression(binding.Name, binding.Value, inner)
             );
 
     private IrExpression CompareTupleOperands(TupleOperand left, TupleOperand right, bool negated)

@@ -141,8 +141,7 @@ public static class IrToTsModuleBridge
     {
         var plan = PlanModuleFunctionGroup(overloads);
 
-        var dispatcherName =
-            claims.ClaimOf(overloads[0].OverloadRef!)?.Dispatcher
+        var dispatcherName = claims.ClaimOf(overloads[0].OverloadRef!)?.Dispatcher
             ?? throw new InvalidOperationException(
                 $"The barrel claim pass named no dispatcher for '{SignatureOf(overloads[0])}'."
             );

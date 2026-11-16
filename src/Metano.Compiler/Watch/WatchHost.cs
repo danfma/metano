@@ -44,8 +44,7 @@ public static class WatchHost
     )
     {
         var fullProjectPath = Path.GetFullPath(projectPath);
-        var watchDir =
-            Path.GetDirectoryName(fullProjectPath)
+        var watchDir = Path.GetDirectoryName(fullProjectPath)
             ?? throw new InvalidOperationException(
                 $"Cannot derive watch directory from project path '{fullProjectPath}'."
             );

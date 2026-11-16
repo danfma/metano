@@ -116,8 +116,7 @@
 
   <PropertyGroup>
     <MetanoEnabled Condition="'$(MetanoEnabled)' == '' and '$(MetanoOutputDir)' != ''"
-      >true</MetanoEnabled
-    >
+      >true</MetanoEnabled>
   </PropertyGroup>
 
   <!-- User-authored compilation inputs only — exclude items under
@@ -147,13 +146,11 @@
     <PropertyGroup Condition="'$(MetanoCompilerProject)' == ''">
       <_MetanoToolManifestDir>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.config/dotnet-tools.json'))</_MetanoToolManifestDir>
       <_MetanoToolManifest Condition="'$(_MetanoToolManifestDir)' != ''"
-        >$(_MetanoToolManifestDir)/.config/dotnet-tools.json</_MetanoToolManifest
-      >
+        >$(_MetanoToolManifestDir)/.config/dotnet-tools.json</_MetanoToolManifest>
       <_MetanoRootToolManifest>$([MSBuild]::GetPathOfFileAbove('dotnet-tools.json', '$(MSBuildProjectDirectory)'))</_MetanoRootToolManifest>
       <_MetanoDotnetHome>$(DOTNET_CLI_HOME)</_MetanoDotnetHome>
       <_MetanoDotnetHome Condition="'$(_MetanoDotnetHome)' == ''"
-        >$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))</_MetanoDotnetHome
-      >
+        >$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))</_MetanoDotnetHome>
       <_MetanoGlobalToolStore>$(_MetanoDotnetHome)/.dotnet/tools/.store/metano.compiler.typescript</_MetanoGlobalToolStore>
     </PropertyGroup>
 
@@ -211,16 +208,14 @@
               Set MetanoCompilerProject to the compiler .csproj path to use this mode. -->
       <_MetanoCmd Condition="'$(MetanoCompilerProject)' == ''">dotnet metano-typescript</_MetanoCmd>
       <_MetanoCmd Condition="'$(MetanoCompilerProject)' != ''"
-        >dotnet run --project "$(MetanoCompilerProject)" --</_MetanoCmd
-      >
+        >dotnet run --project "$(MetanoCompilerProject)" --</_MetanoCmd>
 
       <!-- Language tag used to filter <MetanoAsset Language="..."> items.
            The TypeScript build target defaults to "typescript"; downstream
            Dart-specific MSBuild integrations can override _MetanoTargetLanguage
            before this target runs to filter accordingly. -->
       <_MetanoTargetLanguage Condition="'$(_MetanoTargetLanguage)' == ''"
-        >typescript</_MetanoTargetLanguage
-      >
+        >typescript</_MetanoTargetLanguage>
     </PropertyGroup>
 
     <!-- One MSBuild item per CLI flag, evaluated lazily. Each entry's
@@ -292,8 +287,7 @@
     <PropertyGroup>
       <_MetanoShouldProbeTool
         Condition="'$(MetanoCompilerProject)' == '' and '$(MetanoSkipToolCheck)' != 'true'"
-        >true</_MetanoShouldProbeTool
-      >
+        >true</_MetanoShouldProbeTool>
     </PropertyGroup>
     <Exec
       Condition="'$(_MetanoShouldProbeTool)' == 'true'"

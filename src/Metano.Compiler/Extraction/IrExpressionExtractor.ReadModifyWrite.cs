@@ -44,10 +44,8 @@ public sealed partial class IrExpressionExtractor
             if (NativeCompoundShiftKindOf(target, op, assign) is { } kind)
                 return new IrBinaryExpression(target, MapAssignmentOp(assign.Kind()), right, kind);
 
-            return BuildReadModifyWrite(
-                target,
-                assign,
-                readTarget => CompoundValue(assign, readTarget, op, right)
+            return BuildReadModifyWrite(target, assign, readTarget =>
+                CompoundValue(assign, readTarget, op, right)
             );
         }
 
@@ -194,9 +192,8 @@ public sealed partial class IrExpressionExtractor
                 $"'{operation}' on a dictionary entry is not supported."
             ),
             _ when IrEvaluationTraits.IsReusableReceiver(target) => build(target),
-            IrMemberAccess member => BindReceiverOnce(
-                member.Target,
-                receiver => build(member with { Target = receiver })
+            IrMemberAccess member => BindReceiverOnce(member.Target, receiver =>
+                build(member with { Target = receiver })
             ),
             IrElementAccess element => BindElementOnce(element, build),
             _ => ReportUnsupported(
@@ -211,13 +208,10 @@ public sealed partial class IrExpressionExtractor
         IrElementAccess element,
         Func<IrExpression, IrExpression> build
     ) =>
-        BindReceiverOnce(
-            element.Target,
-            receiver =>
-                BindValueOnce(
-                    element.Index,
-                    index => build(element with { Target = receiver, Index = index })
-                )
+        BindReceiverOnce(element.Target, receiver =>
+            BindValueOnce(element.Index, index =>
+                build(element with { Target = receiver, Index = index })
+            )
         );
 
     private static IrBinaryExpression WriteInPlace(

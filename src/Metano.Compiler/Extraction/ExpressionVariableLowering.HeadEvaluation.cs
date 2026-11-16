@@ -153,8 +153,8 @@ internal sealed partial class ExpressionVariableLowering
 
             // Binding hoists a call ahead of the statement, so the arguments
             // are visited in the order the source evaluates them.
-            var sourceOrder =
-                call.EvaluationOrder ?? Enumerable.Range(0, call.Arguments.Count).ToList();
+            var sourceOrder = call.EvaluationOrder
+                ?? Enumerable.Range(0, call.Arguments.Count).ToList();
 
             var bound = sourceOrder.ToDictionary(
                 position => position,

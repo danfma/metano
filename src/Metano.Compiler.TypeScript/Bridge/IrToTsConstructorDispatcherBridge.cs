@@ -68,9 +68,8 @@ public static class IrToTsConstructorDispatcherBridge
         if (primary.Overloads is not { Count: > 0 })
             return null;
 
-        var sorted = OverloadDispatchOrder.Sort(
-            [primary, .. primary.Overloads],
-            ctor => ctor.PlainParameters
+        var sorted = OverloadDispatchOrder.Sort([primary, .. primary.Overloads], ctor =>
+            ctor.PlainParameters
         );
 
         var declared = primary.DeclarationsInOrder;
@@ -173,9 +172,8 @@ public static class IrToTsConstructorDispatcherBridge
     }
 
     private static string SelectorParameterName(IReadOnlyList<TsConstructorParam> parameters) =>
-        TsFreeName.FirstFree(
-            SelectorParameter,
-            name => parameters.Any(parameter => parameter.Name == name)
+        TsFreeName.FirstFree(SelectorParameter, name =>
+            parameters.Any(parameter => parameter.Name == name)
         );
 
     /// <summary>

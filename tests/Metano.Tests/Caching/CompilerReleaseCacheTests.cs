@@ -174,8 +174,7 @@ public class CompilerReleaseCacheTests
 
     private void RewriteReleaseInHostCache(string release)
     {
-        var cache =
-            TranspilationCache.TryRead(OutputDir)
+        var cache = TranspilationCache.TryRead(OutputDir)
             ?? throw new InvalidOperationException("The host cache was not written.");
 
         var rewritten = cache with

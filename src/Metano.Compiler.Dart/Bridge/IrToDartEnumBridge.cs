@@ -25,8 +25,7 @@ public static class IrToDartEnumBridge
                 // first, then the positional [Name("…")] (which the extractor
                 // already baked into m.Value), and finally the source name.
                 // m.Value alone would silently drop per-target overrides.
-                var rawValue =
-                    IrToDartNamingPolicy.FindNameOverride(m.Attributes)
+                var rawValue = IrToDartNamingPolicy.FindNameOverride(m.Attributes)
                     ?? (m.Value is string s ? s : m.Name);
                 return new DartEnumValue(memberName, $"'{DartStringLiteral.Escape(rawValue)}'");
             })

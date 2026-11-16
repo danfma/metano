@@ -79,9 +79,8 @@ public sealed partial class IrExpressionExtractor
         if (operation is not IUnaryOperation { IsLifted: true })
             return null;
 
-        return LiftUnary(
-            OperandOf(operandSyntax),
-            operand => ReduceOverflow(operation, BuildUnary(op, operand, operandSyntax))
+        return LiftUnary(OperandOf(operandSyntax), operand =>
+            ReduceOverflow(operation, BuildUnary(op, operand, operandSyntax))
         );
     }
 
@@ -105,19 +104,12 @@ public sealed partial class IrExpressionExtractor
         if (!PropagatesNullThroughLift(operation, op))
             return null;
 
-        return BuildReadModifyWrite(
-            target,
-            assign,
-            readTarget =>
-                LiftBinary(
-                    new OperatorOperand(
-                        readTarget,
-                        IsNullableValueOperand(assign.Left),
-                        assign.Left
-                    ),
-                    OperandOf(assign.Right),
-                    LiftedOperatorFor(op, assign)
-                )
+        return BuildReadModifyWrite(target, assign, readTarget =>
+            LiftBinary(
+                new OperatorOperand(readTarget, IsNullableValueOperand(assign.Left), assign.Left),
+                OperandOf(assign.Right),
+                LiftedOperatorFor(op, assign)
+            )
         );
     }
 
@@ -130,13 +122,8 @@ public sealed partial class IrExpressionExtractor
     {
         var operation = _semantic.GetOperation(operatorSyntax);
 
-        return new(
-            op.IsRelational(),
-            (left, right) =>
-                ReduceOverflow(
-                    operation,
-                    BuildBinary(operatorSyntax, op, left, right, isLifted: true)
-                )
+        return new(op.IsRelational(), (left, right) =>
+            ReduceOverflow(operation, BuildBinary(operatorSyntax, op, left, right, isLifted: true))
         );
     }
 
@@ -310,10 +297,8 @@ public sealed partial class IrExpressionExtractor
         if (right.Value is IrLiteral { Kind: IrLiteralKind.Null })
             return BindValueOnce(left.Value, _ => NullResultOf(op));
 
-        return BindOperandsInOrder(
-            left,
-            right,
-            (boundLeft, boundRight) => GuardLiftedOperator(boundLeft, boundRight, op)
+        return BindOperandsInOrder(left, right, (boundLeft, boundRight) =>
+            GuardLiftedOperator(boundLeft, boundRight, op)
         );
     }
 
@@ -331,14 +316,10 @@ public sealed partial class IrExpressionExtractor
         var leftIsReusable =
             IrEvaluationTraits.IsSideEffectFree(left.Value) && CanBeReadAfter(left, right.Value);
 
-        return BindOnce(
-            left.Value,
-            leftIsReusable,
-            boundLeft =>
-                BindValueOnce(
-                    right.Value,
-                    boundRight => build(left.WithValue(boundLeft), right.WithValue(boundRight))
-                )
+        return BindOnce(left.Value, leftIsReusable, boundLeft =>
+            BindValueOnce(right.Value, boundRight =>
+                build(left.WithValue(boundLeft), right.WithValue(boundRight))
+            )
         );
     }
 
@@ -374,10 +355,11 @@ public sealed partial class IrExpressionExtractor
         if (ConditionalAccessOf(operand) is var (access, continuation))
             return access with { WhenNotNull = LiftUnary(continuation, apply) };
 
-        return BindValueOnce(
-            operand.Value,
-            bound => new IrConditionalExpression(IsNull(bound), NullLiteral, apply(bound))
-        );
+        return BindValueOnce(operand.Value, bound => new IrConditionalExpression(
+            IsNull(bound),
+            NullLiteral,
+            apply(bound)
+        ));
     }
 
     private static ExpressionSyntax LastContinuation(ConditionalAccessExpressionSyntax access) =>

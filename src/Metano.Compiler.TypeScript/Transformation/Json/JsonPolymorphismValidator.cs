@@ -114,8 +114,7 @@ internal sealed class JsonPolymorphismValidator(
 
         foreach (var registration in polymorphism.Registrations)
         {
-            var rejection =
-                RejectionOf(polymorphism, registration)
+            var rejection = RejectionOf(polymorphism, registration)
                 ?? DuplicateRejectionOf(polymorphism, registration, valid);
 
             if (rejection is not null)

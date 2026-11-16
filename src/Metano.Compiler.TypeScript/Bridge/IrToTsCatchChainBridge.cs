@@ -202,9 +202,8 @@ internal static class IrToTsCatchChainBridge
     /// the handler's parameter captures none of the clauses' names.
     /// </summary>
     private static string FreeCaughtValueName(IReadOnlyList<IrCatchClause> clauses) =>
-        TsFreeName.FirstFree(
-            CaughtValue,
-            candidate => clauses.Any(clause => Names(clause, candidate))
+        TsFreeName.FirstFree(CaughtValue, candidate =>
+            clauses.Any(clause => Names(clause, candidate))
         );
 
     private static bool Names(IrCatchClause clause, string name) =>

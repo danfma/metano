@@ -143,9 +143,9 @@ public static class IrPropertyExtractor
         if (syntax.ExpressionBody is not null)
             return true;
         return syntax.AccessorList?.Accessors.Any(a =>
-                a.IsKind(SyntaxKind.GetAccessorDeclaration)
-                && (a.Body is not null || a.ExpressionBody is not null)
-            )
+            a.IsKind(SyntaxKind.GetAccessorDeclaration)
+            && (a.Body is not null || a.ExpressionBody is not null)
+        )
             ?? false;
     }
 
