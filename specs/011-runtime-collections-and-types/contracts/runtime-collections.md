@@ -139,7 +139,7 @@ export class List<T> implements IList<T> {
 
   ```ts
   {
-    const $l = <receiver>;            // a temporary unless the receiver is a local, a parameter or `this`
+    const $l = <receiver>;            // always a temporary: the body may reassign a local receiver
     const $a = $l._items; const $v = $l._version; const $n = $a.length;
     for (let $i = 0; ; $i++) {
       if ($l._version !== $v || $a.length !== $n) throwModified(); // every MoveNext, the final one included
@@ -263,7 +263,7 @@ Passed only when the compilation asks a runtime question about that collection k
 | `Queue` / `Stack` | ≤ 1.5 ns over `push` / `a[head++]` / `pop` / `at(-1)` | estimated, confirmed in 011c |
 | record keys, sorted and immutable classes | recorded per release; `SortedSet` / `SortedDictionary`: time per op at 1e5 ≤ 2.5× at 1e3; `SortedList`: reads only; immutable: 1e4 repeated `Add` ≤ 50 ms | no native equivalent |
 | `Queue.dequeue` | O(1) | ring buffer (today O(n)) |
-| Checks off (FR-058) | no `_version` string and no `>>>0` in `get` / `set` in the bun / esbuild bundle | inline `typeof __METANO_CHECKS__` guard, default on |
+| Checks off (FR-058) | in the bun / esbuild bundle, no store to or read of `_version` outside the constructor, and `get` / `set` do not call the out-of-range throw function | inline `typeof __METANO_CHECKS__` guard, default on |
 | `List` alone, minified + gz | ≤ 2.5 KB | measured 1.67 KB with the full surface (research R13) |
 | `Dictionary` / `HashSet` / `Queue` / `Stack` alone | ≤ 3.0 / 1.6 / 1.2 / 1.2 KB | NFR-008 |
 | `ReadOnlyList` / `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary` / `SortedSet` / `SortedDictionary` / `SortedList` / `ConcurrentDictionary` alone | ≤ 0.8 / 2.0 / 2.0 / 2.5 / 2.5 / 3.0 / 2.5 / 3.5 KB | NFR-008, proposed |
