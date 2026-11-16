@@ -68,9 +68,14 @@ export interface IReadOnlySet<T> extends IReadOnlyCollection<T> {
   overlaps(other: Iterable<T>): boolean;
   setEquals(other: Iterable<T>): boolean;
 }
-// A mutable view of a List's backing array (FR-056): element reads and writes, no length or order change.
+// A view of a List's backing array (FR-056): index writes and the in-place members that keep the length;
+// push / pop / shift / unshift / splice and a length assignment do not type-check (tsgo --strict, research R16).
 export interface Span<T> extends ReadonlyArray<T> {
   [index: number]: T;
+  sort(compareFn?: (a: T, b: T) => number): this;
+  reverse(): this;
+  fill(value: T, start?: number, end?: number): this;
+  copyWithin(target: number, start: number, end?: number): this;
 }
 export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
   add(item: T): boolean;               // C# ISet<T>.Add returns bool
@@ -96,7 +101,7 @@ constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[]);
 static of<T>(items: readonly T[], typeArguments?: readonly RuntimeType[]): List<T>;    // collection initializers / expressions
 static from<T>(items: Iterable<T>, typeArguments?): List<T>;                           // copy
 static withCapacity<T>(capacity: number, typeArguments?): List<T>;                     // capacity hint dropped, argument evaluated once
-static adopt<T>(array: T[], options?: { fixedSize?: boolean }, typeArguments?): List<T>; // zero copy: the array is the backing store
+static adopt<T>(array: T[], options?: { fixedSize?: boolean; readOnly?: boolean }, typeArguments?): List<T>; // zero copy: the array is the backing store
 ```
 
 `List.of([1, 2])` with no descriptors is the common emission; `List.of([1, 2], [Int32Type])` only when the compilation asks about `List` (FR-008).
@@ -131,11 +136,11 @@ export class List<T> implements IList<T> {
 ```
 
 - `get` / `set` / `update` / `insert` / `removeAt` / `fromEnd` / `removeRange` / `getRange` throw `ArgumentOutOfRangeException` with .NET's message (`Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')`).
-- A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. `asArray(list)` (reflection helper) returns its backing array.
+- A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. With `readOnly: true` (the array-valued deferred types `ImmutableList<T>`, `ImmutableArray<T>`, `ReadOnlyCollection<T>`, FR-054) `set`, `update`, `sort` and `reverse` throw `NotSupportedException` too (and every mutator throws with the read-only message instead of the fixed-size one; the exact .NET message per source type is pinned by the 011c runtime tests), as those types' `IList<T>` members do in .NET. `asArray(list)` (reflection helper) returns its backing array.
 - `contains` / `indexOf` / `remove` / `lastIndexOf` / `binarySearch` use `defaultEquals` with a `===` fast path for primitives.
 - `sort()` without a comparison uses `Comparer<T>.Default` semantics for numbers, strings, booleans, temporal values (by tag) and `IComparable` implementers (`compareTo`); otherwise throws `InvalidOperationException` (`Failed to compare two elements in the array.`).
-- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` and the backing array's `length` recorded at the start (two integer compares per `next()`), so a length change made through `asJsArray()` is detected too (FR-057); element writes through a view bump nothing, as span writes in .NET.
-- **One backing array for life** (FR-057): `_items` is assigned once (in the constructor, or by `adopt`) and every member mutates it in place (`clear` sets `length = 0`, `sort` / `reverse` are in place); `count` reads `_items.length`. `asJsArray()`, `asSpan()` and `asReadOnlySpan()` return `_items` itself (`list.asSpan() === list.asJsArray()`), so they never go stale (unlike a .NET span after a reallocation, documented). Nothing polices a view at run time: `Span<T>` and `ReadonlyArray<T>` restrict what typed TS may do, a cast does not; a write past the end through `asJsArray()` leaves holes that `get` returns as `undefined` (documented).
+- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` and the backing array's `length` recorded at the start (two integer compares per `next()`), so a length change made through `asJsArray()` is detected too (FR-057). Element writes through a view bump nothing: through `asSpan()` this matches .NET (a span write bumps nothing); through `asJsArray()` it diverges, because .NET's `JsArray<T>` writes through the list's indexer and bumps the version (documented, FR-057). A future indexed-loop lowering of `foreach` (the indexer experiment of NFR-001) MUST keep both checks.
+- **One backing array for life** (FR-057): `_items` is assigned once (in the constructor, or by `adopt`) and every member mutates it in place (`clear` sets `length = 0`, `sort` / `reverse` are in place); `count` reads `_items.length`. `asJsArray()`, `asSpan()` and `asReadOnlySpan()` return `_items` itself (`list.asSpan() === list.asJsArray()`, and the free helpers return the same object), so they never go stale (unlike a .NET span after a reallocation, documented). Nothing polices a view at run time: `Span<T>` and `ReadonlyArray<T>` restrict what typed TS may do, a cast does not; a write past the end through `asJsArray()` leaves holes that `get` returns as `undefined` (documented).
 - Memory: one backing array plus `count` = the array's `length`; no per-element structures. A C# `List<T>` member not listed here (for example `Capacity`, `TrimExcess`, `EnsureCapacity`, `ForEach` with index) reports `MS0001` at the call site (FR-001).
 
 ### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`) — deferred to stage 011h (FR-054)
@@ -193,7 +198,12 @@ Ring buffer: `enqueue`, `dequeue` (throws `InvalidOperationException`, `Queue em
 export function fromEnd<T>(array: readonly T[], n: number): T;          // arr[^n]; IndexOutOfRangeException
 export function isIterable(value: unknown): value is Iterable<unknown>;  // Symbol.iterator present (strings included)
 export function asArray(value: unknown): unknown[] | null;               // native array, or the backing array of a fixed-size adopted List, else null
+export function asJsArray<T>(list: List<T> | null): T[];                  // AsJsArray(); the backing array; ArgumentNullException for null (FR-056)
+export function asSpan<T>(list: List<T> | null): Span<T>;                 // AsSpan() / CollectionsMarshal.AsSpan(list); the backing array; [] for null
+export function asReadOnlySpan<T>(list: List<T> | null): ReadonlyArray<T>; // AsReadOnlySpan(); the backing array; [] for null
 ```
+
+The C# calls lower to these free helpers (each tree-shakes on its own); the `List` members `asJsArray()` / `asSpan()` / `asReadOnlySpan()` are the same views for hand-written TS.
 
 `addEntry`, `listRemove`, `tryGetValue`, `getValueOrDefault` (free functions) are **removed**; their callers are the class members above. `ImmutableCollection` stays for the deferred immutable types until stage 011h removes it (#361 turns it into flat exports for 3.0.0).
 

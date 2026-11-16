@@ -57,19 +57,19 @@ JsArray<int> forJs = xs.ToArray(); // T[] → JsArray<T> is free (FR-004)
 ```
 
 ```ts
-import { List } from "metano-runtime/system/collections";
+import { asJsArray, asReadOnlySpan, asSpan, List } from "metano-runtime/system/collections";
 
 const xs = List.of([3, 1, 2]);
 const copy = xs.toArray();
-const live = xs.asJsArray();
-const span = xs.asSpan();
-const ro = xs.asReadOnlySpan();
-const marshal = xs.asSpan();
+const live = asJsArray(xs);
+const span = asSpan(xs);
+const ro = asReadOnlySpan(xs);
+const marshal = asSpan(xs);
 span[0] = 9;
 const forJs = xs.toArray();
 ```
 
-Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The golden `collections-deferred-conversion.ts` pins `IReadOnlyList<int> r = ImmutableList.Create(1, 2);`: `MS0001` at the conversion (FR-054).
+Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The free helpers handle a `null` list (FR-056). The golden `collections-deferred-conversion.ts` pins FR-054's two conversion rules: `IReadOnlyList<int> r = immutable;` (an `ImmutableList<int>` parameter, a native array in 2.x and 3.0.0) emits `List.adopt(immutable, { fixedSize: true, readOnly: true })`, and `IDictionary<string, int> d = new ConcurrentDictionary<string, int>();` reports `MS0001` at the conversion.
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 
