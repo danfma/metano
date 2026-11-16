@@ -192,9 +192,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["binder.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-static-binding.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-static-binding.ts", result["binder.ts"]);
     }
 
     [Test]

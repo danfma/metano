@@ -1388,6 +1388,9 @@ public sealed partial class IrExpressionExtractor
         if (symbol is ITypeSymbol or INamespaceSymbol)
             return TypeReferenceFromIdentifier(symbol, generic.Identifier.ValueText);
 
+        if (IsLocalFunction(symbol))
+            return ReportUnboundLocalFunction(generic, generic.Identifier.ValueText);
+
         if (
             symbol
                 is { IsStatic: false }
@@ -1444,6 +1447,9 @@ public sealed partial class IrExpressionExtractor
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
             return TypeReferenceFromIdentifier(symbol, id.Identifier.ValueText);
+
+        if (IsLocalFunction(symbol))
+            return ReportUnboundLocalFunction(id, id.Identifier.ValueText);
 
         // Inline method expansion: when the enclosing extractor is
         // lowering an `[Inline]` method body, each use of a method
@@ -1531,6 +1537,27 @@ public sealed partial class IrExpressionExtractor
             ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation, _target)
             : id.Identifier.ValueText;
     }
+
+    private static bool IsLocalFunction(ISymbol? symbol) =>
+        symbol is IMethodSymbol { MethodKind: MethodKind.LocalFunction };
+
+    /// <summary>
+    /// A reference to a local function. Its declaration statement is not
+    /// lowered (it reports MS0001 itself), so the name binds to nothing the
+    /// output declares: resolving it as a member of the enclosing type would
+    /// print <c>C.local(...)</c>, a call that fails when it runs. The
+    /// reference reports MS0001 and becomes the throwing placeholder instead.
+    /// </summary>
+    private static IrUnsupportedExpression ReportUnboundLocalFunction(
+        SyntaxNode node,
+        string name
+    ) =>
+        ReportUnsupported(
+            node,
+            "LocalFunction",
+            $"Local function '{name}' is not supported by the transpiler, so a reference to it "
+                + "has nothing to bind to."
+        );
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
         symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol;

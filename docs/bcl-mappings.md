@@ -14,7 +14,7 @@ This page lists every mapping the transpiler knows about out of the box.
 | `int`, `short`, `byte`, `sbyte`, `uint`, `ushort`, `float`, `double` | `number` ([integers of 32 bits or fewer](#integers-of-32-bits-or-fewer)) |
 | `long`, `ulong`, `nint`, `nuint` | `bigint` (3.0.0; [64-bit integers](#64-bit-integers-long--ulong); 2.x mapped them to `number`) |
 | `decimal` | `Decimal` (from `metano-runtime/system/decimal`: [`decimal.js`](https://mikemcl.github.io/decimal.js/) configured for `System.Decimal`) |
-| `BigInteger` | `bigint` |
+| `BigInteger` | `bigint` (`new BigInteger(x)` from `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal` and the default one lower to `BigInt(x)` / `bigIntegerFromDouble(x)` / `bigIntegerFromDecimal(x)` / `0n`; the byte-array and span overloads are not mapped) |
 | `char` | `string` (length 1) |
 | `Guid` | `UUID` (branded `string`, from `metano-runtime`) |
 | `Uri` | `string` |

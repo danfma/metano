@@ -195,7 +195,7 @@ export class Names {
       return this.formatFmtCount(args[0] as string, args[1] as number);
     }
 
-    if (args.length >= 1 && isString(args[0]) && args.slice(1).every((value) => typeof value === "object")) {
+    if (args.length >= 1 && isString(args[0])) {
       return this.formatFmtArgs(args[0] as string, ...args.slice(1) as Object[]);
     }
 

@@ -52,7 +52,57 @@ internal static class OverloadDispatchOrder
             .Select(entry => entry.Overload)
             .ToList();
 
-        return SixtyFourBitDispatchOrder.Reordered(sorted, parametersOf);
+        return SixtyFourBitDispatchOrder.Reordered(
+            MostDerivedFirst(sorted, parametersOf),
+            parametersOf
+        );
+    }
+
+    /// <summary>
+    /// Moves an overload whose every parameter is the same type as, or derives
+    /// from, the matching parameter of an overload tried before it (and one at
+    /// least strictly does) ahead of that one: the guards overlap, and the first
+    /// that matches wins, so <c>F(ArgumentException)</c> must be tried before
+    /// <c>F(Exception)</c>, as C#'s binding prefers it. Only overloads of the
+    /// same tier and arity compare; the others, and unrelated ones, keep their
+    /// order.
+    /// </summary>
+    private static List<TOverload> MostDerivedFirst<TOverload>(
+        List<TOverload> sorted,
+        Func<TOverload, IReadOnlyList<IrParameter>> parametersOf
+    )
+    {
+        var result = new List<TOverload>(sorted.Count);
+
+        foreach (var overload in sorted)
+        {
+            var index = result.FindIndex(earlier =>
+                IsMoreDerived(parametersOf(overload), parametersOf(earlier))
+            );
+
+            result.Insert(index < 0 ? result.Count : index, overload);
+        }
+
+        return result;
+    }
+
+    private static bool IsMoreDerived(
+        IReadOnlyList<IrParameter> candidate,
+        IReadOnlyList<IrParameter> other
+    )
+    {
+        if (
+            candidate.Count != other.Count
+            || OverloadRank.Of(candidate).Tier != OverloadRank.Of(other).Tier
+        )
+            return false;
+
+        var relations = candidate
+            .Zip(other, (left, right) => TypeSpecificity.Compare(left.Type, right.Type))
+            .ToList();
+
+        return relations.All(relation => relation is not TypeSpecificity.Relation.Unrelated)
+            && relations.Contains(TypeSpecificity.Relation.MoreDerived);
     }
 
     /// <summary>The tiers, in dispatch order.</summary>

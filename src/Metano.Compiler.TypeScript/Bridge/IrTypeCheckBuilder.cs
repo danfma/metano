@@ -37,6 +37,8 @@ internal static class IrTypeCheckBuilder
         {
             IrNullableTypeRef nullable => NullableCheck(nullable, value, scope),
             IrTypeParameterRef typeParameter => TypeParameterCheck(typeParameter, value, scope),
+            // `object` accepts every value, a string or a number included.
+            _ when type.IsObject => null,
             _ when scope.TypeOverrides?.TryResolve(type) is TsNamedType exported =>
                 new TsBinaryExpression(
                     value,

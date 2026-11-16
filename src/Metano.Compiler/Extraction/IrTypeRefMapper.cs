@@ -397,7 +397,8 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
-                HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named)
+                HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
+                Supertypes: SupertypesOf(named, target)
             );
 
         if (named.TypeKind == TypeKind.Delegate)
@@ -424,7 +425,8 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
-                ClrTypeName: BclExportReader.ExportKey(named)
+                ClrTypeName: BclExportReader.ExportKey(named),
+                Supertypes: SupertypesOf(named, target)
             );
 
         // JSX recognition mirrors the declaration-side IrTypeSemantics flags
@@ -455,7 +457,8 @@ public static class IrTypeRefMapper
                 IsDefaultConstructible: IsDefaultConstructible(named, target),
                 IsValueType: named.IsValueType,
                 HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target),
-                StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target)
+                StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target),
+                Supertypes: SupertypesOf(named, target)
             );
 
         if (named.TypeKind == TypeKind.Struct)
@@ -471,7 +474,8 @@ public static class IrTypeRefMapper
                 IsDefaultConstructible: IsDefaultConstructible(named, target),
                 IsValueType: true,
                 HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target),
-                StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target)
+                StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target),
+                Supertypes: SupertypesOf(named, target)
             );
 
         if (named.TypeKind == TypeKind.Class)
@@ -486,11 +490,51 @@ public static class IrTypeRefMapper
                 JsTupleArity: jsTupleArity,
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
-                RendersAsJsxElement: rendersAsJsx
+                RendersAsJsxElement: rendersAsJsx,
+                Supertypes: SupertypesOf(named, target)
             );
 
         return null;
     }
+
+    /// <summary>
+    /// The keys (<see cref="IrNamedTypeRef.SupertypeKey"/>) of the base classes
+    /// of <paramref name="named"/> below <c>System.Object</c> and of every
+    /// interface it implements; <c>null</c> when it has none.
+    /// </summary>
+    private static IReadOnlyList<string>? SupertypesOf(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var supertypes = new List<string>();
+
+        for (var baseType = named.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            if (
+                baseType.SpecialType
+                is SpecialType.System_Object
+                    or SpecialType.System_ValueType
+                    or SpecialType.System_Enum
+            )
+                break;
+
+            supertypes.Add(SupertypeKeyOf(baseType, target));
+        }
+
+        supertypes.AddRange(named.AllInterfaces.Select(type => SupertypeKeyOf(type, target)));
+
+        return supertypes.Count == 0 ? null : supertypes;
+    }
+
+    private static string SupertypeKeyOf(
+        INamedTypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        IrNamedTypeRef.SupertypeKeyOf(
+            GetNamespace(type),
+            BuildQualifiedName(type.OriginalDefinition, target)
+        );
 
     /// <summary>
     /// Whether the zero value of <paramref name="named"/> can be built with a

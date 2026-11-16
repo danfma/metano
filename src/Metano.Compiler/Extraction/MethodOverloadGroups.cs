@@ -244,6 +244,22 @@ internal static class MethodOverloadGroups
         var segregated = members.Where(IsSegregatedOverride).ToList();
         var main = members.Except(segregated).ToList();
 
+        // An override of a BCL virtual (`object.Equals`, `ToString`) that keeps
+        // its own group and an overload declared beside it would both claim
+        // the plain name (`Equals(T)` and `Equals(object)`: two `equals`
+        // methods): they form one dispatched group instead, the override an
+        // overload like the others (#677). The override of an emitted virtual
+        // keeps today's emission (DECIDED-29).
+        if (
+            main.Count > 0
+            && segregated.Count > 0
+            && segregated.All(member => OverridesBclVirtual(member, target))
+        )
+        {
+            main = members;
+            segregated = [];
+        }
+
         if (main.Count > 0)
         {
             yield return new MethodOverloadGroup(
@@ -267,6 +283,21 @@ internal static class MethodOverloadGroups
 
     private static bool IsSegregatedOverride(MethodGroupMember member) =>
         member.Symbol.IsOverride && member.Anchor is null;
+
+    /// <summary>
+    /// Whether the override chain of <paramref name="member"/> ends in a virtual
+    /// of a type the target does not emit (a BCL one such as
+    /// <c>object.Equals</c>), so no emitted declaration owns its name.
+    /// </summary>
+    private static bool OverridesBclVirtual(MethodGroupMember member, TargetLanguage? target)
+    {
+        var root = member.Symbol.OriginalDefinition;
+
+        while (root.OverriddenMethod is { } overridden)
+            root = overridden.OriginalDefinition;
+
+        return !IsEmittedBase(root.ContainingType, target);
+    }
 
     /// <summary>
     /// The methods the class extractor declares, in declaration order:
@@ -378,10 +409,10 @@ internal static class MethodOverloadGroups
         method.IsOverride ? IrOverloadAnchorKind.Override : IrOverloadAnchorKind.Implementation;
 
     /// <summary>
-    /// The first declaration of <paramref name="method"/>'s override chain,
-    /// when an emitted class declares it in a dispatched group (DECIDED-29
-    /// keeps the others; a BCL root such as <c>object.Equals</c> is not
-    /// emitted).
+    /// The first declaration of <paramref name="method"/>'s override chain that
+    /// an emitted class declares, when it sits in a dispatched group (DECIDED-29
+    /// keeps the others). A BCL root such as <c>object.Equals</c> is not
+    /// emitted, so the chain's first emitted override stands for it.
     /// </summary>
     private static IMethodSymbol? DispatchedOverrideRootOf(
         IMethodSymbol method,
@@ -389,17 +420,22 @@ internal static class MethodOverloadGroups
     )
     {
         var root = method.OriginalDefinition;
+        IMethodSymbol? firstEmitted = null;
 
         while (root.OverriddenMethod is { } overridden)
+        {
             root = overridden.OriginalDefinition;
 
-        if (SymbolEqualityComparer.Default.Equals(root, method.OriginalDefinition))
-            return null;
+            if (IsEmittedBase(root.ContainingType, target))
+                firstEmitted = root;
+        }
 
-        if (!IsEmittedBase(root.ContainingType, target))
-            return null;
-
-        return GroupOf(root, target) is { IsDispatched: true } ? root : null;
+        // The first emitted declaration of the chain stands for the root when
+        // the chain continues into a BCL virtual (`object.Equals`) that no
+        // emitted class owns.
+        return firstEmitted is not null && GroupOf(firstEmitted, target) is { IsDispatched: true }
+            ? firstEmitted
+            : null;
     }
 
     /// <summary>
