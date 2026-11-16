@@ -691,7 +691,9 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   and a user `[Emit]` that names its own class uses `$Type` too (`[Emit("$Type.make($0)")]`).
 - A call that writes its type arguments to a transpiled generic method keeps them
   (`Guard.throwIfEqual<Shape>(circle, square)`); TypeScript no longer infers the type from the
-  first operand only.
+  first operand only. A call that passes a `null` literal where a written type argument is not
+  nullable in TypeScript (`Gen<string>(null)` in nullable-oblivious code) leaves the type to
+  inference, as 2.x did.
 - Two project types printed under one name that one file refers to (`Na.R23` and `Nb.R23`) now
   report `MS0070` at the second reference instead of silently binding one module.
 - `package.json#sideEffects` lists the `[ModuleEntryPoint]` and `[StrictUnionGuard]` variant

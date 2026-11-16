@@ -213,6 +213,33 @@ public class UsingAliasBindingTests
         await Assert.That(output).Contains("Guard.throwIfEqual<Shape>(circle, square)");
     }
 
+    /// <summary>
+    /// A <c>null</c> literal passed where a written type argument is not
+    /// nullable in TypeScript (nullable-oblivious code) leaves the type to
+    /// inference, which accepts the call; a nullable type argument is kept.
+    /// </summary>
+    [Test]
+    public async Task ExplicitTypeArgument_IsDroppedForANullLiteralOfANonNullableType()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Probe
+            {
+            #nullable disable
+                public static string Oblivious() => Gen<string>(null);
+            #nullable enable
+                public static string Annotated() => Gen<string?>(null);
+
+                static string Gen<T>(T x) => "g";
+            }
+            """
+        )["probe.ts"];
+
+        await Assert.That(output).Contains("return Probe.gen(null);");
+        await Assert.That(output).Contains("return Probe.gen<string | null>(null);");
+    }
+
     [Test]
     public async Task DecimalZero_ImportsDecimalWhenNoSignatureNamesIt()
     {
