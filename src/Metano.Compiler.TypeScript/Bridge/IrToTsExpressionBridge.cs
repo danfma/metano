@@ -1102,7 +1102,10 @@ public static partial class IrToTsExpressionBridge
     /// square)</c>). <c>null</c> when none is written, or the callee is foreign
     /// or bound to a JavaScript declaration (a BCL, untranspiled, <c>[External]</c>
     /// or <c>[Import]</c> type, whose generic signature the toolchain does not
-    /// control).
+    /// control), and when a <c>null</c> literal argument meets a type argument
+    /// TypeScript reads as non-nullable (<c>Gen&lt;string&gt;(null)</c> in
+    /// nullable-oblivious code): inference types that call, the written
+    /// arguments would reject it.
     /// </summary>
     private static IReadOnlyList<TsType>? WrittenTypeArguments(
         IrCallExpression call,
@@ -1110,10 +1113,18 @@ public static partial class IrToTsExpressionBridge
     ) =>
         call is { HasExplicitTypeArguments: true, TypeArguments: { Count: > 0 } typeArguments }
         && call.Origin is { IsForeignMember: false, IsDeclaringTypeExternal: false }
+        && !PassesNullToANonNullableTypeArgument(call.Arguments, typeArguments)
             ? typeArguments
                 .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
                 .ToList()
             : null;
+
+    private static bool PassesNullToANonNullableTypeArgument(
+        IReadOnlyList<IrArgument> arguments,
+        IReadOnlyList<IrTypeRef> typeArguments
+    ) =>
+        arguments.Any(argument => argument.Value is IrLiteral { Kind: IrLiteralKind.Null })
+        && typeArguments.Any(typeArgument => typeArgument is not IrNullableTypeRef);
 
     /// <summary>
     /// A static member of a BCL or other untranspiled .NET type
