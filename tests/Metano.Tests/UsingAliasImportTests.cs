@@ -351,4 +351,97 @@ public class UsingAliasImportTests
         await Assert.That(output).DoesNotContain(" as ");
         await Assert.That(output).Contains("new Column(12)");
     }
+
+    /// <summary>
+    /// A <c>using</c> alias of a type from another <c>[EmitPackage]</c> package
+    /// imports the export under the alias, in type and value positions, rather
+    /// than importing the alias as a name the package does not export.
+    /// </summary>
+    [Test]
+    public async Task UsingAlias_OfACrossPackageType_ImportsTheExportUnderTheAlias()
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("shared")]
+
+            namespace Shared;
+
+            public enum Status { Active, Inactive }
+            """;
+
+        var consumer = """
+            using State = Shared.Status;
+
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Order
+            {
+                public State Current { get; set; } = State.Active;
+            }
+            """;
+
+        var output = TranspileHelper.TranspileWithLibrary(library, consumer)["app/order.ts"];
+
+        await Assert.That(output).Contains("import { Status as State } from \"shared/shared\";");
+        await Assert.That(output).Contains("State.Active");
+        await Assert.That(output).DoesNotContain("import { State");
+    }
+
+    /// <summary>
+    /// A <c>using</c> alias of a BCL-mapped type: <c>decimal</c> prints as
+    /// decimal.js's <c>Decimal</c> in type and value positions alike (the
+    /// mapping names the export, not the alias), so the alias is never
+    /// imported as a name decimal.js does not export.
+    /// </summary>
+    [Test]
+    public async Task UsingAlias_OfDecimal_ImportsDecimalOnly()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using Money = System.Decimal;
+
+            [Transpile]
+            public static class Prices
+            {
+                public static Money Half(Money price) => price / 2;
+
+                public static decimal Parse(string text) => Money.Parse(text);
+
+                public static decimal Round(Money price) => Money.Round(price);
+            }
+            """
+        )["prices.ts"];
+
+        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert.That(output).Contains("half(price: Decimal): Decimal");
+        await Assert.That(output).Contains("return new Decimal(parseDecimalText(text));");
+        await Assert.That(output).DoesNotContain("Money");
+    }
+
+    /// <summary>
+    /// A guard called through an alias of its exception type lowers to the
+    /// runtime function: neither the alias nor the exception class, which the
+    /// template never prints, is imported.
+    /// </summary>
+    [Test]
+    public async Task UsingAlias_OfAnExceptionType_ImportsNoClassForAGuard()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using AE = System.ArgumentException;
+
+            [Transpile]
+            public static class Guard
+            {
+                public static void Check(string? text) => AE.ThrowIfNullOrEmpty(text);
+            }
+            """
+        )["guard.ts"];
+
+        await Assert.That(output).Contains("throwIfNullOrEmpty(text, \"text\");");
+        await Assert.That(output).DoesNotContain("AE");
+        await Assert.That(output).DoesNotContain("argument-exception");
+    }
 }

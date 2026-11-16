@@ -1,9 +1,9 @@
-using System.Text.RegularExpressions;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.Parenthesization.Templates;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation;
@@ -158,6 +158,8 @@ public sealed class ImportCollector(
                 valueTypes.Remove(name);
             }
         }
+
+        var aliasedOrigins = RecoverAliasedOrigins(crossPackageOrigins, valueTypes);
 
         var tsTypeName = _context.ResolveTsName(currentType);
         referencedTypes.Remove(currentType.Name);
@@ -338,6 +340,33 @@ public sealed class ImportCollector(
                     TypeOnly: allTypeOnly,
                     TypeOnlyNames: !allTypeOnly && anyTypeOnly ? typeOnlyNames : null
                 )
+            );
+        }
+
+        // An origin staged under a `using` alias imports its export under the
+        // alias: `import { Decimal as D } from "decimal.js"`, on a line of its
+        // own so the canonical name can still be imported plainly beside it.
+        foreach (var aliased in aliasedOrigins)
+        {
+            _typeMappingContext.ConfirmCrossPackageDependency(aliased.Origin.PackageName);
+
+            var importPath =
+                aliased.Origin.SubPath.Length > 0
+                    ? $"{aliased.Origin.PackageName}/{aliased.Origin.SubPath}"
+                    : aliased.Origin.PackageName;
+
+            imports.Add(
+                aliased.Origin.IsDefault
+                    ? new TsImport([aliased.Alias], importPath, IsDefault: true)
+                    : new TsImport(
+                        [aliased.Canonical],
+                        importPath,
+                        TypeOnly: !aliased.IsValue,
+                        Aliases: new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            [aliased.Canonical] = aliased.Alias,
+                        }
+                    )
             );
         }
 
@@ -1003,6 +1032,41 @@ public sealed class ImportCollector(
                     + "the bare name is ambiguous. Rename one of the two with [Name(\"...\")]."
             )
         );
+
+    /// <summary>
+    /// Takes out of <paramref name="crossPackageOrigins"/> every origin the
+    /// walker staged under a <c>using</c> alias (the printed name), so it is
+    /// imported under its exported, canonical name with the alias as the local
+    /// binding. Each one keeps whether a value position referenced it.
+    /// </summary>
+    private static List<AliasedOrigin> RecoverAliasedOrigins(
+        Dictionary<string, TsTypeOrigin> crossPackageOrigins,
+        HashSet<string> valueTypes
+    )
+    {
+        if (IrToTsTypeMapper.UsingAliases is not { } scope)
+            return [];
+
+        var aliased = new List<AliasedOrigin>();
+
+        foreach (var (name, origin) in crossPackageOrigins.ToList())
+        {
+            if (!scope.AliasToCanonical.TryGetValue(name, out var canonical))
+                continue;
+
+            crossPackageOrigins.Remove(name);
+            aliased.Add(new AliasedOrigin(canonical, name, origin, valueTypes.Remove(name)));
+        }
+
+        return aliased;
+    }
+
+    private sealed record AliasedOrigin(
+        string Canonical,
+        string Alias,
+        TsTypeOrigin Origin,
+        bool IsValue
+    );
 
     /// <summary>
     /// Stages <paramref name="origin"/> for <paramref name="name"/>, reporting
@@ -1712,8 +1776,9 @@ public sealed class ImportCollector(
                 // would either be missed entirely or be marked as type-only when they
                 // need to be value imports (e.g., a `new SomeRecord(...)` substituted
                 // into the template).
-                if (template.Receiver is not null)
-                    CollectFromExpression(template.Receiver, sink);
+                if (template.Receiver is { } receiver)
+                    CollectTemplateReceiver(template.Template, receiver, sink);
+
                 foreach (var arg in template.Arguments)
                     CollectFromExpression(arg, sink);
 
@@ -1730,14 +1795,16 @@ public sealed class ImportCollector(
                 // nothing (a `[PlainObject]` one has no value to import, #651).
                 // PascalCase guard skips primitive type aliases (`string`,
                 // `number`, `boolean`) that don't need import lines.
-                foreach (
-                    var (typeArg, index) in template.TypeArgumentNames.Select((n, i) => (n, i))
-                )
+                var embeddedTypeArguments = TsTemplatePlaceholder.ReferencedTypeArgumentIndices(
+                    template.Template
+                );
+
+                foreach (var (index, typeArg) in template.TypeArgumentNames.Index())
                 {
                     if (typeArg.Length == 0 || !char.IsUpper(typeArg[0]))
                         continue;
 
-                    if (!EmbedsTypeArgument(template.Template, index))
+                    if (!embeddedTypeArguments.Contains(index))
                         continue;
 
                     names.Add(typeArg);
@@ -1766,11 +1833,40 @@ public sealed class ImportCollector(
     }
 
     /// <summary>
-    /// Whether <paramref name="template"/> embeds the <c>$T&lt;index&gt;</c>
-    /// placeholder (and not only a longer one, <c>$T10</c> for index 1).
+    /// Collects a template's <paramref name="receiver"/> only where it binds a
+    /// name the printed template uses: the <c>$this</c> placeholder prints it,
+    /// and a static mapping whose text names the receiver's type
+    /// (<c>new Decimal(parseDecimalText($0))</c> for <c>decimal.Parse</c>) needs
+    /// that type's canonical, exported binding, never a <c>using</c> alias of
+    /// it. Any other receiver is not printed and imports nothing: a guard's
+    /// exception class, or a type named through an alias (#651).
     /// </summary>
-    private static bool EmbedsTypeArgument(string template, int index) =>
-        Regex.IsMatch(template, $@"\$T{index}(?!\d)");
+    private void CollectTemplateReceiver(
+        string template,
+        TsExpression receiver,
+        ImportCollectionSink sink
+    )
+    {
+        if (TsTemplatePlaceholder.ReferencesReceiver(template))
+        {
+            CollectFromExpression(receiver, sink);
+            return;
+        }
+
+        if (receiver is not TsTypeReference typeReference)
+            return;
+
+        var root = RootSegment(typeReference.Name);
+
+        var canonical =
+            IrToTsTypeMapper.UsingAliases?.AliasToCanonical.GetValueOrDefault(root) ?? root;
+
+        if (!TsTemplateLexer.NamesIdentifier(template, canonical))
+            return;
+
+        StageOrigin(sink.CrossPackageOrigins, canonical, typeReference.Origin);
+        sink.ValueNames.Add(canonical);
+    }
 
     /// <summary>
     /// Walks a JSX element so component / helper names and any expressions

@@ -81,6 +81,28 @@ internal sealed class TsTemplateLexer
     public static IReadOnlyList<TsTemplateToken>? Tokenize(string text) =>
         new TsTemplateLexer(text).TokenizeAll();
 
+    /// <summary>
+    /// Whether <paramref name="text"/> uses <paramref name="identifier"/> as a
+    /// name of its own (<c>new Decimal(…)</c>), not as part of a longer one or
+    /// a member name. A text the lexer cannot read is assumed to use it.
+    /// </summary>
+    public static bool NamesIdentifier(string text, string identifier)
+    {
+        if (Tokenize(text) is not { } tokens)
+            return true;
+
+        return tokens
+            .Index()
+            .Any(entry =>
+                entry.Item is { Kind: TsTemplateTokenKind.Operand } token
+                && token.Text == identifier
+                && !(
+                    entry.Index > 0
+                    && tokens[entry.Index - 1].Is(TsTemplateTokenKind.Punctuator, ".")
+                )
+            );
+    }
+
     private IReadOnlyList<TsTemplateToken>? TokenizeAll()
     {
         while (_position < _text.Length)
