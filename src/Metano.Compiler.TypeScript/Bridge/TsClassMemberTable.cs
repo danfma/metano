@@ -28,6 +28,21 @@ internal sealed class TsClassMemberTable
 
     public static TsClassMemberTable Of(IrClassDeclaration ir)
     {
+        var table = UserMembersOf(ir);
+
+        foreach (var name in IrToTsRecordSynthesisBridge.SynthesizedMemberNames(ir, table))
+            table.Declare(isStatic: false, name, ir.Name);
+
+        return table;
+    }
+
+    /// <summary>
+    /// The names the user-written members of <paramref name="ir"/> declare (its
+    /// promoted constructor parameters, fields, properties, events, methods and
+    /// operators), before any member the emitter synthesizes.
+    /// </summary>
+    public static TsClassMemberTable UserMembersOf(IrClassDeclaration ir)
+    {
         var table = new TsClassMemberTable();
 
         foreach (var name in IrToTsClassBridge.PromotedMemberNames(ir.Constructor))
@@ -35,12 +50,6 @@ internal sealed class TsClassMemberTable
 
         foreach (var member in ir.Members ?? [])
             table.DeclareMember(member);
-
-        if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
-        {
-            foreach (var name in IrToTsRecordSynthesisBridge.SynthesizedMemberNames(ir))
-                table.Declare(isStatic: false, name, ir.Name);
-        }
 
         return table;
     }

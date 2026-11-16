@@ -45,9 +45,20 @@ public static class IrToTsRecordSynthesisBridge
     /// <summary>
     /// The instance members <see cref="Generate"/> declares on
     /// <paramref name="ir"/>, which a class's claim pass treats as user
-    /// members (spec 013 FR-004).
+    /// members (spec 013 FR-004): each one the type's value equality
+    /// synthesizes, unless a user member of <paramref name="userMembers"/>
+    /// already emits under its name (a field <c>HashCode</c>, a method
+    /// <c>Equals(T other, double tolerance)</c>), which keeps it.
     /// </summary>
-    internal static IReadOnlyList<string> SynthesizedMemberNames(IrClassDeclaration ir) =>
+    internal static IReadOnlyList<string> SynthesizedMemberNames(
+        IrClassDeclaration ir,
+        TsClassMemberTable userMembers
+    ) =>
+        ShouldSynthesize(ir)
+            ? [.. CandidateNames(ir).Where(name => !userMembers.Instances.ContainsKey(name))]
+            : [];
+
+    private static IReadOnlyList<string> CandidateNames(IrClassDeclaration ir) =>
         IrValueEqualitySynthesis.SynthesizesRecordMembers(ir)
             ? RecordMemberNames
             : StructMemberNames;
@@ -78,12 +89,17 @@ public static class IrToTsRecordSynthesisBridge
     {
         var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
         var overridesBase = IrToTsClassBridge.BuildExtends(ir) is not null;
+        var free = SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir));
 
-        var with = IrValueEqualitySynthesis.SynthesizesRecordMembers(ir)
+        var with = free.Contains(WithMethodName)
             ? [GenerateWith(ir)]
             : Array.Empty<TsMethodMember>();
 
-        TsMethodMember[] members = [.. SynthesizedEquality(ir, fields, overridesBase), .. with];
+        TsMethodMember[] members =
+        [
+            .. SynthesizedEquality(ir, free, fields, overridesBase),
+            .. with,
+        ];
 
         return members.Select(m => m with { Override = overridesBase }).ToList();
     }
@@ -91,18 +107,24 @@ public static class IrToTsRecordSynthesisBridge
     /// <summary>
     /// <c>equals</c> and <c>hashCode</c>, each unless the record declares its
     /// own (<see cref="IrRecordEqualityOverrides"/>) — C# uses the declared one
-    /// instead of synthesizing it, and it is emitted under the same name.
+    /// instead of synthesizing it, and it is emitted under the same name — or
+    /// another user member already emits under the name (<paramref name="free"/>).
     /// </summary>
     private static IEnumerable<TsMethodMember> SynthesizedEquality(
         IrClassDeclaration ir,
+        IReadOnlyList<string> free,
         IReadOnlyList<RecordField> fields,
         bool overridesBase
     )
     {
-        if (!IrValueEqualitySynthesis.DeclaresEquals(ir))
+        if (free.Contains(EqualsMethodName) && !IrValueEqualitySynthesis.DeclaresEquals(ir))
             yield return GenerateEquals(fields, overridesBase);
 
-        if (!IrRecordEqualityOverrides.DeclaresHashCode(ir))
+        var synthesizesHashCode =
+            free.Contains(IrToTsNamingPolicy.HashCodeMethodName)
+            && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
+
+        if (synthesizesHashCode)
             yield return GenerateHashCode(fields, overridesBase);
     }
 

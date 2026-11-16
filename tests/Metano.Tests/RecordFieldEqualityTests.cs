@@ -141,4 +141,44 @@ public class RecordFieldEqualityTests
         await Assert.That(files["tagged.ts"]).DoesNotContain("HashCode");
         await Assert.That(files["tagged.ts"]).DoesNotContain("valueEquals");
     }
+
+    /// <summary>
+    /// A synthesized member is skipped when a user member already emits under
+    /// its name: a struct or record method <c>Equals(T other, double tol)</c>
+    /// is the class's <c>equals</c>, and a field or positional property
+    /// <c>HashCode</c> is its <c>hashCode</c> (two declarations of one name are
+    /// TS2393 / TS2300, and the user's member was replaced).
+    /// </summary>
+    [Test]
+    public async Task SynthesizedMember_YieldsToAUserMemberOfTheSameName()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct KTol { public double V; public KTol(double v) { V = v; } public bool Equals(KTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
+
+            [Transpile]
+            public struct KEntry { public int HashCode; public string Key; public KEntry(int h, string k) { HashCode = h; Key = k; } }
+
+            [Transpile]
+            public record RTol(double V) { public bool Equals(RTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
+
+            [Transpile]
+            public record RHash(int HashCode, string Key);
+            """
+        );
+
+        await Assert.That(Count(files["k-tol.ts"], "equals(")).IsEqualTo(1);
+        await Assert
+            .That(files["k-tol.ts"])
+            .Contains("equals(other: KTol, tol: number): boolean {");
+        await Assert.That(files["k-tol.ts"]).Contains("hashCode(): number {");
+        await Assert.That(files["k-entry.ts"]).DoesNotContain("hashCode(): number");
+        await Assert.That(files["k-entry.ts"]).Contains("equals(other: any): boolean {");
+        await Assert.That(Count(files["r-tol.ts"], "equals(")).IsEqualTo(1);
+        await Assert.That(files["r-hash.ts"]).DoesNotContain("hashCode(): number");
+        await Assert.That(files["r-hash.ts"]).Contains("with(overrides?: Partial<RHash>): RHash {");
+    }
+
+    private static int Count(string text, string fragment) => text.Split(fragment).Length - 1;
 }
