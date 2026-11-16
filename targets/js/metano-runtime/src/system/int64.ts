@@ -44,8 +44,9 @@ const DOUBLE_SIGNIFICAND_BITS = 53;
 const INTEGER_TEXT = /^-?\d+$/;
 
 /**
- * The decimal.js surface the `decimal` conversions read. Structural, so the
- * runtime never imports decimal.js itself.
+ * The decimal.js surface the `decimal` conversions read. Structural, so this
+ * barrel module does not import decimal.js (only `metano-runtime/system/decimal`
+ * does, and a project that never uses `decimal` does not load it).
  */
 type DecimalLike = {
   trunc(): { toFixed(): string };

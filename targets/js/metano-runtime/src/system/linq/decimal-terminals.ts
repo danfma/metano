@@ -3,9 +3,10 @@
  * for `decimal` and `decimal?` sources or selectors. They keep the `kind` of the `number`
  * terminals, so an IQueryable provider translates both alike, and .NET's semantics: nulls
  * skipped, `InvalidOperationException` for an empty non-nullable average and `null` for an
- * empty nullable one. The runtime never imports decimal.js (it is the consumer's dependency):
- * the values are read through the structural {@link DecimalValue}, and the sum takes the
- * `Decimal` class to build its `0`. `Min` and `Max` over decimals are the generic `min` and
+ * empty nullable one. Only `metano-runtime/system/decimal`, outside the barrel, imports
+ * decimal.js, so a project that never uses `decimal` does not load it: the values are read
+ * through the structural {@link DecimalValue}, and the sum takes the `Decimal` class to build
+ * its `0`. `Min` and `Max` over decimals are the generic `min` and
  * `max`, which order them through {@link compareKeys}.
  */
 import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";

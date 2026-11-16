@@ -27,7 +27,10 @@ export type ConvertTarget =
   | "UInt64"
   | "Char";
 
-/** The decimal.js surface `Convert` reads; structural, so the runtime never imports decimal.js. */
+/**
+ * The decimal.js surface `Convert` reads; structural, so this barrel module does not import
+ * decimal.js (only `metano-runtime/system/decimal` does).
+ */
 type RoundableDecimal = {
   toDecimalPlaces(decimalPlaces: number, rounding: number): { toFixed(): string };
 };

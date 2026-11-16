@@ -66,7 +66,8 @@ function formatException(text: string): FormatException {
  * `decimal.TryParse(text, out value)` (the `(string, out decimal)` and `(string,
  * IFormatProvider, out decimal)` overloads): `[true, value]` for text {@link parseDecimalText}
  * accepts, `[false, 0]` for anything else, `null` included. `create` is the `Decimal` class
- * the generated code imports, so the runtime holds no reference to decimal.js.
+ * the generated code imports from `metano-runtime/system/decimal`, so this barrel module does
+ * not import decimal.js (a project that never uses `decimal` does not load it).
  */
 export function tryParseDecimal<TDecimal>(
   text: string | null | undefined,
