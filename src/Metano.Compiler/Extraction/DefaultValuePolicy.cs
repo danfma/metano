@@ -43,6 +43,34 @@ internal static class DefaultValuePolicy
         };
     }
 
+    /// <summary>
+    /// The fields <c>new S()</c> leaves unset when it stands for
+    /// <c>default(S)</c>: a value-typed field (a type parameter, a
+    /// <c>DateTime</c>, a tuple, …) whose type has no default kind
+    /// (<see cref="IrDefaultValues.KindOf"/>), read from the struct's own
+    /// declaration, which is what its emitted class initializes. A
+    /// reference-typed field is left <c>undefined</c>, which reads like the
+    /// <c>null</c> C# stores.
+    /// </summary>
+    public static IReadOnlyList<string> UnsetFieldsOf(
+        ITypeSymbol structType,
+        Func<ITypeSymbol, IrTypeRef> mapType
+    ) =>
+        [
+            .. structType
+                .OriginalDefinition.GetMembers()
+                .OfType<IFieldSymbol>()
+                .Where(field => !field.IsStatic && !field.IsConst)
+                .Where(field => IsValueLike(field.Type))
+                .Where(field =>
+                    IrDefaultValues.KindOf(mapType(field.Type)) is IrDefaultValueKind.None
+                )
+                .Select(field => field.AssociatedSymbol?.Name ?? field.Name),
+        ];
+
+    private static bool IsValueLike(ITypeSymbol type) =>
+        type.IsValueType || type is ITypeParameterSymbol { IsReferenceType: false };
+
     public static void ReportUnrepresentable(
         SyntaxNode call,
         IMethodSymbol method,

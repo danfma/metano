@@ -478,7 +478,10 @@ Product requirements added after the migration (normative; each one is traced by
   the value FR-052 gives a parameter declared `= default` and the implicit initializer gives an
   unassigned field of that struct. One core policy spells the default for every position: these
   literals, parameter defaults, the miss value of the `OrDefault` LINQ terminals and
-  `List<T>.Find`, and the `GetValueOrDefault` fallbacks. A type no expression spells (a struct
+  `List<T>.Find`, and the `GetValueOrDefault` fallbacks; the implicit initializer of a field
+  reads the same policy (`'\0'`, `Guid.Empty` and a `BigInteger` zero included). A `default`
+  literal whose struct construction leaves a field without its default (a type-parameter,
+  tuple or `DateTime` field) MUST report `MS0001`. A type no expression spells (a struct
   that declares a constructor, a tuple, a `[StringEnum]` without a zero member) MUST report
   `MS0001` and keep the target's placeholder. The implicit initializer of an enum field MUST be
   the same value, never the lowest member; a `[StringEnum]` field without a zero member gets no

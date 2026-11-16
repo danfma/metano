@@ -596,7 +596,9 @@ public class OverloadFactoryGoldenTests
 
                 public Guid Id;
 
-                public Day(int n) { Tag = 'a'; Label = ""; Mood = Mood.Loud; Nested = new Inner(n); Id = Guid.Empty; }
+                public (int, int) Span;
+
+                public Day(int n) { Tag = 'a'; Label = ""; Mood = Mood.Loud; Nested = new Inner(n); Id = Guid.Empty; Span = (n, n); }
 
                 public Day(string label) : this(label.Length) { Label = label; }
             }
@@ -616,8 +618,8 @@ public class OverloadFactoryGoldenTests
         await Assert
             .That(unrepresentable[0])
             .IsEqualTo(
-                "The default value of 'System.Guid' has no literal in the target: 'new Day()' "
-                    + "leaves 'id' undefined instead of the zeroed value (spec 013 FR-027)."
+                "The default value of '(int, int)' has no literal in the target: 'new Day()' "
+                    + "leaves 'span' undefined instead of the zeroed value (spec 013 FR-027)."
             );
     }
 

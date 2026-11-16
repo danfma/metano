@@ -2142,15 +2142,17 @@ public static partial class IrToTsExpressionBridge
 
         // A runtime collection (`new HashSet<number | null>([1])`) carries the
         // C# type arguments: inference from the elements alone would narrow
-        // the element type the later `add` calls must accept.
-        var collectionTypeArguments = ne.Type is IrSetTypeRef or IrMapTypeRef
+        // the element type the later `add` calls must accept. So does a
+        // generic class built with no arguments (`new Box<number>()`, a struct
+        // default), which has nothing to infer them from.
+        var explicitTypeArguments = KeepsTypeArguments(ne)
             ? ConstructedTypeArgumentsOf(ne.Type, context)
             : null;
 
         return InEvaluationOrder(ne, args, ordered => new TsNewExpression(
             MapNewTarget(ne.Type),
             ordered,
-            collectionTypeArguments
+            explicitTypeArguments
         ));
     }
 
@@ -2377,6 +2379,10 @@ public static partial class IrToTsExpressionBridge
 
         return BoundBefore(ordered.Bindings, build(ordered.Arguments));
     }
+
+    private static bool KeepsTypeArguments(IrNewExpression ne) =>
+        ne.Type is IrSetTypeRef or IrMapTypeRef
+        || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } };
 
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
         IrTypeRef type,
