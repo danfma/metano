@@ -18,9 +18,9 @@
 - [x] Success criteria are measurable (SC-001–SC-008)
 - [x] All acceptance scenarios are defined (US1–US9)
 - [x] Edge cases are identified (fixed-size adopted arrays and `asArray`, erased element descriptors, identity loss, duplicated package copies, primitives, `NullReferenceException`, non-Error throwables and `AbortError`, catch-filter ordering, `params` / optional with hidden parameters, overloads vs override groups, `Type` surface, `new T()`, `default(T)`, `dynamic` operators and verbatim naming on Metano objects, `Js.Code` statement form and string-literal holes, `UnsafeCast` on .NET, enumeration invalidation, dictionary order after removals, cross-package majors)
-- [x] Scope is clearly bounded (deferred: `Target.Language` folding, sorted collections, `Dart.Code`, Dart `Stack` and exception bodies, every-`arr[i]` checks, member metadata, `TypeError` translation, flat exports for pre-existing namespaces (#361) and union companions)
+- [x] Scope is clearly bounded (deferred: the collections beyond `List` / `HashSet` / `Dictionary` / `Queue` / `Stack` to stage 011h (FR-054, 2026-11-16), `Target.Language` folding, sorted collections, `Dart.Code`, Dart `Stack` and exception bodies, every-`arr[i]` checks, member metadata, `TypeError` translation, flat exports for pre-existing namespaces (#361) and union companions)
 - [x] Dependencies and assumptions identified (PR #298, specs 009 / 010, #328, #334 / #355 for `MS0044`, #361, #291, #296, #173, #175, the measured bundler versions)
-- [x] Consistency across spec / plan / contracts / data-model checked (FR numbers ascending, diagnostic codes `MS0045`–`MS0055`, OD numbers, stage order 011a–011g with 011b before 011c, Dart mapping in every stage)
+- [x] Consistency across spec / plan / contracts / data-model checked (FR numbers unique, ascending within each group, FR-054–FR-057 closing group A; diagnostic codes `MS0045`–`MS0055`, OD numbers, stage order 011a–011g with 011b before 011c, Dart mapping in every stage)
 - [x] No contradiction with specs 009 / 010: the interaction table lists every requirement of theirs that changes (including 010 D13 / FR-042 companions, FR-017 / US7-7, ADR-0009's registry, the `$type` rename and duplicated-package identity) and why both remain satisfiable
 
 ## Feature Readiness

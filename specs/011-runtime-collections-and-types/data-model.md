@@ -8,6 +8,9 @@ No persistent data. The entities are the C# inputs the core reads, the IR it bui
 |---|---|---|
 | BCL collection symbols (`RoslynTypeQueries.IsCollectionLike` / `IsDictionaryLike` / `IsSetLike`, `Queue`, `Stack`, `ImmutableList`, `ImmutableArray`, `ReadOnlyCollection`, the interfaces) | symbol identity + type arguments + variance of the interface's type parameters | Replaced by one `CollectionKindResolver` that returns `(IrCollectionKind, args, variance)`; string-prefix tests go away. |
 | `Metano.Interop.JsArray<T>` | symbol identity | TS-only (MS0051 elsewhere). |
+| `Metano.Interop.InteropExtensions.AsJsArray` / `AsSpan` / `AsReadOnlySpan` over `List<T>`, `System.Runtime.InteropServices.CollectionsMarshal.AsSpan(List<T>)`, `List<T>.ToArray()` and the other in-scope `ToArray()` members | symbol identity of the member | Declarative member mappings (FR-055, FR-056): `asJsArray()` / `asSpan()` / `asReadOnlySpan()` / `toArray()` on the runtime class; no IR node of their own. `AsJsArray` is TS-only (MS0051). |
+| `System.Span<T>` / `System.ReadOnlySpan<T>` in type position | element type, read-only-ness | `IrArrayTypeRef` with `SpanKind` (FR-001's span row); a `ReadOnlySpan<char>` that views a string keeps today's mapping. |
+| A conversion whose source is a type FR-054 defers and whose target is an in-scope runtime collection class or interface | source and target types | `MS0001` at the conversion (FR-054); no IR conversion node. |
 | `Metano.Interop.Js.Code` / `Code<T>` | the `code` argument syntax (literal, const, interpolated string), the type argument | FR-031; holes are `InterpolationSyntax` expressions; a hole position inside a JS string literal of the text is detected by a small lexer over the literal parts (MS0056). |
 | `Metano.Interop.InteropExtensions.UnsafeCast<T>` / `AsDynamic` | the receiver, the type argument | FR-035 / FR-036. |
 | `IConversionOperation` with `Conversion.IsBoxing` (to `object` / `ValueType` / `Enum` only) over an enum / `[InlineWrapper]` type that has a descriptor, `[EmitRuntimeType]` / `[assembly: DisableBoxing]` attributes | source type, target type (`object`, `ValueType`, `Enum`, an interface), whether the source is an open `T`, nullable, an interop-bound `object` slot | FR-050 / FR-027; the conversion is lowered to `box(...)` and reaches the type. |
@@ -50,6 +53,13 @@ classDiagram
     class IrArrayTypeRef {
         IrTypeRef ElementType
         bool IsJsArray
+        IrSpanKind SpanKind
+    }
+    class IrSpanKind {
+        <<enumeration>>
+        None
+        Span
+        ReadOnlySpan
     }
     class IrDynamicTypeRef
     class IrRuntimeTypeTest {
@@ -144,6 +154,8 @@ classDiagram
 
 Notes:
 
+- `IrCollectionKind.ImmutableList` and `ReadOnlyList` are deferred to stage 011h with their classes (FR-054); in 3.0.0 the extractor does not produce them, and the deferred types keep their 2.x IR (`IrArrayTypeRef`, `IrMapTypeRef`, `IrSetTypeRef`).
+- `IrArrayTypeRef.SpanKind` marks a `Span<T>` (`Span`) or `ReadOnlySpan<T>` (`ReadOnlySpan`); the value is still the native array (a view of a `List<T>` is its backing array, FR-056, FR-057), only the TS type differs: the runtime `Span<T>` interface or `ReadonlyArray<T>`. `None` is every other array.
 - `IrRuntimeTypeTest.Of(type, staticType)` gains the static type of the tested expression so that `Typeof.Validating` and `Constant` can be decided in one place (FR-022). Every existing caller passes `staticType: null` and gets today's behaviour plus the new categories; `ArrayTuple` is kept unchanged.
 - `IrReifiedTypeParameter.Position` is the index in the emitted parameter list after the trailing rule of OD-7; `HasDefault` is `true` when a preceding parameter is optional. A generic class's `ReifiedTypeParameters` describe its hidden constructor parameter and `TypeArgumentSlot` names the per-declaring-class slot it defines (`$typeArguments$Box`), `null` for a class that defines none; `BaseTypeArguments` are the descriptors a derived class passes to `super` (FR-024). The variant guards of a `[StrictUnionGuard]` base are data of the guard emitter, not of the descriptor.
 - `IrRuntimeTypeDescriptor` is attached to a declaration only when `RuntimeTypeReachability` reaches it (FR-027); exception classes always carry one. The Dart target ignores it.
@@ -158,7 +170,7 @@ Notes:
 
 | Component | Role |
 |---|---|
-| `Bridge/IrToTsCollectionBridge` | `IrCollectionTypeRef` → runtime class / interface type refs; factories for `new` / both initializer forms / collection expressions; `adopt(…, { fixedSize: true })` at array→interface conversions (FR-003); `$typeArguments$<Class>` only for questioned kinds (FR-008); `IrIndexerUpdateExpression` → `update` / `updateReturningOld`. |
+| `Bridge/IrToTsCollectionBridge` | `IrCollectionTypeRef` → runtime class / interface type refs; `IrArrayTypeRef.SpanKind` → `Span<T>` (imported from `metano-runtime/system/collections`) / `ReadonlyArray<T>` (FR-056); factories for `new` / both initializer forms / collection expressions; `adopt(…, { fixedSize: true })` at array→interface conversions (FR-003); `$typeArguments$<Class>` only for questioned kinds (FR-008); `IrIndexerUpdateExpression` → `update` / `updateReturningOld`. |
 | `Transformation/RuntimeTypeEmitter` | `IrRuntimeTypeDescriptor` → the lazy `static get $runtimeType()` returning a data literal + module-level `let X$rt` on classes; an exported data literal `X$runtimeType` for interfaces, plain objects, enums, unions (FR-018–FR-020, FR-029, FR-044). No factory call is emitted. |
 | `Bridge/IrToTsRuntimeTestBridge` | renders every `IrRuntimeTypeTest` category (replaces `BuildTypeTest`; `IrTypeCheckBuilder.Generate` delegates to it, FR-021); `withImplementers` at cross-package interface tests (FR-019). |
 | `Bridge/IrToTsCatchChainBridge` + `TypeScript/AST/TsTryStatement` | FR-015: a real AST node printed by `Printer`, replacing `MapTry`'s string rendering. |
@@ -189,4 +201,4 @@ Before the literal fix there was a value-level cycle `reflection → exceptions`
 
 ## 5. Dart target
 
-`IrCollectionTypeRef` → `List` / `Map` / `Set` / `Queue`; `IrDynamicTypeRef` → `dynamic`; `IrRuntimeTypeTest` → native `is`; the catch clause list → one `catch (e$)` with an `is` chain and `when` filters inside (FR-015, FR-038); `IrIndexerUpdateExpression` → `list[i] = f(list[i])` with a temp for the index; `IrUnsafeCastExpression` → `as T`; `IrAsDynamicExpression` → `as dynamic`; `IrInlineCodeExpression` with `Target = TypeScript` → MS0051; descriptors and reified parameters ignored. Each node's Dart mapping lands in the same PR as the node (FR-038).
+`IrCollectionTypeRef` → `List` / `Map` / `Set` / `Queue`; `IrDynamicTypeRef` → `dynamic`; `IrRuntimeTypeTest` → native `is`; the catch clause list → one `catch (e$)` with an `is` chain and `when` filters inside (FR-015, FR-038); `IrIndexerUpdateExpression` → `list[i] = f(list[i])` with a temp for the index; `IrUnsafeCastExpression` → `as T`; `IrAsDynamicExpression` → `as dynamic`; `AsSpan()` → the list itself, `AsReadOnlySpan()` → `UnmodifiableListView(list)`, `AsJsArray()` → MS0051 (FR-056); `IrInlineCodeExpression` with `Target = TypeScript` → MS0051; descriptors and reified parameters ignored. Each node's Dart mapping lands in the same PR as the node (FR-038).
