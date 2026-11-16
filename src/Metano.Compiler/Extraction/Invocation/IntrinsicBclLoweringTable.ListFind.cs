@@ -36,6 +36,7 @@ public sealed partial class IntrinsicBclLoweringTable
 
         var find = ctx.Symbol!;
         var elementType = find.ContainingType.TypeArguments[0];
+
         var missValue = DefaultValuePolicy.Of(
             elementType,
             _helpers.BuildOrigin,

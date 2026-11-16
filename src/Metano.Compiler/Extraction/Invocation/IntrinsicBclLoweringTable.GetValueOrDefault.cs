@@ -41,6 +41,7 @@ public sealed partial class IntrinsicBclLoweringTable
         var operation = BoundInvocation(ctx);
         var arguments = ArgumentValues(ctx, operation);
         var valueType = operation.TargetMethod.TypeArguments[1];
+
         var defaultValue =
             arguments.Count == 3
                 ? arguments[2]

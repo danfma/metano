@@ -106,6 +106,7 @@ public class SideEffectsManifestTests
             Path.Combine(root, "package.json"),
             """{ "name": "consumer", "sideEffects": false }"""
         );
+
         Write(root, EntryPointFiles());
 
         await Assert
@@ -122,6 +123,7 @@ public class SideEffectsManifestTests
             Path.Combine(root, "package.json"),
             """{ "name": "consumer", "sideEffects": ["./styles.css", "./dist/gone.js"] }"""
         );
+
         Write(root, EntryPointFiles());
 
         await Assert
@@ -149,6 +151,7 @@ public class SideEffectsManifestTests
             }
             """
         );
+
         Write(root, EntryPointFiles());
 
         await Assert
@@ -165,6 +168,7 @@ public class SideEffectsManifestTests
             Path.Combine(root, "package.json"),
             """{ "name": "consumer", "sideEffects": ["./styles.css", 42] }"""
         );
+
         Write(root, EntryPointFiles());
 
         var entries = ((JsonArray)ReadJson(root)["sideEffects"]!)
@@ -201,6 +205,7 @@ public class SideEffectsManifestTests
             Path.Combine(root, "package.json"),
             """{ "name": "consumer", "sideEffects": true }"""
         );
+
         Write(root, EntryPointFiles());
 
         await Assert.That(ReadJson(root)["sideEffects"]!.GetValue<bool>()).IsTrue();

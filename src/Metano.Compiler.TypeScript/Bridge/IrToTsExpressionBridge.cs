@@ -1669,6 +1669,7 @@ public static partial class IrToTsExpressionBridge
                 LowerLambdaParameterType(p, context)
             ))
             .ToList();
+
         var parameters = DeduplicateParameterNames(
             DropTrailingErasedDiscards(lambda.Parameters, mappedParameters)
         );

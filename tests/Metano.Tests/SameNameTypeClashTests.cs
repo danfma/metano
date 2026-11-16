@@ -47,6 +47,7 @@ public class SameNameTypeClashTests
 
         await Assert.That(clash.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
         await Assert.That(clash.Message).Contains("'R23' names both 'Na.R23' and 'Nb.R23'");
+
         await Assert
             .That(
                 clash

@@ -334,6 +334,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var targetType = IrToTsTypeMapper.Map(cast.TargetType);
+
         var runtimeClass = ReferenceCastLowering.MayImportTargetClass(conversion)
             ? RuntimeClassOf(testedType)
             : null;

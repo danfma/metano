@@ -54,6 +54,7 @@ public class ReferenceDowncastCacheTests
         foreach (var file in transformer.TransformAll())
         {
             var path = Path.Combine(cacheDir, file.FileName);
+
             var content = transformer.CachedFileContents.TryGetValue(file.FileName, out var cached)
                 ? cached
                 : printer.Print(file);

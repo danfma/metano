@@ -67,11 +67,13 @@ public static class TranspilerHost
         IReadOnlyDictionary<string, string>? referenceFingerprints = null;
         IReadOnlyDictionary<string, string>? assetSourceHashes = null;
         var configFingerprint = BuildConfigFingerprint(target, options);
+
         if (ShouldAttemptCache(options))
         {
             sourceHashes = CacheKeyBuilder.ComputeSourceHashes(compilation);
             referenceFingerprints = CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
             assetSourceHashes = CacheKeyBuilder.ComputeAssetFingerprints(assets);
+
             if (
                 TryShortCircuitFromCache(
                     outputDir,
@@ -285,6 +287,7 @@ public static class TranspilerHost
         sourceHashes ??= CacheKeyBuilder.ComputeSourceHashes(compilation);
         referenceFingerprints ??= CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
         assetSourceHashes ??= CacheKeyBuilder.ComputeAssetFingerprints(assets);
+
         var cache = new TranspilationCache(
             FormatVersion: TranspilationCache.CurrentFormatVersion,
             Target: target.Language.ToString(),
@@ -296,6 +299,7 @@ public static class TranspilerHost
             PackageDependencies: output.PackageDependencies,
             ModuleSideEffectFiles: output.ModuleSideEffectFiles
         );
+
         cache.Write(outputDir);
     }
 
@@ -351,6 +355,7 @@ public static class TranspilerHost
             cache.PackageDependencies,
             cache.ModuleSideEffectFiles ?? []
         );
+
         totalSw.Stop();
         Console.WriteLine(
             $"Metano: incremental cache hit — {cache.OutputHashes.Count} output file(s) reused, no work to do."

@@ -8,12 +8,6 @@ namespace BclReference;
 /// </summary>
 internal static class NumberParsingRows
 {
-    public static void AddTo(FixtureWriter rows)
-    {
-        AddIntegers(rows);
-        AddFloatingPointAndBoolean(rows);
-    }
-
     private const int Integer = 7;
     private const int HexNumber = 515;
     private const int IntegerWithThousands = 71;
@@ -96,6 +90,12 @@ internal static class NumberParsingRows
         "+1",
         "1 f",
     ];
+
+    public static void AddTo(FixtureWriter rows)
+    {
+        AddIntegers(rows);
+        AddFloatingPointAndBoolean(rows);
+    }
 
     private static void AddIntegers(FixtureWriter rows)
     {

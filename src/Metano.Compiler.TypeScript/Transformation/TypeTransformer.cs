@@ -514,6 +514,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var outcomes = new GroupOutcomes(groups.Count);
             perGroupEmissions = outcomes.Emissions;
             var skippedGroupCount = 0;
+
             Parallel.For(0, groups.Count, index =>
             {
                 if (
@@ -1697,16 +1698,20 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (_diagnostics.Any(d => d.Severity == MetanoDiagnosticSeverity.Error))
             return;
         var entries = new Dictionary<string, GroupCacheEntry>(StringComparer.Ordinal);
+
         for (var i = 0; i < groups.Count; i++)
         {
             var key = GroupKey(groups[i]);
             if (!closures.TryGetValue(key, out var closure))
                 continue;
             var emission = emissions[i] ?? GroupEmission.Empty;
+
             if (emission.Files.Count == 0 || !emission.IsCacheable)
                 continue;
+
             entries[key] = new GroupCacheEntry(closure, emission.Files, emission.Dependencies);
         }
+
         var cache = new GroupCacheFile(
             GroupCacheFile.CurrentFormatVersion,
             GroupCacheFingerprint(),
@@ -2320,6 +2325,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .ToList();
 
         var irBody = stmtExtractor.ExtractStatements(globalStatements).Statements;
+
         foreach (
             var ts in IrToTsStatementBridge.MapBody(
                 irBody,

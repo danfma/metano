@@ -152,6 +152,7 @@ public sealed class ImportCollector(
             {
                 if (!activeScope.AliasToCanonical.TryGetValue(name, out var canonical))
                     continue;
+
                 referencedTypes.Add(canonical);
 
                 if (!aliasBindings.TryGetValue(canonical, out var bindings))
@@ -1229,6 +1230,7 @@ public sealed class ImportCollector(
         var names = sink.Names;
         var valueNames = sink.ValueNames;
         var crossPackageOrigins = sink.CrossPackageOrigins;
+
         switch (node)
         {
             case TsTypeAlias alias:
@@ -1253,11 +1255,13 @@ public sealed class ImportCollector(
                 break;
             case TsFunction func:
                 CollectFromTypeParameters(func.TypeParameters, sink);
+
                 CollectFromParameters(Signature(func.Parameters), sink, () =>
                 {
                     CollectFromType(func.ReturnType, sink);
                     CollectFromStatements(func.Body, sink);
                 });
+
                 break;
             case TsConstObject constObj:
                 foreach (var (_, value) in constObj.Entries)
@@ -1287,23 +1291,27 @@ public sealed class ImportCollector(
                 if (cls.Implements is not null)
                     foreach (var iface in cls.Implements)
                         CollectFromType(iface, sink);
+
                 if (cls.Constructor is not null)
                 {
                     CollectFromParameters(Signature(cls.Constructor.Parameters), sink, () =>
                         CollectFromStatements(cls.Constructor.Body, sink)
                     );
                 }
+
                 foreach (var member in cls.Members)
                 {
                     switch (member)
                     {
                         case TsMethodMember m:
                             CollectFromTypeParameters(m.TypeParameters, sink);
+
                             CollectFromParameters(Signature(m.Parameters), sink, () =>
                             {
                                 CollectFromType(m.ReturnType, sink);
                                 CollectFromStatements(m.Body, sink);
                             });
+
                             // Collect from overload signatures too
                             if (m.Overloads is not null)
                                 foreach (var overload in m.Overloads)
@@ -1327,6 +1335,7 @@ public sealed class ImportCollector(
                             break;
                     }
                 }
+
                 break;
             case TsTopLevelStatement topStmt:
                 // The body of a [ModuleEntryPoint] method ends up here as a flat list
@@ -1510,6 +1519,7 @@ public sealed class ImportCollector(
         var names = sink.Names;
         var valueNames = sink.ValueNames;
         var crossPackageOrigins = sink.CrossPackageOrigins;
+
         switch (stmt)
         {
             case TsReturnStatement ret:
@@ -1806,6 +1816,7 @@ public sealed class ImportCollector(
                 sink.WithBoundNames(arrow.Parameters.Select(p => p.Name), () =>
                     CollectFromStatements(arrow.Body, sink)
                 );
+
                 break;
             case TsNamedFunctionExpression namedFunction:
                 // Bound only inside its own body, but that body is exactly
@@ -1818,6 +1829,7 @@ public sealed class ImportCollector(
                     namedFunction.Parameters.Select(p => p.Name).Append(namedFunction.Name),
                     () => CollectFromStatements(namedFunction.Body, sink)
                 );
+
                 break;
             case TsElementAccess elemAccess:
                 CollectFromExpression(elemAccess.Object, sink);

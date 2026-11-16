@@ -254,17 +254,20 @@ public class PackageJsonCacheReuseTests
     {
         var package = NewPackage();
         var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
+
         var listsWithoutDecimal = DecimalListsSource.Replace(
             "Acme.Shared.Tag Total() => new Acme.Shared.Tag(\"t\")",
             "int Total() => 0"
         );
 
         var editedSources = new[] { TaggedItemsSource, listsWithoutDecimal };
+
         await TranspileColdAndReadManifest(
             package,
             [TaggedItemsSource, DecimalListsSource],
             library
         );
+
         var coldEditedManifest = await TranspileColdInFreshPackage(editedSources, library);
 
         DeleteManifest(package);
