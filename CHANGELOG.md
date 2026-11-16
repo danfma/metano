@@ -698,7 +698,9 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   report `MS0070` at the second reference instead of silently binding one module.
 - `package.json#sideEffects` lists the `[ModuleEntryPoint]` and `[StrictUnionGuard]` variant
   modules (their `dist` `.js` and source `.ts` paths) instead of a flat `false`, so bundlers
-  keep a side-effect-only import of them; regeneration upgrades the earlier `false`.
+  keep a side-effect-only import of them; regeneration upgrades the earlier `false`. The
+  compiled path follows the package's own `#/*` import target when the consumer retargeted it
+  (`./lib/*` in a Vite app), and a hand-written entry that is not a string is kept as written.
 - The `hello-world`, `sample-counter-v5` and `sample-queryable-sqlite` TypeScript builds are
   fixed, and CI builds every sample.
 
