@@ -59,9 +59,7 @@ public sealed record IrNamedTypeRef(
     /// The identity <see cref="IrNamedTypeSemantics.Supertypes"/> lists a type
     /// under: its namespace and name, without type arguments.
     /// </summary>
-    public string SupertypeKey => SupertypeKeyOf(Namespace, Name);
-
-    public static string SupertypeKeyOf(string? @namespace, string name) => $"{@namespace}|{name}";
+    public SupertypeKey SupertypeKey => SupertypeKey.From(Namespace, Name);
 }
 
 /// <summary>
@@ -175,7 +173,7 @@ public sealed record IrNamedTypeSemantics(
     bool HasImplicitParameterlessOverload = false,
     string? ClrTypeName = null,
     IReadOnlySet<IrPrimitive>? StructuralEqualityLeaves = null,
-    IReadOnlyList<string>? Supertypes = null
+    IReadOnlyList<SupertypeKey>? Supertypes = null
 );
 
 /// <summary>

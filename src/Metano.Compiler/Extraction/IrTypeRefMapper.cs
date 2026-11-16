@@ -378,6 +378,7 @@ public static class IrTypeRefMapper
                     .Where(f => f.HasConstantValue)
                     .Select(f => SymbolHelper.GetNameOverride(f, target) ?? f.Name)
                     .ToList();
+
                 return new IrNamedTypeSemantics(
                     IrNamedTypeKind.StringEnum,
                     StringEnumValues: values,
@@ -387,6 +388,7 @@ public static class IrTypeRefMapper
                     IsValueType: true
                 );
             }
+
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.NumericEnum,
                 IsTranspilable: IsTranspilableType(named, target),
@@ -508,12 +510,12 @@ public static class IrTypeRefMapper
     /// of <paramref name="named"/> below <c>System.Object</c> and of every
     /// interface it implements; <c>null</c> when it has none.
     /// </summary>
-    private static IReadOnlyList<string>? SupertypesOf(
+    private static IReadOnlyList<SupertypeKey>? SupertypesOf(
         INamedTypeSymbol named,
         Metano.Annotations.TargetLanguage? target
     )
     {
-        var supertypes = new List<string>();
+        var supertypes = new List<SupertypeKey>();
 
         for (var baseType = named.BaseType; baseType is not null; baseType = baseType.BaseType)
         {
@@ -533,14 +535,10 @@ public static class IrTypeRefMapper
         return supertypes.Count == 0 ? null : supertypes;
     }
 
-    private static string SupertypeKeyOf(
+    private static SupertypeKey SupertypeKeyOf(
         INamedTypeSymbol type,
         Metano.Annotations.TargetLanguage? target
-    ) =>
-        IrNamedTypeRef.SupertypeKeyOf(
-            GetNamespace(type),
-            BuildQualifiedName(type.OriginalDefinition, target)
-        );
+    ) => SupertypeKey.From(GetNamespace(type), BuildQualifiedName(type.OriginalDefinition, target));
 
     /// <summary>
     /// Whether the zero value of <paramref name="named"/> can be built with a
