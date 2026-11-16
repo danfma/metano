@@ -1,6 +1,6 @@
 # Contract: TypeScript emission (goldens)
 
-**Normative for**: FR-007, FR-009, FR-010, FR-054–FR-056, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 golden bundle check: compiled with tsgo and bundled as a side-effect-only import with packages external, nothing but its external `import` statements remains.
+**Normative for**: FR-007, FR-009, FR-010, FR-054–FR-058, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 golden bundle check: compiled with tsgo and bundled as a side-effect-only import with packages external, nothing but its external `import` statements remains.
 
 ## Collections (`collections-basic.ts`)
 
@@ -69,7 +69,30 @@ span[0] = 9;
 const forJs = xs.toArray();
 ```
 
-Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The free helpers handle a `null` list (FR-056). The golden `collections-deferred-conversion.ts` pins FR-054's two conversion rules: `IReadOnlyList<int> r = immutable;` (an `ImmutableList<int>` parameter, a native array in 2.x and 3.0.0) emits `List.adopt(immutable, { fixedSize: true, readOnly: true })`, and `IDictionary<string, int> d = new ConcurrentDictionary<string, int>();` reports `MS0001` at the conversion.
+Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The free helpers handle a `null` list (FR-056).
+
+## `foreach` over a `List<T>` (`list-foreach-lowering.ts`, FR-057)
+
+```csharp
+var sum = 0; foreach (var x in xs) { sum += x; }   // xs: List<int>
+```
+
+```ts
+import { throwModified } from "metano-runtime/system/collections";
+
+let sum = 0;
+{
+  const $a = xs._items; const $v = xs._version; const $n = $a.length;
+  for (let $i = 0; $i < $n; $i++) {
+    if (xs._version !== $v || $a.length !== $n) throwModified();
+    const x = $a[$i];
+    sum += x;
+  }
+  if (xs._version !== $v || $a.length !== $n) throwModified();
+}
+```
+
+The temporaries follow the printer's naming rules; a `foreach` over any other `IEnumerable<T>` stays `for..of`. How the generated checks read FR-058's constant (directly, or through a constant exported by the runtime) is fixed in 011c; with the constant set to `false` the bundle contains neither check (FR-043 verifies it per bundler).
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 

@@ -36,7 +36,9 @@ export type EnumType<T> = RuntimeTypeBase<T> & { readonly kind: "enum" | "string
 export type ArrayType = RuntimeTypeBase<unknown[]> & { readonly kind: "array"; };              // erased element
 export type CollectionType<T> = RuntimeTypeBase<T> & {
   readonly kind: "collection";
-  readonly collection: "List" | "Dictionary" | "HashSet" | "Queue" | "Stack" | "ImmutableList" | "ReadOnlyList" // the last two from stage 011h (FR-054)
+  readonly collection: "List" | "Dictionary" | "HashSet" | "Queue" | "Stack" | "ImmutableList" | "ReadOnlyList" | "ImmutableHashSet" | "ImmutableDictionary"
+    | "SortedSet" | "SortedDictionary" | "SortedList" | "ConcurrentDictionary" // the 011h classes (FR-054)
+    | "IImmutableList" | "IImmutableSet" | "IImmutableDictionary"
     | "IList" | "ICollection" | "IReadOnlyList" | "IReadOnlyCollection" | "IDictionary" | "IReadOnlyDictionary" | "ISet" | "IReadOnlySet";
   readonly ctor?: abstract new (...args: any[]) => T;                   // classes only
   readonly typeArguments: ReadonlyArray<RuntimeType>;                   // UnknownType = wildcard
@@ -67,7 +69,7 @@ export function specialize<T>(open: ClassType<T>, args: ReadonlyArray<RuntimeTyp
 export function withImplementers<T>(iface: InterfaceType<T>, implementers: ReadonlyArray<PlainObjectType<unknown>>): InterfaceType<T>; // memoized; FR-019 cross-package
 ```
 
-The collection factories (`listType`, `dictionaryType`, `hashSetType`, `queueType`, `stackType`, `immutableListType` and `readOnlyListType` (these two from stage 011h, FR-054), and the interface ones `iListType`, `iReadOnlyListType`, …) live in **`system/collections/descriptors.ts`**, next to the classes they name, so `reflection` never imports `collections` and the dependency graph stays acyclic (data-model.md § 4). Memoization: a `Map` per factory keyed by the tuple of argument identities (nested `Map`s), so `listType(StringType) === listType(StringType)` and `Type ==` is `===`.
+The collection factories (`listType`, `dictionaryType`, `hashSetType`, `queueType`, `stackType`, `immutableListType`, `readOnlyListType`, `immutableHashSetType`, `immutableDictionaryType`, `sortedSetType`, `sortedDictionaryType`, `sortedListType`, `concurrentDictionaryType` (stage 011h, FR-054), and the interface ones `iListType`, `iReadOnlyListType`, …) live in **`system/collections/descriptors.ts`**, next to the classes they name, so `reflection` never imports `collections` and the dependency graph stays acyclic (data-model.md § 4). Memoization: a `Map` per factory keyed by the tuple of argument identities (nested `Map`s), so `listType(StringType) === listType(StringType)` and `Type ==` is `===`.
 
 ### Operations
 
@@ -242,6 +244,6 @@ Dart renders the same chain with `is` tests inside one `catch (e$)` (FR-038).
 
 ```ts
 interface TypeSpec<T> { …; readonly runtimeType?: () => RuntimeType<T>; }   // additive
-type ListDescriptor = { kind: "list"; element: TypeDescriptor };            // + dictionary, queue, stack; immutableList, readOnlyList from stage 011h
+type ListDescriptor = { kind: "list"; element: TypeDescriptor };            // + dictionary, queue, stack; from 011h: immutableList, readOnlyList, immutableHashSet, sortedSet, immutableDictionary, concurrentDictionary, sortedDictionary, sortedList
 type DictionaryDescriptor = { kind: "dictionary"; key: TypeDescriptor; value: TypeDescriptor }; // replaces "map"
 ```
