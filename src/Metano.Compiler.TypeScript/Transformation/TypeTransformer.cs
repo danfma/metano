@@ -502,6 +502,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // file's). Otherwise both stay null and every iteration
             // takes the miss branch.
             groups = GroupTypesByFile(transpilableTypes);
+            ReportSameNameTypeClashes(groups, transpilableTypes);
             var cachedGroups = LoadGroupCacheIfValid();
             perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
@@ -1374,6 +1375,24 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string FileName,
         List<INamedTypeSymbol> Types
     );
+
+    /// <summary>
+    /// Runs over every group, including the ones the per-group cache reuses, so a
+    /// cache hit still reports (#504).
+    /// </summary>
+    private void ReportSameNameTypeClashes(
+        IEnumerable<TypeFileGroup> groups,
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes
+    )
+    {
+        var validator = new SameNameTypeClashValidator(compilation, Context, transpilableTypes);
+
+        foreach (var group in groups)
+        {
+            foreach (var finding in validator.Validate(group.FileName, group.Types))
+                ReportDiagnostic(finding);
+        }
+    }
 
     private static string GroupKey(TypeFileGroup group) => $"{group.Namespace}/{group.FileName}";
 
