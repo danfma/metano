@@ -466,6 +466,25 @@ public class InterpolationFormatClauseTests
     }
 
     /// <summary>
+    /// A <c>DateOnly</c> prints the ISO text only under <c>O</c> / <c>o</c>
+    /// and the ISO pattern; <c>d</c> (the culture's short date, its default
+    /// format) and <c>D</c> are not that text, so they keep reporting (#677:
+    /// the default format must not be folded to upper case to say so).
+    /// </summary>
+    [Test]
+    [Arguments("$\"{d:d}\"")]
+    [Arguments("$\"{d:D}\"")]
+    [Arguments("d.ToString(\"d\")")]
+    public async Task DateOnlyShortAndLongDate_Report(string expression)
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body("DateOnly d", expression)
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(1);
+    }
+
+    /// <summary>
     /// A static <c>ToString</c> with a leading <c>string</c> parameter
     /// (<c>Convert.ToString(string)</c>) is not a format call: it keeps the
     /// unmapped-call report it had before.

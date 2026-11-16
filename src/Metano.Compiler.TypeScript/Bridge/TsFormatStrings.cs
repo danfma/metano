@@ -83,12 +83,14 @@ internal sealed partial class TsFormatStrings : IFormatStringCapability
     /// <c>DateOnly</c> (years 1 to 9999 print four digits), and a
     /// <c>BigInteger</c>'s <c>G</c> / <c>R</c> / <c>D</c> without a precision (a
     /// <c>bigint</c>'s digits).
-    /// Both letter cases of a standard format mean the same there, and an
+    /// Both letter cases of a standard format mean the same there, except a
+    /// <c>DateOnly</c>'s (<see cref="DateOnlyPrintsAsDefaultText"/>), and an
     /// empty format is the type's own default (<see cref="EmptyFormatOf"/>).
     /// </summary>
     public bool PrintsAsDefaultText(ITypeSymbol type, string format)
     {
-        var letter = (format.Length == 0 ? EmptyFormatOf(type) : format).ToUpperInvariant();
+        var effective = format.Length == 0 ? EmptyFormatOf(type) : format;
+        var letter = effective.ToUpperInvariant();
 
         if (type.TypeKind is TypeKind.Enum)
             return EnumPrintsAsDefaultText(type, letter);
@@ -96,11 +98,20 @@ internal sealed partial class TsFormatStrings : IFormatStringCapability
         return type.ToDisplayString() switch
         {
             GuidTypeName => letter is "D",
-            DateOnlyTypeName => letter is "O" || format is IsoDatePattern,
+            DateOnlyTypeName => DateOnlyPrintsAsDefaultText(effective),
             BigIntegerTypeName => letter is "G" or "R" or "D",
             _ => false,
         };
     }
+
+    /// <summary>
+    /// A <c>DateOnly</c>'s <c>O</c> / <c>o</c> and the ISO pattern. Its case
+    /// matters for the other letters (<c>d</c> is the culture's short date,
+    /// <c>D</c> its long date), so none of them is folded to upper case: both
+    /// print something other than the ISO text.
+    /// </summary>
+    private static bool DateOnlyPrintsAsDefaultText(string format) =>
+        format is "O" or "o" or IsoDatePattern;
 
     /// <summary>
     /// Whether the integer formatters implement <paramref name="format"/>:

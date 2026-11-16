@@ -587,15 +587,6 @@ public static class SymbolHelper
             );
 
     /// <summary>
-    /// Reads <c>[Inline]</c> from <c>Metano.Annotations</c>. Marks
-    /// a <c>static readonly</c> field or a <c>static</c> property
-    /// for use-site substitution — every reference to the member is
-    /// replaced by its initializer (or getter expression) before
-    /// lowering. Namespace-qualified match so unrelated
-    /// <c>[Inline]</c> attributes from other libraries are not
-    /// mistaken for the Metano variant.
-    /// </summary>
-    /// <summary>
     /// True when the symbol carries <c>[ObjectArgs]</c> from
     /// <c>Metano.Annotations</c>, asking the transpiler to lower its
     /// parameter list as a single object literal at the TypeScript
@@ -611,6 +602,15 @@ public static class SymbolHelper
                 && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
             );
 
+    /// <summary>
+    /// Reads <c>[Inline]</c> from <c>Metano.Annotations</c>. Marks
+    /// a <c>static readonly</c> field or a <c>static</c> property
+    /// for use-site substitution — every reference to the member is
+    /// replaced by its initializer (or getter expression) before
+    /// lowering. Namespace-qualified match so unrelated
+    /// <c>[Inline]</c> attributes from other libraries are not
+    /// mistaken for the Metano variant.
+    /// </summary>
     public static bool HasInline(this ISymbol symbol) =>
         symbol
             .GetAttributes()
@@ -1400,18 +1400,6 @@ public static class SymbolHelper
         && member is IFieldSymbol or IPropertySymbol { GetMethod: not null, Parameters.Length: 0 };
 
     /// <summary>
-    /// Determines if a type should be transpiled, considering:
-    /// 1. [Ignore] → always excluded; type is paint-as-.NET-only and
-    ///    references from transpiled code raise MS0013.
-    /// 2. [External] → excluded from transpilation, but the type stays
-    ///    discoverable via the Roslyn semantic model so user code can
-    ///    reference it. No .ts file is generated and no import is added —
-    ///    it's an ambient declaration over an external library shape.
-    /// 3. [Transpile] → always included.
-    /// 4. assemblyWideTranspile + public, or nested (any accessibility) in an
-    ///    opted-in container → included (see <see cref="IsAssemblyWideOptIn"/>).
-    /// </summary>
-    /// <summary>
     /// Whether <paramref name="assembly"/> carries <c>[assembly: TranspileAssembly]</c>
     /// as a bound attribute (a referenced package, or a compilation whose attribute
     /// already resolved).
@@ -1436,6 +1424,18 @@ public static class SymbolHelper
             type.ContainingAssembly
         );
 
+    /// <summary>
+    /// Determines if a type should be transpiled, considering:
+    /// 1. [Ignore] → always excluded; type is paint-as-.NET-only and
+    ///    references from transpiled code raise MS0013.
+    /// 2. [External] → excluded from transpilation, but the type stays
+    ///    discoverable via the Roslyn semantic model so user code can
+    ///    reference it. No .ts file is generated and no import is added —
+    ///    it's an ambient declaration over an external library shape.
+    /// 3. [Transpile] → always included.
+    /// 4. assemblyWideTranspile + public, or nested (any accessibility) in an
+    ///    opted-in container → included (see <see cref="IsAssemblyWideOptIn"/>).
+    /// </summary>
     public static bool IsTranspilable(
         ISymbol symbol,
         bool assemblyWideTranspile = false,

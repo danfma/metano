@@ -394,6 +394,16 @@ public sealed class Printer
             else
                 sb.AppendLine(";");
         }
+
+        // A member with a value needs the field and constructor that hold it.
+        if (e.Values.Any(v => v.Value is not null))
+        {
+            sb.AppendLine();
+            sb.Append(Indent).AppendLine("final String value;");
+            sb.AppendLine();
+            sb.Append(Indent).Append("const ").Append(e.Name).AppendLine("(this.value);");
+        }
+
         sb.AppendLine("}");
     }
 
