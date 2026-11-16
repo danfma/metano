@@ -454,7 +454,8 @@ public static class IrTypeRefMapper
                 RendersAsJsxElement: rendersAsJsx,
                 IsDefaultConstructible: IsDefaultConstructible(named, target),
                 IsValueType: named.IsValueType,
-                HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target)
+                HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target),
+                StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target)
             );
 
         if (named.TypeKind == TypeKind.Struct)
@@ -469,7 +470,8 @@ public static class IrTypeRefMapper
                 JsTupleArity: jsTupleArity,
                 IsDefaultConstructible: IsDefaultConstructible(named, target),
                 IsValueType: true,
-                HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target)
+                HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target),
+                StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target)
             );
 
         if (named.TypeKind == TypeKind.Class)
@@ -568,6 +570,147 @@ public static class IrTypeRefMapper
 
         var emittedName = SymbolHelper.GetNameOverride(first, target);
         return new IrEnumMemberInfo(first.Name, emittedName);
+    }
+
+    /// <summary>
+    /// The primitive leaves of <paramref name="type"/>'s value equality, or
+    /// <c>null</c> when some instance field compares by reference or by an
+    /// equality the definition does not fix (see
+    /// <see cref="IrNamedTypeSemantics.StructuralEqualityLeaves"/>). Walks the
+    /// symbols of the transpiled records and structs it meets (never mapping
+    /// one, whose own semantics would walk again), so a cycle ends.
+    /// </summary>
+    private static IReadOnlySet<IrPrimitive>? StructuralEqualityLeavesOf(
+        INamedTypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        if (!IsTranspilableType(type, target))
+            return null;
+
+        var leaves = new HashSet<IrPrimitive>();
+        var visiting = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
+        return CollectEqualityLeaves(type, leaves, visiting, target) ? leaves : null;
+    }
+
+    private static bool CollectEqualityLeaves(
+        ITypeSymbol type,
+        HashSet<IrPrimitive> leaves,
+        HashSet<ISymbol> visiting,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        if (
+            type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            } nullable
+        )
+            return CollectEqualityLeaves(nullable.TypeArguments[0], leaves, visiting, target);
+
+        if (type is INamedTypeSymbol { IsTupleType: true } tuple)
+            return tuple.TupleElements.All(element =>
+                CollectEqualityLeaves(element.Type, leaves, visiting, target)
+            );
+
+        if (IsWalkedValueType(type, target))
+            return InstanceFieldsHaveEqualityLeaves(
+                (INamedTypeSymbol)type,
+                leaves,
+                visiting,
+                target
+            );
+
+        // Only a primitive, an enum or a value type can be a leaf. An array, a
+        // class, a delegate, a type parameter or a generic type compares by
+        // reference or by an equality its definition does not fix, and mapping
+        // one would also map the types it names, which may lead back here.
+        if (!IsLeafCandidate(type))
+            return false;
+
+        var leaf = Map(
+            type.WithNullableAnnotation(NullableAnnotation.NotAnnotated),
+            null,
+            target
+        ) switch
+        {
+            IrPrimitiveTypeRef { Primitive: var primitive } => primitive,
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } => IrPrimitive.Int32,
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } => IrPrimitive.String,
+            IrNamedTypeRef
+            {
+                Semantics:
+                { Kind: IrNamedTypeKind.Branded, BrandedUnderlyingPrimitive: { } underlying },
+            } => underlying,
+            _ => (IrPrimitive?)null,
+        };
+
+        if (leaf is not { } found)
+            return false;
+
+        leaves.Add(found);
+
+        return true;
+    }
+
+    private static bool IsLeafCandidate(ITypeSymbol type) =>
+        type is INamedTypeSymbol { IsGenericType: false } named
+        && (
+            named.SpecialType is not SpecialType.None
+            || named.TypeKind is TypeKind.Enum or TypeKind.Struct
+        );
+
+    /// <summary>
+    /// A transpiled record or struct the walk enters field by field: not a
+    /// branded wrapper (one value) nor an enum.
+    /// </summary>
+    private static bool IsWalkedValueType(
+        ITypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        type is INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } named
+        && (named.IsRecord || named.TypeKind is TypeKind.Struct)
+        && !SymbolHelper.HasBranded(named)
+        && IsTranspilableType(named, target);
+
+    private static bool InstanceFieldsHaveEqualityLeaves(
+        INamedTypeSymbol type,
+        HashSet<IrPrimitive> leaves,
+        HashSet<ISymbol> visiting,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var definition = type.OriginalDefinition;
+
+        if (!visiting.Add(definition))
+            return true;
+
+        return InstanceFieldsOf(definition)
+            .All(field => CollectEqualityLeaves(field.Type, leaves, visiting, target));
+    }
+
+    /// <summary>
+    /// The instance fields a record's or struct's equality compares, the
+    /// inherited ones of a derived record included.
+    /// </summary>
+    private static IEnumerable<IFieldSymbol> InstanceFieldsOf(INamedTypeSymbol type)
+    {
+        for (
+            var current = type;
+            current
+                is {
+                    SpecialType: not SpecialType.System_Object and not SpecialType.System_ValueType
+                };
+            current = current.BaseType
+        )
+        {
+            foreach (var field in current.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (!field.IsStatic && !field.IsConst)
+                    yield return field;
+            }
+        }
     }
 
     private static IrPrimitive? DetectBrandedUnderlyingPrimitive(INamedTypeSymbol wrapper)

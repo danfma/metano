@@ -114,9 +114,11 @@ internal static class IrToTsArgumentGuards
 
     /// <summary>
     /// Whether <c>valueEquals</c> answers <c>EqualityComparer&lt;T&gt;.Default</c>
-    /// for <paramref name="type"/>: an equatable primitive, an enum, a branded
-    /// value, a transpiled record or struct (its generated <c>equals</c>, or a
-    /// <c>[PlainObject]</c> shape), a tuple of those, or a nullable one.
+    /// for every value of <paramref name="type"/>: an equatable primitive, an
+    /// enum, a branded value, a transpiled record or struct whose fields end,
+    /// all the way down, in equatable primitives (no class, array, collection,
+    /// <c>object</c> or generic <c>T</c> field), a tuple of those, or a
+    /// nullable one.
     /// </summary>
     private static bool IsEquatable(IrTypeRef? type) =>
         type switch
@@ -135,8 +137,9 @@ internal static class IrToTsArgumentGuards
         {
             IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum or IrNamedTypeKind.Branded =>
                 true,
-            IrNamedTypeKind.Record or IrNamedTypeKind.Struct => semantics.IsTranspilable
-                && !semantics.IsExternal,
+            IrNamedTypeKind.Record or IrNamedTypeKind.Struct => !semantics.IsExternal
+                && semantics.StructuralEqualityLeaves is { } leaves
+                && leaves.All(EquatablePrimitives.Contains),
             _ => false,
         };
 }
