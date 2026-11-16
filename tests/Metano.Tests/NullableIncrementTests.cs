@@ -76,7 +76,7 @@ public class NullableIncrementTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : receiver$temp$1 + 1)(this.items[receiver$temp$0]))(this.next());"
+                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : receiver$temp$1 + 1)(this.items[receiver$temp$0] ?? null))(this.next());"
             );
         await Assert.That(output.Split("this.next()").Length).IsEqualTo(2);
     }
@@ -111,7 +111,7 @@ public class NullableIncrementTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : receiver$temp$1 + 2)(this.items[receiver$temp$0]))(this.next());"
+                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : receiver$temp$1 + 2)(this.items[receiver$temp$0] ?? null))(this.next());"
             );
         await Assert.That(output.Split("this.next()").Length).IsEqualTo(2);
     }

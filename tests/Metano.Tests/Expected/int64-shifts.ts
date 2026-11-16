@@ -117,6 +117,6 @@ export class Shift {
 
   members(n: number): void {
     this.total = BigInt.asIntN(64, this.total << 2n);
-    ((receiver$temp$0) => this.slots[receiver$temp$0] = BigInt.asIntN(64, BigInt.asUintN(64, this.slots[receiver$temp$0]) >> BigInt(n & 63)))(this.next());
+    ((receiver$temp$0) => this.slots[receiver$temp$0] = BigInt.asIntN(64, BigInt.asUintN(64, this.slots[receiver$temp$0]!) >> BigInt(n & 63)))(this.next());
   }
 }

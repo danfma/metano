@@ -1,4 +1,4 @@
-import { HashSet, checkedNarrow, tupleEquals } from "metano-runtime";
+import { HashSet, checkedNarrow, toException, tupleEquals } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export function equalsOperator(a: number, b: number): boolean {
@@ -142,7 +142,8 @@ export function nullableIteratedStop(a: number, b: number): bigint {
       total = BigInt.asIntN(64, total + pair[0]);
     }
   } catch (e$) {
-    if (e$ instanceof InvalidOperationException) {
+    const e0 = toException(e$);
+    if (e0 instanceof InvalidOperationException) {
       return BigInt.asIntN(64, total - BigInt(count));
     } else {
       throw e$;
@@ -203,7 +204,8 @@ export function literalCastStopsAtTheMissingElement(a: number): number {
 
     return Number(BigInt.asIntN(32, BigInt.asIntN(64, wide[0] + wide[1])));
   } catch (e$) {
-    if (e$ instanceof InvalidOperationException) {
+    const e0 = toException(e$);
+    if (e0 instanceof InvalidOperationException) {
       return -calls;
     } else {
       throw e$;
@@ -248,7 +250,8 @@ export function literalCastThrowsOnTheMissingLong(a: bigint): number {
 
     return wide[1] > 0 ? 1 : 2;
   } catch (e$) {
-    if (e$ instanceof InvalidOperationException) {
+    const e0 = toException(e$);
+    if (e0 instanceof InvalidOperationException) {
       return -1;
     } else {
       throw e$;
@@ -300,7 +303,7 @@ export function castLiteralNullableSum(a: bigint): bigint {
 export function castLiteralElementSum(a: bigint): bigint {
   const pairs: [bigint, bigint][] = [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number])];
 
-  return BigInt.asIntN(64, pairs[0][0] + pairs[0][1]);
+  return BigInt.asIntN(64, pairs[0]![0] + pairs[0]![1]);
 }
 
 export function castLiteralConditionalSum(a: bigint): bigint {
@@ -332,7 +335,7 @@ export function spreadListSum(a: number, b: number): bigint {
   })([] as Array<number>);
   const longs = [...Array.from(ints, (element$temp$1) => BigInt(element$temp$1))];
 
-  return BigInt.asIntN(64, longs[0] + longs[1]);
+  return BigInt.asIntN(64, longs[0]! + longs[1]!);
 }
 
 export function spreadListContains(a: number, b: number): boolean {
@@ -358,7 +361,7 @@ export function spreadArraySum(a: number, b: number): bigint {
   const ints = [a, b];
   const longs = [...Array.from(ints, (element$temp$0) => BigInt(element$temp$0)), 3n];
 
-  return BigInt.asIntN(64, BigInt.asIntN(64, longs[0] + longs[1]) + longs[2]);
+  return BigInt.asIntN(64, BigInt.asIntN(64, longs[0]! + longs[1]!) + longs[2]!);
 }
 
 export function spreadTupleSum(a: number, b: number): bigint {
@@ -369,5 +372,5 @@ export function spreadTupleSum(a: number, b: number): bigint {
   })([] as Array<[number, number]>);
   const wide = [...Array.from(pairs, (element$temp$1) => [BigInt(element$temp$1[0]), BigInt(element$temp$1[1])] as [bigint, bigint])];
 
-  return BigInt.asIntN(64, wide[0][0] + wide[0][1]);
+  return BigInt.asIntN(64, wide[0]![0] + wide[0]![1]);
 }

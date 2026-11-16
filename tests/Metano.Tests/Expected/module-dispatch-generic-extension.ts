@@ -3,7 +3,7 @@ export function firstFallback<T>(items: T[], fallback: T): T {
 }
 
 export function firstDefault<T>(items: T[]): T {
-  return items[0];
+  return items[0]!;
 }
 
 export function first<T>(items: T[], fallback: T): T;

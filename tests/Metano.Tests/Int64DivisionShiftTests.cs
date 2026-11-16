@@ -144,9 +144,7 @@ public class Int64DivisionShiftTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(DivisionSource);
 
-        await Assert
-            .That(files["divide.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-division.ts"));
+        await TranspileHelper.AssertGolden("int64-division.ts", files["divide.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -156,9 +154,7 @@ public class Int64DivisionShiftTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ShiftSource);
 
-        await Assert
-            .That(files["shift.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-shifts.ts"));
+        await TranspileHelper.AssertGolden("int64-shifts.ts", files["shift.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }

@@ -653,6 +653,17 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `WhenWritingDefault` on a non-nullable member (a `0` or `false` default) and a context-wide
   `DefaultIgnoreCondition = WhenWritingDefault` still do.
 
+### Generated code type-checks under `noUncheckedIndexedAccess` (baseline FR-069; #670)
+
+- An array, `List<T>` or `string` element read is emitted as `values[i]!`, since C# types it `T`
+  where the flag types the JavaScript read `T | undefined`; a nullable element is
+  `(values[i] ?? null)`, because a `!` would strip its own `null`. A write target
+  (`values[i] = v`, `??=`) stays bare and a compound assignment or `++` asserts it
+  (`values[i]! += v`). In a `?.` chain the final `a?.[i]` is left unchecked (the chain already
+  yields `null`). The output differs only by the `!` / `?? null`; run-time values are unchanged
+  and an out-of-range read still gives `undefined` (C# throws; #651's FR-016 list keeps that
+  gap). A `Dictionary` read (`d.get(k)`) is not covered.
+
 ### Toolchain
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.

@@ -1,11 +1,11 @@
 import { arrayLength } from "metano-runtime";
 
 export function elementAt(values: bigint[], index: bigint): bigint {
-  return values[Number(index)];
+  return values[Number(index)]!;
 }
 
 export function intElementAt(values: number[], index: bigint): number {
-  return values[Number(index)];
+  return values[Number(index)]!;
 }
 
 export function longLengthOf(values: bigint[]): bigint {

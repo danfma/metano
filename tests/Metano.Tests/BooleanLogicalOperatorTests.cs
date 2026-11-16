@@ -203,7 +203,7 @@ public class BooleanLogicalOperatorTests
 
         await Assert
             .That(output)
-            .Contains("this.flags[receiver$temp$0] = !!(+this.flags[receiver$temp$0] & +b)");
+            .Contains("this.flags[receiver$temp$0] = !!(+this.flags[receiver$temp$0]! & +b)");
         await Assert.That(output.Split("this.next()").Length).IsEqualTo(2);
     }
 

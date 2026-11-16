@@ -57,9 +57,9 @@ export class Counter {
   }
 
   element(): bigint {
-    ((receiver$temp$0) => this.slots[receiver$temp$0] = BigInt.asIntN(64, this.slots[receiver$temp$0] * 2n))(this.next());
-    ((receiver$temp$1) => this.slots[receiver$temp$1] = BigInt.asIntN(64, this.slots[receiver$temp$1] + 1n))(this.next());
-    const old = ((receiver$temp$2) => BigInt.asIntN(64, (this.slots[receiver$temp$2] = BigInt.asIntN(64, this.slots[receiver$temp$2] + 1n)) - 1n))(this.next());
+    ((receiver$temp$0) => this.slots[receiver$temp$0] = BigInt.asIntN(64, this.slots[receiver$temp$0]! * 2n))(this.next());
+    ((receiver$temp$1) => this.slots[receiver$temp$1] = BigInt.asIntN(64, this.slots[receiver$temp$1]! + 1n))(this.next());
+    const old = ((receiver$temp$2) => BigInt.asIntN(64, (this.slots[receiver$temp$2] = BigInt.asIntN(64, this.slots[receiver$temp$2]! + 1n)) - 1n))(this.next());
 
     return old;
   }

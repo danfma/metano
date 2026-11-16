@@ -67,7 +67,7 @@ public class PrecedenceTranspileTests
     )]
     [Arguments("C15", "int M(Box t, Box b) => (t = b).Get() + t.V;", "return (t = b).get() + t.v;")]
     [Arguments("C55", "string M(int i) => (++i).ToString();", "return (++i).toString();")]
-    [Arguments("C64", "char M(string? a, string b) => (a ?? b)[0];", "return (a ?? b)[0];")]
+    [Arguments("C64", "char M(string? a, string b) => (a ?? b)[0];", "return (a ?? b)[0]!;")]
     [Arguments(
         "C67",
         "string M(int a, int b) => (a > b ? a : b).ToString();",
@@ -112,7 +112,7 @@ public class PrecedenceTranspileTests
     [Arguments(
         "C54",
         "int M(Box[] boxes, int i) => boxes[i++].Get() * 10 + i;",
-        "return boxes[i++].get() * 10 + i;"
+        "return boxes[i++]!.get() * 10 + i;"
     )]
     [Arguments("C63", "int M() { int x; return (x = 5) + 1 + x; }", "return (x = 5) + 1 + x;")]
     [Arguments(
@@ -186,7 +186,7 @@ public class PrecedenceTranspileTests
     [Arguments(
         "C46",
         "int M(List<int> list) => list.Count > 0 ? list[0] : -1;",
-        "return list.length > 0 ? list[0] : -1;"
+        "return list.length > 0 ? list[0]! : -1;"
     )]
     [Arguments("C62", "int M(bool c, int a, int b) => (c ? a : b) + 1;", "return (c ? a : b) + 1;")]
     [Arguments(

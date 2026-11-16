@@ -28,21 +28,21 @@ export class Counter {
   }
 
   multiplySlot(factor: bigint): bigint {
-    ((receiver$temp$0) => this._slots[receiver$temp$0] = BigInt.asIntN(64, this._slots[receiver$temp$0] * factor))(this.nextSlot());
+    ((receiver$temp$0) => this._slots[receiver$temp$0] = BigInt.asIntN(64, this._slots[receiver$temp$0]! * factor))(this.nextSlot());
 
-    return this._slotReads === 1 ? this._slots[1] : -1n;
+    return this._slotReads === 1 ? this._slots[1]! : -1n;
   }
 
   incrementSlot(): bigint {
-    const previous = ((receiver$temp$0) => BigInt.asIntN(64, (this._slots[receiver$temp$0] = BigInt.asIntN(64, this._slots[receiver$temp$0] + 1n)) - 1n))(this.nextSlot());
+    const previous = ((receiver$temp$0) => BigInt.asIntN(64, (this._slots[receiver$temp$0] = BigInt.asIntN(64, this._slots[receiver$temp$0]! + 1n)) - 1n))(this.nextSlot());
 
     return this._slotReads === 1 ? previous : -1n;
   }
 
   remainderSlot(divisor: bigint): bigint {
-    ((receiver$temp$0) => this._slots[receiver$temp$0] = remInt64(this._slots[receiver$temp$0], divisor))(this.nextSlot());
+    ((receiver$temp$0) => this._slots[receiver$temp$0] = remInt64(this._slots[receiver$temp$0]!, divisor))(this.nextSlot());
 
-    return this._slotReads === 1 ? this._slots[1] : -1n;
+    return this._slotReads === 1 ? this._slots[1]! : -1n;
   }
 
   shiftTotal(count: number): bigint {

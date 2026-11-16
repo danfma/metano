@@ -4,27 +4,27 @@ export class Sequences {
   constructor() { }
 
   lastOfArray(values: number[]): number {
-    return values[values.length - 1];
+    return values[values.length - 1]!;
   }
 
   fromEndOfList(values: number[], offset: number): number {
-    return values[values.length - offset];
+    return values[values.length - offset]!;
   }
 
   fromEndOfReadOnlyList(values: number[]): number {
-    return values[values.length - (1 + 1)];
+    return values[values.length - (1 + 1)]!;
   }
 
   fromEndOfIList(values: number[]): number {
-    return values[values.length - 1];
+    return values[values.length - 1]!;
   }
 
   lastChar(text: string): string {
-    return text[text.length - 1];
+    return text[text.length - 1]!;
   }
 
   lastItem(): number {
-    return this._items[this._items.length - 1];
+    return this._items[this._items.length - 1]!;
   }
 
   middle(values: number[]): number[] {

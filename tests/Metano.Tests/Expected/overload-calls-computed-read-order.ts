@@ -43,7 +43,7 @@ export class SourceOrderCalls {
   }
 
   static indexer(e: Engine, xs: number[]): number {
-    return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(xs[Trace.next("i")], xs[Trace.next("j")]);
+    return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(xs[Trace.next("i")]!, xs[Trace.next("j")]!);
   }
 
   static getterReceiver(h: Holder): number {

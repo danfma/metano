@@ -32,11 +32,11 @@ export class Cells {
   }
 
   element(h: Cells, k: number, n: number): void {
-    h.next().slots[k++] <<= n;
+    h.next().slots[k++]! <<= n;
   }
 
   indexAndCount(h: Cells, n: number): void {
-    h.slots[h.nextIndex()] <<= h.nextCount(n);
+    h.slots[h.nextIndex()]! <<= h.nextCount(n);
   }
 
   property(h: Cells, n: number): void {
@@ -44,7 +44,7 @@ export class Cells {
   }
 
   arrayReceiver(hs: Cells[]): void {
-    hs[0].slots[1] <<= 2;
+    hs[0]!.slots[1]! <<= 2;
   }
 
   async awaited(h: Cells): Promise<void> {

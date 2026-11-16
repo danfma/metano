@@ -91,12 +91,12 @@ export class Small {
   }
 
   onElement(i: number): void {
-    this.cells[i] = (this.cells[i] + 200) & 0xFF;
-    this.cells[i] = (this.cells[i] + 1) & 0xFF;
+    this.cells[i] = (this.cells[i]! + 200) & 0xFF;
+    this.cells[i] = (this.cells[i]! + 1) & 0xFF;
   }
 
   onElementOnce(i: number): void {
-    ((receiver$temp$0) => this.cells[receiver$temp$0] = (this.cells[receiver$temp$0] + 1) & 0xFF)(this.next(i));
+    ((receiver$temp$0) => this.cells[receiver$temp$0] = (this.cells[receiver$temp$0]! + 1) & 0xFF)(this.next(i));
   }
 
   onOptional(): void {

@@ -89,9 +89,7 @@ public class ModuleDispatcherGenericGoldenTests
 
         await Assert.That(outputs).DoesNotContain("as T");
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("module-dispatch-generic-extension.ts"));
+        await TranspileHelper.AssertGolden("module-dispatch-generic-extension.ts", outputs);
     }
 
     [Test]
