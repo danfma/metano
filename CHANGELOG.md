@@ -416,9 +416,11 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   values the runtime compares as .NET does: the sign guards for numbers and `char` (the sign
   bit: `-0`, a `decimal` `-0.0m` and `NaN` are negative); the ordered ones also for `bool` and
   the date and time types; `ThrowIfEqual` / `ThrowIfNotEqual` for those, strings, `Guid`,
-  enums, transpiled records and structs (`[PlainObject]` ones included) and tuples of them,
+  enums, transpiled, non-generic records and structs whose fields are such values all the way down (`[PlainObject]` ones included) and tuples of them,
   compared by value. Over another `T` (an ordered `string` or `Guid`, a class, an array,
-  `object`, `DateTimeOffset` for equality, a type parameter) it reports `MS0001`. The message
+  `object`, `DateTimeOffset` for equality, a type parameter, a record or struct holding one,
+  a generic record) it reports `MS0001`. Known gap: `Guid.Parse` keeps the text's letter case,
+  so two `Guid`s parsed from differently cased text compare unequal. The message
   texts are .NET's, but values quoted inside a message are formatted by JavaScript, not .NET (`true` for `True`, an ISO date for `1/2/2024`, `PT5M` for a `TimeSpan`'s `00:05:00`, `1e+21`, `[object Object]` for a record). Any other static member of an exception
   type (`ObjectDisposedException.ThrowIf`) reports `MS0001`, as in 2.x.
 - The runtime throws its own classes everywhere it reproduces a .NET failure: 32-bit integer
@@ -451,6 +453,16 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   parameter is named `inner` no longer binds its arguments to temporaries. A `$` in a Dart
   string or `char` literal is now escaped (2.x emitted it bare, which Dart reads as an
   interpolation).
+- Value equality of records, `[PlainObject]` records, `HashSet` / `Dictionary` keys and
+  `Distinct` now tells `TimeSpan` members apart: before, any two durations compared equal (and
+  hashed alike); now equal lengths are equal (`PT5M` and `PT300S`), and a duration with weeks,
+  months or years, read from ISO text, compares field by field.
+- A `[MapMethod]` template's generic type argument is imported only when the template embeds
+  it as `$T<n>`, and its receiver only when the template embeds `$this` or names the
+  receiver's type; before, a guard's `[PlainObject]` type argument was imported as a value
+  and a static mapping called through a `using` alias imported the alias. A `using` alias of a
+  type from another package imports the export under the alias
+  (`import { Status as State }`).
 - A call to a method or constructor with a `[CallerArgumentExpression]` parameter (baseline
   FR-052) passes the caller's argument text, as C# does; an omitted default before that
   parameter is passed as `undefined` in TypeScript when the callee is a transpiled,
