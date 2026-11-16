@@ -24,10 +24,11 @@ public partial class RuntimeExceptionConstructorTests
     private const string SolutionFile = "Metano.slnx";
 
     /// <summary>
-    /// The runtime module that is not an exception class of its own: the
-    /// factory of the stand-in for an unmapped exception type.
+    /// The runtime modules that are not an exception class of their own: the
+    /// factory of the stand-in for an unmapped exception type, and the
+    /// normalization of a caught value.
     /// </summary>
-    private const string NamedExceptionModule = "named-exception.ts";
+    private static readonly string[] NonClassModules = ["named-exception.ts", "to-exception.ts"];
 
     /// <summary>
     /// Parameters of the mapped .NET constructors that no runtime class takes,
@@ -65,7 +66,7 @@ public partial class RuntimeExceptionConstructorTests
 
         var defined = Directory
             .GetFiles(RuntimeExceptionsDirectory(), "*exception.ts")
-            .Where(path => Path.GetFileName(path) != NamedExceptionModule)
+            .Where(path => !NonClassModules.Contains(Path.GetFileName(path)))
             .Select(path =>
                 ExportedClassPattern().Match(File.ReadAllText(path)).Groups["name"].Value
             )

@@ -262,7 +262,7 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   `IrExceptionConstruction.ExceptionTypeName` carry. The type mapper (type
   position), `extends`, construction, the `is` / `as` / pattern / `catch`
   tests and the overload-dispatcher checks read it (`TestedClassOf` gives
-  `Error` for `System.Exception` itself until `toException`); so does the
+  `Error` for `System.Exception` itself outside a catch chain); so does the
   core, through the `IrExtractionContext.HasExceptionRuntimeClass` port, to
   report an exception without a class (`MS0001` at a construction, `MS0045`
   at an `is` / `as` / pattern / `catch` clause, `ExceptionRuntimeClassReporter`).
@@ -298,16 +298,15 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   filter, and declares the clause's variable (`const e = e$;`) when its body
   reads it. The first clause that takes every value ends the chain; otherwise
   it ends in `else { throw e$; }`. `throw;` rethrows `e$`. A lone clause that
-  takes every exception keeps the plain `catch (e) { … }`. Extraction reports
+  takes every exception keeps the plain `catch (e) { … }` (unless it names `Exception` and reads its
+  variable). A chain whose arms observe the caught value starts with
+  `const e0 = toException(e$);` and the arms test, filter (`tryFilter`) and bind `e0`. Extraction reports
   (`UnsupportedCatchClauseReporter`) `MS0045` for a clause on an exception
   without a runtime class, and `MS0001` for a clause on a type parameter, for
   a filter that declares a variable or passes an `out` argument, and on Dart,
   which keeps its native `on T catch` clauses, for every filter. Known
-  deviations: a thrown value is not normalized (`toException`), so a
-  JavaScript `TypeError` is no `NullReferenceException` and the variable of a
-  catch-all arm is the raw value; an exception thrown by a filter propagates
-  (.NET treats the filter as false); a filter runs after the `finally` blocks
-  between the throw and the clause (.NET runs it before them).
+  deviation: a filter runs after the `finally` blocks between the throw and
+  the clause (.NET runs it before them).
 - **`IrToTsModuleBridge`** — `[NoContainer]` / legacy
   `[ExportedAsModule]` static classes + top-level statements → flat top-level
   functions.

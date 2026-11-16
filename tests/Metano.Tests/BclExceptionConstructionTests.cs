@@ -142,8 +142,8 @@ public class BclExceptionConstructionTests
         );
 
         await Assert.That(output).Contains("} catch (e$) {");
-        await Assert.That(output).Contains("if (e$ instanceof ArgumentException) {");
-        await Assert.That(output).Contains("const e = e$;");
+        await Assert.That(output).Contains("if (e0 instanceof ArgumentException) {");
+        await Assert.That(output).Contains("const e = e0;");
         await Assert.That(output).Contains("return e.message;");
         await Assert.That(output).Contains("throw e$;");
     }

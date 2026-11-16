@@ -17,11 +17,12 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 /// matches:
 /// <code>
 /// } catch (e$) {
-///   if (e$ instanceof NotFoundException) {
-///     const e = e$;
+///   const e0 = toException(e$);
+///   if (e0 instanceof NotFoundException) {
+///     const e = e0;
 ///     …
-///   } else if (e$ instanceof InvalidOperationException &amp;&amp; ((e) =&gt; e.message === "x")(e$)) {
-///     const e = e$;
+///   } else if (e0 instanceof InvalidOperationException &amp;&amp; tryFilter(() =&gt; e0.message === "x")) {
+///     const e = e0;
 ///     …
 ///   } else {
 ///     throw e$;
@@ -29,6 +30,12 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 /// }
 /// </code>
 /// <list type="bullet">
+///   <item><b>Normalization.</b> When an arm observes the caught value as an
+///   exception, <c>const e0 = toException(e$);</c> converts it once, so a
+///   JavaScript <c>TypeError</c> is a <c>NullReferenceException</c>, an
+///   <c>AbortError</c> a <c>TaskCanceledException</c>, any other <c>Error</c>
+///   or thrown value an <c>Exception</c>; the type tests, the filters and the
+///   variables use <c>e0</c> (see <c>toException</c> in <c>metano-runtime</c>).</item>
 ///   <item><b>Type test.</b> The same test an <c>is</c> pattern on the clause's
 ///   type lowers to (<see cref="IrToTsExpressionBridge.BuildTypeTest"/>):
 ///   <c>instanceof</c> the class of a transpiled exception, or the runtime
@@ -36,10 +43,10 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 ///   <c>catch</c> and <c>catch (Exception)</c> take every value and need no
 ///   test.</item>
 ///   <item><b>Filter.</b> A <c>when</c> condition joins the type test with
-///   <c>&amp;&amp;</c>, so a clause whose filter is false falls through to the
-///   next clause. A filter that reads the clause's variable binds it through
-///   an immediately invoked arrow, since the arm's <c>const</c> is not
-///   declared yet.</item>
+///   <c>&amp;&amp;</c> through <c>tryFilter(() =&gt; …)</c>, so a clause whose
+///   filter is false, or throws, falls through to the next clause. A filter
+///   that reads the clause's variable takes it as the arrow's parameter,
+///   since the arm's <c>const</c> is not declared yet.</item>
 ///   <item><b>Variable.</b> An arm whose body reads the clause's variable
 ///   declares it from the caught value: a fresh binding per catch, as C#
 ///   scopes it, typed by the arm's <c>instanceof</c> narrowing.</item>
@@ -51,14 +58,9 @@ internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatemen
 /// every exception keeps the plain <c>catch (e) { … }</c> shape, its variable
 /// being the handler's parameter.
 /// <para>
-/// An interim, partial delivery of spec 011 FR-015. Known deviations: a
-/// thrown value is not normalized (<c>toException</c>), so a JavaScript
-/// <c>TypeError</c> matches no <c>NullReferenceException</c> clause and the
-/// variable of a catch-all arm is the raw value; an exception thrown by a
-/// filter propagates, where .NET swallows it and treats the filter as false;
-/// and a filter runs after the <c>finally</c> blocks between the throw and
-/// the clause, where .NET runs it before them. A clause on an exception
-/// without a runtime class is reported (MS0045, see
+/// Spec 011 FR-015. Known deviation: a filter runs after the <c>finally</c>
+/// blocks between the throw and the clause, where .NET runs it before them.
+/// A clause on an exception without a runtime class is reported (MS0045, see
 /// <c>UnsupportedCatchClauseReporter</c>).
 /// </para>
 /// </summary>
@@ -75,6 +77,16 @@ internal static class IrToTsCatchChainBridge
     /// <summary>The handler parameter of a lone clause that declares no variable.</summary>
     private const string UnnamedCaughtValue = "_err";
 
+    /// <summary>
+    /// The name of the value <c>toException</c> normalized the caught one to,
+    /// marked again (<c>e0$</c>, …) when a clause already names it.
+    /// </summary>
+    private const string NormalizedValue = "e0";
+
+    private const string ToExceptionHelper = "toException";
+
+    private const string TryFilterHelper = "tryFilter";
+
     public static TsCatchHandler Map(
         IReadOnlyList<IrCatchClause> clauses,
         IrToTsBridgeContext context
@@ -83,10 +95,69 @@ internal static class IrToTsCatchChainBridge
         if (clauses is [var only] && KeepsPlainCatch(only))
             return MapPlainCatch(only, context);
 
-        var caught = FreeCaughtValueName(clauses);
-        var arms = clauses.Select(clause => MapArm(clause, caught, context));
+        var caught = FreeName(CaughtValue, clauses);
+        var normalized = NeedsNormalization(clauses) ? FreeName(NormalizedValue, clauses) : null;
+        var subject = normalized ?? caught;
+        var arms = clauses.Select(clause => MapArm(clause, subject, caught, context));
 
-        return new TsCatchHandler(caught, RenderChain(EndChain(arms, caught)));
+        return new TsCatchHandler(
+            caught,
+            [.. MapNormalization(normalized, caught), .. RenderChain(EndChain(arms, caught))]
+        );
+    }
+
+    /// <summary>
+    /// <c>const e0 = toException(e$);</c>: the caught value as a
+    /// <c>System.Exception</c>, which every arm tests and binds, so a
+    /// JavaScript <c>TypeError</c> is a <c>NullReferenceException</c> and a
+    /// thrown string an <c>Exception</c>.
+    /// </summary>
+    private static IEnumerable<TsStatement> MapNormalization(string? normalized, string caught)
+    {
+        if (normalized is null)
+            return [];
+
+        return
+        [
+            new TsVariableDeclaration(
+                normalized,
+                new TsCallExpression(
+                    new TsRuntimeHelperReference(ToExceptionHelper),
+                    [new TsIdentifier(caught)]
+                ),
+                Const: true
+            ),
+        ];
+    }
+
+    /// <summary>
+    /// Whether an arm the chain can reach observes the caught value as a
+    /// <c>System.Exception</c>: a clause that names an exception type
+    /// (<c>System.Exception</c> included) and tests it, filters on it or reads
+    /// its variable. The rule does not look at which arms could match a
+    /// <c>TypeError</c>. A general <c>catch</c>, and a <c>catch (Exception)</c>
+    /// that reads nothing, observe nothing.
+    /// </summary>
+    private static bool NeedsNormalization(IReadOnlyList<IrCatchClause> clauses) =>
+        ReachableClauses(clauses).Any(ObservesNormalizedValue);
+
+    private static bool ObservesNormalizedValue(IrCatchClause clause) =>
+        clause.ExceptionType is not null
+        && (!clause.HandlesEveryException || ReadsVariable(clause));
+
+    private static bool ReadsVariable(IrCatchClause clause) =>
+        clause.VariableName is { } name && IrReferencedNames.AnyIn(clause.Body, [name]);
+
+    /// <summary>The clauses up to the first one that handles every exception.</summary>
+    private static IEnumerable<IrCatchClause> ReachableClauses(IEnumerable<IrCatchClause> clauses)
+    {
+        foreach (var clause in clauses)
+        {
+            yield return clause;
+
+            if (clause.HandlesEveryException)
+                yield break;
+        }
     }
 
     private static TsCatchHandler MapPlainCatch(IrCatchClause clause, IrToTsBridgeContext context)
@@ -101,16 +172,21 @@ internal static class IrToTsCatchChainBridge
         );
     }
 
-    private static CatchArm MapArm(IrCatchClause clause, string caught, IrToTsBridgeContext context)
+    private static CatchArm MapArm(
+        IrCatchClause clause,
+        string subject,
+        string caught,
+        IrToTsBridgeContext context
+    )
     {
         var condition = IrTypeCheckBuilder.AllOf([
-            MapTypeTest(clause, caught),
-            MapFilter(clause, caught, context),
+            MapTypeTest(clause, subject),
+            MapFilter(clause, subject, context),
         ]);
 
         var body = IrToTsStatementBridge.MapBody(clause.Body, context.Rethrowing(caught));
 
-        return new CatchArm(condition, [.. MapVariable(clause, caught), .. body]);
+        return new CatchArm(condition, [.. MapVariable(clause, subject), .. body]);
     }
 
     /// <summary>
@@ -136,7 +212,7 @@ internal static class IrToTsCatchChainBridge
 
     private static TsExpression? MapFilter(
         IrCatchClause clause,
-        string caught,
+        string subject,
         IrToTsBridgeContext context
     )
     {
@@ -144,21 +220,19 @@ internal static class IrToTsCatchChainBridge
             return null;
 
         var condition = IrToTsExpressionBridge.Map(filter, context);
+        var helper = new TsRuntimeHelperReference(TryFilterHelper);
 
         if (clause.VariableName is not { } name || !IrReferencedNames.AnyIn(filter, [name]))
-            return condition;
+            return new TsCallExpression(helper, [new TsArrowFunction([], Return(condition))]);
 
-        return TsImmediateInvocation.Of(
-            [
-                new TsImmediateBinding(
-                    IrToTsNamingPolicy.ToLocalName(name),
-                    new TsIdentifier(caught)
-                ),
-            ],
-            [new TsReturnStatement(condition)],
-            isAsync: false
-        );
+        var variable = new TsParameter(IrToTsNamingPolicy.ToLocalName(name), null);
+        var filterWithVariable = new TsArrowFunction([variable], Return(condition));
+
+        return new TsCallExpression(helper, [filterWithVariable, new TsIdentifier(subject)]);
     }
+
+    private static IReadOnlyList<TsStatement> Return(TsExpression value) =>
+        [new TsReturnStatement(value)];
 
     /// <summary>
     /// The arm's declaration of the clause's variable: <c>const e = e$;</c>,
@@ -185,7 +259,9 @@ internal static class IrToTsCatchChainBridge
     /// takes every exception, and its variable can stand for the caught value.
     /// </summary>
     private static bool KeepsPlainCatch(IrCatchClause clause) =>
-        clause.HandlesEveryException && !RethrowsAfterRebinding(clause);
+        clause.HandlesEveryException
+        && !RethrowsAfterRebinding(clause)
+        && !NeedsNormalization([clause]);
 
     /// <summary>
     /// Whether the clause's body rebinds the clause's variable and has a
@@ -198,13 +274,11 @@ internal static class IrToTsCatchChainBridge
         IrLocalReassignmentCollector.CollectFromStatements(clause.Body).Contains(variable);
 
     /// <summary>
-    /// <c>e$</c>, marked again (<c>e$$</c>, …) while a clause names it, so
-    /// the handler's parameter captures none of the clauses' names.
+    /// <c>e$</c> (or <c>e0</c>), marked again (<c>e$$</c>, …) while a clause
+    /// names it, so the handler's names capture none of the clauses' names.
     /// </summary>
-    private static string FreeCaughtValueName(IReadOnlyList<IrCatchClause> clauses) =>
-        TsFreeName.FirstFree(CaughtValue, candidate =>
-            clauses.Any(clause => Names(clause, candidate))
-        );
+    private static string FreeName(string name, IReadOnlyList<IrCatchClause> clauses) =>
+        TsFreeName.FirstFree(name, candidate => clauses.Any(clause => Names(clause, candidate)));
 
     private static bool Names(IrCatchClause clause, string name) =>
         IrReferencedNames.AnyReadOrEmittedMemberIn(clause.Body, [name])

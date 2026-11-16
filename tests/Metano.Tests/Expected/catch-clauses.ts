@@ -1,3 +1,4 @@
+import { toException, tryFilter } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
@@ -61,10 +62,11 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof NotFoundException) {
+      const e0 = toException(e$);
+      if (e0 instanceof NotFoundException) {
         return "missing";
-      } else if (e$ instanceof AppException) {
-        const e = e$;
+      } else if (e0 instanceof AppException) {
+        const e = e0;
 
         return "app:" + e.code;
       } else {
@@ -79,8 +81,9 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof NotFoundException) {
-        const e = e$;
+      const e0 = toException(e$);
+      if (e0 instanceof NotFoundException) {
+        const e = e0;
 
         return "missing:" + e.code;
       } else {
@@ -95,8 +98,9 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof AppException) {
-        const e = e$;
+      const e0 = toException(e$);
+      if (e0 instanceof AppException) {
+        const e = e0;
 
         return "app:" + e.code;
       } else {
@@ -111,10 +115,11 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof NotFoundException) {
+      const e0 = toException(e$);
+      if (e0 instanceof NotFoundException) {
         return "missing";
       } else {
-        const e = e$;
+        const e = e0;
 
         return e instanceof AppException ? "app" : "any";
       }
@@ -127,15 +132,16 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof AppException && ((e) => e.code === 404)(e$)) {
+      const e0 = toException(e$);
+      if (e0 instanceof AppException && tryFilter((e) => e.code === 404, e0)) {
         return "missing";
-      } else if (e$ instanceof AppException && this.verbose) {
-        const e = e$;
+      } else if (e0 instanceof AppException && tryFilter(() => this.verbose)) {
+        const e = e0;
 
         return "verbose:" + e.code;
-      } else if (kind === "quiet") {
+      } else if (tryFilter(() => kind === "quiet")) {
         return "quiet";
-      } else if (e$ instanceof AppException) {
+      } else if (e0 instanceof AppException) {
         return "app";
       } else {
         throw e$;
@@ -147,11 +153,12 @@ export class Handlers {
     try {
       this.work(kind);
     } catch (e$) {
-      if (e$ instanceof NotFoundException) {
+      const e0 = toException(e$);
+      if (e0 instanceof NotFoundException) {
         this._log.push("missing");
         throw e$;
-      } else if (e$ instanceof AppException) {
-        let e = e$;
+      } else if (e0 instanceof AppException) {
+        let e = e0;
         e = new AppException("replaced", e.code);
         this._log.push(e.message);
         throw e$;
@@ -167,8 +174,9 @@ export class Handlers {
     try {
       this.work(kind);
     } catch (e$) {
-      if (e$ instanceof AppException) {
-        const e = e$;
+      const e0 = toException(e$);
+      if (e0 instanceof AppException) {
+        const e = e0;
         try {
           if (e.code === 404) {
             throw e$;
@@ -176,8 +184,9 @@ export class Handlers {
 
           this.work("retry");
         } catch (e$) {
-          if (e$ instanceof NotFoundException) {
-            const inner = e$;
+          const e0 = toException(e$);
+          if (e0 instanceof NotFoundException) {
+            const inner = e0;
             this._log.push("inner:" + inner.code);
           } else {
             throw e$;
@@ -195,12 +204,13 @@ export class Handlers {
       try {
         this.work(kind);
       } catch (e$) {
-        if (e$ instanceof NotFoundException) {
+        const e0 = toException(e$);
+        if (e0 instanceof NotFoundException) {
           continue;
-        } else if (e$ instanceof AppException && ((e) => e.code < 0)(e$)) {
+        } else if (e0 instanceof AppException && tryFilter((e) => e.code < 0, e0)) {
           break;
-        } else if (e$ instanceof AppException) {
-          const e = e$;
+        } else if (e0 instanceof AppException) {
+          const e = e0;
           codes.push(() => e.code);
         } else {
           throw e$;
@@ -217,11 +227,12 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof NotFoundException) {
-        const e = e$;
+      const e0 = toException(e$);
+      if (e0 instanceof NotFoundException) {
+        const e = e0;
 
         return await this.recoverAsync(e.code);
-      } else if (e$ instanceof AppException) {
+      } else if (e0 instanceof AppException) {
         await this.recoverAsync(0);
         throw e$;
       } else {
@@ -236,10 +247,11 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof AppException) {
+      const e0 = toException(e$);
+      if (e0 instanceof AppException) {
         return "app";
-      } else if (e$ instanceof InvalidOperationException) {
-        const e = e$;
+      } else if (e0 instanceof InvalidOperationException) {
+        const e = e0;
 
         return "invalid:" + e.message;
       } else {
@@ -254,7 +266,8 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
-      if (e$ instanceof NotFoundException) {
+      const e0 = toException(e$);
+      if (e0 instanceof NotFoundException) {
         return "missing";
       } else {
         return "ex";
@@ -268,6 +281,8 @@ export class Handlers {
 
       return "ok";
     } catch (e$) {
+      const e0 = toException(e$);
+
       return "failure";
     }
   }
@@ -284,9 +299,11 @@ export class Handlers {
   wrapped(kind: string): void {
     try {
       this.work(kind);
-    } catch (e) {
+    } catch (e$) {
+      const e0 = toException(e$);
+      const e = e0;
       this._log.push(e instanceof AppException ? "app" : "other");
-      throw e;
+      throw e$;
     }
   }
 

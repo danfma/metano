@@ -356,8 +356,8 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   a BCL exception type without a runtime class is the `MS0045` error of the
   next section.
 - A filter runs after the `finally` blocks between the throw and the clause
-  (.NET runs it before them), and an exception thrown by a filter propagates
-  (.NET treats the filter as false).
+  (.NET runs it before them). An exception thrown by a filter is treated as
+  false (`tryFilter`, #651).
 
 ### ⚠ BCL exceptions are `metano-runtime` classes (spec 011 FR-013, FR-014, FR-016; #651)
 
@@ -404,10 +404,18 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   order, so with `F(Exception)` declared before `F(ArgumentException)` a call from hand-written
   JavaScript takes the first arm for an `ArgumentException` (C# calls bind statically; user
   classes behave the same in 2.x).
-- **A typed clause no longer takes a JavaScript error.** In 2.x every BCL-typed clause tested
-  `instanceof Error`, so `catch (NullReferenceException)` around a `null` dereference took the
-  `TypeError` by accident; now it reaches `catch (Exception)` or a general `catch` instead.
-  The normalization that will map it (`toException`, spec 011 FR-015) is the next slice.
+- **A typed clause takes a JavaScript error as .NET would** (resolved by `toException`, spec 011
+  FR-015, #651). In 2.x every BCL-typed clause tested `instanceof Error`, so
+  `catch (NullReferenceException)` around a `null` dereference took the `TypeError` by accident;
+  the first #651 slice made it reach `catch (Exception)` or a general `catch`; now the chain
+  normalizes the caught value once (`const e0 = toException(e$);`) and the arms test and bind
+  `e0`: a `TypeError` is a `NullReferenceException`, an `AbortError` a `TaskCanceledException`,
+  any other `Error` (a `RangeError`, a `SyntaxError`) an `Exception` that keeps its `message` and
+  `stack` and holds the original as `innerException` / `cause`, and a thrown non-`Error` value an
+  `Exception` carrying its text. A `catch (Exception e)` that reads `e` gets the normalized
+  value; `throw;` still rethrows the original. A `when` filter runs through `tryFilter`, so a
+  filter that throws counts as `false`. A `TypeError` thrown on purpose by third-party JavaScript
+  is also a `NullReferenceException`. Still open: Dart's `is` chain and the `TsTryStatement` node.
 - A BCL exception outside the mapped set (`IOException`, …) reports `MS0001` where it is
   constructed and is emitted as `namedException("System.IO", "IOException", message, inner)`:
   a runtime `Exception` whose `Message` is .NET's (2.x too) and whose `name` / `toString()`
