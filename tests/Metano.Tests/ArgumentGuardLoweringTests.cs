@@ -103,8 +103,10 @@ public class ArgumentGuardLoweringTests
     /// array in a <c>[PlainObject]</c>, a class in a struct or a record), and a
     /// generic record, whose <c>T</c> member's equality its definition does not
     /// fix; an unsealed record, which a derived record can extend with state its
-    /// static type does not show; and a record holding a <c>double</c>, whose
-    /// generated <c>equals</c> finds a <c>NaN</c> field unequal to itself.
+    /// static type does not show; a record holding a <c>double</c>, whose
+    /// generated <c>equals</c> finds a <c>NaN</c> field unequal to itself; and a
+    /// struct with its own <c>Equals</c>, explicit <c>IEquatable&lt;T&gt;</c> ones
+    /// included, which a field-wise comparison would bypass.
     /// </summary>
     [Test]
     [Arguments("Account")]
@@ -120,6 +122,7 @@ public class ArgumentGuardLoweringTests
     [Arguments("Shape")]
     [Arguments("Measure")]
     [Arguments("Reading")]
+    [Arguments("Tolerant")]
     public async Task EqualityGuard_OverAReferenceKind_IsReported(string type)
     {
         var (_, diagnostics) = TranspileGuards(
@@ -442,6 +445,16 @@ public class ArgumentGuardLoweringTests
 
             [Transpile]
             public readonly record struct Reading(double Value);
+
+            [Transpile]
+            public readonly struct Tolerant : IEquatable<Tolerant>
+            {
+                public readonly int Value;
+
+                public Tolerant(int value) => Value = value;
+
+                bool IEquatable<Tolerant>.Equals(Tolerant other) => true;
+            }
 
             [Transpile]
             public sealed record Node(int Value, Node? Next);
