@@ -187,7 +187,8 @@ public sealed partial class IrExpressionExtractor
         if (!TakesComparer(method))
             return false;
 
-        return ComparerArgumentOf(call, method) is not { } comparer || IsNullConstant(comparer);
+        return ComparerArgumentOf(call.ArgumentList.Arguments, method) is not { } comparer
+            || IsNullConstant(comparer);
     }
 
     /// <summary>

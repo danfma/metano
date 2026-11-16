@@ -100,7 +100,8 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The stages of the chain rooted at <paramref name="outermost"/>,
     /// outermost first, and the syntax of its source; <c>null</c> when a stage
-    /// is in the static form, which the legacy fluent emission path handles.
+    /// is in the static form and cannot be read as the extension form
+    /// (<see cref="StaticStageOf"/>).
     /// </summary>
     private (IReadOnlyList<LinqStageSite> Sites, ExpressionSyntax Source)? WalkLinqChain(
         InvocationExpressionSyntax outermost
@@ -152,17 +153,39 @@ public sealed partial class IrExpressionExtractor
             }
 
             if (QualifiedMemberSyntax.From(current.Expression) is not { } memberAccess)
-                return null; // static-direct calls (e.g. Enumerable.Where(items, p)) — MVP only handles extension form.
+                return null;
 
             // Static call syntax (`Enumerable.Where(items, p)`) also matches
             // MemberAccess. Detect it by the receiver expression resolving
             // to a type symbol — extension form's receiver always resolves
-            // to a value (parameter, local, member). Bail to legacy fluent
-            // emission so the call shape stays correct.
+            // to a value (parameter, local, member). The static form is the
+            // extension form with its source written as the first argument.
             if (_semantic.GetSymbolInfo(memberAccess.Receiver).Symbol is INamedTypeSymbol)
-                return null;
+            {
+                if (StaticStageOf(current, sym, op) is not { } staticSite)
+                    return null;
 
-            sites.Add(new LinqStageSite(current, sym, op, memberAccess));
+                sites.Add(staticSite);
+
+                if (staticSite.Receiver is InvocationExpressionSyntax staticInner)
+                {
+                    current = staticInner;
+                    continue;
+                }
+
+                sourceSyntax = staticSite.Receiver;
+                break;
+            }
+
+            sites.Add(
+                new LinqStageSite(
+                    current,
+                    sym,
+                    op,
+                    memberAccess.Receiver,
+                    current.ArgumentList.Arguments
+                )
+            );
 
             // A leading `?.Stage(…)` reads the null-conditional receiver,
             // which is already extracted (and bound): the chain starts there.
@@ -184,6 +207,35 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// The static call <c>Enumerable.Where(xs, p)</c> read as the extension
+    /// call <c>xs.Where(p)</c> it means: its source is the first argument,
+    /// and the method it binds to is reduced onto that source, so the rest of
+    /// the extraction binds arguments to parameters as for the extension
+    /// form. <c>null</c> when the call names an argument (the order it
+    /// evaluates them in is not tracked past the source) or the method does
+    /// not reduce; the call is then reported.
+    /// </summary>
+    private LinqStageSite? StaticStageOf(
+        InvocationExpressionSyntax call,
+        IMethodSymbol method,
+        IrLinqOperator op
+    )
+    {
+        var arguments = call.ArgumentList.Arguments;
+
+        if (arguments.Count == 0 || arguments.Any(argument => argument.NameColon is not null))
+            return null;
+
+        var source = arguments[0].Expression;
+        var sourceType = _semantic.GetTypeInfo(source).Type;
+        var reduced = sourceType is null ? null : method.ReduceExtensionMethod(sourceType);
+
+        return reduced is null
+            ? null
+            : new LinqStageSite(call, reduced, op, source, [.. arguments.Skip(1)]);
+    }
+
+    /// <summary>
     /// One stage of a chain, with its arguments bound to the parameters of
     /// its method and the queryable tree it captures. A <c>null</c> comparer
     /// is dropped, as the comparer-less overload means the same (#648). The
@@ -192,17 +244,25 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrLinqStage ExtractLinqStage(LinqStageSite site)
     {
-        var (call, method, op, memberAccess) = site;
+        var (call, method, op, _, arguments) = site;
         var nullComparer = NullComparerArgumentOf(site);
-        var written = StageArguments(call, method, op, nullComparer);
+        var written = StageArguments(call, arguments, method, op, nullComparer);
         var args = nullComparer is null ? written : WithoutComparer(written, method);
 
         if (args.HasUnrepresentableMissValue && LowersLinqChains)
             ElementMissValue.ReportUnrepresentable(call, method, method.TypeArguments[0]);
 
-        var queryable = TryCaptureQueryableMeta(call, method, memberAccess);
+        var queryable = TryCaptureQueryableMeta(arguments, method, site.Receiver);
 
-        return new IrLinqStage(op, args.Values, queryable, LinqSixtyFourBitValues.Of(method, op))
+        var sixtyFourBit = LinqSixtyFourBitValues.Of(method, op);
+
+        return new IrLinqStage(
+            op,
+            args.Values,
+            queryable,
+            sixtyFourBit,
+            sixtyFourBit is null ? LinqAggregateValues.Of(method, op) : null
+        )
         {
             EvaluationOrder = args.EvaluationOrder,
         };
@@ -219,13 +279,14 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private LinqStageArguments StageArguments(
         InvocationExpressionSyntax stage,
+        IReadOnlyList<ArgumentSyntax> arguments,
         IMethodSymbol method,
         IrLinqOperator op,
         ArgumentSyntax? skipped = null
     )
     {
-        var written = stage
-            .ArgumentList.Arguments.Select(argument =>
+        var written = arguments
+            .Select(argument =>
                 argument == skipped ? SkippedArgument(argument) : ExtractArgument(argument)
             )
             .ToList();
@@ -255,19 +316,19 @@ public sealed partial class IrExpressionExtractor
     /// surface and the lambda flows as a plain closure.
     /// </summary>
     private IrQueryableMeta? TryCaptureQueryableMeta(
-        InvocationExpressionSyntax stage,
+        IReadOnlyList<ArgumentSyntax> arguments,
         IMethodSymbol? stageMethod,
-        QualifiedMemberSyntax memberAccess
+        ExpressionSyntax receiver
     )
     {
         if (stageMethod is null)
             return null;
 
-        var receiverIsQueryable = ReceiverIsIQueryable(memberAccess.Receiver);
+        var receiverIsQueryable = ReceiverIsIQueryable(receiver);
         var methodHasQueryable = HasQueryableAttribute(stageMethod);
 
-        var argumentsInParameterOrder = stage
-            .ArgumentList.Arguments.Select(argument =>
+        var argumentsInParameterOrder = arguments
+            .Select(argument =>
                 (argument.Expression, ParameterIndex: ParameterIndexOf(argument, stageMethod))
             )
             .OrderBy(argument => argument.ParameterIndex);

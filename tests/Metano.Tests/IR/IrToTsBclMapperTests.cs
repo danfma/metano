@@ -170,11 +170,7 @@ public class IrToTsBclMapperTests
         await Assert.That(callee.Property).IsEqualTo("where");
         var wrapCall = (TsCallExpression)callee.Object;
         var wrapCallee = (TsPropertyAccess)wrapCall.Callee;
-        // The wrapper root is the runtime helper reference, not a bare
-        // identifier, so a name collision aliases it (#484).
-        await Assert
-            .That(((TsRuntimeHelperReference)wrapCallee.Object).Name)
-            .IsEqualTo("Enumerable");
+        await Assert.That(((TsIdentifier)wrapCallee.Object).Name).IsEqualTo("Enumerable");
         await Assert.That(wrapCallee.Property).IsEqualTo("from");
     }
 

@@ -45,6 +45,10 @@ public class LinqUnimplementedOverloadTests
 
             public object Concat(List<int> xs, List<int> ys) => xs.Concat(ys).Append(4).Prepend(0).Reverse();
 
+            public object SetOperations(List<int> xs, List<int> ys) => xs.Union(ys).Intersect(ys).Except(ys);
+
+            public object StaticForm(List<int> xs) => Enumerable.Where(xs, x => x > 1).Count() + Enumerable.Count(xs);
+
             public object Zip(List<int> xs, List<int> ys) => xs.Zip(ys, (a, b) => a + b);
 
             public int[] ToArray(List<int> xs) => xs.ToArray();
@@ -76,6 +80,9 @@ public class LinqUnimplementedOverloadTests
             public double Numbers(List<int> xs) =>
                 xs.Sum() + xs.Sum(x => x * 2) + xs.Min() + xs.Min(x => -x) + xs.Max() + xs.Max(x => -x) + xs.Average() + xs.Average(x => x * 2);
 
+            public object Decimals(List<decimal> ms, List<decimal?> nms, List<string> ss, List<int?> ns) =>
+                new object?[] { ms.Sum(), ms.Average(), ms.Min(m => -m), nms.Sum(), nms.Average(), ss.Min(), ss.Max(), ns.Min(), ns.Average() };
+
             public int Extremes(List<int> xs) => xs.MinBy(x => -x) + xs.MaxBy(x => -x);
 
             public bool Contains(IEnumerable<int> xs) => xs.Contains(3);
@@ -83,7 +90,7 @@ public class LinqUnimplementedOverloadTests
             public int Aggregate(List<int> xs) => xs.Aggregate(0, (a, x) => a + x);
 
             public object Queryable(IQueryable<int> q, List<int> ys) =>
-                q.Where(x => x > 1).OrderBy(x => x).Select(x => x * 2).Concat(ys).Zip(ys, (a, b) => a + b);
+                q.Where(x => x > 1).OrderBy(x => x).Select(x => x * 2).Concat(ys).Union(ys).Intersect(ys).Except(ys).Zip(ys, (a, b) => a + b);
 
             public Dictionary<int, int> QueryableToDictionary(IQueryable<int> q) => q.ToDictionary(x => x, x => x * 2);
 
@@ -510,20 +517,61 @@ public class LinqUnimplementedOverloadTests
     }
 
     /// <summary>
-    /// <c>Union</c>, <c>Intersect</c> and <c>Except</c> have a declarative
-    /// mapping, so the unlowered-method check does not report them. That
-    /// legacy mapping is broken itself — it imports an <c>Enumerable</c> the
-    /// runtime does not export (#657) — so its output is not pinned here.
+    /// <c>Union</c>, <c>Intersect</c> and <c>Except</c> lower to pipe
+    /// operators, and the static form lowers to the same pipe (#657).
     /// </summary>
     [Test]
-    [Arguments("xs.Union(ys)")]
-    [Arguments("xs.Intersect(ys)")]
-    [Arguments("xs.Except(ys)")]
-    public async Task LegacyMappedLinqMethod_IsNotReportedAsUnlowered(string call)
+    [Arguments("xs.Union(ys)", "linq(xs, union(ys))")]
+    [Arguments("xs.Intersect(ys)", "linq(xs, intersect(ys))")]
+    [Arguments("xs.Except(ys)", "linq(xs, except(ys))")]
+    [Arguments(
+        "Enumerable.Where(xs, x => x > 1).ToList()",
+        "linq(xs, where((x: number) => x > 1), toArray())"
+    )]
+    [Arguments("Enumerable.Count(xs)", "linq(xs, count())")]
+    [Arguments(
+        "Enumerable.Count(xs.Where(x => x > 1))",
+        "linq(xs, where((x: number) => x > 1), count())"
+    )]
+    public async Task SetOperationsAndStaticForm_LowerToThePipe(string call, string emitted)
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["calls.ts"]).Contains(emitted);
+    }
+
+    /// <summary>The static form with a named argument is reported, not lowered.</summary>
+    [Test]
+    public async Task StaticForm_WithNamedArgument_Reports()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body("Enumerable.Where(xs, predicate: x => x > 1)")
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(1);
+    }
+
+    /// <summary>Aggregates are chosen by the element type (#618, #657).</summary>
+    [Test]
+    [Arguments("ms.Sum()", "linq(ms, sumDecimal(Decimal))")]
+    [Arguments("ms.Average()", "averageDecimal()")]
+    [Arguments("nms.Average()", "averageNullableDecimal()")]
+    [Arguments("ns.Min()", "minNullable()")]
+    [Arguments("ns.Average()", "averageNullable()")]
+    [Arguments("ss.Max()", "maxNullable()")]
+    [Arguments("xs.Min()", "linq(xs, min())")]
+    public async Task Aggregates_AreChosenByElementType(string call, string emitted)
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            Host
+                + $$"""
+                    public object Run(List<int> xs, List<decimal> ms, List<decimal?> nms, List<string> ss, List<int?> ns) => {{call}};
+                }
+                """
+        );
+
+        await Assert.That(files["calls.ts"]).Contains(emitted);
     }
 
     /// <summary>

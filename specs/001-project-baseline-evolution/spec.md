@@ -407,6 +407,26 @@ Product requirements added after the migration (normative; each one is traced by
   constructor initializer, an explicit delegate `.Invoke(...)` and an `[Emit]` callee. Traced by the "Caller
   argument expressions" row of the feature-support matrix.
 
+- **FR-056** (LINQ aggregates by element type, #618, #657): `Sum`, `Average`, `Min`, `Max`,
+  `MinBy` and `MaxBy` in TypeScript MUST give what .NET gives for the element type. `Min` / `Max`
+  of a non-nullable sequence and `MinBy` / `MaxBy` of a value-typed element throw
+  `InvalidOperationException` when empty; of a `Nullable<T>` or reference result they skip nulls and
+  give `null` when no value is left. `double` `NaN` wins `Min` and loses `Max`. `decimal` sums and
+  averages use decimal.js arithmetic (`sumDecimal`, `averageDecimal`), and `decimal`, `string`,
+  date and other ordered values are ordered by `compareKeys` (strings in ordinal order, which
+  differs from .NET's culture-sensitive order for mixed case). Traced by the "LINQ pipe lowering" row
+  of the feature-support matrix.
+
+- **FR-057** (LINQ set operators, #657): `Union`, `Intersect` and `Except` MUST lower to the
+  pipe operators `union`, `intersect` and `except` of `metano-runtime/system/linq`, comparing
+  elements by value as `HashSet` does and yielding distinct elements in .NET's order. The overloads
+  that take a comparer report MS0001 unless the comparer is `null`.
+
+- **FR-058** (LINQ static call form, #619, #657): `Enumerable.X(xs, ...)` /
+  `Queryable.X(xs, ...)` for a method that has a pipe operator MUST lower to the same pipe as
+  `xs.X(...)`, including when nested in a chain. A static call that names an argument reports
+  MS0001. The legacy fluent `Enumerable.from(...)` mappings no longer exist.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

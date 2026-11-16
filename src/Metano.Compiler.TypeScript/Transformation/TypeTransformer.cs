@@ -2839,7 +2839,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         StringComparer.Ordinal
     )
     {
-        "Enumerable",
         "Grouping",
         IrRuntimeRequirementToTsImport.ImportedNameOf("HashCode"),
         "HashSet",
