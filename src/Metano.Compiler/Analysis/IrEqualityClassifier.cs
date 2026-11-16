@@ -23,24 +23,58 @@ namespace Metano.Compiler.Analysis;
 /// Temporal, the runtime UUID, nested transpiled records, plain
 /// classes / structs the user authored, or tuples (which compare
 /// element-wise on the C# side) — or a value <c>===</c> gets wrong:
-/// a <c>double</c> / <c>float</c> (<c>NaN</c> equals itself on .NET) and a
-/// bare type parameter, which can hold any of those (#674).
+/// a <c>double</c> / <c>float</c> (<c>NaN</c> equals itself on .NET).
+/// </para>
+/// <para>
+/// "Default" means <c>defaultEquals(a, b)</c>, .NET's
+/// <c>EqualityComparer&lt;T&gt;.Default</c>, for a field whose static type does
+/// not say how it compares: a type parameter, <c>object</c>, an interface or a
+/// class (#674).
 /// </para>
 /// </summary>
 public static class IrEqualityClassifier
 {
     /// <summary>
+    /// <c>true</c> when <paramref name="type"/> compares with <c>===</c>.
+    /// </summary>
+    public static bool UseStrictEquality(IrTypeRef? type) =>
+        EqualityOf(type) is FieldEqualityKind.Strict;
+
+    /// <summary>
+    /// How the synthesized <c>equals</c> compares a field of <paramref name="type"/>:
+    /// <c>===</c>, the structural <c>valueEquals</c> for types known to compare by
+    /// value, or <c>defaultEquals</c> (.NET's <c>EqualityComparer&lt;T&gt;.Default</c>)
+    /// when the static type does not say: a type parameter, <c>object</c>, an
+    /// interface, a class (reference equality unless it overrides <c>Equals</c>).
+    /// </summary>
+    public static FieldEqualityKind EqualityOf(IrTypeRef? type) =>
+        type switch
+        {
+            IrTypeParameterRef => FieldEqualityKind.Default,
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Object } => FieldEqualityKind.Default,
+            IrNullableTypeRef nullable => EqualityOf(nullable.Inner),
+            IrNamedTypeRef
+            {
+                Semantics.Kind: IrNamedTypeKind.Class
+                    or IrNamedTypeKind.Interface
+                    or IrNamedTypeKind.Delegate
+                    or IrNamedTypeKind.Exception
+            } => FieldEqualityKind.Default,
+            _ => LegacyStrictOrValue(type) ? FieldEqualityKind.Strict : FieldEqualityKind.Value,
+        };
+
+    /// <summary>
     /// True when the field's lowered surface uses <c>===</c> in the
     /// synthesized record <c>equals</c> body. False routes through the
     /// runtime <c>valueEquals</c> helper.
     /// </summary>
-    public static bool UseStrictEquality(IrTypeRef? type) =>
+    private static bool LegacyStrictOrValue(IrTypeRef? type) =>
         type switch
         {
             null => true,
             IrPrimitiveTypeRef p => UseStrictEqualityForPrimitive(p.Primitive),
             IrTypeParameterRef => false,
-            IrNullableTypeRef nullable => UseStrictEquality(nullable.Inner),
+            IrNullableTypeRef nullable => LegacyStrictOrValue(nullable.Inner),
             IrNamedTypeRef named => UseStrictEqualityForNamed(named),
             // Collection-like / function-like / reference shapes —
             // C#'s default equality comparer falls back to reference
@@ -111,4 +145,12 @@ public static class IrEqualityClassifier
             is IrNamedTypeKind.StringEnum
                 or IrNamedTypeKind.NumericEnum
                 or IrNamedTypeKind.Branded;
+}
+
+/// <summary>The comparison a record field gets in the synthesized <c>equals</c>.</summary>
+public enum FieldEqualityKind
+{
+    Strict,
+    Value,
+    Default,
 }

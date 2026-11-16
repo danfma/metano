@@ -155,10 +155,15 @@ public static class IrToTsRecordSynthesisBridge
         var self = new TsPropertyAccess(new TsIdentifier("this"), field.Name);
         var other = new TsPropertyAccess(new TsIdentifier("other"), field.Name);
 
-        if (IrEqualityClassifier.UseStrictEquality(field.Type))
-            return new TsBinaryExpression(self, "===", other);
-
-        return new TsCallExpression(new TsRuntimeHelperReference("valueEquals"), [self, other]);
+        return IrEqualityClassifier.EqualityOf(field.Type) switch
+        {
+            FieldEqualityKind.Strict => new TsBinaryExpression(self, "===", other),
+            FieldEqualityKind.Default => new TsCallExpression(
+                new TsRuntimeHelperReference("defaultEquals"),
+                [self, other]
+            ),
+            _ => new TsCallExpression(new TsRuntimeHelperReference("valueEquals"), [self, other]),
+        };
     }
 
     /// <summary>

@@ -128,13 +128,26 @@ public static class IrRuntimeRequirementScanner
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
             // line lands only when a non-strict field actually exists.
-            if (!IrRecordEqualityOverrides.DeclaresEquals(c) && HasNonStrictEqualityMember(c))
-                acc.Add(new IrRuntimeRequirement("ValueEquals", IrRuntimeCategory.Equality));
+            if (!IrRecordEqualityOverrides.DeclaresEquals(c))
+                AddEqualityHelpers(c, acc);
         }
     }
 
-    private static bool HasNonStrictEqualityMember(IrClassDeclaration c) =>
-        (c.EqualityMembers ?? []).Any(m => !IrEqualityClassifier.UseStrictEquality(m.Type));
+    private static void AddEqualityHelpers(IrClassDeclaration c, HashSet<IrRuntimeRequirement> acc)
+    {
+        var strategies = (c.EqualityMembers ?? []).Select(m =>
+            IrEqualityClassifier.EqualityOf(m.Type)
+        );
+
+        foreach (var strategy in strategies.Distinct())
+        {
+            if (strategy is FieldEqualityKind.Value)
+                acc.Add(new IrRuntimeRequirement("ValueEquals", IrRuntimeCategory.Equality));
+
+            if (strategy is FieldEqualityKind.Default)
+                acc.Add(new IrRuntimeRequirement("DefaultEquals", IrRuntimeCategory.Equality));
+        }
+    }
 
     private static void ScanInterface(IrInterfaceDeclaration i, HashSet<IrRuntimeRequirement> acc)
     {

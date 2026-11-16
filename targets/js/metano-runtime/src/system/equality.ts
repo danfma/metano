@@ -356,3 +356,32 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * local or a method the user named `hashCode` (records declare one).
  */
 export const valueHashCode = hashCode;
+
+/**
+ * .NET's `EqualityComparer<T>.Default.Equals` for a value whose static type is open
+ * (a type parameter, `object`, an interface, a class): the same reference, or both
+ * nullish, is equal; numbers are equal when `===` or both `NaN`; a value with an
+ * `equals` method (records, structs, `Decimal`, user overrides) compares through it; a
+ * `Temporal.Duration` (a `TimeSpan`) by its length; a `Date` by its time. Everything
+ * else (a class without `Equals`, an array, a `Map`, a `Set`) compares by reference.
+ * Unlike {@link equals}, it never compares structurally.
+ */
+export function defaultEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+
+  if (typeof a === "number") return typeof b === "number" && Number.isNaN(a) && Number.isNaN(b);
+  if (typeof a !== "object" || typeof b !== "object") return false;
+
+  if ("equals" in a && typeof (a as { equals?: unknown }).equals === "function") {
+    return (a as { equals(other: unknown): boolean }).equals(b);
+  }
+
+  if (isDuration(a) || isDuration(b)) {
+    return isDuration(a) && isDuration(b) && durationsEqual(a, b);
+  }
+
+  if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime();
+
+  return false;
+}

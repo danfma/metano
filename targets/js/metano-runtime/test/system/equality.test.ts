@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
+import { Decimal } from "decimal.js";
 import {
+  defaultEquals,
   equals,
   hashCode,
   objectEquals,
@@ -457,5 +459,64 @@ describe("Temporal.Duration (a C# TimeSpan)", () => {
     expect(hashCode(minutes(5))).toBe(hashCode(Temporal.Duration.from("PT300S")));
     expect(hashCode(minutes(5))).not.toBe(hashCode(minutes(6)));
     expect(hashCode(Temporal.Duration.from("P1W"))).toBe(hashCode(Temporal.Duration.from("P1W")));
+  });
+});
+
+describe("defaultEquals (EqualityComparer<T>.Default)", () => {
+  class Plain {
+    constructor(readonly value: number) {}
+  }
+
+  class Valued {
+    constructor(readonly value: number) {}
+
+    equals(other: unknown): boolean {
+      return other instanceof Valued && other.value === this.value;
+    }
+  }
+
+  test("a class without equals compares by reference", () => {
+    const first = new Plain(1);
+
+    expect(defaultEquals(first, new Plain(1))).toBe(false);
+    expect(defaultEquals(first, first)).toBe(true);
+  });
+
+  test("a value with an equals method compares through it", () => {
+    expect(defaultEquals(new Valued(1), new Valued(1))).toBe(true);
+    expect(defaultEquals(new Valued(1), new Valued(2))).toBe(false);
+    expect(defaultEquals(new Decimal("1.0"), new Decimal("1.00"))).toBe(true);
+  });
+
+  test("numbers are equal when === or both NaN", () => {
+    expect(defaultEquals(Number.NaN, Number.NaN)).toBe(true);
+    expect(defaultEquals(0, -0)).toBe(true);
+    expect(defaultEquals(1, 2)).toBe(false);
+    expect(defaultEquals(1, "1")).toBe(false);
+  });
+
+  test("strings and booleans compare by value", () => {
+    expect(defaultEquals("a", "a")).toBe(true);
+    expect(defaultEquals("a", "b")).toBe(false);
+  });
+
+  test("arrays, maps and sets compare by reference", () => {
+    expect(defaultEquals([1], [1])).toBe(false);
+    expect(defaultEquals(new Map(), new Map())).toBe(false);
+    expect(defaultEquals(new Set(), new Set())).toBe(false);
+  });
+
+  test("durations compare by length", () => {
+    const minutes = (count: number) => Temporal.Duration.from({ minutes: count });
+
+    expect(defaultEquals(minutes(5), Temporal.Duration.from("PT300S"))).toBe(true);
+    expect(defaultEquals(minutes(5), minutes(6))).toBe(false);
+  });
+
+  test("null and undefined", () => {
+    expect(defaultEquals(null, null)).toBe(true);
+    expect(defaultEquals(null, undefined)).toBe(true);
+    expect(defaultEquals(null, new Plain(1))).toBe(false);
+    expect(defaultEquals(new Plain(1), null)).toBe(false);
   });
 });

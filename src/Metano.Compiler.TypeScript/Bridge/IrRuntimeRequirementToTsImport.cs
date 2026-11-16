@@ -79,6 +79,7 @@ public static class IrRuntimeRequirementToTsImport
         {
             "HashCode" => ("metano-runtime", "HashCode", false),
             "ValueEquals" => ("metano-runtime", "valueEquals", false),
+            "DefaultEquals" => ("metano-runtime", "defaultEquals", false),
             "TupleEquals" => ("metano-runtime", "tupleEquals", false),
             "RecordCopy" => ("metano-runtime", "copyRecordWith", false),
             "IntegerDivision" => ("metano-runtime", "intDiv", false),

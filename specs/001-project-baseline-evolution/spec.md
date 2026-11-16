@@ -569,13 +569,15 @@ Product requirements added after the migration (normative; each one is traced by
   The implicit initializer of an enum field MUST be the same value, never the lowest member;
   a `[StringEnum]` field without a zero member gets no initializer.
 - **FR-060** (record field equality, #674): The generated `equals` of a record MUST compare a
-  field through the runtime's `valueEquals` unless `===` is .NET's equality for its type: a
-  `double` / `float` (`NaN` equals itself), a type parameter, `decimal`, the date and time
-  types, `Guid`, tuples and transpiled record, class and struct types. Integers, `string`,
-  `bool`, enums and branded values keep `===`. An equality guard
+  field as .NET's `EqualityComparer<T>.Default` does. A field of a type that compares by value
+  with `===` (integers, `string`, `bool`, enums, branded values) uses `===`; a `double` /
+  `float`, `decimal`, the date and time types, `Guid`, tuples and transpiled record and struct
+  types use the runtime's `valueEquals`; a field whose static type does not say (a type
+  parameter, `object`, an interface, a class) uses the runtime's `defaultEquals`: its own
+  `equals` when it has one, `NaN` equal to itself, else reference equality. An equality guard
   (`ArgumentOutOfRangeException.ThrowIfEqual` / `ThrowIfNotEqual`) admits a sealed generic
-  record, and a record with a `double` / `float` field, when every type argument and field is
-  such a value.
+  record, and a record with a `double` / `float` field, when every type argument and field is a
+  value of the first kind or one the runtime compares as .NET does.
 - **FR-061** (null guards by declared type, #649): The null guard of a string concatenation,
   an interpolation hole, a list pattern's subject and an exception's `message` argument MUST
   follow the declared nullability of the operand, not Roslyn's flow state, which is optimistic

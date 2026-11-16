@@ -1,10 +1,10 @@
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, defaultEquals } from "metano-runtime";
 
 export class Result<T> {
   constructor(readonly value: T, readonly success: boolean) { }
 
   equals(other: any): boolean {
-    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals(this.value, other.value) && this.success === other.success;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && defaultEquals(this.value, other.value) && this.success === other.success;
   }
 
   hashCode(): number {
