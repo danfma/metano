@@ -24,6 +24,16 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public static class IrExceptionConstructionExtractor
 {
+    /// <summary>.NET's message of a <c>SwitchExpressionException</c>.</summary>
+    public const string SwitchExpressionDefaultMessage =
+        "Non-exhaustive switch expression failed to match its input.";
+
+    /// <summary>
+    /// The line .NET appends to an exception message for the value no switch
+    /// arm matched, before the value and a closing <c>.</c>.
+    /// </summary>
+    public const string UnmatchedValueLine = "\nUnmatched value was ";
+
     private const string SystemExceptionName = "System.Exception";
     private const string MessageParameterName = "message";
 
@@ -63,7 +73,7 @@ public static class IrExceptionConstructionExtractor
             "Could not find the drive. The drive might not be ready or might not be mapped.",
         ["System.Threading.Tasks.TaskCanceledException"] = "A task was canceled.",
         ["System.Runtime.CompilerServices.SwitchExpressionException"] =
-            "Non-exhaustive switch expression failed to match its input.",
+            SwitchExpressionDefaultMessage,
         ["System.Text.Json.JsonException"] =
             "Exception of type 'System.Text.Json.JsonException' was thrown.",
     };

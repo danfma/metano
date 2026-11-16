@@ -1,3 +1,4 @@
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -73,9 +74,6 @@ public static class IrToTsExceptionConstructionBridge
 
     private const string SwitchExpressionExceptionTypeName =
         "System.Runtime.CompilerServices.SwitchExpressionException";
-
-    private const string SwitchExpressionDefaultMessage =
-        "Non-exhaustive switch expression failed to match its input.";
 
     /// <summary>
     /// Whether the class currently being emitted overrides <c>Message</c> —
@@ -274,9 +272,13 @@ public static class IrToTsExceptionConstructionBridge
     private static TsExpression SwitchExpressionMessage(TsExpression unmatchedValue) =>
         new TsConditionalExpression(
             new TsBinaryExpression(unmatchedValue, "==", new TsLiteral("null")),
-            new TsStringLiteral(SwitchExpressionDefaultMessage),
+            new TsStringLiteral(IrExceptionConstructionExtractor.SwitchExpressionDefaultMessage),
             new TsTemplateLiteral(
-                [SwitchExpressionDefaultMessage + "\nUnmatched value was ", "."],
+                [
+                    IrExceptionConstructionExtractor.SwitchExpressionDefaultMessage
+                        + IrExceptionConstructionExtractor.UnmatchedValueLine,
+                    ".",
+                ],
                 [unmatchedValue]
             )
         );
@@ -406,7 +408,7 @@ public static class IrToTsExceptionConstructionBridge
         AppendValueLine(
             composer,
             plan.FoldedValueOf(IrExceptionArgumentRole.UnmatchedValue, operands),
-            "\nUnmatched value was "
+            IrExceptionConstructionExtractor.UnmatchedValueLine
         );
 
         return composer.Build();

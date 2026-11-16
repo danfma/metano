@@ -766,12 +766,6 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 GuardTestKind.Object
             ),
 
-            // A BCL-exported class (decimal → decimal.js `Decimal`) is a
-            // runtime constructor the compilation imports, not a project type
-            // with its own guard: test the constructor. A bare presence check
-            // would accept plain JS numbers no C# decimal ever produces. The
-            // node's own origin (#477) is the test — a project type named
-            // Decimal has none and falls to its guard below.
             // A BCL exception: the test its resolved runtime class carries
             // (`instanceof Error` for System.Exception, and for an unmapped
             // type, which names the root: a structural widening, documented).
@@ -780,6 +774,12 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 GuardTestKind.Object
             ),
 
+            // A BCL-exported class (decimal → decimal.js `Decimal`) is a
+            // runtime constructor the compilation imports, not a project type
+            // with its own guard: test the constructor. A bare presence check
+            // would accept plain JS numbers no C# decimal ever produces. The
+            // node's own origin (#477) is the test — a project type named
+            // Decimal has none and falls to its guard below.
             TsNamedType { Origin: not null } named when IsBclExportedClass(named) => Required(
                 InstanceofCheck(fieldAccess, named.Name, named.Origin),
                 GuardTestKind.Object
