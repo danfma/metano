@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The .NET side of the BCL conformance rows for the members whose JavaScript lowering
+    diverged from .NET (wave 3.0, group A): runs each row on real .NET and writes the result,
+    or the exception type, parameter and message, to
+    targets/js/metano-runtime/test/conformance/*.json. The metano-runtime helpers must produce
+    the same value (bun test, and `node test/conformance/run-node.ts`).
+    Regenerate by running this project from the repository (dotnet run, with
+    tests/BclReference as the project).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+</Project>

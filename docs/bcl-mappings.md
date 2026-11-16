@@ -480,9 +480,17 @@ native array methods directly:
 | `s.Contains(sub)` | `s.includes(sub)` |
 | `s.StartsWith(p)` | `s.startsWith(p)` |
 | `s.EndsWith(p)` | `s.endsWith(p)` |
-| `s.Substring(i)` / `s.Substring(i, n)` | `s.substring(i)` / `s.substring(i, i+n)` |
+| `s.Substring(i)` / `s.Substring(i, n)` | `stringSubstring(s, i)` / `stringSubstring(s, i, n)` (from `metano-runtime`) |
+| `s.Remove(i)` / `s.Remove(i, n)` / `s.Insert(i, t)` | `stringRemove(s, i)` / `stringRemove(s, i, n)` / `stringInsert(s, i, t)` |
+| `s.PadLeft(n)` / `s.PadRight(n, c)` | `stringPadLeft(s, n)` / `stringPadRight(s, n, c)` |
+| `s.IndexOf(t, i)` / `s.IndexOf(t, i, n)` / `s.IndexOf(t, comparison)` | `stringIndexOf(s, t, i)` / `stringIndexOf(s, t, i, n)` / `stringIndexOf(s, t, 0, undefined, comparison)` |
+| `s.LastIndexOf(t, i)` (and the count and comparison forms) | `stringLastIndexOf(s, t, i)` |
+| `s.StartsWith(p, comparison)` / `s.EndsWith(p, comparison)` / `s.Contains(t, comparison)` | `stringStartsWith(s, p, comparison)` / `stringEndsWith(...)` / `stringContains(...)` |
+| `s.Trim(c)` / `s.TrimStart(c1, c2)` / `s.TrimEnd(chars)` | `stringTrim(s, c)` / `stringTrimStart(s, c1, c2)` / `stringTrimEnd(s, ...chars)` |
+| `s.Split(c)` / `s.Split(c, count)` / `s.Split(sep, options)` / `s.Split()` | `stringSplit(s, c, false)` / `stringSplit(s, c, false, count)` / `stringSplit(s, sep, false, undefined, options)` / `stringSplitChars(s)` |
+| `s.ToCharArray()` / `s.ToCharArray(i, n)` | `stringToCharArray(s)` / `stringToCharArray(s, i, n)` |
+| `string.Join(sep, values, i, n)` | `stringJoinRange(sep, values, i, n)` |
 | `s.Replace(a, b)` (`char` or `string` overloads) | `stringReplace(s, a, b)` (from `metano-runtime`) |
-| `s.Split(c)` | `s.split(c)` |
 | `s.Length` | `s.length` |
 | `string.IsNullOrEmpty(s)` | `isNullOrEmpty(s)` (from `metano-runtime`) |
 | `string.IsNullOrWhiteSpace(s)` | `isNullOrWhiteSpace(s)` (from `metano-runtime`) |

@@ -702,6 +702,15 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 
 ## 2.10.1
 
+- **`string` members (#661).** `s.Substring(i, n)` was `s.substring(i, n)`, which reads `n` as
+  an end index (`"abcdef".Substring(1, 2)` printed `"b"`); it is `stringSubstring(s, i, n)` now,
+  and so are `Remove`, `Insert`, `PadLeft` / `PadRight`, `ToCharArray(i, n)`, `IndexOf` /
+  `LastIndexOf` with a start, count or `StringComparison`, `StartsWith` / `EndsWith` /
+  `Contains` with a comparison, `Trim` / `TrimStart` / `TrimEnd` with characters, every `Split`
+  with characters, a count or options, and `string.Join(sep, values, start, count)`. They throw
+  `ArgumentOutOfRangeException` / `ArgumentNullException` for a bad argument where
+  JavaScript clamps, swaps or ignores it. `StringComparison` and `StringSplitOptions` are
+  `metano-runtime` enums now (they were unresolved identifiers).
 _2026-11-03_
 
 

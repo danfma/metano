@@ -190,13 +190,13 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)(value.substring(1));"
+                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)(stringSubstring(value, 1));"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0.slice(1, receiver$temp$0.length - 1))(value.substring(1));"
+                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0.slice(1, receiver$temp$0.length - 1))(stringSubstring(value, 1));"
             );
     }
 
@@ -263,7 +263,10 @@ public class NullConditionalMappingTranspileTests
 
         await Assert.That(output).Contains("return order?.self.self.items.length ?? null;");
         await Assert.That(output).Contains("return order?.items[0] ?? null;");
-        await Assert.That(output).Contains("return value?.substring(1).trim() ?? null;");
+
+        await Assert
+            .That(output)
+            .Contains("return value == null ? null : stringSubstring(value, 1).trim();");
     }
 
     [Test]

@@ -1,3 +1,4 @@
+import { stringSubstring } from "metano-runtime";
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 import { Chained } from "./chained";
 import { Derived } from "./derived";
@@ -182,7 +183,7 @@ export class SourceOrderCalls {
   }
 
   static bclInstance(): number {
-    return (($arg1, $arg0) => "abcdefgh".substring($arg0, $arg1))(Trace.next("p"), Trace.next("q")).length;
+    return (($arg1, $arg0) => stringSubstring("abcdefgh", $arg0, $arg1))(Trace.next("p"), Trace.next("q")).length;
   }
 
   static bclException(): number {

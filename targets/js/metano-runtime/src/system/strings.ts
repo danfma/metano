@@ -17,7 +17,7 @@ const DOTNET_WHITE_SPACE_CODES: ReadonlySet<number> = new Set([
 ]);
 
 /** Whether `code` is a .NET white-space character (`char.IsWhiteSpace`). */
-function isDotNetWhiteSpace(code: number): boolean {
+export function isDotNetWhiteSpace(code: number): boolean {
   const isControlWhiteSpace = code >= 0x0009 && code <= 0x000d;
   const isSpaceSeparatorRange = code >= 0x2000 && code <= 0x200a;
 

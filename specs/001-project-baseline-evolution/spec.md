@@ -476,6 +476,20 @@ Product requirements added after the migration (normative; each one is traced by
   whose enum declares `final String value;` and `const E(this.value);`; a numeric enum declares
   neither. Traced by the "String enums" row of the feature-support matrix.
 
+- **FR-053** (string members with .NET arguments, #661): A `System.String` member whose
+  JavaScript namesake reads its arguments differently or clamps where .NET throws — `Substring`,
+  `Remove`, `Insert`, `PadLeft` / `PadRight`, `ToCharArray(start, length)`, `IndexOf` /
+  `LastIndexOf` with a start index, count or `StringComparison`, `StartsWith` / `EndsWith` /
+  `Contains` with a `StringComparison`, `Trim` / `TrimStart` / `TrimEnd` with characters, `Split`
+  with characters, a count or `StringSplitOptions`, and `string.Join(separator, values, start,
+  count)` — MUST lower in TypeScript to a `metano-runtime` helper that returns .NET's value for
+  valid arguments, evaluates each argument once and throws .NET's `ArgumentOutOfRangeException`
+  / `ArgumentNullException` (type, parameter name and message) for invalid ones. Comparisons
+  are ordinal; the culture-sensitive `StringComparison` members behave as their ordinal
+  counterparts. The helpers MUST agree with rows recorded from real .NET under Bun and Node
+  (`tests/BclReference`). Not covered: `AsSpan` / `Slice` on strings and spans, culture-aware
+  comparison. Traced by the "String members with .NET arguments" row of the feature-support
+  matrix.
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
