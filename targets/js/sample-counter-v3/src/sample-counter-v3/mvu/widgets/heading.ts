@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { formatDouble } from "metano-runtime";
 import { Widget } from "#/sample-counter-v3/mvu/widget";
 
 export class Heading extends Widget {
@@ -39,7 +40,7 @@ export class Heading extends Widget {
                 : 0.75;
     const element = document.createElement(headingType.tagName);
     element.textContent = this._content;
-    element.setAttribute("style", `font-size:${sizeEm}em`);
+    element.setAttribute("style", `font-size:${formatDouble(sizeEm)}em`);
 
     return element;
   }

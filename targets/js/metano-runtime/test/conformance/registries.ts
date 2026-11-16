@@ -8,6 +8,8 @@
 
 import { tryParseDecimal } from "../../dist/system/decimal-parsing.js";
 import * as dateTimeOffsets from "../../dist/system/date-time-offset.js";
+import { formatBoolean } from "../../dist/system/boolean-format.js";
+import { formatDouble, formatSingle } from "../../dist/system/double-format.js";
 import * as numberParsing from "../../dist/system/number-parsing.js";
 import * as stringMembers from "../../dist/system/string-members.js";
 import * as timeSpans from "../../dist/system/time-span.js";
@@ -94,4 +96,10 @@ export const parsingRegistry: RowRegistry = {
 
     return [found, value.toFixed()];
   },
+};
+
+export const textRegistry: RowRegistry = {
+  formatBoolean,
+  formatDouble: (value: number | null) => formatDouble(value),
+  formatSingle,
 };

@@ -111,3 +111,56 @@ using Metano.Annotations;
     RuntimeImports = "formatDouble",
     WhenParameterTypes = [typeof(string), typeof(IFormatProvider)]
 )]
+
+// ─── Default text: ToString() (baseline FR-014, #308) ───────────
+// The text a `bool`, `double` or `float` prints without a format, in the invariant culture:
+// `True` / `False`, `1E-07`, `1E+21`, `-0` (JavaScript writes `true`, `1e-7`, `1e+21`, `0`).
+// `$"{value}"`, `"x" + value`, `string.Join` over these types and an explicit `ToString()`
+// all call the same runtime function, so a project that prints none of them imports none; the
+// extractor routes the first three through the mapping below (`DefaultTextConversion`).
+// `formatDouble` with no format is `G`, the shortest round-trip text. `formatSingle` reads the
+// value as the `float` C# holds (the TypeScript `number` need not be single precision) and
+// prints the shortest digits that read back as it. A `null` (`bool?`, `double?`, `float?`)
+// prints as the empty string, as in C#. The provider is ignored, as in every provider overload.
+[assembly: MapMethod(
+    typeof(bool),
+    nameof(bool.ToString),
+    JsTemplate = "formatBoolean($this)",
+    RuntimeImports = "formatBoolean",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(bool),
+    nameof(bool.ToString),
+    JsTemplate = "formatBoolean($this)",
+    RuntimeImports = "formatBoolean",
+    WhenParameterTypes = [typeof(IFormatProvider)]
+)]
+[assembly: MapMethod(
+    typeof(double),
+    nameof(double.ToString),
+    JsTemplate = "formatDouble($this)",
+    RuntimeImports = "formatDouble",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(double),
+    nameof(double.ToString),
+    JsTemplate = "formatDouble($this)",
+    RuntimeImports = "formatDouble",
+    WhenParameterTypes = [typeof(IFormatProvider)]
+)]
+[assembly: MapMethod(
+    typeof(float),
+    nameof(float.ToString),
+    JsTemplate = "formatSingle($this)",
+    RuntimeImports = "formatSingle",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(float),
+    nameof(float.ToString),
+    JsTemplate = "formatSingle($this)",
+    RuntimeImports = "formatSingle",
+    WhenParameterTypes = [typeof(IFormatProvider)]
+)]

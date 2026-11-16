@@ -724,6 +724,13 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `float` and `bool` call `parseInt32` … `parseBoolean`, which throw `FormatException` and
   `OverflowException` as .NET does. A constant `NumberStyles` outside the supported set reports
   `MS0066`, as for `long`.
+- **Default text of `bool`, `double`, `float` (#308).** In interpolation, string concatenation,
+  `ToString()` and `string.Join` over a value of those static types, `true` is `True`, `1e-7`
+  is `1E-07`, `1e21` is `1E+21` and negative zero is `-0` (the invariant-culture text of
+  .NET); the output calls `formatBoolean`, `formatDouble` and `formatSingle`. Output that
+  printed a `double` or `bool` through JavaScript's conversion changes: regenerate, and use
+  `[Emit]` or `[MapMethod]` where the JavaScript text is wanted. Other types and boxed values
+  are untouched.
 _2026-11-03_
 
 

@@ -536,9 +536,10 @@ span, culture and `AsSpan`/`Slice` forms are not mapped.
 
 Each element is converted the way JS `Array.prototype.join` converts it, which is the
 same conversion string interpolation and `ToString()` use elsewhere in the generated
-code: `null` elements become empty strings, as in .NET, but `bool` values print as
-`true` / `false` (C# prints `True` / `False`) and numbers use the JS number format
-(`1e+21`, where C# prints `1E+21`).
+code: `null` elements become empty strings, as in .NET. A `Join<T>` over `bool`, `double`
+or `float` converts each element with the default-text helper (see
+[Default text of `bool`, `double` and `float`](#default-text-of-bool-double-and-float)); other
+numbers use the JS number format, which agrees with .NET for integers.
 
 `stringReplace` replaces every occurrence, as C# does (JS `replace` stops at the first),
 and inserts the replacement literally (JS `replace` and `replaceAll` expand `$&`-style
@@ -614,6 +615,32 @@ standard numeric format strings in the invariant culture, with the same output a
   same holds for an enum (its name or number as the target holds it) and a `decimal`
   (decimal.js drops trailing zeros: `1.10m` prints `1.1`; #662).
 - **Ignored formats.** C# passes a format only to an `IFormattable` value, so a format on
+## Default text of `bool`, `double` and `float`
+
+Without a format, a `bool`, `double` or `float` converts to text as .NET prints it in the
+invariant culture (baseline FR-014, #308): `True` / `False`, `1E-07`, `1E+21`, `-0`,
+`NaN`, `Infinity` (JavaScript writes `true`, `1e-7`, `1e+21`, `0`). The conversion calls one
+`metano-runtime` function, chosen by the **static type** of the value, in interpolation holes,
+string concatenation (`+`, `+=`), `ToString()` and `string.Join` over `bool`, `double` or
+`float` values (and over their nullable forms, which print `null` as `""`, as in C#); every other type keeps the
+native conversion, so a project that converts none of these three imports none.
+
+| C# | TypeScript |
+|----|----|
+| `$"{flag}"`, `"x" + flag`, `flag.ToString()` (`bool`) | `` `${formatBoolean(flag)}` ``, `"x" + formatBoolean(flag)`, `formatBoolean(flag)` |
+| `$"{d}"`, `d.ToString()` (`double`) | `` `${formatDouble(d)}` ``, `formatDouble(d)` (the `G` format) |
+| `$"{f}"`, `f.ToString()` (`float`) | `formatSingle(f)` |
+| `$"{flag,8}"` | `alignValue(formatBoolean(flag), 8)` |
+| `string.Join(",", flags)` (`IEnumerable<bool>`) | `flags.map((item) => formatBoolean(item)).join(",")` |
+
+`formatSingle` first rounds the number to the `float` C# would hold (the generated code keeps
+a `float` in a JavaScript `number` that need not be single precision) and prints the shortest
+digits that read back as that single-precision value: `1f / 3` prints `0.33333334`, and the
+`float` `0.1f + 0.2f` prints `0.3`. A boxed value (`object o = true`, `string.Join(",", objects)`)
+has no static type to read and keeps the JavaScript text. For native JavaScript text use
+`[Emit]` or `[MapMethod]`. The digits and notation of every row are checked against real .NET
+by `tests/BclReference` (bun and Node); Dart prints these values with its own conversion.
+
   any static type that does not implement it — `string`, `bool`, a user class, record or
   struct — is ignored, and so is one on a `char`; the output prints the clause-free hole
   (`$"{plain:X}"` is `${plain}`). `object`, an interface and a type parameter keep the

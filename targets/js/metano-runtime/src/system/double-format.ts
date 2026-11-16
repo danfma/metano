@@ -29,6 +29,12 @@ const DOUBLE_VALUES = "double";
 /** `G` / `R` without a precision keep fixed-point notation up to 17 integer digits (`1E+17` past it). */
 const ROUND_TRIP_DIGITS = 17;
 
+/** `float`'s `G` / `R` keep fixed-point notation up to 9 integer digits (`1E+09` past it). */
+const SINGLE_ROUND_TRIP_DIGITS = 9;
+
+/** The most significant digits a `float` needs to read back as itself. */
+const SINGLE_MAX_SIGNIFICANT_DIGITS = 9;
+
 /** The bits of a double's stored fraction. */
 const FRACTION_BITS = 52n;
 
@@ -125,12 +131,53 @@ function roundTrip(value: number, exponentLetter: string): string {
  * switches notation differently in JavaScriptCore and V8.
  */
 function shortestDigits(value: number): DecimalDigits {
-  const negative = isNegative(value);
+  return exponentialDigits(isNegative(value), Math.abs(value).toExponential());
+}
 
-  const [, head = "", tail = "", exponent = "0"] =
-    EXPONENTIAL_TEXT.exec(Math.abs(value).toExponential()) ?? [];
+/** The digits and scale of the `toExponential()` text of a magnitude. */
+function exponentialDigits(negative: boolean, exponential: string): DecimalDigits {
+  const [, head = "", tail = "", exponent = "0"] = EXPONENTIAL_TEXT.exec(exponential) ?? [];
 
   return decimalDigits(negative, head + tail, Number(exponent) + 1);
+}
+
+/**
+ * `float`'s default text (`$"{value}"`, `value.ToString()`, `"x" + value`): the shortest
+ * digits that read back as the same single-precision value, in `G` notation. The generated
+ * code holds a `float` in a JavaScript `number` that need not be a single-precision value
+ * (`1f / 3` is a double there), so the value is first rounded to the `float` C# would hold.
+ * A `null` value (a C# `float?`) is the empty string.
+ */
+export function formatSingle(value: number | null | undefined): string {
+  if (value == null) {
+    return "";
+  }
+
+  const single = Math.fround(value);
+
+  if (!Number.isFinite(single)) {
+    return nonFiniteText(single);
+  }
+
+  const digits = shortestSingleDigits(single);
+
+  return generalNotation(digits, Math.max(digits.digits.length, SINGLE_ROUND_TRIP_DIGITS), "E");
+}
+
+/** The shortest digits whose value rounds to the single-precision `value`. */
+function shortestSingleDigits(value: number): DecimalDigits {
+  const negative = isNegative(value);
+  const magnitude = Math.abs(value);
+
+  for (let digits = 1; digits < SINGLE_MAX_SIGNIFICANT_DIGITS; digits++) {
+    const candidate = magnitude.toExponential(digits - 1);
+
+    if (Math.fround(Number(candidate)) === magnitude) {
+      return exponentialDigits(negative, candidate);
+    }
+  }
+
+  return exponentialDigits(negative, magnitude.toExponential(SINGLE_MAX_SIGNIFICANT_DIGITS - 1));
 }
 
 /**

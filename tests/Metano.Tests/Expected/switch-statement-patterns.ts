@@ -1,3 +1,4 @@
+import { formatDouble } from "metano-runtime";
 import { Circle } from "./circle";
 import type { Shape } from "./shape";
 import { Square } from "./square";
@@ -13,13 +14,13 @@ export class Describer {
         {
           const c = o;
 
-          return "big circle " + c.r;
+          return "big circle " + formatDouble(c.r);
         }
       case o instanceof Circle:
         {
           const c = o;
 
-          return "circle " + c.r;
+          return "circle " + formatDouble(c.r);
         }
       case o instanceof Square:
       case typeof o === "number":
@@ -66,7 +67,7 @@ export class Describer {
           {
             const s = $subject;
 
-            return "big square " + s.side;
+            return "big square " + formatDouble(s.side);
           }
         case $subject instanceof Circle:
           return "circle";

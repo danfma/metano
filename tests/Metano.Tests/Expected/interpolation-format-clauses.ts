@@ -1,4 +1,4 @@
-import { alignValue, formatDouble, formatInt64, formatInteger } from "metano-runtime";
+import { alignValue, formatBoolean, formatDouble, formatInt64, formatInteger } from "metano-runtime";
 
 export class Clauses {
   constructor() { }
@@ -20,11 +20,11 @@ export class Clauses {
   }
 
   alignments(i: number, d: number, s: string, b: boolean, n: string | null): string {
-    return `[${alignValue(i, 5)}][${alignValue(d, -8)}][${alignValue(s, 4)}][${alignValue(b, 6)}][${alignValue(n, 3)}]`;
+    return `[${alignValue(i, 5)}][${alignValue(formatDouble(d), -8)}][${alignValue(s, 4)}][${alignValue(formatBoolean(b), 6)}][${alignValue(n, 3)}]`;
   }
 
   ignoredFormats(s: string, b: boolean, c: string): string {
-    return `${s}|${b}|${alignValue(c, 3)}`;
+    return `${s}|${formatBoolean(b)}|${alignValue(c, 3)}`;
   }
 
   toStrings(i: number, d: number, b: number, s: number): string {

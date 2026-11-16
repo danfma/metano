@@ -84,6 +84,9 @@ public sealed partial class IrExpressionExtractor
     {
         var value = Extract(operand);
 
+        if (DefaultTextCall(operand, value) is { } text)
+            return text;
+
         // A base-object member call lowers to `object`'s defaults (#506), and
         // none of them is null — `object.ToString`'s `string?` annotation
         // notwithstanding — so the coalesce would be unreachable code tsgo
@@ -92,6 +95,22 @@ public sealed partial class IrExpressionExtractor
             ? new IrBinaryExpression(value, IrBinaryOp.NullCoalescing, EmptyStringLiteral)
             : value;
     }
+
+    /// <summary>
+    /// <c>value.ToString()</c> for an operand whose static type is a <c>bool</c>,
+    /// <c>double</c> or <c>float</c> (or its nullable form) when the target maps that call
+    /// (<see cref="DefaultTextConversion"/>, #308): the mapping prints .NET's text and a
+    /// <c>null</c> as <c>""</c>, so the operand needs no coalesce. <c>null</c> for any other
+    /// operand.
+    /// </summary>
+    private IrCallExpression? DefaultTextCall(ExpressionSyntax operand, IrExpression value) =>
+        DefaultTextConversion.MappedToString(
+            _semantic.GetTypeInfo(operand).Type,
+            _context.LowersByDeclarativeMapping
+        )
+            is { } toString
+            ? DefaultTextConversion.Call(value, toString, BuildOrigin(toString))
+            : null;
 
     private bool MayFormatAsNull(ExpressionSyntax operand)
     {

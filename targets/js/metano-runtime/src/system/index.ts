@@ -16,6 +16,7 @@ export * from "./integer-format.ts";
 export * from "./double-format.ts";
 export * from "./int64-parsing.ts";
 export * from "./int64-convert.ts";
+export * from "./boolean-format.ts";
 export * from "./big-integer.ts";
 export * from "./exceptions/index.ts";
 export * from "./math.ts";
