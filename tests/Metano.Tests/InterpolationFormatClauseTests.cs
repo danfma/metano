@@ -103,7 +103,9 @@ public class InterpolationFormatClauseTests
             """
         );
 
-        await Assert.That(files["plain.ts"]).Contains("return `${i} ${l} ${n ?? \"\"} ${s ?? \"\"}`;");
+        await Assert
+            .That(files["plain.ts"])
+            .Contains("return `${i} ${l} ${n ?? \"\"} ${s ?? \"\"}`;");
 
         await Assert.That(files["plain.ts"]).DoesNotContain("metano-runtime");
     }
