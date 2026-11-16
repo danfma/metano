@@ -372,17 +372,15 @@ public sealed partial class IrExpressionExtractor
         && symbol.ContainingAssembly.IsBclAssembly();
 
     /// <summary>
-    /// The receiver of <c>value?.ToString(format)</c> (the conditional
-    /// access's operand, which the continuation extracts as the bound,
-    /// non-null receiver); <c>null</c> for any other call.
+    /// The receiver of <c>value?.ToString(format)</c>, however the call sits in
+    /// the conditional chain (<c>m?.ToString("G").Length</c>,
+    /// <c>m?.ToString("G")?.Length</c>): the operand of the conditional access
+    /// whose binding the call is, which the continuation extracts as the bound,
+    /// non-null receiver; <c>null</c> for any other call.
     /// </summary>
     private static ExpressionSyntax? ConditionalReceiverOf(InvocationExpressionSyntax call) =>
-        call
-            is {
-                Expression: MemberBindingExpressionSyntax,
-                Parent: ConditionalAccessExpressionSyntax access
-            }
-            ? access.Expression
+        call.Expression is MemberBindingExpressionSyntax binding
+            ? QualifiedMemberSyntax.ConditionalReceiverOf(binding)
             : null;
 
     /// <summary>The argument passed as <c>ToString</c>'s <c>format</c>, by name or first by position.</summary>
