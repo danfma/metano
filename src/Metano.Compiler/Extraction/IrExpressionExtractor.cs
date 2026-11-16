@@ -341,23 +341,6 @@ public sealed partial class IrExpressionExtractor
         );
 
     /// <summary>
-    /// Lowers a C# <c>with</c> expression (<c>source with { X = expr }</c>)
-    /// into an <see cref="IrWithExpression"/>. Each
-    /// <see cref="AssignmentExpressionSyntax"/> inside the initializer becomes
-    /// an <see cref="IrWithAssignment"/> with the left-hand identifier as the
-    /// member name and the right-hand expression as the new value.
-    /// </summary>
-    /// <summary>
-    /// `[1, 2, 3]` is a C# 12 collection expression — its concrete runtime
-    /// type is decided by the conversion context (target type). When the
-    /// target is `HashSet<T>` / `ISet<T>` we lower to `new HashSet()` so the
-    /// runtime container has add/has semantics; for `Map<K,V>`-shaped
-    /// targets we'd need entries which the spread/element shape doesn't
-    /// carry yet, so those still surface as a plain array literal. Plain
-    /// `List<T>` / arrays / `IEnumerable<T>` keep the array literal — JS
-    /// arrays satisfy that interface natively.
-    /// </summary>
-    /// <summary>
     /// Lowers a null-conditional access (<c>a?.B</c>, <c>a?.B(x).C</c>,
     /// <c>a?[i]</c>, <c>a?.B?.C</c>, <c>a?.B = c</c>). Every step after the
     /// <c>?.</c> goes through <see cref="LowerConditionalContinuation"/>;
@@ -742,6 +725,13 @@ public sealed partial class IrExpressionExtractor
     private static bool IsUnsupportedPlaceholder(IrExpression expression) =>
         expression is IrUnsupportedExpression;
 
+    /// <summary>
+    /// Lowers a C# <c>with</c> expression (<c>source with { X = expr }</c>)
+    /// into an <see cref="IrWithExpression"/>. Each
+    /// <see cref="AssignmentExpressionSyntax"/> inside the initializer becomes
+    /// an <see cref="IrWithAssignment"/> with the left-hand identifier as the
+    /// member name and the right-hand expression as the new value.
+    /// </summary>
     private IrWithExpression ExtractWithExpression(WithExpressionSyntax withExpr)
     {
         var assignments = new List<IrWithAssignment>();
@@ -1381,19 +1371,6 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// An identifier can refer to a local, parameter, field, property, method, <em>or
-    /// a type</em>. The semantic model tells us which — we emit <see cref="IrTypeReference"/>
-    /// when the symbol is a type so backends can keep PascalCase for it (e.g., Dart's
-    /// <c>Counter.zero</c> needs <c>Counter</c> preserved).
-    /// <para>
-    /// When the identifier resolves to an instance member of the containing type
-    /// (C# allows the implicit-<c>this</c> shorthand), the extractor synthesizes
-    /// an explicit <see cref="IrMemberAccess"/> with an <see cref="IrThisExpression"/>
-    /// target. That keeps every backend that lowers the IR from having to
-    /// reconstruct the member-vs-local distinction.
-    /// </para>
-    /// </summary>
-    /// <summary>
     /// <c>OperationResult&lt;Issue&gt;</c> used as an expression (e.g., the
     /// receiver of <c>OperationResult&lt;Issue&gt;.Ok(…)</c>). Roslyn surfaces
     /// this as <see cref="GenericNameSyntax"/>; the semantic model still
@@ -1445,6 +1422,19 @@ public sealed partial class IrExpressionExtractor
         );
     }
 
+    /// <summary>
+    /// An identifier can refer to a local, parameter, field, property, method, <em>or
+    /// a type</em>. The semantic model tells us which — we emit <see cref="IrTypeReference"/>
+    /// when the symbol is a type so backends can keep PascalCase for it (e.g., Dart's
+    /// <c>Counter.zero</c> needs <c>Counter</c> preserved).
+    /// <para>
+    /// When the identifier resolves to an instance member of the containing type
+    /// (C# allows the implicit-<c>this</c> shorthand), the extractor synthesizes
+    /// an explicit <see cref="IrMemberAccess"/> with an <see cref="IrThisExpression"/>
+    /// target. That keeps every backend that lowers the IR from having to
+    /// reconstruct the member-vs-local distinction.
+    /// </para>
+    /// </summary>
     private IrExpression ExtractIdentifierName(IdentifierNameSyntax id)
     {
         var symbol = _semantic.GetSymbolInfo(id).Symbol;

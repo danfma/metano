@@ -1894,6 +1894,62 @@ public class DartBackendTests
     }
 
     /// <summary>
+    /// A <c>[StringEnum]</c> member keeps its C# name as the Dart identifier
+    /// (a <c>[Name]</c> value such as <c>in-progress</c> is not one), carries
+    /// the value, and the enum declares the field and constructor that hold
+    /// it (#677, checked with <c>dart analyze</c>).
+    /// </summary>
+    [Test]
+    public async Task StringEnum_KeepsMemberNames_AndDeclaresItsValueField()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum]
+            public enum Status { Pending, [Name("in-progress")] InProgress, [Name("done")] Finished }
+
+            [Transpile]
+            public static class Labels
+            {
+                public static bool Busy(Status status) => status == Status.InProgress;
+            }
+            """
+        );
+
+        await Assert
+            .That(files["status.dart"])
+            .IsEqualTo(
+                """
+                enum Status {
+                  pending('Pending'),
+                  inProgress('in-progress'),
+                  finished('done');
+
+                  final String value;
+
+                  const Status(this.value);
+                }
+
+                """
+            );
+
+        await Assert.That(files["labels.dart"]).Contains("status == Status.inProgress");
+    }
+
+    /// <summary>A numeric enum has no value, so no field or constructor.</summary>
+    [Test]
+    public async Task NumericEnum_DeclaresNoValueField()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public enum Kind { A, B }
+            """
+        );
+
+        await Assert.That(files["kind.dart"]).DoesNotContain("final String value");
+    }
+
+    /// <summary>
     /// Every Dart string literal path escapes the same characters: a
     /// <c>[StringEnum]</c> / <c>[Name]</c> value and interpolation text too, so
     /// a <c>$</c> is no interpolation and a line break no raw newline.

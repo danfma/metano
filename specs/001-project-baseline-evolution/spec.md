@@ -446,6 +446,12 @@ Product requirements added after the migration (normative; each one is traced by
   first); the final step of a native optional chain stays unchecked. A `Dictionary` read is not
   covered. Traced by the "Indexer reads" row of the feature-support matrix.
 
+- **FR-070** (Dart `[StringEnum]` shape, #677): The Dart backend MUST emit a `[StringEnum]` as an
+  enhanced enum whose members keep their C# names as identifiers (camelCase), carry the string
+  value (a Dart-specific `[Name(Dart, "...")]`, else the `[Name]` value, else the C# name) and
+  whose enum declares `final String value;` and `const E(this.value);`; a numeric enum declares
+  neither. Traced by the "String enums" row of the feature-support matrix.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
