@@ -20,6 +20,7 @@ public class OverloadDispatchSpecificityTests
         );
 
         await Assert.That(output).Contains("instanceof ArgumentException");
+
         await Assert
             .That(output.IndexOf("instanceof ArgumentException", StringComparison.Ordinal))
             .IsLessThan(output.IndexOf("instanceof Error", StringComparison.Ordinal));
@@ -61,6 +62,7 @@ public class OverloadDispatchSpecificityTests
         await Assert
             .That(output.IndexOf("this.gC(", StringComparison.Ordinal))
             .IsLessThan(output.IndexOf("this.gO(", StringComparison.Ordinal));
+
         await Assert.That(output).DoesNotContain("typeof args[0] === \"object\")");
     }
 

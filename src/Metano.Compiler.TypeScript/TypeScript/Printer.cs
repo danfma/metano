@@ -659,6 +659,7 @@ public sealed class Printer(string indent = "  ")
         var accessors = tsClass.Members.Where(m => m is TsGetterMember or TsSetterMember).ToList();
         var methods = tsClass.Members.Where(m => m is TsMethodMember).ToList();
         var staticBlocks = tsClass.Members.Where(m => m is TsStaticBlock).ToList();
+
         var others = tsClass
             .Members.Where(m =>
                 m

@@ -54,6 +54,7 @@ public class StaticConstructorTests
         await Assert
             .That(block)
             .IsGreaterThan(output.IndexOf("static b:", StringComparison.Ordinal));
+
         await Assert
             .That(block)
             .IsGreaterThan(output.IndexOf("static a:", StringComparison.Ordinal));

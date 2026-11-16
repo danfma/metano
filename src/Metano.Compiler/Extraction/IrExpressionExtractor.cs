@@ -3892,6 +3892,7 @@ public sealed partial class IrExpressionExtractor
         // for argument-shape decisions so params spreading and named
         // argument normalization key off the right parameter list.
         ApplyParamsSpread(extensionArgs, extensionCallee, inv.ArgumentList.Arguments);
+
         extensionArgs = WithCallerArgumentExpressions(
             _semantic.GetOperation(inv),
             InParameterOrder(extensionArgs, extensionCallee),

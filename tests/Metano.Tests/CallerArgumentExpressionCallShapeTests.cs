@@ -187,6 +187,7 @@ public class CallerArgumentExpressionCallShapeTests
         await Assert
             .That(output)
             .Contains("static sum(a: number, spot: Spot = new Spot(), z: number = 0)");
+
         await Assert.That(output).Contains("return Probe.sum(1);");
         await Assert.That(output).Contains("return Probe.sum(1, new Spot(), 3);");
     }
