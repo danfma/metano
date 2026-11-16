@@ -303,9 +303,61 @@ public static partial class IrToTsExpressionBridge
             ? nullable.Inner
             : cast.TargetType;
 
-        return cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple
-            ? new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType))
-            : value;
+        if (cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple)
+            return new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType));
+
+        return cast.IsReferenceDowncast ? MapReferenceDowncast(cast, value, testedType) : value;
+    }
+
+    /// <summary>
+    /// An explicit reference conversion: the result takes the target type
+    /// (TypeScript keeps the static type of the operand otherwise, so every
+    /// member access through it fails to type-check). A target with a runtime
+    /// class (a transpiled class or record, a mapped BCL exception) is
+    /// checked as .NET checks it: the <c>castTo</c> helper lets <c>null</c>
+    /// through and throws <c>InvalidCastException</c> for any other type. A
+    /// target with no class to test (an interface, a type parameter, a
+    /// <c>string</c>) is only asserted.
+    /// </summary>
+    private static TsExpression MapReferenceDowncast(
+        IrCastExpression cast,
+        TsExpression value,
+        IrTypeRef testedType
+    )
+    {
+        var targetType = IrToTsTypeMapper.Map(cast.TargetType);
+
+        return cast.ChecksAtRuntime && RuntimeClassOf(testedType) is { } runtimeClass
+            ? new TsCallExpression(
+                new TsRuntimeHelperReference("castTo"),
+                [value, runtimeClass],
+                TypeArguments: [targetType]
+            )
+            : new TsCastExpression(value, targetType);
+    }
+
+    /// <summary>
+    /// The class value an <see cref="IrRuntimeTypeTest.Instanceof"/> test of
+    /// <paramref name="type"/> checks; <c>null</c> when the type has none to
+    /// pass (any other test, or a BCL exception without a mapped class).
+    /// </summary>
+    private static TsExpression? RuntimeClassOf(IrTypeRef type)
+    {
+        if (IrRuntimeTypeTest.Of(type) is not IrRuntimeTypeTest.Instanceof)
+            return null;
+
+        if (
+            type is not IrNamedTypeRef named
+            || IrToTsTypeMapper.Map(type) is not TsNamedType runtime
+        )
+            return null;
+
+        if (!BclExceptionClasses.IsBclException(named))
+            return TypeValueReference(runtime.Name, runtime.Origin);
+
+        return IrToTsTypeMapper.ExceptionClasses.IsMapped(named)
+            ? IrToTsTypeMapper.ExceptionClasses.ClassOf(named).InstanceofTarget()
+            : null;
     }
 
     private static TsExpression InstanceofTest(TsExpression value, TsNamedType type) =>

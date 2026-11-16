@@ -516,6 +516,21 @@ Product requirements added after the migration (normative; each one is traced by
   "`decimal` specifics" section of `docs/bcl-mappings.md` (quotient digits, scale floor, overflow,
   trailing zeros); the exact-scale, overflow and rounding-mode parity of #465 is not claimed.
 
+- **FR-065** (explicit reference downcasts, #669): An explicit reference conversion
+  (`(Derived)value`, `(IShape)obj`, `(string)obj`) MUST give the TypeScript result the target
+  type, so a member read through it type-checks. A target with a runtime class (a transpiled
+  class, record or struct, a BCL exception with a mapped class) is also checked as .NET checks
+  it: `castTo<Derived>(value, Derived)` lets `null` through and throws `InvalidCastException`
+  (message `Unable to cast object of type 'A' to type 'B'.`, simple type names) for any other
+  value. A target with no runtime class to test (an interface, a type parameter, `string`) is
+  only asserted (`value as T`). The result keeps the bare operand where TypeScript's own flow
+  analysis already types it (the cast sits where an earlier `operand is T` of the same operand
+  holds, through `&&`, `?:` or `if`), for an upcast, and for a cast to a type that mentions a
+  type parameter inside an `[Inline]` expansion; it only asserts, without importing the class,
+  in a type the target derives from (an import cycle that fails at load) and inside an `[Inline]`
+  expansion. Unboxing casts (`(int)obj`) are not reference conversions and keep the bare
+  operand. Traced by the "Explicit reference downcasts" row of the feature-support matrix.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

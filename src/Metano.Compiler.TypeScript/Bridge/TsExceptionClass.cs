@@ -40,8 +40,12 @@ public sealed record TsExceptionClass(
     public TsExpression InstanceofTest(TsExpression value) =>
         new TsBinaryExpression(value, "instanceof", InstanceofTarget());
 
-    private TsExpression InstanceofTarget() =>
-        IsRoot ? new TsIdentifier("Error") : ValueReference();
+    /// <summary>
+    /// The value <c>instanceof</c> tests (<c>Error</c> for the root class),
+    /// for a caller that checks a type at runtime through a helper rather than
+    /// the operator.
+    /// </summary>
+    public TsExpression InstanceofTarget() => IsRoot ? new TsIdentifier("Error") : ValueReference();
 
     /// <summary>The class in value position (<c>new</c>, <c>instanceof</c>), carrying its import.</summary>
     public TsExpression ValueReference() =>
