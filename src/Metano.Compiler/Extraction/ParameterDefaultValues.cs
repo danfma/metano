@@ -31,8 +31,11 @@ internal static class ParameterDefaultValues
 
         var model = compilation.GetSemanticModel(syntax.SyntaxTree);
 
-        return new IrExpressionExtractor(model, context.ForConstantDefault()).Extract(
-            defaultExpression
-        );
+        var extractor = new IrExpressionExtractor(model, context.ForConstantDefault());
+        var value = extractor.Extract(defaultExpression);
+
+        return value is IrLiteral { Kind: IrLiteralKind.Default }
+            ? extractor.TryBuildStructDefault(parameter.Type) ?? value
+            : value;
     }
 }

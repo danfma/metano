@@ -421,7 +421,11 @@ public sealed partial class IrExpressionExtractor
         // TODO(#611): named arguments out of parameter order bind their
         // parameters but are evaluated in parameter order: a null delegate
         // evaluates none of them, so they cannot be bound ahead of the call.
-        var passed = InParameterOrder(args, method);
+        var passed = WithCallerArgumentExpressions(
+            _semantic.GetOperation(inv),
+            InParameterOrder(args, method),
+            method
+        );
 
         return new IrCallExpression(receiver, passed, Origin: BuildOrigin(method), IsOptional: true)
         {
@@ -2807,7 +2811,9 @@ public sealed partial class IrExpressionExtractor
             _semantic,
             Extract,
             ExtractArgument,
-            normalized => ReportedSourceOrderOf(_semantic.GetOperation(inv), normalized)
+            normalized => ReportedSourceOrderOf(_semantic.GetOperation(inv), normalized),
+            (written, callee) =>
+                WithCallerArgumentExpressions(_semantic.GetOperation(inv), written, callee)
         );
 
         foreach (var rewriter in _invocationRewriters)
@@ -2938,6 +2944,33 @@ public sealed partial class IrExpressionExtractor
             );
 
         return [.. filled, .. bound.Skip(lastCapturing + 1)];
+    }
+
+    /// <summary>
+    /// The arguments of a <c>: this(...)</c> delegation: the
+    /// <see cref="ExtractInitializerArguments">initializer arguments</see>
+    /// plus, for each <c>[CallerArgumentExpression]</c> parameter of the
+    /// chained constructor the call omits, its caller text as an argument
+    /// named after the parameter (the chain binds the target's parameters
+    /// itself, named ones by name, FR-052).
+    /// </summary>
+    internal List<IrArgument> ExtractChainArguments(ConstructorInitializerSyntax thisCall)
+    {
+        var args = ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
+        var boundArguments = BoundArgumentsOf(_semantic.GetOperation(thisCall)) ?? [];
+
+        var callerTexts = boundArguments
+            .Where(argument =>
+                argument is { ArgumentKind: ArgumentKind.DefaultValue, Parameter: { } parameter }
+                && CapturesCallerArgumentExpression(parameter)
+                && argument.Value.ConstantValue is { HasValue: true, Value: string }
+            )
+            .Select(argument => new IrArgument(
+                new IrLiteral(argument.Value.ConstantValue.Value, IrLiteralKind.String),
+                argument.Parameter!.Name
+            ));
+
+        return [.. args, .. callerTexts];
     }
 
     /// <summary>
@@ -3832,7 +3865,11 @@ public sealed partial class IrExpressionExtractor
         // for argument-shape decisions so params spreading and named
         // argument normalization key off the right parameter list.
         ApplyParamsSpread(extensionArgs, extensionCallee, inv.ArgumentList.Arguments);
-        extensionArgs = InParameterOrder(extensionArgs, extensionCallee).ToList();
+        extensionArgs = WithCallerArgumentExpressions(
+            _semantic.GetOperation(inv),
+            InParameterOrder(extensionArgs, extensionCallee),
+            extensionCallee
+        );
 
         IReadOnlyList<IrTypeRef>? extensionTypeArgs = null;
         if (extensionCallee is { TypeArguments.Length: > 0 })
@@ -4696,14 +4733,19 @@ public sealed partial class IrExpressionExtractor
     /// The arguments of a base-constructor call bound to no overload: its
     /// <see cref="ExtractInitializerArguments">initializer arguments</see>,
     /// named ones placed in the parameter order of
-    /// <paramref name="baseConstructor"/>.
+    /// <paramref name="baseConstructor"/>, with the
+    /// <c>[CallerArgumentExpression]</c> texts the call omits.
     /// </summary>
     public IReadOnlyList<IrArgument> ExtractBaseArguments(
         ArgumentListSyntax argumentList,
         IMethodSymbol? baseConstructor
     ) =>
-        InParameterOrder(
-            ExtractInitializerArguments(argumentList, baseConstructor),
+        WithCallerArgumentExpressions(
+            _semantic.GetOperation(argumentList.Parent!),
+            InParameterOrder(
+                ExtractInitializerArguments(argumentList, baseConstructor),
+                baseConstructor
+            ),
             baseConstructor
         );
 
@@ -5228,10 +5270,23 @@ public sealed partial class IrExpressionExtractor
         return new IrLiteral(null, IrLiteralKind.Default);
     }
 
+    /// <summary>
+    /// What a parameter whose declared default is <c>null</c> receives when a
+    /// call skips it: <c>null</c> for a reference or nullable type; for a
+    /// non-nullable struct (<c>Point p = default</c>) its default value, or
+    /// the omitted marker when none is spelled, so the callee's own default
+    /// applies.
+    /// </summary>
+    private IrExpression NullDefaultOf(ITypeSymbol type) =>
+        IsNonNullableValueType(type)
+            ? TryBuildStructDefault(type) ?? OmittedArgument()
+            : new IrLiteral(null, IrLiteralKind.Null);
+
     private IrExpression BuildLiteralForDefault(object? value, ITypeSymbol type)
     {
         if (value is null)
-            return new IrLiteral(null, IrLiteralKind.Null);
+            return NullDefaultOf(type);
+
         // Enums surface their underlying numeric constant in
         // ExplicitDefaultValue. Translate back to a member access on the enum
         // type so the backend lowering prints `Priority.Medium` rather than a

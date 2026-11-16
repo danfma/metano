@@ -422,7 +422,7 @@ public static class IrConstructorExtractor
             return null;
 
         var extractor = new IrExpressionExtractor(model, context.Extraction, localNames);
-        var arguments = extractor.ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
+        var arguments = extractor.ExtractChainArguments(thisCall);
 
         extractor.ReportIfThisChainOrderIsLost(thisCall);
 

@@ -38,11 +38,18 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// evaluation order. It reports <c>MS0001</c> at the call when the target
 /// does not keep that order, so a rewriter calls it once.
 /// </param>
+/// <param name="WithCallerArguments">
+/// Bound to the extractor's <c>WithCallerArgumentExpressions</c> for this
+/// call site: the arguments (already in parameter order) with the
+/// <c>[CallerArgumentExpression]</c> texts C# supplies for the parameters the
+/// call omits (FR-052), for the method the rewriter lowers the call against.
+/// </param>
 public readonly record struct InvocationRewriteContext(
     InvocationExpressionSyntax Invocation,
     IMethodSymbol? Symbol,
     SemanticModel SemanticModel,
     Func<ExpressionSyntax, IrExpression> Recurse,
     Func<ArgumentSyntax, IrArgument> ExtractArgument,
-    Func<IReadOnlyList<IrArgument>, IReadOnlyList<int>?> ReportedSourceOrderOf
+    Func<IReadOnlyList<IrArgument>, IReadOnlyList<int>?> ReportedSourceOrderOf,
+    Func<IReadOnlyList<IrArgument>, IMethodSymbol, IReadOnlyList<IrArgument>> WithCallerArguments
 );
