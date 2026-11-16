@@ -61,8 +61,10 @@ export type {
   ConcatOp,
   DistinctByOp,
   DistinctOp,
+  ExceptOp,
   GroupByOp,
   Grouping,
+  IntersectOp,
   OrderByDescendingOp,
   OrderByOp,
   ThenByDescendingOp,
@@ -75,6 +77,7 @@ export type {
   SkipWhileOp,
   TakeOp,
   TakeWhileOp,
+  UnionOp,
   WhereOp,
   ZipOp,
   AggregateTerm,
@@ -114,6 +117,9 @@ export {
   distinct,
   distinctBy,
   concat,
+  union,
+  intersect,
+  except,
   append,
   prepend,
   reverse,
@@ -140,10 +146,15 @@ export {
   count,
   sum,
   min,
+  minNullable,
   max,
+  maxNullable,
   minBy,
+  minByNullable,
   maxBy,
+  maxByNullable,
   average,
+  averageNullable,
   contains,
   aggregate,
 } from "./terminals.ts";
@@ -159,3 +170,6 @@ export {
   minUInt64Of,
   sumInt64,
 } from "./int64-terminals.ts";
+
+export { averageDecimal, averageNullableDecimal, sumDecimal } from "./decimal-terminals.ts";
+export type { DecimalConstructor, DecimalValue } from "./decimal-terminals.ts";

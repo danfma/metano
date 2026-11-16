@@ -16,6 +16,11 @@ export function compareKeys(a: unknown, b: unknown): number {
     return (a as { compare: (other: unknown) => number }).compare(b);
   }
 
+  // decimal.js values: `<` would compare their text.
+  if (typeof a === "object" && typeof (a as { comparedTo?: unknown }).comparedTo === "function") {
+    return (a as { comparedTo: (other: unknown) => number }).comparedTo(b);
+  }
+
   // Temporal types expose static compare() on the constructor.
   if (typeof a === "object") {
     const ctor = (a as { constructor?: unknown }).constructor as
