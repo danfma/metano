@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Temporal } from "@js-temporal/polyfill";
 import {
   equals,
   hashCode,
@@ -428,5 +429,33 @@ describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", 
       expect(tupleEquals([null, 3], [[1, 2], 3], [[], null])).toBe(false);
       expect(tupleEquals([[1, 2], 3], [null, 3], [[], null])).toBe(false);
     });
+  });
+});
+
+describe("Temporal.Duration (a C# TimeSpan)", () => {
+  const minutes = (count: number) => Temporal.Duration.from({ minutes: count });
+
+  test("durations of the same length are equal, as TimeSpans are", () => {
+    expect(equals(minutes(5), Temporal.Duration.from("PT300S"))).toBe(true);
+    expect(equals(minutes(5), minutes(6))).toBe(false);
+  });
+
+  test("a duration never equals a non-duration, in either order", () => {
+    expect(equals({}, minutes(5))).toBe(false);
+    expect(equals(minutes(5), {})).toBe(false);
+  });
+
+  test("a duration with calendar units compares field by field", () => {
+    const week = Temporal.Duration.from("P1W");
+
+    expect(equals(week, Temporal.Duration.from("P1W"))).toBe(true);
+    expect(equals(week, Temporal.Duration.from("P7D"))).toBe(false);
+    expect(equals(week, minutes(5))).toBe(false);
+  });
+
+  test("equal durations hash equal and different ones apart", () => {
+    expect(hashCode(minutes(5))).toBe(hashCode(Temporal.Duration.from("PT300S")));
+    expect(hashCode(minutes(5))).not.toBe(hashCode(minutes(6)));
+    expect(hashCode(Temporal.Duration.from("P1W"))).toBe(hashCode(Temporal.Duration.from("P1W")));
   });
 });
