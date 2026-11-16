@@ -102,7 +102,9 @@ public class ArgumentGuardLoweringTests
     /// <c>MS0001</c>. So does a record or struct holding such a member (an
     /// array in a <c>[PlainObject]</c>, a class in a struct or a record), and a
     /// generic record, whose <c>T</c> member's equality its definition does not
-    /// fix.
+    /// fix; an unsealed record, which a derived record can extend with state its
+    /// static type does not show; and a record holding a <c>double</c>, whose
+    /// generated <c>equals</c> finds a <c>NaN</c> field unequal to itself.
     /// </summary>
     [Test]
     [Arguments("Account")]
@@ -115,6 +117,9 @@ public class ArgumentGuardLoweringTests
     [Arguments("Tagged")]
     [Arguments("Holder")]
     [Arguments("Owner")]
+    [Arguments("Shape")]
+    [Arguments("Measure")]
+    [Arguments("Reading")]
     public async Task EqualityGuard_OverAReferenceKind_IsReported(string type)
     {
         var (_, diagnostics) = TranspileGuards(
@@ -126,6 +131,42 @@ public class ArgumentGuardLoweringTests
             .Contains(message =>
                 message.Contains("System.ArgumentOutOfRangeException.ThrowIfNotEqual")
             );
+    }
+
+    /// <summary>
+    /// A record read from a compiled reference hides its private backing
+    /// fields, so its equality cannot be read field by field: the guard keeps
+    /// no mapping, whatever the record holds.
+    /// </summary>
+    [Test]
+    public async Task EqualityGuard_OverARecordFromAMetadataReference_IsNotMapped()
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("shared")]
+
+            namespace Shared;
+
+            public sealed record Tagged(string Name, int[] Tags);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public static class Guard
+            {
+                public static void Check(Shared.Tagged value, Shared.Tagged limit) =>
+                    ArgumentOutOfRangeException.ThrowIfEqual(value, limit);
+            }
+            """;
+
+        var output = TranspileHelper.TranspileWithLibraryImage(library, consumer)["app/guard.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("ArgumentOutOfRangeException.throwIfEqual(value, limit, \"value\")");
     }
 
     /// <summary>
@@ -367,13 +408,13 @@ public class ArgumentGuardLoweringTests
             public enum Level { Low, High }
 
             [Transpile]
-            public record Person(string Name);
+            public sealed record Person(string Name);
 
             [Transpile]
             public readonly record struct Point(int X, int Y);
 
             [Transpile, PlainObject]
-            public record Plain(string Name);
+            public sealed record Plain(string Name);
 
             [Transpile]
             public class Account { }
@@ -382,19 +423,28 @@ public class ArgumentGuardLoweringTests
             public record Box<T>(T Value);
 
             [Transpile, PlainObject]
-            public record Tagged(string Name, int[] Tags);
+            public sealed record Tagged(string Name, int[] Tags);
 
             [Transpile]
             public struct Holder { public Account Account; }
 
             [Transpile]
-            public record Owner(string Name, Account Account);
+            public sealed record Owner(string Name, Account Account);
 
             [Transpile]
-            public record Line(Point From, Point To, Level Level, TimeSpan Length);
+            public sealed record Line(Point From, Point To, Level Level, TimeSpan Length);
 
             [Transpile]
-            public record Node(int Value, Node? Next);
+            public record Shape(int Sides);
+
+            [Transpile]
+            public sealed record Measure(string Unit, double Value);
+
+            [Transpile]
+            public readonly record struct Reading(double Value);
+
+            [Transpile]
+            public sealed record Node(int Value, Node? Next);
 
             [Transpile]
             public static class Guard

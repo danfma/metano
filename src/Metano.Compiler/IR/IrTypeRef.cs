@@ -116,15 +116,21 @@ public sealed record IrNamedTypeRef(
 /// exception's runtime class by the same key as the extraction and
 /// <see cref="IrExceptionConstruction.ExceptionTypeName"/>; <c>null</c> for
 /// every other kind.</param>
-/// <param name="StructuralEqualityLeaves">Set for a transpiled record or struct
-/// whose C# equality is value equality all the way down: every instance field,
-/// recursively through transpiled records, structs, tuples and nullables, ends
-/// in one of these primitives (an enum or a branded value counts as its
-/// underlying value). <c>null</c> when a field is a class, an array, a
+/// <param name="StructuralEqualityLeaves">Set for a transpiled struct, record
+/// struct or sealed record whose equality is the compiler-generated, field-wise
+/// one all the way down: every instance field, recursively through such types,
+/// tuples and nullables, ends in one of these primitives (a branded value counts
+/// as its underlying primitive; an enum records <see cref="IrPrimitive.Int32"/>,
+/// or <see cref="IrPrimitive.String"/> for a <c>[StringEnum]</c>, whatever its
+/// underlying type). <c>null</c> when a field is a class, an array, a
 /// collection, <c>object</c> or a type parameter (a generic definition's
 /// <c>T</c> field), which C# compares by reference or by an equality the
-/// definition does not fix, and for every other kind. A backend admits the
-/// type to a value comparison only if it compares each leaf as .NET does.</param>
+/// definition does not fix; when the type or a base declares its own
+/// <c>Equals</c>, which replaces the field-wise one; for an unsealed record,
+/// whose derived types can add state; for a type read from a metadata
+/// reference, which hides its private backing fields; and for every other
+/// kind. A backend admits the type to a value comparison only if it compares
+/// each leaf as .NET does.</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,

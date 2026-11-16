@@ -132,6 +132,16 @@ internal static class IrToTsArgumentGuards
             _ => false,
         };
 
+    /// <summary>
+    /// A leaf a record's generated <c>equals</c> compares as .NET does: an
+    /// equatable primitive other than a <c>double</c> / <c>float</c>, whose
+    /// field it compares with <c>===</c>, so a <c>NaN</c> field never equals
+    /// itself where <c>EqualityComparer&lt;double&gt;.Default</c> says it does.
+    /// </summary>
+    private static bool IsEquatableFieldLeaf(IrPrimitive leaf) =>
+        EquatablePrimitives.Contains(leaf)
+        && leaf is not (IrPrimitive.Float32 or IrPrimitive.Float64);
+
     private static bool IsEquatableNamed(IrNamedTypeSemantics semantics) =>
         semantics.Kind switch
         {
@@ -139,7 +149,7 @@ internal static class IrToTsArgumentGuards
                 true,
             IrNamedTypeKind.Record or IrNamedTypeKind.Struct => !semantics.IsExternal
                 && semantics.StructuralEqualityLeaves is { } leaves
-                && leaves.All(EquatablePrimitives.Contains),
+                && leaves.All(IsEquatableFieldLeaf),
             _ => false,
         };
 }
