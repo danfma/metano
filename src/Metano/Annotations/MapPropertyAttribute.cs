@@ -53,7 +53,9 @@ public sealed class MapPropertyAttribute(Type declaringType, string csharpProper
 
     /// <summary>
     /// Full JavaScript expression template with a <c>$this</c> placeholder for the
-    /// instance receiver. Mutually exclusive with <see cref="JsProperty"/>.
+    /// instance receiver, or <c>$Type</c> for the receiver's type by its own exported
+    /// name (imported as a value): <c>"new $Type(0)"</c> on <c>decimal.Zero</c>.
+    /// Mutually exclusive with <see cref="JsProperty"/>.
     /// </summary>
     public string? JsTemplate { get; init; }
 

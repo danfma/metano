@@ -675,6 +675,31 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.
 
+### Import resolution, packaging and sample builds (#655, #675, #504, #356, #368, #678)
+
+- A name the emitted code binds itself (a `catch` parameter, a chain's caught value, a
+  `foreach` variable, a parameter, a local) no longer resolves to a module function another
+  file exports under that name, so it no longer adds an import that can close an import cycle
+  (`ReferenceError: Cannot access 'X' before initialization` under Node, `MS0005`).
+- Every `using` alias a file spells now binds an import (`import { Widget as W1, Widget as W2 }`),
+  also beside an `[ImportAlias]` pin of the same type; a `[NoContainer]` factory named like an
+  aliased type is imported beside it; an aliased cross-package enum's synthesized default
+  imports the enum; a type renamed with `[Name]` is called by its emitted name.
+- **Templates name their receiver's type with `$Type`.** The text scan that imported a type a
+  static `[MapMethod]` / `[MapProperty]` template named is gone: a user template such as
+  `new Decimal(parseDecimalText($0))` must now be written `new $Type(parseDecimalText($0))`,
+  and a user `[Emit]` that names its own class uses `$Type` too (`[Emit("$Type.make($0)")]`).
+- A call that writes its type arguments to a transpiled generic method keeps them
+  (`Guard.throwIfEqual<Shape>(circle, square)`); TypeScript no longer infers the type from the
+  first operand only.
+- Two project types printed under one name that one file refers to (`Na.R23` and `Nb.R23`) now
+  report `MS0070` at the second reference instead of silently binding one module.
+- `package.json#sideEffects` lists the `[ModuleEntryPoint]` and `[StrictUnionGuard]` variant
+  modules (their `dist` `.js` and source `.ts` paths) instead of a flat `false`, so bundlers
+  keep a side-effect-only import of them; regeneration upgrades the earlier `false`.
+- The `hello-world`, `sample-counter-v5` and `sample-queryable-sqlite` TypeScript builds are
+  fixed, and CI builds every sample.
+
 ## 2.10.1
 
 _2026-11-03_

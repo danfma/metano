@@ -149,7 +149,14 @@ internal static partial class IrToTsClassBridge
                 enumSemantics.Kind == IrNamedTypeKind.StringEnum
                     ? defaultMember.Name
                     : defaultMember.EmittedName ?? defaultMember.Name;
-            return new TsPropertyAccess(new TsIdentifier(namedEnum.Name), memberName);
+
+            return new TsPropertyAccess(
+                IrToTsExpressionBridge.TypeValueReference(
+                    namedEnum.Name,
+                    IrToTsTypeMapper.TryResolveOrigin(namedEnum)
+                ),
+                memberName
+            );
         }
 
         if (type is IrNamedTypeRef { Semantics.IsDefaultConstructible: true })

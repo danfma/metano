@@ -406,6 +406,30 @@ Product requirements added after the migration (normative; each one is traced by
   extension syntax (`x.Ext()`, lowered to a module function), a `base(...)` / `this(...)`
   constructor initializer, an explicit delegate `.Invoke(...)` and an `[Emit]` callee. Traced by the "Caller
   argument expressions" row of the feature-support matrix.
+- **FR-062** (import resolution, #655, #675, #504): The import collector MUST resolve an
+  identifier to an export of another module only when nothing in scope binds it: a parameter,
+  a declared local, a `foreach` variable, a `catch` parameter or a chain's caught value shadows
+  an export of the same name, so no spurious import (and no import cycle) follows. Every
+  `using` alias a file spells MUST bind an import (`Widget as W1`, `Widget as W2`), also beside
+  an `[ImportAlias]` pin of the same type, and the type binds under its own name only where the
+  file spells it so; a `[NoContainer]` factory named like an aliased type imports beside it. A
+  type used as a value from a synthesized default (an enum's zero member) imports through its
+  package origin. A template text MUST declare the receiver's type with the `$Type` placeholder
+  (the exported name, never an alias, imported as a value) instead of naming it: the scan of the
+  template text is retired, and Metano's own BCL mappings use the placeholder. Two project
+  types printed under one name that one file refers to MUST report `MS0070` at the second
+  reference (an import by alias is a follow-up). Traced by the "Import resolution" row of the
+  feature-support matrix.
+- **FR-063** (side-effect modules, #356, #368): The generated `package.json#sideEffects` MUST
+  list the modules that run code when merely imported (a `[ModuleEntryPoint]` module, a
+  `[StrictUnionGuard]` variant registration), as their `dist` `.js` and source `.ts` paths, and
+  be `false` when there is none, so a bundler keeps a side-effect-only import of them. A flat
+  `false` the writer wrote earlier is upgraded; a hand-written value keeps its entries. Traced by
+  the "Packaging" row of the feature-support matrix.
+- **FR-064** (explicit type arguments, #675): A call that writes its type arguments
+  (`Guard.ThrowIfEqual<Shape>(circle, square)`) to a transpiled generic method MUST keep them in
+  TypeScript, which would otherwise infer the type from the first operand only. A call whose
+  callee is a BCL or untranspiled member keeps the callee's own signature.
 
 - **FR-056** (LINQ aggregates by element type, #618, #657): `Sum`, `Average`, `Min`, `Max`,
   `MinBy` and `MaxBy` in TypeScript MUST give what .NET gives for the element type. `Min` / `Max`

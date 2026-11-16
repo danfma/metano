@@ -11,6 +11,9 @@ namespace Metano.Compiler.TypeScript.AST;
 /// Placeholders inside <see cref="Template"/>:
 /// <list type="bullet">
 ///   <item><c>$this</c> — replaced with <see cref="Receiver"/> (if non-null)</item>
+///   <item><c>$Type</c> — replaced with <see cref="ReceiverType"/>: the receiver's type by its
+///   own exported name, imported as a value (a static mapping that builds or reads the type,
+///   <c>new $Type(parseDecimalText($0))</c>)</item>
 ///   <item><c>$0</c>, <c>$1</c>, … — replaced with the corresponding entry of <see cref="Arguments"/></item>
 ///   <item><c>$T0</c>, <c>$T1</c>, … — replaced verbatim with the corresponding entry of
 ///   <see cref="TypeArgumentNames"/>; used to embed the call site's generic method type
@@ -39,6 +42,12 @@ public sealed record TsTemplate(
 ) : TsExpression
 {
     public IReadOnlyList<string> TypeArgumentNames { get; init; } = [];
+
+    /// <summary>
+    /// The receiver's type as a value reference, canonical (never a <c>using</c> alias),
+    /// for the <c>$Type</c> placeholder; <c>null</c> when the call has no type receiver.
+    /// </summary>
+    public TsExpression? ReceiverType { get; init; }
 
     /// <summary>
     /// Full TypeScript types for the <c>$T0</c>, <c>$T1</c>, … placeholders

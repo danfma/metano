@@ -170,6 +170,26 @@ public static class IrToTsBclMapper
             .ReferencedArgumentIndices(template)
             .All(index => index < argumentCount);
 
+    /// <summary>
+    /// The type a static mapping's receiver names, as the template's <c>$Type</c>
+    /// placeholder prints it: the exported, canonical name, never a <c>using</c> alias
+    /// of it. <c>null</c> for any receiver that is not a type reference.
+    /// </summary>
+    internal static TsExpression? ReceiverTypeOf(TsExpression? receiver) =>
+        receiver switch
+        {
+            TsTypeReference reference => new TsTypeReference(
+                CanonicalTypeName(reference.Name),
+                reference.Origin
+            ),
+            TsIdentifier { Name: [var first, ..] } identifier when char.IsUpper(first) =>
+                new TsIdentifier(CanonicalTypeName(identifier.Name)),
+            _ => null,
+        };
+
+    private static string CanonicalTypeName(string name) =>
+        IrToTsTypeMapper.UsingAliases?.AliasToCanonical.GetValueOrDefault(name) ?? name;
+
     private static TsExpression ApplyPropertyMapping(
         DeclarativeMappingEntry mapping,
         TsExpression? receiver
@@ -179,6 +199,7 @@ public static class IrToTsBclMapper
             return new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
             {
                 RuntimeImports = mapping.RuntimeImportsList,
+                ReceiverType = ReceiverTypeOf(receiver),
             };
 
         var name = mapping.JsName!;
@@ -197,6 +218,7 @@ public static class IrToTsBclMapper
             {
                 TypeArgumentNames = typeArgumentNames,
                 RuntimeImports = mapping.RuntimeImportsList,
+                ReceiverType = ReceiverTypeOf(receiver),
             };
 
         var name = mapping.JsName!;

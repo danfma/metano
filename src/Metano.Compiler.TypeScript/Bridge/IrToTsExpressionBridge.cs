@@ -832,6 +832,21 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
+    /// The value-position reference to a named type by its own emitted name: unlike
+    /// <see cref="MapTypeReference"/>, never through a <c>using</c> alias of it.
+    /// </summary>
+    private static TsExpression CanonicalTypeValue(IrNamedTypeRef type)
+    {
+        var segments = ModuleLocalNaming.Flatten(type.Name, type.PrivateNestedSegments).Split('.');
+
+        var root = TypeValueReference(segments[0], IrToTsTypeMapper.TryResolveOrigin(type));
+
+        return segments
+            .Skip(1)
+            .Aggregate(root, (target, segment) => new TsPropertyAccess(target, segment));
+    }
+
+    /// <summary>
     /// The value-position reference to a type name. A cross-package type lowers to a
     /// <see cref="TsTypeReference"/> — printed exactly like the bare identifier — so
     /// the import collector sees the origin the file must import it from; every other
@@ -890,6 +905,9 @@ public static partial class IrToTsExpressionBridge
                 : [],
             RuntimeImports = tpl.RequiredImports ?? [],
             ExternalImports = tpl.ExternalImports ?? [],
+            ReceiverType = tpl.ReceiverType is IrNamedTypeRef receiverType
+                ? CanonicalTypeValue(receiverType)
+                : null,
         };
 
         return BoundBefore(ordered.Bindings, template);
@@ -1072,9 +1090,30 @@ public static partial class IrToTsExpressionBridge
         return new TsCallExpression(
             MapNullTolerant(call.Target, context),
             WithoutNullRestArray(call.Arguments, loweredArgs),
-            call.IsOptional
+            call.IsOptional,
+            WrittenTypeArguments(call, context)
         );
     }
+
+    /// <summary>
+    /// The type arguments the source writes on a call to a declaration the
+    /// toolchain emits, so TypeScript binds the same type C# does instead of
+    /// inferring one from the first operand (<c>ThrowIfEqual&lt;Shape&gt;(circle,
+    /// square)</c>). <c>null</c> when none is written, or the callee is foreign
+    /// or bound to a JavaScript declaration (a BCL, untranspiled, <c>[External]</c>
+    /// or <c>[Import]</c> type, whose generic signature the toolchain does not
+    /// control).
+    /// </summary>
+    private static IReadOnlyList<TsType>? WrittenTypeArguments(
+        IrCallExpression call,
+        IrToTsBridgeContext context
+    ) =>
+        call is { HasExplicitTypeArguments: true, TypeArguments: { Count: > 0 } typeArguments }
+        && call.Origin is { IsForeignMember: false, IsDeclaringTypeExternal: false }
+            ? typeArguments
+                .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
+                .ToList()
+            : null;
 
     /// <summary>
     /// A static member of a BCL or other untranspiled .NET type

@@ -12,6 +12,13 @@ internal enum TsTemplatePlaceholderKind
 
     /// <summary><c>$TN</c>: the N-th generic type-argument name.</summary>
     TypeArgument,
+
+    /// <summary>
+    /// <c>$Type</c>: the receiver's type, spelled by its own exported name (never a
+    /// <c>using</c> alias of it) and imported as a value. It declares what the
+    /// template text would otherwise have to name.
+    /// </summary>
+    ReceiverType,
 }
 
 /// <summary>
@@ -30,6 +37,8 @@ internal readonly record struct TsTemplatePlaceholder(
 {
     private const string ReceiverText = "$this";
 
+    private const string ReceiverTypeText = "$Type";
+
     public bool IsValue => Kind is not TsTemplatePlaceholderKind.TypeArgument;
 
     /// <summary>
@@ -46,6 +55,13 @@ internal readonly record struct TsTemplatePlaceholder(
                 TsTemplatePlaceholderKind.Receiver,
                 Index: 0,
                 ReceiverText.Length
+            );
+
+        if (IsReceiverType(rest))
+            return new TsTemplatePlaceholder(
+                TsTemplatePlaceholderKind.ReceiverType,
+                Index: 0,
+                ReceiverTypeText.Length
             );
 
         if (rest is ['$', 'T', var digit, ..] && char.IsAsciiDigit(digit))
@@ -81,6 +97,26 @@ internal readonly record struct TsTemplatePlaceholder(
         Occurrences(text)
             .Any(placeholder => placeholder.Kind is TsTemplatePlaceholderKind.Receiver);
 
+    /// <summary>
+    /// Whether <paramref name="text"/> embeds <c>$Type</c>, the receiver's type.
+    /// </summary>
+    public static bool ReferencesReceiverType(string text) =>
+        Occurrences(text)
+            .Any(placeholder => placeholder.Kind is TsTemplatePlaceholderKind.ReceiverType);
+
+    /// <summary>
+    /// <c>$Type</c> not glued to a longer identifier (<c>$Types</c> is not it).
+    /// </summary>
+    private static bool IsReceiverType(ReadOnlySpan<char> rest) =>
+        rest.StartsWith(ReceiverTypeText, StringComparison.Ordinal)
+        && (
+            rest.Length == ReceiverTypeText.Length
+            || !(
+                char.IsLetterOrDigit(rest[ReceiverTypeText.Length])
+                || rest[ReceiverTypeText.Length] is '_' or '$'
+            )
+        );
+
     private static IReadOnlySet<int> ReferencedIndices(
         string text,
         TsTemplatePlaceholderKind kind
@@ -108,6 +144,7 @@ internal readonly record struct TsTemplatePlaceholder(
         Kind switch
         {
             TsTemplatePlaceholderKind.Receiver => template.Receiver,
+            TsTemplatePlaceholderKind.ReceiverType => template.ReceiverType,
             TsTemplatePlaceholderKind.Argument when Index < template.Arguments.Count =>
                 template.Arguments[Index],
             _ => null,

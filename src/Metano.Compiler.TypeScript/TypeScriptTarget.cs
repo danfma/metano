@@ -198,6 +198,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     {
         var roslynCompilation = RequireRoslynCompilation(compilation);
         var sideEffectFiles = moduleSideEffectFiles.ToHashSet(StringComparer.Ordinal);
+
         var reusedFiles = files
             .Select(file => new TsSourceFile(file.RelativePath, [])
             {

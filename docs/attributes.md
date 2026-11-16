@@ -537,6 +537,22 @@ public static string StripDashes(this string value) =>
 
 At the call site `text.StripDashes()` emits `text.replace(/-/g, "")`.
 
+`$Type` stands for the type the method is declared on, by its own exported name (never a
+`using` alias of it), and imports it. A type name written in the template text is not
+imported:
+
+```csharp
+public static class Fmt
+{
+    [Emit("$Type.make($0)")]
+    public static string Make(int value) => throw new NotSupportedException();
+}
+```
+
+`Fmt.Make(1)` emits `Fmt.make(1)` and imports `Fmt` from its module (or package).
+`[MapMethod]` / `[MapProperty]` templates use the same placeholder
+(`new $Type(parseDecimalText($0))`).
+
 ### `[ImportAlias]`
 
 Pins the local name used for an imported type in the generated file. Declare it
