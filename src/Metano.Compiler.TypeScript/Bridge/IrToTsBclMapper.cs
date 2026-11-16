@@ -40,7 +40,7 @@ public static class IrToTsBclMapper
 
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
 
-        return ApplyPropertyMapping(entry, receiver);
+        return ApplyPropertyMapping(entry, receiver, ReceiverTypeOf(access.Target, receiver));
     }
 
     /// <summary>
@@ -109,7 +109,11 @@ public static class IrToTsBclMapper
                 )
                 : loweredReceiver;
 
-        return ApplyMethodMapping(match, receiver, loweredArgs, typeArgumentNames);
+        var receiverType = call.Target is IrMemberAccess { Target: var irReceiver }
+            ? ReceiverTypeOf(irReceiver, loweredReceiver)
+            : null;
+
+        return ApplyMethodMapping(match, receiver, receiverType, loweredArgs, typeArgumentNames);
     }
 
     /// <summary>
@@ -173,17 +177,19 @@ public static class IrToTsBclMapper
     /// <summary>
     /// The type a static mapping's receiver names, as the template's <c>$Type</c>
     /// placeholder prints it: the exported, canonical name, never a <c>using</c> alias
-    /// of it. <c>null</c> for any receiver that is not a type reference.
+    /// of it. <c>null</c> unless the IR receiver is a type reference (the same fact an
+    /// <c>[Emit]</c> template's <c>$Type</c> reads).
     /// </summary>
-    internal static TsExpression? ReceiverTypeOf(TsExpression? receiver) =>
-        receiver switch
+    private static TsExpression? ReceiverTypeOf(IrExpression irReceiver, TsExpression? receiver) =>
+        (irReceiver, receiver) switch
         {
-            TsTypeReference reference => new TsTypeReference(
+            (IrTypeReference, TsTypeReference reference) => new TsTypeReference(
                 CanonicalTypeName(reference.Name),
                 reference.Origin
             ),
-            TsIdentifier { Name: [var first, ..] } identifier when char.IsUpper(first) =>
-                new TsIdentifier(CanonicalTypeName(identifier.Name)),
+            (IrTypeReference, TsIdentifier identifier) => new TsIdentifier(
+                CanonicalTypeName(identifier.Name)
+            ),
             _ => null,
         };
 
@@ -192,14 +198,15 @@ public static class IrToTsBclMapper
 
     private static TsExpression ApplyPropertyMapping(
         DeclarativeMappingEntry mapping,
-        TsExpression? receiver
+        TsExpression? receiver,
+        TsExpression? receiverType
     )
     {
         if (mapping.HasTemplate)
             return new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
             {
                 RuntimeImports = mapping.RuntimeImportsList,
-                ReceiverType = ReceiverTypeOf(receiver),
+                ReceiverType = receiverType,
             };
 
         var name = mapping.JsName!;
@@ -209,6 +216,7 @@ public static class IrToTsBclMapper
     private static TsExpression ApplyMethodMapping(
         DeclarativeMappingEntry mapping,
         TsExpression? receiver,
+        TsExpression? receiverType,
         IReadOnlyList<TsExpression> args,
         IReadOnlyList<string> typeArgumentNames
     )
@@ -218,7 +226,7 @@ public static class IrToTsBclMapper
             {
                 TypeArgumentNames = typeArgumentNames,
                 RuntimeImports = mapping.RuntimeImportsList,
-                ReceiverType = ReceiverTypeOf(receiver),
+                ReceiverType = receiverType,
             };
 
         var name = mapping.JsName!;
