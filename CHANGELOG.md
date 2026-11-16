@@ -711,6 +711,13 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `ArgumentOutOfRangeException` / `ArgumentNullException` for a bad argument where
   JavaScript clamps, swaps or ignores it. `StringComparison` and `StringSplitOptions` are
   `metano-runtime` enums now (they were unresolved identifiers).
+- **`TimeSpan`, `DateTimeOffset`, `Guid`, `decimal` (#673).** `new TimeSpan(0, 5, 0)` was five
+  *months*; the component constructors, `TimeSpan.Zero` and the single-argument `FromDays` …
+  `FromMicroseconds` call `timeSpanFromParts` / `timeSpanZero` / `timeSpanFromX`.
+  `new DateTimeOffset(…, offset)` is `dateTimeOffset(…)` (it was emitted by name).
+  `Guid.Parse(s)` is `UUID.parse(s)`, which lowercases and checks the text, so two spellings
+  of one GUID compare equal (it was `UUID.create(s)`, which kept the input's case).
+  `decimal.TryParse(s, out d)` is `tryParseDecimal(s, Decimal)` (it reported MS0001).
 _2026-11-03_
 
 

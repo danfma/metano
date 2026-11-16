@@ -18,3 +18,13 @@ var strings = new FixtureWriter();
 
 StringRows.AddTo(strings);
 strings.Write(Path.Combine(fixtures, "strings.json"));
+
+var temporal = new FixtureWriter();
+
+TemporalRows.AddTo(temporal);
+temporal.Write(Path.Combine(fixtures, "temporal.json"));
+
+var parsing = new FixtureWriter();
+
+ParsingRows.AddTo(parsing);
+parsing.Write(Path.Combine(fixtures, "parsing.json"));

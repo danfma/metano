@@ -1,3 +1,6 @@
+import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
+import { FormatException } from "./exceptions/format-exception.ts";
+
 /**
  * UUID — a branded primitive type for values that represent a RFC 4122 UUID.
  *
@@ -72,19 +75,60 @@ export namespace UUID {
   ): readonly [found: boolean, value: UUID] {
     const digits = guidDigits(text?.trim() ?? "");
 
-    if (digits === null) {
-      return [false, empty];
+    return digits === null ? [false, empty] : [true, canonicalUuid(digits)];
+  }
+
+  /**
+   * Parses a GUID string the way `Guid.Parse(string)` does: the formats {@link tryParse}
+   * accepts, normalized to the lowercase `D` form `Guid.ToString()` prints, so two spellings
+   * of one GUID compare equal.
+   *
+   * @throws ArgumentNullException for `null`.
+   * @throws FormatException for text that is not a GUID.
+   */
+  export function parse(text: string | null | undefined): UUID {
+    if (text == null) {
+      throw new ArgumentNullException("input");
     }
 
-    const canonical = [
+    const trimmed = text.trim();
+    const digits = guidDigits(trimmed);
+
+    if (digits === null) {
+      throw new FormatException(unrecognizedMessage(trimmed));
+    }
+
+    return canonicalUuid(digits);
+  }
+
+  /** The `HYPHENATED` shape with any characters in place of the hex digits. */
+  const HYPHENATED_SHAPE = /^[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}$/;
+
+  /** The message .NET gives for `text`: what it found wrong depends on how close it came. */
+  function unrecognizedMessage(text: string): string {
+    const closing = ENCLOSURES[text.charAt(0)];
+    const inner = closing !== undefined && text.endsWith(closing) ? text.slice(1, -1) : text;
+
+    if (HYPHENATED_SHAPE.test(inner)) {
+      return "Guid string should only contain hexadecimal characters.";
+    }
+
+    return text.includes("-")
+      ? "Guid should contain 32 digits with 4 dashes (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+      : "Unrecognized Guid format.";
+  }
+
+  /** The lowercase `D` form of 32 hex digits. */
+  function canonicalUuid(digits: string): UUID {
+    return [
       digits.slice(0, 8),
       digits.slice(8, 12),
       digits.slice(12, 16),
       digits.slice(16, 20),
       digits.slice(20),
-    ].join("-");
-
-    return [true, canonical.toLowerCase() as UUID];
+    ]
+      .join("-")
+      .toLowerCase() as UUID;
   }
 
   const HEX_DIGITS = /^[0-9a-fA-F]{32}$/;

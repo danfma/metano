@@ -75,7 +75,7 @@ export namespace UUID {
 | `Guid.NewGuid()` | `UUID.newUuid()` |
 | `Guid.NewGuid().ToString("N")` | `UUID.newUuid().replace(/-/g, "")` (compact form) |
 | `g.ToString("B")` / `g.ToString("P")` | `("{" + g + "}")` / `("(" + g + ")")` (also `b`, `p`, `n`) |
-| `Guid.Parse(s)` | `UUID.create(s)` |
+| `Guid.Parse(s)` | `UUID.parse(s)` (`D`/`N`/`B`/`P` formats, any letter case, normalized to lowercase `D`; `FormatException` for anything else; baseline FR-054, #673) |
 | `Guid.TryParse(s, out var g)` | `const [ok, g] = UUID.tryParse(s)` (`D`/`N`/`B`/`P` formats, normalized to lowercase `D`; `UUID.empty` on failure) |
 | `Guid.Empty` | `UUID.empty` |
 | `guid.ToString()` | `guid` (identity — already a string) |
@@ -114,6 +114,23 @@ automatically whenever any Temporal mapping is used.
 
 | C# | TypeScript |
 |----|----|
+| `new TimeSpan(h, m, s)` / `(d, h, m, s)` / `(d, h, m, s, ms)` / `(d, h, m, s, ms, µs)` | `timeSpanFromParts(0, h, m, s)` / `timeSpanFromParts(d, h, m, s)` / … (runtime; `new Temporal.Duration(0, 5, 0)` would be five *months*) |
+| `TimeSpan.Zero` | `timeSpanZero` |
+| `TimeSpan.FromDays(x)` … `FromMicroseconds(x)` (one `double`, `int` or `long` argument) | `timeSpanFromDays(x)` … `timeSpanFromMicroseconds(x)` |
+| `new DateTimeOffset(y, mo, d, h, mi, s, offset)` / `(…, ms, offset)` | `dateTimeOffset(y, mo, d, h, mi, s, 0, offset)` / `dateTimeOffset(…, ms, offset)` |
+| `new DateTimeOffset(dateTime, offset)` / `(ticks, offset)` | `dateTimeOffsetFromDateTime(dateTime, offset)` / `dateTimeOffsetFromTicks(ticks, offset)` |
+
+The constructors and factories above (baseline FR-054, #673) check .NET's ranges and throw its
+exceptions: `TimeSpan` components beyond `TimeSpan.MaxValue` throw `ArgumentOutOfRangeException`;
+`FromX(double)` truncates a fraction toward zero, as .NET does, and throws `ArgumentException`
+for NaN and `OverflowException` past the range; a `long` argument past the range throws
+`ArgumentOutOfRangeException`, as in .NET, but an `int` argument (`FromDays(int.MaxValue)`)
+throws `OverflowException` where .NET throws `ArgumentOutOfRangeException`, because a `number`
+carries no static type to tell the `int` overload from the `double` one. The .NET 9 `FromHours(2, 30)` forms that combine units stay
+unmapped (MS0001). `DateTimeOffset` takes an offset in whole minutes within fourteen hours
+(`ArgumentException` / `ArgumentOutOfRangeException` otherwise) and a UTC time inside years 1 to
+9999; a `DateTime` argument carries no kind in TypeScript, so the UTC-kind offset check is
+skipped.
 | `T[]` | `T[]` |
 | `List<T>` / `IList<T>` / `IReadOnlyList<T>` | `T[]` |
 | `List<T>.Add(item)` | `list.push(item)` |

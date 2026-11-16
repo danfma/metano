@@ -49,12 +49,26 @@ using Metano.Annotations;
 )]
 
 // ─── Comparison / conversion ────────────────────────────────
+// decimal.TryParse(s, out d) → tryParseDecimal(s, Decimal), which returns `[found, value]` (the
+// `out` slot holds `0m` and is not read). The helper applies the grammar of `decimal.Parse`
+// and reports a failure, `null` included, as `[false, 0]` (#673). The `Decimal` class goes in
 // d.CompareTo(other) → d.cmp(other) — decimal.js returns -1/0/1 just like
 // IComparable.CompareTo, so the rename is enough.
 
 [assembly: MapMethod(typeof(decimal), nameof(decimal.CompareTo), JsMethod = "cmp")]
 
 // ─── Rounding ───────────────────────────────────────────────
+    JsTemplate = "tryParseDecimal($0, Decimal)",
+    RuntimeImports = "tryParseDecimal"
+)]
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.TryParse),
+    WhenParameterTypes = [typeof(string), typeof(IFormatProvider), typeof(decimal)],
+    JsTemplate = "tryParseDecimal($0, Decimal)",
+    RuntimeImports = "tryParseDecimal"
+)]
+
 // decimal.js `round()` rounds a midpoint away from zero by default, while C# rounds it
 // to the nearest even number. Every overload lowers to the runtime
 // `roundDecimal(value, digits?, mode?)` helper, which calls `toDecimalPlaces` with the

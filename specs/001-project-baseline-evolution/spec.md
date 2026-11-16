@@ -491,6 +491,18 @@ Product requirements added after the migration (normative; each one is traced by
   comparison. Traced by the "String members with .NET arguments" row of the feature-support
   matrix.
 ### Key Entities
+  components, `TimeSpan.Zero` and the single-argument `TimeSpan.FromX`, `new DateTimeOffset(...)`
+  from components, a `DateTime` or ticks plus an offset, `Guid.Parse`, `decimal.TryParse`, and
+  `Parse` / `TryParse` of `int`, `uint`, `short`, `ushort`, `byte`, `sbyte` and `Parse` of
+  `double`, `float` and `bool` MUST lower in TypeScript to `metano-runtime` functions with .NET's
+  value and exceptions (`ArgumentOutOfRangeException`, `ArgumentException`, `OverflowException`,
+  `FormatException`, `ArgumentNullException`): a `TimeSpan` built from components or units is the
+  duration .NET builds (never `new Temporal.Duration(0, 5, 0)`), `Guid.Parse` returns the lowercase
+  `D` text, and an integer `Parse` rejects what `Number.parseInt` would half-read (`"12abc"`).
+  A constant `NumberStyles` the integer parsers do not implement reports `MS0066`. The runtime
+  functions MUST agree with rows recorded from real .NET (`tests/BclReference`). Not covered:
+  the .NET 9 multi-unit `TimeSpan.FromX(a, b)` forms, `DateTimeOffset(DateTime)` without an
+  offset, the `X` GUID format, the `ReadOnlySpan<char>` forms of `Parse`.
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
 - **Intermediate Representation (IR)**: The canonical, language-neutral semantic model that
