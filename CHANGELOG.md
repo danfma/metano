@@ -748,7 +748,10 @@ the rows of `tests/BclReference`.
   are untouched. A `decimal` cast to `double` or `float` reads its number (`m.toNumber()`,
   `Math.fround(m.toNumber())`), where 2.x kept the `Decimal` object, so `(double)m + 1`
   concatenated text; `formatDouble` / `formatSingle` throw a `TypeError` for a value that is
-  not a `number` instead of printing `Infinity`.
+  not a `number` instead of printing `Infinity`. The `long?` operand of a `??` whose result
+  is a `double` is converted before the fallback (`long? k = 4; double e = k ?? 1.5` prints
+  `4`), and a `char` read as a `double` or `float` is its UTF-16 code (`double d = 'a'` is
+  `97`; 2.x kept the `"a"` string).
 - **`decimal` precision and rounding (#465, part a).** The class generated code imports for
   `decimal` is `Decimal` from `metano-runtime/system/decimal`: decimal.js configured with
   `System.Decimal`'s 29 significant digits and half-to-even rounding (decimal.js's own

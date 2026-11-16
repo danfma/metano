@@ -155,6 +155,38 @@ public class DefaultTextTranspileTests
             );
     }
 
+    /// <summary>
+    /// A <c>long?</c> read as the <c>double</c> result of <c>??</c> is
+    /// converted before the fallback applies, and a <c>char</c> read as a
+    /// <c>double</c> is its UTF-16 code: <c>formatDouble</c> receives a number.
+    /// </summary>
+    [Test]
+    public async Task ImplicitConversionsToDouble_ReachTheFormatterAsNumbers()
+    {
+        var output = TranspileText(
+            """
+            public static string Coalesce(long? k, long x)
+            {
+                double e = k ?? 1.5;
+                double f = k ?? x;
+                return "v" + e + f;
+            }
+
+            public static string Chars(char c)
+            {
+                double d = c;
+                double a = 'a';
+                return "v" + d + a;
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("const e = (k == null ? null : Number(k)) ?? 1.5;");
+        await Assert.That(output).Contains("const f = Number(k ?? x);");
+        await Assert.That(output).Contains("const d = c.charCodeAt(0);");
+        await Assert.That(output).Contains("const a = 97;");
+    }
+
     private static string TranspileText(string members) =>
         TranspileHelper.Transpile(
             $$"""

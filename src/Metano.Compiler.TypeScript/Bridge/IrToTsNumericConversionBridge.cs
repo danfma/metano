@@ -66,6 +66,12 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to))
             return DecimalToBinaryFloatingPoint(to, value);
 
+        if (IrNumericConversion.IsCharToFloatingPoint(from, to))
+            return new TsCallExpression(
+                new TsPropertyAccess(value, "charCodeAt"),
+                [new TsLiteral("0")]
+            );
+
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
 
