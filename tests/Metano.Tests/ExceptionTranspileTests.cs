@@ -108,6 +108,7 @@ public class ExceptionTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile]
             public sealed class QuotaExceededException : Exception
             {
@@ -177,6 +178,7 @@ public class ExceptionTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             namespace App
             {
                 [Transpile]
@@ -210,6 +212,7 @@ public class ExceptionTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             namespace App
             {
                 [Transpile]
@@ -311,6 +314,7 @@ public class ExceptionTranspileTests
         // base-message field that `base.Message` reads.
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             using System;
 
             [Transpile]
@@ -345,6 +349,7 @@ public class ExceptionTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile]
             public sealed class DetailedException(string detail) : Exception(detail)
             {
@@ -369,6 +374,7 @@ public class ExceptionTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile]
             public sealed class QuietException(string detail) : Exception(detail)
             {

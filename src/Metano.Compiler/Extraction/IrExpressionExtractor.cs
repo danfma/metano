@@ -1232,8 +1232,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Whether a list pattern's subject may be <c>null</c>. Where the subject
     /// is an expression of the statement (<c>x is [..]</c>, a <c>switch</c>
-    /// governing expression), the compiler's null-state analysis decides, so a
-    /// non-nullable array needs no test. A list pattern nested in another
+    /// governing expression), the declared type of the subject decides (null-state
+    /// analysis is optimistic, see <see cref="ReferenceNullability"/>), so an
+    /// array declared non-nullable needs no test. A list pattern nested in another
     /// pattern falls back to its input type, which admits <c>null</c> for any
     /// reference type.
     /// </summary>
@@ -1242,11 +1243,8 @@ public sealed partial class IrExpressionExtractor
         if (PatternSubject(list) is not { } subject)
             return InputMayBeNull(inputType);
 
-        return !IsNotNullByFlow(subject) && InputMayBeNull(inputType);
+        return ReferenceNullability.MayBeNull(_semantic, subject) && InputMayBeNull(inputType);
     }
-
-    private bool IsNotNullByFlow(ExpressionSyntax subject) =>
-        _semantic.GetTypeInfo(subject).Nullability.FlowState == NullableFlowState.NotNull;
 
     /// <summary>
     /// The expression a top-level pattern is matched against, or <c>null</c>

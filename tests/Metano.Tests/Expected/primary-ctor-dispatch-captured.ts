@@ -60,6 +60,6 @@ export class Cap {
   }
 
   greet(): string {
-    return "hi " + this._name;
+    return "hi " + (this._name ?? "");
   }
 }

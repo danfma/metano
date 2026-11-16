@@ -118,7 +118,7 @@ public class IrToTsBodyBridgeTests
     public async Task StringInterpolation_LowersToTemplateLiteral()
     {
         var ts = PrintMethodFromIr("""string Greet(string name) => $"hello {name}!";""");
-        await Assert.That(ts).Contains("`hello ${name}!`");
+        await Assert.That(ts).Contains("`hello ${name ?? \"\"}!`");
     }
 
     [Test]

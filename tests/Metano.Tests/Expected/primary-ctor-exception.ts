@@ -4,7 +4,7 @@ export class DuplicateEntryException extends Exception {
   override readonly name: string = "DuplicateEntryException";
 
   constructor(name: string) {
-    super(`Duplicate entry: ${name}`);
+    super(`Duplicate entry: ${name ?? ""}`);
   }
 
   protected override get $typeName(): string {

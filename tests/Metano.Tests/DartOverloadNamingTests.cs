@@ -713,7 +713,7 @@ public class DartOverloadNamingTests
             import 'animal.dart';
 
             class Cat extends Animal {
-              String speakN(int n) => super.speakN(n) + '!';
+              String speakN(int n) => (super.speakN(n) ?? '') + '!';
             }
 
             """
@@ -726,7 +726,7 @@ public class DartOverloadNamingTests
             import 'animal.dart';
 
             class Zoo {
-              static String run(Animal a) => a.speakN(1) + a.speakS('x');
+              static String run(Animal a) => (a.speakN(1) ?? '') + (a.speakS('x') ?? '');
             }
 
             """
@@ -980,7 +980,7 @@ public class DartOverloadNamingTests
             files,
             "text.dart",
             """
-            String twiceS(String s) => s + s;
+            String twiceS(String s) => (s ?? '') + (s ?? '');
 
             String twiceText(int n) => n.toString();
 
@@ -1008,7 +1008,7 @@ public class DartOverloadNamingTests
             import 'text.dart';
 
             class Use {
-              static String run() => twiceS('x') + twiceText(2) + Ext.dblInt32(3) + Ext.dblString('ab');
+              static String run() => (twiceS('x') ?? '') + (twiceText(2) ?? '') + Ext.dblInt32(3) + Ext.dblString('ab');
             }
 
             """

@@ -1,10 +1,10 @@
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 
 export abstract class Clip {
   constructor(readonly seconds: number) { }
 
   equals(other: any): boolean {
-    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.seconds === other.seconds;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals(this.seconds, other.seconds);
   }
 
   hashCode(): number {

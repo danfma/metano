@@ -17,7 +17,7 @@ export class SoftNums {
       Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.n === other.n &&
       valueEquals(this.d, other.d) &&
-      this.x === other.x &&
+      valueEquals(this.x, other.x) &&
       this.c === other.c
     );
   }

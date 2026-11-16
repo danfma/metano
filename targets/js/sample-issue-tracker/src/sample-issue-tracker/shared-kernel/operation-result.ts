@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 
 export class OperationResult<T> {
   constructor(
@@ -27,7 +27,7 @@ export class OperationResult<T> {
       other != null &&
       Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.success === other.success &&
-      this.value === other.value &&
+      valueEquals(this.value, other.value) &&
       this.errorCode === other.errorCode &&
       this.errorMessage === other.errorMessage
     );

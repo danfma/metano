@@ -36,7 +36,8 @@ namespace Metano.Compiler.IR;
 /// <c>ArgumentNullException</c>. <c>null</c> when the type's default message
 /// is not known.</param>
 /// <param name="MessageMayBeNull">Whether the supplied <c>message</c> argument
-/// may be <c>null</c> at runtime according to C# nullable flow analysis; a
+/// may be <c>null</c> at runtime, by its declared type and not by the
+/// optimistic flow state (#649); a
 /// backend then falls back to <paramref name="DefaultMessage"/> at runtime,
 /// as .NET does.</param>
 /// <param name="RequiresArgumentTemporaries">Whether a role-ordered

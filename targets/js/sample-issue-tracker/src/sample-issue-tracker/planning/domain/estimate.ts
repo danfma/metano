@@ -144,6 +144,6 @@ export class Estimate {
   }
 
   toString(): string {
-    return this.note.length === 0 ? `${this.points} pt` : `${this.points} pt (${this.note})`;
+    return this.note.length === 0 ? `${this.points} pt` : `${this.points} pt (${this.note ?? ""})`;
   }
 }

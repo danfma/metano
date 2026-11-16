@@ -69,6 +69,7 @@ public class BaseObjectMemberLoweringTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile]
             public class Money
             {

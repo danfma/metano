@@ -8,7 +8,7 @@ export class Letters {
   }
 
   framed(text: string, suffix: string | null): string[] {
-    return ["<", ...text.split(""), ...(suffix ?? "").split(""), ...(text + "!").split(""), ">"];
+    return ["<", ...text.split(""), ...(suffix ?? "").split(""), ...((text ?? "") + "!").split(""), ">"];
   }
 
   distinct(text: string): HashSet<string> {

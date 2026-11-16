@@ -15,6 +15,7 @@ namespace Metano.Tests;
 public class PrecedenceTranspileTests
 {
     private const string Prelude = """
+        #nullable enable
         using System.Collections.Generic;
         using System.Linq;
 

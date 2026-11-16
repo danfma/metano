@@ -555,6 +555,35 @@ Product requirements added after the migration (normative; each one is traced by
   `bigIntegerFromDouble(x)`, `bigIntegerFromDecimal(x)`, `0n`); the byte-array and span ones are
   not mapped.
 
+  Dart always passes the value. Not filled yet: a transpiled extension method called with
+  extension syntax (`x.Ext()`, lowered to a module function), a `base(...)` / `this(...)`
+  constructor initializer, an explicit delegate `.Invoke(...)` and an `[Emit]` callee. Traced by the "Caller
+  argument expressions" row of the feature-support matrix.
+- **FR-059** (target-typed `default`, #627, #372, #612, #409): A `default` literal and
+  `default(T)` MUST lower to the default value of the type the compiler converts them to, at
+  every position (a local initializer, a conditional arm, a `??` operand, an argument, a
+  collection element): `false`, `0`, `0n`, `"\u0000"`, `new Decimal("0")`, `null` for a
+  reference or nullable type, the zero-valued member of an enum (a `0` asserted to the enum
+  when it declares none). A type with no literal for its default (a user struct, a tuple, a
+  `[StringEnum]` without a zero member) MUST report `MS0001` and keep the target's placeholder.
+  The implicit initializer of an enum field MUST be the same value, never the lowest member;
+  a `[StringEnum]` field without a zero member gets no initializer.
+- **FR-060** (record field equality, #674): The generated `equals` of a record MUST compare a
+  field through the runtime's `valueEquals` unless `===` is .NET's equality for its type: a
+  `double` / `float` (`NaN` equals itself), a type parameter, `decimal`, the date and time
+  types, `Guid`, tuples and transpiled record, class and struct types. Integers, `string`,
+  `bool`, enums and branded values keep `===`. An equality guard
+  (`ArgumentOutOfRangeException.ThrowIfEqual` / `ThrowIfNotEqual`) admits a sealed generic
+  record, and a record with a `double` / `float` field, when every type argument and field is
+  such a value.
+- **FR-061** (null guards by declared type, #649): The null guard of a string concatenation,
+  an interpolation hole, a list pattern's subject and an exception's `message` argument MUST
+  follow the declared nullability of the operand, not Roslyn's flow state, which is optimistic
+  after `x!`, after a call that clears a checked field or a lambda-cleared local, and absent in
+  nullable-disabled code. The guard stays unless the operand cannot be `null` by construction
+  (a constant, an interpolated string, a concatenation, an object creation, a value type, or a
+  symbol declared non-nullable in a nullable-enabled context).
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

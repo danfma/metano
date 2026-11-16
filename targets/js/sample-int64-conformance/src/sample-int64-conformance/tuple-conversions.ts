@@ -68,7 +68,7 @@ export function mixedText(a: number, b: number): string {
   const narrow = [a, b.toString()] as [number, string];
   const wide = [BigInt(narrow[0]), narrow[1]] as [bigint, string];
 
-  return BigInt.asIntN(64, wide[0] + 1n) + wide[1];
+  return BigInt.asIntN(64, wide[0] + 1n) + (wide[1] ?? "");
 }
 
 export function nullableElementSum(a: number, b: number): bigint {

@@ -6,7 +6,7 @@ export class AppException extends Exception {
   override readonly name: string = "AppException";
 
   constructor(message: string, readonly code: number) {
-    super(message);
+    super(message ?? "Exception of type 'AppException' was thrown.");
     this.code = code;
   }
 

@@ -211,6 +211,7 @@ public class ConstNamingConsistencyTests
     {
         var output = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile]
             public class Sample
             {

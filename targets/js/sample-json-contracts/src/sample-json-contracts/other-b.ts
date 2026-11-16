@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import type { IShapeB } from "./i-shape-b";
 
 export class OtherB implements IShapeB {
@@ -9,7 +9,7 @@ export class OtherB implements IShapeB {
     return (
       other != null &&
       Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
-      this.area === other.area
+      valueEquals(this.area, other.area)
     );
   }
 

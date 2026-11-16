@@ -42,6 +42,8 @@ public class SwitchStatementPatternTests
             Shapes
                 + """
 
+                #nullable enable
+
                 [Transpile]
                 public static class Describer
                 {

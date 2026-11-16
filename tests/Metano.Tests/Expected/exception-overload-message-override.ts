@@ -31,7 +31,7 @@ export class OverloadOverrideException extends Exception {
 
     if (typeof args[0] === "symbol" && args[0] === OverloadOverrideException.byOverloadOverrideExceptionMessage) {
       const message = args[1] as string;
-      super(message);
+      super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
 
@@ -45,7 +45,7 @@ export class OverloadOverrideException extends Exception {
 
       {
         const message = __chain0Arg0;
-        super(message);
+        super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
         this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
         Reflect.deleteProperty(this, "message");
       }
@@ -62,7 +62,7 @@ export class OverloadOverrideException extends Exception {
 
       {
         const message = __chain0Arg0;
-        super(message);
+        super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
         this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
         Reflect.deleteProperty(this, "message");
       }
@@ -74,7 +74,7 @@ export class OverloadOverrideException extends Exception {
 
     if (args.length === 1 && isString(args[0])) {
       const message = args[0] as string;
-      super(message);
+      super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
 

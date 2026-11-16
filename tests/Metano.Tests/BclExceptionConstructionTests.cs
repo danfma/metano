@@ -178,6 +178,7 @@ public class BclExceptionConstructionTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             using System;
 
             [Transpile]
@@ -231,6 +232,7 @@ public class BclExceptionConstructionTests
     {
         var output = TranspileGuard(
             """
+            #nullable enable
             public static void Load() { throw new System.IO.FileNotFoundException(Describe(), Locate()); }
 
             public static string Describe() => "missing";
@@ -461,6 +463,7 @@ public class BclExceptionConstructionTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             using System;
 
             [Transpile]

@@ -22,7 +22,7 @@ export class Opt {
     if (typeof args[0] === "symbol" && args[0] === Opt.byOptSRest) {
       const s = args[1] as string;
       const rest = args.slice(2) as number[];
-      this.log = "params:" + s + ":" + rest.length;
+      this.log = "params:" + (s ?? "") + ":" + rest.length;
 
       return;
     }
@@ -37,7 +37,7 @@ export class Opt {
     if (args.length >= 1 && isString(args[0]) && args.slice(1).every((value) => isInt32(value))) {
       const s = args[0] as string;
       const rest = args.slice(1) as number[];
-      this.log = "params:" + s + ":" + rest.length;
+      this.log = "params:" + (s ?? "") + ":" + rest.length;
 
       return;
     }

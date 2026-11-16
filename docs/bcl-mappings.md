@@ -1058,7 +1058,7 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   the numbers generated code holds (and `char`), testing the sign bit as .NET does (`-0` and
   `NaN` are negative); the ordered guards map for those, `bool` and the date and time types,
   with `double.CompareTo`'s `NaN` order; the equality guards map for those, strings, `Guid`,
-  enums, transpiled, non-generic structs, record structs and sealed records whose fields are such values all the way down, read from source, with no `double` / `float` field (`[PlainObject]` ones included) and tuples of them,
+  enums, transpiled structs, record structs and sealed records (generic ones included, each type argument read as the type it names) whose fields are such values all the way down, read from source (`[PlainObject]` ones included) and tuples of them,
   with `EqualityComparer<T>.Default`'s rules through the runtime's `valueEquals` (`NaN` equals
   `NaN`, `0` equals `-0`, records, tuples and decimals compare by value, and two `TimeSpan`s are
   equal when they last as long, `PT5M` and `PT300S`; a duration read from ISO text with

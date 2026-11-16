@@ -29,7 +29,7 @@ class Clash extends Base {
 import 'base.dart';
 
 class Derived extends Base {
-  String addX(int x) => 'derived:' + super.addX(x);
+  String addX(int x) => 'derived:' + (super.addX(x) ?? '');
 
   String addB(bool b) => 'bool';
 }
@@ -38,7 +38,7 @@ class Derived extends Base {
 import 'mapper.dart';
 
 class FlagMapper extends Mapper {
-  String mapX<T>(T x) => 'flag:' + super.mapX(x);
+  String mapX<T>(T x) => 'flag:' + (super.mapX(x) ?? '');
 
   String mapBC(bool b, bool c) => 'flags';
 }
@@ -56,9 +56,9 @@ import 'middle.dart';
 class Leaf extends Middle {
   String addX(int x) => 'leaf';
 
-  String addS(String s) => 'leaf:' + super.addS(s);
+  String addS(String s) => 'leaf:' + (super.addS(s) ?? '');
 
-  String addD(double d) => 'leaf:' + super.addD(d);
+  String addD(double d) => 'leaf:' + (super.addD(d) ?? '');
 
   String addB(bool b) => 'bool';
 }
@@ -126,7 +126,7 @@ class Sink implements ISink {
 import 'repo.dart';
 
 class StrRepo extends Repo<String> {
-  String putItem(String item) => 'str:' + item;
+  String putItem(String item) => 'str:' + (item ?? '');
 
   String putFlag(bool flag) => 'flag';
 }

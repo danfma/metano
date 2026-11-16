@@ -12,7 +12,7 @@ export class ClipDescription {
       if ($s instanceof ImageClip) {
         const image = $s;
 
-        return `image ${image.path}`;
+        return `image ${image.path ?? ""}`;
       }
 
       if ($s instanceof SilenceClip) {

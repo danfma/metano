@@ -79,7 +79,7 @@ export class SourceOrderCalls {
   }
 
   static formattedOperands(e: Engine, h: Holder): number {
-    return (($arg1, $arg0) => e.joinFD($arg0, $arg1))("x" + h.first, "y" + h.second);
+    return (($arg1, $arg0) => e.joinFD($arg0, $arg1))("x" + (h.first ?? ""), "y" + (h.second ?? ""));
   }
 }
 

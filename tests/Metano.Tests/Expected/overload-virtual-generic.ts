@@ -34,7 +34,7 @@ export class StrRepo extends Repo<string> {
   }
 
   override putItem(item: string): string {
-    return "str:" + item;
+    return "str:" + (item ?? "");
   }
 }
 
@@ -74,6 +74,6 @@ export class StrBox extends Box<string> {
   }
 
   override fT(a: string): string {
-    return "S:" + a + super.fT(a);
+    return "S:" + (a ?? "") + (super.fT(a) ?? "");
   }
 }

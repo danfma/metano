@@ -431,10 +431,10 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   values the runtime compares as .NET does: the sign guards for numbers and `char` (the sign
   bit: `-0`, a `decimal` `-0.0m` and `NaN` are negative); the ordered ones also for `bool` and
   the date and time types; `ThrowIfEqual` / `ThrowIfNotEqual` for those, strings, `Guid`,
-  enums, transpiled, non-generic structs, record structs and sealed records whose fields are such values all the way down, read from source, with no `double` / `float` field (`[PlainObject]` ones included) and tuples of them,
+  enums, transpiled structs, record structs and sealed records (generic ones included, each type argument read as the type it names) whose fields are such values all the way down, read from source (`[PlainObject]` ones included) and tuples of them,
   compared by value. Over another `T` (an ordered `string` or `Guid`, a class, an array,
   `object`, `DateTimeOffset` for equality, a type parameter, a record or struct holding one,
-  a generic record) it reports `MS0001`. Known gap: `Guid.Parse` keeps the text's letter case,
+  a generic record with a class argument) it reports `MS0001`. Known gap: `Guid.Parse` keeps the text's letter case,
   so two `Guid`s parsed from differently cased text compare unequal. The message
   texts are .NET's, but values quoted inside a message are formatted by JavaScript, not .NET (`true` for `True`, an ISO date for `1/2/2024`, `PT5M` for a `TimeSpan`'s `00:05:00`, `1e+21`, `[object Object]` for a record). Any other static member of an exception
   type (`ObjectDisposedException.ThrowIf`) reports `MS0001`, as in 2.x.
@@ -772,6 +772,26 @@ the rows of `tests/BclReference`.
   fast path (FR-067, #677). `new BigInteger(x)` lowers to `BigInt(x)` instead of
   `new Object(x)`, and a reference to a local function reports `MS0001` instead of printing
   `C.local(...)`.
+
+### ⚠ Defaults, record equality and null guards (baseline FR-059, FR-060, FR-061)
+
+- A target-typed `default` (a local initializer, a conditional arm, a `??` operand, a
+  collection element, `default(T)`) lowers to the default of its converted type (`false`,
+  `0`, `0n`, the zero enum member) where 2.x printed `undefined` (#627, #372, #612). A type
+  with no literal default (a user struct, a tuple, a `[StringEnum]` without a zero member)
+  reports `MS0001`. An enum field's implicit initializer is the member whose value is `0`
+  (`0 as E` when there is none), not the lowest member; a `[StringEnum]` field without a zero
+  member has no initializer (#409).
+- The generated record `equals` compares `double` / `float` and type-parameter fields through
+  `valueEquals` (`NaN` equals itself, `Box<TimeSpan>` and `Box<decimal>` compare by value); a
+  generic record holding a class now compares that class structurally, as a non-generic
+  record with a class field already did (#674). The `ThrowIfEqual` / `ThrowIfNotEqual` guards
+  now admit sealed generic records and records with a `double` / `float` field.
+- The null guard of a string concatenation, an interpolation hole, a list pattern's subject
+  and an exception's `message` follows the declared type of the operand, not the optimistic
+  flow state: `"a" + s! + "b"` and a field checked and then cleared by a call keep
+  `s ?? ""`, and nullable-disabled code guards every reference operand, so its output gains
+  `?? ""` where 2.x printed `null` (#649).
 
 ### Toolchain
 
