@@ -199,10 +199,63 @@ A throwaway spike (branch `spike/011-runtime-list` at `eed6402b`, a local branch
 | Fidelity | 10 of the 13 probed C# / TS divergences of a list are fixed by the runtime class [V, spike]; the 3 left are `ToString()`, `Capacity` and the culture-sensitive order of a string `Sort()` [per the maintainer-facing summary of the spike]; the silent wrong values of today's native-array mapping include `Sort()` ordering numbers as text, `Contains` comparing records by reference and an out-of-range index reading `undefined` | D1 stands; the scope is narrowed to the five most used collections (D20, FR-054). |
 | Consumer impact | Hand-written TS that treats a list as an array breaks, some uses only at run time: `items[0]` and `items.length` are `undefined`, `toHaveLength` fails, `structuredClone(list)` gives an object without the elements, SolidJS `<For each>` rejects a non-array (the spike changed the binding to take `T[]`) [V, spike] | The migration notes list each case and its replacement (D23); interop is an explicit conversion, never an implicit one (D21). |
 | Bundle cost | +1.9 KB gzip per program that uses `List`, 0 when unused [V, spike] | Within the 2.5 KB budget of NFR-008. |
-| Performance | Indexed read + write over 1e6 numbers (`list.get(i)` / `list.set(i, v)` vs `a[i]`): **4.7× on Node, 1.28× on Bun**, against the 2.0× limit of NFR-001 [V, spike; `performance.now()`, 3 warm-ups, 15 timed runs, ratio of medians] | The gate holds and now names both engines (D22); the 011c indexer design must meet it on V8. An experiment on indexer variants runs separately. |
+| Performance | Indexed read + write over 1e6 numbers (`list.get(i)` / `list.set(i, v)` vs `a[i]`): **4.7× on Node, 1.28× on Bun**, against the 2.0× limit of NFR-001 [V, spike; `performance.now()`, 3 warm-ups, 15 timed runs, ratio of medians] | The gate holds and now names both engines (D22); the 011c indexer design must meet it on V8. An experiment on indexer variants runs separately. R17 shows the Node figure is mostly an on-stack-replacement artefact of this loop shape. |
 
 [V] A TS interface `Span<T> extends ReadonlyArray<T>` with a writable numeric index and the in-place members `sort`, `reverse`, `fill` and `copyWithin` (each returning `this`) type-checks under `tsgo --strict` as FR-056 requires (probe of 2026-11-16, revised in the first review round): a `number[]` is assignable to it; index writes, `sort(cmp)`, `reverse()`, `fill` and `copyWithin` compile, so today's `span.Reverse()` / `span.Sort(comparison)` lowerings (`src/Metano/Runtime/Spans.cs`) keep type-checking; `push`, `pop`, `shift`, `unshift` (TS2339), `splice` (TS2551) and a `length` assignment (TS2540) are rejected; a `ReadonlyArray<T>` rejects index writes (TS2542). A first draft without the in-place members would have broken those lowerings (TS2339 on `sort` / `reverse`).
 
 [V] .NET: `CollectionsMarshal.AsSpan<T>(List<T>? list)` (`System.Runtime.InteropServices`, .NET 5+) returns a `Span<T>` over the list's current buffer, an empty span for `null`; the documentation warns that items must not be added or removed while the span is in use (a growth that reallocates leaves the span on the old buffer [I]). No `List<T>.AsSpan()` instance member exists, hence the Metano extension of FR-056 whose .NET body calls it.
 
-**Conclusion**: a runtime `List<T>` over one backing array delivers the fidelity D1 promised at a measured bundle cost, makes zero-copy views free (FR-056, FR-057), breaks hand-written array-style consumers in ways the migration notes must name, and misses the indexer budget on V8 in its plain-method form, which stage 011c must fix rather than the budget absorb.
+**Conclusion**: a runtime `List<T>` over one backing array delivers the fidelity D1 promised at a measured bundle cost, makes zero-copy views free (FR-056, FR-057), breaks hand-written array-style consumers in ways the migration notes must name, and misses the indexer budget on V8 in its plain-method form, which stage 011c must fix rather than the budget absorb. (The performance part of this conclusion is revised by R17.)
+
+## R17 — Indexer experiment: what a `List<T>` costs, and how to measure it (2026-11-16)
+
+An experiment on indexer variants (Node v24.11.0 / V8 and Bun 1.4.2 / JavaScriptCore, Apple M1 Pro, macOS; its harness and raw results live outside the repository, so this entry carries the numbers it relies on) generated one module per (variant, workload, regime) from shared loop templates, ran each in a fresh process (10 untimed warm-up runs, 21 timed runs, median), and checked with a semantics probe that every checked variant throws `ArgumentOutOfRangeException` for `get(-1)`, `get(count)`, `set(count)` and `set(-1)` without growing. Two regimes: **L**, the spike's shape (one long loop over 1e6 elements, 5 passes, inside a function called a few times), and **H**, "hot helper" (a kernel that makes one pass over a 1e4-element list, called 500 times: 5e6 operations). Ratios are variant median / native-array median. All figures below are [V, experiment] unless tagged [I].
+
+**On-stack replacement distorts the long-loop shape.** In regime L, V8 runs the timed loop as on-stack-replacement (OSR) code, where *any* branch in the loop body costs about 4×: a native array read loop takes 4.91 ms, the same loop with an unrelated `if (x < 0) throw` 19.77 ms, and with a redundant bounds check 19.58 ms; under `node --no-use-osr` the checked native loop takes 5.30 ms. The spike's own `list.get(i)` read loop runs at **0.98×** native with `--no-use-osr`, against 3.88× in OSR code. The spike's "4.7× on Node" (R16) is therefore mostly an artefact of the shape, not a cost of the class. Bun shows no such effect (native + check: 4.09 ms against 2.67 ms). The method call is not the cost either: V8's `--trace-turbo-inlining` shows TurboFan inlining `get`, `set` and the `count` getter into the kernel, with no TurboFan deopt in steady state in regime H.
+
+**Variants** (ratio to native, regime H; `!` = above 2.0×):
+
+| Variant | Node read | Node write | Node rmw | Node `Add` | Bun read | Bun write | Bun rmw | Bun `Add` |
+|---|---|---|---|---|---|---|---|---|
+| spike (`defineProperty` storage, two-compare check) | 1.59× | 2.21×! | 2.35×! | 1.09× | 1.52× | 1.80× | 2.33×! | 1.03× |
+| `defineProperty` storage + unsigned check | 1.75× | 2.34×! | 2.46×! | 1.11× | 1.51× | 1.75× | 2.34×! | 1.02× |
+| plain fields + unsigned check (recommended) | 1.72× | 2.43×! | 2.51×! | 1.40× | 1.54× | 1.75× | 2.34×! | 1.00× |
+| plain fields, lazy version (`_version++` only while an enumerator is live) | — | 2.23×! | 2.33×! | — | — | 1.46× | 2.06×! | — |
+| `#private` fields | 1.73× | 2.39×! | 2.53×! | **2.55×!** | 1.53× | 1.82× | 2.40×! | 1.09× |
+| symbol keys | 1.73× | 2.30×! | 2.47×! | 2.54×! | 1.55× | 1.76× | 2.41×! | 1.02× |
+| module function `listGet(list, i)` | 2.05×! | 2.58×! | 2.95×! | 1.34× | 1.54× | 1.83× | 2.41×! | 1.01× |
+| check inlined at the call site | 1.46× | 2.41×! | 2.49×! | 1.44× | 1.81× | 2.03×! | 2.66×! | 0.97× |
+| closure object | 17.95×! | 19.00×! | 25.47×! | 5.12×! | 1.50× | 1.77× | 2.36×! | 1.24× |
+| `Proxy` with numeric-key traps | 181.61×! | 183.39×! | 327.16×! | 60.60×! | 73.87×! | 71.57×! | 128.65×! | 12.00×! |
+| `class List extends Array` (no checks; reference only) | 1.01× | 1.03× | 1.01× | 8.67×! | 0.99× | 1.01× | 1.10× | 1.05× |
+
+Random-index reads (the index comes from data): recommended 1.80× (Node) / 1.30× (Bun); the spike's two-compare check 2.26× on Node. The `#private` / symbol `Add` penalty on Node reproduced in two more fresh processes (5.91 / 6.06 ms against 3.24 / 3.18 ms for plain fields).
+
+**Iteration** (`foreach` summing, ratio to a native `for..of`, regime H): the compiler-lowered indexed loop over the backing array with a `_version` check per step 1.37× Node / **0.52×** Bun; the version-checked `ListIterator` class through `[Symbol.iterator]` 4.68× / 3.57×; a generator 28.42× / 8.28×; delegating to the array's own iterator 1.05× / 1.21× but without the "collection was modified" check.
+
+**Absolute overhead per operation** of the recommended design (regime H, (variant median − native median) / 5e6) [V, derived]:
+
+| Operation | Node | Bun |
+|---|---|---|
+| `get`, sequential | 0.43 ns | 0.28 ns |
+| `get`, data-driven index | 0.75 ns | 0.25 ns |
+| `set` | 0.88 ns | 0.41 ns |
+| read-modify-write (`set(i, get(i) + 1)`) | 0.89 ns | 0.63 ns |
+| `get` at a polymorphic site (four element types) | 0.82 ns | 1.41 ns |
+| `Add` (vs `push`) [I: assumes 5e6 operations, as the other H workloads] | 0.19 ns | 0.00 ns |
+| lowered `foreach`, per element (vs `for..of`) | 0.23 ns | faster than native |
+
+A native write costs about 0.6 ns per element, so one extra field store reads as +100% in a single-store micro-loop; a loop body doing 5–10 ns of real work dilutes the ratio to roughly 1.1–1.2× [I].
+
+**Recommended design** (adopted by FR-057 and FR-010):
+
+- Plain own fields `_items` (never reassigned) and `_version`, created in the constructor in a fixed order so every construction path shares one hidden class (`adopt` goes through the constructor); no `#private` (Node `Add` 1.9× slower), no symbol keys, no closures (13–26× on Node), no `Proxy` (70–500×). Reads are equal across plain, `defineProperty`, `#private` and symbol fields, so FR-002's non-enumerable storage costs nothing measurable on reads; it measured close to plain fields on writes and better on Node `Add`.
+- `get` / `set` with one unsigned bounds compare, `(index >>> 0) >= items.length`, and the throw in a separate cold module-level function; equal to the spike's check on sequential reads and better on data-driven ones. A non-integer index (`1.5`) returns `undefined` instead of throwing, which compiled C# (`int`) never produces but hand-written JS can.
+- The compiler emits `list.get(i)` / `list.set(i, v)`; inlining the check at the call site brought no consistent gain and must hoist the right-hand side to keep C#'s evaluation order.
+- `foreach` over a static `List<T>` lowered to an indexed loop over the backing array that checks `_version` on each step; `[Symbol.iterator]` keeps the version-checked `ListIterator` for JS interop.
+
+**Remaining gap**: writes and read-modify-write stay at 2.0–2.9× on every semantics-preserving variant, because of the bounds check and the `_version++` store, both required by .NET (verified on .NET 11.0.0: `foreach (var x in list) list[0] = …` throws `InvalidOperationException`). The lazy version narrows it but does not close it. In absolute terms the gap is under 1 ns per operation on both engines, which is what NFR-001 now budgets (D25).
+
+**Caveats** [I]: one machine and one version of each engine; micro-benchmarks with near-empty loop bodies; the native baseline has no bounds check at all, while a C# array has one.
+
+**Conclusion**: measure in the hot-helper shape and budget the absolute overhead (NFR-001); build the `List` as above (FR-057); lower `foreach` over `List<T>` to the checked indexed loop. The ratio gate on a single-store loop measured the store, not the design.
