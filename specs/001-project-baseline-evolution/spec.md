@@ -399,7 +399,7 @@ Product requirements added after the migration (normative; each one is traced by
   defaulted parameter the call omits before the caller-expression parameter MUST receive the
   default the call site sees, the one declared by the method the call binds to. In TypeScript a
   callee that applies that same default itself (a transpiled, non-virtual method or constructor
-  that is not `[Import]`, `[External]`, `[Emit]` or declaration-only) is passed `undefined`;
+  that is not `[Emit]`, nor bound elsewhere by `[Import]` or `[External]` on itself or its type) is passed `undefined`;
   any other callee (one of those, a delegate, an interface, abstract, virtual or override
   member, whose runtime implementation may declare a different default) is passed the value.
   Dart always passes the value. Not filled yet: a transpiled extension method called with

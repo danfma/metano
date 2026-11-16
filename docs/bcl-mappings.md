@@ -946,13 +946,15 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   the numbers generated code holds (and `char`), testing the sign bit as .NET does (`-0` and
   `NaN` are negative); the ordered guards map for those, `bool` and the date and time types,
   with `double.CompareTo`'s `NaN` order; the equality guards map for those, strings, `Guid`,
-  enums, transpiled records and structs (`[PlainObject]` ones included) and tuples of them,
+  enums, transpiled, non-generic records and structs whose fields are such values all the way down (`[PlainObject]` ones included) and tuples of them,
   with `EqualityComparer<T>.Default`'s rules through the runtime's `valueEquals` (`NaN` equals
   `NaN`, `0` equals `-0`, records, tuples, decimals and `TimeSpan`s compare by value). A
   comparison guard over another `T` (an ordered `string`, culture-sensitive on .NET, or `Guid`;
   `Complex`; a class or an array, which .NET compares by reference; `DateTimeOffset` for
   equality, whose Temporal value also compares the time zone; a type parameter) reports
-  `MS0001`. The message texts are .NET's, but values quoted inside a message are formatted by JavaScript, not .NET (`true` for `True`, an ISO date for `1/2/2024`, `PT5M` for a `TimeSpan`'s `00:05:00`, `1e+21`, `[object Object]` for a record). A `null` parameter
+  `MS0001`. `Guid.Parse` keeps the text's letter case, so two `Guid`s parsed from
+  differently cased text compare unequal here where .NET finds them equal. The message texts
+  are .NET's, but values quoted inside a message are formatted by JavaScript, not .NET (`true` for `True`, an ISO date for `1/2/2024`, `PT5M` for a `TimeSpan`'s `00:05:00`, `1e+21`, `[object Object]` for a record). A `null` parameter
   name leaves the name empty, as on .NET.
   `ObjectDisposedException.ThrowIf` and every other static member of an exception type
   without a mapping report `MS0001`.
