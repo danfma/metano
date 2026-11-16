@@ -7,6 +7,7 @@
     <Project Path="src/Metano.Build/Metano.Build.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/BclReference/BclReference.csproj" />
     <Project Path="tests/Int64Reference/Int64Reference.csproj" />
     <Project Path="tests/Metano.Tests/Metano.Tests.csproj" />
   </Folder>

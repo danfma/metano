@@ -188,7 +188,11 @@ public class NullableTranspileTests
 
         var output = result["helper.ts"];
         await Assert.That(output).Contains("value?.toUpperCase()");
-        await Assert.That(output).Contains("value?.substring(1).trim()");
+
+        await Assert
+            .That(output)
+            .Contains("value == null ? null : stringSubstring(value, 1).trim()");
+
         await Assert.That(output).Contains("value?.size");
         await Assert.That(output).Contains("value?.has(key)");
         await Assert.That(output).Contains("if (value != null) {\n    value.length = 0;\n  }");
