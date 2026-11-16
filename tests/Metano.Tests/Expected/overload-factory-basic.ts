@@ -1,5 +1,5 @@
 import { isInt32 } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export class Money {
   protected static readonly byMoneyAmount: unique symbol = Symbol("Money(decimal amount)");

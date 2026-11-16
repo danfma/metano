@@ -1,6 +1,6 @@
 import { UUID } from "metano-runtime";
 import { firstOrDefault, last, lastOrDefault, linq, select, singleOrDefault, where } from "metano-runtime/system/linq";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { Color } from "./color";
 import type { Level } from "./level";
 import type { Person } from "./person";

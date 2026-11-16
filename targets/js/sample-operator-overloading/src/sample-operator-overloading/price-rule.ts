@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { isBool, isInt32, isString } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { Currency } from "./currency";
 
 export class PriceRule {

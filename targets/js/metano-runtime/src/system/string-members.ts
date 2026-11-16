@@ -306,7 +306,10 @@ export function stringLastIndexOf(
     return -1;
   }
 
-  const found = comparable(value, comparison).lastIndexOf(comparable(text, comparison), latestStart);
+  const found = comparable(value, comparison).lastIndexOf(
+    comparable(text, comparison),
+    latestStart,
+  );
 
   return found >= lowest ? found : -1;
 }
@@ -346,11 +349,7 @@ export function stringEndsWith(
  *
  * @throws ArgumentNullException when `text` is `null`.
  */
-export function stringContains(
-  value: string,
-  text: string,
-  comparison: StringComparison,
-): boolean {
+export function stringContains(value: string, text: string, comparison: StringComparison): boolean {
   requireValue(text, "value");
 
   return comparable(value, comparison).includes(comparable(text, comparison));
@@ -530,7 +529,10 @@ export function stringSplit(
  * space when there are none. The characters come as separate arguments or as arrays of
  * them.
  */
-export function stringSplitChars(value: string, ...separators: readonly TrimCharacters[]): string[] {
+export function stringSplitChars(
+  value: string,
+  ...separators: readonly TrimCharacters[]
+): string[] {
   return stringSplit(value, separators.flat(), true);
 }
 

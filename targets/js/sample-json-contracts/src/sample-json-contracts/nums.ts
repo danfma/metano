@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
-import type { Decimal } from "decimal.js";
+import type { Decimal } from "metano-runtime/system/decimal";
 import type { Color } from "./color";
 
 export class Nums {

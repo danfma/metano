@@ -1,5 +1,5 @@
 import { isBool, isInt32, isString } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { Color } from "./color";
 
 export class Painter {

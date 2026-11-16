@@ -103,18 +103,23 @@ public class UsingAliasImportTests
 
         var output = result["app/ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnFromWidgets }");
+
         await Assert
             .That(output)
             .Contains("export function Column(gap: number): ColumnFromWidgets");
+
         await Assert.That(output).Contains("return new ColumnFromWidgets(gap);");
 
         var info = diagnostics.FirstOrDefault(d =>
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.AliasedImportConflict
         );
+
         await Assert.That(info).IsNotNull();
+
         await Assert
             .That(info!.Severity)
             .IsEqualTo(Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Info);
+
         await Assert.That(info.Message).Contains("ColumnFromWidgets");
     }
 
@@ -414,7 +419,10 @@ public class UsingAliasImportTests
             """
         )["prices.ts"];
 
-        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert
+            .That(output)
+            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+
         await Assert.That(output).Contains("half(price: Decimal): Decimal");
         await Assert.That(output).Contains("return new Decimal(parseDecimalText(text));");
         await Assert.That(output).DoesNotContain("Money");
@@ -471,7 +479,9 @@ public class UsingAliasImportTests
 
         await Assert
             .That(output)
-            .Contains("import { Decimal, Decimal as Money } from \"decimal.js\";");
+            .Contains(
+                "import { Decimal, Decimal as Money } from \"metano-runtime/system/decimal\";"
+            );
 
         await Assert.That(output).Contains("Money.floor(new Decimal(\"2.7\"))");
     }
@@ -498,7 +508,9 @@ public class UsingAliasImportTests
 
         await Assert
             .That(output)
-            .Contains("import { type Decimal, Decimal as Money } from \"decimal.js\";");
+            .Contains(
+                "import { type Decimal, Decimal as Money } from \"metano-runtime/system/decimal\";"
+            );
     }
 
     /// <summary>

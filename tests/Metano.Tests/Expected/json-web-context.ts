@@ -1,4 +1,4 @@
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type JsonReadOptions, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
 import { ImageClip } from "./image-clip";

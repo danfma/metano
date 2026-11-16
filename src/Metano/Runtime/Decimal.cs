@@ -1,12 +1,14 @@
 // Default BCL → JavaScript mapping for `System.Decimal`. Lowers to the `Decimal` class
-// from the `decimal.js` package — a precise arbitrary-precision number type that
-// preserves the C# `decimal` semantics (no IEEE-754 rounding errors). Without this
-// mapping, `decimal` would silently fall through to the primitive switch and become
-// the JS `number` primitive, which is a footgun for any monetary or scientific code.
+// of `metano-runtime/system/decimal` — decimal.js, a precise arbitrary-precision number type
+// that preserves the C# `decimal` semantics (no IEEE-754 rounding errors), configured as a
+// clone with `System.Decimal`'s 29 significant digits and its half-to-even rounding instead of
+// decimal.js's defaults of 20 digits and half up (#465). Without this mapping, `decimal`
+// would silently fall through to the primitive switch and become the JS `number` primitive,
+// which is a footgun for any monetary or scientific code.
 //
-// **Consumer requirement:** add `decimal.js` to your `package.json` dependencies.
-// Metano does NOT manage the JS package install — only the import statement in the
-// generated TypeScript points at the package.
+// decimal.js is a dependency of `metano-runtime`, so a consumer no longer lists it. A project
+// that declares its own `[ExportFromBcl(typeof(decimal), FromPackage = "decimal.js", ...)]`
+// keeps the unconfigured class.
 //
 // This file declares the **type-level** mapping plus member-level mappings (constants,
 // parsing, conversions, comparison). Literal lowering (1.5m → new Decimal("1.5")) and
@@ -19,8 +21,7 @@ using Metano.Annotations;
 [assembly: ExportFromBcl(
     typeof(decimal),
     ExportedName = "Decimal",
-    FromPackage = "decimal.js",
-    Version = "^10.6.0"
+    FromPackage = "metano-runtime/system/decimal"
 )]
 
 // ─── Constants ──────────────────────────────────────────────
@@ -48,16 +49,15 @@ using Metano.Annotations;
     RuntimeImports = "parseDecimalText"
 )]
 
-// ─── Comparison / conversion ────────────────────────────────
 // decimal.TryParse(s, out d) → tryParseDecimal(s, Decimal), which returns `[found, value]` (the
 // `out` slot holds `0m` and is not read). The helper applies the grammar of `decimal.Parse`
 // and reports a failure, `null` included, as `[false, 0]` (#673). The `Decimal` class goes in
-// d.CompareTo(other) → d.cmp(other) — decimal.js returns -1/0/1 just like
-// IComparable.CompareTo, so the rename is enough.
+// as an argument so the runtime never imports decimal.js.
 
-[assembly: MapMethod(typeof(decimal), nameof(decimal.CompareTo), JsMethod = "cmp")]
-
-// ─── Rounding ───────────────────────────────────────────────
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.TryParse),
+    WhenParameterTypes = [typeof(string), typeof(decimal)],
     JsTemplate = "tryParseDecimal($0, Decimal)",
     RuntimeImports = "tryParseDecimal"
 )]
@@ -69,6 +69,13 @@ using Metano.Annotations;
     RuntimeImports = "tryParseDecimal"
 )]
 
+// ─── Comparison / conversion ────────────────────────────────
+// d.CompareTo(other) → d.cmp(other) — decimal.js returns -1/0/1 just like
+// IComparable.CompareTo, so the rename is enough.
+
+[assembly: MapMethod(typeof(decimal), nameof(decimal.CompareTo), JsMethod = "cmp")]
+
+// ─── Rounding ───────────────────────────────────────────────
 // decimal.js `round()` rounds a midpoint away from zero by default, while C# rounds it
 // to the nearest even number. Every overload lowers to the runtime
 // `roundDecimal(value, digits?, mode?)` helper, which calls `toDecimalPlaces` with the

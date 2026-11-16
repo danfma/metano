@@ -28,7 +28,10 @@ public class DecimalTypePatternTests
 
         var output = result["checker.ts"];
 
-        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert
+            .That(output)
+            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+
         await Assert.That(output).Contains("return o instanceof Decimal;");
         await Assert.That(output).DoesNotContain("typeof o === \"number\"");
     }
@@ -122,6 +125,7 @@ public class DecimalTypePatternTests
         );
 
         var output = result["classifier.ts"];
+
         await Assert
             .That(output)
             .Contains(
@@ -143,9 +147,11 @@ public class DecimalTypePatternTests
         );
 
         var output = result["defaults.ts"];
+
         await Assert
             .That(output)
             .Contains("return (o instanceof Decimal ? o : null) ?? new Decimal(\"0\");");
+
         await Assert.That(output).DoesNotContain("typeof o === \"number\"");
     }
 

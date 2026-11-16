@@ -503,6 +503,14 @@ Product requirements added after the migration (normative; each one is traced by
   functions MUST agree with rows recorded from real .NET (`tests/BclReference`). Not covered:
   the .NET 9 multi-unit `TimeSpan.FromX(a, b)` forms, `DateTimeOffset(DateTime)` without an
   offset, the `X` GUID format, the `ReadOnlySpan<char>` forms of `Parse`.
+- **FR-055** (decimal precision and rounding, #465 part a): The class the TypeScript target
+  generates for `decimal` MUST be decimal.js configured for `System.Decimal` — 29 significant
+  digits, half-to-even rounding — exported by `metano-runtime/system/decimal`, so no generated
+  code relies on decimal.js's global defaults. Known differences remain documented in the
+  "`decimal` specifics" section of `docs/bcl-mappings.md` (quotient digits, scale floor, overflow,
+  trailing zeros); the exact-scale, overflow and rounding-mode parity of #465 is not claimed.
+
+### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
 - **Intermediate Representation (IR)**: The canonical, language-neutral semantic model that

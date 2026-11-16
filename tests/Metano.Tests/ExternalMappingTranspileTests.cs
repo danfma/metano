@@ -24,12 +24,13 @@ public class ExternalMappingTranspileTests
     }
 
     [Test]
-    public async Task Decimal_HasBuiltInMappingToDecimalJs()
+    public async Task Decimal_HasBuiltInMappingToTheConfiguredDecimal()
     {
         // Metano ships a default [ExportFromBcl] for `decimal` in
         // Metano/Runtime/Decimal.cs, so user code that uses decimal automatically
-        // imports `Decimal` from `decimal.js` without any per-project declaration.
-        // The user is responsible for adding `decimal.js` to their package.json.
+        // imports `Decimal` from metano-runtime's configured decimal.js clone
+        // (29 digits, half-to-even; baseline FR-055) without any per-project
+        // declaration. decimal.js itself is a dependency of metano-runtime.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -39,7 +40,8 @@ public class ExternalMappingTranspileTests
 
         var output = result["price.ts"];
         await Assert.That(output).Contains("amount: Decimal");
-        await Assert.That(output).Contains("from \"decimal.js\"");
+        await Assert.That(output).Contains("from \"metano-runtime/system/decimal\"");
+        await Assert.That(output).DoesNotContain("decimal.js");
     }
 
     // ─── [Import] ───────────────────────────────────────────

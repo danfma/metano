@@ -68,7 +68,7 @@ public class PackageJsonCacheReuseTests
         {
             public class TodoList
             {
-                public decimal Total() => 0m;
+                public Acme.Shared.Tag Total() => new Acme.Shared.Tag("t");
             }
         }
         """;
@@ -78,7 +78,7 @@ public class PackageJsonCacheReuseTests
         {
             public class TodoList
             {
-                public decimal Total() => 1m;
+                public Acme.Shared.Tag Total() => new Acme.Shared.Tag("u");
             }
         }
         """;
@@ -188,9 +188,7 @@ public class PackageJsonCacheReuseTests
         await Assert.That(reused.ServedFromCache).IsTrue();
         await Assert.That(rebuiltManifest).IsEqualTo(coldManifest);
 
-        await Assert
-            .That(DependencyNames(rebuiltManifest))
-            .IsEquivalentTo(["@acme/shared", "decimal.js"]);
+        await Assert.That(DependencyNames(rebuiltManifest)).IsEquivalentTo(["@acme/shared"]);
     }
 
     /// <summary>
@@ -244,9 +242,7 @@ public class PackageJsonCacheReuseTests
         await Assert.That(partial.ServedFromCache).IsFalse();
         await Assert.That(rebuiltManifest).IsEqualTo(coldEditedManifest);
 
-        await Assert
-            .That(DependencyNames(rebuiltManifest))
-            .IsEquivalentTo(["@acme/shared", "decimal.js"]);
+        await Assert.That(DependencyNames(rebuiltManifest)).IsEquivalentTo(["@acme/shared"]);
     }
 
     /// <summary>
@@ -259,7 +255,7 @@ public class PackageJsonCacheReuseTests
         var package = NewPackage();
         var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
         var listsWithoutDecimal = DecimalListsSource.Replace(
-            "decimal Total() => 0m",
+            "Acme.Shared.Tag Total() => new Acme.Shared.Tag(\"t\")",
             "int Total() => 0"
         );
 

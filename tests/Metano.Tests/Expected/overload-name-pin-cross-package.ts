@@ -1,5 +1,5 @@
-import { Decimal } from "decimal.js";
 import { Money, discount } from "lib/lib";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export class Register {
   constructor() { }

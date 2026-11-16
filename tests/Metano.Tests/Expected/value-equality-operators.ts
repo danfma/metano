@@ -1,5 +1,5 @@
 import { tupleEquals, valueEquals } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import type { Counter } from "./counter";
 import type { Dto } from "./dto";
 import type { Node } from "./node";

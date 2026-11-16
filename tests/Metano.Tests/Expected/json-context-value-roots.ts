@@ -1,6 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { HashSet, UUID } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { EpisodeId } from "./episode-id";
 import { EpisodeSummary } from "./episode-summary";

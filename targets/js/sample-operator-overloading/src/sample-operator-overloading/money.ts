@@ -7,7 +7,7 @@ import {
   isBigInt,
   roundDecimal,
 } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import type { Currency } from "./currency";
 import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
 

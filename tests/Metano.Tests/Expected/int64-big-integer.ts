@@ -1,5 +1,5 @@
 import { bigIntegerFromDecimal, bigIntegerFromDouble, decimalTextFromBigInteger, doubleFromBigInteger, int32FromBigInteger, int64FromBigInteger, narrowFromBigInteger, uint32FromBigInteger } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Big {

@@ -500,7 +500,8 @@ Set `AsDefault = true` for default imports (`import Foo from "package"`).
 
 Assembly-level mapping from a .NET BCL type to an npm package. Used by the
 `Metano` package itself to wire up default mappings like
-`decimal` → `Decimal` from `decimal.js`.
+`decimal` → `Decimal` from `metano-runtime/system/decimal` (decimal.js configured for
+`System.Decimal`).
 
 ```csharp
 [assembly: ExportFromBcl(

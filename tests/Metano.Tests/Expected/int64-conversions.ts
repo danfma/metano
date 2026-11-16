@@ -1,5 +1,5 @@
 import { checkedInt64, checkedNarrow, checkedUInt64, int32FromDouble, int32FromDoubleChecked, int64FromBigInteger, int64FromDecimal, int64FromDouble, int64FromDoubleChecked, int64ToSingle, mapNullable, uint32FromDouble, uint64FromBigInteger, uint64FromDecimal, uint64FromDouble, uint64FromDoubleChecked } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import type { Big } from "./big";
 import type { Color } from "./color";
 

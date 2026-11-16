@@ -13,7 +13,7 @@ This page lists every mapping the transpiler knows about out of the box.
 | `bool` | `boolean` |
 | `int`, `short`, `byte`, `sbyte`, `uint`, `ushort`, `float`, `double` | `number` ([integers of 32 bits or fewer](#integers-of-32-bits-or-fewer)) |
 | `long`, `ulong`, `nint`, `nuint` | `bigint` (3.0.0; [64-bit integers](#64-bit-integers-long--ulong); 2.x mapped them to `number`) |
-| `decimal` | `Decimal` (from [`decimal.js`](https://mikemcl.github.io/decimal.js/)) |
+| `decimal` | `Decimal` (from `metano-runtime/system/decimal`: [`decimal.js`](https://mikemcl.github.io/decimal.js/) configured for `System.Decimal`) |
 | `BigInteger` | `bigint` |
 | `char` | `string` (length 1) |
 | `Guid` | `UUID` (branded `string`, from `metano-runtime`) |
@@ -25,8 +25,18 @@ This page lists every mapping the transpiler knows about out of the box.
 ### `decimal` specifics
 
 Because JavaScript numbers are IEEE-754 (and lose precision for many financial
-calculations), `decimal` maps to the `Decimal` class from the `decimal.js` npm
-package. Operators are lowered to method calls:
+calculations), `decimal` maps to the `Decimal` class of `metano-runtime/system/decimal`:
+[`decimal.js`](https://mikemcl.github.io/decimal.js/) configured as a clone with
+`System.Decimal`'s 29 significant digits and half-to-even rounding, where decimal.js defaults to
+20 digits and rounds a midpoint half up (baseline FR-055, #465). `decimal.MaxValue - 1` is
+`79228162514264337593543950334` and `0.5m + 2.5m` rounds as .NET does; decimal.js is a dependency
+of `metano-runtime`, so a project no longer lists it. Known differences from `System.Decimal`
+(arithmetic rows against real .NET: `tests/BclReference`): a quotient keeps 29 significant digits
+where .NET keeps 28 decimal places (`1m / 3m` has one more `3`), a result below `1e-28` is kept
+where .NET rounds it to zero, trailing zeros are dropped (`1.10m` prints `1.1`; #662), and
+overflow past `decimal.MaxValue` does not throw. A project that declares its own
+`[ExportFromBcl(typeof(decimal), FromPackage = "decimal.js", ...)]` keeps the unconfigured
+class. Operators are lowered to method calls:
 
 | C# | TypeScript |
 |----|----|
@@ -104,16 +114,6 @@ Metano uses the [Temporal API](https://tc39.es/proposal-temporal/docs/) via the
 | `TimeSpan` | `Temporal.Duration` |
 | `DateTime.Now` / `DateTimeOffset.UtcNow` | `Temporal.Now.plainDateTimeISO()` / `Temporal.Now.zonedDateTimeISO()` |
 | `DateOnly.DayNumber` | `dayNumber(date)` (runtime helper) |
-
-The `@js-temporal/polyfill` dependency is added to your `package.json`
-automatically whenever any Temporal mapping is used.
-
-## Collections
-
-### Lists and arrays
-
-| C# | TypeScript |
-|----|----|
 | `new TimeSpan(h, m, s)` / `(d, h, m, s)` / `(d, h, m, s, ms)` / `(d, h, m, s, ms, µs)` | `timeSpanFromParts(0, h, m, s)` / `timeSpanFromParts(d, h, m, s)` / … (runtime; `new Temporal.Duration(0, 5, 0)` would be five *months*) |
 | `TimeSpan.Zero` | `timeSpanZero` |
 | `TimeSpan.FromDays(x)` … `FromMicroseconds(x)` (one `double`, `int` or `long` argument) | `timeSpanFromDays(x)` … `timeSpanFromMicroseconds(x)` |
@@ -131,6 +131,16 @@ unmapped (MS0001). `DateTimeOffset` takes an offset in whole minutes within four
 (`ArgumentException` / `ArgumentOutOfRangeException` otherwise) and a UTC time inside years 1 to
 9999; a `DateTime` argument carries no kind in TypeScript, so the UTC-kind offset check is
 skipped.
+
+The `@js-temporal/polyfill` dependency is added to your `package.json`
+automatically whenever any Temporal mapping is used.
+
+## Collections
+
+### Lists and arrays
+
+| C# | TypeScript |
+|----|----|
 | `T[]` | `T[]` |
 | `List<T>` / `IList<T>` / `IReadOnlyList<T>` | `T[]` |
 | `List<T>.Add(item)` | `list.push(item)` |
@@ -298,8 +308,33 @@ delegates, constructors and null-conditional calls, report MS0001 and pass by va
 | `double.TryParse` / `float.TryParse` | `tryParseFloat64(s)` |
 | `bool.TryParse(s, out var b)` | `tryParseBoolean(s)` |
 
-The parsers follow the invariant culture and only the `(string, out T)` overloads are
-mapped; `decimal.TryParse` is not mapped yet.
+The parsers follow the invariant culture. `decimal.TryParse(s, out var d)` is
+`tryParseDecimal(s, Decimal)`, which applies the grammar of `decimal.Parse` and reports a
+failure (`null` included) as `[false, 0]`; it takes the `Decimal` class as an argument, so the
+runtime itself never imports decimal.js (baseline FR-054, #673).
+
+### Parsing numbers and booleans
+
+`Parse` and `TryParse` of `int`, `uint`, `short`, `ushort`, `byte` and `sbyte`, and `Parse` of
+`double`, `float` and `bool`, call `metano-runtime` parsers with .NET's grammar and exceptions
+(baseline FR-054, #668): `int.Parse("12abc")` throws `FormatException` where `Number.parseInt`
+returns `12`, and `byte.Parse("300")` throws `OverflowException` with .NET's message.
+
+| C# | TypeScript |
+|----|----|
+| `int.Parse(s)` / `int.Parse(s, provider)` | `parseInt32(s)` |
+| `int.Parse(s, NumberStyles.HexNumber)` | `parseInt32(s, 515)` (the constant `NumberStyles` folds to its flags value, as for `long`) |
+| `uint.Parse(s)` / `short.Parse(s)` / `ushort.Parse(s)` / `byte.Parse(s)` / `sbyte.Parse(s)` | `parseUInt32(s)` / `parseInt16(s)` / `parseUInt16(s)` / `parseByte(s)` / `parseSByte(s)` |
+| `int.TryParse(s, NumberStyles.Integer, provider, out var n)` | `tryParseInt32(s, 7)` |
+| `double.Parse(s)` / `float.Parse(s)` | `parseFloat64(s)` |
+| `bool.Parse(s)` | `parseBoolean(s)` |
+
+The styles are the ones `long.Parse` takes: `Integer`, `HexNumber` (a negative value reads as
+two's complement at the type's width), `Integer | AllowThousands` and `Number`; any other
+constant style reports `MS0066` and throws `NotSupportedException` at run time. The
+`ReadOnlySpan<char>` forms of `Parse`, the `NumberStyles` forms of `double.Parse` and the
+`(string, out T)` fallbacks of other types stay as they were (MS0001 for a static member with no
+mapping).
 
 ### Sets
 
@@ -580,6 +615,32 @@ algorithm: .NET 11 rounds the exact binary value instead (`Math.Round(2.675, 2)`
 there). `MidpointRounding` maps to
 the runtime `MidpointRounding` object, which keeps the .NET member names and values.
 
+## Default text of `bool`, `double` and `float`
+
+Without a format, a `bool`, `double` or `float` converts to text as .NET prints it in the
+invariant culture (baseline FR-014, #308): `True` / `False`, `1E-07`, `1E+21`, `-0`,
+`NaN`, `Infinity` (JavaScript writes `true`, `1e-7`, `1e+21`, `0`). The conversion calls one
+`metano-runtime` function, chosen by the **static type** of the value, in interpolation holes,
+string concatenation (`+`, `+=`), `ToString()` and `string.Join` over `bool`, `double` or
+`float` values (and over their nullable forms, which print `null` as `""`, as in C#); every other type keeps the
+native conversion, so a project that converts none of these three imports none.
+
+| C# | TypeScript |
+|----|----|
+| `$"{flag}"`, `"x" + flag`, `flag.ToString()` (`bool`) | `` `${formatBoolean(flag)}` ``, `"x" + formatBoolean(flag)`, `formatBoolean(flag)` |
+| `$"{d}"`, `d.ToString()` (`double`) | `` `${formatDouble(d)}` ``, `formatDouble(d)` (the `G` format) |
+| `$"{f}"`, `f.ToString()` (`float`) | `formatSingle(f)` |
+| `$"{flag,8}"` | `alignValue(formatBoolean(flag), 8)` |
+| `string.Join(",", flags)` (`IEnumerable<bool>`) | `flags.map((item) => formatBoolean(item)).join(",")` |
+
+`formatSingle` first rounds the number to the `float` C# would hold (the generated code keeps
+a `float` in a JavaScript `number` that need not be single precision) and prints the shortest
+digits that read back as that single-precision value: `1f / 3` prints `0.33333334`, and the
+`float` `0.1f + 0.2f` prints `0.3`. A boxed value (`object o = true`, `string.Join(",", objects)`)
+has no static type to read and keeps the JavaScript text. For native JavaScript text use
+`[Emit]` or `[MapMethod]`. The digits and notation of every row are checked against real .NET
+by `tests/BclReference` (bun and Node); Dart prints these values with its own conversion.
+
 ## Number formatting (format strings and interpolation clauses)
 
 A format or alignment clause of an interpolation hole (`$"{n,8:D2}"`) and `ToString(format)`
@@ -610,37 +671,11 @@ standard numeric format strings in the invariant culture, with the same output a
   `NaN`, `Infinity`, `-Infinity` in every format.
 - **Alignment.** The width counts UTF-16 code units; a positive alignment pads on the left,
   a negative one on the right, and a longer text is not truncated. An alignment without a
-  format pads the text the hole prints without the clause, so a `double` or a `bool` keeps
-  the JavaScript text (`1e-7`, `true`) until the default conversion changes (#308); the
-  same holds for an enum (its name or number as the target holds it) and a `decimal`
-  (decimal.js drops trailing zeros: `1.10m` prints `1.1`; #662).
+  format pads the text the hole prints without the clause: for a `bool`, `double` or
+  `float` that is the default text below (`True`, `1E-07`); an enum prints its name or number
+  as the target holds it, and a `decimal` drops trailing zeros (decimal.js: `1.10m` prints
+  `1.1`; #662).
 - **Ignored formats.** C# passes a format only to an `IFormattable` value, so a format on
-## Default text of `bool`, `double` and `float`
-
-Without a format, a `bool`, `double` or `float` converts to text as .NET prints it in the
-invariant culture (baseline FR-014, #308): `True` / `False`, `1E-07`, `1E+21`, `-0`,
-`NaN`, `Infinity` (JavaScript writes `true`, `1e-7`, `1e+21`, `0`). The conversion calls one
-`metano-runtime` function, chosen by the **static type** of the value, in interpolation holes,
-string concatenation (`+`, `+=`), `ToString()` and `string.Join` over `bool`, `double` or
-`float` values (and over their nullable forms, which print `null` as `""`, as in C#); every other type keeps the
-native conversion, so a project that converts none of these three imports none.
-
-| C# | TypeScript |
-|----|----|
-| `$"{flag}"`, `"x" + flag`, `flag.ToString()` (`bool`) | `` `${formatBoolean(flag)}` ``, `"x" + formatBoolean(flag)`, `formatBoolean(flag)` |
-| `$"{d}"`, `d.ToString()` (`double`) | `` `${formatDouble(d)}` ``, `formatDouble(d)` (the `G` format) |
-| `$"{f}"`, `f.ToString()` (`float`) | `formatSingle(f)` |
-| `$"{flag,8}"` | `alignValue(formatBoolean(flag), 8)` |
-| `string.Join(",", flags)` (`IEnumerable<bool>`) | `flags.map((item) => formatBoolean(item)).join(",")` |
-
-`formatSingle` first rounds the number to the `float` C# would hold (the generated code keeps
-a `float` in a JavaScript `number` that need not be single precision) and prints the shortest
-digits that read back as that single-precision value: `1f / 3` prints `0.33333334`, and the
-`float` `0.1f + 0.2f` prints `0.3`. A boxed value (`object o = true`, `string.Join(",", objects)`)
-has no static type to read and keeps the JavaScript text. For native JavaScript text use
-`[Emit]` or `[MapMethod]`. The digits and notation of every row are checked against real .NET
-by `tests/BclReference` (bun and Node); Dart prints these values with its own conversion.
-
   any static type that does not implement it — `string`, `bool`, a user class, record or
   struct — is ignored, and so is one on a `char`; the output prints the clause-free hole
   (`$"{plain:X}"` is `${plain}`). `object`, an interface and a type parameter keep the
