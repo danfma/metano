@@ -1135,106 +1135,15 @@ public sealed class ImportCollector(
                 continue;
             }
 
-            // Merge all names, preserving type-only where every contributor agrees.
-            var allNames = new List<string>();
-            var typeOnlyNames = new HashSet<string>(StringComparer.Ordinal);
-            var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
-            var allTypeOnly = true;
-
-            // Bindings merge by (name, alias): `Decimal` and `Decimal as Money`
-            // are two bindings of one export, and both survive. A name is
-            // listed once; its first alias rides on it unless the plain name
-            // is bound too, and every further alias is an extra binding.
-            var plainNames = new HashSet<string>(StringComparer.Ordinal);
-            var extraAliases = new List<TsImportAlias>();
+            var bindings = new ImportBindings();
 
             foreach (var item in items)
-            {
-                foreach (var name in item.Names)
-                {
-                    var isTypeOnly =
-                        item.TypeOnly
-                        || (item.TypeOnlyNames is not null && item.TypeOnlyNames.Contains(name));
-                    var local = item.Aliases?.GetValueOrDefault(name);
+                bindings.Add(item);
 
-                    if (!allNames.Contains(name))
-                    {
-                        allNames.Add(name);
-
-                        if (isTypeOnly)
-                            typeOnlyNames.Add(name);
-                    }
-
-                    if (local is null)
-                    {
-                        plainNames.Add(name);
-                        continue;
-                    }
-
-                    if (aliases.TryGetValue(name, out var listed) && listed != local)
-                        AddExtraAlias(extraAliases, new TsImportAlias(name, local, isTypeOnly));
-                    else
-                        aliases[name] = local;
-                }
-
-                if (!item.TypeOnly)
-                    allTypeOnly = false;
-            }
-
-            // A name bound plainly too keeps its alias as an extra binding.
-            foreach (var name in plainNames.Where(aliases.ContainsKey).ToList())
-            {
-                AddExtraAlias(
-                    extraAliases,
-                    new TsImportAlias(name, aliases[name], typeOnlyNames.Contains(name))
-                );
-
-                aliases.Remove(name);
-            }
-
-            // Names that appear as value in ANY import are not type-only.
-            if (!allTypeOnly)
-            {
-                foreach (var item in items)
-                {
-                    if (item.TypeOnly)
-                        continue;
-                    foreach (var name in item.Names)
-                    {
-                        if (item.TypeOnlyNames is null || !item.TypeOnlyNames.Contains(name))
-                            typeOnlyNames.Remove(name);
-                    }
-                }
-            }
-
-            var finalAllTypeOnly = allTypeOnly || typeOnlyNames.Count == allNames.Count;
-            SortValuesFirst(allNames, typeOnlyNames);
-
-            merged.Add(
-                new TsImport(
-                    allNames.ToArray(),
-                    group.Key.From,
-                    TypeOnly: finalAllTypeOnly,
-                    TypeOnlyNames: !finalAllTypeOnly && typeOnlyNames.Count > 0
-                        ? typeOnlyNames
-                        : null,
-                    Aliases: aliases.Count > 0 ? aliases : null,
-                    ExtraAliases: extraAliases.Count > 0 ? extraAliases : null
-                )
-            );
+            merged.Add(bindings.ToImport(group.Key.From));
         }
 
         return merged;
-    }
-
-    private static void AddExtraAlias(List<TsImportAlias> extraAliases, TsImportAlias binding)
-    {
-        if (
-            !extraAliases.Any(existing =>
-                existing.Original == binding.Original && existing.Local == binding.Local
-            )
-        )
-            extraAliases.Add(binding);
     }
 
     /// <summary>

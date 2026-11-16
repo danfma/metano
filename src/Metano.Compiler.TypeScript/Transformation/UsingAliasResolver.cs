@@ -27,20 +27,23 @@ public static class UsingAliasResolver
         if (tree is null)
             return null;
         var canonicalToAlias = new Dictionary<string, string>(StringComparer.Ordinal);
+        var aliasToCanonical = new Dictionary<string, string>(StringComparer.Ordinal);
         var semanticModel = compilation.GetSemanticModel(tree);
         var root = tree.GetCompilationUnitRoot();
 
-        Collect(root.Usings, semanticModel, canonicalToAlias);
-        foreach (var ns in root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
-            Collect(ns.Usings, semanticModel, canonicalToAlias);
+        Collect(root.Usings, semanticModel, canonicalToAlias, aliasToCanonical);
 
-        return UsingAliasScope.Create(canonicalToAlias);
+        foreach (var ns in root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
+            Collect(ns.Usings, semanticModel, canonicalToAlias, aliasToCanonical);
+
+        return UsingAliasScope.Create(canonicalToAlias, aliasToCanonical);
     }
 
     private static void Collect(
         SyntaxList<UsingDirectiveSyntax> usings,
         SemanticModel semanticModel,
-        Dictionary<string, string> canonicalToAlias
+        Dictionary<string, string> canonicalToAlias,
+        Dictionary<string, string> aliasToCanonical
     )
     {
         foreach (var directive in usings)
@@ -63,6 +66,7 @@ public static class UsingAliasResolver
                 continue;
 
             canonicalToAlias[canonicalName] = aliasName;
+            aliasToCanonical[aliasName] = canonicalName;
         }
     }
 }

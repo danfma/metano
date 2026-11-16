@@ -475,4 +475,81 @@ public class UsingAliasImportTests
 
         await Assert.That(output).Contains("Money.floor(new Decimal(\"2.7\"))");
     }
+
+    /// <summary>
+    /// The common shape: the canonical name only in signatures (type-only) and
+    /// the alias only as a call's receiver (a value). Each binding keeps its own
+    /// type-only flag, so the alias is a value binding.
+    /// </summary>
+    [Test]
+    public async Task UsingAlias_AsValue_BesideATypeOnlyCanonical_IsAValueBinding()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using Money = System.Decimal;
+
+            [Transpile]
+            public static class Prices
+            {
+                public static decimal Abs(decimal price) => Money.Abs(price);
+            }
+            """
+        )["prices.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("import { type Decimal, Decimal as Money } from \"decimal.js\";");
+    }
+
+    /// <summary>
+    /// The inverse: a value canonical binding beside a type-only alias keeps
+    /// the alias type-only.
+    /// </summary>
+    [Test]
+    public async Task ImportBindings_KeepATypeOnlyAliasBesideAValueCanonical()
+    {
+        var bindings = new Metano.Compiler.TypeScript.Transformation.ImportBindings();
+
+        bindings.Add("Decimal", alias: null, typeOnly: false);
+        bindings.Add("Decimal", alias: "Money", typeOnly: true);
+
+        var import = bindings.ToImport("decimal.js");
+
+        await Assert.That(import.Names).IsEquivalentTo(["Decimal"]);
+        await Assert.That(import.TypeOnly).IsFalse();
+
+        await Assert
+            .That(import.ExtraAliases!.Single())
+            .IsEqualTo(
+                new Metano.Compiler.TypeScript.AST.TsImportAlias("Decimal", "Money", TypeOnly: true)
+            );
+    }
+
+    /// <summary>
+    /// Two aliases of one type in a file: decimal.js's export is bound under
+    /// each alias the source spells, and a project type prints as one of them.
+    /// </summary>
+    [Test]
+    public async Task TwoAliasesOfOneType_BindEach()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using Money = System.Decimal;
+            using Cash = System.Decimal;
+
+            [Transpile]
+            public static class Prices
+            {
+                public static decimal Abs(decimal price) => Money.Abs(price);
+
+                public static decimal Floor(decimal price) => Cash.Floor(price);
+            }
+            """
+        )["prices.ts"];
+
+        await Assert.That(output).Contains("Decimal as Money");
+        await Assert.That(output).Contains("Decimal as Cash");
+        await Assert.That(output).DoesNotContain("{ Money");
+        await Assert.That(output).DoesNotContain(", Money,");
+    }
 }
