@@ -761,6 +761,17 @@ the rows of `tests/BclReference`.
   to type-check at the first member read and let a wrong cast continue with `undefined`
   members. A cast that an earlier `x is T` already guards, and an upcast, keep the bare operand
   (FR-065, #669).
+- A static constructor's body, dropped before with no diagnostic, lowers to a class
+  `static { }` block that runs after the static fields (FR-066, #426); Dart and `[NoContainer]`
+  classes report `MS0001`.
+- Overload dispatchers try a derived parameter type before its base (`F(ArgumentException)`
+  before `F(Exception)`), and an `object` parameter accepts any value. A class declaring
+  `Equals(T)` beside `Equals(object)` (or `ToString()` beside `ToString(string)`) emits one
+  dispatched group, `equals` over `equalsOther` / `equalsObj`; a hand-written call to
+  `x.equals(...)` that matched the object arm before keeps working, direct C# calls bind the
+  fast path (FR-067, #677). `new BigInteger(x)` lowers to `BigInt(x)` instead of
+  `new Object(x)`, and a reference to a local function reports `MS0001` instead of printing
+  `C.local(...)`.
 
 ### Toolchain
 

@@ -70,9 +70,7 @@ public class OverloadNamingGoldenTests
             """
         );
 
-        await Assert
-            .That(result["names.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-names-types.ts"));
+        await TranspileHelper.AssertGolden("overload-names-types.ts", result["names.ts"]);
     }
 
     [Test]

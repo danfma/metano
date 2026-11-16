@@ -6,7 +6,17 @@ namespace Metano.Compiler.IR;
 /// type system (e.g., <see cref="IrPrimitiveTypeRef"/> with <see cref="IrPrimitive.Guid"/>
 /// becomes <c>UUID</c> in TypeScript, <c>String</c> in Dart).
 /// </summary>
-public abstract record IrTypeRef;
+public abstract record IrTypeRef
+{
+    /// <summary>
+    /// Whether the type is <c>object</c>: the primitive, or the named
+    /// <c>System.Object</c> a reference through the <c>object</c> keyword maps to.
+    /// </summary>
+    public bool IsObject =>
+        this
+            is IrPrimitiveTypeRef { Primitive: IrPrimitive.Object }
+                or IrNamedTypeRef { Name: "Object", Namespace: "System" };
+}
 
 /// <summary>
 /// A type a backend composes from other types for its own lowering (for
@@ -43,7 +53,16 @@ public sealed record IrNamedTypeRef(
     IrTypeOrigin? Origin = null,
     IrNamedTypeSemantics? Semantics = null,
     int PrivateNestedSegments = 0
-) : IrTypeRef;
+) : IrTypeRef
+{
+    /// <summary>
+    /// The identity <see cref="IrNamedTypeSemantics.Supertypes"/> lists a type
+    /// under: its namespace and name, without type arguments.
+    /// </summary>
+    public string SupertypeKey => SupertypeKeyOf(Namespace, Name);
+
+    public static string SupertypeKeyOf(string? @namespace, string name) => $"{@namespace}|{name}";
+}
 
 /// <summary>
 /// Semantic metadata about a named type reference that backends use to
@@ -116,6 +135,11 @@ public sealed record IrNamedTypeRef(
 /// exception's runtime class by the same key as the extraction and
 /// <see cref="IrExceptionConstruction.ExceptionTypeName"/>; <c>null</c> for
 /// every other kind.</param>
+/// <param name="Supertypes">The keys (<see cref="IrNamedTypeRef.SupertypeKey"/>) of every base
+/// class below <c>System.Object</c> and every interface the type implements, so a backend can
+/// tell which of two types is the more derived (an overload dispatcher tries
+/// <c>F(ArgumentException)</c> before <c>F(Exception)</c>); <c>null</c> when the type has none
+/// or is not a class, record, struct, interface or exception.</param>
 /// <param name="StructuralEqualityLeaves">Set for a transpiled struct, record
 /// struct or sealed record whose equality is the compiler-generated, field-wise
 /// one all the way down: every instance field, recursively through such types,
@@ -150,7 +174,8 @@ public sealed record IrNamedTypeSemantics(
     bool IsValueType = false,
     bool HasImplicitParameterlessOverload = false,
     string? ClrTypeName = null,
-    IReadOnlySet<IrPrimitive>? StructuralEqualityLeaves = null
+    IReadOnlySet<IrPrimitive>? StructuralEqualityLeaves = null,
+    IReadOnlyList<string>? Supertypes = null
 );
 
 /// <summary>

@@ -142,8 +142,9 @@ public class CheckedContextTests
 
     /// <summary>
     /// Local functions are not supported by the transpiler (<c>MS0001</c>
-    /// <c>LocalFunctionStatement</c>), so only the <c>checked</c> block around
-    /// one lowers; the local function keeps its own report.
+    /// <c>LocalFunctionStatement</c>, and one for each reference to it), so
+    /// only the <c>checked</c> block around one lowers; the local function
+    /// keeps its own reports.
     /// </summary>
     [Test]
     public async Task CheckedBlock_AroundALocalFunction_ReportsOnlyTheLocalFunction()
@@ -167,8 +168,13 @@ public class CheckedContextTests
 
         var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
 
-        await Assert.That(messages).HasSingleItem();
-        await Assert.That(messages[0]).Contains("LocalFunctionStatement");
+        await Assert.That(messages).Count().IsEqualTo(2);
+        await Assert
+            .That(messages.Count(message => message.Contains("LocalFunctionStatement")))
+            .IsEqualTo(1);
+        await Assert
+            .That(messages.Count(message => message.Contains("Local function 'G'")))
+            .IsEqualTo(1);
         await Assert.That(files["ops.ts"]).DoesNotContain("CheckedStatement");
     }
 

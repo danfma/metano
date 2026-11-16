@@ -531,6 +531,30 @@ Product requirements added after the migration (normative; each one is traced by
   expansion. Unboxing casts (`(int)obj`) are not reference conversions and keep the bare
   operand. Traced by the "Explicit reference downcasts" row of the feature-support matrix.
 
+- **FR-066** (static constructors, #426): A type's static constructor MUST run in C# order:
+  after the static field initializers, once, before the type is used. TypeScript lowers its body
+  to a class `static { }` block (ES2022) printed after the static fields; its locals stay
+  inside the block. Dart reports `MS0001` (the body is dropped). A containerless
+  (`[NoContainer]`) class keeps its `MS0001` error: the module variables it would assign have
+  no ordered form. Differs from .NET: TypeScript runs the block when the class is defined, not
+  at first use.
+
+- **FR-067** (dispatcher order and BCL-virtual groups, #677, extends FR-050): A dispatcher
+  MUST try, among overloads of the same tier and arity, the one whose parameters all equal or
+  derive from (a base class, an interface, `object`) the matching parameters of another before
+  that other, as C#'s binding prefers it (`F(ArgumentException)` before `F(Exception)`); other
+  pairs keep their order. An `object` parameter accepts every value in a dispatcher guard. An
+  override of a virtual that no emitted class declares (`object.Equals`, `ToString`) and an
+  overload of the same name declared beside it form one dispatched group (`equals` dispatcher
+  over `equalsOther` / `equalsObj`), where two same-named methods were emitted before; a
+  derived override anchors on the first emitted override of its chain. The override of an
+  emitted virtual keeps its own group (DECIDED-29). A reference to a local function, which is
+  not lowered, reports `MS0001` and prints the throwing placeholder instead of a member call.
+  The `System.Numerics.BigInteger` constructors from `int`, `uint`, `long`, `ulong`, `float`,
+  `double`, `decimal` and the default one lower to `bigint` values (`BigInt(x)`,
+  `bigIntegerFromDouble(x)`, `bigIntegerFromDecimal(x)`, `0n`); the byte-array and span ones are
+  not mapped.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
