@@ -795,8 +795,10 @@ the rows of `tests/BclReference`.
   `EqualityComparer<T>.Default`: the value's own `equals` (records, `Decimal`, user overrides),
   a `TimeSpan` by length, `NaN` equal to itself, else reference equality, so `Box<TimeSpan>`
   and `Box<decimal>` compare by value and `Box<SomeClass>` / `Box<int[]>` by reference as on
-  .NET. Known gap: a tuple or array-backed value in a `T` position compares by reference
-  (2.x: `===`, the same). Fields of a known class type, which 2.x compared structurally,
+  .NET. A plain (non-record) struct now gets a generated `equals` / `hashCode` over its fields
+  (.NET's `ValueType.Equals`) unless it declares its own, so a struct behind an `object` or
+  interface field compares by value. Known gap: a tuple or array-backed value in a `T` or
+  `object` position compares by reference (2.x: `===`, the same). Fields of a known class type, which 2.x compared structurally,
   now compare by reference unless the class declares `Equals` (#674). The `ThrowIfEqual` /
   `ThrowIfNotEqual` guards now admit sealed generic records and records with a `double` /
   `float` field.

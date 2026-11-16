@@ -101,4 +101,44 @@ public class RecordFieldEqualityTests
         await Assert.That(plain).Contains("this.b === other.b");
         await Assert.That(plain).DoesNotContain("valueEquals");
     }
+
+    /// <summary>
+    /// A plain struct compares by its fields on .NET (<c>ValueType.Equals</c>),
+    /// so it carries a generated <c>equals</c> / <c>hashCode</c> that
+    /// <c>defaultEquals</c> finds behind an <c>object</c> or interface field;
+    /// no <c>with</c>, which only records synthesize. A struct that declares
+    /// its own <c>Equals</c> / <c>GetHashCode</c> keeps it.
+    /// </summary>
+    [Test]
+    public async Task PlainStruct_GetsFieldWiseEqualsAndHashCode()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Point { public int X; public double Y; public Point(int x, double y) { X = x; Y = y; } }
+
+            [Transpile]
+            public struct Tagged
+            {
+                public int N;
+                public override bool Equals(object? obj) => obj is Tagged t && t.N == N;
+                public override int GetHashCode() => N;
+            }
+            """
+        );
+
+        var point = files["point.ts"];
+
+        await Assert
+            .That(point)
+            .Contains(
+                "return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && valueEquals(this.y, other.y);"
+            );
+
+        await Assert.That(point).Contains("hashCode(): number {");
+        await Assert.That(point).DoesNotContain("with(");
+        await Assert.That(point).DoesNotContain("copyRecordWith");
+        await Assert.That(files["tagged.ts"]).DoesNotContain("HashCode");
+        await Assert.That(files["tagged.ts"]).DoesNotContain("valueEquals");
+    }
 }

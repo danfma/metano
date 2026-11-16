@@ -1,4 +1,4 @@
-import { isInt32 } from "metano-runtime";
+import { HashCode, isInt32 } from "metano-runtime";
 
 export class Pt {
   protected static readonly byPtX: unique symbol = Symbol("Pt(int x)");
@@ -66,9 +66,21 @@ export class Pt {
   static fromXY(x: number, y: number): Pt {
     return new Pt(Pt.byPtXY, x, y);
   }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && this.name === other.name;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.x);
+    hc.add(this.name);
+
+    return hc.toHashCode();
+  }
 }
 
-import { isInt32 } from "metano-runtime";
+import { HashCode, isInt32 } from "metano-runtime";
 
 export class Tick {
   protected static readonly byTickDefault: unique symbol = Symbol("Tick()");
@@ -117,6 +129,17 @@ export class Tick {
 
   static fromN(n: number): Tick {
     return new Tick(Tick.byTickN, n);
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.n === other.n;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.n);
+
+    return hc.toHashCode();
   }
 }
 

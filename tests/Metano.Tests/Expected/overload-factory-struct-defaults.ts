@@ -1,4 +1,4 @@
-import { UUID, isInt32, isString } from "metano-runtime";
+import { HashCode, UUID, isInt32, isString, valueEquals } from "metano-runtime";
 import { Inner } from "./inner";
 import { Mood } from "./mood";
 
@@ -100,5 +100,20 @@ export class Day {
 
   static fromLabel(label: string): Day {
     return new Day(Day.byDayLabel, label);
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.tag === other.tag && this.label === other.label && this.mood === other.mood && valueEquals(this.nested, other.nested) && valueEquals(this.id, other.id);
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.tag);
+    hc.add(this.label);
+    hc.add(this.mood);
+    hc.add(this.nested);
+    hc.add(this.id);
+
+    return hc.toHashCode();
   }
 }
