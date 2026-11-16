@@ -33,7 +33,6 @@ internal static class CustomInitAccessor
     /// it. C# lets an <c>init</c> accessor write a <c>readonly</c> field; a target
     /// setter it lowers to may not, so the fact is recorded on the field
     /// (<see cref="IR.IrFieldDeclaration.IsAssignedByInitAccessor"/>).
-    /// Symbol-based: only assignments that bind to <paramref name="field"/> count.
     /// </summary>
     public static bool WritesField(IFieldSymbol field, Compilation compilation) =>
         field
@@ -42,26 +41,13 @@ internal static class CustomInitAccessor
             .Where(HasTranspiledBody)
             .SelectMany(property => property.SetMethod!.DeclaringSyntaxReferences)
             .Select(reference => reference.GetSyntax())
-            .Any(accessor => AssignsField(accessor, field, compilation));
-
-    private static bool AssignsField(
-        SyntaxNode accessor,
-        IFieldSymbol field,
-        Compilation compilation
-    )
-    {
-        var model = compilation.GetSemanticModel(accessor.SyntaxTree);
-
-        return accessor
-            .DescendantNodes()
-            .OfType<AssignmentExpressionSyntax>()
-            .Any(assignment =>
-                SymbolEqualityComparer.Default.Equals(
-                    model.GetSymbolInfo(assignment.Left).Symbol,
-                    field
+            .Any(accessor =>
+                FieldWrites.Within(
+                    accessor,
+                    field,
+                    compilation.GetSemanticModel(accessor.SyntaxTree)
                 )
             );
-    }
 
     private static bool HasInitBody(IPropertySymbol property) =>
         property.SetMethod is { IsInitOnly: true } init && AccessorBodies.HasBody(init);

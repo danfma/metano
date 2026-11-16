@@ -397,7 +397,9 @@ internal static partial class IrToTsClassBridge
             name,
             tsType,
             initializer,
-            field.IsReadonly && !field.IsAssignedByInitAccessor,
+            field.IsReadonly
+                && !field.IsAssignedByInitAccessor
+                && !field.IsAssignedByStaticConstructor,
             Static: field.IsStatic,
             Accessibility: accessibility,
             DefinitelyAssigned: field.IsRequired,

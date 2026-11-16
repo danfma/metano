@@ -766,7 +766,8 @@ the rows of `tests/BclReference`.
   (FR-065, #669).
 - A static constructor's body, dropped before with no diagnostic, lowers to a class
   `static { }` block that runs after the static fields (FR-066, #426); Dart and `[NoContainer]`
-  classes report `MS0001`.
+  classes report `MS0001`. A `static readonly` field the static constructor writes is emitted
+  without `readonly`, which TypeScript would reject in the block (TS2540).
 - Overload dispatchers try a derived parameter type before its base (`F(ArgumentException)`
   before `F(Exception)`), and an `object` parameter accepts any value. A class declaring
   `Equals(T)` beside `Equals(object)` (or `ToString()` beside `ToString(string)`) emits one
