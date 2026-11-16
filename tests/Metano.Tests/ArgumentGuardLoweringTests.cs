@@ -84,6 +84,12 @@ public class ArgumentGuardLoweringTests
     [Arguments("int?", "null")]
     [Arguments("Line", "limit")]
     [Arguments("Node", "limit")]
+    [Arguments("Box<TimeSpan>", "limit")]
+    [Arguments("Box<int>", "limit")]
+    [Arguments("Box<Box<decimal>>", "limit")]
+    [Arguments("Measure", "limit")]
+    [Arguments("Reading", "limit")]
+    [Arguments("double", "limit")]
     public async Task EqualityGuard_OverAValueKind_IsMapped(string type, string other)
     {
         var (files, diagnostics) = TranspileGuards(
@@ -101,12 +107,11 @@ public class ArgumentGuardLoweringTests
     /// compares the time zone: the guard keeps no mapping and reports
     /// <c>MS0001</c>. So does a record or struct holding such a member (an
     /// array in a <c>[PlainObject]</c>, a class in a struct or a record), and a
-    /// generic record, whose <c>T</c> member's equality its definition does not
-    /// fix; an unsealed record, which a derived record can extend with state its
-    /// static type does not show; a record holding a <c>double</c>, whose
-    /// generated <c>equals</c> finds a <c>NaN</c> field unequal to itself; and a
-    /// struct with its own <c>Equals</c>, explicit <c>IEquatable&lt;T&gt;</c> ones
-    /// included, which a field-wise comparison would bypass.
+    /// generic record whose type argument is one (<c>Box&lt;Account&gt;</c>, at
+    /// any depth); an unsealed record, which a derived record can extend with
+    /// state its static type does not show; and a struct with its own
+    /// <c>Equals</c>, explicit <c>IEquatable&lt;T&gt;</c> ones included, which a
+    /// field-wise comparison would bypass.
     /// </summary>
     [Test]
     [Arguments("Account")]
@@ -114,14 +119,13 @@ public class ArgumentGuardLoweringTests
     [Arguments("object")]
     [Arguments("DateTimeOffset")]
     [Arguments("(int, Account)")]
-    [Arguments("Box<TimeSpan>")]
-    [Arguments("Box<int>")]
+    [Arguments("Box<Account>")]
+    [Arguments("Box<Box<Account>>")]
+    [Arguments("Box<int[]>")]
     [Arguments("Tagged")]
     [Arguments("Holder")]
     [Arguments("Owner")]
     [Arguments("Shape")]
-    [Arguments("Measure")]
-    [Arguments("Reading")]
     [Arguments("Tolerant")]
     public async Task EqualityGuard_OverAReferenceKind_IsReported(string type)
     {
@@ -423,7 +427,7 @@ public class ArgumentGuardLoweringTests
             public class Account { }
 
             [Transpile]
-            public record Box<T>(T Value);
+            public sealed record Box<T>(T Value);
 
             [Transpile, PlainObject]
             public sealed record Tagged(string Name, int[] Tags);

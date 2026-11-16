@@ -11,8 +11,8 @@ namespace Metano.Compiler.Analysis;
 ///
 /// <para>
 /// "Strict" means <c>===</c> on the TS side: the field is either a
-/// real JS primitive, an enum / branded primitive that lowers to one,
-/// a bare type parameter (no shape known at compile time), or a
+/// real JS primitive whose <c>===</c> is .NET's equality, an enum /
+/// branded primitive that lowers to one, or a
 /// reference-typed collection where C#'s
 /// <c>EqualityComparer&lt;T&gt;.Default</c> would also fall back to
 /// reference equality.
@@ -22,7 +22,9 @@ namespace Metano.Compiler.Analysis;
 /// wrapper carrying its own <c>equals</c> contract — Decimal,
 /// Temporal, the runtime UUID, nested transpiled records, plain
 /// classes / structs the user authored, or tuples (which compare
-/// element-wise on the C# side).
+/// element-wise on the C# side) — or a value <c>===</c> gets wrong:
+/// a <c>double</c> / <c>float</c> (<c>NaN</c> equals itself on .NET) and a
+/// bare type parameter, which can hold any of those (#674).
 /// </para>
 /// </summary>
 public static class IrEqualityClassifier
@@ -37,7 +39,7 @@ public static class IrEqualityClassifier
         {
             null => true,
             IrPrimitiveTypeRef p => UseStrictEqualityForPrimitive(p.Primitive),
-            IrTypeParameterRef => true,
+            IrTypeParameterRef => false,
             IrNullableTypeRef nullable => UseStrictEquality(nullable.Inner),
             IrNamedTypeRef named => UseStrictEqualityForNamed(named),
             // Collection-like / function-like / reference shapes —
@@ -72,8 +74,10 @@ public static class IrEqualityClassifier
     /// Those wrappers expose <c>equals</c> contracts and need to
     /// route through <c>valueEquals</c>. <c>Object</c> joins them so
     /// boxed value-equal instances compare as <c>object.Equals</c>
-    /// would on the C# side. Everything else is a real JS primitive
-    /// where <c>===</c> is correct and faster.
+    /// would on the C# side. <c>double</c> / <c>float</c> join them because
+    /// <c>NaN === NaN</c> is false where <c>double.Equals</c> says true.
+    /// Everything else is a real JS primitive where <c>===</c> is correct
+    /// and faster.
     /// </summary>
     private static bool UseStrictEqualityForPrimitive(IrPrimitive p) =>
         p switch
@@ -86,6 +90,8 @@ public static class IrEqualityClassifier
             IrPrimitive.TimeOnly => false,
             IrPrimitive.TimeSpan => false,
             IrPrimitive.Object => false,
+            IrPrimitive.Float32 => false,
+            IrPrimitive.Float64 => false,
             _ => true,
         };
 

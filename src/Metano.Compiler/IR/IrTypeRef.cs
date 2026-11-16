@@ -147,9 +147,9 @@ public sealed record IrNamedTypeRef(
 /// as its underlying primitive; an enum records <see cref="IrPrimitive.Int32"/>,
 /// or <see cref="IrPrimitive.String"/> for a <c>[StringEnum]</c>, whatever its
 /// underlying type). <c>null</c> when a field is a class, an array, a
-/// collection, <c>object</c> or a type parameter (a generic definition's
-/// <c>T</c> field), which C# compares by reference or by an equality the
-/// definition does not fix; when the type or a base declares its own
+/// collection, <c>object</c> or an open type parameter (a type argument
+/// of a constructed generic type is read as the type it names), which C#
+/// compares by reference or by an equality the definition does not fix; when the type or a base declares its own
 /// <c>Equals</c>, which replaces the field-wise one; for an unsealed record,
 /// whose derived types can add state; for a type read from a metadata
 /// reference, which hides its private backing fields; and for every other

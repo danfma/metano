@@ -121,8 +121,9 @@ public static class IrRuntimeRequirementScanner
 
             acc.Add(new IrRuntimeRequirement("RecordCopy", IrRuntimeCategory.RecordCopy));
             // The synthesized `equals` falls back to `valueEquals` for
-            // every equality member whose type is not strictly
-            // primitive / enum / branded / type-parameter so wrapper
+            // every equality member whose type is not an integer, string,
+            // boolean, enum or branded value (a double and a type parameter
+            // included) so wrapper
             // types (Decimal, Temporal, nested records) compare via
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
