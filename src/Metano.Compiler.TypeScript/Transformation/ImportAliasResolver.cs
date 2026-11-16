@@ -93,7 +93,7 @@ public static class ImportAliasResolver
         if (layerB is not null)
             foreach (var (canonical, alias) in layerB)
                 merged[canonical] = alias;
-        return UsingAliasScope.Create(merged);
+        return UsingAliasScope.Create(merged, layerA?.OtherAliases);
     }
 
     private static IEnumerable<INamedTypeSymbol> EnumerateFileLocalCarriers(INamespaceSymbol root)
