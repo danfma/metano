@@ -71,27 +71,29 @@ const forJs = xs.toArray();
 
 Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The free helpers handle a `null` list (FR-056).
 
-## `foreach` over a `List<T>` (`list-foreach-lowering.ts`, `list-foreach-break-after-mutation.ts`, `list-foreach-return.ts`, FR-057)
+## `foreach` over a `List<T>` (`list-foreach-lowering.ts`, `list-foreach-break-after-mutation.ts`, `list-foreach-return.ts`, `list-foreach-reassigned-receiver.ts`, FR-057)
 
 ```csharp
 var sum = 0; foreach (var x in xs) { sum += x; }                       // xs: List<int>, a local
 foreach (var x in this.Items) { if (x < 0) { this.Items.Remove(x); break; } }
 foreach (var x in xs) { if (x == target) return true; }
+foreach (var x in xs) { xs = other; xs.Add(x); }                       // reassigns the local receiver
 ```
 
 ```ts
 let sum = 0;
 {
-  const $a = xs._items; const $v = xs._version; const $n = $a.length;
+  const $l = xs;                        // always bound, even for a local
+  const $a = $l._items; const $v = $l._version; const $n = $a.length;
   for (let $i = 0; ; $i++) {
-    if (xs._version !== $v || $a.length !== $n) throwModified();
+    if ($l._version !== $v || $a.length !== $n) throwModified();
     if ($i === $n) break;
     const x = $a[$i];
     sum += x;
   }
 }
 {
-  const $l = this.items;                // not a local, parameter or `this`: evaluated once
+  const $l = this.items;
   const $a = $l._items; const $v = $l._version; const $n = $a.length;
   for (let $i = 0; ; $i++) {
     if ($l._version !== $v || $a.length !== $n) throwModified();
@@ -101,17 +103,29 @@ let sum = 0;
   }
 }
 {
-  const $a = xs._items; const $v = xs._version; const $n = $a.length;
+  const $l = xs;
+  const $a = $l._items; const $v = $l._version; const $n = $a.length;
   for (let $i = 0; ; $i++) {
-    if (xs._version !== $v || $a.length !== $n) throwModified();
+    if ($l._version !== $v || $a.length !== $n) throwModified();
     if ($i === $n) break;
     const x = $a[$i];
     if (x === target) return true;
   }
 }
+{
+  const $l = xs;                        // the loop keeps checking the original list
+  const $a = $l._items; const $v = $l._version; const $n = $a.length;
+  for (let $i = 0; ; $i++) {
+    if ($l._version !== $v || $a.length !== $n) throwModified();
+    if ($i === $n) break;
+    const x = $a[$i];
+    xs = other;
+    xs.add(x);                          // mutates `other`, not the enumerated list: no throw, as in .NET
+  }
+}
 ```
 
-`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). Each check line carries FR-058's inline guard (`(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity. A `foreach` over any other `IEnumerable<T>` stays `for..of`.
+`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). Each check line carries FR-058's inline guard (`(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity. A `foreach` over any other `IEnumerable<T>` stays `for..of`. Further goldens pin the remaining exits and the null receiver: `list-foreach-throw.ts` (a `throw` from the body leaves with no further check), `list-foreach-goto.ts` (a `goto` out of the body, in whatever form the existing `goto` lowering emits, leaves with no further check) and `list-foreach-null-receiver.ts` (`$l._items` on `null` throws a `TypeError`, which a typed catch sees as `NullReferenceException` through FR-052's `toException`, as C# throws `NullReferenceException`).
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 
