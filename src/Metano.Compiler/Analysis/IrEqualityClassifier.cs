@@ -60,7 +60,7 @@ public static class IrEqualityClassifier
                     or IrNamedTypeKind.Delegate
                     or IrNamedTypeKind.Exception
             } => FieldEqualityKind.Default,
-            _ => LegacyStrictOrValue(type) ? FieldEqualityKind.Strict : FieldEqualityKind.Value,
+            _ => ComparesStrictly(type) ? FieldEqualityKind.Strict : FieldEqualityKind.Value,
         };
 
     /// <summary>
@@ -68,13 +68,13 @@ public static class IrEqualityClassifier
     /// synthesized record <c>equals</c> body. False routes through the
     /// runtime <c>valueEquals</c> helper.
     /// </summary>
-    private static bool LegacyStrictOrValue(IrTypeRef? type) =>
+    private static bool ComparesStrictly(IrTypeRef? type) =>
         type switch
         {
             null => true,
             IrPrimitiveTypeRef p => UseStrictEqualityForPrimitive(p.Primitive),
             IrTypeParameterRef => false,
-            IrNullableTypeRef nullable => LegacyStrictOrValue(nullable.Inner),
+            IrNullableTypeRef nullable => ComparesStrictly(nullable.Inner),
             IrNamedTypeRef named => UseStrictEqualityForNamed(named),
             // Collection-like / function-like / reference shapes —
             // C#'s default equality comparer falls back to reference

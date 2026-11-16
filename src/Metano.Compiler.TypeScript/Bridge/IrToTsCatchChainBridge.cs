@@ -139,25 +139,13 @@ internal static class IrToTsCatchChainBridge
     /// that reads nothing, observe nothing.
     /// </summary>
     private static bool NeedsNormalization(IReadOnlyList<IrCatchClause> clauses) =>
-        ReachableClauses(clauses).Any(ObservesNormalizedValue);
+        IrCatchClause.Reachable(clauses).Any(ObservesNormalizedValue);
 
     private static bool ObservesNormalizedValue(IrCatchClause clause) =>
         clause.ExceptionType is not null && (!clause.IsUnconditional || ReadsVariable(clause));
 
     private static bool ReadsVariable(IrCatchClause clause) =>
         clause.VariableName is { } name && IrReferencedNames.AnyIn(clause.Body, [name]);
-
-    /// <summary>The clauses up to the first one that handles every exception.</summary>
-    private static IEnumerable<IrCatchClause> ReachableClauses(IEnumerable<IrCatchClause> clauses)
-    {
-        foreach (var clause in clauses)
-        {
-            yield return clause;
-
-            if (clause.IsUnconditional)
-                yield break;
-        }
-    }
 
     private static TsCatchHandler MapPlainCatch(IrCatchClause clause, IrToTsBridgeContext context)
     {

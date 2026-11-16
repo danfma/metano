@@ -412,9 +412,9 @@ public static class PackageJsonWriter
     /// dist or source tree) so a stale entry is replaced while a hand-added one is kept.
     /// </summary>
     private sealed record SideEffectModules(
-        List<string> Targets,
-        HashSet<string> Emitted,
-        string[] OwnedTrees
+        IReadOnlyList<string> Targets,
+        IReadOnlySet<string> Emitted,
+        IReadOnlyList<string> OwnedTrees
     )
     {
         public bool Owns(string entry) =>

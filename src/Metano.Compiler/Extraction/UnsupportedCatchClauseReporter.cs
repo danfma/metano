@@ -52,7 +52,7 @@ internal sealed class UnsupportedCatchClauseReporter(
         IReadOnlyList<IrCatchClause> clauses
     )
     {
-        foreach (var (declared, clause) in ReachableClauses(statement.Catches.Zip(clauses)))
+        foreach (var (declared, clause) in statement.Catches.Zip(IrCatchClause.Reachable(clauses)))
         {
             if (declared.Filter is { } filter)
                 ReportUnsupportedFilter(filter, clause);
@@ -83,23 +83,6 @@ internal sealed class UnsupportedCatchClauseReporter(
             _exceptionClassReporter.ReportUnanswerableTest(caught, ClauseHead(declared));
         else if (_erasesStaticTypes && !HasRuntimeTypeTest(clause))
             ReportUntestableType(declared, clause);
-    }
-
-    /// <summary>
-    /// The clauses C# can reach: the first unconditional one takes every
-    /// exception, so the ones after it are never tried.
-    /// </summary>
-    private static IEnumerable<(CatchClauseSyntax Declared, IrCatchClause Clause)> ReachableClauses(
-        IEnumerable<(CatchClauseSyntax Declared, IrCatchClause Clause)> clauses
-    )
-    {
-        foreach (var reachable in clauses)
-        {
-            yield return reachable;
-
-            if (reachable.Clause.IsUnconditional)
-                yield break;
-        }
     }
 
     private ITypeSymbol? CaughtSymbolOf(CatchClauseSyntax clause) =>

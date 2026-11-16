@@ -64,11 +64,14 @@ public static class IrToTsStatementBridge
         {
             EmbeddedScopes =
             [
-                new TsEmbeddedScope(
-                    [],
-                    [.. initializers, .. body],
-                    [.. condition is null ? [] : new[] { condition }, .. incrementors]
-                ),
+                new TsEmbeddedScope([], [.. initializers, .. body])
+                {
+                    Expressions =
+                    [
+                        .. condition is null ? [] : new[] { condition },
+                        .. incrementors,
+                    ],
+                },
             ],
         };
     }

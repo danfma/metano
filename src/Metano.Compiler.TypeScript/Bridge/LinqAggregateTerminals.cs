@@ -26,7 +26,7 @@ internal static class LinqAggregateTerminals
             (IrLinqOperator.Average, { IsDecimal: true, EmptyIsNull: true }) =>
                 "averageNullableDecimal",
             (IrLinqOperator.Average, { IsDecimal: true }) => "averageDecimal",
-            (_, { EmptyIsNull: true } values) when HasNullableVariant(stage.Operator) =>
+            (_, { EmptyIsNull: true }) when HasNullableVariant(stage.Operator) =>
                 IrLinqMapping.EmittedName(stage.Operator) + NullableSuffix,
             _ => IrLinqMapping.EmittedName(stage.Operator),
         };

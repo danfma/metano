@@ -31,13 +31,9 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonUnmirroredContextOptions
 {
-    private const string NumberHandlingOption = "NumberHandling";
-
     private const string ConvertersOption = "Converters";
 
     private const string MaxDepthOption = "MaxDepth";
-
-    private const string DefaultIgnoreConditionOption = "DefaultIgnoreCondition";
 
     /// <summary>
     /// The depth limit the runtime enforces (DECIDED-20 b); <c>0</c> means
@@ -105,10 +101,12 @@ internal static class JsonUnmirroredContextOptions
     private static IEnumerable<string> UnmirroredSettingsOf(string option, TypedConstant value) =>
         option switch
         {
-            NumberHandlingOption => UnmirroredNumberHandlingFlagsOf(value),
+            JsonOptionNames.NumberHandling => UnmirroredNumberHandlingFlagsOf(value),
             ConvertersOption => value.Values.IsDefaultOrEmpty ? [] : [option],
             MaxDepthOption => value.Value is 0 or MirroredMaxDepth ? [] : [option],
-            DefaultIgnoreConditionOption => IsMirroredIgnoreCondition(value) ? [] : [option],
+            JsonOptionNames.DefaultIgnoreCondition => IsMirroredIgnoreCondition(value)
+                ? []
+                : [option],
             _ when IsNonDefaultUnmirrored(option, value) => [option],
             _ => [],
         };
@@ -142,7 +140,7 @@ internal static class JsonUnmirroredContextOptions
             .Where(flag => flag != JsonNumberHandling.Strict)
             .Where(flag => flag != JsonNumberHandling.AllowReadingFromString)
             .Where(flag => handling.HasFlag(flag))
-            .Select(flag => $"{NumberHandlingOption}.{flag}");
+            .Select(flag => $"{JsonOptionNames.NumberHandling}.{flag}");
     }
 
     private static string Message(string setting) =>

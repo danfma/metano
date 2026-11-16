@@ -19,11 +19,7 @@ internal static class JsonOptionsReader
 
     private const string CaseInsensitiveOption = "PropertyNameCaseInsensitive";
 
-    private const string NumberHandlingOption = "NumberHandling";
-
     private const string OutOfOrderMetadataOption = "AllowOutOfOrderMetadataProperties";
-
-    private const string DefaultIgnoreConditionOption = "DefaultIgnoreCondition";
 
     /// <summary>
     /// The <c>DefaultIgnoreCondition</c> of <paramref name="contextType"/>:
@@ -35,7 +31,8 @@ internal static class JsonOptionsReader
     {
         if (
             OptionsAttributeOf(contextType) is not { } attribute
-            || !NamedOptionsOf(attribute).TryGetValue(DefaultIgnoreConditionOption, out var named)
+            || !NamedOptionsOf(attribute)
+                .TryGetValue(JsonOptionNames.DefaultIgnoreCondition, out var named)
         )
         {
             return JsonIgnoreCondition.Never;
@@ -130,7 +127,7 @@ internal static class JsonOptionsReader
         bool webDefaults
     )
     {
-        if (options.TryGetValue(NumberHandlingOption, out var named))
+        if (options.TryGetValue(JsonOptionNames.NumberHandling, out var named))
             return (JsonNumberHandling)(named as int? ?? 0);
 
         return webDefaults ? JsonNumberHandling.AllowReadingFromString : JsonNumberHandling.Strict;

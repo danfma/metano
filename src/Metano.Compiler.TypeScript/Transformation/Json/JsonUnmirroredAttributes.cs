@@ -233,7 +233,10 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
             return null;
 
         if (
-            JsonPropertyCollector.OmitsNullOnWrite(condition.Value, JsonMemberAccess.TypeOf(member))
+            JsonPropertyCollector.ConditionOmitsNullOnWrite(
+                condition.Value,
+                JsonMemberAccess.TypeOf(member)
+            )
         )
             return null;
 
