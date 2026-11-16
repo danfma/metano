@@ -101,6 +101,7 @@ public class EndToEndOutputTests
         );
 
         var keys = string.Join(", ", result.Keys.OrderBy(k => k));
+
         var actual = result.TryGetValue("acme-issues/issue.ts", out var content)
             ? content
             : $"<no acme-issues/issue.ts; got files: {keys}>";
@@ -110,7 +111,7 @@ public class EndToEndOutputTests
         // elision shows up as a clear diff.
         var expected =
             "import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\";\n"
-            + "import type { Decimal } from \"decimal.js\";\n"
+            + "import type { Decimal } from \"metano-runtime/system/decimal\";\n"
             + "\n"
             + "export class Issue {\n"
             + "  constructor(readonly title: string, readonly status: IssueStatus, readonly estimatedCost: Decimal) { }\n"

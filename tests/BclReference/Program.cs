@@ -38,3 +38,8 @@ var text = new FixtureWriter();
 
 TextRows.AddTo(text);
 text.Write(Path.Combine(fixtures, "text.json"));
+
+var decimals = new FixtureWriter();
+
+DecimalRows.AddTo(decimals);
+decimals.Write(Path.Combine(fixtures, "decimal.json"));

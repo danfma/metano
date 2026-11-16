@@ -1,5 +1,5 @@
 import { MidpointRounding, roundDecimal, roundNumber } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export class Numbers {
   constructor() { }

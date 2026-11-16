@@ -1,5 +1,5 @@
 import { bigIntegerFromDecimal, bigIntegerFromDouble, decimalTextFromBigInteger, doubleFromBigInteger, int32FromBigInteger, narrowFromBigInteger, uint32FromBigInteger } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export function bigToInt(value: bigint): number {
   return int32FromBigInteger(value);

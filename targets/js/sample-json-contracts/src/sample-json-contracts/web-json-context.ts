@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import {
   SerializerContext,
   type JsonReadOptions,

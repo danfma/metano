@@ -737,7 +737,7 @@ The runtime `SerializerContext` accepts custom converters in its options:
 
 ```typescript
 import { SerializerContext, type JsonConverter } from "metano-runtime/system/json";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 const decimalAsString: JsonConverter = {
   kind: "decimal",

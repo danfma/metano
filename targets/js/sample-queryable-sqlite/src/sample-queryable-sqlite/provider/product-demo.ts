@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { linq, orderBy, orderByDescending, skip, take, where } from "metano-runtime/system/linq";
-import type { Decimal } from "decimal.js";
+import type { Decimal } from "metano-runtime/system/decimal";
 import type { Product } from "#/sample-queryable-sqlite/product";
 import type { IProductRepository } from "./i-product-repository";
 

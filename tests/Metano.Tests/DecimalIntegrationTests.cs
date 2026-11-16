@@ -20,7 +20,11 @@ public class DecimalIntegrationTests
         );
 
         var output = result["price.ts"];
-        await Assert.That(output).Contains("import type { Decimal } from \"decimal.js\"");
+
+        await Assert
+            .That(output)
+            .Contains("import type { Decimal } from \"metano-runtime/system/decimal\"");
+
         await Assert.That(output).Contains("amount: Decimal");
     }
 
@@ -231,7 +235,10 @@ public class DecimalIntegrationTests
 
         var output = result["calc.ts"];
 
-        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert
+            .That(output)
+            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+
         await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
         await Assert.That(output).DoesNotContain($"{alias},");
     }

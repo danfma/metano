@@ -6,6 +6,7 @@
  * wrapper that reads it the way the row records it (ticks, UTC ticks and offset, text).
  */
 
+import { Decimal } from "../../dist/system/decimal.js";
 import { tryParseDecimal } from "../../dist/system/decimal-parsing.js";
 import * as dateTimeOffsets from "../../dist/system/date-time-offset.js";
 import { formatBoolean } from "../../dist/system/boolean-format.js";
@@ -102,4 +103,15 @@ export const textRegistry: RowRegistry = {
   formatBoolean,
   formatDouble: (value: number | null) => formatDouble(value),
   formatSingle,
+};
+
+const decimalRow = (apply: (left: Decimal, right: Decimal) => Decimal) => (left: string, right: string) =>
+  apply(new Decimal(left), new Decimal(right)).toFixed();
+
+export const decimalRegistry: RowRegistry = {
+  decimalPlus: decimalRow((left, right) => left.plus(right)),
+  decimalMinus: decimalRow((left, right) => left.minus(right)),
+  decimalTimes: decimalRow((left, right) => left.times(right)),
+  decimalDivideExact: decimalRow((left, right) => left.div(right)),
+  decimalRoundToEven: (value: string, places: number) => new Decimal(value).toDecimalPlaces(places).toFixed(),
 };

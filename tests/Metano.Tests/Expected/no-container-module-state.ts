@@ -1,4 +1,4 @@
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export const max: number = 10;
 export const Min: number = 1;

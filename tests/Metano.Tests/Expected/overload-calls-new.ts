@@ -1,4 +1,4 @@
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { Bag } from "./bag";
 import { Box } from "./box";
 import { Money } from "./money";

@@ -47,7 +47,7 @@ public class BclExportNameClashTests
         var output = result["app/calculator.ts"];
 
         await Assert.That(output).Contains("import type { Decimal } from \"./decimal\";");
-        await Assert.That(output).DoesNotContain("decimal.js");
+        await Assert.That(output).DoesNotContain("metano-runtime/system/decimal");
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class BclExportNameClashTests
 
         await Assert.That(output).Contains("import { Decimal } from \"./decimal\";");
         await Assert.That(output).Contains("})(new Decimal());");
-        await Assert.That(output).DoesNotContain("decimal.js");
+        await Assert.That(output).DoesNotContain("metano-runtime/system/decimal");
     }
 
     [Test]
@@ -114,6 +114,7 @@ public class BclExportNameClashTests
         await Assert
             .That(output)
             .Contains("import { MidpointRounding } from \"./midpoint-rounding\";");
+
         await Assert
             .That(output)
             .DoesNotContain("import { MidpointRounding } from \"metano-runtime\";");
@@ -151,7 +152,10 @@ public class BclExportNameClashTests
 
         var output = result["app/money.ts"];
 
-        await Assert.That(output).Contains("import type { Decimal } from \"decimal.js\";");
+        await Assert
+            .That(output)
+            .Contains("import type { Decimal } from \"metano-runtime/system/decimal\";");
+
         await Assert.That(output).Contains("left.plus(right)");
     }
 
@@ -233,10 +237,12 @@ public class BclExportNameClashTests
         await Assert
             .That(result["app/money.ts"])
             .Contains("import type { Decimal } from \"@scope/numerics/lib\";");
-        await Assert.That(result["app/money.ts"]).DoesNotContain("decimal.js");
+
+        await Assert.That(result["app/money.ts"]).DoesNotContain("metano-runtime/system/decimal");
+
         await Assert
             .That(result["app/calc.ts"])
-            .Contains("import type { Decimal } from \"decimal.js\";");
+            .Contains("import type { Decimal } from \"metano-runtime/system/decimal\";");
     }
 
     /// <summary>
@@ -268,9 +274,12 @@ public class BclExportNameClashTests
         var clashes = diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash).ToList();
 
         await Assert.That(clashes).HasSingleItem();
+
         await Assert
             .That(clashes[0].Message)
-            .Contains("'Decimal' names both an import from 'decimal.js' and a project type in");
+            .Contains(
+                "'Decimal' names both an import from 'metano-runtime/system/decimal' and a project type in"
+            );
     }
 
     /// <summary>
@@ -315,9 +324,12 @@ public class BclExportNameClashTests
         var clashes = diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash).ToList();
 
         await Assert.That(clashes).HasSingleItem();
+
         await Assert
             .That(clashes[0].Message)
-            .Contains("'Decimal' names both an import from 'decimal.js' and an import from");
+            .Contains(
+                "'Decimal' names both an import from 'metano-runtime/system/decimal' and an import from"
+            );
     }
 
     /// <summary>
@@ -357,7 +369,11 @@ public class BclExportNameClashTests
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
             .IsEmpty();
-        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+
+        await Assert
+            .That(output)
+            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+
         await Assert.That(output).Contains("instanceof Decimal");
     }
 
@@ -389,6 +405,6 @@ public class BclExportNameClashTests
         var output = result["app/money.ts"];
 
         await Assert.That(output).DoesNotContain("from \"\"");
-        await Assert.That(output).DoesNotContain("decimal.js");
+        await Assert.That(output).DoesNotContain("metano-runtime/system/decimal");
     }
 }

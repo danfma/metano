@@ -1,4 +1,4 @@
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Money } from "./money";
 import { Tag } from "./tag";

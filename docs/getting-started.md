@@ -284,8 +284,8 @@ Metano: 3 file(s) generated in ../my-domain-ts/src
 ```
 
 Metano wrote the files into `my-domain-ts/src/` (the `MetanoOutputDir` you
-configured) **and** merged the `decimal.js` dependency (required by the
-`decimal` mapping) into `my-domain-ts/package.json`, next to the
+configured). `decimal` imports its class from `metano-runtime` (decimal.js, configured for
+`System.Decimal`; decimal.js is a dependency of `metano-runtime`), next to the
 `metano-runtime` dependency you added in Step 2. Every subsequent `dotnet build` regenerates the
 files; the `MetanoClean` flag wipes the output directory first so renamed or
 deleted C# types don't leave stale `.ts` files behind.
@@ -308,7 +308,7 @@ export type Category = (typeof Category)[keyof typeof Category];
 
 ```typescript
 import { HashCode } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 import type { Category } from "./category";
 
 export class Product {
@@ -378,8 +378,7 @@ dependency from Step 2):
     }
   },
   "dependencies": {
-    "metano-runtime": "^2.6.1",
-    "decimal.js": "^10.6.0"
+    "metano-runtime": "^2.6.1"
   }
 }
 ```
@@ -393,8 +392,7 @@ below.
 ## Step 6: Consume from your TypeScript package
 
 The `my-domain-ts` package you created in Step 2 now has generated files in
-`src/`. Make sure the new `decimal.js` dependency (added automatically by the
-transpiler to `package.json`) is installed:
+`src/`. Make sure the dependencies are installed (decimal.js arrives with `metano-runtime`):
 
 ```bash
 cd ../my-domain-ts
@@ -405,7 +403,7 @@ Create a quick smoke-test script at `my-domain-ts/test.ts`:
 
 ```typescript
 import { Product, Category } from "./src";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 const book = new Product("Clean Code", new Decimal(45), "Books");
 console.log(book.isExpensive);       // false

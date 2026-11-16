@@ -1,6 +1,6 @@
 import { isString } from "metano-runtime";
-import { Decimal } from "decimal.js";
 import { Money } from "lib/lib";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export class Receipt extends Money {
   protected static readonly byReceiptAmount: unique symbol = Symbol("Receipt(decimal amount)");

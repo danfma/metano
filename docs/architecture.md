@@ -338,7 +338,7 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   lowered call / member-access expressions.
 - **`IrToTsTypeMapper`** — IR type ref → TS type, with an optional
   `IrToTsTypeOverrides` hook for `[ExportFromBcl]` mappings (decimal →
-  Decimal from `decimal.js`, etc.).
+  Decimal from `metano-runtime/system/decimal`, etc.).
 - **`IrRuntimeRequirementToTsImport`** — `{helper → category}` facts → one
   `TsImport` per module (metano-runtime, @js-temporal/polyfill, …).
 - **`IrToTsNamingPolicy`** — TS-specific naming: camelCase, reserved-word

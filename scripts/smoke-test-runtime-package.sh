@@ -100,6 +100,7 @@ import { linq } from "metano-runtime/system/linq";
 import { UUID } from "metano-runtime/system/uuid.js";
 import { UUID as ExtensionlessUUID } from "metano-runtime/system/uuid";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
+import { Decimal } from "metano-runtime/system/decimal";
 
 // @ts-expect-error — root: isInt32 returns boolean, not string.
 export const rootIsTyped: string = isInt32(1);
@@ -118,6 +119,9 @@ export const extensionlessDeepImportIsTyped: number = ExtensionlessUUID;
 
 // @ts-expect-error — per-class exception module, as generated code imports it.
 export const exceptionModuleIsTyped: number = InvalidOperationException;
+
+// @ts-expect-error — system/decimal: the configured Decimal is a class, not a number.
+export const decimalIsTyped: number = Decimal;
 TS
 }
 
@@ -148,6 +152,7 @@ const expectedExports = [
   ["metano-runtime/system/uuid", "UUID"],
   ["metano-runtime/system/exceptions/invalid-operation-exception", "InvalidOperationException"],
   ["metano-runtime/system/exceptions/divide-by-zero-exception", "DivideByZeroException"],
+  ["metano-runtime/system/decimal", "Decimal"],
 ];
 
 for (const [specifier, exportName] of expectedExports) {
@@ -176,6 +181,16 @@ if (!(thrown instanceof DivideByZeroException) || !(thrown instanceof Error)) {
 }
 
 console.log("ok   the root barrel throws the per-class exception classes");
+
+// The configured decimal keeps System.Decimal's 29 digits (decimal.js alone keeps 20), and its
+// decimal.js dependency installs with the runtime.
+const { Decimal } = await import("metano-runtime/system/decimal");
+
+if (new Decimal("79228162514264337593543950335").minus(1).toFixed() !== "79228162514264337593543950334") {
+  throw new Error("metano-runtime/system/decimal does not keep System.Decimal's 29 digits");
+}
+
+console.log("ok   metano-runtime/system/decimal keeps 29 significant digits");
 JS
 }
 

@@ -126,6 +126,7 @@ public class CrossPackageImportTests
             library,
             consumer
         );
+
         var output = files["app/holder.ts"];
 
         // No import line is generated (we have no package name to import from).
@@ -379,6 +380,7 @@ public class CrossPackageImportTests
         await Assert.That(output).Contains("import { Moment } from \"local-moment\"");
         await Assert.That(output).DoesNotContain("shared-moment");
         var mergedDiagnostics = ir.Diagnostics.Concat(transformer.Diagnostics);
+
         await Assert
             .That(
                 mergedDiagnostics.Any(d =>
@@ -425,6 +427,7 @@ public class CrossPackageImportTests
 
         var libACompilation = TranspileHelper.CompileLibrary(libraryA, "LibA");
         var libBCompilation = TranspileHelper.CompileLibrary(libraryB, "LibB");
+
         var consumerCompilation = TranspileHelper.CompileConsumer(
             consumer,
             libACompilation,
@@ -435,6 +438,7 @@ public class CrossPackageImportTests
         transformer.TransformAll();
 
         var mergedDiagnostics = ir.Diagnostics.Concat(transformer.Diagnostics);
+
         await Assert
             .That(
                 mergedDiagnostics.Any(d =>
@@ -524,6 +528,7 @@ public class CrossPackageImportTests
         await Assert
             .That(output)
             .Contains("import type { CreateUserDto } from \"@acme/dtos/acme-dtos\"");
+
         await Assert.That(output).Contains("pending: CreateUserDto | null");
     }
 
@@ -619,12 +624,13 @@ public class CrossPackageImportTests
     [Test]
     public async Task ExportFromBclWithVersion_AddedToDependencies()
     {
-        // The default decimal mapping in Metano/Runtime/Decimal.cs declares
-        // Version = "^10.6.0". Any consumer that uses decimal should auto-get the
-        // dependency entry.
+        // An [ExportFromBcl] that declares a Version adds that package to the
+        // dependencies of any consumer that uses the mapped type. (The default decimal
+        // mapping is a metano-runtime module and declares none.)
         var compilation = TranspileHelper.CompileLibrary(
             """
             [assembly: TranspileAssembly]
+            [assembly: ExportFromBcl(typeof(decimal), FromPackage = "decimal.js", ExportedName = "Decimal", Version = "^10.6.0")]
 
             public record Price(decimal Amount);
             """
@@ -701,9 +707,11 @@ public class CrossPackageImportTests
             library,
             consumer
         );
+
         var ms0007 = diagnostics
             .Where(d => d.Code == "MS0007" && d.Message.Contains("Lib.Item"))
             .ToList();
+
         await Assert.That(ms0007.Count).IsEqualTo(1);
     }
 }

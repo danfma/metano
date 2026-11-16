@@ -702,6 +702,12 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 
 ## 2.10.1
 
+### ⚠ BCL members that diverged from JavaScript call runtime helpers (baseline FR-014, FR-053–FR-055; #661, #673, #668, #308, #465)
+
+These members produced a wrong value, or none, in 2.x; each now calls a `metano-runtime`
+function with .NET's semantics and exceptions, checked against real .NET (bun and Node) by
+the rows of `tests/BclReference`.
+
 - **`string` members (#661).** `s.Substring(i, n)` was `s.substring(i, n)`, which reads `n` as
   an end index (`"abcdef".Substring(1, 2)` printed `"b"`); it is `stringSubstring(s, i, n)` now,
   and so are `Remove`, `Insert`, `PadLeft` / `PadRight`, `ToCharArray(i, n)`, `IndexOf` /
@@ -731,8 +737,23 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   printed a `double` or `bool` through JavaScript's conversion changes: regenerate, and use
   `[Emit]` or `[MapMethod]` where the JavaScript text is wanted. Other types and boxed values
   are untouched.
-_2026-11-03_
+- **`decimal` precision and rounding (#465, part a).** The class generated code imports for
+  `decimal` is `Decimal` from `metano-runtime/system/decimal`: decimal.js configured with
+  `System.Decimal`'s 29 significant digits and half-to-even rounding (decimal.js's own
+  defaults are 20 digits and half up), so `decimal.MaxValue - 1` is exact. Generated imports
+  change from `decimal.js` to `metano-runtime/system/decimal`; decimal.js is a dependency of
+  `metano-runtime` now, and the compiler no longer adds it to a project's `package.json`.
+  A project that declares its own `ExportFromBcl` for `decimal` keeps decimal.js. A quotient
+  keeps 29 significant digits where .NET keeps 28 decimal places, and overflow past
+  `decimal.MaxValue` does not throw (part b of #465 stays open).
 
+### Toolchain
+
+- The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.
+
+## 2.10.1
+
+_2026-11-03_
 
 ### 🐛 Bug Fixes
 
@@ -742,7 +763,6 @@ _2026-11-03_
 ## 2.10.0
 
 _2026-11-03_
-
 
 ### ✨ Features
 
@@ -764,7 +784,6 @@ _2026-11-03_
 ## 2.9.0
 
 _2026-11-03_
-
 
 ### ✨ Features
 
@@ -788,7 +807,6 @@ _2026-11-03_
 ## 2.8.0
 
 _2026-11-03_
-
 
 ### ✨ Features
 
@@ -848,7 +866,6 @@ _2026-11-03_
 
 _2026-11-02_
 
-
 ### 🐛 Bug Fixes
 
 * assign positional overrides and emit abstract properties without storage ([#336](https://github.com/danfma/metano/issues/336)) ([b6b363d](https://github.com/danfma/metano/commit/b6b363d9bbd274db3265edcafa26f51fdd4e70b6)), closes [#324](https://github.com/danfma/metano/issues/324)
@@ -888,7 +905,6 @@ _2026-11-02_
 
 _2026-11-01_
 
-
 ### 🐛 Bug Fixes
 
 * decide primary-ctor promotion once per type and never promote a written parameter ([#254](https://github.com/danfma/metano/issues/254)) ([f60a70b](https://github.com/danfma/metano/commit/f60a70b51617a4aa00aa3ee3938e65df2cbe714c))
@@ -924,7 +940,6 @@ _2026-11-01_
 ## 2.7.0
 
 _2026-11-01_
-
 
 ### ✨ Features
 
@@ -1003,7 +1018,6 @@ _2026-11-01_
 
 _2026-06-29_
 
-
 ### 🐛 Bug Fixes
 
 * import symbols referenced only inside nested record variants ([02c224c](https://github.com/danfma/metano/commit/02c224cb400e11b89285a45fd667a098f16ccf0a))
@@ -1011,7 +1025,6 @@ _2026-06-29_
 ## 2.6.0
 
 _2026-06-25_
-
 
 ### ✨ Features
 
@@ -1031,7 +1044,6 @@ _2026-06-25_
 
 _2026-06-23_
 
-
 ### ✨ Features
 
 * add configurable isolated subpath-import alias for generated packages ([a0856f2](https://github.com/danfma/metano/commit/a0856f26c4f806259f995d663bcf7815f0052cab))
@@ -1039,7 +1051,6 @@ _2026-06-23_
 ## 2.4.0
 
 _2026-06-03_
-
 
 ### ✨ Features
 
@@ -1086,7 +1097,6 @@ _2026-06-03_
 ## 2.3.0
 
 _2026-05-12_
-
 
 ### ✨ Features
 
@@ -1143,7 +1153,6 @@ _2026-05-12_
 
 _2026-05-07_
 
-
 ### ✨ Features
 
 * **compiler,ts:** Phase A — lower LINQ chains to pipe form ([#20](https://github.com/danfma/metano/issues/20)) ([73cd8f5](https://github.com/danfma/metano/commit/73cd8f501ebbf9a6e889818bc553bc7c56d6253d)), closes [#31](https://github.com/danfma/metano/issues/31)
@@ -1178,7 +1187,6 @@ _2026-05-07_
 
 _2026-05-02_
 
-
 ### ✨ Features
 
 * **cli:** add --dry-run flag ([#19](https://github.com/danfma/metano/issues/19)) ([d035bba](https://github.com/danfma/metano/commit/d035bba173076abb3c8b6fd26f5db80419542207))
@@ -1204,7 +1212,6 @@ _2026-05-02_
 ## 2.0.0
 
 _2026-05-01_
-
 
 ### ⚠ BREAKING CHANGES
 
@@ -1253,7 +1260,6 @@ Tests:
 
 _2026-05-01_
 
-
 ### ✨ Features
 
 * **compiler:** enhance type checking, import handling, and constructor extraction ([0ec6081](https://github.com/danfma/metano/commit/0ec60812ffbe5dfbe33dd95f78864cd6347651be))
@@ -1261,7 +1267,6 @@ _2026-05-01_
 ## 1.0.3
 
 _2026-04-30_
-
 
 ### 🐛 Bug Fixes
 
@@ -1271,7 +1276,6 @@ _2026-04-30_
 
 _2026-04-30_
 
-
 ### ♻️ Refactor
 
 * **release:** drop dotnet-releaser, use dotnet pack + nuget push directly ([f6c98af](https://github.com/danfma/metano/commit/f6c98af567533b072d63ce5e1747c83a0b250f8f))
@@ -1279,7 +1283,6 @@ _2026-04-30_
 ## 1.0.1
 
 _2026-04-30_
-
 
 ### 🐛 Bug Fixes
 
@@ -1289,7 +1292,6 @@ _2026-04-30_
 ## 1.0.0
 
 _2026-04-30_
-
 
 ### ✨ Features
 
