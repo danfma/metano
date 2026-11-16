@@ -247,6 +247,104 @@ public class ArgumentGuardLoweringTests
         await Assert.That(files["use.ts"]).Contains("return new Holder(count - 1, \"count - 1\");");
     }
 
+    /// <summary>
+    /// A caller-expression parameter before a <c>params</c> one is filled when
+    /// the call stops before both (<c>M(x)</c>); only filling the
+    /// <c>params</c> slot itself is skipped.
+    /// </summary>
+    [Test]
+    public async Task CallerExpressionBeforeParams_IsFilled()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Runtime.CompilerServices;
+
+            [Transpile]
+            public static class Probe
+            {
+                public static string Text(
+                    int value,
+                    [CallerArgumentExpression(nameof(value))] string? text = null,
+                    params int[] rest
+                ) => text ?? "";
+
+                public static string Run(int count) => Text(count);
+            }
+            """
+        );
+
+        await Assert.That(files["probe.ts"]).Contains("Probe.text(count, \"count\")");
+    }
+
+    /// <summary>
+    /// A callee that does not apply its own C# declaration's default receives
+    /// the default the call site sees, as C# passes it: an <c>[Import]</c>ed
+    /// one has no transpiled default, a delegate has none, and an interface
+    /// member's implementation may declare another one.
+    /// </summary>
+    [Test]
+    public async Task OmittedDefault_ForACalleeWithoutItsOwnDefault_PassesTheValue()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Runtime.CompilerServices;
+            using Metano.Annotations;
+
+            [Import("Lib", from: "lib")]
+            public static class Lib
+            {
+                public static string Text(
+                    int value,
+                    int scale = 2,
+                    [CallerArgumentExpression(nameof(value))] string? text = null
+                ) => text ?? "";
+            }
+
+            public delegate string Texter(
+                int value,
+                int scale = 3,
+                [CallerArgumentExpression(nameof(value))] string? text = null
+            );
+
+            [Transpile]
+            public interface ITexter
+            {
+                string Text(
+                    int value,
+                    int scale = 4,
+                    [CallerArgumentExpression(nameof(value))] string? text = null
+                );
+            }
+
+            [Transpile]
+            public sealed class Texts : ITexter
+            {
+                public string Text(
+                    int value,
+                    int scale = 9,
+                    [CallerArgumentExpression(nameof(value))] string? text = null
+                ) => text ?? "";
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static string Imported(int count) => Lib.Text(count);
+
+                public static string Delegated(Texter texter, int count) => texter(count);
+
+                public static string Interfaced(ITexter texter, int count) => texter.Text(count);
+            }
+            """
+        );
+
+        var output = files["use.ts"];
+
+        await Assert.That(output).Contains("Lib.text(count, 2, \"count\")");
+        await Assert.That(output).Contains("texter(count, 3, \"count\")");
+        await Assert.That(output).Contains("texter.text(count, 4, \"count\")");
+    }
+
     private static (
         Dictionary<string, string> Files,
         IReadOnlyList<MetanoDiagnostic> Diagnostics

@@ -2893,12 +2893,12 @@ public sealed partial class IrExpressionExtractor
     /// (<c>ArgumentNullException.ThrowIfNull(name)</c> passes <c>"name"</c> as
     /// <c>paramName</c>), read from Roslyn's bound <paramref name="operation"/>.
     /// A positional call gains its omitted trailing parameters up to the last
-    /// capturing one, each other omitted parameter marked
-    /// <see cref="IrArgument.IsOmittedDefault"/> with its default; a named or
-    /// reordered call, already one argument per parameter
-    /// (<see cref="InParameterOrder"/>), has the capturing defaults replaced.
-    /// An argument the call writes wins. Extension calls bind by parameter
-    /// name, so the receiver's slot does not shift them.
+    /// capturing one, each other omitted parameter with the default the call
+    /// site sees (<see cref="OmittedDefault"/>); a named or reordered call,
+    /// already one argument per parameter (<see cref="InParameterOrder"/>), has
+    /// the capturing defaults replaced. An argument the call writes wins.
+    /// Extension calls bind by parameter name, so the receiver's slot does not
+    /// shift them.
     /// </summary>
     private List<IrArgument> WithCallerArgumentExpressions(
         IOperation? operation,
@@ -2910,10 +2910,7 @@ public sealed partial class IrExpressionExtractor
         var parameters = method?.Parameters ?? [];
         var lastCapturing = parameters.ToList().FindLastIndex(CapturesCallerArgumentExpression);
 
-        if (
-            lastCapturing < 0
-            || parameters.Skip(bound.Count).Take(lastCapturing + 1).Any(p => p.IsParams)
-        )
+        if (lastCapturing < 0 || FillReachesParams(parameters, bound.Count, lastCapturing))
             return bound;
 
         if (BoundArgumentsOf(operation) is not { } boundArguments)
@@ -2925,22 +2922,61 @@ public sealed partial class IrExpressionExtractor
             )
             .ToDictionary(argument => argument.Parameter!.Name, argument => argument.Value);
 
-        for (var index = 0; index <= lastCapturing; index++)
-        {
-            var parameter = parameters[index];
-            var callerText = CallerTextOf(parameter, supplied);
+        var filled = parameters
+            .Take(lastCapturing + 1)
+            .Select(
+                (parameter, index) =>
+                    CallerTextOf(parameter, supplied)
+                    ?? bound.ElementAtOrDefault(index)
+                    ?? OmittedDefault(method!, parameter)
+            );
 
-            if (index >= bound.Count)
-                bound.Add(
-                    callerText
-                        ?? new IrArgument(BuildDefaultArgument(parameter), IsOmittedDefault: true)
-                );
-            else if (callerText is not null)
-                bound[index] = callerText;
-        }
-
-        return bound;
+        return [.. filled, .. bound.Skip(lastCapturing + 1)];
     }
+
+    /// <summary>
+    /// Whether filling the omitted parameters up to the last capturing one
+    /// (<paramref name="lastCapturing"/>) would fill a <c>params</c> one, whose
+    /// expanded arguments have no single slot.
+    /// </summary>
+    private static bool FillReachesParams(
+        IReadOnlyList<IParameterSymbol> parameters,
+        int boundCount,
+        int lastCapturing
+    ) => parameters.Take(lastCapturing + 1).Skip(boundCount).Any(p => p.IsParams);
+
+    /// <summary>
+    /// An omitted <paramref name="parameter"/> before a filled caller
+    /// expression. A transpiled callee that applies its own declaration's
+    /// default receives it marked <see cref="IrArgument.IsOmittedDefault"/>, so
+    /// a target can pass "no value" (TypeScript's <c>undefined</c>); any other
+    /// callee (an <c>[Import]</c>, <c>[External]</c>, <c>[Emit]</c> or
+    /// declaration-only one, a delegate, a virtual, abstract or interface
+    /// member whose runtime implementation may declare another default) gets
+    /// the default the call site sees, the one <paramref name="method"/>
+    /// declares, as C# passes it.
+    /// </summary>
+    private IrArgument OmittedDefault(IMethodSymbol method, IParameterSymbol parameter) =>
+        new(BuildDefaultArgument(parameter), IsOmittedDefault: AppliesItsOwnDefaults(method));
+
+    private bool AppliesItsOwnDefaults(IMethodSymbol method) =>
+        method
+            is {
+                MethodKind: MethodKind.Ordinary
+                    or MethodKind.ReducedExtension
+                    or MethodKind.Constructor,
+                IsVirtual: false,
+                IsAbstract: false,
+                IsOverride: false,
+                ContainingType: { TypeKind: not TypeKind.Interface } type,
+            }
+        && IrTypeRefMapper.IsTranspilableType(type, _target)
+        && !SymbolHelper.HasEmit(method)
+        && !SymbolHelper.HasImport(method)
+        && !SymbolHelper.HasExternal(method)
+        && !SymbolHelper.HasImport(type)
+        && !SymbolHelper.HasExternal(type)
+        && !type.HasAttribute("NoEmit");
 
     private static IReadOnlyList<IArgumentOperation>? BoundArgumentsOf(IOperation? operation) =>
         operation switch
