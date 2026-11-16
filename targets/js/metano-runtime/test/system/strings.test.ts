@@ -1,12 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ArgumentException, ArgumentNullException } from "#/system/exceptions/index.ts";
-import {
-  alignText,
-  alignValue,
-  isNullOrEmpty,
-  isNullOrWhiteSpace,
-  stringReplace,
-} from "#/system/strings.ts";
+import { StringComparison, stringReplace } from "#/system/string-members.ts";
+import { alignText, alignValue, isNullOrEmpty, isNullOrWhiteSpace } from "#/system/strings.ts";
 
 /** Every BMP code point .NET 10's `char.IsWhiteSpace` accepts. */
 const dotnetWhiteSpace = [
@@ -90,6 +85,12 @@ describe("stringReplace", () => {
     expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(
       "Value cannot be null. (Parameter 'oldValue')",
     );
+  });
+
+  test("a case-insensitive comparison matches the old value in any case", () => {
+    expect(stringReplace("aXbxX", "x", "-", StringComparison.OrdinalIgnoreCase)).toBe("a-b--");
+    expect(stringReplace("aXbxX", "x", "-", StringComparison.Ordinal)).toBe("aXb-X");
+    expect(stringReplace("aXbxX", "XX", "$&", StringComparison.OrdinalIgnoreCase)).toBe("aXb$&");
   });
 });
 

@@ -14,6 +14,7 @@
  * form, as `OrdinalIgnoreCase` does.
  */
 
+import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
 import { isDotNetWhiteSpace } from "./strings.ts";
@@ -588,4 +589,53 @@ export function stringJoinRange(
   }
 
   return values.slice(startIndex, startIndex + count).join(separator ?? "");
+}
+
+/**
+ * C#'s `value.Replace(oldValue, newValue)` for the `(char, char)` and
+ * `(string, string?)` overloads, and `value.Replace(oldValue, newValue, comparison)`:
+ * replaces every occurrence of `oldValue`, scanning left to right without overlap.
+ * Unlike `String.prototype.replace`, it replaces all occurrences, and unlike
+ * `replaceAll`, `$` sequences in `newValue` are inserted literally. A `null`
+ * `newValue` removes the occurrences. A case-insensitive `comparison` matches
+ * `oldValue` in any case and keeps the rest of `value` as written.
+ *
+ * @throws ArgumentNullException when `oldValue` is `null`.
+ * @throws ArgumentException when `oldValue` is empty.
+ */
+export function stringReplace(
+  value: string,
+  oldValue: string,
+  newValue: string | null | undefined,
+  comparison?: StringComparison,
+): string {
+  // Generated code is not always type-checked against this signature (a C# `null!`
+  // argument reaches here), so the C# null check stays.
+  if (oldValue == null) {
+    throw new ArgumentNullException("oldValue");
+  }
+
+  if (oldValue.length === 0) {
+    throw new ArgumentException("The value cannot be an empty string.", "oldValue");
+  }
+
+  const replacement = newValue ?? "";
+
+  if (!ignoresCase(comparison)) {
+    return value.split(oldValue).join(replacement);
+  }
+
+  const haystack = foldCase(value);
+  const needle = foldCase(oldValue);
+  let replaced = "";
+  let copiedUpTo = 0;
+  let found = haystack.indexOf(needle);
+
+  while (found !== -1) {
+    replaced += value.slice(copiedUpTo, found) + replacement;
+    copiedUpTo = found + needle.length;
+    found = haystack.indexOf(needle, copiedUpTo);
+  }
+
+  return replaced + value.slice(copiedUpTo);
 }

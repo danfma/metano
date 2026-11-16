@@ -720,7 +720,9 @@ the rows of `tests/BclReference`.
   with characters, a count or options, and `string.Join(sep, values, start, count)`. They throw
   `ArgumentOutOfRangeException` / `ArgumentNullException` for a bad argument where
   JavaScript clamps, swaps or ignores it. `StringComparison` and `StringSplitOptions` are
-  `metano-runtime` enums now (they were unresolved identifiers).
+  `metano-runtime` enums now (they were unresolved identifiers). `Replace(a, b, comparison)` and
+  `Replace(a, b, ignoreCase, culture)` pass the comparison to `stringReplace` (they were
+  emitted as `s.replace(a, b, …)`, which ignores it and replaces the first match only).
 - **`TimeSpan`, `DateTimeOffset`, `Guid`, `decimal` (#673).** `new TimeSpan(0, 5, 0)` was five
   *months*; the component constructors, `TimeSpan.Zero` and the single-argument `FromDays` …
   `FromMicroseconds` call `timeSpanFromParts` / `timeSpanZero` / `timeSpanFromX`.

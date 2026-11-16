@@ -543,6 +543,7 @@ native array methods directly:
 | `s.ToCharArray()` / `s.ToCharArray(i, n)` | `stringToCharArray(s)` / `stringToCharArray(s, i, n)` |
 | `string.Join(sep, values, i, n)` | `stringJoinRange(sep, values, i, n)` |
 | `s.Replace(a, b)` (`char` or `string` overloads) | `stringReplace(s, a, b)` (from `metano-runtime`) |
+| `s.Replace(a, b, comparison)` / `s.Replace(a, b, ignoreCase, culture)` | `stringReplace(s, a, b, comparison)`; a case-insensitive comparison matches `a` in any case, the culture is not read |
 | `s.Length` | `s.length` |
 | `string.IsNullOrEmpty(s)` | `isNullOrEmpty(s)` (from `metano-runtime`) |
 | `string.IsNullOrWhiteSpace(s)` | `isNullOrWhiteSpace(s)` (from `metano-runtime`) |

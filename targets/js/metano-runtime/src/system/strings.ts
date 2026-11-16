@@ -3,9 +3,6 @@
  * closest JavaScript built-in.
  */
 
-import { ArgumentException } from "./exceptions/argument-exception.ts";
-import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
-
 /**
  * The single characters .NET's `char.IsWhiteSpace` accepts besides the ranges tested in
  * {@link isDotNetWhiteSpace}. JavaScript's `trim()` and `\s` disagree with .NET on two
@@ -60,34 +57,6 @@ export function isNullOrWhiteSpace(value: string | null | undefined): value is N
   }
 
   return true;
-}
-
-/**
- * C#'s `value.Replace(oldValue, newValue)` for the `(char, char)` and
- * `(string, string?)` overloads: replaces every ordinal occurrence of `oldValue`,
- * scanning left to right without overlap. Unlike `String.prototype.replace`, it
- * replaces all occurrences, and unlike `replaceAll`, `$` sequences in `newValue` are
- * inserted literally. A `null` `newValue` removes the occurrences.
- *
- * @throws Error with .NET's `ArgumentNullException` message when `oldValue` is `null`,
- *   and with its `ArgumentException` message when `oldValue` is empty.
- */
-export function stringReplace(
-  value: string,
-  oldValue: string,
-  newValue: string | null | undefined,
-): string {
-  // Generated code is not always type-checked against this signature (a C# `null!`
-  // argument reaches here), so the C# null check stays.
-  if (oldValue == null) {
-    throw new ArgumentNullException("oldValue");
-  }
-
-  if (oldValue.length === 0) {
-    throw new ArgumentException("The value cannot be an empty string.", "oldValue");
-  }
-
-  return value.split(oldValue).join(newValue ?? "");
 }
 
 /**

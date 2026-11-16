@@ -713,7 +713,9 @@ using Metano.Annotations;
 // first occurrence, and both `replace` and `replaceAll` expand `$&`-style sequences in
 // the replacement. The helper also keeps C#'s argument checks (an empty `old` throws)
 // and treats a null `new` as removal. Covers the (char, char) and (string, string?)
-// overloads; the culture- and comparison-aware overloads stay unmapped.
+// overloads, the StringComparison one (a case-insensitive comparison matches `old` in
+// any case; the culture members match as their ordinal counterparts) and the
+// (string, string?, bool ignoreCase, CultureInfo?) one, whose culture is not read.
 
 [assembly: MapMethod(
     typeof(string),
@@ -721,6 +723,20 @@ using Metano.Annotations;
     JsTemplate = "stringReplace($this, $0, $1)",
     RuntimeImports = "stringReplace",
     WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.Replace),
+    JsTemplate = "stringReplace($this, $0, $1, $2)",
+    RuntimeImports = "stringReplace",
+    WhenParameterTypes = [typeof(string), typeof(string), typeof(StringComparison)]
+)]
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.Replace),
+    JsTemplate = "stringReplace($this, $0, $1, $2 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)",
+    RuntimeImports = "stringReplace, StringComparison",
+    WhenArgCount = 4
 )]
 
 // ─── Null / empty checks ────────────────────────────────────
