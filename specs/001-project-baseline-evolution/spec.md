@@ -351,9 +351,11 @@ Product requirements added after the migration (normative; each one is traced by
      format is the type's own default format, as in .NET (`G` for an enum or a
      `BigInteger`, `D` for a `Guid`, the short date for a `DateOnly`). A user type's own
      `ToString(string)` is not affected; neither is a type compiled from source or a
-     transpiled library, whatever its assembly name: only an assembly read from metadata,
-     named `System` / `System.*` (or the core library) and not carrying
-     `[TranspileAssembly]` / `[EmitPackage]`, is a BCL assembly.
+     transpiled library, whatever its assembly name: only an assembly that is not a source
+     assembly, is named `System` / `System.*` (or the core library) and does not carry
+     `[TranspileAssembly]` / `[EmitPackage]` is a BCL assembly. The exclusion rests on
+     source-ness or the Metano attributes: a project reference Roslyn retargets is not a
+     source assembly, so one named `System.*` without the attributes is treated as BCL.
   4. *Unsupported clauses.* A clause the target does not format as .NET does MUST report
      `MS0001` (warning) at the hole, or at the format argument of `ToString(format)`, and
      lower to the throwing placeholder (in a static field initializer the module then

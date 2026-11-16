@@ -600,7 +600,8 @@ standard numeric format strings in the invariant culture, with the same output a
   alone, and a static `ToString` (`Convert.ToString(s)`) is not a format call. A BCL type is
   one from an assembly read from metadata, named `System` / `System.*` (or the core library),
   that does not carry `[TranspileAssembly]` / `[EmitPackage]`: a project or transpiled library
-  named `System.*` keeps its own methods. `value?.ToString(format)` takes the same steps as
+  named `System.*` keeps its own methods (a retargeted project reference counts as read from
+  metadata, so without the attributes it is treated as BCL). `value?.ToString(format)` takes the same steps as
   the plain call, and an empty or `null` format is the type's default format, as in .NET
   (`mode.ToString("")` prints the member name). The 64-bit integers, `nint` and
   `nuint` included, keep `MS0066` for their unsupported formats (see below). A letter .NET

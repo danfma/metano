@@ -632,6 +632,65 @@ public class InterpolationFormatClauseTests
     }
 
     /// <summary>
+    /// A <c>?.</c> call anywhere in a conditional chain (followed by
+    /// <c>.Length</c>, <c>?.Length</c>, a method, or behind another
+    /// <c>?.</c>) reads the bound receiver: a default-text or mapped format
+    /// lowers as the plain call does, and a format no formatter takes reports
+    /// at compile time, naming the receiver's type.
+    /// </summary>
+    [Test]
+    [Arguments("Mode? m", "m?.ToString(\"G\").Length", null)]
+    [Arguments("Mode? m", "m?.ToString(\"\").Length", null)]
+    [Arguments("Mode? m", "m?.ToString(\"G\").ToUpper()", null)]
+    [Arguments("Mode? m", "m?.ToString(\"G\")?.Length", null)]
+    [Arguments("Hold h", "h?.NMode?.ToString(\"G\")?.ToLower()", null)]
+    [Arguments("Guid? g", "g?.ToString(\"N\").Length", null)]
+    [Arguments("Guid? g", "g?.ToString(\"N\")?.Length", null)]
+    [Arguments(
+        "int? n",
+        "n?.ToString(\"0.00\")?.Length",
+        "The format '0.00' is not supported for 'int'"
+    )]
+    [Arguments("int? n", "n?.ToString(\"B\").Length", "The format 'B' is not supported for 'int'")]
+    [Arguments(
+        "double? d",
+        "d?.ToString(\"0.00\")?.Length",
+        "The format '0.00' is not supported for 'double'"
+    )]
+    public async Task ConditionalChainToString_ReadsTheBoundReceiver(
+        string parameter,
+        string expression,
+        string? report
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Host
+                + $$"""
+                    public object? Run({{parameter}}) => {{expression}};
+                }
+
+                [Transpile]
+                public class Hold
+                {
+                    public Mode? NMode { get; set; }
+                }
+                """
+        );
+
+        var reports = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
+
+        if (report is null)
+        {
+            await Assert.That(reports).IsEmpty();
+            await Assert.That(files["holes.ts"]).DoesNotContain("Unsupported expression");
+
+            return;
+        }
+
+        await Assert.That(reports.Single()).StartsWith(report);
+    }
+
+    /// <summary>
     /// An empty format is the type's default, so where that default is not
     /// the clause-free text (an enum's <c>G</c> holds the name, a
     /// <c>DateOnly</c>'s short date) it still reports.

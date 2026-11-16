@@ -103,9 +103,13 @@ public static class RoslynTypeQueries
     /// library, by name: the core library (<c>System.Private.CoreLib</c>,
     /// <c>mscorlib</c>, <c>netstandard</c>) or a <c>System</c> /
     /// <c>System.*</c> assembly read from metadata. An assembly compiled from
-    /// source (the project itself, a project reference) and an assembly that
-    /// Metano transpiles (<c>[TranspileAssembly]</c> or <c>[EmitPackage]</c>)
-    /// never are, whatever their name. A third-party package named
+    /// source never is, and neither is one that Metano transpiles
+    /// (<c>[TranspileAssembly]</c> or <c>[EmitPackage]</c>), whatever their
+    /// name. The exclusion rests on either fact: a project reference is not
+    /// always a source assembly (Roslyn retargets a <c>CompilationReference</c>
+    /// to a non-source assembly symbol), so a project reference named
+    /// <c>System.*</c> without the Metano attributes counts as base class
+    /// library. A third-party package named
     /// <c>System.*</c> that carries neither attribute (for example
     /// <c>System.Reactive</c>) counts as base class library; callers that
     /// report on a BCL member then report for it too, never silently.
