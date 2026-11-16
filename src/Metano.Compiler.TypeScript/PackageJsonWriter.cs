@@ -29,6 +29,9 @@ public static class PackageJsonWriter
         "optionalDependencies",
     ];
 
+    /// <summary>The wildcard tails an import target ends with: <c>./lib/*.js</c> or <c>./lib/*</c>.</summary>
+    private static readonly string[] CompiledTreeSuffixes = ["/*.js", "/*"];
+
     private static readonly JsonSerializerOptions WriteOptions = new()
     {
         WriteIndented = true,
@@ -361,14 +364,10 @@ public static class PackageJsonWriter
             _ => null,
         };
 
-        var stripped = target switch
-        {
-            not null when target.EndsWith("/*.js", StringComparison.Ordinal) => target[
-                ..^"/*.js".Length
-            ],
-            not null when target.EndsWith("/*", StringComparison.Ordinal) => target[..^"/*".Length],
-            _ => null,
-        };
+        var stripped = CompiledTreeSuffixes
+            .Where(suffix => target?.EndsWith(suffix, StringComparison.Ordinal) == true)
+            .Select(suffix => target![..^suffix.Length])
+            .FirstOrDefault();
 
         return stripped is null ? null : NormalizePath(stripped);
     }

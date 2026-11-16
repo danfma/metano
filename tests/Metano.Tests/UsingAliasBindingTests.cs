@@ -176,6 +176,7 @@ public class UsingAliasBindingTests
         var output = TranspileHelper.TranspileWithLibrary(library, consumer)["app/order.ts"];
 
         await Assert.That(output).Contains("Status.Active");
+
         await Assert
             .That(output)
             .Contains("import { Status, type Status as State } from \"shared/shared\";");

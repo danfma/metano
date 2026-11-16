@@ -643,9 +643,6 @@ internal sealed class JsonSpecBuilder
     /// non-zero <c>[JsonPropertyOrder]</c>: the runtime sorts the whole base
     /// chain by it (FR-046).
     /// </summary>
-    private static bool OmitsNull(JsonSerializableProperty property) =>
-        property.OmitsNull && JsonTypeClassifier.IsNullable(property.Type);
-
     private TsObjectLiteral BuildPropertySpec(JsonSerializableProperty property)
     {
         var type = property.Type;
@@ -671,6 +668,9 @@ internal sealed class JsonSpecBuilder
 
         return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
     }
+
+    private static bool OmitsNull(JsonSerializableProperty property) =>
+        property.OmitsNull && JsonTypeClassifier.IsNullable(property.Type);
 
     private static TsThrowStatement BuildAbstractFactoryThrow(string message) =>
         new(new TsNewExpression(new TsIdentifier("Error"), [new TsStringLiteral(message)]));

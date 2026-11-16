@@ -36,6 +36,7 @@ public static class CyclicReferenceDetector
 
         var importGraph = LocalImportGraph.AllImports(files, importAlias);
         var aliasPrefix = importGraph.AliasPrefix;
+
         var graph = importGraph.Files.ToDictionary(
             file => file,
             file => importGraph.TargetsOf(file),

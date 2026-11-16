@@ -241,24 +241,7 @@ internal static class MethodOverloadGroups
             )
             .ToList();
 
-        var segregated = members.Where(IsSegregatedOverride).ToList();
-        var main = members.Except(segregated).ToList();
-
-        // An override of a BCL virtual (`object.Equals`, `ToString`) that keeps
-        // its own group and an overload declared beside it would both claim
-        // the plain name (`Equals(T)` and `Equals(object)`: two `equals`
-        // methods): they form one dispatched group instead, the override an
-        // overload like the others (#677). The override of an emitted virtual
-        // keeps today's emission (DECIDED-29).
-        if (
-            main.Count > 0
-            && segregated.Count > 0
-            && segregated.All(member => OverridesBclVirtual(member, target))
-        )
-        {
-            main = members;
-            segregated = [];
-        }
+        var (main, segregated) = SplitSegregatedOverrides(members, target);
 
         if (main.Count > 0)
         {
@@ -279,6 +262,31 @@ internal static class MethodOverloadGroups
                 IsSegregatedOverrides: true
             );
         }
+    }
+
+    /// <summary>
+    /// The members that form the name's main group, and the overrides kept in
+    /// a group of their own (DECIDED-29). An override of a BCL virtual
+    /// (<c>object.Equals</c>, <c>ToString</c>) and an overload declared beside
+    /// it would both claim the plain name (<c>Equals(T)</c> and
+    /// <c>Equals(object)</c>: two <c>equals</c> methods): they form one
+    /// dispatched group instead, the override an overload like the others
+    /// (#677). The override of an emitted virtual keeps its own group.
+    /// </summary>
+    private static (
+        List<MethodGroupMember> Main,
+        List<MethodGroupMember> Segregated
+    ) SplitSegregatedOverrides(List<MethodGroupMember> members, TargetLanguage? target)
+    {
+        var segregated = members.Where(IsSegregatedOverride).ToList();
+        var main = members.Except(segregated).ToList();
+
+        var joinsTheMainGroup =
+            main.Count > 0
+            && segregated.Count > 0
+            && segregated.All(member => OverridesBclVirtual(member, target));
+
+        return joinsTheMainGroup ? (members, []) : (main, segregated);
     }
 
     private static bool IsSegregatedOverride(MethodGroupMember member) =>
@@ -419,23 +427,29 @@ internal static class MethodOverloadGroups
         TargetLanguage? target
     )
     {
-        var root = method.OriginalDefinition;
-        IMethodSymbol? firstEmitted = null;
-
-        while (root.OverriddenMethod is { } overridden)
-        {
-            root = overridden.OriginalDefinition;
-
-            if (IsEmittedBase(root.ContainingType, target))
-                firstEmitted = root;
-        }
-
         // The first emitted declaration of the chain stands for the root when
         // the chain continues into a BCL virtual (`object.Equals`) that no
         // emitted class owns.
+        var firstEmitted = OverrideChainOf(method)
+            .LastOrDefault(declaration => IsEmittedBase(declaration.ContainingType, target));
+
         return firstEmitted is not null && GroupOf(firstEmitted, target) is { IsDispatched: true }
             ? firstEmitted
             : null;
+    }
+
+    /// <summary>
+    /// The declarations <paramref name="method"/> overrides, nearest first, up to
+    /// the virtual that starts the chain (original definitions).
+    /// </summary>
+    private static IEnumerable<IMethodSymbol> OverrideChainOf(IMethodSymbol method)
+    {
+        for (
+            var overridden = method.OriginalDefinition.OverriddenMethod;
+            overridden is not null;
+            overridden = overridden.OriginalDefinition.OverriddenMethod
+        )
+            yield return overridden.OriginalDefinition;
     }
 
     /// <summary>
