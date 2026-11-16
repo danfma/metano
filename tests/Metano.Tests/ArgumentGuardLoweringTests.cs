@@ -82,6 +82,8 @@ public class ArgumentGuardLoweringTests
     [Arguments("Point", "limit")]
     [Arguments("Plain", "limit")]
     [Arguments("int?", "null")]
+    [Arguments("Line", "limit")]
+    [Arguments("Node", "limit")]
     public async Task EqualityGuard_OverAValueKind_IsMapped(string type, string other)
     {
         var (files, diagnostics) = TranspileGuards(
@@ -97,7 +99,10 @@ public class ArgumentGuardLoweringTests
     /// value equality cannot tell from a structural match, and a
     /// <c>DateTimeOffset</c> compares instants where its Temporal value also
     /// compares the time zone: the guard keeps no mapping and reports
-    /// <c>MS0001</c>.
+    /// <c>MS0001</c>. So does a record or struct holding such a member (an
+    /// array in a <c>[PlainObject]</c>, a class in a struct or a record), and a
+    /// generic record, whose <c>T</c> member's equality its definition does not
+    /// fix.
     /// </summary>
     [Test]
     [Arguments("Account")]
@@ -105,6 +110,11 @@ public class ArgumentGuardLoweringTests
     [Arguments("object")]
     [Arguments("DateTimeOffset")]
     [Arguments("(int, Account)")]
+    [Arguments("Box<TimeSpan>")]
+    [Arguments("Box<int>")]
+    [Arguments("Tagged")]
+    [Arguments("Holder")]
+    [Arguments("Owner")]
     public async Task EqualityGuard_OverAReferenceKind_IsReported(string type)
     {
         var (_, diagnostics) = TranspileGuards(
@@ -367,6 +377,24 @@ public class ArgumentGuardLoweringTests
 
             [Transpile]
             public class Account { }
+
+            [Transpile]
+            public record Box<T>(T Value);
+
+            [Transpile, PlainObject]
+            public record Tagged(string Name, int[] Tags);
+
+            [Transpile]
+            public struct Holder { public Account Account; }
+
+            [Transpile]
+            public record Owner(string Name, Account Account);
+
+            [Transpile]
+            public record Line(Point From, Point To, Level Level, TimeSpan Length);
+
+            [Transpile]
+            public record Node(int Value, Node? Next);
 
             [Transpile]
             public static class Guard
