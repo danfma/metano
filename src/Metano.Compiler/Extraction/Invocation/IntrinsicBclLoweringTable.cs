@@ -198,11 +198,11 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     {
         var typeName = textParse.ContainingType.Name;
 
-        var written = context.Invocation.Expression is MemberAccessExpressionSyntax access
+        var writtenReceiver = context.Invocation.Expression is MemberAccessExpressionSyntax access
             ? context.Recurse(access.Expression)
             : null;
 
-        return written is IrTypeReference reference
+        return writtenReceiver is IrTypeReference reference
             ? reference with
             {
                 Name = typeName,

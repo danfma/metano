@@ -62,17 +62,41 @@ internal readonly record struct TsTemplatePlaceholder(
     /// <paramref name="text"/>, so a caller can tell which arguments a
     /// template drops.
     /// </summary>
-    public static IReadOnlySet<int> ReferencedArgumentIndices(string text)
-    {
-        var referenced = new HashSet<int>();
+    public static IReadOnlySet<int> ReferencedArgumentIndices(string text) =>
+        ReferencedIndices(text, TsTemplatePlaceholderKind.Argument);
 
+    /// <summary>
+    /// The indices of the <c>$TN</c> type-argument placeholders that occur in
+    /// <paramref name="text"/>: a type argument the template does not embed is
+    /// never printed.
+    /// </summary>
+    public static IReadOnlySet<int> ReferencedTypeArgumentIndices(string text) =>
+        ReferencedIndices(text, TsTemplatePlaceholderKind.TypeArgument);
+
+    /// <summary>
+    /// Whether <paramref name="text"/> embeds the <c>$this</c> receiver: a
+    /// template that does not (a static mapping) never prints it.
+    /// </summary>
+    public static bool ReferencesReceiver(string text) =>
+        Occurrences(text)
+            .Any(placeholder => placeholder.Kind is TsTemplatePlaceholderKind.Receiver);
+
+    private static IReadOnlySet<int> ReferencedIndices(
+        string text,
+        TsTemplatePlaceholderKind kind
+    ) =>
+        Occurrences(text)
+            .Where(placeholder => placeholder.Kind == kind)
+            .Select(placeholder => placeholder.Index)
+            .ToHashSet();
+
+    private static IEnumerable<TsTemplatePlaceholder> Occurrences(string text)
+    {
         for (var dollar = text.IndexOf('$'); dollar >= 0; dollar = text.IndexOf('$', dollar + 1))
         {
-            if (Match(text, dollar) is { Kind: TsTemplatePlaceholderKind.Argument } argument)
-                referenced.Add(argument.Index);
+            if (Match(text, dollar) is { } placeholder)
+                yield return placeholder;
         }
-
-        return referenced;
     }
 
     /// <summary>

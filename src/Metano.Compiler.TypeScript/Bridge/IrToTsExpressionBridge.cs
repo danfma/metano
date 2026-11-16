@@ -746,16 +746,13 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapTypeReference(IrTypeReference reference)
     {
-        var name = ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments);
-        var origin = IrToTsTypeMapper.TryResolveOrigin(reference);
+        var segments = IrToTsTypeMapper
+            .ResolveAliasedName(
+                ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments)
+            )
+            .Split('.');
 
-        // A reference imported from its origin keeps the name the import binds:
-        // a `using D = System.Decimal;` alias would name no export of decimal.js.
-        var segments = (origin is null ? IrToTsTypeMapper.ResolveAliasedName(name) : name).Split(
-            '.'
-        );
-
-        var root = TypeValueReference(segments[0], origin);
+        var root = TypeValueReference(segments[0], IrToTsTypeMapper.TryResolveOrigin(reference));
 
         return segments
             .Skip(1)
