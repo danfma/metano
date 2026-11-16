@@ -63,7 +63,7 @@ export function formatDouble(
   format?: string | null,
   alignment?: number,
 ): string {
-  const text = value == null ? "" : formatValue(value, format ?? "");
+  const text = value == null ? "" : formatValue(requireNumber(value), format ?? "");
 
   return alignText(text, alignment);
 }
@@ -153,7 +153,7 @@ export function formatSingle(value: number | null | undefined): string {
     return "";
   }
 
-  const single = Math.fround(value);
+  const single = Math.fround(requireNumber(value));
 
   if (!Number.isFinite(single)) {
     return nonFiniteText(single);
@@ -162,6 +162,19 @@ export function formatSingle(value: number | null | undefined): string {
   const digits = shortestSingleDigits(single);
 
   return generalNotation(digits, Math.max(digits.digits.length, SINGLE_ROUND_TRIP_DIGITS), "E");
+}
+
+/**
+ * `value` itself when it is a `number`. A generated call passes only a C#
+ * `double` / `float`, so anything else is a lowering bug: it throws instead
+ * of printing a wrong text (a `Decimal` would read as `Infinity`).
+ */
+function requireNumber(value: unknown): number {
+  if (typeof value !== "number") {
+    throw new TypeError(`Expected a number to format, got ${typeof value}.`);
+  }
+
+  return value;
 }
 
 /** The shortest digits whose value rounds to the single-precision `value`. */

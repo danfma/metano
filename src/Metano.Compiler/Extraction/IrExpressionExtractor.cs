@@ -5339,7 +5339,8 @@ public sealed partial class IrExpressionExtractor
     /// render becomes an <see cref="IrNumericConversion"/> (a floating-point
     /// value to a narrow integer, a narrowing between two integers of 32
     /// bits or fewer, and every cast into or out of a 64-bit
-    /// integer or a <c>BigInteger</c>, spec 012 FR-003, FR-074); a constant one
+    /// integer or a <c>BigInteger</c>, spec 012 FR-003, FR-074, and a
+    /// <c>decimal</c> read as a <c>double</c> or <c>float</c>); a constant one
     /// folds. One other cast needs runtime code: a <c>decimal</c> to a 32-bit
     /// or narrower integer (<c>(int|short|byte)decimalExpr</c>) truncates and
     /// reads the number, <c>expr.trunc().toNumber()</c>. All other casts

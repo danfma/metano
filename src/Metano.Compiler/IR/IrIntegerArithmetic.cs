@@ -8,7 +8,9 @@ namespace Metano.Compiler.IR;
 /// floating-point value to a 32-bit or narrower integer
 /// (<see cref="TruncatesFloatingPoint"/>, FR-070); or a cast between two
 /// integers of 32 bits or fewer that can change the value
-/// (<see cref="NarrowsInteger"/>, FR-074). The core decides
+/// (<see cref="NarrowsInteger"/>, FR-074); or a cast of a <c>decimal</c>
+/// to <c>double</c> or <c>float</c> (<see cref="IsDecimalToBinaryFloatingPoint"/>),
+/// which reads the decimal's nearest binary value. The core decides
 /// it from Roslyn's semantic model, so a target renders it from
 /// <see cref="From"/>, <see cref="To"/> and <see cref="IsChecked"/> alone,
 /// without re-deriving operand types.
@@ -57,6 +59,15 @@ public sealed record IrNumericConversion(
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> narrows an integer of 32 bits or fewer (FR-074).</summary>
     public static bool IsIntegerNarrowing(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from.IsNarrowIntegerValue() && to.IsNarrowIntegerValue() && !to.Kind.HoldsEvery(from.Kind);
+
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
+    public static bool IsDecimalToBinaryFloatingPoint(
+        IrNumericEndpoint from,
+        IrNumericEndpoint to
+    ) =>
+        from is { Kind: IrNumericKind.Decimal, IsEnum: false }
+        && to is { IsEnum: false }
+        && to.Kind.IsFloatingPoint();
 }
 
 /// <summary>

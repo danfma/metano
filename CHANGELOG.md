@@ -736,7 +736,10 @@ the rows of `tests/BclReference`.
   .NET); the output calls `formatBoolean`, `formatDouble` and `formatSingle`. Output that
   printed a `double` or `bool` through JavaScript's conversion changes: regenerate, and use
   `[Emit]` or `[MapMethod]` where the JavaScript text is wanted. Other types and boxed values
-  are untouched.
+  are untouched. A `decimal` cast to `double` or `float` reads its number (`m.toNumber()`,
+  `Math.fround(m.toNumber())`), where 2.x kept the `Decimal` object, so `(double)m + 1`
+  concatenated text; `formatDouble` / `formatSingle` throw a `TypeError` for a value that is
+  not a `number` instead of printing `Infinity`.
 - **`decimal` precision and rounding (#465, part a).** The class generated code imports for
   `decimal` is `Decimal` from `metano-runtime/system/decimal`: decimal.js configured with
   `System.Decimal`'s 29 significant digits and half-to-even rounding (decimal.js's own
