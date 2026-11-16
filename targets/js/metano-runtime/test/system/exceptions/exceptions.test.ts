@@ -87,6 +87,7 @@ describe("exceptions", () => {
     expect(new ArgumentException("bad").paramName).toBeNull();
     expect(argumentNull.message).toBe("Value cannot be null. (Parameter 's')");
     expect(argumentNull).toBeInstanceOf(ArgumentException);
+
     expect(argumentNull.toString()).toBe(
       "System.ArgumentNullException: Value cannot be null. (Parameter 's')",
     );
@@ -275,10 +276,13 @@ describe("exception hierarchy (spec 011 FR-013)", () => {
     expect(new ArgumentOutOfRangeException("p", 42, "range").message).toBe(
       "range (Parameter 'p')\nActual value was 42.",
     );
+
     expect(new ArgumentOutOfRangeException(null, 5, "m").message).toBe("m\nActual value was 5.");
+
     expect(new ArgumentOutOfRangeException("p", "", "m").message).toBe(
       "m (Parameter 'p')\nActual value was .",
     );
+
     expect(new ArgumentOutOfRangeException("p", null, "m").message).toBe("m (Parameter 'p')");
     expect(new ArgumentOutOfRangeException("p", 42).actualValue).toBe(42);
   });
