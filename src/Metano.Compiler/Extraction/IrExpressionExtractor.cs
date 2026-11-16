@@ -2950,8 +2950,8 @@ public sealed partial class IrExpressionExtractor
     /// expression. A transpiled callee that applies its own declaration's
     /// default receives it marked <see cref="IrArgument.IsOmittedDefault"/>, so
     /// a target can pass "no value" (TypeScript's <c>undefined</c>); any other
-    /// callee (an <c>[Import]</c>, <c>[External]</c>, <c>[Emit]</c> or
-    /// declaration-only one, a delegate, a virtual, abstract or interface
+    /// callee (an <c>[Import]</c>, <c>[External]</c> or <c>[Emit]</c> one, a
+    /// delegate, a virtual, abstract or interface
     /// member whose runtime implementation may declare another default) gets
     /// the default the call site sees, the one <paramref name="method"/>
     /// declares, as C# passes it.
@@ -2960,6 +2960,14 @@ public sealed partial class IrExpressionExtractor
         new(BuildDefaultArgument(parameter), IsOmittedDefault: AppliesItsOwnDefaults(method));
 
     private bool AppliesItsOwnDefaults(IMethodSymbol method) =>
+        IsStaticallyDispatched(method) && HasTranspiledDeclaration(method);
+
+    /// <summary>
+    /// Whether the call runs <paramref name="method"/>'s own body: an ordinary
+    /// method, extension or constructor that no override or interface
+    /// implementation can replace with a body declaring other defaults.
+    /// </summary>
+    private static bool IsStaticallyDispatched(IMethodSymbol method) =>
         method
             is {
                 MethodKind: MethodKind.Ordinary
@@ -2968,15 +2976,22 @@ public sealed partial class IrExpressionExtractor
                 IsVirtual: false,
                 IsAbstract: false,
                 IsOverride: false,
-                ContainingType: { TypeKind: not TypeKind.Interface } type,
-            }
-        && IrTypeRefMapper.IsTranspilableType(type, _target)
+                ContainingType.TypeKind: not TypeKind.Interface,
+            };
+
+    /// <summary>
+    /// Whether the target emits <paramref name="method"/>'s declaration, with
+    /// its C# defaults: a transpiled type's member that no <c>[Emit]</c>
+    /// template replaces and no <c>[Import]</c> or <c>[External]</c> binding
+    /// (on the member or its type) provides from elsewhere.
+    /// </summary>
+    private bool HasTranspiledDeclaration(IMethodSymbol method) =>
+        IrTypeRefMapper.IsTranspilableType(method.ContainingType, _target)
         && !SymbolHelper.HasEmit(method)
         && !SymbolHelper.HasImport(method)
         && !SymbolHelper.HasExternal(method)
-        && !SymbolHelper.HasImport(type)
-        && !SymbolHelper.HasExternal(type)
-        && !type.HasAttribute("NoEmit");
+        && !SymbolHelper.HasImport(method.ContainingType)
+        && !SymbolHelper.HasExternal(method.ContainingType);
 
     private static IReadOnlyList<IArgumentOperation>? BoundArgumentsOf(IOperation? operation) =>
         operation switch

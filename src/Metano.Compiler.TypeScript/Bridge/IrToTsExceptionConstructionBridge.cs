@@ -272,11 +272,11 @@ public static class IrToTsExceptionConstructionBridge
     private static TsExpression SwitchExpressionMessage(TsExpression unmatchedValue) =>
         new TsConditionalExpression(
             new TsBinaryExpression(unmatchedValue, "==", new TsLiteral("null")),
-            new TsStringLiteral(IrExceptionConstructionExtractor.SwitchExpressionDefaultMessage),
+            new TsStringLiteral(SwitchExpressionExceptionText.DefaultMessage),
             new TsTemplateLiteral(
                 [
-                    IrExceptionConstructionExtractor.SwitchExpressionDefaultMessage
-                        + IrExceptionConstructionExtractor.UnmatchedValueLine,
+                    SwitchExpressionExceptionText.DefaultMessage
+                        + SwitchExpressionExceptionText.UnmatchedValueLine,
                     ".",
                 ],
                 [unmatchedValue]
@@ -408,7 +408,7 @@ public static class IrToTsExceptionConstructionBridge
         AppendValueLine(
             composer,
             plan.FoldedValueOf(IrExceptionArgumentRole.UnmatchedValue, operands),
-            IrExceptionConstructionExtractor.UnmatchedValueLine
+            SwitchExpressionExceptionText.UnmatchedValueLine
         );
 
         return composer.Build();
