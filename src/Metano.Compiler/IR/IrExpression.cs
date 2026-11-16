@@ -642,10 +642,24 @@ public enum IrUnaryOp
 /// value its static type (the <c>0</c> of an enum that declares no zero
 /// member), so a target that erases casts still asserts it
 /// (<c>0 as Level</c>).</param>
+/// <param name="IsReferenceDowncast">The source wrote an explicit reference
+/// conversion (<c>(Derived)baseValue</c>, <c>(IShape)obj</c>): C# checks the
+/// value at runtime and throws <c>InvalidCastException</c> for another type,
+/// so a target that erases static types types the result and, where the type
+/// has a runtime test, checks it too.</param>
+/// <param name="ChecksAtRuntime">Whether an <paramref name="IsReferenceDowncast"/>
+/// may reference the target type's runtime class to check it. <c>false</c> when
+/// the cast sits in a type its target derives from: the module of such a target
+/// imports the cast's own module to extend it, so a value import back would be
+/// an import cycle that fails when the modules load, or the cast belongs to an
+/// <c>[Inline]</c> expansion, which lands in a caller whose enclosing type the
+/// extraction cannot see. The cast then only types the result.</param>
 public sealed record IrCastExpression(
     IrExpression Expression,
     IrTypeRef TargetType,
-    bool IsAssertion = false
+    bool IsAssertion = false,
+    bool IsReferenceDowncast = false,
+    bool ChecksAtRuntime = true
 ) : IrExpression;
 
 /// <summary>

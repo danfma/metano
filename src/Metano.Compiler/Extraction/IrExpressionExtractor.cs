@@ -5385,7 +5385,12 @@ public sealed partial class IrExpressionExtractor
             return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
         }
 
-        return new IrCastExpression(inner, ExtractTargetType(cast));
+        return new IrCastExpression(
+            inner,
+            ExtractTargetType(cast),
+            IsReferenceDowncast: IsTypedReferenceDowncast(cast, targetType),
+            ChecksAtRuntime: ChecksReferenceDowncast(cast, targetType)
+        );
     }
 }
 

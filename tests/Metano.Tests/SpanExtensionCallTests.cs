@@ -119,7 +119,10 @@ public class SpanExtensionCallTests
         "s.sort((x: number, y: number) => y - x)"
     )]
     [Arguments("xs.Sort(Descending)", "xs.sort(Calls.descending)")]
-    [Arguments("object o = sp.ToString(); ((string)o).StartsWith(sp)", "o.startsWith(sp)")]
+    [Arguments(
+        "object o = sp.ToString(); ((string)o).StartsWith(sp)",
+        "(o as string).startsWith(sp)"
+    )]
     [Arguments(
         "object o = sp.ToString(); (o as string)!.IndexOf(sp)",
         "(typeof o === \"string\" ? o : null)!.indexOf(sp)"

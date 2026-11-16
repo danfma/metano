@@ -754,6 +754,13 @@ the rows of `tests/BclReference`.
   where 2.x wrote `p: Point = undefined` and passed `null` (both fail `tsgo --strict`). Only a
   struct that declares no constructor qualifies; one with a declared or primary constructor keeps
   `undefined` (#676).
+- An explicit reference downcast (`(Circle)shape`) types its TypeScript result: a class,
+  record or mapped BCL exception target is checked by the new runtime helper `castTo` (`null`
+  passes, another type throws `InvalidCastException`), any other target (an interface, a type
+  parameter, `string`) is asserted (`o as IMarker`). 2.x emitted the bare operand, which failed
+  to type-check at the first member read and let a wrong cast continue with `undefined`
+  members. A cast that an earlier `x is T` already guards, and an upcast, keep the bare operand
+  (FR-065, #669).
 
 ### Toolchain
 
