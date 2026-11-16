@@ -1,31 +1,15 @@
 {
   "compilerOptions": {
-    // General
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
     "target": "ESNext",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    // Modules
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
+    "lib": ["ESNext"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
-
-    // Type Checking & Safety
+    "isolatedModules": true,
+    "noEmit": true,
     "strict": true,
-    "types": ["vite/client"],
-    
-    // Path and output
-    "rootDir": "./src",
-    "outDir": "lib",
-    "paths": {
-      "#/*": ["./src/*"]
-    }
-  }
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts"]
 }

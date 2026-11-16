@@ -92,5 +92,20 @@ jobs:
       - name: sample-int64-conformance
         run: cd targets/js/sample-int64-conformance && bun run build && bun test && bun run test:node
 
+      # Every other sample must at least build, so a tsconfig or hand-written
+      # provider regression cannot go unnoticed (#678).
+      - name: Sample builds
+        run: |
+          for sample in hello-world sample-counter-v1 sample-counter-v2 sample-counter-v3 \
+            sample-counter-v4 sample-counter-v5 sample-solid-ui sample-operator-overloading \
+            sample-queryable-arrays sample-queryable-sqlite; do
+            echo "::group::$sample"
+            (cd "targets/js/$sample" && bun run build)
+            echo "::endgroup::"
+          done
+
+      - name: sample-queryable-sqlite
+        run: cd targets/js/sample-queryable-sqlite && bun test
+
       - name: Biome check
         run: bunx biome check .
