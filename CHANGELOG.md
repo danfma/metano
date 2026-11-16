@@ -709,8 +709,6 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   A custom target that overrides it reads `cached.Files` and `cached.PackageDependencies`
   instead of the 2.x `files` and `packageDependencies` parameters.
 
-## 2.10.1
-
 ### ⚠ BCL members that diverged from JavaScript call runtime helpers (baseline FR-014, FR-053–FR-055; #661, #673, #668, #308, #465)
 
 These members produced a wrong value, or none, in 2.x; each now calls a `metano-runtime`
@@ -821,10 +819,6 @@ the rows of `tests/BclReference`.
   `?? ""` where 2.x printed `null` (#649). Known limitation: an `[Emit]` template that
   produces a never-nullish expression (`typeof $0`) and returns a `string` in nullable-disabled
   code gets the guard, which tsgo rejects as TS2869.
-
-### Toolchain
-
-- The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.
 
 ## 2.10.1
 

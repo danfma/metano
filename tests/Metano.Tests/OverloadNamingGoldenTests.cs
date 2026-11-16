@@ -139,6 +139,11 @@ public class OverloadNamingGoldenTests
             """
         );
 
+        // Known bug #504: the golden binds both `Numerics.Decimal` and
+        // `Other.Decimal` to one `import { Decimal } from "#/other/decimal"`;
+        // two project types of one name in one file only report MS0070 so far.
+        // The golden freezes the overload names this test is about, not that
+        // import: update it when #504 aliases the second type.
         await Assert
             .That(result["climbs.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("overload-names-climb.ts"));
