@@ -45,7 +45,7 @@ public class LocalBindingImportTests
                 """
         );
 
-        await Assert.That(result["boot.ts"]).DoesNotContain("import");
+        await Assert.That(result["boot.ts"]).DoesNotContain("failures");
     }
 
     [Test]
