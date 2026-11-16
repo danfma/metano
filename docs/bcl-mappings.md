@@ -932,7 +932,11 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   arms / overload-dispatcher arms test `instanceof` it. `catch (X)` clauses test it too (the
   single-`catch` chain of spec 011 FR-015, see [`docs/architecture.md`](architecture.md));
   `catch (Exception)` and a general `catch` take every thrown value, including one that is not
-  an `Error`. Interim, until `toException`: a test on `System.Exception` itself is
+  an `Error`. A chain with a typed arm first normalizes the caught value with `toException`
+  (`const e0 = toException(e$);`): a `TypeError` is a `NullReferenceException`, an `AbortError` a
+  `TaskCanceledException`, any other `Error` an `Exception` (keeping `message`, `stack` and the
+  original as `innerException`), a thrown non-`Error` value an `Exception`; a `when` filter that
+  throws is `false` (`tryFilter`). Outside a `catch`, a test on `System.Exception` itself is
   `instanceof Error`, so a JavaScript error (a `TypeError`) is an `Exception`. A `[GenerateGuard]`
   field typed as a BCL exception tests `instanceof` its class (`Error` for `System.Exception`
   and for an unmapped type, which names the root: a structural widening). An overload
@@ -983,9 +987,8 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   `TimeOnly` / `DateTime` component constructors, a negative array length, a non-exhaustive
   switch expression (`SwitchExpressionException`) and the JSON serializer.
 - **Known deviations.** A `TypeError` thrown by JavaScript (a member access on `null`) is not
-  a `NullReferenceException`, so a typed clause does not take it (it reaches
-  `catch (Exception)`), and a thrown value that is not an `Exception` is not wrapped (both are
-  spec 011 FR-015's `toException`, not implemented yet). Indexers out of range, a missing
+  a `NullReferenceException` (`toException` of a catch chain converts it, spec 011 FR-015; hand-written
+  code that tests a caught value outside a chain sees the `TypeError`). Indexers out of range, a missing
   dictionary key and several `string` / LINQ argument checks throw nothing or a JavaScript
   error (spec 011 FR-016 lists them). Dart keeps its native exception types.
 

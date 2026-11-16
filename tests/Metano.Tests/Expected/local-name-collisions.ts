@@ -1,3 +1,5 @@
+import { toException } from "metano-runtime";
+
 export class Collisions {
   constructor() { }
 
@@ -34,7 +36,10 @@ export class Collisions {
     let ex = 0;
     try {
       ex = 1;
-    } catch (ex$1) {
+    } catch (e$) {
+      const e0 = toException(e$);
+      const ex$1 = e0;
+
       return ex + ex$1.message.length;
     }
 

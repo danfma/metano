@@ -376,8 +376,9 @@ public class CatchClauseLoweringTests
             """
         );
 
-        await Assert.That(output).Contains("} catch (failure) {");
-        await Assert.That(output).DoesNotContain("e$");
+        await Assert.That(output).Contains("} catch (e$) {");
+        await Assert.That(output).Contains("const e0 = toException(e$);");
+        await Assert.That(output).Contains("const failure = e0;");
     }
 
     [Test]
@@ -410,7 +411,8 @@ public class CatchClauseLoweringTests
         );
 
         await Assert.That(output).Contains("} catch (e$) {");
-        await Assert.That(output).Contains("let failure = e$;");
+        await Assert.That(output).Contains("const e0 = toException(e$);");
+        await Assert.That(output).Contains("let failure = e0;");
         await Assert.That(output).Contains("throw e$;");
     }
 
@@ -426,7 +428,9 @@ public class CatchClauseLoweringTests
 
         await Assert
             .That(output)
-            .Contains("if (e$ instanceof AppException && ((failure) => failure.code === 1)(e$)) {");
+            .Contains(
+                "if (e0 instanceof AppException && tryFilter((failure) => failure.code === 1, e0)) {"
+            );
 
         await Assert.That(output).Contains("} else {\n        throw e$;\n      }");
         await Assert.That(output).DoesNotContain("const failure");
@@ -443,8 +447,8 @@ public class CatchClauseLoweringTests
             """
         );
 
-        await Assert.That(output).Contains("if (this.ready) {");
-        await Assert.That(output).Contains("} else if (e$ instanceof AppException) {");
+        await Assert.That(output).Contains("if (tryFilter(() => this.ready)) {");
+        await Assert.That(output).Contains("} else if (e0 instanceof AppException) {");
     }
 
     [Test]
@@ -491,7 +495,7 @@ public class CatchClauseLoweringTests
         var handler = result["handler.ts"];
 
         await Assert.That(handler).Contains("} catch (e$$) {");
-        await Assert.That(handler).Contains("if (e$$ instanceof AppException) {");
+        await Assert.That(handler).Contains("if (e0 instanceof AppException) {");
         await Assert.That(handler).Contains("return e$();");
         await Assert.That(handler).Contains("throw e$$;");
     }
@@ -536,8 +540,8 @@ public class CatchClauseLoweringTests
         var client = result["consumer/client.ts"];
 
         await Assert.That(client).Contains("import { QuotaException } from \"errors-lib");
-        await Assert.That(client).Contains("if (e$ instanceof QuotaException) {");
-        await Assert.That(client).Contains("} else if (e$ instanceof InvalidOperationException) {");
+        await Assert.That(client).Contains("if (e0 instanceof QuotaException) {");
+        await Assert.That(client).Contains("} else if (e0 instanceof InvalidOperationException) {");
     }
 
     [Test]
@@ -584,7 +588,9 @@ public class CatchClauseLoweringTests
 
         var panel = result["panel.tsx"];
 
-        await Assert.That(panel).Contains("if (e$ instanceof LoadException && props$quiet) {");
+        await Assert
+            .That(panel)
+            .Contains("if (e0 instanceof LoadException && tryFilter(() => props$quiet)) {");
         await Assert.That(panel).Contains("throw e$;");
     }
 

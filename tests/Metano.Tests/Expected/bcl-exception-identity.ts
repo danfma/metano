@@ -1,4 +1,4 @@
-import { isString } from "metano-runtime";
+import { isString, toException, tryFilter } from "metano-runtime";
 import { Decimal } from "decimal.js";
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 import { ArgumentNullException } from "metano-runtime/system/exceptions/argument-null-exception";
@@ -171,16 +171,17 @@ export class Ledger {
 
       return "posted";
     } catch (e$) {
-      if (e$ instanceof KeyNotFoundException) {
-        const e = e$;
+      const e0 = toException(e$);
+      if (e0 instanceof KeyNotFoundException) {
+        const e = e0;
 
         return "missing:" + e.message;
-      } else if (e$ instanceof ArgumentOutOfRangeException && ((e) => e.paramName === "amount")(e$)) {
+      } else if (e0 instanceof ArgumentOutOfRangeException && tryFilter((e) => e.paramName === "amount", e0)) {
         return "amount";
-      } else if (e$ instanceof ArgumentException) {
+      } else if (e0 instanceof ArgumentException) {
         return "argument";
       } else {
-        const e = e$;
+        const e = e0;
 
         return "other:" + e.message;
       }

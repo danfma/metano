@@ -163,7 +163,7 @@ public class LocalNameCollisionTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("catch (ex$1)");
+        await Assert.That(output).Contains("const ex$1 = e0;");
         await Assert.That(output).Contains("ex + ex$1");
     }
 
@@ -1011,8 +1011,6 @@ public class LocalNameCollisionTests
     {
         var output = TranspileHelper.Transpile(GoldenSource)["collisions.ts"];
 
-        await Assert
-            .That(output)
-            .IsEqualTo(TranspileHelper.ReadExpected("local-name-collisions.ts"));
+        await TranspileHelper.AssertGolden("local-name-collisions.ts", output);
     }
 }
