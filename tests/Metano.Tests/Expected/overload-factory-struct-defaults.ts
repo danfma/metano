@@ -7,7 +7,7 @@ export class Day {
 
   protected static readonly byDayLabel: unique symbol = Symbol("Day(string label)");
 
-  tag: string;
+  tag: string = "\u0000";
 
   label: string;
 
@@ -15,7 +15,9 @@ export class Day {
 
   nested: Inner;
 
-  id: UUID;
+  id: UUID = UUID.empty;
+
+  span: [number, number];
 
   constructor(overload: typeof Day.byDayN, n: number);
   constructor(overload: typeof Day.byDayLabel, label: string);
@@ -28,7 +30,8 @@ export class Day {
       this.label = null as never;
       this.mood = Mood.Calm;
       this.nested = new Inner();
-      this.id = undefined as never;
+      this.id = UUID.empty;
+      this.span = undefined as never;
 
       return;
     }
@@ -40,6 +43,7 @@ export class Day {
       this.mood = Mood.Loud;
       this.nested = Inner.fromV(n);
       this.id = UUID.empty;
+      this.span = [n, n] as [number, number];
 
       return;
     }
@@ -55,6 +59,7 @@ export class Day {
         this.mood = Mood.Loud;
         this.nested = Inner.fromV(n);
         this.id = UUID.empty;
+        this.span = [n, n] as [number, number];
       }
 
       this.label = label;
@@ -69,6 +74,7 @@ export class Day {
       this.mood = Mood.Loud;
       this.nested = Inner.fromV(n);
       this.id = UUID.empty;
+      this.span = [n, n] as [number, number];
 
       return;
     }
@@ -84,6 +90,7 @@ export class Day {
         this.mood = Mood.Loud;
         this.nested = Inner.fromV(n);
         this.id = UUID.empty;
+        this.span = [n, n] as [number, number];
       }
 
       this.label = label;
@@ -103,7 +110,7 @@ export class Day {
   }
 
   equals(other: any): boolean {
-    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.tag === other.tag && this.label === other.label && this.mood === other.mood && valueEquals(this.nested, other.nested) && valueEquals(this.id, other.id);
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.tag === other.tag && this.label === other.label && this.mood === other.mood && valueEquals(this.nested, other.nested) && valueEquals(this.id, other.id) && valueEquals(this.span, other.span);
   }
 
   hashCode(): number {
@@ -113,6 +120,7 @@ export class Day {
     hc.add(this.mood);
     hc.add(this.nested);
     hc.add(this.id);
+    hc.add(this.span);
 
     return hc.toHashCode();
   }

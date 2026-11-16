@@ -169,6 +169,47 @@ public class DefaultLiteralTests
         await Assert.That(Warnings(diagnostics)).IsEmpty();
     }
 
+    /// <summary>
+    /// <c>new S()</c> stands for <c>default(S)</c> with the struct's type
+    /// arguments; a field whose type has no default (a type parameter, a
+    /// tuple) is left undefined, so the literal still reports MS0001.
+    /// </summary>
+    [Test]
+    public async Task StructDefaultWithAnUnsetField_KeepsItsTypeArgumentsAndReports()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Types
+                + """
+
+                [Transpile]
+                public struct ZGen<T> { public T Value; public int N; }
+
+                [Transpile]
+                public struct ZOdd { public System.Guid Id; public char C; public int N; }
+
+                [Transpile]
+                public class Holder
+                {
+                    public int Gen() { ZGen<int> a = default; return a.N; }
+                    public int Odd() { ZOdd z = default; return z.N; }
+                }
+                """
+        );
+
+        var holder = files["holder.ts"];
+
+        await Assert.That(holder).Contains("const a = new ZGen<number>();");
+        await Assert.That(holder).Contains("const z = new ZOdd();");
+        await Assert.That(files["z-odd.ts"]).Contains("id: UUID = UUID.empty;");
+        await Assert.That(files["z-odd.ts"]).Contains("c: string = \"\\u0000\";");
+
+        await Assert
+            .That(Warnings(diagnostics))
+            .IsEquivalentTo([
+                "'default(ZGen<int>)' has no literal in the target for 'Value': 'new ZGen()' leaves it undefined.",
+            ]);
+    }
+
     private static IEnumerable<string> Warnings(IEnumerable<MetanoDiagnostic> diagnostics) =>
         diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).Select(d => d.Message);
 }

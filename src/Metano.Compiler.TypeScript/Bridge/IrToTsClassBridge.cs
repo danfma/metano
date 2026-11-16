@@ -93,7 +93,7 @@ internal static partial class IrToTsClassBridge
     /// whose declaration omits an explicit one, as the core's default-value
     /// policy spells it (<see cref="IrDefaultValues.KindOf"/>): <c>null</c>
     /// for a nullable type, the zero of a primitive (<c>0</c>, <c>0n</c>,
-    /// <c>false</c>, <c>new Decimal("0")</c>), the zero member of an enum
+    /// <c>false</c>, <c>new Decimal("0")</c>, <c>"\0"</c>, <c>UUID.empty</c>), the zero member of an enum
     /// (<c>0 as E</c> when a numeric enum declares none), and <c>new S()</c>
     /// for a default-constructible struct. <c>null</c> when the policy spells
     /// no value — the caller emits the field without an initializer (TS leaves
@@ -119,7 +119,9 @@ internal static partial class IrToTsClassBridge
     private static TsExpression PrimitiveZero(IrPrimitive primitive) =>
         primitive switch
         {
-            IrPrimitive.Int64 or IrPrimitive.UInt64 => SixtyFourBitZero(),
+            IrPrimitive.Int64 or IrPrimitive.UInt64 or IrPrimitive.BigInteger => SixtyFourBitZero(),
+            IrPrimitive.Char => new TsStringLiteral("\0"),
+            IrPrimitive.Guid => new TsPropertyAccess(new TsRuntimeHelperReference("UUID"), "empty"),
             IrPrimitive.Decimal => new TsNewExpression(
                 IrToTsExpressionBridge.BclDecimalValueReference(),
                 [new TsStringLiteral("0")]

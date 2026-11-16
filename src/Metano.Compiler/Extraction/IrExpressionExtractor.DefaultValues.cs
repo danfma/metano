@@ -32,6 +32,9 @@ public sealed partial class IrExpressionExtractor
 
         var value = DefaultOf(type);
 
+        if (value is IrNewExpression)
+            ReportUnsetStructFields(syntax, type);
+
         if (value is not null)
             return value;
 
@@ -57,6 +60,29 @@ public sealed partial class IrExpressionExtractor
 
     private static bool IsNullableType(ITypeSymbol type) =>
         type.NullableAnnotation == NullableAnnotation.Annotated || type.IsNullableValueType();
+
+    /// <summary>
+    /// Reports MS0001 when the <c>new S()</c> that stands for <c>default(S)</c>
+    /// leaves a field without its default (<see cref="DefaultValuePolicy.UnsetFieldsOf"/>).
+    /// </summary>
+    private void ReportUnsetStructFields(SyntaxNode syntax, ITypeSymbol type)
+    {
+        var unset = DefaultValuePolicy.UnsetFieldsOf(type, MapElementType);
+
+        if (unset.Count == 0)
+            return;
+
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'default({type.ToDisplayString()})' has no literal in the target for "
+                    + $"{string.Join(", ", unset.Select(name => $"'{name}'"))}: 'new "
+                    + $"{type.Name}()' leaves {(unset.Count == 1 ? "it" : "them")} undefined.",
+                syntax.GetLocation()
+            )
+        );
+    }
 
     private static void ReportUnrepresentableDefaultLiteral(SyntaxNode syntax, ITypeSymbol type) =>
         ExtractionDiagnostics.Report(

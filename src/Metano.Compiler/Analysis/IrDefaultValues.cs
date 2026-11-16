@@ -16,7 +16,7 @@ public enum IrDefaultValueKind
     /// <summary><c>null</c>: a nullable type.</summary>
     Null,
 
-    /// <summary>The zero literal of a primitive: <c>false</c>, <c>0</c>, <c>0n</c>, <c>'\0'</c>, <c>0m</c>.</summary>
+    /// <summary>The zero of a primitive: <c>false</c>, <c>0</c>, <c>0n</c>, <c>'\0'</c>, <c>0m</c>, <c>Guid.Empty</c>.</summary>
     Zero,
 
     /// <summary>The enum member whose value is <c>0</c>.</summary>
@@ -69,5 +69,8 @@ public static class IrDefaultValues
                 or IrPrimitive.UInt64
                 or IrPrimitive.Float32
                 or IrPrimitive.Float64
-                or IrPrimitive.Decimal;
+                or IrPrimitive.Decimal
+                or IrPrimitive.BigInteger
+                or IrPrimitive.Char
+                or IrPrimitive.Guid;
 }

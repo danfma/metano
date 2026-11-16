@@ -10,7 +10,7 @@ export class Segment {
 
   origin: Point | null = null;
 
-  boxed: Box<number> = new Box();
+  boxed: Box<number> = new Box<number>();
 
   extent: Size = new Size();
 

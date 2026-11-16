@@ -799,8 +799,13 @@ the rows of `tests/BclReference`.
   collection element, `default(T)`) lowers to the default of its converted type (`false`,
   `0`, `0n`, the zero enum member) where 2.x printed `undefined` (#627, #372, #612). A struct
   that declares no constructor is `new Point()` there too, as in a `= default` parameter and an
-  `OrDefault` / `Find` / `GetValueOrDefault` miss; a type no expression spells (a struct that
-  declares a constructor, a tuple, a `[StringEnum]` without a zero member) reports `MS0001`. An enum field's implicit initializer is the member whose value is `0`
+  `OrDefault` / `Find` / `GetValueOrDefault` miss (`new Box<number>()` keeps its type
+  arguments); when a field of that struct has no default of its own (a type parameter, a
+  tuple, a `DateTime`), the `default` literal still reports `MS0001`, since the field stays
+  undefined. A field of type `char`, `Guid` or `BigInteger` without an initializer is
+  initialized to `"\u0000"`, `UUID.empty` or `0n` (2.x left it undefined). A type no
+  expression spells (a struct that declares a constructor, a tuple, a `[StringEnum]` without a
+  zero member) reports `MS0001`. An enum field's implicit initializer is the member whose value is `0`
   (`0 as E` when there is none), not the lowest member; a `[StringEnum]` field without a zero
   member has no initializer (#409).
 - The generated record `equals` compares `double` / `float` fields through `valueEquals` (`NaN`
