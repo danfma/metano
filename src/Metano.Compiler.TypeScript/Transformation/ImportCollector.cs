@@ -1152,7 +1152,7 @@ public sealed class ImportCollector(
     /// plain alphabetical sort. In mixed buckets it produces the more readable
     /// <c>{ Value, type Type }</c> shape instead of interleaving them by name.
     /// </summary>
-    private static void SortValuesFirst(List<string> names, IReadOnlySet<string> typeOnlyNames)
+    internal static void SortValuesFirst(List<string> names, IReadOnlySet<string> typeOnlyNames)
     {
         names.Sort(
             (a, b) =>

@@ -526,8 +526,9 @@ public class UsingAliasImportTests
     }
 
     /// <summary>
-    /// Two aliases of one type in a file: decimal.js's export is bound under
-    /// each alias the source spells, and a project type prints as one of them.
+    /// Two aliases of one BCL-origin type in a file: decimal.js's export is
+    /// bound under each alias the source spells. Two aliases of a same-project
+    /// type still bind only the printed one (a known gap).
     /// </summary>
     [Test]
     public async Task TwoAliasesOfOneType_BindEach()
