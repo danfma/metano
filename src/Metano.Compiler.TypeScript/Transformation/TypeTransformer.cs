@@ -27,9 +27,6 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 {
-    /// <summary>The asserted classes of a group transformed with every cast checked.</summary>
-    private static readonly IReadOnlySet<string> NoAssertedCasts = new HashSet<string>();
-
     private readonly List<MetanoDiagnostic> _diagnostics = [];
 
     /// <summary>
@@ -511,6 +508,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
                     : ComputePerGroupClosure(ir, groups, _constructorAccessFacts);
+
             var outcomes = new GroupOutcomes(groups.Count);
             perGroupEmissions = outcomes.Emissions;
             var skippedGroupCount = 0;
@@ -531,8 +529,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 }
             });
 
-            AssertCastsClosingImportCycles(groups, outcomes);
+            new ImportCycleCastPass(ImportAlias).Run(outcomes, (index, asserted) =>
+                TransformGroupFresh(index, groups[index], outcomes, asserted)
+            );
+
             files.AddRange(outcomes.Files.OfType<TsSourceFile>());
+
             if (skippedGroupCount > 0)
             {
                 Console.WriteLine(
@@ -980,7 +982,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return true;
         }
 
-        TransformGroupFresh(index, group, outcomes, NoAssertedCasts);
+        TransformGroupFresh(index, group, outcomes, ImportCycleCastPass.NoAssertedCasts);
 
         return false;
     }
@@ -1026,94 +1028,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             dependencies.SnapshotDependencies(),
             IsCacheable: assertedCasts.Count == 0
         );
-    }
-
-    /// <summary>
-    /// The import-graph pass of the reference casts (#669): a group whose file
-    /// sits on a cycle of value imports asserts every cast whose class it
-    /// imports from a module that reaches back to it, so the class import
-    /// cannot close the cycle (<c>Node.describe</c> → <c>Printer.print</c> →
-    /// <c>castTo(n, Leaf)</c>, where <c>Leaf</c> extends <c>Node</c>: loading
-    /// <c>node</c> first evaluated <c>class Leaf extends Node</c> before
-    /// <c>Node</c> existed). The graph is the one before any group is
-    /// transformed again, so an import a reassertion drops never unblocks
-    /// another cast. A group reused from the cache carries no casts to read:
-    /// on a cycle it is transformed again first.
-    /// </summary>
-    private void AssertCastsClosingImportCycles(
-        IReadOnlyList<TypeFileGroup> groups,
-        GroupOutcomes outcomes
-    )
-    {
-        var graph = LocalImportGraph.ValueImports(
-            [.. outcomes.Files.OfType<TsSourceFile>()],
-            ImportAlias
-        );
-
-        for (var index = 0; index < groups.Count; index++)
-        {
-            if (outcomes.Files[index] is not { } file || !IsOnImportCycle(graph, file))
-                continue;
-
-            if (outcomes.CheckedCasts[index] is null)
-                TransformGroupFresh(index, groups[index], outcomes, NoAssertedCasts);
-
-            var asserted = CastsClosingImportCycles(graph, outcomes, index);
-
-            if (asserted.Count > 0)
-                TransformGroupFresh(index, groups[index], outcomes, asserted);
-        }
-    }
-
-    private static bool IsOnImportCycle(LocalImportGraph graph, TsSourceFile file)
-    {
-        var key = LocalImportGraph.KeyOf(file);
-
-        return graph.TargetsOf(key).Any(target => graph.Reaches(target, key));
-    }
-
-    private static HashSet<string> CastsClosingImportCycles(
-        LocalImportGraph graph,
-        GroupOutcomes outcomes,
-        int index
-    )
-    {
-        var file = outcomes.Files[index]!;
-        var key = LocalImportGraph.KeyOf(file);
-
-        return outcomes.CheckedCasts[index]!
-            .Where(name =>
-                graph.ValueSourceOf(file, name) is { } source && graph.Reaches(source, key)
-            )
-            .ToHashSet(StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// What the transform of every group produced, indexed like the groups so
-    /// the caller keeps source order after the parallel pass.
-    /// </summary>
-    private sealed class GroupOutcomes(int count)
-    {
-        public TsSourceFile?[] Files { get; } = new TsSourceFile?[count];
-
-        public GroupEmission[] Emissions { get; } = new GroupEmission[count];
-
-        /// <summary>The local classes each transformed group's casts check; <c>null</c> for a group reused from the cache.</summary>
-        public IReadOnlySet<string>?[] CheckedCasts { get; } = new IReadOnlySet<string>?[count];
-    }
-
-    /// <summary>
-    /// What a group contributes to the per-group cache: the metadata of the file it
-    /// emitted and the cross-package dependencies that file requires.
-    /// </summary>
-    private sealed record GroupEmission(
-        IReadOnlyList<CachedFileMetadata> Files,
-        IReadOnlyDictionary<string, string> Dependencies,
-        bool IsCacheable = true
-    )
-    {
-        public static GroupEmission Empty { get; } =
-            new([], new Dictionary<string, string>(StringComparer.Ordinal));
     }
 
     /// <summary>
