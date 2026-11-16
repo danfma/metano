@@ -18,7 +18,7 @@ export class PlainCalls {
   }
 
   static textOperands(e: Engine, s: string, n: number): number {
-    return e.joinFD(s + "!", s + n);
+    return e.joinFD((s ?? "") + "!", (s ?? "") + n);
   }
 
   static staticAutos(e: Engine): number {

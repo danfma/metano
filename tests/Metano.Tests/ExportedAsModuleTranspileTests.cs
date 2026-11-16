@@ -7,6 +7,7 @@ public class NoContainerTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile, NoContainer]
             public static class MathUtils
             {

@@ -240,6 +240,7 @@ public class PerClassBackingFieldTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             namespace App;
 
             [Transpile]

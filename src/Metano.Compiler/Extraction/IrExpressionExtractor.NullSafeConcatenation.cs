@@ -10,9 +10,10 @@ namespace Metano.Compiler.Extraction;
 /// <c>null</c> operand as the empty string, where JavaScript writes
 /// <c>"null"</c> (<c>"n" + null</c> is <c>"nnull"</c>). An operand that may
 /// be <c>null</c> — a nullable value, a <c>null</c> literal, or a reference
-/// or type parameter whose nullable flow state is <em>maybe null</em> — is
-/// therefore extracted as <c>operand ?? ""</c>. In a nullable-disabled
-/// context a reference has no flow state and is left as is.
+/// or type parameter that is not <see cref="ReferenceNullability">null by
+/// construction</see> — is therefore extracted as <c>operand ?? ""</c>,
+/// whatever the (optimistic, or absent when nullable is disabled) flow state
+/// says.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
@@ -91,10 +92,24 @@ public sealed partial class IrExpressionExtractor
         // none of them is null — `object.ToString`'s `string?` annotation
         // notwithstanding — so the coalesce would be unreachable code tsgo
         // rejects (TS2869) over a string literal.
-        return MayFormatAsNull(operand) && value is not IrBaseObjectMemberCall
-            ? new IrBinaryExpression(value, IrBinaryOp.NullCoalescing, EmptyStringLiteral)
-            : value;
+        if (!MayFormatAsNull(operand) || value is IrBaseObjectMemberCall)
+            return value;
+
+        return new IrBinaryExpression(
+            WithoutNonNullAssertion(value),
+            IrBinaryOp.NullCoalescing,
+            EmptyStringLiteral
+        );
     }
+
+    /// <summary>
+    /// <c>s!</c> asserts a value the guard then tests, so the assertion is
+    /// dropped under it: <c>s ?? ""</c>, not <c>s! ?? ""</c>.
+    /// </summary>
+    private static IrExpression WithoutNonNullAssertion(IrExpression value) =>
+        value is IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion, Operand: var inner }
+            ? WithoutNonNullAssertion(inner)
+            : value;
 
     /// <summary>
     /// <c>value.ToString()</c> for an operand whose static type is a <c>bool</c>,
@@ -112,12 +127,6 @@ public sealed partial class IrExpressionExtractor
             ? DefaultTextConversion.Call(value, toString, BuildOrigin(toString))
             : null;
 
-    private bool MayFormatAsNull(ExpressionSyntax operand)
-    {
-        var info = _semantic.GetTypeInfo(operand);
-
-        return info.Type is null
-            || info.Type.IsNullableValueType()
-            || info.Nullability.FlowState == NullableFlowState.MaybeNull;
-    }
+    private bool MayFormatAsNull(ExpressionSyntax operand) =>
+        ReferenceNullability.MayBeNull(_semantic, operand);
 }

@@ -273,7 +273,7 @@ public class LiftedNullableOperatorTests
         );
 
         await Assert.That(output).Contains("s = (s ?? \"\") + (n ?? \"\");");
-        await Assert.That(output).Contains("s += \"!\";");
+        await Assert.That(output).Contains("s = (s ?? \"\") + \"!\";");
     }
 
     [Test]
@@ -311,7 +311,7 @@ public class LiftedNullableOperatorTests
     }
 
     [Test]
-    public async Task Concatenation_InNullableDisabledContext_IsLeftAsIs()
+    public async Task Concatenation_InNullableDisabledContext_KeepsTheGuard()
     {
         var output = TranspileInHelperClass(
             """
@@ -321,7 +321,7 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return \"s=\" + s;");
+        await Assert.That(output).Contains("return \"s=\" + (s ?? \"\");");
     }
 
     [Test]

@@ -99,7 +99,7 @@ export class Derived extends Base {
   }
 
   override addX(x: number): string {
-    return "derived:" + super.addX(x);
+    return "derived:" + (super.addX(x) ?? "");
   }
 
   addB(b: boolean): string {
@@ -132,7 +132,7 @@ export class FlagMapper extends Mapper {
   }
 
   override mapX<T>(x: T): string {
-    return "flag:" + super.mapX<T>(x);
+    return "flag:" + (super.mapX<T>(x) ?? "");
   }
 
   override map(x: number, y: number): string;
@@ -186,11 +186,11 @@ export class Leaf extends Middle {
   }
 
   override addS(s: string): string {
-    return "leaf:" + super.addS(s);
+    return "leaf:" + (super.addS(s) ?? "");
   }
 
   override addD(d: number): string {
-    return "leaf:" + super.addD(d);
+    return "leaf:" + (super.addD(d) ?? "");
   }
 
   addB(b: boolean): string {
@@ -429,7 +429,7 @@ export class StrRepo extends Repo<string> {
   }
 
   override putItem(item: string): string {
-    return "str:" + item;
+    return "str:" + (item ?? "");
   }
 
   putFlag(flag: boolean): string {

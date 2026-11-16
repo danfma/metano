@@ -163,7 +163,7 @@ export class SourceOrderCalls {
   static tag(tag: string): string {
     Trace.next(tag);
 
-    return tag + tag;
+    return (tag ?? "") + (tag ?? "");
   }
 
   static paramsOmitted(e: Engine): number {
@@ -179,7 +179,7 @@ export class SourceOrderCalls {
   }
 
   static nullArgument(t: Tuner): number {
-    return (($arg1, $arg0) => t.named($arg0, $arg1))(SourceOrderCalls.tag("p"), SourceOrderCalls.tag("q") + "x");
+    return (($arg1, $arg0) => t.named($arg0, $arg1))(SourceOrderCalls.tag("p"), (SourceOrderCalls.tag("q") ?? "") + "x");
   }
 
   static bclInstance(): number {

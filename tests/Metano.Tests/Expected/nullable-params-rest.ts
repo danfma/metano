@@ -8,7 +8,7 @@ export class Calc {
   }
 
   static join(label: string, ...parts: (string | null)[]): string {
-    return label + (parts?.length ?? -1);
+    return (label ?? "") + (parts?.length ?? -1);
   }
 }
 

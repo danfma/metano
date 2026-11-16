@@ -1,6 +1,7 @@
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -84,8 +85,8 @@ public static class IrExceptionConstructionExtractor
     /// message.</param>
     /// <param name="target">The active backend, for target-scoped <c>[Ignore]</c>.</param>
     /// <param name="sourceArguments">The source argument list, used with
-    /// <paramref name="model"/> to read the message argument's nullable flow
-    /// state; <c>null</c> for an implicit base call.</param>
+    /// <paramref name="model"/> to decide whether the message argument may
+    /// be null; <c>null</c> for an implicit base call.</param>
     /// <param name="model">The semantic model of <paramref name="sourceArguments"/>.</param>
     public static IrExceptionConstruction? Extract(
         IMethodSymbol? constructor,
@@ -181,14 +182,38 @@ public static class IrExceptionConstructionExtractor
             return false;
 
         var messageArgument = sourceArguments.Arguments.FirstOrDefault(argument =>
-            model.GetOperation(argument)
-                is IArgumentOperation { Parameter.Name: MessageParameterName }
+            ArgumentOperationOf(argument, model) is { Parameter.Name: MessageParameterName }
         );
 
         return messageArgument is not null
-            && model.GetTypeInfo(messageArgument.Expression).Nullability.FlowState
-                is NullableFlowState.MaybeNull;
+            && ReferenceNullability.MayBeNull(model, messageArgument.Expression);
     }
+
+    /// <summary>
+    /// The operation of <paramref name="argument"/>. A null-forgiving
+    /// argument (<c>m!</c>) has none, nor has its expression: the operation
+    /// of its operand is the one whose parent is the argument.
+    /// </summary>
+    private static IArgumentOperation? ArgumentOperationOf(
+        ArgumentSyntax argument,
+        SemanticModel model
+    ) =>
+        model.GetOperation(argument) as IArgumentOperation
+        ?? model.GetOperation(WithoutNullForgiveness(argument.Expression))?.Parent
+            as IArgumentOperation;
+
+    private static ExpressionSyntax WithoutNullForgiveness(ExpressionSyntax expression) =>
+        expression switch
+        {
+            PostfixUnaryExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SuppressNullableWarningExpression
+            } forgiven => WithoutNullForgiveness(forgiven.Operand),
+            ParenthesizedExpressionSyntax parenthesized => WithoutNullForgiveness(
+                parenthesized.Expression
+            ),
+            _ => expression,
+        };
 
     private static string? DefaultMessageOf(
         INamedTypeSymbol exceptionType,

@@ -37,6 +37,7 @@ public class InterpolatedStringEscapeTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             using System.Text;
 
             [Transpile]
@@ -60,6 +61,7 @@ public class InterpolatedStringEscapeTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             using System;
 
             [assembly: ExportFromBcl(typeof(ArgumentNullException), ExportedName = "NullArgument", FromPackage = "my-errors")]
@@ -94,6 +96,7 @@ public class InterpolatedStringEscapeTests
     {
         var result = TranspileHelper.Transpile(
             $$"""
+            #nullable enable
             [Transpile]
             public class Greeter
             {

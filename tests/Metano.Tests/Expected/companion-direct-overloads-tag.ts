@@ -75,6 +75,6 @@ export namespace Tag {
   }
 
   export function both(): string {
-    return Tag.sU(UId.create(2n)) + Tag.sL(2n);
+    return (Tag.sU(UId.create(2n)) ?? "") + (Tag.sL(2n) ?? "");
   }
 }

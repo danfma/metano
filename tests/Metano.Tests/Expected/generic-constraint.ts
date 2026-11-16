@@ -1,11 +1,11 @@
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import type { IEntity } from "./i-entity";
 
 export class Repo<T extends IEntity> {
   constructor(readonly item: T) { }
 
   equals(other: any): boolean {
-    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.item === other.item;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals(this.item, other.item);
   }
 
   hashCode(): number {

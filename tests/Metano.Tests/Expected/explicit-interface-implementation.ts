@@ -25,6 +25,6 @@ export class Person implements IPlain, IBox<string> {
   }
 
   describe(other: IPlain): string {
-    return other.name + this.calc(2) + other.shout();
+    return (other.name ?? "") + this.calc(2) + (other.shout() ?? "");
   }
 }

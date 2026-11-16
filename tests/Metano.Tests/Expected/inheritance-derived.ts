@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import { Shape } from "./shape";
 
 export class Circle extends Shape {
@@ -11,7 +11,7 @@ export class Circle extends Shape {
   }
 
   override equals(other: any): boolean {
-    return super.equals(other) && this.radius === other.radius;
+    return super.equals(other) && valueEquals(this.radius, other.radius);
   }
 
   override hashCode(): number {

@@ -103,7 +103,7 @@ public class InterpolationFormatClauseTests
             """
         );
 
-        await Assert.That(files["plain.ts"]).Contains("return `${i} ${l} ${n ?? \"\"} ${s}`;");
+        await Assert.That(files["plain.ts"]).Contains("return `${i} ${l} ${n ?? \"\"} ${s ?? \"\"}`;");
 
         await Assert.That(files["plain.ts"]).DoesNotContain("metano-runtime");
     }
@@ -285,7 +285,7 @@ public class InterpolationFormatClauseTests
     /// hole prints <c>ToString()</c>, as on main; an alignment still pads.
     /// </summary>
     [Test]
-    [Arguments("$\"{p:X}\"", "Plain p", "return `${p}`;")]
+    [Arguments("$\"{p:X}\"", "Plain p", "return `${p ?? \"\"}`;")]
     [Arguments("$\"{p:D2}\"", "Pair p", "return `${p}`;")]
     [Arguments("$\"{p,6:X}\"", "Plain p", "return `${alignValue(p, 6)}`;")]
     public async Task FormatOnANonFormattableType_IsIgnored(
@@ -868,7 +868,7 @@ public class InterpolationFormatClauseTests
         );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-        await Assert.That(files["holes.dart"]).Contains("'${i} ${s}'");
+        await Assert.That(files["holes.dart"]).Contains("'${i} ${s ?? ''}'");
     }
 
     private static string Body(string parameters, string expression) =>

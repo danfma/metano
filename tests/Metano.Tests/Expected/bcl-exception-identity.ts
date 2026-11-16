@@ -47,7 +47,7 @@ export class LedgerException extends Exception {
     if (typeof args[0] === "symbol" && args[0] === LedgerException.byLedgerExceptionMessageInner) {
       const message = args[1] as string;
       const inner = args[2] as Exception;
-      super(message, inner);
+      super(message ?? "Exception of type 'Billing.LedgerException' was thrown.", inner);
 
       return;
     }
@@ -55,7 +55,7 @@ export class LedgerException extends Exception {
     if (args.length === 2 && isString(args[0]) && args[1] instanceof Error) {
       const message = args[0] as string;
       const inner = args[1] as Exception;
-      super(message, inner);
+      super(message ?? "Exception of type 'Billing.LedgerException' was thrown.", inner);
 
       return;
     }
@@ -122,7 +122,7 @@ export class Ledger {
       throw new ArgumentException("The account is empty.", "account");
     }
 
-    throw new KeyNotFoundException(`No account '${account}'.`);
+    throw new KeyNotFoundException(`No account '${account ?? ""}'.`);
   }
 
   static wrap(inner: Exception): Exception {
@@ -142,7 +142,7 @@ export class Ledger {
       if ($s instanceof ArgumentException) {
         const argument = $s;
 
-        return "argument:" + argument.paramName;
+        return "argument:" + (argument.paramName ?? "");
       }
 
       if ($s instanceof StaleLedgerException) {

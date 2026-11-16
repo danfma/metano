@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 
 export abstract class GBase<T> {
   constructor(readonly value: T) {}
@@ -8,7 +8,7 @@ export abstract class GBase<T> {
     return (
       other != null &&
       Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
-      this.value === other.value
+      valueEquals(this.value, other.value)
     );
   }
 

@@ -140,6 +140,7 @@ public class InheritedPropertyTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
             [Transpile]
             public abstract class Shape
             {

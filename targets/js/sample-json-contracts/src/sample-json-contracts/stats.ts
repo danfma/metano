@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 
 export class Stats {
   constructor(
@@ -13,7 +13,7 @@ export class Stats {
       other != null &&
       Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.count === other.count &&
-      this.ratio === other.ratio &&
+      valueEquals(this.ratio, other.ratio) &&
       this.userName === other.userName
     );
   }

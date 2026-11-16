@@ -69,6 +69,6 @@ export class Catalog implements ILookup {
     const [tens] = Catalog.split(42);
     const [$found1, name] = this.tryName(key);
 
-    return $found1 ? name + tens : "none";
+    return $found1 ? (name ?? "") + tens : "none";
   }
 }

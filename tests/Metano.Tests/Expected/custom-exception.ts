@@ -4,7 +4,7 @@ export class InvalidAmountError extends Exception {
   override readonly name: string = "InvalidAmountError";
 
   constructor(message: string) {
-    super(message);
+    super(message ?? "Exception of type 'InvalidAmountError' was thrown.");
   }
 
   protected override get $typeName(): string {

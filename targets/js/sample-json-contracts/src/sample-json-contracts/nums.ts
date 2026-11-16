@@ -21,7 +21,7 @@ export class Nums {
       this.n === other.n &&
       this.m === other.m &&
       valueEquals(this.d, other.d) &&
-      this.x === other.x &&
+      valueEquals(this.x, other.x) &&
       this.l === other.l &&
       this.map === other.map &&
       this.c === other.c

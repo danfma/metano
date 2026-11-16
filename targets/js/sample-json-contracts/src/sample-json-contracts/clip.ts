@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 
 export abstract class Clip {
   constructor(readonly seconds: number) {}
@@ -8,7 +8,7 @@ export abstract class Clip {
     return (
       other != null &&
       Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
-      this.seconds === other.seconds
+      valueEquals(this.seconds, other.seconds)
     );
   }
 

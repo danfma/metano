@@ -8,7 +8,7 @@ export class Ops {
   }
 
   mSRest(s: string, ...rest: number[]): string {
-    return "params:" + s + ":" + rest.length;
+    return "params:" + (s ?? "") + ":" + rest.length;
   }
 
   m(a?: number): string;
@@ -30,7 +30,7 @@ export class Ops {
   }
 
   static sAB(a: number = 5, b: string = "x"): string {
-    return "S:" + a + b;
+    return "S:" + a + (b ?? "");
   }
 
   static s(flag: boolean): string;
