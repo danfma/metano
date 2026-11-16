@@ -48,6 +48,7 @@ public static class IrFieldExtractor
             IsConstant: field.HasConstant(),
             IsRequired: field.IsRequired,
             IsAssignedByInitAccessor: IsAssignedByInitAccessor(field, compilation),
+            IsAssignedByStaticConstructor: IsAssignedByStaticConstructor(field, compilation),
             IsCompileTimeConstant: field.IsConst
         )
         {
@@ -59,6 +60,14 @@ public static class IrFieldExtractor
         field.IsReadOnly
         && compilation is not null
         && CustomInitAccessor.WritesField(field, compilation);
+
+    private static bool IsAssignedByStaticConstructor(
+        IFieldSymbol field,
+        Compilation? compilation
+    ) =>
+        field is { IsStatic: true, IsReadOnly: true }
+        && compilation is not null
+        && IrStaticConstructorExtractor.WritesField(field, compilation);
 
     private static IrExpression? TryExtractInitializer(
         IFieldSymbol field,

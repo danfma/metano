@@ -37,6 +37,17 @@ public static class IrStaticConstructorExtractor
     }
 
     /// <summary>
+    /// The static constructor of <paramref name="field"/>'s type writes it. C#
+    /// lets a static constructor write a <c>static readonly</c> field; a target
+    /// that lowers the body to a class initializer may not, so the fact is
+    /// recorded on the field
+    /// (<see cref="IrFieldDeclaration.IsAssignedByStaticConstructor"/>).
+    /// </summary>
+    public static bool WritesField(IFieldSymbol field, Compilation compilation) =>
+        DeclaringSyntaxOf(field.ContainingType) is { } syntax
+        && FieldWrites.Within(syntax, field, compilation.GetSemanticModel(syntax.SyntaxTree));
+
+    /// <summary>
     /// The declared static constructor of <paramref name="type"/>, for a
     /// diagnostic that points at it; <c>null</c> when it declares none.
     /// </summary>

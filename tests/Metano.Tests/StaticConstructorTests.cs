@@ -61,6 +61,38 @@ public class StaticConstructorTests
     }
 
     [Test]
+    public async Task StaticReadonlyField_TheStaticConstructorWrites_IsMutable()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public static class Table
+            {
+                public static readonly Dictionary<string, int> Map;
+                public static readonly int Count;
+                public static readonly int Seed;
+                public static readonly int Untouched = 3;
+
+                static Table()
+                {
+                    Map = new Dictionary<string, int>();
+                    Map["a"] = 1;
+                    Count += 2;
+                    int.TryParse("4", out Seed);
+                }
+            }
+            """
+        )["table.ts"];
+
+        await Assert.That(output).Contains("static map: Map<string, number>;");
+        await Assert.That(output).Contains("static count: number = 0;");
+        await Assert.That(output).Contains("static seed: number = 0;");
+        await Assert.That(output).Contains("static readonly untouched: number = 3;");
+    }
+
+    [Test]
     public async Task TypeWithoutAStaticConstructor_EmitsNoStaticBlock()
     {
         var output = TranspileHelper.Transpile(

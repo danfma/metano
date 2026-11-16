@@ -129,6 +129,10 @@ public sealed record IrPropertyDeclaration(
 /// <c>init</c> accessor body of its type assigns (see <c>CustomInitAccessor</c>). C#
 /// allows that write; a backend that lowers the accessor to a setter, which cannot
 /// write a read-only field, declares the field mutable.</param>
+/// <param name="IsAssignedByStaticConstructor">A <c>static readonly</c> field that the
+/// static constructor of its type writes. C# allows that write; a backend that lowers the
+/// constructor to a class initializer whose language rejects it declares the field
+/// mutable.</param>
 /// <param name="IsCompileTimeConstant">Declared with the C# <c>const</c> modifier
 /// (Roslyn's <c>IFieldSymbol.IsConst</c>): implies <see cref="IsReadonly"/> (a C#
 /// <c>const</c> is read-only). Distinct from <see cref="IsConstant"/>, which is the
@@ -147,7 +151,8 @@ public sealed record IrFieldDeclaration(
     bool IsConstant = false,
     bool IsRequired = false,
     bool IsAssignedByInitAccessor = false,
-    bool IsCompileTimeConstant = false
+    bool IsCompileTimeConstant = false,
+    bool IsAssignedByStaticConstructor = false
 ) : IrMemberDeclaration(Name, Visibility, IsStatic);
 
 /// <summary>
