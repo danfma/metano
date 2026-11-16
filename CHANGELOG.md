@@ -413,9 +413,13 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `[CallerArgumentExpression]` parameter name: `ArgumentNullException.ThrowIfNull`,
   `ArgumentException.ThrowIfNullOrEmpty` / `ThrowIfNullOrWhiteSpace` and the
   `ArgumentOutOfRangeException.ThrowIf*` comparisons. A comparison guard maps only for the
-  values the runtime compares as .NET does (numbers and `char`; for the ordered ones also `bool`
-  and the date and time types; any `T` for `ThrowIfEqual` / `ThrowIfNotEqual`); over another `T`
-  (`string`, `Guid`, a user type) it reports `MS0001`. Any other static member of an exception
+  values the runtime compares as .NET does: the sign guards for numbers and `char` (the sign
+  bit: `-0`, a `decimal` `-0.0m` and `NaN` are negative); the ordered ones also for `bool` and
+  the date and time types; `ThrowIfEqual` / `ThrowIfNotEqual` for those, strings, `Guid`,
+  enums, transpiled records and structs (`[PlainObject]` ones included) and tuples of them,
+  compared by value. Over another `T` (an ordered `string` or `Guid`, a class, an array,
+  `object`, `DateTimeOffset` for equality, a type parameter) it reports `MS0001`. The message
+  texts are .NET's, but values quoted inside a message are formatted by JavaScript, not .NET (`true` for `True`, an ISO date for `1/2/2024`, `PT5M` for a `TimeSpan`'s `00:05:00`, `1e+21`, `[object Object]` for a record). Any other static member of an exception
   type (`ObjectDisposedException.ThrowIf`) reports `MS0001`, as in 2.x.
 - The runtime throws its own classes everywhere it reproduces a .NET failure: 32-bit integer
   division by zero (`DivideByZeroException`), `decimal.Parse(s)` and `decimal.Parse(s, provider)`
@@ -449,7 +453,12 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   interpolation).
 - A call to a method or constructor with a `[CallerArgumentExpression]` parameter (baseline
   FR-052) passes the caller's argument text, as C# does; an omitted default before that
-  parameter is passed as `undefined` in TypeScript, so the callee's own default applies. 2.x
+  parameter is passed as `undefined` in TypeScript when the callee is a transpiled,
+  non-virtual method or constructor that applies the same default itself, and as the default
+  the call site sees otherwise (an `[Import]` / `[External]` callee, a delegate, an interface
+  or virtual member, whose implementation may declare another default). Not filled yet:
+  extension syntax on a transpiled extension method, `base(...)` / `this(...)` initializers,
+  an explicit `.Invoke(...)` and `[Emit]` callees. 2.x
   passed `null`, and wrote a skipped enum default with a lower-cased member name
   (`Level.high`).
 

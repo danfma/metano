@@ -299,10 +299,16 @@ Product requirements added after the migration (normative; each one is traced by
   `[CallerArgumentExpression("p")]` parameter that the call leaves out MUST pass the source text
   of the call's argument for `p`, positional or named, in every target, as the C# compiler
   does; this covers the argument guards (`ArgumentNullException.ThrowIfNull(x)` passes `"x"`).
-  An argument written for the caller-expression parameter itself keeps the call's own value. A defaulted parameter the call omits before the caller-expression parameter
-  is passed as `undefined` in TypeScript, so the callee applies its default, and as its default
-  value in Dart. Limitation: a transpiled extension method called with extension syntax
-  (`x.Ext()`, lowered to a module function) does not get the text. Traced by the "Caller
+  An argument written for the caller-expression parameter itself keeps the call's own value. A
+  defaulted parameter the call omits before the caller-expression parameter MUST receive the
+  default the call site sees, the one declared by the method the call binds to. In TypeScript a
+  callee that applies that same default itself (a transpiled, non-virtual method or constructor
+  that is not `[Import]`, `[External]`, `[Emit]` or declaration-only) is passed `undefined`;
+  any other callee (one of those, a delegate, an interface, abstract, virtual or override
+  member, whose runtime implementation may declare a different default) is passed the value.
+  Dart always passes the value. Not filled yet: a transpiled extension method called with
+  extension syntax (`x.Ext()`, lowered to a module function), a `base(...)` / `this(...)`
+  constructor initializer, an explicit delegate `.Invoke(...)` and an `[Emit]` callee. Traced by the "Caller
   argument expressions" row of the feature-support matrix.
 
 - **FR-051** (numeric format strings and interpolation clauses, #323, #308): A format clause
