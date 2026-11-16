@@ -20,7 +20,7 @@ import { Dictionary, List, Queue, Stack } from "metano-runtime/system/collection
 const xs = List.of([1, 2]);
 xs.add(3);
 xs.set(0, 9);
-xs.update(1, (v) => v + 5);
+xs.set(1, xs.get(1) + 5);
 const last = xs.fromEnd(1);
 const mid = xs.slice(1);
 const byName = Dictionary.assign([["a", new Point(1, 2)]]);
@@ -71,28 +71,47 @@ const forJs = xs.toArray();
 
 Every crossing is spelled in the C# source; assigning `xs` itself to a `JsArray<int>` (or passing it to an interop parameter of that type) is a C# type error, so the compiler never inserts a conversion. Where a local's type is printed, `Span<int>` is `Span<number>` (a type-only import from `metano-runtime/system/collections`) and `ReadOnlySpan<int>` is `ReadonlyArray<number>`. The free helpers handle a `null` list (FR-056).
 
-## `foreach` over a `List<T>` (`list-foreach-lowering.ts`, FR-057)
+## `foreach` over a `List<T>` (`list-foreach-lowering.ts`, `list-foreach-break-after-mutation.ts`, `list-foreach-return.ts`, FR-057)
 
 ```csharp
-var sum = 0; foreach (var x in xs) { sum += x; }   // xs: List<int>
+var sum = 0; foreach (var x in xs) { sum += x; }                       // xs: List<int>, a local
+foreach (var x in this.Items) { if (x < 0) { this.Items.Remove(x); break; } }
+foreach (var x in xs) { if (x == target) return true; }
 ```
 
 ```ts
-import { throwModified } from "metano-runtime/system/collections";
-
 let sum = 0;
 {
   const $a = xs._items; const $v = xs._version; const $n = $a.length;
-  for (let $i = 0; $i < $n; $i++) {
+  for (let $i = 0; ; $i++) {
     if (xs._version !== $v || $a.length !== $n) throwModified();
+    if ($i === $n) break;
     const x = $a[$i];
     sum += x;
   }
-  if (xs._version !== $v || $a.length !== $n) throwModified();
+}
+{
+  const $l = this.items;                // not a local, parameter or `this`: evaluated once
+  const $a = $l._items; const $v = $l._version; const $n = $a.length;
+  for (let $i = 0; ; $i++) {
+    if ($l._version !== $v || $a.length !== $n) throwModified();
+    if ($i === $n) break;
+    const x = $a[$i];
+    if (x < 0) { this.items.remove(x); break; }   // leaves with no further check: no throw, as in .NET
+  }
+}
+{
+  const $a = xs._items; const $v = xs._version; const $n = $a.length;
+  for (let $i = 0; ; $i++) {
+    if (xs._version !== $v || $a.length !== $n) throwModified();
+    if ($i === $n) break;
+    const x = $a[$i];
+    if (x === target) return true;
+  }
 }
 ```
 
-The temporaries follow the printer's naming rules; a `foreach` over any other `IEnumerable<T>` stays `for..of`. How the generated checks read FR-058's constant (directly, or through a constant exported by the runtime) is fixed in 011c; with the constant set to `false` the bundle contains neither check (FR-043 verifies it per bundler).
+`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). Each check line carries FR-058's inline guard (`(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity. A `foreach` over any other `IEnumerable<T>` stays `for..of`.
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 

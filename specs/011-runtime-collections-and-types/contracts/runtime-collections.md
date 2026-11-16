@@ -90,7 +90,7 @@ export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
 
 ## Classes
 
-Every class: `implements Iterable<T>`; does not extend `Array`; `Array.isArray(x) === false`; exposes `count`; declares **no `#private` fields** (proxies used by Solid / Vue / MobX cannot see through them); keeps its storage in **non-enumerable string-keyed fields** defined in the constructor through `Object.defineProperty` (`_items`, `_version`, `_comparer`, and the per-class slot `$typeArguments$List` / `$typeArguments$Dictionary` / … when passed; FR-002, FR-008), so that `Object.keys`, spread, `JSON.stringify` and the structural `equals` of `system/equality` see nothing; implements `toJSON()`; keeps a `_version` counter for the enumeration-invalidation rule (spec Edge Cases); carries the lazy `$runtimeType` getter of FR-018, which returns a data literal (a collection is reachable through `is List<T>` only via `instanceof`, so the getter is read only by `getRuntimeType`, which specializes it from the most-derived `$typeArguments$<Class>` slot).
+Every class: `implements Iterable<T>`; does not extend `Array`; `Array.isArray(x) === false`; exposes `count`; declares **no `#private` fields** (proxies used by Solid / Vue / MobX cannot see through them); keeps its storage in **non-enumerable string-keyed fields** defined in the constructor through `Object.defineProperty` (`_items`, `_version`, `_comparer`, and the per-class slot `$typeArguments$List` / `$typeArguments$Dictionary` / …, always defined and `undefined` when no descriptors are passed, so each construction path has one hidden class; FR-002, FR-008), so that `Object.keys`, spread, `JSON.stringify` and the structural `equals` of `system/equality` see nothing; implements `toJSON()`; keeps a `_version` counter for the enumeration-invalidation rule (spec Edge Cases); carries the lazy `$runtimeType` getter of FR-018, which returns a data literal (a collection is reachable through `is List<T>` only via `instanceof`, so the getter is read only by `getRuntimeType`, which specializes it from the most-derived `$typeArguments$<Class>` slot).
 
 ### Common signatures
 
@@ -101,7 +101,7 @@ constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[]);
 static of<T>(items: readonly T[], typeArguments?: readonly RuntimeType[]): List<T>;    // collection initializers / expressions
 static from<T>(items: Iterable<T>, typeArguments?): List<T>;                           // copy
 static withCapacity<T>(capacity: number, typeArguments?): List<T>;                     // capacity hint dropped, argument evaluated once
-static adopt<T>(array: T[], options?: { fixedSize?: boolean; readOnly?: boolean }, typeArguments?): List<T>; // zero copy: the array is the backing store
+static adopt<T>(array: T[], options?: { fixedSize?: boolean }, typeArguments?): List<T>; // zero copy: the array is the backing store
 ```
 
 `List.of([1, 2])` with no descriptors is the common emission; `List.of([1, 2], [Int32Type])` only when the compilation asks about `List` (FR-008).
@@ -129,28 +129,42 @@ export class List<T> implements IList<T> {
   asJsArray(): T[];                                           // the backing array itself; AsJsArray() (FR-056)
   asSpan(): Span<T>;                                          // the backing array itself; AsSpan() / CollectionsMarshal.AsSpan(list)
   asReadOnlySpan(): ReadonlyArray<T>;                         // the backing array itself; AsReadOnlySpan()
-  asReadOnly(): ReadOnlyList<T>;                              // a live read-only view (stage 011h, FR-054)
   toJSON(): T[];
   [Symbol.iterator](): Iterator<T>;
 }
 ```
 
 - `get` / `set` / `update` / `insert` / `removeAt` / `fromEnd` / `removeRange` / `getRange` throw `ArgumentOutOfRangeException` with .NET's message (`Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')`).
-- **Check form and emission** (FR-057, research R17): `get` / `set` test `(index >>> 0) >= this._items.length` and call a cold module-level `throwOOR(index)`; generated code calls `get` / `set` (no inline check). `foreach` over a static `List<T>` is lowered by the compiler to `{ const $a = list._items; const $v = list._version; const $n = $a.length; for (let $i = 0; $i < $n; $i++) { if (list._version !== $v || $a.length !== $n) throwModified(); const x = $a[$i]; … } if (list._version !== $v || $a.length !== $n) throwModified(); }`, with `throwModified` exported from `system/collections`; `_items` and `_version` are documented as internal fields that generated code may read. A non-integer index from hand-written JS (`1.5`) returns `undefined` (documented). Under FR-058's constant set to `false`, the bounds compares, the `_version` stores and the loop's checks are removed.
-- A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. With `readOnly: true` (a read-only source, such as `ReadOnlyList` over a native array, D27) `set`, `update`, `sort` and `reverse` throw `NotSupportedException` too (and every mutator throws with the read-only message instead of the fixed-size one; the exact .NET message per source type is pinned by the 011c runtime tests), as read-only types' `IList<T>` members do in .NET. `asArray(list)` (reflection helper) returns its backing array.
+- **ABI and `foreach` lowering** (FR-057): `_items` and `_version` are declared in the public `.d.ts` and are read by generated code; indexers emit `get` / `set` (FR-010). `foreach (var x in <receiver>)` over a static `List<T>` lowers to:
+
+  ```ts
+  {
+    const $l = <receiver>;            // a temporary unless the receiver is a local, a parameter or `this`
+    const $a = $l._items; const $v = $l._version; const $n = $a.length;
+    for (let $i = 0; ; $i++) {
+      if ($l._version !== $v || $a.length !== $n) throwModified(); // every MoveNext, the final one included
+      if ($i === $n) break;
+      const x = $a[$i];
+      /* body: a `break`, `return`, `throw` or `goto` leaves without a further check */
+    }
+  }
+  ```
+
+  `continue` in the body reaches the next step's check. With FR-058's constant defined as `false`, the check line is eliminated. The design that meets NFR-001 (one unsigned bounds compare, cold `throwOOR` / `throwModified`, constructor field order) is in plan.md § Benchmark plan and research R17.
+- A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. `asArray(list)` (reflection helper) returns its backing array.
 - `contains` / `indexOf` / `remove` / `lastIndexOf` / `binarySearch` use `defaultEquals` with a `===` fast path for primitives.
 - `sort()` without a comparison uses `Comparer<T>.Default` semantics for numbers, strings, booleans, temporal values (by tag) and `IComparable` implementers (`compareTo`); otherwise throws `InvalidOperationException` (`Failed to compare two elements in the array.`).
-- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` and the backing array's `length` recorded at the start (two integer compares per `next()`), so a length change made through `asJsArray()` is detected too (FR-057). Element writes through a view bump nothing: through `asSpan()` this matches .NET (a span write bumps nothing); through `asJsArray()` it diverges, because .NET's `JsArray<T>` writes through the list's indexer and bumps the version (documented, FR-057). A future indexed-loop lowering of `foreach` (the indexer experiment of NFR-001) MUST keep both checks.
+- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` and the backing array's `length` recorded at the start (two integer compares per `next()`), so a length change made through `asJsArray()` is detected too (FR-057). Element writes through a view bump nothing: through `asSpan()` this matches .NET (a span write bumps nothing); through `asJsArray()` it diverges, because .NET's `JsArray<T>` writes through the list's indexer and bumps the version (documented, FR-057). The lowered `foreach` above performs the same two checks (normative, FR-057).
 - **One backing array for life** (FR-057): `_items` is assigned once (in the constructor, or by `adopt`) and every member mutates it in place (`clear` sets `length = 0`, `sort` / `reverse` are in place); `count` reads `_items.length`. `asJsArray()`, `asSpan()` and `asReadOnlySpan()` return `_items` itself (`list.asSpan() === list.asJsArray()`, and the free helpers return the same object), so they never go stale (unlike a .NET span after a reallocation, documented). Nothing polices a view at run time: `Span<T>` and `ReadonlyArray<T>` restrict what typed TS may do, a cast does not; a write past the end through `asJsArray()` leaves holes that `get` returns as `undefined` (documented).
 - Memory: one backing array plus `count` = the array's `length`; no per-element structures. A C# `List<T>` member not listed here (for example `Capacity`, `TrimExcess`, `EnsureCapacity`, `ForEach` with index) reports `MS0001` at the call site (FR-001).
 
 ### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`; stage 011h)
 
-A live view over an `IList<T>` or a native array: `IReadOnlyList<T>` members, `count` live, `toJSON`; its `IList<T>` / `ICollection<T>` mutators throw `NotSupportedException`. `list.asReadOnly()`, `Array.AsReadOnly(arr)` and `new ReadOnlyCollection<T>(source)` build it.
+Its own class (`instanceof List` is `false`): a live view over an `IList<T>` or a native array, `IReadOnlyList<T>` members, `count` live, `toJSON`; its `IList<T>` / `ICollection<T>` mutators throw `NotSupportedException` with .NET's message (`Collection is read-only.`, pinned by the 011h runtime tests). Built by `new ReadOnlyList(source)` (`Array.AsReadOnly(arr)`, `new ReadOnlyCollection<T>(source)`) and by the free helper `asReadOnly(list)` (`list.AsReadOnly()`), both in `read-only-list.ts`; `List` has no `asReadOnly` member, so a bundle using only `List` pulls no `ReadOnlyList`.
 
 ### `ImmutableList<T>` (`ImmutableList<T>`, `ImmutableArray<T>`, OD-17; stage 011h)
 
-`IReadOnlyList<T>` and `IImmutableList<T>`: `add`, `addRange`, `insert`, `remove`, `removeAt`, `removeAll`, `setItem`, `clear`, `sort` return a **new** `ImmutableList<T>` (copy-on-write over one array, O(n) per mutator; .NET's tree gives O(log n), a documented divergence revisitable by benchmark); `static empty<T>()` (memoized, lazily) and `static of(...)` / `from(...)`; `toBuilder()` returns a `List<T>`-backed builder whose `toImmutable()` copies; `toJSON`.
+`IReadOnlyList<T>` and `IImmutableList<T>`: `add`, `addRange`, `insert`, `remove`, `removeAt`, `removeAll`, `setItem`, `clear`, `sort` return a **new** `ImmutableList<T>` (copy-on-write over one array, O(n) per mutator; .NET's tree gives O(log n), a documented divergence revisitable by benchmark); `static empty<T>()` (memoized, lazily) and `static of(...)` / `from(...)`; `toJSON`. Builders (`ToBuilder()`, `CreateBuilder()`) are `ImmutableListBuilder<T>` (likewise `ImmutableHashSetBuilder<T>`, `ImmutableDictionaryBuilder<K,V>`): small classes that hold a `List` / `HashSet` / `Dictionary` (composition; `instanceof List` is `false`), each in its own module; `ToImmutable()` lowers to the free helper `toImmutableList(builder)` (`toImmutableHashSet`, `toImmutableDictionary`), which copies. Repeated `Add` is O(n²); FR-054's 1e4-element budget bounds it.
 
 ### `ImmutableHashSet<T>`, `ImmutableDictionary<K, V>` (stage 011h)
 
@@ -166,7 +180,7 @@ Two parallel sorted arrays with binary search: O(log n) `get` / `containsKey` / 
 
 ### `ConcurrentDictionary<K, V>` (stage 011h)
 
-`class ConcurrentDictionary<K, V> extends Dictionary<K, V>` adding `getOrAdd(key, valueOrFactory)`, `addOrUpdate(key, addValueOrFactory, updateFactory)`, `tryAdd`, `tryUpdate(key, newValue, comparisonValue)`, `tryRemove(key): readonly [true, V] | readonly [false, null]`, `toArray()` (a `[K, V][]` snapshot), `isEmpty`. Each call runs to completion without yielding, so it is atomic (JavaScript shares no object between threads; FR-054). Its enumerator does **not** throw on modification: like .NET's, it is safe while the dictionary changes and is not a moment-in-time snapshot.
+`class ConcurrentDictionary<K, V> implements IDictionary<K, V>`, a **sibling** of `Dictionary` (both compose the internal `hash-core.ts`; `instanceof Dictionary` is `false`, as `is Dictionary<K,V>` is in .NET), with the dictionary surface plus `getOrAdd(key, valueOrFactory)`, `addOrUpdate(key, addValueOrFactory, updateFactory)`, `tryAdd`, `tryUpdate(key, newValue, comparisonValue)`, `tryRemove(key): readonly [true, V] | readonly [false, null]`, `toArray()` (a `[K, V][]` snapshot), `isEmpty`. Each call runs to completion without yielding, so it is atomic (JavaScript shares no object between threads; FR-054). Its enumerator does **not** throw on modification: like .NET's, it is safe while the dictionary changes and is not a moment-in-time snapshot. `keys` / `values` return **snapshots** (new read-only collections), as .NET's `Keys` / `Values` do, not live views.
 
 ### `Dictionary<K, V>`
 
@@ -226,7 +240,7 @@ The C# calls lower to these free helpers (each tree-shakes on its own); the `Lis
 
 ## Descriptor factories (`descriptors.ts`, FR-017)
 
-`listType(elem)`, `dictionaryType(key, value)`, `hashSetType(elem)`, `queueType(elem)`, `stackType(elem)`, `immutableListType(elem)`, `readOnlyListType(elem)`, `immutableHashSetType(elem)`, `immutableDictionaryType(key, value)`, `sortedSetType(elem)`, `sortedDictionaryType(key, value)`, `sortedListType(key, value)`, `concurrentDictionaryType(key, value)` (these with stage 011h), and the interface descriptors `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType`, each memoized on argument identity and carrying `variance` (`invariant` for classes, `covariant` for the `out` parameters of the read-only interfaces and `IEnumerable<out T>`). Importing `List` alone does not pull them (separate module; measured).
+`listType(elem)`, `dictionaryType(key, value)`, `hashSetType(elem)`, `queueType(elem)`, `stackType(elem)`, `immutableListType(elem)`, `readOnlyListType(elem)`, `immutableHashSetType(elem)`, `immutableDictionaryType(key, value)`, `sortedSetType(elem)`, `sortedDictionaryType(key, value)`, `sortedListType(key, value)`, `concurrentDictionaryType(key, value)` (these with stage 011h), and the interface descriptors `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType`, and (stage 011h) `iImmutableListType`, `iImmutableSetType`, `iImmutableDictionaryType`, each memoized on argument identity and carrying `variance` (`invariant` for classes, `covariant` for the `out` parameters of the read-only interfaces and `IEnumerable<out T>`). Importing `List` alone does not pull them (separate module; measured).
 
 ## Type-argument descriptors (FR-008)
 
@@ -238,18 +252,18 @@ Passed only when the compilation asks a runtime question about that collection k
 
 ## Performance and size budgets (NFR-001, NFR-008)
 
-| Operation / entry | Budget (absolute overhead per operation, hot-helper shape, larger of Node.js and Bun, checks on) | Rationale |
+| Operation / entry | Budget (NFR-001: normalized overhead per operation on the reference machine, hot-helper shape, default build, larger of Node.js and Bun) | Rationale |
 |---|---|---|
-| `List.get` / `set` | ≤ 1.0 ns each over `a[i]` / `a[i] = v` | one unsigned bounds compare (cold throw) and, for `set`, the `_version` store; measured 0.75 / 0.88 ns (research R17) |
-| `list[i] op= v` | ≤ 1.5 ns | measured 0.89 ns |
-| `get` at a polymorphic site | ≤ 2.0 ns | measured 1.41 ns (Bun) |
-| `List.add` | ≤ 0.5 ns over `push` | delegates to `push`, bumps `_version`; measured 0.19 ns |
-| lowered `foreach` over `List` | ≤ 0.5 ns per element over `for..of` | indexed loop, version and length compares; measured 0.23 ns with the version compare |
-| `Dictionary` / `ConcurrentDictionary` / `HashSet` primitive keys | ≤ 2.0 ns over `Map` / `Set` | native fast path; estimated, confirmed in 011c |
-| `Queue` / `Stack` | ≤ 1.5 ns over a native array | estimated, confirmed in 011c |
-| record keys, sorted and immutable classes | recorded per release; sorted: time per op at 1e5 ≤ 2.5× at 1e3 | no native equivalent |
+| `List.get` / `set` | ≤ 1.0 ns each over `a[i]` / `a[i] = v` | bounds compare and, for `set`, the `_version` store; R17 measured 0.45 (sequential) / 0.74 (data-driven) / 0.82 ns for the `defineProperty` + unsigned-compare variant |
+| `list[i] op= v`, direct form / closure fallback | ≤ 1.5 ns / ≤ 3.0 ns | 0.86 ns measured / closure form estimated |
+| `get` at a polymorphic site | ≤ 2.0 ns | 1.08 ns measured (Node) |
+| `List.add` | ≤ 0.5 ns over `push` | delegates to `push`, bumps `_version`; 0.05 ns measured |
+| lowered `foreach` over `List` | ≤ 0.5 ns per element over `for..of` | 0.23 ns measured on the plain-field class with the version compare only |
+| `Dictionary` / `ConcurrentDictionary` / `HashSet` primitive keys | ≤ 2.0 ns over the named `Map` / `Set` calls | estimated, confirmed in 011c |
+| `Queue` / `Stack` | ≤ 1.5 ns over `push` / `a[head++]` / `pop` / `at(-1)` | estimated, confirmed in 011c |
+| record keys, sorted and immutable classes | recorded per release; `SortedSet` / `SortedDictionary`: time per op at 1e5 ≤ 2.5× at 1e3; `SortedList`: reads only; immutable: 1e4 repeated `Add` ≤ 50 ms | no native equivalent |
 | `Queue.dequeue` | O(1) | ring buffer (today O(n)) |
-| Checks off (FR-058) | bounds compare and `_version` access absent from the bundle | bundle-time constant, default on |
+| Checks off (FR-058) | no `_version` string and no `>>>0` in `get` / `set` in the bun / esbuild bundle | inline `typeof __METANO_CHECKS__` guard, default on |
 | `List` alone, minified + gz | ≤ 2.5 KB | measured 1.67 KB with the full surface (research R13) |
 | `Dictionary` / `HashSet` / `Queue` / `Stack` alone | ≤ 3.0 / 1.6 / 1.2 / 1.2 KB | NFR-008 |
 | `ReadOnlyList` / `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary` / `SortedSet` / `SortedDictionary` / `SortedList` / `ConcurrentDictionary` alone | ≤ 0.8 / 2.0 / 2.0 / 2.5 / 2.5 / 3.0 / 2.5 / 3.5 KB | NFR-008, proposed |

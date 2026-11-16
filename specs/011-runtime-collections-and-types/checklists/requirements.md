@@ -12,15 +12,15 @@
 
 ## Requirement Completeness
 
-- [ ] Open decisions resolved. **OD-1–OD-22** are open with a recommendation each, except **OD-10**, which the maintainer resolved in the first critic pass (implicit `dynamic` conversions unchecked, explicit casts checked when answerable).
+- [x] Open decisions resolved. **OD-1–OD-23** were decided by the maintainer on 2026-11-02 (OD-10 earlier, in the first critic pass; OD-21 lives in contracts/diagnostics.md), and **D20–D27** on 2026-11-16.
 - [x] Every FR is grounded in today's code (research R1–R6 cite the file and line of the behaviour it changes) or in a measurement (R13 for every emission shape, R14 for equality)
 - [x] Requirements are testable and unambiguous (each FR maps to a golden, a diagnostic test, a runtime test, a benchmark budget, a bundle budget or a documentation file)
 - [x] Success criteria are measurable (SC-001–SC-010)
 - [x] All acceptance scenarios are defined (US1–US9)
 - [x] Edge cases are identified (fixed-size adopted arrays and `asArray`, erased element descriptors, identity loss, duplicated package copies, primitives, `NullReferenceException`, non-Error throwables and `AbortError`, catch-filter ordering, `params` / optional with hidden parameters, overloads vs override groups, `Type` surface, `new T()`, `default(T)`, `dynamic` operators and verbatim naming on Metano objects, `Js.Code` statement form and string-literal holes, `UnsafeCast` on .NET, enumeration invalidation, dictionary order after removals, cross-package majors)
-- [x] Scope is clearly bounded (every collection ships in 3.0.0, FR-054 (D24, 2026-11-16); deferred: structural sharing for the immutable classes and a chunked sorted array unless a benchmark requires them, a structural comparer for tuple-typed elements, `Target.Language` folding, `Dart.Code`, Dart `Stack` and exception bodies, every-`arr[i]` checks, member metadata, `TypeError` translation, flat exports for pre-existing namespaces (#361) and union companions)
+- [x] Scope is clearly bounded (every collection ships in 3.0.0, FR-054 (D24, 2026-11-16); deferred: structural sharing for the immutable classes and a chunked sorted array unless a benchmark requires them, a structural comparer for tuple-typed elements, `Target.Language` folding, `Dart.Code`, Dart `Stack` and exception bodies, every-`arr[i]` checks, member metadata, flat exports for 010's union companions; #361 is a 3.0.0 release gate, not deferred (FR-040); `TypeError` → `NullReferenceException` is specified by FR-052)
 - [x] Dependencies and assumptions identified (PR #298, specs 009 / 010, #328, #334 / #355 for `MS0044`, #361, #291, #296, #173, #175, the measured bundler versions)
-- [x] Consistency across spec / plan / contracts / data-model checked (FR numbers unique, ascending within each group, FR-054–FR-058 closing group A; diagnostic codes `MS0045`–`MS0055`, OD numbers, stage order 011a–011g with 011b before 011c, Dart mapping in every stage)
+- [x] Consistency across spec / plan / contracts / data-model checked (FR numbers unique, ascending within each group, FR-054–FR-058 closing group A; diagnostic codes `MS0045`–`MS0058`, OD numbers, stage order 011a, 011b, 011c, 011h, 011d–011g, Dart mapping in every stage)
 - [x] No contradiction with specs 009 / 010: the interaction table lists every requirement of theirs that changes (including 010 D13 / FR-042 companions, FR-017 / US7-7, ADR-0009's registry, the `$type` rename and duplicated-package identity) and why both remain satisfiable
 
 ## Feature Readiness
@@ -30,7 +30,7 @@
 - [x] Baseline feature-support matrix rows added (Planned)
 - [x] ADR-0027 added (own runtime collections + descriptors vs Array subclasses, wrappers with adapters, Deepkit-style transformer, symbol-keyed statics / namespaces, a guard registry, structural equality); `0026` stays reserved by spec 010
 - [x] Issue created: #335; follow-ups #361 (pre-existing namespace emissions) and #368 (flat `sideEffects: false`) filed, both on the 3.0.0 release gate; #369 filed for the `[Flags]` JSON converter (spec 009)
-- [ ] Open decisions resolved with the maintainer before `/speckit-tasks`
+- [x] Open decisions resolved with the maintainer before `/speckit-tasks` (OD-1–OD-23, D20–D27)
 - [ ] Benchmark (NFR-001) run and recorded before stage 011c merges
 - [ ] Tree-shaking suite (FR-043) green from stage 011a on, with its side-effect self-test proving the check is not vacuous
 - [ ] FR-043 allowlist empty before 3.0.0 ships (#361 landed)
