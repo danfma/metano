@@ -1892,4 +1892,30 @@ public class DartBackendTests
             .That(files["probe.dart"])
             .Contains("Probe.text(count + 1, Level.high, 'count + 1')");
     }
+
+    /// <summary>
+    /// Every Dart string literal path escapes the same characters: a
+    /// <c>[StringEnum]</c> / <c>[Name]</c> value and interpolation text too, so
+    /// a <c>$</c> is no interpolation and a line break no raw newline.
+    /// </summary>
+    [Test]
+    public async Task EveryStringLiteralPath_EscapesTheSameCharacters()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum]
+            public enum Currency { [Name("$usd")] Usd, [Name("it's\\")] Quoted }
+
+            [Transpile]
+            public static class Labels
+            {
+                public static string Line(int count) => $"$ {count}\n'\\";
+            }
+            """
+        );
+
+        await Assert.That(files["currency.dart"]).Contains("'\\$usd'");
+        await Assert.That(files["currency.dart"]).Contains("'it\\'s\\\\'");
+        await Assert.That(files["labels.dart"]).Contains("'\\$ ${count}\\n\\'\\\\'");
+    }
 }
