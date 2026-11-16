@@ -1,23 +1,28 @@
 /**
- * Runtime helpers for the C# `TryParse(string, out T)` family on the primitive types. The
- * compiler lowers each `out` parameter into the second tuple element (see the declarative
- * mappings under `Metano/Runtime/Parsing.cs`), so `int.TryParse(s, out var n)` becomes
- * `const [ok, n] = tryParseInt32(s)`.
+ * Runtime helpers for the C# `Parse(string)` and `TryParse(string, out T)` families on the
+ * primitive types. The compiler lowers each `out` parameter into the second tuple element
+ * (see the declarative mappings under `Metano/Runtime/Parsing.cs`), so
+ * `int.TryParse(s, out var n)` becomes `const [ok, n] = tryParseInt32(s)`, and `int.Parse(s)`
+ * becomes `parseInt32(s)`, which throws .NET's exceptions where `Number.parseInt` returns
+ * `12` for `"12abc"`.
  *
  * Parsing follows the invariant culture: `.` is the decimal separator, `,` the thousands
  * separator, and only the whitespace .NET accepts around a number (tab, line feed,
  * vertical tab, form feed, carriage return and space) is ignored. On failure the value is
- * C#'s `default` for the type (`0` or `false`).
+ * C#'s `default` for the type (`0` or `false`). The integer parsers take the `NumberStyles`
+ * flags the compiler folds from the C# argument, as `long.Parse` does (`int64-parsing.ts`).
  */
+import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
+import { FormatException } from "./exceptions/format-exception.ts";
+import {
+  DEFAULT_INTEGER_STYLE,
+  parseInRange,
+  tryParseInRange,
+  type IntegerRange,
+} from "./int64-parsing.ts";
 
 /** The result of a `TryParse` call: whether it succeeded and the parsed value. */
 export type ParseResult<T> = readonly [found: boolean, value: T];
-
-const INT32_MIN = -2147483648;
-const INT32_MAX = 2147483647;
-
-/** `NumberStyles.Integer`: an optional sign followed by decimal digits. */
-const INTEGER = /^[+-]?\d+$/;
 
 /**
  * `NumberStyles.Float | NumberStyles.AllowThousands`: an optional sign, digits with
@@ -36,13 +41,118 @@ const SPECIAL_FLOATS = new Map<string, number>([
   ["-∞", Number.NEGATIVE_INFINITY],
 ]);
 
-/** Mirrors `int.TryParse(string, out int)`. */
-export function tryParseInt32(text: string | null | undefined): ParseResult<number> {
-  const integer = parseInteger(text);
+/** The integer type of `bits` bits, signed or not, named `typeName` in .NET's overflow message. */
+function integerRange(bits: number, signed: boolean, typeName: string): IntegerRange {
+  const span = 1n << BigInt(bits);
 
-  return integer !== null && integer >= INT32_MIN && integer <= INT32_MAX
-    ? [true, Number(integer)]
-    : [false, 0];
+  return {
+    min: signed ? -(span >> 1n) : 0n,
+    max: signed ? (span >> 1n) - 1n : span - 1n,
+    bits,
+    message: `Value was either too large or too small for ${typeName}.`,
+    family: "integers",
+  };
+}
+
+const INT32 = integerRange(32, true, "an Int32");
+const UINT32 = integerRange(32, false, "a UInt32");
+const INT16 = integerRange(16, true, "an Int16");
+const UINT16 = integerRange(16, false, "a UInt16");
+const BYTE = integerRange(8, false, "an unsigned byte");
+const SBYTE = integerRange(8, true, "a signed byte");
+
+/**
+ * Mirrors `int.Parse(string)` and its `NumberStyles` overloads.
+ *
+ * @throws ArgumentNullException for `null`.
+ * @throws FormatException for text outside the style's grammar.
+ * @throws OverflowException for a value outside `int`.
+ */
+export function parseInt32(text: string | null | undefined, style = DEFAULT_INTEGER_STYLE): number {
+  return Number(parseInRange(text, style, INT32));
+}
+
+/** Mirrors `uint.Parse(string)` and its `NumberStyles` overloads. */
+export function parseUInt32(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): number {
+  return Number(parseInRange(text, style, UINT32));
+}
+
+/** Mirrors `short.Parse(string)` and its `NumberStyles` overloads. */
+export function parseInt16(text: string | null | undefined, style = DEFAULT_INTEGER_STYLE): number {
+  return Number(parseInRange(text, style, INT16));
+}
+
+/** Mirrors `ushort.Parse(string)` and its `NumberStyles` overloads. */
+export function parseUInt16(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): number {
+  return Number(parseInRange(text, style, UINT16));
+}
+
+/** Mirrors `byte.Parse(string)` and its `NumberStyles` overloads. */
+export function parseByte(text: string | null | undefined, style = DEFAULT_INTEGER_STYLE): number {
+  return Number(parseInRange(text, style, BYTE));
+}
+
+/** Mirrors `sbyte.Parse(string)` and its `NumberStyles` overloads. */
+export function parseSByte(text: string | null | undefined, style = DEFAULT_INTEGER_STYLE): number {
+  return Number(parseInRange(text, style, SBYTE));
+}
+
+/** Mirrors `int.TryParse(string, out int)` and its `NumberStyles` overloads. */
+export function tryParseInt32(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): ParseResult<number> {
+  return numberResult(tryParseInRange(text, style, INT32));
+}
+
+/** Mirrors `uint.TryParse(string, out uint)` and its `NumberStyles` overloads. */
+export function tryParseUInt32(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): ParseResult<number> {
+  return numberResult(tryParseInRange(text, style, UINT32));
+}
+
+/** Mirrors `short.TryParse(string, out short)` and its `NumberStyles` overloads. */
+export function tryParseInt16(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): ParseResult<number> {
+  return numberResult(tryParseInRange(text, style, INT16));
+}
+
+/** Mirrors `ushort.TryParse(string, out ushort)` and its `NumberStyles` overloads. */
+export function tryParseUInt16(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): ParseResult<number> {
+  return numberResult(tryParseInRange(text, style, UINT16));
+}
+
+/** Mirrors `byte.TryParse(string, out byte)` and its `NumberStyles` overloads. */
+export function tryParseByte(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): ParseResult<number> {
+  return numberResult(tryParseInRange(text, style, BYTE));
+}
+
+/** Mirrors `sbyte.TryParse(string, out sbyte)` and its `NumberStyles` overloads. */
+export function tryParseSByte(
+  text: string | null | undefined,
+  style = DEFAULT_INTEGER_STYLE,
+): ParseResult<number> {
+  return numberResult(tryParseInRange(text, style, SBYTE));
+}
+
+function numberResult(result: readonly [found: boolean, value: bigint]): ParseResult<number> {
+  return [result[0], Number(result[1])];
 }
 
 /**
@@ -80,11 +190,45 @@ export function tryParseBoolean(text: string | null | undefined): ParseResult<bo
   return [word === "false", false];
 }
 
-/** The integer `text` spells, or `null` when it is not an integer. */
-function parseInteger(text: string | null | undefined): bigint | null {
-  const trimmed = trimNumberWhitespace(text);
+/**
+ * Mirrors `double.Parse(string)` (and `float.Parse`, whose values the generated code holds as
+ * `number` too).
+ *
+ * @throws ArgumentNullException for `null`.
+ * @throws FormatException for text outside the grammar of {@link tryParseFloat64}.
+ */
+export function parseFloat64(text: string | null | undefined): number {
+  if (text == null) {
+    throw new ArgumentNullException("s");
+  }
 
-  return trimmed !== null && INTEGER.test(trimmed) ? BigInt(trimmed) : null;
+  const [found, value] = tryParseFloat64(text);
+
+  if (!found) {
+    throw new FormatException(`The input string '${text}' was not in a correct format.`);
+  }
+
+  return value;
+}
+
+/**
+ * Mirrors `bool.Parse(string)`.
+ *
+ * @throws ArgumentNullException for `null`.
+ * @throws FormatException for text that is neither `true` nor `false`.
+ */
+export function parseBoolean(text: string | null | undefined): boolean {
+  if (text == null) {
+    throw new ArgumentNullException("value");
+  }
+
+  const [found, value] = tryParseBoolean(text);
+
+  if (!found) {
+    throw new FormatException(`String '${text}' was not recognized as a valid Boolean.`);
+  }
+
+  return value;
 }
 
 /**

@@ -6,6 +6,7 @@
 
 import { checkRows } from "./conformance-rows.ts";
 import {
+  numberParsingRegistry,
   parsingRegistry,
   stringRegistry,
   temporalRegistry,
@@ -15,6 +16,7 @@ const files = {
   "strings.json": stringRegistry,
   "temporal.json": temporalRegistry,
   "parsing.json": parsingRegistry,
+  "number-parsing.json": numberParsingRegistry,
 } as const;
 
 const mismatches = Object.entries(files).flatMap(([file, registry]) =>

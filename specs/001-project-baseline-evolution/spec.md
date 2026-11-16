@@ -490,7 +490,7 @@ Product requirements added after the migration (normative; each one is traced by
   (`tests/BclReference`). Not covered: `AsSpan` / `Slice` on strings and spans, culture-aware
   comparison. Traced by the "String members with .NET arguments" row of the feature-support
   matrix.
-### Key Entities
+- **FR-054** (construction and parsing members, #673, #668): `new TimeSpan(...)` from
   components, `TimeSpan.Zero` and the single-argument `TimeSpan.FromX`, `new DateTimeOffset(...)`
   from components, a `DateTime` or ticks plus an offset, `Guid.Parse`, `decimal.TryParse`, and
   `Parse` / `TryParse` of `int`, `uint`, `short`, `ushort`, `byte`, `sbyte` and `Parse` of

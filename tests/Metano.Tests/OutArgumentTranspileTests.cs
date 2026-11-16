@@ -281,9 +281,11 @@ public class OutArgumentTranspileTests
                 "abstract tryLoad(key: string): readonly [found: true, value: string] "
                     + "| readonly [found: false, value: string | null];"
             );
+
         await Assert
             .That(result["store.ts"])
             .Contains("measure(text: string): readonly [length: number] {");
+
         await Assert
             .That(result["empty-store.ts"])
             .Contains(
@@ -424,6 +426,7 @@ public class OutArgumentTranspileTests
         await Assert
             .That(output)
             .Contains("if (check && ([, a] = tryGetValue(counts, \"a\", 0))[0]) {");
+
         await Assert
             .That(output)
             .Contains("if (check && ([, b] = tryGetValue(counts, \"b\", 0))[0]) {");
@@ -449,6 +452,7 @@ public class OutArgumentTranspileTests
         await Assert
             .That(output)
             .Contains("tryTags(key: string): readonly [found: boolean, tags: HashSet<string>];");
+
         await Assert.That(output).Contains("HashSet");
         await Assert.That(output).Contains("from \"metano-runtime\"");
     }
@@ -488,6 +492,7 @@ public class OutArgumentTranspileTests
                     return check && ([, w] = tryGetValue(words, key, null))[0] && w.length > 3;
                 """
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -628,6 +633,7 @@ public class OutArgumentTranspileTests
                     }
                 """
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -637,6 +643,7 @@ public class OutArgumentTranspileTests
                       do {
                 """
             );
+
         await Assert
             .That(output)
             .Contains("} while (([, v] = tryGetValue(values, n, 0))[0] && v > 0);");
@@ -666,6 +673,7 @@ public class OutArgumentTranspileTests
         var output = result["twice.ts"];
 
         await Assert.That(output.Split("let v: number;").Length - 1).IsEqualTo(2);
+
         await Assert
             .That(output)
             .Contains(
@@ -745,6 +753,7 @@ public class OutArgumentTranspileTests
                   })();
                 """
             );
+
         await Assert.That(output).Contains("const [$found0, n] = tryParseInt32(text);");
     }
 
@@ -1006,6 +1015,7 @@ public class OutArgumentTranspileTests
                     const [r, c] = Order.foo($result0);
                 """
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -1037,6 +1047,7 @@ public class OutArgumentTranspileTests
                       const [$found0, x] = Order.bar();
                 """
             );
+
         await Assert.That(output).Contains("const [$result1, a] = Order.foo(1);");
     }
 
@@ -1084,7 +1095,7 @@ public class OutArgumentTranspileTests
             [Transpile]
             public class Unmapped
             {
-                public int Styles(string s) => int.TryParse(s, NumberStyles.Any, null, out var n) ? n : 0;
+                public double Styles(string s) => double.TryParse(s, NumberStyles.Any, null, out var n) ? n : 0;
 
                 public bool Remove(ConcurrentDictionary<string, int> d) => d.TryRemove("a", out _);
             }
@@ -1096,7 +1107,8 @@ public class OutArgumentTranspileTests
             .Select(d => d.Message)
             .ToList();
 
-        await Assert.That(messages).Contains(m => m.StartsWith("'int.TryParse' takes 'out'"));
+        await Assert.That(messages).Contains(m => m.StartsWith("'double.TryParse' takes 'out'"));
+
         await Assert
             .That(messages)
             .Contains(m => m.Contains("ConcurrentDictionary<TKey, TValue>.TryRemove'"));

@@ -718,6 +718,12 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   `Guid.Parse(s)` is `UUID.parse(s)`, which lowercases and checks the text, so two spellings
   of one GUID compare equal (it was `UUID.create(s)`, which kept the input's case).
   `decimal.TryParse(s, out d)` is `tryParseDecimal(s, Decimal)` (it reported MS0001).
+- **`int.Parse` and friends (#668).** `int.Parse(s)` was emitted as `Int32.parse(s)`, an
+  undeclared identifier; `Parse` / `TryParse` of `int`, `uint`, `short`, `ushort`, `byte` and
+  `sbyte` (the `string`, provider and `NumberStyles` overloads) and `Parse` of `double`,
+  `float` and `bool` call `parseInt32` … `parseBoolean`, which throw `FormatException` and
+  `OverflowException` as .NET does. A constant `NumberStyles` outside the supported set reports
+  `MS0066`, as for `long`.
 _2026-11-03_
 
 

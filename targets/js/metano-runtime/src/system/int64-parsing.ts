@@ -4,7 +4,8 @@
  * default), `HexNumber`, `Integer | AllowThousands` and `Number`. The grammar
  * is .NET's, not `BigInt(string)`'s, which accepts `""`, `0x` prefixes and
  * other whitespace. The compiler folds the `NumberStyles` argument to its
- * flags value.
+ * flags value. The same grammar, over the narrower integer types, backs
+ * `number-parsing.ts` ({@link parseInRange}).
  */
 import {
   ArgumentNullException,
@@ -28,9 +29,6 @@ const INTEGER_THOUSANDS_STYLE = 71;
 
 /** `NumberStyles.Number`: also a trailing sign, group separators and a decimal point. */
 const NUMBER_STYLE = 111;
-
-/** A 64-bit hex value has at most 16 significant digits. */
-const MAX_HEX_DIGITS = 16;
 
 const INT64_RANGE_MESSAGE = "Value was either too large or too small for an Int64.";
 
@@ -62,12 +60,62 @@ type ParsedNumber = {
 /** What a parse produced: a value, or the exception `Parse` throws and `TryParse` reports as `false`. */
 type ParseOutcome = { readonly value: bigint } | { readonly error: Error };
 
-/** The bounds and message of the target type. */
-type Int64Range = { readonly min: bigint; readonly max: bigint; readonly message: string };
+/**
+ * An integer type to parse into: its bounds, its width in bits (a hex value is read as that
+ * many bits of two's complement), the message of the `OverflowException` for a value outside
+ * it, and how the `NotSupportedException` for an unsupported style names the type family.
+ */
+export type IntegerRange = {
+  readonly min: bigint;
+  readonly max: bigint;
+  readonly bits: number;
+  readonly message: string;
+  readonly family: string;
+};
 
-const SIGNED: Int64Range = { min: INT64_MIN, max: INT64_MAX, message: INT64_RANGE_MESSAGE };
+const SIGNED: IntegerRange = {
+  min: INT64_MIN,
+  max: INT64_MAX,
+  bits: 64,
+  message: INT64_RANGE_MESSAGE,
+  family: "64-bit integers",
+};
 
-const UNSIGNED: Int64Range = { min: 0n, max: UINT64_MAX, message: UINT64_RANGE_MESSAGE };
+const UNSIGNED: IntegerRange = {
+  min: 0n,
+  max: UINT64_MAX,
+  bits: 64,
+  message: UINT64_RANGE_MESSAGE,
+  family: "64-bit integers",
+};
+
+/** `Integer`, the style `Parse(string)` uses. */
+export const DEFAULT_INTEGER_STYLE = INTEGER_STYLE;
+
+/**
+ * `T.Parse(text, style)` for the integer type `range` describes.
+ *
+ * @throws ArgumentNullException for `null`.
+ * @throws FormatException for text outside the style's grammar.
+ * @throws OverflowException for a value outside `range`, or a non-zero fraction.
+ * @throws NotSupportedException for a style the runtime does not implement.
+ */
+export function parseInRange(
+  text: string | null | undefined,
+  style: number,
+  range: IntegerRange,
+): bigint {
+  return parsedValue(parse(text, style, range));
+}
+
+/** `T.TryParse(text, style, out value)`: `[false, 0n]` wherever {@link parseInRange} throws. */
+export function tryParseInRange(
+  text: string | null | undefined,
+  style: number,
+  range: IntegerRange,
+): Int64ParseResult {
+  return parseResult(parse(text, style, range));
+}
 
 /**
  * `long.Parse(text, style)`.
@@ -120,12 +168,12 @@ function parseResult(outcome: ParseOutcome): Int64ParseResult {
   return "error" in outcome ? [false, 0n] : [true, outcome.value];
 }
 
-function parse(text: string | null | undefined, style: number, range: Int64Range): ParseOutcome {
+function parse(text: string | null | undefined, style: number, range: IntegerRange): ParseOutcome {
   const pattern = GRAMMARS.get(style);
 
   if (pattern === undefined) {
     throw new NotSupportedException(
-      `NumberStyles value ${style} is not supported for 64-bit integers in TypeScript.`,
+      `NumberStyles value ${style} is not supported for ${range.family} in TypeScript.`,
     );
   }
 
@@ -162,7 +210,7 @@ function parsedNumber(body: string, negative: boolean): ParsedNumber {
   };
 }
 
-function decimalValue(number: ParsedNumber, range: Int64Range): ParseOutcome {
+function decimalValue(number: ParsedNumber, range: IntegerRange): ParseOutcome {
   const value = number.negative ? -number.integer : number.integer;
   const negativeZeroOfUnsigned = number.negative && range.min === 0n && number.hasDecimalPoint;
   const fits = value >= range.min && value <= range.max && !negativeZeroOfUnsigned;
@@ -172,17 +220,17 @@ function decimalValue(number: ParsedNumber, range: Int64Range): ParseOutcome {
     : { error: new OverflowException(range.message) };
 }
 
-/** Up to 16 significant hex digits, read as two's complement for `long`. */
-function hexValue(digits: string, range: Int64Range): ParseOutcome {
+/** At most `bits / 4` significant hex digits, read as two's complement for a signed type. */
+function hexValue(digits: string, range: IntegerRange): ParseOutcome {
   const significant = digits.replace(/^0+/, "");
 
-  if (significant.length > MAX_HEX_DIGITS) {
+  if (significant.length > range.bits / 4) {
     return { error: new OverflowException(range.message) };
   }
 
   const unsigned = BigInt(`0x${significant || "0"}`);
 
-  return { value: range.min === 0n ? unsigned : BigInt.asIntN(64, unsigned) };
+  return { value: range.min === 0n ? unsigned : BigInt.asIntN(range.bits, unsigned) };
 }
 
 /** A whole-string grammar: white space, the number, white space. */
