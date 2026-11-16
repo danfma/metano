@@ -132,9 +132,18 @@ public static class IrPropertyExtractor
             IsRequired: prop.IsRequired,
             OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
             EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, context.Target),
-            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, context.Compilation)
+            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, context.Compilation),
+            IsAssignedByStaticConstructor: IsAssignedByStaticConstructor(prop, context.Compilation)
         );
     }
+
+    private static bool IsAssignedByStaticConstructor(
+        IPropertySymbol prop,
+        Compilation? compilation
+    ) =>
+        prop is { IsStatic: true, SetMethod: null }
+        && compilation is not null
+        && IrStaticConstructorExtractor.WritesMember(prop, compilation);
 
     private static bool DetectGetterBody(PropertyDeclarationSyntax? syntax)
     {

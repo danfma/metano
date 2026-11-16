@@ -67,7 +67,7 @@ public static class IrFieldExtractor
     ) =>
         field is { IsStatic: true, IsReadOnly: true }
         && compilation is not null
-        && IrStaticConstructorExtractor.WritesField(field, compilation);
+        && IrStaticConstructorExtractor.WritesMember(field, compilation);
 
     private static IrExpression? TryExtractInitializer(
         IFieldSymbol field,

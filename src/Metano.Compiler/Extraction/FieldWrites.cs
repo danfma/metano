@@ -5,19 +5,19 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Finds the statements of a body that write a field: an assignment (simple or
-/// compound), an increment or decrement, or a <c>ref</c> / <c>out</c> argument.
-/// Symbol-based: only writes that bind to the field itself count, so
-/// <c>Map["a"] = 1</c> (an indexer write through the field) does not.
+/// Finds the statements of a body that write a field or property: an assignment
+/// (simple or compound), an increment or decrement, or a <c>ref</c> / <c>out</c>
+/// argument. Symbol-based: only writes that bind to the member itself count, so
+/// <c>Map["a"] = 1</c> (an indexer write through the member) does not.
 /// </summary>
 internal static class FieldWrites
 {
-    public static bool Within(SyntaxNode body, IFieldSymbol field, SemanticModel model) =>
+    public static bool Within(SyntaxNode body, ISymbol member, SemanticModel model) =>
         body.DescendantNodes()
             .Select(WrittenExpression)
             .OfType<ExpressionSyntax>()
             .Any(written =>
-                SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(written).Symbol, field)
+                SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(written).Symbol, member)
             );
 
     private static ExpressionSyntax? WrittenExpression(SyntaxNode node) =>
