@@ -15,7 +15,7 @@
 - [ ] Open decisions resolved. **OD-1–OD-22** are open with a recommendation each, except **OD-10**, which the maintainer resolved in the first critic pass (implicit `dynamic` conversions unchecked, explicit casts checked when answerable).
 - [x] Every FR is grounded in today's code (research R1–R6 cite the file and line of the behaviour it changes) or in a measurement (R13 for every emission shape, R14 for equality)
 - [x] Requirements are testable and unambiguous (each FR maps to a golden, a diagnostic test, a runtime test, a benchmark budget, a bundle budget or a documentation file)
-- [x] Success criteria are measurable (SC-001–SC-008)
+- [x] Success criteria are measurable (SC-001–SC-009)
 - [x] All acceptance scenarios are defined (US1–US9)
 - [x] Edge cases are identified (fixed-size adopted arrays and `asArray`, erased element descriptors, identity loss, duplicated package copies, primitives, `NullReferenceException`, non-Error throwables and `AbortError`, catch-filter ordering, `params` / optional with hidden parameters, overloads vs override groups, `Type` surface, `new T()`, `default(T)`, `dynamic` operators and verbatim naming on Metano objects, `Js.Code` statement form and string-literal holes, `UnsafeCast` on .NET, enumeration invalidation, dictionary order after removals, cross-package majors)
 - [x] Scope is clearly bounded (deferred: the collections beyond `List` / `HashSet` / `Dictionary` / `Queue` / `Stack` to stage 011h (FR-054, 2026-11-16), `Target.Language` folding, sorted collections, `Dart.Code`, Dart `Stack` and exception bodies, every-`arr[i]` checks, member metadata, `TypeError` translation, flat exports for pre-existing namespaces (#361) and union companions)
