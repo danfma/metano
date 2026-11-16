@@ -131,3 +131,124 @@ using Metano.Annotations;
         typeof(int),
     ]
 )]
+
+// TimeSpan components (#673): `new TimeSpan(0, 5, 0)` is five minutes, where
+// `new Temporal.Duration(0, 5, 0)` reads its arguments as years, months and weeks. The runtime
+// builds the duration from the component sum and throws .NET's `ArgumentOutOfRangeException`
+// past `TimeSpan.MaxValue`. A constructor that takes components has no `long` overload, so
+// the argument count picks the template; the `(long ticks)` constructor is mapped above.
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "timeSpanFromParts(0, $0, $1, $2)",
+    RuntimeImports = "timeSpanFromParts",
+    WhenArgCount = 3
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "timeSpanFromParts($0, $1, $2, $3)",
+    RuntimeImports = "timeSpanFromParts",
+    WhenArgCount = 4
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "timeSpanFromParts($0, $1, $2, $3, $4)",
+    RuntimeImports = "timeSpanFromParts",
+    WhenArgCount = 5
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "timeSpanFromParts($0, $1, $2, $3, $4, $5)",
+    RuntimeImports = "timeSpanFromParts",
+    WhenArgCount = 6
+)]
+
+// TimeSpan.Zero, and the single-argument FromDays / FromHours / FromMinutes / FromSeconds /
+// FromMilliseconds / FromMicroseconds (the `double`, `int` and `long` overloads): the runtime
+// scales in ticks, truncates a fraction toward zero as .NET does, and throws its
+// `ArgumentException` (NaN), `OverflowException` and `ArgumentOutOfRangeException`. The
+// .NET 9 overloads that combine several units (`FromHours(2, 30)`) stay unmapped (MS0001).
+[assembly: MapProperty(
+    typeof(TimeSpan),
+    nameof(TimeSpan.Zero),
+    JsTemplate = "timeSpanZero",
+    RuntimeImports = "timeSpanZero"
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.FromDays),
+    JsTemplate = "timeSpanFromDays($0)",
+    RuntimeImports = "timeSpanFromDays",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.FromHours),
+    JsTemplate = "timeSpanFromHours($0)",
+    RuntimeImports = "timeSpanFromHours",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.FromMinutes),
+    JsTemplate = "timeSpanFromMinutes($0)",
+    RuntimeImports = "timeSpanFromMinutes",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.FromSeconds),
+    JsTemplate = "timeSpanFromSeconds($0)",
+    RuntimeImports = "timeSpanFromSeconds",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.FromMilliseconds),
+    JsTemplate = "timeSpanFromMilliseconds($0)",
+    RuntimeImports = "timeSpanFromMilliseconds",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.FromMicroseconds),
+    JsTemplate = "timeSpanFromMicroseconds($0)",
+    RuntimeImports = "timeSpanFromMicroseconds",
+    WhenArgCount = 1
+)]
+
+// DateTimeOffset constructors (#673): a `Temporal.ZonedDateTime` at a fixed offset. The runtime
+// checks .NET's ranges and the offset (whole minutes, within fourteen hours) and throws its
+// exceptions. The `(DateTime, TimeSpan)` form cannot check the `DateTime` kind: the
+// `Temporal.PlainDateTime` carries none.
+[assembly: MapMethod(
+    typeof(DateTimeOffset),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "dateTimeOffset($0, $1, $2, $3, $4, $5, 0, $6)",
+    RuntimeImports = "dateTimeOffset",
+    WhenArgCount = 7
+)]
+[assembly: MapMethod(
+    typeof(DateTimeOffset),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "dateTimeOffset($0, $1, $2, $3, $4, $5, $6, $7)",
+    RuntimeImports = "dateTimeOffset",
+    WhenArgCount = 8
+)]
+[assembly: MapMethod(
+    typeof(DateTimeOffset),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "dateTimeOffsetFromDateTime($0, $1)",
+    RuntimeImports = "dateTimeOffsetFromDateTime",
+    WhenParameterTypes = [typeof(DateTime), typeof(TimeSpan)]
+)]
+[assembly: MapMethod(
+    typeof(DateTimeOffset),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "dateTimeOffsetFromTicks($0, $1)",
+    RuntimeImports = "dateTimeOffsetFromTicks",
+    WhenParameterTypes = [typeof(long), typeof(TimeSpan)]
+)]

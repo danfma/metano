@@ -61,3 +61,24 @@ export function parseDecimalText(text: string | null | undefined): string {
 function formatException(text: string): FormatException {
   return new FormatException(`The input string '${text}' was not in a correct format.`);
 }
+
+/**
+ * `decimal.TryParse(text, out value)` (the `(string, out decimal)` and `(string,
+ * IFormatProvider, out decimal)` overloads): `[true, value]` for text {@link parseDecimalText}
+ * accepts, `[false, 0]` for anything else, `null` included. `create` is the `Decimal` class
+ * the generated code imports, so the runtime holds no reference to decimal.js.
+ */
+export function tryParseDecimal<TDecimal>(
+  text: string | null | undefined,
+  create: new (value: string) => TDecimal,
+): readonly [found: boolean, value: TDecimal] {
+  try {
+    return [true, new create(parseDecimalText(text))];
+  } catch (error) {
+    if (error instanceof FormatException || error instanceof OverflowException || text == null) {
+      return [false, new create("0")];
+    }
+
+    throw error;
+  }
+}

@@ -22,11 +22,14 @@ using Metano.Annotations;
     RuntimeImports = "UUID"
 )]
 
-// Guid.Parse(s) → UUID.create(s) — wraps an existing string as a UUID.
+// Guid.Parse(s) → UUID.parse(s): accepts the D, N, B and P forms in either letter case and
+// returns the lowercase `D` text `Guid.ToString()` prints, so two spellings of one GUID compare
+// equal (#673); a malformed text throws `FormatException`. `UUID.create` stays the unchecked
+// wrapper for trusted strings.
 [assembly: MapMethod(
     typeof(Guid),
     nameof(Guid.Parse),
-    JsTemplate = "UUID.create($0)",
+    JsTemplate = "UUID.parse($0)",
     RuntimeImports = "UUID"
 )]
 
