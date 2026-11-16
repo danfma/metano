@@ -79,6 +79,11 @@ public sealed class MapMethodAttribute(Type declaringType, string csharpMethod) 
     /// Full JavaScript expression template with <c>$this</c>, <c>$0</c>, <c>$1</c>, …
     /// placeholders. Mutually exclusive with <see cref="JsMethod"/>.
     ///
+    /// <c>$Type</c> stands for the receiver's type by its own exported name (never a
+    /// <c>using</c> alias of it) and imports it as a value, so a static mapping that
+    /// builds the type declares it instead of naming it in the text:
+    /// <c>JsTemplate = "new $Type(parseDecimalText($0))"</c> on <c>decimal.Parse</c>.
+    ///
     /// Templates also support <c>$T0</c>, <c>$T1</c>, … placeholders which resolve to
     /// the call site's generic method type-argument names. So
     /// <c>JsTemplate = "$T0[$0 as keyof typeof $T0]"</c> applied to

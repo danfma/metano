@@ -42,6 +42,6 @@ export class CounterApp extends StatefulWidget<Counter> {
   }
 
   static mount(containerId: string): void {
-    App.run(containerId, new CounterApp());
+    App.run<Counter>(containerId, new CounterApp());
   }
 }

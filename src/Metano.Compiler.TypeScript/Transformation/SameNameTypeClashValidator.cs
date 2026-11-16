@@ -19,6 +19,7 @@ internal sealed class SameNameTypeClashValidator(
 )
 {
     private readonly Dictionary<SyntaxTree, SemanticModel> _models = [];
+
     private readonly Lazy<IReadOnlySet<string>> _ambiguousNames = new(() =>
         AmbiguousNames(transpilableTypes, context)
     );
@@ -73,11 +74,12 @@ internal sealed class SameNameTypeClashValidator(
         };
 
         // Only a type spelled by its own name: a `using` alias prints under the alias.
-        return type is { ContainingType: null } own
+        return
+            type is { ContainingType: null } own
             && own.Name == node.Identifier.ValueText
             && context.TranspilableTypes.ContainsKey(context.ResolveTsName(own))
-                ? (own.OriginalDefinition, node.GetLocation())
-                : null;
+            ? (own.OriginalDefinition, node.GetLocation())
+            : null;
     }
 
     private static bool Same(INamedTypeSymbol first, INamedTypeSymbol second) =>

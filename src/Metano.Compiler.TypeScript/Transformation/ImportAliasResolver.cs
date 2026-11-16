@@ -93,7 +93,11 @@ public static class ImportAliasResolver
         if (layerB is not null)
             foreach (var (canonical, alias) in layerB)
                 merged[canonical] = alias;
-        return UsingAliasScope.Create(merged, layerA?.OtherAliases);
+
+        // A `using` alias the merged map displaces (an [ImportAlias] pin replaces the
+        // printed alias of its type) still spells that type in value positions, so it
+        // stays resolvable: the scope keeps it as a further alias.
+        return UsingAliasScope.Create(merged, layerA?.AliasToCanonical);
     }
 
     private static IEnumerable<INamedTypeSymbol> EnumerateFileLocalCarriers(INamespaceSymbol root)

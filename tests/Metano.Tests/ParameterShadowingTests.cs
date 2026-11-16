@@ -117,7 +117,7 @@ public class ParameterShadowingTests
         );
 
         await Assert.That(files["mod.ts"]).Contains("run(id$: number)");
-        await Assert.That(files["mod.ts"]).Contains("return id(id$);");
+        await Assert.That(files["mod.ts"]).Contains("return id<number>(id$);");
     }
 
     [Test]

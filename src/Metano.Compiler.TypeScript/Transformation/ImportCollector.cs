@@ -139,20 +139,28 @@ public sealed class ImportCollector(
         // the alias text only; recover the canonical via the per-file scope
         // so the import line resolves to the canonical and emits the
         // matching `{ Canonical as Alias }` form.
-        var aliasOverrides = new Dictionary<string, string>(StringComparer.Ordinal);
+        //
+        // Every alias a file spells binds an import (`Widget as W1`, `Widget as
+        // W2`), each with its own type-only flag. The canonical name binds plainly
+        // only when the text names it too (a value position keeps the source
+        // spelling), which `spelledCanonically` records before the substitution.
+        var spelledCanonically = referencedTypes.ToHashSet(Ordinal);
+        var aliasBindings = new Dictionary<string, List<(string Alias, bool IsValue)>>(Ordinal);
         if (IrToTsTypeMapper.UsingAliases is { } activeScope)
         {
             foreach (var name in referencedTypes.ToList())
             {
-                if (
-                    !activeScope.AliasToCanonical.TryGetValue(name, out var canonical)
-                    || aliasOverrides.ContainsKey(canonical)
-                )
+                if (!activeScope.AliasToCanonical.TryGetValue(name, out var canonical))
                     continue;
                 referencedTypes.Add(canonical);
-                if (valueTypes.Contains(name))
-                    valueTypes.Add(canonical);
-                aliasOverrides[canonical] = name;
+
+                if (!aliasBindings.TryGetValue(canonical, out var bindings))
+                {
+                    bindings = [];
+                    aliasBindings[canonical] = bindings;
+                }
+
+                bindings.Add((name, valueTypes.Contains(name)));
                 referencedTypes.Remove(name);
                 valueTypes.Remove(name);
             }
@@ -375,10 +383,7 @@ public sealed class ImportCollector(
         // Same strategy the cross-package loop above uses — keeps barrel-first output
         // clean and Biome-friendly (e.g., all-type-only → whole-statement `import type`
         // rather than per-name `{ type A, type B }`).
-        var localByPath = new Dictionary<
-            string,
-            (List<string> Names, HashSet<string> TypeOnlyNames, Dictionary<string, string> Aliases)
-        >(StringComparer.Ordinal);
+        var localByPath = new Dictionary<string, ImportBindings>(StringComparer.Ordinal);
 
         // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes
         // by the *referenced* identifier (the key used to look up the entry), but
@@ -393,22 +398,80 @@ public sealed class ImportCollector(
         {
             if (!localByPath.TryGetValue(importPath, out var bucket))
             {
-                bucket = (
-                    new List<string>(),
-                    new HashSet<string>(StringComparer.Ordinal),
-                    new Dictionary<string, string>(StringComparer.Ordinal)
-                );
+                bucket = new ImportBindings();
                 localByPath[importPath] = bucket;
             }
-            if (!bucket.Names.Contains(name))
-                bucket.Names.Add(name);
-            if (typeOnly)
-                bucket.TypeOnlyNames.Add(name);
-            else
-                bucket.TypeOnlyNames.Remove(name);
-            if (aliasOverrides.TryGetValue(name, out var aliasName))
-                bucket.Aliases[name] = aliasName;
+
+            bucket.Add(name, alias: null, typeOnly);
         }
+
+        // A project type: bound under every `using` alias the file spells for it, and
+        // plainly only when the file also names it by its own name.
+        void AddLocalType(string importPath, string canonical, string tsName, bool typeOnly)
+        {
+            if (!aliasBindings.TryGetValue(canonical, out var aliases))
+            {
+                AddLocal(importPath, tsName, typeOnly);
+
+                return;
+            }
+
+            if (!localByPath.TryGetValue(importPath, out var bucket))
+            {
+                bucket = new ImportBindings();
+                localByPath[importPath] = bucket;
+            }
+
+            foreach (var (alias, isValue) in aliases)
+                bucket.Add(tsName, alias, typeOnly: !isValue);
+
+            // A same-named [NoContainer] factory owns the plain spelling.
+            if (
+                spelledCanonically.Contains(canonical)
+                && !_context.NoContainerFunctionExports.ContainsKey(canonical)
+            )
+                bucket.Add(tsName, alias: null, typeOnly);
+        }
+
+        void ImportErasableExport(string name, NoContainerExport erasableExport)
+        {
+            // Cross-assembly entry — route through the originating
+            // [EmitPackage] subpath instead of a project-relative file path.
+            if (erasableExport.CrossPackageOrigin is { } crossOrigin)
+            {
+                // An import line is actually being emitted for this package —
+                // promote the resolver's staged version hint into a real
+                // package.json dependency (mirrors the cross-package origin
+                // loop above). Without this the [NoContainer] facade's package
+                // is dropped from #dependencies.
+                _typeMappingContext.ConfirmCrossPackageDependency(crossOrigin.PackageName);
+
+                var crossPath =
+                    crossOrigin.SubPath.Length > 0
+                        ? $"{crossOrigin.PackageName}/{crossOrigin.SubPath}"
+                        : crossOrigin.PackageName;
+
+                AddLocal(crossPath, name, typeOnly: false);
+
+                return;
+            }
+
+            // Same emit target — no import needed.
+            var erasableOwner = erasableExport.Owner;
+
+            if (erasableOwner.Namespace == currentNs && erasableOwner.FileName == currentFileName)
+                return;
+
+            var fnPath = _context.PathNaming.ComputeRelativeImportPath(
+                currentNs,
+                erasableOwner.Namespace,
+                erasableOwner.FileName
+            );
+
+            AddLocal(fnPath, name, typeOnly: false);
+        }
+
+        var importedAliasedTypes = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
         {
@@ -514,8 +577,12 @@ public sealed class ImportCollector(
             // Skip when the name shows up only because a `using` alias
             // remapped a colliding canonical type — the reference belongs
             // to the imported type, not to the local factory that happens
-            // to share the same emitted name.
-            if (aliasOverrides.ContainsKey(typeName))
+            // to share the same emitted name. A name the text also spells as
+            // itself is the factory's too, and the aliased type still binds
+            // below.
+            var namesAliasedType = aliasBindings.ContainsKey(typeName);
+
+            if (namesAliasedType && !spelledCanonically.Contains(typeName))
             {
                 // fall through to the transpilable-type branch
             }
@@ -524,37 +591,10 @@ public sealed class ImportCollector(
                 && importedNames.Add(typeName)
             )
             {
-                // Cross-assembly entry — route through the originating
-                // [EmitPackage] subpath instead of a project-relative file path.
-                if (erasableExport.CrossPackageOrigin is { } crossOrigin)
-                {
-                    // An import line is actually being emitted for this package —
-                    // promote the resolver's staged version hint into a real
-                    // package.json dependency (mirrors the cross-package origin
-                    // loop above). Without this the [NoContainer] facade's package
-                    // is dropped from #dependencies.
-                    _typeMappingContext.ConfirmCrossPackageDependency(crossOrigin.PackageName);
-                    var crossPath =
-                        crossOrigin.SubPath.Length > 0
-                            ? $"{crossOrigin.PackageName}/{crossOrigin.SubPath}"
-                            : crossOrigin.PackageName;
-                    AddLocal(crossPath, typeName, typeOnly: false);
+                ImportErasableExport(typeName, erasableExport);
+
+                if (!namesAliasedType)
                     continue;
-                }
-                // Same emit target — no import needed.
-                var erasableOwner = erasableExport.Owner;
-                if (
-                    erasableOwner.Namespace == currentNs
-                    && erasableOwner.FileName == currentFileName
-                )
-                    continue;
-                var fnPath = _context.PathNaming.ComputeRelativeImportPath(
-                    currentNs,
-                    erasableOwner.Namespace,
-                    erasableOwner.FileName
-                );
-                AddLocal(fnPath, typeName, typeOnly: false);
-                continue;
             }
 
             // Transpilable type within the project
@@ -583,7 +623,12 @@ public sealed class ImportCollector(
             if (referencedRef.Namespace == currentNs && referencedRef.FileName == currentFileName)
                 continue;
 
-            if (!importedNames.Add(typeName))
+            // The aliased type binds apart from a same-named factory imported above.
+            var alreadyImported = namesAliasedType
+                ? !importedAliasedTypes.Add(typeName)
+                : !importedNames.Add(typeName);
+
+            if (alreadyImported)
                 continue;
 
             // Path is computed against the FILE name (not the type name) so multiple
@@ -594,7 +639,7 @@ public sealed class ImportCollector(
                 referencedRef.FileName
             );
             var typeOnly = !valueTypes.Contains(typeName);
-            AddLocal(importPath, referencedRef.TsName, typeOnly);
+            AddLocalType(importPath, typeName, referencedRef.TsName, typeOnly);
         }
 
         AddModuleExportImports(
@@ -605,7 +650,7 @@ public sealed class ImportCollector(
             AddLocal
         );
 
-        // Emit one merged TsImport per bucketed local path. Three-case form:
+        // Emit one merged TsImport per bucketed local path (see ImportBindings.ToImport):
         //   - all type-only → `import type { A, B } from "..."`       (whole statement)
         //   - all value     → `import { A, B } from "..."`            (plain)
         //   - mixed         → `import { A, type B } from "..."`       (per-name)
@@ -614,20 +659,7 @@ public sealed class ImportCollector(
         foreach (
             var (importPath, bucket) in localByPath.OrderBy(kv => kv.Key, StringComparer.Ordinal)
         )
-        {
-            var allTypeOnly = bucket.TypeOnlyNames.Count == bucket.Names.Count;
-            var anyTypeOnly = bucket.TypeOnlyNames.Count > 0;
-            SortValuesFirst(bucket.Names, bucket.TypeOnlyNames);
-            imports.Add(
-                new TsImport(
-                    bucket.Names.ToArray(),
-                    importPath,
-                    TypeOnly: allTypeOnly,
-                    TypeOnlyNames: !allTypeOnly && anyTypeOnly ? bucket.TypeOnlyNames : null,
-                    Aliases: bucket.Aliases.Count > 0 ? bucket.Aliases : null
-                )
-            );
-        }
+            imports.Add(bucket.ToImport(importPath));
 
         // Template-driven external imports collected from TsTemplate.ExternalImports
         // (e.g., `[Emit("createElement($T0, $0)"), Import("createElement", "inferno-create-element")]`).
@@ -1810,8 +1842,7 @@ public sealed class ImportCollector(
                 // would either be missed entirely or be marked as type-only when they
                 // need to be value imports (e.g., a `new SomeRecord(...)` substituted
                 // into the template).
-                if (template.Receiver is { } receiver)
-                    CollectTemplateReceiver(template.Template, receiver, sink);
+                CollectTemplateReceivers(template, sink);
 
                 foreach (var arg in template.Arguments)
                     CollectFromExpression(arg, sink);
@@ -1867,39 +1898,25 @@ public sealed class ImportCollector(
     }
 
     /// <summary>
-    /// Collects a template's <paramref name="receiver"/> only where it binds a
-    /// name the printed template uses: the <c>$this</c> placeholder prints it,
-    /// and a static mapping whose text names the receiver's type
-    /// (<c>new Decimal(parseDecimalText($0))</c> for <c>decimal.Parse</c>) needs
-    /// that type's canonical, exported binding, never a <c>using</c> alias of
-    /// it. Any other receiver is not printed and imports nothing: a guard's
-    /// exception class, or a type named through an alias (#651).
+    /// Collects the receiver of a template only where the printed template uses it:
+    /// <c>$this</c> prints the receiver, and <c>$Type</c> prints the receiver's type by
+    /// its own exported name, which the template declares instead of the walker guessing
+    /// it from the text. A receiver the template never prints imports nothing: a guard's
+    /// exception class, or a type named through an alias (#651, #675).
     /// </summary>
-    private void CollectTemplateReceiver(
-        string template,
-        TsExpression receiver,
-        ImportCollectionSink sink
-    )
+    private void CollectTemplateReceivers(TsTemplate template, ImportCollectionSink sink)
     {
-        if (TsTemplatePlaceholder.ReferencesReceiver(template))
-        {
+        if (
+            template.Receiver is { } receiver
+            && TsTemplatePlaceholder.ReferencesReceiver(template.Template)
+        )
             CollectFromExpression(receiver, sink);
-            return;
-        }
 
-        if (receiver is not TsTypeReference typeReference)
-            return;
-
-        var root = RootSegment(typeReference.Name);
-
-        var canonical = IrToTsTypeMapper.UsingAliases?.AliasToCanonical.GetValueOrDefault(root)
-            ?? root;
-
-        if (!TsTemplateLexer.NamesIdentifier(template, canonical))
-            return;
-
-        StageOrigin(sink.CrossPackageOrigins, canonical, typeReference.Origin);
-        sink.ValueNames.Add(canonical);
+        if (
+            template.ReceiverType is { } receiverType
+            && TsTemplatePlaceholder.ReferencesReceiverType(template.Template)
+        )
+            CollectFromExpression(receiverType, sink);
     }
 
     /// <summary>

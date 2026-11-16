@@ -147,6 +147,7 @@ public static class PackageJsonWriter
         // values. The transpiler must not flip a hand-curated `type`
         // or `sideEffects` value back on every regeneration.
         WriteIfMissing(root, "type", "module");
+
         SeedOrUpgradeSideEffects(
             root,
             BuildSideEffectModules(files, srcRelative, distDirRelativeToPackageRoot, outputPrefix)
@@ -336,6 +337,7 @@ public static class PackageJsonWriter
     {
         var existing = root["sideEffects"];
         var previous = existing as JsonArray;
+
         var isFlatFalse =
             existing is JsonValue flag && flag.TryGetValue<bool>(out var value) && !value;
 

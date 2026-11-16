@@ -28,12 +28,12 @@ using Metano.Annotations;
 // For high-allocation hot paths the user can hoist their own constant; this default
 // just keeps the call site syntactically equivalent.
 
-[assembly: MapProperty(typeof(decimal), nameof(decimal.Zero), JsTemplate = "new Decimal(0)")]
-[assembly: MapProperty(typeof(decimal), nameof(decimal.One), JsTemplate = "new Decimal(1)")]
-[assembly: MapProperty(typeof(decimal), nameof(decimal.MinusOne), JsTemplate = "new Decimal(-1)")]
+[assembly: MapProperty(typeof(decimal), nameof(decimal.Zero), JsTemplate = "new $Type(0)")]
+[assembly: MapProperty(typeof(decimal), nameof(decimal.One), JsTemplate = "new $Type(1)")]
+[assembly: MapProperty(typeof(decimal), nameof(decimal.MinusOne), JsTemplate = "new $Type(-1)")]
 
 // ─── Parsing ────────────────────────────────────────────────
-// decimal.Parse(s) → new Decimal(parseDecimalText(s)), also for decimal.Parse(s, provider), which
+// decimal.Parse(s) → new $Type(parseDecimalText(s)), also for decimal.Parse(s, provider), which
 // the extractor binds to this overload. The NumberStyles / span overloads keep new Decimal(s).
 // The runtime helper checks .NET's
 // `NumberStyles.Number` grammar and range and throws FormatException / OverflowException /
@@ -44,7 +44,7 @@ using Metano.Annotations;
     typeof(decimal),
     nameof(decimal.Parse),
     WhenParameterTypes = [typeof(string)],
-    JsTemplate = "new Decimal(parseDecimalText($0))",
+    JsTemplate = "new $Type(parseDecimalText($0))",
     RuntimeImports = "parseDecimalText"
 )]
 

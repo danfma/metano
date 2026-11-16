@@ -302,6 +302,14 @@ public sealed record IrCallExpression(
     /// delegate, whose target is the delegate's <c>call</c> member.
     /// </summary>
     public bool InvokesDelegate { get; init; }
+
+    /// <summary>
+    /// Whether the source writes the type arguments (<c>Guard&lt;Shape&gt;(a, b)</c>)
+    /// rather than leaving them to inference. A target whose own inference can
+    /// differ from C#'s (TypeScript infers from the first operand where C#
+    /// unifies them all) passes the written ones through.
+    /// </summary>
+    public bool HasExplicitTypeArguments { get; init; }
 }
 
 /// <summary>
@@ -1082,6 +1090,13 @@ public sealed record IrTemplateExpression(
     IReadOnlyList<IrExternalImport>? ExternalImports = null
 ) : IrExpression
 {
+    /// <summary>
+    /// The type the template's method is declared on, for a template that names it
+    /// (<c>$Type.make($0)</c> on a user <c>[Emit]</c>): the emitted name, never a
+    /// <c>using</c> alias of it. <c>null</c> for a template that has no declaring type.
+    /// </summary>
+    public IrTypeRef? ReceiverType { get; init; }
+
     /// <summary>
     /// The order the source evaluates <see cref="Arguments"/> in, on the
     /// template of a call: see <see cref="IrCallExpression.EvaluationOrder"/>.

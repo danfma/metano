@@ -93,6 +93,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
         )
         {
             EvaluationOrder = ReportedTemplateOrderOf(context, args, templateArgs.Count),
+            ReceiverType = _helpers.MapTypeRef(symbol.ContainingType),
         };
     }
 

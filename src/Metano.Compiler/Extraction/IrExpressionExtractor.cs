@@ -2876,8 +2876,22 @@ public sealed partial class IrExpressionExtractor
         {
             EvaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), args),
             InvokesDelegate = symbol is { MethodKind: MethodKind.DelegateInvoke },
+            HasExplicitTypeArguments = WritesTypeArguments(inv),
         };
     }
+
+    /// <summary>
+    /// Whether the invoked name carries a type argument list in the source
+    /// (<c>M&lt;T&gt;(…)</c>, <c>x.M&lt;T&gt;(…)</c>, <c>x?.M&lt;T&gt;(…)</c>).
+    /// </summary>
+    private static bool WritesTypeArguments(InvocationExpressionSyntax inv) =>
+        inv.Expression switch
+        {
+            GenericNameSyntax => true,
+            MemberAccessExpressionSyntax { Name: GenericNameSyntax } => true,
+            MemberBindingExpressionSyntax { Name: GenericNameSyntax } => true,
+            _ => false,
+        };
 
     /// <summary>
     /// <paramref name="args"/> with the <c>[CallerArgumentExpression]</c> texts
