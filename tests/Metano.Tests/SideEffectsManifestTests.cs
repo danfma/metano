@@ -218,9 +218,11 @@ public class SideEffectsManifestTests
         adopted.AdoptCachedOutput(
             ir,
             compilation,
-            output.Files,
-            output.PackageDependencies,
-            output.ModuleSideEffectFiles
+            new CachedTargetOutput(
+                output.Files,
+                output.PackageDependencies,
+                output.ModuleSideEffectFiles
+            )
         );
 
         var freshRoot = CreateTempDir();

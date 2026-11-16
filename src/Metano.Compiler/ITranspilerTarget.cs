@@ -64,8 +64,8 @@ public interface ITranspilerTarget
 
     /// <summary>
     /// Called by the host instead of <see cref="Transform"/> when the incremental cache
-    /// short-circuits the whole run (ADR-0021): <paramref name="files"/> is the previous
-    /// output, reused byte-for-byte from disk. A target whose post-emit stage reads
+    /// short-circuits the whole run (ADR-0021): <paramref name="cached"/> holds the previous
+    /// output, reused byte-for-byte from disk, and the state the host restored with it. A target whose post-emit stage reads
     /// per-run state (e.g. the TypeScript target's package.json reconciliation) refreshes
     /// whatever of that state it can rebuild without transforming — anything only a
     /// transform discovers is unavailable here, and the target documents how its
@@ -76,17 +76,11 @@ public interface ITranspilerTarget
     /// <param name="compilation">Roslyn compilation, if the active frontend produced one.
     /// The cache path only runs after a successful load, so the C# frontend always
     /// supplies it.</param>
-    /// <param name="files">The reused generated files only; copied assets are not
-    /// included.</param>
-    /// <param name="packageDependencies">The <see cref="TargetOutput.PackageDependencies"/>
-    /// of the run that produced <paramref name="files"/>, restored from the cache.</param>
-    /// <param name="moduleSideEffectFiles">The <see cref="TargetOutput.ModuleSideEffectFiles"/>
-    /// of the run that produced <paramref name="files"/>, restored from the cache.</param>
+    /// <param name="cached">The reused files and the per-run state restored from the
+    /// cache.</param>
     void AdoptCachedOutput(
         IrCompilation ir,
         Compilation? compilation,
-        IReadOnlyList<GeneratedFile> files,
-        IReadOnlyDictionary<string, string> packageDependencies,
-        IReadOnlyList<string> moduleSideEffectFiles
+        CachedTargetOutput cached
     ) { }
 }

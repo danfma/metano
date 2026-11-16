@@ -30,12 +30,10 @@ internal sealed class CacheAdoptionRecorder(TypeScriptTarget inner) : ITranspile
     public void AdoptCachedOutput(
         IrCompilation ir,
         Compilation? compilation,
-        IReadOnlyList<GeneratedFile> files,
-        IReadOnlyDictionary<string, string> packageDependencies,
-        IReadOnlyList<string> moduleSideEffectFiles
+        CachedTargetOutput cached
     )
     {
         AdoptedCachedOutput = true;
-        inner.AdoptCachedOutput(ir, compilation, files, packageDependencies, moduleSideEffectFiles);
+        inner.AdoptCachedOutput(ir, compilation, cached);
     }
 }

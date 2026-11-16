@@ -85,25 +85,17 @@ public static class TranspilerHost
                     options.FilePrefix,
                     options.ShowTimings,
                     totalSw,
-                    out var cachedFiles,
-                    out var cachedPackageDependencies,
-                    out var cachedModuleSideEffectFiles
+                    out var cached
                 )
             )
             {
-                target.AdoptCachedOutput(
-                    ir,
-                    compilation,
-                    cachedFiles,
-                    cachedPackageDependencies,
-                    cachedModuleSideEffectFiles
-                );
+                target.AdoptCachedOutput(ir, compilation, cached);
 
                 // Refresh the MSBuild stamp so the next incremental
                 // build still sees a fresh Outputs timestamp even when
                 // the entire pipeline short-circuited via the cache.
                 WriteStamp(outputDir);
-                return new TranspileResult(true, cachedFiles, 0, 0);
+                return new TranspileResult(true, cached.Files, 0, 0);
             }
         }
 
@@ -319,14 +311,10 @@ public static class TranspilerHost
         string? filePrefix,
         bool showTimings,
         Stopwatch totalSw,
-        out IReadOnlyList<GeneratedFile> cachedFiles,
-        out IReadOnlyDictionary<string, string> cachedPackageDependencies,
-        out IReadOnlyList<string> cachedModuleSideEffectFiles
+        out CachedTargetOutput cached
     )
     {
-        cachedFiles = [];
-        cachedModuleSideEffectFiles = [];
-        cachedPackageDependencies = new Dictionary<string, string>(StringComparer.Ordinal);
+        cached = new CachedTargetOutput([], new Dictionary<string, string>(), []);
         var cache = TranspilationCache.TryRead(outputDir);
         if (cache is null)
             return false;
@@ -358,9 +346,11 @@ public static class TranspilerHost
         if (rehydrated is null)
             return false;
 
-        cachedFiles = rehydrated;
-        cachedPackageDependencies = cache.PackageDependencies;
-        cachedModuleSideEffectFiles = cache.ModuleSideEffectFiles ?? [];
+        cached = new CachedTargetOutput(
+            rehydrated,
+            cache.PackageDependencies,
+            cache.ModuleSideEffectFiles ?? []
+        );
         totalSw.Stop();
         Console.WriteLine(
             $"Metano: incremental cache hit — {cache.OutputHashes.Count} output file(s) reused, no work to do."
