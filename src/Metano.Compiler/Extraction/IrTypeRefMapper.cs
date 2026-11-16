@@ -674,6 +674,41 @@ public static class IrTypeRefMapper
         && !SymbolHelper.HasBranded(named)
         && IsTranspilableType(named, target);
 
+    /// <summary>
+    /// Whether the generated, field-wise equality of <paramref name="type"/>
+    /// is the whole of its equality, read from fields the walk can see: no
+    /// derived type can add state a static type does not show (a struct, a
+    /// record struct, a sealed record), no user <c>Equals</c> replaces the
+    /// generated one, and the definition and its bases come from source, as a
+    /// metadata reference hides the private backing fields.
+    /// </summary>
+    private static bool HasVisibleFieldwiseEquality(INamedTypeSymbol type) =>
+        (type.TypeKind is TypeKind.Struct || type.IsSealed)
+        && !DeclaresOwnEquals(type)
+        && BaseChainOf(type).All(current => !current.DeclaringSyntaxReferences.IsEmpty);
+
+    private static bool DeclaresOwnEquals(INamedTypeSymbol type) =>
+        BaseChainOf(type)
+            .SelectMany(current => current.GetMembers(nameof(Equals)))
+            .Any(member => !member.IsImplicitlyDeclared);
+
+    /// <summary>
+    /// <paramref name="type"/> and the base types its equality reads fields
+    /// from, up to <c>object</c> or <c>ValueType</c>.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> BaseChainOf(INamedTypeSymbol type)
+    {
+        for (
+            var current = type;
+            current
+                is {
+                    SpecialType: not SpecialType.System_Object and not SpecialType.System_ValueType
+                };
+            current = current.BaseType
+        )
+            yield return current;
+    }
+
     private static bool InstanceFieldsHaveEqualityLeaves(
         INamedTypeSymbol type,
         HashSet<IrPrimitive> leaves,
@@ -682,6 +717,9 @@ public static class IrTypeRefMapper
     )
     {
         var definition = type.OriginalDefinition;
+
+        if (!HasVisibleFieldwiseEquality(definition))
+            return false;
 
         if (!visiting.Add(definition))
             return true;
@@ -694,24 +732,10 @@ public static class IrTypeRefMapper
     /// The instance fields a record's or struct's equality compares, the
     /// inherited ones of a derived record included.
     /// </summary>
-    private static IEnumerable<IFieldSymbol> InstanceFieldsOf(INamedTypeSymbol type)
-    {
-        for (
-            var current = type;
-            current
-                is {
-                    SpecialType: not SpecialType.System_Object and not SpecialType.System_ValueType
-                };
-            current = current.BaseType
-        )
-        {
-            foreach (var field in current.GetMembers().OfType<IFieldSymbol>())
-            {
-                if (!field.IsStatic && !field.IsConst)
-                    yield return field;
-            }
-        }
-    }
+    private static IEnumerable<IFieldSymbol> InstanceFieldsOf(INamedTypeSymbol type) =>
+        BaseChainOf(type)
+            .SelectMany(current => current.GetMembers().OfType<IFieldSymbol>())
+            .Where(field => !field.IsStatic && !field.IsConst);
 
     private static IrPrimitive? DetectBrandedUnderlyingPrimitive(INamedTypeSymbol wrapper)
     {
