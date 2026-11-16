@@ -10,6 +10,7 @@ import {
   parsingRegistry,
   stringRegistry,
   temporalRegistry,
+  textRegistry,
 } from "./registries.ts";
 
 const files = {
@@ -17,6 +18,7 @@ const files = {
   "temporal.json": temporalRegistry,
   "parsing.json": parsingRegistry,
   "number-parsing.json": numberParsingRegistry,
+  "text.json": textRegistry,
 } as const;
 
 const mismatches = Object.entries(files).flatMap(([file, registry]) =>

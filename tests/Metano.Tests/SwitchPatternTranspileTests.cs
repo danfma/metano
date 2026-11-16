@@ -442,7 +442,7 @@ public class SwitchPatternTranspileTests
                       if ($s instanceof Circle && $s.radius > 1) {
                         const x = $s.x;
 
-                        return `wide at ${x}`;
+                        return `wide at ${formatDouble(x)}`;
                       }
                 """
             );
@@ -657,7 +657,9 @@ public class SwitchPatternTranspileTests
 
         var output = result["geo/loader.ts"];
         await Assert.That(output).Contains("return await (async ($s) => {");
-        await Assert.That(output).Contains("return await Loader.load(`${c.radius}`);");
+        await Assert
+            .That(output)
+            .Contains("return await Loader.load(`${formatDouble(c.radius)}`);");
     }
 
     [Test]

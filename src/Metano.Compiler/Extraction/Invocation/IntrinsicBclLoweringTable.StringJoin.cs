@@ -39,7 +39,7 @@ public sealed partial class IntrinsicBclLoweringTable
     {
         var arguments = ArgumentsInParameterOrder(BoundInvocation(ctx));
         var separator = ctx.Recurse((ExpressionSyntax)arguments[0].Value.Syntax);
-        var values = JoinValuesArray(ctx, arguments[1]);
+        var values = WithDefaultText(ctx, JoinValuesArray(ctx, arguments[1]));
 
         return new IrCallExpression(
             new IrMemberAccess(new IrTypeReference("String"), ctx.Symbol!.Name),
@@ -56,7 +56,7 @@ public sealed partial class IntrinsicBclLoweringTable
         {
             return new IrArrayLiteral(
                 ctx.Invocation.ArgumentList.Arguments.Skip(1)
-                    .Select(a => ctx.Recurse(a.Expression))
+                    .Select(a => ExpandedElement(ctx, a.Expression))
                     .ToList()
             );
         }
@@ -67,6 +67,58 @@ public sealed partial class IntrinsicBclLoweringTable
         return valueType is not null && LowersToArray(valueType)
             ? value
             : new IrArrayLiteral([new IrSpreadExpression(value)]);
+    }
+
+    /// <summary>
+    /// An expanded <c>params object[]</c> element: the argument converted as its static type
+    /// prints (a <c>bool</c> argument boxes to <c>"True"</c>, not <c>"true"</c>).
+    /// </summary>
+    private IrExpression ExpandedElement(InvocationRewriteContext ctx, ExpressionSyntax element)
+    {
+        var value = ctx.Recurse(element);
+        var type = ctx.SemanticModel.GetTypeInfo(element).Type;
+
+        return
+            DefaultTextConversion.MappedToString(type, _lowersByDeclarativeMapping) is { } toString
+            ? DefaultTextConversion.Call(value, toString, _helpers.BuildOrigin(toString))
+            : value;
+    }
+
+    /// <summary>
+    /// <c>values.map(item =&gt; item.ToString())</c> for a <c>Join&lt;T&gt;</c> over
+    /// <c>bool</c>, <c>double</c> or <c>float</c> values when the target maps their
+    /// <c>ToString()</c> (<see cref="DefaultTextConversion"/>, #308): the target's own join
+    /// would convert each element its own way (<c>true</c> for <c>True</c>). Any other
+    /// <c>Join</c> keeps the array as it is.
+    /// </summary>
+    private IrExpression WithDefaultText(InvocationRewriteContext ctx, IrExpression values)
+    {
+        if (ctx.Symbol is not { IsGenericMethod: true, TypeArguments: [var element] })
+            return values;
+
+        if (
+            DefaultTextConversion.MappedToString(element, _lowersByDeclarativeMapping)
+            is not { } toString
+        )
+            return values;
+
+        const string ItemName = "item";
+
+        var convert = new IrLambdaExpression(
+            [new IrParameter(ItemName, _helpers.MapTypeRef(element), HasExplicitType: false)],
+            ReturnType: null,
+            [
+                new IrReturnStatement(
+                    DefaultTextConversion.Call(
+                        new IrIdentifier(ItemName),
+                        toString,
+                        _helpers.BuildOrigin(toString)
+                    )
+                ),
+            ]
+        );
+
+        return new IrCallExpression(new IrMemberAccess(values, "map"), [new IrArgument(convert)]);
     }
 
     private bool LowersToArray(ITypeSymbol type) =>

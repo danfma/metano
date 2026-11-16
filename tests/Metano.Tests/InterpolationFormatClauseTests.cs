@@ -98,17 +98,37 @@ public class InterpolationFormatClauseTests
             [Transpile]
             public class Plain
             {
-                public string Show(int i, double d, bool b, long l, int? n, string s) =>
-                    $"{i} {d} {b} {l} {n} {s}";
+                public string Show(int i, long l, int? n, string s) => $"{i} {l} {n} {s}";
+            }
+            """
+        );
+
+        await Assert.That(files["plain.ts"]).Contains("return `${i} ${l} ${n ?? \"\"} ${s}`;");
+
+        await Assert.That(files["plain.ts"]).DoesNotContain("metano-runtime");
+    }
+
+    /// <summary>
+    /// A hole over a <c>bool</c>, <c>double</c> or <c>float</c> without a clause prints .NET's
+    /// default text through the runtime function (baseline FR-014, #308); the others keep the
+    /// native conversion.
+    /// </summary>
+    [Test]
+    public async Task HolesOverBoolAndFloatingPoint_PrintDotNetText()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Plain
+            {
+                public string Show(double d, bool b, float f) => $"{d} {b} {f}";
             }
             """
         );
 
         await Assert
             .That(files["plain.ts"])
-            .Contains("return `${i} ${d} ${b} ${l} ${n ?? \"\"} ${s}`;");
-
-        await Assert.That(files["plain.ts"]).DoesNotContain("metano-runtime");
+            .Contains("return `${formatDouble(d)} ${formatBoolean(b)} ${formatSingle(f)}`;");
     }
 
     [Test]

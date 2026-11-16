@@ -74,12 +74,29 @@ public sealed partial class IrExpressionExtractor
             return UnsupportedHole(hole, UnsupportedClauseMessage());
 
         if (format is null || FormatsAsDotNet(kind, format, formats))
-            return new IrInterpolationExpression(Extract(hole.Expression), format, alignment, kind);
+            return new IrInterpolationExpression(
+                format is null ? AlignedHoleValue(hole.Expression) : Extract(hole.Expression),
+                format,
+                alignment,
+                kind
+            );
 
         if (type is null || HasFormatter(kind, formats))
             return UnsupportedHole(hole, type, format);
 
         return ExtractUnformattedHole(hole, type, format, alignment, formats);
+    }
+
+    /// <summary>
+    /// The value of a hole with an alignment and no format: the text it prints without the
+    /// clause, so a <c>bool</c>, <c>double</c> or <c>float</c> keeps .NET's default text
+    /// (<see cref="DefaultTextConversion"/>, #308).
+    /// </summary>
+    private IrExpression AlignedHoleValue(ExpressionSyntax expression)
+    {
+        var value = Extract(expression);
+
+        return DefaultTextCall(expression, value) ?? value;
     }
 
     /// <summary>

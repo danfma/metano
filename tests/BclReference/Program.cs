@@ -33,3 +33,8 @@ var numberParsing = new FixtureWriter();
 
 NumberParsingRows.AddTo(numberParsing);
 numberParsing.Write(Path.Combine(fixtures, "number-parsing.json"));
+
+var text = new FixtureWriter();
+
+TextRows.AddTo(text);
+text.Write(Path.Combine(fixtures, "text.json"));
