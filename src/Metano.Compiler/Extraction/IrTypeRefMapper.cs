@@ -687,10 +687,22 @@ public static class IrTypeRefMapper
         && !DeclaresOwnEquals(type)
         && BaseChainOf(type).All(current => !current.DeclaringSyntaxReferences.IsEmpty);
 
+    /// <summary>
+    /// Whether <paramref name="type"/> or a base declares an <c>Equals</c> of
+    /// its own: an override or overload, or an explicit
+    /// <c>IEquatable&lt;T&gt;.Equals</c>, whose metadata name is not
+    /// <c>Equals</c>.
+    /// </summary>
     private static bool DeclaresOwnEquals(INamedTypeSymbol type) =>
         BaseChainOf(type)
-            .SelectMany(current => current.GetMembers(nameof(Equals)))
-            .Any(member => !member.IsImplicitlyDeclared);
+            .SelectMany(current => current.GetMembers().OfType<IMethodSymbol>())
+            .Any(method => !method.IsImplicitlyDeclared && IsEqualsMethod(method));
+
+    private static bool IsEqualsMethod(IMethodSymbol method) =>
+        method.Name == nameof(Equals)
+        || method.ExplicitInterfaceImplementations.Any(implemented =>
+            implemented.Name == nameof(Equals)
+        );
 
     /// <summary>
     /// <paramref name="type"/> and the base types its equality reads fields
