@@ -136,6 +136,7 @@ public class ReferenceDowncastTests
         await Assert.That(output).Contains("o instanceof Circle && o.radius > 0");
         await Assert.That(output).Contains("(c = o, true) ? o.radius : 0");
         await Assert.That(output).Contains("return s.radius;");
+
         await Assert
             .That(output)
             .Contains("p instanceof Circle && castTo<Circle>(o, Circle).radius > 0");

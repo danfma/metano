@@ -91,6 +91,7 @@ public class EqualsOverloadPairTests
         )["money.ts"];
 
         await Assert.That(output).Contains("toString(...args: unknown[]): string {");
+
         await Assert
             .That(CountOccurrences(output, "  toString(prefix: string): string {"))
             .IsEqualTo(0);
