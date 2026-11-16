@@ -39,10 +39,18 @@ internal static class NumericEndpoints
         Of(type) is { } endpoint && endpoint.IsSixtyFourBitValue();
 
     /// <summary>
-    /// Whether the conversion from <paramref name="from"/> to
-    /// <paramref name="to"/> is made explicit for its 64-bit side: one side
-    /// is a 64-bit integer or a <c>BigInteger</c> (spec 012 FR-003), so one
-    /// table decides every <c>bigint</c> conversion.
+    /// Whether an implicit conversion from <paramref name="from"/> to
+    /// <paramref name="to"/> is made explicit: one that crosses a 64-bit
+    /// integer (<see cref="CrossesSixtyFourBits"/>), or a <c>char</c> read as a
+    /// <c>double</c> / <c>float</c>, whose value is its UTF-16 code.
+    /// </summary>
+    public static bool NeedsImplicitNode(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        CrossesSixtyFourBits(from, to) || IrNumericConversion.IsCharToFloatingPoint(from, to);
+
+    /// <summary>
+    /// Whether a conversion from <paramref name="from"/> to <paramref name="to"/>
+    /// has a 64-bit integer or a <c>BigInteger</c> on either side (spec 012
+    /// FR-003), so one table decides every <c>bigint</c> conversion.
     /// </summary>
     public static bool CrossesSixtyFourBits(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from != to && (from.IsWideIntegerValue() || to.IsWideIntegerValue());
@@ -51,12 +59,13 @@ internal static class NumericEndpoints
     /// Whether a conversion from <paramref name="from"/> to
     /// <paramref name="to"/> becomes an <see cref="IrNumericConversion"/>: a
     /// floating-point truncation (FR-070), a narrowing between two integers
-    /// of 32 bits or fewer (FR-074), a <c>decimal</c> read as a
+    /// of 32 bits or fewer (FR-074), a <c>decimal</c> or <c>char</c> read as a
     /// <c>double</c> or <c>float</c>, and the conversions of
     /// <see cref="CrossesSixtyFourBits"/>.
     /// </summary>
     public static bool IsLoweredExplicitly(IrNumericEndpoint from, IrNumericEndpoint to) =>
         IrNumericConversion.IsFloatingPointTruncation(from, to)
+        || IrNumericConversion.IsCharToFloatingPoint(from, to)
         || IrNumericConversion.IsIntegerNarrowing(from, to)
         || IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to)
         || CrossesSixtyFourBits(from, to);

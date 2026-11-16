@@ -61,10 +61,13 @@ public sealed partial class IrExpressionExtractor
         IrExpression value
     )
     {
+        var typeInfo = _semantic.GetTypeInfo(expression);
+
+        if (CharLiteralAsFloatingPoint(value, typeInfo) is { } code)
+            return code;
+
         if (CarriesNoImplicitConversion(expression, value))
             return value;
-
-        var typeInfo = _semantic.GetTypeInfo(expression);
 
         if (ImplicitSixtyFourBitEndpoints(expression, typeInfo) is not var (from, to))
             return value;
@@ -76,6 +79,58 @@ public sealed partial class IrExpressionExtractor
             IsChecked: false,
             IsLifted: typeInfo.Type.IsNullableValueType()
         );
+    }
+
+    /// <summary>
+    /// A <c>char</c> literal read as a <c>double</c> or <c>float</c>
+    /// (<c>double d = 'a'</c>): its UTF-16 code as a number literal; <c>null</c>
+    /// for any other value.
+    /// </summary>
+    private static IrLiteral? CharLiteralAsFloatingPoint(IrExpression value, TypeInfo typeInfo) =>
+        value is IrLiteral { Kind: IrLiteralKind.Char, Value: char character }
+        && typeInfo.ConvertedType?.SpecialType
+            is SpecialType.System_Double
+                or SpecialType.System_Single
+            ? new IrLiteral((double)character, IrLiteralKind.Float64)
+            : null;
+
+    /// <summary>
+    /// The left operand of <c>value ?? fallback</c> with the numeric conversion
+    /// C# applies to it (<c>ICoalesceOperation.ValueConversion</c>), which
+    /// Roslyn reports on the operation rather than on the operand: a
+    /// <c>long?</c> read as the <c>double</c> result (<c>k ?? 1.5</c>) is
+    /// converted before the fallback applies. Any other operand is unchanged.
+    /// </summary>
+    private OperatorOperand LeftOperandOf(BinaryExpressionSyntax binary)
+    {
+        var operand = OperandOf(binary.Left);
+
+        if (
+            !binary.IsKind(SyntaxKind.CoalesceExpression)
+            || _semantic.GetOperation(binary)
+                is not ICoalesceOperation { Value.Type: { } valueType, Type: { } resultType }
+        )
+            return operand;
+
+        if (
+            NumericEndpoints.Of(valueType.UnwrapNullableValueType()) is not { } from
+            || NumericEndpoints.Of(resultType.UnwrapNullableValueType()) is not { } to
+            || !NumericEndpoints.NeedsImplicitNode(from, to)
+        )
+            return operand;
+
+        var converted = new IrNumericConversion(
+            operand.Value,
+            from,
+            to,
+            IsChecked: false,
+            IsLifted: valueType.IsNullableValueType()
+        );
+
+        return operand with
+        {
+            Value = converted,
+        };
     }
 
     /// <summary>
@@ -114,7 +169,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var needsNode =
-            NumericEndpoints.CrossesSixtyFourBits(from, to)
+            NumericEndpoints.NeedsImplicitNode(from, to)
             && !IsExactRelationalOperand(expression, from, to);
 
         return needsNode ? (from, to) : null;

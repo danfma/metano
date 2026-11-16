@@ -60,6 +60,12 @@ public sealed record IrNumericConversion(
     public static bool IsIntegerNarrowing(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from.IsNarrowIntegerValue() && to.IsNarrowIntegerValue() && !to.Kind.HoldsEvery(from.Kind);
 
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>char</c> as a <c>double</c> or <c>float</c>: its UTF-16 code.</summary>
+    public static bool IsCharToFloatingPoint(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from is { Kind: IrNumericKind.Char, IsEnum: false }
+        && to is { IsEnum: false }
+        && to.Kind.IsFloatingPoint();
+
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
     public static bool IsDecimalToBinaryFloatingPoint(
         IrNumericEndpoint from,

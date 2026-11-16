@@ -1775,7 +1775,7 @@ public sealed partial class IrExpressionExtractor
             ?? TryExtractStringConcatenation(bin)
             ?? ReduceOverflow(
                 _semantic.GetOperation(bin),
-                BuildBinary(bin, op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
+                BuildBinary(bin, op, LeftOperandOf(bin), OperandOf(bin.Right), isLifted: false)
             );
     }
 
