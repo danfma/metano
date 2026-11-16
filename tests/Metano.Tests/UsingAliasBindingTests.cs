@@ -232,7 +232,10 @@ public class UsingAliasBindingTests
             """
         )["probe.ts"];
 
-        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert
+            .That(output)
+            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+
         await Assert.That(output).Contains("new Decimal(0)");
         await Assert.That(output).Contains("new Decimal(parseDecimalText(\"1.5\"))");
     }

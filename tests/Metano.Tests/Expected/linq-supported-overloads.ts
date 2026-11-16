@@ -1,6 +1,6 @@
 import { HashSet } from "metano-runtime";
 import { aggregate, all, any, append, average, averageDecimal, averageNullable, averageNullableDecimal, concat, contains, count, distinct, distinctBy, except, first, firstOrDefault, groupBy, intersect, last, lastOrDefault, linq, max, maxBy, maxNullable, min, minBy, minNullable, orderBy, orderByDescending, prepend, reverse, select, selectMany, single, singleOrDefault, skip, skipWhile, sum, sumDecimal, take, takeWhile, thenBy, thenByDescending, toArray, toMap, toSet, union, where, zip } from "metano-runtime/system/linq";
-import { Decimal } from "decimal.js";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export class Supported {
   constructor() { }
