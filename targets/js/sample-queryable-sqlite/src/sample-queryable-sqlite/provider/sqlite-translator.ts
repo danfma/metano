@@ -303,6 +303,7 @@ function readParamName(tree: ExprTree): string | null {
     case "binary":
       return readParamName(tree.left) ?? readParamName(tree.right);
     case "unary":
+    case "convert":
       return readParamName(tree.operand);
     case "conditional":
       return (
@@ -354,6 +355,9 @@ function translate(tree: ExprTree, captures: Record<string, unknown>, state: Bui
       return translateUnary(tree, captures, state);
     case "conditional":
       return translateConditional(tree, captures, state);
+    case "convert":
+      // SQLite integers are already 64-bit, so a numeric conversion is the identity.
+      return translate(tree.operand, captures, state);
     case "call":
     case "lambda":
     case "new":

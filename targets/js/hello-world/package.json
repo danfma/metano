@@ -5,9 +5,8 @@
   "type": "module",
   "module": "src/program.ts",
   "scripts": {
-    "dev": "vite --port 3000",
-    "build": "tsgo -b && vite build",
-    "preview": "vite preview"
+    "build": "tsgo -b",
+    "start": "bun src/program.ts"
   },
   "dependencies": {
     "metano-runtime": "workspace:*"
