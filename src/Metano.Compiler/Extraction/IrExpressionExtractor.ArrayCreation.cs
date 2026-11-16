@@ -33,7 +33,7 @@ public sealed partial class IrExpressionExtractor
         if (array.ElementType is ITypeParameterSymbol { IsReferenceType: false })
             return null;
 
-        var elementDefault = DefaultValueLiterals.For(array.ElementType, BuildOrigin);
+        var elementDefault = DefaultOrMarker(array.ElementType);
 
         if (!IsShareableElementDefault(elementDefault))
             return null;
@@ -61,7 +61,8 @@ public sealed partial class IrExpressionExtractor
         };
 
     /// <summary>
-    /// A default every slot can share: not the opaque struct marker, and not
+    /// A default every slot can share: not the opaque struct marker nor a
+    /// struct construction, and not
     /// <c>null</c> for Dart, whose sound null safety rejects a
     /// <c>List&lt;T&gt;</c> filled with <c>null</c> where C# types the slots
     /// as <c>T</c>.
@@ -70,6 +71,9 @@ public sealed partial class IrExpressionExtractor
         elementDefault switch
         {
             IrLiteral { Kind: IrLiteralKind.Default } => false,
+            // One `new S()` filling every slot would alias them; C# gives
+            // each slot its own zeroed struct.
+            IrNewExpression => false,
             IrLiteral { Kind: IrLiteralKind.Null } => _target
                 is not Metano.Annotations.TargetLanguage.Dart,
             _ => true,

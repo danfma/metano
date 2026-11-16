@@ -22,6 +22,9 @@ public class DefaultLiteralTests
         [Transpile]
         public struct Point { public int X; }
 
+        [Transpile]
+        public struct Sized { public int W; public Sized(int w) { W = w; } }
+
         [Transpile, StringEnum]
         public enum Tone { Soft = 1, Loud = 2 }
         """;
@@ -37,6 +40,8 @@ public class DefaultLiteralTests
     [Arguments("string? s = default; return s;", "const s = null as string | null;")]
     [Arguments("int? n = default; return n;", "const n = null as number | null;")]
     [Arguments("var x = default(int); return x;", "const x = 0;")]
+    [Arguments("Point p = default; return p;", "const p = new Point();")]
+    [Arguments("var p = default(Point); return p;", "const p = new Point();")]
     [Arguments("var b = default(bool); return b;", "const b = false;")]
     public async Task LocalInitializer_TakesTheDefaultOfItsType(string body, string lowered)
     {
@@ -99,13 +104,14 @@ public class DefaultLiteralTests
     }
 
     /// <summary>
-    /// A type with no literal for its default (a user struct, a tuple, a
-    /// <c>[StringEnum]</c> without a zero member) reports <c>MS0001</c> and
-    /// keeps the placeholder.
+    /// A type no expression spells (a struct that declares a constructor, a
+    /// tuple, a <c>[StringEnum]</c> without a zero member) reports
+    /// <c>MS0001</c> and keeps the placeholder; a struct that declares none is
+    /// <c>new Point()</c>, as a parameter default is.
     /// </summary>
     [Test]
-    [Arguments("Point p = default; return p;", "Point")]
-    [Arguments("var p = default(Point); return p;", "Point")]
+    [Arguments("Sized s = default; return s;", "Sized")]
+    [Arguments("var s = default(Sized); return s;", "Sized")]
     [Arguments("(int, int) t = default; return t;", "(int, int)")]
     [Arguments("Tone t = default; return t;", "Tone")]
     public async Task TypeWithoutALiteralDefault_ReportsAndKeepsThePlaceholder(
@@ -128,6 +134,39 @@ public class DefaultLiteralTests
         await Assert
             .That(Warnings(diagnostics))
             .Contains(message => message.Contains($"'default({type})' has no literal"));
+    }
+
+    /// <summary>
+    /// The value a lookup returns when no element qualifies and the
+    /// <c>GetValueOrDefault</c> fallbacks take the same default a
+    /// <c>default</c> literal does: a struct that declares no constructor is
+    /// <c>new Point()</c>, the zeroed value C# returns.
+    /// </summary>
+    [Test]
+    public async Task LookupMisses_TakeTheStructDefault()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Types
+                + """
+
+                [Transpile]
+                public class Holder
+                {
+                    public int First(List<Point> xs) => xs.FirstOrDefault().X;
+                    public int Find(List<Point> xs) => xs.Find(p => p.X > 0).X;
+                    public int Value(Point? p) => p.GetValueOrDefault().X;
+                    public int Lookup(Dictionary<string, Point> d) => d.GetValueOrDefault("k").X;
+                }
+                """
+        );
+
+        var holder = files["holder.ts"];
+
+        await Assert.That(holder).Contains("linq(xs, firstOrDefault(undefined, new Point())).x");
+        await Assert.That(holder).Contains("(xs.find((p: Point) => p.x > 0) ?? new Point()).x");
+        await Assert.That(holder).Contains("(p ?? new Point()).x");
+        await Assert.That(holder).Contains("getValueOrDefault(d, \"k\", new Point()).x");
+        await Assert.That(Warnings(diagnostics)).IsEmpty();
     }
 
     private static IEnumerable<string> Warnings(IEnumerable<MetanoDiagnostic> diagnostics) =>

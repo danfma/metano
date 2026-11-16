@@ -474,10 +474,15 @@ Product requirements added after the migration (normative; each one is traced by
   every position (a local initializer, a conditional arm, a `??` operand, an argument, a
   collection element): `false`, `0`, `0n`, `"\u0000"`, `new Decimal("0")`, `null` for a
   reference or nullable type, the zero-valued member of an enum (a `0` asserted to the enum
-  when it declares none). A type with no literal for its default (a user struct, a tuple, a
-  `[StringEnum]` without a zero member) MUST report `MS0001` and keep the target's placeholder.
-  The implicit initializer of an enum field MUST be the same value, never the lowest member;
-  a `[StringEnum]` field without a zero member gets no initializer.
+  when it declares none), and `new S()` for a transpiled struct that declares no constructor —
+  the value FR-052 gives a parameter declared `= default` and the implicit initializer gives an
+  unassigned field of that struct. One core policy spells the default for every position: these
+  literals, parameter defaults, the miss value of the `OrDefault` LINQ terminals and
+  `List<T>.Find`, and the `GetValueOrDefault` fallbacks. A type no expression spells (a struct
+  that declares a constructor, a tuple, a `[StringEnum]` without a zero member) MUST report
+  `MS0001` and keep the target's placeholder. The implicit initializer of an enum field MUST be
+  the same value, never the lowest member; a `[StringEnum]` field without a zero member gets no
+  initializer.
 
 - **FR-060** (record field equality, #674): The generated `equals` of a record MUST compare a
   field as .NET's `EqualityComparer<T>.Default` does. A field of a type that compares by value

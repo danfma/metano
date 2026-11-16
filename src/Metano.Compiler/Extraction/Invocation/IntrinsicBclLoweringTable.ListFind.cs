@@ -36,10 +36,14 @@ public sealed partial class IntrinsicBclLoweringTable
 
         var find = ctx.Symbol!;
         var elementType = find.ContainingType.TypeArguments[0];
-        var missValue = ElementMissValue.Of(elementType, _helpers.BuildOrigin, _helpers.MapTypeRef);
+        var missValue = DefaultValuePolicy.Of(
+            elementType,
+            _helpers.BuildOrigin,
+            _helpers.MapTypeRef
+        );
 
         if (missValue is null)
-            ElementMissValue.ReportUnrepresentable(ctx.Invocation, find, elementType);
+            DefaultValuePolicy.ReportUnrepresentable(ctx.Invocation, find, elementType);
 
         return new IrCallExpression(
             new IrMemberAccess(ReceiverOf(ctx), find.Name),

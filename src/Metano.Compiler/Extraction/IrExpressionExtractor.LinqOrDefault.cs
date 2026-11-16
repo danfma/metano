@@ -53,8 +53,7 @@ public sealed partial class IrExpressionExtractor
         var predicate = PredicateOf(arguments, defaultValueIndex);
         var writtenDefault = ExplicitDefaultValue(arguments, defaultValueIndex);
 
-        var missValue = writtenDefault
-            ?? ElementMissValue.Of(method.TypeArguments[0], BuildOrigin, MapElementType);
+        var missValue = writtenDefault ?? DefaultOf(method.TypeArguments[0]);
 
         if (missValue is null or IrLiteral { Kind: IrLiteralKind.Null })
             return new LinqStageArguments(

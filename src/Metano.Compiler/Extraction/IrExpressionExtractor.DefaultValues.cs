@@ -16,10 +16,10 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// <c>default</c> of <paramref name="type"/> as IR: the literal or member
-    /// <see cref="ElementMissValue.Of"/> picks for it. A type with no literal
-    /// (a user struct, a tuple, a <c>[StringEnum]</c> without a zero member)
-    /// reports MS0001 and keeps the opaque <see cref="IrLiteralKind.Default"/>
+    /// <c>default</c> of <paramref name="type"/> as IR: the value
+    /// <see cref="DefaultValuePolicy.Of"/> picks for it. A type no expression
+    /// spells (a struct that declares a constructor, a tuple, a
+    /// <c>[StringEnum]</c> without a zero member) reports MS0001 and keeps the opaque <see cref="IrLiteralKind.Default"/>
     /// marker, which a target prints as its own placeholder.
     /// </summary>
     private IrExpression DefaultValueOf(ExpressionSyntax syntax, ITypeSymbol? type)
@@ -30,7 +30,7 @@ public sealed partial class IrExpressionExtractor
         if (type.IsReferenceType || type is ITypeParameterSymbol || IsNullableType(type))
             return new IrLiteral(null, IrLiteralKind.Null);
 
-        var value = ElementMissValue.Of(type, BuildOrigin, MapElementType);
+        var value = DefaultOf(type);
 
         if (value is not null)
             return value;
@@ -39,6 +39,21 @@ public sealed partial class IrExpressionExtractor
 
         return new IrLiteral(null, IrLiteralKind.Default);
     }
+
+    /// <summary>
+    /// <c>default(T)</c> of <paramref name="type"/> as IR through the core's
+    /// policy (<see cref="DefaultValuePolicy"/>), or <c>null</c> when no
+    /// expression spells it.
+    /// </summary>
+    internal IrExpression? DefaultOf(ITypeSymbol type) =>
+        DefaultValuePolicy.Of(type, BuildOrigin, MapElementType);
+
+    /// <summary>
+    /// <see cref="DefaultOf"/>, or the opaque <see cref="IrLiteralKind.Default"/>
+    /// marker a target prints as its placeholder when no expression spells it.
+    /// </summary>
+    private IrExpression DefaultOrMarker(ITypeSymbol type) =>
+        DefaultOf(type) ?? new IrLiteral(null, IrLiteralKind.Default);
 
     private static bool IsNullableType(ITypeSymbol type) =>
         type.NullableAnnotation == NullableAnnotation.Annotated || type.IsNullableValueType();

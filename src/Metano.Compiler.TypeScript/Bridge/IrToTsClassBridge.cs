@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -88,76 +89,49 @@ internal static partial class IrToTsClassBridge
         IrToTsTypeParameterMapper.Convert(ir.TypeParameters);
 
     /// <summary>
-    /// Computes the implicit <c>default(T)</c> initializer for a field /
-    /// property whose declaration omits an explicit one:
-    /// <list type="bullet">
-    ///   <item>nullable types → <c>null</c></item>
-    ///   <item>numeric primitives → <c>0</c></item>
-    ///   <item>boolean → <c>false</c></item>
-    ///   <item>decimal → <c>new Decimal("0")</c></item>
-    ///   <item>enums → the member whose value is <c>0</c>, as C#'s
-    ///     <c>default(E)</c> is. String enums use the source-name key; numeric
-    ///     enums honor a target <c>[Name]</c> override on the member. A numeric
-    ///     enum without a zero member gets <c>0 as E</c>; a <c>[StringEnum]</c>
-    ///     without one gets no initializer, as no string stands for it.</item>
-    ///   <item>default-constructible transpiled structs → <c>new S()</c>, the
-    ///     zero-initialized instance C# stores. Only a struct that declares no
-    ///     constructor qualifies, so no user constructor body runs; a struct
-    ///     that declares one gets no implicit initializer (see
-    ///     <see cref="IrNamedTypeSemantics.IsDefaultConstructible"/>).</item>
-    ///   <item>everything else → no implicit initializer (TS leaves
-    ///     reference fields <c>undefined</c>, matching nullable C#)</item>
-    /// </list>
-    /// Returns <c>null</c> when no default applies — the caller emits the
-    /// field without an initializer in that case.
+    /// Prints the implicit <c>default(T)</c> initializer of a field / property
+    /// whose declaration omits an explicit one, as the core's default-value
+    /// policy spells it (<see cref="IrDefaultValues.KindOf"/>): <c>null</c>
+    /// for a nullable type, the zero of a primitive (<c>0</c>, <c>0n</c>,
+    /// <c>false</c>, <c>new Decimal("0")</c>), the zero member of an enum
+    /// (<c>0 as E</c> when a numeric enum declares none), and <c>new S()</c>
+    /// for a default-constructible struct. <c>null</c> when the policy spells
+    /// no value — the caller emits the field without an initializer (TS leaves
+    /// a reference field <c>undefined</c>).
     /// </summary>
-    public static TsExpression? ComputeDefaultInitializer(IrTypeRef type)
-    {
-        if (type is IrNullableTypeRef)
-            return new TsLiteral("null");
-
-        if (type is IrPrimitiveTypeRef p)
-            return p.Primitive switch
-            {
-                IrPrimitive.Int64 or IrPrimitive.UInt64 => SixtyFourBitZero(),
-                IrPrimitive.Int16
-                or IrPrimitive.Int32
-                or IrPrimitive.Byte
-                or IrPrimitive.Float32
-                or IrPrimitive.Float64 => new TsLiteral("0"),
-                IrPrimitive.Decimal => new TsNewExpression(
-                    IrToTsExpressionBridge.BclDecimalValueReference(),
-                    [new TsStringLiteral("0")]
-                ),
-                IrPrimitive.Boolean => new TsLiteral("false"),
-                _ => null,
-            };
-
-        if (
-            type is IrNamedTypeRef
-            {
-                Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum
-            } namedEnum
-        )
-            return EnumDefault(namedEnum);
-
-        if (type is IrNamedTypeRef { Semantics.IsDefaultConstructible: true })
-            return IrToTsExpressionBridge.Map(
+    public static TsExpression? ComputeDefaultInitializer(IrTypeRef type) =>
+        IrDefaultValues.KindOf(type) switch
+        {
+            IrDefaultValueKind.Null => new TsLiteral("null"),
+            IrDefaultValueKind.Zero => PrimitiveZero(((IrPrimitiveTypeRef)type).Primitive),
+            IrDefaultValueKind.EnumZeroMember => EnumZeroMember((IrNamedTypeRef)type),
+            IrDefaultValueKind.EnumZeroAssertion => new TsCastExpression(
+                new TsLiteral("0"),
+                IrToTsTypeMapper.Map(type)
+            ),
+            IrDefaultValueKind.StructConstruction => IrToTsExpressionBridge.Map(
                 new IrNewExpression(type, []),
                 IrToTsBridgeContext.For(null)
-            );
+            ),
+            _ => null,
+        };
 
-        return null;
-    }
+    private static TsExpression PrimitiveZero(IrPrimitive primitive) =>
+        primitive switch
+        {
+            IrPrimitive.Int64 or IrPrimitive.UInt64 => SixtyFourBitZero(),
+            IrPrimitive.Decimal => new TsNewExpression(
+                IrToTsExpressionBridge.BclDecimalValueReference(),
+                [new TsStringLiteral("0")]
+            ),
+            IrPrimitive.Boolean => new TsLiteral("false"),
+            _ => new TsLiteral("0"),
+        };
 
-    private static TsExpression? EnumDefault(IrNamedTypeRef namedEnum)
+    private static TsExpression EnumZeroMember(IrNamedTypeRef namedEnum)
     {
         var semantics = namedEnum.Semantics!;
-
-        if (semantics.EnumZeroMember is not { } zeroMember)
-            return semantics.Kind == IrNamedTypeKind.NumericEnum
-                ? new TsCastExpression(new TsLiteral("0"), IrToTsTypeMapper.Map(namedEnum))
-                : null;
+        var zeroMember = semantics.EnumZeroMember!;
 
         // String enums key the runtime object on the source-cased name —
         // a [Name(target, ...)] rename would produce an invalid property
