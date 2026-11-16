@@ -10,10 +10,16 @@ namespace Metano.Compiler.TypeScript.AST;
 /// resolves every <see cref="TsRuntimeHelperReference"/> through it; <c>null</c> when
 /// no name collided.
 /// </para>
+/// <para>
+/// <see cref="HasModuleSideEffects"/> is <c>true</c> when the module runs code when merely
+/// imported (see <see cref="TsTopLevelStatement.RunsOnImport"/>). It is set explicitly because
+/// a per-group cache hit rebuilds the file without its statements.
+/// </para>
 /// </summary>
 public sealed record TsSourceFile(
     string FileName,
     IReadOnlyList<TsTopLevel> Statements,
     string Namespace = "",
-    IReadOnlyDictionary<string, string>? RuntimeHelperAliases = null
+    IReadOnlyDictionary<string, string>? RuntimeHelperAliases = null,
+    bool HasModuleSideEffects = false
 );

@@ -165,6 +165,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         return new TargetOutput(generated, transformer.Diagnostics)
         {
             PackageDependencies = crossPackageDependencies,
+            ModuleSideEffectFiles =
+            [
+                .. sourceFiles
+                    .Where(file => file.HasModuleSideEffects)
+                    .Select(file => file.FileName)
+                    .Order(StringComparer.Ordinal),
+            ],
         };
     }
 
@@ -185,11 +192,18 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         IrCompilation ir,
         Compilation? compilation,
         IReadOnlyList<GeneratedFile> files,
-        IReadOnlyDictionary<string, string> packageDependencies
+        IReadOnlyDictionary<string, string> packageDependencies,
+        IReadOnlyList<string> moduleSideEffectFiles
     )
     {
         var roslynCompilation = RequireRoslynCompilation(compilation);
-        var reusedFiles = files.Select(file => new TsSourceFile(file.RelativePath, [])).ToList();
+        var sideEffectFiles = moduleSideEffectFiles.ToHashSet(StringComparer.Ordinal);
+        var reusedFiles = files
+            .Select(file => new TsSourceFile(file.RelativePath, [])
+            {
+                HasModuleSideEffects = sideEffectFiles.Contains(file.RelativePath),
+            })
+            .ToList();
 
         LastPackageManifestInputs = CapturePackageManifestInputs(
             ir,

@@ -1082,6 +1082,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return new TsSourceFile(relativePath, statements, group.Namespace)
             {
                 RuntimeHelperAliases = collected.RuntimeHelperAliases,
+                HasModuleSideEffects = statements.Any(statement =>
+                    statement is TsTopLevelStatement { RunsOnImport: true }
+                ),
             };
         }
         finally
@@ -1959,7 +1962,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         foreach (var statement in lowered)
-            sink.Add(new TsTopLevelStatement(statement));
+            sink.Add(new TsTopLevelStatement(statement, RunsOnImport: true));
 
         if (trailingExport is not null)
             sink.Add(trailingExport);
@@ -2204,7 +2207,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 IrToTsBridgeContext.For(Context.DeclarativeMappings)
             )
         )
-            sink.Add(new TsTopLevelStatement(ts));
+            sink.Add(new TsTopLevelStatement(ts, RunsOnImport: true));
     }
 
     /// <summary>

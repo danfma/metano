@@ -57,7 +57,13 @@ public static class FileMetadataExtractor
             RequireKnownNonExportShape(stmt);
         }
 
-        return new CachedFileMetadata(file.FileName, Sha256(content), imports, exports);
+        return new CachedFileMetadata(
+            file.FileName,
+            Sha256(content),
+            imports,
+            exports,
+            file.HasModuleSideEffects
+        );
     }
 
     private static CachedImport CaptureImport(TsImport import) =>
@@ -179,7 +185,10 @@ public static class FileMetadataExtractor
         foreach (var export in metadata.Exports)
             statements.Add(BuildExportStub(export));
 
-        return new TsSourceFile(metadata.Path, statements);
+        return new TsSourceFile(metadata.Path, statements)
+        {
+            HasModuleSideEffects = metadata.HasModuleSideEffects,
+        };
     }
 
     /// <summary>

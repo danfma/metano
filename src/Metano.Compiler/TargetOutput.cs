@@ -21,4 +21,12 @@ public sealed record TargetOutput(
     /// </summary>
     public IReadOnlyDictionary<string, string> PackageDependencies { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The emitted files (relative paths) that run code when merely imported, such as a
+    /// <c>[ModuleEntryPoint]</c> module. A target's package manifest stage uses them to
+    /// keep bundlers from dropping a side-effect-only import (#368). Persisted by the host
+    /// like <see cref="PackageDependencies"/>. Empty for targets that have no such files.
+    /// </summary>
+    public IReadOnlyList<string> ModuleSideEffectFiles { get; init; } = [];
 }

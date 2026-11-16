@@ -147,7 +147,10 @@ public static class PackageJsonWriter
         // values. The transpiler must not flip a hand-curated `type`
         // or `sideEffects` value back on every regeneration.
         WriteIfMissing(root, "type", "module");
-        WriteIfMissing(root, "sideEffects", false);
+        SeedOrUpgradeSideEffects(
+            root,
+            BuildSideEffectModules(files, srcRelative, distDirRelativeToPackageRoot, outputPrefix)
+        );
 
         // Imports follow the same write-if-missing rule as the
         // scalar fields above: the transpiler seeds its alias keys
@@ -280,6 +283,91 @@ public static class PackageJsonWriter
                     + $"to align them."
             )
         );
+    }
+
+    /// <summary>
+    /// The package-relative paths of the modules that run code when merely imported (a
+    /// <c>[ModuleEntryPoint]</c> module, a strict-union-guard variant): both the compiled
+    /// <c>.js</c> and the <c>.ts</c> source, since a bundler matches <c>sideEffects</c>
+    /// against whichever the resolution picked (#368).
+    /// </summary>
+    private static SideEffectModules BuildSideEffectModules(
+        IReadOnlyList<TsSourceFile> files,
+        string srcRelative,
+        string distRelative,
+        string outputPrefix
+    )
+    {
+        var src = NormalizePath(srcRelative).TrimEnd('/');
+        var dist = NormalizePath(distRelative).TrimEnd('/');
+        var prefix = outputPrefix.TrimEnd('/');
+        var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
+        var targets = new List<string>();
+        var emitted = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var file in files)
+        {
+            var fileName = NormalizePath(file.FileName);
+            var withoutExt = fileName[..fileName.LastIndexOf('.')];
+            var paths = new[] { $"./{distBase}/{withoutExt}.js", SourceTarget(src, fileName) };
+
+            emitted.UnionWith(paths);
+
+            if (file.HasModuleSideEffects)
+                targets.AddRange(paths);
+        }
+
+        targets.Sort(StringComparer.Ordinal);
+
+        var ownedTrees =
+            src.Length > 0 ? new[] { $"./{distBase}/", $"./{src}/" } : new[] { $"./{distBase}/" };
+
+        return new SideEffectModules(targets, emitted, ownedTrees);
+    }
+
+    /// <summary>
+    /// Seeds <c>sideEffects</c> as the list of side-effect modules (or <c>false</c> when
+    /// there are none). A flat <c>false</c> is the writer's own earlier default, so it is
+    /// upgraded to the list; a list keeps the entries the consumer added by hand and
+    /// replaces the ones this writer owns; any other value (<c>true</c>, a hand-written
+    /// string) is the consumer's and stays.
+    /// </summary>
+    private static void SeedOrUpgradeSideEffects(JsonObject root, SideEffectModules modules)
+    {
+        var existing = root["sideEffects"];
+        var previous = existing as JsonArray;
+        var isFlatFalse =
+            existing is JsonValue flag && flag.TryGetValue<bool>(out var value) && !value;
+
+        if (existing is not null && previous is null && !isFlatFalse)
+            return;
+
+        var kept = (previous ?? [])
+            .Select(entry => entry?.GetValue<string>())
+            .OfType<string>()
+            .Where(entry => !modules.Owns(entry));
+        var merged = kept.Concat(modules.Targets).ToList();
+
+        root["sideEffects"] =
+            merged.Count == 0
+                ? JsonValue.Create(false)
+                : new JsonArray([.. merged.Select(entry => (JsonNode?)JsonValue.Create(entry))]);
+    }
+
+    /// <summary>
+    /// The side-effect paths of a run: the <paramref name="Targets"/> to list, and the
+    /// paths a previous run may have written (every emitted file, or anything under the
+    /// dist or source tree) so a stale entry is replaced while a hand-added one is kept.
+    /// </summary>
+    private sealed record SideEffectModules(
+        List<string> Targets,
+        HashSet<string> Emitted,
+        string[] OwnedTrees
+    )
+    {
+        public bool Owns(string entry) =>
+            Emitted.Contains(entry)
+            || OwnedTrees.Any(tree => entry.StartsWith(tree, StringComparison.Ordinal));
     }
 
     /// <summary>Seeds <paramref name="key"/> only when missing.</summary>

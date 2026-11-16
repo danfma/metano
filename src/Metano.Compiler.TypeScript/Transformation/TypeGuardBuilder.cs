@@ -367,7 +367,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             [new TsStringLiteral(variantTsName), new TsIdentifier(guardName)]
         );
 
-        return new TsTopLevelStatement(new TsExpressionStatement(call));
+        return new TsTopLevelStatement(new TsExpressionStatement(call), RunsOnImport: true);
     }
 
     private static INamedTypeSymbol? FindStrictUnionBase(INamedTypeSymbol type)
