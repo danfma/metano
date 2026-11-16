@@ -35,7 +35,7 @@ internal static class ParameterDefaultValues
         var value = extractor.Extract(defaultExpression);
 
         return value is IrLiteral { Kind: IrLiteralKind.Default }
-            ? extractor.TryBuildStructDefault(parameter.Type) ?? value
+            ? extractor.DefaultOf(parameter.Type) ?? value
             : value;
     }
 }

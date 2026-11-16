@@ -179,7 +179,7 @@ public sealed partial class IrExpressionExtractor
         return new IrBinaryExpression(
             receiver,
             IrBinaryOp.NullCoalescing,
-            DefaultValueLiterals.For(valueType, BuildOrigin)
+            DefaultOrMarker(valueType)
         );
     }
 

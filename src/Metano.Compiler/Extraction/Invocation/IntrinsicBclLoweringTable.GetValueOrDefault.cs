@@ -44,7 +44,8 @@ public sealed partial class IntrinsicBclLoweringTable
         var defaultValue =
             arguments.Count == 3
                 ? arguments[2]
-                : DefaultValueLiterals.For(valueType, _helpers.BuildOrigin);
+                : DefaultValuePolicy.Of(valueType, _helpers.BuildOrigin, _helpers.MapTypeRef)
+                    ?? new IrLiteral(null, IrLiteralKind.Default);
 
         return new IrCallExpression(
             new IrMemberAccess(arguments[0], ctx.Symbol!.Name),

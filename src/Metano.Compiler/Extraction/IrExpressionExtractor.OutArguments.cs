@@ -160,7 +160,7 @@ public sealed partial class IrExpressionExtractor
     private IrOutArgument ExtractOutArgument(ArgumentSyntax argument, IMethodSymbol method)
     {
         var parameter = BoundParameterOf(argument, method);
-        var defaultValue = DefaultValueLiterals.For(parameter.Type, BuildOrigin);
+        var defaultValue = DefaultOrMarker(parameter.Type);
 
         if (
             defaultValue is IrLiteral { Kind: IrLiteralKind.Default }

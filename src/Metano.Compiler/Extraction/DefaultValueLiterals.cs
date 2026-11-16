@@ -4,15 +4,11 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Builds the IR for the value C# gives <c>default(T)</c> when the compiler
-/// has to synthesize it (no source expression exists), plus the enum-member
-/// lookup shared with explicit parameter defaults.
-/// <para>
-/// A <c>default</c> literal written in source does not go through
-/// <see cref="For"/>: <c>IrExpressionExtractor.ExtractDefaultLiteral</c> keeps
-/// the opaque <see cref="IrLiteralKind.Default"/> marker for value types, so
-/// the backends choose the per-target default there.
-/// </para>
+/// Spells the literals and members of <c>default(T)</c> (<c>false</c>, the
+/// numeric zeros, <c>'\0'</c>, <c>Guid.Empty</c>, the zero enum member), plus
+/// the enum-member lookup shared with explicit parameter defaults. Expression
+/// positions read it through <see cref="DefaultValuePolicy"/>, which adds the
+/// struct construction and the enum assertion.
 /// </summary>
 internal static class DefaultValueLiterals
 {

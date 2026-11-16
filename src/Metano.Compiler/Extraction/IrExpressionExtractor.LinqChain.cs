@@ -250,7 +250,7 @@ public sealed partial class IrExpressionExtractor
         var args = nullComparer is null ? written : WithoutComparer(written, method);
 
         if (args.HasUnrepresentableMissValue && LowersLinqChains)
-            ElementMissValue.ReportUnrepresentable(call, method, method.TypeArguments[0]);
+            DefaultValuePolicy.ReportUnrepresentable(call, method, method.TypeArguments[0]);
 
         var queryable = TryCaptureQueryableMeta(arguments, method, site.Receiver);
 

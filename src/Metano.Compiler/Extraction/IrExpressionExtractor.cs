@@ -5286,7 +5286,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression NullDefaultOf(ITypeSymbol type) =>
         IsNonNullableValueType(type)
-            ? TryBuildStructDefault(type) ?? OmittedArgument()
+            ? DefaultOf(type) ?? OmittedArgument()
             : new IrLiteral(null, IrLiteralKind.Null);
 
     private IrExpression BuildLiteralForDefault(object? value, ITypeSymbol type)
