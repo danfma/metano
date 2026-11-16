@@ -19,7 +19,10 @@
     "vite": "^8.0.4",
     "vite-tsconfig-paths": "^6.1.1"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/program.js",
+    "./src/program.ts"
+  ],
   "imports": {
     "#/*": {
       "types": "./lib/*",

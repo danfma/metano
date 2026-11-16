@@ -2,7 +2,10 @@
   "name": "sample-todo-service",
   "type": "module",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/program.js",
+    "./src/program.ts"
+  ],
   "module": "./dist/program.js",
   "imports": {
     "#/*": {
