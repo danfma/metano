@@ -41,6 +41,8 @@ namespace Metano.Compiler.Caching;
 ///   <see cref="TargetOutput.PackageDependencies"/>, not part of the key
 ///   but restored on a hit so the target's package manifest stage sees
 ///   them without transforming (#299).</item>
+///   <item><b>Module side-effect files</b>: the previous run's
+///   <see cref="TargetOutput.ModuleSideEffectFiles"/>, restored the same way (#368).</item>
 /// </list>
 ///
 /// <para>
@@ -57,10 +59,11 @@ public sealed record TranspilationCache(
     IReadOnlyDictionary<string, string> ReferenceFingerprints,
     IReadOnlyDictionary<string, string> AssetSourceHashes,
     IReadOnlyDictionary<string, string> OutputHashes,
-    IReadOnlyDictionary<string, string> PackageDependencies
+    IReadOnlyDictionary<string, string> PackageDependencies,
+    IReadOnlyList<string>? ModuleSideEffectFiles = null
 )
 {
-    public const int CurrentFormatVersion = 4;
+    public const int CurrentFormatVersion = 5;
     public const string FileName = ".metano-cache.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()

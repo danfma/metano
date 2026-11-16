@@ -36,7 +36,7 @@ public sealed record GroupCacheFile(
     // invalidates every stale v2 file so the next run rebuilds the
     // group cache from scratch. v4 added the per-group cross-package
     // Dependencies (#299) so a reused group still reports them.
-    public const int CurrentFormatVersion = 4;
+    public const int CurrentFormatVersion = 5;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()

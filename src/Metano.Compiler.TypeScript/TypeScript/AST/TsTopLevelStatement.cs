@@ -9,5 +9,10 @@ namespace Metano.Compiler.TypeScript.AST;
 ///
 /// The printer simply emits <see cref="Inner"/> as if it were a top-level declaration;
 /// the import collector descends into it via the existing statement walker.
+///
+/// <see cref="RunsOnImport"/> marks a statement that must run when its module is merely
+/// imported (a <c>[ModuleEntryPoint]</c> body, a strict-union-guard registration). Such a
+/// module is a side-effect module: <c>package.json#sideEffects</c> lists it so bundlers
+/// keep a side-effect-only import of it.
 /// </summary>
-public sealed record TsTopLevelStatement(TsStatement Inner) : TsTopLevel;
+public sealed record TsTopLevelStatement(TsStatement Inner, bool RunsOnImport = false) : TsTopLevel;

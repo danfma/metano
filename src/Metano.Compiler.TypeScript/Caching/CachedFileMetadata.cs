@@ -26,7 +26,8 @@ public sealed record CachedFileMetadata(
     string Path,
     string ContentHash,
     IReadOnlyList<CachedImport> Imports,
-    IReadOnlyList<CachedExport> Exports
+    IReadOnlyList<CachedExport> Exports,
+    bool HasModuleSideEffects = false
 );
 
 public sealed record CachedImport(

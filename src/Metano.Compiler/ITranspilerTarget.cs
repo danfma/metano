@@ -80,10 +80,13 @@ public interface ITranspilerTarget
     /// included.</param>
     /// <param name="packageDependencies">The <see cref="TargetOutput.PackageDependencies"/>
     /// of the run that produced <paramref name="files"/>, restored from the cache.</param>
+    /// <param name="moduleSideEffectFiles">The <see cref="TargetOutput.ModuleSideEffectFiles"/>
+    /// of the run that produced <paramref name="files"/>, restored from the cache.</param>
     void AdoptCachedOutput(
         IrCompilation ir,
         Compilation? compilation,
         IReadOnlyList<GeneratedFile> files,
-        IReadOnlyDictionary<string, string> packageDependencies
+        IReadOnlyDictionary<string, string> packageDependencies,
+        IReadOnlyList<string> moduleSideEffectFiles
     ) { }
 }
