@@ -59,8 +59,8 @@ public class DefaultTextTranspileTests
                 "return \"x\" + formatBoolean(b) + formatDouble(d) + formatSingle(f) + formatBoolean(n);"
             );
 
-        await Assert.That(output).Contains("s += formatBoolean(b);");
-        await Assert.That(output).Contains("s += formatDouble(1.5);");
+        await Assert.That(output).Contains("s = (s ?? \"\") + formatBoolean(b);");
+        await Assert.That(output).Contains("s = (s ?? \"\") + formatDouble(1.5);");
     }
 
     [Test]

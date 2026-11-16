@@ -24,7 +24,7 @@ export class Clauses {
   }
 
   ignoredFormats(s: string, b: boolean, c: string): string {
-    return `${s}|${formatBoolean(b)}|${alignValue(c, 3)}`;
+    return `${s ?? ""}|${formatBoolean(b)}|${alignValue(c, 3)}`;
   }
 
   toStrings(i: number, d: number, b: number, s: number): string {
