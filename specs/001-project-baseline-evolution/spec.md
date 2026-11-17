@@ -589,8 +589,10 @@ Product requirements added after the migration (normative; each one is traced by
   - `static readonly #$init = typeInitializer("Name", () => { … })`, a `metano-runtime` helper, is
     declared before the slots. Its body first assigns the slots whose default is not a literal
     token, then the field and auto-property initializers in textual order, then the constructor
-    body. The type name is the simple C# name, with its containing types dotted
-    (`Outer.Inner`) and no type arguments, for nested and generic types alike.
+    body. The type name is the one .NET 10 reports in `TypeInitializationException.TypeName`
+    and its message: the namespace-qualified metadata name of a top-level type, without type
+    arguments (`MyApp.Registry`, `` MyApp.Pair`1 ``), and only the metadata name of a nested type
+    (`Inner`, not `MyApp.Outer+Inner`).
   - Each static field and auto-property becomes a private slot `#name$` (the trailing `$`, which
     no C# name spells, keeps it apart from `#$init` and from Metano's own private members such as
     an exception's `#baseMessage`). A slot holds a literal-token default at class definition:
