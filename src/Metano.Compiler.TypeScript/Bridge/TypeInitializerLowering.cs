@@ -72,7 +72,9 @@ internal abstract class TypeInitializerLowering
                 lowering
             );
 
-        if (ir.StaticInitializer is not null)
+        // A containerless class keeps its static constructor report (MS0001,
+        // ModuleVariableValidator) and is emitted without the body.
+        if (ir.StaticInitializer is not null && !type.IsContainerless())
             throw new InvalidOperationException(
                 $"'{type.Name}' has a static constructor body but is not lowered lazily; "
                     + "the eager lowering has nowhere to run it."
