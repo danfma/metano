@@ -36,3 +36,6 @@ targets/js/sample-counter-v5/lib/
 # Local working plans (per CLAUDE.md workflow — private per-session notes,
 # not committed — the authoritative backlog lives in GitHub issues)
 tasks/
+
+# Conformance probes: transpiled output and build products (scripts/run-conformance.sh)
+tests/Conformance/.work/
