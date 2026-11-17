@@ -1,4 +1,8 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.TypeScript.Bridge;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Metano.Tests;
 
@@ -112,7 +116,7 @@ public class OperatorHelperDeclarationTests
     }
 
     [Test]
-    public async Task BrandedCompanion_UsesTheClassNames_AndSkipsOnlyAnIdentityUnwrapBody()
+    public async Task BrandedCompanion_UsesTheClassNames_AndDeclaresEveryConversion()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -138,7 +142,109 @@ public class OperatorHelperDeclarationTests
         );
 
         await TranspileHelper.AssertGolden("operator-helper-branded.ts", result["qty.ts"]);
-        await Assert.That(result["slug.ts"]).DoesNotContain("__implicitToString");
+
+        await Assert
+            .That(result["slug.ts"])
+            .Contains(
+                """
+                  export function __implicitToString(s: Slug): string {
+                    return s;
+                  }
+                """
+            );
+    }
+
+    [Test]
+    public async Task BrandedCompanion_DeclaresTheSameConversions_FromSourceAndFromMetadata()
+    {
+        var library = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            [Branded]
+            public readonly record struct Slug(string Value)
+            {
+                public static implicit operator string(Slug s) => s.Value;
+
+                public static explicit operator Slug(string raw) => new(raw.Trim());
+            }
+            """
+        );
+
+        var fromSource = CompanionFunctionNamesOf(library);
+        var fromMetadata = CompanionFunctionNamesOf(MetadataOnlyViewOf(library));
+
+        await Assert.That(fromSource).Contains("__implicitToString");
+        await Assert.That(fromMetadata).IsEquivalentTo(fromSource);
+    }
+
+    [Test]
+    public async Task ADerivedClassOfAMetadataOnlyBase_OverridesTheBaseOperatorStatics()
+    {
+        var files = TranspileHelper.TranspileWithLibraryImage(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            public class Base
+            {
+                public int V;
+
+                public static explicit operator int(Base b) => b.V;
+
+                public static Base operator +(Base a, Base b) => new Base();
+            }
+            """,
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Der : Base
+            {
+                public static explicit operator int(Der d) => d.V * 2;
+
+                public static Der operator +(Der a, Der b) => new Der();
+            }
+            """
+        );
+
+        await Assert.That(files["der.ts"]).Contains("static override __toInt32(d: Der): number {");
+        await Assert.That(files["der.ts"]).Contains("static override __add(a: Der, b: Der): Der {");
+        await Assert.That(files["der.ts"]).Contains("override $add(b: Der): Der {");
+    }
+
+    [Test]
+    public async Task AConversion_SpellsTheConvertedTypeByItsEmittedName()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, Name("Cash")]
+            public class Money { }
+
+            [Transpile, Name(TargetLanguage.Dart, "DartCoin")]
+            public class Coin { }
+
+            [Transpile]
+            public class Wallet
+            {
+                public static implicit operator Wallet(Money m) => new Wallet();
+
+                public static explicit operator Money?(Wallet w) => null;
+
+                public static explicit operator Coin(Wallet w) => new Coin();
+            }
+            """
+        );
+
+        var wallet = files["wallet.ts"];
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(wallet).Contains("static __implicitFromCash(m: Cash): Wallet {");
+        await Assert.That(wallet).Contains("static __toCashOrNull(w: Wallet): Cash | null {");
+        await Assert.That(wallet).Contains("static __toCoin(w: Wallet): Coin {");
     }
 
     [Test]
@@ -204,6 +310,75 @@ public class OperatorHelperDeclarationTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await Assert.That(files["der.ts"]).Contains("static __implicitFromInt32(v: number): Der {");
+
+        await Assert
+            .That(files["der.ts"])
+            .Contains("static override __implicitFromInt32(v: number): Der {");
+    }
+
+    [Test]
+    public async Task OperatorStaticsShadowingTheBase_AreEmittedOverride()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Base
+            {
+                public int V;
+
+                public static explicit operator int(Base b) => b.V;
+
+                public static Base operator +(Base a, Base b) => new Base();
+
+                public static implicit operator Base(int v) => new Base();
+            }
+
+            [Transpile]
+            public class Der : Base
+            {
+                public static explicit operator int(Der d) => d.V * 2;
+
+                public static Der operator +(Der a, Der b) => new Der();
+
+                public static Der operator +(Der a, int n) => new Der();
+
+                public static Der operator -(Der a, Der b) => new Der();
+
+                public static implicit operator Der(int v) => new Der();
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await TranspileHelper.AssertGolden("operator-helper-override.ts", files["der.ts"]);
+    }
+
+    private static IReadOnlyList<string> CompanionFunctionNamesOf(Compilation compilation)
+    {
+        var type = compilation.GetTypeByMetadataName("Slug")!;
+        var ir = IrEmissionNormalizer.Normalize(IrClassExtractor.Extract(type), type);
+
+        return TsCompanionPlan.Of(ir)!.Groups.Select(group => group.FunctionName).ToList();
+    }
+
+    /// <summary>
+    /// A compilation that sees <paramref name="library"/> only through its
+    /// emitted image, as a consumer of the published package does: no syntax.
+    /// </summary>
+    private static Compilation MetadataOnlyViewOf(CSharpCompilation library)
+    {
+        using var stream = new MemoryStream();
+
+        var emitted = library.Emit(stream);
+
+        if (!emitted.Success)
+            throw new InvalidOperationException(string.Join("\n", emitted.Diagnostics));
+
+        return CSharpCompilation.Create(
+            "Consumer",
+            references: library.References.Append(
+                MetadataReference.CreateFromImage(stream.ToArray())
+            )
+        );
     }
 }

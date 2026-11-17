@@ -751,12 +751,36 @@ public sealed class IrToTsClassEmitter(
 
     /// <summary>
     /// Lowers a user-defined operator (single or overload-folded) to its TS
-    /// helper methods, deriving the emitted name from the operator's
-    /// <c>[Name]</c> override or <see cref="IrMethodSemantics.OperatorKind"/>
-    /// (<see cref="TsOperatorNaming"/>), and a conversion operator group to one
-    /// static per conversion (baseline FR-078, #600).
+    /// helper methods, and a conversion operator group to one static per
+    /// conversion (baseline FR-078, #600). A helper whose name an emitted base
+    /// already declares on the same side (a derived class redeclaring
+    /// <c>explicit operator int</c> or <c>operator +</c>) is emitted
+    /// <c>override</c> (TS4114).
     /// </summary>
     private IReadOnlyList<TsClassMember> EmitOperator(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        IrMethodDeclaration irOp,
+        TsOverloadClaims claims
+    ) =>
+        BuildOperatorMembers(type, ir, irOp, claims)
+            .Select(member =>
+                member is TsMethodMember method && claims.InheritsMember(method.Name, method.Static)
+                    ? method with
+                    {
+                        Override = true,
+                    }
+                    : member
+            )
+            .ToList();
+
+    /// <summary>
+    /// The TS helper methods of a user-defined operator, deriving the emitted
+    /// name from the operator's <c>[Name]</c> override or
+    /// <see cref="IrMethodSemantics.OperatorKind"/>
+    /// (<see cref="TsOperatorNaming"/>).
+    /// </summary>
+    private IReadOnlyList<TsClassMember> BuildOperatorMembers(
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         IrMethodDeclaration irOp,

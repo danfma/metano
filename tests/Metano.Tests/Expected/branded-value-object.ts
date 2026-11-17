@@ -34,6 +34,10 @@ export namespace EpisodeSlug {
     throw new Error("No matching overload for from");
   }
 
+  export function __implicitToString(self: EpisodeSlug): string {
+    return self;
+  }
+
   export function __fromString(raw: string): EpisodeSlug {
     return EpisodeSlug.fromValue(raw);
   }

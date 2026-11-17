@@ -68,6 +68,7 @@ NullGuardProbes.concatDecimal = a1.5
 NullGuardProbes.interpGeneric = ghg5hgtruehg1.5h
 OperatorProbes.brandedOperatorAndConversions = 5|6|1
 OperatorProbes.conversions = 7|7|7|7
+OperatorProbes.crossPackageConversions = ab|[object Object]|[object Object]
 OperatorProbes.genericOperatorAndConversion = undefined[object Object]2
 OperatorProbes.increment THROWS TypeError: undefined is not an object (evaluating 'm.v.toString')
 OperatorProbes.pinnedConversions = [object Object]|[object Object]

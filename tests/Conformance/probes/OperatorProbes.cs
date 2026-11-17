@@ -86,6 +86,14 @@ public readonly record struct OpQty(int Value)
     public static explicit operator int(OpQty q) => q.Value + 7;
 }
 
+public class OpConvDer : Lib.LConvBase
+{
+    public OpConvDer(int v)
+        : base(v) { }
+
+    public static explicit operator int(OpConvDer d) => d.V * 2;
+}
+
 /// <summary>
 /// User-defined operators and conversions (baseline FR-077–FR-079, #599,
 /// #600). Slice G3b changes only their declarations, which C# cannot call by
@@ -140,5 +148,13 @@ public static class OperatorProbes
         var sum = q + new OpQty(1);
 
         return q.Value + "|" + sum.Value + "|" + (int)new OpQty(1);
+    }
+
+    public static string CrossPackageConversions()
+    {
+        string slug = new Lib.LSlug("ab");
+        var d = new OpConvDer(3);
+
+        return slug + "|" + (int)d + "|" + (int)(Lib.LConvBase)d;
     }
 }

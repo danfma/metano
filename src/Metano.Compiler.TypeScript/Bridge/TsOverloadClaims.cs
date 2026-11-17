@@ -19,17 +19,20 @@ internal sealed class TsOverloadClaims
     private readonly IReadOnlyDictionary<int, TsConstructorOverloadNames> _constructors;
     private readonly IReadOnlyDictionary<TsMethodOverloadKey, TsMethodOverloadNames> _methods;
     private readonly IReadOnlyList<TsClaimFinding> _findings;
+    private readonly TsClaimSides _inherited;
 
     public TsOverloadClaims(
         IReadOnlyDictionary<int, TsConstructorOverloadNames> constructors,
         IReadOnlyDictionary<TsMethodOverloadKey, TsMethodOverloadNames> methods,
         TsClaimSides sides,
+        TsClaimSides inherited,
         IReadOnlyList<TsClaimFinding> findings
     )
     {
         _constructors = constructors;
         _methods = methods;
         _findings = findings;
+        _inherited = inherited;
         Statics = sides.Statics;
         Instances = sides.Instances;
     }
@@ -39,6 +42,7 @@ internal sealed class TsOverloadClaims
         new(
             new Dictionary<int, TsConstructorOverloadNames>(),
             new Dictionary<TsMethodOverloadKey, TsMethodOverloadNames>(),
+            TsClaimSides.Empty,
             TsClaimSides.Empty,
             []
         );
@@ -96,6 +100,16 @@ internal sealed class TsOverloadClaims
     /// </summary>
     public bool OverridesInheritedMember(IrMethodDeclaration overload, string name) =>
         MethodNamesOf(overload).OverriddenNames.Contains(name);
+
+    /// <summary>
+    /// Whether an emitted base declares <paramref name="name"/> on the static
+    /// or the instance side, so a member the class declares under the same
+    /// name shadows it and is emitted <c>override</c> (TS4114): an operator
+    /// helper or a conversion static a derived class redeclares (baseline
+    /// FR-078).
+    /// </summary>
+    public bool InheritsMember(string name, bool isStatic) =>
+        (isStatic ? _inherited.Statics : _inherited.Instances).ContainsKey(name);
 
     /// <summary>
     /// The fast-path name of the method overload the class declares under

@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -12,9 +13,15 @@ namespace Metano.Compiler.Extraction;
 /// <c>InOf</c>, the type parameter's name and <c>Value</c> for an error type.
 /// Each named type carries its own qualifier chain for the climb (FR-003).
 /// </summary>
-internal static class IrNamingSpellingExtractor
+internal sealed class IrNamingSpellingExtractor
 {
     private const string GlobalQualifier = "Global";
+
+    private static readonly IrNamingSpellingExtractor Clr = new(named => named.Name);
+
+    private readonly Func<INamedTypeSymbol, string> _nameOf;
+
+    private IrNamingSpellingExtractor(Func<INamedTypeSymbol, string> nameOf) => _nameOf = nameOf;
 
     public static IrNamingSpelling Extract(IParameterSymbol parameter)
     {
@@ -23,13 +30,29 @@ internal static class IrNamingSpellingExtractor
         if (RefKindPrefix(parameter.RefKind) is { } prefix)
             components.Add(Unqualified(prefix));
 
-        AddType(parameter.Type, components);
+        Clr.AddType(parameter.Type, components);
 
         return new IrNamingSpelling(components);
     }
 
-    /// <summary>The spelling of a type outside a parameter (a conversion's target type).</summary>
-    public static IrNamingSpelling Extract(ITypeSymbol type)
+    /// <summary>
+    /// The spelling of the type a conversion operator converts to or from
+    /// (baseline FR-078): spec 013's, except that a named type is spelled by
+    /// the name <paramref name="target"/> emits it with, its <c>[Name]</c>
+    /// for that target when it has one (<c>[Name("Cash")] class Money</c> →
+    /// <c>Cash</c>), so the conversion's static names the type the reader
+    /// sees. Its qualifiers stay the CLR ones.
+    /// </summary>
+    public static IrNamingSpelling ExtractConverted(ITypeSymbol type, TargetLanguage? target)
+    {
+        var emittedNames = new IrNamingSpellingExtractor(named =>
+            named.GetNameOverride(target) ?? named.Name
+        );
+
+        return emittedNames.Spell(type);
+    }
+
+    private IrNamingSpelling Spell(ITypeSymbol type)
     {
         var components = new List<IrNamingComponent>();
 
@@ -38,7 +61,7 @@ internal static class IrNamingSpellingExtractor
         return new IrNamingSpelling(components);
     }
 
-    private static void AddType(ITypeSymbol type, List<IrNamingComponent> components)
+    private void AddType(ITypeSymbol type, List<IrNamingComponent> components)
     {
         if (IsAnnotatedReference(type))
         {
@@ -90,17 +113,17 @@ internal static class IrNamingSpellingExtractor
         }
     }
 
-    private static void AddTypes(IEnumerable<ITypeSymbol> types, List<IrNamingComponent> components)
+    private void AddTypes(IEnumerable<ITypeSymbol> types, List<IrNamingComponent> components)
     {
         foreach (var type in types)
             AddType(type, components);
     }
 
-    private static void AddNamedType(INamedTypeSymbol named, List<IrNamingComponent> components)
+    private void AddNamedType(INamedTypeSymbol named, List<IrNamingComponent> components)
     {
         components.Add(
             new IrNamingComponent(
-                NamingText.Capitalize(named.Name),
+                NamingText.Capitalize(_nameOf(named)),
                 QualifierChain(named),
                 TypeIdentity(named)
             )
@@ -151,7 +174,7 @@ internal static class IrNamingSpellingExtractor
 
         return name
             + "Of"
-            + string.Concat(container.TypeArguments.Select(argument => Extract(argument).Leaf));
+            + string.Concat(container.TypeArguments.Select(argument => Clr.Spell(argument).Leaf));
     }
 
     private static string TypeIdentity(INamedTypeSymbol named) =>

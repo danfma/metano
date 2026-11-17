@@ -57,10 +57,10 @@ public sealed record IrConversionName(
     string? Pin
 )
 {
+    /// <summary>The candidate as one word: the pin as written, else the prefix and the spelling.</summary>
+    public string Candidate => Pin ?? PrefixOf(Kind, Direction) + Spelling;
+
     /// <summary>The words a conversion's name starts with, before its spelling.</summary>
     public static string PrefixOf(IrConversionKind kind, IrConversionDirection direction) =>
         (kind is IrConversionKind.Explicit ? "" : kind.ToString()) + direction;
-
-    /// <summary>The candidate as one word: the pin as written, else the prefix and the spelling.</summary>
-    public string Candidate => Pin ?? PrefixOf(Kind, Direction) + Spelling;
 }

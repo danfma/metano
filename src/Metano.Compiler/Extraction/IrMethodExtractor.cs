@@ -78,7 +78,6 @@ public static class IrMethodExtractor
         {
             ConversionName = ConversionNaming.Of(method, target),
             TakesDeclaringTypeFirst = TakesDeclaringTypeFirst(method),
-            ReturnsWrappedValue = WrappedValueConversion.Returns(method),
         };
 
         ConversionNaming.ReportIfDeadEnd(method, target);
