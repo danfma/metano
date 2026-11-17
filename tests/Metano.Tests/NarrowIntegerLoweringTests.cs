@@ -402,8 +402,6 @@ public class NarrowIntegerLoweringTests
     }
 
     [Test]
-    [Arguments("counts[key]++", "Dictionary<string, int>")]
-    [Arguments("counts[key] += 2", "Dictionary<string, int>")]
     [Arguments("counts[key]++", "Dictionary<string, byte>")]
     [Arguments("counts[key] += 1", "Dictionary<string, byte>")]
     [Arguments("counts[key] |= 1u << 31", "Dictionary<string, uint>")]
@@ -588,7 +586,7 @@ public class NarrowIntegerLoweringTests
             .That(diagnostic.Message)
             .IsEqualTo($"'{expression}' on a dictionary entry is not supported.");
 
-        await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
 
         await Assert
             .That(location.SourceTree!.GetText().ToString(location.SourceSpan))

@@ -895,9 +895,10 @@ Product requirements added after the migration (normative; each one is traced by
   arithmetic is typed `int` by C# and is reduced like any `int` result; a `char` operand is a
   number in `[0, 0xFFFF]` (#501), so `c + 1` and `c - 'a'` fit and `c * 70000` wraps. In TypeScript, a reduced
   store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a `Dictionary<_, int>`)
-  MUST report `MS0001` as an error (for this store and the checked forms of 012 Edge Cases),
-  so the build fails as it did before this requirement, when `tsc` rejected the invalid
-  `counts.get(key)++` it emitted. This closes the known gap of 012
+  MUST report `MS0001` as an error, so the build fails as it did before this requirement, when
+  `tsc` rejected the invalid `counts.get(key)++` it emitted; the dictionary-entry stores
+  reported before it (checked forms, types narrower than `int`, shifts and `uint` bitwise
+  reads, 012 Edge Cases) keep their warning on every target. This closes the known gap of 012
   section K: an unchecked result read by checked code (`checked(a + unchecked(b * c))`, a
   `var h = unchecked(a * 31 + 7); h + 1` in a checked project) is in range, and a cast to the
   operand's own type (`(int)(i + j)`) reads the wrapped value. Traced by the "`int` / `uint`

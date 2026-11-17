@@ -393,21 +393,35 @@ public class Int32WrapTests
 
     /// <summary>
     /// A dictionary entry has no read-modify-write (the read of a missing
-    /// key would not throw), so a wrapped store on one reports MS0001 as an
-    /// error: the build fails, as it did when <c>tsc</c> rejected the
-    /// <c>counts.get(key)++</c> it emitted before.
+    /// key would not throw). The store FR-074 adds, an unchecked
+    /// <c>int</c> / <c>uint</c> arithmetic store that now wraps, reports
+    /// MS0001 as an error: the build fails, as it did when <c>tsc</c>
+    /// rejected the <c>counts.get(key)++</c> it emitted before. The stores
+    /// reported before FR-074 (checked, narrower than <c>int</c>) keep their
+    /// warning.
     /// </summary>
     [Test]
-    public async Task WrappedStore_OnADictionaryEntry_ReportsUnsupported()
+    [Arguments("counts[key]++;", "int", MetanoDiagnosticSeverity.Error)]
+    [Arguments("counts[key]--;", "uint", MetanoDiagnosticSeverity.Error)]
+    [Arguments("counts[key] += 2;", "int", MetanoDiagnosticSeverity.Error)]
+    [Arguments("counts[key] *= 3;", "uint", MetanoDiagnosticSeverity.Error)]
+    [Arguments("checked { counts[key]++; }", "int", MetanoDiagnosticSeverity.Warning)]
+    [Arguments("counts[key]++;", "byte", MetanoDiagnosticSeverity.Warning)]
+    [Arguments("counts[key] <<= 1;", "int", MetanoDiagnosticSeverity.Warning)]
+    public async Task StoreOnADictionaryEntry_ReportsUnsupported(
+        string store,
+        string valueType,
+        MetanoDiagnosticSeverity severity
+    )
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
+            $$"""
             using System.Collections.Generic;
 
             [Transpile]
             public class Tally
             {
-                public void Count(Dictionary<string, int> counts, string key) => counts[key]++;
+                public void Count(Dictionary<string, {{valueType}}> counts, string key) { {{store}} }
             }
             """
         );
@@ -415,7 +429,37 @@ public class Int32WrapTests
         var unsupported = UnsupportedFeatures(diagnostics);
 
         await Assert.That(unsupported.Count).IsEqualTo(1);
-        await Assert.That(unsupported[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(unsupported[0].Severity).IsEqualTo(severity);
+    }
+
+    /// <summary>
+    /// A checked <c>byte</c> store on a dictionary entry was reported as a
+    /// warning before FR-074 and still is, so Dart still transpiles it, and
+    /// its output is byte-identical to the integration base's.
+    /// </summary>
+    [Test]
+    public async Task Dart_CheckedByteStoreOnADictionaryEntry_StaysAWarning()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Tally
+            {
+                public void Count(Dictionary<string, byte> counts, string key)
+                {
+                    checked { counts[key]++; }
+                }
+            }
+            """
+        );
+
+        var unsupported = UnsupportedFeatures(diagnostics);
+
+        await Assert.That(unsupported.Count).IsEqualTo(1);
+        await Assert.That(unsupported[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await TranspileHelper.AssertGolden("dart-dictionary-entry-store.dart", files["tally.dart"]);
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction;
 
@@ -222,15 +223,23 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A reduced store on a dictionary entry: the read-modify-write cannot
     /// read a missing key as C# does (it throws <c>KeyNotFoundException</c>),
-    /// and the native compound operator on <c>map.get(key)</c> is not valid
-    /// JavaScript, so MS0001 is an error that fails the build (spec 001
-    /// FR-074).
+    /// so it reports MS0001. The store FR-074 adds, an unchecked
+    /// <c>int</c> / <c>uint</c> <c>+=</c>, <c>-=</c>, <c>*=</c>, <c>++</c> or
+    /// <c>--</c> that now wraps, is an error: before FR-074 it emitted the
+    /// native operator on <c>map.get(key)</c>, which <c>tsc</c> rejected, so
+    /// the build keeps failing. The stores reported before FR-074 (checked
+    /// forms, the types narrower than <c>int</c>, shifts, <c>uint</c> bitwise
+    /// reads) keep their warning.
     /// </summary>
-    private static IrUnsupportedExpression ReportDictionaryEntryStore(ExpressionSyntax operation)
+    private IrUnsupportedExpression ReportDictionaryEntryStore(ExpressionSyntax operation)
     {
+        var severity = StoresAnInt32ArithmeticWrap(operation)
+            ? MetanoDiagnosticSeverity.Error
+            : MetanoDiagnosticSeverity.Warning;
+
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
+                severity,
                 DiagnosticCodes.UnsupportedFeature,
                 $"'{operation}' on a dictionary entry is not supported.",
                 operation.GetLocation()
@@ -238,5 +247,33 @@ public sealed partial class IrExpressionExtractor
         );
 
         return new IrUnsupportedExpression(operation.Kind().ToString());
+    }
+
+    /// <summary>
+    /// Whether <paramref name="operation"/> stores the FR-074 wrap of
+    /// <c>int</c> / <c>uint</c> arithmetic: an increment, a decrement or an
+    /// arithmetic compound assignment whose stored value wraps to 32 bits.
+    /// </summary>
+    private bool StoresAnInt32ArithmeticWrap(ExpressionSyntax operation)
+    {
+        var store = _semantic.GetOperation(operation);
+
+        var isArithmeticStore =
+            store
+            is IIncrementOrDecrementOperation
+                or ICompoundAssignmentOperation
+                {
+                    OperatorKind: BinaryOperatorKind.Add
+                        or BinaryOperatorKind.Subtract
+                        or BinaryOperatorKind.Multiply,
+                };
+
+        return isArithmeticStore
+            && ReductionOf(store)
+                is {
+                    Mode: IrOverflowMode.Wrap,
+                    Kind: IrNumericKind.Int32 or IrNumericKind.UInt32,
+                    Operator: null,
+                };
     }
 }
