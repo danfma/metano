@@ -619,6 +619,54 @@ Product requirements added after the migration (normative; each one is traced by
   whose enum declares `final String value;` and `const E(this.value);`; a numeric enum declares
   neither. Traced by the "String enums" row of the feature-support matrix.
 
+- **FR-071** (`char` as a UTF-16 code unit in numeric positions, #501): A `char` keeps its
+  representation, a one-unit `string` (TypeScript) and `String` (Dart): this is not a change of
+  type, so JSON, dictionary keys, `switch`, equality, concatenation and `ToString` are unchanged.
+  The numeric reading is explicit at every position where C# reads the `char` as a number, decided
+  from the operand types and the conversion the semantic model reports. The TypeScript backend
+  MUST read the code unit as `value.charCodeAt(0)` wherever a `char` operand meets a numeric type:
+  an implicit or explicit `char` to `int`, `uint`, `long`, `ulong`, `double`, `float`, `decimal`
+  or `BigInteger` conversion (`int code = s[0]`, `(int)s[0]`, `long r = c + i`), an operand of an
+  arithmetic, shift (count included, `l << c`), bitwise or unary operator (`c + 1`, `c - 'a'`,
+  `c * 2`, `-c`, `~c`), a relational or equality operand compared with a non-`char` numeric value
+  (`c < n`, `c == 97`), an arm of a conditional or coalesce whose type is numeric (`f ? c : 0`)
+  and the operand of a `char` to `byte`, `sbyte`, `short` or `ushort` conversion
+  (`unchecked((byte)c)` is the code unit narrowed like any `ushort`, checked as the context says).
+  A `char` literal read as a number folds to its code (`c - 'a'` is `c.charCodeAt(0) - 97`, as the
+  `double` case does). A comparison whose two operands are both `char` (`c >= 'a'`, `a == b`),
+  `switch` and pattern tests against `char` constants, and the elements of a `foreach` over a
+  `string` keep comparing and looping as one-unit strings: a JS string comparison orders by UTF-16
+  code unit, as .NET orders `char`. Text positions stay text: `"x" + c`, `c + "x"`, `$"{c}"`,
+  `c.ToString()` and `new string(c, n)` never read the code. The arithmetic result is an `int`
+  (a `number`, or a `bigint` once widened to `long`), as C# types it: `c + 1` is not a `char`.
+  Dart keeps its current output byte for byte: the nodes print as their operand, an explicit
+  conversion keeps its `as T` cast, and Dart `String` arithmetic stays a documented gap (no
+  `MS0001`, no `codeUnitAt`).
+
+- **FR-072** (`char` stores and narrowing, #501): The TypeScript backend MUST produce a `char`
+  from a number only through `String.fromCharCode`, keeping the low 16 bits as .NET does:
+  `(char)n` and `(char)(c + 1)` are `String.fromCharCode(n & 0xFFFF)` (a `long`, `BigInteger` and
+  floating-point source keep the existing lowering of spec 012 FR-011 and FR-070); in a `checked`
+  context a source outside `0..0xFFFF` throws `OverflowException` through the existing checked
+  narrowing helper. An increment, a decrement or a compound assignment whose target is a `char`
+  (`c++`, `--c`, `c += (char)2`, `c -= 1`) reads the code, applies the operator on the `int`, and
+  stores it back as a `char`: `c = String.fromCharCode(c.charCodeAt(0) + 1 & 0xFFFF)`. The
+  prefix and compound forms keep their value as an assignment expression; a postfix `c++` / `c--`
+  whose value is used reports `MS0001`, as does a target that cannot be evaluated twice without a
+  side effect. A `foreach` variable declared `char` over numbers (`foreach (char x in doubles)`)
+  converts each element with the same rules, and the variable is a one-unit string, so `s += x` on
+  an `int` reads its code (FR-071) instead of concatenating. Dart keeps its current output byte
+  for byte.
+
+- **FR-073** (lone surrogates in literals, #501): No generated file MUST fail to write because of
+  its text. The TypeScript printer MUST emit an unpaired UTF-16 surrogate of any string literal,
+  `char` literal or template quasi as the `\uXXXX` escape (`'\uD83D'` prints as `"\ud83d"`), so
+  the file is valid UTF-8 and the literal evaluates to the same code unit; a valid surrogate pair
+  stays printed as its character, so existing output is unchanged. The Dart backend escapes a lone
+  surrogate the same way (`\uD83D` in a Dart string) and is otherwise unchanged. Before this
+  requirement the CLI aborted with `EncoderFallbackException` while writing the file. Traced by
+  the "`char` as a code unit" and "Lone surrogate literals" rows of the feature-support matrix.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
