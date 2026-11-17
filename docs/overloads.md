@@ -302,12 +302,28 @@ run in `targets/js/sample-issue-tracker`.
 |---|---|---|
 | `MS0003` | error / warning | the climb's dead end; an invalid `[Name]` suffix (error); an override's `[Name]` ignored for its root's, a `[Name]` on a constructor that is not overloaded (warning) |
 | `MS0034` | error | `[JsonFactory]` on a method of an overloaded group (the dispatcher is shared by its siblings) |
+| `MS0063` | warning | an overload a dispatcher cannot tell from a synthesized value-equality member that joined its group (see below) |
 | `MS0067` | warning | a generated name was taken and took `$` |
-| `MS0068` | error | a user member takes a generated fast path or factory name it does not own |
+| `MS0068` | error | a user member takes a generated fast path or factory name it does not own (including `equalsByValue` / `hashCodeByValue` / `withByValue`) |
+| `MS0001` | error | such an overload implements a transpiled interface member, whose callers reach it through the shared name |
 | `MS0069` | warning | a type implements one generic interface with overload groups more than once (`C : IConv<int>, IConv<string>`); calls to those members keep runtime dispatch |
 
 The [diagnostic catalog](../specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md)
 lists every message.
+
+### Methods spelled like `equals`, `hashCode` or `with`
+
+A record's or plain struct's `Equals(object)`, `GetHashCode()` and record copy keep
+the names the runtime calls. A user method the target spells the same way —
+`Equals(RTol other, double tol)`, `HashCode(int seed)`, a record's `With(int a)`, or a
+lone method whose `[Name]` is `equals` / `hashCode` / `with` — shares that name: the
+synthesized member joins its group as one more overload under the fast path
+`equalsByValue` / `hashCodeByValue` / `withByValue`. The dispatcher tries the
+synthesized member first for an argument of the receiver's own type, so the runtime's
+`valueEquals`, `HashSet` and `Dictionary` keep value equality; C# calls bind to the fast
+paths. A struct's `Equals(S)` that implements `IEquatable<S>` (or a transpiled
+interface's `Equals(S)`) replaces the synthesized equality, as `EqualityComparer<S>`
+uses it. See [the contract](../specs/013-overload-factories/contracts/value-equality-members.md).
 
 ## Dart
 
