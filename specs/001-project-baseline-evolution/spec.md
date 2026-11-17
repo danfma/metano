@@ -864,7 +864,9 @@ Product requirements added after the migration (normative; each one is traced by
   local, field, property, array element or indexer, MUST be reduced modulo 2^32 to the type's
   range, as .NET wraps it (`int.MaxValue + 1` is `int.MinValue`, `0u - 1u` is `4294967295`).
   The core decides it from Roslyn and represents it as 012 FR-026's
-  `IrIntegerOverflow(Value, Int32 | UInt32, Wrap)`; an increment or a compound assignment stores
+  `IrIntegerOverflow(Value, Int32 | UInt32, Wrap)` for a target whose numeric lowering rules
+  ask for it (`NumericLoweringRules.WrapsInt32Arithmetic`, the policy record that also holds the
+  `char` rules of FR-071): TypeScript turns it on, Dart keeps it off; an increment or a compound assignment stores
   the reduced value through 012 FR-024's read-modify-write (receiver and index evaluated once; a
   postfix form whose value is used yields the stored value stepped back and reduced again, with
   no temporary), and a lifted form reduces its non-null result (012 FR-025). The TypeScript
@@ -879,19 +881,19 @@ Product requirements added after the migration (normative; each one is traced by
   | `x = i++` | `x = ((i = (i + 1) \| 0) - 1) \| 0` |
 
   A product MUST use `Math.imul`, never `(a * b) | 0`: two 32-bit factors can exceed 2^53, where
-  a `double` has lost the low bits. Dart prints the same node as DECIDED-19 prints every wrap
-  narrower than 64 bits (`(a + b).toSigned(32)` on `int`, `(a * b).toUnsigned(32)` on `uint`; a
-  product of two 32-bit values is exact in a 64-bit Dart VM `int`), so Dart needs no new code and
-  its output changes with the TypeScript output. Known gap: compiled to JavaScript (dart2js,
-  Dart web), a Dart `int` is a `double`, so `(a * b).toSigned(32)` loses the low bits of a
-  product past 2^53. Not reduced: `/` and `%` (only `int.MinValue / -1` and `% -1` leave the
+  a `double` has lost the low bits. **Dart is out of scope** (maintainer decision of
+  2026-11-17): its output MUST stay byte-identical, with no `.toSigned(32)` / `.toUnsigned(32)`
+  for this requirement and no MS0001 on a dictionary entry, so unchecked `int` / `uint`
+  arithmetic keeps the 64-bit Dart `int` result (`int.MaxValue + 1` is `2147483648`), a
+  documented gap deferred to after v3 (a later wrap would print DECIDED-19's selectors, and
+  would need a `Math.imul` counterpart on Dart web, where an `int` is a `double`). Not reduced: `/` and `%` (only `int.MinValue / -1` and `% -1` leave the
   range, and .NET throws `OverflowException` for them in both contexts: the divergence of
   baseline FR-014 stays), an operation whose result is of an enum type (`e + 1` on an enum `E` is
   an `E`; an operation on enum operands whose result is an integer, such as
   `DayOfWeek.Friday - DayOfWeek.Monday`, which is an `int`, is reduced), user-defined operators,
   `[Queryable]` expression trees, and constants (Roslyn folds them, 012 FR-074). `char`
   arithmetic is typed `int` by C# and is reduced like any `int` result; a `char` operand is a
-  number in `[0, 0xFFFF]` (#501), so `c + 1` and `c - 'a'` fit and `c * 70000` wraps. A reduced
+  number in `[0, 0xFFFF]` (#501), so `c + 1` and `c - 'a'` fit and `c * 70000` wraps. In TypeScript, a reduced
   store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a `Dictionary<_, int>`)
   MUST report `MS0001` as an error, as the checked forms do (012 Edge Cases); before this
   requirement it emitted the invalid `counts.get(key)++`. This closes the known gap of 012
@@ -902,8 +904,9 @@ Product requirements added after the migration (normative; each one is traced by
 
 - **FR-075** (wraps the core proves unneeded, #639): The core MUST omit the reduction of FR-074,
   and the check of 012 FR-077 (one rule for both contexts), where C# shows that the exact result
-  fits the type. The decision is in the core, so it holds for every target (Dart prints no wrap
-  there either):
+  fits the type. The proof is a neutral fact the core computes from Roslyn, so it holds for every
+  target that reduces (Dart prints neither the unchecked wrap, which it does not produce, nor
+  checked `int` / `uint` arithmetic, DECIDED-19, so its output does not change):
   - the operand ranges of 012 FR-074 (`IntegerValueRanges`: a constant, a value widened from a
     narrower type, a mask; `b1 + b2` on `byte`, `s * 2` on `short`, `(x & 0xFF) + 1`), which
     also read as `[0, int.MaxValue]` the `Length` of an array or a `string` and the `Count` of
@@ -946,16 +949,34 @@ Product requirements added after the migration (normative; each one is traced by
   `a - (b - c)` and `-(a + 1) | 0` keep their parentheses; goldens MUST pin these shapes and the
   product case above. Every other consumer keeps the wrap: a checked operation (`checkedInt32`),
   a comparison, `/`, `%`, a conversion to `double`, `long` (`BigInt(...)`) or `string`, an
-  argument, a return value and a store. Dart prints every wrap FR-075 keeps (the same elision
-  is valid on a 64-bit Dart `int` for `+`, `-` and `*`, but not for its 64-bit bitwise
-  operators; a follow-up may add it).
+  argument, a return value and a store. Dart has no FR-074 wrap to elide (out of scope, see
+  FR-074).
 
   Known gaps and follow-ups of FR-074–FR-076: a real read-modify-write on dictionary entries
   (instead of `MS0001`); the range of a proven counter inside the loop body (it spans its type
-  there); a write through `Unsafe.AsRef(in i)`, which escapes the data-flow proof of FR-075; and
-  the asm.js-style `((s | 0) + x) | 0`, which avoids a V8 slow path for an accumulator that
-  overflows on most iterations (measured on Node 24: about 13 times slower than that form,
-  where Bun shows no slow path), to be decided with a benchmark.
+  there); a write through `Unsafe.AsRef(in i)`, which escapes the data-flow proof of FR-075; the
+  asm.js-style `((s | 0) + x) | 0`, which avoids a V8 slow path for an accumulator that
+  overflows on most iterations; `int.MinValue / -1`, `% -1` and `Math.Abs(int.MinValue)`; and
+  the Dart wrap (FR-074).
+
+  Benchmark (recorded for the maintainer decision; Apple M1 Pro, Bun 1.4.2, Node 24.11.0; median
+  of 7 runs of a 5·10^7-iteration loop over an `Int32Array`, in ms):
+
+  | Loop body | Bun | Node |
+  | --- | --- | --- |
+  | sum in range, unwrapped (before FR-074): `s = s + x` | 109 | 80 |
+  | sum in range, wrapped: `s = (s + x) \| 0` | 95 | 48 |
+  | hash, unwrapped: `h = h * 31 + x` | 219 | 159 |
+  | hash, wrapped: `h = (Math.imul(h, 31) + x) \| 0` | 140 | 76 |
+  | accumulator overflowing on most iterations, wrapped: `s = (s + x) \| 0` | 48 | 415 |
+  | the same, asm.js form: `s = ((s \| 0) + x) \| 0` | 51 | 39 |
+  | the same on `uint`: `s = (s + x) >>> 0` | 121 | 407 |
+
+  In range, the wrap is as fast as or faster than the unwrapped `number` (V8 and JavaScriptCore
+  keep the value a small integer), and a wrapped hash is faster than the unwrapped one, which
+  leaves the integer range. An accumulator that overflows on most iterations hits a V8 slow path
+  on Node (about 10 times the asm.js form; Bun has none). The maintainer accepted the Node slow
+  path for 3.0 (2026-11-17); the asm.js form stays a follow-up.
 
 ### Key Entities
 
