@@ -37,7 +37,12 @@ or module function; for virtual and interface members, the **root** group of § 
    or `From` + the source type's spelling (a conversion into it), because C# tells conversions
    apart by their source and target types (`explicit operator int(Money m)` /
    `explicit operator long(Money m)` → `__toInt32` / `__toInt64` in TypeScript; baseline FR-078,
-   #600). Two conversions of one type whose names collide climb as step 5 describes.
+   #600); a `checked` conversion operator is `CheckedTo` / `CheckedFrom`. The name comes from one
+   function of the symbol (`ConversionNaming.Of`), at the declaration and at every use, and is
+   carried as `IrConversionName`; a conversion group gets no overload suffix (the former
+   `<Params>To<Target>` suffix is retired). Two conversions of one type whose names collide
+   climb as step 5 describes; a name claimed by another member is `MS0003` rather than a `$`
+   rename, so the name never depends on the claim pass.
 4. **Distinctness, pass 2.** If every suffix in `G` is distinct, done.
 5. **The climb (DECIDED-4).** While two or more overloads share a suffix, each overload of every
    colliding set qualifies **every parameter's spelling one more level**, and the suffixes are
