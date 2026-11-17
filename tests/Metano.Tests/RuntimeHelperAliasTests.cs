@@ -52,12 +52,15 @@ public class RuntimeHelperAliasTests
             .Contains(
                 @"import { HashCode, copyRecordWith, valueEquals as valueEquals$rt } from ""metano-runtime"";"
             );
+
         await Assert
             .That(output)
             .Contains(
                 "return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals$rt(this.item, other.item);"
             );
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+
         await Assert
             .That(files["shared.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-exported-as-module.ts"));
@@ -91,9 +94,11 @@ public class RuntimeHelperAliasTests
         var output = files["is-int32.ts"];
 
         await Assert.That(output).Contains("export class isInt32");
+
         await Assert
             .That(output)
             .Contains(@"import { isInt32 as isInt32$rt, isString } from ""metano-runtime"";");
+
         await Assert.That(output).Contains("isInt32$rt(args[0])");
         // No collision for `isString` — the negative dispatcher check stays
         // on the plain name.
@@ -151,9 +156,11 @@ public class RuntimeHelperAliasTests
         var output = files["program.ts"];
 
         await Assert.That(output).Contains(@"import { isString } from ""ext-stub"";");
+
         await Assert
             .That(output)
             .Contains(@"import { isInt32, isString as isString$rt } from ""metano-runtime"";");
+
         await Assert.That(output).Contains("isString$rt(");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -199,6 +206,7 @@ public class RuntimeHelperAliasTests
             .Contains(
                 @"import { HashCode, copyRecordWith, valueEquals as valueEquals$rt2 } from ""metano-runtime"";"
             );
+
         await Assert.That(output).Contains("valueEquals$rt2(a, b)");
         await Assert.That(output).Contains("export function valueEquals(");
         await Assert.That(output).Contains("export function valueEquals$rt(");
@@ -319,8 +327,10 @@ public class RuntimeHelperAliasTests
             .Contains(
                 @"import { count, linq, where as where$rt } from ""metano-runtime/system/linq"";"
             );
+
         await Assert.That(output).Contains("where$rt(");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+
         await Assert
             .That(files["queries.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-linq-pipe.ts"));
@@ -366,9 +376,11 @@ public class RuntimeHelperAliasTests
         await Assert
             .That(output)
             .Contains(@"import { HashSet as HashSet$rt } from ""metano-runtime"";");
+
         await Assert.That(output).Contains("items: HashSet$rt<number>");
         await Assert.That(output).Contains("new HashSet$rt<number>()");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+
         await Assert
             .That(files["sets.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-class-shaped.ts"));
@@ -406,6 +418,7 @@ public class RuntimeHelperAliasTests
         await Assert
             .That(output)
             .Contains(@"import { isInt32, isString } from ""metano-runtime"";");
+
         await Assert.That(output).Contains("isInt32(args[0])");
         await Assert.That(output).DoesNotContain("$rt");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();

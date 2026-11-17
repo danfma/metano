@@ -36,9 +36,11 @@ public class StaticExtensionMemberTests
         );
 
         var output = result["app/date-extensions.ts"];
+
         await Assert
             .That(output)
             .Contains("export function create(year: number, month: number, day: number): Date");
+
         await Assert.That(output).DoesNotContain("date: Date");
     }
 

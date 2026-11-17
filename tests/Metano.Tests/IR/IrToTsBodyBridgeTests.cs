@@ -36,6 +36,7 @@ public class IrToTsBodyBridgeTests
             """,
             extraMembers: "void doSomething(int v) { }"
         );
+
         // `x` is declared once and never reassigned, so the extractor's
         // effective-const pass promotes it to `const` — matching the legacy
         // ExpressionTransformer behavior on the same input.
@@ -56,6 +57,7 @@ public class IrToTsBodyBridgeTests
             }
             """
         );
+
         await Assert.That(ts).Contains("if (flag) {").And.Contains("return;");
     }
 
@@ -102,6 +104,7 @@ public class IrToTsBodyBridgeTests
             "bool IsFoo(object o) => o is Foo;",
             extraMembers: "public class Foo { }"
         );
+
         await Assert.That(ts).Contains("instanceof T.Foo");
     }
 
@@ -150,6 +153,7 @@ public class IrToTsBodyBridgeTests
             public T(int count) { this.count = count; }
             """
         );
+
         // The reference to `count` is an implicit-`this` access to the instance
         // field, which the IR extractor now expands to `this.count`.
         await Assert.That(ts).Contains("new T((this.count + 1) | 0)");
@@ -167,6 +171,7 @@ public class IrToTsBodyBridgeTests
             "bool Check(object obj) => obj is Point { X: 0 };",
             extraMembers: "public record Point(int X, int Y);"
         );
+
         // Point is nested inside the test host `T`, so the mapped type keeps
         // the `T.` qualifier — that's the IR type ref lowering, not the
         // property-pattern layer.
@@ -251,6 +256,7 @@ public class IrToTsBodyBridgeTests
             }
             """
         );
+
         await Assert.That(ts).Contains(".toFixed(");
     }
 
@@ -271,6 +277,7 @@ public class IrToTsBodyBridgeTests
             }
             """
         );
+
         await Assert.That(ts).Contains("(x).toString(16)");
     }
 
@@ -288,6 +295,7 @@ public class IrToTsBodyBridgeTests
             public void cb2(System.Action<IAmbient> cb) { }
             """
         );
+
         await Assert.That(ts).Contains("(x) => x.read()");
     }
 
@@ -308,6 +316,7 @@ public class IrToTsBodyBridgeTests
             }
             """
         );
+
         await Assert.That(ts).Contains("UserId.create(s)");
         await Assert.That(ts).DoesNotContain("new UserId(");
     }
@@ -359,6 +368,7 @@ public class IrToTsBodyBridgeTests
         var compilation = IrTestHelper.Compile(csharp);
         var tree = compilation.SyntaxTrees.First();
         var model = compilation.GetSemanticModel(tree);
+
         var methodSyntax = tree.GetRoot()
             .DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
@@ -366,6 +376,7 @@ public class IrToTsBodyBridgeTests
 
         var methodSymbol = (IMethodSymbol)model.GetDeclaredSymbol(methodSyntax)!;
         var stmtExtractor = new IrStatementExtractor(model, IrExtractionContext.Empty);
+
         var irBody = stmtExtractor
             .ExtractBody(methodSyntax.Body, methodSyntax.ExpressionBody, methodSymbol.ReturnsVoid)
             .Statements;

@@ -271,6 +271,7 @@ public class ObjectInitializerTests
             .ToList();
 
         await Assert.That(unsupported).HasSingleItem();
+
         await Assert
             .That(unsupported[0].Message)
             .Contains("does not bind to an instance 'Add' method");
@@ -358,6 +359,7 @@ public class ObjectInitializerTests
         await Assert.That(output).Contains("set value(value: number) {");
         await Assert.That(output).Contains("this._value = Math.imul(value, 2);");
         await Assert.That(output).Contains("Object.assign(receiver$temp$0, { value: 3 });");
+
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsEmpty();
@@ -430,6 +432,7 @@ public class ObjectInitializerTests
             .Contains(
                 "((receiver$temp$0) { receiver$temp$0.value = 1; return receiver$temp$0; })(Box())"
             );
+
         await Assert
             .That(output)
             .Contains("receiver$temp$0.add(1); receiver$temp$0.add(2); return receiver$temp$0; }");

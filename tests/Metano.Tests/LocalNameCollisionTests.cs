@@ -821,6 +821,7 @@ public class LocalNameCollisionTests
                 )
             )
             .IsEqualTo(1);
+
         await Assert.That(diagnostics.Any(d => d.Code == "MS0003")).IsFalse();
     }
 
@@ -879,6 +880,7 @@ public class LocalNameCollisionTests
         await Assert
             .That(diagnostics.Count(d => d.Code == "MS0003" && d.Message.Contains("'a'")))
             .IsEqualTo(1);
+
         await Assert.That(diagnostics.Any(d => d.Code == "MS0006")).IsFalse();
     }
 

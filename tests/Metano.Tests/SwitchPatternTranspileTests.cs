@@ -341,6 +341,7 @@ public class SwitchPatternTranspileTests
                       }
                 """
             );
+
         // `var` sub-patterns add no test and bind their member.
         await Assert
             .That(output)
@@ -350,6 +351,7 @@ public class SwitchPatternTranspileTests
                         const r = $s.radius;
                 """
             );
+
         // A guarded `var` arm scopes its binding in a block.
         await Assert
             .That(output)
@@ -364,6 +366,7 @@ public class SwitchPatternTranspileTests
                       }
                 """
             );
+
         await Assert.That(output).Contains("return \"none\";");
         await Assert.That(output).DoesNotContain("if (true)");
         await Assert.That(output).DoesNotContain("Non-exhaustive switch expression");
@@ -435,6 +438,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["geo/positional.ts"];
+
         await Assert
             .That(output)
             .Contains(
@@ -446,6 +450,7 @@ public class SwitchPatternTranspileTests
                       }
                 """
             );
+
         await Assert.That(output).Contains("const r = $s.radius;");
         await Assert.That(output).Contains("return s instanceof Circle && s.radius > 1;");
         await Assert.That(output).DoesNotContain("$s[");
@@ -505,11 +510,13 @@ public class SwitchPatternTranspileTests
         );
 
         var output = files["ranges.ts"];
+
         await Assert
             .That(output)
             .Contains(
                 "const a = undefined /* TODO: positional element 0 has no member to read */;"
             );
+
         await Assert
             .That(
                 diagnostics.Any(d => d.Code == "MS0001" && d.Message.Contains("Range.Deconstruct"))
@@ -657,6 +664,7 @@ public class SwitchPatternTranspileTests
 
         var output = result["geo/loader.ts"];
         await Assert.That(output).Contains("return await (async ($s) => {");
+
         await Assert
             .That(output)
             .Contains("return await Loader.load(`${formatDouble(c.radius)}`);");
@@ -938,6 +946,7 @@ public class SwitchPatternTranspileTests
         await Assert
             .That(result["geo/toggle.ts"])
             .Contains("constructor(readonly default_: boolean)");
+
         await Assert.That(result["geo/toggle.ts"]).Contains("this.default_ === other.default_");
         await Assert.That(result["geo/toggles.ts"]).Contains("t != null && t.default_ === true");
     }
@@ -1073,6 +1082,7 @@ public class SwitchPatternTranspileTests
         await Assert
             .That(output.Split("return slot != null && slot.head instanceof Circle;").Length - 1)
             .IsEqualTo(2);
+
         await Assert.That(output).Contains("return s instanceof Square;");
         await Assert.That(output).DoesNotContain("=== Circle");
         await Assert.That(output).DoesNotContain("=== Square");

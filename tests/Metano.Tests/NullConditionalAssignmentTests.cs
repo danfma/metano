@@ -105,6 +105,7 @@ public class NullConditionalAssignmentTests
         );
 
         var output = result["container.ts"];
+
         await Assert
             .That(output)
             .Contains("this.outer != null && (this.outer.inner.value = \"x\")");

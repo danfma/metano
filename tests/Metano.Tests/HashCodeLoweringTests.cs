@@ -76,6 +76,7 @@ public class HashCodeLoweringTests
         await Assert.That(CountOccurrences(output, "  hashCode(): number {")).IsEqualTo(1);
         await Assert.That(output).Contains("return valueHashCode(this.name.toUpperCase());");
         await Assert.That(output).DoesNotContain("getHashCode");
+
         await Assert
             .That(output)
             .Contains("import { copyRecordWith, valueHashCode } from \"metano-runtime\";");

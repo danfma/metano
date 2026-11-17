@@ -141,6 +141,7 @@ public class ExtensionTranspileTests
 
         var output = result["string-extensions.ts"];
         await Assert.That(output).Contains("export function isBlank$get(text: string): boolean");
+
         await Assert
             .That(output)
             .Contains("export function repeat(text: string, times: number): string");
@@ -167,15 +168,18 @@ public class ExtensionTranspileTests
         );
 
         var output = result["int-extensions.ts"];
+
         var firstOccurrence = output.IndexOf(
             "export function doubled(",
             System.StringComparison.Ordinal
         );
+
         var secondOccurrence = output.IndexOf(
             "export function doubled(",
             firstOccurrence + 1,
             System.StringComparison.Ordinal
         );
+
         await Assert.That(firstOccurrence).IsGreaterThanOrEqualTo(0);
         await Assert.That(secondOccurrence).IsEqualTo(-1);
     }

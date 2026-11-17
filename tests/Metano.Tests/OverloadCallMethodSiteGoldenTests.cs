@@ -461,12 +461,14 @@ public class OverloadCallMethodSiteGoldenTests
             .ToList();
 
         await Assert.That(shadows.Count).IsEqualTo(1);
+
         await Assert
             .That(shadows[0].Message)
             .IsEqualTo(
                 "Fast path 'Mixed.foldX' of 'Fold(int x)' is already taken in the barrel; it is "
                     + "emitted as 'foldX$' (spec 013 FR-032)."
             );
+
         await Assert.That(shadows[0].Location).IsNotNull();
 
         await TranspileHelper.AssertGolden(
@@ -534,6 +536,7 @@ public class OverloadCallMethodSiteGoldenTests
         await Assert.That(module).Contains("export function getAB(a: number, b: number): number {");
         await Assert.That(module).Contains("export function getAllX(allX: number): number {");
         await Assert.That(module).Contains("export function getAllX$(x: number): number {");
+
         await Assert
             .That(module)
             .Contains("export function getAllXY(x: number, y: number): number {");
@@ -543,12 +546,14 @@ public class OverloadCallMethodSiteGoldenTests
             .ToList();
 
         await Assert.That(shadows.Count).IsEqualTo(1);
+
         await Assert
             .That(shadows[0].Message)
             .IsEqualTo(
                 "Fast path 'Clash.getAllX' of 'GetAll(int x)' is already taken in the barrel; it is "
                     + "emitted as 'getAllX$' (spec 013 FR-032)."
             );
+
         await Assert.That(shadows[0].Location).IsNotNull();
 
         // The call sites call the claimed name of the overload Roslyn
@@ -689,9 +694,11 @@ public class OverloadCallMethodSiteGoldenTests
                 "Fast path 'Q.quxX' of 'Qux(int x)' is already taken in the barrel; it is "
                     + "emitted as 'quxX$' (spec 013 FR-032).",
             ]);
+
         await Assert
             .That(result["res.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-res.ts"));
+
         await Assert
             .That(result["q.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-q.ts"));
@@ -762,6 +769,7 @@ public class OverloadCallMethodSiteGoldenTests
                 "Fast path 'Res.fooY' of 'Foo(int y)' is already taken in the barrel; it is "
                     + "emitted as 'fooY$' (spec 013 FR-032).",
             ]);
+
         await Assert
             .That(result["res.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias-res.ts"));

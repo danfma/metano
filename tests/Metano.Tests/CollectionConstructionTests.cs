@@ -193,6 +193,7 @@ public class CollectionConstructionTests
         await Assert
             .That(output)
             .Contains("return (($arg0) => [] as Array<number>)(this.nextCapacity());");
+
         await Assert.That(output).Contains("return [] as Array<number>;");
     }
 
@@ -237,10 +238,12 @@ public class CollectionConstructionTests
         );
 
         var output = result["shelf.ts"];
+
         var importCount = output
             .Split('\n')
             .Where(line => line.StartsWith("import "))
             .Sum(line => line.Split("HashSet").Length - 1);
+
         await Assert.That(importCount).IsEqualTo(1);
     }
 

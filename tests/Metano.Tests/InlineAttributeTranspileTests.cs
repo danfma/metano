@@ -545,6 +545,7 @@ public class InlineAttributeTranspileTests
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidInline
             && d.Severity == Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Error
         );
+
         await Assert.That(error).IsNotNull();
         await Assert.That(error!.Message).Contains("Catalog");
         await Assert.That(error.Message).Contains("static");
@@ -604,6 +605,7 @@ public class InlineAttributeTranspileTests
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidInline
             && d.Severity == Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Warning
         );
+
         await Assert.That(warning).IsNotNull();
         await Assert.That(warning!.Message).Contains("Compute");
     }

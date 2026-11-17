@@ -47,6 +47,7 @@ public class EnumerableImplementationTests
         await Assert
             .That(result["bag.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("enumerable-implementation.ts"));
+
         await Assert.That(result["i-bag.ts"]).DoesNotContain("Symbol.iterator");
     }
 
@@ -84,6 +85,7 @@ public class EnumerableImplementationTests
         var countdown = result["countdown.ts"];
         await Assert.That(countdown).Contains("export class Countdown implements Iterable<number>");
         await Assert.That(countdown).Contains("*getEnumerator(): Generator<number> {");
+
         await Assert
             .That(countdown)
             .Contains(
@@ -93,6 +95,7 @@ public class EnumerableImplementationTests
                   }
                 """
             );
+
         // The derived class inherits the base member, which calls its override.
         await Assert.That(result["liftoff.ts"]).DoesNotContain("Symbol.iterator");
     }
@@ -310,6 +313,7 @@ public class EnumerableImplementationTests
         await Assert.That(output).Contains("export interface Stepper {");
         await Assert.That(output).Contains("export function next(self: Stepper): number {");
         await Assert.That(output).DoesNotContain("Iterator<");
+
         await Assert
             .That(
                 diagnostics.Count(d =>

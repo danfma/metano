@@ -72,9 +72,11 @@ public class ModuleFunctionClaimGoldenTests
             "module-claims-ignored-extension-host.ts",
             result["ign-host.ts"]
         );
+
         await Assert
             .That(result["em-host.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-claims-emit-extension-host.ts"));
+
         await Assert
             .That(result["priv-host.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-claims-private-extension-host.ts"));
@@ -181,6 +183,7 @@ public class ModuleFunctionClaimGoldenTests
                 "Fast path 'Res.fooX' of 'Foo(int x)' is already taken in the barrel; it is "
                     + "emitted as 'fooX$' (spec 013 FR-032).",
             ]);
+
         await Assert
             .That(result["res.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-claims-import-host-res.ts"));
@@ -290,6 +293,7 @@ public class ModuleFunctionClaimGoldenTests
         var result = TranspileHelper.Transpile(source);
 
         await Assert.That(binding).IsEqualTo("delete");
+
         await Assert
             .That(result["use.ts"])
             .Contains($"import {{ remove as {binding} }} from \"ext-lib\";");

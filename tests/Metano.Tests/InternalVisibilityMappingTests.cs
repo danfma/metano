@@ -68,6 +68,7 @@ public class InternalVisibilityMappingTests
         var files = TranspileHelper.Transpile(
             WidgetSource.Replace("{ACCESSIBILITY}", accessibility)
         );
+
         var output = files["app/widget.ts"];
 
         await Assert.That(output).Contains(fieldLine + "\n");
@@ -146,6 +147,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["app/engine.ts"];
 
         await Assert.That(output).Contains(signatures + "\n");
@@ -175,9 +177,11 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["app/engine.ts"];
 
         await Assert.That(output).DoesNotContain("private add(");
+
         await Assert
             .That(output)
             .Contains("/** @internal */\n  add(a: number, b: number): number;");
@@ -220,6 +224,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["app/widget.ts"];
 
         await Assert.That(output).Contains("  count: number = 0;");
@@ -255,6 +260,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["widget.ts"];
 
         await Assert.That(output).Contains(expectedLine + "\n");
@@ -275,6 +281,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["gauge.ts"];
 
         await Assert
@@ -284,6 +291,7 @@ public class InternalVisibilityMappingTests
                     + "  constructor(text: string);\n"
                     + "  constructor(...args: unknown[]) {"
             );
+
         await Assert.That(output).DoesNotContain("@internal */\n  constructor(");
         await Assert.That(output).DoesNotContain("private constructor(");
         // Each factory keeps its own overload's visibility (spec 013 DECIDED-17).
@@ -393,6 +401,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["app/engine.ts"];
 
         await Assert
@@ -402,6 +411,7 @@ public class InternalVisibilityMappingTests
                     + "  add(a: number): number;\n"
                     + "  add(...args: unknown[]): number {"
             );
+
         await Assert.That(output).DoesNotContain("protected add(");
     }
 
@@ -472,6 +482,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["gauge.ts"];
 
         // The protected constructor is widened and stays in the .d.ts, so a
@@ -483,6 +494,7 @@ public class InternalVisibilityMappingTests
                     + "  /** @internal */\n  constructor(text: string);\n"
                     + "  constructor(...args: unknown[]) {"
             );
+
         await Assert.That(output).DoesNotContain("protected constructor(");
     }
 
@@ -500,6 +512,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["meter.ts"];
 
         await Assert.That(output).Contains("  constructor(value: number)");
@@ -524,6 +537,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["app/clock.ts"];
 
         await Assert.That(output).Contains("  /** @internal */\n  ticked$add(handler:");
@@ -545,6 +559,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["app/probe.ts"];
 
         await Assert.That(output).Contains("  constructor(readonly x: number) { }");
@@ -620,6 +635,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var widget = files["app/widget.ts"];
         var gadget = files["app/gadget.ts"];
 
@@ -627,9 +643,11 @@ public class InternalVisibilityMappingTests
         await Assert.That(widget).Contains("  /** @internal */\n  protected steps: number = 0;");
         await Assert.That(widget).Contains("  private changed: ");
         await Assert.That(widget).Contains("  /** @internal */\n  protected changed$add(handler:");
+
         await Assert
             .That(widget)
             .Contains("  /** @internal */\n  protected changed$remove(handler:");
+
         await Assert.That(widget).Contains("  /** @internal */\n  protected reset(): void {");
         await Assert.That(widget).Contains("this.changed?.();");
         await Assert.That(widget).Contains("this.reset();");
@@ -655,6 +673,7 @@ public class InternalVisibilityMappingTests
             }
             """
         );
+
         var output = files["counters.ts"];
 
         await Assert.That(output).Contains("export function twice(value: number): number {");
@@ -776,6 +795,7 @@ public class InternalVisibilityMappingTests
                     + "  /** @internal */\n  constructor(id: number);\n"
                     + "  constructor(...args: unknown[]) {"
             );
+
         await Assert.That(baseOutput).Contains("\n  v(): void {");
         await Assert.That(baseOutput).DoesNotContain("protected v(");
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  v(");
@@ -840,6 +860,7 @@ public class InternalVisibilityMappingTests
                     + "  constructor();\n"
                     + "  constructor(...args: unknown[]) {"
             );
+
         await Assert
             .That(baseOutput)
             .Contains(
@@ -847,6 +868,7 @@ public class InternalVisibilityMappingTests
                     + "  q(a: string): number;\n"
                     + "  q(...args: unknown[]): number {"
             );
+
         await Assert.That(baseOutput).DoesNotContain("@internal");
     }
 

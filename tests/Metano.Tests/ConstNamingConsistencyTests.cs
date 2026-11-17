@@ -799,6 +799,7 @@ public class ConstNamingConsistencyTests
         await Assert
             .That(output)
             .Contains("function column(args: { of?: number; width?: number })");
+
         await Assert.That(output).Contains("const { of: of_ = 0, width = 100 } = args;");
         await Assert.That(output).Contains("return (of_ + width) | 0;");
     }

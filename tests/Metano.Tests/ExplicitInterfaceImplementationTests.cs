@@ -404,6 +404,7 @@ public class ExplicitInterfaceImplementationTests
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.ExplicitImplementationConflict))
             .IsFalse();
+
         await Assert.That(output).Contains("readonly cents: number");
         await Assert.That(output).DoesNotContain("op_Addition");
         await Assert.That(output).DoesNotContain("iAddable");
