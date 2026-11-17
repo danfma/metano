@@ -567,48 +567,112 @@ Product requirements added after the migration (normative; each one is traced by
 
 - **FR-066** (static constructors, #426; lazy since #681): A type's static constructor MUST run
   when .NET runs it: once, immediately before the first of these on that type: an instance
-  created through one of its emitted constructors or constructor factories, a call to a static
-  method or operator it declares, a read or write of a static field or property it declares.
-  Its static field and auto-property initializers run first, inside it, in textual order. These
-  do not trigger it: reading a `const` or an `[Inline]` field (folded at the use site), a
-  reference to the class itself (`typeof`, `instanceof`, passing the class), a nested type, and
-  the statics Metano synthesizes (overload selectors, runtime type descriptors). A static member
-  reached through a derived type's name triggers only the declaring type (`Derived.M()` with `M`
-  declared on `Base` runs `Base`'s), and `new Derived()` runs `Derived`'s before `Base`'s, the
-  reverse of the instance constructors. Re-entry, from the body itself or through another type's
-  initializer that reads back, sees the type as initialized, with the values assigned so far (C#
-  defaults before their initializer). An exception that escapes the initializer is wrapped in a
-  `TypeInitializationException` (type name, the original as `InnerException`, .NET's message),
-  and every later trigger rethrows that same exception.
+  created through one of its declared or emitted constructors, a call to a static method, operator
+  or conversion operator it declares, a read or write of a static field or property it declares,
+  and, for a struct, the first call to one of its instance methods. Its static field and
+  auto-property initializers run first, inside it, in textual order; for a partial type, in the
+  order Roslyn lists the declarations (the syntax-tree order of the compilation). These do not
+  trigger it: reading a `const` or an `[Inline]` field (folded at the use site), a reference to the
+  class itself (`typeof`, `instanceof`, passing the class), a nested type, the statics Metano
+  synthesizes (overload selectors, runtime type descriptors), and a struct's default value
+  (`default(S)`, an array element, a slot default, `new S()` binding to the implicit parameterless
+  constructor). A static member reached through a derived type's name triggers only the declaring
+  type (`Derived.M()` with `M` declared on `Base` runs `Base`'s), and `new Derived()` runs
+  `Derived`'s before `Base`'s, the reverse of the instance constructors. Re-entry, from the body
+  itself or through another type's initializer that reads back, sees the type as initialized,
+  with the values assigned so far (C# defaults before their initializer). An exception that
+  escapes the initializer is wrapped in a `TypeInitializationException` (the original as
+  `InnerException`, .NET's message), and every later trigger rethrows that same exception.
 
   TypeScript lowers a type that declares a static constructor, even an empty one, without a
-  `static { }` block. The class's first static member is
-  `static readonly #$init = typeInitializer("Ns.Name", () => { … })` (a `metano-runtime`
-  helper): its body assigns the field and auto-property initializers in textual order, then runs
-  the constructor body. Each static field and auto-property becomes a private `#name` slot that
-  holds its default value, plus a `static get name()` / `static set name(value)` pair that calls
-  `Name.#$init()` first. A read-only member has no setter. A `static readonly` field or get-only
-  static property that the static constructor writes gets a `private` setter, so it stays
-  read-only outside the class. Every static method, operator and static property accessor,
-  every instance constructor (before `super(...)`) and every constructor factory starts with
-  `Name.#$init();`. A type without an explicit static constructor keeps its static field
-  initializers at class definition: .NET's `beforefieldinit` leaves their timing to the runtime
-  (.NET 10 runs them at the first static field access).
+  `static { }` block:
+  - `static readonly #$init = typeInitializer("Name", () => { … })`, a `metano-runtime` helper, is
+    declared before the slots. Its body first assigns the slots whose default is not a literal
+    (a struct default), then the field and auto-property initializers in textual order, then the
+    constructor body. The type name is the simple C# name, with its containing types dotted
+    (`Outer.Inner`) and no type arguments, for nested and generic types alike.
+  - Each static field and auto-property becomes a private slot `#name$` (the trailing `$`, which
+    no C# name spells, keeps it apart from `#$init` and from Metano's own private members such as
+    an exception's `#baseMessage`). A slot holds a literal default at class definition: `null`
+    for a reference or nullable type, `0` / `0n` / `false` for a primitive. It never runs a
+    constructor or a guard at class definition. A `static get name()` / `static set name(value)`
+    pair calls `Name.#$init()` first. A read-only member has no setter. A `static readonly` field
+    or get-only static property that the static constructor writes gets a `private` setter, so it
+    stays read-only outside the class.
+  - Every static method, operator and conversion method, and every static property accessor,
+    starts with `Name.#$init();`.
+  - Every instance constructor runs the guard before anything else the instance runs: before
+    `super(...)` in a derived class, and before the instance field initializers in a class with
+    no base class, where ES class fields run before the constructor body: the first instance
+    field initializer evaluates `Name.#$init()` first (`a = (C.#$init(), Other.next());`). A
+    constructor dispatcher guards before branching. A class with a static constructor and no
+    declared instance constructor gets one that carries the guard (in a derived class
+    `constructor(...args) { D.#$init(); super(...args); }`).
+  - A struct runs the guard in a declared constructor, never in its default construction: the
+    emitted constructor guards only when called with arguments, unless the struct declares a
+    parameterless constructor. Its instance field initializers do not carry the guard. Each of
+    its instance methods starts with the guard.
+  - Accessors, `#$init` and every guard spell `Name.#x$` / `Name.#$init()`, never `this`:
+    `Derived.x` reaches `Base`'s accessor with `this === Derived`.
 
-  Differs from .NET or not covered:
+  A type without an explicit static constructor keeps its static field initializers at class
+  definition: .NET's `beforefieldinit` leaves their timing to the runtime (.NET 10 runs them at
+  the first static field access).
+
+  `TypeInitializationException` is a `metano-runtime` class extending the runtime
+  `SystemException`, bound with `[ExportFromBcl(typeof(TypeInitializationException))]` like its
+  siblings, with `TypeName` mapped. It passes the inner exception to `super(message, inner)`, so
+  `InnerException` reads `cause`; a thrown value that is not an `Error` is converted with
+  `toException` first.
+
+  Barrel order: when a type's static constructor constructs a class in another file of the same
+  barrel that `extends` the type, the two modules form an import cycle that loads only when the
+  derived module is evaluated first. The generated `index.ts` barrel then lists the derived
+  module's export just before the base module's. Only the export lines of such a cycle move; every
+  other line keeps its place, so a barrel without such a cycle does not change, and the order is
+  deterministic (NFR-005). `[EmitInFile]` prints a base class before a class in the same file that
+  `extends` it, whatever their declaration order (it prints declaration order today, which fails at
+  load).
+
+  Lowering boundary (TypeScript bridge): lazy versus eager is one per-class strategy, chosen once by
+  `IrClassDeclaration.StaticInitializer is not null`; the eager one is today's output. The lazy one
+  lowers static fields and auto-properties to slots and accessors, guards the constructor, emits
+  `#$init` in place of the static block, and guards static user members in one pass after the class
+  members are composed, selected by IR origin and `static` (not by TS name), so operators,
+  conversions and overload fast paths added by other lowerings are guarded too. The operator,
+  overload, constructor and factory dispatcher bridges and the struct default-constructor bridge
+  are not edited; constructor factories are covered by the constructor guard. The helper is
+  imported as a TypeScript runtime-helper reference, not a core runtime requirement. Core adds no
+  new fact.
+
+  Differs from .NET or not covered (follow-ups):
   - A generic type runs one initializer for all its constructions, since its static members are
     shared; .NET runs one per closed type.
+  - A static `async` method runs the guard synchronously, but a failure becomes a rejected promise
+    where .NET throws at the call; a static iterator (`static *m()`) runs the guard at the first
+    `next()`, not at the call.
+  - Calls that do not reach an emitted member do not trigger it: `[Inline]`, `[Emit]` and
+    BCL-mapped static methods, and a record's synthesized `==`.
+  - A struct that declares a parameterless constructor runs the guard when Metano spells its
+    default value as `new S()`.
+  - Importing the base module directly (not through the barrel) while its static constructor
+    constructs a derived class from another file still evaluates the derived class's `extends`
+    clause before the base class exists (`ReferenceError`). Workaround: `[EmitInFile]` or the
+    barrel. The same holds when the two modules are re-exported by different barrels. Automatic
+    co-location of cycle members is a follow-up.
+  - The static constructor body is dropped with no diagnostic in a static class with extension
+    members (module-shaped), in a `[Branded]` struct and in an interface. `MS0001` is not extended
+    here.
   - A containerless (`[NoContainer]` / `[ExportedAsModule]`) class keeps its `MS0001` error: an ES
     module variable cannot run code when it is read.
-  - `[PlainObject]` emits no class; its static members, the static constructor included, are not
-    emitted (unchanged).
+  - `[PlainObject]` emits no class; its static members, the static constructor included, are
+    dropped (existing).
   - Dart reports `MS0001` (the body is dropped).
-  - An initializer that constructs a class declared in another file which `extends` the type forms
-    an import cycle. The initializer no longer runs at load, so the cycle loads when the
-    derived class's module is evaluated first, or when both classes are emitted in one file
-    (`[EmitInFile]`). When the base class's module is evaluated first, the derived class's
-    `extends` clause still reads the base class before it is defined (`ReferenceError`).
-  - A static event does not trigger it: static events are not emitted as static members yet.
+  - Existing defects found here, not fixed by this FR: `MS0005` misses an import used only in a
+    static constructor; writing a base static through a derived name (`Derived.F = 5`) on a type
+    without a static constructor creates a shadow property on the derived class; static events
+    are emitted as instance members (and so do not trigger it); a private static field `count`
+    and a static property `Count` clash on the TS name `count`.
 
 - **FR-067** (dispatcher order and BCL-virtual groups, #677, extends FR-050): A dispatcher
   MUST try, among overloads of the same tier and arity, the one whose parameters all equal or
