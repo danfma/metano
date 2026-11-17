@@ -42,7 +42,7 @@ the migration list.
 
 ### Integers read as `decimal`, and `decimal` stores (baseline FR-080, #476)
 
-- An `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` read as a `decimal` (an assignment or initializer, an argument, a `return`, an operand of `+`, `<`, `==`, ..., a collection element, a conditional branch, the left operand of `??`, the cast `(decimal)i`) is now `new Decimal(i)`, lifted `n == null ? null : new Decimal(n)`. It printed the `number`, which failed `tsc` (`TS2322`) and threw `TypeError` at the first `Decimal` method call.
+- An `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` read as a `decimal` (an assignment or initializer, an argument, a `return`, an operand of `+`, `<`, `==`, ..., a collection element, a conditional branch, the left operand of `??`, the cast `(decimal)i`) is now `new Decimal(i + 0)` (the `+ 0` turns a JS `-0` into `0`), lifted `n == null ? null : new Decimal(n + 0)`. It printed the `number`, which failed `tsc` (`TS2322`) and threw `TypeError` at the first `Decimal` method call.
 - `d += x`, `-=`, `*=`, `/=`, `%=` and `d++` / `--d` on a `decimal` store the `Decimal` method call (`d = d.plus(new Decimal(x))`), evaluating the target once; the native operators concatenated strings (`a += d`) or stored a `number` (`a++`).
 - Dart output does not change.
 
