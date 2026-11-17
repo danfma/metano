@@ -31,7 +31,7 @@ public static class IrClassExtractor
 
         var semantics = ExtractSemantics(type, context);
 
-        ValueEqualityShapeReporter.Report(type, context.GroupingPolicy);
+        ValueEqualityShapeReporter.Report(type, semantics.ValueEquality, context.GroupingPolicy);
 
         var baseType =
             type.BaseType is not null && IsMeaningfulBase(type.BaseType)
