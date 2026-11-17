@@ -499,8 +499,10 @@ Product requirements added after the migration (normative; each one is traced by
   interface field compares by value. The synthesized `equals` / `hashCode` / `with` keep their
   names: a user method spelled like one forms a dispatched group of its own (spec 013) and is
   emitted under its fast-path name, and a field or property emitted as `equals` MUST report
-  `MS0001` as an error; a tuple there compares by reference (a known gap: a tuple
-  value is an array, indistinguishable at run time from a reference-compared array). An equality guard
+  `MS0001` as an error; an array behind a type parameter, `object` or an interface
+  compares element by element, so a tuple there compares by value as on .NET (a tuple is an
+  array at run time); a C# array there also compares element-wise where .NET compares the
+  reference, as 2.x did (a known gap: the run time cannot tell a tuple from an array). An equality guard
   (`ArgumentOutOfRangeException.ThrowIfEqual` / `ThrowIfNotEqual`) admits a sealed generic
   record, and a record with a `double` / `float` field, when every type argument and field is a
   value of the first kind or one the runtime compares as .NET does.

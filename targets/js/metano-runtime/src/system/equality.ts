@@ -362,9 +362,11 @@ export const valueHashCode = hashCode;
  * (a type parameter, `object`, an interface, a class): the same reference, or both
  * nullish, is equal; numbers are equal when `===` or both `NaN`; a value with an
  * `equals` method (records, structs, `Decimal`, user overrides) compares through it; a
- * `Temporal.Duration` (a `TimeSpan`) by its length; a `Date` by its time. Everything
- * else (a class without `Equals`, an array, a `Map`, a `Set`) compares by reference.
- * Unlike {@link equals}, it never compares structurally.
+ * `Temporal.Duration` (a `TimeSpan`) by its length; a `Date` by its time; an array
+ * element by element. A C# tuple is an array at run time, so a tuple behind `object` or
+ * `T` compares by value as on .NET; a C# array there also compares element-wise, where
+ * .NET compares the reference (the run time cannot tell the two apart). Everything else
+ * (a class without `Equals`, a `Map`, a `Set`) compares by reference.
  */
 export function defaultEquals(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -383,5 +385,18 @@ export function defaultEquals(a: unknown, b: unknown): boolean {
 
   if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime();
 
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return arraysEqualByDefault(a, b);
+  }
+
   return false;
+}
+
+/** Two arrays of the same length whose elements are pairwise {@link defaultEquals}. */
+function arraysEqualByDefault(a: unknown, b: unknown): boolean {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((item, index) => defaultEquals(item, b[index]));
 }
