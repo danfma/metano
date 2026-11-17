@@ -26,7 +26,7 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? symbol
     )
     {
-        if (symbol is null || SynthesizedKindOf(symbol) is not { } kind)
+        if (symbol is null || SynthesizedMemberOf(symbol) is not { } kind)
             return null;
 
         if (_semantic.GetOperation(inv) is not IInvocationOperation operation)
@@ -53,6 +53,16 @@ public sealed partial class IrExpressionExtractor
             Overload = bound.Overload with { Synthesized = kind },
         };
     }
+
+    /// <summary>
+    /// The synthesized member a call to <paramref name="method"/> reaches: one C#
+    /// synthesizes (<see cref="SynthesizedKindOf"/>), or one a user declaration
+    /// was folded into (an <c>override GetHashCode()</c>), in this package or a
+    /// referenced one.
+    /// </summary>
+    private IrSynthesizedValueMember? SynthesizedMemberOf(IMethodSymbol method) =>
+        SynthesizedKindOf(method)
+        ?? MethodOverloadGroups.SynthesizedKindOf(method, _context.GroupingPolicy);
 
     /// <summary>
     /// The synthesized member a call to <paramref name="method"/> reaches: a
