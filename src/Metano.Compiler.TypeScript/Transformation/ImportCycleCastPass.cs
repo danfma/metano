@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Transformation;
@@ -16,14 +17,20 @@ namespace Metano.Compiler.TypeScript.Transformation;
 internal sealed class ImportCycleCastPass(string? importAlias)
 {
     /// <summary>The asserted classes of a group transformed with every cast checked.</summary>
-    public static readonly IReadOnlySet<string> NoAssertedCasts = new HashSet<string>();
+    public static readonly IReadOnlySet<string> NoAssertedCasts = FrozenSet.ToFrozenSet(
+        Array.Empty<string>(),
+        StringComparer.Ordinal
+    );
 
     /// <summary>
-    /// Runs the pass over <paramref name="outcomes"/>; <paramref name="transformAgain"/>
-    /// transforms the group at an index again with the classes whose casts it asserts,
-    /// recording the result back into <paramref name="outcomes"/>.
+    /// Runs the pass over <paramref name="outcomes"/>. <paramref name="transformAgain"/>
+    /// transforms the group at an index again, asserting the casts to the classes it
+    /// is given, and returns the local classes the new transform's casts check.
     /// </summary>
-    public void Run(GroupOutcomes outcomes, Action<int, IReadOnlySet<string>> transformAgain)
+    public void Run(
+        GroupOutcomes outcomes,
+        Func<int, IReadOnlySet<string>, IReadOnlySet<string>> transformAgain
+    )
     {
         var graph = LocalImportGraph.ValueImports(
             [.. outcomes.Files.OfType<TsSourceFile>()],
@@ -35,10 +42,9 @@ internal sealed class ImportCycleCastPass(string? importAlias)
             if (outcomes.Files[index] is not { } file || !IsOnImportCycle(graph, file))
                 continue;
 
-            if (outcomes.CheckedCasts[index] is null)
-                transformAgain(index, NoAssertedCasts);
-
-            var asserted = CastsClosingImportCycles(graph, outcomes, index);
+            var checkedCasts = outcomes.CheckedCasts[index]
+                ?? transformAgain(index, NoAssertedCasts);
+            var asserted = CastsClosingImportCycles(graph, file, checkedCasts);
 
             if (asserted.Count > 0)
                 transformAgain(index, asserted);
@@ -54,14 +60,13 @@ internal sealed class ImportCycleCastPass(string? importAlias)
 
     private static HashSet<string> CastsClosingImportCycles(
         LocalImportGraph graph,
-        GroupOutcomes outcomes,
-        int index
+        TsSourceFile file,
+        IReadOnlySet<string> checkedCasts
     )
     {
-        var file = outcomes.Files[index]!;
         var key = LocalImportGraph.KeyOf(file);
 
-        return outcomes.CheckedCasts[index]!
+        return checkedCasts
             .Where(name =>
                 graph.ValueSourceOf(file, name) is { } source && graph.Reaches(source, key)
             )

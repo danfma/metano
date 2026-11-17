@@ -504,6 +504,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             groups = GroupTypesByFile(transpilableTypes);
             ReportSameNameTypeClashes(groups, transpilableTypes);
             var cachedGroups = LoadGroupCacheIfValid();
+
             perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
@@ -990,10 +991,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Transforms <paramref name="group"/> and records its file, its cacheable
     /// emission and the local classes its casts check into
-    /// <paramref name="outcomes"/>. Casts to the classes in
-    /// <paramref name="assertedCasts"/> are asserted instead of checked.
+    /// <paramref name="outcomes"/>, and returns those classes. Casts to the
+    /// classes in <paramref name="assertedCasts"/> are asserted instead of checked.
     /// </summary>
-    private void TransformGroupFresh(
+    private IReadOnlySet<string> TransformGroupFresh(
         int index,
         TypeFileGroup group,
         GroupOutcomes outcomes,
@@ -1011,7 +1012,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             outcomes.Emissions[index] = GroupEmission.Empty;
 
-            return;
+            return casts.Checked;
         }
 
         // Print once: the printed bytes are what the target emits
@@ -1028,6 +1029,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             dependencies.SnapshotDependencies(),
             IsCacheable: assertedCasts.Count == 0
         );
+
+        return casts.Checked;
     }
 
     /// <summary>
