@@ -1,8 +1,9 @@
 # Contract: Synthesized value-equality members in overload groups
 
 **Normative for**: 013 FR-038–FR-045, DECIDED-33–DECIDED-35; baseline FR-060.
-**Status**: design revised after review (architecture: approved with reservations;
-compiler-man: approved with changes), wave 3.0 round 6. It replaces the round-3 forced rename
+**Status**: implemented in wave 3.0 round 6, after review (architecture: approved with
+reservations; compiler-man: approved with changes). "As implemented" notes record where the code
+settles a detail the review left open. It replaces the round-3 forced rename
 (`ValueEqualityMemberNames`, `MethodOverloadGroup.YieldsToValueEquality`) and the round-4
 TypeScript-only join, which could not anchor overrides or inherit dispatchers.
 
@@ -52,26 +53,45 @@ the base type, so only `IrClassExtractor` pattern-matches on the case:
 internal abstract record GroupMember(
     int Ordinal,                        // declaration order; a synthesized member comes after
                                         // every declared one
-    bool IsStatic,
-    int RequiredArity, int MaximumArity,
-    OverloadSuffixPin? Pin,             // [Name] for a declared member; the contract suffix for
-                                        // a synthesized one
-    MemberAnchor? Anchor);
+    MemberAnchor? Anchor)
+{
+    public abstract bool IsStatic { get; }
+    public abstract int RequiredArity { get; }
+    public abstract int MaximumArity { get; }
+    public abstract bool StandsFor(IMethodSymbol method);   // a declared symbol, or the
+                                                            // replacement folded in (§ 3)
+}
 
-internal sealed record DeclaredMember(IMethodSymbol Symbol, …) : GroupMember(…);
-internal sealed record SynthesizedMember(IrSynthesizedValueMember Kind, …) : GroupMember(…);
+internal sealed record DeclaredMember(IMethodSymbol Symbol, int Ordinal, MemberAnchor? Anchor)
+    : GroupMember(Ordinal, Anchor);
+internal sealed record SynthesizedMember(
+    IrSynthesizedValueMember Kind, int Ordinal, MemberAnchor? Anchor,
+    IMethodSymbol? Replacement = null) : GroupMember(Ordinal, Anchor);
 
-// One anchor for both cases: the root group's identity plus the kind of anchoring.
+// One anchor for both cases.
+internal abstract record AnchorRoot;
+internal sealed record DeclaredRoot(IMethodSymbol Method) : AnchorRoot;
+internal sealed record SynthesizedRoot(INamedTypeSymbol Owner, IrSynthesizedValueMember Kind)
+    : AnchorRoot;
 internal sealed record MemberAnchor(
-    IrOverloadRef Root,
+    AnchorRoot Root,
     IrOverloadAnchorKind Kind,
-    IReadOnlyList<IrOverloadRef> FurtherRoots,
-    IReadOnlyList<IrOverloadRef>? ReimplementedRoots);
+    IReadOnlyList<IMethodSymbol> FurtherRoots,
+    IReadOnlyList<IMethodSymbol>? ReimplementedRoots = null);
 ```
+
+**As implemented.**
+
+- **The anchor is not a bare `IrOverloadRef`.** The root suffix of a declared root is read from its symbol (its group and `[Name]` pin), so the anchor names its root (`AnchorRoot`). The class extractor turns it into the ref (`IrOverloadAnchor.Root`) with `RefOf` / `SynthesizedRefOf`. Further roots are always interface members and stay symbols.
+- **The suffix pin is not stored on the member.** Naming reads a declared member's `[Name]` (or its root's), and a synthesized member always takes the policy's suffix.
 
 - `IrSynthesizedValueMember` (`Equals`, `HashCode`, `Copy`) is the single enum for the kind, used by core and the IR alike.
 - `SynthesizedMember` needs no `Owner`: a group belongs to one type.
-- In the IR, a synthesized member is an `IrMethodDeclaration` with `Semantics.IsSynthesized` and `SynthesizedKind`. It also carries the user declaration it routes to when the type replaces its kind (§ 3, `ReplacedBy: IrOverloadRef?`, or the user's body folded in). Otherwise its `Body` is null and the target supplies the body it already synthesizes.
+- In the IR, a synthesized member is an `IrMethodDeclaration` with `Semantics.IsSynthesized` and `SynthesizedKind`. Its `Body` takes one of three forms:
+  - the user's body folded in (§ 3);
+  - for a record that declares `Equals(R)`, the route C# takes, as ordinary IR: `return this.Equals(other is R ? (R)other : null);`, its call bound to the user overload's ref;
+  - null otherwise: the target supplies the body it already synthesizes.
+- A declared overload the dispatcher cannot tell from the synthesized member carries `IsShadowedBySynthesized` (§ 3).
 - Its shape is fixed by its kind:
 
   | Kind | Parameters (dispatch shape) | Return |
@@ -97,7 +117,7 @@ internal sealed record MemberAnchor(
 
 ```csharp
 public sealed record SynthesizedMemberNames(
-    string? Equals, string? HashCode, string? Copy, string FastPathSuffix);
+    string? EqualsName, string? HashCodeName, string? CopyName, string FastPathSuffix);
 
 public sealed record OverloadGroupingPolicy(
     TargetLanguage? Target, SynthesizedMemberNames? ValueEqualityNames);
@@ -117,7 +137,7 @@ public sealed record OverloadGroupingPolicy(
 
 For each kind `K` the shape synthesizes, whose target name is non-null:
 
-1. **A user instance method group shares `K`'s spelling** (operators and statics never): `K` joins it. A lone user method gives a group of two, dispatched under the shared name.
+1. **A user instance method group shares `K`'s spelling** (operators and statics never): `K` joins it. A lone user method gives a group of two, dispatched under the shared name. A group whose only members are the declarations that replace `K` (a record's lone `Equals(R)`, a struct's lone `override Equals(object)`) does not count: those declarations are C#'s implementation of `K` itself, and they are emitted under its name as today (NFR-001).
 2. **The nearest emitted base inserted `K`** (§ 4): `K` is inserted, anchored, even when nothing in the type shares the name.
 3. Otherwise nothing is inserted, and the target emits `K` as today (NFR-001).
 
@@ -149,7 +169,24 @@ A user overload is **distinguishable** from the synthesized member at an argumen
 accept only when each of its parameters there has a runtime check **and** that check cannot
 accept the owner type (`Equals(IUShape)` on `UIface : IUShape` accepts the owner).
 
-- An indistinguishable overload keeps its fast path, so its C# call sites stay direct, but it gets **no dispatcher branch**. It is reported with the existing `MS0063` warning.
+**As implemented**, core decides it from symbols at the fewest arguments both accept:
+
+- **No runtime check:** a type parameter, `object`, `dynamic` or `ValueType`.
+- **The check accepts the synthesized argument:**
+  - for `Equals`, the owner type, a base or an interface of it (a `Nullable<T>` unwrapped);
+  - for the copy, any interface;
+  - at zero arguments there is no parameter to check, so any overlap there counts.
+
+The dispatcher order is:
+
+1. the synthesized branch guarded by the same runtime type;
+2. the distinguishable branches;
+3. the synthesized closing branch;
+4. the shadowed overloads, at the argument counts the synthesized member does not accept.
+
+A shadowed overload whose argument counts the synthesized member covers entirely has no branch.
+
+- An indistinguishable overload keeps its fast path, so its C# call sites stay direct, but it gets **no dispatcher branch**. It is reported with the existing `MS0063` warning, except when the type replaces `Equals` itself (a record's `Equals(R)`, a struct's `override Equals(object)`): calls through the dispatcher then reach the user's own equality.
 - The synthesized member keeps the shared name and its branch.
 - The case is an **error** (`MS0001`) only when that overload implements an interface member, or overrides a root whose contract name is the shared name: callers through the interface or the base would reach the synthesized member instead.
 - Examples:
@@ -206,6 +243,11 @@ consumer computes the same result over the producer's metadata:
 - direct calls into a joined group;
 - metadata-only references keep the dispatcher (FR-019).
 
+**Compiler-generated members in metadata.** A referenced record's synthesized `Equals(R)`,
+`Equals(object)` and `GetHashCode()` are not implicitly declared when read from metadata; they
+carry `[CompilerGenerated]`, which survives in reference assemblies. The groups and the shape
+exclude them as they exclude implicit members, so a consumer computes the producer's groups.
+
 **Non-public colliding overloads across a reference assembly** (C5). A `private Equals(R, double)`
 joins in the producer, which emits a dispatcher `equals` and `equalsByValue`. A reference assembly
 strips it, so the consumer sees no colliding group and inserts nothing. That is safe:
@@ -238,6 +280,8 @@ the Flutter sample stay byte-identical.
 - The shape fact.
 
 **Golden:** `value-equality-join.ts`, compiled with tsgo `--strict --noImplicitOverride`.
+
+**Limitation (documented, § 5):** UNum prints `TTFT` where .NET prints `TFFT`. A user `Equals(double)` is distinguishable, so `object.Equals(a, 1.0)` takes its branch.
 
 ## 11. Expected size
 
