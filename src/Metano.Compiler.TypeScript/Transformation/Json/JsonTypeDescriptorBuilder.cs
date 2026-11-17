@@ -190,9 +190,10 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// </summary>
     private static TsExpression FactoryReferenceOf(string typeName, string member)
     {
-        TsExpression factoryTarget = typeName is "UUID"
-            ? new TsRuntimeHelperReference("UUID")
-            : QualifiedReference(typeName);
+        TsExpression factoryTarget =
+            typeName is UuidRuntimeReference.Name
+                ? UuidRuntimeReference.Value()
+                : QualifiedReference(typeName);
 
         return new TsPropertyAccess(factoryTarget, member);
     }
