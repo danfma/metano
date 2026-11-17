@@ -588,30 +588,37 @@ Product requirements added after the migration (normative; each one is traced by
   `static { }` block:
   - `static readonly #$init = typeInitializer("Name", () => { … })`, a `metano-runtime` helper, is
     declared before the slots. Its body first assigns the slots whose default is not a literal
-    (a struct default), then the field and auto-property initializers in textual order, then the
-    constructor body. The type name is the simple C# name, with its containing types dotted
+    token, then the field and auto-property initializers in textual order, then the constructor
+    body. The type name is the simple C# name, with its containing types dotted
     (`Outer.Inner`) and no type arguments, for nested and generic types alike.
   - Each static field and auto-property becomes a private slot `#name$` (the trailing `$`, which
     no C# name spells, keeps it apart from `#$init` and from Metano's own private members such as
-    an exception's `#baseMessage`). A slot holds a literal default at class definition: `null`
-    for a reference or nullable type, `0` / `0n` / `false` for a primitive. It never runs a
-    constructor or a guard at class definition. A `static get name()` / `static set name(value)`
+    an exception's `#baseMessage`). A slot holds a literal-token default at class definition:
+    `null` for a reference or nullable type, `0` / `0n` / `false` for a primitive. Every other
+    default (a struct default `new S()`, a property read such as an enum's zero member `E.None` or
+    `UUID.empty`) is assigned at the start of `#$init`, so a slot never runs a constructor, a guard
+    or a read of another module at class definition. Plan note: a `null` slot of a non-nullable
+    reference type is declared `T | null` (strict-mode valid) and its getter narrows it to `T`. A `static get name()` / `static set name(value)`
     pair calls `Name.#$init()` first. A read-only member has no setter. A `static readonly` field
     or get-only static property that the static constructor writes gets a `private` setter, so it
     stays read-only outside the class.
   - Every static method, operator and conversion method, and every static property accessor,
     starts with `Name.#$init();`.
   - Every instance constructor runs the guard before anything else the instance runs: before
-    `super(...)` in a derived class, and before the instance field initializers in a class with
-    no base class, where ES class fields run before the constructor body: the first instance
-    field initializer evaluates `Name.#$init()` first (`a = (C.#$init(), Other.next());`). A
-    constructor dispatcher guards before branching. A class with a static constructor and no
+    `super(...)` in a derived class. In a class with no base class, ES class fields run before the
+    constructor body, so the guard folds into the first class field, in emitted order, that has an
+    initializer (promoted, synthesized and auto-property backing fields included; declaration-only
+    fields skipped): `a = (C.#$init(), Other.next());`. When no field has an initializer, the
+    guard is the first constructor statement. A constructor dispatcher guards before branching. A class with a static constructor and no
     declared instance constructor gets one that carries the guard (in a derived class
     `constructor(...args) { D.#$init(); super(...args); }`).
   - A struct runs the guard in a declared constructor, never in its default construction: the
     emitted constructor guards only when called with arguments, unless the struct declares a
-    parameterless constructor. Its instance field initializers do not carry the guard. Each of
-    its instance methods starts with the guard.
+    parameterless constructor. A struct with a static constructor declares its instance fields
+    without initializers (defaults only) and assigns its instance field initializers in the
+    constructor, after the guard, in textual order, so they never run before it; as in C#, a
+    default construction does not run them. Each of its instance methods and instance property
+    and indexer accessors starts with the guard (ECMA-335 I.8.9.5).
   - Accessors, `#$init` and every guard spell `Name.#x$` / `Name.#$init()`, never `this`:
     `Derived.x` reaches `Base`'s accessor with `this === Derived`.
 
@@ -625,14 +632,18 @@ Product requirements added after the migration (normative; each one is traced by
   `InnerException` reads `cause`; a thrown value that is not an `Error` is converted with
   `toException` first.
 
-  Barrel order: when a type's static constructor constructs a class in another file of the same
-  barrel that `extends` the type, the two modules form an import cycle that loads only when the
-  derived module is evaluated first. The generated `index.ts` barrel then lists the derived
-  module's export just before the base module's. Only the export lines of such a cycle move; every
-  other line keeps its place, so a barrel without such a cycle does not change, and the order is
-  deterministic (NFR-005). `[EmitInFile]` prints a base class before a class in the same file that
-  `extends` it, whatever their declaration order (it prints declaration order today, which fails at
-  load).
+  Barrel order: when a type's initializer (the static constructor body or the static field and
+  property initializers, which run inside `#$init`) value-references a class in another file of the
+  same barrel that `extends` the type, directly or transitively (`new RoDerived()`,
+  `RoDerived.Create()`, `RoDerived.Instance`), the modules form an import cycle that loads only when
+  the derived module is evaluated first. The generated `index.ts` barrel then hoists the export
+  lines of those derived modules to its top, ordered by base, then by derived, each in the barrel's
+  existing order; every other line keeps its relative order. Hoisting to the top, not just before
+  the base, is needed because any earlier line whose module imports the base evaluates the base
+  first. A barrel without such a cycle does not change, and the order is deterministic (NFR-005).
+  `[EmitInFile]` keeps declaration order, except that a class that `extends` a class of the same
+  file moves directly after its base (today it prints declaration order, which fails at load when
+  the derived class comes first); existing goldens do not change.
 
   Lowering boundary (TypeScript bridge): lazy versus eager is one per-class strategy, chosen once by
   `IrClassDeclaration.StaticInitializer is not null`; the eager one is today's output. The lazy one
