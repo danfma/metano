@@ -40,7 +40,8 @@ or module function; for virtual and interface members, the **root** group of § 
    `explicit operator long(Money m)` → `__toInt32` / `__toInt64` in TypeScript,
    `implicit operator Money(int c)` → `__implicitFromInt32`; baseline FR-078, #600). The name comes from one
    function of the symbol (`ConversionNaming.Of`), at the declaration and at every use, and is
-   carried as `IrConversionName`; a conversion group gets no overload suffix (the former
+   carried as `IrConversionName`; a conversion group's overload suffix is each conversion's
+   `IrConversionName.Candidate` for the emitting target, the same name (the former
    `<Params>To<Target>` suffix is retired). Two conversions of one type whose names collide
    climb as step 5 describes; a name claimed by another member is `MS0003` rather than a `$`
    rename, so the name never depends on the claim pass.
