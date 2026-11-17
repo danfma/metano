@@ -820,8 +820,10 @@ the rows of `tests/BclReference`.
   (`Equals(T other, double tol)`, `HashCode(int seed)`, a record's `With(int a)`) is emitted
   under its overload fast-path name (`equalsOtherTol`, `hashCodeSeed`, `withA`) and its calls
   follow, so the synthesized `equals` / `hashCode` / `with` the runtime calls keep their names;
-  a field or property emitted as `equals` reports `MS0001` as an error. Known gap: a tuple or array-backed value in a `T` or
-  `object` position compares by reference (2.x: `===`, the same). Fields of a known class type, which 2.x compared structurally,
+  a field or property emitted as `equals` reports `MS0001` as an error. An array in a `T`, `object` or
+  interface position compares element by element, so a tuple there compares by value as on
+  .NET; a C# array there also compares element-wise where .NET compares the reference, as in
+  2.x (the run time cannot tell a tuple from an array). Fields of a known class type, which 2.x compared structurally,
   now compare by reference unless the class declares `Equals` (#674). The `ThrowIfEqual` /
   `ThrowIfNotEqual` guards now admit sealed generic records and records with a `double` /
   `float` field.

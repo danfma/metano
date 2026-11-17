@@ -500,8 +500,16 @@ describe("defaultEquals (EqualityComparer<T>.Default)", () => {
     expect(defaultEquals("a", "b")).toBe(false);
   });
 
-  test("arrays, maps and sets compare by reference", () => {
-    expect(defaultEquals([1], [1])).toBe(false);
+  test("arrays compare element by element, so a tuple behind object compares by value", () => {
+    expect(defaultEquals([1, "x"], [1, "x"])).toBe(true);
+    expect(defaultEquals([1, "x"], [2, "x"])).toBe(false);
+    expect(defaultEquals([1, 2], [1, 2, 3])).toBe(false);
+    expect(defaultEquals([new Valued(1)], [new Valued(1)])).toBe(true);
+    expect(defaultEquals([new Plain(1)], [new Plain(1)])).toBe(false);
+    expect(defaultEquals([1], { 0: 1, length: 1 })).toBe(false);
+  });
+
+  test("maps and sets compare by reference", () => {
     expect(defaultEquals(new Map(), new Map())).toBe(false);
     expect(defaultEquals(new Set(), new Set())).toBe(false);
   });
