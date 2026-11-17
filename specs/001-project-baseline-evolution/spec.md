@@ -1167,6 +1167,26 @@ Product requirements added after the migration (normative; each one is traced by
   requirement scanner (`IrRuntimeRequirementScanner`), the body coverage probe, the Dart
   printer, `DartBinaryOperandGrouping` and `DartIrRewriter`.
 
+  As landed (G3c): the nodes live in `IR/IrUserOperators.cs`. `BoundOperator` is
+  `IrUserOperator(DeclaringType, MetadataName, Overload, Pin, ConversionName)`. A compound
+  assignment or increment is a third node, `IrUserOperatorStore(SourceForm, ReadModifyWrite)`:
+  the read-modify-write of FR-077 beside the store as the source wrote it (`t += y`, `c++`).
+  `IrUserConversion` is `(Operator, Operand, After, IsLifted, SourceForm)`: `Before` is the
+  numeric conversion node applied to `Operand`, `After` an `IrNumericStep` (the endpoints of the
+  conversion node it stands for), and `IsLifted` also covers an explicit cast from a nullable
+  value to a class. Each node carries its source form, and Dart prints that form (the Dart
+  rewriter turns a compound `+=` / `-=` / `*=` / `/=` / `%=` into `t = t.$add(y)` and the
+  `foreach` variable declared from a conversion back into the loop variable), so its output is
+  byte-identical, today's double evaluation of `arr[i++] = arr[i++].$add(m)` included;
+  `DartBinaryOperandGrouping` sees the native operators. The TypeScript import of the declaring
+  type comes from the type reference the call names, so `ImportCollector` and the runtime
+  requirement scanner need no case. The `EmitsOperatorFastPaths` port and
+  `TryExtractUserOperatorCall` are removed. A `[JsxComponentBuilder]` family's conversion to its
+  element (the JSX rendering protocol) keeps its lowering. A condition tested through a user
+  `true` operator (`if (x)`, `x ? a : b`) reports `MS0001` like `&&` / `||`. Not covered
+  (follow-ups): a user conversion of a tuple element, and the arguments of a collection
+  initializer's `Add` (as FR-079 lists).
+
 - **FR-080** (implicit integer-to-decimal conversions, #599 follow-up, #476): An implicit
   conversion from `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` to `decimal`, or between
   their nullable forms, MUST become spec 012's numeric conversion node, through the one rule
