@@ -1072,7 +1072,11 @@ Product requirements added after the migration (normative; each one is traced by
   C# forbids an implicit and an explicit conversion between the same two types (CS0557), so
   the kind never tells two conversions apart; it is in the name so a reader sees it, and
   switching a conversion between implicit and explicit renames its TypeScript static (a 3.0
-  API note). The spellings are spec 013's.
+  API note). The spellings are spec 013's, except that a named converted type is spelled by
+  the name the target emits it with, its `[Name]` for that target when it has one
+  (`[Name("Cash")] class Money`: `implicit operator Wallet(Money m)` → `__implicitFromCash`);
+  its climb qualifiers stay the CLR ones. A conversion group's overload suffix is the same
+  candidate for the same target, so the core holds one name per conversion.
   The core keeps grouping conversion operators as it does today (`MethodOverloadGroups` is not
   restructured) and adds one neutral fact per conversion declaration,
   `IrConversionName { Direction (To / From), Kind (Implicit / Explicit / Checked), Spelling, Pin }` on
@@ -1087,7 +1091,10 @@ Product requirements added after the migration (normative; each one is traced by
   for spec 013's names. A conversion name claimed by another member the type itself declares
   is an `MS0003` error at the conversion's declaration; inherited statics do not claim it
   (`implicit operator Base(int)` on `Base` and `implicit operator Der(int)` on `Der : Base` are
-  both `__implicitFromInt32`, which TypeScript accepts on the static side) (no `$` rename), so a conversion's name is a pure
+  both `__implicitFromInt32`) (no `$` rename): a static, or an operator's instance form, that
+  a derived class declares under a name its emitted base declares on the same side is emitted
+  `override` (`static override __implicitFromInt32`, `static override __add`,
+  `override $add`; TS4114 under `noImplicitOverride`), the base read from metadata alike. So a conversion's name is a pure
   function of its symbol and a metadata-only reference computes the same one without running
   the producer's claim pass. `[Name("toInt")]` names that one conversion (`__toInt`), no longer
   its group. A conversion declares no instance helper. The static helpers of a generic type
@@ -1096,10 +1103,13 @@ Product requirements added after the migration (normative; each one is traced by
   `static __toT<T>(b: Box<T>): T`), which fixes today's TS2302. A `[Branded]` /
   `[InlineWrapper]` companion namespace exports the same names as functions (`Qty.__add`,
   `Qty.__implicitFromInt32`, and the per-overload fast paths of an operator group) instead of
-  `op_Addition` / `op_Implicit`. Its conversion to the underlying primitive is the identity,
-  and stays undeclared, only when its body returns the wrapped value (`=> self.Value`); any
-  other body (`implicit operator int(Cents c) => c.Value * 10`) is an ordinary `__implicitToInt32`,
-  where today the companion drops it by return type alone. The operator helpers and conversion
+  `op_Addition` / `op_Implicit`. Every conversion is declared, the identity unwrap included
+  (`implicit operator string(Slug s) => s.Value` is
+  `export function __implicitToString(s: Slug): string { return s; }`): a consumer that sees
+  the type only through metadata cannot read the body, so it calls the static whatever the
+  body is, and producer and consumer agree with no extra fact (maintainer decision, option
+  (a)). Today the companion drops a conversion to the underlying primitive by return type
+  alone. The operator helpers and conversion
   statics of a class flow out through the class emitter's member composition
   (`EmitDeferredOperatorsAndMethods` / `EmitOperator`), so the lazy static-constructor guard of
   #681 applies to them; companion functions do not pass through it (a `[Branded]` struct with a
@@ -1137,7 +1147,8 @@ Product requirements added after the migration (normative; each one is traced by
   reference rules are FR-077's, and a metadata-only reference names the same static, since its
   name is a function of the symbol (FR-078). An interpolation hole formats its value
   (`ToString`) without a conversion and is unchanged. A conversion of a branded type calls its
-  companion function, and the identity unwrap of FR-078 lowers to its operand. A conversion
+  companion function, the identity unwrap of FR-078 included (`string s = slug` →
+  `Slug.__implicitToString(slug)`), in the same compilation and through metadata alike. A conversion
   involving `dynamic` is left to spec 011 FR-030. Dart renders the node as today: the operand
   of an implicit conversion and `operand as T` for a cast (byte-identical). Follow-ups (gaps):
   Dart `MS0001` for the conversions it erases; the arguments of a collection or object
