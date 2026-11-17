@@ -1,7 +1,9 @@
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -26,20 +28,23 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsRecordSynthesisBridge
 {
-    private const string EqualsMethodName = "equals";
-    private const string WithMethodName = "with";
+    /// <summary>The name of the synthesized <c>Equals</c>, which <c>valueEquals</c> calls.</summary>
+    internal const string EqualsMethodName = "equals";
 
-    private static readonly IReadOnlyList<string> RecordMemberNames =
-    [
-        EqualsMethodName,
-        IrToTsNamingPolicy.HashCodeMethodName,
-        WithMethodName,
-    ];
+    private const string HashCodeMethodName = IrToTsNamingPolicy.HashCodeMethodName;
+
+    private const string WithMethodName = "with";
 
     private static readonly IReadOnlyList<string> StructMemberNames =
     [
         EqualsMethodName,
-        IrToTsNamingPolicy.HashCodeMethodName,
+        HashCodeMethodName,
+    ];
+
+    private static readonly IReadOnlyList<string> RecordMemberNames =
+    [
+        .. StructMemberNames,
+        WithMethodName,
     ];
 
     /// <summary>
@@ -47,8 +52,13 @@ public static class IrToTsRecordSynthesisBridge
     /// <paramref name="ir"/>, which a class's claim pass treats as user
     /// members (spec 013 FR-004): each one the type's value equality
     /// synthesizes, unless a user member of <paramref name="userMembers"/>
-    /// already emits under its name (a field <c>HashCode</c>, a method
-    /// <c>Equals(T other, double tolerance)</c>), which keeps it.
+    /// already emits under its name. A user method spelled like one yields
+    /// the name in the core (it is emitted under its fast-path name,
+    /// <c>equalsOtherTol</c>), so the member left here is a data member: a
+    /// field <c>HashCode</c> keeps <c>hashCode</c> (the runtime reads a
+    /// record's hash through <c>hashCode()</c> only when it is a function),
+    /// and one named <c>Equals</c> is reported
+    /// (<see cref="ReportClaimedEquals"/>).
     /// </summary>
     internal static IReadOnlyList<string> SynthesizedMemberNames(
         IrClassDeclaration ir,
@@ -85,43 +95,98 @@ public static class IrToTsRecordSynthesisBridge
     /// may be private to the base.
     /// </para>
     /// </summary>
-    public static IReadOnlyList<TsClassMember> Generate(IrClassDeclaration ir)
+    internal static IReadOnlyList<TsClassMember> Generate(
+        IrClassDeclaration ir,
+        TsClassMemberTable userMembers
+    )
     {
         var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
         var overridesBase = IrToTsClassBridge.BuildExtends(ir) is not null;
-        var free = SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir));
+        var unclaimedNames = SynthesizedMemberNames(ir, userMembers);
 
-        var with = free.Contains(WithMethodName)
+        var with = unclaimedNames.Contains(WithMethodName)
             ? [GenerateWith(ir)]
             : Array.Empty<TsMethodMember>();
 
         TsMethodMember[] members =
         [
-            .. SynthesizedEquality(ir, free, fields, overridesBase),
+            .. SynthesizedEquality(ir, unclaimedNames, fields, overridesBase),
             .. with,
         ];
 
         return members.Select(m => m with { Override = overridesBase }).ToList();
     }
 
+    /// <summary>Whether the bridge emits a <c>hashCode</c> for <paramref name="ir"/>.</summary>
+    internal static bool SynthesizesHashCode(IrClassDeclaration ir) =>
+        SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir))
+            .Contains(HashCodeMethodName) && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
+
+    /// <summary>
+    /// Reports <c>MS0001</c> (an error) at a field or property of
+    /// <paramref name="type"/> whose emitted name is <c>equals</c> when the type's
+    /// value equality would synthesize that member: a data member has no
+    /// renaming path, and keeping it would leave the type without its
+    /// equality, which <c>valueEquals</c> and the runtime collections call.
+    /// </summary>
+    internal static void ReportClaimedEquals(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        TsClassMemberTable userMembers,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var claimsEquals =
+            ShouldSynthesize(ir)
+            && !IrValueEqualitySynthesis.DeclaresEquals(ir)
+            && userMembers.Instances.TryGetValue(EqualsMethodName, out _);
+
+        if (!claimsEquals)
+            return;
+
+        var member = type.GetMembers()
+            .FirstOrDefault(candidate =>
+                candidate is IFieldSymbol or IPropertySymbol
+                && !candidate.IsStatic
+                && userMembers.Instances.GetValueOrDefault(EqualsMethodName) == candidate.Name
+            );
+
+        report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{type.Name}.{member?.Name ?? EqualsMethodName}' is emitted as 'equals', the "
+                    + $"member that carries the value equality of '{type.Name}'; a field or "
+                    + "property cannot be renamed, so the type would lose its equality. Rename "
+                    + "the member.",
+                member?.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault()
+            )
+        );
+    }
+
     /// <summary>
     /// <c>equals</c> and <c>hashCode</c>, each unless the record declares its
     /// own (<see cref="IrRecordEqualityOverrides"/>) — C# uses the declared one
     /// instead of synthesizing it, and it is emitted under the same name — or
-    /// another user member already emits under the name (<paramref name="free"/>).
+    /// another user member already emits under the name (not in
+    /// <paramref name="unclaimedNames"/>).
     /// </summary>
     private static IEnumerable<TsMethodMember> SynthesizedEquality(
         IrClassDeclaration ir,
-        IReadOnlyList<string> free,
+        IReadOnlyList<string> unclaimedNames,
         IReadOnlyList<RecordField> fields,
         bool overridesBase
     )
     {
-        if (free.Contains(EqualsMethodName) && !IrValueEqualitySynthesis.DeclaresEquals(ir))
+        var synthesizesEquals =
+            unclaimedNames.Contains(EqualsMethodName)
+            && !IrValueEqualitySynthesis.DeclaresEquals(ir);
+
+        if (synthesizesEquals)
             yield return GenerateEquals(fields, overridesBase);
 
         var synthesizesHashCode =
-            free.Contains(IrToTsNamingPolicy.HashCodeMethodName)
+            unclaimedNames.Contains(HashCodeMethodName)
             && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
 
         if (synthesizesHashCode)
@@ -235,12 +300,7 @@ public static class IrToTsRecordSynthesisBridge
             )
         );
 
-        return new TsMethodMember(
-            IrToTsNamingPolicy.HashCodeMethodName,
-            [],
-            new TsNumberType(),
-            body
-        );
+        return new TsMethodMember(HashCodeMethodName, [], new TsNumberType(), body);
     }
 
     private static TsExpressionStatement AddToHash(TsExpression value) =>

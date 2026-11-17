@@ -36,7 +36,7 @@ public static class IrValueEqualitySynthesis
     public static bool DeclaresEquals(IrClassDeclaration type) =>
         type.Semantics.IsRecord
             ? IrRecordEqualityOverrides.DeclaresEquals(type)
-            : IrRecordEqualityOverrides.DeclaresAnyEquals(type);
+            : IrRecordEqualityOverrides.DeclaresStructEquals(type);
 
     private static bool IsEmittedAsClass(IrTypeSemantics semantics) =>
         !semantics.IsPlainObject

@@ -30,7 +30,9 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Money"
         );
-        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir));
+        var printed = PrintMembers(
+            IrToTsRecordSynthesisBridge.Generate(ir, TsClassMemberTable.UserMembersOf(ir))
+        );
 
         // equals: narrow to the record type, then compare every field with ===.
         await Assert.That(printed).Contains("equals(other: any): boolean");
@@ -60,7 +62,9 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Pair"
         );
-        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir));
+        var printed = PrintMembers(
+            IrToTsRecordSynthesisBridge.Generate(ir, TsClassMemberTable.UserMembersOf(ir))
+        );
 
         // `with` must retain the full self type so the return signature
         // reads Pair<K, V>.
@@ -78,7 +82,9 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Clip"
         );
-        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir));
+        var printed = PrintMembers(
+            IrToTsRecordSynthesisBridge.Generate(ir, TsClassMemberTable.UserMembersOf(ir))
+        );
 
         await Assert.That(printed).Contains("with(overrides?: Partial<Clip>): Clip {");
         await Assert.That(printed).Contains("return copyRecordWith<Clip>(this, overrides);");

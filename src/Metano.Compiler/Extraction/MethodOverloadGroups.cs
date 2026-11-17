@@ -46,22 +46,28 @@ internal sealed record MethodAnchor(
 /// <param name="IsSegregatedOverrides">The overrides of roots that are not
 /// dispatched (an inherited single virtual): they keep their own group, as
 /// before spec 013 (DECIDED-29, #159).</param>
+/// <param name="YieldsToValueEquality">The name is spelled like a member the
+/// type's synthesized value equality declares
+/// (<see cref="ValueEqualityMemberNames"/>), so the group's members are fast
+/// paths even alone, and the synthesized member keeps the name.</param>
 internal sealed record MethodOverloadGroup(
     string Name,
     IReadOnlyList<MethodGroupMember> Members,
     IReadOnlyList<IMethodSymbol>? InheritedOverloads,
-    bool IsSegregatedOverrides
+    bool IsSegregatedOverrides,
+    bool YieldsToValueEquality = false
 )
 {
     /// <summary>
     /// Whether the group's members are fast paths of a dispatched group: two
-    /// or more declared, an inherited dispatcher, or one member anchored on
-    /// a dispatched root.
+    /// or more declared, an inherited dispatcher, one member anchored on a
+    /// dispatched root, or a name a synthesized value-equality member keeps.
     /// </summary>
     public bool IsDispatched =>
         InheritedOverloads is not null
         || Members.Count >= 2
-        || Members.Any(member => member.Anchor is not null);
+        || Members.Any(member => member.Anchor is not null)
+        || YieldsToValueEquality;
 
     public MethodGroupMember? MemberOf(IMethodSymbol method) =>
         Members.FirstOrDefault(member =>
@@ -249,7 +255,8 @@ internal static class MethodOverloadGroups
                 name,
                 main,
                 InheritedOverloadsOf(type, name, main, target),
-                IsSegregatedOverrides: false
+                IsSegregatedOverrides: false,
+                YieldsToValueEquality: ValueEqualityMemberNames.AreClaimed(type, name, main)
             );
         }
 

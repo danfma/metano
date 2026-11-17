@@ -1248,8 +1248,20 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     )
     {
         var acc = new HashSet<IrRuntimeRequirement>();
+
         foreach (var type in types)
             ScanTypeAndEmittedNested(type, acc, irCache);
+
+        // The core asks for HashCode wherever value equality is synthesized;
+        // the import follows what the bridge actually emits, so a hashCode a
+        // user field keeps leaves no unused HashCode import (noUnusedLocals).
+        var synthesizesHashCode = irCache
+            .Values.OfType<IrClassDeclaration>()
+            .Any(IrToTsRecordSynthesisBridge.SynthesizesHashCode);
+
+        if (!synthesizesHashCode)
+            acc.RemoveWhere(requirement => requirement.Category is IrRuntimeCategory.Hashing);
+
         return acc;
     }
 

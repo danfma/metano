@@ -143,44 +143,82 @@ public class RecordFieldEqualityTests
     }
 
     /// <summary>
-    /// A synthesized member is skipped when a user member already emits under
-    /// its name: a struct or record method <c>Equals(T other, double tol)</c>
-    /// is the class's <c>equals</c>, and a field or positional property
-    /// <c>HashCode</c> is its <c>hashCode</c> (two declarations of one name are
-    /// TS2393 / TS2300, and the user's member was replaced).
+    /// A user method spelled like a synthesized value-equality member
+    /// (<c>Equals(T other, double tol)</c>, <c>HashCode(int seed)</c>, a
+    /// record's <c>With(int a)</c>) is emitted under its spec 013 fast-path name
+    /// and its calls follow, so the synthesized <c>equals</c> / <c>hashCode</c> /
+    /// <c>with</c> the runtime calls (<c>valueEquals</c>, <c>HashSet</c>, the
+    /// <c>with</c> lowering) keep their names. A field <c>HashCode</c> keeps
+    /// <c>hashCode</c> (no synthesized one, no <c>HashCode</c> import).
     /// </summary>
     [Test]
-    public async Task SynthesizedMember_YieldsToAUserMemberOfTheSameName()
+    public async Task UserMethodSpelledLikeAValueEqualityMember_TakesItsFastPathName()
     {
         var files = TranspileHelper.Transpile(
             """
             [Transpile]
-            public struct KTol { public double V; public KTol(double v) { V = v; } public bool Equals(KTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
+            public record RTol(double V) { public bool Equals(RTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
+
+            [Transpile]
+            public record QWith(int A, string B) { public QWith With(int a) => new QWith(a, B); }
+
+            [Transpile]
+            public struct QHashM { public int V; public QHashM(int v) { V = v; } public int HashCode(int seed) => V + seed; }
 
             [Transpile]
             public struct KEntry { public int HashCode; public string Key; public KEntry(int h, string k) { HashCode = h; Key = k; } }
 
             [Transpile]
-            public record RTol(double V) { public bool Equals(RTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
-
-            [Transpile]
-            public record RHash(int HashCode, string Key);
+            public static class Use
+            {
+                public static bool Near(RTol a, RTol b) => a.Equals(b, 0.1) && a.Equals(b);
+                public static QWith Copy(QWith a) => a with { A = 5 };
+                public static QWith Rebuild(QWith a) => a.With(7);
+                public static int Hash(QHashM a) => a.HashCode(2) + a.GetHashCode();
+            }
             """
         );
 
-        await Assert.That(Count(files["k-tol.ts"], "equals(")).IsEqualTo(1);
-
         await Assert
-            .That(files["k-tol.ts"])
-            .Contains("equals(other: KTol, tol: number): boolean {");
-
-        await Assert.That(files["k-tol.ts"]).Contains("hashCode(): number {");
+            .That(files["r-tol.ts"])
+            .Contains("equalsOtherTol(other: RTol, tol: number): boolean {");
+        await Assert.That(files["r-tol.ts"]).Contains("equals(other: any): boolean {");
+        await Assert.That(files["q-with.ts"]).Contains("withA(a: number): QWith {");
+        await Assert.That(files["q-with.ts"]).Contains("with(overrides?: Partial<QWith>): QWith {");
+        await Assert.That(files["q-hash-m.ts"]).Contains("hashCodeSeed(seed: number): number {");
+        await Assert.That(files["q-hash-m.ts"]).Contains("hashCode(): number {");
         await Assert.That(files["k-entry.ts"]).DoesNotContain("hashCode(): number");
-        await Assert.That(files["k-entry.ts"]).Contains("equals(other: any): boolean {");
-        await Assert.That(Count(files["r-tol.ts"], "equals(")).IsEqualTo(1);
-        await Assert.That(files["r-hash.ts"]).DoesNotContain("hashCode(): number");
-        await Assert.That(files["r-hash.ts"]).Contains("with(overrides?: Partial<RHash>): RHash {");
+        await Assert.That(files["k-entry.ts"]).DoesNotContain("HashCode");
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).Contains("a.equalsOtherTol(b, 0.1) && a.equals(b)");
+        await Assert.That(use).Contains("a.with({ a: 5 })");
+        await Assert.That(use).Contains("a.withA(7)");
+        await Assert.That(use).Contains("a.hashCodeSeed(2)");
     }
 
-    private static int Count(string text, string fragment) => text.Split(fragment).Length - 1;
+    /// <summary>
+    /// A field or property emitted as <c>equals</c> has no renaming path, and
+    /// keeping it would drop the type's value equality: an error, never silent.
+    /// </summary>
+    [Test]
+    public async Task DataMemberNamedEquals_ReportsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct QEqualsProp { public int A; public QEqualsProp(int a) { A = a; } public new bool Equals => true; }
+            """
+        );
+
+        var error = diagnostics.Single(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.UnsupportedFeature
+        );
+
+        await Assert
+            .That(error.Severity)
+            .IsEqualTo(Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Error);
+        await Assert.That(error.Message).Contains("'QEqualsProp.Equals' is emitted as 'equals'");
+    }
 }

@@ -61,7 +61,8 @@ public static class IrObjectContract
         && method.Semantics.IsOverride
         && IsObjectTypeRef(method.Parameters[0].Type);
 
-    private static bool IsObjectTypeRef(IrTypeRef type) =>
+    /// <summary>Whether <paramref name="type"/> is <c>object</c> (or <c>object?</c>).</summary>
+    internal static bool IsObjectTypeRef(IrTypeRef type) =>
         type switch
         {
             IrNullableTypeRef nullable => IsObjectTypeRef(nullable.Inner),

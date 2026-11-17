@@ -496,7 +496,10 @@ Product requirements added after the migration (normative; each one is traced by
   `equals` when it has one, `NaN` equal to itself, else reference equality. A plain
   (non-record) struct emitted as a class carries a generated `equals` / `hashCode` over its
   fields (its `ValueType.Equals`) unless it declares its own, so a struct behind an `object` or
-  interface field compares by value; a tuple there compares by reference (a known gap: a tuple
+  interface field compares by value. The synthesized `equals` / `hashCode` / `with` keep their
+  names: a user method spelled like one forms a dispatched group of its own (spec 013) and is
+  emitted under its fast-path name, and a field or property emitted as `equals` MUST report
+  `MS0001` as an error; a tuple there compares by reference (a known gap: a tuple
   value is an array, indistinguishable at run time from a reference-compared array). An equality guard
   (`ArgumentOutOfRangeException.ThrowIfEqual` / `ThrowIfNotEqual`) admits a sealed generic
   record, and a record with a `double` / `float` field, when every type argument and field is a
