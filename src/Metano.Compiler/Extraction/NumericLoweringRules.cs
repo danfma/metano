@@ -24,31 +24,29 @@ namespace Metano.Compiler.Extraction;
 /// collection (<see cref="IntegerValueRanges"/>) and the bounded step of a
 /// counting loop (<see cref="BoundedCountingLoop"/>) may drop a reduction
 /// or a narrowing (FR-075).</param>
+/// <param name="ComputesDecimalByMethods">Whether the target computes with a
+/// <c>decimal</c> as a runtime value whose operators are methods, as
+/// TypeScript's <c>Decimal</c> is and Dart's output is not: an integer of 32
+/// bits or fewer read as a <c>decimal</c> is converted (FR-080), and the
+/// compound assignments and <c>++</c> / <c>--</c> of a <c>decimal</c> store
+/// the method call (<c>d = d.plus(x)</c>). The binary lowering
+/// (<c>a + b</c> → <c>a.plus(b)</c>) and <c>BuildDecimalEquality</c> do not
+/// read it yet and run for every target, Dart included (a latent Dart gap,
+/// deferred).</param>
 internal sealed record NumericLoweringRules(
     bool LowersCharCodes,
     bool WrapsInt32Arithmetic,
-    bool ReadsCollectionAndLoopRanges
+    bool ReadsCollectionAndLoopRanges,
+    bool ComputesDecimalByMethods
 )
 {
-    /// <summary>
-    /// Whether the target computes with a <c>decimal</c> as a runtime value
-    /// whose operators are method calls, so an integer of 32 bits or fewer
-    /// read as a <c>decimal</c> is converted (FR-080) and a <c>decimal</c>
-    /// compound assignment stores the method call
-    /// (<c>d = d.plus(x)</c>). Dart prints a <c>decimal</c> endpoint as its
-    /// operand and keeps its compound operators.
-    /// </summary>
-    public bool LowersDecimalValues { get; init; }
-
     public static NumericLoweringRules For(TargetLanguage? target) =>
         new(
             LowersCharCodes: target != TargetLanguage.Dart,
             WrapsInt32Arithmetic: target != TargetLanguage.Dart,
-            ReadsCollectionAndLoopRanges: target != TargetLanguage.Dart
-        )
-        {
-            LowersDecimalValues = target != TargetLanguage.Dart,
-        };
+            ReadsCollectionAndLoopRanges: target != TargetLanguage.Dart,
+            ComputesDecimalByMethods: target != TargetLanguage.Dart
+        );
 
     /// <summary>
     /// Whether an implicit conversion from <paramref name="from"/> to
@@ -85,7 +83,7 @@ internal sealed record NumericLoweringRules(
         || NumericEndpoints.CrossesSixtyFourBits(from, to);
 
     private bool IsLoweredIntegerToDecimal(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        LowersDecimalValues && IrNumericConversion.IsIntegerToDecimal(from, to);
+        ComputesDecimalByMethods && IrNumericConversion.IsIntegerToDecimal(from, to);
 
     private bool IsLoweredCharRead(IrNumericEndpoint from, IrNumericEndpoint to) =>
         IrNumericConversion.IsCharRead(from, to) && (LowersCharCodes || to.Kind.IsFloatingPoint());

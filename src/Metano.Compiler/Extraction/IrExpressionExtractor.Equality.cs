@@ -102,7 +102,7 @@ public sealed partial class IrExpressionExtractor
     }
 
     private bool IsConvertedToDecimal(IrExpression value) =>
-        _context.NumericLowering.LowersDecimalValues
+        _context.NumericLowering.ComputesDecimalByMethods
         && value is IrNumericConversion { To.Kind: IrNumericKind.Decimal };
 
     private static IrExpression ToDecimal(IrExpression number) =>
