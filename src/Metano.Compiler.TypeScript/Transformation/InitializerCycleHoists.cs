@@ -1,4 +1,5 @@
 using Metano.Compiler.Extraction;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -30,7 +31,7 @@ public static class InitializerCycleHoists
 
         foreach (var (type, module) in moduleOf)
         {
-            if (!RunsItsInitializerLazily(type))
+            if (!TypeInitializerLowering.RunsLazily(type))
                 continue;
 
             foreach (var derived in DerivedTypesNamedByInitializer(type, compilation))
@@ -42,13 +43,6 @@ public static class InitializerCycleHoists
 
         return hoists.Distinct().ToList();
     }
-
-    private static bool RunsItsInitializerLazily(INamedTypeSymbol type) =>
-        type.TypeKind is TypeKind.Class or TypeKind.Struct
-        && IrStaticConstructorExtractor.DeclaredBy(type) is not null
-        && !type.HasPlainObject()
-        && !type.IsContainerless()
-        && !TypeTransformer.IsModuleShapedStaticClass(type);
 
     private static IEnumerable<INamedTypeSymbol> DerivedTypesNamedByInitializer(
         INamedTypeSymbol type,

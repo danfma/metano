@@ -97,19 +97,17 @@ public sealed class IrToTsClassEmitter(
 
         var constructorAccessibility = _constructorAccessPolicy.ResolveAndReport(type, ir);
 
+        var implicitParameterlessBody = emitsDispatcher
+            ? IrToTsStructDefaultConstructorBridge.BuildBody(ir, type, _context.ReportDiagnostic)
+            : null;
+
         var constructor = BuildClassConstructor(
             type,
             ir,
             ctorParams,
             emitsDispatcher,
             new ConstructorSelectors(typeName, claims),
-            emitsDispatcher
-                ? IrToTsStructDefaultConstructorBridge.BuildBody(
-                    ir,
-                    type,
-                    _context.ReportDiagnostic
-                )
-                : null,
+            implicitParameterlessBody,
             constructorAccessibility,
             extendsType,
             keepsBaseMessage,
@@ -124,8 +122,15 @@ public sealed class IrToTsClassEmitter(
         var userMembers = new HashSet<TsClassMember>(ReferenceEqualityComparer.Instance);
 
         var typeInitializer = TypeInitializerLowering.For(
+            type,
             ir,
-            TypeInitializerTargetOf(type, typeName, extendsType, explicitCtors, ir),
+            TypeInitializerTargetOf(
+                type,
+                typeName,
+                extendsType,
+                ImplicitDefaultOf(ir, explicitCtors, implicitParameterlessBody),
+                ir
+            ),
             lowering
         );
 
@@ -184,6 +189,8 @@ public sealed class IrToTsClassEmitter(
             new TsClassBody(constructor, classMembers),
             userMembers
         );
+
+        ReportSlotNameClashes(type, typeInitializer.SlotNameClashes());
 
         statements.Add(
             new TsClass(
@@ -358,16 +365,41 @@ public sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
+    /// A static member that shares its TypeScript name with another member's
+    /// lazily initialized slot is an error (FR-066): the class would declare the
+    /// name twice, and neither member may silently replace the other.
+    /// </summary>
+    private void ReportSlotNameClashes(INamedTypeSymbol type, IReadOnlyList<SlotNameClash> clashes)
+    {
+        foreach (var clash in clashes)
+        {
+            var member = type.GetMembers(clash.Member.Name).FirstOrDefault(m => m.IsStatic);
+
+            _context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"The static member '{type.Name}.{clash.Member.Name}' prints as "
+                        + $"'{clash.Name}', the name of the lazily initialized static "
+                        + $"'{clash.SlotOwner.Name}' (spec 001 FR-066): rename one of them "
+                        + "with [Name(\"...\")].",
+                    (member ?? type).Locations.FirstOrDefault()
+                )
+            );
+        }
+    }
+
+    /// <summary>
     /// The facts the type initializer lowering needs about the class: its emitted
     /// name, the name a <c>TypeInitializationException</c> reports (containing
     /// types dotted, no type arguments), whether it extends a class, and, for a
-    /// struct, whether it declares a parameterless constructor.
+    /// struct, where its constructor builds the implicit default value.
     /// </summary>
     private static TypeInitializerTarget TypeInitializerTargetOf(
         INamedTypeSymbol type,
         string typeName,
         TsType? extendsType,
-        IReadOnlyList<IMethodSymbol> explicitCtors,
+        ImplicitDefaultConstruction implicitDefault,
         IrClassDeclaration ir
     ) =>
         new(
@@ -375,8 +407,30 @@ public sealed class IrToTsClassEmitter(
             DottedTypeName(type),
             extendsType is not null,
             ir.Semantics.IsValueType,
-            explicitCtors.Any(ctor => ctor.Parameters.Length == 0)
+            implicitDefault
         );
+
+    /// <summary>
+    /// Where the emitted constructor builds a struct's implicit default value:
+    /// the whole constructor of a struct that declares none, the dispatcher's
+    /// leading branch when it has one (<paramref name="implicitParameterlessBody"/>).
+    /// </summary>
+    private static ImplicitDefaultConstruction ImplicitDefaultOf(
+        IrClassDeclaration ir,
+        IReadOnlyList<IMethodSymbol> explicitCtors,
+        IReadOnlyList<TsStatement>? implicitParameterlessBody
+    )
+    {
+        if (!ir.Semantics.IsValueType)
+            return ImplicitDefaultConstruction.None;
+
+        if (explicitCtors.Count == 0)
+            return ImplicitDefaultConstruction.WholeConstructor;
+
+        return implicitParameterlessBody is null
+            ? ImplicitDefaultConstruction.None
+            : ImplicitDefaultConstruction.LeadingBranch;
+    }
 
     private static string DottedTypeName(INamedTypeSymbol type) =>
         type.ContainingType is { } containing

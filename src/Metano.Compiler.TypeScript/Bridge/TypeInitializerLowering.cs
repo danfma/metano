@@ -1,5 +1,8 @@
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -15,8 +18,29 @@ internal sealed record TypeInitializerTarget(
     string TypeName,
     bool HasBaseClass,
     bool IsStruct,
-    bool DeclaresParameterlessConstructor
+    ImplicitDefaultConstruction ImplicitDefault
 );
+
+/// <summary>
+/// Where a struct's emitted constructor builds C#'s implicit default value
+/// (<c>default(S)</c>, or <c>new S()</c> without a declared parameterless
+/// constructor), which runs no constructor, so neither the static constructor
+/// nor the instance field initializers.
+/// </summary>
+internal enum ImplicitDefaultConstruction
+{
+    /// <summary>Every path of the constructor runs a constructor C# declares.</summary>
+    None,
+
+    /// <summary>A struct that declares no constructor: the whole constructor builds it.</summary>
+    WholeConstructor,
+
+    /// <summary>
+    /// A dispatched struct without a declared parameterless constructor: the
+    /// dispatcher's first branch builds it (spec 013 FR-027).
+    /// </summary>
+    LeadingBranch,
+}
 
 /// <summary>
 /// A class's constructor and members, as the type initializer completes them.
@@ -34,13 +58,30 @@ internal sealed record TsClassBody(TsConstructor Constructor, IReadOnlyList<TsCl
 internal abstract class TypeInitializerLowering
 {
     public static TypeInitializerLowering For(
+        INamedTypeSymbol type,
         IrClassDeclaration ir,
         TypeInitializerTarget target,
         IrToTsBridgeContext lowering
     ) =>
-        ir.StaticInitializer is { } staticConstructorBody
-            ? new LazyTypeInitializerLowering(target, staticConstructorBody, lowering)
+        RunsLazily(type)
+            ? new LazyTypeInitializerLowering(target, ir, ir.StaticInitializer ?? [], lowering)
             : EagerTypeInitializerLowering.Instance;
+
+    /// <summary>
+    /// The one rule for which types run their static initialization lazily: a
+    /// class or struct emitted as a TypeScript class (not a <c>[PlainObject]</c>
+    /// interface, a <c>[NoContainer]</c> type or a module-shaped static class)
+    /// that declares a static constructor. The class emitter lowers such a type
+    /// with <see cref="LazyTypeInitializerLowering"/>, and the barrel orders its
+    /// modules by the cycles its initializer forms
+    /// (<see cref="InitializerCycleHoists"/>).
+    /// </summary>
+    public static bool RunsLazily(INamedTypeSymbol type) =>
+        type.TypeKind is TypeKind.Class or TypeKind.Struct
+        && IrStaticConstructorExtractor.DeclaredBy(type) is not null
+        && !type.HasPlainObject()
+        && !type.IsContainerless()
+        && !TypeTransformer.IsModuleShapedStaticClass(type);
 
     /// <summary>The members a field lowers to, given what the class bridge built for it.</summary>
     public abstract IReadOnlyList<TsClassMember> LowerField(
@@ -59,7 +100,24 @@ internal abstract class TypeInitializerLowering
     /// lowered from the type's own C# members, the ones a guard may start.
     /// </summary>
     public abstract TsClassBody Complete(TsClassBody body, IReadOnlySet<TsClassMember> userMembers);
+
+    /// <summary>
+    /// The static members whose TypeScript name another member's lowering
+    /// already declares; none when static members keep their own declarations.
+    /// </summary>
+    public virtual IReadOnlyList<SlotNameClash> SlotNameClashes() => [];
 }
+
+/// <summary>
+/// A static member (<see cref="Member"/>) whose TypeScript name
+/// (<see cref="Name"/>) is also the name of the accessors
+/// <see cref="SlotOwner"/>'s slot declares.
+/// </summary>
+internal sealed record SlotNameClash(
+    IrMemberDeclaration Member,
+    string Name,
+    IrMemberDeclaration SlotOwner
+);
 
 /// <summary>
 /// Today's static initialization: static field initializers run at class

@@ -29,6 +29,8 @@ the migration list.
 - Its static fields and auto-properties become `#name$` slots behind `static get` / `static set` accessors that run the guard. A `static readonly` member the static constructor writes keeps a `private` setter (2.x declared it mutable and public). Reference slots start at `null`.
 - A failing static constructor throws a `TypeInitializationException` (new runtime class, `catch` tests it) wrapping the original, and every later access rethrows it.
 - Types without a static constructor keep their eager static field initializers.
+- A struct with a static constructor runs it, then its instance field and auto-property initializers, in every declared constructor, also one called with an empty `params` array; its implicit default value runs neither.
+- A static member whose TypeScript name equals a slot's name (a private field `count` beside a property `Count`) is an `MS0001` error asking for a `[Name]`.
 - The generated barrel lists a derived module before the base module whose static constructor constructs it, and `[EmitInFile]` prints a base class before a class in the same file that extends it.
 
 ### ⚠ 64-bit integers become `bigint` (spec 012)
