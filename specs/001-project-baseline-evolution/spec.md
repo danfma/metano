@@ -991,9 +991,9 @@ Product requirements added after the migration (normative; each one is traced by
   operand's type, MUST run that operator. The core extracts it as its own neutral node,
   `IrUserOperatorApplication(Op, BoundOperator, Operands, IsLifted)`, never as an
   `IrBinaryExpression` / `IrUnaryExpression` with an optional field nor as an
-  `IrCallExpression`, so no built-in lowering (the integer overflow reduction, the integer value
-  ranges, decimal and Temporal arithmetic, Dart's operand grouping) mistakes it for built-in
-  arithmetic. `BoundOperator` is a record of neutral facts: the declaring type, the operator's
+  `IrCallExpression`, so no core lowering of built-in arithmetic (the integer overflow
+  reduction, the integer value ranges, decimal and Temporal arithmetic) mistakes it for a
+  built-in operator and wraps or rewrites it. `BoundOperator` is a record of neutral facts: the declaring type, the operator's
   C# metadata name, the overload of a dispatched group when there is one, and its `[Name]`
   pin. The operands are Roslyn's, with their conversions (FR-079, FR-080, spec 012's numeric
   ones). The core's TypeScript-specific `"$" + opName` compound rewrite and the
@@ -1033,7 +1033,12 @@ Product requirements added after the migration (normative; each one is traced by
   relational and equality application (byte-identical); a compound assignment prints the
   read-modify-write with the native operator (`t = t + y`, receiver bound once) and `++` /
   `--` stores the static Dart already declares (`c = Cnt.op_Increment(c)`), replacing today's
-  `t = t.$add(y)` and `c++` (neither runs the C# operator); a Dart golden pins both.
+  `t = t.$add(y)` and `c++` (neither runs the C# operator); a Dart golden pins both. Because
+  Dart prints the node as its native operator, `DartBinaryOperandGrouping` MUST group it exactly
+  like the equivalent `IrBinaryExpression` / `IrUnaryExpression`, as the outer operand and as
+  the inner one (precedence keyed on the operator, not on the node type): `(a + b) * 3` with a
+  user `+` keeps its parentheses, where the grouping that only knows `IrBinaryExpression`
+  would print `a + b * 3`. A Dart golden pins a mixed user / built-in expression.
   Follow-ups (gaps, not this requirement): Dart's operators declared for the right operand and
   a user `!=` that Dart ignores. Traced by the "User-defined operators at their use sites" row
   of the feature-support matrix.
@@ -1072,8 +1077,10 @@ Product requirements added after the migration (normative; each one is traced by
   overload suffix, so there is one rule for the concept (Dart names the primary by `[Name]` or
   its metadata name, never by that suffix). The TypeScript bridge un-groups the conversions and
   emits one static each; the `__` prefix, the lower-casing and the claim stay in the bridge, as
-  for spec 013's names. A conversion name claimed by another member of the type is an `MS0003`
-  error at the conversion's declaration (no `$` rename), so a conversion's name is a pure
+  for spec 013's names. A conversion name claimed by another member the type itself declares
+  is an `MS0003` error at the conversion's declaration; inherited statics do not claim it
+  (`implicit operator Base(int)` on `Base` and `implicit operator Der(int)` on `Der : Base` are
+  both `__fromInt32`, which TypeScript accepts on the static side) (no `$` rename), so a conversion's name is a pure
   function of its symbol and a metadata-only reference computes the same one without running
   the producer's claim pass. `[Name("toInt")]` names that one conversion (`__toInt`), no longer
   its group. A conversion declares no instance helper. The static helpers of a generic type
@@ -1134,8 +1141,8 @@ Product requirements added after the migration (normative; each one is traced by
   every IR walker and rewriter handles both — the JSX component bridge's rewrite
   (`IrToTsJsxComponentBridge`), the `[PlainObject]` `RewriteThis` (`IrToTsPlainObjectBridge`),
   the TypeScript `ImportCollector` walkers (the declaring type's import), the runtime
-  requirement scanner (`IrRuntimeRequirementScanner`), the body coverage probe, and the Dart
-  printer.
+  requirement scanner (`IrRuntimeRequirementScanner`), the body coverage probe, the Dart
+  printer, `DartBinaryOperandGrouping` and `DartIrRewriter`.
 
 - **FR-080** (implicit integer-to-decimal conversions, #599 follow-up, #476): An implicit
   conversion from `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` to `decimal`, or between
