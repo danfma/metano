@@ -82,10 +82,12 @@ public class StaticConstructorOperatorTests
         var result = TranspileHelper.Transpile(Source);
 
         await TranspileHelper.AssertGolden("static-constructor-operators.ts", result["meter.ts"]);
+
         await TranspileHelper.AssertGolden(
             "static-constructor-operators-derived.ts",
             result["sub-meter.ts"]
         );
+
         await TranspileHelper.AssertGolden(
             "static-constructor-operators-struct.ts",
             result["pt.ts"]
@@ -119,13 +121,12 @@ public class StaticConstructorOperatorTests
     [Test]
     public async Task ClassInstanceForms_AreNotGuarded_StructInstanceForms_Are()
     {
-        var result = TranspileHelper.Transpile(Source);
+        var meter = TranspileHelper.Transpile(Source)["meter.ts"];
+        var pt = TranspileHelper.Transpile(Source)["pt.ts"];
 
-        await Assert.That(result["meter.ts"]).Contains("$negate(): Meter {\n    return Meter");
-        await Assert
-            .That(result["meter.ts"])
-            .Contains("$add(...args: unknown[]): Meter {\n    if (");
-        await Assert.That(result["pt.ts"]).Contains("$subtract(b: Pt): Pt {\n    Pt.#$init();\n");
+        await Assert.That(meter).Contains("$negate(): Meter {\n    return Meter");
+        await Assert.That(meter).Contains("$add(...args: unknown[]): Meter {\n    if (");
+        await Assert.That(pt).Contains("$subtract(b: Pt): Pt {\n    Pt.#$init();\n");
     }
 
     [Test]
