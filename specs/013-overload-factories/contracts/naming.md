@@ -32,10 +32,12 @@ or module function; for virtual and interface members, the **root** group of § 
 3. **Suffix, pass 2 — type spellings.** On any collision, **every** overload of `G` switches to the
    § Spellings of its parameter types, concatenated in order (`F(int a)` / `F(string a)` →
    `Int32` / `String`). Operator groups start here: their suffix is always the type spellings
-   (FR-033, today's convention). A conversion operator group (`op_Implicit` / `op_Explicit`)
-   names like a method, but its type spelling ends with `To` + the target type's spelling,
-   because C# tells conversions apart by their target type (`explicit operator int(Money m)` /
-   `explicit operator long(Money m)` → `MoneyToInt32` / `MoneyToInt64`).
+   (FR-033, today's convention). A conversion operator is not named here: each conversion is its
+   own static named `To` + the target type's spelling (a conversion out of the declaring type)
+   or `From` + the source type's spelling (a conversion into it), because C# tells conversions
+   apart by their source and target types (`explicit operator int(Money m)` /
+   `explicit operator long(Money m)` → `__toInt32` / `__toInt64` in TypeScript; baseline FR-078,
+   #600). Two conversions of one type whose names collide climb as step 5 describes.
 4. **Distinctness, pass 2.** If every suffix in `G` is distinct, done.
 5. **The climb (DECIDED-4).** While two or more overloads share a suffix, each overload of every
    colliding set qualifies **every parameter's spelling one more level**, and the suffixes are
@@ -85,9 +87,9 @@ or module function; for virtual and interface members, the **root** group of § 
    overload keeps its generated suffix. A member that is not an overload of a dispatched group —
    a single method or operator, or an overload of an `[External]`, `[JsCallable]` or
    `[PlainObject]` type, which emits no dispatcher — keeps today's meaning: `[Name]` renames the
-   whole member. A conversion operator has no C# name, so its `[Name]` names its group and pins
-   nothing (`[Name("toInt")] explicit operator int(Money)` / `explicit operator long(Money)` →
-   `__toInt` over `__toIntMoneyToInt32` / `__toIntMoneyToInt64`). A `[Name]` on a constructor
+   whole member. A conversion operator has no C# name, so its `[Name]` names that one
+   conversion (`[Name("toInt")] explicit operator int(Money)` / `explicit operator long(Money)` →
+   `__toInt` / `__toInt64`, no dispatcher; baseline FR-078, #600). A `[Name]` on a constructor
    outside a dispatched set names nothing and reports an `MS0003` warning. Dart pins the same
    suffixes (slice 013g). Root anchoring decides overrides and implementations (§ Root anchoring):
    in a derived type's visible group an override is not named at all (the inherited overload it
