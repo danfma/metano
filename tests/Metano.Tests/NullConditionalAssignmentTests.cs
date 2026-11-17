@@ -138,6 +138,9 @@ public class NullConditionalAssignmentTests
         );
 
         var output = result["pad.ts"];
-        await Assert.That(output).Contains("this.slot != null && (this.slot.value += 1)");
+
+        await Assert
+            .That(output)
+            .Contains("this.slot != null && (this.slot.value = (this.slot.value + 1) | 0)");
     }
 }

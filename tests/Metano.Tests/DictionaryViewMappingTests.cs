@@ -178,7 +178,7 @@ public class DictionaryViewMappingTests
         await Assert.That(output).Contains("const values = [...d.values()];");
         await Assert
             .That(output)
-            .Contains("return keys.length + values.length + (keys.includes(\"a\") ? 1 : 0);");
+            .Contains("return (keys.length + values.length + (keys.includes(\"a\") ? 1 : 0)) | 0;");
     }
 
     [Test]
@@ -200,7 +200,7 @@ public class DictionaryViewMappingTests
         );
 
         await Assert.That(output).Contains("for (const value of [...d.values()]) {");
-        await Assert.That(output).Contains("return total + linq([...d.values()], sum());");
+        await Assert.That(output).Contains("return (total + linq([...d.values()], sum())) | 0;");
         await Assert.That(output).Contains("return linq([...d.keys()], toArray());");
         await Assert.That(output).Contains("return linq([...d.values()], contains(2));");
         await Assert.That(output).Contains("return [...d.keys()].join(\",\");");

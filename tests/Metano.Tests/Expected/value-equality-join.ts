@@ -91,7 +91,7 @@ export class QHashM {
   }
 
   hashCodeSeed(seed: number): number {
-    return this.v + seed;
+    return (this.v + seed) | 0;
   }
 
   hashCodeByValue(): number {
@@ -191,7 +191,7 @@ export class ADer extends ABase {
   }
 
   override hashCodeSeed(s: number): number {
-    return s + 1;
+    return (s + 1) | 0;
   }
 
   override hashCodeByValue(): number {
@@ -232,7 +232,7 @@ export class HMid extends HTop {
   }
 
   equalsOSlack(o: HMid, slack: number): boolean {
-    return Math.abs(o.b - this.b) <= slack;
+    return Math.abs((o.b - this.b) | 0) <= slack;
   }
 
   equalsByValue(other: any): boolean {
@@ -304,7 +304,7 @@ export class UObjEq {
   }
 
   equalsOSlack(o: UObjEq, slack: number): boolean {
-    return Math.abs(o.x - this.x) <= slack;
+    return Math.abs((o.x - this.x) | 0) <= slack;
   }
 
   equalsByValue(o: Object | null): boolean {
@@ -420,7 +420,7 @@ export class NHash {
   constructor(readonly v: number) { }
 
   hashCodeSeed(seed: number): number {
-    return this.v + seed;
+    return (this.v + seed) | 0;
   }
 
   hashCodeByValue(): number {
@@ -519,7 +519,7 @@ export class SEqJoin {
   }
 
   equalsOSlack(o: SEqJoin, slack: number): boolean {
-    return Math.abs(o.x - this.x) <= slack;
+    return Math.abs((o.x - this.x) | 0) <= slack;
   }
 
   equalsO(o: SEqJoin): boolean {
@@ -639,7 +639,7 @@ export class JoinUse {
   }
 
   static hash(a: QHashM): number {
-    return a.hashCodeSeed(2) + a.hashCodeByValue();
+    return (a.hashCodeSeed(2) + a.hashCodeByValue()) | 0;
   }
 
   static low(a: HLow, b: HLow): boolean {

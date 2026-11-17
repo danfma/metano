@@ -30,11 +30,13 @@ namespace Metano.Compiler.Extraction;
 ///   64-bit Dart <c>int</c>);</item>
 ///   <item><c>+</c>, <c>-</c>, <c>*</c>, unary <c>-</c>, <c>++</c> and
 ///   <c>--</c> on <c>int</c> / <c>uint</c> are range-checked in a checked
-///   context. In an unchecked context they are not reduced: the wrap of
-///   <c>int</c> / <c>uint</c> arithmetic is a documented gap.</item>
+///   context. In an unchecked context they wrap when the target's
+///   <see cref="NumericLoweringRules.WrapsInt32Arithmetic"/> asks for it
+///   (spec 001 FR-074), and are not reduced otherwise (Dart's documented
+///   gap).</item>
 /// </list>
 /// A reduction that cannot change the value is not produced: the operand
-/// ranges (<see cref="IntegerValueRanges"/>) decide.
+/// ranges (<see cref="IntegerValueRanges"/>) decide (spec 001 FR-075).
 /// </summary>
 internal static class NarrowIntegerOverflow
 {
@@ -49,15 +51,17 @@ internal static class NarrowIntegerOverflow
         BinaryOperatorKind operatorKind,
         IrNumericKind kind,
         bool isChecked,
+        NumericLoweringRules rules,
         IntegerRange? left,
         IntegerRange? right
     ) =>
         operatorKind switch
         {
             BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply =>
-                CheckedArithmetic(
+                Arithmetic(
                     kind,
                     isChecked,
+                    rules,
                     IntegerValueRanges.ExactResult(operatorKind, left, right)
                 ),
             // TODO(#549): `uint` `&`, `|` and `^` cannot leave the domain in
@@ -106,6 +110,7 @@ internal static class NarrowIntegerOverflow
         BinaryOperatorKind operatorKind,
         IrNumericKind targetKind,
         bool isChecked,
+        NumericLoweringRules rules,
         IntegerRange? value
     )
     {
@@ -115,6 +120,7 @@ internal static class NarrowIntegerOverflow
                 operatorKind,
                 targetKind,
                 isChecked,
+                rules,
                 IntegerRange.Of(targetKind),
                 value
             );
@@ -154,14 +160,21 @@ internal static class NarrowIntegerOverflow
     /// <summary>
     /// <c>++</c> / <c>--</c>: an <c>sbyte</c>, <c>byte</c>, <c>short</c> or
     /// <c>ushort</c> stores the stepped value narrowed; an <c>int</c> /
-    /// <c>uint</c> is range-checked in a checked context only.
+    /// <c>uint</c> follows <see cref="Arithmetic"/>, unless the step is the
+    /// bounded one of a counting loop (<paramref name="isBoundedStep"/>,
+    /// FR-075), which cannot leave the type's range.
     /// </summary>
-    public static IntegerOverflowReduction? IncrementReduction(IrNumericKind kind, bool isChecked)
+    public static IntegerOverflowReduction? IncrementReduction(
+        IrNumericKind kind,
+        bool isChecked,
+        NumericLoweringRules rules,
+        bool isBoundedStep
+    )
     {
         if (kind.IsNarrowerThanInt32())
             return IntegerOverflowReduction.Of(kind, isChecked);
 
-        return isChecked ? IntegerOverflowReduction.Of(kind, isChecked: true) : null;
+        return isBoundedStep ? null : Arithmetic(kind, isChecked, rules, result: null);
     }
 
     /// <summary>
@@ -173,31 +186,35 @@ internal static class NarrowIntegerOverflow
         UnaryOperatorKind operatorKind,
         IrNumericKind kind,
         bool isChecked,
+        NumericLoweringRules rules,
         IntegerRange? operand
     ) =>
         operatorKind switch
         {
-            UnaryOperatorKind.Minus => CheckedArithmetic(kind, isChecked, operand?.Negated()),
+            UnaryOperatorKind.Minus => Arithmetic(kind, isChecked, rules, operand?.Negated()),
             UnaryOperatorKind.BitwiseNegation => UnsignedBits(kind, result: null),
             _ => null,
         };
 
     /// <summary>
-    /// A range check of <paramref name="kind"/> in a checked context, unless
-    /// the exact <paramref name="result"/> is known to fit.
+    /// A range check of <paramref name="kind"/> in a checked context, and a
+    /// wrap in an unchecked one when <paramref name="rules"/> wrap
+    /// <c>int</c> / <c>uint</c> arithmetic (FR-074), unless the exact
+    /// <paramref name="result"/> is known to fit (FR-075).
     /// </summary>
-    private static IntegerOverflowReduction? CheckedArithmetic(
+    private static IntegerOverflowReduction? Arithmetic(
         IrNumericKind kind,
         bool isChecked,
+        NumericLoweringRules rules,
         IntegerRange? result
     )
     {
-        if (!isChecked)
+        if (!isChecked && !rules.WrapsInt32Arithmetic)
             return null;
 
         var fits = result is { } exact && IntegerRange.Of(kind).Contains(exact);
 
-        return fits ? null : IntegerOverflowReduction.Of(kind, isChecked: true);
+        return fits ? null : IntegerOverflowReduction.Of(kind, isChecked);
     }
 
     /// <summary>

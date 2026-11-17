@@ -113,10 +113,10 @@ public class SpanExtensionCallTests
     [Arguments("sp.TrimStart()", "sp.trimStart()")]
     [Arguments("sp.TrimEnd()", "sp.trimEnd()")]
     [Arguments("Span<int> s = xs; s.Reverse()", "s.reverse()")]
-    [Arguments("xs.Sort((x, y) => y - x)", "xs.sort((x: number, y: number) => y - x)")]
+    [Arguments("xs.Sort((x, y) => y - x)", "xs.sort((x: number, y: number) => (y - x) | 0)")]
     [Arguments(
         "Span<int> s = xs; s.Sort((x, y) => y - x)",
-        "s.sort((x: number, y: number) => y - x)"
+        "s.sort((x: number, y: number) => (y - x) | 0)"
     )]
     [Arguments("xs.Sort(Descending)", "xs.sort(Calls.descending)")]
     [Arguments(

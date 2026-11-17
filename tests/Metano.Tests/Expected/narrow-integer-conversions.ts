@@ -73,7 +73,7 @@ export class Narrowing {
   }
 
   maskedPair(x: number, y: number): number {
-    return (x & y) >>> 0 & 65535;
+    return x & y & 65535;
   }
 
   constant(): number {

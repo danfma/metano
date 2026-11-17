@@ -18,8 +18,7 @@ public class NoContainerTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("exported-as-module.ts");
-        await Assert.That(result["math-utils.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("exported-as-module.ts", result["math-utils.ts"]);
     }
 
     [Test]

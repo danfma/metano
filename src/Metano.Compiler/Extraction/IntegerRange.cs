@@ -98,11 +98,17 @@ internal readonly record struct IntegerRange
 
     public static IntegerRange Exactly(Int128 value) => new(value, value);
 
-    /// <summary>The values of the integer kind <paramref name="kind"/> (64 bits or fewer).</summary>
-    /// <exception cref="ArgumentException"><paramref name="kind"/> is not an integer kind.</exception>
+    /// <summary>The values of the non-negative half of the signed or unsigned integer kind <paramref name="kind"/>.</summary>
+    public static IntegerRange NonNegativeOf(IrNumericKind kind) => new(0, Of(kind).Max);
+
+    /// <summary>
+    /// The values of the integer kind <paramref name="kind"/> (64 bits or
+    /// fewer), or of a <c>char</c> read as its UTF-16 code.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="kind"/> is not an integer or <c>char</c> kind.</exception>
     public static IntegerRange Of(IrNumericKind kind)
     {
-        if (!kind.IsInteger())
+        if (!kind.IsIntegerOrChar())
             throw new ArgumentException($"'{kind}' is not an integer kind.", nameof(kind));
 
         var width = kind.BitWidth();

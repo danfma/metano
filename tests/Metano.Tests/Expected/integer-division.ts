@@ -24,7 +24,7 @@ export class Quotients {
   }
 
   static mixed(a: number, b: number): number {
-    return intDiv(a, b) * 2 + intDiv(a + 1, b);
+    return (Math.imul(intDiv(a, b), 2) + intDiv((a + 1) | 0, b)) | 0;
   }
 
   static shrink(value: number): number {

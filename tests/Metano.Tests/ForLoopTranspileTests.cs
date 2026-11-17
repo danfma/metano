@@ -49,9 +49,7 @@ public class ForLoopTranspileTests
             """
         );
 
-        await Assert
-            .That(result["walks.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("for-loop-multiple-clauses.ts"));
+        await TranspileHelper.AssertGolden("for-loop-multiple-clauses.ts", result["walks.ts"]);
     }
 
     [Test]
@@ -119,7 +117,9 @@ public class ForLoopTranspileTests
             """
         )["lookup.ts"];
 
-        await Assert.That(output).Contains("for (let k = 0, step = 1; ; k += step, hits++) {");
+        await Assert
+            .That(output)
+            .Contains("for (let k = 0, step = 1; ; k = (k + step) | 0, hits = (hits + 1) | 0) {");
     }
 
     [Test]

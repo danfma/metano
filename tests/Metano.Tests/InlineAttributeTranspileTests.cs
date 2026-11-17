@@ -437,7 +437,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["calc.ts"];
-        await Assert.That(output).Contains("return 10 - 1;");
+        await Assert.That(output).Contains("return (10 - 1) | 0;");
     }
 
     [Test]
@@ -466,7 +466,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["calc.ts"];
-        await Assert.That(output).Contains("return 7 + 5;");
+        await Assert.That(output).Contains("return (7 + 5) | 0;");
     }
 
     // ─── Static-class [Inline] propagation ───────────────────
@@ -497,7 +497,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["calc.ts"];
-        await Assert.That(output).Contains("return 3 + 3 * 2;");
+        await Assert.That(output).Contains("return (3 + Math.imul(3, 2)) | 0;");
     }
 
     [Test]
@@ -633,7 +633,7 @@ public class InlineAttributeTranspileTests
             await Assert.That(helpers).DoesNotContain("squared");
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("((x: number) => x * x)(n + 1)");
+        await Assert.That(output).Contains("((x: number) => Math.imul(x, x))((n + 1) | 0)");
         await Assert.That(output).DoesNotContain("(n + 1) * (n + 1)");
     }
 
@@ -664,7 +664,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("(x: number) => x * x");
+        await Assert.That(output).Contains("(x: number) => Math.imul(x, x)");
         await Assert.That(output).DoesNotContain("MathHelpers.");
     }
 
@@ -695,7 +695,7 @@ public class InlineAttributeTranspileTests
 
         var output = result["caller.ts"];
         await Assert.That(output).Contains("function inline$factorial(");
-        await Assert.That(output).Contains("inline$factorial(n - 1)");
+        await Assert.That(output).Contains("inline$factorial((n - 1) | 0)");
         await Assert.That(output).DoesNotContain("Factorial(");
     }
 
@@ -730,7 +730,7 @@ public class InlineAttributeTranspileTests
 
         var output = result["caller.ts"];
         await Assert.That(output).Contains("function inline$factorial(");
-        await Assert.That(output).Contains("inline$factorial(n - 1)");
+        await Assert.That(output).Contains("inline$factorial((n - 1) | 0)");
         await Assert.That(output).DoesNotContain("MathHelpers.");
     }
 
@@ -758,7 +758,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("(x: number) => x * x");
+        await Assert.That(output).Contains("((x: number) => Math.imul(x, x))");
         await Assert.That(output).DoesNotContain("function inline$");
     }
 
@@ -784,7 +784,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("(n + 1) * (n + 1)");
+        await Assert.That(output).Contains("Math.imul(n + 1, n + 1)");
         await Assert.That(output).DoesNotContain("=> x * x");
     }
 }

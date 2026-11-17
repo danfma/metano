@@ -41,8 +41,8 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const k = 3;");
-        await Assert.That(output).Contains("return k + x;");
-        await Assert.That(output).Contains("return k + x + k;");
+        await Assert.That(output).Contains("return (k + x) | 0;");
+        await Assert.That(output).Contains("return (k + x + k) | 0;");
         await Assert.That(output).DoesNotContain("const K =");
         await Assert.That(output).DoesNotContain("return K");
     }
@@ -69,7 +69,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const factor = 3;");
-        await Assert.That(output).Contains("return factor * n + x;");
+        await Assert.That(output).Contains("return (Math.imul(factor, n) + x) | 0;");
         await Assert.That(output).DoesNotContain("const Factor =");
         await Assert.That(output).DoesNotContain("return Factor");
     }
@@ -98,7 +98,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const bonus = 10;");
-        await Assert.That(output).Contains("return bonus + x;");
+        await Assert.That(output).Contains("return (bonus + x) | 0;");
         await Assert.That(output).DoesNotContain("const Bonus =");
         await Assert.That(output).DoesNotContain("return Bonus");
     }
@@ -154,7 +154,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const rounding = 1;");
-        await Assert.That(output).Contains("return this._total + rounding;");
+        await Assert.That(output).Contains("return (this._total + rounding) | 0;");
         await Assert.That(output).DoesNotContain("const Rounding =");
         await Assert.That(output).DoesNotContain("+ Rounding");
     }
@@ -202,7 +202,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const default_ = 2;");
-        await Assert.That(output).Contains("const new_ = default_ + 1;");
+        await Assert.That(output).Contains("const new_ = (default_ + 1) | 0;");
         await Assert.That(output).Contains("return new_;");
     }
 
@@ -250,8 +250,8 @@ public class ConstNamingConsistencyTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("let total = x * 2;");
-        await Assert.That(output).Contains("total += 1;");
+        await Assert.That(output).Contains("let total = Math.imul(x, 2);");
+        await Assert.That(output).Contains("total = (total + 1) | 0;");
         await Assert.That(output).Contains("return total;");
         await Assert.That(output).DoesNotContain("let Total =");
         await Assert.That(output).DoesNotContain("return Total");
@@ -279,7 +279,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("for (const item of xs)");
-        await Assert.That(output).Contains("sum += item;");
+        await Assert.That(output).Contains("sum = (sum + item) | 0;");
         await Assert.That(output).DoesNotContain("of Item");
         await Assert.That(output).DoesNotContain("+ Item");
     }
@@ -368,7 +368,7 @@ public class ConstNamingConsistencyTests
         await Assert.That(output).Contains("let rest: number[] | null;");
         await Assert.That(output).Contains("(first = xs[0]!, true)");
         await Assert.That(output).Contains("(rest = xs.slice(1), true)");
-        await Assert.That(output).Contains("return first + rest.length;");
+        await Assert.That(output).Contains("return (first + rest.length) | 0;");
         await Assert.That(output).DoesNotContain("First");
         await Assert.That(output).DoesNotContain("Rest");
     }
@@ -423,7 +423,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const n =");
-        await Assert.That(output).Contains("return n * 2;");
+        await Assert.That(output).Contains("return Math.imul(n, 2);");
         await Assert.That(output).DoesNotContain("return N");
     }
 
@@ -609,7 +609,7 @@ public class ConstNamingConsistencyTests
         )["globals.ts"];
 
         await Assert.That(output).Contains("export const new_: number = 9;");
-        await Assert.That(output).Contains("return new_ + x;");
+        await Assert.That(output).Contains("return (new_ + x) | 0;");
     }
 
     [Test]
@@ -667,7 +667,7 @@ public class ConstNamingConsistencyTests
         await Assert.That(files).ContainsKey("limits.ts");
         await Assert.That(files["limits.ts"]).Contains("export const Max: number = 10;");
         await Assert.That(files["limits.ts"]).Contains("const max = 3;");
-        await Assert.That(files["limits.ts"]).Contains("return Max + max;");
+        await Assert.That(files["limits.ts"]).Contains("return (Max + max) | 0;");
         await Assert.That(diagnostics.Any(d => d.Message.Contains("shadows"))).IsFalse();
     }
 
@@ -694,7 +694,7 @@ public class ConstNamingConsistencyTests
 
         var globals = output["globals.ts"];
         await Assert.That(globals).Contains("export const new_: number = 9;");
-        await Assert.That(globals).Contains("return new_ + x;");
+        await Assert.That(globals).Contains("return (new_ + x) | 0;");
 
         var reader = output["reader.ts"];
         await Assert.That(reader).Contains("import { new_ } from \"./globals\";");
@@ -722,7 +722,7 @@ public class ConstNamingConsistencyTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("constructor(of_: number)");
-        await Assert.That(output).Contains("this._v = of_ + 1;");
+        await Assert.That(output).Contains("this._v = (of_ + 1) | 0;");
     }
 
     [Test]
@@ -738,7 +738,7 @@ public class ConstNamingConsistencyTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("(of_: number) => of_ + 3");
+        await Assert.That(output).Contains("(of_: number) => (of_ + 3) | 0");
     }
 
     [Test]
@@ -760,8 +760,8 @@ public class ConstNamingConsistencyTests
         await Assert.That(output).Contains("static f(of_: number): number;");
         await Assert.That(output).Contains("static fOfBy(of_: number, by: number): number {");
         await Assert.That(output).Contains("static fOf(of_: number): number {");
-        await Assert.That(output).Contains("return of_ + 1;");
-        await Assert.That(output).Contains("return of_ + by;");
+        await Assert.That(output).Contains("return (of_ + 1) | 0;");
+        await Assert.That(output).Contains("return (of_ + by) | 0;");
     }
 
     [Test]
@@ -778,7 +778,7 @@ public class ConstNamingConsistencyTests
         )["math.ts"];
 
         await Assert.That(output).Contains("export function twice(of_: number): number");
-        await Assert.That(output).Contains("return of_ * 2;");
+        await Assert.That(output).Contains("return Math.imul(of_, 2);");
     }
 
     [Test]
@@ -800,7 +800,7 @@ public class ConstNamingConsistencyTests
             .That(output)
             .Contains("function column(args: { of?: number; width?: number })");
         await Assert.That(output).Contains("const { of: of_ = 0, width = 100 } = args;");
-        await Assert.That(output).Contains("return of_ + width;");
+        await Assert.That(output).Contains("return (of_ + width) | 0;");
     }
 
     [Test]
@@ -844,7 +844,8 @@ public class ConstNamingConsistencyTests
         await Assert
             .That(output)
             .Contains("export function shift(self: Line, of_: number): number {");
-        await Assert.That(output).Contains("  return of_ + 1;");
+
+        await Assert.That(output).Contains("  return (of_ + 1) | 0;");
     }
 
     [Test]
@@ -939,7 +940,7 @@ public class ConstNamingConsistencyTests
         await Assert.That(output).Contains("constructor(of_: number);");
         await Assert.That(output).Contains("const of_ = args[0] as number;");
         await Assert.That(output).Contains("const of_ = __chain0Arg0;");
-        await Assert.That(output).Contains("this.sum = of_ + by;");
+        await Assert.That(output).Contains("this.sum = (of_ + by) | 0;");
     }
 
     [Test]

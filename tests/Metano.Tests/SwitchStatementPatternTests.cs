@@ -182,9 +182,7 @@ public class SwitchStatementPatternTests
                 """
         );
 
-        var expected = TranspileHelper.ReadExpected("is-pattern-designators.ts");
-
-        await Assert.That(result["geometry.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("is-pattern-designators.ts", result["geometry.ts"]);
     }
 
     [Test]
@@ -402,7 +400,7 @@ public class SwitchStatementPatternTests
                         break;
                       }
 
-                      count += n.value;
+                      count = (count + n.value) | 0;
                       cursor = n.next;
                     }
                 """

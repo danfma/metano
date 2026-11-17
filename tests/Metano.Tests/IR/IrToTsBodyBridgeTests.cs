@@ -111,7 +111,7 @@ public class IrToTsBodyBridgeTests
         // The TS printer collapses a single-return arrow body to expression form:
         // (x) => x + 1 rather than (x) => { return x + 1; }.
         var ts = PrintMethodFromIr("System.Func<int, int> Make() => x => x + 1;");
-        await Assert.That(ts).Contains("(x: number) => x + 1");
+        await Assert.That(ts).Contains("(x: number) => (x + 1) | 0");
     }
 
     [Test]
@@ -152,7 +152,7 @@ public class IrToTsBodyBridgeTests
         );
         // The reference to `count` is an implicit-`this` access to the instance
         // field, which the IR extractor now expands to `this.count`.
-        await Assert.That(ts).Contains("new T(this.count + 1)");
+        await Assert.That(ts).Contains("new T((this.count + 1) | 0)");
     }
 
     [Test]

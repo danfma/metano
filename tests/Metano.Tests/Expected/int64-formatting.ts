@@ -44,7 +44,7 @@ export class Text {
   }
 
   compare(l: bigint, m: bigint, u: bigint, i: number): number {
-    return compareInt64(l, m) + compareInt64(u, u) + compareInt64(l, BigInt(i));
+    return (compareInt64(l, m) + compareInt64(u, u) + compareInt64(l, BigInt(i))) | 0;
   }
 
   equal(l: bigint, m: bigint, i: number, o: Object): boolean {

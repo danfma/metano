@@ -206,8 +206,13 @@ public class IndexAndRangeTests
 
         var output = result["buffer.ts"];
         await Assert.That(output).Contains("values[values.length - 1] = 5;");
-        await Assert.That(output).Contains("values[values.length - 2]! += 1;");
-        await Assert.That(output).Contains("values[values.length - 1]!++;");
+        await Assert
+            .That(output)
+            .Contains("values[values.length - 2] = (values[values.length - 2]! + 1) | 0;");
+
+        await Assert
+            .That(output)
+            .Contains("values[values.length - 1] = (values[values.length - 1]! + 1) | 0;");
     }
 
     [Test]
@@ -389,6 +394,7 @@ public class IndexAndRangeTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
         await Assert
             .That(files["feeds.ts"])
             .Contains(
@@ -425,6 +431,7 @@ public class IndexAndRangeTests
         var output = files["sequences.dart"];
         await Assert.That(diagnostics).IsEmpty();
         await Assert.That(output).Contains("values[values.length - (offset + 1)]");
+
         await Assert
             .That(output)
             .Contains(

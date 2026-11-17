@@ -20,7 +20,7 @@ export class Shelf {
   constructor() { }
 
   private next(): number {
-    return ++this._calls;
+    return this._calls = (this._calls + 1) | 0;
   }
 
   union(xs: number[], ys: number[]): HashSet<number> {

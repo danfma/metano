@@ -148,9 +148,7 @@ public class TupleLiteralTests
             """
         );
 
-        await Assert
-            .That(result["pairs.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("tuple-literals.ts"));
+        await TranspileHelper.AssertGolden("tuple-literals.ts", result["pairs.ts"]);
     }
 
     /// <summary>

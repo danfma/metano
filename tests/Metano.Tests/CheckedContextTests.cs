@@ -66,9 +66,7 @@ public class CheckedContextTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Int32Source);
 
-        await Assert
-            .That(files["counter.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("checked-unchecked-int32.ts"));
+        await TranspileHelper.AssertGolden("checked-unchecked-int32.ts", files["counter.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -227,8 +225,8 @@ public class CheckedContextTests
     [Arguments("static readonly u: number = 4294967295;")]
     [Arguments("static readonly b: number = 44;")]
     [Arguments("let h = -2128831035;")]
-    [Arguments("h = (h ^ c.charCodeAt(0)) * 16777619;")]
-    [Arguments("return a * -2128831035;")]
+    [Arguments("h = Math.imul(h ^ c.charCodeAt(0), 16777619);")]
+    [Arguments("return Math.imul(a, -2128831035);")]
     [Arguments("return 18446744073709551615n;")]
     [Arguments("return -2147483648;")]
     [Arguments("return new Decimal(\"-2128831035\");")]

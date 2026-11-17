@@ -11,11 +11,11 @@ const secret: number = 7;
 export const ceiling: number = 100;
 
 export function hit(): void {
-  hits++;
-  hits += step;
+  hits = (hits + 1) | 0;
+  hits = (hits + step) | 0;
   total = total.plus(new Decimal("1"));
 }
 
 export function clamp(v: number): number {
-  return v > max ? max : v < Min ? Min : v + secret + ceiling;
+  return v > max ? max : v < Min ? Min : (v + secret + ceiling) | 0;
 }

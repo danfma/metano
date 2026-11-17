@@ -46,8 +46,12 @@ public class CallerArgumentExpressionCallShapeTests
 
         await Assert.That(output).Contains("return show(count, \"count\");");
         await Assert.That(output).Contains("return Ext.show(count, \"count\");");
-        await Assert.That(output).Contains("pair(count, count + 1, undefined, \"count + 1\")");
-        await Assert.That(output).Contains("pair(count, count * 2, 1, \"count * 2\")");
+
+        await Assert
+            .That(output)
+            .Contains("pair(count, (count + 1) | 0, undefined, \"count + 1\")");
+
+        await Assert.That(output).Contains("pair(count, Math.imul(count, 2), 1, \"count * 2\")");
     }
 
     [Test]
@@ -74,7 +78,7 @@ public class CallerArgumentExpressionCallShapeTests
             """
         );
 
-        await Assert.That(files["derived.ts"]).Contains("super(count + 1, \"count + 1\");");
+        await Assert.That(files["derived.ts"]).Contains("super((count + 1) | 0, \"count + 1\");");
     }
 
     [Test]
@@ -105,9 +109,9 @@ public class CallerArgumentExpressionCallShapeTests
     }
 
     [Test]
-    [Arguments("probe.Invoke(count + 1)", "probe(count + 1, ")]
-    [Arguments("probe?.Invoke(count + 1)", "probe?.(count + 1, ")]
-    [Arguments("probe(count + 1)", "probe(count + 1, ")]
+    [Arguments("probe.Invoke(count + 1)", "probe((count + 1) | 0, ")]
+    [Arguments("probe?.Invoke(count + 1)", "probe?.((count + 1) | 0, ")]
+    [Arguments("probe(count + 1)", "probe((count + 1) | 0, ")]
     public async Task DelegateCall_PassesTheCallerText(string call, string emitted)
     {
         var files = TranspileHelper.Transpile(
@@ -154,7 +158,7 @@ public class CallerArgumentExpressionCallShapeTests
             """
         );
 
-        await Assert.That(output).Contains("return (count + 1).describe(\"count + 1\");");
+        await Assert.That(output).Contains("return ((count + 1) | 0).describe(\"count + 1\");");
         await Assert.That(output).DoesNotContain("$1");
     }
 

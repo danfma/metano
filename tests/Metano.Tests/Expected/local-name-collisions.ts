@@ -6,19 +6,19 @@ export class Collisions {
   static paramVsLocal(total: number): number {
     const total$1 = 10;
 
-    return total$1 + total;
+    return (total$1 + total) | 0;
   }
 
   static twoLocals(): number {
     const total = 1;
     const total$1 = 2;
 
-    return total + total$1;
+    return (total + total$1) | 0;
   }
 
   static lambdaOverLocal(): number {
     const factor = 3;
-    const scale = (factor$1: number) => factor$1 * factor;
+    const scale = (factor$1: number) => Math.imul(factor$1, factor);
 
     return scale(2);
   }
@@ -26,7 +26,7 @@ export class Collisions {
   static forEachVsLocal(items: number[]): number {
     let total = 0;
     for (const total$1 of items) {
-      total += total$1;
+      total = (total + total$1) | 0;
     }
 
     return total;
@@ -40,7 +40,7 @@ export class Collisions {
       const e0 = toException(e$);
       const ex$1 = e0;
 
-      return ex + ex$1.message.length;
+      return (ex + ex$1.message.length) | 0;
     }
 
     return ex;
@@ -51,7 +51,7 @@ export class Collisions {
     let total$1: number;
 
     if (typeof o === "number" && (total$1 = o, true)) {
-      return total + total$1;
+      return (total + total$1) | 0;
     }
 
     return total;
@@ -63,11 +63,11 @@ export class Collisions {
     switch (n) {
       case 1:
         const t = 1;
-        r += t;
+        r = (r + t) | 0;
         break;
       case 2:
         const t$1 = 2;
-        r += t$1;
+        r = (r + t$1) | 0;
         break;
     }
 

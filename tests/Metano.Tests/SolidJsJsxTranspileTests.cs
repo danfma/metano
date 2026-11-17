@@ -285,7 +285,7 @@ public class SolidJsJsxTranspileTests
         // SC-002: no wrapper object survives anywhere in the output.
         await Assert.That(tsx).DoesNotContain("SignalWrapper");
         await Assert.That(tsx).DoesNotContain("metano-solid-js");
-        await Assert.That(tsx).IsEqualTo(TranspileHelper.ReadExpected("jsx-signal-counter.tsx"));
+        await TranspileHelper.AssertGolden("jsx-signal-counter.tsx", tsx);
     }
 
     [Test]

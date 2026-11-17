@@ -4,7 +4,7 @@ export class Walks {
   static converge(n: number): number {
     let sum = 0;
     for (let i = 0, j = n; i < j; i++, j--) {
-      sum += j - i;
+      sum = (sum + (j - i)) | 0;
     }
 
     return sum;
@@ -15,17 +15,17 @@ export class Walks {
     let l: number;
     let total = 0;
     let steps = 0;
-    for (k = 0, l = n; k < l; k++, l -= 2, steps++) {
-      total += k;
+    for (k = 0, l = n; k < l; k = (k + 1) | 0, l = (l - 2) | 0, steps = (steps + 1) | 0) {
+      total = (total + k) | 0;
     }
 
-    return total + steps;
+    return (total + steps) | 0;
   }
 
   static single(n: number): number {
     let total = 0;
     for (let i = 0; i < n; i++) {
-      total += i;
+      total = (total + i) | 0;
     }
 
     return total;

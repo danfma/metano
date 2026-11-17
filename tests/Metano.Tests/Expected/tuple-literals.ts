@@ -20,6 +20,6 @@ export class Pairs {
     const positional = this.positional(3);
     const local = [4, "s"] as [number, string];
 
-    return named[0] + named[1] + positional[0] + positional[1].length + local[0] + local[1].length;
+    return (named[0] + named[1] + positional[0] + positional[1].length + local[0] + local[1].length) | 0;
   }
 }

@@ -27,7 +27,7 @@ public class IrBodyPipelineTests
 
         var output = result["adder.ts"];
         await Assert.That(output).Contains("add(a: number, b: number): number");
-        await Assert.That(output).Contains("return a + b;");
+        await Assert.That(output).Contains("return (a + b) | 0;");
     }
 
     [Test]

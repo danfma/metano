@@ -33,7 +33,7 @@ export class Glossary {
       return -1;
     }
 
-    return count + 1;
+    return (count + 1) | 0;
   }
 
   describe(key: string): string {

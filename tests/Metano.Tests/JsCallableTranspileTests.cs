@@ -90,8 +90,8 @@ public class JsCallableTranspileTests
         );
 
         var output = result["signal-consumer.ts"];
-        var expected = TranspileHelper.ReadExpected("js-callable-overloaded-invoke.ts");
-        await Assert.That(output).IsEqualTo(expected);
+
+        await TranspileHelper.AssertGolden("js-callable-overloaded-invoke.ts", output);
     }
 
     // Contract C3 — arbitrary arity.

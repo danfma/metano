@@ -131,7 +131,7 @@ public class ExtensionPropertySetterTests
         );
 
         var output = result["app/caller.ts"];
-        await Assert.That(output).Contains("count$set(c, count$get(c) + 1)");
+        await Assert.That(output).Contains("count$set(c, (count$get(c) + 1) | 0)");
         await Assert.That(output).DoesNotContain("receiver$temp$");
     }
 

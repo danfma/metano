@@ -193,8 +193,8 @@ public class PrimaryConstructorCaptureTests
 
         var output = result["quota.ts"];
         await Assert.That(output).Contains("constructor(readonly limit: number)");
-        await Assert.That(output).Contains("this.twice = limit * 2;");
-        await Assert.That(output).Contains("return this.limit * 2;");
+        await Assert.That(output).Contains("this.twice = Math.imul(limit, 2);");
+        await Assert.That(output).Contains("return Math.imul(this.limit, 2);");
         await Assert.That(output).Contains("return amount <= this.limit;");
         await Assert.That(output).DoesNotContain("_limit");
     }
@@ -303,7 +303,7 @@ public class PrimaryConstructorCaptureTests
 
         var counted = result["counted.ts"];
         await Assert.That(counted).Contains("constructor(readonly x: number)");
-        await Assert.That(counted).Contains("this.y = x++;");
+        await Assert.That(counted).Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;");
         await Assert.That(counted).Contains("return this.x;");
         await Assert.That(counted).DoesNotContain("private _x");
 
@@ -311,7 +311,7 @@ public class PrimaryConstructorCaptureTests
         // positional property (`public`).
         var countedValue = result["counted-value.ts"];
         await Assert.That(countedValue).Contains("constructor(public x: number)");
-        await Assert.That(countedValue).Contains("this.y = x++;");
+        await Assert.That(countedValue).Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;");
     }
 
     [Test]
@@ -334,7 +334,10 @@ public class PrimaryConstructorCaptureTests
 
         var output = result["explicit.ts"];
         await Assert.That(output).Contains("constructor(x: number)");
-        await Assert.That(output).Contains("this.y = x++;\n    this.x = x;");
+
+        await Assert
+            .That(output)
+            .Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;\n    this.x = x;");
     }
 
     [Test]
@@ -359,7 +362,7 @@ public class PrimaryConstructorCaptureTests
         await Assert.That(output).Contains("constructor(a: number)");
         await Assert.That(output).Contains("private _a: number;");
         await Assert.That(output).Contains("get a(): number {\n    return this._a;");
-        await Assert.That(output).Contains("this._a++;");
+        await Assert.That(output).Contains("((this._a = (this._a + 1) | 0) - 1) | 0;");
     }
 
     [Test]
@@ -387,7 +390,9 @@ public class PrimaryConstructorCaptureTests
 
         await Assert
             .That(output)
-            .Contains("this._a = a;\n    this.b = this._a++;\n    this.a = this._a;");
+            .Contains(
+                "this._a = a;\n    this.b = ((this._a = (this._a + 1) | 0) - 1) | 0;\n    this.a = this._a;"
+            );
     }
 
     [Test]
@@ -491,7 +496,7 @@ public class PrimaryConstructorCaptureTests
         var output = result["tally.ts"];
         await Assert.That(output).Contains("private _count: number;");
         await Assert.That(output).Contains("private readonly _step: number;");
-        await Assert.That(output).Contains("this._count += this._step;");
+        await Assert.That(output).Contains("this._count = (this._count + this._step) | 0;");
     }
 
     [Test]
@@ -536,7 +541,7 @@ public class PrimaryConstructorCaptureTests
 
         var output = result["hidden.ts"];
         await Assert.That(output).Contains("private readonly _limit: number;");
-        await Assert.That(output).Contains("return this._limit * 2;");
+        await Assert.That(output).Contains("return Math.imul(this._limit, 2);");
     }
 
     [Test]
@@ -722,7 +727,10 @@ public class PrimaryConstructorCaptureTests
         var output = result["app/point.ts"];
         await Assert.That(output).Contains("private readonly _x: number");
         await Assert.That(output).Contains("private readonly _y: number");
-        await Assert.That(output).Contains("this._x * this._x + this._y * this._y");
+
+        await Assert
+            .That(output)
+            .Contains("(Math.imul(this._x, this._x) + Math.imul(this._y, this._y)) | 0");
     }
 
     [Test]

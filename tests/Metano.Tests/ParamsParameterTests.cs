@@ -471,9 +471,10 @@ public class ParamsParameterTests
             """
         );
 
-        await Assert
-            .That(result["app/nullable-params.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("nullable-params-rest.ts"));
+        await TranspileHelper.AssertGolden(
+            "nullable-params-rest.ts",
+            result["app/nullable-params.ts"]
+        );
         await Assert.That(diagnostics).IsEmpty();
     }
 

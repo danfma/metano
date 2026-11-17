@@ -99,10 +99,10 @@ export class Checks {
   }
 
   inner(a: number, b: number): number {
-    return checkedInt32(a + a * b);
+    return checkedInt32(a + Math.imul(a, b));
   }
 
   plain(a: number, b: number): number {
-    return a + b * a - 1;
+    return (a + Math.imul(b, a) - 1) | 0;
   }
 }

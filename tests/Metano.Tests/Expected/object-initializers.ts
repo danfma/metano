@@ -17,7 +17,7 @@ export class Factory {
 
   build(capacity: number): number {
     const point = ((receiver$temp$0) => {
-      receiver$temp$0.x = this.seed + 1;
+      receiver$temp$0.x = (this.seed + 1) | 0;
       Object.assign(receiver$temp$0, { y: 2 });
       receiver$temp$0.inner.z = 3;
       receiver$temp$0.inner.items.push(4);
@@ -85,6 +85,6 @@ export class Factory {
       return receiver$temp$11;
     })(new Bag());
 
-    return point.x + tag.weight + list.length + sized.length + typed.length + byIndex.size + byAdd.size + set.size + nested.length + this._defaults.length;
+    return (point.x + tag.weight + list.length + sized.length + typed.length + byIndex.size + byAdd.size + set.size + nested.length + this._defaults.length) | 0;
   }
 }

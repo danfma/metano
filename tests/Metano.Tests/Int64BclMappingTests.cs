@@ -241,9 +241,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(MathSource);
 
-        await Assert
-            .That(files["statics.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-math.ts"));
+        await TranspileHelper.AssertGolden("int64-math.ts", files["statics.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -292,9 +290,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(FormattingSource);
 
-        await Assert
-            .That(files["text.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-formatting.ts"));
+        await TranspileHelper.AssertGolden("int64-formatting.ts", files["text.ts"]);
 
         await Assert.That(diagnostics.Where(d => d.Code == UnsupportedFormat)).IsEmpty();
     }
@@ -304,9 +300,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ConvertSource);
 
-        await Assert
-            .That(files["converts.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-convert.ts"));
+        await TranspileHelper.AssertGolden("int64-convert.ts", files["converts.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }

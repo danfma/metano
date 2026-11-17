@@ -63,7 +63,7 @@ public class CrossPackageExpressionImportTests
             .That(output)
             .Contains($"import {{ Calc }} from \"{Specifier(withSubpathRoot)}\"");
 
-        await Assert.That(output).Contains("return Calc.twice(2) + Calc.zero;");
+        await Assert.That(output).Contains("return (Calc.twice(2) + Calc.zero) | 0;");
     }
 
     [Test]

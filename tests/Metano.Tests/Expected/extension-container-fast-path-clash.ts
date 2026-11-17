@@ -1,15 +1,15 @@
 import { isInt32, isString } from "metano-runtime";
 
 export function twice(x: number): number {
-  return x * 2;
+  return Math.imul(x, 2);
 }
 
 export function foldX$(x: number): number {
-  return x + 1;
+  return (x + 1) | 0;
 }
 
 export function foldS(s: string): number {
-  return s.length + 1;
+  return (s.length + 1) | 0;
 }
 
 export function fold(x: number): number;

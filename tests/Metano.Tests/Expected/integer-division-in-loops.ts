@@ -6,23 +6,23 @@ export class Halver {
   static steps(n: number): number {
     let steps = 0;
     for (let i = n; i > 0; i = intDiv(i, 2)) {
-      steps++;
+      steps = (steps + 1) | 0;
     }
     while (n > 0) {
-      n -= intDiv(n, 3) + 1;
+      n = (n - (intDiv(n, 3) + 1)) | 0;
     }
     for (const x of [9, 18]) {
-      steps += intDiv(x, 4);
+      steps = (steps + intDiv(x, 4)) | 0;
     }
     do {
-      steps += intDiv(steps, 2);
+      steps = (steps + intDiv(steps, 2)) | 0;
     } while (steps < 0);
     try {
-      steps += intDiv(steps, 5);
+      steps = (steps + intDiv(steps, 5)) | 0;
     } finally {
       n = intDiv(n, 2);
     }
 
-    return steps + n;
+    return (steps + n) | 0;
   }
 }

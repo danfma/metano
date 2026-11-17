@@ -282,15 +282,17 @@ public class NarrowIntegerLoweringTests
     }
 
     /// <summary>
-    /// The documented gap: <c>int</c> / <c>uint</c> arithmetic in the default
-    /// (unchecked) context is not wrapped.
+    /// <c>int</c> arithmetic in the default (unchecked) context wraps (spec
+    /// 001 FR-074), with one trailing reduction (FR-076).
     /// </summary>
     [Test]
-    public async Task UncheckedArithmetic_IsNotWrapped()
+    public async Task UncheckedArithmetic_Wraps()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(CheckedArithmeticSource);
 
-        await Assert.That(BodyOf(files["checks.ts"], "plain")).IsEqualTo("return a + b * a - 1;");
+        await Assert
+            .That(BodyOf(files["checks.ts"], "plain"))
+            .IsEqualTo("return (a + Math.imul(b, a) - 1) | 0;");
     }
 
     /// <summary>
@@ -353,7 +355,10 @@ public class NarrowIntegerLoweringTests
 
         await TranspileHelper.AssertGolden("int32-compound-shifts.ts", cells);
         await Assert.That(BodyOf(cells, "field")).IsEqualTo("h.next().signed <<= n;");
-        await Assert.That(BodyOf(cells, "element")).IsEqualTo("h.next().slots[k++]! <<= n;");
+
+        await Assert
+            .That(BodyOf(cells, "element"))
+            .IsEqualTo("h.next().slots[((k = (k + 1) | 0) - 1) | 0]! <<= n;");
 
         await Assert
             .That(BodyOf(cells, "indexAndCount"))
@@ -397,6 +402,8 @@ public class NarrowIntegerLoweringTests
     }
 
     [Test]
+    [Arguments("counts[key]++", "Dictionary<string, int>")]
+    [Arguments("counts[key] += 2", "Dictionary<string, int>")]
     [Arguments("counts[key]++", "Dictionary<string, byte>")]
     [Arguments("counts[key] += 1", "Dictionary<string, byte>")]
     [Arguments("counts[key] |= 1u << 31", "Dictionary<string, uint>")]
@@ -415,12 +422,12 @@ public class NarrowIntegerLoweringTests
         await AssertReportsTheDictionaryEntry(diagnostics, expression);
     }
 
-    /// <summary>An <c>int</c> entry in the default context needs no reduction and reports nothing.</summary>
+    /// <summary>A bitwise store on an <c>int</c> entry needs no reduction and reports nothing.</summary>
     [Test]
     public async Task DictionaryEntryOfAnUnreducedStore_ReportsNothing()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            DictionaryEntrySource("counts[key] += 2", "Dictionary<string, int>")
+            DictionaryEntrySource("counts[key] |= 2", "Dictionary<string, int>")
         );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();

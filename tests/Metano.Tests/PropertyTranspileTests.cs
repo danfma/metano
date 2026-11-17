@@ -17,7 +17,7 @@ public class PropertyTranspileTests
 
         var output = result["rect.ts"];
         await Assert.That(output).Contains("get area(): number");
-        await Assert.That(output).Contains("this.width * this.height");
+        await Assert.That(output).Contains("Math.imul(this.width, this.height)");
     }
 
     [Test]

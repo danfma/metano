@@ -59,9 +59,9 @@ public class ElementAccessTypingTests
 
         await Assert.That(output).Contains("a[i] = 1;");
         await Assert.That(output).Contains("s[i] ??= \"x\";");
-        await Assert.That(output).Contains("a[i]! += 2;");
-        await Assert.That(output).Contains("a[i]!++;");
-        await Assert.That(output).Contains("--a[i + 1]!;");
+        await Assert.That(output).Contains("a[i] = (a[i]! + 2) | 0;");
+        await Assert.That(output).Contains("a[i] = (a[i]! + 1) | 0;");
+        await Assert.That(output).Contains("a[(i + 1) | 0] = (a[(i + 1) | 0]! - 1) | 0;");
     }
 
     [Test]

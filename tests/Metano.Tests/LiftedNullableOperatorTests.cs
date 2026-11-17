@@ -22,8 +22,12 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return o.qty == null ? null : o.qty + k;");
-        await Assert.That(output).Contains("return a == null || b == null ? null : a * b;");
+        await Assert.That(output).Contains("return o.qty == null ? null : (o.qty + k) | 0;");
+
+        await Assert
+            .That(output)
+            .Contains("return a == null || b == null ? null : Math.imul(a, b);");
+
         await Assert.That(output).Contains("return a == null ? null : a << 2;");
         await Assert.That(output).Contains("return a == null ? null : a * b;");
     }
@@ -38,7 +42,7 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return a + b;");
+        await Assert.That(output).Contains("return (a + b) | 0;");
         await Assert.That(output).Contains("return a < b;");
     }
 
@@ -87,12 +91,15 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return (o == null ? null : o.items.length + 1) ?? 0;");
-        await Assert.That(output).Contains("return o == null ? null : 1 + o.items.length;");
+        await Assert
+            .That(output)
+            .Contains("return (o == null ? null : (o.items.length + 1) | 0) ?? 0;");
+
+        await Assert.That(output).Contains("return o == null ? null : (1 + o.items.length) | 0;");
 
         await Assert
             .That(output)
-            .Contains("return o == null ? null : o.qty == null ? null : o.qty + 1;");
+            .Contains("return o == null ? null : o.qty == null ? null : (o.qty + 1) | 0;");
 
         await Assert
             .That(output)
@@ -100,11 +107,11 @@ public class LiftedNullableOperatorTests
 
         await Assert
             .That(output)
-            .Contains("return o == null ? null : o.qty == null ? null : -o.qty;");
+            .Contains("return o == null ? null : o.qty == null ? null : -o.qty | 0;");
 
         await Assert
             .That(output)
-            .Contains("return o == null ? null : k == null ? null : k + o.items.length;");
+            .Contains("return o == null ? null : k == null ? null : (k + o.items.length) | 0;");
 
         await Assert
             .That(output)
@@ -125,14 +132,14 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : receiver$temp$0 + receiver$temp$1)(o.nextQty()))(o.nextQty());"
+                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(o.nextQty()))(o.nextQty());"
             );
 
         // The left operand is bound too, so it is read before the call runs.
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null ? null : receiver$temp$0 + receiver$temp$1)(o.count()))(a);"
+                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(o.count()))(a);"
             );
 
         // A side-effecting left operand keeps the access on the right from
@@ -140,7 +147,7 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : receiver$temp$0 + receiver$temp$1)(p?.qty ?? null))(o.nextQty());"
+                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(p?.qty ?? null))(o.nextQty());"
             );
     }
 
@@ -154,7 +161,7 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0 + 1)(await t);"
+                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : (receiver$temp$0 + 1) | 0)(await t);"
             );
     }
 
@@ -198,9 +205,9 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return a == null ? null : -a;");
+        await Assert.That(output).Contains("return a == null ? null : -a | 0;");
         await Assert.That(output).Contains("return b == null ? null : !b;");
-        await Assert.That(output).Contains("o.qty = o.qty == null ? null : o.qty + 10;");
+        await Assert.That(output).Contains("o.qty = o.qty == null ? null : (o.qty + 10) | 0;");
 
         // A lifted integer division keeps its truncating lowering.
         await Assert.That(output).Contains("x = x == null ? null : intDiv(x, 2);");
@@ -223,7 +230,7 @@ public class LiftedNullableOperatorTests
 
         await Assert
             .That(output)
-            .Contains("receiver$temp$0.qty == null ? null : receiver$temp$0.qty + 1");
+            .Contains("receiver$temp$0.qty == null ? null : (receiver$temp$0.qty + 1) | 0");
 
         await Assert.That(output).Contains("(o.self())");
     }
@@ -491,9 +498,7 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert
-            .That(output)
-            .IsEqualTo(TranspileHelper.ReadExpected("lifted-nullable-operators.ts"));
+        await TranspileHelper.AssertGolden("lifted-nullable-operators.ts", output);
     }
 
     private static string TranspileInHelperClass(string members) =>

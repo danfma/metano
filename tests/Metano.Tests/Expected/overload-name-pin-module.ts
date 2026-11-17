@@ -1,11 +1,11 @@
 import { isInt32, isString } from "metano-runtime";
 
 export function twiceX(x: number): number {
-  return x * 2;
+  return Math.imul(x, 2);
 }
 
 export function twiceText(s: string): number {
-  return s.length * 2;
+  return Math.imul(s.length, 2);
 }
 
 export function twice(x: number): number;
@@ -23,11 +23,11 @@ export function twice(...args: unknown[]): number {
 }
 
 export function thriceX(x: number): number {
-  return x * 3;
+  return Math.imul(x, 3);
 }
 
 export function thriceOfText(s: string): number {
-  return s.length * 3;
+  return Math.imul(s.length, 3);
 }
 
 export function thrice(x: number): number;
@@ -50,11 +50,11 @@ export class Caller {
   constructor() { }
 
   static direct(): number {
-    return twiceText("abcd") + twiceX(1);
+    return (twiceText("abcd") + twiceX(1)) | 0;
   }
 
   static asExtension(): number {
-    return thriceOfText("abcd") + thriceX(7);
+    return (thriceOfText("abcd") + thriceX(7)) | 0;
   }
 }
 

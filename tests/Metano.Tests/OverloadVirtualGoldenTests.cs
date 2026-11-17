@@ -76,9 +76,10 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert
-            .That(Joined(result, "base", "partial", "full", "hider", "ledger", "flagged", "shorty"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-virtual.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-virtual.ts",
+            Joined(result, "base", "partial", "full", "hider", "ledger", "flagged", "shorty")
+        );
     }
 
     /// <summary>
@@ -171,9 +172,10 @@ public class OverloadVirtualGoldenTests
         var fromImage = TranspileHelper.TranspileWithLibraryImage(library, VirtualConsumer);
         var fromProject = TranspileHelper.TranspileWithLibrary(library, VirtualConsumer);
 
-        await Assert
-            .That(fromImage["app/derived.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-virtual-metadata.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-virtual-metadata.ts",
+            fromImage["app/derived.ts"]
+        );
 
         await Assert.That(fromProject["app/derived.ts"]).IsEqualTo(fromImage["app/derived.ts"]);
     }
@@ -242,9 +244,10 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert
-            .That(Joined(result, "op", "neg"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-abstract-methods.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-abstract-methods.ts",
+            Joined(result, "op", "neg")
+        );
     }
 
     /// <summary>
@@ -320,9 +323,10 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert
-            .That(Joined(result, "i-shape", "sq", "plot", "ia", "ib", "both", "use"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-interface.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-interface.ts",
+            Joined(result, "i-shape", "sq", "plot", "ia", "ib", "both", "use")
+        );
     }
 
     /// <summary>
@@ -488,7 +492,7 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert.That(result["my-widget.ts"]).Contains("super.add(x + 1);");
+        await Assert.That(result["my-widget.ts"]).Contains("super.add((x + 1) | 0);");
         await Assert.That(result["my-widget.ts"]).Contains("super.add(\"s\");");
         await Assert.That(result["my-widget.ts"]).DoesNotContain("super.addX(");
     }

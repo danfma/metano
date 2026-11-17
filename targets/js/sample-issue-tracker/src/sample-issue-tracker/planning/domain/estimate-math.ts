@@ -17,7 +17,7 @@ export function plan(estimate: Estimate, sprints: number): Estimate {
 }
 
 export function scaleFactor(estimate: Estimate, factor: number): Estimate {
-  return Estimate.fromPointsNote(estimate.points * factor, estimate.note);
+  return Estimate.fromPointsNote(Math.imul(estimate.points, factor), estimate.note);
 }
 
 export function scaleNote(estimate: Estimate, note: string): Estimate {

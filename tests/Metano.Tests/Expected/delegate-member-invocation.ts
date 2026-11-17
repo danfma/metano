@@ -17,6 +17,6 @@ export class Calls {
     const i = holder.invoke();
     holder.onPing.call(holder, 3);
 
-    return a + b + c + d + e + f + g + h + i;
+    return (a + b + c + d + e + f + g + h + i) | 0;
   }
 }

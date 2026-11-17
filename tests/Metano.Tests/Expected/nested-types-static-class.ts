@@ -8,7 +8,7 @@ class ShotSchedule$ShotEntry {
   }
 
   twice(): ShotSchedule$ShotEntry {
-    return ShotSchedule$ShotEntry.empty().with({ frames: this.frames * 2 });
+    return ShotSchedule$ShotEntry.empty().with({ frames: Math.imul(this.frames, 2) });
   }
 
   equals(other: any): boolean {
@@ -67,7 +67,7 @@ export class ShotSchedule {
     const boxed = entry;
     const isEntry = boxed instanceof ShotSchedule$ShotEntry ? 1 : 0;
 
-    return box.value.frames + (kind === ShotSchedule.Kind.B ? 1 : 0) + ShotSchedule$ShotEntry.empty().frames + isEntry + ShotSchedule.Slot.create().index + ShotSchedule$Deep.make().n + new ShotSchedule$Deep.Leaf(1).n + entry.twice().frames;
+    return (box.value.frames + (kind === ShotSchedule.Kind.B ? 1 : 0) + ShotSchedule$ShotEntry.empty().frames + isEntry + ShotSchedule.Slot.create().index + ShotSchedule$Deep.make().n + new ShotSchedule$Deep.Leaf(1).n + entry.twice().frames) | 0;
   }
 
   /** @internal */

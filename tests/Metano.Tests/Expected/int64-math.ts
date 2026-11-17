@@ -24,7 +24,7 @@ export class Statics {
   }
 
   sign(l: bigint, u: bigint): number {
-    return signInt64(l) + signInt64(l) + signInt64(u);
+    return (signInt64(l) + signInt64(l) + signInt64(u)) | 0;
   }
 
   clamp(l: bigint): bigint {

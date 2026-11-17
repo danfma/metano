@@ -9,12 +9,31 @@ namespace Metano.Compiler.Extraction;
 /// produce, read from what Roslyn already knows: a constant is its value, a
 /// conversion that cannot change the value keeps its operand's range, a
 /// built-in <c>+</c>, <c>-</c>, <c>*</c>, <c>&amp;</c>, <c>|</c>, <c>^</c>
-/// or <c>&lt;&lt;</c> by a constant combines its operands' ranges, and
-/// anything else spans its type. It is
-/// not a data-flow analysis: a variable spans its type.
+/// or <c>&lt;&lt;</c> by a constant combines its operands' ranges, a
+/// <c>char</c> is its UTF-16 code, the <c>Length</c> of an array or a
+/// <c>string</c> and the <c>Count</c> of a BCL collection that owns its
+/// storage are non-negative (spec 001 FR-075), and anything else spans its
+/// type. It is not a data-flow analysis: a variable spans its type.
 /// </summary>
 internal static class IntegerValueRanges
 {
+    /// <summary>
+    /// The BCL collection classes whose <c>Count</c> is the number of
+    /// elements they store (never a value a user type returns).
+    /// </summary>
+    private static readonly string[] StorageOwningCollections =
+    [
+        "System.Collections.Generic.List`1",
+        "System.Collections.Generic.Dictionary`2",
+        "System.Collections.Generic.HashSet`1",
+        "System.Collections.Generic.Queue`1",
+        "System.Collections.Generic.Stack`1",
+        "System.Collections.Generic.SortedDictionary`2",
+        "System.Collections.Generic.SortedList`2",
+        "System.Collections.Generic.SortedSet`1",
+        "System.Collections.Generic.LinkedList`1",
+    ];
+
     /// <summary>
     /// The values <paramref name="operation"/> can produce; <c>null</c> when
     /// its type is not an integer of 64 bits or fewer (an enum reads as its
@@ -41,6 +60,8 @@ internal static class IntegerValueRanges
                 Of(binary.LeftOperand),
                 Of(binary.RightOperand)
             ),
+            IPropertyReferenceOperation property when IsStoredElementCount(property) =>
+                IntegerRange.NonNegativeOf(IrNumericKind.Int32),
             _ => null,
         };
 
@@ -49,11 +70,36 @@ internal static class IntegerValueRanges
         return exact is { } range && typeRange.Contains(range) ? range : typeRange;
     }
 
-    /// <summary>The values of the integer type <paramref name="type"/>, through <c>Nullable&lt;T&gt;</c>; <c>null</c> for any other type.</summary>
+    /// <summary>The values of the integer or <c>char</c> type <paramref name="type"/>, through <c>Nullable&lt;T&gt;</c>; <c>null</c> for any other type.</summary>
     public static IntegerRange? OfType(ITypeSymbol? type) =>
-        NumericEndpoints.Of(type) is { Kind: var kind } && kind.IsInteger()
+        NumericEndpoints.Of(type) is { Kind: var kind } && kind.IsIntegerOrChar()
             ? IntegerRange.Of(kind)
             : null;
+
+    /// <summary>
+    /// The <c>Length</c> of an array or a <c>string</c>, or the <c>Count</c>
+    /// of one of <see cref="StorageOwningCollections"/>, matched by symbol
+    /// identity.
+    /// </summary>
+    private static bool IsStoredElementCount(IPropertyReferenceOperation property) =>
+        property.Property switch
+        {
+            {
+                Name: "Length",
+                ContainingType.SpecialType: SpecialType.System_Array or SpecialType.System_String,
+            } => true,
+            { Name: "Count", ContainingType.OriginalDefinition: var owner } => property
+                .SemanticModel
+                ?.Compilation
+                is { } compilation
+                && StorageOwningCollections.Any(name =>
+                    SymbolEqualityComparer.Default.Equals(
+                        compilation.GetTypeByMetadataName(name),
+                        owner
+                    )
+                ),
+            _ => false,
+        };
 
     /// <summary>
     /// The mathematical result of the built-in operator <paramref name="kind"/>
@@ -99,6 +145,7 @@ internal static class IntegerValueRanges
                 uint v => v,
                 long v => v,
                 ulong v => v,
+                char v => v,
                 _ => null,
             }
             : null;

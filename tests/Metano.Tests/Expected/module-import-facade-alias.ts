@@ -5,6 +5,6 @@ export class Use {
   constructor() { }
 
   go(): number {
-    return otherX(1) + thing("t") + fooY(2) + otherX$(1) + otherS("a") + fooY$(3) + fooS("b");
+    return (otherX(1) + thing("t") + fooY(2) + otherX$(1) + otherS("a") + fooY$(3) + fooS("b")) | 0;
   }
 }

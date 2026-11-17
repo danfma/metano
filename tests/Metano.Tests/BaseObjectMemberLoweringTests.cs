@@ -97,7 +97,7 @@ public class BaseObjectMemberLoweringTests
         var coins = result["coins.ts"];
 
         await Assert.That(coins).Contains("return super.equals(other) && other instanceof Coins");
-        await Assert.That(coins).Contains("return super.hashCode() + 1;");
+        await Assert.That(coins).Contains("return (super.hashCode() + 1) | 0;");
         await Assert.That(coins).Contains("return super.toString() + \"!\";");
     }
 

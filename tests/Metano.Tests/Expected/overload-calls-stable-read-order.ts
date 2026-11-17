@@ -6,7 +6,7 @@ export class PlainCalls {
   constructor() { }
 
   static insideOneArgument(e: Engine, h: Holder): number {
-    return e.applyFD(7, h.p - h.q);
+    return e.applyFD(7, (h.p - h.q) | 0);
   }
 
   static getterAndConstant(e: Engine, h: Holder): number {

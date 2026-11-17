@@ -7,7 +7,7 @@ export class Derived extends Base {
   }
 
   override addX(x: number): number {
-    return x + 1;
+    return (x + 1) | 0;
   }
 
   addB(b: boolean): number {

@@ -145,7 +145,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var storesAnInt32Wrap =
-            IntegerOverflowLowering.ReductionOf(_semantic.GetOperation(assign)) is
+            ReductionOf(_semantic.GetOperation(assign)) is
             { Kind: IrNumericKind.Int32, Mode: IrOverflowMode.Wrap, Operator: null };
 
         return op switch

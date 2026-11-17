@@ -86,9 +86,7 @@ public class ObjectInitializerTests
             """
         );
 
-        await Assert
-            .That(result["factory.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("object-initializers.ts"));
+        await TranspileHelper.AssertGolden("object-initializers.ts", result["factory.ts"]);
     }
 
     [Test]
@@ -173,7 +171,10 @@ public class ObjectInitializerTests
 
         var output = result["cells.ts"];
 
-        await Assert.That(output).Contains(".get(receiver$temp$1).v = i++;");
+        await Assert
+            .That(output)
+            .Contains(".get(receiver$temp$1).v = ((i = (i + 1) | 0) - 1) | 0;");
+
         await Assert.That(output).Contains(".get(receiver$temp$1).w = 0;");
         await Assert.That(output).Contains("})(i);");
     }
@@ -355,7 +356,7 @@ public class ObjectInitializerTests
         var output = result["doubled.ts"];
         await Assert.That(output).Contains("private _value: number = 0;");
         await Assert.That(output).Contains("set value(value: number) {");
-        await Assert.That(output).Contains("this._value = value * 2;");
+        await Assert.That(output).Contains("this._value = Math.imul(value, 2);");
         await Assert.That(output).Contains("Object.assign(receiver$temp$0, { value: 3 });");
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))

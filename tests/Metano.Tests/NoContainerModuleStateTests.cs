@@ -45,8 +45,7 @@ public class NoContainerModuleStateTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("no-container-module-state.ts");
-        await Assert.That(result["limits.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("no-container-module-state.ts", result["limits.ts"]);
     }
 
     [Test]
@@ -92,7 +91,7 @@ public class NoContainerModuleStateTests
 
         var output = result["meter.ts"];
         await Assert.That(output).Contains("import { max, step } from \"./limits\";");
-        await Assert.That(output).Contains("return max + step;");
+        await Assert.That(output).Contains("return (max + step) | 0;");
     }
 
     [Test]

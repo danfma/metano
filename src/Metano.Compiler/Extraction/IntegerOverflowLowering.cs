@@ -24,24 +24,33 @@ internal static class IntegerOverflowLowering
     /// <c>+=</c>, <c>-=</c>, <c>*=</c> on a 64-bit integer (lifted forms
     /// included); <c>~</c> on <c>ulong</c> and <c>&lt;&lt;</c> (and
     /// <c>&lt;&lt;=</c>), which always wrap; the reductions of
-    /// <see cref="NarrowIntegerOverflow"/> on a narrower integer;
-    /// <c>null</c> for any other operation or a user-defined operator.
+    /// <see cref="NarrowIntegerOverflow"/> on a narrower integer, as the
+    /// target's <paramref name="rules"/> ask; <c>null</c> for any other
+    /// operation or a user-defined operator.
     /// </summary>
-    public static IntegerOverflowReduction? ReductionOf(IOperation? operation) =>
+    public static IntegerOverflowReduction? ReductionOf(
+        IOperation? operation,
+        NumericLoweringRules rules
+    ) =>
         operation switch
         {
-            IBinaryOperation { OperatorMethod: null } binary => BinaryReduction(binary),
+            IBinaryOperation { OperatorMethod: null } binary => BinaryReduction(binary, rules),
             ICompoundAssignmentOperation { OperatorMethod: null } compound => CompoundReduction(
-                compound
+                compound,
+                rules
             ),
             IIncrementOrDecrementOperation { OperatorMethod: null } increment => IncrementReduction(
-                increment
+                increment,
+                rules
             ),
-            IUnaryOperation { OperatorMethod: null } unary => UnaryReduction(unary),
+            IUnaryOperation { OperatorMethod: null } unary => UnaryReduction(unary, rules),
             _ => null,
         };
 
-    private static IntegerOverflowReduction? BinaryReduction(IBinaryOperation binary) =>
+    private static IntegerOverflowReduction? BinaryReduction(
+        IBinaryOperation binary,
+        NumericLoweringRules rules
+    ) =>
         IntegerKindOf(binary.Type) switch
         {
             null => null,
@@ -54,6 +63,7 @@ internal static class IntegerOverflowLowering
                 binary.OperatorKind,
                 kind,
                 binary.IsChecked,
+                rules,
                 IntegerValueRanges.Of(binary.LeftOperand),
                 IntegerValueRanges.Of(binary.RightOperand)
             ),
@@ -66,7 +76,8 @@ internal static class IntegerOverflowLowering
     /// <see cref="NarrowIntegerOverflow.CompoundReduction"/>.
     /// </summary>
     private static IntegerOverflowReduction? CompoundReduction(
-        ICompoundAssignmentOperation compound
+        ICompoundAssignmentOperation compound,
+        NumericLoweringRules rules
     ) =>
         IntegerKindOf(compound.Type) switch
         {
@@ -78,6 +89,7 @@ internal static class IntegerOverflowLowering
                 compound.OperatorKind,
                 kind,
                 IsCheckedStore(compound),
+                rules,
                 IntegerValueRanges.Of(compound.Value)
             ),
         };
@@ -99,7 +111,8 @@ internal static class IntegerOverflowLowering
         );
 
     private static IntegerOverflowReduction? IncrementReduction(
-        IIncrementOrDecrementOperation increment
+        IIncrementOrDecrementOperation increment,
+        NumericLoweringRules rules
     ) =>
         IntegerKindOf(increment.Type) switch
         {
@@ -108,10 +121,18 @@ internal static class IntegerOverflowLowering
                 kind,
                 increment.IsChecked
             ),
-            { } kind => NarrowIntegerOverflow.IncrementReduction(kind, increment.IsChecked),
+            { } kind => NarrowIntegerOverflow.IncrementReduction(
+                kind,
+                increment.IsChecked,
+                rules,
+                BoundedCountingLoop.IsBoundedStep(increment)
+            ),
         };
 
-    private static IntegerOverflowReduction? UnaryReduction(IUnaryOperation unary) =>
+    private static IntegerOverflowReduction? UnaryReduction(
+        IUnaryOperation unary,
+        NumericLoweringRules rules
+    ) =>
         IntegerKindOf(unary.Type) switch
         {
             null => null,
@@ -120,6 +141,7 @@ internal static class IntegerOverflowLowering
                 unary.OperatorKind,
                 kind,
                 unary.IsChecked,
+                rules,
                 IntegerValueRanges.Of(unary.Operand)
             ),
         };

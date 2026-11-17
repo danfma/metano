@@ -56,7 +56,7 @@ public class CharCodeUnitTests
     [Arguments("return c.charCodeAt(0) < n;")]
     [Arguments("return c.charCodeAt(0) === 97;")]
     [Arguments("return f ? c.charCodeAt(0) : 0;")]
-    [Arguments("const r = BigInt(c.charCodeAt(0) + i);")]
+    [Arguments("const r = BigInt((c.charCodeAt(0) + i) | 0);")]
     [Arguments("l << BigInt(c.charCodeAt(0) & 63)")]
     [Arguments("const d = new Decimal(c.charCodeAt(0));")]
     [Arguments("return c.charCodeAt(0) & 0xFF;")]
@@ -64,7 +64,7 @@ public class CharCodeUnitTests
     [Arguments("const f = () => c.charCodeAt(0);")]
     [Arguments("const x = x$element.charCodeAt(0);")]
     [Arguments("[...Array.from(s.split(\"\"), (element$temp$0) => element$temp$0.charCodeAt(0))]")]
-    [Arguments("t += c.charCodeAt(0);")]
+    [Arguments("t = (t + c.charCodeAt(0)) | 0;")]
     public async Task NumericPositions_ReadTheCodeUnit(string expected)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);

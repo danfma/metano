@@ -6,7 +6,7 @@ export class Derived extends Base {
   }
 
   override addX(x: number): number {
-    return x * 2;
+    return Math.imul(x, 2);
   }
 
   override addS$(s: string): number {

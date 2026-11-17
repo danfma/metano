@@ -12,6 +12,6 @@ export class BufferedEstimate extends Estimate {
   }
 
   override addPoints(points: number): Estimate {
-    return super.addPoints(points + this.buffer);
+    return super.addPoints((points + this.buffer) | 0);
   }
 }

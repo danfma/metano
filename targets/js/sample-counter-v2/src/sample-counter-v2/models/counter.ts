@@ -7,7 +7,7 @@ export class Counter {
   constructor(readonly count: number) {}
 
   increment(): Counter {
-    return this.with({ count: this.count + 1 });
+    return this.with({ count: (this.count + 1) | 0 });
   }
 
   equals(other: any): boolean {

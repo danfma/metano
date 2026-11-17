@@ -16,8 +16,7 @@ public class ExpressionTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("with-expression.ts");
-        await Assert.That(result["coord.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("with-expression.ts", result["coord.ts"]);
     }
 
     [Test]

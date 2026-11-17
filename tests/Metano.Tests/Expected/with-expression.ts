@@ -4,7 +4,7 @@ export class Coord {
   constructor(readonly x: number, readonly y: number) { }
 
   static moveX(coord: Coord, dx: number): Coord {
-    return coord.with({ x: coord.x + dx });
+    return coord.with({ x: (coord.x + dx) | 0 });
   }
 
   equals(other: any): boolean {

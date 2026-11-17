@@ -5,7 +5,7 @@ let bazX: number = 3;
 export const QuxX: number = 4;
 
 export function fooX$(x: number): number {
-  return x + fooX;
+  return (x + fooX) | 0;
 }
 
 export function fooS(s: string): number {
@@ -49,7 +49,7 @@ export function bar(...args: unknown[]): number {
 }
 
 export function bazX$(x: number): number {
-  return x + bazX;
+  return (x + bazX) | 0;
 }
 
 export function bazS(s: string): number {
@@ -71,7 +71,7 @@ export function baz(...args: unknown[]): number {
 }
 
 export function quxX(x: number): number {
-  return x + QuxX;
+  return (x + QuxX) | 0;
 }
 
 export function quxS(s: string): number {

@@ -10,7 +10,7 @@ export class Supported {
   }
 
   select(xs: number[]): Object {
-    return linq(xs, select((x: number) => x * 2), select((x: number, i: number) => x + i));
+    return linq(xs, select((x: number) => Math.imul(x, 2)), select((x: number, i: number) => (x + i) | 0));
   }
 
   selectMany(xss: number[][]): Object {
@@ -18,11 +18,11 @@ export class Supported {
   }
 
   ascending(xs: number[]): Object {
-    return linq(xs, orderBy((x: number) => x), thenBy((x: number) => -x));
+    return linq(xs, orderBy((x: number) => x), thenBy((x: number) => -x | 0));
   }
 
   descending(xs: number[]): Object {
-    return linq(xs, orderByDescending((x: number) => x), thenByDescending((x: number) => -x));
+    return linq(xs, orderByDescending((x: number) => x), thenByDescending((x: number) => -x | 0));
   }
 
   groupBy(xs: number[]): Object {
@@ -46,11 +46,11 @@ export class Supported {
   }
 
   staticForm(xs: number[]): Object {
-    return linq(xs, where((x: number) => x > 1), count()) + linq(xs, count());
+    return (linq(xs, where((x: number) => x > 1), count()) + linq(xs, count())) | 0;
   }
 
   zip(xs: number[], ys: number[]): Object {
-    return linq(xs, zip(ys, (a: number, b: number) => a + b));
+    return linq(xs, zip(ys, (a: number, b: number) => (a + b) | 0));
   }
 
   toArray(xs: number[]): number[] {
@@ -66,7 +66,7 @@ export class Supported {
   }
 
   toDictionaryElement(xs: number[]): Map<number, number> {
-    return linq(xs, toMap((x: number) => x, (x: number) => x * 2));
+    return linq(xs, toMap((x: number) => x, (x: number) => Math.imul(x, 2)));
   }
 
   toHashSet(xs: number[]): HashSet<number> {
@@ -74,23 +74,23 @@ export class Supported {
   }
 
   firsts(xs: number[]): number {
-    return linq(xs, first()) + linq(xs, first((x: number) => x > 1)) + linq(xs, last()) + linq(xs, last((x: number) => x > 1)) + linq(xs, single()) + linq(xs, single((x: number) => x > 1));
+    return (linq(xs, first()) + linq(xs, first((x: number) => x > 1)) + linq(xs, last()) + linq(xs, last((x: number) => x > 1)) + linq(xs, single()) + linq(xs, single((x: number) => x > 1))) | 0;
   }
 
   orDefaults(xs: number[]): number {
-    return linq(xs, firstOrDefault(undefined, 0)) + linq(xs, firstOrDefault((x: number) => x > 1, 0)) + linq(xs, lastOrDefault(undefined, 7)) + linq(xs, singleOrDefault((x: number) => x > 1, 7));
+    return (linq(xs, firstOrDefault(undefined, 0)) + linq(xs, firstOrDefault((x: number) => x > 1, 0)) + linq(xs, lastOrDefault(undefined, 7)) + linq(xs, singleOrDefault((x: number) => x > 1, 7))) | 0;
   }
 
   firstOrDefaults(xs: number[]): number {
-    return linq(xs, firstOrDefault(undefined, 7)) + linq(xs, firstOrDefault((x: number) => x > 1, 7));
+    return (linq(xs, firstOrDefault(undefined, 7)) + linq(xs, firstOrDefault((x: number) => x > 1, 7))) | 0;
   }
 
   lastOrDefaults(xs: number[]): number {
-    return linq(xs, lastOrDefault(undefined, 0)) + linq(xs, lastOrDefault((x: number) => x > 1, 0)) + linq(xs, lastOrDefault((x: number) => x > 1, 7));
+    return (linq(xs, lastOrDefault(undefined, 0)) + linq(xs, lastOrDefault((x: number) => x > 1, 0)) + linq(xs, lastOrDefault((x: number) => x > 1, 7))) | 0;
   }
 
   singleOrDefaults(xs: number[]): number {
-    return linq(xs, singleOrDefault(undefined, 0)) + linq(xs, singleOrDefault((x: number) => x > 1, 0)) + linq(xs, singleOrDefault(undefined, 7));
+    return (linq(xs, singleOrDefault(undefined, 0)) + linq(xs, singleOrDefault((x: number) => x > 1, 0)) + linq(xs, singleOrDefault(undefined, 7))) | 0;
   }
 
   quantifiers(xs: number[]): boolean {
@@ -98,11 +98,11 @@ export class Supported {
   }
 
   counts(xs: number[]): bigint {
-    return BigInt.asIntN(64, BigInt.asIntN(64, BigInt(linq(xs, count()) + linq(xs, count((x: number) => x > 1))) + BigInt(linq(xs, count()))) + BigInt(linq(xs, count((x: number) => x > 1))));
+    return BigInt.asIntN(64, BigInt.asIntN(64, BigInt((linq(xs, count()) + linq(xs, count((x: number) => x > 1))) | 0) + BigInt(linq(xs, count()))) + BigInt(linq(xs, count((x: number) => x > 1))));
   }
 
   numbers(xs: number[]): number {
-    return linq(xs, sum()) + linq(xs, sum((x: number) => x * 2)) + linq(xs, min()) + linq(xs, min((x: number) => -x)) + linq(xs, max()) + linq(xs, max((x: number) => -x)) + linq(xs, average()) + linq(xs, average((x: number) => x * 2));
+    return ((linq(xs, sum()) + linq(xs, sum((x: number) => Math.imul(x, 2))) + linq(xs, min()) + linq(xs, min((x: number) => -x | 0)) + linq(xs, max()) + linq(xs, max((x: number) => -x | 0))) | 0) + linq(xs, average()) + linq(xs, average((x: number) => Math.imul(x, 2)));
   }
 
   decimals(ms: Decimal[], nms: (Decimal | null)[], ss: string[], ns: (number | null)[]): Object {
@@ -110,7 +110,7 @@ export class Supported {
   }
 
   extremes(xs: number[]): number {
-    return linq(xs, minBy((x: number) => -x)) + linq(xs, maxBy((x: number) => -x));
+    return (linq(xs, minBy((x: number) => -x | 0)) + linq(xs, maxBy((x: number) => -x | 0))) | 0;
   }
 
   contains(xs: Iterable<number>): boolean {
@@ -118,7 +118,7 @@ export class Supported {
   }
 
   aggregate(xs: number[]): number {
-    return linq(xs, aggregate(0, (a: number, x: number) => a + x));
+    return linq(xs, aggregate(0, (a: number, x: number) => (a + x) | 0));
   }
 
   queryable(q: Iterable<number>, ys: number[]): Object {
@@ -143,7 +143,7 @@ export class Supported {
         name: "x",
         type: { name: "number" },
       },
-    }), select((x: number) => x * 2, {
+    }), select((x: number) => Math.imul(x, 2), {
       tree: {
         kind: "binary",
         op: "*",
@@ -158,7 +158,7 @@ export class Supported {
           type: { name: "number" },
         },
       },
-    }), concat(ys), union(ys), intersect(ys), except(ys), zip(ys, (a: number, b: number) => a + b, {
+    }), concat(ys), union(ys), intersect(ys), except(ys), zip(ys, (a: number, b: number) => (a + b) | 0, {
       tree: {
         kind: "binary",
         op: "+",
@@ -177,7 +177,7 @@ export class Supported {
   }
 
   queryableToDictionary(q: Iterable<number>): Map<number, number> {
-    return linq(q, toMap((x: number) => x, (x: number) => x * 2, {
+    return linq(q, toMap((x: number) => x, (x: number) => Math.imul(x, 2), {
       tree: {
         kind: "param",
         name: "x",
@@ -187,7 +187,7 @@ export class Supported {
   }
 
   queryableTerminals(q: Iterable<number>): number {
-    return linq(q, first((x: number) => x > 1, {
+    return (linq(q, first((x: number) => x > 1, {
       tree: {
         kind: "binary",
         op: ">",
@@ -238,6 +238,6 @@ export class Supported {
         name: "x",
         type: { name: "number" },
       },
-    })) + (linq(q, contains(3)) ? 1 : 0);
+    })) + (linq(q, contains(3)) ? 1 : 0)) | 0;
   }
 }

@@ -30,7 +30,7 @@ public class ParameterShadowingTests
         await Assert.That(files["mod.ts"]).Contains("export function run(log$: number): number {");
         await Assert.That(files["mod.ts"]).Contains("return log(log$);");
         await Assert.That(files["mod.ts"]).Contains("const x = log(log$);");
-        await Assert.That(files["mod.ts"]).Contains("return log(x) + log$;");
+        await Assert.That(files["mod.ts"]).Contains("return (log(x) + log$) | 0;");
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public class ParameterShadowingTests
 
         await Assert.That(files["user.ts"]).Contains("return (log$: number) => log(log$);");
         await Assert.That(files["user.ts"]).Contains("captures(log$: number)");
-        await Assert.That(files["user.ts"]).Contains("return (x: number) => log(x + log$);");
+        await Assert.That(files["user.ts"]).Contains("return (x: number) => log((x + log$) | 0);");
     }
 
     [Test]
@@ -206,7 +206,7 @@ public class ParameterShadowingTests
         );
 
         await Assert.That(files["inst.ts"]).Contains("run(log: number): number {");
-        await Assert.That(files["inst.ts"]).Contains("return this.log(log) + log;");
+        await Assert.That(files["inst.ts"]).Contains("return (this.log(log) + log) | 0;");
     }
 
     [Test]

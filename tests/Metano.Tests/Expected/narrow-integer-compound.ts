@@ -107,7 +107,7 @@ export class Small {
   loop(n: number): number {
     let total = 0;
     for (let i = 0; i < n; i = (i + 1) & 0xFF) {
-      total += i;
+      total = (total + i) | 0;
     }
 
     return total;
@@ -132,14 +132,14 @@ export class Small {
   }
 
   untouched(i: number): number {
-    i++;
-    i += 2;
-    i *= 3;
+    i = (i + 1) | 0;
+    i = (i + 2) | 0;
+    i = Math.imul(i, 3);
 
     return i;
   }
 
   private next(i: number): number {
-    return i + 1;
+    return (i + 1) | 0;
   }
 }

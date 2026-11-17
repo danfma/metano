@@ -21,7 +21,7 @@ export class IntBox extends Box<number> {
     if (typeof args[0] === "symbol" && args[0] === IntBox.byIntBoxValueExtra) {
       const value = args[1] as number;
       const extra = args[2] as number;
-      super(Box.byBoxN, value + extra);
+      super(Box.byBoxN, (value + extra) | 0);
 
       return;
     }
@@ -29,7 +29,7 @@ export class IntBox extends Box<number> {
     if (args.length === 2 && isInt32(args[0]) && isInt32(args[1])) {
       const value = args[0] as number;
       const extra = args[1] as number;
-      super(Box.byBoxN, value + extra);
+      super(Box.byBoxN, (value + extra) | 0);
 
       return;
     }

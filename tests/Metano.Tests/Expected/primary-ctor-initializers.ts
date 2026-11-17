@@ -12,9 +12,9 @@ export class Account {
   constructor(amount: number, owner: string, bonus: number) {
     this._owner = owner;
     this._bonus = bonus;
-    this.amount = amount * 2;
-    this._total = bonus + 1;
-    this.twice = amount * 2;
+    this.amount = Math.imul(amount, 2);
+    this._total = (bonus + 1) | 0;
+    this.twice = Math.imul(amount, 2);
   }
 
   get owner(): string {
@@ -22,6 +22,6 @@ export class Account {
   }
 
   sum(): number {
-    return this._bonus + this._total;
+    return (this._bonus + this._total) | 0;
   }
 }

@@ -23,7 +23,7 @@ public class IncrementExpressionTests
         );
 
         var output = result["counter.ts"];
-        await Assert.That(output).Contains("this._next++");
+        await Assert.That(output).Contains("((this._next = (this._next + 1) | 0) - 1) | 0");
     }
 
     [Test]
@@ -40,7 +40,7 @@ public class IncrementExpressionTests
             """
         );
 
-        await Assert.That(result["counter.ts"]).Contains("this._n--");
+        await Assert.That(result["counter.ts"]).Contains("this._n = (this._n - 1) | 0");
     }
 
     [Test]
@@ -59,7 +59,7 @@ public class IncrementExpressionTests
             """
         );
 
-        await Assert.That(result["counter.ts"]).Contains("++this._n");
+        await Assert.That(result["counter.ts"]).Contains("this._n = (this._n + 1) | 0");
     }
 
     [Test]
@@ -78,6 +78,6 @@ public class IncrementExpressionTests
             """
         );
 
-        await Assert.That(result["bag.ts"]).Contains("this._id++");
+        await Assert.That(result["bag.ts"]).Contains("((this._id = (this._id + 1) | 0) - 1) | 0");
     }
 }

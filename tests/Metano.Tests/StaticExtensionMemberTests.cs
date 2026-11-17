@@ -256,7 +256,7 @@ public class StaticExtensionMemberTests
         );
 
         var output = result["app/caller.ts"];
-        await Assert.That(output).Contains("default$set(default$get() + 1)");
+        await Assert.That(output).Contains("default$set((default$get() + 1) | 0)");
         await Assert.That(output).DoesNotContain("receiver$temp$");
     }
 

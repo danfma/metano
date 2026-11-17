@@ -16,7 +16,7 @@ export class Counter {
   constructor() { }
 
   next(): number {
-    return this._cursor++;
+    return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;
   }
 
   locals(l: bigint, u: bigint): bigint {

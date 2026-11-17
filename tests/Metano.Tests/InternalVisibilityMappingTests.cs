@@ -575,7 +575,8 @@ public class InternalVisibilityMappingTests
         await Assert
             .That(files["app/probe.ts"])
             .Contains("  constructor(/** @internal */ protected readonly x: number) { }");
-        await Assert.That(files["app/derived-probe.ts"]).Contains("return this.x * 2;");
+
+        await Assert.That(files["app/derived-probe.ts"]).Contains("return Math.imul(this.x, 2);");
     }
 
     [Test]
@@ -632,9 +633,9 @@ public class InternalVisibilityMappingTests
         await Assert.That(widget).Contains("  /** @internal */\n  protected reset(): void {");
         await Assert.That(widget).Contains("this.changed?.();");
         await Assert.That(widget).Contains("this.reset();");
-        await Assert.That(widget).Contains("return this.count + this.steps;");
+        await Assert.That(widget).Contains("return (this.count + this.steps) | 0;");
         await Assert.That(gadget).Contains("this.reset();");
-        await Assert.That(gadget).Contains("return this.count + this.steps;");
+        await Assert.That(gadget).Contains("return (this.count + this.steps) | 0;");
     }
 
     [Test]
@@ -874,8 +875,6 @@ public class InternalVisibilityMappingTests
             """
         );
 
-        await Assert
-            .That(files["app/ledger.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("mixed-visibility-overloads.ts"));
+        await TranspileHelper.AssertGolden("mixed-visibility-overloads.ts", files["app/ledger.ts"]);
     }
 }

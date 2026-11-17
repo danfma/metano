@@ -32,9 +32,7 @@ public class PrimaryConstructorInitializerTests
             """
         );
 
-        await Assert
-            .That(result["account.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-initializers.ts"));
+        await TranspileHelper.AssertGolden("primary-ctor-initializers.ts", result["account.ts"]);
     }
 
     [Test]
@@ -58,7 +56,10 @@ public class PrimaryConstructorInitializerTests
 
         var derived = result["derived.ts"];
 
-        await Assert.That(derived).Contains("super(seed + 1);\n    this.double = seed * 2;");
+        await Assert
+            .That(derived)
+            .Contains("super((seed + 1) | 0);\n    this.double = Math.imul(seed, 2);");
+
         await Assert.That(derived).DoesNotContain("private readonly _seed");
         await Assert.That(result["base.ts"]).Contains("constructor(readonly value: number) { }");
     }
@@ -78,7 +79,9 @@ public class PrimaryConstructorInitializerTests
 
         await Assert
             .That(result["scaled.ts"])
-            .Contains("constructor(readonly factor: number) {\n    this.double = factor * 2;\n  }");
+            .Contains(
+                "constructor(readonly factor: number) {\n    this.double = Math.imul(factor, 2);\n  }"
+            );
     }
 
     [Test]
@@ -98,7 +101,7 @@ public class PrimaryConstructorInitializerTests
 
         var output = result["lazy.ts"];
 
-        await Assert.That(output).Contains("this._next = () => seed + 1;");
+        await Assert.That(output).Contains("this._next = () => (seed + 1) | 0;");
         await Assert.That(output).DoesNotContain("private readonly _seed");
     }
 

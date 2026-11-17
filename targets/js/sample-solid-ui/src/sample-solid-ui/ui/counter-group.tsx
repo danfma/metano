@@ -7,7 +7,7 @@ export type CounterGroupProps = {};
 
 export function CounterGroup(props: CounterGroupProps) {
   const [countersCount, setCountersCount] = createSignal(1);
-  const addCounter = () => setCountersCount(countersCount() + 1);
+  const addCounter = () => setCountersCount((countersCount() + 1) | 0);
 
   return (
     <div>

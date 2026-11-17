@@ -65,6 +65,6 @@ export class B {
   }
 
   twice(): number {
-    return new A().read(this) * 2;
+    return Math.imul(new A().read(this), 2);
   }
 }

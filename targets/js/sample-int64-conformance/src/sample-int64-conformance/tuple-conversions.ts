@@ -138,7 +138,7 @@ export function nullableIteratedStop(a: number, b: number): bigint {
       const pair = ((receiver$temp$1) => [BigInt(receiver$temp$1[0]), BigInt(receiver$temp$1[1])] as [bigint, bigint])(pair$element ?? (() => {
         throw new InvalidOperationException("Nullable object must have a value.");
       })());
-      count++;
+      count = (count + 1) | 0;
       total = BigInt.asIntN(64, total + pair[0]);
     }
   } catch (e$) {
@@ -188,12 +188,12 @@ export function iteratedNarrowedCheckedSum(a: bigint): number {
 export function literalCastStopsAtTheMissingElement(a: number): number {
   let calls = 0;
   const missing = () => {
-    calls++;
+    calls = (calls + 1) | 0;
 
     return null;
   };
   const next = () => {
-    calls += 100;
+    calls = (calls + 100) | 0;
 
     return a;
   };
@@ -206,7 +206,7 @@ export function literalCastStopsAtTheMissingElement(a: number): number {
   } catch (e$) {
     const e0 = toException(e$);
     if (e0 instanceof InvalidOperationException) {
-      return -calls;
+      return -calls | 0;
     } else {
       throw e$;
     }

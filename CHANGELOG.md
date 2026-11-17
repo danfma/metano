@@ -33,6 +33,13 @@ the migration list.
 - A static member whose TypeScript name equals a slot's name (a private field `count` beside a property `Count`) is an `MS0001` error asking for a `[Name]`.
 - The generated barrel lists a derived module before the base module whose static constructor constructs it, and `[EmitInFile]` prints a base class before a class in the same file that extends it.
 
+### ⚠ `int` / `uint` arithmetic wraps in the default context (spec FR-074 to FR-076, #639)
+
+- In an unchecked context, `int` / `uint` `+`, `-`, `*`, unary `-` and the stores of `++`, `--`, `+=`, `-=`, `*=` are reduced modulo 2^32 as .NET does, with native operators: `(a + b) | 0`, `(u - v) >>> 0`, `Math.imul(a, b)`, `i = (i + 1) | 0`. `int.MaxValue + 1` is `int.MinValue` (it was `2147483648`). This closes, for TypeScript, the known gap listed under the integers of 32 bits or fewer below: an unchecked result read by checked code is in range, and `(int)(i + j)` reads the wrapped value.
+- No reduction where C# proves the value fits (operand ranges, a `char` operand, array and `string` `Length`, the `Count` of the BCL collections that own their storage, the step of a bounded `for` counter, which keeps `i++`), in either context; a JavaScript consumer that reduces modulo 2^32 itself (`&`, `|`, `^`, `~`, shifts, `Math.imul`, another wrap, an unchecked narrowing) drops its operand's trailing `| 0`.
+- `counts[key]++` and `counts[key] += n` on a `Dictionary<_, int>` now report `MS0001` in the default context too (they emitted invalid `counts.get(key)++`).
+- Generated output changes wherever such an operation can leave the range; an accumulator that overflows on most iterations is about 10 times slower on Node than the asm.js form (benchmark in spec FR-076). Dart output does not change: its unchecked `int` / `uint` arithmetic keeps the 64-bit result (deferred to after v3).
+
 ### ⚠ 64-bit integers become `bigint` (spec 012)
 
 - `long` / `ulong` (and `nint` / `nuint`) map to TypeScript `bigint` instead

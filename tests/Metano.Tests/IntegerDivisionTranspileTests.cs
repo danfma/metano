@@ -42,9 +42,7 @@ public class IntegerDivisionTranspileTests
             """
         );
 
-        await Assert
-            .That(result["quotients.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("integer-division.ts"));
+        await TranspileHelper.AssertGolden("integer-division.ts", result["quotients.ts"]);
     }
 
     [Test]
@@ -82,9 +80,7 @@ public class IntegerDivisionTranspileTests
             """
         );
 
-        await Assert
-            .That(result["halver.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("integer-division-in-loops.ts"));
+        await TranspileHelper.AssertGolden("integer-division-in-loops.ts", result["halver.ts"]);
     }
 
     [Test]
@@ -235,7 +231,7 @@ public class IntegerDivisionTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => cells[receiver$temp$0] = intDiv(cells[receiver$temp$0]!, 2))(index++);"
+                "((receiver$temp$0) => cells[receiver$temp$0] = intDiv(cells[receiver$temp$0]!, 2))(((index = (index + 1) | 0) - 1) | 0);"
             );
         await Assert.That(output).Contains("cells[index] = intDiv(cells[index]!, 2);");
     }

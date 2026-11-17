@@ -20,6 +20,6 @@ export class Settings {
   }
 
   static get twice(): number {
-    return Settings.count * 2;
+    return Math.imul(Settings.count, 2);
   }
 }

@@ -23,7 +23,7 @@ export class Sprint {
   }
 
   get durationDays(): number {
-    return dayNumber(this.endDate) - dayNumber(this.startDate) + 1;
+    return (dayNumber(this.endDate) - dayNumber(this.startDate) + 1) | 0;
   }
 
   isActiveOn(date: Temporal.PlainDate): boolean {

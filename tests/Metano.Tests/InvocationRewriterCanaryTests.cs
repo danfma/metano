@@ -248,7 +248,7 @@ public class InvocationRewriterCanaryTests
 
         var output = result["math-helpers.ts"];
 
-        await Assert.That(output).Contains("return n + n;");
+        await Assert.That(output).Contains("return (n + n) | 0;");
     }
 
     [Test]
