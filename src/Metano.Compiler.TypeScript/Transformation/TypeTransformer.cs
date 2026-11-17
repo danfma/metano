@@ -555,8 +555,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // Generate index.ts barrel files per namespace folder
         var indexFiles = BarrelFileGenerator.Generate(
             files,
-            NamespaceBarrels,
-            InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
+            new BarrelOptions(
+                NamespaceBarrels,
+                InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
+            )
         );
 
         files.AddRange(indexFiles);

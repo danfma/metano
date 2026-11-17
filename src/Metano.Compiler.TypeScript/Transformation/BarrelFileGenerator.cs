@@ -17,7 +17,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 public static class BarrelFileGenerator
 {
     /// <summary>
-    /// Generates the barrel files. When <paramref name="namespaceBarrels"/> is
+    /// Generates the barrel files. When <see cref="BarrelOptions.NamespaceBarrels"/> is
     /// <c>true</c>, additionally aggregates every leaf barrel into a
     /// root <c>src/index.ts</c> via nested <c>export namespace</c>
     /// blocks that mirror the C# namespace hierarchy. Consumers can
@@ -33,19 +33,21 @@ public static class BarrelFileGenerator
     /// <c>index.ts</c>.
     /// </para>
     /// <para>
-    /// <paramref name="hoists"/> name the modules a leaf barrel lists first: a
-    /// derived class's module that must load before the base module which
-    /// constructs it from a lazy static constructor (<see cref="InitializerCycleHoists"/>).
+    /// <see cref="BarrelOptions.Hoists"/> name the modules a leaf barrel lists
+    /// first: a derived class's module that must load before the base module
+    /// which constructs it from a lazy static constructor
+    /// (<see cref="InitializerCycleHoists"/>).
     /// </para>
     /// </summary>
     public static IReadOnlyList<TsSourceFile> Generate(
         IReadOnlyList<TsSourceFile> typeFiles,
-        bool namespaceBarrels = false,
-        IReadOnlyList<BarrelHoist>? hoists = null
+        BarrelOptions? options = null
     )
     {
-        var leafBarrels = GenerateLeafBarrels(typeFiles, hoists ?? []);
-        if (!namespaceBarrels)
+        var settings = options ?? new BarrelOptions();
+        var leafBarrels = GenerateLeafBarrels(typeFiles, settings.Hoists ?? []);
+
+        if (!settings.NamespaceBarrels)
             return leafBarrels;
 
         var aggregationStatements = BuildNamespaceAggregationStatements(leafBarrels);
@@ -365,3 +367,13 @@ public static class BarrelFileGenerator
         public string? LeafAlias { get; set; }
     }
 }
+
+/// <summary>
+/// How <see cref="BarrelFileGenerator.Generate"/> builds the barrels: whether it
+/// adds the root namespace barrel (<see cref="NamespaceBarrels"/>, ADR-0006), and
+/// the modules a leaf barrel lists first (<see cref="Hoists"/>).
+/// </summary>
+public sealed record BarrelOptions(
+    bool NamespaceBarrels = false,
+    IReadOnlyList<BarrelHoist>? Hoists = null
+);

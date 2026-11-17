@@ -10,11 +10,8 @@ export class Cell {
   w: number = 0;
 
   constructor(v: number) {
-    if (arguments.length !== 0) {
-      Cell.#$init();
-      this.w = Seed.next();
-    }
-
+    Cell.#$init();
+    this.w = Seed.next();
     this.v = v;
   }
 

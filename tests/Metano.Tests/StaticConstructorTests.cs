@@ -210,6 +210,72 @@ public class StaticConstructorTests
     }
 
     [Test]
+    public async Task StructParamsConstructor_RunsThePrologueWithAnEmptyArray()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Bag
+            {
+                public int W = 7;
+                public int Count;
+
+                static Bag() { }
+
+                public Bag(params int[] values) { Count = values.Length; }
+            }
+            """
+        )["bag.ts"];
+
+        await TranspileHelper.AssertGolden("lazy-static-constructor-struct-params.ts", output);
+    }
+
+    [Test]
+    public async Task DispatchedStruct_RunsThePrologueAfterTheImplicitDefaultBranch()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Pair
+            {
+                public int W = 7;
+                public int V;
+
+                static Pair() { }
+
+                public Pair(int v) { V = v; }
+
+                public Pair(string text) { V = text.Length; }
+            }
+            """
+        )["pair.ts"];
+
+        await TranspileHelper.AssertGolden("lazy-static-constructor-struct-dispatched.ts", output);
+    }
+
+    [Test]
+    public async Task StructWithoutAConstructor_BuildsItsDefaultWithoutTheGuard()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Bare
+            {
+                public int V;
+
+                static Bare() { }
+
+                public int Get() => V;
+            }
+            """
+        )["bare.ts"];
+
+        await Assert.That(output).DoesNotContain("arguments.length");
+        await Assert.That(CountOf(output, "Bare.#$init();")).IsEqualTo(1);
+        await Assert.That(output).Contains("get(): number {\n    Bare.#$init();");
+    }
+
+    [Test]
     public async Task StaticMembers_StartWithTheGuard_ConstsDoNot()
     {
         var output = TranspileHelper.Transpile(
@@ -241,9 +307,9 @@ public class StaticConstructorTests
     }
 
     [Test]
-    public async Task StaticFieldSharingAPropertyName_KeepsOneAccessorPair()
+    public async Task StaticMemberSharingASlotName_ReportsAnErrorAtTheMember()
     {
-        var output = TranspileHelper.Transpile(
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             [Transpile]
             public class Tally
@@ -257,10 +323,44 @@ public class StaticConstructorTests
                 public static int Count => count;
             }
             """
-        )["tally.ts"];
+        );
 
-        await Assert.That(CountOf(output, "get count()")).IsEqualTo(1);
-        await Assert.That(output).Contains("return Tally.#count$;");
+        var clash = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert.That(clash.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(clash.Message).Contains("'Tally.Count' prints as 'count'");
+        await Assert.That(clash.Message).Contains("[Name(");
+        await Assert.That(clash.Location!.SourceSpan.Length).IsEqualTo("Count".Length);
+    }
+
+    [Test]
+    public async Task StaticMemberRenamedAwayFromASlot_KeepsBothMembers()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Tally
+            {
+                static int count;
+
+                static Tally() { }
+
+                public Tally() { count++; }
+
+                [Name("total")]
+                public static int Count => count;
+            }
+            """
+        );
+
+        var output = files["tally.ts"];
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsFalse();
+
+        await Assert.That(output).Contains("static get total(): number {\n    Tally.#$init();");
+        await Assert.That(output).Contains("private static get count(): number {");
     }
 
     [Test]

@@ -436,3 +436,207 @@ public static class LazyFieldProbes
         return LazyLog.Take("v=" + declared.V);
     }
 }
+
+public struct LzParamsNone
+{
+    public int W = 7;
+    public int Count;
+
+    static LzParamsNone()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public LzParamsNone(params int[] values)
+    {
+        Count = values.Length;
+    }
+}
+
+public struct LzParamsEmpty
+{
+    public int W = 7;
+    public int Count;
+
+    static LzParamsEmpty()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public LzParamsEmpty(params int[] values)
+    {
+        Count = values.Length;
+    }
+}
+
+public struct LzParamsTwo
+{
+    public int W = 7;
+    public int Count;
+
+    static LzParamsTwo()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public LzParamsTwo(params int[] values)
+    {
+        Count = values.Length;
+    }
+}
+
+public struct LzDispatched
+{
+    public int W = 7;
+    public int P { get; set; } = 8;
+    public int V;
+
+    static LzDispatched()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public LzDispatched(int v)
+    {
+        V = v;
+    }
+
+    public LzDispatched(string text)
+    {
+        V = text.Length;
+    }
+
+    public int Get() => V;
+}
+
+public struct LzDispatchedProperty
+{
+    public int W = 7;
+    public int P { get; set; } = 8;
+    public int V;
+
+    static LzDispatchedProperty()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public LzDispatchedProperty(int v)
+    {
+        V = v;
+    }
+
+    public LzDispatchedProperty(string text)
+    {
+        V = text.Length;
+    }
+
+    public int Get() => V;
+}
+
+public struct LzParamsDispatched
+{
+    public int W = 7;
+    public int Count;
+
+    static LzParamsDispatched()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public LzParamsDispatched(params int[] values)
+    {
+        Count = values.Length;
+    }
+
+    public LzParamsDispatched(string text)
+    {
+        Count = -text.Length;
+    }
+}
+
+public struct LzEagerParams
+{
+    public int W = 7;
+    public int Count;
+
+    public LzEagerParams(params int[] values)
+    {
+        Count = values.Length;
+    }
+}
+
+public struct LzBareStruct
+{
+    public int V;
+
+    static LzBareStruct()
+    {
+        LazyLog.Write("cctor");
+    }
+
+    public int Get() => V;
+}
+
+public static class LazyStructProbes
+{
+    public static string ParamsConstructorWithoutArguments()
+    {
+        LazyLog.Write("start");
+        var empty = new LzParamsNone();
+        return LazyLog.Take("W=" + empty.W + ":n=" + empty.Count);
+    }
+
+    public static string ParamsConstructorWithoutArgumentsNoStaticConstructor()
+    {
+        var empty = new LzEagerParams();
+        return "W=" + empty.W + ":n=" + empty.Count;
+    }
+
+    public static string ParamsConstructorWithEmptyArray()
+    {
+        LazyLog.Write("start");
+        var empty = new LzParamsEmpty(new int[0]);
+        return LazyLog.Take("W=" + empty.W + ":n=" + empty.Count);
+    }
+
+    public static string ParamsConstructorWithArguments()
+    {
+        LazyLog.Write("start");
+        var two = new LzParamsTwo(1, 2);
+        return LazyLog.Take("W=" + two.W + ":n=" + two.Count);
+    }
+
+    public static string DispatchedParamsConstructorWithEmptyArray()
+    {
+        LazyLog.Write("start");
+        var empty = new LzParamsDispatched(new int[0]);
+        return LazyLog.Take("W=" + empty.W + ":n=" + empty.Count);
+    }
+
+    public static string ImplicitDefaultOfDispatchedStruct()
+    {
+        LazyLog.Write("start");
+        var zero = new LzDispatched();
+        LazyLog.Write("W=" + zero.W);
+        var value = zero.Get();
+        var one = new LzDispatched(1);
+        return LazyLog.Take("get=" + value + ":W=" + one.W + ":P=" + one.P + ":V=" + one.V);
+    }
+
+    public static string StructAutoPropertyRead()
+    {
+        LazyLog.Write("start");
+        var zero = new LzDispatchedProperty();
+        LazyLog.Write("P=" + zero.P);
+        return LazyLog.Take("get=" + zero.Get());
+    }
+
+    public static string DefaultOfBareStruct()
+    {
+        LazyLog.Write("start");
+        var zero = default(LzBareStruct);
+        var made = new LzBareStruct();
+        LazyLog.Write("built");
+        return LazyLog.Take("get=" + zero.Get() + made.V);
+    }
+}

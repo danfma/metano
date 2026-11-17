@@ -23,6 +23,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal sealed class LazyTypeInitializerLowering(
     TypeInitializerTarget target,
+    IrClassDeclaration ir,
     IReadOnlyList<IrStatement> staticConstructorBody,
     IrToTsBridgeContext lowering
 ) : TypeInitializerLowering
@@ -33,10 +34,9 @@ internal sealed class LazyTypeInitializerLowering(
     private readonly List<TsStatement> _slotDefaults = [];
     private readonly List<TsStatement> _staticInitializers = [];
     private readonly List<TsStatement> _structFieldInitializers = [];
-    private readonly HashSet<string> _slotNames = new(StringComparer.Ordinal);
 
-    private readonly HashSet<TsClassMember> _slotAccessors = new(
-        ReferenceEqualityComparer.Instance
+    private readonly Dictionary<string, IrMemberDeclaration> _slotOwners = new(
+        StringComparer.Ordinal
     );
 
     public override IReadOnlyList<TsClassMember> LowerField(
@@ -53,6 +53,7 @@ internal sealed class LazyTypeInitializerLowering(
         return LowerStaticStorage(
             built,
             new StaticStorage(
+                field,
                 field.Type,
                 field.Initializer is not null,
                 field.IsAssignedByStaticConstructor
@@ -74,6 +75,7 @@ internal sealed class LazyTypeInitializerLowering(
         return LowerStaticStorage(
             storage,
             new StaticStorage(
+                property,
                 property.Type,
                 property.Initializer is not null,
                 property.Semantics?.IsAssignedByStaticConstructor == true
@@ -84,8 +86,7 @@ internal sealed class LazyTypeInitializerLowering(
     public override TsClassBody Complete(TsClassBody body, IReadOnlySet<TsClassMember> userMembers)
     {
         var members = body
-            .Members.Where(member => !IsShadowedBySlot(member))
-            .Select(member =>
+            .Members.Select(member =>
                 userMembers.Contains(member) && RunsTheGuard(member) ? Guarded(member) : member
             )
             .ToList();
@@ -98,23 +99,31 @@ internal sealed class LazyTypeInitializerLowering(
     }
 
     /// <summary>
-    /// A static member that shares its name with a slot's accessor pair (a private
-    /// field <c>count</c> beside a property <c>Count</c>, both <c>count</c> in
-    /// TypeScript) is dropped: an eager class field overwrites it at class
-    /// definition, so the field already won; two accessor pairs would make the
-    /// property read itself.
+    /// Every static member whose TypeScript name is the name of another member's
+    /// slot accessors (a private field <c>count</c> beside a property <c>Count</c>,
+    /// both <c>count</c>): the two would declare one name twice, so the class
+    /// emitter reports each as an error asking for a <c>[Name]</c>.
     /// </summary>
-    private bool IsShadowedBySlot(TsClassMember member) =>
-        !_slotAccessors.Contains(member)
-        && StaticMemberName(member) is { } name
-        && _slotNames.Contains(name);
+    public override IReadOnlyList<SlotNameClash> SlotNameClashes() =>
+        (ir.Members ?? [])
+            .Where(member => member.IsStatic)
+            .Select(ClashOf)
+            .OfType<SlotNameClash>()
+            .ToList();
 
-    private static string? StaticMemberName(TsClassMember member) =>
+    private SlotNameClash? ClashOf(IrMemberDeclaration member) =>
+        TsNameOf(member) is { } name
+        && _slotOwners.TryGetValue(name, out var owner)
+        && !ReferenceEquals(owner, member)
+            ? new SlotNameClash(member, name, owner)
+            : null;
+
+    private static string? TsNameOf(IrMemberDeclaration member) =>
         member switch
         {
-            TsGetterMember { Static: true } getter => getter.Name,
-            TsSetterMember { Static: true } setter => setter.Name,
-            TsMethodMember { Static: true } method => method.Name,
+            IrFieldDeclaration or IrPropertyDeclaration =>
+                IrToTsNamingPolicy.ToDeclaredDataMemberName(member.Name, member.Attributes),
+            IrMethodDeclaration method => IrToTsNamingPolicy.ToMethodName(method),
             _ => null,
         };
 
@@ -158,17 +167,15 @@ internal sealed class LazyTypeInitializerLowering(
     /// The constructor runs the guard before anything the instance runs. A derived
     /// class runs it before <c>super(...)</c>; a base class's instance field
     /// initializers run before its constructor body, so the guard folds into the
-    /// first one. A struct runs it only when called with arguments, unless it
-    /// declares a parameterless constructor: its default value (<c>new S()</c>)
-    /// must not trigger the initializer.
+    /// first one. A struct runs it, then its instance field initializers, on every
+    /// path that runs a declared constructor, also one called with no arguments
+    /// (a <c>params</c> array left empty); the path that builds the implicit
+    /// default value runs neither, as <c>default(S)</c> runs no constructor.
     /// </summary>
     private TsConstructor GuardConstructor(TsConstructor constructor, List<TsClassMember> members)
     {
         if (target.IsStruct)
-            return constructor with
-            {
-                Body = [.. StructConstructorPrologue(), .. constructor.Body],
-            };
+            return constructor with { Body = WithStructPrologue(constructor.Body) };
 
         if (!target.HasBaseClass && FoldIntoFirstFieldInitializer(members))
             return constructor;
@@ -179,20 +186,16 @@ internal sealed class LazyTypeInitializerLowering(
         };
     }
 
-    private IReadOnlyList<TsStatement> StructConstructorPrologue()
+    private IReadOnlyList<TsStatement> WithStructPrologue(IReadOnlyList<TsStatement> body)
     {
         TsStatement[] prologue = [Guard(), .. _structFieldInitializers];
 
-        if (target.DeclaresParameterlessConstructor)
-            return prologue;
-
-        var calledWithArguments = new TsBinaryExpression(
-            new TsPropertyAccess(new TsIdentifier("arguments"), "length"),
-            "!==",
-            new TsLiteral("0")
-        );
-
-        return [new TsIfStatement(calledWithArguments, prologue)];
+        return target.ImplicitDefault switch
+        {
+            ImplicitDefaultConstruction.WholeConstructor => body,
+            ImplicitDefaultConstruction.LeadingBranch => [body[0], .. prologue, .. body.Skip(1)],
+            _ => [.. prologue, .. body],
+        };
     }
 
     private bool FoldIntoFirstFieldInitializer(List<TsClassMember> members)
@@ -282,8 +285,7 @@ internal sealed class LazyTypeInitializerLowering(
         if (!built.Readonly || storage.IsAssignedByStaticConstructor)
             members.Add(Setter(built, slot));
 
-        _slotAccessors.UnionWith(members.Skip(1));
-        _slotNames.Add(built.Name);
+        _slotOwners.TryAdd(built.Name, storage.Owner);
 
         return members;
     }
@@ -370,6 +372,7 @@ internal sealed class LazyTypeInitializerLowering(
 
     /// <summary>The facts a static field or auto-property brings to its slot.</summary>
     private sealed record StaticStorage(
+        IrMemberDeclaration Owner,
         IrTypeRef Type,
         bool HasInitializer,
         bool IsAssignedByStaticConstructor
