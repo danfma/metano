@@ -60,8 +60,6 @@ internal static class TsOverloadCallSites
     internal static string? MethodFastPathOf(IrSelectedOverload overload) =>
         MethodFastPathOf(overload.Target)
         ?? (
-            overload.Synthesized is { } kind
-                ? TsGroupingPolicy.NameOf(kind) + TsGroupingPolicy.FastPathSuffix
-                : null
+            overload.Synthesized is { } kind ? TsGroupingPolicy.Instance.FastPathNameOf(kind) : null
         );
 }
