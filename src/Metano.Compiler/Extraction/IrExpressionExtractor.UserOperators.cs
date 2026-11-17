@@ -432,8 +432,8 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var unwraps = IsLiftedOver(sourceType, method);
-        var yieldsNull =
-            unwraps && (targetType.IsReferenceType || targetType.IsNullableValueType());
+        var nullTarget = targetType.IsReferenceType || targetType.IsNullableValueType();
+        var yieldsNull = unwraps && nullTarget;
         var throwsOnNull = unwraps && !yieldsNull;
         var sourceUnwraps = IsNullableUnwrapCast(cast, sourceType, targetType);
 
