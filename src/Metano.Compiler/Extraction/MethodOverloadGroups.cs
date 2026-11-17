@@ -368,7 +368,7 @@ internal static class MethodOverloadGroups
         OverloadGroupingPolicy policy
     )
     {
-        var declared = DeclaredMethods(type, policy.Target).ToList();
+        var declared = DeclaredMethods(type, policy).ToList();
 
         var groups = declared
             .GroupBy(GroupNameOf, StringComparer.Ordinal)
@@ -492,18 +492,21 @@ internal static class MethodOverloadGroups
     /// </summary>
     private static IEnumerable<IMethodSymbol> DeclaredMethods(
         INamedTypeSymbol type,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
-            .Where(method => IsDeclaredGroupMethod(method, target));
+            .Where(method => IsDeclaredGroupMethod(method, policy));
 
-    private static bool IsDeclaredGroupMethod(IMethodSymbol method, TargetLanguage? target) =>
+    private static bool IsDeclaredGroupMethod(
+        IMethodSymbol method,
+        OverloadGroupingPolicy policy
+    ) =>
         !method.IsImplicitlyDeclared
         && !method.IsCompilerGenerated()
-        && !SymbolHelper.HasIgnore(method, target)
+        && !SymbolHelper.HasIgnore(method, policy.Target)
         && IsUserMethod(method)
-        && !IsDroppedExplicitImplementation(method, target)
+        && !IsDroppedExplicitImplementation(method, policy)
         && !SymbolHelper.IsInlinedAtCallSite(method);
 
     private static bool IsOperator(IMethodSymbol method) =>
@@ -516,12 +519,21 @@ internal static class MethodOverloadGroups
                 or MethodKind.Conversion
                 or MethodKind.ExplicitInterfaceImplementation;
 
-    private static bool IsDroppedExplicitImplementation(
+    /// <summary>
+    /// Whether the target drops <paramref name="method"/>, an explicit
+    /// implementation it cannot declare under its interface member's name
+    /// (<see cref="ExplicitImplementationLowering"/>); a struct's explicit
+    /// <c>IEquatable&lt;S&gt;.Equals</c> superseded only by <c>ValueType.Equals</c>
+    /// stays for a target that names the synthesized <c>Equals</c>
+    /// (<see cref="ValueEqualityShapes.KeepsSupersededEquatable"/>).
+    /// </summary>
+    internal static bool IsDroppedExplicitImplementation(
         IMethodSymbol method,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
-        ExplicitImplementationLowering.Resolve(method, target)
-            is { Fate: not ExplicitImplementationFate.EmittedUnderInterfaceName };
+        ExplicitImplementationLowering.Resolve(method, policy.Target) is { } lowering
+        && lowering.Fate is not ExplicitImplementationFate.EmittedUnderInterfaceName
+        && !ValueEqualityShapes.KeepsSupersededEquatable(method, lowering, policy);
 
     /// <summary>
     /// What <paramref name="method"/> is anchored on: the root of its
