@@ -565,13 +565,50 @@ Product requirements added after the migration (normative; each one is traced by
   generated import graph), and inside an `[Inline]` expansion. Unboxing casts (`(int)obj`) are not reference conversions and keep the bare
   operand. Traced by the "Explicit reference downcasts" row of the feature-support matrix.
 
-- **FR-066** (static constructors, #426): A type's static constructor MUST run in C# order:
-  after the static field initializers, once, before the type is used. TypeScript lowers its body
-  to a class `static { }` block (ES2022) printed after the static fields; its locals stay
-  inside the block. Dart reports `MS0001` (the body is dropped). A containerless
-  (`[NoContainer]`) class keeps its `MS0001` error: the module variables it would assign have
-  no ordered form. Differs from .NET: TypeScript runs the block when the class is defined, not
-  at first use.
+- **FR-066** (static constructors, #426; lazy since #681): A type's static constructor MUST run
+  when .NET runs it: once, immediately before the first of these on that type: an instance
+  created through one of its emitted constructors or constructor factories, a call to a static
+  method or operator it declares, a read or write of a static field or property it declares.
+  Its static field and auto-property initializers run first, inside it, in textual order. These
+  do not trigger it: reading a `const` or an `[Inline]` field (folded at the use site), a
+  reference to the class itself (`typeof`, `instanceof`, passing the class), a nested type, and
+  the statics Metano synthesizes (overload selectors, runtime type descriptors). A static member
+  reached through a derived type's name triggers only the declaring type (`Derived.M()` with `M`
+  declared on `Base` runs `Base`'s), and `new Derived()` runs `Derived`'s before `Base`'s, the
+  reverse of the instance constructors. Re-entry, from the body itself or through another type's
+  initializer that reads back, sees the type as initialized, with the values assigned so far (C#
+  defaults before their initializer). An exception that escapes the initializer is wrapped in a
+  `TypeInitializationException` (type name, the original as `InnerException`, .NET's message),
+  and every later trigger rethrows that same exception.
+
+  TypeScript lowers a type that declares a static constructor, even an empty one, without a
+  `static { }` block. The class's first static member is
+  `static readonly #$init = typeInitializer("Ns.Name", () => { … })` (a `metano-runtime`
+  helper): its body assigns the field and auto-property initializers in textual order, then runs
+  the constructor body. Each static field and auto-property becomes a private `#name` slot that
+  holds its default value, plus a `static get name()` / `static set name(value)` pair that calls
+  `Name.#$init()` first. A read-only member has no setter. A `static readonly` field or get-only
+  static property that the static constructor writes gets a `private` setter, so it stays
+  read-only outside the class. Every static method, operator and static property accessor,
+  every instance constructor (before `super(...)`) and every constructor factory starts with
+  `Name.#$init();`. A type without an explicit static constructor keeps its static field
+  initializers at class definition: .NET's `beforefieldinit` leaves their timing to the runtime
+  (.NET 10 runs them at the first static field access).
+
+  Differs from .NET or not covered:
+  - A generic type runs one initializer for all its constructions, since its static members are
+    shared; .NET runs one per closed type.
+  - A containerless (`[NoContainer]` / `[ExportedAsModule]`) class keeps its `MS0001` error: an ES
+    module variable cannot run code when it is read.
+  - `[PlainObject]` emits no class; its static members, the static constructor included, are not
+    emitted (unchanged).
+  - Dart reports `MS0001` (the body is dropped).
+  - An initializer that constructs a class declared in another file which `extends` the type forms
+    an import cycle. The initializer no longer runs at load, so the cycle loads when the
+    derived class's module is evaluated first, or when both classes are emitted in one file
+    (`[EmitInFile]`). When the base class's module is evaluated first, the derived class's
+    `extends` clause still reads the base class before it is defined (`ReferenceError`).
+  - A static event does not trigger it: static events are not emitted as static members yet.
 
 - **FR-067** (dispatcher order and BCL-virtual groups, #677, extends FR-050): A dispatcher
   MUST try, among overloads of the same tier and arity, the one whose parameters all equal or
