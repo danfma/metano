@@ -857,9 +857,10 @@ Product requirements added after the migration (normative; each one is traced by
 
 - **FR-074** (`int` / `uint` arithmetic wraps in the default context, #639 layer 3; completes
   spec 012 section K): In an unchecked context (Roslyn's `IsChecked` is false: no `checked`
-  scope and no `CheckForOverflowUnderflow`, 012 FR-023), the result of the built-in `+`, `-`,
-  `*` and unary `-` computed in `int` or `uint` (operands narrower than `int` included, since C#
-  promotes them), and the value that `++`, `--`, `+=`, `-=` and `*=` store in an `int` / `uint`
+  scope and no `CheckForOverflowUnderflow`, 012 FR-023), the result of the built-in `+`, `-` and
+  `*` computed in `int` or `uint` and of unary `-` on an `int` (operands narrower than `int`
+  included, since C# promotes them; unary `-` on a `uint` is promoted to `long` and follows the
+  64-bit rules), and the value that `++`, `--`, `+=`, `-=` and `*=` store in an `int` / `uint`
   local, field, property, array element or indexer, MUST be reduced modulo 2^32 to the type's
   range, as .NET wraps it (`int.MaxValue + 1` is `int.MinValue`, `0u - 1u` is `4294967295`).
   The core decides it from Roslyn and represents it as 012 FR-026's
@@ -880,15 +881,19 @@ Product requirements added after the migration (normative; each one is traced by
   A product MUST use `Math.imul`, never `(a * b) | 0`: two 32-bit factors can exceed 2^53, where
   a `double` has lost the low bits. Dart prints the same node as DECIDED-19 prints every wrap
   narrower than 64 bits (`(a + b).toSigned(32)` on `int`, `(a * b).toUnsigned(32)` on `uint`; a
-  product of two 32-bit values is exact in a 64-bit Dart `int`), so Dart needs no new code and its output changes
-  with the TypeScript output. Not reduced: `/` and `%` (only `int.MinValue / -1` and `% -1`
-  leave the range, and .NET throws `OverflowException` for them in both contexts: the divergence
-  of baseline FR-014 stays), enum operands, user-defined operators, `[Queryable]` expression
-  trees, and constants (Roslyn folds them, 012 FR-074). `char` arithmetic is typed `int` by C#,
-  so the wrap applies to that `int` result once `char` is a number (#501); while a `char` is still
-  a string in TypeScript, an operation with a `char` operand is not reduced, so a concatenation is
-  not read as `0`. A reduced store on a dictionary entry (`counts[key]++`, `counts[key] += n` on
-  a `Dictionary<_, int>`) reports `MS0001`, as the checked forms do (012 Edge Cases); before this
+  product of two 32-bit values is exact in a 64-bit Dart VM `int`), so Dart needs no new code and
+  its output changes with the TypeScript output. Known gap: compiled to JavaScript (dart2js,
+  Dart web), a Dart `int` is a `double`, so `(a * b).toSigned(32)` loses the low bits of a
+  product past 2^53. Not reduced: `/` and `%` (only `int.MinValue / -1` and `% -1` leave the
+  range, and .NET throws `OverflowException` for them in both contexts: the divergence of
+  baseline FR-014 stays), an operation whose result is of an enum type (`e + 1` on an enum `E` is
+  an `E`; an operation on enum operands whose result is an integer, such as
+  `DayOfWeek.Friday - DayOfWeek.Monday`, which is an `int`, is reduced), user-defined operators,
+  `[Queryable]` expression trees, and constants (Roslyn folds them, 012 FR-074). `char`
+  arithmetic is typed `int` by C# and is reduced like any `int` result; a `char` operand is a
+  number in `[0, 0xFFFF]` (#501), so `c + 1` and `c - 'a'` fit and `c * 70000` wraps. A reduced
+  store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a `Dictionary<_, int>`)
+  MUST report `MS0001` as an error, as the checked forms do (012 Edge Cases); before this
   requirement it emitted the invalid `counts.get(key)++`. This closes the known gap of 012
   section K: an unchecked result read by checked code (`checked(a + unchecked(b * c))`, a
   `var h = unchecked(a * 31 + 7); h + 1` in a checked project) is in range, and a cast to the
@@ -897,33 +902,60 @@ Product requirements added after the migration (normative; each one is traced by
 
 - **FR-075** (wraps the core proves unneeded, #639): The core MUST omit the reduction of FR-074,
   and the check of 012 FR-077 (one rule for both contexts), where C# shows that the exact result
-  fits the type:
+  fits the type. The decision is in the core, so it holds for every target (Dart prints no wrap
+  there either):
   - the operand ranges of 012 FR-074 (`IntegerValueRanges`: a constant, a value widened from a
     narrower type, a mask; `b1 + b2` on `byte`, `s * 2` on `short`, `(x & 0xFF) + 1`), which
-    also read the `Length` of an array or a `string` and the `Count` of a BCL collection class
-    (not an interface) as `[0, int.MaxValue]`, so `a.Length - 1` emits `a.length - 1`;
+    also read as `[0, int.MaxValue]` the `Length` of an array or a `string` and the `Count` of
+    these BCL classes, matched by symbol identity (`OriginalDefinition`), which own their
+    storage: `List<T>`, `Dictionary<TKey, TValue>`, `HashSet<T>`, `Queue<T>`, `Stack<T>`,
+    `SortedDictionary<TKey, TValue>`, `SortedList<TKey, TValue>`, `SortedSet<T>` and
+    `LinkedList<T>`. Any other `Count` spans its type (`Collection<T>`,
+    `ReadOnlyCollection<T>` and `ObservableCollection<T>` read it from a wrapped user `IList<T>`,
+    and an interface may return anything). So `a.Length - 1` emits `a.length - 1`;
   - the step of a counting loop: `i++` / `++i` (`i--` / `--i`) as an incrementor of a `for`
     whose variable `i` (`int` or `uint`) is declared in the `for` initializer and is not written
     in the condition, the body or the other incrementors (Roslyn data flow, `ref` / `out`
-    arguments and lambdas included), when the condition is, or is a `&&` conjunct containing, a
-    comparison computed in `i`'s own type that bounds the step: `i < e` (or `e > i`) for `++`,
-    `i > e` for `--`, `i <= e` when `e`'s range ends below the type's maximum, and `i >= e` when
-    `e`'s range starts above the type's minimum (`i >= 0` on an `int`, never on a `uint`). The
-    step keeps the native operator: `for (let i = 0; i < n; i++)`.
+    arguments and lambdas included), when the condition is a comparison that bounds the step,
+    or such a comparison is a top-level operand of a `&&` chain that is the condition (a
+    comparison nested in any other expression, such as `(i < 0) == false` or `!(i >= n)`, does
+    not count). The comparison is computed in `i`'s own type and one of its operands is the
+    local `i` itself with no conversion (`(short)i < 100` does not bound `i`): `i < e` (or
+    `e > i`) for `++`, `i > e` (or `e < i`) for `--`, `i <= e` when `e`'s range ends below the
+    type's maximum, and `i >= e` when `e`'s range starts above the type's minimum (`i >= 0` on an
+    `int`, never on a `uint`). The step keeps the native operator:
+    `for (let i = 0; i < n; i++)`. Tests MUST pin the negative shapes (a nested comparison, a
+    converted counter, a comparison promoted to `long`, a counter written in the body or passed
+    by `ref`), which keep the wrap.
 
 - **FR-076** (TypeScript consumers that already reduce, #639): The TypeScript bridge MUST omit
-  the `| 0` / `>>> 0` of an `int` / `uint` wrap (FR-074, and 012 FR-076's reads) on an operand
-  whose JavaScript consumer reduces it modulo 2^32 itself: the operand of another wrapped
-  `int` / `uint` `+`, `-` or unary `-`, of `Math.imul`, of `&`, `|`, `^`, `~`, a shift, or of a
-  012 FR-074 narrowing conversion, recursively through the operands of `+`, `-` and unary `-`.
-  The unreduced operand is exact (a sum of n values of 32 bits stays below n · 2^32, far inside
-  2^53, and `Math.imul` returns 32 bits), and the consumer applies `ToInt32` / `ToUint32` to it,
-  so `a + b + c - a * b` emits `(a + b + c - Math.imul(a, b)) | 0` and `(a + b) & 0xFF` stays as
-  written. Every other consumer keeps the wrap: a checked operation (`checkedInt32`), a
-  comparison, `/`, `%`, a conversion to `double`, `long` (`BigInt(...)`) or `string`, an
-  argument, a return value and a store. Dart prints every wrap (the same elision is valid on a
-  64-bit Dart `int` for `+`, `-` and `*`, but not for its 64-bit bitwise operators; a follow-up
-  may add it).
+  the final `| 0` / `>>> 0` of an `int` / `uint` wrap (FR-074, and 012 FR-076's reads) on an
+  operand whose JavaScript consumer reduces it modulo 2^32 itself: the operand of another wrapped
+  `int` / `uint` `+`, `-` or unary `-`, of `Math.imul`, of `&`, `|`, `^`, `~`, a shift, or of an
+  unchecked 012 FR-074 narrowing conversion that emits its reduction (a checked narrowing reads
+  the exact value and keeps the inner wrap; a conversion the ranges drop reduces nothing),
+  recursively through the operands of `+`, `-` and unary `-`. Only the trailing reduction goes:
+  a wrapped `int` product keeps `Math.imul` (`(a * b) + c` emits `(Math.imul(a, b) + c) | 0`,
+  never `(a * b + c) | 0`, which gives `0` instead of `18` at `a = 0x7FFFFFFF`,
+  `b = 0x7FFFFFF3`, `c = 5`), and a `uint` product drops only its `>>> 0`
+  (`(Math.imul(a, b) + 1) >>> 0`). The unreduced operand is exact (a sum of n values of 32 bits
+  stays below n · 2^32, far inside 2^53, and `Math.imul` returns 32 bits), and the consumer
+  applies `ToInt32` / `ToUint32` to it, so `a + b + c - a * b` emits
+  `(a + b + c - Math.imul(a, b)) | 0` and `(a + b) & 0xFF` stays as written. The printer keeps the
+  grouping the omitted wrap supplied: `a - -b` never prints as `a--b`, and `a - (b + c)`,
+  `a - (b - c)` and `-(a + 1) | 0` keep their parentheses; goldens MUST pin these shapes and the
+  product case above. Every other consumer keeps the wrap: a checked operation (`checkedInt32`),
+  a comparison, `/`, `%`, a conversion to `double`, `long` (`BigInt(...)`) or `string`, an
+  argument, a return value and a store. Dart prints every wrap FR-075 keeps (the same elision
+  is valid on a 64-bit Dart `int` for `+`, `-` and `*`, but not for its 64-bit bitwise
+  operators; a follow-up may add it).
+
+  Known gaps and follow-ups of FR-074–FR-076: a real read-modify-write on dictionary entries
+  (instead of `MS0001`); the range of a proven counter inside the loop body (it spans its type
+  there); a write through `Unsafe.AsRef(in i)`, which escapes the data-flow proof of FR-075; and
+  the asm.js-style `((s | 0) + x) | 0`, which avoids a V8 slow path for an accumulator that
+  overflows on most iterations (measured on Node 24: about 13 times slower than that form,
+  where Bun shows no slow path), to be decided with a benchmark.
 
 ### Key Entities
 
