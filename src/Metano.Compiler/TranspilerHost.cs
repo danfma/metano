@@ -324,27 +324,17 @@ public static class TranspilerHost
             []
         );
 
-        var cache = TranspilationCache.TryRead(outputDir);
+        var key = new CacheRunKey(
+            targetLanguage,
+            configFingerprint,
+            sourceHashes,
+            referenceFingerprints,
+            assetSourceHashes
+        );
 
-        if (cache is null)
+        if (TranspilationCache.TryRead(outputDir) is not { } cache || !key.Matches(cache))
             return false;
 
-        if (!string.Equals(cache.Target, targetLanguage, StringComparison.Ordinal))
-            return false;
-        if (
-            !string.Equals(
-                cache.ConfigurationFingerprint,
-                configFingerprint,
-                StringComparison.Ordinal
-            )
-        )
-            return false;
-        if (!CacheKeyBuilder.DictionariesEqual(cache.SourceHashes, sourceHashes))
-            return false;
-        if (!CacheKeyBuilder.DictionariesEqual(cache.ReferenceFingerprints, referenceFingerprints))
-            return false;
-        if (!CacheKeyBuilder.DictionariesEqual(cache.AssetSourceHashes, assetSourceHashes))
-            return false;
         if (!AreAssetCopiesIntact(assets, assetSourceHashes, outputDir, projectDir))
             return false;
 
@@ -354,6 +344,7 @@ public static class TranspilerHost
             cache.OutputHashes,
             prefixBlock
         );
+
         if (rehydrated is null)
             return false;
 
@@ -367,9 +358,35 @@ public static class TranspilerHost
         Console.WriteLine(
             $"Metano: incremental cache hit — {cache.OutputHashes.Count} output file(s) reused, no work to do."
         );
+
         if (showTimings)
             Console.WriteLine($"  Total: {totalSw.ElapsedMilliseconds}ms");
+
         return true;
+    }
+
+    /// <summary>
+    /// The key a cache must have been written under to be reused by this run:
+    /// the same target, configuration, sources, references and assets.
+    /// </summary>
+    private sealed record CacheRunKey(
+        string TargetLanguage,
+        string ConfigFingerprint,
+        IReadOnlyDictionary<string, string> SourceHashes,
+        IReadOnlyDictionary<string, string> ReferenceFingerprints,
+        IReadOnlyDictionary<string, string> AssetSourceHashes
+    )
+    {
+        public bool Matches(TranspilationCache cache) =>
+            string.Equals(cache.Target, TargetLanguage, StringComparison.Ordinal)
+            && string.Equals(
+                cache.ConfigurationFingerprint,
+                ConfigFingerprint,
+                StringComparison.Ordinal
+            )
+            && CacheKeyBuilder.DictionariesEqual(cache.SourceHashes, SourceHashes)
+            && CacheKeyBuilder.DictionariesEqual(cache.ReferenceFingerprints, ReferenceFingerprints)
+            && CacheKeyBuilder.DictionariesEqual(cache.AssetSourceHashes, AssetSourceHashes);
     }
 
     /// <summary>
