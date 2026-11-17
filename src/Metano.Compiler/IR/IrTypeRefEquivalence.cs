@@ -19,7 +19,6 @@ public static class IrTypeRefEquivalence
             (null, _) or (_, null) => false,
             (IrPrimitiveTypeRef l, IrPrimitiveTypeRef r) => l.Primitive == r.Primitive,
             (IrTypeParameterRef l, IrTypeParameterRef r) => l.Name == r.Name,
-            (IrUnknownTypeRef, IrUnknownTypeRef) => true,
             (IrNamedTypeRef l, IrNamedTypeRef r) => l.Name == r.Name
                 && l.Namespace == r.Namespace
                 && l.PrivateNestedSegments == r.PrivateNestedSegments
@@ -52,7 +51,8 @@ public static class IrTypeRefEquivalence
                 && l.Signatures.Zip(r.Signatures)
                     .All(pair => AreEquivalent(pair.First, pair.Second)),
 
-            // A node this comparison does not know: conservatively not equivalent.
+            // An unknown type, or a node this comparison does not know:
+            // conservatively not equivalent.
             _ => false,
         };
 
