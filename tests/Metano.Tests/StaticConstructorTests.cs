@@ -601,6 +601,43 @@ public class StaticConstructorTests
     }
 
     [Test]
+    [Arguments("NoContainer")]
+    [Arguments("ExportedAsModule")]
+    public async Task ContainerlessInstanceClass_KeepsItsReportsAndEmitsTheClass(string attribute)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            [Transpile, {{attribute}}]
+            public class A
+            {
+                public static int X;
+
+                static A() { X = 3; }
+
+                public int Y;
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("static constructor")
+                )
+            )
+            .IsTrue();
+
+        await Assert.That(files["a.ts"]).Contains("export class A");
+        await Assert.That(files["a.ts"]).DoesNotContain("x = 3");
+        await Assert.That(files["a.ts"]).DoesNotContain("#$init");
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == "MS0015"))
+            .IsEqualTo(attribute == "NoContainer");
+    }
+
+    [Test]
     public async Task Dart_ReportsAStaticConstructor()
     {
         var (_, diagnostics) = DartTranspileHelper.Transpile(
