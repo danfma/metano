@@ -172,7 +172,9 @@ public class DefaultLiteralTests
     /// <summary>
     /// <c>new S()</c> stands for <c>default(S)</c> with the struct's type
     /// arguments; a field whose type has no default (a type parameter, a
-    /// tuple) is left undefined, so the literal still reports MS0001.
+    /// tuple) whose type in the constructed struct is a value type is left
+    /// undefined, so the literal still reports MS0001; one whose constructed
+    /// type is a reference type (<c>ZBoxed&lt;string?&gt;</c>) has its <c>null</c>.
     /// </summary>
     [Test]
     public async Task StructDefaultWithAnUnsetField_KeepsItsTypeArgumentsAndReports()
@@ -188,10 +190,14 @@ public class DefaultLiteralTests
                 public struct ZOdd { public System.Guid Id; public char C; public int N; }
 
                 [Transpile]
+                public struct ZBoxed<T> { public T Value; }
+
+                [Transpile]
                 public class Holder
                 {
                     public int Gen() { ZGen<int> a = default; return a.N; }
                     public int Odd() { ZOdd z = default; return z.N; }
+                    public string? Boxed() { ZBoxed<string?> b = default; return b.Value; }
                 }
                 """
         );
@@ -205,9 +211,7 @@ public class DefaultLiteralTests
 
         await Assert
             .That(Warnings(diagnostics))
-            .IsEquivalentTo([
-                "'default(ZGen<int>)' has no literal in the target for 'Value': 'new ZGen()' leaves it undefined.",
-            ]);
+            .IsEquivalentTo(["'default(ZGen<int>)' has no target default for field 'Value'."]);
     }
 
     private static IEnumerable<string> Warnings(IEnumerable<MetanoDiagnostic> diagnostics) =>

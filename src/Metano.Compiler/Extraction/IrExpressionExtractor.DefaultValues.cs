@@ -62,8 +62,9 @@ public sealed partial class IrExpressionExtractor
         type.NullableAnnotation == NullableAnnotation.Annotated || type.IsNullableValueType();
 
     /// <summary>
-    /// Reports MS0001 when the <c>new S()</c> that stands for <c>default(S)</c>
-    /// leaves a field without its default (<see cref="DefaultValuePolicy.UnsetFieldsOf"/>).
+    /// Reports MS0001 when a field of the struct has no target default
+    /// (<see cref="DefaultValuePolicy.UnsetFieldsOf"/>), so <c>default(S)</c> does
+    /// not give it its C# value.
     /// </summary>
     private void ReportUnsetStructFields(SyntaxNode syntax, ITypeSymbol type)
     {
@@ -76,9 +77,9 @@ public sealed partial class IrExpressionExtractor
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.UnsupportedFeature,
-                $"'default({type.ToDisplayString()})' has no literal in the target for "
-                    + $"{string.Join(", ", unset.Select(name => $"'{name}'"))}: 'new "
-                    + $"{type.Name}()' leaves {(unset.Count == 1 ? "it" : "them")} undefined.",
+                $"'default({type.ToDisplayString()})' has no target default for "
+                    + $"{(unset.Count == 1 ? "field" : "fields")} "
+                    + $"{string.Join(", ", unset.Select(name => $"'{name}'"))}.",
                 syntax.GetLocation()
             )
         );
