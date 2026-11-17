@@ -94,7 +94,10 @@ internal static class SynthesizedGroupMembers
                 [member],
                 MethodOverloadGroups.InheritedOverloadsOf(type, groupName, [member], policy),
                 IsSegregatedOverrides: false
-            );
+            )
+            {
+                DetachedReplacement = RenamedReplacementOf(type, groups, kind, name, policy),
+            };
 
             return [.. remaining, own];
         }
@@ -205,6 +208,29 @@ internal static class SynthesizedGroupMembers
         kind is IrSynthesizedValueMember.Equals
         && ValueEqualityShapes.RoutedEqualsOf(type, policy) is { } routed
         && !spelled.Any(group => group.MemberOf(routed) is not null)
+            ? routed
+            : null;
+
+    /// <summary>
+    /// For a member inserted only because a base inserted it: the typed replacing
+    /// <c>Equals</c> it routes to when that declaration is a lone method its own
+    /// <c>[Name]</c> spells apart from the synthesized member's name. It has no fast
+    /// path the route can call (a dispatched group gives it one), so the route
+    /// would reach the inherited dispatcher and loop; <c>null</c> otherwise.
+    /// </summary>
+    private static IMethodSymbol? RenamedReplacementOf(
+        INamedTypeSymbol type,
+        IReadOnlyList<MethodOverloadGroup> groups,
+        IrSynthesizedValueMember kind,
+        string name,
+        OverloadGroupingPolicy policy
+    ) =>
+        kind is IrSynthesizedValueMember.Equals
+        && ValueEqualityShapes.RoutedEqualsOf(type, policy) is { } routed
+        && routed.GetNameOverride(policy.Target) is { } renamed
+        && renamed != name
+        && groups.FirstOrDefault(group => group.MemberOf(routed) is not null)
+            is not { IsDispatched: true }
             ? routed
             : null;
 

@@ -1204,4 +1204,46 @@ public class ValueEqualityJoinTests
             )
             .IsTrue();
     }
+
+    /// <summary>
+    /// The same holds when the derived record inserts the synthesized member only
+    /// because its base did: a typed replacing <c>Equals</c> renamed by its own
+    /// <c>[Name]</c> would route through the inherited dispatcher and loop, so it
+    /// reports <c>MS0001</c> (FR-039).
+    /// </summary>
+    [Test]
+    public async Task RenamedReplacingEqualsUnderAJoinedBase_ReportsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record B5(int X) { [Name("equals")] public bool Same(string s) => s == "c" + X; }
+
+            [Transpile]
+            public record D5(int X, int Y) : B5(X) { [Name("sameD")] public virtual bool Equals(D5? o) => o is not null && o.X == X; public override int GetHashCode() => X; }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Severity == MetanoDiagnosticSeverity.Error);
+
+        await Assert.That(error.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        await Assert.That(error.Message).Contains("'D5.Equals' replaces the synthesized equality");
+
+        // Under a base whose own Equals group joined, the renamed declaration
+        // overloads the inherited dispatcher and has a fast path: no error.
+
+        var (_, overloaded) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record B6(int X) { public bool Equals(string s) => s == "c" + X; }
+
+            [Transpile]
+            public record D6(int X, int Y) : B6(X) { [Name("sameD")] public virtual bool Equals(D6? o) => o is not null && o.X == X; public override int GetHashCode() => X; }
+            """
+        );
+
+        await Assert
+            .That(overloaded.Any(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsFalse();
+    }
 }

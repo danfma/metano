@@ -11,8 +11,9 @@ namespace Metano.Compiler.Extraction;
 /// once per extracted type, from <c>IrClassExtractor.Extract</c>, outside the
 /// overload groups' cache:
 /// <list type="bullet">
-///   <item>a plain struct's <c>Equals(S)</c> that replaces the equality only because
-///   it implements a transpiled interface's <c>Equals</c>, not
+///   <item>a struct's <c>Equals(S)</c> that replaces the equality only because it
+///   implements a transpiled interface's <c>Equals</c> (a record struct's
+///   <c>Equals(R)</c> always replaces it, so only a plain struct can), not
 ///   <c>System.IEquatable&lt;S&gt;</c>: the target's sets, dictionaries and record
 ///   fields compare through it, where .NET's <c>EqualityComparer&lt;S&gt;.Default</c>
 ///   compares the fields (<c>MS0063</c>);</item>
