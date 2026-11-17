@@ -2202,6 +2202,9 @@ public sealed partial class IrExpressionExtractor
         if (IsNullableValueOperand(operand))
             return LiftIncrement(node, operand, op, extractedOperand, isPrefix);
 
+        if (IsCharStoreTarget(operand))
+            return ExtractCharIncrement(node, op, extractedOperand, isPrefix);
+
         return TryExtractReducedIncrement(node, operand, op, extractedOperand, isPrefix)
             ?? new IrUnaryExpression(op, extractedOperand, isPrefix);
     }

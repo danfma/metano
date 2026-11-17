@@ -21,6 +21,8 @@ public sealed class IrStatementExtractor(
 {
     private readonly SemanticModel _semantic = semanticModel;
     private readonly IrExtractionContext _context = context;
+
+    private bool LowersCharCodes => NumericEndpoints.LowersCharCodes(_context.Target);
     private readonly IrTypeOriginResolver? _originResolver = context.OriginResolver;
     private readonly IrExpressionExtractor _expressions = new(semanticModel, context);
     private readonly LocalBindingNames? _inheritedLocalNames = inheritedLocalNames;
@@ -447,7 +449,7 @@ public sealed class IrStatementExtractor(
         if (elementNullable && !variableNullable)
             return UnwrappedElementValue(fe, element, elementType, variableType, from, to);
 
-        if (!NumericEndpoints.IsLoweredExplicitly(from, to))
+        if (!NumericEndpoints.IsLoweredExplicitly(from, to, LowersCharCodes))
             return null;
 
         var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
@@ -479,7 +481,7 @@ public sealed class IrStatementExtractor(
     {
         var guarded = _expressions.GuardedValueOrThrow(element);
 
-        if (from == to || !NumericEndpoints.IsLoweredExplicitly(from, to))
+        if (from == to || !NumericEndpoints.IsLoweredExplicitly(from, to, LowersCharCodes))
             return new IrCastExpression(guarded, MapType(variableType));
 
         var unwrapped = new IrCastExpression(

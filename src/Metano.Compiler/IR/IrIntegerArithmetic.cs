@@ -60,11 +60,23 @@ public sealed record IrNumericConversion(
     public static bool IsIntegerNarrowing(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from.IsNarrowIntegerValue() && to.IsNarrowIntegerValue() && !to.Kind.HoldsEvery(from.Kind);
 
-    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>char</c> as a <c>double</c> or <c>float</c>: its UTF-16 code.</summary>
-    public static bool IsCharToFloatingPoint(IrNumericEndpoint from, IrNumericEndpoint to) =>
+    /// <summary>
+    /// Whether a conversion from <paramref name="from"/> to <paramref name="to"/>
+    /// reads a <c>char</c> as a number (FR-071): any numeric target other than
+    /// <c>char</c> itself and an enum.
+    /// </summary>
+    public static bool IsCharRead(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from is { Kind: IrNumericKind.Char, IsEnum: false }
         && to is { IsEnum: false }
-        && to.Kind.IsFloatingPoint();
+        && to.Kind is not IrNumericKind.Char;
+
+    /// <summary>
+    /// Whether a conversion from <paramref name="from"/> to <paramref name="to"/>
+    /// makes a <c>char</c> of an integer of 32 bits or fewer (FR-072): the
+    /// low 16 bits of the value, range-checked in a checked context.
+    /// </summary>
+    public static bool IsCharStore(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        to is { Kind: IrNumericKind.Char, IsEnum: false } && from.IsNarrowIntegerValue();
 
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
     public static bool IsDecimalToBinaryFloatingPoint(

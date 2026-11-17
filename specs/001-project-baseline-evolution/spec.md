@@ -659,18 +659,22 @@ Product requirements added after the migration (normative; each one is traced by
   never read the code. An arithmetic result is an `int` (a `number`, or a `bigint` once widened to
   `long`): `c + 1` is not a `char`.
   Range: a `char` is the integer range `[0, 0xFFFF]` for the integer range analysis that decides
-  where an unchecked `int` operation needs a 32-bit wrap (#639, layer 3):
-  `IntegerValueRanges.OfType` and `ConstantOf` get a `char` arm, so `c +/- k` does not get a
-  wrap. Order of the three steps of an expression such as `(char)(c + 1)`: the `char` to `int`
-  node on the operand, the `int` overflow wrap on the `int` result (when the analysis asks for
-  it), the `int` to `char` store narrowing last. Whichever of this work and #639 lands second
-  regenerates the goldens the other changes.
-  Dart: the nodes print as their operand (an implicit one) or keep the `as T` cast (an explicit
-  one) and the literal fold lives in the TypeScript bridge, so a Dart `int i = 'a'` prints as
-  today. Every Dart output that is valid Dart today stays byte for byte; char arithmetic in Dart
-  (`c + 1`, `c++`, `int x = c`) was not valid Dart and stays a documented gap, with no
-  `codeUnitAt`; its text may change shape with the new nodes (the implementation checks and
-  records what `c++` prints), and the Dart sample regeneration diff stays clean.
+  where an unchecked `int` operation needs a 32-bit wrap (#639, layer 3). This feature does not
+  add the `char` arm to `IntegerValueRanges` (it would drop a Dart `.toSigned(32)`, and Dart
+  output does not change); #639 adds it with its own Dart handling. Order of the three steps of
+  an expression such as `(char)(c + 1)`: the `char` to `int` node on the operand, the `int`
+  overflow wrap on the `int` result (when the analysis asks for it), the `int` to `char` store
+  narrowing last. Whichever of this work and #639 lands second regenerates the goldens the other
+  changes.
+  Dart: no output changes. The target keeps every `char` shape it prints today, wrong ones
+  included (`int x = c`, `c + 1`, `c++`, `c += (char)1` print as before; `(char)98` stays
+  `98 as String`; a `foreach` over numbers into a `char` variable keeps its form): the core
+  lowers a `char` as its code only when the target says so (`NumericEndpoints.LowersCharCodes`,
+  false for Dart), the way a tuple conversion is kept unconverted for Dart. The existing fold of
+  a `char` literal read as `double` or `float` is unchanged. Char arithmetic in Dart is a
+  documented gap, with no `codeUnitAt`. The Dart outputs of the conformance probes and of the
+  sample regeneration stay byte for byte. The only Dart text FR-073 changes is a lone surrogate,
+  whose literal made the CLI abort before.
 
 - **FR-072** (`char` stores and narrowing, #501): A `char` is produced from a number only
   through `String.fromCharCode`, keeping the low 16 bits as .NET does. `(char)n` and
@@ -690,7 +694,7 @@ Product requirements added after the migration (normative; each one is traced by
   `TryExtractReducedIncrement`, which already handle `byte`. A `foreach` variable declared `char`
   over numbers (`foreach (char x in doubles)`) converts each element with these rules and is a
   one-unit string, so `t += x` on an `int` reads its code (FR-071) instead of concatenating.
-  Dart: as the Dart paragraph of FR-071; `c++` in Dart was not valid Dart and stays a gap.
+  Dart: as the Dart paragraph of FR-071 (the stores keep their current Dart shapes).
 
 - **FR-073** (lone surrogates in literals, #501): No generated file MUST fail to write because
   of its text. The TypeScript printer MUST emit an unpaired UTF-16 surrogate of any string

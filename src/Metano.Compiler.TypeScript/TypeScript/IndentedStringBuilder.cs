@@ -88,6 +88,7 @@ public sealed class IndentedStringBuilder
         {
             '`' => "\\`",
             '$' when OpensTemplateHole(value, index) => "\\$",
+            _ when SurrogateText.IsLone(value, index) => UnicodeEscape(value[index]),
             var c => EscapeNonDelimiterChar(c),
         };
 
@@ -98,13 +99,23 @@ public sealed class IndentedStringBuilder
     {
         var escaped = new StringBuilder(value.Length);
 
-        foreach (var c in value)
+        for (var index = 0; index < value.Length; index++)
         {
-            escaped.Append(c == '"' ? "\\\"" : EscapeNonDelimiterChar(c));
+            escaped.Append(EscapeStringChar(value, index));
         }
 
         return escaped.ToString();
     }
+
+    private static string EscapeStringChar(string value, int index) =>
+        value[index] switch
+        {
+            '"' => "\\\"",
+            _ when SurrogateText.IsLone(value, index) => UnicodeEscape(value[index]),
+            var c => EscapeNonDelimiterChar(c),
+        };
+
+    internal static string UnicodeEscape(char unit) => $"\\u{(int)unit:x4}";
 
     /// <summary>
     /// The escape every JS string form shares: the backslash and the control
@@ -117,7 +128,7 @@ public sealed class IndentedStringBuilder
             '\n' => "\\n",
             '\r' => "\\r",
             '\t' => "\\t",
-            _ when char.IsControl(c) || c is '\u2028' or '\u2029' => $"\\u{(int)c:x4}",
+            _ when char.IsControl(c) || c is '\u2028' or '\u2029' => UnicodeEscape(c),
             _ => c.ToString(),
         };
 

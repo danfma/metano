@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using Metano.Compiler.Caching;
 using Metano.Compiler.Diagnostics;
 
@@ -164,9 +165,15 @@ public static class TranspilerHost
             return new TranspileResult(true, output.Files, warningCount, 0);
         }
 
-        if (output.Files.Count > 0)
-            await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix);
-        var assetDiagnostics = await CopyAssetsAsync(assets, outputDir, projectDir);
+        var writeDiagnostics =
+            output.Files.Count > 0
+                ? await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix)
+                : [];
+
+        var assetDiagnostics = writeDiagnostics
+            .Concat(await CopyAssetsAsync(assets, outputDir, projectDir))
+            .ToList();
+
         var (assetWarnings, assetErrors) =
             assetDiagnostics.Count > 0 ? ReportDiagnostics(assetDiagnostics) : (0, 0);
         warningCount += assetWarnings;
@@ -603,7 +610,13 @@ public static class TranspilerHost
             $"Failed to copy asset '{source}' to '{relative}': {ex.Message}"
         );
 
-    private static async Task EmitFilesAsync(
+    /// <summary>
+    /// Writes <paramref name="files"/>. A file whose text is not valid UTF-8
+    /// (a printer left an unpaired surrogate raw, FR-073) is reported as an
+    /// <c>MS0001</c> error naming the file and the offending index, and the
+    /// run carries on with the others.
+    /// </summary>
+    private static async Task<IReadOnlyList<MetanoDiagnostic>> EmitFilesAsync(
         string outputDir,
         IReadOnlyList<GeneratedFile> files,
         bool clean,
@@ -620,6 +633,8 @@ public static class TranspilerHost
 
         var prefixBlock = string.IsNullOrEmpty(filePrefix) ? "" : filePrefix + "\n";
 
+        var failures = new List<MetanoDiagnostic>();
+
         foreach (var file in files)
         {
             var filePath = ToDiskPath(outputDir, file.RelativePath);
@@ -628,10 +643,30 @@ public static class TranspilerHost
             if (fileDir is not null)
                 Directory.CreateDirectory(fileDir);
 
-            await File.WriteAllTextAsync(filePath, prefixBlock + file.Content);
+            try
+            {
+                await File.WriteAllTextAsync(filePath, prefixBlock + file.Content);
+            }
+            catch (EncoderFallbackException ex)
+            {
+                File.Delete(filePath);
+
+                failures.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.UnsupportedFeature,
+                        $"Cannot write '{file.RelativePath}': its text holds an unpaired "
+                            + $"UTF-16 surrogate that UTF-8 cannot encode (index {ex.Index})."
+                    )
+                );
+
+                continue;
+            }
 
             Console.WriteLine($"  Generated: {file.RelativePath}");
         }
+
+        return failures;
     }
 
     /// <summary>

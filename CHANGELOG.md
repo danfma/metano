@@ -16,6 +16,13 @@ the migration list.
 - `Union`, `Intersect`, `Except` and the static call form `Enumerable.Where(xs, p)` lower to the pipe form; the legacy `Enumerable.from(...)` mappings are gone (#657, #619).
 - A lambda parameter of type `decimal` is annotated `Decimal`, no longer `number`.
 
+### `char` as a UTF-16 code unit (spec FR-071 to FR-073, #501)
+
+- A `char` read as a number now reads its code unit: `int i = c`, `(int)c`, `c + 1`, `c - 'a'`, `c < n`, `l << c`, `(byte)c`, `decimal d = c`, an `M(int)` / `M(string)` overload argument, `foreach (int x in str)` and `[.. str]` into a numeric collection all print `c.charCodeAt(0)` where they printed the string (and so concatenated or gave `NaN`). A `char` literal read as a number folds to its code.
+- A `char` made of a number (`(char)n`, `(char)(c + 1)`) and `c++`, `c--`, `c += (char)2` store back through `String.fromCharCode(... & 0xFFFF)`; a checked context throws `OverflowException`. Text positions (`"x" + c`, interpolation, `ToString`, `char` vs `char` comparison, `switch` on a `char`) are unchanged.
+- An unpaired UTF-16 surrogate in a string or `char` literal prints as a `\uXXXX` escape (TypeScript and Dart; `{"\ud83d"}` in JSX), where the CLI aborted with `EncoderFallbackException`; a write failure now reports `MS0001` naming the file.
+- Dart output does not change; char arithmetic in Dart remains a documented gap.
+
 ### ⚠ 64-bit integers become `bigint` (spec 012)
 
 - `long` / `ulong` (and `nint` / `nuint`) map to TypeScript `bigint` instead

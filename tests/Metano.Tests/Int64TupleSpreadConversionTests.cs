@@ -210,15 +210,14 @@ public class Int64TupleSpreadConversionTests
     }
 
     /// <summary>
-    /// A string spreads its UTF-16 code units, which the mapped spread does
-    /// not read as C# does, so a converted one is reported instead of emitted
-    /// unconverted. (A dictionary spreads key-value pairs, which C# never
-    /// converts numerically, so it has no such case.)
+    /// A string spreads its UTF-16 code units (<c>split("")</c>), each read as
+    /// the number C# converts it to (FR-071). (A dictionary spreads key-value
+    /// pairs, which C# never converts numerically, so it has no such case.)
     /// </summary>
     [Test]
-    public async Task ConvertedStringSpread_IsReported()
+    public async Task ConvertedStringSpread_ReadsEachCodeUnit()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using System.Collections.Generic;
 
@@ -226,19 +225,52 @@ public class Int64TupleSpreadConversionTests
             public class Codes
             {
                 public List<long> Of(string text) => [.. text];
+                public int[] Ints(string text) => [.. text];
             }
             """
         );
 
-        var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
-
-        await Assert.That(messages).HasSingleItem();
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
 
         await Assert
-            .That(messages[0])
-            .IsEqualTo(
-                "Expression '.. text' (spread of a string whose characters convert to a 64-bit "
-                    + "integer) is not supported by the transpiler."
+            .That(files["codes.ts"])
+            .Contains(
+                "[...Array.from(text.split(\"\"), (element$temp$0) => BigInt(element$temp$0.charCodeAt(0)))]"
+            );
+
+        await Assert
+            .That(files["codes.ts"])
+            .Contains(
+                "[...Array.from(text.split(\"\"), (element$temp$0) => element$temp$0.charCodeAt(0))]"
+            );
+    }
+
+    /// <summary>Spread elements are numbered in source order, a string spread included.</summary>
+    [Test]
+    public async Task ConvertedStringSpread_TakesAnElementName()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Codes
+            {
+                public int Of(string text, int[] ints)
+                {
+                    List<long> codes = [.. text];
+                    List<long> longs = [.. ints];
+
+                    return codes.Count + longs.Count;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["codes.ts"])
+            .Contains(
+                "const longs = [...Array.from(ints, (element$temp$1) => BigInt(element$temp$1))];"
             );
     }
 
@@ -324,35 +356,6 @@ public class Int64TupleSpreadConversionTests
         await TranspileHelper.AssertGolden("int64-tuple-typeless-cast.ts", files["typeless.ts"]);
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-    }
-
-    /// <summary>A reported string spread takes no element name: the next spread of the body is the first.</summary>
-    [Test]
-    public async Task ConvertedStringSpread_TakesNoElementName()
-    {
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
-            """
-            using System.Collections.Generic;
-
-            [Transpile]
-            public class Codes
-            {
-                public int Of(string text, int[] ints)
-                {
-                    List<long> codes = [.. text];
-                    List<long> longs = [.. ints];
-
-                    return codes.Count + longs.Count;
-                }
-            }
-            """
-        );
-
-        await Assert
-            .That(files["codes.ts"])
-            .Contains(
-                "const longs = [...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))];"
-            );
     }
 
     /// <summary>

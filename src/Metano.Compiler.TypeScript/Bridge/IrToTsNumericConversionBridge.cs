@@ -19,10 +19,17 @@ internal static class IrToTsNumericConversionBridge
 {
     private const string LiftedValueName = "value";
 
-    public static TsExpression Map(IrNumericConversion conversion, TsExpression operand) =>
-        conversion.IsLifted
-            ? Lifted(conversion, operand)
+    private static readonly IrNumericEndpoint CodeUnit = new(IrNumericKind.UInt16);
+
+    public static TsExpression Map(IrNumericConversion conversion, TsExpression operand)
+    {
+        if (conversion.IsLifted)
+            return Lifted(conversion, operand);
+
+        return FoldedCharLiteral(conversion) is { } code
+            ? CharCodeAs(conversion.To, conversion.IsChecked, code)
             : RenderConversion(conversion.From, conversion.To, conversion.IsChecked, operand);
+    }
 
     /// <summary>
     /// <c>x == null ? null : convert(x)</c> for an operand that is safe to
@@ -66,8 +73,11 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to))
             return DecimalToBinaryFloatingPoint(to, value);
 
-        if (IrNumericConversion.IsCharToFloatingPoint(from, to))
-            return CharCode(value);
+        if (IrNumericConversion.IsCharRead(from, to))
+            return CharCodeAs(to, isChecked, CharCode(value));
+
+        if (IrNumericConversion.IsCharStore(from, to))
+            return CharFromCode(isChecked, value);
 
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
@@ -245,7 +255,6 @@ internal static class IrToTsNumericConversionBridge
                 value
             ),
             IrNumericKind.Decimal => RuntimeCall(Int64RuntimeHelpers.FromDecimal(isSigned), value),
-            IrNumericKind.Char => BigInt(CharCode(value)),
             _ => WidenedInteger(from, to, isChecked, value),
         };
     }
@@ -253,6 +262,71 @@ internal static class IrToTsNumericConversionBridge
     /// <summary>The UTF-16 code of a <c>char</c>, which is a one-unit string: <c>value.charCodeAt(0)</c>.</summary>
     private static TsExpression CharCode(TsExpression value) =>
         new TsCallExpression(new TsPropertyAccess(value, "charCodeAt"), [new TsLiteral("0")]);
+
+    /// <summary>
+    /// A relational or equality operator whose two operands are non-nullable
+    /// <c>char</c> reads (<c>c == 'a'</c>, <c>a &lt; b</c>) compares them as
+    /// the one-unit strings they are, since a JS string comparison orders by
+    /// UTF-16 code unit as .NET orders <c>char</c> (FR-071); the operands lose
+    /// their conversion. A nullable operand keeps its lifted conversion.
+    /// </summary>
+    public static IrBinaryExpression WithCharOperandsAsText(IrBinaryExpression binary) =>
+        binary.Operator
+            is IrBinaryOp.Equal
+                or IrBinaryOp.NotEqual
+                or IrBinaryOp.LessThan
+                or IrBinaryOp.LessThanOrEqual
+                or IrBinaryOp.GreaterThan
+                or IrBinaryOp.GreaterThanOrEqual
+        && binary is { Left: IrNumericConversion left, Right: IrNumericConversion right }
+        && IsPlainCharRead(left)
+        && IsPlainCharRead(right)
+            ? binary with
+            {
+                Left = left.Operand,
+                Right = right.Operand,
+            }
+            : binary;
+
+    private static bool IsPlainCharRead(IrNumericConversion conversion) =>
+        !conversion.IsLifted && IrNumericConversion.IsCharRead(conversion.From, conversion.To);
+
+    /// <summary>
+    /// The UTF-16 <paramref name="code"/> of a <c>char</c> converted to
+    /// <paramref name="to"/>: a <c>ushort</c> read like any other integer, a
+    /// <c>decimal</c> as a <c>Decimal</c> value.
+    /// </summary>
+    private static TsExpression CharCodeAs(
+        IrNumericEndpoint to,
+        bool isChecked,
+        TsExpression code
+    ) =>
+        to.Kind is IrNumericKind.Decimal
+            ? new TsNewExpression(IrToTsExpressionBridge.BclDecimalValueReference(), [code])
+            : RenderConversion(CodeUnit, to, isChecked, code);
+
+    /// <summary>
+    /// The code of a <c>char</c> literal read as a number (FR-071), which the
+    /// bridge folds instead of printing <c>"a".charCodeAt(0)</c>; <c>null</c>
+    /// for any other conversion.
+    /// </summary>
+    private static TsLiteral? FoldedCharLiteral(IrNumericConversion conversion) =>
+        IrNumericConversion.IsCharRead(conversion.From, conversion.To)
+        && conversion.Operand is IrLiteral { Kind: IrLiteralKind.Char, Value: char character }
+            ? new TsLiteral(((int)character).ToString(CultureInfo.InvariantCulture))
+            : null;
+
+    /// <summary>
+    /// A <c>char</c> made of an integer of 32 bits or fewer (FR-072): the low
+    /// 16 bits unchecked, a range check checked, then <c>String.fromCharCode</c>.
+    /// </summary>
+    private static TsExpression CharFromCode(bool isChecked, TsExpression value) =>
+        Global(
+            "String.fromCharCode",
+            isChecked
+                ? NarrowIntegerTsExpressions.Checked(IrNumericKind.Char, value)
+                : NarrowIntegerTsExpressions.Wrapped(IrNumericKind.Char, value)
+        );
 
     /// <summary>The helper that truncates a fraction into a <c>BigInteger</c> (FR-003), or <c>null</c>.</summary>
     private static string? BigIntegerFromFraction(IrNumericKind from) =>

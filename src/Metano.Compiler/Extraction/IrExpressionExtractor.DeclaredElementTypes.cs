@@ -86,12 +86,11 @@ public sealed partial class IrExpressionExtractor
     /// <paramref name="elementType"/>: a number, or a tuple converted element
     /// by element.
     /// </summary>
-    private static bool IsConvertedOnSpread(ISpreadOperation spread, ITypeSymbol elementType)
+    private bool IsConvertedOnSpread(ISpreadOperation spread, ITypeSymbol elementType)
     {
-        var convertedTuples = TupleElementConversions.Implicit.ConvertingTuples(
-            spread.ElementType,
-            elementType
-        );
+        var convertedTuples = TupleElementConversions
+            .Implicit(LowersCharCodes)
+            .ConvertingTuples(spread.ElementType, elementType);
 
         return spread.ElementConversion.IsNumeric
             || (elementType.IsTupleType && convertedTuples is not null);

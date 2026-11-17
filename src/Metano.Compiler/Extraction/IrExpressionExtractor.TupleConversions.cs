@@ -61,7 +61,7 @@ public sealed partial class IrExpressionExtractor
             value,
             typeInfo.Type,
             typeInfo.ConvertedType,
-            TupleElementConversions.Implicit
+            TupleElementConversions.Implicit(LowersCharCodes)
         ) ?? value;
     }
 
@@ -226,7 +226,10 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>The explicit-cast element rule in the checked context of <paramref name="site"/>.</summary>
     private TupleElementConversions ExplicitElementConversionsAt(SyntaxNode site) =>
-        TupleElementConversions.Explicit(CheckedContexts.IsChecked(site, _semantic.Compilation));
+        TupleElementConversions.Explicit(
+            CheckedContexts.IsChecked(site, _semantic.Compilation),
+            LowersCharCodes
+        );
 
     /// <summary>
     /// <paramref name="value"/>, of the tuple type <paramref name="from"/>,
@@ -378,13 +381,19 @@ public sealed partial class IrExpressionExtractor
         bool IsChecked
     )
     {
-        /// <summary>The implicit rule: an element converts when it crosses a 64-bit integer.</summary>
-        public static TupleElementConversions Implicit { get; } =
-            new(NumericEndpoints.CrossesSixtyFourBits, IsChecked: false);
+        /// <summary>The implicit rule: an element converts when it crosses a 64-bit integer or is a <c>char</c> read as a number.</summary>
+        public static TupleElementConversions Implicit(bool lowersCharCodes) =>
+            new(
+                (from, to) => NumericEndpoints.NeedsImplicitNode(from, to, lowersCharCodes),
+                IsChecked: false
+            );
 
         /// <summary>The explicit-cast rule, in the cast's checked context.</summary>
-        public static TupleElementConversions Explicit(bool isChecked) =>
-            new(NumericEndpoints.IsLoweredExplicitly, isChecked);
+        public static TupleElementConversions Explicit(bool isChecked, bool lowersCharCodes) =>
+            new(
+                (from, to) => NumericEndpoints.IsLoweredExplicitly(from, to, lowersCharCodes),
+                isChecked
+            );
 
         /// <summary>
         /// The two tuple types (nullable unwrapped) when

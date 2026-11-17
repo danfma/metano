@@ -94,24 +94,15 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>..source</c> with the conversion C# applies to each element it
-    /// spreads. A converted string spread is reported: C# spreads its UTF-16
-    /// code units, which the mapped spread does not iterate. (A dictionary
-    /// spreads key-value pairs, which C# never converts: a
-    /// <c>KeyValuePair&lt;int, int&gt;</c> spread into a collection of
-    /// <c>KeyValuePair&lt;long, long&gt;</c> is a compile error.)
+    /// spreads; a string spreads its UTF-16 code units (a <c>char</c> read as
+    /// a number, FR-071). (A dictionary spreads key-value pairs, which C#
+    /// never converts: a <c>KeyValuePair&lt;int, int&gt;</c> spread into a
+    /// collection of <c>KeyValuePair&lt;long, long&gt;</c> is a compile error.)
     /// </summary>
     private IrExpression ExtractSpread(SpreadElementSyntax spread)
     {
         var source = SpreadSourceOf(spread.Expression);
         var converting = ConvertingSpreadElementTypesOf(spread);
-
-        if (converting is not null && source is IrSpreadSource.String)
-        {
-            return ReportUnsupported(
-                spread,
-                "spread of a string whose characters convert to a 64-bit integer"
-            );
-        }
 
         var conversion = converting is var (from, to)
             ? SpreadElementConversion(spread, NextSpreadElementName(), from, to)
@@ -144,7 +135,9 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        return TupleElementConversions.Implicit.ConvertsElement(from, to) ? (from, to) : null;
+        return TupleElementConversions.Implicit(LowersCharCodes).ConvertsElement(from, to)
+            ? (from, to)
+            : null;
     }
 
     /// <summary>
@@ -164,7 +157,7 @@ public sealed partial class IrExpressionExtractor
             new IrIdentifier(name),
             from,
             to,
-            TupleElementConversions.Implicit
+            TupleElementConversions.Implicit(LowersCharCodes)
         );
 
         return new IrSpreadElementConversion(name, converted);

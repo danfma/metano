@@ -39,6 +39,9 @@ public sealed partial class IrExpressionExtractor
     {
         var right = Extract(assign.Right);
 
+        if (MapCompoundAssignmentOperator(assign) is { } charOp && IsCharStoreTarget(assign.Left))
+            return BuildCharCompoundAssignment(target, assign, charOp, right);
+
         if (MapCompoundAssignmentOperator(assign) is { } op && RequiresReadModifyWrite(op, assign))
         {
             if (NativeCompoundShiftKindOf(target, op, assign) is { } kind)

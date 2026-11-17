@@ -115,7 +115,7 @@ public sealed partial class IrExpressionExtractor
         if (
             NumericEndpoints.Of(valueType.UnwrapNullableValueType()) is not { } from
             || NumericEndpoints.Of(resultType.UnwrapNullableValueType()) is not { } to
-            || !NumericEndpoints.NeedsImplicitNode(from, to)
+            || !NumericEndpoints.NeedsImplicitNode(from, to, LowersCharCodes)
         )
             return operand;
 
@@ -134,7 +134,8 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// A literal already carries its converted kind; a parenthesized,
+    /// A literal already carries its converted kind (a <c>char</c> literal read
+    /// as a number does not: the target folds it, FR-071); a parenthesized,
     /// <c>checked</c> / <c>unchecked</c> or null-forgiving (<c>x!</c>)
     /// expression leaves the conversion to its operand.
     /// </summary>
@@ -142,7 +143,7 @@ public sealed partial class IrExpressionExtractor
         ExpressionSyntax expression,
         IrExpression value
     ) =>
-        value is IrLiteral
+        value is IrLiteral { Kind: not IrLiteralKind.Char }
         || expression is ParenthesizedExpressionSyntax or CheckedExpressionSyntax
         || expression.IsKind(SyntaxKind.SuppressNullableWarningExpression);
 
@@ -169,7 +170,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var needsNode =
-            NumericEndpoints.NeedsImplicitNode(from, to)
+            NumericEndpoints.NeedsImplicitNode(from, to, LowersCharCodes)
             && !IsExactRelationalOperand(expression, from, to);
 
         return needsNode ? (from, to) : null;
@@ -251,7 +252,10 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        if (!NumericEndpoints.IsLoweredExplicitly(from, to) || KeepsIntegerValue(cast, from, to))
+        if (
+            !NumericEndpoints.IsLoweredExplicitly(from, to, LowersCharCodes)
+            || KeepsIntegerValue(cast, from, to)
+        )
             return null;
 
         return new IrNumericConversion(
