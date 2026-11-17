@@ -44,13 +44,13 @@ internal static class DefaultValuePolicy
     }
 
     /// <summary>
-    /// The fields <c>new S()</c> leaves unset when it stands for
-    /// <c>default(S)</c>: a value-typed field (a type parameter, a
-    /// <c>DateTime</c>, a tuple, …) whose type has no default kind
-    /// (<see cref="IrDefaultValues.KindOf"/>), read from the struct's own
-    /// declaration, which is what its emitted class initializes. A
-    /// reference-typed field is left <c>undefined</c>, which reads like the
-    /// <c>null</c> C# stores.
+    /// The fields of <paramref name="structType"/> whose value <c>default(S)</c>
+    /// does not give when it is spelled <c>new S()</c>: the struct's declaration
+    /// gives the field no default (<see cref="IrDefaultValueKind.None"/>: a type
+    /// parameter, a <c>DateTime</c>, a tuple, a struct that declares a
+    /// constructor) while the field's type in <paramref name="structType"/> is a
+    /// value type, whose C# default is not <c>null</c>. A field of a reference
+    /// type (<c>ZBoxed&lt;string&gt;.Value</c>) has the <c>null</c> default either way.
     /// </summary>
     public static IReadOnlyList<string> UnsetFieldsOf(
         ITypeSymbol structType,
@@ -58,17 +58,18 @@ internal static class DefaultValuePolicy
     ) =>
         [
             .. structType
-                .OriginalDefinition.GetMembers()
+                .GetMembers()
                 .OfType<IFieldSymbol>()
                 .Where(field => !field.IsStatic && !field.IsConst)
-                .Where(field => IsValueLike(field.Type))
+                .Where(field => HoldsAValue(field.Type))
                 .Where(field =>
-                    IrDefaultValues.KindOf(mapType(field.Type)) is IrDefaultValueKind.None
+                    IrDefaultValues.KindOf(mapType(field.OriginalDefinition.Type))
+                    is IrDefaultValueKind.None
                 )
                 .Select(field => field.AssociatedSymbol?.Name ?? field.Name),
         ];
 
-    private static bool IsValueLike(ITypeSymbol type) =>
+    private static bool HoldsAValue(ITypeSymbol type) =>
         type.IsValueType || type is ITypeParameterSymbol { IsReferenceType: false };
 
     public static void ReportUnrepresentable(
