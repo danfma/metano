@@ -1,5 +1,4 @@
 using Metano.Annotations;
-using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -92,35 +91,6 @@ internal static class ValueEqualityShapes
                 method is { Name: nameof(GetHashCode), IsOverride: true, Parameters.Length: 0 }
             );
 
-    /// <summary>
-    /// Whether the overload groups keep <paramref name="method"/>, an explicit
-    /// <c>IEquatable&lt;S&gt;.Equals(S)</c> of struct <c>S</c>, that the lowering
-    /// supersedes only because <c>System.ValueType.Equals</c> holds its name. For a
-    /// target that names the synthesized <c>Equals</c> the struct's equality is that
-    /// member's, which the implementation replaces (B2); every other target, and
-    /// every other explicit implementation, keeps the lowering's fate.
-    /// </summary>
-    public static bool KeepsSupersededEquatable(
-        IMethodSymbol method,
-        ExplicitImplementation lowering,
-        OverloadGroupingPolicy policy
-    ) =>
-        policy.NameOf(IrSynthesizedValueMember.Equals) is not null
-        && lowering
-            is {
-                Fate: ExplicitImplementationFate.Superseded,
-                ClaimingMember: IMethodSymbol
-                {
-                    ContainingType.SpecialType: SpecialType.System_ValueType
-                },
-            }
-        && method.ContainingType is { TypeKind: TypeKind.Struct, IsRecord: false } type
-        && method.Parameters is [{ Type: var parameter }]
-        && IsTypeItself(parameter, type)
-        && method.ExplicitInterfaceImplementations.Any(member =>
-            IsEquatableOf(member.ContainingType, type)
-        );
-
     private static bool ReplacesRecordEquals(
         INamedTypeSymbol type,
         IMethodSymbol method,
@@ -146,7 +116,7 @@ internal static class ValueEqualityShapes
     ) =>
         UserMethodsOf(type, policy.Target)
             .Where(method => MethodOverloadGroups.GroupNameOf(method) == nameof(Equals))
-            .Where(method => !MethodOverloadGroups.IsDroppedExplicitImplementation(method, policy));
+            .Where(method => !ExplicitImplementationFates.IsDropped(method, policy));
 
     private static bool IsObjectOverride(IMethodSymbol method, ITypeSymbol parameter) =>
         method.IsOverride && parameter.SpecialType is SpecialType.System_Object;
@@ -160,11 +130,22 @@ internal static class ValueEqualityShapes
         IMethodSymbol method,
         TargetLanguage? target
     ) =>
+        ImplementsEqualsOf(type, method, implemented =>
+            EquatableInterfaces.IsEquatableOf(implemented, type)
+            || MethodOverloadGroups.IsTranspiledInterface(implemented, target)
+        );
+
+    /// <summary>
+    /// Whether <paramref name="method"/> implements an <c>Equals</c> of an interface
+    /// of <paramref name="type"/> that <paramref name="counts"/> accepts.
+    /// </summary>
+    private static bool ImplementsEqualsOf(
+        INamedTypeSymbol type,
+        IMethodSymbol method,
+        Func<INamedTypeSymbol, bool> counts
+    ) =>
         type
-            .AllInterfaces.Where(implemented =>
-                IsEquatableOf(implemented, type)
-                || MethodOverloadGroups.IsTranspiledInterface(implemented, target)
-            )
+            .AllInterfaces.Where(counts)
             .SelectMany(implemented =>
                 implemented.GetMembers(nameof(Equals)).OfType<IMethodSymbol>()
             )
@@ -175,14 +156,27 @@ internal static class ValueEqualityShapes
                 )
             );
 
-    private static bool IsEquatableOf(INamedTypeSymbol candidate, INamedTypeSymbol type) =>
-        candidate
-            is {
-                Name: "IEquatable",
-                ContainingNamespace.Name: "System",
-                TypeArguments: [var argument],
-            }
-        && IsTypeItself(argument, type);
+    /// <summary>
+    /// A struct's replacing <c>Equals(S)</c> that implements a transpiled
+    /// interface's <c>Equals</c> but not <c>System.IEquatable&lt;S&gt;</c>: .NET's
+    /// <c>EqualityComparer&lt;S&gt;.Default</c> compares such a struct field by field,
+    /// while the target's sets, dictionaries and record fields reach the user's
+    /// equality. <c>null</c> when there is none, and when the struct overrides
+    /// <c>Equals(object)</c>, which .NET's comparer then calls too.
+    /// </summary>
+    public static IMethodSymbol? TranspiledOnlyEqualsOf(
+        INamedTypeSymbol type,
+        OverloadGroupingPolicy policy
+    ) =>
+        KindOf(type) is IrValueEqualityKind.Struct && FoldedEqualsOf(type, policy) is null
+            ? ReplacingEqualsOf(type, policy)
+                .FirstOrDefault(method =>
+                    IsTypeItself(method.Parameters[0].Type, type)
+                    && !ImplementsEqualsOf(type, method, implemented =>
+                        EquatableInterfaces.IsEquatableOf(implemented, type)
+                    )
+                )
+            : null;
 
     private static IrValueEqualityKind KindOf(INamedTypeSymbol type)
     {

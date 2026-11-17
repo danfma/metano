@@ -68,8 +68,6 @@ internal static class SynthesizedGroupMembers
             )
             .ToList();
 
-        ReportSpelledTwice(type, spelled, name);
-
         var joined = spelled.FirstOrDefault();
 
         var inherited = InsertedByBase(type, kind, policy);
@@ -112,6 +110,7 @@ internal static class SynthesizedGroupMembers
                     {
                         Members = [.. group.Members, member],
                         NamingMember = namingMember,
+                        SpelledAlike = [.. spelled.Skip(1).Select(FirstMethodOf)],
                     }
                     : group
             )
@@ -134,32 +133,40 @@ internal static class SynthesizedGroupMembers
     }
 
     /// <summary>
-    /// <c>MS0001</c> (an error) at each group after the first the target spells
-    /// <paramref name="name"/>: only one takes the synthesized member, so the
-    /// others would declare a second member of that name.
+    /// Reports <c>MS0001</c> (an error) at each method of
+    /// <see cref="MethodOverloadGroup.SpelledAlike"/>: only <paramref name="group"/>
+    /// takes the synthesized member, so the others would declare a second member
+    /// of that name. Called once per extracted group, outside the groups' cache.
     /// </summary>
-    private static void ReportSpelledTwice(
+    public static void ReportSpelledAlike(
         INamedTypeSymbol type,
-        IReadOnlyList<MethodOverloadGroup> spelled,
-        string name
+        MethodOverloadGroup group,
+        OverloadGroupingPolicy policy
     )
     {
-        foreach (var extra in spelled.Skip(1))
-        {
-            var method = extra.DeclaredMembers.First().Symbol;
+        if (
+            group.Synthesized is not { } synthesized
+            || policy.NameOf(synthesized.Kind) is not { } name
+        )
+            return;
 
+        foreach (var method in group.SpelledAlike)
+        {
             ExtractionDiagnostics.Report(
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Error,
                     DiagnosticCodes.UnsupportedFeature,
                     $"'{type.Name}.{method.Name}' is emitted as '{name}', which the overloads "
-                        + $"of '{spelled[0].Name}' already declare with the synthesized member "
+                        + $"of '{group.Name}' already declare with the synthesized member "
                         + "of that name; give one of them another [Name] (spec 013 FR-039).",
                     method.Locations.FirstOrDefault()
                 )
             );
         }
     }
+
+    private static IMethodSymbol FirstMethodOf(MethodOverloadGroup group) =>
+        group.DeclaredMembers.First().Symbol;
 
     /// <summary>
     /// Whether the target spells <paramref name="group"/> <paramref name="name"/>
