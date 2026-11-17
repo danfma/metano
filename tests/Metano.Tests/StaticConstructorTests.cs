@@ -382,7 +382,7 @@ public class StaticConstructorTests
     }
 
     [Test]
-    public async Task NestedType_ReportsItsDottedName()
+    public async Task NestedType_ReportsItsMetadataNameAsDotNetDoes()
     {
         var output = TranspileHelper.Transpile(
             """
@@ -398,7 +398,54 @@ public class StaticConstructorTests
             """
         )["outer.ts"];
 
-        await Assert.That(output).Contains("typeInitializer(\"Outer.Inner\", () => {");
+        await Assert.That(output).Contains("typeInitializer(\"Inner\", () => {");
+    }
+
+    [Test]
+    public async Task TopLevelGenericType_ReportsItsQualifiedMetadataName()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            namespace MyApp
+            {
+                [Transpile]
+                public class Pair<T>
+                {
+                    static Pair() { }
+                }
+            }
+            """
+        );
+
+        var output = files.Values.Single(text => text.Contains("class Pair"));
+
+        await Assert.That(output).Contains("typeInitializer(\"MyApp.Pair`1\", () => {");
+    }
+
+    [Test]
+    public async Task StructWithUnsupportedDispatcher_KeepsTheStubAndItsReport()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct P
+            {
+                public int V;
+
+                static P() { }
+
+                public P(int v) { V = v; }
+
+                public P(string s) { V = 0; goto done; done: V = 1; }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsTrue();
+
+        await Assert.That(files["p.ts"]).Contains("constructor() {\n    P.#$init();\n  }");
     }
 
     [Test]

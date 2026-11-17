@@ -21,6 +21,17 @@ public static class ClrTypeName
             _ => type.MetadataName,
         };
 
+    /// <summary>
+    /// The name .NET's <c>TypeInitializationException.TypeName</c> (and its
+    /// message) reports for <paramref name="type"/>, measured on .NET 10: the
+    /// namespace-qualified metadata name of a top-level type without type
+    /// arguments (<c>MyApp.Registry</c>, <c>MyApp.Pair`1</c> for every
+    /// construction), and only the metadata name of a nested type
+    /// (<c>Inner</c>, not <c>MyApp.Outer+Inner</c>).
+    /// </summary>
+    public static string OfTypeInitializer(INamedTypeSymbol type) =>
+        type.ContainingType is null ? QualifiedMetadataName(type) : type.MetadataName;
+
     private static string NamedTypeName(INamedTypeSymbol type)
     {
         var typeArguments = TypeArgumentChainOf(type).Select(Of).ToList();

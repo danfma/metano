@@ -9,8 +9,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <summary>
 /// The class an <see cref="TypeInitializerLowering"/> lowers: its emitted name
 /// (<see cref="ClassName"/>, which every guard and slot access spells), the
-/// name <c>TypeInitializationException</c> reports (<see cref="TypeName"/>:
-/// the simple C# name, containing types dotted, no type arguments), and the
+/// name <c>TypeInitializationException</c> reports (<see cref="TypeName"/>,
+/// <see cref="Metano.Compiler.Analysis.ClrTypeName.OfTypeInitializer"/>), and the
 /// shape facts the constructor guard depends on.
 /// </summary>
 internal sealed record TypeInitializerTarget(
@@ -62,10 +62,24 @@ internal abstract class TypeInitializerLowering
         IrClassDeclaration ir,
         TypeInitializerTarget target,
         IrToTsBridgeContext lowering
-    ) =>
-        RunsLazily(type)
-            ? new LazyTypeInitializerLowering(target, ir, ir.StaticInitializer ?? [], lowering)
-            : EagerTypeInitializerLowering.Instance;
+    )
+    {
+        if (RunsLazily(type))
+            return new LazyTypeInitializerLowering(
+                target,
+                ir,
+                ir.StaticInitializer ?? [],
+                lowering
+            );
+
+        if (ir.StaticInitializer is not null)
+            throw new InvalidOperationException(
+                $"'{type.Name}' has a static constructor body but is not lowered lazily; "
+                    + "the eager lowering has nowhere to run it."
+            );
+
+        return EagerTypeInitializerLowering.Instance;
+    }
 
     /// <summary>
     /// The one rule for which types run their static initialization lazily: a

@@ -128,7 +128,11 @@ public sealed class IrToTsClassEmitter(
                 type,
                 typeName,
                 extendsType,
-                ImplicitDefaultOf(ir, explicitCtors, implicitParameterlessBody),
+                ImplicitDefaultOf(
+                    ir,
+                    explicitCtors,
+                    emitsSelectorsAndFactories && implicitParameterlessBody is not null
+                ),
                 ir
             ),
             lowering
@@ -391,8 +395,8 @@ public sealed class IrToTsClassEmitter(
 
     /// <summary>
     /// The facts the type initializer lowering needs about the class: its emitted
-    /// name, the name a <c>TypeInitializationException</c> reports (containing
-    /// types dotted, no type arguments), whether it extends a class, and, for a
+    /// name, the name a <c>TypeInitializationException</c> reports
+    /// (<see cref="ClrTypeName.OfTypeInitializer"/>), whether it extends a class, and, for a
     /// struct, where its constructor builds the implicit default value.
     /// </summary>
     private static TypeInitializerTarget TypeInitializerTargetOf(
@@ -404,7 +408,7 @@ public sealed class IrToTsClassEmitter(
     ) =>
         new(
             typeName,
-            DottedTypeName(type),
+            ClrTypeName.OfTypeInitializer(type),
             extendsType is not null,
             ir.Semantics.IsValueType,
             implicitDefault
@@ -413,12 +417,14 @@ public sealed class IrToTsClassEmitter(
     /// <summary>
     /// Where the emitted constructor builds a struct's implicit default value:
     /// the whole constructor of a struct that declares none, the dispatcher's
-    /// leading branch when it has one (<paramref name="implicitParameterlessBody"/>).
+    /// leading branch when the dispatcher was built with one
+    /// (<paramref name="leadsWithImplicitDefault"/>; the unsupported-constructor
+    /// stub has none).
     /// </summary>
     private static ImplicitDefaultConstruction ImplicitDefaultOf(
         IrClassDeclaration ir,
         IReadOnlyList<IMethodSymbol> explicitCtors,
-        IReadOnlyList<TsStatement>? implicitParameterlessBody
+        bool leadsWithImplicitDefault
     )
     {
         if (!ir.Semantics.IsValueType)
@@ -427,15 +433,10 @@ public sealed class IrToTsClassEmitter(
         if (explicitCtors.Count == 0)
             return ImplicitDefaultConstruction.WholeConstructor;
 
-        return implicitParameterlessBody is null
-            ? ImplicitDefaultConstruction.None
-            : ImplicitDefaultConstruction.LeadingBranch;
+        return leadsWithImplicitDefault
+            ? ImplicitDefaultConstruction.LeadingBranch
+            : ImplicitDefaultConstruction.None;
     }
-
-    private static string DottedTypeName(INamedTypeSymbol type) =>
-        type.ContainingType is { } containing
-            ? $"{DottedTypeName(containing)}.{type.Name}"
-            : type.Name;
 
     /// <summary>
     /// Second-phase walk that emits operators (before methods) and

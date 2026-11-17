@@ -39,8 +39,9 @@ public static class IrStaticConstructorExtractor
     /// <summary>
     /// The static constructor of <paramref name="member"/>'s type writes it. C#
     /// lets a static constructor write a <c>static readonly</c> field or a
-    /// static get-only auto-property; a target that lowers the body to a class
-    /// initializer may not, so the fact is recorded on the member
+    /// static get-only auto-property; a target whose lowering of the constructor
+    /// writes the member from outside its declaration keeps a way to write it, so
+    /// the fact is recorded on the member
     /// (<see cref="IrFieldDeclaration.IsAssignedByStaticConstructor"/>,
     /// <see cref="IrPropertySemantics.IsAssignedByStaticConstructor"/>).
     /// </summary>

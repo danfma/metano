@@ -3,7 +3,7 @@ import { typeInitializer } from "metano-runtime";
 import { Priority } from "./priority";
 
 export class PriorityLabels {
-  static readonly #$init: () => void = typeInitializer("PriorityLabels", () => {
+  static readonly #$init: () => void = typeInitializer("SampleTodo.PriorityLabels", () => {
     PriorityLabels.labels = new Map<Priority, string>();
     PriorityLabels.labels.set(Priority.Low, "Low");
     PriorityLabels.labels.set(Priority.Medium, "Medium");
