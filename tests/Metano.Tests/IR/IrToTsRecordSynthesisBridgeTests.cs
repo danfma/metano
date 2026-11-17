@@ -30,17 +30,20 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Money"
         );
+
         var printed = PrintMembers(
             IrToTsRecordSynthesisBridge.Generate(ir, TsClassMemberTable.UserMembersOf(ir))
         );
 
         // equals: narrow to the record type, then compare every field with ===.
         await Assert.That(printed).Contains("equals(other: any): boolean");
+
         await Assert
             .That(printed)
             .Contains(
                 "other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.amount === other.amount && this.currency === other.currency"
             );
+
         // hashCode: drive the HashCode builder over every field.
         await Assert.That(printed).Contains("hashCode(): number");
         await Assert.That(printed).Contains("const hc = new HashCode();");
@@ -62,6 +65,7 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Pair"
         );
+
         var printed = PrintMembers(
             IrToTsRecordSynthesisBridge.Generate(ir, TsClassMemberTable.UserMembersOf(ir))
         );
@@ -82,6 +86,7 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Clip"
         );
+
         var printed = PrintMembers(
             IrToTsRecordSynthesisBridge.Generate(ir, TsClassMemberTable.UserMembersOf(ir))
         );
@@ -103,6 +108,7 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Money"
         );
+
         await Assert.That(IrToTsRecordSynthesisBridge.ShouldSynthesize(ir)).IsFalse();
     }
 
@@ -116,6 +122,7 @@ public class IrToTsRecordSynthesisBridgeTests
             """,
             "Bag"
         );
+
         await Assert.That(IrToTsRecordSynthesisBridge.ShouldSynthesize(ir)).IsFalse();
     }
 
@@ -125,10 +132,12 @@ public class IrToTsRecordSynthesisBridgeTests
     {
         var compilation = IrTestHelper.Compile(source);
         var tree = compilation.SyntaxTrees.First();
+
         var typeDecl = tree.GetRoot()
             .DescendantNodes()
             .OfType<TypeDeclarationSyntax>()
             .First(t => t.Identifier.ValueText == typeName);
+
         var model = compilation.GetSemanticModel(tree);
         var symbol = (INamedTypeSymbol)model.GetDeclaredSymbol(typeDecl)!;
 
