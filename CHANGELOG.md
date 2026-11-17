@@ -820,7 +820,12 @@ the rows of `tests/BclReference`.
   implements `IEquatable<S>` (or a transpiled interface's `Equals(S)`), as
   `EqualityComparer<S>.Default` uses it on .NET, so a boxed comparison of that struct also
   reaches it where .NET compares fields; an `Equals(S)` that implements nothing no longer
-  replaces the field comparison and reports `MS0063`. A user method spelled like a
+  replaces the field comparison and reports `MS0063`. A struct whose `Equals(S)` replaces it only
+  through a transpiled interface (no `IEquatable<S>`, no `override Equals(object)`) also reports
+  `MS0063`: sets, dictionaries and record fields compare through it where .NET compares fields.
+  Two methods spelled `equals` by `[Name]` report `MS0001`. Known limitation, as in 2.x: a boxed
+  comparison of a struct with only `Equals(S)` against `null` or a foreign value reaches its body
+  unguarded. A user method spelled like a
   synthesized member (`Equals(T other, double tol)`, `HashCode(int seed)`, a record's
   `With(int a)`, or a lone method whose `[Name]` is `equals` / `hashCode` / `with`) now shares
   the name: the synthesized member joins its overload group, the

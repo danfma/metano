@@ -51,10 +51,14 @@ interface member: `IEquatable<S>.Equals`, implicitly or explicitly, or a transpi
 - **Alone,** it stays the type's `equals`, as on main.
 - **Beside another `Equals` overload,** the synthesized member routes to it, as it does to a record's `Equals(R)`.
 - **The cost:** a boxed comparison (`object.Equals`, a `ValueType.Equals` call) also reaches the user's `Equals(S)`, where .NET compares fields. This is main's behavior for that shape.
+  - **Known limitation, identical to main:** a boxed comparison with `null` or a foreign value reaches the lone `Equals(S)`'s body unguarded, which may throw (`o.X` on `null`). A routed wrapper with a same-runtime-type guard is a follow-up (R8-S3).
 - **A struct whose `Equals(S)` and `override Equals(object)` disagree** violates the .NET contract (`Equals(object)` should agree with `IEquatable<S>.Equals`). A boxed comparison of such a struct then reaches `Equals(S)` too.
-- **Which interfaces count:** `System.IEquatable<S>` itself, or an interface the toolchain transpiles. An `Equals(S)` that implements any other interface member replaces nothing.
+- **Which interfaces count:** `System.IEquatable<S>` itself (matched as `System.IEquatable`1` exactly), or an interface the toolchain transpiles. An `Equals(S)` that implements any other interface member (an `[Ignore]`d, `[External]` or BCL one) replaces nothing.
+- **A replacement through a transpiled interface alone** reports an `MS0063` warning (`ValueEqualityShapeReporter`). That is a struct without `IEquatable<S>` and without `override Equals(object)`. The target's sets, dictionaries and record fields compare through `Equals(S)`, where .NET's `EqualityComparer<S>.Default` compares the fields.
 - **A struct's `Equals(S)` that implements no interface member replaces nothing,** since `ValueType.Equals` never calls it. It is shadowed and reports `MS0063` (§ 3).
-- An explicit `IEquatable<S>.Equals(S)` on a struct is kept by the overload groups and emitted under its interface member's name. The explicit-implementation lowering supersedes it only because `System.ValueType.Equals` holds that name (`ValueEqualityShapes.KeepsSupersededEquatable`).
+- An explicit `System.IEquatable<T>.Equals(T)` on a struct or record struct, for any `T`, is kept by the overload groups and emitted under its interface member's name. The explicit-implementation lowering supersedes it only because its name is held by `System.ValueType.Equals`, or by another `Equals` overload of the struct with other parameters. `ExplicitImplementationFates` is the one predicate the groups, the shape and the class extractor share.
+  - **When `T` is the struct**, it replaces the equality and is routed to: `SD` with `Equals(SD, int)` beside an explicit `IEquatable<SD>.Equals`.
+  - **When `T` is another type** (`IEquatable<int>`, `IEquatable<SP>`), it joins the `Equals` group as an ordinary checked overload (`equalsO` behind an `isInt32` branch).
   - Only that one name is freed, and only for a target that names the synthesized `Equals`.
   - The target-agnostic lowering is unchanged. Every other `ValueType` name (an explicit `IFormattable.ToString`, an explicit `GetHashCode`) keeps its fate, and Dart output is byte-identical.
 
@@ -147,7 +151,7 @@ public sealed record OverloadGroupingPolicy(
   - The method whose `[Name]` named the group (`MethodOverloadGroup.NamingMember`) pins no suffix: its fast path is named over its parameters (`equalsOTol`).
   - The target names a group holding a synthesized member after that member's kind, never after the group's C# name.
   - **A group takes one synthesized member,** under the spelling that matched it: `[Name("equals")] With(int)` joins `Equals` and not the copy.
-  - **Two groups spelled alike** (two methods both `[Name("equals")]`): the second reports `MS0001` as an error.
+  - **Two groups spelled alike** (two methods both `[Name("equals")]`): the second reports `MS0001` as an error. The groups carry it as data (`MethodOverloadGroup.SpelledAlike`), and the class extractor reports it once per extracted group, outside the groups' cache.
   - `GetHashCode` joins the group `HashCode`.
 - **Identity.** A group keeps its C# name as its identity (`GroupNameOf`), so every declared member's `IrOverloadRef` is unchanged. A synthesized member's ref is `(typeKey, joined group's name, ordinal after every declared member)`.
 - **Explicit interface implementations** (C5): `bool IEquatable<int>.Equals(int o)` and `IWither IWither.With(int a)` group under their interface member's name (`GroupNameOf`), so their spelling is `equals` / `with`. They join when the implementation is emitted under the interface name; dropped ones never do.
