@@ -90,6 +90,9 @@ public class StaticConstructorTests
         await Assert.That(output).Contains("static count: number = 0;");
         await Assert.That(output).Contains("static seed: number = 0;");
         await Assert.That(output).Contains("static readonly untouched: number = 3;");
+        await Assert.That(output).Contains("Table.map = (new Map<string, number>());");
+        await Assert.That(output).Contains("Table.count += 2;");
+        await Assert.That(output).Contains("Table.seed = $out0;");
     }
 
     [Test]
@@ -117,6 +120,8 @@ public class StaticConstructorTests
         await Assert.That(output).Contains("static instance: RoSingle;");
         await Assert.That(output).Contains("static p: number = 0;");
         await Assert.That(output).Contains("static readonly untouched: number = 3;");
+        await Assert.That(output).Contains("RoSingle.instance = new RoSingle();");
+        await Assert.That(output).Contains("RoSingle.p = 9;");
     }
 
     [Test]
