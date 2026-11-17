@@ -35,7 +35,7 @@ public class NullableDecimalEqualityTests
         );
 
         await Assert.That(output).Contains("return valueEquals(d, new Decimal(0));");
-        await Assert.That(output).Contains("return !valueEquals(d, new Decimal(i));");
+        await Assert.That(output).Contains("return !valueEquals(d, new Decimal(i + 0));");
     }
 
     [Test]
@@ -43,7 +43,7 @@ public class NullableDecimalEqualityTests
     {
         var output = Transpile("public static bool Same(decimal? d, int? i) => d == i;");
 
-        await Assert.That(output).Contains("i == null ? null : new Decimal(i)");
+        await Assert.That(output).Contains("i == null ? null : new Decimal(i + 0)");
     }
 
     [Test]

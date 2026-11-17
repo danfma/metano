@@ -300,7 +300,7 @@ public class TupleLiteralTests
 
         await Assert
             .That(output)
-            .Contains("return tupleEquals(a, [new Decimal(b[0]), new Decimal(b[1])] as ");
+            .Contains("return tupleEquals(a, [new Decimal(b[0] + 0), new Decimal(b[1] + 0)] as ");
     }
 
     /// <summary>
