@@ -3,8 +3,9 @@ import { SystemException } from "./system-exception.ts";
 /**
  * Mirrors `System.TypeInitializationException`: a type's static constructor (or one
  * of its static field initializers) threw. The original exception is the inner
- * exception (`cause`). `typeName` is the simple C# name of the type, its containing
- * types dotted (`Outer.Inner`), with no namespace or type arguments.
+ * exception (`cause`). `typeName` is the name .NET reports: the namespace-qualified
+ * metadata name of a top-level type (`MyApp.Pair\`1`, no type arguments), and only the
+ * metadata name of a nested type (`Inner`).
  */
 export class TypeInitializationException extends SystemException {
   override readonly name: string = "TypeInitializationException";

@@ -640,3 +640,75 @@ public static class LazyStructProbes
         return LazyLog.Take("get=" + zero.Get() + made.V);
     }
 }
+
+public class LzOuter
+{
+    public class Inner
+    {
+        public static int Value = 1;
+
+        static Inner()
+        {
+            throw new InvalidOperationException("nested");
+        }
+    }
+}
+
+public class LzGenericFail<T>
+{
+    public static int Value = 1;
+
+    static LzGenericFail()
+    {
+        throw new InvalidOperationException("generic");
+    }
+}
+
+public class LzTopFail
+{
+    public static int Value = 1;
+
+    static LzTopFail()
+    {
+        throw new InvalidOperationException("top");
+    }
+}
+
+public static class LazyTypeNameProbes
+{
+    public static string TopLevelTypeName()
+    {
+        try
+        {
+            return "read=" + LzTopFail.Value;
+        }
+        catch (TypeInitializationException ex)
+        {
+            return ex.TypeName + "|" + ex.Message;
+        }
+    }
+
+    public static string NestedTypeName()
+    {
+        try
+        {
+            return "read=" + LzOuter.Inner.Value;
+        }
+        catch (TypeInitializationException ex)
+        {
+            return ex.TypeName + "|" + ex.Message;
+        }
+    }
+
+    public static string GenericTypeName()
+    {
+        try
+        {
+            return "read=" + LzGenericFail<int>.Value;
+        }
+        catch (TypeInitializationException ex)
+        {
+            return ex.TypeName + "|" + ex.Message;
+        }
+    }
+}
