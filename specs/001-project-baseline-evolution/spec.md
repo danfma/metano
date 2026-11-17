@@ -988,36 +988,55 @@ Product requirements added after the migration (normative; each one is traced by
 - **FR-077** (user-defined operators at their use sites, #599): Every application of a
   user-defined operator that C# binds (binary, unary, relational, `==` / `!=`, `++` / `--` and
   the compound assignment `x op= y`), on a class, struct or record and declared on either
-  operand's type, MUST run that operator. The core records on the application the neutral facts
-  (the operator method C# bound: declaring type, C# metadata name, the overload of a dispatched
-  group, its `[Name]`) and Roslyn's bound operands with their conversions (FR-079, FR-080 and
-  spec 012's numeric ones); each target decides the shape. TypeScript calls the declaring
-  type's static helper of FR-078 (`Tick.__add(a, b)`, `Pt.__negate(p)`, `Meters.__add(5, m)`),
-  the fast path of a dispatched group as spec 013 FR-018 already does
-  (`Vec.__multiplyDoubleVec(2, v)`), and the group's dispatcher (`Amount.__multiply(a, 3)`) for
-  a type read from a metadata-only reference (spec 013 DECIDED-24). `x op= y` stores
-  `T.__op(x, y)` and `x++` / `++x` store `T.__increment(x)` through the read-modify-write of
-  FR-014, so the receiver and the index are evaluated once (`arr[i++] += t` reads `i` once); a
-  postfix form yields the value read before the store. A lifted operator over `Nullable<T>`
-  yields `null` when an operand is `null` (arithmetic, bitwise, unary) or `false` (relational);
-  a lifted `==` is `true` when both operands are `null`, `false` when one is, and the
-  operator's result otherwise, and `!=` the opposite; each operand is evaluated once. A `==` /
-  `!=` written against the `null` literal keeps the plain null test, without calling the
-  operator, so TypeScript keeps narrowing the operand (a documented divergence for an operator
-  that treats `null` as a value). A record's synthesized `==` / `!=` keeps its value-equality
-  lowering (FR-060); a record cannot declare its own. The applications inside the type's own
-  members (an `Equals` written as `this == other`) follow the same rule. Not lowered: a
-  user-defined `true` / `false` operator used by a condition, `&&` or `||`; a C# 14 instance
-  compound-assignment or increment operator (`void operator +=(int k)`, `void operator ++()`);
-  an operator applied to a type parameter through a `static abstract` interface member (generic
-  math); an operator of a `[PlainObject]` type, which has no class to declare a helper on. Each
-  reports `MS0001` (warning) at the application and lowers to the throwing placeholder, and the
-  `[PlainObject]` operator also reports `MS0001` at its declaration. Dart keeps its native
-  operator at every binary, unary, relational and equality application (byte-identical); at a
-  compound assignment or `++` / `--` of a user-defined operator it prints the shared
-  read-modify-write with its native operator (`t = t + y`) instead of today's call of a `$add`
-  member Dart never declares, a shape no Dart golden covers. Traced by the "User-defined
-  operators at their use sites" row of the feature-support matrix.
+  operand's type, MUST run that operator. The core extracts it as its own neutral node,
+  `IrUserOperatorApplication(Op, BoundOperator, Operands, IsLifted)`, never as an
+  `IrBinaryExpression` / `IrUnaryExpression` with an optional field nor as an
+  `IrCallExpression`, so no built-in lowering (the integer overflow reduction, the integer value
+  ranges, decimal and Temporal arithmetic, Dart's operand grouping) mistakes it for built-in
+  arithmetic. `BoundOperator` is a record of neutral facts: the declaring type, the operator's
+  C# metadata name, the overload of a dispatched group when there is one, and its `[Name]`
+  pin. The operands are Roslyn's, with their conversions (FR-079, FR-080, spec 012's numeric
+  ones). The core's TypeScript-specific `"$" + opName` compound rewrite and the
+  `EmitsOperatorFastPaths` gate are removed: each target decides the shape. TypeScript calls
+  the declaring type's static helper of FR-078 (`Tick.__add(a, b)`, `Pt.__negate(p)`,
+  `Meters.__add(5, m)`), the fast path of a dispatched group as spec 013 FR-018 already does
+  (`Vec.__multiplyDoubleVec(2, v)`), and the group's dispatcher (`Amount.__multiply(a, 3)`)
+  for a type read from a metadata-only reference (spec 013 DECIDED-24). `x op= y` stores
+  `Out(T.__op(In(x), y))`, with Roslyn's `InConversion` / `OutConversion` of the compound
+  operation (either may be user-defined: `sv += 2` with `Feet operator +(S, int)` and
+  `implicit operator S(Feet)` stores the `Feet` → `S` conversion of `sv + 2`'s result), and `x++` / `++x` store
+  `T.__increment(x)`, both through the read-modify-write that already binds a target's
+  receiver and index once (`IrExpressionExtractor.ReadModifyWrite.cs` / `WriteIncrement`,
+  spec 012 FR-075–FR-077, #497), so `arr[i++] += t` reads `i` once; a postfix form yields the
+  value read before the store. A lifted operator over `Nullable<T>` yields `null` when an
+  operand is `null` (arithmetic, bitwise, unary) or `false` (relational); a lifted `==` is
+  `true` when both operands are `null`, `false` when one is, and the operator's result
+  otherwise, and `!=` the opposite; each operand is evaluated once. An `==` / `!=` with an
+  operand whose constant value is `null` (`null`, `default`, `(T)null`) keeps the plain null
+  test without calling the operator, so TypeScript keeps narrowing the other operand. For a
+  struct or `Nullable<T>` operand that is exactly .NET's lifted semantics; for a class operand
+  it is a documented divergence (an operator that treats `null` as a value is not called). A
+  record's synthesized `==` / `!=` keeps its value-equality lowering (FR-060); a record cannot
+  declare its own. The applications inside the type's own members (an `Equals` written as
+  `this == other`) follow the same rule. Not lowered, reporting `MS0001` (warning) at the
+  application with the throwing placeholder: a user-defined `true` / `false` operator used by
+  a condition, `&&` or `||` (a condition over `implicit operator bool` is FR-079, not this
+  case); a C# 14 instance compound-assignment or increment operator (`void operator +=(int k)`,
+  `void operator ++()`); an operator of a `[PlainObject]` type, which has no class to declare a
+  helper on (also `MS0001` at its declaration). Out of scope and unchanged: an operator applied
+  to a type parameter through a `static abstract` interface member (generic math,
+  `T : INumber<T>`, `a + b`), which keeps today's raw `a + b` (it runs under Bun for numbers; a
+  placeholder would regress it). Known limitation: a struct operator that mutates its
+  parameter (`operator ++(S s) { s.V++; return s; }`) aliases in TypeScript, where structs are
+  references, so the postfix value is the new one (.NET: old `5`, stored `6`; TypeScript:
+  `6` / `6`). Dart renders the node as today: its native operator at every binary, unary,
+  relational and equality application (byte-identical); a compound assignment prints the
+  read-modify-write with the native operator (`t = t + y`, receiver bound once) and `++` /
+  `--` stores the static Dart already declares (`c = Cnt.op_Increment(c)`), replacing today's
+  `t = t.$add(y)` and `c++` (neither runs the C# operator); a Dart golden pins both.
+  Follow-ups (gaps, not this requirement): Dart's operators declared for the right operand and
+  a user `!=` that Dart ignores. Traced by the "User-defined operators at their use sites" row
+  of the feature-support matrix.
 
 - **FR-078** (operator and conversion helpers, #599, #600; amends spec 013 FR-005 and its naming
   contract): Each user-defined operator MUST declare a static helper on its type named `__` +
@@ -1035,59 +1054,114 @@ Product requirements added after the migration (normative; each one is traced by
   `this` as the `int` (TS2345). A `true` / `false` operator declares nothing. Each conversion
   operator MUST declare its own static, never a dispatcher, because C# selects a conversion by
   its source and target types, never by its arguments: `__to` + the target type's spelling for a
-  conversion out of the declaring type and `__from` + the source type's spelling for a
-  conversion into it, with spec 013's spellings (`explicit operator int(Money m)` →
-  `__toInt32`, `explicit operator long(Money m)` → `__toInt64`, `implicit operator Money(int c)`
-  → `__fromInt32`, `implicit operator string(Money m)` → `__toString`,
-  `implicit operator Cents?(int? v)` → `__fromInt32OrNull`). The core computes the name
-  candidate once per conversion from the Roslyn symbol, at the declaration and at every use
-  (a metadata-only reference included); two conversions of one type whose candidates collide
-  climb as spec 013 step 5 describes, and a dead end is spec 013's `MS0003`. `[Name("toInt")]`
-  names that one conversion (`__toInt`), no longer its group. A conversion declares no instance
-  helper. A `[Branded]` / `[InlineWrapper]` companion namespace exports the same names as
-  functions (`Qty.__add`, `Qty.__fromInt32`, and the per-overload fast paths of an operator
-  group) instead of `op_Addition` / `op_Implicit`; its identity unwrap conversion (to the
-  underlying primitive) stays undeclared, since the brand is the primitive. Dart keeps its
-  declarations (byte-identical): one static per operator and the primary of a conversion group
-  with its `MS0001`. Traced by the "User-defined operators at their use sites" and
-  "User-defined conversions" rows of the feature-support matrix.
+  conversion out of the declaring type, `__from` + the source type's spelling for a conversion
+  into it, and `__checkedTo` / `__checkedFrom` for a `checked` conversion operator, which C#
+  binds in a checked context beside its unchecked twin (`explicit operator int(Money m)` →
+  `__toInt32`, `explicit operator checked int(Money m)` → `__checkedToInt32`,
+  `explicit operator long(Money m)` → `__toInt64`, `implicit operator Money(int c)` →
+  `__fromInt32`, `implicit operator string(Money m)` → `__toString`,
+  `implicit operator Cents?(int? v)` → `__fromInt32OrNull`). The spellings are spec 013's.
+  The core keeps grouping conversion operators as it does today (`MethodOverloadGroups` is not
+  restructured) and adds one neutral fact per conversion declaration,
+  `IrConversionName { Direction (To / From), IsChecked, Spelling, Pin }` on
+  `IrMethodSemantics`, computed by one function from the Roslyn symbol
+  (`ConversionNaming.Of(IMethodSymbol)`), which the use sites of FR-079 call too. Two
+  conversions of one type whose candidates collide climb with `OverloadSpellingClimb` as spec
+  013 step 5 describes, and a dead end is spec 013's `MS0003`. The old conversion suffix rule
+  (`OverloadSignature.ConversionTarget`, `MoneyToInt32`) is removed: a conversion group gets no
+  overload suffix, so there is one rule for the concept (Dart names the primary by `[Name]` or
+  its metadata name, never by that suffix). The TypeScript bridge un-groups the conversions and
+  emits one static each; the `__` prefix, the lower-casing and the claim stay in the bridge, as
+  for spec 013's names. A conversion name claimed by another member of the type is an `MS0003`
+  error at the conversion's declaration (no `$` rename), so a conversion's name is a pure
+  function of its symbol and a metadata-only reference computes the same one without running
+  the producer's claim pass. `[Name("toInt")]` names that one conversion (`__toInt`), no longer
+  its group. A conversion declares no instance helper. The static helpers of a generic type
+  re-declare the type's type parameters with their constraints, as spec 013 FR-028 does for
+  factories (`static __add<T>(b: Box<T>, n: number): Box<T>`,
+  `static __toT<T>(b: Box<T>): T`), which fixes today's TS2302. A `[Branded]` /
+  `[InlineWrapper]` companion namespace exports the same names as functions (`Qty.__add`,
+  `Qty.__fromInt32`, and the per-overload fast paths of an operator group) instead of
+  `op_Addition` / `op_Implicit`. Its conversion to the underlying primitive is the identity,
+  and stays undeclared, only when its body returns the wrapped value (`=> self.Value`); any
+  other body (`implicit operator int(Cents c) => c.Value * 10`) is an ordinary `__toInt32`,
+  where today the companion drops it by return type alone. The operator helpers and conversion
+  statics of a class flow out through the class emitter's member composition
+  (`EmitDeferredOperatorsAndMethods` / `EmitOperator`), so the lazy static-constructor guard of
+  #681 applies to them; companion functions do not pass through it (a `[Branded]` struct with a
+  static constructor is #681's documented gap). Dart keeps its declarations (byte-identical):
+  one static per operator and the primary of a conversion group with its `MS0001`. Traced by
+  the "User-defined operators at their use sites" and "User-defined conversions" rows of the
+  feature-support matrix.
 
 - **FR-079** (user-defined conversions at their use sites, #599): Every user-defined conversion
   C# applies MUST run its conversion operator: implicit ones (an initializer or assignment, an
   argument, a `return`, either operand of `??`, a conditional branch, an element of a
-  collection, array or tuple, an operand of an operator or of a string concatenation) and
-  explicit ones (a cast). The core records the conversion operator C# bound, with the standard
-  conversions Roslyn applies before it (source to the operator's parameter) and after it (the
-  operator's result to the target type) as numeric conversion nodes where spec 012 FR-010 or
-  FR-080 needs one; a target decides the call shape. TypeScript calls the static of FR-078 on
-  the declaring type (`Money m = 7` → `Money.__fromInt32(7)`; `(long)m` → `Money.__toInt64(m)`;
-  `string s = m` → `Money.__toString(m)`; `long l = tick` → `BigInt(Tick.__toInt32(tick))`;
-  `decimal e = new Cents(1) + 1m` → `Cents.__toDecimal(new Cents(1)).plus(new Decimal("1"))`).
-  A lifted conversion (`Cents? c; decimal? d = c`) yields `null` for `null`
-  (`c == null ? null : Cents.__toDecimal(c)`), evaluating the operand once. The reference rules
-  are FR-077's, and a metadata-only reference names the same static, since its name derives
-  from the symbol. An interpolation hole formats its value (`ToString`) without a conversion and
-  is unchanged. A conversion of a branded type calls its companion function, and the identity
-  unwrap lowers to its operand. A conversion involving `dynamic` is left to spec 011 FR-030. Dart
-  prints the operand of an implicit conversion and `operand as T` for a cast, as today
-  (byte-identical). Traced by the "User-defined conversions" row of the feature-support matrix.
+  collection, array or tuple, an operand of an operator or of a string concatenation, a
+  condition through `implicit operator bool`: `if`, `while`, `?:`, `!b`, and the operands of
+  `&&` / `||` when the type declares no `&` / `|` / `true` / `false` operator, the in and out
+  conversions of a compound assignment, and a `foreach` iteration variable, whose conversion
+  Roslyn reports as `ForEachLoopOperationInfo.ElementConversion`), and explicit ones (a cast).
+  The core extracts it as its own neutral node,
+  `IrUserConversion(BoundOperator, Operand, Before: IrNumericConversion?, After: IrNumericConversion?, IsLifted)`,
+  where `Before` converts the source to the operator's parameter and `After` the operator's
+  result to the target type, each present where spec 012 FR-010, FR-071 (the `char`
+  endpoints) or FR-080 needs a node, and `BoundOperator` is FR-077's record with the
+  `IrConversionName` of FR-078. TypeScript calls the static of FR-078 on the declaring type
+  (`Money m = 7` → `Money.__fromInt32(7)`; `Money m = 'a'` → `Money.__fromInt32(97)`;
+  `(long)m` → `Money.__toInt64(m)`; `string s = m` → `Money.__toString(m)`;
+  `long l = tick` → `BigInt(Tick.__toInt32(tick))`;
+  `decimal e = new Cents(1) + 1m` → `Cents.__toDecimal(new Cents(1)).plus(new Decimal("1"))`;
+  `foreach (Money m in ints)` → `const m = Money.__fromInt32(item)` per element). A lifted
+  conversion (`Cents? c; decimal? d = c`) yields `null` for `null`
+  (`c == null ? null : Cents.__toDecimal(c)`), evaluating the operand once. An explicit cast of
+  a nullable source over an operator that takes the non-nullable type behaves as .NET: to a
+  struct target (`(N)intNullable`) a `null` throws `InvalidOperationException` ("Nullable
+  object must have a value."), and to a class target (`(Money)intNullable`) a `null` yields
+  `null` without calling the operator; TypeScript never calls `N.__fromInt32(null)`. The
+  reference rules are FR-077's, and a metadata-only reference names the same static, since its
+  name is a function of the symbol (FR-078). An interpolation hole formats its value
+  (`ToString`) without a conversion and is unchanged. A conversion of a branded type calls its
+  companion function, and the identity unwrap of FR-078 lowers to its operand. A conversion
+  involving `dynamic` is left to spec 011 FR-030. Dart renders the node as today: the operand
+  of an implicit conversion and `operand as T` for a cast (byte-identical). Follow-ups (gaps):
+  Dart `MS0001` for the conversions it erases; the arguments of a collection or object
+  initializer's `Add`; a checked `Before` conversion (`(Money)someLong` over an operator
+  taking `int`), which needs spec 012's checked narrowing. Traced by the "User-defined
+  conversions" row of the feature-support matrix.
+
+  New-node checklist for `IrUserOperatorApplication` and `IrUserConversion` (FR-077, FR-079):
+  every IR walker and rewriter handles both — the JSX component bridge's rewrite
+  (`IrToTsJsxComponentBridge`), the `[PlainObject]` `RewriteThis` (`IrToTsPlainObjectBridge`),
+  the TypeScript `ImportCollector` walkers (the declaring type's import), the runtime
+  requirement scanner (`IrRuntimeRequirementScanner`), the body coverage probe, and the Dart
+  printer.
 
 - **FR-080** (implicit integer-to-decimal conversions, #599 follow-up, #476): An implicit
   conversion from `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` to `decimal`, or between
   their nullable forms, MUST become spec 012's numeric conversion node, through the one rule
-  that already decides the 64-bit ones (`NumericEndpoints.NeedsImplicitNode`: a `decimal`
-  endpoint needs a node from any of these sources), wherever Roslyn reports it: an initializer
-  or assignment, an argument, a `return`, an operand of an arithmetic, relational or compound
-  operator, and the left operand of `??` whose value C# converts to a `decimal` result
-  (`int? a = null; decimal d = a ?? 1.5m`, `decimal e = n ?? 0m` with `n` an `int?`). The
-  explicit cast `(decimal)i` from the same sources lowers the same way. TypeScript emits
-  `new Decimal(x)`, exact for every value of these types, and lifted
-  `x == null ? null : new Decimal(x)`; today the `number` reaches the `Decimal` slot unchanged
-  and the first `Decimal` method call on it throws `TypeError`. `long` / `ulong` keep their path
-  (`new Decimal(x.toString())`). Not covered: `char` (#501), and the explicit `float` / `double`
-  casts, which .NET rounds to 7 / 15 significant digits. Dart prints the operand, as for every
-  `decimal` endpoint (byte-identical). Traced by the "Implicit integer-to-decimal conversions"
-  row of the feature-support matrix.
+  that already decides the 64-bit ones: an `IsIntegerToDecimal` clause in
+  `NumericEndpoints.NeedsImplicitNode`, next to the `char` clause of FR-071. It applies wherever
+  Roslyn reports the conversion: an initializer or assignment, an argument, a `return`, an
+  operand of an arithmetic, relational or compound operator, and the left operand of `??`
+  whose value C# converts to a `decimal` result (`int? a = null; decimal d = a ?? 1.5m`,
+  `decimal e = n ?? 0m` with `n` an `int?`). The explicit cast `(decimal)i` from the same
+  sources lowers the same way (`IsLoweredExplicitly`). TypeScript emits `new Decimal(x)`, exact
+  for every value of these types, and lifted `x == null ? null : new Decimal(x)`; today the
+  `number` reaches the `Decimal` slot unchanged and the first `Decimal` method call on it
+  throws `TypeError`. `long` / `ulong` keep their path (`new Decimal(x.toString())`). Not
+  covered: `char` (#501), and the explicit `float` / `double` casts, which .NET rounds to 7 / 15
+  significant digits. Dart prints the operand, as for every `decimal` endpoint
+  (byte-identical). Traced by the "Implicit integer-to-decimal conversions" row of the
+  feature-support matrix.
+
+  Delivery (wave 2, group G3, three sequential hand-ins on one branch, each reviewed before the
+  next): G3a is FR-080 alone (after G1's `char` clause lands); G3b is FR-078 (declarations and
+  names, #600, checked conversions, generic type parameters and the branded rename); G3c is
+  FR-077 and FR-079 (the use sites). The 3.0 migration notes in the CHANGELOG list the renames
+  (`__negate` / `__plus`, the conversion statics, the companion `op_*` functions) when they
+  land. Whichever of G3 and #681 (G4) lands second adds a golden with a static constructor, an
+  operator and a conversion.
 
 ### Key Entities
 
