@@ -1029,16 +1029,18 @@ Product requirements added after the migration (normative; each one is traced by
   placeholder would regress it). Known limitation: a struct operator that mutates its
   parameter (`operator ++(S s) { s.V++; return s; }`) aliases in TypeScript, where structs are
   references, so the postfix value is the new one (.NET: old `5`, stored `6`; TypeScript:
-  `6` / `6`). Dart renders the node as today: its native operator at every binary, unary,
-  relational and equality application (byte-identical); a compound assignment prints the
-  read-modify-write with the native operator (`t = t + y`, receiver bound once) and `++` /
-  `--` stores the static Dart already declares (`c = Cnt.op_Increment(c)`), replacing today's
-  `t = t.$add(y)` and `c++` (neither runs the C# operator); a Dart golden pins both. Because
-  Dart prints the node as its native operator, `DartBinaryOperandGrouping` MUST group it exactly
-  like the equivalent `IrBinaryExpression` / `IrUnaryExpression`, as the outer operand and as
-  the inner one (precedence keyed on the operator, not on the node type): `(a + b) * 3` with a
-  user `+` keeps its parentheses, where the grouping that only knows `IrBinaryExpression`
-  would print `a + b * 3`. A Dart golden pins a mixed user / built-in expression.
+  `6` / `6`). Dart output MUST stay byte-identical (maintainer rule for wave 2), including the
+  shapes that are wrong today: the Dart bridge renders the new node back to today's Dart text —
+  its native operator at every binary, unary, relational and equality application, `t =
+  t.$add(y)` at a compound assignment and `c++` at an increment — by itself, never through a
+  target decision in the core. Because Dart prints the node as its native operator,
+  `DartBinaryOperandGrouping` MUST group it exactly like the equivalent `IrBinaryExpression` /
+  `IrUnaryExpression`, as the outer operand and as the inner one (precedence keyed on the
+  operator, not on the node type): `(a + b) * 3` with a user `+` keeps its parentheses, where
+  the grouping that only knows `IrBinaryExpression` would print `a + b * 3`. A Dart golden pins
+  today's output for a mixed user / built-in expression, a compound assignment and an
+  increment. A shape whose Dart text cannot stay byte-identical is reported to the maintainer
+  before it lands.
   Follow-ups (gaps, not this requirement): Dart's operators declared for the right operand and
   a user `!=` that Dart ignores. Traced by the "User-defined operators at their use sites" row
   of the feature-support matrix.
@@ -1058,17 +1060,22 @@ Product requirements added after the migration (normative; each one is traced by
   operand (`operator +(int a, Meters m)`) has no instance form, where today `$add(m)` passes
   `this` as the `int` (TS2345). A `true` / `false` operator declares nothing. Each conversion
   operator MUST declare its own static, never a dispatcher, because C# selects a conversion by
-  its source and target types, never by its arguments: `__to` + the target type's spelling for a
-  conversion out of the declaring type, `__from` + the source type's spelling for a conversion
-  into it, and `__checkedTo` / `__checkedFrom` for a `checked` conversion operator, which C#
+  its source and target types, never by its arguments: `__to` + the target type's spelling for an
+  explicit conversion out of the declaring type, `__from` + the source type's spelling for one
+  into it, `__implicitTo` / `__implicitFrom` for an implicit conversion, and `__checkedTo` /
+  `__checkedFrom` for a `checked` conversion operator, which is always explicit and which C#
   binds in a checked context beside its unchecked twin (`explicit operator int(Money m)` →
   `__toInt32`, `explicit operator checked int(Money m)` → `__checkedToInt32`,
   `explicit operator long(Money m)` → `__toInt64`, `implicit operator Money(int c)` →
-  `__fromInt32`, `implicit operator string(Money m)` → `__toString`,
-  `implicit operator Cents?(int? v)` → `__fromInt32OrNull`). The spellings are spec 013's.
+  `__implicitFromInt32`, `implicit operator string(Money m)` → `__implicitToString`,
+  `implicit operator Cents?(int? v)` → `__implicitFromInt32OrNull`; maintainer decision D1).
+  C# forbids an implicit and an explicit conversion between the same two types (CS0557), so
+  the kind never tells two conversions apart; it is in the name so a reader sees it, and
+  switching a conversion between implicit and explicit renames its TypeScript static (a 3.0
+  API note). The spellings are spec 013's.
   The core keeps grouping conversion operators as it does today (`MethodOverloadGroups` is not
   restructured) and adds one neutral fact per conversion declaration,
-  `IrConversionName { Direction (To / From), IsChecked, Spelling, Pin }` on
+  `IrConversionName { Direction (To / From), Kind (Implicit / Explicit / Checked), Spelling, Pin }` on
   `IrMethodSemantics`, computed by one function from the Roslyn symbol
   (`ConversionNaming.Of(IMethodSymbol)`), which the use sites of FR-079 call too. Two
   conversions of one type whose candidates collide climb with `OverloadSpellingClimb` as spec
@@ -1080,7 +1087,7 @@ Product requirements added after the migration (normative; each one is traced by
   for spec 013's names. A conversion name claimed by another member the type itself declares
   is an `MS0003` error at the conversion's declaration; inherited statics do not claim it
   (`implicit operator Base(int)` on `Base` and `implicit operator Der(int)` on `Der : Base` are
-  both `__fromInt32`, which TypeScript accepts on the static side) (no `$` rename), so a conversion's name is a pure
+  both `__implicitFromInt32`, which TypeScript accepts on the static side) (no `$` rename), so a conversion's name is a pure
   function of its symbol and a metadata-only reference computes the same one without running
   the producer's claim pass. `[Name("toInt")]` names that one conversion (`__toInt`), no longer
   its group. A conversion declares no instance helper. The static helpers of a generic type
@@ -1088,10 +1095,10 @@ Product requirements added after the migration (normative; each one is traced by
   factories (`static __add<T>(b: Box<T>, n: number): Box<T>`,
   `static __toT<T>(b: Box<T>): T`), which fixes today's TS2302. A `[Branded]` /
   `[InlineWrapper]` companion namespace exports the same names as functions (`Qty.__add`,
-  `Qty.__fromInt32`, and the per-overload fast paths of an operator group) instead of
+  `Qty.__implicitFromInt32`, and the per-overload fast paths of an operator group) instead of
   `op_Addition` / `op_Implicit`. Its conversion to the underlying primitive is the identity,
   and stays undeclared, only when its body returns the wrapped value (`=> self.Value`); any
-  other body (`implicit operator int(Cents c) => c.Value * 10`) is an ordinary `__toInt32`,
+  other body (`implicit operator int(Cents c) => c.Value * 10`) is an ordinary `__implicitToInt32`,
   where today the companion drops it by return type alone. The operator helpers and conversion
   statics of a class flow out through the class emitter's member composition
   (`EmitDeferredOperatorsAndMethods` / `EmitOperator`), so the lazy static-constructor guard of
@@ -1115,17 +1122,18 @@ Product requirements added after the migration (normative; each one is traced by
   result to the target type, each present where spec 012 FR-010, FR-071 (the `char`
   endpoints) or FR-080 needs a node, and `BoundOperator` is FR-077's record with the
   `IrConversionName` of FR-078. TypeScript calls the static of FR-078 on the declaring type
-  (`Money m = 7` → `Money.__fromInt32(7)`; `Money m = 'a'` → `Money.__fromInt32(97)`;
-  `(long)m` → `Money.__toInt64(m)`; `string s = m` → `Money.__toString(m)`;
-  `long l = tick` → `BigInt(Tick.__toInt32(tick))`;
-  `decimal e = new Cents(1) + 1m` → `Cents.__toDecimal(new Cents(1)).plus(new Decimal("1"))`;
-  `foreach (Money m in ints)` → `const m = Money.__fromInt32(item)` per element). A lifted
+  (`Money m = 7` → `Money.__implicitFromInt32(7)`; `Money m = 'a'` →
+  `Money.__implicitFromInt32(97)`; `(long)m` → `Money.__toInt64(m)`; `string s = m` →
+  `Money.__implicitToString(m)`; `long l = tick` → `BigInt(Tick.__implicitToInt32(tick))`;
+  `decimal e = new Cents(1) + 1m` →
+  `Cents.__implicitToDecimal(new Cents(1)).plus(new Decimal("1"))`;
+  `foreach (Money m in ints)` → `const m = Money.__implicitFromInt32(item)` per element). A lifted
   conversion (`Cents? c; decimal? d = c`) yields `null` for `null`
-  (`c == null ? null : Cents.__toDecimal(c)`), evaluating the operand once. An explicit cast of
+  (`c == null ? null : Cents.__implicitToDecimal(c)`), evaluating the operand once. An explicit cast of
   a nullable source over an operator that takes the non-nullable type behaves as .NET: to a
   struct target (`(N)intNullable`) a `null` throws `InvalidOperationException` ("Nullable
   object must have a value."), and to a class target (`(Money)intNullable`) a `null` yields
-  `null` without calling the operator; TypeScript never calls `N.__fromInt32(null)`. The
+  `null` without calling the operator; TypeScript never calls `N.__fromInt32(null)` (or its implicit form). The
   reference rules are FR-077's, and a metadata-only reference names the same static, since its
   name is a function of the symbol (FR-078). An interpolation hole formats its value
   (`ToString`) without a conversion and is unchanged. A conversion of a branded type calls its
