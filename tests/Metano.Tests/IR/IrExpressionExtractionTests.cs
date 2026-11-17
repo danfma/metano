@@ -649,7 +649,7 @@ public class IrExpressionExtractionTests
 
         var context = new IrExtractionContext(
             resolver,
-            Target: Metano.Annotations.TargetLanguage.TypeScript
+            GroupingPolicy: Metano.Compiler.TypeScript.Bridge.TsGroupingPolicy.Instance
         )
         {
             EmitsConstructorSelectors = _ => true,

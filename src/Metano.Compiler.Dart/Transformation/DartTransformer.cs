@@ -58,9 +58,8 @@ public sealed class DartTransformer
     /// operator application keeps the source operator (spec 013 FR-022).
     /// </summary>
     private IrExtractionContext Extraction =>
-        new(Compilation: _compilation, Target: TargetLanguage.Dart)
+        new(Compilation: _compilation, GroupingPolicy: DartGroupingPolicy.Instance)
         {
-            GroupingPolicy = DartGroupingPolicy.Instance,
             EmitsConstructorSelectors = DartTypeShapes.EmitsNamedConstructors,
         };
 

@@ -100,11 +100,10 @@ public sealed class TsModuleFunctionClaims
         IrTypeOriginResolver? shapeOriginResolver
     )
     {
-        var extraction = new IrExtractionContext(shapeOriginResolver)
-        {
-            Target = TargetLanguage.TypeScript,
-            GroupingPolicy = TsGroupingPolicy.Instance,
-        };
+        var extraction = new IrExtractionContext(
+            shapeOriginResolver,
+            GroupingPolicy: TsGroupingPolicy.Instance
+        );
 
         var staticTypes = assembly is { } assemblySymbol
             ? TypeScriptTransformContext

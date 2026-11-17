@@ -5,7 +5,8 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// Everything an IR extractor needs beyond its syntax and semantic model:
 /// the cross-package type-origin resolver, the compilation (null in
-/// shape-only mode), the language target, and the target's local-naming
+/// shape-only mode), the target's overload-grouping policy (which names the
+/// language target), and the target's local-naming
 /// decision the local-name disambiguator maps bindings through (#398). One
 /// immutable object threads through every extractor — type, member, module
 /// function, statement, expression — replacing the
@@ -16,11 +17,21 @@ namespace Metano.Compiler.Extraction;
 public sealed record IrExtractionContext(
     IrTypeOriginResolver? OriginResolver = null,
     Compilation? Compilation = null,
-    Metano.Annotations.TargetLanguage? Target = null,
+    OverloadGroupingPolicy? GroupingPolicy = null,
     LocalNaming? LocalNaming = null
 )
 {
-    private readonly OverloadGroupingPolicy? _groupingPolicy;
+    /// <summary>
+    /// What the overload groups depend on besides the symbols (spec 013
+    /// FR-039): the language target and the names it emits synthesized
+    /// value-equality members under. A target passes its single instance;
+    /// without one there is no target and no synthesized member joins a group.
+    /// </summary>
+    public OverloadGroupingPolicy GroupingPolicy { get; init; } =
+        GroupingPolicy ?? OverloadGroupingPolicy.For(null);
+
+    /// <summary>The language target, the one <see cref="GroupingPolicy"/> names.</summary>
+    public Metano.Annotations.TargetLanguage? Target => GroupingPolicy.Target;
 
     /// <summary>
     /// The port through which a target says which types it emits with an
@@ -122,26 +133,6 @@ public sealed record IrExtractionContext(
     /// formatters); Dart honors no clause yet and leaves it unset.
     /// </summary>
     public IFormatStringCapability? FormatStrings { get; init; }
-
-    /// <summary>
-    /// What the overload groups depend on besides the symbols (spec 013
-    /// FR-039): <see cref="Target"/> and the names the target emits synthesized
-    /// value-equality members under. A target sets its single instance; by
-    /// default no synthesized member joins a group. The policy's target is
-    /// always <see cref="Target"/>.
-    /// </summary>
-    public OverloadGroupingPolicy GroupingPolicy
-    {
-        get => _groupingPolicy ?? OverloadGroupingPolicy.For(Target);
-        init =>
-            _groupingPolicy =
-                value.Target == Target
-                    ? value
-                    : throw new ArgumentException(
-                        $"The grouping policy targets {value.Target}, the context {Target}.",
-                        nameof(value)
-                    );
-    }
 
     /// <summary>
     /// The context of a constant parameter default: the origin resolver
