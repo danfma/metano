@@ -886,7 +886,8 @@ reduced value (`i = (i + 1) | 0;`, `u = Math.imul(u, k) >>> 0;`). `int.MaxValue 
 - Not reduced: `/`, `%` (`int.MinValue / -1` still returns `2147483648`), results of an
   enum type, user-defined operators, `[Queryable]` expression trees, constants.
 - A wrapped store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a
-  `Dictionary<_, int>`) reports an `MS0001` error (the checked forms too), so the build fails.
+  `Dictionary<_, int>`) reports an `MS0001` error, so the build fails as `tsc` did before; the
+  checked and narrow-type forms keep their warning.
 - Cost: in range the wrap is as fast as the unwrapped `number`; an accumulator that
   overflows on most iterations hits a V8 slow path on Node (about 10 times the asm.js
   `((s | 0) + x) | 0` form; Bun has none). Numbers in spec 001 FR-076.
