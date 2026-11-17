@@ -284,10 +284,11 @@ public static class IrToTsOverloadDispatcherBridge
     ) =>
         synthesized is not null
         && member.IsShadowedBySynthesized
-        && member.ReturnType == synthesized.ReturnType
-        && member
-            .Parameters.Select(parameter => parameter.Type)
-            .SequenceEqual(synthesized.Parameters.Select(parameter => parameter.Type));
+        && IrTypeRefEquivalence.AreEquivalent(member.ReturnType, synthesized.ReturnType)
+        && IrTypeRefEquivalence.AreEquivalent(
+            [.. member.Parameters.Select(parameter => parameter.Type)],
+            [.. synthesized.Parameters.Select(parameter => parameter.Type)]
+        );
 
     /// <summary>
     /// The body of a dispatcher whose group holds a synthesized value-equality
