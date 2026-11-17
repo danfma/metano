@@ -855,6 +855,76 @@ Product requirements added after the migration (normative; each one is traced by
   `Char.maxValue.charCodeAt(0)`, a ReferenceError), `int[] arr = { c, 'b' }` (an unsupported
   array initializer), and the Dart `'\0'` literal printing a raw NUL.
 
+- **FR-074** (`int` / `uint` arithmetic wraps in the default context, #639 layer 3; completes
+  spec 012 section K): In an unchecked context (Roslyn's `IsChecked` is false: no `checked`
+  scope and no `CheckForOverflowUnderflow`, 012 FR-023), the result of the built-in `+`, `-`,
+  `*` and unary `-` computed in `int` or `uint` (operands narrower than `int` included, since C#
+  promotes them), and the value that `++`, `--`, `+=`, `-=` and `*=` store in an `int` / `uint`
+  local, field, property, array element or indexer, MUST be reduced modulo 2^32 to the type's
+  range, as .NET wraps it (`int.MaxValue + 1` is `int.MinValue`, `0u - 1u` is `4294967295`).
+  The core decides it from Roslyn and represents it as 012 FR-026's
+  `IrIntegerOverflow(Value, Int32 | UInt32, Wrap)`; an increment or a compound assignment stores
+  the reduced value through 012 FR-024's read-modify-write (receiver and index evaluated once; a
+  postfix form whose value is used yields the stored value stepped back and reduced again, with
+  no temporary), and a lifted form reduces its non-null result (012 FR-025). The TypeScript
+  bridge renders the wrap with native operators and imports nothing:
+
+  | C# (unchecked) | TypeScript |
+  | --- | --- |
+  | `a + b`, `a - b`, `-a` on `int` | `(a + b) \| 0`, `(a - b) \| 0`, `-a \| 0` |
+  | `a + b`, `a - b` on `uint` | `(a + b) >>> 0`, `(a - b) >>> 0` |
+  | `a * b` on `int` / `uint` | `Math.imul(a, b)` / `Math.imul(a, b) >>> 0` |
+  | `i++;`, `i += k;`, `u *= k;` | `i = (i + 1) \| 0;`, `i = (i + k) \| 0;`, `u = Math.imul(u, k) >>> 0;` |
+  | `x = i++` | `x = ((i = (i + 1) \| 0) - 1) \| 0` |
+
+  A product MUST use `Math.imul`, never `(a * b) | 0`: two 32-bit factors can exceed 2^53, where
+  a `double` has lost the low bits. Dart prints the same node as DECIDED-19 prints every wrap
+  narrower than 64 bits (`(a + b).toSigned(32)` on `int`, `(a * b).toUnsigned(32)` on `uint`; a
+  product of two 32-bit values is exact in a 64-bit Dart `int`), so Dart needs no new code and its output changes
+  with the TypeScript output. Not reduced: `/` and `%` (only `int.MinValue / -1` and `% -1`
+  leave the range, and .NET throws `OverflowException` for them in both contexts: the divergence
+  of baseline FR-014 stays), enum operands, user-defined operators, `[Queryable]` expression
+  trees, and constants (Roslyn folds them, 012 FR-074). `char` arithmetic is typed `int` by C#,
+  so the wrap applies to that `int` result once `char` is a number (#501); while a `char` is still
+  a string in TypeScript, an operation with a `char` operand is not reduced, so a concatenation is
+  not read as `0`. A reduced store on a dictionary entry (`counts[key]++`, `counts[key] += n` on
+  a `Dictionary<_, int>`) reports `MS0001`, as the checked forms do (012 Edge Cases); before this
+  requirement it emitted the invalid `counts.get(key)++`. This closes the known gap of 012
+  section K: an unchecked result read by checked code (`checked(a + unchecked(b * c))`, a
+  `var h = unchecked(a * 31 + 7); h + 1` in a checked project) is in range, and a cast to the
+  operand's own type (`(int)(i + j)`) reads the wrapped value. Traced by the "`int` / `uint`
+  wrap-around" row of the feature-support matrix.
+
+- **FR-075** (wraps the core proves unneeded, #639): The core MUST omit the reduction of FR-074,
+  and the check of 012 FR-077 (one rule for both contexts), where C# shows that the exact result
+  fits the type:
+  - the operand ranges of 012 FR-074 (`IntegerValueRanges`: a constant, a value widened from a
+    narrower type, a mask; `b1 + b2` on `byte`, `s * 2` on `short`, `(x & 0xFF) + 1`), which
+    also read the `Length` of an array or a `string` and the `Count` of a BCL collection class
+    (not an interface) as `[0, int.MaxValue]`, so `a.Length - 1` emits `a.length - 1`;
+  - the step of a counting loop: `i++` / `++i` (`i--` / `--i`) as an incrementor of a `for`
+    whose variable `i` (`int` or `uint`) is declared in the `for` initializer and is not written
+    in the condition, the body or the other incrementors (Roslyn data flow, `ref` / `out`
+    arguments and lambdas included), when the condition is, or is a `&&` conjunct containing, a
+    comparison computed in `i`'s own type that bounds the step: `i < e` (or `e > i`) for `++`,
+    `i > e` for `--`, `i <= e` when `e`'s range ends below the type's maximum, and `i >= e` when
+    `e`'s range starts above the type's minimum (`i >= 0` on an `int`, never on a `uint`). The
+    step keeps the native operator: `for (let i = 0; i < n; i++)`.
+
+- **FR-076** (TypeScript consumers that already reduce, #639): The TypeScript bridge MUST omit
+  the `| 0` / `>>> 0` of an `int` / `uint` wrap (FR-074, and 012 FR-076's reads) on an operand
+  whose JavaScript consumer reduces it modulo 2^32 itself: the operand of another wrapped
+  `int` / `uint` `+`, `-` or unary `-`, of `Math.imul`, of `&`, `|`, `^`, `~`, a shift, or of a
+  012 FR-074 narrowing conversion, recursively through the operands of `+`, `-` and unary `-`.
+  The unreduced operand is exact (a sum of n values of 32 bits stays below n · 2^32, far inside
+  2^53, and `Math.imul` returns 32 bits), and the consumer applies `ToInt32` / `ToUint32` to it,
+  so `a + b + c - a * b` emits `(a + b + c - Math.imul(a, b)) | 0` and `(a + b) & 0xFF` stays as
+  written. Every other consumer keeps the wrap: a checked operation (`checkedInt32`), a
+  comparison, `/`, `%`, a conversion to `double`, `long` (`BigInt(...)`) or `string`, an
+  argument, a return value and a store. Dart prints every wrap (the same elision is valid on a
+  64-bit Dart `int` for `+`, `-` and `*`, but not for its 64-bit bitwise operators; a follow-up
+  may add it).
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
