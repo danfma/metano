@@ -1167,7 +1167,10 @@ Product requirements added after the migration (normative; each one is traced by
   conversion from `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` to `decimal`, or between
   their nullable forms, MUST become spec 012's numeric conversion node, through the one rule
   that already decides the 64-bit ones: an `IsIntegerToDecimal` clause in
-  `NumericEndpoints.NeedsImplicitNode`, next to the `char` clause of FR-071. It applies wherever
+  `NumericLoweringRules.NeedsImplicitNode` and `IsLoweredExplicitly`, next to the `char` clause
+  of FR-071, gated by the target fact `NumericLoweringRules.LowersDecimalValues` (a target that
+  computes with a `decimal` as a runtime value whose operators are methods; false for Dart).
+  It applies wherever
   Roslyn reports the conversion: an initializer or assignment, an argument, a `return`, an
   operand of an arithmetic, relational or compound operator, and the left operand of `??`
   whose value C# converts to a `decimal` result (`int? a = null; decimal d = a ?? 1.5m`,
@@ -1177,9 +1180,15 @@ Product requirements added after the migration (normative; each one is traced by
   `number` reaches the `Decimal` slot unchanged and the first `Decimal` method call on it
   throws `TypeError`. `long` / `ulong` keep their path (`new Decimal(x.toString())`). Not
   covered: `char` (#501), and the explicit `float` / `double` casts, which .NET rounds to 7 / 15
-  significant digits. Dart prints the operand, as for every `decimal` endpoint
-  (byte-identical). Traced by the "Implicit integer-to-decimal conversions" row of the
-  feature-support matrix.
+  significant digits. The same target fact makes the stores into a `decimal` call its methods:
+  a compound assignment (`d += i` → `d = d.plus(new Decimal(i))`, `-=`, `*=`, `/=`, `%=`) and
+  `++` / `--` (`d = d.plus(new Decimal("1"))`, a used postfix value yielding the value read
+  before the store) go through the read-modify-write that binds the target's receiver and index
+  once; today the native operator coerces the `Decimal` to a string or a number (`a += d`
+  concatenated, `a++` stored a `number`). A lifted `decimal?` comparison with an integer operand
+  (`d == i`) reads the converted operand once (no second `new Decimal`). Dart prints the
+  operand, as for every `decimal` endpoint, and keeps its compound operators (byte-identical).
+  Traced by the "Implicit integer-to-decimal conversions" row of the feature-support matrix.
 
   Delivery (wave 2, group G3, three sequential hand-ins on one branch, each reviewed before the
   next): G3a is FR-080 alone (after G1's `char` clause lands); G3b is FR-078 (declarations and
