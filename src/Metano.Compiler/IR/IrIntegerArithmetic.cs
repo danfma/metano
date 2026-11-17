@@ -78,6 +78,14 @@ public sealed record IrNumericConversion(
     public static bool IsCharStore(IrNumericEndpoint from, IrNumericEndpoint to) =>
         to is { Kind: IrNumericKind.Char, IsEnum: false } && from.IsNarrowIntegerValue();
 
+    /// <summary>
+    /// Whether a conversion from <paramref name="from"/> to <paramref name="to"/>
+    /// makes a <c>decimal</c> of an integer of 32 bits or fewer (baseline
+    /// FR-080): exact for every value of the source.
+    /// </summary>
+    public static bool IsIntegerToDecimal(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from.IsNarrowIntegerValue() && to is { Kind: IrNumericKind.Decimal, IsEnum: false };
+
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
     public static bool IsDecimalToBinaryFloatingPoint(
         IrNumericEndpoint from,

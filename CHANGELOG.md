@@ -40,6 +40,12 @@ the migration list.
 - `counts[key]++` and `counts[key] += n` on a `Dictionary<_, int>` now report an `MS0001` error in the default context (they emitted invalid `counts.get(key)++`, which `tsc` rejected, so the build still fails); the checked and narrow-type forms keep their `MS0001` warning.
 - Generated output changes wherever such an operation can leave the range; an accumulator that overflows on most iterations is about 10 times slower on Node than the asm.js form (benchmark in spec FR-076). Dart output does not change: its unchecked `int` / `uint` arithmetic keeps the 64-bit result (deferred to after v3).
 
+### Integers read as `decimal`, and `decimal` stores (baseline FR-080, #476)
+
+- An `sbyte`, `byte`, `short`, `ushort`, `int` or `uint` read as a `decimal` (an assignment or initializer, an argument, a `return`, an operand of `+`, `<`, `==`, ..., a collection element, a conditional branch, the left operand of `??`, the cast `(decimal)i`) is now `new Decimal(i)`, lifted `n == null ? null : new Decimal(n)`. It printed the `number`, which failed `tsc` (`TS2322`) and threw `TypeError` at the first `Decimal` method call.
+- `d += x`, `-=`, `*=`, `/=`, `%=` and `d++` / `--d` on a `decimal` store the `Decimal` method call (`d = d.plus(new Decimal(x))`), evaluating the target once; the native operators concatenated strings (`a += d`) or stored a `number` (`a++`).
+- Dart output does not change.
+
 ### ⚠ 64-bit integers become `bigint` (spec 012)
 
 - `long` / `ulong` (and `nint` / `nuint`) map to TypeScript `bigint` instead

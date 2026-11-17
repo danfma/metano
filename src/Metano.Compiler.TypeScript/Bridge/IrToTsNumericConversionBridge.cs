@@ -79,6 +79,9 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsCharStore(from, to))
             return CharFromCode(isChecked, value);
 
+        if (IrNumericConversion.IsIntegerToDecimal(from, to))
+            return DecimalOf(value);
+
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
 
@@ -306,8 +309,15 @@ internal static class IrToTsNumericConversionBridge
         TsExpression code
     ) =>
         to.Kind is IrNumericKind.Decimal
-            ? new TsNewExpression(IrToTsExpressionBridge.BclDecimalValueReference(), [code])
+            ? DecimalOf(code)
             : RenderConversion(CodeUnit, to, isChecked, code);
+
+    /// <summary>
+    /// A <c>Decimal</c> of an integer <c>number</c> of 32 bits or fewer,
+    /// exact for every such value: <c>new Decimal(value)</c> (FR-080).
+    /// </summary>
+    private static TsExpression DecimalOf(TsExpression value) =>
+        new TsNewExpression(IrToTsExpressionBridge.BclDecimalValueReference(), [value]);
 
     /// <summary>
     /// The code of a <c>char</c> literal read as a number (FR-071), which the

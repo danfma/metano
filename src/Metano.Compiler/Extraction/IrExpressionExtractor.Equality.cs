@@ -75,7 +75,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The operand as a decimal: an operand C# converts implicitly from
     /// another numeric type (<c>d == 0</c>) becomes a <c>decimal</c> value, so
-    /// the value comparison sees two decimals.
+    /// the value comparison sees two decimals. For a target that converts
+    /// every integer read as a <c>decimal</c> (FR-080), an operand the
+    /// extraction already converted is that value.
     /// </summary>
     private IrExpression ExtractAsDecimal(ExpressionSyntax operand)
     {
@@ -83,6 +85,9 @@ public sealed partial class IrExpressionExtractor
         var type = _semantic.GetTypeInfo(operand).Type;
 
         if (type.UnderlyingValueType()?.SpecialType == SpecialType.System_Decimal)
+            return value;
+
+        if (IsConvertedToDecimal(value))
             return value;
 
         // A missing nullable number stays missing, as the lifted comparison
@@ -95,6 +100,10 @@ public sealed partial class IrExpressionExtractor
             ))
             : ToDecimal(value);
     }
+
+    private bool IsConvertedToDecimal(IrExpression value) =>
+        _context.NumericLowering.LowersDecimalValues
+        && value is IrNumericConversion { To.Kind: IrNumericKind.Decimal };
 
     private static IrExpression ToDecimal(IrExpression number) =>
         new IrNewExpression(new IrPrimitiveTypeRef(IrPrimitive.Decimal), [new IrArgument(number)]);

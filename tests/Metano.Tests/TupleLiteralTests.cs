@@ -272,11 +272,10 @@ public class TupleLiteralTests
     /// <summary>
     /// The strongly-typed <c>Equals</c> converts its argument to the
     /// receiver's instantiation: a literal argument's elements take the
-    /// converted runtime representation (<c>Decimal</c>), while a variable
-    /// keeps its numbers — the compiler applies no implicit numeric
-    /// conversion to a non-literal value — and compares through
-    /// <c>Decimal.equals</c>, which accepts a number. (The literal's type
-    /// assertion is not pinned: tuple literals assert their natural type.)
+    /// converted runtime representation (<c>Decimal</c>), and so do a
+    /// variable's, element by element, since each <c>int</c> read as a
+    /// <c>decimal</c> becomes one (baseline FR-080). (The type assertion is
+    /// not pinned: tuple literals assert their natural type.)
     /// </summary>
     [Test]
     public async Task ConvertedDecimalArgument_ComparesAsTheReceiverTuple()
@@ -299,7 +298,9 @@ public class TupleLiteralTests
             .That(output)
             .Contains("return tupleEquals(a, [new Decimal(\"1\"), new Decimal(\"2\")] as ");
 
-        await Assert.That(output).Contains("return tupleEquals(a, b);");
+        await Assert
+            .That(output)
+            .Contains("return tupleEquals(a, [new Decimal(b[0]), new Decimal(b[1])] as ");
     }
 
     /// <summary>
