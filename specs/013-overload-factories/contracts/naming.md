@@ -130,6 +130,11 @@ the spelling.
 
 ## Root anchoring (DECIDED-15, FR-025)
 
+- **Synthesized value-equality members (FR-038–FR-041).** A group may hold a synthesized member
+  besides its declared overloads. Its suffix is pinned to the target contract's (`ByValue`); it
+  anchors on the same kind's member of the nearest emitted base that inserted it, never on a
+  symbol chain ([value-equality-members.md](./value-equality-members.md) § 4).
+
 - The candidate names of a method overload come from its **root declaration**: follow
   `IMethodSymbol.OverriddenMethod` to the first declaration (for an `override`), or take the
   implemented interface member (for an implicit or explicit interface implementation), using the
@@ -194,7 +199,8 @@ functions.
 3. selectors;
 4. factories;
 5. method and module fast paths (the root group's names first, then a derived type's new
-   overloads);
+   overloads); a synthesized value-equality member's fast path (`equalsByValue`) is claimed here
+   like any other (FR-038);
 6. operator fast paths;
 7. inherited instance members: every **non-root** instance candidate (a `new` method's, a derived
    type's new overload's) claims against the instance members of every emitted base class, of

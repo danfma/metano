@@ -496,10 +496,14 @@ Product requirements added after the migration (normative; each one is traced by
   `equals` when it has one, `NaN` equal to itself, else reference equality. A plain
   (non-record) struct emitted as a class carries a generated `equals` / `hashCode` over its
   fields (its `ValueType.Equals`) unless it declares its own, so a struct behind an `object` or
-  interface field compares by value. The synthesized `equals` / `hashCode` / `with` keep their
-  names: a user method spelled like one forms a dispatched group of its own (spec 013) and is
-  emitted under its fast-path name, and a field or property emitted as `equals` MUST report
-  `MS0001` as an error; an array behind a type parameter, `object` or an interface
+  interface field compares by value. The synthesized `equals` / `hashCode` / `with` keep the
+  names the runtime calls: a user method the target spells the same way (`Equals(T other,
+  double tol)`, `HashCode(int seed)`, a record's `With(int a)`, an `IEqualityComparer<T>`
+  implementation) MUST be joined by the synthesized member as one more overload of its group,
+  dispatched under the shared name, with spec 013's naming and anchoring (013 FR-038–FR-045,
+  DECIDED-33); an overload the dispatcher cannot tell from the synthesized member, and a field
+  or property emitted as `equals`, MUST report `MS0001` as an error, while a field `HashCode`
+  keeps its name; an array behind a type parameter, `object` or an interface
   compares element by element, so a tuple there compares by value as on .NET (a tuple is an
   array at run time); a C# array there also compares element-wise where .NET compares the
   reference, as 2.x did (a known gap: the run time cannot tell a tuple from an array). An equality guard

@@ -213,3 +213,20 @@ flowchart TD
 
 The parameterless overload's suffix is `Default` before pass 1 (DECIDED-5); it takes part in the
 same distinctness checks.
+
+## 7. Synthesized value-equality members (FR-038–FR-045)
+
+- `OverloadGroupingPolicy(TargetLanguage? Target, SynthesizedMemberNames? ValueEqualityNames)`:
+  replaces the `TargetLanguage? target` parameter of `MethodOverloadGroups` and its callers, and
+  keys the groups' cache. It is built from `IrExtractionContext`.
+- `SynthesizedMemberNames(IReadOnlyDictionary<SynthesizedValueMember, string> EmittedNames,
+  string FastPathSuffix, Func<string, string> MethodSpelling)`: supplied by the target
+  (TypeScript: `equals` / `hashCode` / `with`, `ByValue`, camelCase; Dart: none in 3.0).
+- `GroupMember` = `DeclaredMember(IMethodSymbol, Ordinal, MethodAnchor?)` |
+  `SynthesizedMember(SynthesizedValueMember Kind, INamedTypeSymbol Owner, Ordinal, SynthesizedAnchor?)`.
+- `IrMethodDeclaration.SynthesizedKind: IrSynthesizedValueMember?` (`Equals`, `HashCode`,
+  `Copy`), with `Semantics.IsSynthesized` and `Body: null`; the target supplies the body.
+- `IrOverloadRef` is unchanged: a synthesized member's ref is the joined group's name with the
+  ordinal after every declared member.
+
+See [contracts/value-equality-members.md](./contracts/value-equality-members.md).
