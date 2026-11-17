@@ -631,7 +631,9 @@ Product requirements added after the migration (normative; each one is traced by
   and the coalesce operand) and the explicit one (`IsLoweredExplicitly`: casts, `foreach`
   variables, tuple elements, collection spreads in `IrStatementExtractor` and
   `TupleConversions`). The core always emits the neutral nodes and does not fold a `char`
-  literal; the TypeScript bridge decides the shape. An enum endpoint (`(E)c`, `(char)e`) is not
+  literal to an integer; the existing core fold of a `char` literal read as `double` or `float`
+  (`double d = 'a'`, `CharLiteralAsFloatingPoint`, which Dart relies on) stays as it is. The
+  TypeScript bridge decides the shape and folds the integer-target literals. An enum endpoint (`(E)c`, `(char)e`) is not
   covered (known gap).
   The TypeScript bridge renders such a node as `value.charCodeAt(0)` (narrowed like a `ushort`
   for a narrower target, checked when the context is), and folds the node of a `char` literal to
