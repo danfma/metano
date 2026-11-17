@@ -135,7 +135,7 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        return TupleElementConversions.Implicit(LowersCharCodes).ConvertsElement(from, to)
+        return TupleElementConversions.Implicit(_context.NumericLowering).ConvertsElement(from, to)
             ? (from, to)
             : null;
     }
@@ -157,7 +157,7 @@ public sealed partial class IrExpressionExtractor
             new IrIdentifier(name),
             from,
             to,
-            TupleElementConversions.Implicit(LowersCharCodes)
+            TupleElementConversions.Implicit(_context.NumericLowering)
         );
 
         return new IrSpreadElementConversion(name, converted);

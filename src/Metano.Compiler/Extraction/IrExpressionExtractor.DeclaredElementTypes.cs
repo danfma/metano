@@ -89,7 +89,7 @@ public sealed partial class IrExpressionExtractor
     private bool IsConvertedOnSpread(ISpreadOperation spread, ITypeSymbol elementType)
     {
         var convertedTuples = TupleElementConversions
-            .Implicit(LowersCharCodes)
+            .Implicit(_context.NumericLowering)
             .ConvertingTuples(spread.ElementType, elementType);
 
         return spread.ElementConversion.IsNumeric

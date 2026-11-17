@@ -170,13 +170,15 @@ public static class TranspilerHost
                 ? await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix)
                 : [];
 
-        var assetDiagnostics = writeDiagnostics
+        var outputDiagnostics = writeDiagnostics
             .Concat(await CopyAssetsAsync(assets, outputDir, projectDir))
             .ToList();
 
         var (assetWarnings, assetErrors) =
-            assetDiagnostics.Count > 0 ? ReportDiagnostics(assetDiagnostics) : (0, 0);
+            outputDiagnostics.Count > 0 ? ReportDiagnostics(outputDiagnostics) : (0, 0);
+
         warningCount += assetWarnings;
+
         if (assetErrors > 0)
             return new TranspileResult(false, output.Files, warningCount, assetErrors);
 

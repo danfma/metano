@@ -716,8 +716,11 @@ Product requirements added after the migration (normative; each one is traced by
   Known gaps of this feature, not designed here: `(char)e` / `(E)c` with an enum endpoint, the
   redundant `& 0xFFFF` in a `fromCharCode` argument, an `M(char)` / `M(string)` overload pair
   (indistinguishable at runtime), `[Queryable]` expression trees over `char`, `char.IsDigit`,
-  `c.CompareTo` and `new string(c, n)` (the BCL mappings do not resolve them), and the Dart
-  `'\0'` literal printing a raw NUL.
+  `c.CompareTo`, `new string(c, n)` and `new string(char[])` (the BCL mappings do not resolve
+  them), a nullable `char` increment or compound assignment (`n++`, `n += x` on a `char?`
+  concatenates), `(char)decimalValue` (stores the `Decimal`), `int max = char.MaxValue` (prints
+  `Char.maxValue.charCodeAt(0)`, a ReferenceError), `int[] arr = { c, 'b' }` (an unsupported
+  array initializer), and the Dart `'\0'` literal printing a raw NUL.
 
 ### Key Entities
 

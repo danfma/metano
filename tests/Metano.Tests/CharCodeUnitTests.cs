@@ -111,6 +111,27 @@ public class CharCodeUnitTests
     }
 
     [Test]
+    public async Task NarrowingCastsOfChars_KeepTheirCodeUnitComparison()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public static class Narrow
+            {
+                public static bool Bytes(char a, char b) => unchecked((byte)a) == unchecked((byte)b);
+                public static bool Ints(char a, char b) => (int)a > (int)b;
+            }
+            """
+        );
+
+        await Assert
+            .That(files["narrow.ts"])
+            .Contains("(a.charCodeAt(0) & 0xFF) === (b.charCodeAt(0) & 0xFF)");
+
+        await Assert.That(files["narrow.ts"]).Contains("return a > b;");
+    }
+
+    [Test]
     public async Task CharPattern_StaysAStringTest()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(TextSource);
