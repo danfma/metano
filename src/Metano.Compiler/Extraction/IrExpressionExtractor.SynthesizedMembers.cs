@@ -50,7 +50,7 @@ public sealed partial class IrExpressionExtractor
             Origin: BuildOrigin(symbol)
         )
         {
-            Overload = bound.Overload,
+            Overload = bound.Overload with { Synthesized = kind },
         };
     }
 
@@ -74,24 +74,37 @@ public sealed partial class IrExpressionExtractor
     }
 
     private static bool IsSynthesizedDeclaration(IMethodSymbol method) =>
-        method.IsImplicitlyDeclared && method.ContainingType.IsRecord
+        (method.IsImplicitlyDeclared || method.IsCompilerGenerated())
+            && method.ContainingType.IsRecord
         || method.ContainingType.SpecialType is SpecialType.System_ValueType;
 
     /// <summary>
-    /// The synthesized <paramref name="kind"/> member of a type whose claims the
-    /// target reads (declared in this compilation, emitted as a class) when it
-    /// joined a group; <c>null</c> otherwise.
+    /// The synthesized <paramref name="kind"/> member of an emitted type
+    /// (<see cref="DispatchedMethodCalls.IsEmittedContainingType"/>), declared here
+    /// or in a referenced package, when it joined a group; <c>null</c> otherwise.
+    /// A referenced package's claims may be unreadable: the member's fast path
+    /// keeps its stable name there (contracts/value-equality-members.md § 8).
     /// </summary>
     private IrOverloadRef? SynthesizedRefOf(INamedTypeSymbol type, IrSynthesizedValueMember kind)
     {
         var definition = type.OriginalDefinition;
 
-        if (definition.DeclaringSyntaxReferences.IsEmpty)
-            return null;
-
-        if (!IrTypeRefMapper.IsTranspilableType(definition, _target) || definition.HasExternal())
+        if (!DispatchedMethodCalls.IsEmittedContainingType(definition, _target))
             return null;
 
         return MethodOverloadGroups.SynthesizedRefOf(definition, kind, _context.GroupingPolicy);
     }
+
+    /// <summary>
+    /// <paramref name="overload"/>, marked with the synthesized member it binds
+    /// when <paramref name="method"/> is a declaration folded into one (an
+    /// <c>override GetHashCode()</c>), so a target names its stable fast path.
+    /// </summary>
+    private IrSelectedOverload MarkSynthesized(IrSelectedOverload overload, IMethodSymbol method) =>
+        MethodOverloadGroups.SynthesizedKindOf(method, _context.GroupingPolicy) is { } kind
+            ? overload with
+            {
+                Synthesized = kind,
+            }
+            : overload;
 }

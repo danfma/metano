@@ -41,15 +41,14 @@ internal static class SynthesizedGroupMembers
             return groups;
 
         var shape = ValueEqualityShapes.Of(type, policy.Target);
-        var result = groups;
 
-        foreach (var kind in Kinds)
-        {
-            if (shape.Synthesizes(kind) && policy.NameOf(kind) is { } name)
-                result = InsertKind(type, result, kind, name, policy);
-        }
-
-        return result;
+        return Kinds
+            .Where(shape.Synthesizes)
+            .Select(kind => (Kind: kind, Name: policy.NameOf(kind)))
+            .Where(entry => entry.Name is not null)
+            .Aggregate(groups, (inserted, entry) =>
+                InsertKind(type, inserted, entry.Kind, entry.Name!, policy)
+            );
     }
 
     private static IReadOnlyList<MethodOverloadGroup> InsertKind(
@@ -97,16 +96,34 @@ internal static class SynthesizedGroupMembers
             return [.. remaining, own];
         }
 
+        var namingMember = NamingMemberOf(joined, target);
+
         return remaining
             .Select(group =>
                 IsSameGroup(group, joined)
                     ? group with
                     {
                         Members = [.. group.Members, member],
+                        NamingMember = namingMember,
                     }
                     : group
             )
             .ToList();
+    }
+
+    /// <summary>
+    /// The lone method whose raw <c>[Name]</c> spells the group the synthesized
+    /// member joined: it named the group, so it pins no suffix (FR-039).
+    /// <c>null</c> when the group's C# name spells it.
+    /// </summary>
+    private static IMethodSymbol? NamingMemberOf(MethodOverloadGroup group, TargetLanguage? target)
+    {
+        if (group.IsDispatched)
+            return null;
+
+        var member = group.DeclaredMembers.First();
+
+        return NameOverrideOf(member, target) is null ? null : member.Symbol;
     }
 
     /// <summary>
@@ -125,10 +142,17 @@ internal static class SynthesizedGroupMembers
         if (group.DeclaredMembers.Any(member => IsOperator(member.Symbol)))
             return false;
 
-        if (SymbolHelper.ToCamelCase(group.Name) != name)
-            return false;
+        return SpellingOf(group, target) == name;
+    }
 
-        return group.IsDispatched || NameOverrideOf(group.DeclaredMembers.First(), target) is null;
+    private static string SpellingOf(MethodOverloadGroup group, TargetLanguage? target)
+    {
+        var camelCased = SymbolHelper.ToCamelCase(group.Name);
+
+        if (group.IsDispatched)
+            return camelCased;
+
+        return NameOverrideOf(group.DeclaredMembers.First(), target) ?? camelCased;
     }
 
     private static string? NameOverrideOf(DeclaredMember member, TargetLanguage? target) =>
@@ -152,15 +176,13 @@ internal static class SynthesizedGroupMembers
         TargetLanguage? target
     )
     {
-        var replacing = ReplacingDeclarationOf(type, kind, target);
+        var replacing = ReplacingDeclarationsOf(type, kind, target);
 
-        return group.DeclaredMembers.Any(member =>
-            replacing is null || !member.StandsFor(replacing)
-        );
+        return group.DeclaredMembers.Any(member => !replacing.Any(member.StandsFor));
     }
 
-    /// <summary>The declaration C# uses instead of synthesizing <paramref name="kind"/>; <c>null</c> when none.</summary>
-    private static IMethodSymbol? ReplacingDeclarationOf(
+    /// <summary>The declarations C# uses instead of synthesizing <paramref name="kind"/>.</summary>
+    private static IReadOnlyList<IMethodSymbol> ReplacingDeclarationsOf(
         INamedTypeSymbol type,
         IrSynthesizedValueMember kind,
         TargetLanguage? target
@@ -171,24 +193,34 @@ internal static class SynthesizedGroupMembers
             IrSynthesizedValueMember.HashCode => ValueEqualityShapes.ReplacingHashCodeOf(
                 type,
                 target
-            ),
-            _ => null,
+            )
+                is { } hashCode
+                ? [hashCode]
+                : [],
+            _ => [],
         };
 
     /// <summary>
     /// The replacing declaration the inserted member takes the body of: one with
     /// the member's own signature (a struct's <c>override Equals(object)</c>, an
-    /// <c>override GetHashCode()</c>). A record's <c>Equals(R)</c> is routed to
-    /// instead, and stays a declared overload.
+    /// <c>override GetHashCode()</c>). A typed <c>Equals</c> (a record's
+    /// <c>Equals(R)</c>, a struct's interface-implementing <c>Equals(S)</c>) is
+    /// routed to instead, and stays a declared overload.
     /// </summary>
     private static IMethodSymbol? FoldedReplacementOf(
         INamedTypeSymbol type,
         IrSynthesizedValueMember kind,
         TargetLanguage? target
     ) =>
-        kind is IrSynthesizedValueMember.Equals && type.IsRecord
-            ? null
-            : ReplacingDeclarationOf(type, kind, target);
+        kind switch
+        {
+            IrSynthesizedValueMember.Equals => ValueEqualityShapes.FoldedEqualsOf(type, target),
+            IrSynthesizedValueMember.HashCode => ValueEqualityShapes.ReplacingHashCodeOf(
+                type,
+                target
+            ),
+            _ => null,
+        };
 
     /// <summary>
     /// The root and group name of <paramref name="kind"/> in the topmost emitted
@@ -199,25 +231,38 @@ internal static class SynthesizedGroupMembers
         INamedTypeSymbol type,
         IrSynthesizedValueMember kind,
         OverloadGroupingPolicy policy
+    ) =>
+        EmittedBasesOf(type, policy)
+            .Select(ancestor =>
+                (
+                    Ancestor: ancestor,
+                    Group: MethodOverloadGroups
+                        .Of(ancestor, policy)
+                        .FirstOrDefault(candidate => candidate.Synthesized?.Kind == kind)
+                )
+            )
+            .Where(entry => entry.Group is not null)
+            .Select(entry =>
+                ((SynthesizedRoot Root, string GroupName)?)
+                    (
+                        new SynthesizedRoot(entry.Ancestor.OriginalDefinition, kind),
+                        entry.Group!.Name
+                    )
+            )
+            .LastOrDefault();
+
+    /// <summary>The emitted base classes of <paramref name="type"/>, nearest first.</summary>
+    private static IEnumerable<INamedTypeSymbol> EmittedBasesOf(
+        INamedTypeSymbol type,
+        OverloadGroupingPolicy policy
     )
     {
-        (SynthesizedRoot Root, string GroupName)? found = null;
-
         for (
             var ancestor = type.BaseType;
             MethodOverloadGroups.IsEmittedBase(ancestor, policy.Target);
             ancestor = ancestor!.BaseType
         )
-        {
-            var group = MethodOverloadGroups
-                .Of(ancestor!, policy)
-                .FirstOrDefault(candidate => candidate.Synthesized?.Kind == kind);
-
-            if (group is not null)
-                found = (new SynthesizedRoot(ancestor!.OriginalDefinition, kind), group.Name);
-        }
-
-        return found;
+            yield return ancestor!;
     }
 
     /// <summary>The ordinal after every member the type groups under <paramref name="groupName"/>.</summary>

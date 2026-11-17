@@ -132,7 +132,7 @@ internal static class DispatchedMethodCalls
     /// A <c>[Branded]</c> type is judged per method
     /// (<see cref="KeepsBrandedDispatcher"/>).
     /// </summary>
-    private static bool IsEmittedContainingType(INamedTypeSymbol type, TargetLanguage? target)
+    internal static bool IsEmittedContainingType(INamedTypeSymbol type, TargetLanguage? target)
     {
         if (type.TypeKind == TypeKind.Interface)
             return MethodOverloadGroups.IsTranspiledInterface(type, target);

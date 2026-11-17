@@ -141,6 +141,13 @@ internal sealed record MethodOverloadGroup(
 )
 {
     /// <summary>
+    /// The lone method whose raw <c>[Name]</c> spelled the group a synthesized
+    /// member joined (FR-039): its <c>[Name]</c> named the group, so it pins no
+    /// suffix. <c>null</c> for every other group.
+    /// </summary>
+    public IMethodSymbol? NamingMember { get; init; }
+
+    /// <summary>
     /// Whether the group's members are fast paths of a dispatched group: two
     /// or more, an inherited dispatcher, or one member anchored on a
     /// dispatched root.
@@ -222,10 +229,13 @@ internal static class MethodOverloadGroups
 
             suffixes[member] = rootSuffix;
 
-            if (anchor.RootMethod is { } rootMethod)
+            if (
+                anchor.RootMethod is { } rootMethod
+                && member is DeclaredMember { Symbol: var symbol }
+            )
             {
                 OverloadSuffixPin
-                    .Of(((DeclaredMember)member).Symbol, policy.Target)
+                    .Of(symbol, policy.Target)
                     ?.ReportIfIgnoredFor(rootMethod, rootSuffix);
             }
         }
@@ -251,7 +261,7 @@ internal static class MethodOverloadGroups
                 overload,
                 OverloadSuffixPin.Of(overload, policy.Target)
             ))
-            .Concat(namingMembers.Select(member => PinnedOverloadOf(member, policy.Target)))
+            .Concat(namingMembers.Select(member => PinnedOverloadOf(group, member, policy.Target)))
             .ToList();
 
         var memberSuffixes = OverloadGroupNaming.SuffixesOf(visible).Skip(inherited.Count);
@@ -325,6 +335,20 @@ internal static class MethodOverloadGroups
                 entry.Member!.Ordinal
             ))
             .FirstOrDefault();
+
+    /// <summary>
+    /// The synthesized member <paramref name="method"/> is folded into (an
+    /// <c>override GetHashCode()</c>, a struct's <c>override Equals(object)</c>);
+    /// <c>null</c> for any other method.
+    /// </summary>
+    public static IrSynthesizedValueMember? SynthesizedKindOf(
+        IMethodSymbol method,
+        OverloadGroupingPolicy policy
+    ) =>
+        GroupOf(method.OriginalDefinition, policy)?.MemberOf(method.OriginalDefinition)
+            is SynthesizedMember synthesized
+            ? synthesized.Kind
+            : null;
 
     /// <summary>
     /// The name a method groups under: its C# name, or an explicit
@@ -878,6 +902,9 @@ internal static class MethodOverloadGroups
         return false;
     }
 
+    private static bool IsNamingMember(MethodOverloadGroup group, DeclaredMember member) =>
+        group.NamingMember is { } naming && member.StandsFor(naming);
+
     private static bool IsSameDefinition(IMethodSymbol method, IMethodSymbol other) =>
         SymbolEqualityComparer.Default.Equals(method.OriginalDefinition, other.OriginalDefinition);
 
@@ -890,9 +917,20 @@ internal static class MethodOverloadGroups
             _ => true,
         };
 
-    private static PinnedOverload PinnedOverloadOf(DeclaredMember member, TargetLanguage? target) =>
+    /// <summary>
+    /// A member as its group's naming reads it: pinned by its root's
+    /// <c>[Name]</c> or its own, except the member whose <c>[Name]</c> named the
+    /// group (<see cref="MethodOverloadGroup.NamingMember"/>).
+    /// </summary>
+    private static PinnedOverload PinnedOverloadOf(
+        MethodOverloadGroup group,
+        DeclaredMember member,
+        TargetLanguage? target
+    ) =>
         new(
             member.Symbol,
-            OverloadSuffixPin.Of(member.Anchor?.RootMethod ?? member.Symbol, target)
+            IsNamingMember(group, member)
+                ? null
+                : OverloadSuffixPin.Of(member.Anchor?.RootMethod ?? member.Symbol, target)
         );
 }

@@ -138,13 +138,20 @@ internal sealed class TsClassMemberTable
     /// <summary>
     /// The name a method declares: a dispatched group's dispatcher keeps the
     /// camelCased C# name, which its fast paths extend — a <c>[Name]</c> on
-    /// one of its overloads pins that overload's suffix (spec 013 FR-005) —;
-    /// a single method takes its own naming policy.
+    /// one of its overloads pins that overload's suffix (spec 013 FR-005) —,
+    /// and a group a synthesized value-equality member joined keeps that
+    /// member's name, which may have come from a lone method's <c>[Name]</c>
+    /// (spec 013 FR-039); a single method takes its own naming policy.
     /// </summary>
-    public static string MethodNameOf(IrMethodDeclaration method) =>
-        method.OverloadName is null
-            ? IrToTsNamingPolicy.ToMethodName(method)
+    public static string MethodNameOf(IrMethodDeclaration method)
+    {
+        if (method.OverloadName is null)
+            return IrToTsNamingPolicy.ToMethodName(method);
+
+        return IrMethodGroup.Of(method).Synthesized?.SynthesizedKind is { } kind
+            ? TsGroupingPolicy.NameOf(kind)
             : TypeScriptNaming.ToCamelCaseMember(method.Name);
+    }
 
     /// <summary>
     /// The name an operator lowers to (<c>add</c>, <c>negate</c>): a single

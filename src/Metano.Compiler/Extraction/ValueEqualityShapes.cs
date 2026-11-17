@@ -23,35 +23,90 @@ internal static class ValueEqualityShapes
 
         return new IrValueEqualityShape(
             kind,
-            ReplacesEquals: ReplacingEqualsOf(type, target) is not null,
+            ReplacesEquals: ReplacingEqualsOf(type, target).Count > 0,
             ReplacesHashCode: ReplacingHashCodeOf(type, target) is not null
         );
     }
 
     /// <summary>
-    /// The declaration C# uses instead of the synthesized <c>Equals(object)</c>:
-    /// a record's <c>Equals(R)</c>, a struct's <c>override Equals(object)</c>.
-    /// <c>null</c> when there is none, and for a struct's <c>Equals(S)</c>, which
-    /// <c>ValueType.Equals</c> never calls.
+    /// The declarations C# uses instead of the synthesized <c>Equals(object)</c>:
+    /// a record's <c>Equals(R)</c>; a struct's <c>override Equals(object)</c>, and
+    /// its <c>Equals(S)</c> when it implements an interface member — the
+    /// <c>IEquatable&lt;S&gt;.Equals</c> that <c>EqualityComparer&lt;S&gt;.Default</c>
+    /// (sets, dictionaries, record fields) calls, implicitly or explicitly, or a
+    /// transpiled interface's. A struct's <c>Equals(S)</c> that implements nothing
+    /// replaces nothing: <c>ValueType.Equals</c> never calls it.
     /// </summary>
-    public static IMethodSymbol? ReplacingEqualsOf(INamedTypeSymbol type, TargetLanguage? target) =>
-        UserMethodsOf(type, target, nameof(object.Equals))
-            .FirstOrDefault(method =>
+    public static IReadOnlyList<IMethodSymbol> ReplacingEqualsOf(
+        INamedTypeSymbol type,
+        TargetLanguage? target
+    ) =>
+        EqualsMethodsOf(type, target)
+            .Where(method =>
                 method.Parameters is [{ Type: var parameter }]
                 && (
                     type.IsRecord
-                        ? IsTypeItself(parameter, type)
-                        : method.IsOverride && parameter.SpecialType is SpecialType.System_Object
+                        ? method.MethodKind is MethodKind.Ordinary && IsTypeItself(parameter, type)
+                        : IsObjectOverride(method, parameter)
+                            || IsTypeItself(parameter, type)
+                                && ImplementsInterfaceMember(type, method)
                 )
-            );
+            )
+            .ToList();
+
+    /// <summary>
+    /// The replacing declaration the synthesized <c>Equals(object)</c> takes the
+    /// body of: a struct's <c>override Equals(object)</c>, the same signature.
+    /// </summary>
+    public static IMethodSymbol? FoldedEqualsOf(INamedTypeSymbol type, TargetLanguage? target) =>
+        type.IsRecord
+            ? null
+            : ReplacingEqualsOf(type, target)
+                .FirstOrDefault(method => IsObjectOverride(method, method.Parameters[0].Type));
+
+    /// <summary>
+    /// The typed replacing <c>Equals</c> the synthesized <c>Equals(object)</c> routes
+    /// to, as C# does: a record's <c>Equals(R)</c>, or a struct's interface-implementing
+    /// <c>Equals(S)</c> when it declares no <c>override Equals(object)</c>.
+    /// <c>null</c> when there is none.
+    /// </summary>
+    public static IMethodSymbol? RoutedEqualsOf(INamedTypeSymbol type, TargetLanguage? target) =>
+        FoldedEqualsOf(type, target) is null
+            ? ReplacingEqualsOf(type, target)
+                .FirstOrDefault(method => IsTypeItself(method.Parameters[0].Type, type))
+            : null;
 
     /// <summary>The type's <c>override GetHashCode()</c>; <c>null</c> when it declares none.</summary>
     public static IMethodSymbol? ReplacingHashCodeOf(
         INamedTypeSymbol type,
         TargetLanguage? target
     ) =>
-        UserMethodsOf(type, target, nameof(object.GetHashCode))
-            .FirstOrDefault(method => method is { IsOverride: true, Parameters.Length: 0 });
+        UserMethodsOf(type, target)
+            .FirstOrDefault(method =>
+                method is { Name: nameof(GetHashCode), IsOverride: true, Parameters.Length: 0 }
+            );
+
+    private static IEnumerable<IMethodSymbol> EqualsMethodsOf(
+        INamedTypeSymbol type,
+        TargetLanguage? target
+    ) =>
+        UserMethodsOf(type, target)
+            .Where(method => MethodOverloadGroups.GroupNameOf(method) == nameof(Equals));
+
+    private static bool IsObjectOverride(IMethodSymbol method, ITypeSymbol parameter) =>
+        method.IsOverride && parameter.SpecialType is SpecialType.System_Object;
+
+    private static bool ImplementsInterfaceMember(INamedTypeSymbol type, IMethodSymbol method) =>
+        !method.ExplicitInterfaceImplementations.IsEmpty
+        || type.AllInterfaces.SelectMany(implemented =>
+                implemented.GetMembers(nameof(Equals)).OfType<IMethodSymbol>()
+            )
+            .Any(member =>
+                SymbolEqualityComparer.Default.Equals(
+                    type.FindImplementationForInterfaceMember(member),
+                    method
+                )
+            );
 
     private static IrValueEqualityKind KindOf(INamedTypeSymbol type)
     {
@@ -74,11 +129,10 @@ internal static class ValueEqualityShapes
 
     private static IEnumerable<IMethodSymbol> UserMethodsOf(
         INamedTypeSymbol type,
-        TargetLanguage? target,
-        string name
+        TargetLanguage? target
     ) =>
         type
-            .OriginalDefinition.GetMembers(name)
+            .OriginalDefinition.GetMembers()
             .OfType<IMethodSymbol>()
             .Where(method =>
                 method
@@ -86,6 +140,7 @@ internal static class ValueEqualityShapes
                         IsStatic: false,
                         IsImplicitlyDeclared: false,
                         MethodKind: MethodKind.Ordinary
+                            or MethodKind.ExplicitInterfaceImplementation,
                     }
                 && !method.IsCompilerGenerated()
                 && !method.HasIgnore(target)

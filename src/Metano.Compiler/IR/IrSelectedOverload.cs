@@ -14,4 +14,13 @@ namespace Metano.Compiler.IR;
 public sealed record IrSelectedOverload(
     IrOverloadRef Target,
     IReadOnlyList<int>? EvaluationOrder = null
-);
+)
+{
+    /// <summary>
+    /// The synthesized value-equality member the overload is (spec 013 FR-043):
+    /// its fast path keeps a stable name, so a target that cannot read the
+    /// declaring type's claims (a referenced package) still names it.
+    /// <c>null</c> for a declared overload.
+    /// </summary>
+    public IrSynthesizedValueMember? Synthesized { get; init; }
+}

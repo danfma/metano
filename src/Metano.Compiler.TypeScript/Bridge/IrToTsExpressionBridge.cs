@@ -679,7 +679,7 @@ public static partial class IrToTsExpressionBridge
         // function stays bare.
         var memberName =
             ma.Overload is { } groupOverload
-            && TsOverloadCallSites.MethodFastPathOf(groupOverload.Target) is { } groupFastPath
+            && TsOverloadCallSites.MethodFastPathOf(groupOverload) is { } groupFastPath
                 ? groupFastPath
                 : AccessedMemberName(ma);
 
@@ -1821,7 +1821,7 @@ public static partial class IrToTsExpressionBridge
         }
 
         var copy = w.Overload is { } overload
-            ? TsOverloadCallSites.MethodFastPathOf(overload.Target)
+            ? TsOverloadCallSites.MethodFastPathOf(overload)
             : null;
 
         return new TsCallExpression(
@@ -2179,7 +2179,7 @@ public static partial class IrToTsExpressionBridge
         if (BaseOverloadOf(call) is not { } overload)
             return null;
 
-        if (TsOverloadCallSites.MethodFastPathOf(overload.Target) is not { } fastPath)
+        if (TsOverloadCallSites.MethodFastPathOf(overload) is not { } fastPath)
             return null;
 
         var ordered = TsEvaluationOrder.Bind(
@@ -2226,7 +2226,7 @@ public static partial class IrToTsExpressionBridge
             BoundArgumentPrefix
         );
 
-        var fastPath = TsOverloadCallSites.MethodFastPathOf(overload.Target);
+        var fastPath = TsOverloadCallSites.MethodFastPathOf(overload);
 
         // The argument bindings evaluate first, in the source's order — an
         // instance receiver with a side effect must evaluate before them, as

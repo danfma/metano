@@ -508,7 +508,9 @@ public static class IrClassExtractor
     {
         var policy = context.GroupingPolicy;
         var suffixes = MethodOverloadGroups.SuffixesOf(type, group, policy);
-        var shadowed = SynthesizedShadowing.Report(type, group, policy);
+        var shadowed = SynthesizedShadowing.ShadowedBy(type, group);
+
+        SynthesizedShadowingReporter.Report(type, group, shadowed, policy);
         var declared = group.DeclaredMembers.ToList();
 
         var symbolSuffixes = declared.ToDictionary(
@@ -531,7 +533,8 @@ public static class IrClassExtractor
                 {
                     DeclarationOrdinal = member.Ordinal,
                     Anchor = AnchorOf(member, context),
-                    IsShadowedBySynthesized = shadowed.Contains(member),
+                    IsShadowedBySynthesized =
+                        member is DeclaredMember declared && shadowed.Contains(declared),
                 }
         );
     }
