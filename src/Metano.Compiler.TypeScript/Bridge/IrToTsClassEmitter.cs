@@ -413,7 +413,18 @@ public sealed class IrToTsClassEmitter(
             classMembers.Add(toJson);
 
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
-            classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir));
+        {
+            var userMembers = TsClassMemberTable.UserMembersOf(ir);
+
+            classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir, userMembers));
+
+            IrToTsRecordSynthesisBridge.ReportClaimedEquals(
+                type,
+                ir,
+                userMembers,
+                _context.ReportDiagnostic
+            );
+        }
 
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
 

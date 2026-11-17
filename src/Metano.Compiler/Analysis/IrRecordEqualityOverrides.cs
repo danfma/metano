@@ -27,13 +27,20 @@ public static class IrRecordEqualityOverrides
             );
 
     /// <summary>
-    /// The type declares an instance <c>Equals</c> of one parameter of any
-    /// type (a struct's <c>Equals(object?)</c> override or <c>Equals(S)</c>),
-    /// which the backend emits under the synthesized member's name.
+    /// The struct declares the instance <c>Equals</c> C# uses instead of
+    /// <c>ValueType.Equals</c>: an <c>Equals(object?)</c> override or an
+    /// <c>Equals(S)</c>, which the backend emits under the synthesized member's
+    /// name. Any other <c>Equals</c> overload yields that name.
     /// </summary>
-    public static bool DeclaresAnyEquals(IrClassDeclaration type) =>
+    public static bool DeclaresStructEquals(IrClassDeclaration type) =>
         DeclaredMethods(type)
-            .Any(m => m is { Name: nameof(object.Equals), IsStatic: false, Parameters.Count: 1 });
+            .Any(m =>
+                m is { Name: nameof(object.Equals), IsStatic: false, Parameters.Count: 1 }
+                && (
+                    IrObjectContract.IsObjectTypeRef(m.Parameters[0].Type)
+                    || IsRecordTypeRef(m.Parameters[0].Type, type)
+                )
+            );
 
     /// <summary>The record overrides <c>GetHashCode</c>.</summary>
     public static bool DeclaresHashCode(IrClassDeclaration record) =>
