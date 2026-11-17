@@ -148,6 +148,13 @@ internal sealed record MethodOverloadGroup(
     public IMethodSymbol? NamingMember { get; init; }
 
     /// <summary>
+    /// The first methods of other groups the target spells like the synthesized
+    /// member this group took (FR-039): each would declare a second member of
+    /// that name, which the class extractor reports as an error.
+    /// </summary>
+    public IReadOnlyList<IMethodSymbol> SpelledAlike { get; init; } = [];
+
+    /// <summary>
     /// Whether the group's members are fast paths of a dispatched group: two
     /// or more, an inherited dispatcher, or one member anchored on a
     /// dispatched root.
@@ -506,7 +513,7 @@ internal static class MethodOverloadGroups
         && !method.IsCompilerGenerated()
         && !SymbolHelper.HasIgnore(method, policy.Target)
         && IsUserMethod(method)
-        && !IsDroppedExplicitImplementation(method, policy)
+        && !ExplicitImplementationFates.IsDropped(method, policy)
         && !SymbolHelper.IsInlinedAtCallSite(method);
 
     private static bool IsOperator(IMethodSymbol method) =>
@@ -518,22 +525,6 @@ internal static class MethodOverloadGroups
                 or MethodKind.UserDefinedOperator
                 or MethodKind.Conversion
                 or MethodKind.ExplicitInterfaceImplementation;
-
-    /// <summary>
-    /// Whether the target drops <paramref name="method"/>, an explicit
-    /// implementation it cannot declare under its interface member's name
-    /// (<see cref="ExplicitImplementationLowering"/>); a struct's explicit
-    /// <c>IEquatable&lt;S&gt;.Equals</c> superseded only by <c>ValueType.Equals</c>
-    /// stays for a target that names the synthesized <c>Equals</c>
-    /// (<see cref="ValueEqualityShapes.KeepsSupersededEquatable"/>).
-    /// </summary>
-    internal static bool IsDroppedExplicitImplementation(
-        IMethodSymbol method,
-        OverloadGroupingPolicy policy
-    ) =>
-        ExplicitImplementationLowering.Resolve(method, policy.Target) is { } lowering
-        && lowering.Fate is not ExplicitImplementationFate.EmittedUnderInterfaceName
-        && !ValueEqualityShapes.KeepsSupersededEquatable(method, lowering, policy);
 
     /// <summary>
     /// What <paramref name="method"/> is anchored on: the root of its

@@ -31,6 +31,8 @@ public static class IrClassExtractor
 
         var semantics = ExtractSemantics(type, context);
 
+        ValueEqualityShapeReporter.Report(type, context.GroupingPolicy);
+
         var baseType =
             type.BaseType is not null && IsMeaningfulBase(type.BaseType)
                 ? IrTypeRefMapper.Map(type.BaseType, originResolver)
@@ -400,7 +402,7 @@ public static class IrClassExtractor
             if (SymbolHelper.HasIgnore(member, target))
                 continue;
 
-            if (IsDroppedExplicitImplementation(member, target))
+            if (ExplicitImplementationFates.IsDropped(member, context.GroupingPolicy))
                 continue;
 
             switch (member)
@@ -513,6 +515,7 @@ public static class IrClassExtractor
         var shadowed = SynthesizedShadowing.ShadowedBy(type, group);
 
         SynthesizedShadowingReporter.Report(type, group, shadowed, policy);
+        SynthesizedGroupMembers.ReportSpelledAlike(type, group, policy);
         var declared = group.DeclaredMembers.ToList();
 
         var symbolSuffixes = declared.ToDictionary(
@@ -535,12 +538,13 @@ public static class IrClassExtractor
                 {
                     DeclarationOrdinal = member.Ordinal,
                     Anchor = AnchorOf(member, context),
-                    IsShadowedBySynthesized =
-                        member is DeclaredMember declaredMember
-                        && shadowed.Contains(declaredMember),
+                    IsShadowedBySynthesized = IsShadowed(member, shadowed),
                 }
         );
     }
+
+    private static bool IsShadowed(GroupMember member, IReadOnlySet<DeclaredMember> shadowed) =>
+        member is DeclaredMember declared && shadowed.Contains(declared);
 
     private static IrMethodDeclaration DeclarationOf(
         INamedTypeSymbol type,
@@ -608,20 +612,6 @@ public static class IrClassExtractor
 
         return roots.Count > 0 ? roots : null;
     }
-
-    /// <summary>
-    /// An explicit interface implementation the target cannot declare: its interface
-    /// is erased, it implements an operator, or its interface member name is already
-    /// taken (the frontend reports <c>MS0031</c> for the latter unless the interface is
-    /// outside the transpiled contract, such as a BCL bridge). See
-    /// <see cref="ExplicitImplementationLowering"/>.
-    /// </summary>
-    private static bool IsDroppedExplicitImplementation(
-        ISymbol member,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        ExplicitImplementationLowering.Resolve(member, target)
-            is { Fate: not ExplicitImplementationFate.EmittedUnderInterfaceName };
 
     private static IrEventDeclaration ExtractEvent(
         IEventSymbol evt,
