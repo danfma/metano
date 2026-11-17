@@ -220,7 +220,7 @@ internal sealed class TsCompanionPlan
     private static IEnumerable<string> DeclaredFunctionNamesOf(IrMethodDeclaration primary) =>
         primary.Semantics.ConversionName is null
             ? [FunctionNameOf(primary)]
-            : new[] { primary }.Concat(primary.Overloads ?? []).Select(FunctionNameOf);
+            : IrMethodGroup.Of(primary).Members.Select(FunctionNameOf);
 
     /// <summary>
     /// Inline wrapper helpers lower to <c>export namespace TypeName { export

@@ -37,10 +37,13 @@ public enum IrConversionKind
 /// types, never by its arguments, so each conversion is named on its own —
 /// its kind's prefix (<c>Implicit</c>, none for an explicit one,
 /// <c>Checked</c>), then <c>To</c> + the target type's spelling or
-/// <c>From</c> + the source type's, with spec 013's spellings and climb
+/// <c>From</c> + the source type's, with spec 013's spellings (a named
+/// converted type by the name the target emits it with) and climb
 /// (<c>ToInt64</c>, <c>ImplicitFromInt32</c>, <c>CheckedToInt32</c>). The core
-/// computes it once per conversion from the Roslyn symbol, at the declaration
-/// and at every use; a target decides its prefix, casing and claim.
+/// computes it once per conversion and target from the Roslyn symbol, at the
+/// declaration and at every use, the kind and direction words included; a
+/// target adds only its own decoration (TypeScript's <c>__</c> and casing)
+/// and claim.
 /// </summary>
 /// <param name="Direction">Out of or into the declaring type.</param>
 /// <param name="Kind">Implicit, explicit or checked.</param>

@@ -482,7 +482,7 @@ public class FunctionDispatcherAmbiguityTests
     }
 
     [Test]
-    public async Task CompanionNamespace_OperatorGroup_KeepsItsFastPathsLocal()
+    public async Task CompanionNamespace_OperatorGroup_ExportsItsFastPaths()
     {
         var result = TranspileHelper.Transpile(
             Preamble

@@ -31,6 +31,6 @@ export namespace Ticks {
       return __addTicksUId(args[0] as Ticks, args[1] as UId);
     }
 
-    throw new Error("No matching overload for op_Addition");
+    throw new Error("No matching overload for add");
   }
 }
