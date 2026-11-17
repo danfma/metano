@@ -34,10 +34,11 @@ or module function; for virtual and interface members, the **root** group of § 
    `Int32` / `String`). Operator groups start here: their suffix is always the type spellings
    (FR-033, today's convention). A conversion operator is not named here: each conversion is its
    own static named `To` + the target type's spelling (a conversion out of the declaring type)
-   or `From` + the source type's spelling (a conversion into it), because C# tells conversions
-   apart by their source and target types (`explicit operator int(Money m)` /
-   `explicit operator long(Money m)` → `__toInt32` / `__toInt64` in TypeScript; baseline FR-078,
-   #600); a `checked` conversion operator is `CheckedTo` / `CheckedFrom`. The name comes from one
+   or `From` + the source type's spelling (a conversion into it), after `Implicit` for an
+   implicit conversion and `Checked` for a `checked` one, because C# tells conversions apart by
+   their source and target types (`explicit operator int(Money m)` /
+   `explicit operator long(Money m)` → `__toInt32` / `__toInt64` in TypeScript,
+   `implicit operator Money(int c)` → `__implicitFromInt32`; baseline FR-078, #600). The name comes from one
    function of the symbol (`ConversionNaming.Of`), at the declaration and at every use, and is
    carried as `IrConversionName`; a conversion group gets no overload suffix (the former
    `<Params>To<Target>` suffix is retired). Two conversions of one type whose names collide
