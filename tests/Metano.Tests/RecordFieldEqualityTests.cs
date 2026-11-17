@@ -182,6 +182,7 @@ public class RecordFieldEqualityTests
         await Assert
             .That(files["r-tol.ts"])
             .Contains("equalsOtherTol(other: RTol, tol: number): boolean {");
+
         await Assert.That(files["r-tol.ts"]).Contains("equals(other: any): boolean {");
         await Assert.That(files["q-with.ts"]).Contains("withA(a: number): QWith {");
         await Assert.That(files["q-with.ts"]).Contains("with(overrides?: Partial<QWith>): QWith {");
@@ -219,6 +220,7 @@ public class RecordFieldEqualityTests
         await Assert
             .That(error.Severity)
             .IsEqualTo(Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Error);
+
         await Assert.That(error.Message).Contains("'QEqualsProp.Equals' is emitted as 'equals'");
     }
 }

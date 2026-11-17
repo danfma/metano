@@ -44,6 +44,7 @@ internal sealed class ImportCycleCastPass(string? importAlias)
 
             var checkedCasts = outcomes.CheckedCasts[index]
                 ?? transformAgain(index, NoAssertedCasts);
+
             var asserted = CastsClosingImportCycles(graph, file, checkedCasts);
 
             if (asserted.Count > 0)
