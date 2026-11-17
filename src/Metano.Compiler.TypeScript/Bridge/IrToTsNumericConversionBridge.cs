@@ -21,18 +21,6 @@ internal static class IrToTsNumericConversionBridge
 
     private static readonly IrNumericEndpoint CodeUnit = new(IrNumericKind.UInt16);
 
-    /// <summary>
-    /// The operand <paramref name="conversion"/> renders: an unchecked
-    /// narrowing between integers of 32 bits or fewer reduces its operand
-    /// modulo 2^32 itself, so an <c>int</c> / <c>uint</c> wrap there drops
-    /// its trailing reduction (spec 001 FR-076). A checked narrowing reads
-    /// the exact value, and a lifted one keeps its operand as it is.
-    /// </summary>
-    public static IrExpression OperandOf(IrNumericConversion conversion) =>
-        conversion is { IsChecked: false, IsLifted: false, NarrowsInteger: true }
-            ? IrToTsIntegerOverflowBridge.ReducedByConsumer(conversion.Operand)
-            : conversion.Operand;
-
     public static TsExpression Map(IrNumericConversion conversion, TsExpression operand)
     {
         if (conversion.IsLifted)

@@ -72,7 +72,7 @@ public static partial class IrToTsExpressionBridge
         if (IrToTsJsxBridge.TryLowerJsxProducer(expression, context) is { } jsx)
             return jsx;
 
-        return expression switch
+        return IrToTsIntegerOverflowBridge.WithOperandsItReduces(expression) switch
         {
             IrLiteral lit => MapLiteral(lit),
             IrIdentifier id => new TsIdentifier(IrToTsNamingPolicy.ToLocalName(id.Name)),
@@ -110,7 +110,7 @@ public static partial class IrToTsExpressionBridge
             IrCastExpression cast => MapCast(cast, context),
             IrNumericConversion conversion => IrToTsNumericConversionBridge.Map(
                 conversion,
-                Map(IrToTsNumericConversionBridge.OperandOf(conversion), context)
+                Map(conversion.Operand, context)
             ),
             IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(overflow, value =>
                 Map(value, context)
@@ -158,9 +158,7 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapBinary(IrBinaryExpression binary, IrToTsBridgeContext context)
     {
-        var bin = IrToTsIntegerOverflowBridge.WithBitwiseOperandsReduced(
-            IrToTsNumericConversionBridge.WithCharOperandsAsText(binary)
-        );
+        var bin = IrToTsNumericConversionBridge.WithCharOperandsAsText(binary);
 
         if (
             bin.Operator is IrBinaryOp.Assign
@@ -248,9 +246,6 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        if (unary.Operator is IrUnaryOp.BitwiseNot)
-            return Map(IrToTsIntegerOverflowBridge.ReducedByConsumer(unary.Operand), context);
-
         if (unary.Operator is not (IrUnaryOp.Increment or IrUnaryOp.Decrement))
             return Map(unary.Operand, context);
 

@@ -7,22 +7,34 @@ namespace Metano.Compiler.Extraction;
 /// Which numeric operations the core makes explicit for one target, decided
 /// once from the target (<see cref="IrExtractionContext.NumericLowering"/>)
 /// so no caller threads a flag: the conversions it lowers to an
-/// <see cref="IrNumericConversion"/>, and whether unchecked <c>int</c> /
-/// <c>uint</c> arithmetic wraps. Dart keeps its <c>char</c> shapes and its
-/// unchecked 32-bit arithmetic as they were (both documented gaps), where
-/// the other targets read a <c>char</c> as its UTF-16 code (spec 001 FR-071,
-/// FR-072) and wrap that arithmetic (FR-074).
+/// <see cref="IrNumericConversion"/>, whether unchecked <c>int</c> /
+/// <c>uint</c> arithmetic wraps, and which range facts may drop a
+/// reduction. Dart keeps its <c>char</c> shapes, its unchecked 32-bit
+/// arithmetic and its narrowings as they were (documented gaps, deferred
+/// after v3), where the other targets read a <c>char</c> as its UTF-16 code
+/// (spec 001 FR-071, FR-072), wrap that arithmetic (FR-074) and drop the
+/// reductions the facts of FR-075 prove unneeded.
 /// </summary>
 /// <param name="LowersCharCodes">Whether a <c>char</c> is read and stored as its code.</param>
 /// <param name="WrapsInt32Arithmetic">Whether unchecked <c>int</c> / <c>uint</c>
 /// <c>+</c>, <c>-</c>, <c>*</c>, unary <c>-</c> and their stores are reduced
 /// modulo 2^32 (an <see cref="IrIntegerOverflow"/> that wraps).</param>
-internal sealed record NumericLoweringRules(bool LowersCharCodes, bool WrapsInt32Arithmetic)
+/// <param name="ReadsCollectionAndLoopRanges">Whether the non-negative
+/// <c>Length</c> / <c>Count</c> of an array, a <c>string</c> or a BCL
+/// collection (<see cref="IntegerValueRanges"/>) and the bounded step of a
+/// counting loop (<see cref="BoundedCountingLoop"/>) may drop a reduction
+/// or a narrowing (FR-075).</param>
+internal sealed record NumericLoweringRules(
+    bool LowersCharCodes,
+    bool WrapsInt32Arithmetic,
+    bool ReadsCollectionAndLoopRanges
+)
 {
     public static NumericLoweringRules For(TargetLanguage? target) =>
         new(
             LowersCharCodes: target != TargetLanguage.Dart,
-            WrapsInt32Arithmetic: target != TargetLanguage.Dart
+            WrapsInt32Arithmetic: target != TargetLanguage.Dart,
+            ReadsCollectionAndLoopRanges: target != TargetLanguage.Dart
         );
 
     /// <summary>

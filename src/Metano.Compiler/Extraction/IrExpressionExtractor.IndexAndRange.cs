@@ -40,7 +40,7 @@ public sealed partial class IrExpressionExtractor
 
     private const string RangeTypeName = "System.Range";
 
-    private const string ListTypeName = "System.Collections.Generic.List`1";
+    internal const string ListTypeName = "System.Collections.Generic.List`1";
 
     /// <summary>
     /// One extracted range bound: a plain offset, or the <c>n</c> of a

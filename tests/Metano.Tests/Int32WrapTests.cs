@@ -393,7 +393,9 @@ public class Int32WrapTests
 
     /// <summary>
     /// A dictionary entry has no read-modify-write (the read of a missing
-    /// key would not throw), so a wrapped store on one reports MS0001.
+    /// key would not throw), so a wrapped store on one reports MS0001 as an
+    /// error: the build fails, as it did when <c>tsc</c> rejected the
+    /// <c>counts.get(key)++</c> it emitted before.
     /// </summary>
     [Test]
     public async Task WrappedStore_OnADictionaryEntry_ReportsUnsupported()
@@ -410,7 +412,10 @@ public class Int32WrapTests
             """
         );
 
-        await Assert.That(UnsupportedFeatures(diagnostics).Count).IsEqualTo(1);
+        var unsupported = UnsupportedFeatures(diagnostics);
+
+        await Assert.That(unsupported.Count).IsEqualTo(1);
+        await Assert.That(unsupported[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
     }
 
     /// <summary>
@@ -430,6 +435,44 @@ public class Int32WrapTests
         await Assert.That(wraps).DoesNotContain("toSigned(32)");
         await Assert.That(wraps).DoesNotContain("toUnsigned(32)");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// The facts FR-075 reads for TypeScript (a <c>char</c> code, a
+    /// collection count, a bounded loop step) are gated off for Dart, so
+    /// Dart prints its pre-#639-layer-3 narrowings and checked steps: the
+    /// golden is byte-identical to the output of the integration base.
+    /// </summary>
+    [Test]
+    public async Task Dart_KeepsItsNarrowingsAndCheckedSteps()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Scope
+            {
+                public uint TextLength(string s) => (uint)s.Length;
+                public uint ArrayLength(int[] a) => (uint)a.Length;
+                public uint ListCount(List<int> l) => (uint)l.Count;
+                public uint CharNext(char c) => (uint)(c + 1);
+                public int CharUnsigned(char c) => (int)(uint)c;
+                public ushort CharSame(char c) => (ushort)(c + 0);
+                public byte Masked(int x) => (byte)(x & 0xFF);
+                public int Add(int a, int b) => a + b;
+
+                public int Sum(int n)
+                {
+                    var s = 0;
+                    checked { for (var i = 0; i < n; i++) s += i; }
+                    return s;
+                }
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden("dart-int32-wrap-scope.dart", files["scope.dart"]);
     }
 
     private static string BodyOf(string source, string name)

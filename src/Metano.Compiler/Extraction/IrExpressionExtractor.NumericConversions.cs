@@ -297,7 +297,10 @@ public sealed partial class IrExpressionExtractor
         IrNumericEndpoint to
     ) =>
         IrNumericConversion.IsIntegerNarrowing(from, to)
-        && IntegerValueRanges.Of(_semantic.GetOperation(Unparenthesized(cast.Expression)))
+        && IntegerValueRanges.Of(
+            _semantic.GetOperation(Unparenthesized(cast.Expression)),
+            _context.NumericLowering
+        )
             is { } operand
         && IntegerRange.Of(to.Kind).Contains(operand);
 

@@ -69,19 +69,44 @@ internal static class IrToTsIntegerOverflowBridge
         };
 
     /// <summary>
-    /// <paramref name="binary"/> with the operands its JavaScript operator
-    /// reduces modulo 2^32 (<c>&amp;</c>, <c>|</c>, <c>^</c> and the shifts
-    /// of a 32-bit or narrower integer) passed through
-    /// <see cref="ReducedByConsumer"/> (FR-076).
+    /// <paramref name="expression"/> with its operands passed through
+    /// <see cref="ReducedByConsumer"/> when it
+    /// <see cref="ReducesOperandsModulo2To32">reduces them itself</see>
+    /// (FR-076); unchanged otherwise.
     /// </summary>
-    public static IrBinaryExpression WithBitwiseOperandsReduced(IrBinaryExpression binary) =>
-        IsThirtyTwoBitBitwise(binary)
-            ? binary with
+    public static IrExpression WithOperandsItReduces(IrExpression expression) =>
+        expression switch
+        {
+            _ when !ReducesOperandsModulo2To32(expression) => expression,
+            IrBinaryExpression binary => binary with
             {
                 Left = ReducedByConsumer(binary.Left),
                 Right = ReducedByConsumer(binary.Right),
-            }
-            : binary;
+            },
+            IrUnaryExpression unary => unary with { Operand = ReducedByConsumer(unary.Operand) },
+            IrNumericConversion conversion => conversion with
+            {
+                Operand = ReducedByConsumer(conversion.Operand),
+            },
+            _ => expression,
+        };
+
+    /// <summary>
+    /// Whether the JavaScript form of <paramref name="consumer"/> applies
+    /// <c>ToInt32</c> / <c>ToUint32</c> to its operands: <c>&amp;</c>,
+    /// <c>|</c>, <c>^</c> and the shifts of a 32-bit or narrower integer,
+    /// <c>~</c>, and an unchecked, non-lifted narrowing between integers of
+    /// 32 bits or fewer (a checked one reads the exact value). The one rule
+    /// of FR-076's consumers besides the wraps and <c>Math.imul</c>.
+    /// </summary>
+    private static bool ReducesOperandsModulo2To32(IrExpression consumer) =>
+        consumer switch
+        {
+            IrBinaryExpression binary => IsThirtyTwoBitBitwise(binary),
+            IrUnaryExpression { Operator: IrUnaryOp.BitwiseNot } => true,
+            IrNumericConversion { IsChecked: false, IsLifted: false, NarrowsInteger: true } => true,
+            _ => false,
+        };
 
     /// <summary>
     /// <c>| 0</c> / <c>&gt;&gt;&gt; 0</c> over the wrapped operation, whose

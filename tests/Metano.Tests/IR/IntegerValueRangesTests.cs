@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
@@ -41,8 +42,19 @@ public class IntegerValueRangesTests
             public static ulong ULongProduct(ulong a, ulong b) => a * b;
             public static int NarrowedULongProduct(ulong a, ulong b) => (int)(a * b);
             public static double Floating(double d) => d;
+            public static int Length(int[] a) => a.Length;
+            public static int ListCount(System.Collections.Generic.List<int> l) => l.Count;
+            public static int CharPlusOne(char c) => c + 1;
         }
         """;
+
+    private static readonly NumericLoweringRules TypeScriptRules = NumericLoweringRules.For(
+        TargetLanguage.TypeScript
+    );
+
+    private static readonly NumericLoweringRules DartRules = NumericLoweringRules.For(
+        TargetLanguage.Dart
+    );
 
     private static readonly Lazy<(SemanticModel Model, SyntaxNode Root)> Compiled = new(Compile);
 
@@ -66,9 +78,12 @@ public class IntegerValueRangesTests
     [Arguments("FromDouble", (long)int.MinValue, (long)int.MaxValue)]
     [Arguments("FromNullable", 0L, 255L)]
     [Arguments("NarrowedULongProduct", (long)int.MinValue, (long)int.MaxValue)]
+    [Arguments("Length", 0L, (long)int.MaxValue)]
+    [Arguments("ListCount", 0L, (long)int.MaxValue)]
+    [Arguments("CharPlusOne", 1L, 65536L)]
     public async Task Of_ReadsTheValuesAnOperationCanProduce(string method, long min, long max)
     {
-        var range = IntegerValueRanges.Of(ReturnedOperationOf(method));
+        var range = IntegerValueRanges.Of(ReturnedOperationOf(method), TypeScriptRules);
 
         await Assert.That(range?.Min).IsEqualTo((Int128)min);
         await Assert.That(range?.Max).IsEqualTo((Int128)max);
@@ -81,7 +96,7 @@ public class IntegerValueRangesTests
     [Test]
     public async Task Of_FallsBackToTheTypeWhenAProductIsUnknown()
     {
-        var range = IntegerValueRanges.Of(ReturnedOperationOf("ULongProduct"));
+        var range = IntegerValueRanges.Of(ReturnedOperationOf("ULongProduct"), TypeScriptRules);
 
         await Assert.That(range).IsEqualTo(IntegerRange.Of(IrNumericKind.UInt64));
     }
@@ -89,8 +104,25 @@ public class IntegerValueRangesTests
     [Test]
     public async Task Of_IsNullForAnOperationThatIsNotAnInteger()
     {
-        await Assert.That(IntegerValueRanges.Of(ReturnedOperationOf("Floating"))).IsNull();
-        await Assert.That(IntegerValueRanges.Of(null)).IsNull();
+        await Assert
+            .That(IntegerValueRanges.Of(ReturnedOperationOf("Floating"), TypeScriptRules))
+            .IsNull();
+        await Assert.That(IntegerValueRanges.Of(null, TypeScriptRules)).IsNull();
+    }
+
+    /// <summary>
+    /// Dart reads neither a <c>char</c> nor a collection count as a range
+    /// (spec 001 FR-075 is deferred there), so its output stays as it was.
+    /// </summary>
+    [Test]
+    [Arguments("Length")]
+    [Arguments("ListCount")]
+    [Arguments("CharPlusOne")]
+    public async Task Of_ForDart_SpansTheTypeOfTheNewArms(string method)
+    {
+        var range = IntegerValueRanges.Of(ReturnedOperationOf(method), DartRules);
+
+        await Assert.That(range).IsEqualTo(IntegerRange.Of(IrNumericKind.Int32));
     }
 
     private static IOperation? ReturnedOperationOf(string method)

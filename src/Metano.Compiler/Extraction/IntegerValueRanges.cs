@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Operations;
@@ -10,10 +11,12 @@ namespace Metano.Compiler.Extraction;
 /// conversion that cannot change the value keeps its operand's range, a
 /// built-in <c>+</c>, <c>-</c>, <c>*</c>, <c>&amp;</c>, <c>|</c>, <c>^</c>
 /// or <c>&lt;&lt;</c> by a constant combines its operands' ranges, a
-/// <c>char</c> is its UTF-16 code, the <c>Length</c> of an array or a
-/// <c>string</c> and the <c>Count</c> of a BCL collection that owns its
-/// storage are non-negative (spec 001 FR-075), and anything else spans its
-/// type. It is not a data-flow analysis: a variable spans its type.
+/// <c>char</c> is its UTF-16 code when the target lowers char codes, the
+/// <c>Length</c> of an array or a <c>string</c> and the <c>Count</c> of a
+/// BCL collection that owns its storage are non-negative when the target
+/// reads those ranges (spec 001 FR-075; <see cref="NumericLoweringRules"/>
+/// decides both), and anything else spans its type. It is not a data-flow
+/// analysis: a variable spans its type.
 /// </summary>
 internal static class IntegerValueRanges
 {
@@ -23,7 +26,7 @@ internal static class IntegerValueRanges
     /// </summary>
     private static readonly string[] StorageOwningCollections =
     [
-        "System.Collections.Generic.List`1",
+        IrExpressionExtractor.ListTypeName,
         "System.Collections.Generic.Dictionary`2",
         "System.Collections.Generic.HashSet`1",
         "System.Collections.Generic.Queue`1",
@@ -34,33 +37,41 @@ internal static class IntegerValueRanges
         "System.Collections.Generic.LinkedList`1",
     ];
 
+    /// <summary><see cref="StorageOwningCollections"/> resolved once per compilation.</summary>
+    private static readonly ConditionalWeakTable<
+        Compilation,
+        HashSet<INamedTypeSymbol>
+    > ResolvedCollections = new();
+
     /// <summary>
     /// The values <paramref name="operation"/> can produce; <c>null</c> when
     /// its type is not an integer of 64 bits or fewer (an enum reads as its
-    /// underlying kind).
+    /// underlying kind), as the target's <paramref name="rules"/> read it.
     /// </summary>
-    public static IntegerRange? Of(IOperation? operation)
+    public static IntegerRange? Of(IOperation? operation, NumericLoweringRules rules)
     {
         if (operation is null)
             return null;
 
-        if (ConstantOf(operation) is { } constant)
+        if (ConstantOf(operation, rules) is { } constant)
             return IntegerRange.Exactly(constant);
 
-        if (OfType(operation.Type) is not { } typeRange)
+        if (OfType(operation.Type, rules) is not { } typeRange)
             return null;
 
         var exact = operation switch
         {
             IConversionOperation { Conversion.IsUserDefined: false } conversion => Of(
-                conversion.Operand
+                conversion.Operand,
+                rules
             ),
             IBinaryOperation { OperatorMethod: null } binary => ExactResult(
                 binary.OperatorKind,
-                Of(binary.LeftOperand),
-                Of(binary.RightOperand)
+                Of(binary.LeftOperand, rules),
+                Of(binary.RightOperand, rules)
             ),
-            IPropertyReferenceOperation property when IsStoredElementCount(property) =>
+            IPropertyReferenceOperation property
+                when rules.ReadsCollectionAndLoopRanges && IsStoredElementCount(property) =>
                 IntegerRange.NonNegativeOf(IrNumericKind.Int32),
             _ => null,
         };
@@ -70,11 +81,18 @@ internal static class IntegerValueRanges
         return exact is { } range && typeRange.Contains(range) ? range : typeRange;
     }
 
-    /// <summary>The values of the integer or <c>char</c> type <paramref name="type"/>, through <c>Nullable&lt;T&gt;</c>; <c>null</c> for any other type.</summary>
-    public static IntegerRange? OfType(ITypeSymbol? type) =>
-        NumericEndpoints.Of(type) is { Kind: var kind } && kind.IsIntegerOrChar()
+    /// <summary>
+    /// The values of the integer type <paramref name="type"/>, through
+    /// <c>Nullable&lt;T&gt;</c>, or of a <c>char</c> when the target lowers
+    /// char codes; <c>null</c> for any other type.
+    /// </summary>
+    public static IntegerRange? OfType(ITypeSymbol? type, NumericLoweringRules rules) =>
+        NumericEndpoints.Of(type) is { Kind: var kind } && IsRangedKind(kind, rules)
             ? IntegerRange.Of(kind)
             : null;
+
+    private static bool IsRangedKind(IrNumericKind kind, NumericLoweringRules rules) =>
+        kind.IsInteger() || (rules.LowersCharCodes && kind is IrNumericKind.Char);
 
     /// <summary>
     /// The <c>Length</c> of an array or a <c>string</c>, or the <c>Count</c>
@@ -92,14 +110,15 @@ internal static class IntegerValueRanges
                 .SemanticModel
                 ?.Compilation
                 is { } compilation
-                && StorageOwningCollections.Any(name =>
-                    SymbolEqualityComparer.Default.Equals(
-                        compilation.GetTypeByMetadataName(name),
-                        owner
-                    )
-                ),
+                && ResolvedCollections.GetValue(compilation, Resolve).Contains(owner),
             _ => false,
         };
+
+    private static HashSet<INamedTypeSymbol> Resolve(Compilation compilation) =>
+        StorageOwningCollections
+            .Select(compilation.GetTypeByMetadataName)
+            .OfType<INamedTypeSymbol>()
+            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
     /// <summary>
     /// The mathematical result of the built-in operator <paramref name="kind"/>
@@ -133,7 +152,7 @@ internal static class IntegerValueRanges
     private static int ConstantCountOf(IntegerRange count) =>
         count.Min >= 0 && count.Min <= int.MaxValue ? (int)count.Min : -1;
 
-    private static Int128? ConstantOf(IOperation operation) =>
+    private static Int128? ConstantOf(IOperation operation, NumericLoweringRules rules) =>
         operation.ConstantValue is { HasValue: true, Value: var value }
             ? value switch
             {
@@ -145,7 +164,7 @@ internal static class IntegerValueRanges
                 uint v => v,
                 long v => v,
                 ulong v => v,
-                char v => v,
+                char v when rules.LowersCharCodes => v,
                 _ => null,
             }
             : null;
