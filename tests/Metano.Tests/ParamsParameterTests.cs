@@ -328,6 +328,7 @@ public class ParamsParameterTests
         var output = result["app/logger.ts"];
         await Assert.That(output).Contains("this.count(\"none\") + this.count(\"default\")");
         await Assert.That(output).DoesNotContain("...null");
+
         await Assert
             .That(
                 diagnostics.Any(d =>
@@ -407,7 +408,9 @@ public class ParamsParameterTests
         var warnings = diagnostics
             .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
             .ToList();
+
         await Assert.That(warnings.All(d => d.Location is not null)).IsTrue();
+
         await Assert
             .That(warnings.Select(d => d.Location!.SourceSpan).Distinct().Count())
             .IsEqualTo(2);
@@ -475,6 +478,7 @@ public class ParamsParameterTests
             "nullable-params-rest.ts",
             result["app/nullable-params.ts"]
         );
+
         await Assert.That(diagnostics).IsEmpty();
     }
 
@@ -498,9 +502,11 @@ public class ParamsParameterTests
         var output = result["app/calc.ts"];
 
         await Assert.That(output).Contains("static pick(label: string, ...xs: number[]): number;");
+
         await Assert
             .That(output)
             .Contains("static pickLabelXs(label: string, ...xs: number[]): number {");
+
         await Assert.That(output).DoesNotContain("...xs: number[] | null");
     }
 
@@ -558,6 +564,7 @@ public class ParamsParameterTests
 
         await Assert.That(output).Contains("count(...items: string[]): number {");
         await Assert.That(output).Contains("return this.count();");
+
         await Assert
             .That(
                 diagnostics.Any(d =>
@@ -707,6 +714,7 @@ public class ParamsParameterTests
         );
 
         await Assert.That(result["app/derived.ts"]).Contains("super();");
+
         await Assert
             .That(
                 diagnostics.Any(d =>

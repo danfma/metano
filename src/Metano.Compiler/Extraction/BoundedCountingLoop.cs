@@ -74,6 +74,7 @@ internal static class BoundedCountingLoop
                 variable.Initializer?.Value
             )
             .OfType<ExpressionSyntax>();
+
         var otherIncrementors = loop.Incrementors.Where(incrementor => incrementor != step);
         var expressions = initializers.Concat(otherIncrementors);
 

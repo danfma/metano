@@ -78,9 +78,11 @@ public class PerClassBackingFieldTests
         await Assert
             .That(result["app/d-base.ts"])
             .Contains($"  private readonly {baseField}: () => number = () => 1;");
+
         await Assert
             .That(derived)
             .Contains($"  private readonly {derivedField}: () => number = () => 2;");
+
         await Assert.That(derived).Contains($"    return this.{derivedField};");
         await Assert.That(derived).Contains("    return (super.get() + this.get()) | 0;");
         await Assert.That(baseField).IsNotEqualTo(derivedField);
@@ -115,6 +117,7 @@ public class PerClassBackingFieldTests
         var field = FieldOf(baseOutput, "p", "RBase");
 
         await Assert.That(baseOutput).Contains($"  private {field}: number = 10;");
+
         await Assert
             .That(baseOutput)
             .Contains($"  set p(value: number) {{\n    this.{field} = value;\n  }}");
@@ -151,6 +154,7 @@ public class PerClassBackingFieldTests
         var derived = result["app/i-der.ts"];
 
         await Assert.That(derived).Contains($"  private {derivedField}: number = 7;");
+
         await Assert
             .That(derived)
             .Contains($"  set q(value: number) {{\n    this.{derivedField} = value;\n  }}");
@@ -185,6 +189,7 @@ public class PerClassBackingFieldTests
         await Assert
             .That(result["app/lonely.ts"])
             .Contains($"  private readonly {field}: number = 9;");
+
         await Assert.That(result["app/lonely.ts"]).Contains("  get z(): number {");
     }
 
@@ -234,6 +239,7 @@ public class PerClassBackingFieldTests
         await Assert
             .That(result["app/s-mid.ts"])
             .Contains($"  private readonly {field}: number = 2;");
+
         await Assert.That(result["app/s-mid.ts"]).Contains("  get s(): number {");
     }
 
@@ -270,6 +276,7 @@ public class PerClassBackingFieldTests
 
         await Assert.That(result["app/c-base.ts"]).Contains($"    this.{baseField} = name;");
         await Assert.That(result["app/c-der.ts"]).Contains($"    this.{derivedField} = n;");
+
         await Assert
             .That(result["app/c-der.ts"])
             .Contains("return super.name + \"/\" + this.name;");
@@ -304,6 +311,7 @@ public class PerClassBackingFieldTests
         await Assert.That(result["app/p-base.ts"]).Contains("  constructor(x: number) {");
         await Assert.That(result["app/p-base.ts"]).DoesNotContain("readonly x: number)");
         await Assert.That(result["app/p-base.ts"]).Contains($"    this.{baseField} = x;");
+
         await Assert
             .That(result["app/p-der.ts"])
             .Contains($"    this.{derivedField} = Math.imul(x, 2);");
@@ -509,9 +517,11 @@ public class PerClassBackingFieldTests
         await Assert
             .That(result["app/j-base.ts"])
             .Contains("  toJSON(): unknown {\n    return publicJsonShape(this);\n  }");
+
         await Assert
             .That(result["app/j-base.ts"])
             .Contains("import { publicJsonShape } from \"metano-runtime\";");
+
         await Assert
             .That(result["app/j-der.ts"])
             .Contains("  override toJSON(): unknown {\n    return publicJsonShape(this);\n  }");
@@ -595,6 +605,7 @@ public class PerClassBackingFieldTests
         );
 
         await Assert.That(result["app/f-der.ts"]).Contains("  get p(): number {\n    return 5;");
+
         await Assert
             .That(result["app/f-der.ts"])
             .Contains("  set p(value: number) {\n    super.p = value;\n  }");

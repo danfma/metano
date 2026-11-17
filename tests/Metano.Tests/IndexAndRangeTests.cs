@@ -154,12 +154,14 @@ public class IndexAndRangeTests
         );
 
         var output = result["shrinking.ts"];
+
         await Assert
             .That(output)
             .Contains(
                 "return ((receiver$temp$0) => this.items[this.items.length - receiver$temp$0]!)"
                     + "(this.popL());"
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -206,6 +208,7 @@ public class IndexAndRangeTests
 
         var output = result["buffer.ts"];
         await Assert.That(output).Contains("values[values.length - 1] = 5;");
+
         await Assert
             .That(output)
             .Contains("values[values.length - 2] = (values[values.length - 2]! + 1) | 0;");
@@ -234,6 +237,7 @@ public class IndexAndRangeTests
         // The placeholder replaces the whole assignment: a call is not an
         // assignable location, so `(...)() = 5` would not parse.
         await Assert.That(files["buffer.ts"]).DoesNotContain(")() = 5");
+
         await Assert
             .That(files["buffer.ts"])
             .Contains("throw new Error(\"Unsupported expression: IndexFromEndWrite\");");
@@ -255,6 +259,7 @@ public class IndexAndRangeTests
         );
 
         await AssertSingleUnsupported(diagnostics, "values[index]");
+
         await Assert
             .That(files["picker.ts"])
             .Contains("throw new Error(\"Unsupported expression: IndexElementAccess\");");
@@ -276,6 +281,7 @@ public class IndexAndRangeTests
         );
 
         await AssertSingleUnsupported(diagnostics, "values[range]");
+
         await Assert
             .That(files["picker.ts"])
             .Contains("throw new Error(\"Unsupported expression: RangeElementAccess\");");
@@ -333,6 +339,7 @@ public class IndexAndRangeTests
         // itself, which is passed by value (#265).
         await Assert.That(unsupported).Count().IsEqualTo(2);
         await Assert.That(unsupported).Contains(m => m.StartsWith("'ref' argument 'Load()[^1]'"));
+
         await Assert
             .That(unsupported)
             .Contains(m => !m.StartsWith("'ref'") && m.Contains("Load()[^1]"));
@@ -354,6 +361,7 @@ public class IndexAndRangeTests
         );
 
         await AssertSingleUnsupported(diagnostics, "^1");
+
         await Assert
             .That(files["picker.ts"])
             .Contains("throw new Error(\"Unsupported expression: IndexExpression\");");
@@ -373,6 +381,7 @@ public class IndexAndRangeTests
         );
 
         await AssertSingleUnsupported(diagnostics, "sizeof(int)");
+
         await Assert
             .That(files["sizes.ts"])
             .Contains("throw new Error(\"Unsupported expression: SizeOfExpression\");");
@@ -437,6 +446,7 @@ public class IndexAndRangeTests
             .Contains(
                 "((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1])(this.load())"
             );
+
         await Assert.That(output).Contains("values.sublist(1, values.length - 1)");
         await Assert.That(output).Contains("text.substring(0, text.length - 1)");
         await Assert.That(output).Contains("items[items.length - 1]");

@@ -86,6 +86,7 @@ public class ForLoopTranspileTests
                     let c = 0;
                 """
             );
+
         await Assert
             .That(output)
             .Contains(

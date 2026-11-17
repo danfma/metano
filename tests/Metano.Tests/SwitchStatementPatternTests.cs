@@ -213,11 +213,13 @@ public class SwitchStatementPatternTests
         await Assert
             .That(output)
             .Contains("case o instanceof Node && o.next != null && o.next.value === 0:");
+
         await Assert
             .That(output)
             .Contains(
                 "case o instanceof Node && o.next != null && o.next.next != null && o.next.next.value > 1:"
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -242,6 +244,7 @@ public class SwitchStatementPatternTests
         await Assert
             .That(output)
             .Contains("node != null && node.next != null && node.next.value === 1");
+
         await Assert
             .That(output)
             .Contains("o instanceof Node && o.next != null && o.next.value === 2");
@@ -717,6 +720,7 @@ public class SwitchStatementPatternTests
         );
 
         await Assert.That(output).Contains("const $subject = items[0]!;");
+
         await Assert
             .That(output)
             .Contains(
@@ -762,11 +766,13 @@ public class SwitchStatementPatternTests
 
         await Assert.That(output).Contains("let $subject0: Shape;");
         await Assert.That(output).Contains("let c: Circle;");
+
         await Assert
             .That(output)
             .Contains(
                 "return ($subject0 = Describer.pick(), true) && $subject0 instanceof Circle && (c = $subject0, true) ? c.r : 0;"
             );
+
         await Assert.That(output).DoesNotContain("/* TODO: unsupported");
     }
 
@@ -795,6 +801,7 @@ public class SwitchStatementPatternTests
         );
 
         await Assert.That(output).Contains("($subject0 = Describer.current, true)");
+
         await Assert
             .That(output)
             .Contains("Describer.stored instanceof Circle && (c = Describer.stored, true)");

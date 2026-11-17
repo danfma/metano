@@ -705,6 +705,7 @@ public class PrimaryConstructorCaptureTests
             .ToList();
 
         await Assert.That(assignments.Count).IsGreaterThanOrEqualTo(2);
+
         foreach (var m in assignments)
             await Assert.That(m.Index).IsGreaterThan(superIndex);
     }

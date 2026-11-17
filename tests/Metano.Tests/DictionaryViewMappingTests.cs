@@ -24,17 +24,21 @@ public class DictionaryViewMappingTests
         await Assert
             .That(output)
             .Contains("static keys(d: Map<string, number>): number {\n    return d.size;");
+
         await Assert
             .That(output)
             .Contains("static values(d: Map<string, number>): number {\n    return d.size;");
+
         await Assert
             .That(output)
             .Contains("static interfaceKeys(d: Map<string, number>): number {\n    return d.size;");
+
         await Assert
             .That(output)
             .Contains(
                 "static interfaceValues(d: Map<string, number>): number {\n    return d.size;"
             );
+
         await Assert.That(output).DoesNotContain("d.keys");
         await Assert.That(output).DoesNotContain("d.values");
     }
@@ -55,12 +59,15 @@ public class DictionaryViewMappingTests
         await Assert
             .That(output)
             .Contains("static mutable(d: Map<string, number>): number {\n    return d.size;");
+
         await Assert
             .That(output)
             .Contains("static readOnly(d: Map<string, number>): number {\n    return d.size;");
+
         await Assert
             .That(output)
             .Contains("static concrete(d: Map<string, number>): number {\n    return d.size;");
+
         await Assert.That(output).DoesNotContain("d.length");
     }
 
@@ -95,6 +102,7 @@ public class DictionaryViewMappingTests
             .Contains(
                 "static concrete(d: Map<string, number>, key: string): boolean {\n    return d.has(key);"
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -133,26 +141,31 @@ public class DictionaryViewMappingTests
         await Assert
             .That(output)
             .Contains("static keys(d: Map<string, number>): string[] {\n    return [...d.keys()];");
+
         await Assert
             .That(output)
             .Contains(
                 "static values(d: Map<string, number>): number[] {\n    return [...d.values()];"
             );
+
         await Assert
             .That(output)
             .Contains(
                 "static mutableKeys(d: Map<string, number>): string[] {\n    return [...d.keys()];"
             );
+
         await Assert
             .That(output)
             .Contains(
                 "static mutableValues(d: Map<string, number>): number[] {\n    return [...d.values()];"
             );
+
         await Assert
             .That(output)
             .Contains(
                 "static readOnlyKeys(d: Map<string, number>): Iterable<string> {\n    return [...d.keys()];"
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -176,6 +189,7 @@ public class DictionaryViewMappingTests
 
         await Assert.That(output).Contains("const keys = [...d.keys()];");
         await Assert.That(output).Contains("const values = [...d.values()];");
+
         await Assert
             .That(output)
             .Contains("return (keys.length + values.length + (keys.includes(\"a\") ? 1 : 0)) | 0;");
@@ -219,6 +233,7 @@ public class DictionaryViewMappingTests
         );
 
         await Assert.That(output).Contains("return (primary ?? backup).size;");
+
         await Assert
             .That(output)
             .Contains("return linq([...(primary ?? backup).keys()], toArray());");
