@@ -58,11 +58,15 @@ public sealed class TsOverloadClaimsRegistry(
     > _companionPlans = new(SymbolEqualityComparer.Default);
 
     /// <summary>
-    /// Whether a class needs a claim pass: it declares an overload group, or
-    /// it extends an emitted class whose static side it must claim against.
+    /// Whether a class needs a claim pass: it declares an overload group or a
+    /// conversion operator, whose fixed name the pass checks (baseline
+    /// FR-078), or it extends an emitted class whose static side it must claim
+    /// against.
     /// </summary>
     internal static bool AppliesTo(IrClassDeclaration ir) =>
-        HasOverloadGroup(ir) || IrToTsClassBridge.BuildExtends(ir) is TsNamedType;
+        HasOverloadGroup(ir)
+        || HasConversion(ir)
+        || IrToTsClassBridge.BuildExtends(ir) is TsNamedType;
 
     /// <summary>
     /// The emitted fast-path name of a root overload (spec 013 FR-025): a
@@ -256,6 +260,11 @@ public sealed class TsOverloadClaimsRegistry(
         context.TypeMapping is { } typeMapping
             ? IrTypeOriginResolverFactory.CreateUnrecorded(typeMapping)
             : null;
+
+    private static bool HasConversion(IrClassDeclaration ir) =>
+        (ir.Members ?? []).Any(member =>
+            member is IrMethodDeclaration { Semantics.ConversionName: not null }
+        );
 
     private static bool HasOverloadGroup(IrClassDeclaration ir) =>
         ir.Constructor is { Overloads.Count: > 0 }

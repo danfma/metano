@@ -117,15 +117,20 @@ internal sealed class TsClassMemberTable
 
     /// <summary>
     /// An operator declares its static helper (<c>__add</c>, the dispatcher of
-    /// an overloaded group) and its instance forwarder (<c>$add</c>).
+    /// an overloaded group) and, when it applies to the declaring type as its
+    /// left operand, its instance forwarder (<c>$add</c>). A conversion's
+    /// statics are fixed names the claim pass checks against these
+    /// (<see cref="TsOverloadClaimPass"/>, baseline FR-078).
     /// </summary>
     private void DeclareOperator(IrMethodDeclaration op)
     {
-        if (OperatorNameOf(op) is not { } name)
+        if (TsOperatorNaming.OperatorNameOf(op) is not { } name)
             return;
 
-        Declare(isStatic: true, OperatorDispatcherName(name), op.Name);
-        Declare(isStatic: false, $"${name}", op.Name);
+        Declare(isStatic: true, TsOperatorNaming.StaticHelperName(name), op.Name);
+
+        if (IrToTsClassBridge.HasInstanceForm(op))
+            Declare(isStatic: false, TsOperatorNaming.InstanceHelperName(name), op.Name);
     }
 
     private void Declare(bool isStatic, string name, string declaredBy)
@@ -152,32 +157,4 @@ internal sealed class TsClassMemberTable
             ? TsGroupingPolicy.NameOf(kind)
             : TypeScriptNaming.ToCamelCaseMember(method.Name);
     }
-
-    /// <summary>
-    /// The name an operator lowers to (<c>add</c>, <c>negate</c>): a single
-    /// operator's <c>[Name]</c> override, else the name of its operator kind;
-    /// <c>null</c> when neither exists. An overloaded operator group keeps
-    /// its kind's name, which its fast paths extend: a <c>[Name]</c> on one of
-    /// its overloads pins that overload's suffix (spec 013 FR-005). A kind
-    /// with no name — a conversion — is named by its <c>[Name]</c>, overloaded
-    /// or not, as before 013f.
-    /// </summary>
-    public static string? OperatorNameOf(IrMethodDeclaration op)
-    {
-        var kindName = OperatorKindNameOf(op);
-
-        if (kindName is null)
-            return IrToTsNamingPolicy.FindNameOverride(op.Attributes);
-
-        return IrToTsNamingPolicy.FindMemberNameOverride(op.Attributes, op.OverloadName)
-            ?? kindName;
-    }
-
-    private static string? OperatorKindNameOf(IrMethodDeclaration op) =>
-        op.Semantics.OperatorKind is { } kind
-            ? IrToTsClassBridge.MapOperatorKindToName(kind)
-            : null;
-
-    /// <summary>The static helper of an operator: <c>__</c> + its name.</summary>
-    public static string OperatorDispatcherName(string operatorName) => $"__{operatorName}";
 }

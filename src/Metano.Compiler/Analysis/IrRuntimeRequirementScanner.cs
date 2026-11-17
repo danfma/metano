@@ -188,9 +188,14 @@ public static class IrRuntimeRequirementScanner
         // Overloaded methods drive an overload dispatcher whose body emits a
         // primitive type check per parameter (`isInt32(args[0])`, etc.). The
         // scanner records the requirement up front so the import walker can
-        // stop guessing at function names.
-        foreach (var branch in IrMethodGroup.Of(method).Branches)
-            CollectDispatcherTypeChecks(branch.Parameters, acc);
+        // stop guessing at function names. A conversion group drives none: C#
+        // selects a conversion by its types, never by its arguments, so no
+        // target dispatches one (baseline FR-078).
+        if (method.Semantics.ConversionName is null)
+        {
+            foreach (var branch in IrMethodGroup.Of(method).Branches)
+                CollectDispatcherTypeChecks(branch.Parameters, acc);
+        }
 
         foreach (var overload in method.Overloads ?? [])
             ScanMethod(overload, acc);

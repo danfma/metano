@@ -369,12 +369,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         var functions = group
             .FastPaths.Select(fastPath =>
-                BuildFastPathFunction(
-                    fastPath,
-                    group.ExportsFastPaths,
-                    plan.Accessibility,
-                    bclRegistry
-                )
+                BuildFastPathFunction(fastPath, plan.Accessibility, bclRegistry)
             )
             .ToList();
 
@@ -603,7 +598,6 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     private static TsFunction BuildFastPathFunction(
         TsCompanionFastPath fastPath,
-        bool exported,
         TsAccessibility groupAccessibility,
         DeclarativeMappingRegistry? bclRegistry
     )
@@ -611,19 +605,17 @@ public static class IrToTsOverloadDispatcherBridge
         var method = fastPath.Method;
         var context = IrToTsBridgeContext.For(bclRegistry);
 
-        var jsDoc = exported
-            ? IrToTsVisibilityMapper.SignatureJSDocOf(
-                IrToTsVisibilityMapper.Map(method.Visibility),
-                groupAccessibility
-            )
-            : null;
+        var jsDoc = IrToTsVisibilityMapper.SignatureJSDocOf(
+            IrToTsVisibilityMapper.Map(method.Visibility),
+            groupAccessibility
+        );
 
         return new(
             fastPath.Name,
             FastPathParameters(method, context),
             IrToTsTypeMapper.Map(method.ReturnType),
             IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
-            Exported: exported,
+            Exported: true,
             Async: method.Semantics.IsAsync,
             TypeParameters: MapTypeParameters(method.TypeParameters),
             JSDoc: jsDoc

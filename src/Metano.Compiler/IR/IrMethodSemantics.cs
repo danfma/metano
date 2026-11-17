@@ -35,4 +35,28 @@ public sealed record IrMethodSemantics(
     bool IsOverride = false,
     bool IsSealed = false,
     bool IsEmitTemplate = false
-);
+)
+{
+    /// <summary>
+    /// The name candidate of a user-defined conversion operator (baseline
+    /// FR-078); <c>null</c> for any other method.
+    /// </summary>
+    public IrConversionName? ConversionName { get; init; }
+
+    /// <summary>
+    /// Whether a user-defined operator's first parameter is its declaring type
+    /// or that type's nullable form, so the application has the declaring type
+    /// as its left (or only) operand; <c>false</c> for an operator declared for
+    /// its right operand (<c>operator +(int a, Meters m)</c>) and for any other
+    /// method.
+    /// </summary>
+    public bool TakesDeclaringTypeFirst { get; init; }
+
+    /// <summary>
+    /// Whether a conversion operator of a <c>[Branded]</c> type only returns
+    /// its operand's wrapped value, as its own type (<c>=&gt; self.Value</c>):
+    /// the identity once the wrapper lowers to the branded primitive (baseline
+    /// FR-078). Decided from the body, never from the return type alone.
+    /// </summary>
+    public bool ReturnsWrappedValue { get; init; }
+}

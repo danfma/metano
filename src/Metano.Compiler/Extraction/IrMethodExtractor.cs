@@ -74,7 +74,14 @@ public static class IrMethodExtractor
             IsOverride: method.IsOverride,
             IsSealed: method.IsSealed,
             IsEmitTemplate: SymbolHelper.HasEmit(method)
-        );
+        )
+        {
+            ConversionName = ConversionNaming.Of(method, target),
+            TakesDeclaringTypeFirst = TakesDeclaringTypeFirst(method),
+            ReturnsWrappedValue = WrappedValueConversion.Returns(method),
+        };
+
+        ConversionNaming.ReportIfDeadEnd(method, target);
 
         var body = compilation is not null ? TryExtractBody(method, context, localNames) : null;
 
@@ -145,6 +152,15 @@ public static class IrMethodExtractor
 
     private static bool IsOperatorKind(MethodKind kind) =>
         kind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
+
+    /// <summary>
+    /// Whether a user-defined operator applies to its declaring type as its
+    /// left (or only) operand, which is what an instance form of it needs.
+    /// </summary>
+    private static bool TakesDeclaringTypeFirst(IMethodSymbol method) =>
+        method.MethodKind == MethodKind.UserDefinedOperator
+        && method.Parameters is [var first, ..]
+        && first.Type.IsDeclaringTypeOf(method);
 
     private static string? ResolveOperatorKind(IMethodSymbol method)
     {

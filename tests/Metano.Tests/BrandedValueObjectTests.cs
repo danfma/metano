@@ -222,7 +222,7 @@ public class BrandedValueObjectTests
 
         await Assert
             .That(output)
-            .Contains("export function op_Implicit(raw: string): ScriptWordId");
+            .Contains("export function __implicitFromString(raw: string): ScriptWordId");
 
         await Assert.That(output).DoesNotContain("self: ScriptWordId");
         await Assert.That(output).DoesNotContain("...args");

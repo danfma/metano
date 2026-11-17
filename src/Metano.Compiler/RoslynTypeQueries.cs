@@ -61,6 +61,19 @@ public static class RoslynTypeQueries
     public static ITypeSymbol UnwrapNullableValueType(this ITypeSymbol type) =>
         type.UnderlyingValueType()!;
 
+    /// <summary>
+    /// Whether <paramref name="type"/> is the type that declares
+    /// <paramref name="member"/>, or that type's nullable form: the operand a
+    /// user-defined operator or conversion applies to on its own type
+    /// (<c>Money</c> in <c>operator +(Money a, int b)</c> or
+    /// <c>explicit operator int(Money? m)</c>).
+    /// </summary>
+    public static bool IsDeclaringTypeOf(this ITypeSymbol type, ISymbol member) =>
+        SymbolEqualityComparer.Default.Equals(
+            type.UnwrapNullableValueType().OriginalDefinition,
+            member.ContainingType.OriginalDefinition
+        );
+
     /// <summary><c>T</c> for <c>Nullable&lt;T&gt;</c>, the type itself otherwise.</summary>
     public static ITypeSymbol? UnderlyingValueType(this ITypeSymbol? type) =>
         type

@@ -295,7 +295,8 @@ public class OverloadNamePolicyTests
 
         await Assert
             .That(SuffixesIn(declaration, type, "op_Explicit"))
-            .IsEqualTo("MoneyToInt32 / MoneyToInt64");
+            .IsEqualTo("ToInt32 / ToInt64");
+
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.AmbiguousConstruct))
             .IsEmpty();
@@ -377,6 +378,7 @@ public class OverloadNamePolicyTests
         await Assert
             .That(SuffixesIn(declaration, type, "K"))
             .IsEqualTo("GlobalNDecimal$1 / GlobalNDecimal$2");
+
         await Assert.That(deadEnd.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
         await Assert.That(deadEnd.Location).IsEqualTo(secondK);
         await Assert.That(deadEnd.Message).Contains("'GlobalNDecimal$1' and 'GlobalNDecimal$2'");

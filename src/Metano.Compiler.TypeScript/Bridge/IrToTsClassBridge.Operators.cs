@@ -15,14 +15,17 @@ internal static partial class IrToTsClassBridge
 {
     /// <summary>
     /// Lowers a single user-defined operator into a static method
-    /// (<c>__add</c> / <c>__negate</c>) plus a thin instance helper
-    /// (<c>$add(other)</c> / <c>$negate()</c>) that delegates to it.
-    /// Multi-operator dispatch (two overloads sharing the same name) is
-    /// handled by <see cref="BuildOperatorDispatcher"/>.
+    /// (<c>__add</c> / <c>__negate</c>) plus, when the operator applies to its
+    /// declaring type as its left (or only) operand, a thin instance helper
+    /// (<c>$add(other)</c> / <c>$negate()</c>) that delegates to it; an
+    /// operator declared for its right operand (<c>operator +(int a, Meters m)</c>)
+    /// has no instance form (baseline FR-078). Multi-operator dispatch (two
+    /// overloads sharing the same name) is handled by
+    /// <see cref="BuildOperatorDispatcher"/>.
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildOperator(
         IrMethodDeclaration method,
-        string containingTypeName,
+        TsOperatorOwner owner,
         string operatorName,
         IReadOnlyList<TsParameter> parameters,
         TsType returnType,
@@ -36,40 +39,88 @@ internal static partial class IrToTsClassBridge
             IrToTsBridgeContext.For(bclRegistry)
         );
 
-        var staticName = $"__{operatorName}";
-        var isUnary = method.Parameters.Count == 1;
-        var typeRef = new TsIdentifier(containingTypeName);
+        var staticName = TsOperatorNaming.StaticHelperName(operatorName);
 
-        TsStatement helperBody;
-        IReadOnlyList<TsParameter> helperParams;
-        if (isUnary)
-        {
-            helperParams = [];
-            helperBody = new TsReturnStatement(
-                new TsCallExpression(
-                    new TsPropertyAccess(typeRef, staticName),
-                    [new TsIdentifier("this")]
-                )
-            );
-        }
-        else
-        {
-            var rightParam = parameters[^1];
-            helperParams = [rightParam];
-            helperBody = new TsReturnStatement(
-                new TsCallExpression(
-                    new TsPropertyAccess(typeRef, staticName),
-                    [new TsIdentifier("this"), new TsIdentifier(rightParam.Name)]
-                )
-            );
-        }
+        var helper = new TsMethodMember(
+            staticName,
+            parameters,
+            returnType,
+            body,
+            Static: true,
+            TypeParameters: owner.TypeParameters
+        );
 
-        return
-        [
-            new TsMethodMember(staticName, parameters, returnType, body, Static: true),
-            new TsMethodMember($"${operatorName}", helperParams, returnType, [helperBody]),
-        ];
+        if (!method.Semantics.TakesDeclaringTypeFirst)
+            return [helper];
+
+        return [helper, InstanceForwarder(owner, operatorName, parameters, returnType)];
     }
+
+    /// <summary>
+    /// The instance form of a single operator: the receiver is its first
+    /// operand (<c>$add(b) { return T.__add(this, b); }</c>).
+    /// </summary>
+    private static TsMethodMember InstanceForwarder(
+        TsOperatorOwner owner,
+        string operatorName,
+        IReadOnlyList<TsParameter> parameters,
+        TsType returnType
+    )
+    {
+        var forwarded = parameters.Skip(1).ToList();
+
+        var call = new TsCallExpression(
+            new TsPropertyAccess(
+                new TsIdentifier(owner.TypeName),
+                TsOperatorNaming.StaticHelperName(operatorName)
+            ),
+            [new TsIdentifier("this"), .. forwarded.Select(p => new TsIdentifier(p.Name))]
+        );
+
+        return new TsMethodMember(
+            TsOperatorNaming.InstanceHelperName(operatorName),
+            forwarded,
+            returnType,
+            [new TsReturnStatement(call)]
+        );
+    }
+
+    /// <summary>
+    /// Lowers a user-defined conversion operator into its own static
+    /// (<c>static __toInt32(m: Money): number</c>): conversions never share a
+    /// dispatcher, since C# selects one by its source and target types and
+    /// never by its arguments, and they declare no instance form (baseline
+    /// FR-078, #600).
+    /// </summary>
+    public static TsMethodMember BuildConversion(
+        IrMethodDeclaration conversion,
+        TsOperatorOwner owner,
+        IReadOnlyList<TsParameter> parameters,
+        TsType returnType,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        new(
+            TsOperatorNaming.ConversionHelperName(conversion.Semantics.ConversionName!),
+            parameters,
+            returnType,
+            IrToTsBodyHelpers.LowerOrNotImplemented(
+                conversion.Body,
+                conversion.Name,
+                IrToTsBridgeContext.For(bclRegistry)
+            ),
+            Static: true,
+            TypeParameters: owner.TypeParameters
+        );
+
+    /// <summary>
+    /// Whether an operator, or any overload of its group, applies to its
+    /// declaring type as its left operand, so the type declares its instance
+    /// form (<c>$add</c>).
+    /// </summary>
+    public static bool HasInstanceForm(IrMethodDeclaration op) =>
+        new[] { op }
+            .Concat(op.Overloads ?? [])
+            .Any(overload => overload.Semantics.TakesDeclaringTypeFirst);
 
     /// <summary>
     /// Lowers an overloaded operator group (two or more <c>operator +</c>
@@ -77,7 +128,9 @@ internal static partial class IrToTsClassBridge
     /// (<c>__add(...args: unknown[])</c>) plus one public fast-path method
     /// per overload (<c>__addMoneyInt32</c>), plus a single instance helper (<c>$add(...args)</c>)
     /// that delegates to the static side with <c>this</c> as the first
-    /// argument. Per-overload parameter lists, return types, and type-checks
+    /// argument, over the overloads whose first operand is the declaring type
+    /// (none when no overload has one, baseline FR-078). The statics of a
+    /// generic type re-declare its type parameters. Per-overload parameter lists, return types, and type-checks
     /// come pre-resolved from the caller because the legacy
     /// <see cref="TypeMapper"/> still owns <c>[ExportFromBcl]</c> overrides
     /// and <see cref="IrTypeCheckBuilder"/> consumes <see cref="IrTypeRef"/>
@@ -87,7 +140,7 @@ internal static partial class IrToTsClassBridge
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildOperatorDispatcher(
         IReadOnlyList<IrMethodDeclaration> overloads,
-        string containingTypeName,
+        TsOperatorOwner owner,
         string operatorName,
         IReadOnlyList<IReadOnlyList<TsParameter>> overloadParameters,
         IReadOnlyList<TsType> overloadReturnTypes,
@@ -97,8 +150,8 @@ internal static partial class IrToTsClassBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var staticName = $"__{operatorName}";
-        var className = new TsIdentifier(containingTypeName);
+        var staticName = TsOperatorNaming.StaticHelperName(operatorName);
+        var className = new TsIdentifier(owner.TypeName);
         var members = new List<TsClassMember>();
 
         // The three input lists are kept parallel, so the sorted index works
@@ -118,7 +171,11 @@ internal static partial class IrToTsClassBridge
         );
 
         var staticOverloadSigs = indices
-            .Select(i => new TsMethodOverload(overloadParameters[i], overloadReturnTypes[i]))
+            .Select(i => new TsMethodOverload(
+                overloadParameters[i],
+                overloadReturnTypes[i],
+                owner.TypeParameters
+            ))
             .ToList();
 
         // The core's naming policy spells operator overloads by their parameter
@@ -137,13 +194,15 @@ internal static partial class IrToTsClassBridge
                 overloads[i].Name,
                 IrToTsBridgeContext.For(bclRegistry)
             );
+
             members.Add(
                 new TsMethodMember(
                     fastPathNames[k],
                     overloadParameters[i],
                     overloadReturnTypes[i],
                     body,
-                    Static: true
+                    Static: true,
+                    TypeParameters: owner.TypeParameters
                 )
             );
         }
@@ -169,13 +228,25 @@ internal static partial class IrToTsClassBridge
                 sharedReturnType,
                 staticDispatchBody,
                 Static: true,
+                TypeParameters: owner.TypeParameters,
                 Overloads: staticOverloadSigs
             )
         );
 
+        var receiverPositions = Enumerable
+            .Range(0, indices.Count)
+            .Where(k => overloads[indices[k]].Semantics.TakesDeclaringTypeFirst)
+            .ToList();
+
+        if (receiverPositions.Count == 0)
+            return members;
+
+        var receiverIndices = receiverPositions.Select(k => indices[k]).ToList();
+        var receiverFastPaths = receiverPositions.Select(k => fastPathNames[k]).ToList();
+
         // Instance helper signatures: drop the first parameter (it becomes
         // `this`); the dispatch ignores arity index 0 too.
-        var instanceOverloadSigs = indices
+        var instanceOverloadSigs = receiverIndices
             .Select(i => new TsMethodOverload(
                 overloadParameters[i].Skip(1).ToList(),
                 overloadReturnTypes[i]
@@ -183,10 +254,10 @@ internal static partial class IrToTsClassBridge
             .ToList();
 
         var instanceDispatchBody = BuildDispatcherBranches(
-            indices,
+            receiverIndices,
             overloadParamIrTypes,
             overloadParameters,
-            fastPathNames,
+            receiverFastPaths,
             className,
             operatorName,
             typeCheckScope,
@@ -196,7 +267,7 @@ internal static partial class IrToTsClassBridge
 
         members.Add(
             new TsMethodMember(
-                $"${operatorName}",
+                TsOperatorNaming.InstanceHelperName(operatorName),
                 [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
                 sharedReturnType,
                 instanceDispatchBody,
@@ -280,41 +351,4 @@ internal static partial class IrToTsClassBridge
         );
         return body;
     }
-
-    /// <summary>
-    /// Maps the IR's canonical operator name (<c>"Addition"</c>,
-    /// <c>"Equality"</c>, …) to the conventional TypeScript helper name
-    /// (<c>"add"</c>, <c>"equals"</c>). Returns <c>null</c> for unsupported
-    /// operator kinds. Unary forms (<c>"UnaryNegation"</c>, …) are folded
-    /// onto the same canonical name as their binary form when there's no
-    /// natural distinction at call site.
-    /// </summary>
-    public static string? MapOperatorKindToName(string kind) =>
-        kind switch
-        {
-            "Addition" => "add",
-            "Subtraction" => "subtract",
-            "Multiply" => "multiply",
-            "Division" => "divide",
-            "Modulus" => "modulo",
-            "Equality" => "equals",
-            "Inequality" => "notEquals",
-            "LessThan" => "lessThan",
-            "GreaterThan" => "greaterThan",
-            "LessThanOrEqual" => "lessThanOrEqual",
-            "GreaterThanOrEqual" => "greaterThanOrEqual",
-            "LogicalNot" => "not",
-            "OnesComplement" => "bitwiseNot",
-            "BitwiseAnd" => "bitwiseAnd",
-            "BitwiseOr" => "bitwiseOr",
-            "ExclusiveOr" => "xor",
-            "LeftShift" => "shiftLeft",
-            "RightShift" => "shiftRight",
-            // Unary +/- collapse to the same canonical name as their binary
-            // form so the call-site lowering for `-x` and `x - y` agree on
-            // the helper name (matches the legacy single-token mapping).
-            "UnaryNegation" => "subtract",
-            "UnaryPlus" => "add",
-            _ => null,
-        };
 }

@@ -31,16 +31,11 @@ internal sealed record OverloadParameter(string Name, IrNamingSpelling Spelling)
 /// One overload as the naming policy sees it.
 /// </summary>
 /// <param name="Parameters">Its parameters.</param>
-/// <param name="ConversionTarget">A conversion operator's target type, which
-/// C# tells conversions apart by (<c>explicit operator int(Money m)</c> /
-/// <c>explicit operator long(Money m)</c> → <c>MoneyToInt32</c> /
-/// <c>MoneyToInt64</c>); <c>null</c> for any other overload.</param>
 /// <param name="PinnedSuffix">The suffix a <c>[Name]</c> pins on the overload
 /// (spec 013 FR-005, contracts/naming.md § Stage 1, step 7), already
 /// capitalized; <c>null</c> when the overload's suffix is computed.</param>
 internal sealed record OverloadSignature(
     IReadOnlyList<OverloadParameter> Parameters,
-    IrNamingSpelling? ConversionTarget = null,
     string? PinnedSuffix = null
 );
 
@@ -150,25 +145,16 @@ internal static class OverloadNamePolicy
 
     /// <summary>
     /// The overload's type spelling parts: its pinned suffix as one part that
-    /// never climbs, else its parameters' parts (or <c>Default</c>), then
-    /// <c>To</c> and a conversion's target type.
+    /// never climbs, else its parameters' parts (or <c>Default</c>).
     /// </summary>
     private static IReadOnlyList<IrNamingComponent> SpellingComponents(OverloadSignature overload)
     {
         if (overload.PinnedSuffix is { } pinned)
             return [new IrNamingComponent(pinned, [])];
 
-        IReadOnlyList<IrNamingComponent> parameterParts =
-            overload.Parameters.Count == 0
-                ? [new IrNamingComponent(ParameterlessSuffix, [])]
-                : overload
-                    .Parameters.SelectMany(parameter => parameter.Spelling.Components)
-                    .ToList();
-
-        if (overload.ConversionTarget is not { } target)
-            return parameterParts;
-
-        return [.. parameterParts, new IrNamingComponent("To", []), .. target.Components];
+        return overload.Parameters.Count == 0
+            ? [new IrNamingComponent(ParameterlessSuffix, [])]
+            : overload.Parameters.SelectMany(parameter => parameter.Spelling.Components).ToList();
     }
 
     private static bool AreDistinct(IReadOnlyList<string> suffixes) =>

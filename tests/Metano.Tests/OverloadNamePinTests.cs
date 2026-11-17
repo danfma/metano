@@ -465,9 +465,9 @@ public class OverloadNamePinTests
     }
 
     /// <summary>
-    /// A conversion operator has no C# name, so its <c>[Name]</c> names its
-    /// group, overloaded or not, as before 013f; a single unary operator keeps
-    /// its <c>[Name]</c> as its whole name too.
+    /// A conversion operator has no C# name, so its <c>[Name]</c> names that
+    /// one conversion's static, with no dispatcher (baseline FR-078, #600); a
+    /// single unary operator keeps its <c>[Name]</c> as its whole name too.
     /// </summary>
     [Test]
     public async Task ConversionGroup_IsNamedByItsName_AndPinsNoSuffix()

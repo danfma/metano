@@ -70,6 +70,9 @@ internal static class OverloadGroupNaming
     {
         var symbols = overloads.Select(overload => overload.Symbol).ToList();
 
+        if (symbols.All(symbol => symbol.MethodKind == MethodKind.Conversion))
+            return ConversionSuffixesOf(symbols);
+
         var suffixes = OverloadNamePolicy.Compute(
             overloads.Select(SignatureOf).ToList(),
             KindOf(symbols)
@@ -154,11 +157,21 @@ internal static class OverloadGroupNaming
                     IrNamingSpellingExtractor.Extract(parameter)
                 ))
                 .ToList(),
-            overload.Symbol.MethodKind == MethodKind.Conversion
-                ? IrNamingSpellingExtractor.Extract(overload.Symbol.ReturnType)
-                : null,
             overload.Pin?.Suffix
         );
+
+    /// <summary>
+    /// A conversion operator group's suffixes: each conversion's own name
+    /// candidate (<see cref="ConversionNaming"/>, baseline FR-078), the one rule
+    /// that names conversions. No target reads them — TypeScript names each
+    /// conversion by its <see cref="IrMethodSemantics.ConversionName"/> and
+    /// Dart its primary by its <c>[Name]</c> or C# name — so they carry no
+    /// target's pin and report nothing: the declaration reports a dead end
+    /// (<see cref="ConversionNaming.ReportIfDeadEnd"/>).
+    /// </summary>
+    private static IReadOnlyList<string> ConversionSuffixesOf(
+        IReadOnlyList<IMethodSymbol> symbols
+    ) => symbols.Select(symbol => ConversionNaming.Of(symbol, target: null)!.Candidate).ToList();
 
     private static OverloadGroupKind KindOf(IReadOnlyList<IMethodSymbol> symbols)
     {
