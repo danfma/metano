@@ -495,7 +495,8 @@ Product requirements added after the migration (normative; each one is traced by
   parameter, `object`, an interface, a class) uses the runtime's `defaultEquals`: its own
   `equals` when it has one, `NaN` equal to itself, else reference equality. A plain
   (non-record) struct emitted as a class carries a generated `equals` / `hashCode` over its
-  fields (its `ValueType.Equals`) unless it declares its own, so a struct behind an `object` or
+  fields (its `ValueType.Equals`) unless it declares its own (an `override Equals(object)`, or an
+  `Equals(S)` implementing `IEquatable<S>` or a transpiled interface member), so a struct behind an `object` or
   interface field compares by value. The synthesized `equals` / `hashCode` / `with` keep the
   names the runtime calls: a user method the target spells the same way (`Equals(T other,
   double tol)`, `HashCode(int seed)`, a record's `With(int a)`, an `IEqualityComparer<T>`

@@ -33,7 +33,8 @@ public sealed record IrValueEqualityShape(
     IrValueEqualityKind Kind,       // None for [PlainObject], [JsTuple], [Branded], JSX
                                     // components and every non-record class
     bool ReplacesEquals,            // record: a declared Equals(R); struct: a declared
-                                    // override Equals(object)
+                                    // override Equals(object), or an Equals(S) that
+                                    // implements an interface member
     bool ReplacesHashCode);         // a declared override GetHashCode()
 ```
 
@@ -42,7 +43,16 @@ public sealed record IrValueEqualityShape(
 - The name-and-arity heuristic over IR members (`IsRecordTypeRef`, `DeclaresStructEquals`) is retired.
 - A synthesized `IrMethodDeclaration` (§ 1) can never count as a user `Equals` or `GetHashCode`: the shape is read from symbols, before any synthesized member exists.
 
-**Changes from today.** A struct's `Equals(S)` (`IEquatable<S>`) **no longer** replaces the synthesized `Equals(object)`, because .NET's `ValueType.Equals` does not call it. A boxed comparison then compares fields, as on .NET; this closes the earlier "only `Equals(S)`" follow-up.
+**A struct's `Equals(S)` (round 7).** It replaces the synthesized equality when it implements an
+interface member: `IEquatable<S>.Equals`, implicitly or explicitly, or a transpiled interface's
+`Equals(S)`.
+
+- **Why.** .NET's `EqualityComparer<S>.Default` calls `IEquatable<S>.Equals` for sets, dictionaries, `Distinct` and record fields, and a caller through the interface calls it too.
+- **Alone,** it stays the type's `equals`, as on main.
+- **Beside another `Equals` overload,** the synthesized member routes to it, as it does to a record's `Equals(R)`.
+- **The cost:** a boxed comparison (`object.Equals`, a `ValueType.Equals` call) also reaches the user's `Equals(S)`, where .NET compares fields. This is main's behavior for that shape.
+- **A struct's `Equals(S)` that implements no interface member replaces nothing,** since `ValueType.Equals` never calls it. It is shadowed and reports `MS0063` (§ 3).
+- An explicit `IEquatable<S>.Equals` on a struct is emitted under the interface member's name. `System.ValueType`'s inherited `Equals` claims no name, as `object`'s does not.
 
 ## 1. The group member (FR-038)
 
@@ -125,10 +135,13 @@ public sealed record OverloadGroupingPolicy(
 
 - **Value equality.** Both records hold only strings, so they compare by value and can key the groups' cache (A1).
 - **One instance per target.** TypeScript holds `new(TargetLanguage.TypeScript, new("equals", "hashCode", "with", "ByValue"))`. Dart holds `new(TargetLanguage.Dart, null)` for 3.0 (DECIDED-35, OQ-9 decided), so no Dart member joins and Dart output is unchanged. The TypeScript strings live in `Metano.Compiler.TypeScript`; core holds none.
-- **One source of `Target`.** `IrExtractionContext` exposes `GroupingPolicy`, built from its `Target` and the `ValueEqualityNames` the target sets.
+- **One source of `Target`.** `IrExtractionContext` takes the policy in its primary constructor and projects `Target` from it.
 - **The policy replaces `TargetLanguage?` across the grouping family** (A4): every `MethodOverloadGroups` entry point, `OverloadEmittedName.NameOverrideOf` / `PinsOverloadSuffixes`, and their callers listed in § 1.
-- **Spelling (A2, A3).** A declared group is spelled `SymbolHelper.GetNameOverride(member, target)` of its only member, when the group has exactly one member with a `[Name]`. Otherwise it is spelled `SymbolHelper.ToCamelCase(GroupNameOf(member))`. It uses the raw override, never `OverloadEmittedName.NameOverrideOf`, which would re-enter `GroupOf(...).IsDispatched`.
+- **Spelling (A2, A3).** A dispatched group is spelled `SymbolHelper.ToCamelCase(GroupNameOf(member))`, since a `[Name]` on its overloads pins suffixes. A lone method is spelled by its raw `SymbolHelper.GetNameOverride(member, target)` when it has one, else by its camelCased name. The raw override is used, never `OverloadEmittedName.NameOverrideOf`, which would re-enter `GroupOf(...).IsDispatched`.
   - `[Name("near")] Equals(NRec, double)` is spelled `near` and joins nothing.
+  - `[Name("equals")] Same(NEq, double)`, `[Name("hashCode")] Seeded(int)` and `[Name("with")] Replace(int)` join the `equals` / `hashCode` / `with` members.
+  - The method whose `[Name]` named the group (`MethodOverloadGroup.NamingMember`) pins no suffix: its fast path is named over its parameters (`equalsOTol`).
+  - The target names a group holding a synthesized member after that member's kind, never after the group's C# name.
   - `GetHashCode` joins the group `HashCode`.
 - **Identity.** A group keeps its C# name as its identity (`GroupNameOf`), so every declared member's `IrOverloadRef` is unchanged. A synthesized member's ref is `(typeKey, joined group's name, ordinal after every declared member)`.
 - **Explicit interface implementations** (C5): `bool IEquatable<int>.Equals(int o)` and `IWither IWither.With(int a)` group under their interface member's name (`GroupNameOf`), so their spelling is `equals` / `with`. They join when the implementation is emitted under the interface name; dropped ones never do.
@@ -149,7 +162,8 @@ For each kind `K` the shape synthesizes, whose target name is non-null:
 - **Replacing by a typed `Equals(R)` on a record.** The synthesized `Equals(object)` routes to it as C# does: `this.<userFastPath>(other instanceof R ? other : null)`.
   - UBoth: a user `virtual Equals(UBoth?)` beside `Equals(UBoth, double)`; behind `object`, .NET prints `False`, where today the dispatcher throws "No matching overload".
   - A derived record with its own `Equals(D)` under a joined base answers through its own equality: its synthesized member overrides the base's and routes to `Equals(D)`.
-- **A struct's `Equals(S)` replaces nothing** (§ 0). USBoth: `Equals(USBoth)` beside `Equals(USBoth, int)`. The synthesized member compares fields, and the C# call `a.Equals(b)` binds to the user's `Equals(S)` (§ 5).
+- **A struct's interface-implementing `Equals(S)` is routed to like a record's `Equals(R)`** (§ 0): `return other is S ? this.Equals((S)other) : false`. SEqJoin: `Equals(SEqJoin)` (`IEquatable`) beside `Equals(SEqJoin, int)`.
+- **A struct's `Equals(S)` that implements nothing replaces nothing** (§ 0). USBoth: `Equals(USBoth)` beside `Equals(USBoth, int)`. The synthesized member compares fields, and the C# call `a.Equals(b)` binds to the user's `Equals(S)` (§ 5).
 
 ### Per kind
 
@@ -186,9 +200,11 @@ The dispatcher order is:
 
 A shadowed overload whose argument counts the synthesized member covers entirely has no branch.
 
-- An indistinguishable overload keeps its fast path, so its C# call sites stay direct, but it gets **no dispatcher branch**. It is reported with the existing `MS0063` warning, except when the type replaces `Equals` itself (a record's `Equals(R)`, a struct's `override Equals(object)`): calls through the dispatcher then reach the user's own equality.
+- An indistinguishable overload keeps its fast path, so its C# call sites stay direct, but it gets **no dispatcher branch**. It is reported with the existing `MS0063` warning, except when the type replaces `Equals` itself (a record's `Equals(R)`, a struct's `override Equals(object)` or interface-implementing `Equals(S)`). Calls through the dispatcher then reach the user's own equality. That check runs first, before the interface check below.
 - The synthesized member keeps the shared name and its branch.
-- The case is an **error** (`MS0001`) only when that overload implements an interface member, or overrides a root whose contract name is the shared name: callers through the interface or the base would reach the synthesized member instead.
+- The case is an **error** (`MS0001`) only when that overload implements a member of a transpiled interface: callers through the interface would reach the synthesized member instead.
+  - Example: `interface IHasHash { int HashCode(); }` on a record.
+  - **An override needs no such check.** It is anchored on its base's group, which the synthesized member joins too (rule 2), so it has no branch of its own and its C# calls bind statically. The shadowed root reports once, at the base.
 - Examples:
   - `GRec<T>.With(T v)` and `Equals(IUShape)`: MS0063, and the code keeps building.
   - A zero-parameter `HashCode()`: MS0063.
@@ -241,7 +257,7 @@ consumer computes the same result over the producer's metadata:
 
 - a consumer record deriving from a library record that joined (`override equalsByValue`);
 - direct calls into a joined group;
-- metadata-only references keep the dispatcher (FR-019).
+- metadata-only references keep the dispatcher (FR-019), except calls bound to a synthesized member (`a.Equals(b)`, `base.GetHashCode()`, `with`). Their fast path keeps its stable name in every package (`equalsByValue`, DECIDED-34), so the call carries the member's kind (`IrSelectedOverload.Synthesized`) and the target names it even when the producer's claims are unreadable. A `base.` call through the base dispatcher would recurse into the derived override.
 
 **Compiler-generated members in metadata.** A referenced record's synthesized `Equals(R)`,
 `Equals(object)` and `GetHashCode()` are not implicitly declared when read from metadata; they

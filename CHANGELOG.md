@@ -816,10 +816,14 @@ the rows of `tests/BclReference`.
   and `Box<decimal>` compare by value and `Box<SomeClass>` / `Box<int[]>` by reference as on
   .NET. A plain (non-record) struct now gets a generated `equals` / `hashCode` over its fields
   (.NET's `ValueType.Equals`) unless it declares its own, so a struct behind an `object` or
-  interface field compares by value; a struct's `Equals(S)` no longer replaces that field
-  comparison (only an `override Equals(object)` does, as on .NET). A user method spelled like a
+  interface field compares by value. A struct's own `Equals(S)` keeps replacing it when it
+  implements `IEquatable<S>` (or a transpiled interface's `Equals(S)`), as
+  `EqualityComparer<S>.Default` uses it on .NET, so a boxed comparison of that struct also
+  reaches it where .NET compares fields; an `Equals(S)` that implements nothing no longer
+  replaces the field comparison and reports `MS0063`. A user method spelled like a
   synthesized member (`Equals(T other, double tol)`, `HashCode(int seed)`, a record's
-  `With(int a)`) now shares the name: the synthesized member joins its overload group, the
+  `With(int a)`, or a lone method whose `[Name]` is `equals` / `hashCode` / `with`) now shares
+  the name: the synthesized member joins its overload group, the
   dispatcher keeps `equals` / `hashCode` / `with`, the synthesized member's fast path is
   `equalsByValue` / `hashCodeByValue` / `withByValue`, and C# calls bind statically to the fast
   paths (spec 013 FR-038–FR-045). An overload a dispatcher cannot tell from the synthesized
