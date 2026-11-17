@@ -1,0 +1,96 @@
+# Known gaps: a conformance row whose Bun/Node output differs from .NET on purpose or for now.
+# One entry per line: <Class.row | Class.*>  <#issue | none>  <note>. The first matching line wins, so put
+# specific rows before a Class.* wildcard. The entry names the follow-up; the recorded output
+# (recorded/bun.txt, recorded/node.txt) pins how the row differs today, so a row that gets worse
+# is CHANGED. When a row starts matching .NET, delete its line and re-record.
+# `none` marks a divergence no open issue covers yet.
+
+AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
+AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
+CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
+CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
+CastProbes.exceptionsFail             #651  BCL exception identity (the message lacks the System. namespace)
+CastProbes.downFail                   none  InvalidCastException message lacks the namespace of the type names
+CastProbes.recordsFail                none  InvalidCastException message lacks the namespace of the type names
+CastProbes.genericFail                none  a generic down cast is not checked (TypeError at the first member access)
+CastProbes.interfaceFail              none  a cast to an interface is not checked (TypeError at the first member access)
+CastProbes.objectToStringFail         none  (string)(object)5 is not checked
+CastProbes.enums                      none  a numeric enum prints its number, .NET prints the member name
+TextProbes.enumsText                  none  a numeric enum prints its number, .NET prints the member name
+CatchProbes.all                       none  an out-of-range index and a missing dictionary key do not throw
+CatchProbes.dictMissing               none  a missing dictionary key does not throw KeyNotFoundException
+CatchProbes.indexOut                  none  an out-of-range list index does not throw
+IndexProbes.listOutOfRange            none  an out-of-range list index does not throw
+IndexProbes.outOfRange                none  an out-of-range array index does not throw
+IndexProbes.outOfRangeNullable        none  an out-of-range array index does not throw
+StringProbes.lengthAndIndex           none  an out-of-range string index does not throw
+DecimalProbes.big                     #465  decimal.js precision and rounding are not System.Decimal's
+DecimalProbes.precision               #465  decimal.js precision and rounding are not System.Decimal's
+DecimalProbes.thirds                  #465  decimal.js precision and rounding are not System.Decimal's
+DecimalProbes.overflow                #465  Decimal.maxValue and the overflow check are not mapped
+Round2Probes.decToDoubleThird         #465  decimal.js precision and rounding are not System.Decimal's
+DecimalProbes.collections             #687  IndexOf / Contains over decimals use reference identity
+DecimalProbes.arithmetic              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+DecimalProbes.negatives               #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+DecimalProbes.parseTry                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+DecimalProbes.rounding                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+DecimalProbes.trailingZeros           #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+DecimalProbes.records                 #664  record ToString and decimal scale
+IndexProbes.decimalElems              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+LinqProbes.decimalLambda              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+LinqProbes.minMaxDecimal              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+NullGuardProbes.concatDecimal         #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+ParseProbes.decimalParse              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+ParseProbes.decimalTry                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
+DecimalProbes.compound                none  NEW BUG: `a += d`, `a *= d`, `a /= d` and `a++` on a decimal emit JavaScript operators on Decimal objects (prints 9, .NET 3.0)
+DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
+DecimalProbes.dictKey                 none  a decimal dictionary key is compared by reference
+DecimalProbes.typeTests               none  `is int` on a number that holds a whole value
+DefaultProbes.arrays                  #688  array-creation expression unsupported
+DefaultProbes.isDefault               #686  EqualityComparer<T>.Default is unmapped
+DefaultProbes.*                       #291  default(T) of a struct, enum, tuple, BCL value or type parameter
+DispatchProbes.equalsPair             #684  record equality edge case through a base-typed receiver or object.Equals
+EqualityProbes.genericArray           #688  a tuple is a plain array, so arrays behind object/T compare element by element
+EqualityProbes.genericList            #688  a tuple is a plain array, so arrays behind object/T compare element by element
+EqualityProbes.objectArrays           #688  a tuple is a plain array, so arrays behind object/T compare element by element
+EqualityProbes.objectBoxed            #684  a boxed int and a boxed double are the same JavaScript number
+IndexProbes.nested                    #688  array-creation expression unsupported
+IndexProbes.structElems               #688  array-creation expression unsupported
+IndexProbes.swap                      #688  tuple deconstruction unsupported
+IndexProbes.tupleElems                #688  declaration expression unsupported
+IndexProbes.refArgs                   none  a ref argument that is an array element is passed by value
+IndexProbes.stringsIdx                #501  char arithmetic: (char)(s[0] + 1)
+TextProbes.chars                      #501  char arithmetic and char to int conversions
+LinqProbes.intOverflowSum             #639  checked int arithmetic in LINQ sums
+LinqSetProbes.comparers               #687  equality comparers are not accepted
+LinqSetProbes.setOpsRecords           #687  records compare by reference in set operations
+ParseProbes.convertCalls              #686  Convert.* is unmapped
+ParseProbes.offsets                   #686  DateTimeOffset members are unmapped
+ParseProbes.timeSpans                 #686  TimeSpan members are unmapped
+ParseProbes.doubleOk                  none  double.Parse of an invalid text returns Infinity instead of throwing
+Round2Probes.exCtorArgs               #651  BCL exception identity and messages
+Round3Probes.decimalRoutes            #686  decimal.ToDouble is unmapped
+Round3Probes.mathCalls                #686  Math.PI is unmapped
+Round3Probes.timeProps                #686  TimeSpan members are unmapped
+StringProbes.chars                    #686  string.Concat over chars is unmapped
+StringProbes.compare                  #686  string.Compare is unmapped
+StringProbes.equalsCalls              #686  string.Equals is unmapped
+StringProbes.formatting               #686  string.Format is unmapped (composite formatting: #662)
+StringProbes.cases                    none  ToUpperInvariant("ß") gives SS in JavaScript
+StringProbes.emptyAndNullArgs         none  "abc".Contains(null) does not throw ArgumentNullException
+StringProbes.trimSpecial              none  JavaScript trims U+FEFF, .NET does not
+StringProbes.condChainNested          none  a boxed bool prints true, .NET prints True
+NullGuardProbes.interpGeneric         none  a boxed bool prints true, .NET prints True
+TextProbes.boolNullable               none  a boxed bool prints true, .NET prints True
+TextProbes.boxed                      none  a boxed bool or double prints true / 1e-7, .NET prints True / 1E-07
+TextProbes.compound                   none  a double in string concatenation prints 2.5 for 2.50m, .NET keeps the scale
+TextProbes.generic                    none  a boxed bool or double prints true / 1e-7, .NET prints True / 1E-07
+TextProbes.joinArrays                 none  a boxed bool or double prints true / 1e-7, .NET prints True / 1E-07
+TextProbes.dates                      none  TimeSpan prints as an ISO duration, .NET prints 01:02:03
+TextProbes.floatMath                  none  float equality after a float computation
+TextProbes.recordToString             #664  record ToString prints [object Object]
+TextProbes.tupleToString              none  a tuple ToString prints a bare list
+Round2Probes.nullableText             none  a nullable bool or double prints true / 1e-7, .NET prints True / 1E-07
+Round2Probes.nullableTextNull         none  ToString() of a null nullable throws TypeError instead of printing an empty text
+Round4Probes.compoundIndexOnce        none  compound string concatenation onto null prints "null"
+Round4Probes.compoundReceiverOnce     none  compound string concatenation onto null prints "null"

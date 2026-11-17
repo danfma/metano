@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The library half of the cross-package conformance row (CrossPackageProbes): a separate
+    transpilable assembly, emitted as the "conformance-lib" package. Never part of
+    Metano.slnx; scripts/run-conformance.sh transpiles it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS8851;CS0659;CS8767;CS8765</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/Metano/Metano.csproj" />
+  </ItemGroup>
+</Project>
