@@ -115,6 +115,15 @@ public static partial class IrToTsExpressionBridge
             IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(overflow, value =>
                 Map(value, context)
             ),
+            IrUserOperatorApplication application => IrToTsUserOperatorBridge.MapApplication(
+                application,
+                context
+            ),
+            IrUserOperatorStore store => Map(store.ReadModifyWrite, context),
+            IrUserConversion userConversion => IrToTsUserOperatorBridge.MapConversion(
+                userConversion,
+                context
+            ),
             IrLambdaExpression lambda => MapLambda(lambda, context),
             IrStringInterpolation interp => MapStringInterpolation(interp, context),
             IrIsPatternExpression isPattern => MapIsPattern(isPattern, context),

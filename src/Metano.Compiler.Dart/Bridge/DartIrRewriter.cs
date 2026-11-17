@@ -88,11 +88,7 @@ public sealed class DartIrRewriter
             {
                 Statements = b.Statements.Select(RewriteStatement).ToList(),
             },
-            IrForEachStatement f => f with
-            {
-                Collection = RewriteExpression(f.Collection),
-                Body = f.Body.Select(RewriteStatement).ToList(),
-            },
+            IrForEachStatement f => RewriteForEach(DartUserOperatorForms.LoopOverSourceVariable(f)),
             IrForStatement f => f with
             {
                 Initializers = f.Initializers.Select(RewriteStatement).ToList(),
@@ -124,6 +120,13 @@ public sealed class DartIrRewriter
             _ => stmt,
         };
 
+    private IrForEachStatement RewriteForEach(IrForEachStatement loop) =>
+        loop with
+        {
+            Collection = RewriteExpression(loop.Collection),
+            Body = loop.Body.Select(RewriteStatement).ToList(),
+        };
+
     private IrCatchClause RewriteCatch(IrCatchClause c) =>
         c with
         {
@@ -144,6 +147,8 @@ public sealed class DartIrRewriter
     private IrExpression RewriteExpression(IrExpression expr) =>
         expr switch
         {
+            IrUserOperatorApplication or IrUserOperatorStore or IrUserConversion =>
+                RewriteExpression(DartUserOperatorForms.SourceFormOf(expr)),
             IrCallExpression call => RewriteCall(call),
             IrBaseObjectMemberCall baseCall => baseCall with
             {

@@ -218,6 +218,7 @@ public class IrExpressionExtractionTests
             "int Call() => Add(1, 2);",
             "public static int Add(int a, int b) => a + b;"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var call = (ret.Value as IrCallExpression)!;
         await Assert.That(call.Origin).IsNotNull();
@@ -232,12 +233,15 @@ public class IrExpressionExtractionTests
         var ir = ExtractFromMethod(
             "void M(System.Collections.Generic.List<int> xs) { xs.Add(1); }"
         );
+
         var stmt = GetAt<IrExpressionStatement>(ir, 0);
         var call = (stmt.Expression as IrCallExpression)!;
         await Assert.That(call.Origin).IsNotNull();
+
         await Assert
             .That(call.Origin!.DeclaringTypeFullName)
             .IsEqualTo("System.Collections.Generic.List<T>");
+
         await Assert.That(call.Origin.MemberName).IsEqualTo("Add");
         await Assert.That(call.Origin.IsStatic).IsFalse();
     }
@@ -249,6 +253,7 @@ public class IrExpressionExtractionTests
             "int Call() => Box<int>(42);",
             "public static T Box<T>(T v) => v;"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var call = (ret.Value as IrCallExpression)!;
         await Assert.That(call.TypeArguments).IsNotNull();
@@ -283,6 +288,7 @@ public class IrExpressionExtractionTests
             "int Call() => Add(1, 2);",
             "static int Add(int a, int b) => a + b;"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var call = (ret.Value as IrCallExpression)!;
         var target = (call.Target as IrMemberAccess)!;
@@ -356,6 +362,7 @@ public class IrExpressionExtractionTests
         var ir = ExtractFromMethod(
             "string Describe(int n) => n switch { 0 => \"zero\", _ => \"many\" };"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var sw = (ret.Value as IrSwitchExpression)!;
         await Assert.That(sw.Arms.Count).IsEqualTo(2);
@@ -377,6 +384,7 @@ public class IrExpressionExtractionTests
             """,
             "public record Foo(int X, int Y);"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var w = (ret.Value as IrWithExpression)!;
         await Assert.That(w.Assignments.Count).IsEqualTo(1);
@@ -399,6 +407,7 @@ public class IrExpressionExtractionTests
             """,
             "public record Foo(int X, int Priority);"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var ne = (ret.Value as IrNewExpression)!;
         await Assert.That(ne.Arguments.Count).IsEqualTo(2);
@@ -430,6 +439,7 @@ public class IrExpressionExtractionTests
         var ir = ExtractFromMethod(
             "string Classify(int n) => n switch { var x when x > 0 => \"pos\", _ => \"other\" };"
         );
+
         var ret = GetAt<IrReturnStatement>(ir, 0);
         var sw = (ret.Value as IrSwitchExpression)!;
         await Assert.That(sw.Arms[0].WhenClause).IsNotNull();
@@ -543,6 +553,7 @@ public class IrExpressionExtractionTests
             }
             """
         );
+
         var fe = GetAt<IrForEachStatement>(ir, 0);
         await Assert.That(fe.Variable).IsEqualTo("x");
         await Assert.That(fe.Body).Count().IsEqualTo(1);
@@ -574,6 +585,7 @@ public class IrExpressionExtractionTests
             """,
             extraMembers: "void DoWork() { }"
         );
+
         var ts = GetAt<IrTryStatement>(ir, 0);
         await Assert.That(ts.Catches).IsNotNull();
         await Assert.That(ts.Catches!).Count().IsEqualTo(2);
@@ -593,6 +605,7 @@ public class IrExpressionExtractionTests
             }
             """
         );
+
         var sw = GetAt<IrSwitchStatement>(ir, 0);
         await Assert.That(sw.Cases).Count().IsEqualTo(3);
         await Assert.That(sw.Cases.Last().Labels.Single()).IsTypeOf<IrDefaultCaseLabel>();
@@ -613,6 +626,7 @@ public class IrExpressionExtractionTests
             }
             """
         );
+
         var labels = GetAt<IrSwitchStatement>(ir, 0).Cases.Single().Labels;
 
         await Assert.That(labels).Count().IsEqualTo(3);
@@ -653,7 +667,6 @@ public class IrExpressionExtractionTests
         )
         {
             EmitsConstructorSelectors = _ => true,
-            EmitsOperatorFastPaths = true,
             KeepsArgumentEvaluationOrder = true,
         };
 
@@ -661,7 +674,6 @@ public class IrExpressionExtractionTests
 
         await Assert.That(constant).IsEqualTo(new IrExtractionContext(resolver));
         await Assert.That(constant.EmitsConstructorSelectors).IsNull();
-        await Assert.That(constant.EmitsOperatorFastPaths).IsFalse();
         await Assert.That(constant.KeepsArgumentEvaluationOrder).IsFalse();
     }
 

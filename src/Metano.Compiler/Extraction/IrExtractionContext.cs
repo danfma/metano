@@ -49,19 +49,6 @@ public sealed record IrExtractionContext(
     public Func<INamedTypeSymbol, bool>? EmitsConstructorSelectors { get; init; }
 
     /// <summary>
-    /// Whether the target emits an addressable fast path per overload of a
-    /// dispatched operator group (spec 013 FR-033), so the extractor binds an
-    /// operator application to the overload Roslyn resolved. Opt-in, like
-    /// <see cref="EmitsConstructorSelectors"/>: a target that does not
-    /// declare the fast paths keeps the source operator. TypeScript sets it
-    /// (<c>Money.__addMoneyInt32(a, b)</c>); Dart declares one
-    /// <c>operator +</c> per class and leaves it unset. Method, <c>base.M</c>,
-    /// method-group and module-function call sites bind on every target: each
-    /// names the fast paths of those groups (#549).
-    /// </summary>
-    public bool EmitsOperatorFastPaths { get; init; }
-
-    /// <summary>
     /// Whether the target declares an addressable fast path for a method of
     /// a <c>[Branded]</c> / <c>[InlineWrapper]</c> type when its group is
     /// dispatched (issue #569), so the extractor binds a call or method
@@ -144,12 +131,11 @@ public sealed record IrExtractionContext(
     /// needs neither a target-specific rewrite (the Temporal comparisons) nor
     /// a second semantic model. The target capabilities
     /// (<see cref="EmitsConstructorSelectors"/>,
-    /// <see cref="EmitsOperatorFastPaths"/>,
     /// <see cref="EmitsBrandedFastPath"/>,
     /// <see cref="KeepsArgumentEvaluationOrder"/>,
     /// <see cref="HasExceptionRuntimeClass"/>,
     /// <see cref="FormatStrings"/>) are dropped on purpose: each one binds a
-    /// constructor call, a user-defined operator, a method call, a call with
+    /// constructor call, a method call, a call with
     /// named arguments or a formatted value, or answers for an exception
     /// construction or type test, and a C# default value is a constant,
     /// <c>default</c> or a parameterless struct construction, which holds

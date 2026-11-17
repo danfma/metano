@@ -234,12 +234,14 @@ public sealed partial class IrExpressionExtractor
         // A 64-bit constant folds to one literal, and a constant inside
         // checked / unchecked takes Roslyn's wrapped value; see
         // IrExpressionExtractor.NumericConversions.cs and .CheckedContext.cs.
-        var value = FoldedInt64Constant(expression)
+        var value = UnsupportedUserTruthTest(expression)
+            ?? FoldedInt64Constant(expression)
             ?? FoldedCheckedContextConstant(expression)
             ?? FoldedNumberStylesConstant(expression)
             ?? ExtractUnbound(expression);
 
-        return WithImplicitNumericConversion(expression, value);
+        return WithImplicitUserConversion(expression, value)
+            ?? WithImplicitNumericConversion(expression, value);
     }
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
@@ -1781,7 +1783,7 @@ public sealed partial class IrExpressionExtractor
 
         var op = NarrowBuiltinOperator(mappedOp, bin);
 
-        return TryExtractUserOperatorCall(bin)
+        return TryExtractUserBinary(bin, op)
             ?? TryExtractValueEquality(bin)
             ?? TryExtractNullableBooleanLogic(bin, op)
             ?? TryExtractLiftedBinary(bin, op)
@@ -1790,57 +1792,6 @@ public sealed partial class IrExpressionExtractor
                 _semantic.GetOperation(bin),
                 BuildBinary(bin, op, LeftOperandOf(bin), OperandOf(bin.Right), isLifted: false)
             );
-    }
-
-    /// <summary>
-    /// A binary expression whose operator resolves to a user-defined
-    /// overload of a dispatched operator group (spec 013 FR-018): the fast
-    /// path the claim pass names, <c>T.__addMoneyInt32(a, b)</c>, with
-    /// Roslyn's bound operands. The declaring type is the static operand
-    /// type's, so the call targets the fast path directly and no runtime
-    /// check runs. <c>null</c> for any other operator: the synthesized
-    /// equality of a record keeps its value lowering, and a single operator
-    /// or a metadata-only one keeps today's shape (DECIDED-11,
-    /// DECIDED-24), and so does every operator on a target that emits no
-    /// operator fast paths (<see cref="IrExtractionContext.EmitsOperatorFastPaths"/>).
-    /// </summary>
-    private IrExpression? TryExtractUserOperatorCall(BinaryExpressionSyntax bin)
-    {
-        if (!_context.EmitsOperatorFastPaths)
-            return null;
-
-        if (
-            _semantic.GetSymbolInfo(bin).Symbol
-            is not IMethodSymbol
-            {
-                MethodKind: MethodKind.UserDefinedOperator,
-                Parameters.Length: 2,
-            } operatorMethod
-        )
-            return null;
-
-        var overloadRef = DispatchedMethodCalls.RefOf(operatorMethod, _context);
-
-        if (overloadRef is null)
-            return null;
-
-        var bound = ExtractBoundOperatorCall(
-            _semantic.GetOperation(bin),
-            operatorMethod,
-            overloadRef
-        );
-
-        if (bound is null)
-            return null;
-
-        return new IrCallExpression(
-            new IrMemberAccess(TypeReferenceTo(operatorMethod.ContainingType), operatorMethod.Name),
-            bound.Arguments,
-            Origin: BuildOrigin(operatorMethod)
-        )
-        {
-            Overload = bound.Overload,
-        };
     }
 
     /// <summary>
@@ -1861,6 +1812,9 @@ public sealed partial class IrExpressionExtractor
         bool isLifted
     )
     {
+        if (isLifted && UserBinaryOver(operatorSyntax, op, left.Value, right.Value) is { } user)
+            return user;
+
         // decimal arithmetic needs a special lowering: legacy emits
         // `a.plus(b)` / `.times(b)` / `.div(b)` / etc. on the decimal.js
         // Decimal class rather than raw `+` / `*` / `/`. Detect via
@@ -2046,43 +2000,8 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        // `x += y` where the compound operator resolves to a user-defined
-        // operator method — rewrite to `x = x.$add(y)`. The semantic model
-        // exposes the operator on the assignment expression itself.
-        if (
-            _semantic.GetSymbolInfo(assign).Symbol is IMethodSymbol
-            {
-                MethodKind: MethodKind.UserDefinedOperator,
-            } opMethod
-        )
-        {
-            var opName = assign.Kind() switch
-            {
-                Microsoft.CodeAnalysis.CSharp.SyntaxKind.AddAssignmentExpression => "add",
-                Microsoft.CodeAnalysis.CSharp.SyntaxKind.SubtractAssignmentExpression => "subtract",
-                Microsoft.CodeAnalysis.CSharp.SyntaxKind.MultiplyAssignmentExpression => "multiply",
-                Microsoft.CodeAnalysis.CSharp.SyntaxKind.DivideAssignmentExpression => "divide",
-                Microsoft.CodeAnalysis.CSharp.SyntaxKind.ModuloAssignmentExpression => "modulo",
-                _ => null,
-            };
-            if (opName is not null)
-            {
-                var left = Extract(assign.Left);
-
-                if (IsUnsupportedPlaceholder(left))
-                    return left;
-
-                var right = Extract(assign.Right);
-                return new IrBinaryExpression(
-                    left,
-                    IrBinaryOp.Assign,
-                    new IrCallExpression(
-                        new IrMemberAccess(left, "$" + opName),
-                        [new IrArgument(right)]
-                    )
-                );
-            }
-        }
+        if (TryExtractUserCompoundAssignment(assign) is { } userCompound)
+            return userCompound;
 
         // `event += handler` / `event -= handler` — when the left side binds
         // to an event symbol, rewrite the compound assignment into a call to
@@ -2130,6 +2049,10 @@ public sealed partial class IrExpressionExtractor
             && suppress.IsKind(SyntaxKind.SuppressNullableWarningExpression)
         )
             return AssertNonNull(suppress.Operand);
+
+        if (node is PrefixUnaryExpressionSyntax prefix && TryExtractUserUnary(prefix) is { } user)
+            return user;
+
         if (node is PrefixUnaryExpressionSyntax plus && plus.IsKind(SyntaxKind.UnaryPlusExpression))
             return Extract(plus.Operand);
 
@@ -2199,6 +2122,25 @@ public sealed partial class IrExpressionExtractor
         if (IsUnsupportedPlaceholder(extractedOperand))
             return extractedOperand;
 
+        return TryExtractUserIncrement(node, op, extractedOperand, isPrefix, () =>
+            ExtractBuiltinIncrement(node, operand, op, extractedOperand, isPrefix)
+        ) ?? ExtractBuiltinIncrement(node, operand, op, extractedOperand, isPrefix);
+    }
+
+    /// <summary>
+    /// <c>x++</c>, <c>++x</c>, <c>x--</c> or <c>--x</c> through the built-in
+    /// operator of the operand's type: lifted over a nullable value, stored
+    /// through the code of a <c>char</c> or the methods of a <c>decimal</c>,
+    /// reduced to an integer kind, or the native operator.
+    /// </summary>
+    private IrExpression ExtractBuiltinIncrement(
+        ExpressionSyntax node,
+        ExpressionSyntax operand,
+        IrUnaryOp op,
+        IrExpression extractedOperand,
+        bool isPrefix
+    )
+    {
         if (IsNullableValueOperand(operand))
             return LiftIncrement(node, operand, op, extractedOperand, isPrefix);
 
@@ -5387,6 +5329,9 @@ public sealed partial class IrExpressionExtractor
 
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
+
+        if (TryExtractUserCast(cast, inner, sourceType, targetType) is { } user)
+            return user;
 
         var unwrapsNullable = IsNullableUnwrapCast(cast, sourceType, targetType);
 

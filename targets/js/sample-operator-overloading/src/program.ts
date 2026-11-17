@@ -4,6 +4,6 @@ import { Money } from "#/sample-operator-overloading/money";
 
 let poket = Money.fromCents(150n, Currency.Usd);
 
-poket = poket.$add(new Money(250n, Currency.Usd));
+poket = Money.__add(poket, new Money(250n, Currency.Usd));
 
 console.log(poket);

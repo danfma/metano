@@ -1,10 +1,10 @@
-import type { Ticks } from "./ticks";
+import { Ticks } from "./ticks";
 import type { UId } from "./u-id";
 
 export class OperatorCalls {
   constructor() { }
 
   run(ticks: Ticks, id: UId): Ticks {
-    return ticks + 2n + id;
+    return Ticks.__addTicksUId(Ticks.__addTicksInt64(ticks, 2n), id);
   }
 }

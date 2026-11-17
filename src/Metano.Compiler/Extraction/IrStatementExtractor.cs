@@ -433,6 +433,17 @@ public sealed class IrStatementExtractor(
             return tuple;
 
         if (
+            _expressions.UserElementConversion(
+                info.ElementConversion,
+                element,
+                info.ElementType,
+                variableType
+            ) is
+            { } user
+        )
+            return user;
+
+        if (
             !IsNumericElementConversion(info)
             || info.ElementType is not { } elementType
             || NumericEndpoints.Of(elementType) is not { } from

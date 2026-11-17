@@ -139,7 +139,7 @@ public class FloatingPointMappingTests
         );
 
         var output = result["distances.ts"];
-        await Assert.That(output).Contains("return Number.isNaN(m);");
+        await Assert.That(output).Contains("return Number.isNaN(Meters.__implicitToDouble(m));");
         await AssertNoBclNumericReceiverLeaks(output);
     }
 
@@ -162,11 +162,13 @@ public class FloatingPointMappingTests
 
         await Assert.That(output).Contains("return Number.isNaN(v);");
         await Assert.That(output).Contains("return !Number.isNaN(v);");
+
         await Assert
             .That(output)
             .Contains(
                 "return Number.isNaN(v) ? \"missing\" : v === Infinity ? \"overflow\" : \"value\";"
             );
+
         await Assert.That(output).DoesNotContain("=== Number.NaN");
         await AssertNoBclNumericReceiverLeaks(output);
     }

@@ -890,6 +890,15 @@ the rows of `tests/BclReference`.
   produces a never-nullish expression (`typeof $0`) and returns a `string` in nullable-disabled
   code gets the guard, which tsgo rejects as TS2869.
 
+### ⚠ User-defined operators and conversions run at their use sites (baseline FR-077, FR-079; #599)
+
+- Every application of a user-defined operator calls its type's static helper: `a + b` is `Money.__add(a, b)`, `-a` is `Money.__negate(a)`, a dispatched group calls the fast path C# resolved (`Vec.__multiplyDoubleVec(2, v)`, a branded type its companion function `Ticks.__addTicksInt64`), and a type read only from metadata calls the dispatcher. They printed the JavaScript operator on the objects (`a + b` concatenated, `-a` gave `NaN`).
+- `x += y` stores `x = Money.__add(x, y)` and `x++` stores `x = Money.__increment(x)`, evaluating the target once; they called the instance helper (`x = x.$add(y)`) or printed `x++` on the object.
+- Every user-defined conversion runs: `Money m = 7` is `Money.__implicitFromInt32(7)`, `(long)m` is `Money.__toInt64(m)`, `decimal d = m` calls `Money.__implicitToDecimal(m)`, a `foreach (Money m in ints)` variable converts each element, and a condition over `implicit operator bool` calls it. They passed the operand unchanged.
+- Lifted operators and conversions over `Nullable<T>` yield `null` (or `false` for a relational operator); a lifted `==` / `!=` compares `null` as C# does. A test against a constant `null` (`x == null`) stays a plain null check.
+- A user `true` / `false` operator in a condition or `&&` / `||`, a C# 14 instance compound or increment operator and an operator of a `[PlainObject]` type report `MS0001`.
+- Dart output does not change.
+
 ### ⚠ Operator helpers and conversion statics are renamed (baseline FR-078; #600, #599)
 
 - Each conversion operator is its own static, named by its kind, direction and converted type,

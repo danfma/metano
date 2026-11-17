@@ -264,11 +264,15 @@ public class NullableValueGuardTests
 
         await Assert
             .That(conversions)
-            .Contains($"export function read(m: Meters): number {{\n  return m{Guard};\n}}");
+            .Contains(
+                $"export function read(m: Meters): number {{\n  return Meters.__toInt32OrNull(m){Guard};\n}}"
+            );
 
         await Assert
             .That(conversions)
-            .Contains($"export function cast(m: Meters): number {{\n  return m{Guard};\n}}");
+            .Contains(
+                $"export function cast(m: Meters): number {{\n  return Meters.__toInt32OrNull(m){Guard};\n}}"
+            );
     }
 
     /// <summary>
@@ -280,7 +284,9 @@ public class NullableValueGuardTests
     {
         var conversions = TranspileHelper.Transpile(UserDefinedConversionSource)["conversions.ts"];
 
-        await Assert.That(conversions).Contains($"  return [BigInt(m{Guard}), ");
+        await Assert
+            .That(conversions)
+            .Contains($"  return [BigInt(Meters.__toInt32OrNull(m){Guard}), ");
     }
 
     [Test]

@@ -183,7 +183,7 @@ public class IntegerDivisionTranspileTests
         )["meters.ts"];
 
         await Assert.That(output).Contains("new Meters(intDiv(a.value, b))");
-        await Assert.That(output).Contains("return m / 3;");
+        await Assert.That(output).Contains("return Meters.__divide(m, 3);");
     }
 
     [Test]

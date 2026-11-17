@@ -53,9 +53,9 @@ public sealed class DartTransformer
     /// explicit it prints the narrowing ones (spec 012 DECIDED-19).
     /// A dispatched constructor set becomes named constructors, so a
     /// construction binds the overload it selects; an overloaded operator
-    /// group keeps one <c>operator</c> declaration, so Dart leaves
-    /// <see cref="IrExtractionContext.EmitsOperatorFastPaths"/> unset and an
-    /// operator application keeps the source operator (spec 013 FR-022).
+    /// group keeps one <c>operator</c> declaration, so the Dart rewriter
+    /// prints an operator application as the source operator (spec 013
+    /// FR-022, baseline FR-077).
     /// </summary>
     private IrExtractionContext Extraction =>
         new(Compilation: _compilation, GroupingPolicy: DartGroupingPolicy.Instance)

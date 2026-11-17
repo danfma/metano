@@ -464,6 +464,22 @@ public static class IrToTsJsxComponentBridge
             {
                 Operand = Rewrite(conversion.Operand, propNames, referenced),
             },
+            IrUserOperatorApplication application => application with
+            {
+                Operands = application
+                    .Operands.Select(operand => Rewrite(operand, propNames, referenced))
+                    .ToList(),
+            },
+            IrUserOperatorStore store => store with
+            {
+                SourceForm = Rewrite(store.SourceForm, propNames, referenced),
+                ReadModifyWrite = Rewrite(store.ReadModifyWrite, propNames, referenced),
+            },
+            IrUserConversion userConversion => userConversion with
+            {
+                Operand = Rewrite(userConversion.Operand, propNames, referenced),
+                SourceForm = Rewrite(userConversion.SourceForm, propNames, referenced),
+            },
             IrIntegerOverflow overflow => overflow with
             {
                 Value = Rewrite(overflow.Value, propNames, referenced),

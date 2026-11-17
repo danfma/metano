@@ -97,4 +97,3 @@ LazyFieldProbes.structDefaultDoesNotTrigger #291  `new S()` of a struct runs its
 LazyStructProbes.paramsConstructorWithoutArguments #291  `new S()` of a struct whose only constructor takes `params` runs that constructor (its static constructor and field initializers) instead of the default value
 LazyStructProbes.paramsConstructorWithoutArgumentsNoStaticConstructor #291  `new S()` of a struct whose only constructor takes `params` runs that constructor's field initializers instead of the default value (existing, no static constructor involved)
 LazyStructProbes.structAutoPropertyRead none  a struct's instance auto-property is a TS field, so reading it does not run the static constructor (.NET calls the accessor, which does); follow-up of #681
-OperatorProbes.*                      #599  user-defined operators and conversions are not applied at their use sites (G3c lowers them)

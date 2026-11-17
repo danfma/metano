@@ -57,6 +57,22 @@ internal sealed partial class ExpressionVariableLowering
                 case IrNumericConversion conversion:
                     return conversion with { Operand = Bind(conversion.Operand) };
 
+                case IrUserOperatorApplication application:
+                    return StopAfter(
+                        application with
+                        {
+                            Operands = application.Operands.Select(Bind).ToList(),
+                        }
+                    );
+
+                case IrUserConversion userConversion:
+                    return StopAfter(
+                        userConversion with
+                        {
+                            Operand = Bind(userConversion.Operand),
+                        }
+                    );
+
                 case IrIntegerOverflow overflow:
                     return overflow with { Value = Bind(overflow.Value) };
 
