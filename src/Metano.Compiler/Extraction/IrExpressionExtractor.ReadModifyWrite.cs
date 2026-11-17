@@ -61,7 +61,8 @@ public sealed partial class IrExpressionExtractor
         HasNoTargetCompoundOperator(op)
         || NeedsOverflowReduction(assign)
         || NeedsSixtyFourBitReadModifyWrite(op, assign)
-        || NeedsLogicalShiftReadModifyWrite(op, assign);
+        || NeedsLogicalShiftReadModifyWrite(op, assign)
+        || IsDecimalCompound(op, assign);
 
     private static bool HasNoTargetCompoundOperator(IrBinaryOp op) =>
         op
@@ -75,7 +76,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The value <c>target op= right</c> stores: the binary form over the
-    /// current value, reduced as the compound operation needs (FR-024).
+    /// current value, reduced as the compound operation needs (FR-024), or
+    /// the method call of a <c>decimal</c> compound operator.
     /// </summary>
     private IrExpression CompoundValue(
         AssignmentExpressionSyntax assign,
@@ -83,15 +85,17 @@ public sealed partial class IrExpressionExtractor
         IrBinaryOp op,
         IrExpression right
     ) =>
-        ReduceOverflow(
-            _semantic.GetOperation(assign),
-            BuildNumericBinary(
-                assign,
-                op,
-                current,
-                new OperatorOperand(right, MayBeNull: false, assign.Right)
-            )
-        );
+        IsDecimalCompound(op, assign)
+            ? BuildDecimalBinaryCall(current, right, MapDecimalBinaryMethod(op)!)
+            : ReduceOverflow(
+                _semantic.GetOperation(assign),
+                BuildNumericBinary(
+                    assign,
+                    op,
+                    current,
+                    new OperatorOperand(right, MayBeNull: false, assign.Right)
+                )
+            );
 
     /// <summary>
     /// The value an extension property's <c>target op= right</c> stores: the

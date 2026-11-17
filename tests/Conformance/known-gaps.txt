@@ -42,7 +42,7 @@ LinqProbes.minMaxDecimal              #662  decimal.js drops the decimal scale (
 NullGuardProbes.concatDecimal         #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 ParseProbes.decimalParse              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 ParseProbes.decimalTry                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
-DecimalProbes.compound                none  NEW BUG: `a += d`, `a *= d`, `a /= d` and `a++` on a decimal emit JavaScript operators on Decimal objects (prints 9, .NET 3.0)
+DecimalProbes.compound                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
 DecimalProbes.dictKey                 none  a decimal dictionary key is compared by reference
 DecimalProbes.typeTests               none  `is int` on a number that holds a whole value

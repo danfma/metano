@@ -30,22 +30,39 @@ internal sealed record NumericLoweringRules(
     bool ReadsCollectionAndLoopRanges
 )
 {
+    /// <summary>
+    /// Whether the target computes with a <c>decimal</c> as a runtime value
+    /// whose operators are method calls, so an integer of 32 bits or fewer
+    /// read as a <c>decimal</c> is converted (FR-080) and a <c>decimal</c>
+    /// compound assignment stores the method call
+    /// (<c>d = d.plus(x)</c>). Dart prints a <c>decimal</c> endpoint as its
+    /// operand and keeps its compound operators.
+    /// </summary>
+    public bool LowersDecimalValues { get; init; }
+
     public static NumericLoweringRules For(TargetLanguage? target) =>
         new(
             LowersCharCodes: target != TargetLanguage.Dart,
             WrapsInt32Arithmetic: target != TargetLanguage.Dart,
             ReadsCollectionAndLoopRanges: target != TargetLanguage.Dart
-        );
+        )
+        {
+            LowersDecimalValues = target != TargetLanguage.Dart,
+        };
 
     /// <summary>
     /// Whether an implicit conversion from <paramref name="from"/> to
     /// <paramref name="to"/> is made explicit: one that crosses a 64-bit
     /// integer (<see cref="NumericEndpoints.CrossesSixtyFourBits"/>), or a
     /// <c>char</c> read as a <c>double</c> / <c>float</c> or, when the target
-    /// lowers char codes, as any number (FR-071).
+    /// lowers char codes, as any number (FR-071), or an integer of 32 bits
+    /// or fewer read as a <c>decimal</c> when the target lowers decimal
+    /// values (FR-080).
     /// </summary>
     public bool NeedsImplicitNode(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        NumericEndpoints.CrossesSixtyFourBits(from, to) || IsLoweredCharRead(from, to);
+        NumericEndpoints.CrossesSixtyFourBits(from, to)
+        || IsLoweredCharRead(from, to)
+        || IsLoweredIntegerToDecimal(from, to);
 
     /// <summary>
     /// Whether a conversion from <paramref name="from"/> to
@@ -53,8 +70,10 @@ internal sealed record NumericLoweringRules(
     /// floating-point truncation (FR-070), a narrowing between two integers
     /// of 32 bits or fewer (FR-074), a <c>decimal</c> read as a
     /// <c>double</c> or <c>float</c>, a <c>char</c> read as a number or, when
-    /// the target lowers char codes, made of an integer (FR-071, FR-072), and
-    /// the conversions of <see cref="NumericEndpoints.CrossesSixtyFourBits"/>.
+    /// the target lowers char codes, made of an integer (FR-071, FR-072), a
+    /// <c>decimal</c> made of such an integer when the target lowers decimal
+    /// values (FR-080), and the conversions of
+    /// <see cref="NumericEndpoints.CrossesSixtyFourBits"/>.
     /// </summary>
     public bool IsLoweredExplicitly(IrNumericEndpoint from, IrNumericEndpoint to) =>
         IrNumericConversion.IsFloatingPointTruncation(from, to)
@@ -62,7 +81,11 @@ internal sealed record NumericLoweringRules(
         || (LowersCharCodes && IrNumericConversion.IsCharStore(from, to))
         || IrNumericConversion.IsIntegerNarrowing(from, to)
         || IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to)
+        || IsLoweredIntegerToDecimal(from, to)
         || NumericEndpoints.CrossesSixtyFourBits(from, to);
+
+    private bool IsLoweredIntegerToDecimal(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        LowersDecimalValues && IrNumericConversion.IsIntegerToDecimal(from, to);
 
     private bool IsLoweredCharRead(IrNumericEndpoint from, IrNumericEndpoint to) =>
         IrNumericConversion.IsCharRead(from, to) && (LowersCharCodes || to.Kind.IsFloatingPoint());

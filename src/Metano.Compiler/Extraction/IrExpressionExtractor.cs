@@ -2205,6 +2205,9 @@ public sealed partial class IrExpressionExtractor
         if (IsCharStoreTarget(operand))
             return ExtractCharIncrement(node, op, extractedOperand, isPrefix);
 
+        if (IsDecimalStoreTarget(operand))
+            return ExtractDecimalIncrement(node, op, extractedOperand, isPrefix);
+
         return TryExtractReducedIncrement(node, operand, op, extractedOperand, isPrefix)
             ?? new IrUnaryExpression(op, extractedOperand, isPrefix);
     }
