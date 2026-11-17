@@ -62,13 +62,11 @@ internal static class SynthesizedGroupMembers
     {
         var target = policy.Target;
 
-        var spelled = groups
-            .Where(group =>
-                IsSpelled(group, name, target) && HasNonReplacingMember(type, group, kind, policy)
-            )
-            .ToList();
+        var spelled = groups.Where(group => IsSpelled(group, name, target)).ToList();
 
-        var joined = spelled.FirstOrDefault();
+        var joined = spelled.FirstOrDefault(group =>
+            HasNonReplacingMember(type, group, kind, policy)
+        );
 
         var inherited = InsertedByBase(type, kind, policy);
 
@@ -110,7 +108,15 @@ internal static class SynthesizedGroupMembers
                     {
                         Members = [.. group.Members, member],
                         NamingMember = namingMember,
-                        SpelledAlike = [.. spelled.Skip(1).Select(FirstMethodOf)],
+                        // Every other group spelled like it — a replacing
+                        // declaration too, which would keep its plain name beside
+                        // the joined dispatcher — is an error.
+                        SpelledAlike =
+                        [
+                            .. spelled
+                                .Where(other => !IsSameGroup(other, joined))
+                                .Select(FirstMethodOf),
+                        ],
                     }
                     : group
             )
