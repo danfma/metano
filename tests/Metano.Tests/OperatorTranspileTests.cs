@@ -143,8 +143,8 @@ public class OperatorTranspileTests
         );
 
         var output = result["vec2.ts"];
-        await Assert.That(output).Contains("static __subtract(");
-        await Assert.That(output).Contains("$subtract(): Vec2");
+        await Assert.That(output).Contains("static __negate(");
+        await Assert.That(output).Contains("$negate(): Vec2");
     }
 
     /// <summary>
@@ -198,6 +198,6 @@ public class OperatorTranspileTests
 
         var output = result["box.ts"];
 
-        await Assert.That(output).Contains("static __add(...args: unknown[]): Box<T> {");
+        await Assert.That(output).Contains("static __add<T>(...args: unknown[]): Box<T> {");
     }
 }

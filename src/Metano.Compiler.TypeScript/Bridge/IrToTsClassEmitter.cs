@@ -752,7 +752,9 @@ public sealed class IrToTsClassEmitter(
     /// <summary>
     /// Lowers a user-defined operator (single or overload-folded) to its TS
     /// helper methods, deriving the emitted name from the operator's
-    /// <c>[Name]</c> override or <see cref="IrMethodSemantics.OperatorKind"/>.
+    /// <c>[Name]</c> override or <see cref="IrMethodSemantics.OperatorKind"/>
+    /// (<see cref="TsOperatorNaming"/>), and a conversion operator group to one
+    /// static per conversion (baseline FR-078, #600).
     /// </summary>
     private IReadOnlyList<TsClassMember> EmitOperator(
         INamedTypeSymbol type,
@@ -761,26 +763,21 @@ public sealed class IrToTsClassEmitter(
         TsOverloadClaims claims
     )
     {
-        if (TsClassMemberTable.OperatorNameOf(irOp) is not { } opName)
+        var owner = new TsOperatorOwner(
+            _context.ResolveTsName(type),
+            IrToTsTypeParameterMapper.Convert(ir.TypeParameters)
+        );
+
+        if (irOp.Semantics.ConversionName is not null)
+            return EmitConversions(irOp, owner);
+
+        if (TsOperatorNaming.OperatorNameOf(irOp) is not { } opName)
             return [];
-
-        var dispatcherName = TsClassMemberTable.OperatorDispatcherName(opName);
-
-        var typeName = _context.ResolveTsName(type);
 
         if (irOp.Overloads is { Count: > 0 } siblings)
         {
             var allOps = new[] { irOp with { Overloads = null } }.Concat(siblings).ToList();
-            var perParams = allOps
-                .Select<IrMethodDeclaration, IReadOnlyList<TsParameter>>(o =>
-                    o.Parameters.Select(p => new TsParameter(
-                            IrToTsNamingPolicy.ToParameterName(p.Name),
-                            IrToTsTypeMapper.MapParameterType(p, BclOverrides),
-                            Rest: p.IsParams
-                        ))
-                        .ToList()
-                )
-                .ToList();
+            var perParams = allOps.Select(OperatorParameters).ToList();
             var perReturns = allOps
                 .Select(o => IrToTsTypeMapper.Map(o.ReturnType, BclOverrides))
                 .ToList();
@@ -792,7 +789,7 @@ public sealed class IrToTsClassEmitter(
 
             return IrToTsClassBridge.BuildOperatorDispatcher(
                 allOps,
-                typeName,
+                owner,
                 opName,
                 perParams,
                 perReturns,
@@ -803,23 +800,47 @@ public sealed class IrToTsClassEmitter(
             );
         }
 
-        var parameters = irOp
+        return IrToTsClassBridge.BuildOperator(
+            irOp,
+            owner,
+            opName,
+            OperatorParameters(irOp),
+            IrToTsTypeMapper.Map(irOp.ReturnType, BclOverrides),
+            _context.DeclarativeMappings
+        );
+    }
+
+    /// <summary>
+    /// One static per conversion of a conversion operator group, in
+    /// declaration order: the core keeps grouping them (for Dart), the
+    /// TypeScript target un-groups them.
+    /// </summary>
+    private IReadOnlyList<TsClassMember> EmitConversions(
+        IrMethodDeclaration primary,
+        TsOperatorOwner owner
+    ) =>
+        new[] { primary with { Overloads = null } }
+            .Concat(primary.Overloads ?? [])
+            .Select(conversion =>
+                (TsClassMember)
+                    IrToTsClassBridge.BuildConversion(
+                        conversion,
+                        owner,
+                        OperatorParameters(conversion),
+                        IrToTsTypeMapper.Map(conversion.ReturnType, BclOverrides),
+                        _context.DeclarativeMappings
+                    )
+            )
+            .ToList();
+
+    private IReadOnlyList<TsParameter> OperatorParameters(IrMethodDeclaration op) =>
+        op
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p, BclOverrides),
                 Rest: p.IsParams
             ))
             .ToList();
-        var returnType = IrToTsTypeMapper.Map(irOp.ReturnType, BclOverrides);
-        return IrToTsClassBridge.BuildOperator(
-            irOp,
-            typeName,
-            opName,
-            parameters,
-            returnType,
-            _context.DeclarativeMappings
-        );
-    }
 
     /// <summary>
     /// Lowers an IR method's signature (parameters, return type, type

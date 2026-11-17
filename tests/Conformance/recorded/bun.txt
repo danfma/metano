@@ -66,6 +66,13 @@ LinqSetProbes.comparers THROWS Error: Unsupported expression: UnsupportedLinqOve
 LinqSetProbes.setOpsRecords = 3|1|1|2|1|1|2
 NullGuardProbes.concatDecimal = a1.5
 NullGuardProbes.interpGeneric = ghg5hgtruehg1.5h
+OperatorProbes.brandedOperatorAndConversions = 5|6|1
+OperatorProbes.conversions = 7|7|7|7
+OperatorProbes.genericOperatorAndConversion = undefined[object Object]2
+OperatorProbes.increment THROWS TypeError: undefined is not an object (evaluating 'm.v.toString')
+OperatorProbes.pinnedConversions = [object Object]|[object Object]
+OperatorProbes.rightOperand THROWS TypeError: undefined is not an object (evaluating '(5 + new OpMeters(2)).v.toString')
+OperatorProbes.unaryAndBinaryMinus = undefined,undefined|undefined,undefined
 ParseProbes.convertCalls = Exception|Exception|Exception|Exception
 ParseProbes.decimalParse = 1.5|1234.5|FormatException|FormatException|-0.5|FormatException|OverflowException|FormatException|FormatException|FormatException
 ParseProbes.decimalTry = 1.5;F;F;2;F;F;F;F;15;7;5;0.5;F;F;F;F;

@@ -56,6 +56,7 @@ internal sealed class TsOverloadClaimPass
     {
         ReportRedeclaredFactories();
         ReportHijackedFastPaths();
+        ClaimConversions();
         ClaimConstructors();
         ClaimMethodFastPaths();
         ClaimOperatorFastPaths();
@@ -302,10 +303,61 @@ internal sealed class TsOverloadClaimPass
     {
         foreach (var group in OverloadGroups(isOperator: true))
         {
-            if (TsClassMemberTable.OperatorNameOf(group.Primary) is { } operatorName)
-                ClaimFastPaths(group, TsClassMemberTable.OperatorDispatcherName(operatorName));
+            if (TsOperatorNaming.OperatorNameOf(group.Primary) is { } operatorName)
+                ClaimFastPaths(group, TsOperatorNaming.StaticHelperName(operatorName));
         }
     }
+
+    /// <summary>
+    /// The static of each conversion operator (baseline FR-078): a fixed name,
+    /// a function of the conversion's symbol, so a call in another package
+    /// spells it without this pass. A member the class itself declares under
+    /// that name is an <c>MS0003</c> error at the conversion, never a
+    /// <c>$</c> rename; an inherited static does not claim it, since a derived
+    /// class's conversions are its own (<c>Base.__fromInt32</c> beside
+    /// <c>Der.__fromInt32</c>).
+    /// </summary>
+    private void ClaimConversions()
+    {
+        foreach (var conversion in Conversions())
+        {
+            var name = TsOperatorNaming.ConversionHelperName(conversion.Semantics.ConversionName!);
+
+            if (_statics.TryGetValue(name, out var holder))
+            {
+                ReportConversionCollision(conversion, name, holder);
+                continue;
+            }
+
+            _statics[name] = new TsClaimedMember(
+                TsClaimedMemberKind.User,
+                $"the conversion '{name}'",
+                TypeName
+            );
+        }
+    }
+
+    private IEnumerable<IrMethodDeclaration> Conversions() =>
+        (_input.Ir.Members ?? [])
+            .OfType<IrMethodDeclaration>()
+            .SelectMany(method => new[] { method }.Concat(method.Overloads ?? []))
+            .Where(method => method.Semantics.ConversionName is not null);
+
+    private void ReportConversionCollision(
+        IrMethodDeclaration conversion,
+        string name,
+        TsClaimedMember holder
+    ) =>
+        _findings.Add(
+            new TsClaimFinding(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.AmbiguousConstruct,
+                $"The conversion operator '{conversion.SignatureText ?? conversion.Name}' of "
+                    + $"'{TypeName}' is emitted as '{name}', which {DescriptionOf(holder)} "
+                    + "already declares; rename that member (baseline FR-078).",
+                new OverloadDeclarationSite(conversion.Name, Signature: conversion.SignatureText)
+            )
+        );
 
     private IEnumerable<IrMethodGroup> OverloadGroups(bool isOperator) =>
         (_input.Ir.Members ?? [])

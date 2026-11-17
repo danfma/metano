@@ -884,6 +884,30 @@ the rows of `tests/BclReference`.
   produces a never-nullish expression (`typeof $0`) and returns a `string` in nullable-disabled
   code gets the guard, which tsgo rejects as TS2869.
 
+### ⚠ Operator helpers and conversion statics are renamed (baseline FR-078; #600, #599)
+
+- Each conversion operator is its own static, named by its kind, direction and converted type,
+  with no dispatcher: `__toInt32` / `__fromInt32` for an explicit conversion,
+  `__implicitToInt32` / `__implicitFromInt32` for an implicit one, `__checkedToInt32` for a
+  `checked` one (`implicit operator Money(int c)` → `Money.__implicitFromInt32`,
+  `explicit operator long(Money m)` → `Money.__toInt64`). A conversion without `[Name]` used to
+  emit nothing; a `[Name("toInt")]` names that one conversion (`__toInt`), not its group, and
+  the old `__toInt` dispatcher and `$toInt` instance helper are gone. Switching a conversion
+  between implicit and explicit renames its static.
+- Unary `-` and `+` are `__negate` / `__plus` (and `$negate()` / `$plus()`), no longer
+  `__subtract` / `__add`; `++`, `--`, `>>>` and `checked` operators get `__increment`,
+  `__decrement`, `__shiftRightUnsigned` and `__checkedAdd`-style helpers.
+- An operator declared for its right operand (`operator +(int a, Meters m)`) no longer has an
+  instance form (`$add`), which passed `this` as the left operand; an operator group's instance
+  dispatcher keeps only the overloads whose left operand is the type.
+- A `[Branded]` / `[InlineWrapper]` companion uses the same names (`Qty.__add`,
+  `Qty.__implicitFromInt32`, and exported per-overload fast paths such as
+  `Ticks.__addTicksInt64`) instead of `op_Addition` / `op_Implicit`. Its conversion to the
+  underlying primitive is skipped as the identity only when its body returns the wrapped value
+  (`=> self.Value`); any other body is emitted.
+- The statics of a generic type re-declare its type parameters (`static __add<T>(...)`),
+  which fixes `TS2302`.
+
 ## 2.10.1
 
 _2026-11-03_

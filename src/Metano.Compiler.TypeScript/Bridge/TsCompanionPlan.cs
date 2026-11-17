@@ -98,9 +98,11 @@ internal sealed class TsCompanionPlan
 
         foreach (var primary in statics)
         {
-            var overloads = SurvivingOverloadsOf(primary, ir.Semantics);
+            var overloads = SurvivingOverloadsOf(primary);
 
-            if (overloads.Count > 0)
+            if (primary.Semantics.ConversionName is not null)
+                groups.AddRange(overloads.Select(ConversionFunctionOf));
+            else if (overloads.Count > 0)
                 groups.Add(GroupOf(overloads, names));
         }
 
@@ -116,7 +118,6 @@ internal sealed class TsCompanionPlan
     public string? FastPathAt(string memberName, int ordinal) =>
         Groups
             .OfType<TsCompanionDispatcher>()
-            .Where(dispatcher => dispatcher.ExportsFastPaths)
             .SelectMany(dispatcher => dispatcher.FastPaths)
             .FirstOrDefault(fastPath => IsAt(fastPath.Method, memberName, ordinal))
             ?.Name;
@@ -162,22 +163,36 @@ internal sealed class TsCompanionPlan
     /// <summary>
     /// A static method with the overload siblings folded onto
     /// <see cref="IrMethodDeclaration.Overloads"/>, minus the identity unwrap
-    /// conversions (see <see cref="IsIdentityUnwrap"/>).
+    /// conversions: a conversion that only returns the wrapped value
+    /// (<c>implicit operator string(UserId self) =&gt; self.Value</c>) is the
+    /// identity once the wrapper lowers to <c>primitive &amp; { __brand }</c>,
+    /// so the companion skips it. The core decides it from the body
+    /// (<see cref="IrMethodSemantics.ReturnsWrappedValue"/>, baseline FR-078):
+    /// a conversion out of the wrapper with any other body is a function like
+    /// any other.
     /// </summary>
-    private static List<IrMethodDeclaration> SurvivingOverloadsOf(
-        IrMethodDeclaration primary,
-        IrTypeSemantics semantics
-    ) =>
-        new[] { primary }
+    private static List<IrMethodDeclaration> SurvivingOverloadsOf(IrMethodDeclaration primary) =>
+        new[] { primary with { Overloads = null } }
             .Concat(primary.Overloads ?? [])
-            .Where(method => !IsIdentityUnwrap(method, semantics))
+            .Where(method => !method.Semantics.ReturnsWrappedValue)
             .ToList();
 
     /// <summary>
+    /// A conversion is its own function, named like a class's conversion
+    /// static (<c>__implicitFromInt32</c>, baseline FR-078): C# never
+    /// dispatches conversions by their arguments.
+    /// </summary>
+    private static TsCompanionFunction ConversionFunctionOf(IrMethodDeclaration conversion) =>
+        new(
+            TsOperatorNaming.ConversionHelperName(conversion.Semantics.ConversionName!),
+            conversion
+        );
+
+    /// <summary>
     /// A single surviving method is one function under its own name; two or
-    /// more are a dispatcher under that name plus one fast path each, claimed
-    /// in dispatch order. The fast paths of an operator or conversion group
-    /// stay namespace-local: no generated call names them (#599).
+    /// more are a dispatcher under that name plus one exported fast path
+    /// each, claimed in dispatch order (an operator group's included, baseline
+    /// FR-078).
     /// </summary>
     private static TsCompanionGroup GroupOf(
         IReadOnlyList<IrMethodDeclaration> overloads,
@@ -189,35 +204,27 @@ internal sealed class TsCompanionPlan
         if (overloads.Count == 1)
             return new TsCompanionFunction(functionName, overloads[0]);
 
-        var exportsFastPaths = !overloads[0].Semantics.IsOperator;
         var fastPaths = new List<TsCompanionFastPath>();
 
         foreach (var overload in OverloadDispatchOrder.Sort(overloads, m => m.Parameters))
         {
             var candidate = OverloadFastPathName.Of(functionName, overload);
-            var name = names.Claim(candidate, overload, isExported: exportsFastPaths);
+            var name = names.Claim(candidate, overload);
 
             fastPaths.Add(new TsCompanionFastPath(overload, name));
         }
 
-        return new TsCompanionDispatcher(functionName, fastPaths, exportsFastPaths);
+        return new TsCompanionDispatcher(functionName, fastPaths);
     }
 
     /// <summary>
-    /// A conversion operator from the wrapper to its underlying primitive
-    /// (<c>implicit operator string(UserId self) => self.Value</c>, or its
-    /// nullable-annotated <c>string?</c> form) is the identity once the
-    /// wrapper lowers to <c>primitive &amp; { __brand }</c>, and call sites
-    /// never invoke it — the companion skips it. Wrap-direction conversions
-    /// (<c>explicit operator UserId(string raw)</c>) return the wrapper, not
-    /// the primitive, so they are kept: they can carry validation.
+    /// The function names a static group declares before any fast path is
+    /// claimed: its own name, or, for a conversion group, each conversion's.
     /// </summary>
-    private static bool IsIdentityUnwrap(IrMethodDeclaration method, IrTypeSemantics semantics) =>
-        method.Semantics is { IsOperator: true, OperatorKind: "Implicit" or "Explicit" }
-        && StripNullable(method.ReturnType).Equals(semantics.BrandedUnderlyingType);
-
-    private static IrTypeRef StripNullable(IrTypeRef type) =>
-        type is IrNullableTypeRef nullable ? nullable.Inner : type;
+    private static IEnumerable<string> DeclaredFunctionNamesOf(IrMethodDeclaration primary) =>
+        primary.Semantics.ConversionName is null
+            ? [FunctionNameOf(primary)]
+            : new[] { primary }.Concat(primary.Overloads ?? []).Select(FunctionNameOf);
 
     /// <summary>
     /// Inline wrapper helpers lower to <c>export namespace TypeName { export
@@ -227,8 +234,15 @@ internal sealed class TsCompanionPlan
     /// escaping naming policy. The call-site bridge detects [Branded]
     /// receivers and matches the escape so the two halves stay in sync.
     /// </summary>
-    private static string FunctionNameOf(IrMethodDeclaration method) =>
-        IrToTsNamingPolicy.ToFunctionName(method);
+    private static string FunctionNameOf(IrMethodDeclaration method)
+    {
+        if (method.Semantics.ConversionName is { } conversion)
+            return TsOperatorNaming.ConversionHelperName(conversion);
+
+        return TsOperatorNaming.OperatorNameOf(method) is { } operatorName
+            ? TsOperatorNaming.StaticHelperName(operatorName)
+            : IrToTsNamingPolicy.ToFunctionName(method);
+    }
 
     /// <summary>
     /// The one scope the functions of a companion namespace share: the
@@ -252,19 +266,19 @@ internal sealed class TsCompanionPlan
             _typeName = typeName;
 
             _taken = synthesized
-                .Concat(statics.Select(FunctionNameOf))
+                .Concat(statics.SelectMany(DeclaredFunctionNamesOf))
                 .ToHashSet(StringComparer.Ordinal);
         }
 
         public IReadOnlyList<TsClaimFinding> Findings => _findings;
 
-        public string Claim(string candidate, IrMethodDeclaration overload, bool isExported)
+        public string Claim(string candidate, IrMethodDeclaration overload)
         {
             var name = TsFreeName.FirstFree(candidate, _taken.Contains);
 
             _taken.Add(name);
 
-            if (isExported && name != candidate)
+            if (name != candidate)
                 _findings.Add(RenameOf(candidate, name, overload));
 
             return name;
@@ -312,15 +326,12 @@ internal sealed record TsCompanionFunction(string FunctionName, IrMethodDeclarat
 
 /// <summary>
 /// A group of two or more overloads: an exported dispatcher plus one fast
-/// path each, in dispatch order.
+/// path each, in dispatch order. Every fast path is exported, so a generated
+/// call names the overload C# bound (an operator group's too, baseline FR-078).
 /// </summary>
-/// <param name="ExportsFastPaths">Whether the fast paths are exported, so a
-/// generated call names the overload C# bound; an operator or conversion
-/// group keeps them namespace-local.</param>
 internal sealed record TsCompanionDispatcher(
     string FunctionName,
-    IReadOnlyList<TsCompanionFastPath> FastPaths,
-    bool ExportsFastPaths
+    IReadOnlyList<TsCompanionFastPath> FastPaths
 ) : TsCompanionGroup(FunctionName)
 {
     /// <summary>The C# name the group's methods share.</summary>

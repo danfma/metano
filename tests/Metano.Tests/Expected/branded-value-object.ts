@@ -34,7 +34,7 @@ export namespace EpisodeSlug {
     throw new Error("No matching overload for from");
   }
 
-  export function op_Explicit(raw: string): EpisodeSlug {
+  export function __fromString(raw: string): EpisodeSlug {
     return EpisodeSlug.fromValue(raw);
   }
 }
