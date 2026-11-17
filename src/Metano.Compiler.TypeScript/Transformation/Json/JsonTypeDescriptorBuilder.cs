@@ -188,15 +188,13 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// name (#484); any other companion is an emitted module member reached
     /// by its plain name.
     /// </summary>
-    private static TsExpression FactoryReferenceOf(string typeName, string member)
-    {
-        TsExpression factoryTarget =
-            typeName is UuidRuntimeReference.Name
-                ? UuidRuntimeReference.Value()
-                : QualifiedReference(typeName);
+    private static TsExpression FactoryReferenceOf(string typeName, string member) =>
+        new TsPropertyAccess(FactoryTargetOf(typeName), member);
 
-        return new TsPropertyAccess(factoryTarget, member);
-    }
+    private static TsExpression FactoryTargetOf(string typeName) =>
+        typeName is UuidRuntimeReference.Name
+            ? UuidRuntimeReference.Value()
+            : QualifiedReference(typeName);
 
     /// <summary>
     /// A temporal descriptor parses through its mapped <c>Temporal</c> type
