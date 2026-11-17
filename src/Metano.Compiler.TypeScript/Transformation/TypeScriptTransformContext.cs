@@ -553,9 +553,8 @@ public sealed class TypeScriptTransformContext(
     /// pass this object instead of re-threading the individual inputs.
     /// </summary>
     public IrExtractionContext Extraction =>
-        new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming)
+        new(OriginResolver, Compilation, TsGroupingPolicy.Instance, IrToTsNamingPolicy.LocalNaming)
         {
-            GroupingPolicy = TsGroupingPolicy.Instance,
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
