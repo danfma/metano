@@ -33,6 +33,9 @@ public sealed record IrExtractionContext(
     /// <summary>The language target, the one <see cref="GroupingPolicy"/> names.</summary>
     public Metano.Annotations.TargetLanguage? Target => GroupingPolicy.Target;
 
+    /// <summary>The numeric conversions the core makes explicit for <see cref="Target"/>.</summary>
+    internal NumericLoweringRules NumericLowering => NumericLoweringRules.For(Target);
+
     /// <summary>
     /// The port through which a target says which types it emits with an
     /// addressable form per constructor overload — TypeScript a selector and,

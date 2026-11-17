@@ -81,6 +81,25 @@ public static class CharCodeProbes
         return r;
     }
 
+    public static string NarrowCompare()
+    {
+        char l = '\u0141';
+        char a = 'A';
+        char hi = '\uFFFF';
+        char lo = 'a';
+        string r = "";
+        r += unchecked((byte)l) == unchecked((byte)a) ? "1" : "0";
+        r += unchecked((short)hi) < unchecked((short)lo) ? "1" : "0";
+        r += unchecked((sbyte)l) == unchecked((sbyte)a) ? "1" : "0";
+        r += (int)l > (int)a ? "1" : "0";
+        r += (long)l > (long)a ? "1" : "0";
+        r += (double)l > (double)a ? "1" : "0";
+        r += (decimal)l > (decimal)a ? "1" : "0";
+        r += (ushort)hi > (ushort)lo ? "1" : "0";
+
+        return r;
+    }
+
     public static string IntPatterns()
     {
         string r = "";

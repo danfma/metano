@@ -61,7 +61,7 @@ public sealed partial class IrExpressionExtractor
             value,
             typeInfo.Type,
             typeInfo.ConvertedType,
-            TupleElementConversions.Implicit(LowersCharCodes)
+            TupleElementConversions.Implicit(_context.NumericLowering)
         ) ?? value;
     }
 
@@ -228,7 +228,7 @@ public sealed partial class IrExpressionExtractor
     private TupleElementConversions ExplicitElementConversionsAt(SyntaxNode site) =>
         TupleElementConversions.Explicit(
             CheckedContexts.IsChecked(site, _semantic.Compilation),
-            LowersCharCodes
+            _context.NumericLowering
         );
 
     /// <summary>
@@ -382,18 +382,14 @@ public sealed partial class IrExpressionExtractor
     )
     {
         /// <summary>The implicit rule: an element converts when it crosses a 64-bit integer or is a <c>char</c> read as a number.</summary>
-        public static TupleElementConversions Implicit(bool lowersCharCodes) =>
-            new(
-                (from, to) => NumericEndpoints.NeedsImplicitNode(from, to, lowersCharCodes),
-                IsChecked: false
-            );
+        public static TupleElementConversions Implicit(NumericLoweringRules rules) =>
+            new(rules.NeedsImplicitNode, IsChecked: false);
 
         /// <summary>The explicit-cast rule, in the cast's checked context.</summary>
-        public static TupleElementConversions Explicit(bool isChecked, bool lowersCharCodes) =>
-            new(
-                (from, to) => NumericEndpoints.IsLoweredExplicitly(from, to, lowersCharCodes),
-                isChecked
-            );
+        public static TupleElementConversions Explicit(
+            bool isChecked,
+            NumericLoweringRules rules
+        ) => new(rules.IsLoweredExplicitly, isChecked);
 
         /// <summary>
         /// The two tuple types (nullable unwrapped) when

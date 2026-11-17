@@ -115,7 +115,7 @@ public sealed partial class IrExpressionExtractor
         if (
             NumericEndpoints.Of(valueType.UnwrapNullableValueType()) is not { } from
             || NumericEndpoints.Of(resultType.UnwrapNullableValueType()) is not { } to
-            || !NumericEndpoints.NeedsImplicitNode(from, to, LowersCharCodes)
+            || !_context.NumericLowering.NeedsImplicitNode(from, to)
         )
             return operand;
 
@@ -170,7 +170,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var needsNode =
-            NumericEndpoints.NeedsImplicitNode(from, to, LowersCharCodes)
+            _context.NumericLowering.NeedsImplicitNode(from, to)
             && !IsExactRelationalOperand(expression, from, to);
 
         return needsNode ? (from, to) : null;
@@ -253,7 +253,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         if (
-            !NumericEndpoints.IsLoweredExplicitly(from, to, LowersCharCodes)
+            !_context.NumericLowering.IsLoweredExplicitly(from, to)
             || KeepsIntegerValue(cast, from, to)
         )
             return null;

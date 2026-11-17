@@ -268,7 +268,9 @@ internal static class IrToTsNumericConversionBridge
     /// <c>char</c> reads (<c>c == 'a'</c>, <c>a &lt; b</c>) compares them as
     /// the one-unit strings they are, since a JS string comparison orders by
     /// UTF-16 code unit as .NET orders <c>char</c> (FR-071); the operands lose
-    /// their conversion. A nullable operand keeps its lifted conversion.
+    /// their conversion, unless the target cannot hold every code unit
+    /// (<c>(byte)c</c> keeps the low bits). A nullable operand keeps its lifted
+    /// conversion.
     /// </summary>
     public static IrBinaryExpression WithCharOperandsAsText(IrBinaryExpression binary) =>
         binary.Operator
@@ -289,7 +291,9 @@ internal static class IrToTsNumericConversionBridge
             : binary;
 
     private static bool IsPlainCharRead(IrNumericConversion conversion) =>
-        !conversion.IsLifted && IrNumericConversion.IsCharRead(conversion.From, conversion.To);
+        !conversion.IsLifted
+        && IrNumericConversion.IsCharRead(conversion.From, conversion.To)
+        && !IrNumericConversion.IsIntegerNarrowing(CodeUnit, conversion.To);
 
     /// <summary>
     /// The UTF-16 <paramref name="code"/> of a <c>char</c> converted to

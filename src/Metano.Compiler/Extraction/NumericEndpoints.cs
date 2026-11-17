@@ -38,23 +38,6 @@ internal static class NumericEndpoints
     public static bool IsSixtyFourBit(ITypeSymbol? type) =>
         Of(type) is { } endpoint && endpoint.IsSixtyFourBitValue();
 
-    /// <summary>Whether the target lowers a <c>char</c> as its UTF-16 code (FR-071, FR-072); Dart keeps its char shapes as they were.</summary>
-    public static bool LowersCharCodes(Metano.Annotations.TargetLanguage? target) =>
-        target != Metano.Annotations.TargetLanguage.Dart;
-
-    /// <summary>
-    /// Whether an implicit conversion from <paramref name="from"/> to
-    /// <paramref name="to"/> is made explicit: one that crosses a 64-bit
-    /// integer (<see cref="CrossesSixtyFourBits"/>), or a <c>char</c> read as a
-    /// <c>double</c> / <c>float</c> or, when <paramref name="lowersCharCodes"/>,
-    /// as any number, whose value is its UTF-16 code (FR-071).
-    /// </summary>
-    public static bool NeedsImplicitNode(
-        IrNumericEndpoint from,
-        IrNumericEndpoint to,
-        bool lowersCharCodes
-    ) => CrossesSixtyFourBits(from, to) || IsLoweredCharRead(from, to, lowersCharCodes);
-
     /// <summary>
     /// Whether a conversion from <paramref name="from"/> to <paramref name="to"/>
     /// has a 64-bit integer or a <c>BigInteger</c> on either side (spec 012
@@ -62,33 +45,6 @@ internal static class NumericEndpoints
     /// </summary>
     public static bool CrossesSixtyFourBits(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from != to && (from.IsWideIntegerValue() || to.IsWideIntegerValue());
-
-    /// <summary>
-    /// Whether a conversion from <paramref name="from"/> to
-    /// <paramref name="to"/> becomes an <see cref="IrNumericConversion"/>: a
-    /// floating-point truncation (FR-070), a narrowing between two integers
-    /// of 32 bits or fewer (FR-074), a <c>decimal</c> read as a
-    /// <c>double</c> or <c>float</c>, a <c>char</c> read as a number or, when
-    /// <paramref name="lowersCharCodes"/>, made of an integer (FR-071,
-    /// FR-072), and the conversions of <see cref="CrossesSixtyFourBits"/>.
-    /// </summary>
-    public static bool IsLoweredExplicitly(
-        IrNumericEndpoint from,
-        IrNumericEndpoint to,
-        bool lowersCharCodes
-    ) =>
-        IrNumericConversion.IsFloatingPointTruncation(from, to)
-        || IsLoweredCharRead(from, to, lowersCharCodes)
-        || (lowersCharCodes && IrNumericConversion.IsCharStore(from, to))
-        || IrNumericConversion.IsIntegerNarrowing(from, to)
-        || IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to)
-        || CrossesSixtyFourBits(from, to);
-
-    private static bool IsLoweredCharRead(
-        IrNumericEndpoint from,
-        IrNumericEndpoint to,
-        bool lowersCharCodes
-    ) => IrNumericConversion.IsCharRead(from, to) && (lowersCharCodes || to.Kind.IsFloatingPoint());
 
     private static IrNumericKind? KindOf(ITypeSymbol? type) =>
         type?.SpecialType switch

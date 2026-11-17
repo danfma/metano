@@ -17,15 +17,9 @@ public sealed partial class IrExpressionExtractor
     private static readonly IrNumericEndpoint CharEndpoint = new(IrNumericKind.Char);
     private static readonly IrNumericEndpoint Int32Endpoint = new(IrNumericKind.Int32);
 
-    /// <summary>
-    /// Whether the target lowers a <c>char</c> as its UTF-16 code; Dart keeps
-    /// its char shapes (<c>c++</c>, <c>c += 1 as String</c>), a documented gap.
-    /// </summary>
-    private bool LowersCharCodes => NumericEndpoints.LowersCharCodes(_target);
-
     /// <summary>Whether <paramref name="operand"/> is a non-nullable <c>char</c>: a target whose store goes through the code.</summary>
     private bool IsCharStoreTarget(ExpressionSyntax operand) =>
-        LowersCharCodes
+        _context.NumericLowering.LowersCharCodes
         && _semantic.GetTypeInfo(operand).Type?.SpecialType is SpecialType.System_Char;
 
     /// <summary><c>c++</c>, <c>++c</c>, <c>c--</c> or <c>--c</c> on a <c>char</c> (FR-072).</summary>
