@@ -988,4 +988,94 @@ public class ValueEqualityJoinTests
             .That(IrTypeRefEquivalence.AreEquivalent(Generic(), new IrNamedTypeRef("Box")))
             .IsFalse();
     }
+
+    /// <summary>
+    /// A kept explicit <c>IEquatable&lt;S&gt;.Equals</c> beside a method whose
+    /// <c>[Name]</c> also spells <c>equals</c> would keep a plain <c>equals</c> beside
+    /// the joined dispatcher, whose synthesized member routes back to it: it
+    /// reports <c>MS0001</c> instead of emitting a recursive pair (FR-039).
+    /// </summary>
+    [Test]
+    public async Task ExplicitEquatableBesideANamedEquals_ReportsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct G3 : System.IEquatable<G3> { public int X; bool System.IEquatable<G3>.Equals(G3 o) => o.X == X; [Name("equals")] public bool Same(string s) => s == "g" + X; public override int GetHashCode() => X; }
+
+            [Transpile]
+            public struct E12 : System.IEquatable<E12> { public int X; bool System.IEquatable<E12>.Equals(E12 o) => o.X == X; [Name("equals")] public bool Same(E12 o, int s) => System.Math.Abs(o.X - X) <= s; public override int GetHashCode() => X; }
+            """
+        );
+
+        var errors = diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error).ToList();
+
+        await Assert.That(errors.Count).IsEqualTo(2);
+        await Assert.That(errors.All(e => e.Code == DiagnosticCodes.UnsupportedFeature)).IsTrue();
+        await Assert.That(errors.All(e => e.Message.Contains("already declare"))).IsTrue();
+    }
+
+    /// <summary>
+    /// Two explicit <c>IEquatable&lt;T&gt;.Equals</c> of one struct claim one name and
+    /// are both dropped: each reports an <c>MS0001</c> warning instead of silently.
+    /// </summary>
+    [Test]
+    public async Task TwoExplicitEquatables_WarnWhenDropped()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct E4 : System.IEquatable<int>, System.IEquatable<string> { public int X; bool System.IEquatable<int>.Equals(int o) => o == X; bool System.IEquatable<string>.Equals(string? o) => o == "s"; public override int GetHashCode() => X; }
+            """
+        );
+
+        var warnings = diagnostics
+            .Where(d =>
+                d.Severity == MetanoDiagnosticSeverity.Warning
+                && d.Code == DiagnosticCodes.UnsupportedFeature
+            )
+            .ToList();
+
+        await Assert.That(warnings.Count).IsEqualTo(2);
+        await Assert.That(warnings.All(w => w.Message.Contains("is not emitted"))).IsTrue();
+    }
+
+    /// <summary>
+    /// Function parameters, callable signatures and tuple elements are compared
+    /// structurally too.
+    /// </summary>
+    [Test]
+    public async Task TypeRefEquivalence_CoversNestedLists()
+    {
+        IrTypeRef Function() =>
+            new IrFunctionTypeRef(
+                [
+                    new IrParameter(
+                        "x",
+                        new IrTupleTypeRef([new IrPrimitiveTypeRef(IrPrimitive.Int32)])
+                    ),
+                ],
+                new IrPrimitiveTypeRef(IrPrimitive.Boolean)
+            );
+
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(Function(), Function())).IsTrue();
+
+        await Assert
+            .That(
+                IrTypeRefEquivalence.AreEquivalent(
+                    new IrCallableTypeRef([(IrFunctionTypeRef)Function()]),
+                    new IrCallableTypeRef([(IrFunctionTypeRef)Function()])
+                )
+            )
+            .IsTrue();
+
+        await Assert
+            .That(
+                IrTypeRefEquivalence.AreEquivalent(
+                    Function(),
+                    new IrFunctionTypeRef([], new IrPrimitiveTypeRef(IrPrimitive.Boolean))
+                )
+            )
+            .IsFalse();
+    }
 }
