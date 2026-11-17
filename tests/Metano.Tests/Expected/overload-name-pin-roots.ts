@@ -12,11 +12,11 @@ export class Square implements IShape {
   constructor() { }
 
   areaWH(w: number, h: number): number {
-    return w * h;
+    return Math.imul(w, h);
   }
 
   areaSide(side: number): number {
-    return side * side;
+    return Math.imul(side, side);
   }
 
   area(w: number, h: number): number;
@@ -70,7 +70,7 @@ export class Doubler extends Counter {
   }
 
   override addOne(x: number): number {
-    return x * 2;
+    return Math.imul(x, 2);
   }
 }
 
@@ -82,7 +82,7 @@ export class Tripler extends Counter {
   }
 
   override addOne(x: number): number {
-    return x * 3;
+    return Math.imul(x, 3);
   }
 }
 
@@ -93,6 +93,6 @@ export class Use {
   constructor() { }
 
   run(shape: IShape, counter: Counter): number {
-    return shape.areaSide(2) + counter.addOne(3);
+    return (shape.areaSide(2) + counter.addOne(3)) | 0;
   }
 }

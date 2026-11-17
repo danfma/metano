@@ -33,7 +33,7 @@ export class Pt {
     if (typeof args[0] === "symbol" && args[0] === Pt.byPtXY) {
       const x = args[1] as number;
       const y = args[2] as number;
-      this.x = x + y;
+      this.x = (x + y) | 0;
       this.name = "b";
 
       return;
@@ -42,7 +42,7 @@ export class Pt {
     if (args.length === 2 && isInt32(args[0]) && isInt32(args[1])) {
       const x = args[0] as number;
       const y = args[1] as number;
-      this.x = x + y;
+      this.x = (x + y) | 0;
       this.name = "b";
 
       return;

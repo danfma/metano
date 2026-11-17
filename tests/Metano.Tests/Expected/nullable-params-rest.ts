@@ -58,5 +58,5 @@ export interface Point {
 }
 
 export function offset(self: Point, ...deltas: number[]): number {
-  return self.x + (deltas?.length ?? 0);
+  return (self.x + (deltas?.length ?? 0)) | 0;
 }

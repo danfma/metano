@@ -4,6 +4,6 @@ const [count, setCount] = createSignal(0);
 
 console.log(count());
 
-setCount(count() + 1);
+setCount((count() + 1) | 0);
 
-setCount((c: number) => c + 1);
+setCount((c: number) => (c + 1) | 0);

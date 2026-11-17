@@ -66,8 +66,16 @@ public class PrecedenceTranspileTests
         "async Task<string> M(Task<string> t) => (await t).ToUpper();",
         "return (await t).toUpperCase();"
     )]
-    [Arguments("C15", "int M(Box t, Box b) => (t = b).Get() + t.V;", "return (t = b).get() + t.v;")]
-    [Arguments("C55", "string M(int i) => (++i).ToString();", "return (++i).toString();")]
+    [Arguments(
+        "C15",
+        "int M(Box t, Box b) => (t = b).Get() + t.V;",
+        "return ((t = b).get() + t.v) | 0;"
+    )]
+    [Arguments(
+        "C55",
+        "string M(int i) => (++i).ToString();",
+        "return (i = (i + 1) | 0).toString();"
+    )]
     [Arguments("C64", "char M(string? a, string b) => (a ?? b)[0];", "return (a ?? b)[0]!;")]
     [Arguments(
         "C67",
@@ -88,15 +96,31 @@ public class PrecedenceTranspileTests
         "return (value ?? \"\").trim();"
     )]
     // Arithmetic and bitwise operands.
-    [Arguments("C04", "int M(int a, int b, int c) => (a + b) * c;", "return (a + b) * c;")]
-    [Arguments("C05", "int M(int a, int b, int c) => a - (b - c);", "return a - (b - c);")]
+    [Arguments(
+        "C04",
+        "double M(double a, double b, double c) => (a + b) * c;",
+        "return (a + b) * c;"
+    )]
+    [Arguments(
+        "C05",
+        "double M(double a, double b, double c) => a - (b - c);",
+        "return a - (b - c);"
+    )]
     [Arguments(
         "C06",
         "double M(double a, double b, double c) => a / (b * c);",
         "return a / (b * c);"
     )]
-    [Arguments("C07", "int M(int a, int b, int c) => a % (b + c);", "return a % (b + c);")]
-    [Arguments("C24", "string M(int x, int y) => \"s\" + (x + y);", "return \"s\" + (x + y);")]
+    [Arguments(
+        "C07",
+        "double M(double a, double b, double c) => a % (b + c);",
+        "return a % (b + c);"
+    )]
+    [Arguments(
+        "C24",
+        "string M(int x, int y) => \"s\" + (x + y);",
+        "return \"s\" + ((x + y) | 0);"
+    )]
     [Arguments("C25", "string M(int x, int y) => (\"s\" + x) + y;", "return \"s\" + x + y;")]
     [Arguments(
         "C26",
@@ -107,34 +131,46 @@ public class PrecedenceTranspileTests
     [Arguments("C48", "int M(int a, int b, int c) => a | b ^ c;", "return a | b ^ c;")]
     [Arguments("C49", "int M(int a, int b, int c) => (a | b) ^ c;", "return (a | b) ^ c;")]
     [Arguments("C50", "int M(int a, int b, int c) => a << (b + c);", "return a << b + c;")]
-    [Arguments("C51", "int M(int a, int b, int c) => (a << b) + c;", "return (a << b) + c;")]
+    [Arguments("C51", "int M(int a, int b, int c) => (a << b) + c;", "return ((a << b) + c) | 0;")]
     [Arguments("C52", "int M(int a, int b, int c) => (a + b) >> c;", "return a + b >> c;")]
-    [Arguments("C53", "int M(int t, int b) => (t += b) * 2;", "return (t += b) * 2;")]
+    [Arguments(
+        "C53",
+        "int M(int t, int b) => (t += b) * 2;",
+        "return Math.imul(t = (t + b) | 0, 2);"
+    )]
     [Arguments(
         "C54",
         "int M(Box[] boxes, int i) => boxes[i++].Get() * 10 + i;",
-        "return boxes[i++]!.get() * 10 + i;"
+        "return (Math.imul(boxes[((i = (i + 1) | 0) - 1) | 0]!.get(), 10) + i) | 0;"
     )]
-    [Arguments("C63", "int M() { int x; return (x = 5) + 1 + x; }", "return (x = 5) + 1 + x;")]
+    [Arguments(
+        "C63",
+        "double M() { double x; return (x = 5) + 1 + x; }",
+        "return (x = 5) + 1 + x;"
+    )]
     [Arguments(
         "C72",
-        "int M(int a, int b) => (a - b) - (a - b) * 2;",
+        "double M(double a, double b) => (a - b) - (a - b) * 2;",
         "return a - b - (a - b) * 2;"
     )]
     // Prefix operators, including token gluing.
-    [Arguments("C08", "int M(int a, int b) => -(a + b);", "return -(a + b);")]
-    [Arguments("C09", "int M(int a) => -(-a);", "return -(-a);")]
+    [Arguments("C08", "double M(double a, double b) => -(a + b);", "return -(a + b);")]
+    [Arguments("C09", "double M(double a) => -(-a);", "return -(-a);")]
     [Arguments("C10", "bool M(bool a, bool b) => !(a && b);", "return !(a && b);")]
-    [Arguments("C56", "int M(int a, int b) => a - -b;", "return a - -b;")]
-    [Arguments("C57", "int M(int a, int b) => a + +b - --b;", "return a + b - --b;")]
+    [Arguments("C56", "double M(double a, double b) => a - -b;", "return a - -b;")]
+    [Arguments("C57", "double M(double a, double b) => a + +b - --b;", "return a + b - --b;")]
     [Arguments(
         "C65",
         "async Task<string> M(Task<string> t) => (await t) + \"x\";",
         "return await t + \"x\";"
     )]
-    [Arguments("C66", "int M(int a, int b, int c) => -(a - b) * c;", "return -(a - b) * c;")]
+    [Arguments(
+        "C66",
+        "double M(double a, double b, double c) => -(a - b) * c;",
+        "return -(a - b) * c;"
+    )]
     [Arguments("C68", "bool M(int a, int b) => !(a == b);", "return !(a === b);")]
-    [Arguments("P6", "int M(int b) => -(--b);", "return -(--b);")]
+    [Arguments("P6", "double M(double b) => -(--b);", "return -(--b);")]
     [Arguments(
         "Consumer.NotNaN",
         "bool M(double value) => !(value * 0 == 0);",
@@ -189,7 +225,11 @@ public class PrecedenceTranspileTests
         "int M(List<int> list) => list.Count > 0 ? list[0] : -1;",
         "return list.length > 0 ? list[0]! : -1;"
     )]
-    [Arguments("C62", "int M(bool c, int a, int b) => (c ? a : b) + 1;", "return (c ? a : b) + 1;")]
+    [Arguments(
+        "C62",
+        "double M(bool c, double a, double b) => (c ? a : b) + 1;",
+        "return (c ? a : b) + 1;"
+    )]
     [Arguments(
         "C71",
         "int M(Holder? h, bool b) => (h?.Flag ?? b) ? 1 : 0;",
@@ -225,12 +265,12 @@ public class PrecedenceTranspileTests
     [Arguments(
         "C37",
         "string M(bool c, string? s) => $\"a{(c ? \"y\" : \"n\")}b{s ?? \"-\"}c{(c ? 1 : 2) + 1}\";",
-        "return `a${c ? \"y\" : \"n\"}b${s ?? \"-\"}c${(c ? 1 : 2) + 1}`;"
+        "return `a${c ? \"y\" : \"n\"}b${s ?? \"-\"}c${((c ? 1 : 2) + 1) | 0}`;"
     )]
     // BCL templates: placeholders are wrapped by their position in the template.
     [Arguments(
         "C40",
-        "double M(int a, int b) => Math.Pow(a + b, 2) + Math.Pow(-a, 2);",
+        "double M(double a, double b) => Math.Pow(a + b, 2) + Math.Pow(-a, 2);",
         "return Math.pow(a + b, 2) + Math.pow(-a, 2);"
     )]
     [Arguments(
@@ -263,7 +303,11 @@ public class PrecedenceTranspileTests
         "void M(bool f, List<int> l1, List<int> l2) => (f ? l1 : l2).Clear();",
         "(f ? l1 : l2).length = 0"
     )]
-    [Arguments("E5", "void M(int a, int b) => Console.WriteLine(a + b);", "console.log(a + b)")]
+    [Arguments(
+        "E5",
+        "void M(int a, int b) => Console.WriteLine(a + b);",
+        "console.log((a + b) | 0)"
+    )]
     public async Task Expression_LowersWithGrammarMinimalParentheses(
         string caseId,
         string member,
@@ -279,11 +323,11 @@ public class PrecedenceTranspileTests
     // [Emit] templates: the template text decides both how the whole call
     // binds as an operand and which arguments need grouping.
     [Arguments("C38", "Up(a ?? b)", "return (a ?? b).toUpperCase();")]
-    [Arguments("C39", "Dbl(x + y)", "return (x + y) * 2;")]
-    [Arguments("E1", "Add(x, y) * 2", "return (x + y) * 2;")]
+    [Arguments("C39", "Dbl(x + y)", "return ((x + y) | 0) * 2;")]
+    [Arguments("E1", "Add(x, y) * 2", "return Math.imul(x + y, 2);")]
     [Arguments("E2", "Add(x, y).ToString()", "return (x + y).toString();")]
     [Arguments("E3", "Show(Add(x, y))", "show(x + y)")]
-    [Arguments("E6", "-Neg(x)", "return -(-x);")]
+    [Arguments("E6", "-Neg(x)", "return -(-x) | 0;")]
     [Arguments("E7", "Kind(a ?? b) + \"!\"", "return typeof (a ?? b) + \"!\";")]
     public async Task EmitTemplate_ParenthesizesByPlaceholderPosition(
         string caseId,

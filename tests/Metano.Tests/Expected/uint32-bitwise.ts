@@ -52,7 +52,7 @@ export class Bits {
   }
 
   mix(a: number, b: number): number {
-    return ((a ^ b >>> 16) >>> 0) * 2246822507;
+    return Math.imul(a ^ b >>> 16, 2246822507) >>> 0;
   }
 
   lifted(a: number | null, b: number | null): number | null {

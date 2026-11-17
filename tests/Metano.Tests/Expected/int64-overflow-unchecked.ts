@@ -102,7 +102,7 @@ export class Wrap {
   }
 
   narrow(a: number, b: number): number {
-    return a + b;
+    return (a + b) | 0;
   }
 
   floating(a: number, b: number): number {

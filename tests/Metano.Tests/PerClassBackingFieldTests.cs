@@ -82,7 +82,7 @@ public class PerClassBackingFieldTests
             .That(derived)
             .Contains($"  private readonly {derivedField}: () => number = () => 2;");
         await Assert.That(derived).Contains($"    return this.{derivedField};");
-        await Assert.That(derived).Contains("    return super.get() + this.get();");
+        await Assert.That(derived).Contains("    return (super.get() + this.get()) | 0;");
         await Assert.That(baseField).IsNotEqualTo(derivedField);
     }
 
@@ -118,7 +118,8 @@ public class PerClassBackingFieldTests
         await Assert
             .That(baseOutput)
             .Contains($"  set p(value: number) {{\n    this.{field} = value;\n  }}");
-        await Assert.That(result["app/r-der.ts"]).Contains("    return super.p + 1;");
+
+        await Assert.That(result["app/r-der.ts"]).Contains("    return (super.p + 1) | 0;");
         await Assert.That(result["app/r-der.ts"]).Contains("    super.p = value;");
     }
 
@@ -153,7 +154,8 @@ public class PerClassBackingFieldTests
         await Assert
             .That(derived)
             .Contains($"  set q(value: number) {{\n    this.{derivedField} = value;\n  }}");
-        await Assert.That(derived).Contains("    return this.q + super.q;");
+
+        await Assert.That(derived).Contains("    return (this.q + super.q) | 0;");
         await Assert.That(derived).Contains("return copyRecordWith<IDer>(this, overrides);");
         await Assert.That(result["app/i-base.ts"]).Contains($"  private {baseField}: number = 5;");
         // equals / hashCode keep reading through the public accessor.
@@ -302,8 +304,11 @@ public class PerClassBackingFieldTests
         await Assert.That(result["app/p-base.ts"]).Contains("  constructor(x: number) {");
         await Assert.That(result["app/p-base.ts"]).DoesNotContain("readonly x: number)");
         await Assert.That(result["app/p-base.ts"]).Contains($"    this.{baseField} = x;");
-        await Assert.That(result["app/p-der.ts"]).Contains($"    this.{derivedField} = x * 2;");
-        await Assert.That(result["app/p-der.ts"]).Contains("return super.x + this.x;");
+        await Assert
+            .That(result["app/p-der.ts"])
+            .Contains($"    this.{derivedField} = Math.imul(x, 2);");
+
+        await Assert.That(result["app/p-der.ts"]).Contains("return (super.x + this.x) | 0;");
     }
 
     [Test]
@@ -887,12 +892,12 @@ public class PerClassBackingFieldTests
         var n = FieldOf(output, "n", "Counter");
         var label = FieldOf(output, "label", "Counter");
 
-        await Assert.That(output).Contains($"    this.{n} += 2;");
-        await Assert.That(output).Contains($"    this.{n}++;");
-        await Assert.That(output).Contains($"    --this.{n};");
+        await Assert.That(output).Contains($"    this.{n} = (this.n + 2) | 0;");
+        await Assert.That(output).Contains($"    this.{n} = (this.n + 1) | 0;");
+        await Assert.That(output).Contains($"    this.{n} = (this.n - 1) | 0;");
         await Assert.That(output).Contains($"    this.{label} ??= \"none\";");
         // A writable property keeps its (virtual) setter call.
-        await Assert.That(output).Contains("    this.m += 1;");
+        await Assert.That(output).Contains("    this.m = (this.m + 1) | 0;");
     }
 
     [Test]
@@ -976,6 +981,7 @@ public class PerClassBackingFieldTests
 
         await Assert.That(result["app/hider.ts"]).Contains($"  private {hider}: number = 2;");
         await Assert.That(result["app/hider.ts"]).Contains("  get x(): number {");
+
         await Assert
             .That(result["app/virtual-hider.ts"])
             .Contains($"  private {virtualHider}: number = 3;");

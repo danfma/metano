@@ -244,9 +244,7 @@ public class EnumerableImplementationTests
             """
         );
 
-        await Assert
-            .That(result["countdown.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("hand-written-enumerator.ts"));
+        await TranspileHelper.AssertGolden("hand-written-enumerator.ts", result["countdown.ts"]);
         await Assert.That(result["launch.ts"]).Contains("return new Countdown();");
     }
 

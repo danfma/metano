@@ -125,7 +125,7 @@ export function intAddLambda(a: number, b: number): number {
 }
 
 export function uncheckedHashNarrowed(a: number): number {
-  const hash = ((a * 31 + 7) >>> 0) | 0;
+  const hash = ((Math.imul(a, 31) + 7) >>> 0) | 0;
 
   return checkedInt32(intDiv(hash, 2) + 1);
 }

@@ -52,7 +52,7 @@ export class Money {
   }
 
   static __multiplyScaled(a: Money, b: number): Money {
-    return Money.fromCents(a.cents * b);
+    return Money.fromCents(Math.imul(a.cents, b));
   }
 
   static __multiplyMoneyString(a: Money, b: string): Money {
@@ -88,7 +88,7 @@ export class Money {
   }
 
   addOther(other: Money): Money {
-    return Money.fromCents(this.cents + other.cents);
+    return Money.fromCents((this.cents + other.cents) | 0);
   }
 
   addCents(value: number): Money {

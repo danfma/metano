@@ -8,7 +8,7 @@ export class Countdown implements Iterator<number> {
   }
 
   moveNext(): boolean {
-    return --this._value > 0;
+    return (this._value = (this._value - 1) | 0) > 0;
   }
 
   reset(): void {

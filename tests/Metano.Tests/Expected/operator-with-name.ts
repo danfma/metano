@@ -4,7 +4,7 @@ export class Vec2 {
   constructor(readonly x: number, readonly y: number) { }
 
   static __add(a: Vec2, b: Vec2): Vec2 {
-    return new Vec2(a.x + b.x, a.y + b.y);
+    return new Vec2((a.x + b.x) | 0, (a.y + b.y) | 0);
   }
 
   $add(b: Vec2): Vec2 {

@@ -40,7 +40,15 @@ public class IntegerRangeTests
     }
 
     [Test]
-    [Arguments(IrNumericKind.Char)]
+    public async Task Of_ReadsACharAsItsCode()
+    {
+        var range = IntegerRange.Of(IrNumericKind.Char);
+
+        await Assert.That(range.Min).IsEqualTo(Int128.Zero);
+        await Assert.That(range.Max).IsEqualTo((Int128)char.MaxValue);
+    }
+
+    [Test]
     [Arguments(IrNumericKind.Double)]
     [Arguments(IrNumericKind.Decimal)]
     [Arguments(IrNumericKind.BigInteger)]

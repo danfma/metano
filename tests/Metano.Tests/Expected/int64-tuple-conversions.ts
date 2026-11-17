@@ -80,7 +80,7 @@ export class Pairs {
     let total = 0;
     for (const pair$element of pairs) {
       const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
-      total += pair[0] + pair[1];
+      total = (total + (pair[0] + pair[1])) | 0;
     }
 
     return total;
@@ -115,7 +115,7 @@ export class Pairs {
     let missing = 0;
     for (const pair$element of pairs) {
       const pair = pair$element == null ? null : [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
-      missing += pair == null ? 1 : 0;
+      missing = (missing + (pair == null ? 1 : 0)) | 0;
     }
 
     return missing;

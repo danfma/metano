@@ -7,7 +7,7 @@ export class Note extends Entry {
   }
 
   nextId(): number {
-    return this.id + 1;
+    return (this.id + 1) | 0;
   }
 
   override equals(other: any): boolean {

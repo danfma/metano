@@ -17,8 +17,7 @@ public class OperatorTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("operator-with-name.ts");
-        await Assert.That(result["vec2.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("operator-with-name.ts", result["vec2.ts"]);
     }
 
     [Test]
@@ -36,8 +35,7 @@ public class OperatorTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("unary-operator.ts");
-        await Assert.That(result["vec2.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("unary-operator.ts", result["vec2.ts"]);
     }
 
     [Test]

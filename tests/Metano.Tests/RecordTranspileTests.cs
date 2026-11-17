@@ -34,8 +34,7 @@ public class RecordTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("record-with-methods.ts");
-        await Assert.That(result["amount.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("record-with-methods.ts", result["amount.ts"]);
     }
 
     [Test]

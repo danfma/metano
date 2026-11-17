@@ -257,7 +257,7 @@ public class ArgumentGuardLoweringTests
     {
         var output = TranspileCallerExpressionUse(parameter, "Probe.Text(count + 1)");
 
-        await Assert.That(output).Contains("Probe.text(count + 1, undefined, \"count + 1\")");
+        await Assert.That(output).Contains("Probe.text((count + 1) | 0, undefined, \"count + 1\")");
     }
 
     /// <summary>
@@ -302,7 +302,9 @@ public class ArgumentGuardLoweringTests
             """
         );
 
-        await Assert.That(files["use.ts"]).Contains("return new Holder(count - 1, \"count - 1\");");
+        await Assert
+            .That(files["use.ts"])
+            .Contains("return new Holder((count - 1) | 0, \"count - 1\");");
     }
 
     /// <summary>

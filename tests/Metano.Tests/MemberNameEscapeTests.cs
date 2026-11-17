@@ -156,7 +156,7 @@ public class MemberNameEscapeTests
         await Assert.That(output).Contains("return s?.default_ ?? null;");
         await Assert.That(output).Contains("return s.delete_;");
         await Assert.That(output).Contains("return o.default_;");
-        await Assert.That(output).Contains("this.new_ = value + this.new_;");
+        await Assert.That(output).Contains("this.new_ = (value + this.new_) | 0;");
         await Assert.That(output).DoesNotContain(".default;");
     }
 
@@ -275,9 +275,9 @@ public class MemberNameEscapeTests
         );
 
         var output = result["counter.ts"];
-        await Assert.That(output).Contains("this.case_ += 2;");
-        await Assert.That(output).Contains("this.case_++;");
-        await Assert.That(output).Contains("return Counter.default_ + this.case_;");
+        await Assert.That(output).Contains("this.case_ = (this.case_ + 2) | 0;");
+        await Assert.That(output).Contains("this.case_ = (this.case_ + 1) | 0;");
+        await Assert.That(output).Contains("return (Counter.default_ + this.case_) | 0;");
     }
 
     // A pattern over a foreign type reads the member by its real name, like an

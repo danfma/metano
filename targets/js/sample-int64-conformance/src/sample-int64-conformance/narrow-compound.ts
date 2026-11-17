@@ -783,7 +783,7 @@ export function stepsUntilWrap(start: number): number {
       break;
     }
 
-    steps++;
+    steps = (steps + 1) | 0;
   }
 
   return steps;
@@ -827,7 +827,7 @@ export class NarrowCells {
   }
 
   private nextCell(): number {
-    this._cellReads++;
+    this._cellReads = (this._cellReads + 1) | 0;
 
     return 1;
   }

@@ -7,11 +7,11 @@ export class KeyCalls {
   constructor() { }
 
   private next(): number {
-    return ++this._counter;
+    return this._counter = (this._counter + 1) | 0;
   }
 
   private nextId(): UId {
-    return UId.create(BigInt(++this._counter));
+    return UId.create(BigInt(this._counter = (this._counter + 1) | 0));
   }
 
   run(): string {

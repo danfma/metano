@@ -22,7 +22,7 @@ public class AssignmentTests
 
         var output = result["counter.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
-        await Assert.That(output).Contains("this._count = this._count + 1");
+        await Assert.That(output).Contains("this._count = (this._count + 1) | 0");
     }
 
     [Test]
@@ -70,6 +70,6 @@ public class AssignmentTests
 
         var output = result["accumulator.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
-        await Assert.That(output).Contains("this._total += value");
+        await Assert.That(output).Contains("this._total = (this._total + value) | 0");
     }
 }

@@ -61,9 +61,7 @@ public class DelegateMemberInvocationTests
     {
         var result = TranspileHelper.Transpile(Source);
 
-        await Assert
-            .That(result["calls.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("delegate-member-invocation.ts"));
+        await TranspileHelper.AssertGolden("delegate-member-invocation.ts", result["calls.ts"]);
     }
 
     /// <summary>

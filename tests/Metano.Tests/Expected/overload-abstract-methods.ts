@@ -39,7 +39,7 @@ export class Neg extends Op {
   }
 
   override runX(x: number): number {
-    return -x;
+    return -x | 0;
   }
 
   override runS(s: string): number {

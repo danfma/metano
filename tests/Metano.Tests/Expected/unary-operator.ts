@@ -4,7 +4,7 @@ export class Vec2 {
   constructor(readonly x: number, readonly y: number) { }
 
   static __negate(v: Vec2): Vec2 {
-    return new Vec2(-v.x, -v.y);
+    return new Vec2(-v.x | 0, -v.y | 0);
   }
 
   $negate(): Vec2 {

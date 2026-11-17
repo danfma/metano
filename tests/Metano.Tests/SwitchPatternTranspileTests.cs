@@ -537,7 +537,7 @@ public class SwitchPatternTranspileTests
         var output = result["counter.ts"];
         await Assert.That(output).Contains("const n = $s;");
         await Assert.That(output).Contains("let n = $s;");
-        await Assert.That(output).Contains("return n += 1;");
+        await Assert.That(output).Contains("return n = (n + 1) | 0;");
     }
 
     [Test]

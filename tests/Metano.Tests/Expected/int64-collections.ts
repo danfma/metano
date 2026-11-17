@@ -10,11 +10,11 @@ export class Collections {
   constructor() { }
 
   next(): number {
-    return this._cursor++;
+    return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;
   }
 
   index(values: number[], l: bigint, u: bigint): number {
-    return values[Number(l)]! + values[Number(u)]!;
+    return (values[Number(l)]! + values[Number(u)]!) | 0;
   }
 
   write(values: bigint[], l: bigint): void {

@@ -68,9 +68,10 @@ public class ModuleFunctionClaimGoldenTests
 
         await Assert.That(diagnostics).IsEmpty();
 
-        await Assert
-            .That(result["ign-host.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-ignored-extension-host.ts"));
+        await TranspileHelper.AssertGolden(
+            "module-claims-ignored-extension-host.ts",
+            result["ign-host.ts"]
+        );
         await Assert
             .That(result["em-host.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-claims-emit-extension-host.ts"));
@@ -83,8 +84,8 @@ public class ModuleFunctionClaimGoldenTests
         await Assert
             .That(result["use.ts"])
             .Contains(
-                "return (3 * 3) + IgnHost.plainInt32(1) + EmHost.loneInt32(1) "
-                    + "+ PrivHost.hiddenInt32(1);"
+                "return ((3 * 3) + IgnHost.plainInt32(1) + EmHost.loneInt32(1) "
+                    + "+ PrivHost.hiddenInt32(1)) | 0;"
             );
     }
 
@@ -122,14 +123,15 @@ public class ModuleFunctionClaimGoldenTests
 
         await Assert.That(diagnostics).IsEmpty();
 
-        await Assert
-            .That(result["block-only.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-extension-block-host.ts"));
+        await TranspileHelper.AssertGolden(
+            "module-claims-extension-block-host.ts",
+            result["block-only.ts"]
+        );
 
         // The container qualifier on the plain call is the pre-existing #554.
         await Assert
             .That(result["use.ts"])
-            .Contains("return twice(\"x\") + BlockOnly.plainInt32(1);");
+            .Contains("return (twice(\"x\") + BlockOnly.plainInt32(1)) | 0;");
     }
 
     /// <summary>
@@ -182,9 +184,8 @@ public class ModuleFunctionClaimGoldenTests
         await Assert
             .That(result["res.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-claims-import-host-res.ts"));
-        await Assert
-            .That(result["use.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-import-host-use.ts"));
+
+        await TranspileHelper.AssertGolden("module-claims-import-host-use.ts", result["use.ts"]);
     }
 
     /// <summary>
@@ -247,9 +248,8 @@ public class ModuleFunctionClaimGoldenTests
                 "Fast path 'Vars.bazX' of 'Baz(int x)' is already taken in the barrel; it is "
                     + "emitted as 'bazX$' (spec 013 FR-032).",
             ]);
-        await Assert
-            .That(result["vars.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-module-state.ts"));
+
+        await TranspileHelper.AssertGolden("module-claims-module-state.ts", result["vars.ts"]);
     }
 
     /// <summary>

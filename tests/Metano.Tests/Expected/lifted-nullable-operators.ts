@@ -5,11 +5,11 @@ export function concatCount(o: Order | null): string {
 }
 
 export function coalesceSum(o: Order | null): number {
-  return (o == null ? null : o.items.length + 1) ?? 0;
+  return (o == null ? null : (o.items.length + 1) | 0) ?? 0;
 }
 
 export function addQty(o: Order, k: number): number | null {
-  return o.qty == null ? null : o.qty + k;
+  return o.qty == null ? null : (o.qty + k) | 0;
 }
 
 export function lessQty(o: Order): boolean {
@@ -25,11 +25,11 @@ export function qtyOrSeven(o: Order): number {
 }
 
 export function twice(o: Order): number | null {
-  return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : receiver$temp$0 + receiver$temp$1)(o.nextQty()))(o.nextQty());
+  return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(o.nextQty()))(o.nextQty());
 }
 
 export function nestedPlus(o: Order | null): number | null {
-  return (($receiver) => $receiver == null ? null : $receiver.qty == null ? null : $receiver.qty + 1)(o?.next);
+  return (($receiver) => $receiver == null ? null : $receiver.qty == null ? null : ($receiver.qty + 1) | 0)(o?.next);
 }
 
 export function show(o: Order): string {

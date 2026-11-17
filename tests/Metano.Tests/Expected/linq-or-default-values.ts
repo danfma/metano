@@ -59,7 +59,7 @@ export class Lookups {
   }
 
   chained(xs: number[]): number {
-    return linq(xs, where((x: number) => x > 1), select((x: number) => x * 2), firstOrDefault(undefined, 0));
+    return linq(xs, where((x: number) => x > 1), select((x: number) => Math.imul(x, 2)), firstOrDefault(undefined, 0));
   }
 
   wide(xs: bigint[]): bigint {

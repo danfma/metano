@@ -51,7 +51,7 @@ export class SourceOrderCalls {
   }
 
   static interfaceGetter(e: Engine, r: IReading): number {
-    return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(r.value, r.value + 5);
+    return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(r.value, (r.value + 5) | 0);
   }
 
   static overridableAuto(e: Engine, p: Plain): number {
@@ -122,13 +122,13 @@ export class Holder {
   }
 
   get bump(): number {
-    this.auto = this.auto + 1;
+    this.auto = (this.auto + 1) | 0;
 
     return this.auto;
   }
 
   get bumpField(): number {
-    this.field = this.field + 1;
+    this.field = (this.field + 1) | 0;
 
     return this.field;
   }

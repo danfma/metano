@@ -895,7 +895,7 @@ Product requirements added after the migration (normative; each one is traced by
   arithmetic is typed `int` by C# and is reduced like any `int` result; a `char` operand is a
   number in `[0, 0xFFFF]` (#501), so `c + 1` and `c - 'a'` fit and `c * 70000` wraps. In TypeScript, a reduced
   store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a `Dictionary<_, int>`)
-  MUST report `MS0001` as an error, as the checked forms do (012 Edge Cases); before this
+  MUST report `MS0001`, as the checked forms do (012 Edge Cases); before this
   requirement it emitted the invalid `counts.get(key)++`. This closes the known gap of 012
   section K: an unchecked result read by checked code (`checked(a + unchecked(b * c))`, a
   `var h = unchecked(a * 31 + 7); h + 1` in a checked project) is in range, and a cast to the
@@ -906,7 +906,10 @@ Product requirements added after the migration (normative; each one is traced by
   and the check of 012 FR-077 (one rule for both contexts), where C# shows that the exact result
   fits the type. The proof is a neutral fact the core computes from Roslyn, so it holds for every
   target that reduces (Dart prints neither the unchecked wrap, which it does not produce, nor
-  checked `int` / `uint` arithmetic, DECIDED-19, so its output does not change):
+  checked `int` / `uint` arithmetic, DECIDED-19; the one Dart shape it can change is a
+  narrowing conversion the new ranges prove keeps its value, such as `(uint)s.Length`, which
+  drops its `.toUnsigned(32)`, an equivalent form; no existing Dart output changes, and Dart
+  does not lower a `for` statement yet):
   - the operand ranges of 012 FR-074 (`IntegerValueRanges`: a constant, a value widened from a
     narrower type, a mask; `b1 + b2` on `byte`, `s * 2` on `short`, `(x & 0xFF) + 1`), which
     also read as `[0, int.MaxValue]` the `Length` of an array or a `string` and the `Count` of

@@ -48,10 +48,8 @@ public class HashCodeLoweringTests
             """
         );
 
-        await Assert
-            .That(result["money.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("hash-code-lowering.ts"));
-        await Assert.That(result["coins.ts"]).Contains("return super.hashCode() + 1;");
+        await TranspileHelper.AssertGolden("hash-code-lowering.ts", result["money.ts"]);
+        await Assert.That(result["coins.ts"]).Contains("return (super.hashCode() + 1) | 0;");
     }
 
     [Test]

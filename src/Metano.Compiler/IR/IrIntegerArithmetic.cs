@@ -108,8 +108,8 @@ public sealed record IrNumericEndpoint(IrNumericKind Kind, bool IsEnum = false);
 /// stores in an <c>sbyte</c>, <c>byte</c>, <c>short</c> or <c>ushort</c>,
 /// the <c>uint</c> result of a bitwise operator or a left shift, the
 /// <c>int</c> result of <c>&gt;&gt;&gt;</c>, and <c>int</c> / <c>uint</c>
-/// arithmetic in a checked context. Unchecked <c>int</c> / <c>uint</c>
-/// arithmetic is not reduced (a documented gap).
+/// arithmetic in a checked context, or in an unchecked one for a target
+/// whose numeric lowering rules wrap it (spec 001 FR-074).
 /// </summary>
 /// <param name="Value">The operation whose result may leave the domain.</param>
 /// <param name="Kind">The integer kind of the result.</param>

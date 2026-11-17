@@ -9,25 +9,25 @@ export class OutCalls {
   static outFirstInOrder(o: OutHost): number {
     const [r, x] = o.outFirst(Trace.next("p"), Trace.next("q"));
 
-    return r * 100 + x;
+    return (Math.imul(r, 100) + x) | 0;
   }
 
   static outFirstReordered(o: OutHost): number {
     const [r, x] = (($arg1, $arg0) => o.outFirst($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 100 + x;
+    return (Math.imul(r, 100) + x) | 0;
   }
 
   static outMid(o: OutHost): number {
     const [r, x] = (($arg1, $arg0) => o.outMid($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 100 + x;
+    return (Math.imul(r, 100) + x) | 0;
   }
 
   static outMidInOrder(o: OutHost): number {
     const [r, x] = o.outMid(Trace.next("p"), Trace.next("q"));
 
-    return r * 100 + x;
+    return (Math.imul(r, 100) + x) | 0;
   }
 
   static outLast(o: OutHost): number {
@@ -69,7 +69,7 @@ export class OutCalls {
     const [$found2, x] = o.tryMid($result1, $result0);
 
     if ($found2) {
-      return x * 100 + first * 10 + second;
+      return (Math.imul(x, 100) + Math.imul(first, 10) + second) | 0;
     }
 
     return -1;
@@ -90,7 +90,7 @@ export class OutCalls {
   static twoOuts(o: OutHost): number {
     const [r, x, y] = (($arg1, $arg0) => o.two($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 100 + x * 10 + y;
+    return (Math.imul(r, 100) + Math.imul(x, 10) + y) | 0;
   }
 
   static existingLocal(o: OutHost): number {
@@ -98,13 +98,13 @@ export class OutCalls {
     const [r, $out0] = o.outFirst(Trace.next("p"), Trace.next("q"));
     x = $out0;
 
-    return r * 100 + x;
+    return (Math.imul(r, 100) + x) | 0;
   }
 
   static outFirstSingle(o: OutHost): number {
     const [r, x] = o.outFirst(Trace.next("p"), 3);
 
-    return r * 100 + x;
+    return (Math.imul(r, 100) + x) | 0;
   }
 
   static tryGetValue(d: Map<string, number>, key: string): number {
@@ -139,42 +139,42 @@ export class OverloadedOutCalls {
   static firstInOrder(o: Overloaded): number {
     const [r, x] = o.firstOutOfInt32Int32Int32(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 
   static firstReordered(o: Overloaded): number {
     const [r, x] = (($arg1, $arg0) => o.firstOutOfInt32Int32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 
   static midInOrder(o: Overloaded): number {
     const [r, x] = o.midInt32OutOfInt32Int32(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 
   static midReordered(o: Overloaded): number {
     const [r, x] = (($arg1, $arg0) => o.midInt32OutOfInt32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 
   static lastReordered(o: Overloaded): number {
     const [r, x] = (($arg1, $arg0) => o.lastInt32Int32OutOfInt32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 
   static staticInOrder(): number {
     const [r, x] = Overloaded.sharedOutOfInt32Int32Int32(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 
   static staticReordered(): number {
     const [r, x] = (($arg1, $arg0) => Overloaded.sharedOutOfInt32Int32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return r * 1000 + x;
+    return (Math.imul(r, 1000) + x) | 0;
   }
 }

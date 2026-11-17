@@ -32,7 +32,7 @@ export class Cells {
   }
 
   element(h: Cells, k: number, n: number): void {
-    h.next().slots[k++]! <<= n;
+    h.next().slots[((k = (k + 1) | 0) - 1) | 0]! <<= n;
   }
 
   indexAndCount(h: Cells, n: number): void {

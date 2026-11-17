@@ -8,7 +8,7 @@ export class Extra {
   }
 
   pARest(a: number, ...rest: number[]): number {
-    return a + rest.length;
+    return (a + rest.length) | 0;
   }
 
   p(s: string): number;
@@ -30,7 +30,7 @@ export class Extra {
   }
 
   mABRest(a: number, b: number = 2, ...rest: number[]): number {
-    return a + b + rest.length;
+    return (a + b + rest.length) | 0;
   }
 
   m(s: string): number;

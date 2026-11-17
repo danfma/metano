@@ -10,7 +10,7 @@ export class Divide {
   constructor() { }
 
   next(): number {
-    return this._cursor++;
+    return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;
   }
 
   div(l: bigint, m: bigint): bigint {
@@ -82,7 +82,7 @@ export class Divide {
   }
 
   narrow(a: number, b: number): number {
-    return intDiv(a, b) + a % b;
+    return (intDiv(a, b) + a % b) | 0;
   }
 
   compound(l: bigint, m: bigint): bigint {

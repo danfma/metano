@@ -53,7 +53,7 @@ export class Estimate {
     if (typeof args[0] === "symbol" && args[0] === Estimate.byEstimateFirstSecond) {
       const first = args[1] as Estimate;
       const second = args[2] as Estimate;
-      const __chain0Arg0 = first.points + second.points;
+      const __chain0Arg0 = (first.points + second.points) | 0;
       const __chain0Arg1 = "combined";
 
       {
@@ -78,7 +78,7 @@ export class Estimate {
     if (args.length === 2 && args[0] instanceof Estimate && args[1] instanceof Estimate) {
       const first = args[0] as Estimate;
       const second = args[1] as Estimate;
-      const __chain0Arg0 = first.points + second.points;
+      const __chain0Arg0 = (first.points + second.points) | 0;
       const __chain0Arg1 = "combined";
 
       {
@@ -122,7 +122,7 @@ export class Estimate {
   }
 
   addPoints(points: number): Estimate {
-    return Estimate.fromPointsNote(this.points + points, this.note);
+    return Estimate.fromPointsNote((this.points + points) | 0, this.note);
   }
 
   addOther(other: Estimate): Estimate {

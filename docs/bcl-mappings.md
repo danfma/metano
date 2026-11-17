@@ -801,7 +801,7 @@ wrapper type. The compiler makes them behave like C# where C# narrows or reinter
 | `u & v`, `u \| v`, `u ^ v`, `~u`, `u << n` (`uint`) | `(u & v) >>> 0`, …, `~u >>> 0`, `(u << n) >>> 0` | same |
 | `u >> n` (`uint`) | `u >>> n` | same |
 | `i >>> n` (`int`) | `(i >>> n) \| 0` | same |
-| `i + j`, `i - j`, `i * j`, `-i`, `i++` | unchanged: `i + j`, … | `checkedInt32(i + j)`, …, `i = checkedInt32(i + 1)` |
+| `i + j`, `i - j`, `i * j`, `-i`, `i++` | `(i + j) \| 0`, `(i - j) \| 0`, `Math.imul(i, j)`, `-i \| 0`, `i = (i + 1) \| 0` (spec 001 FR-074; `uint`: `>>> 0`) | `checkedInt32(i + j)`, …, `i = checkedInt32(i + 1)` |
 
 - The native operators import nothing; the `checked…` helpers come from
   `metano-runtime` and throw `OverflowException` (`Arithmetic operation resulted in an
@@ -813,7 +813,8 @@ wrapper type. The compiler makes them behave like C# where C# narrows or reinter
   native compound operator, because they cannot leave the type's range.
 - A conversion from `double` / `float` truncates first (`int32FromDouble(d) & 0xFF`), and
   one from `long` / `ulong` goes through `bigint` (`Number(BigInt.asUintN(8, l))`).
-- **Known gap:** `int` / `uint` arithmetic does not wrap in the default (unchecked)
+- **Known gap (closed for TypeScript by spec 001 FR-074–FR-076, below; Dart keeps it):**
+  `int` / `uint` arithmetic does not wrap in the default (unchecked)
   context. `int.MaxValue + 1` is `2147483648` where C# gives `int.MinValue`; the value
   stays exact up to 2^53. A `checked` context gives C#'s `OverflowException`.
   `int.MinValue / -1` returns `2147483648` instead of throwing. At the edges of the gap:
@@ -858,6 +859,38 @@ wrapper type. The compiler makes them behave like C# where C# narrows or reinter
   never throws in a checked context:
   checked `int` / `uint` arithmetic prints as its unchecked form (`a + b`, no wrap), and
   a checked conversion or narrow store prints the narrowing of its unchecked form.
+
+### `int` / `uint` wrap-around (spec 001 FR-074–FR-076, #639)
+
+In the default (unchecked) context, TypeScript reduces `int` / `uint` arithmetic modulo
+2^32 as .NET does, with native operators and no import: `a + b` → `(a + b) | 0`,
+`u - v` → `(u - v) >>> 0`, `a * b` → `Math.imul(a, b)` (never `(a * b) | 0`, which loses
+the low bits past 2^53), `-a` → `-a | 0`, and `i++`, `i += k`, `u *= k` store the
+reduced value (`i = (i + 1) | 0;`, `u = Math.imul(u, k) >>> 0;`). `int.MaxValue + 1` is
+`int.MinValue`, `0u - 1u` is `4294967295`.
+
+- **No reduction where C# proves the value fits** (FR-075, a core fact, so the `checked`
+  form drops its `checkedInt32` too): operand ranges (`b1 + b2` on `byte`,
+  `(x & 0xFF) + 1`, `c + 1` on a `char`), `a.Length - 1` on an array or a `string`,
+  `list.Count - 1` on `List<T>`, `Dictionary<,>`, `HashSet<T>`, `Queue<T>`, `Stack<T>`,
+  `SortedDictionary<,>`, `SortedList<,>`, `SortedSet<T>`, `LinkedList<T>` (any other
+  `Count` spans its type), and the step of a counting `for` whose counter is declared in
+  the initializer, written nowhere else, and bounded by the condition
+  (`for (let i = 0; i < n; i++)` keeps `i++`).
+- **One trailing reduction** (FR-076): an operand whose JavaScript consumer reduces
+  modulo 2^32 itself (another wrapped `+` / `-`, `Math.imul`, `&`, `|`, `^`, `~`, a
+  shift, an unchecked narrowing) drops its own `| 0`: `a + b + c - a * b` emits
+  `(a + b + c - Math.imul(a, b)) | 0`, `(byte)(a + b)` emits `(a + b) & 0xFF`. A
+  comparison, `/`, `%`, a conversion to `double` / `long` / `string`, an argument, a
+  return value, a store and a checked operation keep the wrap.
+- Not reduced: `/`, `%` (`int.MinValue / -1` still returns `2147483648`), results of an
+  enum type, user-defined operators, `[Queryable]` expression trees, constants.
+- A wrapped store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a
+  `Dictionary<_, int>`) reports `MS0001`, as the checked forms do.
+- Cost: in range the wrap is as fast as the unwrapped `number`; an accumulator that
+  overflows on most iterations hits a V8 slow path on Node (about 10 times the asm.js
+  `((s | 0) + x) | 0` form; Bun has none). Numbers in spec 001 FR-076.
+- Dart is out of scope for 3.0: its output keeps the unwrapped 64-bit `int` result.
 
 ## 64-bit integers (`long` / `ulong`)
 

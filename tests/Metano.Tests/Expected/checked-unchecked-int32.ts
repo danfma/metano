@@ -10,7 +10,7 @@ export class Counter {
   }
 
   hash(a: number): number {
-    return a * 31 + 7;
+    return (Math.imul(a, 31) + 7) | 0;
   }
 
   accumulate(values: number[]): number {
@@ -25,7 +25,7 @@ export class Counter {
 
   nested(a: number): number {
     {
-      let h = a * 17;
+      let h = Math.imul(a, 17);
 
       {
         h = checkedInt32(h + 1);

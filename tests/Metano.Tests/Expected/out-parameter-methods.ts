@@ -41,7 +41,7 @@ export class Catalog implements ILookup {
       return [tens, units];
     }
 
-    tens = intDiv(value - units, 10);
+    tens = intDiv((value - units) | 0, 10);
 
     return [tens, units];
   }
@@ -56,7 +56,7 @@ export class Catalog implements ILookup {
   static remainder(a: number, b: number): readonly [result: number, quotient: number] {
     let quotient: number;
 
-    return [a - (quotient = intDiv(a, b)) * b, quotient];
+    return [(a - Math.imul(quotient = intDiv(a, b), b)) | 0, quotient];
   }
 
   use(key: string): string {

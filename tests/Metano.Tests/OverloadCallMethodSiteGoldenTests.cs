@@ -159,9 +159,7 @@ public class OverloadCallMethodSiteGoldenTests
 
         var outputs = string.Join("\n", result["extra.ts"], result["use.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-params.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-params.ts", outputs);
     }
 
     /// <summary>
@@ -369,9 +367,7 @@ public class OverloadCallMethodSiteGoldenTests
 
         var outputs = string.Join("\n", result["ext.ts"], result["use.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-extension-helper.ts"));
+        await TranspileHelper.AssertGolden("overload-extension-helper.ts", outputs);
     }
 
     /// <summary>
@@ -472,9 +468,11 @@ public class OverloadCallMethodSiteGoldenTests
                     + "emitted as 'foldX$' (spec 013 FR-032)."
             );
         await Assert.That(shadows[0].Location).IsNotNull();
-        await Assert
-            .That(result["mixed.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("extension-container-fast-path-clash.ts"));
+
+        await TranspileHelper.AssertGolden(
+            "extension-container-fast-path-clash.ts",
+            result["mixed.ts"]
+        );
 
         // The callers call the claimed names; the container qualifier they
         // keep is the pre-existing #554, so the file is not pinned whole.
@@ -697,9 +695,8 @@ public class OverloadCallMethodSiteGoldenTests
         await Assert
             .That(result["q.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-q.ts"));
-        await Assert
-            .That(result["use.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved.ts"));
+
+        await TranspileHelper.AssertGolden("module-import-facade-reserved.ts", result["use.ts"]);
     }
 
     /// <summary>
@@ -768,9 +765,8 @@ public class OverloadCallMethodSiteGoldenTests
         await Assert
             .That(result["res.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias-res.ts"));
-        await Assert
-            .That(result["use.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias.ts"));
+
+        await TranspileHelper.AssertGolden("module-import-facade-alias.ts", result["use.ts"]);
     }
 
     /// <summary>
@@ -813,9 +809,10 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["use-block.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-extension-block-imports.ts"));
+        await TranspileHelper.AssertGolden(
+            "module-extension-block-imports.ts",
+            result["use-block.ts"]
+        );
     }
 
     /// <summary>
@@ -967,9 +964,7 @@ public class OverloadCallMethodSiteGoldenTests
             result["index.ts"]
         );
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-module-extension.ts"));
+        await TranspileHelper.AssertGolden("overload-module-extension.ts", outputs);
     }
 
     [Test]

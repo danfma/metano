@@ -30,8 +30,10 @@ public class InheritedPropertyTranspileTests
         // parameter and assigns it the argument; the base declares no storage.
         var result = TranspileHelper.Transpile(PositionalOverrideSource);
 
-        var expected = TranspileHelper.ReadExpected("positional-override-abstract-property.ts");
-        await Assert.That(result["note.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "positional-override-abstract-property.ts",
+            result["note.ts"]
+        );
     }
 
     [Test]
@@ -64,7 +66,7 @@ public class InheritedPropertyTranspileTests
 
         await Assert.That(result["l2.ts"]).Contains("constructor(readonly x: number) {");
         await Assert.That(result["l3.ts"]).Contains("constructor(x: number, readonly y: number) {");
-        await Assert.That(result["l3.ts"]).Contains("super(x + 100);");
+        await Assert.That(result["l3.ts"]).Contains("super((x + 100) | 0);");
     }
 
     [Test]
@@ -105,7 +107,7 @@ public class InheritedPropertyTranspileTests
 
         var counter = result["counter.ts"];
         await Assert.That(counter).Contains("constructor(readonly x: number) {");
-        await Assert.That(counter).Contains("this.y = x++;");
+        await Assert.That(counter).Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;");
         await Assert.That(counter).Contains("this.z = x;");
     }
 
@@ -131,7 +133,7 @@ public class InheritedPropertyTranspileTests
         await Assert.That(tripled).Contains("constructor(x: number) {");
         // The override owns a per-class backing field; the moved initializer stores to it.
         await Assert.That(tripled).Contains("this.x$Tripled_");
-        await Assert.That(tripled).Contains(" = x * 3;");
+        await Assert.That(tripled).Contains(" = Math.imul(x, 3);");
         await Assert.That(tripled).Contains("get x(): number {");
     }
 

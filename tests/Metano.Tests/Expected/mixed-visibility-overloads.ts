@@ -50,7 +50,7 @@ export class Ledger {
 
   /** @internal */
   postAmountMemo(amount: number, memo: string): number {
-    return amount + memo.length;
+    return (amount + memo.length) | 0;
   }
 
   postAmount(amount: number): number {

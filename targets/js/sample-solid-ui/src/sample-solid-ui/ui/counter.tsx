@@ -6,8 +6,8 @@ export type CounterProps = { count?: number };
 export function Counter(props: CounterProps) {
   const props$count = props.count ?? 0;
   const [count, setCount] = createSignal(props$count);
-  const decrement = () => setCount(count() - 1);
-  const increment = () => setCount(count() + 1);
+  const decrement = () => setCount((count() - 1) | 0);
+  const increment = () => setCount((count() + 1) | 0);
 
   return (
     <div class="counter">

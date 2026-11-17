@@ -48,9 +48,7 @@ public class CollectionConstructionTests
             """
         );
 
-        await Assert
-            .That(result["shelf.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("collection-construction.ts"));
+        await TranspileHelper.AssertGolden("collection-construction.ts", result["shelf.ts"]);
     }
 
     [Test]
@@ -165,7 +163,7 @@ public class CollectionConstructionTests
         await Assert
             .That(result["factory.ts"])
             .Contains(
-                "return (($arg0, $arg1) => makeWidget($arg0))(this.next(), this.next() * 10);"
+                "return (($arg0, $arg1) => makeWidget($arg0))(this.next(), Math.imul(this.next(), 10));"
             );
     }
 

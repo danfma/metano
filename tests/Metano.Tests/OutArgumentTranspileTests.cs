@@ -224,9 +224,7 @@ public class OutArgumentTranspileTests
     {
         var result = TranspileHelper.Transpile(MethodsSource);
 
-        await Assert
-            .That(result["catalog.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("out-parameter-methods.ts"));
+        await TranspileHelper.AssertGolden("out-parameter-methods.ts", result["catalog.ts"]);
     }
 
     [Test]
@@ -542,7 +540,7 @@ public class OutArgumentTranspileTests
                       }
 
                       readers.push(() => v);
-                      i++;
+                      i = (i + 1) | 0;
                     }
                 """
             );
@@ -573,14 +571,14 @@ public class OutArgumentTranspileTests
             .That(result["summer.ts"])
             .Contains(
                 """
-                    for (let k = 0; ; k++) {
+                    for (let k = 0; ; k = (k + 1) | 0) {
                       const [$found0, w] = tryGetValue(values, k, 0);
 
                       if (!$found0) {
                         break;
                       }
 
-                      sum += w;
+                      sum = (sum + w) | 0;
                     }
                 """
             );
@@ -624,7 +622,7 @@ public class OutArgumentTranspileTests
             .Contains(
                 """
                     while (true) {
-                      n++;
+                      n = (n + 1) | 0;
                       const [$found0, v] = tryGetValue(values, n, 0);
 
                       if (!($found0 && v > 0)) {
@@ -1031,7 +1029,7 @@ public class OutArgumentTranspileTests
     {
         var output = TranspileHelper.Transpile(OrderingSource)["order.ts"];
 
-        await Assert.That(output).Contains("x += ([, x] = Order.foo(3))[0];");
+        await Assert.That(output).Contains("x = (x + ([, x] = Order.foo(3))[0]) | 0;");
     }
 
     [Test]
@@ -1062,7 +1060,7 @@ public class OutArgumentTranspileTests
                 """
                     {
                       let [ok, x] = Order.bar();
-                      for (; ; x++) {
+                      for (; ; x = (x + 1) | 0) {
                 """
             );
     }
@@ -1079,7 +1077,7 @@ public class OutArgumentTranspileTests
                     {
                       let [ok, n] = Order.bar();
                       let k: number;
-                      for (; n < 10; n += ([, k] = Order.foo(1))[0]) {
+                      for (; n < 10; n = (n + ([, k] = Order.foo(1))[0]) | 0) {
                 """
             );
     }

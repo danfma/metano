@@ -274,11 +274,14 @@ public class RuntimeHelperAliasTests
         await Assert
             .That(output)
             .Contains(@"import { intDiv as intDiv$rt } from ""metano-runtime"";");
-        await Assert.That(output).Contains("intDiv$rt(intDiv + b, 2)");
+
+        await Assert.That(output).Contains("intDiv$rt((intDiv + b) | 0, 2)");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-        await Assert
-            .That(files["divider.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-local-collision.ts"));
+
+        await TranspileHelper.AssertGolden(
+            "runtime-helper-alias-local-collision.ts",
+            files["divider.ts"]
+        );
     }
 
     /// <summary>

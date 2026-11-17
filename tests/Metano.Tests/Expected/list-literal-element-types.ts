@@ -36,7 +36,7 @@ export class Lists {
     const same = [maybe];
     named.push(null);
 
-    return named.length + same.length;
+    return (named.length + same.length) | 0;
   }
 
   spreadLocal(xs: number[]): number {
@@ -66,7 +66,7 @@ export class Lists {
     const empty = [] as number[];
     a[0] = cat;
 
-    return a.length + same.length + empty.length;
+    return (a.length + same.length + empty.length) | 0;
   }
 
   nested(): number {
@@ -103,7 +103,7 @@ export class Lists {
     const doubles = [1, 2.5];
     const names = ["a"];
 
-    return ints.length + doubles.length + names.length;
+    return (ints.length + doubles.length + names.length) | 0;
   }
 
   readOnlyViews(dog: Dog): number {
@@ -116,7 +116,7 @@ export class Lists {
     list[0] = null;
     const first = read[0]!.name.length;
 
-    return counted.length + collection.length + read.length + list.length + first;
+    return (counted.length + collection.length + read.length + list.length + first) | 0;
   }
 
   erasedCasts(): number {
@@ -125,7 +125,7 @@ export class Lists {
     cast.push(null);
     defaulted.push(1);
 
-    return cast.length + defaulted.length;
+    return (cast.length + defaulted.length) | 0;
   }
 
   nestedNullability(): number {
@@ -133,13 +133,13 @@ export class Lists {
     const exact = [[1, "a"] as [number, string]];
     pairs.push([2, null] as [number, string | null]);
 
-    return pairs.length + exact.length;
+    return (pairs.length + exact.length) | 0;
   }
 
   forHeader(): number {
     let total = 0;
     for (let l: (number | null)[] = [1]; l.length < 3; l.push(null)) {
-      total += l.length;
+      total = (total + l.length) | 0;
     }
 
     return total;
@@ -150,7 +150,7 @@ export class Lists {
     const longs = [1n, 2n];
     const widened = [...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))];
 
-    return bytes.length + longs.length + widened.length;
+    return (bytes.length + longs.length + widened.length) | 0;
   }
 
   walk(given: (number | null)[] | null, kind: number): number {
@@ -176,7 +176,7 @@ export class Lists {
     holder.initial.push(null);
     lists[0]!.push(null);
 
-    return parenthesized.length + coalesced.length + switched.length + lists.length;
+    return (parenthesized.length + coalesced.length + switched.length + lists.length) | 0;
   }
 
   returned(): (number | null)[] {
@@ -200,6 +200,6 @@ export class Lists {
     this._pets.push(cat);
     this._field.push(null);
 
-    return this._pets.length + this._field.length;
+    return (this._pets.length + this._field.length) | 0;
   }
 }

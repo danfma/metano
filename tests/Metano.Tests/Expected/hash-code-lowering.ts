@@ -16,7 +16,7 @@ export class Money {
   }
 
   hashes(p: Point, s: string, i: number, c: Color, o: Object, n: number | null): number {
-    return valueHashCode(p) + valueHashCode(s) + valueHashCode(i) + valueHashCode(c) + valueHashCode(o) + valueHashCode(n) + valueHashCode(this) + valueHashCode(this);
+    return (valueHashCode(p) + valueHashCode(s) + valueHashCode(i) + valueHashCode(c) + valueHashCode(o) + valueHashCode(n) + valueHashCode(this) + valueHashCode(this)) | 0;
   }
 
   same(a: Money | null, b: Money | null): boolean {

@@ -98,7 +98,7 @@ public class ExtensionTranspileTests
 
         var output = result["int-extensions.ts"];
         await Assert.That(output).Contains("export function squared(value: number): number");
-        await Assert.That(output).Contains("value * value");
+        await Assert.That(output).Contains("Math.imul(value, value)");
     }
 
     [Test]

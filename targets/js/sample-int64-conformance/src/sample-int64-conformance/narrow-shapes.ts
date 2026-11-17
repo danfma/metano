@@ -32,7 +32,7 @@ export function uIntLowBitsToInt(source: number): number {
 }
 
 export function uIntAllBitsToInt(source: number): number {
-  return ((source & 4294967295) >>> 0) | 0;
+  return (source & 4294967295) | 0;
 }
 
 export function constMaskToByte(source: number): number {
@@ -122,7 +122,7 @@ export function receiverEvaluatedOnce(start: number, amount: number): number {
   const source = new NarrowSource(start);
   ((receiver$temp$0) => receiver$temp$0.value = (receiver$temp$0.value + amount) & 0xFF)(source.next());
 
-  return source.evaluations * 1000 + source.value;
+  return (Math.imul(source.evaluations, 1000) + source.value) | 0;
 }
 
 export function receiverIncrementedOnce(start: number): number {
@@ -133,14 +133,14 @@ export function receiverIncrementedOnce(start: number): number {
   })(new NarrowSource(0));
   const previous = ((receiver$temp$1) => (((receiver$temp$1.signed = ((receiver$temp$1.signed + 1) << 24) >> 24) - 1) << 24) >> 24)(source.next());
 
-  return source.evaluations * 1000 + (previous ^ source.signed);
+  return (Math.imul(source.evaluations, 1000) + (previous ^ source.signed)) | 0;
 }
 
 export function foreachBytes(values: number[]): number {
   let total = 0;
   for (const value$element of values) {
     const value = value$element & 0xFF;
-    total += value;
+    total = (total + value) | 0;
   }
 
   return total;
@@ -289,7 +289,7 @@ export function shiftConstants(): string {
 }
 
 export function addShiftConstant(source: number): number {
-  return intDiv(source, 2) + 1 + (1 << 4);
+  return (intDiv(source, 2) + 1 + (1 << 4)) | 0;
 }
 
 export function andNegativeToByte(source: number): number {
@@ -373,7 +373,7 @@ export function receiverByteShiftedLeft(start: number, count: number): string {
 export function receiverElementShifted(start: number, count: number): string {
   const cells = new ShiftCells(start);
   let index = 0;
-  cells.next().slots[index++]! <<= count;
+  cells.next().slots[((index = (index + 1) | 0) - 1) | 0]! <<= count;
 
   return `${cells.slots[0]!}|${cells.evaluations}|${index}`;
 }
@@ -413,7 +413,7 @@ export function receiverUnsignedElementShiftedRight(start: number, count: number
     return receiver$temp$0;
   })(new ShiftCells(0));
   let index = 0;
-  cells.next().unsignedSlots[index++]! >>>= count;
+  cells.next().unsignedSlots[((index = (index + 1) | 0) - 1) | 0]! >>>= count;
 
   return `${cells.unsignedSlots[0]!}|${cells.evaluations}|${index}`;
 }
@@ -454,7 +454,7 @@ export function unsignedShiftedRightValue(start: number, count: number): string 
 export function unsignedShiftLoop(start: number): number {
   let steps = 0;
   for (let remaining = start; remaining !== 0; remaining >>>= 1) {
-    steps++;
+    steps = (steps + 1) | 0;
   }
 
   return steps;
@@ -488,7 +488,7 @@ export class NarrowSource {
   }
 
   next(): NarrowSource {
-    this.evaluations++;
+    this.evaluations = (this.evaluations + 1) | 0;
 
     return this;
   }
@@ -521,41 +521,41 @@ export class ShiftCells {
   }
 
   get tracked(): number {
-    this.reads++;
+    this.reads = (this.reads + 1) | 0;
 
     return this.signed;
   }
 
   set tracked(value: number) {
-    this.writes++;
+    this.writes = (this.writes + 1) | 0;
     this.signed = value;
   }
 
   get trackedUnsigned(): number {
-    this.reads++;
+    this.reads = (this.reads + 1) | 0;
 
     return this.unsigned;
   }
 
   set trackedUnsigned(value: number) {
-    this.writes++;
+    this.writes = (this.writes + 1) | 0;
     this.unsigned = value;
   }
 
   next(): ShiftCells {
-    this.evaluations++;
+    this.evaluations = (this.evaluations + 1) | 0;
 
     return this;
   }
 
   nextIndex(): number {
-    this.indexEvaluations++;
+    this.indexEvaluations = (this.indexEvaluations + 1) | 0;
 
     return 1;
   }
 
   nextCount(count: number): number {
-    this.countEvaluations++;
+    this.countEvaluations = (this.countEvaluations + 1) | 0;
 
     return count;
   }

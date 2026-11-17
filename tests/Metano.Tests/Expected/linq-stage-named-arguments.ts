@@ -14,13 +14,13 @@ export class Stages {
   }
 
   next(): number {
-    this._count = this._count + 1;
+    this._count = (this._count + 1) | 0;
 
     return this._count;
   }
 
   adder(): (arg1: number, arg2: number) => number {
-    return (a: number, x: number) => a + x;
+    return (a: number, x: number) => (a + x) | 0;
   }
 
   matcher(): (arg: number) => boolean {
@@ -28,7 +28,7 @@ export class Stages {
   }
 
   picker(): (arg: number) => number {
-    return (x: number) => x * 10;
+    return (x: number) => Math.imul(x, 10);
   }
 
   others(): number[] {
@@ -49,15 +49,15 @@ export class Stages {
   }
 
   aggregate(xs: number[]): number {
-    return linq(xs, aggregate(0, (a: number, x: number) => a + x));
+    return linq(xs, aggregate(0, (a: number, x: number) => (a + x) | 0));
   }
 
   toDictionary(xs: number[]): Map<number, number> {
-    return linq(xs, toMap((x: number) => x, (x: number) => x * 10));
+    return linq(xs, toMap((x: number) => x, (x: number) => Math.imul(x, 10)));
   }
 
   zip(xs: number[], ys: number[]): number[] {
-    return linq(xs, zip(ys, (a: number, b: number) => a + b), toArray());
+    return linq(xs, zip(ys, (a: number, b: number) => (a + b) | 0), toArray());
   }
 
   firstOrDefault(xs: number[]): number {
@@ -65,7 +65,7 @@ export class Stages {
   }
 
   oneEffect(xs: number[]): number {
-    return linq(xs, aggregate(this.next(), (a: number, x: number) => a + x));
+    return linq(xs, aggregate(this.next(), (a: number, x: number) => (a + x) | 0));
   }
 
   inOrder(xs: number[]): number {
@@ -85,7 +85,7 @@ export class Stages {
   }
 
   midPipe(xs: number[]): number[] {
-    return linq(xs, where((x: number) => x > 0), (($arg1, $arg0) => zip($arg0, $arg1))(this.adder(), this.others()), select((x: number) => x + 1), toArray());
+    return linq(xs, where((x: number) => x > 0), (($arg1, $arg0) => zip($arg0, $arg1))(this.adder(), this.others()), select((x: number) => (x + 1) | 0), toArray());
   }
 
   first(xs: number[]): number {
@@ -113,7 +113,7 @@ export class Stages {
   }
 
   queryableZip(q: Iterable<number>): number[] {
-    return linq(q, zip(this.others(), (a: number, b: number) => a + b, {
+    return linq(q, zip(this.others(), (a: number, b: number) => (a + b) | 0, {
       tree: {
         kind: "binary",
         op: "+",
@@ -151,7 +151,7 @@ export class Stages {
   }
 
   queryableToDictionary(q: Iterable<number>): Map<number, number> {
-    return linq(q, toMap((x: number) => x, (x: number) => x * 10, {
+    return linq(q, toMap((x: number) => x, (x: number) => Math.imul(x, 10), {
       tree: {
         kind: "param",
         name: "x",

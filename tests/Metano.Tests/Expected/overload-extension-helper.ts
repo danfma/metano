@@ -2,11 +2,11 @@ import { isInt32, isString } from "metano-runtime";
 import { Item } from "./item";
 
 export function twiceInt32(item: Item, x: number): number {
-  return x * 2;
+  return Math.imul(x, 2);
 }
 
 export function twiceString(item: Item, x: string): number {
-  return x.length * 2;
+  return Math.imul(x.length, 2);
 }
 
 export function twice(item: Item, x: number): number;

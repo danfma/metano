@@ -110,11 +110,10 @@ public static partial class IrToTsExpressionBridge
             IrCastExpression cast => MapCast(cast, context),
             IrNumericConversion conversion => IrToTsNumericConversionBridge.Map(
                 conversion,
-                Map(conversion.Operand, context)
+                Map(IrToTsNumericConversionBridge.OperandOf(conversion), context)
             ),
-            IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(
-                overflow,
-                Map(overflow.Value, context)
+            IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(overflow, value =>
+                Map(value, context)
             ),
             IrLambdaExpression lambda => MapLambda(lambda, context),
             IrStringInterpolation interp => MapStringInterpolation(interp, context),
@@ -159,7 +158,9 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapBinary(IrBinaryExpression binary, IrToTsBridgeContext context)
     {
-        var bin = IrToTsNumericConversionBridge.WithCharOperandsAsText(binary);
+        var bin = IrToTsIntegerOverflowBridge.WithBitwiseOperandsReduced(
+            IrToTsNumericConversionBridge.WithCharOperandsAsText(binary)
+        );
 
         if (
             bin.Operator is IrBinaryOp.Assign
@@ -247,6 +248,9 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
+        if (unary.Operator is IrUnaryOp.BitwiseNot)
+            return Map(IrToTsIntegerOverflowBridge.ReducedByConsumer(unary.Operand), context);
+
         if (unary.Operator is not (IrUnaryOp.Increment or IrUnaryOp.Decrement))
             return Map(unary.Operand, context);
 

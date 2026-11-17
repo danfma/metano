@@ -52,7 +52,7 @@ export class Counter {
   }
 
   private nextSlot(): number {
-    this._slotReads++;
+    this._slotReads = (this._slotReads + 1) | 0;
 
     return 1;
   }

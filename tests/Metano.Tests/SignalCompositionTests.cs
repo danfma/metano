@@ -59,8 +59,8 @@ public class SignalCompositionTests
         );
 
         var output = result["program.ts"];
-        var expected = TranspileHelper.ReadExpected("signal-composition.ts");
-        await Assert.That(output).IsEqualTo(expected);
+
+        await TranspileHelper.AssertGolden("signal-composition.ts", output);
 
         // Erased types: no Signal / ISignalSetter declaration files, no wrapper.
         await Assert.That(result.ContainsKey("signal.ts")).IsFalse();
@@ -81,8 +81,8 @@ public class SignalCompositionTests
         // count is a Func<T> → call; setCount is [JsCallable] → direct call,
         // both invocation forms (value + updater) lowered without `.Invoke`.
         await Assert.That(output).Contains("console.log(count());");
-        await Assert.That(output).Contains("setCount(count() + 1);");
-        await Assert.That(output).Contains("setCount((c: number) => c + 1);");
+        await Assert.That(output).Contains("setCount((count() + 1) | 0);");
+        await Assert.That(output).Contains("setCount((c: number) => (c + 1) | 0);");
         await Assert.That(output).DoesNotContain(".Invoke");
         await Assert.That(output).DoesNotContain(".invoke");
     }

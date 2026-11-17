@@ -20,10 +20,14 @@ public sealed partial class IrExpressionExtractor
     /// A constant operation that needs a reduction (<c>1u &lt;&lt; 31</c>,
     /// <c>~0u</c>) is the value Roslyn folded, which is already reduced.
     /// </summary>
-    private static IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
-        IntegerOverflowLowering.ReductionOf(operation) is { } reduction
+    private IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
+        ReductionOf(operation) is { } reduction
             ? FoldedOperatorConstant(operation) ?? reduction.Reduce(result)
             : result;
+
+    /// <summary>The reduction <paramref name="operation"/> needs on this target (<see cref="IntegerOverflowLowering.ReductionOf"/>).</summary>
+    private IntegerOverflowReduction? ReductionOf(IOperation? operation) =>
+        IntegerOverflowLowering.ReductionOf(operation, _context.NumericLowering);
 
     /// <summary>The literal of a built-in operator Roslyn folded to a numeric constant, or <c>null</c>.</summary>
     private static IrExpression? FoldedOperatorConstant(IOperation? operation) =>
@@ -53,7 +57,7 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix
     )
     {
-        if (IntegerOverflowLowering.ReductionOf(_semantic.GetOperation(node)) is not { } reduction)
+        if (ReductionOf(_semantic.GetOperation(node)) is not { } reduction)
             return null;
 
         var stepOperator = StepOperatorOf(op);

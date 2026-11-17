@@ -43,7 +43,7 @@ export class SourceOrderCalls {
   static record(): number {
     const rec = (($arg1, $arg0) => new Rec($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
 
-    return rec.a * 10 + rec.b;
+    return (Math.imul(rec.a, 10) + rec.b) | 0;
   }
 
   static baseInitializer(): number {
@@ -73,7 +73,7 @@ export class SourceOrderCalls {
   static makeOp(): Op {
     Trace.next("m");
 
-    return (f: number, d: number) => f * 10 + d;
+    return (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
   }
 
   static computedCallee(): number {
@@ -105,19 +105,19 @@ export class SourceOrderCalls {
   }
 
   static delegate(): number {
-    const op = (f: number, d: number) => f * 10 + d;
+    const op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
     return (($arg1, $arg0) => op($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
   }
 
   static delegateInvoke(): number {
-    const op = (f: number, d: number) => f * 10 + d;
+    const op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
     return (($arg1, $arg0) => op($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
   }
 
   static funcDelegate(): number {
-    const fn = (f: number, d: number) => f * 10 + d;
+    const fn = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
     return (($arg1, $arg0) => fn($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
   }
@@ -139,13 +139,13 @@ export class SourceOrderCalls {
   }
 
   static lambdaArgument(e: Engine): number {
-    return (($arg2, $arg1, $arg0) => e.fold($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("q"), (x: number) => x + 1);
+    return (($arg2, $arg1, $arg0) => e.fold($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("q"), (x: number) => (x + 1) | 0);
   }
 
   static plainObject(): number {
     const dto = (($arg1, $arg0) => ({ f: $arg0, d: $arg1 }))(Trace.next("p"), Trace.next("q"));
 
-    return dto.f * 10 + dto.d;
+    return (Math.imul(dto.f, 10) + dto.d) | 0;
   }
 
   static emit(): number {
@@ -198,7 +198,7 @@ import { Trace } from "./trace";
 export class Holder {
   auto: number = 3;
 
-  field: Op = (f: number, d: number) => f * 10 + d;
+  field: Op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
   constructor() { }
 
@@ -213,7 +213,7 @@ export class Holder {
   get fn(): Op {
     Trace.next("g");
 
-    return (f: number, d: number) => f * 10 + d;
+    return (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
   }
 
   get target(): Engine {
@@ -267,7 +267,7 @@ export class Chained {
     if (typeof args[0] === "symbol" && args[0] === Chained.byChainedFD) {
       const f = args[1] as number;
       const d = args[2] as number;
-      this.total = f * 10 + d;
+      this.total = (Math.imul(f, 10) + d) | 0;
 
       return;
     }
@@ -279,7 +279,7 @@ export class Chained {
       {
         const f = __chain0Arg1;
         const d = __chain0Arg0;
-        this.total = f * 10 + d;
+        this.total = (Math.imul(f, 10) + d) | 0;
       }
 
       return;
@@ -288,7 +288,7 @@ export class Chained {
     if (args.length === 2 && isInt32(args[0]) && isInt32(args[1])) {
       const f = args[0] as number;
       const d = args[1] as number;
-      this.total = f * 10 + d;
+      this.total = (Math.imul(f, 10) + d) | 0;
 
       return;
     }
@@ -300,7 +300,7 @@ export class Chained {
       {
         const f = __chain0Arg1;
         const d = __chain0Arg0;
-        this.total = f * 10 + d;
+        this.total = (Math.imul(f, 10) + d) | 0;
       }
 
       return;

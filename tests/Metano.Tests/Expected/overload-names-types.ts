@@ -5,7 +5,7 @@ export class Names {
   constructor() { }
 
   addXY(x: number, y: number): number {
-    return x + y;
+    return (x + y) | 0;
   }
 
   addP(p: Point): number {

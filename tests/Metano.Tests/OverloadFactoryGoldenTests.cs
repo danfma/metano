@@ -213,9 +213,10 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["int-box.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-generic-closed.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-factory-generic-closed.ts",
+            result["int-box.ts"]
+        );
     }
 
     [Test]
@@ -481,9 +482,7 @@ public class OverloadFactoryGoldenTests
 
         var outputs = string.Join("\n", result["a.ts"], result["b.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-static-init-cycle.ts"));
+        await TranspileHelper.AssertGolden("overload-static-init-cycle.ts", outputs);
     }
 
     [Test]

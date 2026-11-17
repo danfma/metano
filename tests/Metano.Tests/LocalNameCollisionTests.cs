@@ -35,7 +35,7 @@ public class LocalNameCollisionTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const total$1 = 10;");
-        await Assert.That(output).Contains("return total$1 + total;");
+        await Assert.That(output).Contains("return (total$1 + total) | 0;");
         await Assert.That(output).DoesNotContain("const total = 10;");
     }
 
@@ -59,7 +59,7 @@ public class LocalNameCollisionTests
 
         await Assert.That(output).Contains("const total = 1;");
         await Assert.That(output).Contains("const total$1 = 2;");
-        await Assert.That(output).Contains("return total + total$1;");
+        await Assert.That(output).Contains("return (total + total$1) | 0;");
     }
 
     [Test]
@@ -84,7 +84,7 @@ public class LocalNameCollisionTests
         // still-referenced outer local), keeping the outer Factor reads as
         // plain `factor` — the wrong-value bug of #398.
         await Assert.That(output).Contains("const factor = 3;");
-        await Assert.That(output).Contains("factor$1: number) => factor$1 * factor");
+        await Assert.That(output).Contains("factor$1: number) => Math.imul(factor$1, factor)");
     }
 
     [Test]
@@ -107,7 +107,7 @@ public class LocalNameCollisionTests
 
         // Chosen policy: every inner binding that collides with a visible
         // outer emitted name is renamed, read or not (simpler, still correct).
-        await Assert.That(output).Contains("factor$1: number) => factor$1 + 1");
+        await Assert.That(output).Contains("factor$1: number) => (factor$1 + 1) | 0");
         await Assert.That(output).Contains("scale(factor)");
     }
 
@@ -134,7 +134,7 @@ public class LocalNameCollisionTests
 
         await Assert.That(output).Contains("let total = 0;");
         await Assert.That(output).Contains("const total$1 of items");
-        await Assert.That(output).Contains("total += total$1;");
+        await Assert.That(output).Contains("total = (total + total$1) | 0;");
         await Assert.That(output).Contains("return total;");
     }
 
@@ -188,7 +188,7 @@ public class LocalNameCollisionTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("return total + total$1;");
+        await Assert.That(output).Contains("return (total + total$1) | 0;");
         await Assert.That(output).DoesNotContain("total + total;");
     }
 
@@ -240,7 +240,7 @@ public class LocalNameCollisionTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("static add(a: number, a$1: number): number");
-        await Assert.That(output).Contains("return a + a$1;");
+        await Assert.That(output).Contains("return (a + a$1) | 0;");
     }
 
     [Test]
@@ -285,7 +285,7 @@ public class LocalNameCollisionTests
 
         await Assert.That(output).Contains("const default_ = 1;");
         await Assert.That(output).Contains("default$1 = 2;");
-        await Assert.That(output).Contains("return default_ + default$1;");
+        await Assert.That(output).Contains("return (default_ + default$1) | 0;");
     }
 
     [Test]
@@ -312,9 +312,9 @@ public class LocalNameCollisionTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("let total = 0;");
-        await Assert.That(output).Contains("total++;");
+        await Assert.That(output).Contains("total = (total + 1) | 0;");
         await Assert.That(output).Contains("total$1 = 1;");
-        await Assert.That(output).Contains("return total + total$1;");
+        await Assert.That(output).Contains("return (total + total$1) | 0;");
     }
 
     [Test]
@@ -370,7 +370,7 @@ public class LocalNameCollisionTests
 
         await Assert.That(output).Contains("const t = 1;");
         await Assert.That(output).Contains("const t$1 = 2;");
-        await Assert.That(output).Contains("r += t$1;");
+        await Assert.That(output).Contains("r = (r + t$1) | 0;");
     }
 
     [Test]
@@ -402,7 +402,7 @@ public class LocalNameCollisionTests
         // Each case label's bindings are wrapped in their own block, so
         // sibling sections keep the same emitted name.
         await Assert.That(output.Split("const total").Length - 1).IsEqualTo(2);
-        await Assert.That(output).Contains("r += total;");
+        await Assert.That(output).Contains("r = (r + total) | 0;");
         await Assert.That(output).DoesNotContain("$1");
     }
 
@@ -466,7 +466,7 @@ public class LocalNameCollisionTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("const total = 1;");
-        await Assert.That(output).Contains("const total = value + 1;");
+        await Assert.That(output).Contains("const total = (value + 1) | 0;");
         await Assert.That(output).DoesNotContain("$1");
     }
 
@@ -489,8 +489,8 @@ public class LocalNameCollisionTests
 
         // The promoted parameter lowers to the private `_total` field, so
         // its reads never share an emitted name with the body local.
-        await Assert.That(output).Contains("const total = this._total + 1;");
-        await Assert.That(output).Contains("return total + this._total;");
+        await Assert.That(output).Contains("const total = (this._total + 1) | 0;");
+        await Assert.That(output).Contains("return (total + this._total) | 0;");
         await Assert.That(output).DoesNotContain("$1");
     }
 
@@ -546,9 +546,9 @@ public class LocalNameCollisionTests
         // One map per constructor declaration: the initializer's lambda and
         // the body's local both yield to the parameter, each in its own
         // scope, so they take consecutive suffixes.
-        await Assert.That(output).Contains("total$1: number) => total$1 + total");
+        await Assert.That(output).Contains("total$1: number) => (total$1 + total) | 0");
         await Assert.That(output).Contains("total$2 = 2;");
-        await Assert.That(output).Contains("total += total$2;");
+        await Assert.That(output).Contains("total = (total + total$2) | 0;");
     }
 
     [Test]
@@ -564,7 +564,7 @@ public class LocalNameCollisionTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("total$1: number) => total$1 + total");
+        await Assert.That(output).Contains("total$1: number) => (total$1 + total) | 0");
     }
 
     [Test]
@@ -580,7 +580,7 @@ public class LocalNameCollisionTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("total$1: number) => total$1 + total");
+        await Assert.That(output).Contains("total$1: number) => (total$1 + total) | 0");
     }
 
     [Test]
@@ -601,7 +601,7 @@ public class LocalNameCollisionTests
             """
         )["calc.ts"];
 
-        await Assert.That(output).Contains("x$1: number) => x$1 + x");
+        await Assert.That(output).Contains("x$1: number) => (x$1 + x) | 0");
     }
 
     [Test]
@@ -644,7 +644,7 @@ public class LocalNameCollisionTests
 
         // The initializer runs inside the constructor, where `total` is the
         // constructor parameter: the lambda parameter yields to it.
-        await Assert.That(output).Contains("this.f = (total$1: number) => total$1 + total;");
+        await Assert.That(output).Contains("this.f = (total$1: number) => (total$1 + total) | 0;");
     }
 
     [Test]
@@ -660,7 +660,9 @@ public class LocalNameCollisionTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("this.g = (total$1: number) => total$1 * total;");
+        await Assert
+            .That(output)
+            .Contains("this.g = (total$1: number) => Math.imul(total$1, total);");
     }
 
     [Test]
@@ -681,7 +683,9 @@ public class LocalNameCollisionTests
         // A parameter a method also reads is captured into `_total`, so the
         // initializer reads the field; the lambda parameter still yields,
         // since the walk sees the constructor parameter in scope.
-        await Assert.That(output).Contains("this.f = (total$1: number) => total$1 + this._total;");
+        await Assert
+            .That(output)
+            .Contains("this.f = (total$1: number) => (total$1 + this._total) | 0;");
     }
 
     [Test]
@@ -703,7 +707,7 @@ public class LocalNameCollisionTests
         // is its own root and its lambda parameter keeps its name.
         await Assert
             .That(output)
-            .Contains("static f: (arg: number) => number = (total: number) => total + 1;");
+            .Contains("static f: (arg: number) => number = (total: number) => (total + 1) | 0;");
     }
 
     [Test]
@@ -846,7 +850,7 @@ public class LocalNameCollisionTests
         await Assert.That(program).Contains("const app = 1;");
         await Assert.That(program).Contains("const app$1 = 2;");
         await Assert.That(program).Contains("return app$1;");
-        await Assert.That(program).Contains("console.log(f() + app);");
+        await Assert.That(program).Contains("console.log((f() + app) | 0);");
         await Assert.That(program).Contains("export { app };");
         await Assert.That(diagnostics.Any(d => d.Code is "MS0006" or "MS0003")).IsFalse();
     }
@@ -901,7 +905,7 @@ public class LocalNameCollisionTests
 
         await Assert.That(output).Contains("let total = 0;");
         await Assert.That(output).Contains("for (const x of xs) {");
-        await Assert.That(output).Contains("total += x;");
+        await Assert.That(output).Contains("total = (total + x) | 0;");
         await Assert.That(output).DoesNotContain("$1");
     }
 
@@ -999,11 +1003,7 @@ public class LocalNameCollisionTests
             "primary-collisions.ts"
         ];
 
-        await Assert
-            .That(output)
-            .IsEqualTo(
-                TranspileHelper.ReadExpected("primary-constructor-initializer-collisions.ts")
-            );
+        await TranspileHelper.AssertGolden("primary-constructor-initializer-collisions.ts", output);
     }
 
     [Test]

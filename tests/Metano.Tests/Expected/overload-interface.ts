@@ -12,11 +12,11 @@ export class Sq implements IShape {
   constructor() { }
 
   areaWH(w: number, h: number): number {
-    return w * h;
+    return Math.imul(w, h);
   }
 
   areaS(side: number): number {
-    return side * side;
+    return Math.imul(side, side);
   }
 
   area(w: number, h: number): number;
@@ -41,11 +41,11 @@ export class Plot implements IShape {
   constructor() { }
 
   areaWH(w: number, h: number): number {
-    return w * h;
+    return Math.imul(w, h);
   }
 
   areaS(s: number): number {
-    return s * s;
+    return Math.imul(s, s);
   }
 
   areaBig(big: boolean): number {
@@ -94,7 +94,7 @@ export class Both implements IA, IB {
   constructor() { }
 
   gA(x: number): number {
-    return x + 1;
+    return (x + 1) | 0;
   }
 
   gB(x: number): number {

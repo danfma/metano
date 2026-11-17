@@ -4,7 +4,7 @@ export class Amount {
   constructor(readonly value: number) { }
 
   doubled(): number {
-    return this.value * 2;
+    return Math.imul(this.value, 2);
   }
 
   static fromValue(value: number): Amount {

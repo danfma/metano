@@ -153,7 +153,7 @@ export function uIntWithByte(a: number, b: number): number {
 }
 
 export function uIntMix(a: number, b: number): number {
-  return ((((a ^ a >>> 16) >>> 0 << 5) >>> 0 | b >>> 27) >>> 0 ^ ~b >>> 0) >>> 0;
+  return (((a ^ a >>> 16) << 5 | b >>> 27) ^ ~b) >>> 0;
 }
 
 export function uIntLiftedOr(a: number | null, b: number | null): number | null {
@@ -178,7 +178,7 @@ export function uIntFieldCompound(start: number, mask: number): number {
   flags.value = (flags.value << 1) >>> 0;
   flags.value = (flags.value ^ mask) >>> 0;
   flags.value >>>= 3;
-  flags.value = (flags.value & ~mask >>> 0) >>> 0;
+  flags.value = (flags.value & ~mask) >>> 0;
 
   return flags.value;
 }

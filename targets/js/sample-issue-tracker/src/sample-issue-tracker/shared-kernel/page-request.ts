@@ -17,7 +17,7 @@ export class PageRequest {
   }
 
   get skip(): number {
-    return (this.safeNumber - 1) * this.safeSize;
+    return Math.imul(this.safeNumber - 1, this.safeSize);
   }
 
   equals(other: any): boolean {

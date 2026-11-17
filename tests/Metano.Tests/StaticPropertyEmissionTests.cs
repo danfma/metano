@@ -30,7 +30,6 @@ public class StaticPropertyEmissionTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("static-properties.ts");
-        await Assert.That(result["settings.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("static-properties.ts", result["settings.ts"]);
     }
 }

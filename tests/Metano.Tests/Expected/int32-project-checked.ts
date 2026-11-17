@@ -18,7 +18,7 @@ export class Project {
   }
 
   wrapped(a: number, b: number): number {
-    return a + b;
+    return (a + b) | 0;
   }
 
   kept(x: number): number {

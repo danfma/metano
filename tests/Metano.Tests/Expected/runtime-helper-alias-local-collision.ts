@@ -4,6 +4,6 @@ export class Divider {
   constructor() { }
 
   static div(intDiv: number, b: number): number {
-    return intDiv$rt(intDiv + b, 2);
+    return intDiv$rt((intDiv + b) | 0, 2);
   }
 }

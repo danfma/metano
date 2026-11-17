@@ -57,7 +57,7 @@ export class Geometry {
         break;
       }
 
-      total += x.value;
+      total = (total + x.value) | 0;
       cursor = x.next;
     }
     cursor = head;
@@ -68,7 +68,7 @@ export class Geometry {
         break;
       }
 
-      total += x.value * 10;
+      total = (total + Math.imul(x.value, 10)) | 0;
       cursor = x.next;
     }
 
@@ -82,7 +82,7 @@ export class Geometry {
       let n: number;
 
       if (typeof a === "number" && (n = a, true)) {
-        total += n;
+        total = (total + n) | 0;
       }
     }
 
@@ -90,7 +90,7 @@ export class Geometry {
       let n: number;
 
       if (typeof b === "number" && (n = b, true)) {
-        total += n * 100;
+        total = (total + Math.imul(n, 100)) | 0;
       }
     }
 
@@ -108,6 +108,6 @@ export class Geometry {
     let first: number;
     let rest: number[] | null;
 
-    return values != null && values.length >= 1 && (first = values[0]!, true) && (rest = values.slice(1), true) ? first + rest.length : -1;
+    return values != null && values.length >= 1 && (first = values[0]!, true) && (rest = values.slice(1), true) ? (first + rest.length) | 0 : -1;
   }
 }

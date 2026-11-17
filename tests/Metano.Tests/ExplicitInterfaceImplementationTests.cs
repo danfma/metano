@@ -71,9 +71,11 @@ public class ExplicitInterfaceImplementationTests
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Contracts + Person);
 
         await Assert.That(diagnostics).IsEmpty();
-        await Assert
-            .That(files["person.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("explicit-interface-implementation.ts"));
+
+        await TranspileHelper.AssertGolden(
+            "explicit-interface-implementation.ts",
+            files["person.ts"]
+        );
     }
 
     [Test]

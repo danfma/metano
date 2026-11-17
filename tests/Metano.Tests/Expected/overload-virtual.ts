@@ -34,11 +34,11 @@ export class Partial extends Base {
   }
 
   override addX(x: number): number {
-    return super.addX(x) * 2;
+    return Math.imul(super.addX(x), 2);
   }
 
   twice(x: number): number {
-    return super.addX(x) + this.addX(x);
+    return (super.addX(x) + this.addX(x)) | 0;
   }
 }
 
@@ -50,11 +50,11 @@ export class Full extends Base {
   }
 
   override addX(x: number): number {
-    return x + 1;
+    return (x + 1) | 0;
   }
 
   override addS(s: string): number {
-    return super.addS(s) + 1;
+    return (super.addS(s) + 1) | 0;
   }
 }
 
@@ -91,7 +91,7 @@ export class Ledger {
   }
 
   private addS(s: string): number {
-    return s.length + 1000;
+    return (s.length + 1000) | 0;
   }
 
   add(x: number): number;

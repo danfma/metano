@@ -69,7 +69,7 @@ public sealed partial class IrExpressionExtractor
                 or IrBinaryOp.BooleanXor;
 
     private bool NeedsOverflowReduction(AssignmentExpressionSyntax assign) =>
-        IntegerOverflowLowering.ReductionOf(_semantic.GetOperation(assign)) is not null;
+        ReductionOf(_semantic.GetOperation(assign)) is not null;
 
     /// <summary>
     /// The value <c>target op= right</c> stores: the binary form over the

@@ -110,9 +110,7 @@ public class CollectionExpressionTests
             .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
             .IsEmpty();
 
-        await Assert
-            .That(result["shelf.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("collection-expressions.ts"));
+        await TranspileHelper.AssertGolden("collection-expressions.ts", result["shelf.ts"]);
     }
 
     /// <summary>

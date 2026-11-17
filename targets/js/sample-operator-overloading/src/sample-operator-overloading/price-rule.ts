@@ -116,7 +116,7 @@ export class PriceRule {
   static sumAmounts(...amounts: number[]): number {
     let total = 0;
     for (const amount of amounts) {
-      total += amount;
+      total = (total + amount) | 0;
     }
 
     return total;

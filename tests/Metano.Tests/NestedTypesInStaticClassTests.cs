@@ -81,8 +81,10 @@ public class NestedTypesInStaticClassTests
     {
         var result = TranspileHelper.Transpile(ShotScheduleSource);
 
-        var expected = TranspileHelper.ReadExpected("nested-types-static-class.ts");
-        await Assert.That(result["shot-schedule.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "nested-types-static-class.ts",
+            result["shot-schedule.ts"]
+        );
     }
 
     [Test]

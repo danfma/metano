@@ -303,7 +303,7 @@ public class LinqUnimplementedOverloadTests
         await Assert
             .That(files["calls.ts"])
             .Contains(
-                "return linq((() => {\n      throw new Error(\"Unsupported expression: UnloweredLinqCall\");\n    })(), select((x: number) => x * 2));"
+                "return linq((() => {\n      throw new Error(\"Unsupported expression: UnloweredLinqCall\");\n    })(), select((x: number) => Math.imul(x, 2)));"
             );
     }
 
@@ -374,7 +374,7 @@ public class LinqUnimplementedOverloadTests
 
         await Assert
             .That(files["calls.ts"])
-            .Contains("}), aggregate(0, (a: number, x: number) => a + x));");
+            .Contains("}), aggregate(0, (a: number, x: number) => (a + x) | 0));");
     }
 
     /// <summary>
@@ -423,7 +423,7 @@ public class LinqUnimplementedOverloadTests
         await Assert
             .That(files["calls.ts"])
             .Contains(
-                "return linq(q, toMap((x: number) => x + 1, (x: number) => x * 2, {\n      tree: {\n        kind: \"binary\",\n        op: \"+\","
+                "return linq(q, toMap((x: number) => (x + 1) | 0, (x: number) => Math.imul(x, 2), {\n      tree: {\n        kind: \"binary\",\n        op: \"+\","
             );
     }
 

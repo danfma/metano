@@ -21,6 +21,6 @@ export class Shelf {
     const fromPairs = new Map<string, number>([] as Array<[string, number]>);
     const tuple = [1, "s"] as [number, string];
 
-    return empty.length + sized.length + copy.length + map.size + mapCopy.size + set.size + pair[1] + pair[0].length + fromPairs.size + tuple[0] + tuple[1].length + this._items.length + this._byName.size;
+    return (empty.length + sized.length + copy.length + map.size + mapCopy.size + set.size + pair[1] + pair[0].length + fromPairs.size + tuple[0] + tuple[1].length + this._items.length + this._byName.size) | 0;
   }
 }

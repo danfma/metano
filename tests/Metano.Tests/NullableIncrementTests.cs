@@ -18,8 +18,8 @@ public class NullableIncrementTests
             """
         );
 
-        await Assert.That(output).Contains("a = a == null ? null : a + 1;");
-        await Assert.That(output).Contains("a = a == null ? null : a - 1;");
+        await Assert.That(output).Contains("a = a == null ? null : (a + 1) | 0;");
+        await Assert.That(output).Contains("a = a == null ? null : (a - 1) | 0;");
     }
 
     [Test]
@@ -27,7 +27,7 @@ public class NullableIncrementTests
     {
         var output = Transpile("public static int? Bump(int? a) => ++a;");
 
-        await Assert.That(output).Contains("return a = a == null ? null : a + 1;");
+        await Assert.That(output).Contains("return a = a == null ? null : (a + 1) | 0;");
     }
 
     [Test]
@@ -38,7 +38,7 @@ public class NullableIncrementTests
         await Assert.That(output).Contains("(receiver$temp$0) => {");
         await Assert
             .That(output)
-            .Contains("a = receiver$temp$0 == null ? null : receiver$temp$0 + 1;");
+            .Contains("a = receiver$temp$0 == null ? null : (receiver$temp$0 + 1) | 0;");
         await Assert.That(output).Contains("return receiver$temp$0;");
         await Assert.That(output).Contains(")(a);");
     }
@@ -56,7 +56,7 @@ public class NullableIncrementTests
 
         await Assert
             .That(output)
-            .Contains("this.count = receiver$temp$0 == null ? null : receiver$temp$0 - 1;");
+            .Contains("this.count = receiver$temp$0 == null ? null : (receiver$temp$0 - 1) | 0;");
         await Assert.That(output).Contains(")(this.count);");
     }
 
@@ -76,13 +76,17 @@ public class NullableIncrementTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : receiver$temp$1 + 1)(this.items[receiver$temp$0] ?? null))(this.next());"
+                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : (receiver$temp$1 + 1) | 0)(this.items[receiver$temp$0] ?? null))(this.next());"
             );
         await Assert.That(output.Split("this.next()").Length).IsEqualTo(2);
     }
 
+    /// <summary>
+    /// A non-nullable <c>int</c> needs no null guard; its step stores the
+    /// wrapped value (spec 001 FR-074).
+    /// </summary>
     [Test]
-    public async Task Increment_OnNonNullableValue_KeepsTheNativeOperator()
+    public async Task Increment_OnNonNullableValue_StoresTheWrappedValue()
     {
         var output = Transpile(
             """
@@ -90,9 +94,9 @@ public class NullableIncrementTests
             """
         );
 
-        await Assert.That(output).Contains("a++;");
-        await Assert.That(output).Contains("++a;");
-        await Assert.That(output).Contains("return a--;");
+        await Assert.That(output).Contains("a = (a + 1) | 0;");
+        await Assert.That(output).Contains("return ((a = (a - 1) | 0) + 1) | 0;");
+        await Assert.That(output).DoesNotContain("== null");
     }
 
     [Test]
@@ -111,7 +115,7 @@ public class NullableIncrementTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : receiver$temp$1 + 2)(this.items[receiver$temp$0] ?? null))(this.next());"
+                "((receiver$temp$0) => this.items[receiver$temp$0] = ((receiver$temp$1) => receiver$temp$1 == null ? null : (receiver$temp$1 + 2) | 0)(this.items[receiver$temp$0] ?? null))(this.next());"
             );
         await Assert.That(output.Split("this.next()").Length).IsEqualTo(2);
     }
@@ -126,7 +130,7 @@ public class NullableIncrementTests
             """
         );
 
-        await Assert.That(output).Contains("return (a == null ? null : a + 1) ?? (() => {");
+        await Assert.That(output).Contains("return (a == null ? null : (a + 1) | 0) ?? (() => {");
         await Assert.That(output).Contains("Nullable object must have a value.");
         await Assert.That(output).Contains("return BigInt(a ?? (() => {");
     }

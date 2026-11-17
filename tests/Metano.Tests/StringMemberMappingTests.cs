@@ -296,7 +296,7 @@ public class StringMemberMappingTests
             .That(output)
             .Contains("return stringContains(s, \"a\", StringComparison.OrdinalIgnoreCase);");
 
-        await Assert.That(output).Contains("return s.indexOf(\"a\") + s.lastIndexOf(\"a\");");
+        await Assert.That(output).Contains("return (s.indexOf(\"a\") + s.lastIndexOf(\"a\")) | 0;");
         await Assert.That(output).Contains("import { StringComparison, ");
     }
 

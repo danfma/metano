@@ -1,7 +1,7 @@
 import { isInt32, isString } from "metano-runtime";
 
 export function twice(s: string): number {
-  return s.length * 2;
+  return Math.imul(s.length, 2);
 }
 
 export function plainInt32(x: number): number {

@@ -8,7 +8,7 @@ export class Shift {
   constructor() { }
 
   next(): number {
-    return this._cursor++;
+    return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;
   }
 
   left(l: bigint, n: number): bigint {
@@ -88,7 +88,7 @@ export class Shift {
   }
 
   narrow(i: number, n: number): number {
-    return i << n | i >> 2 | ((i >>> n) | 0);
+    return i << n | i >> 2 | i >>> n;
   }
 
   compound(l: bigint, n: number): bigint {
