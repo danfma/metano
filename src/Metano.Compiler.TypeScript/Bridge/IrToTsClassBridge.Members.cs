@@ -253,7 +253,7 @@ internal static partial class IrToTsClassBridge
     /// assign a read-only static property (TS2540).
     /// </summary>
     private static bool IsReadOnly(IrPropertyDeclaration prop) =>
-        prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit
+        (prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit)
         && prop.Semantics?.IsAssignedByStaticConstructor != true;
 
     /// <summary>

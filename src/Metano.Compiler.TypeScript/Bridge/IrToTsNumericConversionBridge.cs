@@ -67,10 +67,7 @@ internal static class IrToTsNumericConversionBridge
             return DecimalToBinaryFloatingPoint(to, value);
 
         if (IrNumericConversion.IsCharToFloatingPoint(from, to))
-            return new TsCallExpression(
-                new TsPropertyAccess(value, "charCodeAt"),
-                [new TsLiteral("0")]
-            );
+            return CharCode(value);
 
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
@@ -248,15 +245,14 @@ internal static class IrToTsNumericConversionBridge
                 value
             ),
             IrNumericKind.Decimal => RuntimeCall(Int64RuntimeHelpers.FromDecimal(isSigned), value),
-            IrNumericKind.Char => BigInt(
-                new TsCallExpression(
-                    new TsPropertyAccess(value, "charCodeAt"),
-                    [new TsLiteral("0")]
-                )
-            ),
+            IrNumericKind.Char => BigInt(CharCode(value)),
             _ => WidenedInteger(from, to, isChecked, value),
         };
     }
+
+    /// <summary>The UTF-16 code of a <c>char</c>, which is a one-unit string: <c>value.charCodeAt(0)</c>.</summary>
+    private static TsExpression CharCode(TsExpression value) =>
+        new TsCallExpression(new TsPropertyAccess(value, "charCodeAt"), [new TsLiteral("0")]);
 
     /// <summary>The helper that truncates a fraction into a <c>BigInteger</c> (FR-003), or <c>null</c>.</summary>
     private static string? BigIntegerFromFraction(IrNumericKind from) =>

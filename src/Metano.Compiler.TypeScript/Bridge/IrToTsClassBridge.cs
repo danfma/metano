@@ -121,7 +121,7 @@ internal static partial class IrToTsClassBridge
         {
             IrPrimitive.Int64 or IrPrimitive.UInt64 or IrPrimitive.BigInteger => SixtyFourBitZero(),
             IrPrimitive.Char => new TsStringLiteral("\0"),
-            IrPrimitive.Guid => new TsPropertyAccess(new TsRuntimeHelperReference("UUID"), "empty"),
+            IrPrimitive.Guid => new TsPropertyAccess(UuidRuntimeReference.Value(), "empty"),
             IrPrimitive.Decimal => new TsNewExpression(
                 IrToTsExpressionBridge.BclDecimalValueReference(),
                 [new TsStringLiteral("0")]
