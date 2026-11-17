@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -26,5 +27,15 @@ public static class TsGroupingPolicy
                 IrToTsRecordSynthesisBridge.WithMethodName,
                 FastPathSuffix
             )
+        );
+
+    /// <summary>
+    /// The name <paramref name="kind"/> is emitted under: the one map from a
+    /// synthesized member to its TypeScript name.
+    /// </summary>
+    public static string NameOf(IrSynthesizedValueMember kind) =>
+        Instance.NameOf(kind)
+        ?? throw new InvalidOperationException(
+            $"TypeScript names every synthesized member; {kind} has none."
         );
 }

@@ -14,6 +14,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class SynthesizedBranches
 {
+    /// <summary>The dispatcher's first argument, <c>args[0]</c>.</summary>
+    private static TsExpression Argument => OverloadArgumentShape.ArgumentAt(0);
+
     /// <summary>The branch tried before every checked branch.</summary>
     public static TsStatement First(
         IrMethodDeclaration synthesized,
@@ -120,8 +123,6 @@ internal static class SynthesizedBranches
             ],
             _ => [],
         };
-
-    private static TsExpression Argument => OverloadArgumentShape.ArgumentAt(0);
 
     /// <summary>
     /// <c>args[0]</c>, cast to the parameter of a user <c>Equals(object)</c>
