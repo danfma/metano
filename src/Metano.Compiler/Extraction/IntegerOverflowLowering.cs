@@ -64,8 +64,8 @@ internal static class IntegerOverflowLowering
                 kind,
                 binary.IsChecked,
                 rules,
-                IntegerValueRanges.Of(binary.LeftOperand),
-                IntegerValueRanges.Of(binary.RightOperand)
+                IntegerValueRanges.Of(binary.LeftOperand, rules),
+                IntegerValueRanges.Of(binary.RightOperand, rules)
             ),
         };
 
@@ -90,7 +90,7 @@ internal static class IntegerOverflowLowering
                 kind,
                 IsCheckedStore(compound),
                 rules,
-                IntegerValueRanges.Of(compound.Value)
+                IntegerValueRanges.Of(compound.Value, rules)
             ),
         };
 
@@ -125,7 +125,7 @@ internal static class IntegerOverflowLowering
                 kind,
                 increment.IsChecked,
                 rules,
-                BoundedCountingLoop.IsBoundedStep(increment)
+                BoundedCountingLoop.IsBoundedStep(increment, rules)
             ),
         };
 
@@ -142,7 +142,7 @@ internal static class IntegerOverflowLowering
                 kind,
                 unary.IsChecked,
                 rules,
-                IntegerValueRanges.Of(unary.Operand)
+                IntegerValueRanges.Of(unary.Operand, rules)
             ),
         };
 

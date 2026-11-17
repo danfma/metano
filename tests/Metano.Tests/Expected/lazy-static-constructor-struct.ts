@@ -18,7 +18,7 @@ export class Cell {
   get twice(): number {
     Cell.#$init();
 
-    return this.v * 2;
+    return Math.imul(this.v, 2);
   }
 
   get(): number {

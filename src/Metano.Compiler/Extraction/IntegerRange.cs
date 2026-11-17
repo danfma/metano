@@ -109,7 +109,7 @@ internal readonly record struct IntegerRange
     public static IntegerRange Of(IrNumericKind kind)
     {
         if (!kind.IsIntegerOrChar())
-            throw new ArgumentException($"'{kind}' is not an integer kind.", nameof(kind));
+            throw new ArgumentException($"'{kind}' is not an integer or char kind.", nameof(kind));
 
         var width = kind.BitWidth();
 

@@ -1,4 +1,5 @@
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -189,11 +190,7 @@ public sealed partial class IrExpressionExtractor
     ) =>
         target switch
         {
-            IrElementAccess { TargetType: IrMapTypeRef } => ReportUnsupported(
-                operation,
-                operation.Kind().ToString(),
-                $"'{operation}' on a dictionary entry is not supported."
-            ),
+            IrElementAccess { TargetType: IrMapTypeRef } => ReportDictionaryEntryStore(operation),
             _ when IrEvaluationTraits.IsReusableReceiver(target) => build(target),
             IrMemberAccess member => BindReceiverOnce(member.Target, receiver =>
                 build(member with { Target = receiver })
@@ -221,4 +218,25 @@ public sealed partial class IrExpressionExtractor
         IrExpression target,
         Func<IrExpression, IrExpression> compute
     ) => new(target, IrBinaryOp.Assign, compute(target));
+
+    /// <summary>
+    /// A reduced store on a dictionary entry: the read-modify-write cannot
+    /// read a missing key as C# does (it throws <c>KeyNotFoundException</c>),
+    /// and the native compound operator on <c>map.get(key)</c> is not valid
+    /// JavaScript, so MS0001 is an error that fails the build (spec 001
+    /// FR-074).
+    /// </summary>
+    private static IrUnsupportedExpression ReportDictionaryEntryStore(ExpressionSyntax operation)
+    {
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{operation}' on a dictionary entry is not supported.",
+                operation.GetLocation()
+            )
+        );
+
+        return new IrUnsupportedExpression(operation.Kind().ToString());
+    }
 }

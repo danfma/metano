@@ -17,13 +17,28 @@ namespace Metano.Compiler.Extraction;
 /// <c>i &lt;= e</c> when <c>e</c> ends below the type's maximum, and
 /// <c>i &gt;= e</c> when <c>e</c> starts above its minimum. The condition
 /// held before the body ran and <c>i</c> did not change since, so the step
-/// stays in range. A neutral fact of the C# program: every target may drop
-/// the reduction of the step.
+/// stays in range. The proof is a fact of the C# program; the target's
+/// <see cref="NumericLoweringRules.ReadsCollectionAndLoopRanges"/> decides
+/// whether it drops the reduction of the step (Dart keeps it: deferred
+/// after v3).
 /// </summary>
 internal static class BoundedCountingLoop
 {
-    public static bool IsBoundedStep(IIncrementOrDecrementOperation increment)
+    /// <summary>The step being proven: the counter, its direction, and the rules that read its bound.</summary>
+    private sealed record CountingStep(
+        ILocalSymbol Counter,
+        bool IsIncrement,
+        NumericLoweringRules Rules
+    );
+
+    public static bool IsBoundedStep(
+        IIncrementOrDecrementOperation increment,
+        NumericLoweringRules rules
+    )
     {
+        if (!rules.ReadsCollectionAndLoopRanges)
+            return false;
+
         if (
             increment
             is not {
@@ -42,11 +57,15 @@ internal static class BoundedCountingLoop
         if (!isCounter || IsWrittenOutsideStep(loop, step, counter, semantic))
             return false;
 
-        var isIncrement = increment.Kind is OperationKind.Increment;
+        var countingStep = new CountingStep(
+            counter,
+            increment.Kind is OperationKind.Increment,
+            rules
+        );
 
         return loop.Condition is { } condition
             && TopLevelConjuncts(semantic.GetOperation(condition))
-                .Any(conjunct => BoundsStep(conjunct, counter, isIncrement));
+                .Any(conjunct => BoundsStep(conjunct, countingStep));
     }
 
     private static bool IsDeclaredBy(
@@ -104,11 +123,13 @@ internal static class BoundedCountingLoop
 
     /// <summary>
     /// Whether <paramref name="conjunct"/> compares the bare
-    /// <paramref name="counter"/>, in its own type, with a bound that keeps
-    /// the step in range.
+    /// counter of <paramref name="step"/>, in its own type, with a bound that
+    /// keeps the step in range.
     /// </summary>
-    private static bool BoundsStep(IOperation conjunct, ILocalSymbol counter, bool isIncrement)
+    private static bool BoundsStep(IOperation conjunct, CountingStep step)
     {
+        var counter = step.Counter;
+
         if (
             conjunct
             is not IBinaryOperation
@@ -128,10 +149,9 @@ internal static class BoundedCountingLoop
             return false;
 
         if (IsCounter(left, counter))
-            return Bounds(comparison.OperatorKind, right, counter, isIncrement);
+            return Bounds(comparison.OperatorKind, right, step);
 
-        return IsCounter(right, counter)
-            && Bounds(Mirrored(comparison.OperatorKind), left, counter, isIncrement);
+        return IsCounter(right, counter) && Bounds(Mirrored(comparison.OperatorKind), left, step);
     }
 
     private static bool IsCounter(IOperation operand, ILocalSymbol counter) =>
@@ -139,17 +159,12 @@ internal static class BoundedCountingLoop
         && SymbolEqualityComparer.Default.Equals(local, counter);
 
     /// <summary>Whether <c>counter op bound</c> keeps the step in range.</summary>
-    private static bool Bounds(
-        BinaryOperatorKind operatorKind,
-        IOperation bound,
-        ILocalSymbol counter,
-        bool isIncrement
-    )
+    private static bool Bounds(BinaryOperatorKind operatorKind, IOperation bound, CountingStep step)
     {
-        var type = IntegerValueRanges.OfType(counter.Type);
-        var values = IntegerValueRanges.Of(bound);
+        var type = IntegerValueRanges.OfType(step.Counter.Type, step.Rules);
+        var values = IntegerValueRanges.Of(bound, step.Rules);
 
-        return (operatorKind, isIncrement) switch
+        return (operatorKind, step.IsIncrement) switch
         {
             (BinaryOperatorKind.LessThan, true) => true,
             (BinaryOperatorKind.GreaterThan, false) => true,

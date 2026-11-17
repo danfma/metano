@@ -588,7 +588,7 @@ public class NarrowIntegerLoweringTests
             .That(diagnostic.Message)
             .IsEqualTo($"'{expression}' on a dictionary entry is not supported.");
 
-        await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
 
         await Assert
             .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
