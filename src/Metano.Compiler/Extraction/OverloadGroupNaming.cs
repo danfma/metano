@@ -55,7 +55,8 @@ internal static class OverloadGroupNaming
         SuffixesOf(
             symbols
                 .Select(symbol => new PinnedOverload(symbol, OverloadSuffixPin.Of(symbol, target)))
-                .ToList()
+                .ToList(),
+            target
         );
 
     /// <summary>
@@ -64,14 +65,18 @@ internal static class OverloadGroupNaming
     /// <see cref="IrNamingSpelling"/>, or the suffix its pin carries (FR-005).
     /// A set the climb cannot separate reports <c>MS0003</c> at its later
     /// overload (FR-024); an invalid pin reports <c>MS0003</c> at its
-    /// attribute and pins nothing.
+    /// attribute and pins nothing. A conversion group is named by
+    /// <see cref="ConversionNaming"/> for <paramref name="target"/>.
     /// </summary>
-    public static IReadOnlyList<string> SuffixesOf(IReadOnlyList<PinnedOverload> overloads)
+    public static IReadOnlyList<string> SuffixesOf(
+        IReadOnlyList<PinnedOverload> overloads,
+        TargetLanguage? target
+    )
     {
         var symbols = overloads.Select(overload => overload.Symbol).ToList();
 
         if (symbols.All(symbol => symbol.MethodKind == MethodKind.Conversion))
-            return ConversionSuffixesOf(symbols);
+            return ConversionSuffixesOf(symbols, target);
 
         var suffixes = OverloadNamePolicy.Compute(
             overloads.Select(SignatureOf).ToList(),
@@ -162,16 +167,17 @@ internal static class OverloadGroupNaming
 
     /// <summary>
     /// A conversion operator group's suffixes: each conversion's own name
-    /// candidate (<see cref="ConversionNaming"/>, baseline FR-078), the one rule
-    /// that names conversions. No target reads them — TypeScript names each
-    /// conversion by its <see cref="IrMethodSemantics.ConversionName"/> and
-    /// Dart its primary by its <c>[Name]</c> or C# name — so they carry no
-    /// target's pin and report nothing: the declaration reports a dead end
+    /// candidate for <paramref name="target"/> (<see cref="ConversionNaming"/>,
+    /// baseline FR-078), the one rule that names conversions, so the suffix is
+    /// the <see cref="IrMethodSemantics.ConversionName"/> the target emits —
+    /// its <c>[Name]</c> pin and the emitted names of the converted types
+    /// included. They report nothing: the declaration reports a dead end
     /// (<see cref="ConversionNaming.ReportIfDeadEnd"/>).
     /// </summary>
     private static IReadOnlyList<string> ConversionSuffixesOf(
-        IReadOnlyList<IMethodSymbol> symbols
-    ) => symbols.Select(symbol => ConversionNaming.Of(symbol, target: null)!.Candidate).ToList();
+        IReadOnlyList<IMethodSymbol> symbols,
+        TargetLanguage? target
+    ) => symbols.Select(symbol => ConversionNaming.Of(symbol, target)!.Candidate).ToList();
 
     private static OverloadGroupKind KindOf(IReadOnlyList<IMethodSymbol> symbols)
     {

@@ -2,9 +2,10 @@ namespace Metano.Tests;
 
 /// <summary>
 /// Value-object patterns on <c>[Branded]</c> structs (issue #245, ADR-0005):
-/// reading the wrapped value collapses to the receiver, identity unwrap
-/// conversions are not emitted, and static overload groups go through the
-/// overload dispatcher instead of silently dropping siblings.
+/// reading the wrapped value collapses to the receiver, every conversion is a
+/// companion function (the identity unwrap included, baseline FR-078), and
+/// static overload groups go through the overload dispatcher instead of
+/// silently dropping siblings.
 /// </summary>
 public class BrandedValueObjectTests
 {
@@ -35,7 +36,7 @@ public class BrandedValueObjectTests
         """;
 
     [Test]
-    public async Task Companion_DispatchesStaticOverloadsAndSkipsUnwrapConversion()
+    public async Task Companion_DispatchesStaticOverloadsAndDeclaresUnwrapConversion()
     {
         var result = TranspileHelper.Transpile(EpisodeSlugSource);
 
@@ -198,11 +199,11 @@ public class BrandedValueObjectTests
     }
 
     [Test]
-    public async Task Companion_KeepsWrapConversion_WhenGroupedWithUnwrap()
+    public async Task Companion_DeclaresEachConversionOfAGroup_WithNoDispatcher()
     {
         // Both conversions are `op_Implicit`, so the extractor folds them into
-        // one overload group; dropping the unwrap leaves a single wrap
-        // function, not a dispatcher.
+        // one overload group; each is its own function, the identity unwrap
+        // included, and no dispatcher joins them.
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations;
@@ -224,7 +225,10 @@ public class BrandedValueObjectTests
             .That(output)
             .Contains("export function __implicitFromString(raw: string): ScriptWordId");
 
-        await Assert.That(output).DoesNotContain("self: ScriptWordId");
+        await Assert
+            .That(output)
+            .Contains("export function __implicitToString(self: ScriptWordId): string");
+
         await Assert.That(output).DoesNotContain("...args");
     }
 

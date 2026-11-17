@@ -902,9 +902,14 @@ the rows of `tests/BclReference`.
   dispatcher keeps only the overloads whose left operand is the type.
 - A `[Branded]` / `[InlineWrapper]` companion uses the same names (`Qty.__add`,
   `Qty.__implicitFromInt32`, and exported per-overload fast paths such as
-  `Ticks.__addTicksInt64`) instead of `op_Addition` / `op_Implicit`. Its conversion to the
-  underlying primitive is skipped as the identity only when its body returns the wrapped value
-  (`=> self.Value`); any other body is emitted.
+  `Ticks.__addTicksInt64`) instead of `op_Addition` / `op_Implicit`. Every conversion is
+  emitted, the identity unwrap to the underlying primitive included
+  (`Slug.__implicitToString(s)` returns `s`), so a package that sees the type only through
+  metadata names the same function.
+- A conversion spells a converted type by its emitted name (`[Name("Cash")] class Money` →
+  `__implicitFromCash`).
+- A derived class that redeclares an operator or a conversion of its emitted base declares its
+  static (and instance form) `override` (`static override __toInt32`), which fixes `TS4114`.
 - The statics of a generic type re-declare its type parameters (`static __add<T>(...)`),
   which fixes `TS2302`.
 

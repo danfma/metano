@@ -98,11 +98,11 @@ internal sealed class TsCompanionPlan
 
         foreach (var primary in statics)
         {
-            var overloads = SurvivingOverloadsOf(primary);
+            var overloads = OverloadsOf(primary);
 
             if (primary.Semantics.ConversionName is not null)
                 groups.AddRange(overloads.Select(ConversionFunctionOf));
-            else if (overloads.Count > 0)
+            else
                 groups.Add(GroupOf(overloads, names));
         }
 
@@ -162,20 +162,16 @@ internal sealed class TsCompanionPlan
 
     /// <summary>
     /// A static method with the overload siblings folded onto
-    /// <see cref="IrMethodDeclaration.Overloads"/>, minus the identity unwrap
-    /// conversions: a conversion that only returns the wrapped value
-    /// (<c>implicit operator string(UserId self) =&gt; self.Value</c>) is the
-    /// identity once the wrapper lowers to <c>primitive &amp; { __brand }</c>,
-    /// so the companion skips it. The core decides it from the body
-    /// (<see cref="IrMethodSemantics.ReturnsWrappedValue"/>, baseline FR-078):
-    /// a conversion out of the wrapper with any other body is a function like
-    /// any other.
+    /// <see cref="IrMethodDeclaration.Overloads"/>. Every conversion is kept,
+    /// the identity unwrap included
+    /// (<c>implicit operator string(UserId self) =&gt; self.Value</c> is
+    /// <c>__implicitToString(self) { return self; }</c>): a consumer that sees
+    /// the type only through metadata cannot read the body, so it calls the
+    /// conversion's static whatever the body is, and the producer declares it
+    /// (baseline FR-078).
     /// </summary>
-    private static List<IrMethodDeclaration> SurvivingOverloadsOf(IrMethodDeclaration primary) =>
-        new[] { primary with { Overloads = null } }
-            .Concat(primary.Overloads ?? [])
-            .Where(method => !method.Semantics.ReturnsWrappedValue)
-            .ToList();
+    private static List<IrMethodDeclaration> OverloadsOf(IrMethodDeclaration primary) =>
+        new[] { primary with { Overloads = null } }.Concat(primary.Overloads ?? []).ToList();
 
     /// <summary>
     /// A conversion is its own function, named like a class's conversion

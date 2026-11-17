@@ -125,3 +125,21 @@ public record LZero(int V)
 
     public LZero With() => new LZero(V + 1);
 }
+
+[Branded]
+public readonly record struct LSlug(string Value)
+{
+    public static implicit operator string(LSlug s) => s.Value;
+}
+
+public class LConvBase
+{
+    public int V;
+
+    public LConvBase(int v)
+    {
+        V = v;
+    }
+
+    public static explicit operator int(LConvBase b) => b.V;
+}

@@ -51,12 +51,4 @@ public sealed record IrMethodSemantics(
     /// method.
     /// </summary>
     public bool TakesDeclaringTypeFirst { get; init; }
-
-    /// <summary>
-    /// Whether a conversion operator of a <c>[Branded]</c> type only returns
-    /// its operand's wrapped value, as its own type (<c>=&gt; self.Value</c>):
-    /// the identity once the wrapper lowers to the branded primitive (baseline
-    /// FR-078). Decided from the body, never from the return type alone.
-    /// </summary>
-    public bool ReturnsWrappedValue { get; init; }
 }

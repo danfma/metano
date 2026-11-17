@@ -65,6 +65,7 @@ internal sealed class TsOverloadClaimPass
             _constructors,
             _methods,
             new TsClaimSides(SideOf(Inherited, _statics), SideOf(InheritedInstances, _instances)),
+            new TsClaimSides(Inherited, InheritedInstances),
             _findings
         );
     }

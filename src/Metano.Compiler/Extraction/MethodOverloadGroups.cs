@@ -278,7 +278,9 @@ internal static class MethodOverloadGroups
             .Concat(namingMembers.Select(member => PinnedOverloadOf(group, member, policy.Target)))
             .ToList();
 
-        var memberSuffixes = OverloadGroupNaming.SuffixesOf(visible).Skip(inherited.Count);
+        var memberSuffixes = OverloadGroupNaming
+            .SuffixesOf(visible, policy.Target)
+            .Skip(inherited.Count);
 
         foreach (var (member, suffix) in namingMembers.Zip(memberSuffixes))
         {
