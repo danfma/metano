@@ -656,17 +656,26 @@ public class ValueEqualityJoinTests
     [Test]
     public async Task Dart_JoinsNothing()
     {
-        var (files, _) = TranspileHelper.TranspileDart(
+        var (files, diagnostics) = TranspileHelper.TranspileDart(
             """
             using Metano.Annotations;
 
             [Transpile]
             public record RTol(double V) { public bool Equals(RTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
+
+            [Transpile]
+            public struct E4 : System.IEquatable<int>, System.IEquatable<string> { public int X; bool System.IEquatable<int>.Equals(int o) => o == X; bool System.IEquatable<string>.Equals(string? o) => o == "s"; public override int GetHashCode() => X; }
             """
         );
 
         await Assert.That(files.Count).IsGreaterThan(0);
         await Assert.That(string.Concat(files.Values)).DoesNotContain("ByValue");
+
+        // The value-equality warnings are TypeScript's: Dart names no synthesized member.
+
+        await Assert
+            .That(diagnostics.Where(d => d.Message.Contains("is not emitted: its name")))
+            .IsEmpty();
     }
 
     /// <summary>
@@ -1037,7 +1046,14 @@ public class ValueEqualityJoinTests
             .ToList();
 
         await Assert.That(warnings.Count).IsEqualTo(2);
-        await Assert.That(warnings.All(w => w.Message.Contains("is not emitted"))).IsTrue();
+
+        await Assert
+            .That(
+                warnings.All(w =>
+                    w.Message.Contains("held by the synthesized 'Equals(object)' of 'E4'")
+                )
+            )
+            .IsTrue();
     }
 
     /// <summary>
@@ -1077,5 +1093,115 @@ public class ValueEqualityJoinTests
                 )
             )
             .IsFalse();
+    }
+
+    /// <summary>
+    /// A typed replacing <c>Equals</c> renamed by its own <c>[Name]</c> beside a
+    /// method whose <c>[Name]</c> spells <c>equals</c> sits outside the joined group,
+    /// so the synthesized member could not reach it: <c>MS0001</c>, never a
+    /// dispatcher that loops (FR-039).
+    /// </summary>
+    [Test]
+    public async Task RenamedReplacingEqualsBesideANamedEquals_ReportsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct C6 : System.IEquatable<C6> { public int X; [Name("equalsValue")] public bool Equals(C6 o) => o.X == X; public override int GetHashCode() => X; [Name("equals")] public bool Same(string s) => s == "c" + X; }
+
+            [Transpile]
+            public record C7(int X) { [Name("sameX")] public virtual bool Equals(C7? o) => o is not null && o.X == X; public override int GetHashCode() => X; [Name("equals")] public bool Same(string s) => s == "c" + X; }
+            """
+        );
+
+        var errors = diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error).ToList();
+
+        await Assert.That(errors.Count).IsEqualTo(2);
+
+        await Assert
+            .That(errors.All(e => e.Message.Contains("replaces the synthesized equality")))
+            .IsTrue();
+    }
+
+    /// <summary>
+    /// The spelled-alike error covers every replacing declaration spelled
+    /// <c>equals</c> beside a <c>[Name("equals")]</c> method: a struct's implicit
+    /// <c>IEquatable&lt;S&gt;.Equals(S)</c> and a record's own <c>Equals(R)</c>.
+    /// </summary>
+    [Test]
+    public async Task ReplacingEqualsBesideANamedEquals_ReportsSpelledAlike()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct C2 : System.IEquatable<C2> { public int X; public bool Equals(C2 o) => o.X == X; public override int GetHashCode() => X; [Name("equals")] public bool Same(string s) => s == "c" + X; }
+
+            [Transpile]
+            public record C3(int X) { public virtual bool Equals(C3? o) => o is not null && o.X == X; public override int GetHashCode() => X; [Name("equals")] public bool Same(string s) => s == "c" + X; }
+            """
+        );
+
+        var errors = diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error).ToList();
+
+        await Assert.That(errors.Count).IsEqualTo(2);
+        await Assert.That(errors.All(e => e.Message.Contains("already declare"))).IsTrue();
+    }
+
+    /// <summary>
+    /// The dropped-IEquatable warning covers record structs, and names a user
+    /// method with the implementation's parameters when that method holds the name.
+    /// </summary>
+    [Test]
+    public async Task DroppedEquatableWarning_CoversRecordStructsAndUserClaimants()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record struct W1(int V) : System.IEquatable<int>, System.IEquatable<string> { bool System.IEquatable<int>.Equals(int o) => o == V; bool System.IEquatable<string>.Equals(string? o) => o == "s"; }
+
+            [Transpile]
+            public struct W2 : System.IEquatable<W2> { public int X; public int Noise; public bool Equals(W2 o) => o.X == X; bool System.IEquatable<W2>.Equals(W2 o) => o.Noise == Noise; public override int GetHashCode() => 1; }
+            """
+        );
+
+        var warnings = diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature
+                && d.Severity == MetanoDiagnosticSeverity.Warning
+            )
+            .Select(d => d.Message)
+            .ToList();
+
+        await Assert.That(warnings.Count(m => m.Contains("of 'W1'"))).IsEqualTo(2);
+
+        await Assert
+            .That(warnings.Single(m => m.StartsWith("'W2.")).Contains("held by 'W2.Equals("))
+            .IsTrue();
+    }
+
+    /// <summary>Two unknown type refs are conservatively not equivalent.</summary>
+    [Test]
+    public async Task TypeRefEquivalence_TreatsUnknownTypesAsDifferent()
+    {
+        await Assert
+            .That(
+                IrTypeRefEquivalence.AreEquivalent(new IrUnknownTypeRef(), new IrUnknownTypeRef())
+            )
+            .IsFalse();
+
+        await Assert
+            .That(
+                IrTypeRefEquivalence.AreEquivalent(
+                    new IrGroupingTypeRef(
+                        new IrTypeParameterRef("K"),
+                        new IrPrimitiveTypeRef(IrPrimitive.String)
+                    ),
+                    new IrGroupingTypeRef(
+                        new IrTypeParameterRef("K"),
+                        new IrPrimitiveTypeRef(IrPrimitive.String)
+                    )
+                )
+            )
+            .IsTrue();
     }
 }
