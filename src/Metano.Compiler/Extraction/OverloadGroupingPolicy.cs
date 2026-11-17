@@ -51,4 +51,13 @@ public sealed record OverloadGroupingPolicy(
 
     /// <summary>The name <paramref name="member"/> joins a group under; <c>null</c> when it joins none.</summary>
     public string? NameOf(IrSynthesizedValueMember member) => ValueEqualityNames?.NameOf(member);
+
+    /// <summary>
+    /// The stable fast path of <paramref name="member"/> once it joined a group
+    /// (DECIDED-34): its name and the pinned suffix; <c>null</c> when it joins none.
+    /// </summary>
+    public string? FastPathNameOf(IrSynthesizedValueMember member) =>
+        ValueEqualityNames is { } names && names.NameOf(member) is { } name
+            ? name + names.FastPathSuffix
+            : null;
 }

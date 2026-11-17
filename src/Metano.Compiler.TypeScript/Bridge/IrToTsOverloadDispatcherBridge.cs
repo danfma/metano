@@ -213,14 +213,10 @@ public static class IrToTsOverloadDispatcherBridge
         var inherited = group.Primary.InheritedOverloads ?? [];
         var branches = OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters);
 
-        var signatures = DistinctSignatures(
-            group,
-            [
-                .. OverloadDispatchOrder.Sort(inherited, m => m.Parameters),
-                .. OverloadDispatchOrder.Sort(SignatureMembersOf(group), m => m.Parameters),
-            ],
-            typeOverrides
-        );
+        var signatures = OverloadDispatchOrder
+            .Sort(inherited, m => m.Parameters)
+            .Concat(OverloadDispatchOrder.Sort(SignatureMembersOf(group), m => m.Parameters))
+            .ToList();
 
         var plan = PlanOverloadGroup(signatures, typeOverrides, sort: false);
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
@@ -266,49 +262,32 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     /// <summary>
-    /// The overload signatures of a group holding a synthesized member, each
-    /// printed once — a user <c>HashCode()</c> beside the synthesized one would
-    /// repeat <c>hashCode(): number;</c>. Every other group keeps each overload's
-    /// signature, as before.
-    /// </summary>
-    private static IReadOnlyList<IrMethodDeclaration> DistinctSignatures(
-        IrMethodGroup group,
-        IReadOnlyList<IrMethodDeclaration> signatures,
-        IrToTsTypeOverrides? typeOverrides
-    ) =>
-        group.Synthesized is null
-            ? signatures
-            : signatures.DistinctBy(method => SignatureKeyOf(method, typeOverrides)).ToList();
-
-    /// <summary>
-    /// What tells two overload signatures apart in TypeScript: their parameter
-    /// types (optional or not) and return type, as printed.
-    /// </summary>
-    private static string SignatureKeyOf(
-        IrMethodDeclaration method,
-        IrToTsTypeOverrides? typeOverrides
-    )
-    {
-        var parameters = SignatureParameters(method, typeOverrides)
-            .Select(parameter =>
-                (parameter.Optional ? "?" : "")
-                + (parameter.Type is null ? "" : Printer.RenderType(parameter.Type))
-            );
-
-        var returns = Printer.RenderType(IrToTsTypeMapper.Map(method.ReturnType, typeOverrides));
-
-        return $"({string.Join(",", parameters)}){returns}";
-    }
-
-    /// <summary>
     /// The members whose signatures the dispatcher declares besides the
     /// inherited ones: every member of a declared dispatcher, the ones a type
     /// adds to an inherited dispatcher.
     /// </summary>
     private static IEnumerable<IrMethodDeclaration> SignatureMembersOf(IrMethodGroup group) =>
-        group.DispatcherKind is IrDispatcherKind.Declared
-            ? group.Members
-            : group.Members.Where(member => !IrMethodGroup.IsOverride(member));
+        (
+            group.DispatcherKind is IrDispatcherKind.Declared
+                ? group.Members
+                : group.Members.Where(member => !IrMethodGroup.IsOverride(member))
+        ).Where(member => !RepeatsSynthesizedSignature(member, group.Synthesized));
+
+    /// <summary>
+    /// A shadowed overload with the synthesized member's parameter and return
+    /// types (a user <c>HashCode()</c> beside the synthesized one): its signature
+    /// would repeat the synthesized member's.
+    /// </summary>
+    private static bool RepeatsSynthesizedSignature(
+        IrMethodDeclaration member,
+        IrMethodDeclaration? synthesized
+    ) =>
+        synthesized is not null
+        && member.IsShadowedBySynthesized
+        && member.ReturnType == synthesized.ReturnType
+        && member
+            .Parameters.Select(parameter => parameter.Type)
+            .SequenceEqual(synthesized.Parameters.Select(parameter => parameter.Type));
 
     /// <summary>
     /// The body of a dispatcher whose group holds a synthesized value-equality
