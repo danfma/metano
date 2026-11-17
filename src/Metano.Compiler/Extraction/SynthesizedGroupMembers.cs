@@ -100,6 +100,7 @@ internal static class SynthesizedGroupMembers
         }
 
         var namingMember = NamingMemberOf(joined, target);
+        var detachedReplacement = DetachedReplacementOf(type, spelled, kind, policy);
 
         return remaining
             .Select(group =>
@@ -117,6 +118,7 @@ internal static class SynthesizedGroupMembers
                                 .Where(other => !IsSameGroup(other, joined))
                                 .Select(FirstMethodOf),
                         ],
+                        DetachedReplacement = detachedReplacement,
                     }
                     : group
             )
@@ -156,6 +158,22 @@ internal static class SynthesizedGroupMembers
         )
             return;
 
+        if (group.DetachedReplacement is { } detached)
+        {
+            ExtractionDiagnostics.Report(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"'{type.Name}.{detached.Name}' replaces the synthesized equality of "
+                        + $"'{type.Name}', but its [Name] keeps it out of the overloads of "
+                        + $"'{group.Name}', which take the synthesized member under '{name}'; "
+                        + "the synthesized member could not reach it. Remove the [Name] or "
+                        + $"rename '{group.Name}' (spec 013 FR-039).",
+                    detached.Locations.FirstOrDefault()
+                )
+            );
+        }
+
         foreach (var method in group.SpelledAlike)
         {
             ExtractionDiagnostics.Report(
@@ -170,6 +188,25 @@ internal static class SynthesizedGroupMembers
             );
         }
     }
+
+    /// <summary>
+    /// The typed replacing <c>Equals</c> the synthesized member routes to when it
+    /// sits outside the joined group — renamed by its own <c>[Name]</c> beside a
+    /// method whose <c>[Name]</c> spells <c>equals</c> —, where the route cannot
+    /// reach a fast path and would loop through the dispatcher; <c>null</c>
+    /// otherwise, and when its group is spelled alike, which reports it already.
+    /// </summary>
+    private static IMethodSymbol? DetachedReplacementOf(
+        INamedTypeSymbol type,
+        IReadOnlyList<MethodOverloadGroup> spelled,
+        IrSynthesizedValueMember kind,
+        OverloadGroupingPolicy policy
+    ) =>
+        kind is IrSynthesizedValueMember.Equals
+        && ValueEqualityShapes.RoutedEqualsOf(type, policy) is { } routed
+        && !spelled.Any(group => group.MemberOf(routed) is not null)
+            ? routed
+            : null;
 
     private static IMethodSymbol FirstMethodOf(MethodOverloadGroup group) =>
         group.DeclaredMembers.First().Symbol;
