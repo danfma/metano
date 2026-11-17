@@ -471,7 +471,8 @@ public class ValueEqualityJoinTests
     /// (implicitly or explicitly) or a transpiled interface's <c>Equals(S)</c>
     /// replaces the synthesized equality (FR-045): alone it stays the type's
     /// <c>equals</c>, which <c>EqualityComparer&lt;S&gt;.Default</c> calls; beside
-    /// another overload the synthesized member routes to it. No diagnostic.
+    /// another overload the synthesized member routes to it. Only a transpiled
+    /// interface's replacement without an <c>override Equals(object)</c> warns.
     /// </summary>
     [Test]
     public async Task InterfaceImplementingStructEquals_ReplacesTheSynthesizedEquality()
@@ -499,14 +500,13 @@ public class ValueEqualityJoinTests
         );
 
         await Assert
-            .That(
-                diagnostics.Where(d =>
-                    d.Code
-                        is DiagnosticCodes.AmbiguousRuntimeDispatch
-                            or DiagnosticCodes.UnsupportedFeature
-                )
-            )
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsEmpty();
+
+        // Only SE, whose equality a transpiled interface alone replaces, is warned.
+        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch);
+
+        await Assert.That(warning.Message).Contains("'SE.Equals");
 
         await Assert.That(files["s-eq-only.ts"]).Contains("equals(o: SEqOnly): boolean {");
         await Assert.That(files["s-eq-only.ts"]).DoesNotContain("ByValue");
@@ -864,5 +864,128 @@ public class ValueEqualityJoinTests
 
         await Assert.That(error.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
         await Assert.That(error.Message).Contains("'N9.SameB' is emitted as 'equals'");
+    }
+
+    /// <summary>
+    /// A struct's explicit <c>System.IEquatable&lt;T&gt;.Equals(T)</c> that
+    /// <c>ValueType.Equals</c> holds the name of is kept for a target naming the
+    /// synthesized <c>Equals</c>: when <c>T</c> is another type it joins as an
+    /// ordinary checked overload (FR-045).
+    /// </summary>
+    [Test]
+    public async Task ExplicitEquatableOfAnotherType_JoinsAsACheckedOverload()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct SOtherX : System.IEquatable<int> { public int X; public SOtherX(int x) { X = x; } bool System.IEquatable<int>.Equals(int o) => o == X; public override int GetHashCode() => X; }
+
+            [Transpile]
+            public struct SP { public int X; }
+
+            [Transpile]
+            public struct SOS : System.IEquatable<SP> { public int X; bool System.IEquatable<SP>.Equals(SP o) => o.X == X; }
+
+            [Transpile]
+            public record struct RSX(int V, int N) : System.IEquatable<int> { bool System.IEquatable<int>.Equals(int o) => o == V; }
+            """
+        );
+
+        await Assert.That(files["s-other-x.ts"]).Contains("equalsO(o: number): boolean {");
+
+        await Assert
+            .That(files["s-other-x.ts"])
+            .Contains("if (args.length === 1 && isInt32(args[0])) {");
+
+        await Assert.That(files["sos.ts"]).Contains("equalsO(o: SP): boolean {");
+        await Assert.That(files["rsx.ts"]).Contains("equalsO(o: number): boolean {");
+    }
+
+    /// <summary>
+    /// A struct's explicit <c>IEquatable&lt;S&gt;.Equals</c> beside a public
+    /// <c>Equals</c> overload with other parameters joins that overload's group,
+    /// and the synthesized member routes to it.
+    /// </summary>
+    [Test]
+    public async Task ExplicitEquatableBesideAnOverload_IsRouted()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct SD : System.IEquatable<SD> { public int X; public int Noise; public bool Equals(SD o, int k) => k > 0; bool System.IEquatable<SD>.Equals(SD o) => o.Noise == Noise; public override int GetHashCode() => 1; }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(files["sd.ts"]).Contains("equalsO(o: SD): boolean {");
+
+        await Assert
+            .That(files["sd.ts"])
+            .Contains("return other instanceof SD ? this.equalsO(other) : false;");
+    }
+
+    /// <summary>
+    /// Only <c>System.IEquatable&lt;S&gt;</c> or a transpiled interface's
+    /// <c>Equals(S)</c> replaces a struct's equality (FR-045): an <c>[Ignore]</c>d or
+    /// <c>[External]</c> interface's does not, so the overload is shadowed. A
+    /// transpiled interface's replaces it with an <c>MS0063</c> warning, since
+    /// sets, dictionaries and record fields reach it where .NET compares fields.
+    /// </summary>
+    [Test]
+    public async Task StructEqualsReplacement_FollowsTheInterface()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Ignore]
+            public interface IEqI<T> { bool Equals(T o); }
+
+            [Metano.Annotations.TypeScript.External]
+            public interface IEqE<T> { bool Equals(T o); }
+
+            [Transpile]
+            public interface IEqT<T> { bool Equals(T o); }
+
+            [Transpile]
+            public struct SIgn : IEqI<SIgn> { public int X; public bool Equals(SIgn o) => o.X == X; }
+
+            [Transpile]
+            public struct SExt : IEqE<SExt> { public int X; public bool Equals(SExt o) => o.X == X; }
+
+            [Transpile]
+            public struct STr : IEqT<STr> { public int X; public bool Equals(STr o) => o.X == X; }
+            """
+        );
+
+        var warnings = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch)
+            .Select(d => d.Message)
+            .ToList();
+
+        await Assert.That(warnings.Count(m => m.Contains("cannot be told apart"))).IsEqualTo(2);
+
+        await Assert
+            .That(warnings.Single(m => m.Contains("replaces the value equality")))
+            .Contains("'STr.Equals");
+    }
+
+    /// <summary>
+    /// <see cref="IrTypeRefEquivalence"/> compares type arguments, tuple elements
+    /// and array elements structurally, which record equality does not.
+    /// </summary>
+    [Test]
+    public async Task TypeRefEquivalence_IsStructural()
+    {
+        IrTypeRef Generic() =>
+            new IrNamedTypeRef("Box", TypeArguments: [new IrPrimitiveTypeRef(IrPrimitive.Int32)]);
+
+        IrTypeRef Array() => new IrArrayTypeRef(Generic());
+
+        await Assert.That(Generic().Equals(Generic())).IsFalse();
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(Generic(), Generic())).IsTrue();
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(Array(), Array())).IsTrue();
+
+        await Assert
+            .That(IrTypeRefEquivalence.AreEquivalent(Generic(), new IrNamedTypeRef("Box")))
+            .IsFalse();
     }
 }
