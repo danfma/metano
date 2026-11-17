@@ -124,6 +124,18 @@ public static class IntToDecimalProbes
         return post + "|" + pre + "|" + d + "|" + arr[0] + "|" + i + "|" + n;
     }
 
+    public static string NegativeZero()
+    {
+        int a = -4,
+            b = 2;
+        decimal m = a % b;
+        decimal p = a * 0;
+        int? n = a % b;
+        decimal? q = n;
+
+        return m + "|" + p + "|" + q + "|" + (m + 0m);
+    }
+
     public static string Nullables()
     {
         int? n = 4;

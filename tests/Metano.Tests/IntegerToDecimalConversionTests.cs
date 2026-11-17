@@ -69,7 +69,7 @@ public class IntegerToDecimalConversionTests
         var result = TranspileHelper.Transpile(Source);
 
         await TranspileHelper.AssertGolden("integer-to-decimal.ts", result["uses.ts"]);
-        await Assert.That(result["cash.ts"]).Contains("this.a = new Decimal(cents);");
+        await Assert.That(result["cash.ts"]).Contains("this.a = new Decimal(cents + 0);");
     }
 
     [Test]
@@ -78,5 +78,29 @@ public class IntegerToDecimalConversionTests
         var (files, _) = DartTranspileHelper.Transpile(Source);
 
         await TranspileHelper.AssertGolden("integer-to-decimal.dart", files["uses.dart"]);
+    }
+
+    [Test]
+    public async Task AJsNegativeZero_BecomesAZeroDecimal()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Zero
+            {
+                public static decimal Remainder(int a, int b) => a % b;
+
+                public static decimal? Lifted(int? n) => n;
+
+                public static decimal Constant() => (decimal)(short)-3;
+            }
+            """
+        );
+
+        var output = result["zero.ts"];
+
+        await Assert.That(output).Contains("return new Decimal(a % b + 0);");
+        await Assert.That(output).Contains("return n == null ? null : new Decimal(n + 0);");
+        await Assert.That(output).DoesNotContain("-3 + 0");
     }
 }

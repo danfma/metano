@@ -80,7 +80,7 @@ internal static class IrToTsNumericConversionBridge
             return CharFromCode(isChecked, value);
 
         if (IrNumericConversion.IsIntegerToDecimal(from, to))
-            return DecimalOf(value);
+            return DecimalOfInteger(value);
 
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
@@ -313,9 +313,19 @@ internal static class IrToTsNumericConversionBridge
             : RenderConversion(CodeUnit, to, isChecked, code);
 
     /// <summary>
-    /// A <c>Decimal</c> of an integer <c>number</c> of 32 bits or fewer,
-    /// exact for every such value: <c>new Decimal(value)</c> (FR-080).
+    /// A <c>Decimal</c> of an integer <c>number</c> of 32 bits or fewer, exact
+    /// for every such value (FR-080): <c>new Decimal(value + 0)</c>. A JS
+    /// integer can be <c>-0</c> (<c>-4 % 2</c>, <c>-4 * 0</c>), which a C#
+    /// integer never is, and the <c>Decimal</c> keeps its sign
+    /// (<c>"" + new Decimal(-0)</c> is <c>"-0"</c>); adding <c>0</c> turns it
+    /// into <c>0</c> and changes no other value. A literal needs nothing.
     /// </summary>
+    private static TsExpression DecimalOfInteger(TsExpression value) =>
+        DecimalOf(
+            value is TsLiteral ? value : new TsBinaryExpression(value, "+", new TsLiteral("0"))
+        );
+
+    /// <summary>A <c>Decimal</c> of a <c>number</c>: <c>new Decimal(value)</c>.</summary>
     private static TsExpression DecimalOf(TsExpression value) =>
         new TsNewExpression(IrToTsExpressionBridge.BclDecimalValueReference(), [value]);
 

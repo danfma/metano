@@ -1172,7 +1172,7 @@ Product requirements added after the migration (normative; each one is traced by
   their nullable forms, MUST become spec 012's numeric conversion node, through the one rule
   that already decides the 64-bit ones: an `IsIntegerToDecimal` clause in
   `NumericLoweringRules.NeedsImplicitNode` and `IsLoweredExplicitly`, next to the `char` clause
-  of FR-071, gated by the target fact `NumericLoweringRules.LowersDecimalValues` (a target that
+  of FR-071, gated by the target fact `NumericLoweringRules.ComputesDecimalByMethods` (a target that
   computes with a `decimal` as a runtime value whose operators are methods; false for Dart).
   It applies wherever
   Roslyn reports the conversion: an initializer or assignment, an argument, a `return`, an
@@ -1189,7 +1189,11 @@ Product requirements added after the migration (normative; each one is traced by
   `++` / `--` (`d = d.plus(new Decimal("1"))`, a used postfix value yielding the value read
   before the store) go through the read-modify-write that binds the target's receiver and index
   once; today the native operator coerces the `Decimal` to a string or a number (`a += d`
-  concatenated, `a++` stored a `number`). A lifted `decimal?` comparison with an integer operand
+  concatenated, `a++` stored a `number`). Not covered (known gap): `++` / `--` on a `decimal`
+  extension property or extension indexer, which keep their own lowering. A JS integer can
+  hold `-0` (`-4 % 2`, `a * 0`), which no C# integer does and which a `Decimal` would keep
+  (`"" + new Decimal(-0)` is `"-0"`, .NET prints `0`), so TypeScript converts a non-literal
+  operand as `new Decimal(x + 0)`. A lifted `decimal?` comparison with an integer operand
   (`d == i`) reads the converted operand once (no second `new Decimal`). Dart prints the
   operand, as for every `decimal` endpoint, and keeps its compound operators (byte-identical).
   Traced by the "Implicit integer-to-decimal conversions" row of the feature-support matrix.
