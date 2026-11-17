@@ -553,7 +553,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         // Generate index.ts barrel files per namespace folder
-        var indexFiles = BarrelFileGenerator.Generate(files, NamespaceBarrels);
+        var indexFiles = BarrelFileGenerator.Generate(
+            files,
+            NamespaceBarrels,
+            InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
+        );
+
         files.AddRange(indexFiles);
 
         // Detect cyclic #/ imports between the generated files and emit MS0005
@@ -1141,7 +1146,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsMethodMember method => ContainsJsxInStatements(method.Body),
             TsGetterMember getter => ContainsJsxInStatements(getter.Body),
             TsSetterMember setter => ContainsJsxInStatements(setter.Body),
-            TsStaticBlock block => ContainsJsxInStatements(block.Body),
             TsFieldMember { Initializer: { } init } => ContainsJsxInExpression(init),
             _ => false,
         };
@@ -1393,7 +1397,34 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             group.Types.Add(type);
         }
 
-        return groups;
+        return groups.ConvertAll(group =>
+            group with
+            {
+                Types = [.. CoLocatedTypeOrder.BasesFirst(group.Types)],
+            }
+        );
+    }
+
+    /// <summary>
+    /// The module path (relative, without extension) every grouped type is emitted
+    /// to, the key the barrel orders its lines by.
+    /// </summary>
+    private IReadOnlyDictionary<INamedTypeSymbol, string> ModulesOf(
+        IEnumerable<TypeFileGroup> groups
+    )
+    {
+        var modules = new Dictionary<INamedTypeSymbol, string>(SymbolEqualityComparer.Default);
+
+        foreach (var group in groups)
+        {
+            var path = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName, false);
+            var module = Path.ChangeExtension(path, null).Replace('\\', '/');
+
+            foreach (var type in group.Types)
+                modules.TryAdd(type, module);
+        }
+
+        return modules;
     }
 
     private sealed record TypeFileGroup(

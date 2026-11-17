@@ -106,4 +106,8 @@ public enum IrExceptionArgumentRole
     /// (<c>ObjectDisposedException</c>); .NET appends
     /// <c>"Object name: 'X'."</c> on a new line.</summary>
     ObjectName,
+
+    /// <summary><c>fullTypeName</c>: the type whose initializer failed
+    /// (<c>TypeInitializationException</c>); .NET names it in the message.</summary>
+    TypeName,
 }

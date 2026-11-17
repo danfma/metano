@@ -28,6 +28,7 @@ const runtimes = ["bun", "node"];
 const options = parseArguments(process.argv.slice(2));
 const dotnetRows = options.liveDotnet || options.recordDotnet ? await runDotnet() : readRows("dotnet");
 const modules = findModules();
+const preloads = readPreloads();
 const rowsToCheck = filterRows(dotnetRows);
 const current = Object.fromEntries(
   await Promise.all(runtimes.map(async (runtime) => [runtime, await runRuntime(runtime)])),
@@ -172,6 +173,27 @@ function gapFor(row) {
   return gaps.find((gap) => (gap.prefix ? row.startsWith(gap.prefix) : gap.pattern === row));
 }
 
+// tools/preloads.txt: `<module> <preload module>...`, module paths relative to the transpiled
+// src/ without extension. The preloads are imported before the probe module, in order.
+function readPreloads() {
+  const file = join(toolsDir, "preloads.txt");
+  const entries = new Map();
+
+  if (!existsSync(file)) {
+    return entries;
+  }
+
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const [module, ...preloadModules] = line.trim().split(/\s+/);
+
+    if (module && !module.startsWith("#") && preloadModules.length > 0) {
+      entries.set(module, preloadModules);
+    }
+  }
+
+  return entries;
+}
+
 function filterRows(rows) {
   return options.filter ? new Map([...rows].filter(([row]) => options.filter.test(row))) : rows;
 }
@@ -250,10 +272,11 @@ async function runDotnet() {
 async function runModule(runtime, module) {
   const isNode = runtime === "node";
   const base = join(work, "probes", isNode ? "dist" : "src");
-  const file = join(base, `${module}${isNode ? ".js" : ".ts"}`);
+  const fileOf = (name) => join(base, `${name}${isNode ? ".js" : ".ts"}`);
+  const files = [fileOf(module), ...(preloads.get(module) ?? []).map(fileOf)];
   const args = isNode
-    ? ["--import", join(toolsDir, "node-extensionless.mjs"), join(toolsDir, "run-probes.mjs"), file]
-    : [join(toolsDir, "run-probes.mjs"), file];
+    ? ["--import", join(toolsDir, "node-extensionless.mjs"), join(toolsDir, "run-probes.mjs"), ...files]
+    : [join(toolsDir, "run-probes.mjs"), ...files];
   const result = await runProcess(runtime, args, work);
   const rows = parseRows(result.stdout);
 

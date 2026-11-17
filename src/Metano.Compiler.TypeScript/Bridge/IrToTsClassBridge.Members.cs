@@ -248,13 +248,13 @@ internal static partial class IrToTsClassBridge
     }
 
     /// <summary>
-    /// <c>get;</c> and <c>get; init;</c> map to a <c>readonly</c> member, unless the
-    /// static constructor writes it: the class's <c>static { }</c> block cannot
-    /// assign a read-only static property (TS2540).
+    /// <c>get;</c> and <c>get; init;</c> map to a <c>readonly</c> member. A static one
+    /// the static constructor writes keeps <c>readonly</c> here: the lazy type
+    /// initializer gives its accessor pair a private setter
+    /// (<see cref="LazyTypeInitializerLowering"/>).
     /// </summary>
     private static bool IsReadOnly(IrPropertyDeclaration prop) =>
-        (prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit)
-        && prop.Semantics?.IsAssignedByStaticConstructor != true;
+        prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit;
 
     /// <summary>
     /// Lowers an <see cref="IrMethodDeclaration"/> into a <see cref="TsMethodMember"/>.
@@ -402,9 +402,7 @@ internal static partial class IrToTsClassBridge
             name,
             tsType,
             initializer,
-            field.IsReadonly
-                && !field.IsAssignedByInitAccessor
-                && !field.IsAssignedByStaticConstructor,
+            field.IsReadonly && !field.IsAssignedByInitAccessor,
             Static: field.IsStatic,
             Accessibility: accessibility,
             DefinitelyAssigned: field.IsRequired,

@@ -92,3 +92,5 @@ Round2Probes.nullableText             none  a nullable bool or double prints tru
 Round2Probes.nullableTextNull         none  ToString() of a null nullable throws TypeError instead of printing an empty text
 Round4Probes.compoundIndexOnce        none  compound string concatenation onto null prints "null"
 Round4Probes.compoundReceiverOnce     none  compound string concatenation onto null prints "null"
+LazyDirectProbes.baseModuleFirst      none  importing the base module of a lazy static constructor cycle directly (not through the barrel) hits the extends TDZ; follow-up: automatic co-location of cycle members (FR-066 option C, to be filed)
+LazyFieldProbes.structDefaultDoesNotTrigger #291  `new S()` of a struct runs its declared constructor instead of the default value; the lazy static constructor still runs at the first instance method call

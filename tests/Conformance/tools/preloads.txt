@@ -1,0 +1,4 @@
+# Modules a probe module's process imports first: `<module> <preload module>...`, paths relative
+# to the transpiled src/ without extension (conformance.mjs, run-probes.mjs).
+# The lazy static constructor cycle loads only through its barrel (spec 001 FR-066, #681).
+conformance/lazy-barrel/lazy-barrel-probes conformance/lazy-barrel/index

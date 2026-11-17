@@ -46,8 +46,10 @@ public sealed record IrClassDeclaration(
     /// <summary>
     /// The body of the type's static constructor (<c>static C() { … }</c>),
     /// which C# runs after the static field initializers; <c>null</c> when the
-    /// type declares none. A target that can run code at type initialization
-    /// (a TypeScript <c>static { }</c> block) lowers it; any other reports it.
+    /// type declares none, and an empty list for an empty one (which still makes
+    /// .NET initialize the type at first use, not <c>beforefieldinit</c>). A
+    /// target that can run code at type initialization lowers it; any other
+    /// reports it.
     /// </summary>
     public IReadOnlyList<IrStatement>? StaticInitializer { get; init; }
 

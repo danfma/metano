@@ -87,6 +87,11 @@ public sealed class BclExceptionClasses
             IrExceptionArgumentRole.Message,
             IrExceptionArgumentRole.InnerException,
         ],
+        ["System.TypeInitializationException"] =
+        [
+            IrExceptionArgumentRole.TypeName,
+            IrExceptionArgumentRole.InnerException,
+        ],
     };
 
     private readonly IReadOnlyDictionary<string, IrBclExport> _exports;

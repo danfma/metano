@@ -147,9 +147,9 @@ public sealed record IrPropertyDeclaration(
 /// allows that write; a backend that lowers the accessor to a setter, which cannot
 /// write a read-only field, declares the field mutable.</param>
 /// <param name="IsAssignedByStaticConstructor">A <c>static readonly</c> field that the
-/// static constructor of its type writes. C# allows that write; a backend that lowers the
-/// constructor to a class initializer whose language rejects it declares the field
-/// mutable.</param>
+/// static constructor of its type writes. C# allows that write; a backend whose
+/// lowering of the constructor writes the field from outside its declaration keeps a
+/// way to write it.</param>
 /// <param name="IsCompileTimeConstant">Declared with the C# <c>const</c> modifier
 /// (Roslyn's <c>IFieldSymbol.IsConst</c>): implies <see cref="IsReadonly"/> (a C#
 /// <c>const</c> is read-only). Distinct from <see cref="IsConstant"/>, which is the
