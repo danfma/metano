@@ -597,7 +597,10 @@ Product requirements added after the migration (normative; each one is traced by
     `null` for a reference or nullable type, `0` / `0n` / `false` for a primitive. Every other
     default (a struct default `new S()`, a property read such as an enum's zero member `E.None` or
     `UUID.empty`) is assigned at the start of `#$init`, so a slot never runs a constructor, a guard
-    or a read of another module at class definition. Plan note: a `null` slot of a non-nullable
+    or a read of another module at class definition. A struct default `new S()` is spelled only for
+    a struct that declares no constructor, whose emitted constructor builds the default value and
+    so runs neither `S`'s guard nor its initializers; the same holds for a struct-typed instance
+    field's default. Plan note: a `null` slot of a non-nullable
     reference type is declared `T | null` (strict-mode valid) and its getter narrows it to `T`. A `static get name()` / `static set name(value)`
     pair calls `Name.#$init()` first. A read-only member has no setter. A `static readonly` field
     or get-only static property that the static constructor writes gets a `private` setter, so it
@@ -612,13 +615,22 @@ Product requirements added after the migration (normative; each one is traced by
     guard is the first constructor statement. A constructor dispatcher guards before branching. A class with a static constructor and no
     declared instance constructor gets one that carries the guard (in a derived class
     `constructor(...args) { D.#$init(); super(...args); }`).
-  - A struct runs the guard in a declared constructor, never in its default construction: the
-    emitted constructor guards only when called with arguments, unless the struct declares a
-    parameterless constructor. A struct with a static constructor declares its instance fields
-    without initializers (defaults only) and assigns its instance field initializers in the
-    constructor, after the guard, in textual order, so they never run before it; as in C#, a
-    default construction does not run them. Each of its instance methods and instance property
-    and indexer accessors starts with the guard (ECMA-335 I.8.9.5).
+  - A struct runs the guard, then its instance field and auto-property initializers, on every path
+    of the emitted constructor that runs a constructor it declares, whatever the number of
+    arguments (`new S(new int[0])` for `S(params int[] values)` runs both), and on no path that
+    builds its implicit default value, which runs no constructor: the whole constructor of a struct
+    that declares none, and the leading `args.length === 0` branch of a dispatcher (spec 013
+    FR-027), after which the prologue follows. A struct with a static constructor declares its
+    instance fields and auto-properties without initializers (defaults only) and assigns their
+    initializers in that prologue, after the guard, in textual order, so they never run before it.
+    Each of its instance methods and instance property and indexer accessors with a body starts
+    with the guard (ECMA-335 I.8.9.5). An instance auto-property is a TypeScript field, so reading
+    or writing it does not run the guard, as a field access does not in .NET; .NET calls its
+    accessor, which does (listed below).
+  - A static member whose TypeScript name is also the name of a slot's accessors (a private field
+    `count` beside a property `Count`, both `count`; two slotted members; a slotted member and a
+    `const`) is an `MS0001` error at that member, asking for a `[Name]` on one of them. Neither
+    member is dropped.
   - Accessors, `#$init` and every guard spell `Name.#x$` / `Name.#$init()`, never `this`:
     `Derived.x` reaches `Base`'s accessor with `this === Derived`.
 
@@ -645,8 +657,10 @@ Product requirements added after the migration (normative; each one is traced by
   file moves directly after its base (today it prints declaration order, which fails at load when
   the derived class comes first); existing goldens do not change.
 
-  Lowering boundary (TypeScript bridge): lazy versus eager is one per-class strategy, chosen once by
-  `IrClassDeclaration.StaticInitializer is not null`; the eager one is today's output. The lazy one
+  Lowering boundary (TypeScript bridge): lazy versus eager is one per-class strategy, chosen by one
+  rule (`TypeInitializerLowering.RunsLazily`: a class or struct emitted as a TypeScript class that
+  declares a static constructor), which the barrel order consumes too; the eager one is today's
+  output. The lazy one
   lowers static fields and auto-properties to slots and accessors, guards the constructor, emits
   `#$init` in place of the static block, and guards static user members in one pass after the class
   members are composed, selected by IR origin and `static` (not by TS name), so operators,
@@ -664,8 +678,12 @@ Product requirements added after the migration (normative; each one is traced by
     `next()`, not at the call.
   - Calls that do not reach an emitted member do not trigger it: `[Inline]`, `[Emit]` and
     BCL-mapped static methods, and a record's synthesized `==`.
-  - A struct that declares a parameterless constructor runs the guard when Metano spells its
-    default value as `new S()`.
+  - Where Metano spells a struct's default value as a call of a constructor the struct declares
+    (`new S()` for a struct that declares a parameterless constructor, or whose only declared
+    constructor TypeScript can call with no arguments, such as `S(params int[] values)`, #291), that
+    call runs the guard and the instance initializers, as it runs the initializers of a struct
+    without a static constructor.
+  - Reading or writing a struct's instance auto-property does not run the guard (it is a field).
   - Importing the base module directly (not through the barrel) while its static constructor
     constructs a derived class from another file still evaluates the derived class's `extends`
     clause before the base class exists (`ReferenceError`). Workaround: `[EmitInFile]` or the
@@ -682,8 +700,9 @@ Product requirements added after the migration (normative; each one is traced by
   - Existing defects found here, not fixed by this FR: `MS0005` misses an import used only in a
     static constructor; writing a base static through a derived name (`Derived.F = 5`) on a type
     without a static constructor creates a shadow property on the derived class; static events
-    are emitted as instance members (and so do not trigger it); a private static field `count`
-    and a static property `Count` clash on the TS name `count`.
+    are emitted as instance members (and so do not trigger it); on a type without a static
+    constructor, a private static field `count` and a static property `Count` still clash on the TS
+    name `count` (a duplicate declaration).
 
 - **FR-067** (dispatcher order and BCL-virtual groups, #677, extends FR-050): A dispatcher
   MUST try, among overloads of the same tier and arity, the one whose parameters all equal or
