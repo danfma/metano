@@ -155,6 +155,13 @@ internal sealed record MethodOverloadGroup(
     public IReadOnlyList<IMethodSymbol> SpelledAlike { get; init; } = [];
 
     /// <summary>
+    /// The typed replacing <c>Equals</c> this group's synthesized member routes to
+    /// although a <c>[Name]</c> keeps it in another group (FR-039): the class
+    /// extractor reports it as an error. <c>null</c> for every other group.
+    /// </summary>
+    public IMethodSymbol? DetachedReplacement { get; init; }
+
+    /// <summary>
     /// Whether the group's members are fast paths of a dispatched group: two
     /// or more, an inherited dispatcher, or one member anchored on a
     /// dispatched root.
