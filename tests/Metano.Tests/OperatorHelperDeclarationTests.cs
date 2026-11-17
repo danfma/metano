@@ -353,6 +353,29 @@ public class OperatorHelperDeclarationTests
         await TranspileHelper.AssertGolden("operator-helper-override.ts", files["der.ts"]);
     }
 
+    [Test]
+    public async Task AnIgnoredConversion_DeclaresNoStatic()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Vec
+            {
+                public int X;
+
+                [Ignore]
+                public static implicit operator System.Text.StringBuilder(Vec v) => new();
+
+                public static explicit operator int(Vec v) => v.X;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(files["vec.ts"]).DoesNotContain("StringBuilder");
+        await Assert.That(files["vec.ts"]).Contains("static __toInt32(v: Vec): number {");
+    }
+
     private static IReadOnlyList<string> CompanionFunctionNamesOf(Compilation compilation)
     {
         var type = compilation.GetTypeByMetadataName("Slug")!;

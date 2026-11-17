@@ -1097,7 +1097,11 @@ Product requirements added after the migration (normative; each one is traced by
   `override $add`; TS4114 under `noImplicitOverride`), the base read from metadata alike. So a conversion's name is a pure
   function of its symbol and a metadata-only reference computes the same one without running
   the producer's claim pass. `[Name("toInt")]` names that one conversion (`__toInt`), no longer
-  its group. A conversion declares no instance helper. The static helpers of a generic type
+  its group. Every conversion is declared, so one to a type the target neither emits nor maps
+  (`implicit operator System.Text.StringBuilder(Vec v)` →
+  `__implicitToStringBuilder(v: Vec): StringBuilder`) fails `tsc` with `TS2304`, where the old
+  rule emitted nothing for it; `[Ignore]` on that conversion declares no static (known
+  limitation). A conversion declares no instance helper. The static helpers of a generic type
   re-declare the type's type parameters with their constraints, as spec 013 FR-028 does for
   factories (`static __add<T>(b: Box<T>, n: number): Box<T>`,
   `static __toT<T>(b: Box<T>): T`), which fixes today's TS2302. A `[Branded]` /

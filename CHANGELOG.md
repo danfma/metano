@@ -914,6 +914,10 @@ the rows of `tests/BclReference`.
   metadata names the same function.
 - A conversion spells a converted type by its emitted name (`[Name("Cash")] class Money` →
   `__implicitFromCash`).
+- Every conversion is declared, so one to a type the target neither emits nor maps
+  (`implicit operator System.Text.StringBuilder(Vec v)`) now emits
+  `__implicitToStringBuilder(v: Vec): StringBuilder` and fails `tsc` with `TS2304`, where nothing
+  was emitted before; put `[Ignore]` on that conversion.
 - A derived class that redeclares an operator or a conversion of its emitted base declares its
   static (and instance form) `override` (`static override __toInt32`), which fixes `TS4114`.
 - The statics of a generic type re-declare its type parameters (`static __add<T>(...)`),
