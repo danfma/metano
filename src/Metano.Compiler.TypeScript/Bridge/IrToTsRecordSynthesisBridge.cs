@@ -67,7 +67,9 @@ public static class IrToTsRecordSynthesisBridge
         if (!ShouldSynthesize(ir))
             return [];
 
-        var joined = JoinedKindsOf(ir).Select(NameOf).ToHashSet(StringComparer.Ordinal);
+        var joined = JoinedKindsOf(ir)
+            .Select(TsGroupingPolicy.NameOf)
+            .ToHashSet(StringComparer.Ordinal);
 
         return
         [
@@ -95,13 +97,24 @@ public static class IrToTsRecordSynthesisBridge
             .Select(group => group.Synthesized)
             .OfType<IrMethodDeclaration>();
 
-    private static string NameOf(IrSynthesizedValueMember kind) =>
-        kind switch
-        {
-            IrSynthesizedValueMember.Equals => EqualsMethodName,
-            IrSynthesizedValueMember.HashCode => HashCodeMethodName,
-            _ => WithMethodName,
-        };
+    /// <summary>
+    /// The base member a joined synthesized member's body chains to: the base's
+    /// fast path it overrides when anchored, else the base record's plain member
+    /// of its name; <c>null</c> for a root record.
+    /// </summary>
+    private static string? SuperMemberOf(
+        IrClassDeclaration ir,
+        IrMethodDeclaration member,
+        string fastPathName
+    )
+    {
+        if (IrMethodGroup.IsOverride(member))
+            return fastPathName;
+
+        return IrToTsClassBridge.BuildExtends(ir) is null
+            ? null
+            : TsGroupingPolicy.NameOf(member.SynthesizedKind!.Value);
+    }
 
     /// <summary>The overrides a copy takes: <c>Partial&lt;Self&gt;</c>.</summary>
     internal static TsType OverridesTypeOf(TsType selfType) =>
@@ -185,11 +198,7 @@ public static class IrToTsRecordSynthesisBridge
     {
         var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
         var isAnchored = IrMethodGroup.IsOverride(member);
-
-        var superMember =
-            isAnchored ? fastPathName
-            : IrToTsClassBridge.BuildExtends(ir) is not null ? NameOf(member.SynthesizedKind!.Value)
-            : null;
+        var superMember = SuperMemberOf(ir, member, fastPathName);
 
         var built = member.SynthesizedKind switch
         {
@@ -264,7 +273,7 @@ public static class IrToTsRecordSynthesisBridge
     {
         var synthesizesEquals =
             unclaimedNames.Contains(EqualsMethodName)
-            && !IrValueEqualitySynthesis.DeclaresEquals(ir);
+            && !IrRecordEqualityOverrides.DeclaresEquals(ir);
 
         if (synthesizesEquals)
             yield return GenerateEquals(fields, overridesBase ? EqualsMethodName : null);

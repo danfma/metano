@@ -24,12 +24,4 @@ public static class IrValueEqualitySynthesis
     /// <summary>Whether <paramref name="type"/> receives a synthesized <c>equals</c> / <c>hashCode</c> pair.</summary>
     public static bool SynthesizesEquality(IrClassDeclaration type) =>
         type.Semantics.ValueEquality.Kind is not IrValueEqualityKind.None;
-
-    /// <summary>
-    /// The type declares the member C# uses instead of the synthesized
-    /// <c>Equals(object)</c>: a record's <c>Equals(R? other)</c> or a struct's
-    /// <c>Equals(object?)</c> override.
-    /// </summary>
-    public static bool DeclaresEquals(IrClassDeclaration type) =>
-        type.Semantics.ValueEquality.ReplacesEquals;
 }

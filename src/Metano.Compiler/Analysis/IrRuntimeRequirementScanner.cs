@@ -120,7 +120,7 @@ public static class IrRuntimeRequirementScanner
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
             // line lands only when a non-strict field actually exists.
-            if (!IrValueEqualitySynthesis.DeclaresEquals(c))
+            if (!IrRecordEqualityOverrides.DeclaresEquals(c))
                 AddEqualityHelpers(c, acc);
         }
     }

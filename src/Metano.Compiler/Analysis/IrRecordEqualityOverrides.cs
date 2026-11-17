@@ -5,8 +5,9 @@ namespace Metano.Compiler.Analysis;
 /// <summary>
 /// The declarations that replace a type's synthesized value-equality members,
 /// read from its <see cref="IrTypeSemantics.ValueEquality"/> (spec 013 FR-045):
-/// C# uses a record's <c>Equals(R)</c>, a struct's <c>override Equals(object)</c>
-/// and an <c>override GetHashCode()</c> instead of synthesizing them.
+/// C# uses a record's <c>Equals(R)</c>, a struct's <c>override Equals(object)</c> or
+/// interface-implementing <c>Equals(S)</c>, and an <c>override GetHashCode()</c>
+/// instead of synthesizing them. The one IR-side facade of those facts.
 /// </summary>
 public static class IrRecordEqualityOverrides
 {
