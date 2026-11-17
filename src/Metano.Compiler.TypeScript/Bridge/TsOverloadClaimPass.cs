@@ -336,8 +336,47 @@ internal sealed class TsOverloadClaimPass
             RecordFastPath(overload, fastPath, RootNamesOf(anchor, fastPath));
         }
 
-        foreach (var overload in group.Members.Where(member => member.Anchor is null))
-            RecordFastPath(overload, ClaimOwnFastPath(overload, baseName), []);
+        // A synthesized member's fast path is claimed before the user
+        // overloads': on a clash the user overload moves, never the stable
+        // name derived types override (spec 013 FR-042).
+        var own = group
+            .Members.Where(member => member.Anchor is null)
+            .OrderBy(member => member.SynthesizedKind is null);
+
+        foreach (var overload in own)
+        {
+            var fastPath = overload.SynthesizedKind is null
+                ? ClaimOwnFastPath(overload, baseName)
+                : ClaimSynthesizedFastPath(overload, baseName);
+
+            RecordFastPath(overload, fastPath, []);
+        }
+    }
+
+    /// <summary>
+    /// A synthesized member's fast path keeps its pinned name (DECIDED-34): a
+    /// user member holding it reports <c>MS0068</c>, as a member hijacking a
+    /// fast path does.
+    /// </summary>
+    private string ClaimSynthesizedFastPath(IrMethodDeclaration overload, string baseName)
+    {
+        var name = baseName + DispatchedOverload.SuffixOf(overload);
+
+        if (_userMembers.Instances.GetValueOrDefault(name) is { } declaredBy)
+        {
+            ReportHijack(
+                declaredBy,
+                name,
+                new TsClaimedMember(
+                    TsClaimedMemberKind.FastPath,
+                    $"the fast path of '{DispatchedOverload.SignatureOf(overload)}'",
+                    TypeName,
+                    Declaration: DispatchedOverload.SignatureOf(overload)
+                )
+            );
+        }
+
+        return name;
     }
 
     /// <summary>

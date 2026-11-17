@@ -451,7 +451,11 @@ public static class IrModuleFunctionExtractor
                     new IrParameter(
                         localNames.NameOf(
                             p,
-                            IrParameterNaming.IrNameOf(p, context.Compilation, context.Target)
+                            IrParameterNaming.IrNameOf(
+                                p,
+                                context.Compilation,
+                                context.GroupingPolicy
+                            )
                         ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
@@ -609,7 +613,11 @@ public static class IrModuleFunctionExtractor
                     new IrParameter(
                         localNames.NameOf(
                             p,
-                            IrParameterNaming.IrNameOf(p, context.Compilation, context.Target)
+                            IrParameterNaming.IrNameOf(
+                                p,
+                                context.Compilation,
+                                context.GroupingPolicy
+                            )
                         ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
@@ -752,7 +760,11 @@ public static class IrModuleFunctionExtractor
                     new IrParameter(
                         localNames.NameOf(
                             p,
-                            IrParameterNaming.IrNameOf(p, context.Compilation, context.Target)
+                            IrParameterNaming.IrNameOf(
+                                p,
+                                context.Compilation,
+                                context.GroupingPolicy
+                            )
                         ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,

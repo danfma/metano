@@ -90,13 +90,20 @@ public static class IrToTsOverloadDispatcherBridge
             var fastPathName = names.FastPathNameOf(overload);
 
             members.Add(
-                BuildFastPathMember(
-                    overload,
-                    fastPathName,
-                    isStatic,
-                    names.OverridesInheritedFastPath(overload),
-                    context
-                )
+                IsTargetSynthesized(overload) && owner is not null
+                    ? IrToTsRecordSynthesisBridge.BuildFastPath(
+                        owner,
+                        overload,
+                        fastPathName,
+                        context
+                    )
+                    : BuildFastPathMember(
+                        overload,
+                        fastPathName,
+                        isStatic,
+                        names.OverridesInheritedFastPath(overload),
+                        context
+                    )
             );
 
             members.AddRange(
@@ -122,7 +129,8 @@ public static class IrToTsOverloadDispatcherBridge
             containingTypeName,
             classTypeParameters,
             names,
-            context
+            context,
+            OverridesBaseValueEquality(group, owner)
         );
 
         if (dispatcher is not null)
@@ -130,6 +138,28 @@ public static class IrToTsOverloadDispatcherBridge
 
         return members;
     }
+
+    /// <summary>
+    /// A synthesized value-equality member whose body the target supplies
+    /// (spec 013 FR-038): no user declaration was folded into it and it routes
+    /// to none.
+    /// </summary>
+    private static bool IsTargetSynthesized(IrMethodDeclaration overload) =>
+        overload is { SynthesizedKind: not null, Body: null };
+
+    /// <summary>
+    /// Whether the group's dispatcher overrides the base record's member of
+    /// its name: a group holding a synthesized member of a record that extends
+    /// an emitted record, whose <c>equals</c> / <c>hashCode</c> / <c>with</c> the
+    /// dispatcher takes over (under <c>noImplicitOverride</c>).
+    /// </summary>
+    private static bool OverridesBaseValueEquality(
+        IrMethodGroup group,
+        IrClassDeclaration? owner
+    ) =>
+        group.Synthesized is not null
+        && owner is not null
+        && IrToTsClassBridge.BuildExtends(owner) is not null;
 
     /// <summary>
     /// One runtime dispatcher per constructed root the group's overloads are
@@ -159,14 +189,19 @@ public static class IrToTsOverloadDispatcherBridge
 
     /// <summary>
     /// The group's dispatcher as <see cref="IrMethodGroup.DispatcherKind"/>
-    /// decides it; <c>null</c> when it emits none.
+    /// decides it; <c>null</c> when it emits none. A group holding a
+    /// synthesized value-equality member tries it first for an argument of the
+    /// receiver's own type, then the checked branches, then the synthesized
+    /// member again for any argument count it accepts, then the overloads it
+    /// shadows (spec 013 FR-042).
     /// </summary>
     private static TsMethodMember? BuildDispatcher(
         IrMethodGroup group,
         string containingTypeName,
         IReadOnlyList<IrTypeParameter> classTypeParameters,
         TsOverloadClaims names,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        bool overridesBaseValueEquality
     )
     {
         var kind = group.DispatcherKind;
@@ -180,20 +215,36 @@ public static class IrToTsOverloadDispatcherBridge
 
         var signatures = OverloadDispatchOrder
             .Sort(inherited, m => m.Parameters)
-            .Concat(branches)
+            .Concat(OverloadDispatchOrder.Sort(SignatureMembersOf(group), m => m.Parameters))
             .ToList();
 
         var plan = PlanOverloadGroup(signatures, typeOverrides, sort: false);
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
         var name = TypeScriptNaming.ToCamelCaseMember(group.Primary.Name);
+        var receiver = DispatchReceiver(group.Primary.IsStatic, containingTypeName);
+        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides);
 
-        var body = BuildDispatcherBody(
-            branches,
-            branches.Select(names.FastPathNameOf).ToList(),
-            DispatchReceiver(group.Primary.IsStatic, containingTypeName),
-            new TypeCheckScope(classTypeParameters, typeOverrides),
-            overridesInherited ? ForwardToBase(name, inherited) : NoMatchingOverload(name)
-        );
+        var unmatched = overridesInherited
+            ? ForwardToBase(name, inherited)
+            : NoMatchingOverload(name);
+
+        var body = group.Synthesized is { } synthesized
+            ? BuildSynthesizedDispatcherBody(
+                group,
+                synthesized,
+                branches,
+                names,
+                receiver,
+                classScope,
+                unmatched
+            )
+            : BuildDispatcherBody(
+                branches,
+                branches.Select(names.FastPathNameOf).ToList(),
+                receiver,
+                classScope,
+                unmatched
+            );
 
         return new TsMethodMember(
             name,
@@ -206,8 +257,74 @@ public static class IrToTsOverloadDispatcherBridge
             // carries the JSDoc its group gives it (SignatureJSDocOf).
             Accessibility: plan.Accessibility,
             Overloads: plan.Signatures,
-            Override: overridesInherited
+            Override: overridesInherited || overridesBaseValueEquality
         );
+    }
+
+    /// <summary>
+    /// The members whose signatures the dispatcher declares besides the
+    /// inherited ones: every member of a declared dispatcher, the ones a type
+    /// adds to an inherited dispatcher.
+    /// </summary>
+    private static IEnumerable<IrMethodDeclaration> SignatureMembersOf(IrMethodGroup group) =>
+        group.DispatcherKind is IrDispatcherKind.Declared
+            ? group.Members
+            : group.Members.Where(member => !IrMethodGroup.IsOverride(member));
+
+    /// <summary>
+    /// The body of a dispatcher whose group holds a synthesized value-equality
+    /// member (spec 013 FR-042): the synthesized member for an argument of the
+    /// receiver's own type, the checked branches, the synthesized member for
+    /// any other call at its argument counts (so a foreign argument reaches
+    /// <c>equals</c> and answers <c>false</c>), the shadowed overloads at the
+    /// counts it does not accept, then the unmatched end.
+    /// </summary>
+    private static List<TsStatement> BuildSynthesizedDispatcherBody(
+        IrMethodGroup group,
+        IrMethodDeclaration synthesized,
+        IReadOnlyList<IrMethodDeclaration> branches,
+        TsOverloadClaims names,
+        TsExpression receiver,
+        TypeCheckScope classScope,
+        TsStatement unmatched
+    )
+    {
+        var shadowed = OverloadDispatchOrder.Sort(group.ShadowedBranches, m => m.Parameters);
+        var fastPath = names.FastPathNameOf(synthesized);
+        var typeOverrides = classScope.TypeOverrides;
+
+        var body = new List<TsStatement>
+        {
+            SynthesizedBranches.First(synthesized, receiver, fastPath, typeOverrides),
+        };
+
+        body.AddRange(
+            BuildBranches(
+                branches,
+                branches.Select(names.FastPathNameOf).ToList(),
+                receiver,
+                classScope
+            )
+        );
+
+        if (
+            SynthesizedBranches.Closing(synthesized, receiver, fastPath, typeOverrides) is
+            { } closing
+        )
+            body.Add(closing);
+
+        body.AddRange(
+            BuildBranches(
+                shadowed,
+                shadowed.Select(names.FastPathNameOf).ToList(),
+                receiver,
+                classScope
+            )
+        );
+
+        body.Add(unmatched);
+
+        return body;
     }
 
     /// <summary>
@@ -502,10 +619,26 @@ public static class IrToTsOverloadDispatcherBridge
         method
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.MapParameterType(p, typeOverrides),
+                ParameterTypeOf(method, p, typeOverrides),
                 Rest: p.IsParams
             ))
             .ToList();
+
+    /// <summary>
+    /// A parameter's TS type; the synthesized copy's overrides are a
+    /// <c>Partial</c> of the record it returns, as the runtime's
+    /// <c>copyRecordWith</c> takes them.
+    /// </summary>
+    private static TsType ParameterTypeOf(
+        IrMethodDeclaration method,
+        IrParameter parameter,
+        IrToTsTypeOverrides? typeOverrides
+    ) =>
+        method.SynthesizedKind is IrSynthesizedValueMember.Copy
+            ? IrToTsRecordSynthesisBridge.OverridesTypeOf(
+                IrToTsTypeMapper.Map(method.ReturnType, typeOverrides)
+            )
+            : IrToTsTypeMapper.MapParameterType(parameter, typeOverrides);
 
     /// <summary>
     /// The parameters of an overload signature, where TypeScript forbids an
@@ -565,6 +698,14 @@ public static class IrToTsOverloadDispatcherBridge
         TsExpression? receiver,
         TypeCheckScope classScope,
         TsStatement unmatched
+    ) => [.. BuildBranches(sorted, fastPathNames, receiver, classScope), unmatched];
+
+    /// <summary>One branch per overload, in the given order, each delegating to its fast path.</summary>
+    private static List<TsStatement> BuildBranches(
+        IReadOnlyList<IrMethodDeclaration> sorted,
+        IReadOnlyList<string> fastPathNames,
+        TsExpression? receiver,
+        TypeCheckScope classScope
     )
     {
         var body = new List<TsStatement>();
@@ -597,8 +738,6 @@ public static class IrToTsOverloadDispatcherBridge
                 )
             );
         }
-
-        body.Add(unmatched);
 
         return body;
     }

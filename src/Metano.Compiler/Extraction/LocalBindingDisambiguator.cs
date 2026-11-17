@@ -131,13 +131,13 @@ internal static class LocalBindingDisambiguator
         IReadOnlyList<StatementSyntax> statements,
         SemanticModel semantic,
         LocalNaming naming,
-        Metano.Annotations.TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         if (statements.Count == 0)
             return LocalBindingNames.Empty;
 
-        var collector = new BindingCollector(semantic, naming, target);
+        var collector = new BindingCollector(semantic, naming, policy);
         var bindings = statements.SelectMany(collector.Collect).ToList();
 
         return Disambiguate(bindings, statements[0], naming);
@@ -237,7 +237,7 @@ internal static class LocalBindingDisambiguator
         if (model is null)
             return LocalBindingNames.Empty;
 
-        var collector = new BindingCollector(model, naming, context.Target);
+        var collector = new BindingCollector(model, naming, context.GroupingPolicy);
 
         return Disambiguate(roots.SelectMany(collector.Collect).ToList(), reportAt, naming);
     }
@@ -404,7 +404,7 @@ internal static class LocalBindingDisambiguator
     private sealed class BindingCollector(
         SemanticModel semantic,
         LocalNaming naming,
-        Metano.Annotations.TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         public IEnumerable<Binding> Collect(SyntaxNode root)
@@ -486,7 +486,7 @@ internal static class LocalBindingDisambiguator
         private Binding ToBinding(ISymbol symbol, string identifier, int position, SyntaxNode scope)
         {
             var irName = symbol is IParameterSymbol parameter
-                ? IrParameterNaming.IrNameOf(parameter, semantic.Compilation, target)
+                ? IrParameterNaming.IrNameOf(parameter, semantic.Compilation, policy)
                 : identifier;
 
             return new Binding(

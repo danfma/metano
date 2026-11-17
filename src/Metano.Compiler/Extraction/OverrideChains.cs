@@ -118,32 +118,29 @@ internal static class OverrideChains
     /// <summary>
     /// Whether <paramref name="type"/> or a class the compilation declares among its
     /// ancestors declares an instance method that the target emits as <c>toJSON</c>
-    /// (an unrenamed <c>ToJSON</c>, or one renamed to it for <paramref name="target"/>).
+    /// (an unrenamed <c>ToJSON</c>, or one renamed to it for the policy's target).
     /// Stops at the first ancestor the toolchain does not emit, as an inheritance
     /// chain never re-enters emitted types after leaving them.
     /// </summary>
     public static bool DeclaresToJson(
         INamedTypeSymbol type,
         Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         compilation is not null
         && TypeAndAncestorsOf(type)
             .TakeWhile(current => IsEmittedByToolchain(current, compilation))
             .Any(current =>
-                current.GetMembers().OfType<IMethodSymbol>().Any(m => IsToJson(m, target))
+                current.GetMembers().OfType<IMethodSymbol>().Any(m => IsToJson(m, policy))
             );
 
-    private static bool IsToJson(IMethodSymbol method, Metano.Annotations.TargetLanguage? target) =>
+    private static bool IsToJson(IMethodSymbol method, OverloadGroupingPolicy policy) =>
         method is { IsStatic: false, MethodKind: MethodKind.Ordinary }
-        && !method.HasIgnore(target)
-        && EmittedNameOf(method, target) == "toJSON";
+        && !method.HasIgnore(policy.Target)
+        && EmittedNameOf(method, policy) == "toJSON";
 
-    private static string EmittedNameOf(
-        IMethodSymbol method,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        OverloadEmittedName.NameOverrideOf(method, target) ?? SymbolHelper.ToCamelCase(method.Name);
+    private static string EmittedNameOf(IMethodSymbol method, OverloadGroupingPolicy policy) =>
+        OverloadEmittedName.NameOverrideOf(method, policy) ?? SymbolHelper.ToCamelCase(method.Name);
 
     /// <summary>
     /// Whether a class the compilation declares, among the ancestors of
@@ -223,18 +220,7 @@ internal static class OverrideChains
         property.DeclaringSyntaxReferences.IsEmpty
         && new[] { property.GetMethod, property.SetMethod }
             .OfType<IMethodSymbol>()
-            .All(IsCompilerGenerated);
-
-    private static bool IsCompilerGenerated(IMethodSymbol accessor) =>
-        accessor
-            .GetAttributes()
-            .Any(attribute =>
-                attribute.AttributeClass
-                    is {
-                        Name: "CompilerGeneratedAttribute",
-                        ContainingNamespace.Name: "CompilerServices"
-                    }
-            );
+            .All(SymbolHelper.IsCompilerGenerated);
 
     private static bool IsOverridable(IPropertySymbol property) =>
         !property.IsIndexer && (property.IsVirtual || (property.IsOverride && !property.IsSealed));

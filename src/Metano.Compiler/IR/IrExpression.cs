@@ -930,7 +930,15 @@ public sealed record IrWithExpression(
     IrExpression Source,
     IReadOnlyList<IrWithAssignment> Assignments,
     bool IsPlainObjectSource = false
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The record's synthesized copy when it joined a dispatched group (spec
+    /// 013 FR-043): a target calls its fast path (<c>source.withByValue(…)</c>)
+    /// instead of the shared dispatcher name. <c>null</c> otherwise.
+    /// </summary>
+    public IrSelectedOverload? Overload { get; init; }
+}
 
 /// <summary>
 /// A single <c>MemberName = value</c> entry inside an

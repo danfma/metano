@@ -3,61 +3,18 @@ using Metano.Compiler.IR;
 namespace Metano.Compiler.Analysis;
 
 /// <summary>
-/// The equality members a record declares itself instead of letting C#
-/// synthesize them: an <c>Equals(R? other)</c> or a <c>GetHashCode</c>
-/// override replaces the synthesized one. Single source of truth for the
-/// backends that synthesize the record helpers (the TypeScript record
-/// synthesis and the Dart class bridge) and for the runtime-requirement scan
-/// that imports what those helpers use, so the three never drift (a skipped
-/// <c>hashCode</c> must not leave its <c>HashCode</c> import behind).
+/// The declarations that replace a type's synthesized value-equality members,
+/// read from its <see cref="IrTypeSemantics.ValueEquality"/> (spec 013 FR-045):
+/// C# uses a record's <c>Equals(R)</c>, a struct's <c>override Equals(object)</c>
+/// and an <c>override GetHashCode()</c> instead of synthesizing them.
 /// </summary>
 public static class IrRecordEqualityOverrides
 {
-    /// <summary>
-    /// The record declares its own <c>Equals(R? other)</c>. The declaration
-    /// carries no namespace, so the parameter type is matched on the record's
-    /// name and arity; an <c>Equals</c> overload over a same-named type of
-    /// another namespace would also match.
-    /// </summary>
-    public static bool DeclaresEquals(IrClassDeclaration record) =>
-        DeclaredMethods(record)
-            .Any(m =>
-                m is { Name: nameof(object.Equals), IsStatic: false, Parameters.Count: 1 }
-                && IsRecordTypeRef(m.Parameters[0].Type, record)
-            );
+    /// <summary>The type declares the member C# uses instead of the synthesized <c>Equals(object)</c>.</summary>
+    public static bool DeclaresEquals(IrClassDeclaration type) =>
+        type.Semantics.ValueEquality.ReplacesEquals;
 
-    /// <summary>
-    /// The struct declares the instance <c>Equals</c> C# uses instead of
-    /// <c>ValueType.Equals</c>: an <c>Equals(object?)</c> override or an
-    /// <c>Equals(S)</c>, which the backend emits under the synthesized member's
-    /// name. Any other <c>Equals</c> overload yields that name.
-    /// </summary>
-    public static bool DeclaresStructEquals(IrClassDeclaration type) =>
-        DeclaredMethods(type)
-            .Any(m =>
-                m is { Name: nameof(object.Equals), IsStatic: false, Parameters.Count: 1 }
-                && (
-                    IrObjectContract.IsObjectTypeRef(m.Parameters[0].Type)
-                    || IsRecordTypeRef(m.Parameters[0].Type, type)
-                )
-            );
-
-    /// <summary>The record overrides <c>GetHashCode</c>.</summary>
-    public static bool DeclaresHashCode(IrClassDeclaration record) =>
-        DeclaredMethods(record).Any(IrObjectContract.IsHashCodeOverride);
-
-    private static IEnumerable<IrMethodDeclaration> DeclaredMethods(IrClassDeclaration record) =>
-        (record.Members ?? []).OfType<IrMethodDeclaration>().SelectMany(WithOverloads);
-
-    private static IEnumerable<IrMethodDeclaration> WithOverloads(IrMethodDeclaration method) =>
-        [method, .. method.Overloads ?? []];
-
-    private static bool IsRecordTypeRef(IrTypeRef type, IrClassDeclaration record) =>
-        type switch
-        {
-            IrNullableTypeRef nullable => IsRecordTypeRef(nullable.Inner, record),
-            IrNamedTypeRef named => named.Name == record.Name
-                && (named.TypeArguments?.Count ?? 0) == (record.TypeParameters?.Count ?? 0),
-            _ => false,
-        };
+    /// <summary>The type declares <c>override GetHashCode()</c>.</summary>
+    public static bool DeclaresHashCode(IrClassDeclaration type) =>
+        type.Semantics.ValueEquality.ReplacesHashCode;
 }

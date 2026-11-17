@@ -59,6 +59,23 @@ public sealed record IrMethodDeclaration(
     /// dispatches the group.
     /// </summary>
     public IReadOnlyList<IrMethodDeclaration>? InheritedOverloads { get; init; }
+
+    /// <summary>
+    /// The value-equality member C# synthesizes that this declaration stands
+    /// for in its dispatched group (spec 013 FR-038): its body is the user
+    /// declaration folded into it, a route to a record's <c>Equals(R)</c>, or
+    /// <c>null</c> for the target to synthesize. <c>null</c> for a declared
+    /// method.
+    /// </summary>
+    public IrSynthesizedValueMember? SynthesizedKind { get; init; }
+
+    /// <summary>
+    /// A declared overload of a group holding a synthesized member that a
+    /// runtime dispatcher cannot tell from it at an argument count both accept
+    /// (spec 013 FR-042): its branch follows the synthesized member's, and is
+    /// dropped when the synthesized member covers every count it accepts.
+    /// </summary>
+    public bool IsShadowedBySynthesized { get; init; }
 }
 
 /// <summary>

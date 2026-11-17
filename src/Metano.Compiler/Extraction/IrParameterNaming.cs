@@ -18,7 +18,7 @@ namespace Metano.Compiler.Extraction;
 /// The callee's emitted name depends on the target: a <c>[Name]</c> may be
 /// targeted, and on an overload of a dispatched group it pins a suffix rather
 /// than renaming the member (<see cref="OverloadEmittedName"/>). The colliding
-/// names are therefore computed, and cached, per owner and target.
+/// names are therefore computed, and cached, per owner and grouping policy.
 /// </para>
 /// </summary>
 internal static class IrParameterNaming
@@ -27,17 +27,17 @@ internal static class IrParameterNaming
 
     private static readonly ConditionalWeakTable<
         ISymbol,
-        ConcurrentDictionary<TargetKey, HashSet<string>>
+        ConcurrentDictionary<OverloadGroupingPolicy, HashSet<string>>
     > CollidingNamesByOwner = new();
 
     public static string IrNameOf(
         IParameterSymbol parameter,
         Compilation? compilation,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         compilation is not null
         && IsRenamableOwner(parameter.ContainingSymbol)
-        && CollidingNamesOf(parameter.ContainingSymbol, compilation, target)
+        && CollidingNamesOf(parameter.ContainingSymbol, compilation, policy)
             .Contains(parameter.Name)
             ? parameter.Name + CollisionSuffix
             : parameter.Name;
@@ -82,11 +82,14 @@ internal static class IrParameterNaming
     private static HashSet<string> CollidingNamesOf(
         ISymbol owner,
         Compilation compilation,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         CollidingNamesByOwner
-            .GetValue(owner, _ => new ConcurrentDictionary<TargetKey, HashSet<string>>())
-            .GetOrAdd(new TargetKey(target), _ => FindCollidingNames(owner, compilation, target));
+            .GetValue(owner, _ => new ConcurrentDictionary<
+                OverloadGroupingPolicy,
+                HashSet<string>
+            >())
+            .GetOrAdd(policy, _ => FindCollidingNames(owner, compilation, policy));
 
     /// <summary>
     /// The names of the owner's parameters that share their emitted name with
@@ -95,7 +98,7 @@ internal static class IrParameterNaming
     private static HashSet<string> FindCollidingNames(
         ISymbol owner,
         Compilation compilation,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         var colliding = new HashSet<string>();
@@ -119,7 +122,7 @@ internal static class IrParameterNaming
             )
                 continue;
 
-            var calleeName = OverloadEmittedName.NameOverrideOf(callee, target)
+            var calleeName = OverloadEmittedName.NameOverrideOf(callee, policy)
                 ?? SymbolHelper.ToCamelCase(callee.Name);
 
             colliding.UnionWith(
@@ -132,10 +135,4 @@ internal static class IrParameterNaming
 
     private static bool IsFlattened(IMethodSymbol callee) =>
         callee is { IsStatic: true } && callee.ContainingType.IsContainerless();
-
-    /// <summary>
-    /// The cache key of a target, <c>null</c> (no target) included, which a
-    /// dictionary key cannot be on its own.
-    /// </summary>
-    private readonly record struct TargetKey(TargetLanguage? Language);
 }

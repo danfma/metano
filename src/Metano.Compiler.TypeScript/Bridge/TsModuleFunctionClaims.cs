@@ -103,6 +103,7 @@ public sealed class TsModuleFunctionClaims
         var extraction = new IrExtractionContext(shapeOriginResolver)
         {
             Target = TargetLanguage.TypeScript,
+            GroupingPolicy = TsGroupingPolicy.Instance,
         };
 
         var staticTypes = assembly is { } assemblySymbol

@@ -59,20 +59,66 @@ public sealed class IrMethodGroup
     private bool AddsOverloads => Members.Any(member => !IsOverride(member));
 
     /// <summary>
-    /// The overloads the dispatcher branches to, in the group's order: every
-    /// member of a declared dispatcher; the overloads a type adds to an
-    /// inherited one, whose own branches reach the overrides through their
-    /// fast paths; none without a dispatcher.
+    /// The overloads the dispatcher branches to by their runtime checks, in the
+    /// group's order: every member of a declared dispatcher; the overloads a
+    /// type adds to an inherited one, whose own branches reach the overrides
+    /// through their fast paths; none without a dispatcher. The synthesized
+    /// value-equality member and the overloads shadowed by it
+    /// (<see cref="IrMethodDeclaration.IsShadowedBySynthesized"/>) dispatch
+    /// around them instead (spec 013 FR-042, <see cref="Synthesized"/>,
+    /// <see cref="ShadowedBranches"/>).
     /// </summary>
     public IReadOnlyList<IrMethodDeclaration> Branches =>
         DispatcherKind switch
         {
-            IrDispatcherKind.Declared => Members,
+            IrDispatcherKind.Declared => Members.Where(IsCheckedBranch).ToList(),
             IrDispatcherKind.OverridesInherited => Members
-                .Where(member => !IsOverride(member))
+                .Where(member => !IsOverride(member) && IsCheckedBranch(member))
                 .ToList(),
             _ => [],
         };
+
+    /// <summary>
+    /// The synthesized value-equality member of the group (spec 013 FR-038):
+    /// its dispatcher tries it first for an argument of the receiver's own type
+    /// and again after the checked branches; <c>null</c> when none joined.
+    /// </summary>
+    public IrMethodDeclaration? Synthesized =>
+        Members.FirstOrDefault(member => member.SynthesizedKind is not null);
+
+    /// <summary>
+    /// The shadowed overloads that also accept argument counts the synthesized
+    /// member does not: their branches follow its last one, reached only at
+    /// those counts. A shadowed overload the synthesized member covers
+    /// entirely has no branch.
+    /// </summary>
+    public IReadOnlyList<IrMethodDeclaration> ShadowedBranches =>
+        DispatcherKind is IrDispatcherKind.None || Synthesized is not { } synthesized
+            ? []
+            : Members
+                .Where(member =>
+                    member.IsShadowedBySynthesized
+                    && !IsOverride(member)
+                    && !IsCoveredBy(member, synthesized)
+                )
+                .ToList();
+
+    private bool IsCheckedBranch(IrMethodDeclaration member) =>
+        member.SynthesizedKind is null && !member.IsShadowedBySynthesized;
+
+    private static bool IsCoveredBy(IrMethodDeclaration member, IrMethodDeclaration synthesized) =>
+        RequiredArityOf(member) >= RequiredArityOf(synthesized)
+        && MaximumArityOf(member) <= MaximumArityOf(synthesized);
+
+    /// <summary>The fewest arguments a call passes <paramref name="method"/>.</summary>
+    public static int RequiredArityOf(IrMethodDeclaration method) =>
+        method.Parameters.Count(parameter => !parameter.CanBeOmitted && !parameter.IsParams);
+
+    /// <summary>The most arguments a call passes <paramref name="method"/>; <see cref="int.MaxValue"/> with <c>params</c>.</summary>
+    public static int MaximumArityOf(IrMethodDeclaration method) =>
+        method.Parameters.Any(parameter => parameter.IsParams)
+            ? int.MaxValue
+            : method.Parameters.Count;
 
     public static IrMethodGroup Of(IrMethodDeclaration primary) => new(primary);
 

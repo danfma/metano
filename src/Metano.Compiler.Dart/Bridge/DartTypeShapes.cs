@@ -30,7 +30,10 @@ internal static class DartTypeShapes
     public static DartOverloadShape ShapeOf(INamedTypeSymbol type) =>
         new(
             NamesMembers: NamesOverloadMembers(type),
-            PinsSuffixes: OverloadEmittedName.PinsOverloadSuffixes(type, TargetLanguage.Dart)
+            PinsSuffixes: OverloadEmittedName.PinsOverloadSuffixes(
+                type,
+                DartGroupingPolicy.Instance
+            )
         );
 
     /// <summary>

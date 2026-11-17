@@ -555,6 +555,7 @@ public sealed class TypeScriptTransformContext(
     public IrExtractionContext Extraction =>
         new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming)
         {
+            GroupingPolicy = TsGroupingPolicy.Instance,
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsOperatorFastPaths = true,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,

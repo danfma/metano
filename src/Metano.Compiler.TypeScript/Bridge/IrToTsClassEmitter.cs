@@ -961,12 +961,13 @@ public sealed class IrToTsClassEmitter(
 
     /// <summary>
     /// Whether the IR models the overload's body: an abstract overload has
-    /// none to model (spec 013 FR-030).
+    /// none to model (spec 013 FR-030), and neither has a synthesized
+    /// value-equality member whose body the target synthesizes (FR-038).
     /// </summary>
     private static bool HasCoveredBody(IrMethodDeclaration method) =>
         method.Body is { } body
             ? IrBodyCoverageProbe.IsFullyCovered(body)
-            : method.Semantics.IsAbstract;
+            : method.Semantics.IsAbstract || method.SynthesizedKind is not null;
 
     /// <summary>
     /// Reports MS0001 (UnsupportedFeature) when the IR statement extractor

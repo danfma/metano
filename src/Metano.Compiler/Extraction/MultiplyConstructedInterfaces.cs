@@ -132,7 +132,7 @@ public static class MultiplyConstructedInterfaces
             foreach (var member in InterfaceOverloadGroup.Of(definition, name, context.Target))
             {
                 yield return new IrConstructedRoot(
-                    MethodOverloadGroups.RefOf(member, context.Target),
+                    MethodOverloadGroups.RefOf(member, context.GroupingPolicy),
                     constructions
                         .Select(construction => SignatureIn(construction, member, context))
                         .ToList(),
