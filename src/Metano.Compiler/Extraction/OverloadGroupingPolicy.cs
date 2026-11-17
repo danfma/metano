@@ -46,6 +46,13 @@ public sealed record OverloadGroupingPolicy(
     SynthesizedMemberNames? ValueEqualityNames
 )
 {
+    /// <summary>
+    /// Whether the target names the synthesized <c>Equals</c>: it joins a user
+    /// group, and a struct's explicit <c>IEquatable&lt;T&gt;.Equals</c> superseded
+    /// only for its name is kept (spec 013 FR-045).
+    /// </summary>
+    public bool NamesSynthesizedEquals => NameOf(IrSynthesizedValueMember.Equals) is not null;
+
     /// <summary>The policy of a target that supplies no synthesized member names.</summary>
     public static OverloadGroupingPolicy For(TargetLanguage? target) => new(target, null);
 
