@@ -107,6 +107,7 @@ public class IntegerValueRangesTests
         await Assert
             .That(IntegerValueRanges.Of(ReturnedOperationOf("Floating"), TypeScriptRules))
             .IsNull();
+
         await Assert.That(IntegerValueRanges.Of(null, TypeScriptRules)).IsNull();
     }
 
