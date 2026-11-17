@@ -51,8 +51,12 @@ interface member: `IEquatable<S>.Equals`, implicitly or explicitly, or a transpi
 - **Alone,** it stays the type's `equals`, as on main.
 - **Beside another `Equals` overload,** the synthesized member routes to it, as it does to a record's `Equals(R)`.
 - **The cost:** a boxed comparison (`object.Equals`, a `ValueType.Equals` call) also reaches the user's `Equals(S)`, where .NET compares fields. This is main's behavior for that shape.
+- **A struct whose `Equals(S)` and `override Equals(object)` disagree** violates the .NET contract (`Equals(object)` should agree with `IEquatable<S>.Equals`). A boxed comparison of such a struct then reaches `Equals(S)` too.
+- **Which interfaces count:** `System.IEquatable<S>` itself, or an interface the toolchain transpiles. An `Equals(S)` that implements any other interface member replaces nothing.
 - **A struct's `Equals(S)` that implements no interface member replaces nothing,** since `ValueType.Equals` never calls it. It is shadowed and reports `MS0063` (§ 3).
-- An explicit `IEquatable<S>.Equals` on a struct is emitted under the interface member's name. `System.ValueType`'s inherited `Equals` claims no name, as `object`'s does not.
+- An explicit `IEquatable<S>.Equals(S)` on a struct is kept by the overload groups and emitted under its interface member's name. The explicit-implementation lowering supersedes it only because `System.ValueType.Equals` holds that name (`ValueEqualityShapes.KeepsSupersededEquatable`).
+  - Only that one name is freed, and only for a target that names the synthesized `Equals`.
+  - The target-agnostic lowering is unchanged. Every other `ValueType` name (an explicit `IFormattable.ToString`, an explicit `GetHashCode`) keeps its fate, and Dart output is byte-identical.
 
 ## 1. The group member (FR-038)
 
@@ -142,6 +146,8 @@ public sealed record OverloadGroupingPolicy(
   - `[Name("equals")] Same(NEq, double)`, `[Name("hashCode")] Seeded(int)` and `[Name("with")] Replace(int)` join the `equals` / `hashCode` / `with` members.
   - The method whose `[Name]` named the group (`MethodOverloadGroup.NamingMember`) pins no suffix: its fast path is named over its parameters (`equalsOTol`).
   - The target names a group holding a synthesized member after that member's kind, never after the group's C# name.
+  - **A group takes one synthesized member,** under the spelling that matched it: `[Name("equals")] With(int)` joins `Equals` and not the copy.
+  - **Two groups spelled alike** (two methods both `[Name("equals")]`): the second reports `MS0001` as an error.
   - `GetHashCode` joins the group `HashCode`.
 - **Identity.** A group keeps its C# name as its identity (`GroupNameOf`), so every declared member's `IrOverloadRef` is unchanged. A synthesized member's ref is `(typeKey, joined group's name, ordinal after every declared member)`.
 - **Explicit interface implementations** (C5): `bool IEquatable<int>.Equals(int o)` and `IWither IWither.With(int a)` group under their interface member's name (`GroupNameOf`), so their spelling is `equals` / `with`. They join when the implementation is emitted under the interface name; dropped ones never do.
@@ -257,7 +263,7 @@ consumer computes the same result over the producer's metadata:
 
 - a consumer record deriving from a library record that joined (`override equalsByValue`);
 - direct calls into a joined group;
-- metadata-only references keep the dispatcher (FR-019), except calls bound to a synthesized member (`a.Equals(b)`, `base.GetHashCode()`, `with`). Their fast path keeps its stable name in every package (`equalsByValue`, DECIDED-34), so the call carries the member's kind (`IrSelectedOverload.Synthesized`) and the target names it even when the producer's claims are unreadable. A `base.` call through the base dispatcher would recurse into the derived override.
+- metadata-only references keep the dispatcher (FR-019), except calls bound to a synthesized member (`a.Equals(b)`, `base.GetHashCode()`, `with`, and a call to a declaration folded into one, such as a library record's `override GetHashCode()` beside `HashCode(int)`). Their fast path keeps its stable name in every package (`equalsByValue`, DECIDED-34), so the call carries the member's kind (`IrSelectedOverload.Synthesized`) and the target names it even when the producer's claims are unreadable. A `base.` call through the base dispatcher would recurse into the derived override.
 
 **Compiler-generated members in metadata.** A referenced record's synthesized `Equals(R)`,
 `Equals(object)` and `GetHashCode()` are not implicitly declared when read from metadata; they

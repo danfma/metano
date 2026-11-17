@@ -302,10 +302,10 @@ run in `targets/js/sample-issue-tracker`.
 |---|---|---|
 | `MS0003` | error / warning | the climb's dead end; an invalid `[Name]` suffix (error); an override's `[Name]` ignored for its root's, a `[Name]` on a constructor that is not overloaded (warning) |
 | `MS0034` | error | `[JsonFactory]` on a method of an overloaded group (the dispatcher is shared by its siblings) |
+| `MS0001` | error | an overload a dispatcher cannot tell from a synthesized value-equality member implements a transpiled interface member, whose callers reach it through the shared name; or two methods spelled alike by `[Name]` take the same synthesized member (see below) |
 | `MS0063` | warning | an overload a dispatcher cannot tell from a synthesized value-equality member that joined its group (see below) |
 | `MS0067` | warning | a generated name was taken and took `$` |
 | `MS0068` | error | a user member takes a generated fast path or factory name it does not own (including `equalsByValue` / `hashCodeByValue` / `withByValue`) |
-| `MS0001` | error | such an overload implements a transpiled interface member, whose callers reach it through the shared name |
 | `MS0069` | warning | a type implements one generic interface with overload groups more than once (`C : IConv<int>, IConv<string>`); calls to those members keep runtime dispatch |
 
 The [diagnostic catalog](../specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md)
