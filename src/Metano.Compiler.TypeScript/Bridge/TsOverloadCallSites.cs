@@ -50,4 +50,18 @@ internal static class TsOverloadCallSites
     /// </summary>
     internal static string? MethodFastPathOf(IrOverloadRef overload) =>
         RequiredClaims.RootFastPathOf(overload);
+
+    /// <summary>
+    /// The fast path of <paramref name="overload"/>: its claimed name, or, for a
+    /// synthesized value-equality member whose declaring type's claims this
+    /// transform cannot read, the stable name every package gives it
+    /// (<c>equalsByValue</c>, spec 013 DECIDED-34).
+    /// </summary>
+    internal static string? MethodFastPathOf(IrSelectedOverload overload) =>
+        MethodFastPathOf(overload.Target)
+        ?? (
+            overload.Synthesized is { } kind
+                ? TsGroupingPolicy.NameOf(kind) + TsGroupingPolicy.FastPathSuffix
+                : null
+        );
 }

@@ -213,14 +213,18 @@ public static class IrToTsOverloadDispatcherBridge
         var inherited = group.Primary.InheritedOverloads ?? [];
         var branches = OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters);
 
-        var signatures = OverloadDispatchOrder
-            .Sort(inherited, m => m.Parameters)
-            .Concat(OverloadDispatchOrder.Sort(SignatureMembersOf(group), m => m.Parameters))
-            .ToList();
+        var signatures = DistinctSignatures(
+            group,
+            [
+                .. OverloadDispatchOrder.Sort(inherited, m => m.Parameters),
+                .. OverloadDispatchOrder.Sort(SignatureMembersOf(group), m => m.Parameters),
+            ],
+            typeOverrides
+        );
 
         var plan = PlanOverloadGroup(signatures, typeOverrides, sort: false);
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
-        var name = TypeScriptNaming.ToCamelCaseMember(group.Primary.Name);
+        var name = TsClassMemberTable.MethodNameOf(group.Primary);
         var receiver = DispatchReceiver(group.Primary.IsStatic, containingTypeName);
         var classScope = new TypeCheckScope(classTypeParameters, typeOverrides);
 
@@ -259,6 +263,41 @@ public static class IrToTsOverloadDispatcherBridge
             Overloads: plan.Signatures,
             Override: overridesInherited || overridesBaseValueEquality
         );
+    }
+
+    /// <summary>
+    /// The overload signatures of a group holding a synthesized member, each
+    /// printed once — a user <c>HashCode()</c> beside the synthesized one would
+    /// repeat <c>hashCode(): number;</c>. Every other group keeps each overload's
+    /// signature, as before.
+    /// </summary>
+    private static IReadOnlyList<IrMethodDeclaration> DistinctSignatures(
+        IrMethodGroup group,
+        IReadOnlyList<IrMethodDeclaration> signatures,
+        IrToTsTypeOverrides? typeOverrides
+    ) =>
+        group.Synthesized is null
+            ? signatures
+            : signatures.DistinctBy(method => SignatureKeyOf(method, typeOverrides)).ToList();
+
+    /// <summary>
+    /// What tells two overload signatures apart in TypeScript: their parameter
+    /// types (optional or not) and return type, as printed.
+    /// </summary>
+    private static string SignatureKeyOf(
+        IrMethodDeclaration method,
+        IrToTsTypeOverrides? typeOverrides
+    )
+    {
+        var parameters = SignatureParameters(method, typeOverrides)
+            .Select(parameter =>
+                (parameter.Optional ? "?" : "")
+                + (parameter.Type is null ? "" : Printer.RenderType(parameter.Type))
+            );
+
+        var returns = Printer.RenderType(IrToTsTypeMapper.Map(method.ReturnType, typeOverrides));
+
+        return $"({string.Join(",", parameters)}){returns}";
     }
 
     /// <summary>

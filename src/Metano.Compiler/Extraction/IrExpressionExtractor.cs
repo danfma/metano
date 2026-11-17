@@ -781,7 +781,9 @@ public sealed partial class IrExpressionExtractor
 
         return new IrWithExpression(Extract(withExpr.Expression), assignments, isPlainObject)
         {
-            Overload = copy is null ? null : new IrSelectedOverload(copy),
+            Overload = copy is null
+                ? null
+                : new IrSelectedOverload(copy) { Synthesized = IrSynthesizedValueMember.Copy },
         };
     }
 
@@ -3114,7 +3116,7 @@ public sealed partial class IrExpressionExtractor
             BuildOrigin(symbol)
         )
         {
-            Overload = bound.Overload,
+            Overload = MarkSynthesized(bound.Overload, symbol),
         };
     }
 
@@ -3221,7 +3223,7 @@ public sealed partial class IrExpressionExtractor
             BuildOrigin(symbol)
         )
         {
-            Overload = bound.Overload,
+            Overload = MarkSynthesized(bound.Overload, symbol),
         };
     }
 

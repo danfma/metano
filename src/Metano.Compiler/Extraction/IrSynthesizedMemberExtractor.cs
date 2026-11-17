@@ -17,6 +17,9 @@ internal static class IrSynthesizedMemberExtractor
     private const string EqualsParameter = "other";
     private const string CopyParameter = "overrides";
 
+    /// <summary>Any value, <c>null</c> included: the argument the runtime passes.</summary>
+    private static IrTypeRef AnyObject { get; } = new IrPrimitiveTypeRef(IrPrimitive.Object);
+
     /// <summary>The member as its group declares it, named with <paramref name="suffix"/>.</summary>
     public static IrMethodDeclaration Extract(
         INamedTypeSymbol type,
@@ -80,9 +83,6 @@ internal static class IrSynthesizedMemberExtractor
             _ => [],
         };
 
-    /// <summary>Any value, <c>null</c> included: the argument the runtime passes.</summary>
-    private static IrTypeRef AnyObject { get; } = new IrPrimitiveTypeRef(IrPrimitive.Object);
-
     private static IrTypeRef ReturnTypeOf(
         INamedTypeSymbol type,
         IrSynthesizedValueMember kind,
@@ -96,9 +96,11 @@ internal static class IrSynthesizedMemberExtractor
         };
 
     /// <summary>
-    /// <c>return this.Equals(other is R ? (R)other : null);</c> for a record that
-    /// declares <c>Equals(R)</c>: C#'s synthesized <c>Equals(object)</c> calls it
-    /// with <c>other as R</c>. <c>null</c> for any other member.
+    /// The route C#'s <c>Equals(object)</c> takes to a typed replacing
+    /// <c>Equals</c>: <c>return this.Equals(other is R ? (R)other : null);</c> for a
+    /// record's <c>Equals(R)</c>, <c>return other is S ? this.Equals((S)other) : false;</c>
+    /// for a struct's interface-implementing <c>Equals(S)</c>. <c>null</c> for any
+    /// other member.
     /// </summary>
     private static IReadOnlyList<IrStatement>? RouteOf(
         INamedTypeSymbol type,
@@ -106,33 +108,60 @@ internal static class IrSynthesizedMemberExtractor
         IrExtractionContext context
     )
     {
-        if (kind is not IrSynthesizedValueMember.Equals || !type.IsRecord)
+        if (kind is not IrSynthesizedValueMember.Equals)
             return null;
 
-        if (ValueEqualityShapes.ReplacingEqualsOf(type, context.Target) is not { } replacing)
+        if (ValueEqualityShapes.RoutedEqualsOf(type, context.Target) is not { } routed)
             return null;
 
-        var recordType = IrTypeRefMapper.Map(type, context.OriginResolver, context.Target);
+        // An explicit implementation the target drops has no member to call:
+        // the target's own body compares the fields instead.
+        if (MethodOverloadGroups.GroupOf(routed, context.GroupingPolicy) is null)
+            return null;
+
+        var ownType = IrTypeRefMapper.Map(type, context.OriginResolver, context.Target);
         var other = new IrIdentifier(EqualsParameter);
+        var isOwnType = new IrIsPatternExpression(other, new IrTypePattern(ownType));
+        var asOwnType = new IrCastExpression(other, ownType);
+
+        if (!type.IsRecord)
+        {
+            return
+            [
+                new IrReturnStatement(
+                    new IrConditionalExpression(
+                        isOwnType,
+                        RoutedCall(routed, asOwnType, context),
+                        new IrLiteral(false, IrLiteralKind.Boolean)
+                    )
+                ),
+            ];
+        }
 
         var asRecord = new IrConditionalExpression(
-            new IrIsPatternExpression(other, new IrTypePattern(recordType)),
-            new IrCastExpression(other, recordType),
+            isOwnType,
+            asOwnType,
             new IrLiteral(null, IrLiteralKind.Null)
         );
 
-        var call = new IrCallExpression(
-            new IrMemberAccess(new IrThisExpression(), replacing.Name),
-            [new IrArgument(asRecord)]
+        return [new IrReturnStatement(RoutedCall(routed, asRecord, context))];
+    }
+
+    /// <summary><c>this.Equals(argument)</c>, bound to the routed declaration's overload.</summary>
+    private static IrCallExpression RoutedCall(
+        IMethodSymbol routed,
+        IrExpression argument,
+        IrExtractionContext context
+    ) =>
+        new(
+            new IrMemberAccess(new IrThisExpression(), MethodOverloadGroups.GroupNameOf(routed)),
+            [new IrArgument(argument)]
         )
         {
             Overload = new IrSelectedOverload(
-                MethodOverloadGroups.RefOf(replacing, context.GroupingPolicy)
+                MethodOverloadGroups.RefOf(routed, context.GroupingPolicy)
             ),
         };
-
-        return [new IrReturnStatement(call)];
-    }
 
     private static string SignatureTextOf(IrSynthesizedValueMember kind) =>
         kind switch
