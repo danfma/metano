@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
@@ -40,14 +41,14 @@ internal static class SynthesizedGroupMembers
         if (policy.ValueEqualityNames is null)
             return groups;
 
-        var shape = ValueEqualityShapes.Of(type, policy.Target);
+        var shape = ValueEqualityShapes.Of(type, policy);
 
         return Kinds
             .Where(shape.Synthesizes)
-            .Select(kind => (Kind: kind, Name: policy.NameOf(kind)))
-            .Where(entry => entry.Name is not null)
-            .Aggregate(groups, (inserted, entry) =>
-                InsertKind(type, inserted, entry.Kind, entry.Name!, policy)
+            .Aggregate(groups, (inserted, kind) =>
+                policy.NameOf(kind) is { } name
+                    ? InsertKind(type, inserted, kind, name, policy)
+                    : inserted
             );
     }
 
@@ -61,9 +62,15 @@ internal static class SynthesizedGroupMembers
     {
         var target = policy.Target;
 
-        var joined = groups.FirstOrDefault(group =>
-            IsSpelled(group, name, target) && HasNonReplacingMember(type, group, kind, target)
-        );
+        var spelled = groups
+            .Where(group =>
+                IsSpelled(group, name, target) && HasNonReplacingMember(type, group, kind, policy)
+            )
+            .ToList();
+
+        ReportSpelledTwice(type, spelled, name);
+
+        var joined = spelled.FirstOrDefault();
 
         var inherited = InsertedByBase(type, kind, policy);
 
@@ -71,7 +78,7 @@ internal static class SynthesizedGroupMembers
             return groups;
 
         var groupName = joined?.Name ?? inherited!.Value.GroupName;
-        var replacement = FoldedReplacementOf(type, kind, target);
+        var replacement = FoldedReplacementOf(type, kind, policy);
 
         var member = new SynthesizedMember(
             kind,
@@ -127,6 +134,34 @@ internal static class SynthesizedGroupMembers
     }
 
     /// <summary>
+    /// <c>MS0001</c> (an error) at each group after the first the target spells
+    /// <paramref name="name"/>: only one takes the synthesized member, so the
+    /// others would declare a second member of that name.
+    /// </summary>
+    private static void ReportSpelledTwice(
+        INamedTypeSymbol type,
+        IReadOnlyList<MethodOverloadGroup> spelled,
+        string name
+    )
+    {
+        foreach (var extra in spelled.Skip(1))
+        {
+            var method = extra.DeclaredMembers.First().Symbol;
+
+            ExtractionDiagnostics.Report(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"'{type.Name}.{method.Name}' is emitted as '{name}', which the overloads "
+                        + $"of '{spelled[0].Name}' already declare with the synthesized member "
+                        + "of that name; give one of them another [Name] (spec 013 FR-039).",
+                    method.Locations.FirstOrDefault()
+                )
+            );
+        }
+    }
+
+    /// <summary>
     /// Whether the target spells <paramref name="group"/> <paramref name="name"/>
     /// (FR-039): a dispatched group by its camelCased C# name — a <c>[Name]</c>
     /// on an overload pins its suffix —, a lone method by its raw <c>[Name]</c>
@@ -136,6 +171,11 @@ internal static class SynthesizedGroupMembers
     /// </summary>
     private static bool IsSpelled(MethodOverloadGroup group, string name, TargetLanguage? target)
     {
+        // A group takes one synthesized member, under the spelling that matched
+        // it: once joined, its C# name no longer re-spells it for another kind.
+        if (group.Synthesized is not null)
+            return false;
+
         if (group.IsSegregatedOverrides || group.Members.Any(member => member.IsStatic))
             return false;
 
@@ -173,10 +213,10 @@ internal static class SynthesizedGroupMembers
         INamedTypeSymbol type,
         MethodOverloadGroup group,
         IrSynthesizedValueMember kind,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
-        var replacing = ReplacingDeclarationsOf(type, kind, target);
+        var replacing = ReplacingDeclarationsOf(type, kind, policy);
 
         return group.DeclaredMembers.Any(member => !replacing.Any(member.StandsFor));
     }
@@ -185,14 +225,14 @@ internal static class SynthesizedGroupMembers
     private static IReadOnlyList<IMethodSymbol> ReplacingDeclarationsOf(
         INamedTypeSymbol type,
         IrSynthesizedValueMember kind,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         kind switch
         {
-            IrSynthesizedValueMember.Equals => ValueEqualityShapes.ReplacingEqualsOf(type, target),
+            IrSynthesizedValueMember.Equals => ValueEqualityShapes.ReplacingEqualsOf(type, policy),
             IrSynthesizedValueMember.HashCode => ValueEqualityShapes.ReplacingHashCodeOf(
                 type,
-                target
+                policy.Target
             )
                 is { } hashCode
                 ? [hashCode]
@@ -210,14 +250,14 @@ internal static class SynthesizedGroupMembers
     private static IMethodSymbol? FoldedReplacementOf(
         INamedTypeSymbol type,
         IrSynthesizedValueMember kind,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         kind switch
         {
-            IrSynthesizedValueMember.Equals => ValueEqualityShapes.FoldedEqualsOf(type, target),
+            IrSynthesizedValueMember.Equals => ValueEqualityShapes.FoldedEqualsOf(type, policy),
             IrSynthesizedValueMember.HashCode => ValueEqualityShapes.ReplacingHashCodeOf(
                 type,
-                target
+                policy.Target
             ),
             _ => null,
         };
@@ -233,23 +273,24 @@ internal static class SynthesizedGroupMembers
         OverloadGroupingPolicy policy
     ) =>
         EmittedBasesOf(type, policy)
-            .Select(ancestor =>
-                (
-                    Ancestor: ancestor,
-                    Group: MethodOverloadGroups
-                        .Of(ancestor, policy)
-                        .FirstOrDefault(candidate => candidate.Synthesized?.Kind == kind)
-                )
-            )
-            .Where(entry => entry.Group is not null)
-            .Select(entry =>
-                ((SynthesizedRoot Root, string GroupName)?)
-                    (
-                        new SynthesizedRoot(entry.Ancestor.OriginalDefinition, kind),
-                        entry.Group!.Name
-                    )
-            )
-            .LastOrDefault();
+            .Select(ancestor => FoundIn(ancestor, kind, policy))
+            .LastOrDefault(found => found is not null);
+
+    /// <summary>
+    /// The root and group name of <paramref name="kind"/> in
+    /// <paramref name="ancestor"/>'s groups; <c>null</c> when it inserted none.
+    /// </summary>
+    private static (SynthesizedRoot Root, string GroupName)? FoundIn(
+        INamedTypeSymbol ancestor,
+        IrSynthesizedValueMember kind,
+        OverloadGroupingPolicy policy
+    ) =>
+        MethodOverloadGroups
+            .Of(ancestor, policy)
+            .FirstOrDefault(candidate => candidate.Synthesized?.Kind == kind)
+            is { } group
+            ? (new SynthesizedRoot(ancestor.OriginalDefinition, kind), group.Name)
+            : null;
 
     /// <summary>The emitted base classes of <paramref name="type"/>, nearest first.</summary>
     private static IEnumerable<INamedTypeSymbol> EmittedBasesOf(

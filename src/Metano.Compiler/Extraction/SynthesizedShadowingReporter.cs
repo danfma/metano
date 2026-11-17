@@ -115,7 +115,7 @@ internal static class SynthesizedShadowingReporter
         OverloadGroupingPolicy policy
     ) =>
         synthesized.Kind is IrSynthesizedValueMember.Equals
-        && ValueEqualityShapes.ReplacingEqualsOf(type, policy.Target).Count > 0;
+        && ValueEqualityShapes.Of(type, policy).ReplacesEquals;
 
     private static string SynthesizedText(IrSynthesizedValueMember kind) =>
         kind switch

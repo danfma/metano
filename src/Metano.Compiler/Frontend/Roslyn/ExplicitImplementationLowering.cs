@@ -261,18 +261,11 @@ public static class ExplicitImplementationLowering
     private static string EmittedName(ISymbol symbol, TargetLanguage? target) =>
         SymbolHelper.GetNameOverride(symbol, target) ?? symbol.Name;
 
-    /// <summary>
-    /// The members of <paramref name="type"/> and its base classes up to, not
-    /// including, <c>object</c> or <c>System.ValueType</c>: a struct's inherited
-    /// <c>ValueType.Equals</c> claims no name, as <c>object</c>'s does not.
-    /// </summary>
     private static IEnumerable<ISymbol> HierarchyMembers(INamedTypeSymbol type)
     {
         for (
             var current = type;
-            current is not null
-                && current.SpecialType
-                    is not (SpecialType.System_Object or SpecialType.System_ValueType);
+            current is not null && current.SpecialType != SpecialType.System_Object;
             current = current.BaseType
         )
         {

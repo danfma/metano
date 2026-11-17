@@ -111,7 +111,7 @@ internal static class IrSynthesizedMemberExtractor
         if (kind is not IrSynthesizedValueMember.Equals)
             return null;
 
-        if (ValueEqualityShapes.RoutedEqualsOf(type, context.Target) is not { } routed)
+        if (ValueEqualityShapes.RoutedEqualsOf(type, context.GroupingPolicy) is not { } routed)
             return null;
 
         // An explicit implementation the target drops has no member to call:

@@ -339,7 +339,7 @@ public static class IrClassExtractor
             )
         )
         {
-            ValueEquality = ValueEqualityShapes.Of(type, target),
+            ValueEquality = ValueEqualityShapes.Of(type, context.GroupingPolicy),
         };
     }
 
@@ -470,7 +470,9 @@ public static class IrClassExtractor
 
     /// <summary>The parameters a member declares (a <c>params</c> one counts once).</summary>
     private static int ParameterCountOf(GroupMember member) =>
-        member is DeclaredMember declared ? declared.Symbol.Parameters.Length : member.MaximumArity;
+        member is DeclaredMember { Symbol: var symbol }
+            ? symbol.Parameters.Length
+            : member.MaximumArity;
 
     /// <summary>An overload of an inherited dispatcher as the deriving type lists it.</summary>
     private static IrMethodDeclaration InheritedSignatureOf(
@@ -534,7 +536,8 @@ public static class IrClassExtractor
                     DeclarationOrdinal = member.Ordinal,
                     Anchor = AnchorOf(member, context),
                     IsShadowedBySynthesized =
-                        member is DeclaredMember declared && shadowed.Contains(declared),
+                        member is DeclaredMember declaredMember
+                        && shadowed.Contains(declaredMember),
                 }
         );
     }
