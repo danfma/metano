@@ -217,15 +217,21 @@ same distinctness checks.
 ## 7. Synthesized value-equality members (FR-038–FR-045)
 
 - `OverloadGroupingPolicy(TargetLanguage? Target, SynthesizedMemberNames? ValueEqualityNames)`:
-  replaces the `TargetLanguage? target` parameter of `MethodOverloadGroups` and its callers, and
-  keys the groups' cache. It is built from `IrExtractionContext`.
-- `SynthesizedMemberNames(IReadOnlyDictionary<SynthesizedValueMember, string> EmittedNames,
-  string FastPathSuffix, Func<string, string> MethodSpelling)`: supplied by the target
-  (TypeScript: `equals` / `hashCode` / `with`, `ByValue`, camelCase; Dart: none in 3.0).
-- `GroupMember` = `DeclaredMember(IMethodSymbol, Ordinal, MethodAnchor?)` |
-  `SynthesizedMember(SynthesizedValueMember Kind, INamedTypeSymbol Owner, Ordinal, SynthesizedAnchor?)`.
+  replaces `TargetLanguage?` across the grouping family (`MethodOverloadGroups`,
+  `OverloadEmittedName.NameOverrideOf` / `PinsOverloadSuffixes` and their callers) and keys the
+  groups' cache. `IrExtractionContext` exposes it; each target holds one static instance.
+- `SynthesizedMemberNames(string? Equals, string? HashCode, string? Copy, string FastPathSuffix)`:
+  plain strings, value equality (TypeScript: `equals` / `hashCode` / `with`, `ByValue`; Dart:
+  none in 3.0). Spelling is core's existing `GetNameOverride ?? ToCamelCase`.
+- `GroupMember(Ordinal, IsStatic, RequiredArity, MaximumArity, OverloadSuffixPin? Pin,
+  MemberAnchor? Anchor)` = `DeclaredMember(IMethodSymbol)` | `SynthesizedMember(IrSynthesizedValueMember Kind)`.
+- `MemberAnchor(IrOverloadRef Root, IrOverloadAnchorKind Kind, FurtherRoots, ReimplementedRoots)`:
+  one ref-based anchor for both cases.
+- `IrTypeSemantics.ValueEquality: IrValueEqualityShape(IrValueEqualityKind Kind, bool ReplacesEquals,
+  bool ReplacesHashCode)`, computed from symbols; the single source of truth for synthesis.
 - `IrMethodDeclaration.SynthesizedKind: IrSynthesizedValueMember?` (`Equals`, `HashCode`,
-  `Copy`), with `Semantics.IsSynthesized` and `Body: null`; the target supplies the body.
+  `Copy`), with `Semantics.IsSynthesized`; its body is the user's folded replacement, a route to
+  the user's typed `Equals(R)`, or null (the target supplies it).
 - `IrOverloadRef` is unchanged: a synthesized member's ref is the joined group's name with the
   ordinal after every declared member.
 

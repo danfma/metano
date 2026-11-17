@@ -1,275 +1,249 @@
 # Contract: Synthesized value-equality members in overload groups
 
 **Normative for**: 013 FR-038–FR-045, DECIDED-33–DECIDED-35; baseline FR-060.
-**Status**: design, for review before implementation (wave 3.0, round 6). It replaces the
-round-3 forced rename (`ValueEqualityMemberNames`, `MethodOverloadGroup.YieldsToValueEquality`)
-and the round-4 TypeScript-only join, which could not anchor overrides or inherit dispatchers.
+**Status**: design revised after review (architecture: approved with reservations;
+compiler-man: approved with changes), wave 3.0 round 6. It replaces the round-3 forced rename
+(`ValueEqualityMemberNames`, `MethodOverloadGroup.YieldsToValueEquality`) and the round-4
+TypeScript-only join, which could not anchor overrides or inherit dispatchers.
 
 ## Problem
 
-A record or a plain struct emitted as a class carries value-equality members C# synthesizes or
-inherits (baseline FR-060): `Equals(object)`, `GetHashCode()` and, for a record, the copy behind a
-`with` expression. A target emits them under names its runtime calls: TypeScript's `valueEquals`,
-`HashSet` and `Dictionary` call `equals(other)` and `hashCode()`, and the `with` lowering calls
-`with(overrides)`. A user method can be spelled the same way in the target (`Equals(RTol other,
-double tol)` → `equals`, `HashCode(int seed)` → `hashCode`, a record's `With(int a)` → `with`), and
-so can a member that implements an interface (`IEqualityComparer<T>.Equals(T, T)`). Today one of
-the two members is silently lost or replaced.
+A record or a plain struct emitted as a class has value-equality members that C# synthesizes or
+inherits (baseline FR-060): `Equals(object)`, `GetHashCode()` and, for a record, the copy behind
+a `with` expression. A target emits them under the names its runtime calls; TypeScript's
+`valueEquals`, `HashSet` and `Dictionary` call `equals(other)` and `hashCode()`.
 
-The fix lets the synthesized member **join** the user group that shares its emitted name as one
-more overload. The spec-013 machinery then does what it does for any overload group: names, root
-anchoring across a hierarchy, inherited dispatchers forwarding to `super`, `override` flags,
-direct call sites and the claim pass.
+A user method can share that spelling: `Equals(RTol other, double tol)` → `equals`,
+`HashCode(int seed)` → `hashCode`, a record's `With(int a)` → `with`, or an implementation of
+`IEqualityComparer<T>.Equals(T, T)`. Today one of the two members is lost.
 
-## 1. The group member: declared or synthesized (FR-038)
+The synthesized member therefore **joins** the user group as one more overload, and spec 013's
+machinery does the rest: names, root anchoring, inherited dispatchers forwarding to `super`,
+`override` flags, direct call sites and the claim pass.
 
-Core groups `IMethodSymbol`s today (`MethodGroupMember(IMethodSymbol Symbol, int Ordinal,
-MethodAnchor? Anchor)`). Only one synthesized member has a Roslyn symbol of the needed shape (a
-record's implicit `Equals(object)`); a struct's lives on `System.ValueType`, a record's
-`GetHashCode()` groups under another C# name, and the record copy is `<Clone>$()`, which takes no
-property bag. So a group member becomes a small closed hierarchy:
+## 0. The neutral fact: `ValueEqualityShape` (FR-045)
+
+Core computes one target-neutral fact per class from its symbols and stores it on the IR:
 
 ```csharp
-internal abstract record GroupMember(int Ordinal);
+public enum IrValueEqualityKind { None, Record, Struct }
 
-// A method the type declares, as today.
-internal sealed record DeclaredMember(IMethodSymbol Symbol, int Ordinal, MethodAnchor? Anchor)
-    : GroupMember(Ordinal);
-
-// A value-equality member the type synthesizes, described by data.
-internal sealed record SynthesizedMember(
-    SynthesizedValueMember Kind,      // Equals | HashCode | Copy
-    INamedTypeSymbol Owner,           // the record or struct
-    int Ordinal,                      // after every declared member (identity stays stable)
-    SynthesizedAnchor? Anchor         // the same Kind in the nearest emitted base that joined it
-) : GroupMember(Ordinal);
+public sealed record IrValueEqualityShape(
+    IrValueEqualityKind Kind,       // None for [PlainObject], [JsTuple], [Branded], JSX
+                                    // components and every non-record class
+    bool ReplacesEquals,            // record: a declared Equals(R); struct: a declared
+                                    // override Equals(object)
+    bool ReplacesHashCode);         // a declared override GetHashCode()
 ```
 
-`SynthesizedValueMember` is a target-neutral enum of C# facts. The member's shape is fixed by its
-kind and never read from a symbol:
+- The fact is stored as `IrTypeSemantics.ValueEquality`.
+- `IrValueEqualitySynthesis` and `IrRecordEqualityOverrides` become readers of that field. So do their callers: the TypeScript record synthesis, the Dart class bridge and `IrRuntimeRequirementScanner`.
+- The name-and-arity heuristic over IR members (`IsRecordTypeRef`, `DeclaresStructEquals`) is retired.
+- A synthesized `IrMethodDeclaration` (§ 1) can never count as a user `Equals` or `GetHashCode`: the shape is read from symbols, before any synthesized member exists.
 
-| Kind | C# meaning | Parameters (dispatch shape) | Return | Suffix |
-|---|---|---|---|---|
-| `Equals` | `Equals(object?)` / `ValueType.Equals` | `other: object` (no runtime check) | `bool` | the contract's pinned suffix |
-| `HashCode` | `GetHashCode()` | none | `int` | the contract's pinned suffix |
-| `Copy` | the record copy of `with` | `overrides: object`, optional (no runtime check) | the record type | the contract's pinned suffix |
+**Changes from today.** A struct's `Equals(S)` (`IEquatable<S>`) **no longer** replaces the synthesized `Equals(object)`, because .NET's `ValueType.Equals` does not call it. A boxed comparison then compares fields, as on .NET; this closes the earlier "only `Equals(S)`" follow-up.
 
-The IR carries it as an `IrMethodDeclaration` with `Semantics.IsSynthesized`, a new
-`IrSynthesizedValueMember? SynthesizedKind` and `Body: null`; a target supplies the body it already
-synthesizes (TypeScript: `IrToTsRecordSynthesisBridge`).
+## 1. The group member (FR-038)
 
-### Which symbol reads become member reads
+A group member becomes a small closed hierarchy. The facts that naming and dispatch need live on
+the base type, so only `IrClassExtractor` pattern-matches on the case:
 
-| File | Today | After |
-|---|---|---|
-| `MethodOverloadGroups.cs` (11) | groups, anchors and names `MethodGroupMember.Symbol` | `GroupMember`; `GroupsNamed` inserts the `SynthesizedMember` (§ 3); `SuffixesOf` returns `IReadOnlyDictionary<GroupMember, string>`; `AnchorOf` for a synthesized member is `SynthesizedAnchorOf` (§ 4); `RefOf(GroupMember)` beside `RefOf(IMethodSymbol)`; new `SynthesizedOf(type, kind, policy)` |
-| `OverloadGroupNaming.cs` (1) | `PinnedOverload(IMethodSymbol Symbol, OverloadSuffixPin? Pin)` | `PinnedOverload(GroupMember Member, OverloadSuffixPin? Pin)`; a synthesized member is always pinned to the contract suffix, so stage 1 never reads its parameters |
-| `IrClassExtractor.cs` (6) | `ExtractNamedOverloads` keyed by `IMethodSymbol`; `AnchorOf(MethodGroupMember)` | keyed by `GroupMember`; builds the synthesized member's IR from its kind; `AnchorOf` maps a `SynthesizedAnchor` to `IrOverloadAnchor` |
-| `DispatchedMethodCalls.cs` (6) | `RefOf(IMethodSymbol)` for a call | unchanged for declared members; adds the bindings of § 5 (implicit `Equals` / `GetHashCode`, `with` expressions) to the synthesized member's ref |
-| `IrExpressionExtractor.cs` (4) | `base.M(...)` and `IsEmittedBase` | `base.Equals(x)` / `base.GetHashCode()` inside a joined type resolve to the base's synthesized ref (§ 4) |
-| `MultiplyConstructedInterfaces.cs` (2), `OverloadEmittedName.cs` (1) | interface roots, `[Name]` pins | unchanged: they only see declared members |
+```csharp
+internal abstract record GroupMember(
+    int Ordinal,                        // declaration order; a synthesized member comes after
+                                        // every declared one
+    bool IsStatic,
+    int RequiredArity, int MaximumArity,
+    OverloadSuffixPin? Pin,             // [Name] for a declared member; the contract suffix for
+                                        // a synthesized one
+    MemberAnchor? Anchor);
+
+internal sealed record DeclaredMember(IMethodSymbol Symbol, …) : GroupMember(…);
+internal sealed record SynthesizedMember(IrSynthesizedValueMember Kind, …) : GroupMember(…);
+
+// One anchor for both cases: the root group's identity plus the kind of anchoring.
+internal sealed record MemberAnchor(
+    IrOverloadRef Root,
+    IrOverloadAnchorKind Kind,
+    IReadOnlyList<IrOverloadRef> FurtherRoots,
+    IReadOnlyList<IrOverloadRef>? ReimplementedRoots);
+```
+
+- `IrSynthesizedValueMember` (`Equals`, `HashCode`, `Copy`) is the single enum for the kind, used by core and the IR alike.
+- `SynthesizedMember` needs no `Owner`: a group belongs to one type.
+- In the IR, a synthesized member is an `IrMethodDeclaration` with `Semantics.IsSynthesized` and `SynthesizedKind`. It also carries the user declaration it routes to when the type replaces its kind (§ 3, `ReplacedBy: IrOverloadRef?`, or the user's body folded in). Otherwise its `Body` is null and the target supplies the body it already synthesizes.
+- Its shape is fixed by its kind:
+
+  | Kind | Parameters (dispatch shape) | Return |
+  |---|---|---|
+  | `Equals` | `other: object` | `bool` |
+  | `HashCode` | none | `int` |
+  | `Copy` | `overrides: object`, optional | the record |
+
+### Sites that change
+
+| File | Change |
+|---|---|
+| `MethodOverloadGroups.cs` | `GroupMember`; `GroupsNamed` inserts the synthesized member (§ 3); `SuffixesOf` is keyed by `GroupMember`; anchors are ref-based; `RefOf(GroupMember)`; new `SynthesizedOf(type, kind, policy)`; every entry point takes the policy |
+| `OverloadGroupNaming.cs` | `PinnedOverload(GroupMember, OverloadSuffixPin?)`; a synthesized member is always pinned |
+| `IrClassExtractor.cs` | keyed by `GroupMember`; builds the synthesized member's IR; folds a replacing `Equals(object)` / `GetHashCode()` into it (§ 3); the only place that matches on the case |
+| `DispatchedMethodCalls.cs` | declared bindings unchanged; adds the bindings of § 5 |
+| `IrExpressionExtractor.cs` | `base.Equals(x)` / `base.GetHashCode()` in a joined type resolve to the base's synthesized ref; passes the policy |
+| `OverloadEmittedName.cs` | `NameOverrideOf(method, policy)` and `PinsOverloadSuffixes(type, policy)` take the policy (A4); **this file changes** |
+| `IrParameterNaming.cs`, `IrPropertyExtractor.cs`, `OverrideChains.cs`, `OverridablePropertyConstructionReads.cs`, `PrimaryConstructorPropertyAlias.cs`, `MultiplyConstructedInterfaces.cs` | pass the policy where they call the grouping family (A4) |
+| Targets | `IrToTsNamingPolicy` (TypeScript) and `DartTypeShapes` (Dart) pass their target's single static policy instance |
 
 ## 2. The target contract (FR-039)
 
-The target tells core how it spells methods and which names its synthesized members take. It
-reaches the groups through the existing target seam: `MethodOverloadGroups.Of` and its callers
-take an `OverloadGroupingPolicy` (today they take `TargetLanguage? target`), built from
-`IrExtractionContext`, which already carries per-target capabilities (`EmitsOperatorFastPaths`,
-`EmitsConstructorSelectors`).
-
 ```csharp
-public sealed record OverloadGroupingPolicy(
-    TargetLanguage? Target,
-    SynthesizedMemberNames? ValueEqualityNames);   // null: nothing joins (today's output)
-
 public sealed record SynthesizedMemberNames(
-    IReadOnlyDictionary<SynthesizedValueMember, string> EmittedNames,
-    string FastPathSuffix,                          // e.g. "ByValue"
-    Func<string, string> MethodSpelling);           // C# method name -> target spelling
+    string? Equals, string? HashCode, string? Copy, string FastPathSuffix);
+
+public sealed record OverloadGroupingPolicy(
+    TargetLanguage? Target, SynthesizedMemberNames? ValueEqualityNames);
 ```
 
-- **TypeScript** supplies `{ Equals: "equals", HashCode: "hashCode", Copy: "with" }`, the suffix
-  `ByValue` and `TypeScriptNaming.ToCamelCaseMember`. These strings live in
-  `Metano.Compiler.TypeScript`; core holds none (NFR-002).
-- **Dart** supplies `null` for 3.0 (DECIDED-35, open question OQ-9), so its output does not change.
-- The groups' cache is keyed by the policy (a record with value equality) instead of the target.
+- **Value equality.** Both records hold only strings, so they compare by value and can key the groups' cache (A1).
+- **One instance per target.** TypeScript holds `new(TargetLanguage.TypeScript, new("equals", "hashCode", "with", "ByValue"))`. Dart holds `new(TargetLanguage.Dart, null)` for 3.0 (DECIDED-35, OQ-9 decided), so no Dart member joins and Dart output is unchanged. The TypeScript strings live in `Metano.Compiler.TypeScript`; core holds none.
+- **One source of `Target`.** `IrExtractionContext` exposes `GroupingPolicy`, built from its `Target` and the `ValueEqualityNames` the target sets.
+- **The policy replaces `TargetLanguage?` across the grouping family** (A4): every `MethodOverloadGroups` entry point, `OverloadEmittedName.NameOverrideOf` / `PinsOverloadSuffixes`, and their callers listed in § 1.
+- **Spelling (A2, A3).** A declared group is spelled `SymbolHelper.GetNameOverride(member, target)` of its only member, when the group has exactly one member with a `[Name]`. Otherwise it is spelled `SymbolHelper.ToCamelCase(GroupNameOf(member))`. It uses the raw override, never `OverloadEmittedName.NameOverrideOf`, which would re-enter `GroupOf(...).IsDispatched`.
+  - `[Name("near")] Equals(NRec, double)` is spelled `near` and joins nothing.
+  - `GetHashCode` joins the group `HashCode`.
+- **Identity.** A group keeps its C# name as its identity (`GroupNameOf`), so every declared member's `IrOverloadRef` is unchanged. A synthesized member's ref is `(typeKey, joined group's name, ordinal after every declared member)`.
+- **Explicit interface implementations** (C5): `bool IEquatable<int>.Equals(int o)` and `IWither IWither.With(int a)` group under their interface member's name (`GroupNameOf`), so their spelling is `equals` / `with`. They join when the implementation is emitted under the interface name; dropped ones never do.
 
-**The group key and identity.** A group keeps its C# name as its identity (`GroupNameOf`), so
-`IrOverloadRef(typeKey, groupName, ordinal)` of every declared member is unchanged. Joining is
-decided by **spelling**: a synthesized member joins the declared group whose spelling
-(`[Name]` override when present, else `MethodSpelling(GroupNameOf(m))`) equals its emitted name.
-So `GetHashCode` joins the group `HashCode` (spelled `hashCode`), and `Equals(RTol, double)`'s
-group `Equals` (spelled `equals`). The synthesized member's ref is
-`IrOverloadRef(typeKey, <that group's name>, <its ordinal, after every declared member>)`.
-Declared ordinals do not move, so a call site and a cached group compute the same refs.
+## 3. When a member is inserted, and its body (FR-040)
 
-## 3. When a member is inserted (FR-040)
+For each kind `K` the shape synthesizes, whose target name is non-null:
 
-For each kind the type synthesizes (`IrValueEqualitySynthesis` and `IrRecordEqualityOverrides`
-decide this, read through a symbol-level adapter that calls the same predicates, FR-045):
+1. **A user instance method group shares `K`'s spelling** (operators and statics never): `K` joins it. A lone user method gives a group of two, dispatched under the shared name.
+2. **The nearest emitted base inserted `K`** (§ 4): `K` is inserted, anchored, even when nothing in the type shares the name.
+3. Otherwise nothing is inserted, and the target emits `K` as today (NFR-001).
 
-1. **A user group shares its spelling** (only instance methods, not operators): the synthesized
-   member joins that group. A lone user method makes a group of two, which is dispatched under
-   the shared name.
-2. **An emitted base joined the same kind** (§ 4): the member is inserted, anchored on the base's,
-   even when no user group of the type shares the name.
-3. Otherwise nothing is inserted, and the target emits the member as today (NFR-001: no churn).
+**A user declaration that replaces `K` does not remove `K`** (C1): C# still has `Equals(object)` and `GetHashCode()` on the type; the user declaration supplies their behavior.
 
-What the type itself declares replaces a kind and blocks the insertion, as C# does: a record's
-`Equals(R)`, a struct's `Equals(object)` override or `Equals(S)`, and a `GetHashCode()` override.
-`Copy` cannot be replaced.
+- **Replacing by the same signature.** `override Equals(object)` on a struct, or `override GetHashCode()`: the user body is folded into the synthesized member, and the user method is not emitted on its own (one `hashCode`, not two).
+  - UHash: `override GetHashCode() => 7` beside `HashCode(int seed)` prints `7|3T`.
+  - UObjEq: `override Equals(object)` beside `Equals(UObjEq, int)`.
+- **Replacing by a typed `Equals(R)` on a record.** The synthesized `Equals(object)` routes to it as C# does: `this.<userFastPath>(other instanceof R ? other : null)`.
+  - UBoth: a user `virtual Equals(UBoth?)` beside `Equals(UBoth, double)`; behind `object`, .NET prints `False`, where today the dispatcher throws "No matching overload".
+  - A derived record with its own `Equals(D)` under a joined base answers through its own equality: its synthesized member overrides the base's and routes to `Equals(D)`.
+- **A struct's `Equals(S)` replaces nothing** (§ 0). USBoth: `Equals(USBoth)` beside `Equals(USBoth, int)`. The synthesized member compares fields, and the C# call `a.Equals(b)` binds to the user's `Equals(S)` (§ 5).
 
-Per kind:
+### Per kind
 
-- **Record `Equals(object)`.** It joins an `Equals` overload such as `Equals(RTol other, double
-  tol)` or `Equals(ROverl o, int slack)` / `Equals(ROverl o, string tag)` (three overloads, one
-  dispatcher). `valueEquals(a, b)` calls `equals(b)`, which takes the one-argument branch: the
-  synthesized one, unless a user one-argument overload whose parameter has a runtime check
-  matches first.
-- **Struct `Equals(object)`.** The member is the data-described `ValueType.Equals`; there is no
-  symbol to read and none is needed.
-- **`GetHashCode()`.** It joins a user `HashCode(int seed)` through the spelling. `HashCode.add`
-  calls `hashCode()`, which takes the zero-argument branch.
-- **Record copy (`with`).** It joins a user `With(int a)`. A `with` expression binds statically to
-  the synthesized fast path (§ 5), so the dispatcher only serves calls through an interface, a base
-  type or hand-written code. Its branch takes an optional `object`, has no runtime check, and is
-  ordered after every overload that has one.
+- **`Equals`** (record or struct, described by data). The dispatcher tries the synthesized branch **first**, guarded by "the argument has the same runtime type as `this`" (C2). The user's one-argument branches follow, and an unguarded synthesized branch closes the one-argument range, so a foreign argument returns `false` instead of throwing.
+  - `valueEquals`, `HashSet` and `Dictionary` reach the synthesized member for same-type values.
+  - UOpt: `Equals(UOpt o, double tol = 0.5)`; .NET prints `FFTFTF`.
+  - UIface: `Equals(IUShape)` on a record implementing `IUShape`; .NET prints `TFFFF`.
+- **`HashCode`** joins a user `HashCode(int seed)` through the spelling. `HashCode.add` calls `hashCode()` and takes the zero-argument branch. HashCode cases:
+  - **A user `HashCode()` with no parameters** has the exact shape of the synthesized member, so it cannot be told apart (rule C3 below).
+  - **`HashCode(int seed = 0)`** overlaps the zero-argument range, so it is not distinguishable at zero arguments: it keeps its fast path and is reported with MS0063. Zero-argument calls through the dispatcher reach the synthesized member; C# calls bind statically.
+- **`Copy`.** A `with` expression binds statically to the synthesized fast path (§ 5), so the dispatcher's copy branch serves only interface, base and hand-written calls. Its guard is "a plain object or `undefined`".
+  - `GRec<T>.With(T v)` keeps building and prints `TT74`.
 
-**"Cannot tell apart" (FR-042, MS0001 error).** A user overload in a joined group is reported, as
-an error at the user method, when its argument-count range overlaps the synthesized member's and
-none of its overlapping parameters has a runtime check (`IrTypeCheckBuilder.HasCheck`, the rule
-`CatchAllOverloads` already uses). Then no dispatcher order can route both members:
+### Indistinguishable user overloads (C2, C3; FR-042)
 
-- `With()` or `With(object)` against the synthesized `with(overrides?)`;
-- `GRec<T>.With(T v)`, since a type parameter has no check;
-- `HashCode()`, which has the same arity as `hashCode()`;
-- `Equals(object o)` declared as an overload rather than an override.
+A user overload is **distinguishable** from the synthesized member at an argument count they both
+accept only when each of its parameters there has a runtime check **and** that check cannot
+accept the owner type (`Equals(IUShape)` on `UIface : IUShape` accepts the owner).
 
-The message names both members and suggests a rename or a parameter of a checkable type. The
-round-4 patch's `ValueEqualityJoinReporter` carries this rule.
+- An indistinguishable overload keeps its fast path, so its C# call sites stay direct, but it gets **no dispatcher branch**. It is reported with the existing `MS0063` warning.
+- The synthesized member keeps the shared name and its branch.
+- The case is an **error** (`MS0001`) only when that overload implements an interface member, or overrides a root whose contract name is the shared name: callers through the interface or the base would reach the synthesized member instead.
+- Examples:
+  - `GRec<T>.With(T v)` and `Equals(IUShape)`: MS0063, and the code keeps building.
+  - A zero-parameter `HashCode()`: MS0063.
+- **The fast-path name is invariant** (C4). On a name clash the **user** member is renamed (`$`, MS0067), never `equalsByValue`, `hashCodeByValue` or `withByValue`.
+- **Only targets that supply names are affected.** These rules apply only when the target supplies the kind's name; Dart supplies none.
 
 ## 4. Anchoring across a hierarchy (FR-041)
 
-- **Stable fast-path name.** A synthesized member's suffix is pinned to the contract's
-  `FastPathSuffix` (an `OverloadSuffixPin` built from data), so its fast path is
-  `<emitted name><suffix>`: `equalsByValue`, `hashCodeByValue`, `withByValue`. It is the same at
-  every level of a hierarchy and in every package. The claim pass claims it as a method fast path
-  (naming.md step 5) and renames it with `$` and `MS0067` only when a user member already holds it.
-- **The anchor.** A `SynthesizedMember` of kind `K` in type `D` is anchored on `K`'s member in the
-  nearest emitted base `B` that inserted one (rule 2 of § 3). It takes the base's fast-path name and
-  is emitted with `override`. A base whose `K` was not inserted (it kept its plain `equals`) is no
-  anchor: `D` then inserts `K` only through rule 1.
-- **The worked hierarchy** (the round-4 failures, compiler-man R3 probes `ABase` / `ADer`):
+- **Stable names.** The fast path is `<name><FastPathSuffix>`: `equalsByValue`, `hashCodeByValue`, `withByValue`, the same in every level and package.
+- **The anchor.** A synthesized `K` in `D` anchors (`MemberAnchor.Root` = that member's ref) on `K` in the nearest emitted base that inserted it. It is emitted with `override`, and with no dispatcher when its group adds no overloads (FR-030). A base that did not insert `K` is no anchor.
+- **The round-4 hierarchy** (compiler-man R3 `ABase` / `ADer`, plus `AOther`):
+  - `ABase` has the dispatcher `equals` over `equalsOtherTol` and `equalsByValue`, and the dispatcher `hashCode` over `abstract hashCodeSeed` and `hashCodeByValue`.
+  - `ADer` emits `override equalsOtherTol(o, t)` (the root's suffix, FR-025), `override equalsByValue`, `override hashCodeSeed` and `override hashCodeByValue`, with no dispatchers.
+  - `AOther` declares no `Equals(…, tol)`: rule 2 inserts its synthesized members, anchored.
+- **Three levels where only the middle type joins.** The top keeps its plain `equals`. The middle declares a dispatcher `override equals(...)` over its synthesized member and its user overload; its synthesized body calls `super.equals(other)`. The bottom anchors on the middle.
+- **`super` without recursion.** A derived synthesized body chains to the base **fast path** (`super.equalsByValue(other)`, `super.hashCodeByValue()`), never through the base dispatcher; that recursion is what hung in round 4. When the base did not join, it calls `super.equals(other)` as today.
+- **tsgo.** A derived `override equals(...)` with overload signatures over a base `equals(other: any)` was confirmed against tsgo in round 4 and is checked again in the golden.
 
-  ```csharp
-  abstract record ABase(double V) { public virtual bool Equals(ABase other, double tol) => false;
-                                    public abstract int HashCode(int seed); }
-  record ADer(double V) : ABase(V) { public override bool Equals(ABase o, double t) => …;
-                                     public override int HashCode(int s) => s + 1; }
-  record AOther(double V) : ABase(V) { public override int HashCode(int s) => s; }
-  ```
+## 5. Direct call sites (FR-043; OQ-10 decided: bind)
 
-  - `ABase`: group `Equals` = {`Equals(ABase, double)` → `equalsOtherTol`, synthesized → `equalsByValue`}, with dispatcher `equals`. Group `HashCode` = {abstract `HashCode(int)` → `abstract hashCodeSeed`, synthesized → `hashCodeByValue`}, with dispatcher `hashCode`.
-  - `ADer`: the override anchors on `ABase`'s root, so it is `override equalsOtherTol(o, t)` (the root's suffix, whatever `ADer` names its parameters; FR-025). The synthesized member anchors on `ABase`'s, so it is `override equalsByValue(other)`. The group adds no overloads, so there is no dispatcher (FR-030). `ABase`'s dispatcher reaches both virtually. The same holds for `HashCode`.
-  - `AOther` declares no `Equals(…, tol)`. Rule 2 inserts its synthesized `Equals`, anchored: `override equalsByValue(other)` and no dispatcher. A two-argument call through `ABase` therefore still reaches `equalsOtherTol` (round 4 lost it).
-- **`super` without recursion.** A derived synthesized body chains to its base's members through
-  the **base fast path**, never through the base dispatcher: `return super.equalsByValue(other)
-  && …` and `hc.add(super.hashCodeByValue())`. In round 4 the derived body called
-  `super.equals(other)`, whose dispatcher called `this.equalsByValue` (the derived one) again. When
-  the base did not join, the body calls `super.equals(other)` as today.
-- **Abstract and virtual user overloads** follow FR-030 unchanged: an abstract one is
-  `abstract <fastPath>(…)` beside the synthesized fast path, and a virtual one is anchored by its
-  overrides.
-- **A derived type that joins when its base did not** (`D : B`, where `D` declares
-  `Equals(D, double)` and `B` kept its plain `equals`): `D`'s group is {user, synthesized}, with a
-  dispatcher `override equals(...)`. Its synthesized body calls `super.equals(other)` (`B`'s plain
-  member). Calls through `B` reach `D`'s dispatcher.
-
-## 5. Direct call sites (FR-043)
-
-- A call that binds to a declared overload of a joined group is a direct fast-path call (FR-018),
-  as for any dispatched group (`a.equalsOtherTol(b, 0.1)`, `a.withA(7)`, `a.hashCodeSeed(2)`).
-- A C# call that binds to the synthesized member resolves to its ref and calls its fast path
-  directly: the implicit `Equals(object)` / `Equals(R)`, a struct's `ValueType.Equals`, and
-  `GetHashCode()` on a joined type (`a.equalsByValue(b)`, `a.hashCodeByValue()`). A `with`
-  expression on a joined record calls `a.withByValue({ … })`. On a type that did not join, these
-  stay as today (`a.equals(b)`, `valueHashCode(a)`, `a.with({…})`).
-- Calls through an interface, `object`, a type parameter or the runtime keep the shared name and
-  are dispatched by argument count and runtime checks (OverloadDispatchOrder): `valueEquals`,
-  `HashSet`, `IEqualityComparer<T>.Equals(a, b)`, `ITolEq.Equals(other, tol)`.
+- A call bound to a declared member of a joined group is a direct fast-path call (FR-018).
+- A call bound to a synthesized member on a joined type calls its fast path. Binding to the synthesized member is needed for correctness: through the dispatcher, a same-type argument and a user typed overload would compete. The bindings are:
+  - the implicit `Equals(object)` / `Equals(R)` of a record (`Equals(Base)` too, on a derived record), and a struct's `ValueType.Equals` → `a.equalsByValue(b)`;
+  - `GetHashCode()` → `a.hashCodeByValue()`;
+  - a `with` expression → `a.withByValue({ … })`.
+- On a type that did not join, these stay as today.
+- Calls through an interface, `object`, a type parameter or the runtime keep the shared name and are dispatched.
+- **Limitation (documented).** Runtime dispatch differs from C# for a foreign argument that a user overload accepts: `record UNum(double V) { bool Equals(double v) }` with `object.Equals(a, 1.0)` is `false` on .NET (the boxed `Equals(object)`), but the dispatcher takes the user `Equals(double)` branch.
 
 ## 6. Interfaces (FR-044)
 
-A user method that implements an interface member keeps the shared name through the class
-dispatcher:
-
-- `SCmp : IEqualityComparer<SPt>` (`Equals(SPt, SPt)`, `GetHashCode(SPt)`) and `RCmp : IEqualityComparer<int>`. The BCL interface is not emitted, so each implementation is its own root. `Equals(SPt, SPt)` joins with the synthesized `Equals` (arity 2 against arity 1). `GetHashCode(SPt)` is spelled `getHashCode` and joins nothing.
-- `ITolEq.Equals(ITolEq other, double tol)` on `ITolRec`: the interface root is a single member, not dispatched, so the implementation is not anchored. It joins with the synthesized member, and the class dispatcher's overload signatures include `equals(other: ITolEq, tol: number)`, which satisfies the interface.
-- `IWither.With(int)` on `WRec` and `IHashSeed.HashCode(int)` on `SHashSeed`: the same, through `with` and `hashCode`.
-- An interface whose root group **is** dispatched anchors the implementation on its names (FR-025). The synthesized member joins the class group beside it.
+- `IEqualityComparer<SPt>` on `SCmp`, and `IEqualityComparer<int>` on `RCmp`:
+  - `Equals(T, T)` joins at two arguments, against the synthesized one-argument member, and is distinguishable.
+  - `GetHashCode(T)` is spelled `getHashCode` and joins nothing.
+- A transpiled `ITolEq.Equals(ITolEq, double)`, `IWither.With(int)` and `IHashSeed.HashCode(int)` join, and the class dispatcher's overload signatures satisfy the interface.
+- An implementation that is indistinguishable **and** implements an interface member is an error (§ 3).
+- An interface whose root group is dispatched anchors the implementation on its names (FR-025).
 
 ## 7. Fields and properties under a synthesized name (FR-042)
 
-Data members are not grouped. The target's member table decides, as today:
+Data members are not grouped; the target's member table decides:
 
-- A field or property emitted as `equals` reports `MS0001` as an **error** at the member, naming its
-  kind (field or property). It cannot join a dispatcher nor be renamed.
-- A data member emitted as `with` cannot occur in TypeScript (`with` is reserved and escaped to
-  `with_`). If another target spells one, it reports like `equals`.
+- A field or property emitted as `equals` reports `MS0001` as an error naming its kind (field or property). The `with` case cannot occur in TypeScript, which escapes the name to `with_`.
 - A field `HashCode` keeps `hashCode`, and the synthesized `hashCode` is skipped (KEntry, RHash).
-  The record still compares through `equals`; the runtime reads a hash through `hashCode()` only
-  when it is a function.
 
 ## 8. Cross-package consistency (FR-039, DECIDED-28)
 
-The decision is a pure function of the symbols and the policy, and the policy is fixed per target.
-A consumer runs it over the producer's metadata symbols (DECIDED-28) and computes the same
-insertions, anchors and fast-path names. That covers:
+Insertion, anchoring and naming are pure functions of the symbols and the per-target policy, so a
+consumer computes the same result over the producer's metadata:
 
 - a consumer record deriving from a library record that joined (`override equalsByValue`);
-- a consumer calling a library record's joined group (`lib.equalsOtherTol(…)`);
-- metadata-only references, which keep the dispatcher (FR-019).
+- direct calls into a joined group;
+- metadata-only references keep the dispatcher (FR-019).
 
-A reference assembly hides nothing that matters here: the decision reads only public declared
-methods and the record or struct shape.
+**Non-public colliding overloads across a reference assembly** (C5). A `private Equals(R, double)`
+joins in the producer, which emits a dispatcher `equals` and `equalsByValue`. A reference assembly
+strips it, so the consumer sees no colliding group and inserts nothing. That is safe:
+
+- the consumer's own calls bind to the record's public members; synthesized ones call `equals(…)` / `with(…)` dynamically, which the producer's dispatcher serves;
+- a consumer subclass inserts `K` only through rule 2. It reads "the base inserted `K`" from the base's **public** groups, so it may decide "not inserted" and emit its synthesized `equals` as a plain override of the producer's dispatcher name. That keeps working for one-argument calls; the producer's private two-argument overload is not callable from the consumer anyway.
+
+A test covers it.
 
 ## 9. Dart
 
-Dart supplies no names for 3.0 (DECIDED-35), so no member is inserted and its output is
-byte-identical. That is checked on the Dart goldens and the Flutter sample's generated files.
-Dart's `hashCode` getter would collide with a user `HashCode(int)` method as a getter, not a
-method, so joining needs a Dart design of its own (OQ-9).
+The Dart policy supplies no names (DECIDED-35), so nothing is inserted and the Dart goldens and
+the Flutter sample stay byte-identical.
 
 ## 10. Test plan
 
-**Probe rows** (.NET 10 against Bun and Node, each process with a timeout), from compiler-man's R3
-set plus the earlier rounds:
+**Probe rows** (.NET 10 against Bun and Node, every process under a timeout):
 
-- **Joins:** `ROverl` (`TTFFT`); `RTol` / `QOuter` (`TTFT`); `QWith` (`5b7bT`); `QHashM` (`3TTT`); `KTol`; `StructClashProbes.*`.
-- **Fields:** `KEntry` and `RHash` (`7kT`, `T1`).
-- **Interfaces:** `SCmp` direct (`T4T`) and through `IEqualityComparer` (`T4`); `RCmp` (`T2T`, the `Dictionary` row); `ITolEq` (`TTTF`, `T`); `IWither` (`5|3|9`); `IHashSeed` (`3|4TT`).
-- **Other shapes:** `named` (`[Name]` on a joined overload); `staticEq` (a static `Equals` never joins); `methodGroup`; `nullCond`; `generic`.
-- **Hierarchy:** `ABase` / `ADer` / `AOther` (`TT34TT`, no hang), plus a derived type joining over a non-joined base.
-- **Errors:** `GRec<T>.With(T)` (MS0001 error); `QEqualsProp` (MS0001 error naming the property).
-- **Cross-package:** the R3 `xpkg` consumer (a library record with a joined `Equals`, a consumer subclass and calls).
+- compiler-man R3: ROverl, SCmp direct and through `IEqualityComparer`, RCmp, ITolEq, IWither, IHashSeed, named, staticEq, methodGroup, nullCond, generic, `GRec<T>.With(T)` (builds, `TT74`).
+- Design probes: UBoth, USBoth, UOpt (`FFTFTF`), UIface (`TFFFF`), UNum (the documented limitation), UHash (`7|3T`), UObjEq.
+- Hierarchies: ABase / ADer / AOther with a timeout; three levels where only the middle joins; a derived type with its own `Equals(D)` under a joined base.
+- Earlier rows: RTol / QOuter, QWith, the `HashCode(int)` struct, KEntry / RHash, KTol, `StructClashProbes`, and the R3 `xpkg` consumer.
+- No row worse than base or `7d7d7e2f`; tsgo errors on the probe project do not grow.
 
 **Tests (TUnit):**
 
-- `ValueEqualityJoinTests`: one test per row above, asserting the emitted dispatcher, fast paths, `override` flags, call sites and diagnostics.
-- A cross-package test using `TranspileWithLibrary`.
-- A Dart test that the Dart goldens do not change.
+- `ValueEqualityJoinTests`, with one test per row family: dispatcher, fast paths, `override`, call sites, diagnostics (MS0063, MS0001, MS0067).
+- A cross-package test with a public and a private colliding overload.
+- A Dart test that output is unchanged.
+- The shape fact.
 
-**Goldens:** a new `value-equality-join.ts` (records, a struct, a hierarchy, compiled with `tsgo --strict`). Existing goldens change only where a group joins; none of today's goldens have one.
-
-**Gates:** all of brief-common.md; tsgo errors on the probe project must not grow.
+**Golden:** `value-equality-join.ts`, compiled with tsgo `--strict --noImplicitOverride`.
 
 ## 11. Expected size
 
 | Area | Estimate |
 |---|---|
-| Core (`MethodOverloadGroups`, `OverloadGroupNaming`, `IrClassExtractor`, `DispatchedMethodCalls`, the policy record, the symbol adapter for the IR predicates, the IR marker) | ≈ 450–600 lines changed |
-| TypeScript (contract supply, synthesized bodies under claimed fast-path names, `super` fast-path chaining, `with` / `equals` / `hashCode` call-site rendering, reporter) | ≈ 300 lines |
-| Tests | ≈ 500 lines |
-| Spec and docs | this contract plus FR edits |
-| Removed | the round-3 rename (`ValueEqualityMemberNames`, `YieldsToValueEquality`, ≈ 90 lines) and its tests |
-| Work | about two to three implementation rounds, including probes |
+| Core | ≈ 700–900 lines: the shape fact and its readers; the policy threaded through the grouping family; the member hierarchy and the ref-based anchor; insertion, folding, call sites |
+| TypeScript | ≈ 350 lines: the policy instance, synthesized bodies under claimed fast paths, the guarded `Equals` branches, `super` chaining, call-site rendering |
+| Tests | ≈ 600 lines |
+| Removed | the round-3 rename and the IR name-and-arity heuristic |
