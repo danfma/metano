@@ -20,6 +20,8 @@ public sealed record IrExtractionContext(
     LocalNaming? LocalNaming = null
 )
 {
+    private readonly OverloadGroupingPolicy? _groupingPolicy;
+
     /// <summary>
     /// The port through which a target says which types it emits with an
     /// addressable form per constructor overload — TypeScript a selector and,
@@ -120,6 +122,26 @@ public sealed record IrExtractionContext(
     /// formatters); Dart honors no clause yet and leaves it unset.
     /// </summary>
     public IFormatStringCapability? FormatStrings { get; init; }
+
+    /// <summary>
+    /// What the overload groups depend on besides the symbols (spec 013
+    /// FR-039): <see cref="Target"/> and the names the target emits synthesized
+    /// value-equality members under. A target sets its single instance; by
+    /// default no synthesized member joins a group. The policy's target is
+    /// always <see cref="Target"/>.
+    /// </summary>
+    public OverloadGroupingPolicy GroupingPolicy
+    {
+        get => _groupingPolicy ?? OverloadGroupingPolicy.For(Target);
+        init =>
+            _groupingPolicy =
+                value.Target == Target
+                    ? value
+                    : throw new ArgumentException(
+                        $"The grouping policy targets {value.Target}, the context {Target}.",
+                        nameof(value)
+                    );
+    }
 
     /// <summary>
     /// The context of a constant parameter default: the origin resolver

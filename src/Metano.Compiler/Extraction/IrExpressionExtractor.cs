@@ -771,7 +771,18 @@ public sealed partial class IrExpressionExtractor
         var sourceType = _semantic.GetTypeInfo(withExpr.Expression).Type;
         var isPlainObject =
             sourceType is INamedTypeSymbol named && SymbolHelper.HasPlainObject(named);
-        return new IrWithExpression(Extract(withExpr.Expression), assignments, isPlainObject);
+
+        // A record whose copy joined a group calls its fast path (spec 013
+        // FR-043): the dispatcher's `with` also serves a user `With(...)`.
+        var copy =
+            sourceType is INamedTypeSymbol record && !isPlainObject
+                ? SynthesizedRefOf(record, IrSynthesizedValueMember.Copy)
+                : null;
+
+        return new IrWithExpression(Extract(withExpr.Expression), assignments, isPlainObject)
+        {
+            Overload = copy is null ? null : new IrSelectedOverload(copy),
+        };
     }
 
     /// <summary>
@@ -1538,7 +1549,7 @@ public sealed partial class IrExpressionExtractor
             return renamed;
 
         return symbol is IParameterSymbol parameter
-            ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation, _target)
+            ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation, _context.GroupingPolicy)
             : id.Identifier.ValueText;
     }
 
@@ -2778,6 +2789,9 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractNullableGetValueOrDefault(inv, symbol) is { } valueOrDefault)
             return valueOrDefault;
 
+        if (TryExtractSynthesizedMemberCall(inv, symbol) is { } synthesizedMemberCall)
+            return synthesizedMemberCall;
+
         if (TryExtractBaseOverloadCall(inv, symbol) is { } baseOverloadCall)
             return baseOverloadCall;
 
@@ -3087,7 +3101,7 @@ public sealed partial class IrExpressionExtractor
 
         var bound = ExtractBoundCall(
             _semantic.GetOperation(inv),
-            MethodOverloadGroups.RefOf(symbol, _target)
+            MethodOverloadGroups.RefOf(symbol, _context.GroupingPolicy)
         );
 
         if (bound is null)
@@ -3213,7 +3227,7 @@ public sealed partial class IrExpressionExtractor
 
     private bool IsDispatchedOnEmittedBase(IMethodSymbol symbol) =>
         MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
-        && MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _target)
+        && MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _context.GroupingPolicy)
             is { IsDispatched: true };
 
     private IReadOnlyList<IrTypeRef>? MethodTypeArgumentsOf(IMethodSymbol symbol) =>
@@ -3464,7 +3478,7 @@ public sealed partial class IrExpressionExtractor
         // `[Name("x")]` (target-aware) is resolved once here so backends
         // consult the emitted name instead of re-scanning attributes.
         var emittedName = symbol is IMethodSymbol method
-            ? OverloadEmittedName.NameOverrideOf(method, _target)
+            ? OverloadEmittedName.NameOverrideOf(method, _context.GroupingPolicy)
             : SymbolHelper.GetNameOverride(symbol, _target);
         // `[External]` (TS-specific) and `[NoContainer]`
         // (cross-target) both cause static member access to flatten
@@ -3657,7 +3671,11 @@ public sealed partial class IrExpressionExtractor
             _semantic.GetDeclaredSymbol(parameter) is { } symbol
                 ? LocalIrNameOf(
                     symbol,
-                    IrParameterNaming.IrNameOf(symbol, _semantic.Compilation, _target)
+                    IrParameterNaming.IrNameOf(
+                        symbol,
+                        _semantic.Compilation,
+                        _context.GroupingPolicy
+                    )
                 )
                 : parameter.Identifier.ValueText,
             ResolveParameterType(parameter),
@@ -4672,7 +4690,7 @@ public sealed partial class IrExpressionExtractor
     /// override through <c>IrToTsNamingPolicy.ToFunctionName</c>).
     /// </summary>
     private string? ResolveEmittedName(IMethodSymbol method) =>
-        OverloadEmittedName.NameOverrideOf(method, _target);
+        OverloadEmittedName.NameOverrideOf(method, _context.GroupingPolicy);
 
     /// <summary>
     /// Skips BCL / external static classes (LINQ, framework helpers) so

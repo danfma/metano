@@ -65,8 +65,8 @@ internal static class DispatchedMethodCalls
         if (HasUnresolvedTypeArguments(definition))
             return null;
 
-        return IsDispatchedGroupMethod(definition, target)
-            ? MethodOverloadGroups.RefOf(definition, target)
+        return IsDispatchedGroupMethod(definition, context.GroupingPolicy)
+            ? MethodOverloadGroups.RefOf(definition, context.GroupingPolicy)
             : null;
     }
 
@@ -97,7 +97,7 @@ internal static class DispatchedMethodCalls
         // RefOf only answers for a member of a dispatched group, so the
         // group and the member always resolve here.
         if (
-            MethodOverloadGroups.GroupOf(definition, target) is not { } group
+            MethodOverloadGroups.GroupOf(definition, context.GroupingPolicy) is not { } group
             || group.MemberOf(definition) is not { } member
         )
         {
@@ -106,7 +106,7 @@ internal static class DispatchedMethodCalls
             );
         }
 
-        var suffix = MethodOverloadGroups.SuffixesOf(type, group, target)[member.Symbol];
+        var suffix = MethodOverloadGroups.SuffixesOf(type, group, context.GroupingPolicy)[member];
 
         return (reference, new IrOverloadName(suffix), OverloadSignatureText.Of(definition));
     }
@@ -168,9 +168,12 @@ internal static class DispatchedMethodCalls
     /// member is declared on the block's synthetic type, which the groups do
     /// not cover — its call keeps the dispatcher until its claims exist.
     /// </summary>
-    private static bool IsDispatchedGroupMethod(IMethodSymbol method, TargetLanguage? target) =>
+    private static bool IsDispatchedGroupMethod(
+        IMethodSymbol method,
+        OverloadGroupingPolicy policy
+    ) =>
         !SymbolHelper.IsExtensionBlockMember(method)
-        && MethodOverloadGroups.GroupOf(method, target) is { IsDispatched: true };
+        && MethodOverloadGroups.GroupOf(method, policy) is { IsDispatched: true };
 
     /// <summary>
     /// A member no generated call site may address directly: an

@@ -19,32 +19,32 @@ public static class OverloadEmittedName
 {
     /// <summary>
     /// <paramref name="method"/>'s <c>[Name]</c> for
-    /// <paramref name="target"/>, or <c>null</c> when it has none or when the
+    /// <paramref name="policy"/>'s target, or <c>null</c> when it has none or when the
     /// <c>[Name]</c> pins a suffix instead.
     /// </summary>
-    public static string? NameOverrideOf(IMethodSymbol method, TargetLanguage? target)
+    public static string? NameOverrideOf(IMethodSymbol method, OverloadGroupingPolicy policy)
     {
-        if (method.GetNameOverride(target) is not { } name)
+        if (method.GetNameOverride(policy.Target) is not { } name)
             return null;
 
-        return PinsItsSuffix(method.OriginalDefinition, target) ? null : name;
+        return PinsItsSuffix(method.OriginalDefinition, policy) ? null : name;
     }
 
-    private static bool PinsItsSuffix(IMethodSymbol method, TargetLanguage? target) =>
+    private static bool PinsItsSuffix(IMethodSymbol method, OverloadGroupingPolicy policy) =>
         OverloadSuffixPin.Applies(method)
         && method.ContainingType is { } type
-        && PinsOverloadSuffixes(type, target)
-        && IsDispatchedOverload(method, type, target);
+        && PinsOverloadSuffixes(type, policy)
+        && IsDispatchedOverload(method, type, policy);
 
     private static bool IsDispatchedOverload(
         IMethodSymbol method,
         INamedTypeSymbol type,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         type.TypeKind == TypeKind.Interface
-            ? InterfaceOverloadGroup.IsMember(method, target)
-                && InterfaceOverloadGroup.IsDispatched(method, target)
-            : MethodOverloadGroups.GroupOf(method, target) is { IsDispatched: true };
+            ? InterfaceOverloadGroup.IsMember(method, policy.Target)
+                && InterfaceOverloadGroup.IsDispatched(method, policy.Target)
+            : MethodOverloadGroups.GroupOf(method, policy) is { IsDispatched: true };
 
     /// <summary>
     /// Whether a <c>[Name]</c> on an overload of a dispatched group of
@@ -55,8 +55,8 @@ public static class OverloadEmittedName
     /// (no dispatcher either). A target that keeps only the primary of such a
     /// group declares it under the name call sites spell from this rule.
     /// </summary>
-    public static bool PinsOverloadSuffixes(INamedTypeSymbol type, TargetLanguage? target) =>
-        IrTypeRefMapper.IsTranspilableType(type, target)
+    public static bool PinsOverloadSuffixes(INamedTypeSymbol type, OverloadGroupingPolicy policy) =>
+        IrTypeRefMapper.IsTranspilableType(type, policy.Target)
         && !type.HasExternal()
         && !type.HasJsCallable()
         && !type.HasPlainObject();

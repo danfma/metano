@@ -33,7 +33,8 @@ public static class IrToTsRecordSynthesisBridge
 
     private const string HashCodeMethodName = IrToTsNamingPolicy.HashCodeMethodName;
 
-    private const string WithMethodName = "with";
+    /// <summary>The name of the synthesized copy, which a <c>with</c> expression calls.</summary>
+    internal const string WithMethodName = "with";
 
     private static readonly IReadOnlyList<string> StructMemberNames =
     [
@@ -51,27 +52,60 @@ public static class IrToTsRecordSynthesisBridge
     /// The instance members <see cref="Generate"/> declares on
     /// <paramref name="ir"/>, which a class's claim pass treats as user
     /// members (spec 013 FR-004): each one the type's value equality
-    /// synthesizes, unless a user member of <paramref name="userMembers"/>
-    /// already emits under its name. A user method spelled like one yields
-    /// the name in the core (it is emitted under its fast-path name,
-    /// <c>equalsOtherTol</c>), so the member left here is a data member: a
-    /// field <c>HashCode</c> keeps <c>hashCode</c> (the runtime reads a
-    /// record's hash through <c>hashCode()</c> only when it is a function),
-    /// and one named <c>Equals</c> is reported
-    /// (<see cref="ReportClaimedEquals"/>).
+    /// synthesizes, unless it joined a user group (spec 013 FR-038, emitted
+    /// there as a fast path) or a user member of <paramref name="userMembers"/>
+    /// already emits under its name. A member left out that way is a data
+    /// member: a field <c>HashCode</c> keeps <c>hashCode</c> (the runtime reads
+    /// a record's hash through <c>hashCode()</c> only when it is a function),
+    /// and one named <c>Equals</c> is reported (<see cref="ReportClaimedEquals"/>).
     /// </summary>
     internal static IReadOnlyList<string> SynthesizedMemberNames(
         IrClassDeclaration ir,
         TsClassMemberTable userMembers
-    ) =>
-        ShouldSynthesize(ir)
-            ? [.. CandidateNames(ir).Where(name => !userMembers.Instances.ContainsKey(name))]
-            : [];
+    )
+    {
+        if (!ShouldSynthesize(ir))
+            return [];
+
+        var joined = JoinedKindsOf(ir).Select(NameOf).ToHashSet(StringComparer.Ordinal);
+
+        return
+        [
+            .. CandidateNames(ir)
+                .Where(name => !joined.Contains(name) && !userMembers.Instances.ContainsKey(name)),
+        ];
+    }
 
     private static IReadOnlyList<string> CandidateNames(IrClassDeclaration ir) =>
         IrValueEqualitySynthesis.SynthesizesRecordMembers(ir)
             ? RecordMemberNames
             : StructMemberNames;
+
+    /// <summary>The synthesized members of <paramref name="ir"/> that joined a user group (spec 013 FR-038).</summary>
+    private static IEnumerable<IrSynthesizedValueMember> JoinedKindsOf(IrClassDeclaration ir) =>
+        SynthesizedGroupMembersOf(ir).Select(member => member.SynthesizedKind!.Value);
+
+    private static IEnumerable<IrMethodDeclaration> SynthesizedGroupMembersOf(
+        IrClassDeclaration ir
+    ) =>
+        (ir.Members ?? [])
+            .OfType<IrMethodDeclaration>()
+            .Where(method => method.OverloadName is not null)
+            .Select(IrMethodGroup.Of)
+            .Select(group => group.Synthesized)
+            .OfType<IrMethodDeclaration>();
+
+    private static string NameOf(IrSynthesizedValueMember kind) =>
+        kind switch
+        {
+            IrSynthesizedValueMember.Equals => EqualsMethodName,
+            IrSynthesizedValueMember.HashCode => HashCodeMethodName,
+            _ => WithMethodName,
+        };
+
+    /// <summary>The overrides a copy takes: <c>Partial&lt;Self&gt;</c>.</summary>
+    internal static TsType OverridesTypeOf(TsType selfType) =>
+        new TsNamedType("Partial", [selfType]);
 
     /// <summary>
     /// Whether the class should receive synthesized members: a record
@@ -117,10 +151,59 @@ public static class IrToTsRecordSynthesisBridge
         return members.Select(m => m with { Override = overridesBase }).ToList();
     }
 
-    /// <summary>Whether the bridge emits a <c>hashCode</c> for <paramref name="ir"/>.</summary>
-    internal static bool SynthesizesHashCode(IrClassDeclaration ir) =>
-        SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir))
-            .Contains(HashCodeMethodName) && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
+    /// <summary>
+    /// Whether the bridge emits a <c>hashCode</c> body for <paramref name="ir"/>:
+    /// a standalone one, or the fast path of a joined <c>HashCode</c> with no
+    /// user body folded in.
+    /// </summary>
+    internal static bool SynthesizesHashCode(IrClassDeclaration ir)
+    {
+        var standalone =
+            SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir))
+                .Contains(HashCodeMethodName) && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
+
+        return standalone
+            || SynthesizedGroupMembersOf(ir)
+                .Any(member =>
+                    member is { SynthesizedKind: IrSynthesizedValueMember.HashCode, Body: null }
+                );
+    }
+
+    /// <summary>
+    /// The fast path of a synthesized member that joined a group (spec 013
+    /// FR-041) under its claimed name, with the body the target synthesizes: an
+    /// anchored one overrides the base's fast path and chains to it
+    /// (<c>super.equalsByValue(other)</c>), never through the base dispatcher; an
+    /// unanchored one of a derived record chains to the base's plain member.
+    /// </summary>
+    internal static TsMethodMember BuildFastPath(
+        IrClassDeclaration ir,
+        IrMethodDeclaration member,
+        string fastPathName,
+        IrToTsBridgeContext context
+    )
+    {
+        var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
+        var isAnchored = IrMethodGroup.IsOverride(member);
+
+        var superMember =
+            isAnchored ? fastPathName
+            : IrToTsClassBridge.BuildExtends(ir) is not null ? NameOf(member.SynthesizedKind!.Value)
+            : null;
+
+        var built = member.SynthesizedKind switch
+        {
+            IrSynthesizedValueMember.Equals => GenerateEquals(fields, superMember),
+            IrSynthesizedValueMember.HashCode => GenerateHashCode(fields, superMember),
+            _ => GenerateWith(ir),
+        };
+
+        return built with
+        {
+            Name = fastPathName,
+            Override = isAnchored,
+        };
+    }
 
     /// <summary>
     /// Reports <c>MS0001</c> (an error) at a field or property of
@@ -136,30 +219,31 @@ public static class IrToTsRecordSynthesisBridge
         Action<MetanoDiagnostic> report
     )
     {
-        var claimsEquals =
-            ShouldSynthesize(ir)
-            && !IrValueEqualitySynthesis.DeclaresEquals(ir)
-            && userMembers.Instances.TryGetValue(EqualsMethodName, out _);
+        if (!ShouldSynthesize(ir))
+            return;
 
-        if (!claimsEquals)
+        if (userMembers.Instances.GetValueOrDefault(EqualsMethodName) is not { } declaredBy)
             return;
 
         var member = type.GetMembers()
             .FirstOrDefault(candidate =>
                 candidate is IFieldSymbol or IPropertySymbol
                 && !candidate.IsStatic
-                && userMembers.Instances.GetValueOrDefault(EqualsMethodName) == candidate.Name
+                && candidate.Name == declaredBy
             );
+
+        if (member is null)
+            return;
 
         report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.UnsupportedFeature,
-                $"'{type.Name}.{member?.Name ?? EqualsMethodName}' is emitted as 'equals', the "
+                $"'{type.Name}.{member.Name}' is emitted as 'equals', the "
                     + $"member that carries the value equality of '{type.Name}'; a field or "
                     + "property cannot be renamed, so the type would lose its equality. Rename "
                     + "the member.",
-                member?.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault()
+                member.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault()
             )
         );
     }
@@ -183,29 +267,30 @@ public static class IrToTsRecordSynthesisBridge
             && !IrValueEqualitySynthesis.DeclaresEquals(ir);
 
         if (synthesizesEquals)
-            yield return GenerateEquals(fields, overridesBase);
+            yield return GenerateEquals(fields, overridesBase ? EqualsMethodName : null);
 
         var synthesizesHashCode =
             unclaimedNames.Contains(HashCodeMethodName)
             && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
 
         if (synthesizesHashCode)
-            yield return GenerateHashCode(fields, overridesBase);
+            yield return GenerateHashCode(fields, overridesBase ? HashCodeMethodName : null);
     }
 
     /// <summary>
     /// <c>equals</c>: the root record tests the exact runtime type
-    /// (<see cref="SameRecordTypeTest"/>); a derived record starts from
-    /// <c>super.equals(other)</c>, which runs that test with <c>this</c> being
-    /// the derived instance. Then every own member is compared.
+    /// (<see cref="SameRecordTypeTest"/>); a derived record starts from the
+    /// base's <paramref name="superMember"/> (<c>super.equals(other)</c>, or the
+    /// base's fast path), which runs that test with <c>this</c> being the
+    /// derived instance. Then every own member is compared.
     /// </summary>
     private static TsMethodMember GenerateEquals(
         IReadOnlyList<RecordField> fields,
-        bool overridesBase
+        string? superMember
     )
     {
-        var baseCondition = overridesBase
-            ? SuperCall(EqualsMethodName, new TsIdentifier("other"))
+        var baseCondition = superMember is not null
+            ? SuperCall(superMember, new TsIdentifier("other"))
             : SameRecordTypeTest();
 
         var condition = fields.Aggregate(baseCondition, (accumulated, field) =>
@@ -272,12 +357,13 @@ public static class IrToTsRecordSynthesisBridge
     }
 
     /// <summary>
-    /// <c>hashCode</c> over the own members; a derived record first adds
-    /// <c>super.hashCode()</c>, mirroring C#'s <c>base.GetHashCode()</c> seed.
+    /// <c>hashCode</c> over the own members; a derived record first adds the
+    /// base's <paramref name="superMember"/> (<c>super.hashCode()</c>, or the
+    /// base's fast path), mirroring C#'s <c>base.GetHashCode()</c> seed.
     /// </summary>
     private static TsMethodMember GenerateHashCode(
         IReadOnlyList<RecordField> fields,
-        bool overridesBase
+        string? superMember
     )
     {
         var body = new List<TsStatement>
@@ -288,8 +374,8 @@ public static class IrToTsRecordSynthesisBridge
             ),
         };
 
-        if (overridesBase)
-            body.Add(AddToHash(SuperCall(IrToTsNamingPolicy.HashCodeMethodName)));
+        if (superMember is not null)
+            body.Add(AddToHash(SuperCall(superMember)));
 
         foreach (var field in fields)
             body.Add(AddToHash(new TsPropertyAccess(new TsIdentifier("this"), field.Name)));
@@ -318,7 +404,7 @@ public static class IrToTsRecordSynthesisBridge
 
         return new TsMethodMember(
             WithMethodName,
-            [new TsParameter("overrides?", new TsNamedType("Partial", [selfType]))],
+            [new TsParameter("overrides?", OverridesTypeOf(selfType))],
             selfType,
             [new TsReturnStatement(copy)]
         );

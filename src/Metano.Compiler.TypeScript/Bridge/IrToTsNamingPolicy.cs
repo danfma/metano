@@ -187,7 +187,7 @@ public static class IrToTsNamingPolicy
     /// <see cref="OverloadEmittedName"/>, else its camelCased C# name.
     /// </summary>
     public static string ToFunctionName(IMethodSymbol method) =>
-        OverloadEmittedName.NameOverrideOf(method, TargetLanguage.TypeScript)
+        OverloadEmittedName.NameOverrideOf(method, TsGroupingPolicy.Instance)
         ?? TypeScriptNaming.ToCamelCase(method.Name);
 
     /// <summary>

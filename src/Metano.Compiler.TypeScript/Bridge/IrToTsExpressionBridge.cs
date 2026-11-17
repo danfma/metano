@@ -1820,8 +1820,12 @@ public static partial class IrToTsExpressionBridge
             return new TsObjectLiteral(spread);
         }
 
+        var copy = w.Overload is { } overload
+            ? TsOverloadCallSites.MethodFastPathOf(overload.Target)
+            : null;
+
         return new TsCallExpression(
-            new TsPropertyAccess(source, "with"),
+            new TsPropertyAccess(source, copy ?? IrToTsRecordSynthesisBridge.WithMethodName),
             [new TsObjectLiteral(properties)]
         );
     }

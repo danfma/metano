@@ -144,7 +144,7 @@ public sealed class IrStatementExtractor(
                             source,
                             _semantic,
                             naming,
-                            _context.Target
+                            _context.GroupingPolicy
                         )
                         : LocalBindingNames.Empty
                 )

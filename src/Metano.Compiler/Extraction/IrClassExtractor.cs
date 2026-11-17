@@ -332,8 +332,15 @@ public static class IrClassExtractor
                 context.Compilation,
                 target
             ),
-            DeclaresToJson: OverrideChains.DeclaresToJson(type, context.Compilation, target)
-        );
+            DeclaresToJson: OverrideChains.DeclaresToJson(
+                type,
+                context.Compilation,
+                context.GroupingPolicy
+            )
+        )
+        {
+            ValueEquality = ValueEqualityShapes.Of(type, target),
+        };
     }
 
     /// <summary>
@@ -422,7 +429,7 @@ public static class IrClassExtractor
         // Methods fold onto one primary IrMethodDeclaration per group, its
         // siblings in Overloads: backends that don't support overloading
         // (Dart) rely on the Overloads slot to drive a diagnostic.
-        foreach (var group in MethodOverloadGroups.Of(type, target))
+        foreach (var group in MethodOverloadGroups.Of(type, context.GroupingPolicy))
             result.Add(ExtractGroup(type, group, context));
 
         return result;
@@ -441,13 +448,13 @@ public static class IrClassExtractor
     )
     {
         if (!group.IsDispatched)
-            return ExtractMethod(group.Members[0].Symbol, context);
+            return ExtractMethod(group.DeclaredMembers.First().Symbol, context);
 
         var named = ExtractNamedOverloads(type, group, context);
 
         var widestFirst = group
-            .Members.OrderByDescending(member => member.Symbol.Parameters.Length)
-            .Select(member => named[member.Symbol])
+            .Members.OrderByDescending(ParameterCountOf)
+            .Select(member => named[member])
             .ToList();
 
         return widestFirst[0] with
@@ -455,70 +462,142 @@ public static class IrClassExtractor
             Overloads = widestFirst.Count > 1 ? widestFirst.Skip(1).ToList() : null,
             InheritedOverloads = group
                 .InheritedOverloads?.Select(overload =>
-                    DeclareUnderInterfaceName(
-                        IrMethodExtractor.ExtractForeignSignature(overload, context),
-                        overload
-                    )
+                    InheritedSignatureOf(type, group.Name, overload, context)
                 )
                 .ToList(),
         };
     }
 
+    /// <summary>The parameters a member declares (a <c>params</c> one counts once).</summary>
+    private static int ParameterCountOf(GroupMember member) =>
+        member is DeclaredMember declared ? declared.Symbol.Parameters.Length : member.MaximumArity;
+
+    /// <summary>An overload of an inherited dispatcher as the deriving type lists it.</summary>
+    private static IrMethodDeclaration InheritedSignatureOf(
+        INamedTypeSymbol type,
+        string groupName,
+        GroupMember overload,
+        IrExtractionContext context
+    ) =>
+        overload switch
+        {
+            DeclaredMember declared => DeclareUnderInterfaceName(
+                IrMethodExtractor.ExtractForeignSignature(declared.Symbol, context),
+                declared.Symbol
+            ),
+            SynthesizedMember synthesized => IrSynthesizedMemberExtractor.SignatureOf(
+                type,
+                groupName,
+                synthesized.Kind,
+                context
+            ),
+            _ => throw new InvalidOperationException($"Unknown group member {overload}."),
+        };
+
     /// <summary>
     /// Extracts a group's overloads and records, on each, its suffix, its
-    /// declaration ordinal and the root it is anchored on.
+    /// declaration ordinal and the root it is anchored on; a declared overload
+    /// a dispatcher cannot tell from the group's synthesized member is marked
+    /// (spec 013 FR-042).
     /// </summary>
-    private static IReadOnlyDictionary<IMethodSymbol, IrMethodDeclaration> ExtractNamedOverloads(
+    private static IReadOnlyDictionary<GroupMember, IrMethodDeclaration> ExtractNamedOverloads(
         INamedTypeSymbol type,
         MethodOverloadGroup group,
         IrExtractionContext context
     )
     {
-        var suffixes = MethodOverloadGroups.SuffixesOf(type, group, context.Target);
+        var policy = context.GroupingPolicy;
+        var suffixes = MethodOverloadGroups.SuffixesOf(type, group, policy);
+        var shadowed = SynthesizedShadowing.Report(type, group, policy);
+        var declared = group.DeclaredMembers.ToList();
+
+        var symbolSuffixes = declared.ToDictionary(
+            member => member.Symbol,
+            member => suffixes[member],
+            (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
+        );
 
         var named = OverloadGroupNaming.Apply(
-            group
-                .Members.Select(member => (member.Symbol, ExtractMethod(member.Symbol, context)))
+            declared
+                .Select(member => (member.Symbol, ExtractMethod(member.Symbol, context)))
                 .ToList(),
-            method => suffixes[method]
+            method => symbolSuffixes[method]
         );
 
         return group.Members.ToDictionary(
-            member => member.Symbol,
+            member => member,
             member =>
-                named[member.Symbol] with
+                DeclarationOf(type, group, member, named, suffixes[member], context) with
                 {
                     DeclarationOrdinal = member.Ordinal,
                     Anchor = AnchorOf(member, context),
-                },
-            (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
+                    IsShadowedBySynthesized = shadowed.Contains(member),
+                }
         );
     }
 
-    private static IrOverloadAnchor? AnchorOf(MethodGroupMember member, IrExtractionContext context)
+    private static IrMethodDeclaration DeclarationOf(
+        INamedTypeSymbol type,
+        MethodOverloadGroup group,
+        GroupMember member,
+        IReadOnlyDictionary<IMethodSymbol, IrMethodDeclaration> named,
+        string suffix,
+        IrExtractionContext context
+    ) =>
+        member switch
+        {
+            DeclaredMember declared => named[declared.Symbol],
+            SynthesizedMember synthesized => IrSynthesizedMemberExtractor.Extract(
+                type,
+                group.Name,
+                synthesized,
+                suffix,
+                context
+            ),
+            _ => throw new InvalidOperationException($"Unknown group member {member}."),
+        };
+
+    private static IrOverloadAnchor? AnchorOf(GroupMember member, IrExtractionContext context)
     {
         if (member.Anchor is not { } anchor)
             return null;
 
+        var policy = context.GroupingPolicy;
+
         var furtherRoots = anchor
-            .FurtherRoots.Select(root => MethodOverloadGroups.RefOf(root, context.Target))
+            .FurtherRoots.Select(root => MethodOverloadGroups.RefOf(root, policy))
             .ToList();
 
         return new IrOverloadAnchor(
-            MethodOverloadGroups.RefOf(anchor.Root, context.Target),
+            RefOf(anchor.Root, policy),
             anchor.Kind,
             furtherRoots.Count > 0 ? furtherRoots : null,
-            ReimplementedRootsOf(anchor, context)
+            ReimplementedRootsOf(anchor, policy)
         );
     }
 
+    private static IrOverloadRef RefOf(AnchorRoot root, OverloadGroupingPolicy policy) =>
+        root switch
+        {
+            DeclaredRoot declared => MethodOverloadGroups.RefOf(declared.Method, policy),
+            SynthesizedRoot synthesized => MethodOverloadGroups.SynthesizedRefOf(
+                synthesized.Owner,
+                synthesized.Kind,
+                policy
+            )
+                ?? throw new InvalidOperationException(
+                    $"'{synthesized.Owner.Name}' inserted no synthesized {synthesized.Kind}."
+                ),
+            _ => throw new InvalidOperationException($"Unknown anchor root {root}."),
+        };
+
     private static IReadOnlyList<IrOverloadRef>? ReimplementedRootsOf(
-        MethodAnchor anchor,
-        IrExtractionContext context
+        MemberAnchor anchor,
+        OverloadGroupingPolicy policy
     )
     {
         var roots = (anchor.ReimplementedRoots ?? [])
-            .Select(root => MethodOverloadGroups.RefOf(root, context.Target))
+            .Select(root => MethodOverloadGroups.RefOf(root, policy))
             .ToList();
 
         return roots.Count > 0 ? roots : null;

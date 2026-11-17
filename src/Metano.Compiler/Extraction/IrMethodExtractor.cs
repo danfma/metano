@@ -39,7 +39,10 @@ public static class IrMethodExtractor
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        localNames.NameOf(p, IrParameterNaming.IrNameOf(p, compilation, target)),
+                        localNames.NameOf(
+                            p,
+                            IrParameterNaming.IrNameOf(p, compilation, context.GroupingPolicy)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver, target),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ParameterDefaultValues.Extract(p, context),

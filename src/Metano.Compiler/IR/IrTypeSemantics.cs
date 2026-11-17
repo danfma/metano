@@ -41,4 +41,11 @@ public sealed record IrTypeSemantics(
     IrEnumeratorContract? Enumerator = null,
     bool InheritsPerClassStorage = false,
     bool DeclaresToJson = false
-);
+)
+{
+    /// <summary>
+    /// The value equality C# gives the type, read from its symbols (spec 013
+    /// FR-045); <see cref="IrValueEqualityShape.None"/> for a type with none.
+    /// </summary>
+    public IrValueEqualityShape ValueEquality { get; init; } = IrValueEqualityShape.None;
+}

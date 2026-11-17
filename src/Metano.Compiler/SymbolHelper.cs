@@ -661,6 +661,23 @@ public static class SymbolHelper
         symbol.HasInline() || HasInheritedInlineFromStaticClass(symbol);
 
     /// <summary>
+    /// The member carries <c>[CompilerGenerated]</c>: a member the compiler
+    /// synthesized (a record's <c>Equals</c>, an auto-property accessor) as a
+    /// referenced assembly shows it, where <see cref="ISymbol.IsImplicitlyDeclared"/>
+    /// is <c>false</c>. The attribute survives in reference assemblies.
+    /// </summary>
+    public static bool IsCompilerGenerated(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(attribute =>
+                attribute.AttributeClass
+                    is {
+                        Name: "CompilerGeneratedAttribute",
+                        ContainingNamespace.Name: "CompilerServices"
+                    }
+            );
+
+    /// <summary>
     /// A method whose every call site is rewritten, so it is never declared as a
     /// member. <c>[Emit]</c> methods are inline templates with no real body: a
     /// declaration would be a stub whose generated body is never called.

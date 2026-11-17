@@ -8,37 +8,124 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// One method a type declares, as the overload groups see it.
+/// One member of an overload group (spec 013 FR-038): a method the type
+/// declares (<see cref="DeclaredMember"/>) or a value-equality member C#
+/// synthesizes, described by data (<see cref="SynthesizedMember"/>). The facts
+/// naming and dispatch read live here, so only the class extractor tells the
+/// two apart.
 /// </summary>
-/// <param name="Symbol">The declared method.</param>
-/// <param name="Ordinal">Its position among the methods the type declares
-/// under its C# name (<see cref="IrOverloadRef.Ordinal"/>).</param>
+/// <param name="Ordinal">Its position among the members the type groups under
+/// its C# name (<see cref="IrOverloadRef.Ordinal"/>); a synthesized member
+/// comes after every declared one.</param>
 /// <param name="Anchor">The root it reuses the names of; <c>null</c> when it
 /// is its own root.</param>
-internal sealed record MethodGroupMember(IMethodSymbol Symbol, int Ordinal, MethodAnchor? Anchor);
+internal abstract record GroupMember(int Ordinal, MemberAnchor? Anchor)
+{
+    /// <summary>Whether the member is static.</summary>
+    public abstract bool IsStatic { get; }
+
+    /// <summary>The fewest arguments a call passes it.</summary>
+    public abstract int RequiredArity { get; }
+
+    /// <summary>The most arguments a call passes it; <see cref="int.MaxValue"/> with <c>params</c>.</summary>
+    public abstract int MaximumArity { get; }
+
+    /// <summary>Whether the member stands for <paramref name="method"/>.</summary>
+    public abstract bool StandsFor(IMethodSymbol method);
+}
+
+/// <summary>A method the type declares.</summary>
+/// <param name="Symbol">The declared method.</param>
+internal sealed record DeclaredMember(IMethodSymbol Symbol, int Ordinal, MemberAnchor? Anchor)
+    : GroupMember(Ordinal, Anchor)
+{
+    public override bool IsStatic => Symbol.IsStatic;
+
+    public override int RequiredArity =>
+        Symbol.Parameters.Count(parameter => !parameter.IsOptional && !parameter.IsParams);
+
+    public override int MaximumArity =>
+        Symbol.Parameters.Any(parameter => parameter.IsParams)
+            ? int.MaxValue
+            : Symbol.Parameters.Length;
+
+    public override bool StandsFor(IMethodSymbol method) =>
+        SymbolEqualityComparer.Default.Equals(Symbol.OriginalDefinition, method.OriginalDefinition);
+}
 
 /// <summary>
-/// The root declaration a method reuses the names of (spec 013 FR-025).
+/// A value-equality member C# synthesizes or inherits (spec 013 FR-038): its
+/// shape is fixed by its kind (<c>Equals(object)</c>, <c>GetHashCode()</c>, the
+/// copy behind <c>with</c> taking optional overrides) and its suffix is pinned
+/// to the target's (DECIDED-34).
 /// </summary>
-/// <param name="Root">The first declaration of its override chain, or the
-/// (constructed) interface member it implements.</param>
+/// <param name="Kind">Which member.</param>
+/// <param name="Replacement">The user declaration that supplies its body: a
+/// struct's <c>override Equals(object)</c> or an <c>override GetHashCode()</c>,
+/// emitted only as this member. <c>null</c> when C# synthesizes it.</param>
+internal sealed record SynthesizedMember(
+    IrSynthesizedValueMember Kind,
+    int Ordinal,
+    MemberAnchor? Anchor,
+    IMethodSymbol? Replacement = null
+) : GroupMember(Ordinal, Anchor)
+{
+    public override bool IsStatic => false;
+
+    public override int RequiredArity => Kind is IrSynthesizedValueMember.Equals ? 1 : 0;
+
+    public override int MaximumArity => Kind is IrSynthesizedValueMember.HashCode ? 0 : 1;
+
+    public override bool StandsFor(IMethodSymbol method) =>
+        Replacement is not null
+        && SymbolEqualityComparer.Default.Equals(
+            Replacement.OriginalDefinition,
+            method.OriginalDefinition
+        );
+}
+
+/// <summary>
+/// The root an anchored member reuses the names of (spec 013 FR-025, FR-041):
+/// a declared method, or a synthesized member of an emitted base class.
+/// </summary>
+internal abstract record AnchorRoot;
+
+/// <summary>A declared root: the first declaration of an override chain, or an interface member.</summary>
+internal sealed record DeclaredRoot(IMethodSymbol Method) : AnchorRoot;
+
+/// <summary>The synthesized <paramref name="Kind"/> member a base class inserted into a group.</summary>
+internal sealed record SynthesizedRoot(INamedTypeSymbol Owner, IrSynthesizedValueMember Kind)
+    : AnchorRoot;
+
+/// <summary>
+/// How a group member is anchored on a root it does not declare (spec 013
+/// FR-025): one shape for declared and synthesized members.
+/// </summary>
+/// <param name="Root">The root whose names it reuses.</param>
 /// <param name="Kind">Override or implementation.</param>
 /// <param name="FurtherRoots">Other dispatched interface members the method
 /// implements, in the order of the type's interfaces.</param>
-internal sealed record MethodAnchor(
-    IMethodSymbol Root,
+/// <param name="ReimplementedRoots">The roots an emitted base class already
+/// implements, which the member re-implements.</param>
+internal sealed record MemberAnchor(
+    AnchorRoot Root,
     IrOverloadAnchorKind Kind,
     IReadOnlyList<IMethodSymbol> FurtherRoots,
     IReadOnlyList<IMethodSymbol>? ReimplementedRoots = null
-);
+)
+{
+    /// <summary>The declared root method; <c>null</c> for a synthesized root.</summary>
+    public IMethodSymbol? RootMethod => (Root as DeclaredRoot)?.Method;
+}
 
 /// <summary>
-/// The methods a type declares under one C# name, the way spec 013 groups
-/// them for dispatch (DECIDED-15, DECIDED-29).
+/// The members a type groups under one C# name, the way spec 013 groups
+/// them for dispatch (DECIDED-15, DECIDED-29, DECIDED-33).
 /// </summary>
 /// <param name="Name">The C# name; an explicit implementation's interface
 /// member name.</param>
-/// <param name="Members">The declared methods, in declaration order.</param>
+/// <param name="Members">The declared methods, in declaration order, then the
+/// synthesized member that joins them.</param>
 /// <param name="InheritedOverloads">The overloads of the dispatcher an
 /// emitted base class already declares for the name, as this type sees them
 /// (type arguments substituted, base-most first); <c>null</c> when no base
@@ -46,36 +133,32 @@ internal sealed record MethodAnchor(
 /// <param name="IsSegregatedOverrides">The overrides of roots that are not
 /// dispatched (an inherited single virtual): they keep their own group, as
 /// before spec 013 (DECIDED-29, #159).</param>
-/// <param name="YieldsToValueEquality">The name is spelled like a member the
-/// type's synthesized value equality declares
-/// (<see cref="ValueEqualityMemberNames"/>), so the group's members are fast
-/// paths even alone, and the synthesized member keeps the name.</param>
 internal sealed record MethodOverloadGroup(
     string Name,
-    IReadOnlyList<MethodGroupMember> Members,
-    IReadOnlyList<IMethodSymbol>? InheritedOverloads,
-    bool IsSegregatedOverrides,
-    bool YieldsToValueEquality = false
+    IReadOnlyList<GroupMember> Members,
+    IReadOnlyList<GroupMember>? InheritedOverloads,
+    bool IsSegregatedOverrides
 )
 {
     /// <summary>
     /// Whether the group's members are fast paths of a dispatched group: two
-    /// or more declared, an inherited dispatcher, one member anchored on a
-    /// dispatched root, or a name a synthesized value-equality member keeps.
+    /// or more, an inherited dispatcher, or one member anchored on a
+    /// dispatched root.
     /// </summary>
     public bool IsDispatched =>
         InheritedOverloads is not null
         || Members.Count >= 2
-        || Members.Any(member => member.Anchor is not null)
-        || YieldsToValueEquality;
+        || Members.Any(member => member.Anchor is not null);
 
-    public MethodGroupMember? MemberOf(IMethodSymbol method) =>
-        Members.FirstOrDefault(member =>
-            SymbolEqualityComparer.Default.Equals(
-                member.Symbol.OriginalDefinition,
-                method.OriginalDefinition
-            )
-        );
+    /// <summary>The declared methods of the group.</summary>
+    public IEnumerable<DeclaredMember> DeclaredMembers => Members.OfType<DeclaredMember>();
+
+    /// <summary>The synthesized member that joins the group; <c>null</c> when none does.</summary>
+    public SynthesizedMember? Synthesized => Members.OfType<SynthesizedMember>().FirstOrDefault();
+
+    /// <summary>The member that stands for <paramref name="method"/>; <c>null</c> when none does.</summary>
+    public GroupMember? MemberOf(IMethodSymbol method) =>
+        Members.FirstOrDefault(member => member.StandsFor(method));
 }
 
 /// <summary>
@@ -97,50 +180,57 @@ internal static class MethodOverloadGroups
 {
     private static readonly ConditionalWeakTable<
         INamedTypeSymbol,
-        ConcurrentDictionary<TargetLanguage, IReadOnlyList<MethodOverloadGroup>>
+        ConcurrentDictionary<OverloadGroupingPolicy, IReadOnlyList<MethodOverloadGroup>>
     > Cache = new();
-
-    /// <summary>The cache key of an extraction for no particular target.</summary>
-    private const TargetLanguage NoTarget = (TargetLanguage)(-1);
 
     /// <summary>The method groups <paramref name="type"/> declares, in first-declaration order.</summary>
     public static IReadOnlyList<MethodOverloadGroup> Of(
         INamedTypeSymbol type,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         Cache
             .GetValue(type.OriginalDefinition, static _ => new())
-            .GetOrAdd(target ?? NoTarget, _ => Compute(type.OriginalDefinition, target));
+            .GetOrAdd(policy, _ => Compute(type.OriginalDefinition, policy));
 
     /// <summary>
     /// The suffix of each member of <paramref name="group"/>, declared by
     /// <paramref name="type"/> (FR-001, FR-025): an anchored member's is its
     /// root's — the root's <c>[Name]</c> wins, the member's own is ignored
-    /// (FR-005) —; the others are named over the visible group.
+    /// (FR-005) —; a synthesized member's is the target's pinned suffix
+    /// (DECIDED-34); the others are named over the visible group.
     /// </summary>
-    public static IReadOnlyDictionary<IMethodSymbol, string> SuffixesOf(
+    public static IReadOnlyDictionary<GroupMember, string> SuffixesOf(
         INamedTypeSymbol type,
         MethodOverloadGroup group,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
-        var suffixes = new Dictionary<IMethodSymbol, string>(SymbolEqualityComparer.Default);
+        var suffixes = new Dictionary<GroupMember, string>();
 
         foreach (var member in group.Members)
         {
+            if (member is SynthesizedMember)
+            {
+                suffixes[member] = SynthesizedSuffixOf(policy);
+                continue;
+            }
+
             if (member.Anchor is not { } anchor)
                 continue;
 
-            var rootSuffix = RootSuffixOf(anchor.Root, target);
+            var rootSuffix = RootSuffixOf(anchor.Root, policy);
 
-            suffixes[member.Symbol] = rootSuffix;
+            suffixes[member] = rootSuffix;
 
-            OverloadSuffixPin
-                .Of(member.Symbol, target)
-                ?.ReportIfIgnoredFor(anchor.Root, rootSuffix);
+            if (anchor.RootMethod is { } rootMethod)
+            {
+                OverloadSuffixPin
+                    .Of(((DeclaredMember)member).Symbol, policy.Target)
+                    ?.ReportIfIgnoredFor(rootMethod, rootSuffix);
+            }
         }
 
-        var own = group.Members.Where(member => member.Anchor is null).ToList();
+        var own = group.DeclaredMembers.Where(member => member.Anchor is null).ToList();
 
         if (own.Count == 0)
             return suffixes;
@@ -151,7 +241,7 @@ internal static class MethodOverloadGroups
         // the visible group already names: naming both would dead-end the
         // pair (FR-024, FR-025, #564).
         var namingMembers = group
-            .Members.Where(member => !OverridesOneOf(inherited, member.Symbol))
+            .DeclaredMembers.Where(member => !OverridesOneOf(inherited, member.Symbol))
             .ToList();
 
         // An anchored member names with its root's pin, never its own: the
@@ -159,9 +249,9 @@ internal static class MethodOverloadGroups
         var visible = inherited
             .Select(overload => new PinnedOverload(
                 overload,
-                OverloadSuffixPin.Of(overload, target)
+                OverloadSuffixPin.Of(overload, policy.Target)
             ))
-            .Concat(namingMembers.Select(member => PinnedOverloadOf(member, target)))
+            .Concat(namingMembers.Select(member => PinnedOverloadOf(member, policy.Target)))
             .ToList();
 
         var memberSuffixes = OverloadGroupNaming.SuffixesOf(visible).Skip(inherited.Count);
@@ -169,26 +259,30 @@ internal static class MethodOverloadGroups
         foreach (var (member, suffix) in namingMembers.Zip(memberSuffixes))
         {
             if (member.Anchor is null)
-                suffixes[member.Symbol] = suffix;
+                suffixes[member] = suffix;
         }
 
         return suffixes;
     }
 
     /// <summary>
-    /// The group of <paramref name="type"/>'s definition that declares
-    /// <paramref name="method"/>; <c>null</c> when none does.
+    /// The group of <paramref name="type"/>'s definition holding the member
+    /// that stands for <paramref name="method"/>; <c>null</c> when none does.
     /// </summary>
-    public static MethodOverloadGroup? GroupOf(IMethodSymbol method, TargetLanguage? target) =>
-        Of(method.ContainingType, target)
+    public static MethodOverloadGroup? GroupOf(
+        IMethodSymbol method,
+        OverloadGroupingPolicy policy
+    ) =>
+        Of(method.ContainingType, policy)
             .FirstOrDefault(group => group.MemberOf(method) is not null);
 
     /// <summary>
     /// The identity of a declared method or interface member
     /// (<see cref="IrOverloadRef"/>): its declaring type, its group name and
-    /// its ordinal there.
+    /// its ordinal there. A declaration folded into a synthesized member
+    /// (<see cref="SynthesizedMember.Replacement"/>) is that member's.
     /// </summary>
-    public static IrOverloadRef RefOf(IMethodSymbol method, TargetLanguage? target)
+    public static IrOverloadRef RefOf(IMethodSymbol method, OverloadGroupingPolicy policy)
     {
         var definition = method.OriginalDefinition;
         var type = definition.ContainingType;
@@ -197,16 +291,40 @@ internal static class MethodOverloadGroups
             return new IrOverloadRef(
                 IrTypeKeys.Of(type),
                 definition.Name,
-                InterfaceOverloadGroup.Of(type, definition.Name, target).IndexOf(definition)
+                InterfaceOverloadGroup.Of(type, definition.Name, policy.Target).IndexOf(definition)
             );
 
-        var member = GroupOf(definition, target)?.MemberOf(definition)
+        var group = GroupOf(definition, policy)
             ?? throw new InvalidOperationException(
                 $"'{definition.ToDisplayString()}' is not a grouped method of its type."
             );
 
-        return new IrOverloadRef(IrTypeKeys.Of(type), GroupNameOf(definition), member.Ordinal);
+        return new IrOverloadRef(
+            IrTypeKeys.Of(type),
+            group.Name,
+            group.MemberOf(definition)!.Ordinal
+        );
     }
+
+    /// <summary>
+    /// The identity of the synthesized <paramref name="kind"/> member that
+    /// joins a group of <paramref name="type"/> (FR-038); <c>null</c> when none
+    /// does.
+    /// </summary>
+    public static IrOverloadRef? SynthesizedRefOf(
+        INamedTypeSymbol type,
+        IrSynthesizedValueMember kind,
+        OverloadGroupingPolicy policy
+    ) =>
+        Of(type, policy)
+            .Select(group => (Group: group, Member: group.Synthesized))
+            .Where(entry => entry.Member?.Kind == kind)
+            .Select(entry => new IrOverloadRef(
+                IrTypeKeys.Of(type.OriginalDefinition),
+                entry.Group.Name,
+                entry.Member!.Ordinal
+            ))
+            .FirstOrDefault();
 
     /// <summary>
     /// The name a method groups under: its C# name, or an explicit
@@ -215,18 +333,48 @@ internal static class MethodOverloadGroups
     public static string GroupNameOf(IMethodSymbol method) =>
         ExplicitImplementationLowering.ImplementedInterfaceMember(method)?.Name ?? method.Name;
 
+    private static string SynthesizedSuffixOf(OverloadGroupingPolicy policy) =>
+        policy.ValueEqualityNames?.FastPathSuffix
+        ?? throw new InvalidOperationException(
+            "A synthesized member joined a group without names."
+        );
+
     private static IReadOnlyList<MethodOverloadGroup> Compute(
         INamedTypeSymbol type,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
-        var declared = DeclaredMethods(type, target).ToList();
+        var declared = DeclaredMethods(type, policy.Target).ToList();
 
-        return declared
+        var groups = declared
             .GroupBy(GroupNameOf, StringComparer.Ordinal)
-            .SelectMany(methods => GroupsNamed(type, methods.Key, methods.ToList(), target))
-            .OrderBy(group => declared.IndexOf(group.Members[0].Symbol))
+            .SelectMany(methods => GroupsNamed(type, methods.Key, methods.ToList(), policy))
             .ToList();
+
+        return SynthesizedGroupMembers
+            .Insert(type, groups, policy)
+            .OrderBy(group => FirstDeclarationIndexOf(group, declared))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Where a group sits among the type's declarations: at its first declared
+    /// method, or the declaration folded into its synthesized member; a group
+    /// holding only a synthesized member comes last.
+    /// </summary>
+    private static int FirstDeclarationIndexOf(
+        MethodOverloadGroup group,
+        List<IMethodSymbol> declared
+    )
+    {
+        var first = group.Members[0] switch
+        {
+            DeclaredMember member => member.Symbol,
+            SynthesizedMember member => member.Replacement,
+            _ => null,
+        };
+
+        return first is null ? int.MaxValue : declared.IndexOf(first);
     }
 
     /// <summary>
@@ -237,26 +385,25 @@ internal static class MethodOverloadGroups
         INamedTypeSymbol type,
         string name,
         IReadOnlyList<IMethodSymbol> methods,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         var members = methods
             .Select(
                 (method, ordinal) =>
-                    new MethodGroupMember(method, ordinal, AnchorOf(type, method, target))
+                    new DeclaredMember(method, ordinal, AnchorOf(type, method, policy))
             )
             .ToList();
 
-        var (main, segregated) = SplitSegregatedOverrides(members, target);
+        var (main, segregated) = SplitSegregatedOverrides(members, policy.Target);
 
         if (main.Count > 0)
         {
             yield return new MethodOverloadGroup(
                 name,
                 main,
-                InheritedOverloadsOf(type, name, main, target),
-                IsSegregatedOverrides: false,
-                YieldsToValueEquality: ValueEqualityMemberNames.AreClaimed(type, name, main)
+                InheritedOverloadsOf(type, name, main, policy),
+                IsSegregatedOverrides: false
             );
         }
 
@@ -280,23 +427,23 @@ internal static class MethodOverloadGroups
     /// dispatched group instead, the override an overload like the others
     /// (#677). The override of an emitted virtual keeps its own group.
     /// </summary>
-    private static (
-        List<MethodGroupMember> Main,
-        List<MethodGroupMember> Segregated
-    ) SplitSegregatedOverrides(List<MethodGroupMember> members, TargetLanguage? target)
+    private static (List<GroupMember> Main, List<GroupMember> Segregated) SplitSegregatedOverrides(
+        List<DeclaredMember> members,
+        TargetLanguage? target
+    )
     {
         var segregated = members.Where(IsSegregatedOverride).ToList();
-        var main = members.Except(segregated).ToList();
+        var main = members.Except(segregated).ToList<GroupMember>();
 
         var joinsTheMainGroup =
             main.Count > 0
             && segregated.Count > 0
             && segregated.All(member => OverridesBclVirtual(member, target));
 
-        return joinsTheMainGroup ? (members, []) : (main, segregated);
+        return joinsTheMainGroup ? ([.. members], []) : (main, [.. segregated]);
     }
 
-    private static bool IsSegregatedOverride(MethodGroupMember member) =>
+    private static bool IsSegregatedOverride(DeclaredMember member) =>
         member.Symbol.IsOverride && member.Anchor is null;
 
     /// <summary>
@@ -304,7 +451,7 @@ internal static class MethodOverloadGroups
     /// of a type the target does not emit (a BCL one such as
     /// <c>object.Equals</c>), so no emitted declaration owns its name.
     /// </summary>
-    private static bool OverridesBclVirtual(MethodGroupMember member, TargetLanguage? target)
+    private static bool OverridesBclVirtual(DeclaredMember member, TargetLanguage? target)
     {
         var root = member.Symbol.OriginalDefinition;
 
@@ -329,6 +476,7 @@ internal static class MethodOverloadGroups
 
     private static bool IsDeclaredGroupMethod(IMethodSymbol method, TargetLanguage? target) =>
         !method.IsImplicitlyDeclared
+        && !method.IsCompilerGenerated()
         && !SymbolHelper.HasIgnore(method, target)
         && IsUserMethod(method)
         && !IsDroppedExplicitImplementation(method, target)
@@ -357,14 +505,16 @@ internal static class MethodOverloadGroups
     /// of dispatched interface groups it implements; <c>null</c> for its own
     /// root. Static members are never anchored.
     /// </summary>
-    private static MethodAnchor? AnchorOf(
+    private static MemberAnchor? AnchorOf(
         INamedTypeSymbol type,
         IMethodSymbol method,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         if (method.IsStatic)
             return null;
+
+        var target = policy.Target;
 
         var interfaceRoots = InterfaceRootsOf(type, method, target);
 
@@ -376,12 +526,12 @@ internal static class MethodOverloadGroups
         );
 
         if (constructedRoot is not null)
-            return new MethodAnchor(constructedRoot, KindOf(method), []);
+            return new MemberAnchor(new DeclaredRoot(constructedRoot), KindOf(method), []);
 
         // An override reuses its root's names; the base it overrides already
         // declares the forwarding members of any further interface roots.
-        if (method.IsOverride && DispatchedOverrideRootOf(method, target) is { } root)
-            return new MethodAnchor(root, IrOverloadAnchorKind.Override, []);
+        if (method.IsOverride && DispatchedOverrideRootOf(method, policy) is { } root)
+            return new MemberAnchor(new DeclaredRoot(root), IrOverloadAnchorKind.Override, []);
 
         if (interfaceRoots.Count == 0)
             return null;
@@ -394,8 +544,8 @@ internal static class MethodOverloadGroups
             ? new List<IMethodSymbol>()
             : interfaceRoots.Skip(1).ToList();
 
-        return new MethodAnchor(
-            interfaceRoots[0],
+        return new MemberAnchor(
+            new DeclaredRoot(interfaceRoots[0]),
             IrOverloadAnchorKind.Implementation,
             furtherRoots,
             furtherRoots
@@ -431,16 +581,16 @@ internal static class MethodOverloadGroups
     /// </summary>
     private static IMethodSymbol? DispatchedOverrideRootOf(
         IMethodSymbol method,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         // The first emitted declaration of the chain stands for the root when
         // the chain continues into a BCL virtual (`object.Equals`) that no
         // emitted class owns.
         var firstEmitted = OverrideChainOf(method)
-            .LastOrDefault(declaration => IsEmittedBase(declaration.ContainingType, target));
+            .LastOrDefault(declaration => IsEmittedBase(declaration.ContainingType, policy.Target));
 
-        return firstEmitted is not null && GroupOf(firstEmitted, target) is { IsDispatched: true }
+        return firstEmitted is not null && GroupOf(firstEmitted, policy) is { IsDispatched: true }
             ? firstEmitted
             : null;
     }
@@ -539,26 +689,31 @@ internal static class MethodOverloadGroups
     /// The suffix the root's own declaring type gave it. Its diagnostics are
     /// reported where that type is extracted, not here.
     /// </summary>
-    private static string RootSuffixOf(IMethodSymbol root, TargetLanguage? target)
+    private static string RootSuffixOf(AnchorRoot root, OverloadGroupingPolicy policy)
     {
+        if (root is not DeclaredRoot { Method: var method })
+            return SynthesizedSuffixOf(policy);
+
         using var _ = ExtractionDiagnostics.Suppress();
 
-        var definition = root.OriginalDefinition;
+        var definition = method.OriginalDefinition;
         var type = definition.ContainingType;
 
         if (type.TypeKind == TypeKind.Interface)
         {
-            var members = InterfaceOverloadGroup.Of(type, definition.Name, target);
+            var members = InterfaceOverloadGroup.Of(type, definition.Name, policy.Target);
 
-            return OverloadGroupNaming.SuffixesOf(members, target)[members.IndexOf(definition)];
+            return OverloadGroupNaming.SuffixesOf(members, policy.Target)[
+                members.IndexOf(definition)
+            ];
         }
 
-        var group = GroupOf(definition, target)
+        var group = GroupOf(definition, policy)
             ?? throw new InvalidOperationException(
                 $"'{definition.ToDisplayString()}' is not a grouped method of its type."
             );
 
-        return SuffixesOf(type, group, target)[group.MemberOf(definition)!.Symbol];
+        return SuffixesOf(type, group, policy)[group.MemberOf(definition)!];
     }
 
     /// <summary>
@@ -567,30 +722,37 @@ internal static class MethodOverloadGroups
     /// <c>new</c> method of the type hides the base overload of its
     /// signature. <c>null</c> when no base dispatches the name.
     /// </summary>
-    private static IReadOnlyList<IMethodSymbol>? InheritedOverloadsOf(
+    internal static IReadOnlyList<GroupMember>? InheritedOverloadsOf(
         INamedTypeSymbol type,
         string name,
-        IReadOnlyList<MethodGroupMember> declared,
-        TargetLanguage? target
+        IReadOnlyList<GroupMember> declared,
+        OverloadGroupingPolicy policy
     )
     {
         // Operators lower to static helpers of their own type, never to an
         // inherited dispatcher.
-        if (declared.Any(member => IsOperator(member.Symbol)))
+        if (declared.OfType<DeclaredMember>().Any(member => IsOperator(member.Symbol)))
             return null;
 
-        if (DispatcherOverloadsAbove(type, name, target) is not { } inherited)
+        if (DispatcherOverloadsAbove(type, name, policy) is not { } inherited)
             return null;
 
-        return inherited
-            .Where(overload =>
-                !declared.Any(member =>
-                    !member.Symbol.IsOverride
-                    && SymbolHelper.HasSameParameters(member.Symbol, overload)
-                )
-            )
-            .ToList();
+        return inherited.Where(overload => !IsHiddenBy(declared, overload)).ToList();
     }
+
+    /// <summary>
+    /// Whether a <c>new</c> method of <paramref name="declared"/> hides the
+    /// inherited <paramref name="overload"/> of its signature. A synthesized
+    /// member is overridden, never hidden.
+    /// </summary>
+    private static bool IsHiddenBy(IReadOnlyList<GroupMember> declared, GroupMember overload) =>
+        overload is DeclaredMember inherited
+        && declared
+            .OfType<DeclaredMember>()
+            .Any(member =>
+                !member.Symbol.IsOverride
+                && SymbolHelper.HasSameParameters(member.Symbol, inherited.Symbol)
+            );
 
     /// <summary>
     /// The dispatcher overloads the nearest emitted base declaring
@@ -599,19 +761,19 @@ internal static class MethodOverloadGroups
     /// base-most first. <c>null</c> when that base's group is not
     /// dispatched.
     /// </summary>
-    private static IReadOnlyList<IMethodSymbol>? DispatcherOverloadsAbove(
+    private static IReadOnlyList<GroupMember>? DispatcherOverloadsAbove(
         INamedTypeSymbol type,
         string name,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     )
     {
         for (
             var ancestor = type.BaseType;
-            IsEmittedBase(ancestor, target);
+            IsEmittedBase(ancestor, policy.Target);
             ancestor = ancestor!.BaseType
         )
         {
-            var group = Of(ancestor!, target)
+            var group = Of(ancestor!, policy)
                 .FirstOrDefault(candidate =>
                     candidate.Name == name && !candidate.IsSegregatedOverrides
                 );
@@ -621,14 +783,14 @@ internal static class MethodOverloadGroups
 
             var added = group
                 .Members.Where(member => member.Anchor?.Kind is not IrOverloadAnchorKind.Override)
-                .Select(member => ConstructedIn(ancestor!, member.Symbol))
+                .Select(member => ConstructedIn(ancestor!, member))
                 .ToList();
 
             if (group.InheritedOverloads is null)
                 return group.Members.Count >= 2 ? added : null;
 
-            var above = (DispatcherOverloadsAbove(ancestor!, name, target) ?? []).Where(overload =>
-                !added.Any(own => SymbolHelper.HasSameParameters(own, overload))
+            var above = (DispatcherOverloadsAbove(ancestor!, name, policy) ?? []).Where(overload =>
+                !added.Any(own => HaveSameParameters(own, overload))
             );
 
             return [.. above, .. added];
@@ -636,6 +798,16 @@ internal static class MethodOverloadGroups
 
         return null;
     }
+
+    private static bool HaveSameParameters(GroupMember member, GroupMember other) =>
+        (member, other) switch
+        {
+            (DeclaredMember declared, DeclaredMember otherDeclared) =>
+                SymbolHelper.HasSameParameters(declared.Symbol, otherDeclared.Symbol),
+            (SynthesizedMember synthesized, SynthesizedMember otherSynthesized) => synthesized.Kind
+                == otherSynthesized.Kind,
+            _ => false,
+        };
 
     /// <summary>
     /// A class the target emits, whose dispatched groups a derived class and
@@ -646,6 +818,18 @@ internal static class MethodOverloadGroups
         type is { TypeKind: TypeKind.Class, SpecialType: SpecialType.None }
         && IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
         && !SymbolHelper.HasExternal(type.OriginalDefinition);
+
+    /// <summary>
+    /// <paramref name="member"/> as the constructed <paramref name="type"/>
+    /// declares it: a declared method with its type arguments substituted.
+    /// </summary>
+    private static GroupMember ConstructedIn(INamedTypeSymbol type, GroupMember member) =>
+        member is DeclaredMember declared
+            ? declared with
+            {
+                Symbol = ConstructedIn(type, declared.Symbol),
+            }
+            : member;
 
     /// <summary>The member of a constructed type that <paramref name="definition"/> declares.</summary>
     private static IMethodSymbol ConstructedIn(INamedTypeSymbol type, IMethodSymbol definition) =>
@@ -666,7 +850,11 @@ internal static class MethodOverloadGroups
     private static IEnumerable<IMethodSymbol> VisibleInheritedOverloads(
         INamedTypeSymbol type,
         MethodOverloadGroup group
-    ) => (group.InheritedOverloads ?? []).Where(overload => IsVisibleFrom(overload, type));
+    ) =>
+        (group.InheritedOverloads ?? [])
+            .OfType<DeclaredMember>()
+            .Select(overload => overload.Symbol)
+            .Where(overload => IsVisibleFrom(overload, type));
 
     /// <summary>
     /// Whether <paramref name="method"/> overrides one of the
@@ -702,8 +890,9 @@ internal static class MethodOverloadGroups
             _ => true,
         };
 
-    private static PinnedOverload PinnedOverloadOf(
-        MethodGroupMember member,
-        TargetLanguage? target
-    ) => new(member.Symbol, OverloadSuffixPin.Of(member.Anchor?.Root ?? member.Symbol, target));
+    private static PinnedOverload PinnedOverloadOf(DeclaredMember member, TargetLanguage? target) =>
+        new(
+            member.Symbol,
+            OverloadSuffixPin.Of(member.Anchor?.RootMethod ?? member.Symbol, target)
+        );
 }

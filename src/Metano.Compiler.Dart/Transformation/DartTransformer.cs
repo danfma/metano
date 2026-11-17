@@ -60,6 +60,7 @@ public sealed class DartTransformer
     private IrExtractionContext Extraction =>
         new(Compilation: _compilation, Target: TargetLanguage.Dart)
         {
+            GroupingPolicy = DartGroupingPolicy.Instance,
             EmitsConstructorSelectors = DartTypeShapes.EmitsNamedConstructors,
         };
 
