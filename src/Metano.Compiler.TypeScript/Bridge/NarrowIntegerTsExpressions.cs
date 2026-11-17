@@ -59,7 +59,8 @@ internal static class NarrowIntegerTsExpressions
             IrNumericKind.SByte
             or IrNumericKind.Byte
             or IrNumericKind.Int16
-            or IrNumericKind.UInt16 => RuntimeCall(
+            or IrNumericKind.UInt16
+            or IrNumericKind.Char => RuntimeCall(
                 Int64RuntimeHelpers.CheckedNarrowNumber,
                 value,
                 Literal(kind.BitWidth()),

@@ -227,7 +227,7 @@ public class CheckedContextTests
     [Arguments("static readonly u: number = 4294967295;")]
     [Arguments("static readonly b: number = 44;")]
     [Arguments("let h = -2128831035;")]
-    [Arguments("h = (h ^ c) * 16777619;")]
+    [Arguments("h = (h ^ c.charCodeAt(0)) * 16777619;")]
     [Arguments("return a * -2128831035;")]
     [Arguments("return 18446744073709551615n;")]
     [Arguments("return -2147483648;")]

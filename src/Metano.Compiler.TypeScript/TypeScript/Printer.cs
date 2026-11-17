@@ -1604,8 +1604,15 @@ public sealed class Printer(string indent = "  ")
     private void PrintJsxAttribute(TsJsxAttribute attribute)
     {
         _sb.Write(attribute.Name);
+
         switch (attribute.Value)
         {
+            case TsJsxAttributeStringValue str when HasLoneSurrogate(str.Value):
+                // A JSX attribute string has no escapes: the value becomes a JS string.
+                _sb.Write("={");
+                _sb.WriteQuoted(str.Value);
+                _sb.Write("}");
+                break;
             case TsJsxAttributeStringValue str:
                 _sb.Write("=\"");
                 _sb.Write(EscapeJsxAttribute(str.Value));
@@ -1628,7 +1635,7 @@ public sealed class Printer(string indent = "  ")
         switch (child)
         {
             case TsJsxText text:
-                _sb.Write(EscapeJsxText(text.Value));
+                PrintJsxText(text.Value);
                 break;
             case TsJsxExpressionChild expr:
                 _sb.Write("{");
@@ -1639,6 +1646,41 @@ public sealed class Printer(string indent = "  ")
                 PrintJsxElement(element.Element);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Prints JSX text. An unpaired surrogate cannot be written as a character
+    /// (the file would not be valid UTF-8) nor as an entity, so it becomes a
+    /// string expression, <c>{"\ud83d"}</c> (FR-073).
+    /// </summary>
+    private void PrintJsxText(string value)
+    {
+        var start = 0;
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (!SurrogateText.IsLone(value, index))
+                continue;
+
+            _sb.Write(EscapeJsxText(value[start..index]));
+            _sb.Write("{");
+            _sb.WriteQuoted(value[index].ToString());
+            _sb.Write("}");
+            start = index + 1;
+        }
+
+        _sb.Write(EscapeJsxText(value[start..]));
+    }
+
+    private static bool HasLoneSurrogate(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (SurrogateText.IsLone(value, index))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

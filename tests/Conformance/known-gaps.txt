@@ -59,8 +59,6 @@ IndexProbes.structElems               #688  array-creation expression unsupporte
 IndexProbes.swap                      #688  tuple deconstruction unsupported
 IndexProbes.tupleElems                #688  declaration expression unsupported
 IndexProbes.refArgs                   none  a ref argument that is an array element is passed by value
-IndexProbes.stringsIdx                #501  char arithmetic: (char)(s[0] + 1)
-TextProbes.chars                      #501  char arithmetic and char to int conversions
 LinqProbes.intOverflowSum             #639  checked int arithmetic in LINQ sums
 LinqSetProbes.comparers               #687  equality comparers are not accepted
 LinqSetProbes.setOpsRecords           #687  records compare by reference in set operations

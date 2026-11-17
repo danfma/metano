@@ -157,8 +157,10 @@ public static partial class IrToTsExpressionBridge
     /// Reads (<c>dict[key]</c>) are rewritten elsewhere to
     /// <c>dict.get(key)</c>.
     /// </summary>
-    private static TsExpression MapBinary(IrBinaryExpression bin, IrToTsBridgeContext context)
+    private static TsExpression MapBinary(IrBinaryExpression binary, IrToTsBridgeContext context)
     {
+        var bin = IrToTsNumericConversionBridge.WithCharOperandsAsText(binary);
+
         if (
             bin.Operator is IrBinaryOp.Assign
             && bin.Left is IrElementAccess { TargetType: IrMapTypeRef } ea
