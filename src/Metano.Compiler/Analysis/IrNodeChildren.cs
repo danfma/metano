@@ -81,6 +81,17 @@ public static class IrNodeChildren
             ],
             IrCastExpression cast => [cast.Expression],
             IrNumericConversion conversion => [conversion.Operand],
+            IrUserOperatorApplication application =>
+            [
+                application.Operator.DeclaringType,
+                .. application.Operands,
+            ],
+            IrUserOperatorStore store => [store.ReadModifyWrite],
+            IrUserConversion userConversion =>
+            [
+                userConversion.Operator.DeclaringType,
+                userConversion.Operand,
+            ],
             IrIntegerOverflow overflow => [overflow.Value],
             IrTypeCheck check => [check.Expression],
             IrLinqChain linq => [linq.Source, .. linq.Stages.SelectMany(s => s.Arguments)],

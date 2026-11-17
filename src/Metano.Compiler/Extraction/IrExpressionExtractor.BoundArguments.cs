@@ -25,38 +25,6 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// A user-defined binary operator application bound to
-    /// <paramref name="target"/>: its operands one value per parameter, in
-    /// parameter order (spec 013 FR-018). <c>null</c> when
-    /// <paramref name="call"/> is no binary application of that overload, or
-    /// the application is a lifted one — a nullable operand that C#
-    /// null-propagates, whose lowering keeps the lifted guard — so the
-    /// caller keeps today's shape. A dispatched unary operator group keeps
-    /// today's shape too: its call sites are not bound.
-    /// </summary>
-    internal BoundOverloadCall? ExtractBoundOperatorCall(
-        IOperation? call,
-        IMethodSymbol operatorMethod,
-        IrOverloadRef target
-    )
-    {
-        if (
-            call is not IBinaryOperation { IsLifted: false } binary
-            || !SymbolEqualityComparer.Default.Equals(binary.OperatorMethod, operatorMethod)
-        )
-            return null;
-
-        var operands = new[] { binary.LeftOperand, binary.RightOperand };
-
-        return new BoundOverloadCall(
-            operands
-                .Select(operand => new IrArgument(Extract((ExpressionSyntax)operand.Syntax)))
-                .ToList(),
-            new IrSelectedOverload(target)
-        );
-    }
-
-    /// <summary>
     /// <paramref name="call"/> — a <c>new</c> or a constructor initializer,
     /// explicit or implicit — bound to <paramref name="target"/>, or
     /// <c>null</c> when it is no call or an argument has no form this

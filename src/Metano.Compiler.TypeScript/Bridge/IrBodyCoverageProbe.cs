@@ -96,6 +96,9 @@ public static class IrBodyCoverageProbe
             IrOutArgumentCall outCall => IsCoveredExpression(outCall.Call),
             IrCastExpression cast => IsCoveredExpression(cast.Expression),
             IrNumericConversion conversion => IsCoveredExpression(conversion.Operand),
+            IrUserOperatorApplication application => application.Operands.All(IsCoveredExpression),
+            IrUserOperatorStore store => IsCoveredExpression(store.ReadModifyWrite),
+            IrUserConversion userConversion => IsCoveredExpression(userConversion.Operand),
             IrIntegerOverflow overflow => IsCoveredExpression(overflow.Value),
             IrLambdaExpression lambda => IsFullyCovered(lambda.Body),
             IrStringInterpolation interp => interp.Parts.All(p =>

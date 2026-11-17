@@ -556,7 +556,6 @@ public sealed class TypeScriptTransformContext(
         new(OriginResolver, Compilation, TsGroupingPolicy.Instance, IrToTsNamingPolicy.LocalNaming)
         {
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
-            EmitsOperatorFastPaths = true,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
             KeepsArgumentEvaluationOrder = true,

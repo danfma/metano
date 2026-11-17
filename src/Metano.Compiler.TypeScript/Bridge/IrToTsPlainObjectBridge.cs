@@ -288,6 +288,22 @@ public static class IrToTsPlainObjectBridge
             {
                 Operand = RewriteThis(conversion.Operand, identifierName),
             },
+            IrUserOperatorApplication application => application with
+            {
+                Operands = application
+                    .Operands.Select(operand => RewriteThis(operand, identifierName))
+                    .ToList(),
+            },
+            IrUserOperatorStore store => store with
+            {
+                SourceForm = RewriteThis(store.SourceForm, identifierName),
+                ReadModifyWrite = RewriteThis(store.ReadModifyWrite, identifierName),
+            },
+            IrUserConversion userConversion => userConversion with
+            {
+                Operand = RewriteThis(userConversion.Operand, identifierName),
+                SourceForm = RewriteThis(userConversion.SourceForm, identifierName),
+            },
             IrIntegerOverflow overflow => overflow with
             {
                 Value = RewriteThis(overflow.Value, identifierName),

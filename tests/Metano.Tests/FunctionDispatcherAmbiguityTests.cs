@@ -538,11 +538,11 @@ public class FunctionDispatcherAmbiguityTests
     }
 
     /// <summary>
-    /// An operator of a branded type is not bound to a companion function
-    /// (#599): the application keeps the lowering it has without one.
+    /// An operator of a branded type is bound to the companion fast path of
+    /// the overload C# resolved (baseline FR-077, #599).
     /// </summary>
     [Test]
-    public async Task OperatorOfABrandedType_IsNotBound()
+    public async Task OperatorOfABrandedType_CallsItsCompanionFastPath()
     {
         var result = TranspileHelper.Transpile(
             Preamble

@@ -70,11 +70,11 @@ internal sealed class TsCompanionPlan
     /// method of a branded type has a fast path a call can name when its
     /// group dispatches — a static one in the companion namespace of a
     /// primitive-backed wrapper, which declares no instance member, and any
-    /// method of a wrapper that falls back to a class. Operators and
-    /// conversions are not applied through the declared functions (#599).
+    /// method of a wrapper that falls back to a class, and the fast paths of
+    /// an operator group, which its applications call (baseline FR-077).
     /// </summary>
     public static bool EmitsFastPathFor(IMethodSymbol method) =>
-        method.MethodKind is MethodKind.Ordinary
+        method.MethodKind is MethodKind.Ordinary or MethodKind.UserDefinedOperator
         && (method.IsStatic || !SymbolHelper.IsPrimitiveBackedBranded(method.ContainingType));
 
     /// <summary>

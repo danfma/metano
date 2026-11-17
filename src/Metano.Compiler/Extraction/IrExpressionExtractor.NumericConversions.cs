@@ -108,9 +108,16 @@ public sealed partial class IrExpressionExtractor
         if (
             !binary.IsKind(SyntaxKind.CoalesceExpression)
             || _semantic.GetOperation(binary)
-                is not ICoalesceOperation { Value.Type: { } valueType, Type: { } resultType }
+                is not ICoalesceOperation
+                {
+                    Value.Type: { } valueType,
+                    Type: { } resultType,
+                } coalesce
         )
             return operand;
+
+        if (UserCoalescedValue(coalesce, operand.Value) is { } userConverted)
+            return operand.WithValue(userConverted);
 
         if (
             NumericEndpoints.Of(valueType.UnwrapNullableValueType()) is not { } from

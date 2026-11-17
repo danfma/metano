@@ -229,6 +229,9 @@ public static class IrBodyPrinter
     {
         switch (expr)
         {
+            case IrUserOperatorApplication or IrUserOperatorStore or IrUserConversion:
+                PrintExpression(sb, DartUserOperatorForms.SourceFormOf(expr));
+                break;
             case IrLiteral lit:
                 PrintLiteral(sb, lit);
                 break;

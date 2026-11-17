@@ -143,3 +143,19 @@ public class LConvBase
 
     public static explicit operator int(LConvBase b) => b.V;
 }
+
+public class LAmount
+{
+    public int V;
+
+    public LAmount(int v)
+    {
+        V = v;
+    }
+
+    public static LAmount operator *(LAmount a, int k) => new(a.V * k);
+
+    public static LAmount operator *(LAmount a, LAmount b) => new(a.V * b.V * 10);
+
+    public static LAmount operator -(LAmount a) => new(-a.V);
+}
