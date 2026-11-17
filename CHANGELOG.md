@@ -23,6 +23,14 @@ the migration list.
 - An unpaired UTF-16 surrogate in a string or `char` literal prints as a `\uXXXX` escape (TypeScript and Dart; `{"\ud83d"}` in JSX), where the CLI aborted with `EncoderFallbackException`; a write failure now reports `MS0001` naming the file.
 - Dart output does not change; char arithmetic in Dart remains a documented gap.
 
+### Static constructors run lazily, at first use (spec FR-066, #681)
+
+- A type that declares a static constructor no longer runs it in a class `static { }` block at load. A `static readonly #$init = typeInitializer("Name", () => { … })` guard runs the static field initializers and then the body, once, right before the first instance creation or static member access, as .NET does. A base class whose static constructor constructs a derived class now loads.
+- Its static fields and auto-properties become `#name$` slots behind `static get` / `static set` accessors that run the guard. A `static readonly` member the static constructor writes keeps a `private` setter (2.x declared it mutable and public). Reference slots start at `null`.
+- A failing static constructor throws a `TypeInitializationException` (new runtime class, `catch` tests it) wrapping the original, and every later access rethrows it.
+- Types without a static constructor keep their eager static field initializers.
+- The generated barrel lists a derived module before the base module whose static constructor constructs it, and `[EmitInFile]` prints a base class before a class in the same file that extends it.
+
 ### ⚠ 64-bit integers become `bigint` (spec 012)
 
 - `long` / `ulong` (and `nint` / `nuint`) map to TypeScript `bigint` instead

@@ -29,9 +29,9 @@ namespace Metano.Compiler.IR;
 /// decision (<c>OverrideChains.EmitsPerClassStorage</c>).</param>
 /// <param name="InheritedAccessor">The accessor of the nearest overridden property up the chain, declared by a class the toolchain emits (this compilation or a transpiled package), that this override leaves to its base.</param>
 /// <param name="IsAssignedByStaticConstructor">A static get-only auto-property that the static
-/// constructor of its type writes. C# allows that write; a backend that lowers the constructor
-/// to a class initializer whose language rejects writing a read-only member declares it
-/// mutable.</param>
+/// constructor of its type writes. C# allows that write; a backend whose lowering of the
+/// constructor writes the property from outside its declaration keeps a way to write
+/// it.</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,

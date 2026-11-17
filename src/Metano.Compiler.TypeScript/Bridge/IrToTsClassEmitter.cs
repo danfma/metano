@@ -121,6 +121,13 @@ public sealed class IrToTsClassEmitter(
 
         var emitsSelectorsAndFactories = emitsDispatcher && constructor.Overloads is { Count: > 0 };
         var classMembers = new List<TsClassMember>();
+        var userMembers = new HashSet<TsClassMember>(ReferenceEqualityComparer.Instance);
+
+        var typeInitializer = TypeInitializerLowering.For(
+            ir,
+            TypeInitializerTargetOf(type, typeName, extendsType, explicitCtors, ir),
+            lowering
+        );
 
         if (emitsSelectorsAndFactories)
         {
@@ -141,13 +148,18 @@ public sealed class IrToTsClassEmitter(
 
         EmitPromotedMemberFields(ir.Constructor, promotedMemberDeclaration, classMembers);
 
+        var dataMembersStart = classMembers.Count;
+
         EmitClassMembers(
             ir,
             PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
             classMembers,
             keepsBaseMessage,
-            lowering
+            lowering,
+            typeInitializer
         );
+
+        userMembers.UnionWith(classMembers.Skip(dataMembersStart));
 
         if (emitsSelectorsAndFactories)
         {
@@ -162,23 +174,22 @@ public sealed class IrToTsClassEmitter(
             );
         }
 
+        var methodsStart = classMembers.Count;
+
         EmitDeferredOperatorsAndMethods(type, ir, claims, classMembers, lowering);
+        userMembers.UnionWith(classMembers.Skip(methodsStart));
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
 
-        if (ir.StaticInitializer is { } staticInitializer)
-        {
-            classMembers.Add(
-                new TsStaticBlock(
-                    IrToTsStatementBridge.MapBody(staticInitializer, lowering).ToList()
-                )
-            );
-        }
+        var body = typeInitializer.Complete(
+            new TsClassBody(constructor, classMembers),
+            userMembers
+        );
 
         statements.Add(
             new TsClass(
                 typeName,
-                constructor,
-                classMembers,
+                body.Constructor,
+                body.Members,
                 Extends: extendsType,
                 Implements: IrToTsClassBridge.BuildImplements(ir),
                 TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
@@ -292,7 +303,8 @@ public sealed class IrToTsClassEmitter(
         IReadOnlySet<string> promotedNames,
         List<TsClassMember> classMembers,
         bool keepsBaseMessage,
-        IrToTsBridgeContext lowering
+        IrToTsBridgeContext lowering,
+        TypeInitializerLowering typeInitializer
     )
     {
         foreach (var irMember in ir.Members ?? [])
@@ -300,23 +312,26 @@ public sealed class IrToTsClassEmitter(
             switch (irMember)
             {
                 case IrFieldDeclaration irField:
-                    classMembers.Add(
-                        IrToTsClassBridge.BuildField(
-                            irField,
-                            IrToTsTypeMapper.Map(irField.Type, BclOverrides),
-                            lowering
-                        )
+                    var field = IrToTsClassBridge.BuildField(
+                        irField,
+                        IrToTsTypeMapper.Map(irField.Type, BclOverrides),
+                        lowering
                     );
+
+                    classMembers.AddRange(typeInitializer.LowerField(irField, field));
                     break;
 
                 case IrPropertyDeclaration irProp
                     when !promotedNames.Contains(
                         IrToTsNamingPolicy.ToDeclaredDataMemberName(irProp.Name, irProp.Attributes)
                     ):
-                    var propertyMembers = IrToTsClassBridge.BuildProperty(
+                    var propertyMembers = typeInitializer.LowerProperty(
                         irProp,
-                        IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
-                        lowering
+                        IrToTsClassBridge.BuildProperty(
+                            irProp,
+                            IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
+                            lowering
+                        )
                     );
 
                     classMembers.AddRange(
@@ -341,6 +356,32 @@ public sealed class IrToTsClassEmitter(
             }
         }
     }
+
+    /// <summary>
+    /// The facts the type initializer lowering needs about the class: its emitted
+    /// name, the name a <c>TypeInitializationException</c> reports (containing
+    /// types dotted, no type arguments), whether it extends a class, and, for a
+    /// struct, whether it declares a parameterless constructor.
+    /// </summary>
+    private static TypeInitializerTarget TypeInitializerTargetOf(
+        INamedTypeSymbol type,
+        string typeName,
+        TsType? extendsType,
+        IReadOnlyList<IMethodSymbol> explicitCtors,
+        IrClassDeclaration ir
+    ) =>
+        new(
+            typeName,
+            DottedTypeName(type),
+            extendsType is not null,
+            ir.Semantics.IsValueType,
+            explicitCtors.Any(ctor => ctor.Parameters.Length == 0)
+        );
+
+    private static string DottedTypeName(INamedTypeSymbol type) =>
+        type.ContainingType is { } containing
+            ? $"{DottedTypeName(containing)}.{type.Name}"
+            : type.Name;
 
     /// <summary>
     /// Second-phase walk that emits operators (before methods) and

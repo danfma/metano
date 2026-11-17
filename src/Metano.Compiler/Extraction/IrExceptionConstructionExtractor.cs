@@ -173,6 +173,7 @@ public static class IrExceptionConstructionExtractor
             "actualValue" => IrExceptionArgumentRole.ActualValue,
             "objectName" => IrExceptionArgumentRole.ObjectName,
             "unmatchedValue" => IrExceptionArgumentRole.UnmatchedValue,
+            "fullTypeName" or "typeName" => IrExceptionArgumentRole.TypeName,
             _ => IrExceptionArgumentRole.Unmapped,
         };
 

@@ -1006,6 +1006,7 @@ which extends `Error`, so `instanceof Error` holds for all of them.
 | `System.Text.Json.JsonException` | `JsonException : Exception` | `(message, innerException)` |
 | `TimeoutException` | `TimeoutException : SystemException` | `(message, innerException)` |
 | `System.Runtime.CompilerServices.SwitchExpressionException` | `SwitchExpressionException : InvalidOperationException` | `(unmatchedValue, message, innerException)` |
+| `TypeInitializationException` | `TypeInitializationException : SystemException` | `(typeName, innerException)`; thrown by the lazy static-constructor guard (FR-066). A C# construction passes `fullTypeName` as `typeName`. |
 
 - **Construction.** `new X(...)` emits `new X(...)` with a value import from the class's
   module. Each argument is classified by the role of the C# constructor parameter it binds

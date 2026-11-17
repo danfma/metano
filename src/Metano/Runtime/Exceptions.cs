@@ -141,6 +141,11 @@ using Metano.Annotations;
     ExportedName = "SwitchExpressionException",
     FromPackage = "metano-runtime/system/exceptions/switch-expression-exception"
 )]
+[assembly: ExportFromBcl(
+    typeof(TypeInitializationException),
+    ExportedName = "TypeInitializationException",
+    FromPackage = "metano-runtime/system/exceptions/type-initialization-exception"
+)]
 
 // The argument guards (`ThrowIfNull`, `ThrowIfNullOrEmpty`, the `ThrowIf*` comparisons) lower
 // to the runtime's `argument-guards` functions; the extractor passes the

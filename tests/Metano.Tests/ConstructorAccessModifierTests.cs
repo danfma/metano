@@ -92,9 +92,11 @@ public class ConstructorAccessModifierTests
 
         await Assert.That(files["point.ts"]).Contains("  constructor(readonly x: number) { }");
         await Assert.That(files["shape.ts"]).Contains("  constructor(readonly name: string) { }");
+
         await Assert
             .That(files["counter.ts"])
             .Contains("  constructor(readonly start: number) { }");
+
         await Assert.That(files["gauge.ts"]).Contains("  constructor(readonly max: number) { }");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
@@ -165,6 +167,7 @@ public class ConstructorAccessModifierTests
         );
 
         var output = files["size.ts"];
+
         var warning = await SingleDiagnostic(
             diagnostics,
             DiagnosticCodes.MixedConstructorAccessibility
@@ -280,6 +283,7 @@ public class ConstructorAccessModifierTests
         );
 
         var output = files["size.ts"];
+
         var warning = await SingleDiagnostic(
             diagnostics,
             DiagnosticCodes.MixedConstructorAccessibility
@@ -315,6 +319,7 @@ public class ConstructorAccessModifierTests
         await Assert.That(output).Contains("  readonly name: string;\n");
         await Assert.That(output).Contains("  constructor(name: string);\n");
         await Assert.That(output).Contains("      this.name = name;\n");
+
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsEmpty();
@@ -365,7 +370,10 @@ public class ConstructorAccessModifierTests
 
         var output = files["registry.ts"];
 
-        await Assert.That(output).Contains("  private constructor() { }");
+        await Assert
+            .That(output)
+            .Contains("  private constructor() {\n    Registry.#$init();\n  }");
+
         await Assert.That(output).DoesNotContain("...args");
     }
 
@@ -516,6 +524,7 @@ public class ConstructorAccessModifierTests
         await Assert
             .That(context)
             .Contains("factory: (p: Record<string, unknown>) => ({ name: p.name as string })");
+
         await Assert.That(context).DoesNotContain("new Payload");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
@@ -542,6 +551,7 @@ public class ConstructorAccessModifierTests
         );
 
         var output = files["report.ts"];
+
         var warning = await SingleDiagnostic(
             diagnostics,
             DiagnosticCodes.ConstructorAccessibilityWidened
@@ -574,6 +584,7 @@ public class ConstructorAccessModifierTests
         await Assert
             .That(files["session.ts"])
             .Contains("export class Session {\n  constructor() { }");
+
         await SingleDiagnostic(diagnostics, DiagnosticCodes.ConstructorAccessibilityWidened);
     }
 
@@ -608,6 +619,7 @@ public class ConstructorAccessModifierTests
         await Assert
             .That(files["catalog.ts"])
             .Contains("export class Catalog {\n  constructor() { }");
+
         await Assert.That(warning.Message).Contains("the nested type 'Catalog.Section.Loader'");
     }
 
@@ -662,6 +674,7 @@ public class ConstructorAccessModifierTests
         await Assert
             .That(output)
             .Contains("export abstract class Result {\n  protected constructor() { }");
+
         await Assert.That(output).Contains("export class Ok extends Result {");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
@@ -757,6 +770,7 @@ public class ConstructorAccessModifierTests
         await Assert
             .That(files["animal.ts"])
             .Contains("  protected constructor(readonly name: string) {");
+
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
 
@@ -764,6 +778,7 @@ public class ConstructorAccessModifierTests
     public async Task Printer_PrefixesEveryOverloadSignatureWithTheModifier()
     {
         var number = new TsNamedType("number");
+
         var constructor = new TsConstructor(
             [
                 new TsConstructorParam(
@@ -809,6 +824,7 @@ public class ConstructorAccessModifierTests
             public class Plain { }
             """
         );
+
         var baseType = compilation.GetTypeByMetadataName("App.Base")!;
         var derived = compilation.GetTypeByMetadataName("App.Derived")!;
         var plain = compilation.GetTypeByMetadataName("App.Plain")!;
@@ -863,6 +879,7 @@ public class ConstructorAccessModifierTests
         foreach (var file in transformer.TransformAll())
         {
             var path = Path.Combine(cacheDir, file.FileName);
+
             var content = transformer.CachedFileContents.TryGetValue(file.FileName, out var cached)
                 ? cached
                 : printer.Print(file);

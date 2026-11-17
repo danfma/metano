@@ -1,11 +1,18 @@
 // Runs the static probes of ONE transpiled module and prints one line per row, in the
 // format of Runner.cs: `<Class>.<method> = <value>` or `<Class>.<method> THROWS <Type>: <message>`.
-// Usage (Bun or Node): <runtime> run-probes.mjs <absolute path of the module>
+// Usage (Bun or Node): <runtime> run-probes.mjs <absolute path of the module> [<preload>...]
 // The orchestrator (conformance.mjs) starts one process per module, under a timeout, so a
-// load failure or a hang in one module cannot hide the rows of the others.
+// load failure or a hang in one module cannot hide the rows of the others. Each preload
+// module (tools/preloads.txt) is imported first, in order: a row that depends on how a
+// consumer enters the package (through its barrel, for instance) names that entry there.
 import { pathToFileURL } from "node:url";
 
-const [modulePath] = process.argv.slice(2);
+const [modulePath, ...preloads] = process.argv.slice(2);
+
+for (const preload of preloads) {
+  await import(pathToFileURL(preload).href);
+}
+
 const module = await import(pathToFileURL(modulePath).href);
 const lines = [];
 

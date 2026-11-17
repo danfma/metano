@@ -32,13 +32,19 @@ public static class BarrelFileGenerator
     /// nested namespace bindings coexist in a single
     /// <c>index.ts</c>.
     /// </para>
+    /// <para>
+    /// <paramref name="hoists"/> name the modules a leaf barrel lists first: a
+    /// derived class's module that must load before the base module which
+    /// constructs it from a lazy static constructor (<see cref="InitializerCycleHoists"/>).
+    /// </para>
     /// </summary>
     public static IReadOnlyList<TsSourceFile> Generate(
         IReadOnlyList<TsSourceFile> typeFiles,
-        bool namespaceBarrels = false
+        bool namespaceBarrels = false,
+        IReadOnlyList<BarrelHoist>? hoists = null
     )
     {
-        var leafBarrels = GenerateLeafBarrels(typeFiles);
+        var leafBarrels = GenerateLeafBarrels(typeFiles, hoists ?? []);
         if (!namespaceBarrels)
             return leafBarrels;
 
@@ -76,7 +82,8 @@ public static class BarrelFileGenerator
     }
 
     private static IReadOnlyList<TsSourceFile> GenerateLeafBarrels(
-        IReadOnlyList<TsSourceFile> typeFiles
+        IReadOnlyList<TsSourceFile> typeFiles,
+        IReadOnlyList<BarrelHoist> hoists
     )
     {
         // Group files by their directory
@@ -100,7 +107,7 @@ public static class BarrelFileGenerator
         {
             var exports = new List<TsTopLevel>();
 
-            foreach (var file in files.OrderBy(f => f.FileName))
+            foreach (var file in ExportOrder(files, hoists))
             {
                 var moduleName = Path.GetFileNameWithoutExtension(file.FileName);
 
@@ -160,6 +167,42 @@ public static class BarrelFileGenerator
 
         return indexFiles;
     }
+
+    /// <summary>
+    /// The files of one barrel in file-name order, except the derived modules of
+    /// <paramref name="hoists"/> whose base module shares the barrel: they come
+    /// first, ordered by base, then by derived, each in file-name order. Any earlier
+    /// line whose module imports the base would evaluate the base first, so moving
+    /// them just before the base is not enough. A barrel without such a pair keeps
+    /// its order.
+    /// </summary>
+    private static IReadOnlyList<TsSourceFile> ExportOrder(
+        IReadOnlyList<TsSourceFile> files,
+        IReadOnlyList<BarrelHoist> hoists
+    )
+    {
+        var ordered = files.OrderBy(f => f.FileName).ToList();
+
+        var positions = ordered
+            .Select((file, index) => (Module: ModuleOf(file), index))
+            .ToDictionary(entry => entry.Module, entry => entry.index, StringComparer.Ordinal);
+
+        var hoisted = hoists
+            .Where(hoist =>
+                positions.ContainsKey(hoist.BaseModule)
+                && positions.ContainsKey(hoist.DerivedModule)
+            )
+            .OrderBy(hoist => positions[hoist.BaseModule])
+            .ThenBy(hoist => positions[hoist.DerivedModule])
+            .Select(hoist => ordered[positions[hoist.DerivedModule]])
+            .Distinct()
+            .ToList();
+
+        return hoisted.Count == 0 ? ordered : [.. hoisted, .. ordered.Except(hoisted)];
+    }
+
+    private static string ModuleOf(TsSourceFile file) =>
+        Path.ChangeExtension(file.FileName, null).Replace('\\', '/');
 
     private static string? GetExportedName(TsTopLevel node) =>
         node switch
