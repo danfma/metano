@@ -375,6 +375,258 @@ export class UBoth {
   }
 }
 
+export class NEq {
+  constructor(readonly v: number) { }
+
+  equalsOTol(o: NEq, tol: number): boolean {
+    return Math.abs(o.v - this.v) <= tol;
+  }
+
+  equalsByValue(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals(this.v, other.v);
+  }
+
+  equals(o: NEq, tol: number): boolean;
+  equals(other: unknown): boolean;
+  equals(...args: unknown[]): boolean {
+    if (args.length === 1 && args[0] != null && Object.getPrototypeOf(args[0]) === Object.getPrototypeOf(this)) {
+      return this.equalsByValue(args[0]);
+    }
+
+    if (args.length === 2 && args[0] instanceof NEq && isFloat64(args[1])) {
+      return this.equalsOTol(args[0] as NEq, args[1] as number);
+    }
+
+    if (args.length === 1) {
+      return this.equalsByValue(args[0]);
+    }
+
+    throw new Error("No matching overload for equals");
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.v);
+
+    return hc.toHashCode();
+  }
+
+  with(overrides?: Partial<NEq>): NEq {
+    return copyRecordWith<NEq>(this, overrides);
+  }
+}
+
+export class NHash {
+  constructor(readonly v: number) { }
+
+  hashCodeSeed(seed: number): number {
+    return this.v + seed;
+  }
+
+  hashCodeByValue(): number {
+    const hc = new HashCode();
+    hc.add(this.v);
+
+    return hc.toHashCode();
+  }
+
+  hashCode(seed: number): number;
+  hashCode(): number;
+  hashCode(...args: unknown[]): number {
+    if (args.length === 0) {
+      return this.hashCodeByValue();
+    }
+
+    if (args.length === 1 && isInt32(args[0])) {
+      return this.hashCodeSeed(args[0] as number);
+    }
+
+    throw new Error("No matching overload for hashCode");
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.v === other.v;
+  }
+
+  with(overrides?: Partial<NHash>): NHash {
+    return copyRecordWith<NHash>(this, overrides);
+  }
+}
+
+export class NWith {
+  constructor(readonly a: number, readonly b: number) { }
+
+  withA(a: number): NWith {
+    return new NWith(a, this.b);
+  }
+
+  withByValue(overrides?: Partial<NWith>): NWith {
+    return copyRecordWith<NWith>(this, overrides);
+  }
+
+  with(a: number): NWith;
+  with(overrides?: Partial<NWith>): NWith;
+  with(...args: unknown[]): NWith {
+    if (args.length === 0 || (args.length === 1 && (args[0] === undefined || Object.getPrototypeOf(args[0]) === Object.prototype))) {
+      return this.withByValue(args[0] as Partial<NWith>);
+    }
+
+    if (args.length === 1 && isInt32(args[0])) {
+      return this.withA(args[0] as number);
+    }
+
+    if (args.length <= 1) {
+      return this.withByValue(args[0] as Partial<NWith>);
+    }
+
+    throw new Error("No matching overload for with");
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.a === other.a && this.b === other.b;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.a);
+    hc.add(this.b);
+
+    return hc.toHashCode();
+  }
+}
+
+export class SEqOnly {
+  x: number = 0;
+
+  constructor(x: number) {
+    this.x = x;
+  }
+
+  equals(o: SEqOnly): boolean {
+    return o.x === this.x;
+  }
+
+  hashCode(): number {
+    return this.x;
+  }
+}
+
+export class SEqJoin {
+  x: number = 0;
+
+  constructor(x: number) {
+    this.x = x;
+  }
+
+  equalsOSlack(o: SEqJoin, slack: number): boolean {
+    return Math.abs(o.x - this.x) <= slack;
+  }
+
+  equalsO(o: SEqJoin): boolean {
+    return o.x === this.x;
+  }
+
+  equalsByValue(other: unknown): boolean {
+    return other instanceof SEqJoin ? this.equalsO(other) : false;
+  }
+
+  equals(o: SEqJoin, slack: number): boolean;
+  equals(o: SEqJoin): boolean;
+  equals(other: unknown): boolean;
+  equals(...args: unknown[]): boolean {
+    if (args.length === 1 && args[0] != null && Object.getPrototypeOf(args[0]) === Object.getPrototypeOf(this)) {
+      return this.equalsByValue(args[0]);
+    }
+
+    if (args.length === 2 && args[0] instanceof SEqJoin && isInt32(args[1])) {
+      return this.equalsOSlack(args[0] as SEqJoin, args[1] as number);
+    }
+
+    if (args.length === 1) {
+      return this.equalsByValue(args[0]);
+    }
+
+    throw new Error("No matching overload for equals");
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.x);
+
+    return hc.toHashCode();
+  }
+}
+
+export class SExpl {
+  x: number = 0;
+
+  constructor(x: number) {
+    this.x = x;
+  }
+
+  equals(o: SExpl): boolean {
+    return o.x === this.x;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.x);
+
+    return hc.toHashCode();
+  }
+}
+
+export class HZero {
+  constructor(readonly v: number) { }
+
+  hashCodeDefault(): number {
+    return 99;
+  }
+
+  hashCodeByValue(): number {
+    const hc = new HashCode();
+    hc.add(this.v);
+
+    return hc.toHashCode();
+  }
+
+  hashCode(): number;
+  hashCode(...args: unknown[]): number {
+    if (args.length === 0) {
+      return this.hashCodeByValue();
+    }
+
+    throw new Error("No matching overload for hashCode");
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.v === other.v;
+  }
+
+  with(overrides?: Partial<HZero>): HZero {
+    return copyRecordWith<HZero>(this, overrides);
+  }
+}
+
+export class Pt {
+  x: number = 0;
+
+  constructor(x: number) {
+    this.x = x;
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.x);
+
+    return hc.toHashCode();
+  }
+}
+
 export class JoinUse {
   constructor() { }
 

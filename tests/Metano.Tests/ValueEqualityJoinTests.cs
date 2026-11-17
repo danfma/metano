@@ -377,6 +377,30 @@ public class ValueEqualityJoinTests
             }
 
             [Transpile, EmitInFile("value-equality-join")]
+            public record NEq(double V) { [Name("equals")] public bool Same(NEq o, double tol) => System.Math.Abs(o.V - V) <= tol; }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public record NHash(int V) { [Name("hashCode")] public int Seeded(int seed) => V + seed; }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public record NWith(int A, int B) { [Name("with")] public NWith Replace(int a) => new NWith(a, B); }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public struct SEqOnly : System.IEquatable<SEqOnly> { public int X; public SEqOnly(int x) { X = x; } public bool Equals(SEqOnly o) => o.X == X; public override int GetHashCode() => X; }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public struct SEqJoin : System.IEquatable<SEqJoin> { public int X; public SEqJoin(int x) { X = x; } public bool Equals(SEqJoin o) => o.X == X; public bool Equals(SEqJoin o, int slack) => System.Math.Abs(o.X - X) <= slack; }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public struct SExpl : System.IEquatable<SExpl> { public int X; public SExpl(int x) { X = x; } bool System.IEquatable<SExpl>.Equals(SExpl o) => o.X == X; }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public record HZero(int V) { public int HashCode() => 99; }
+
+            [Transpile, EmitInFile("value-equality-join")]
+            public struct Pt : System.IFormattable { public int X; public Pt(int x) { X = x; } string System.IFormattable.ToString(string? f, System.IFormatProvider? p) => "P"; }
+
+            [Transpile, EmitInFile("value-equality-join")]
             public static class JoinUse
             {
                 public static bool Near(RTol a, RTol b) => a.Equals(b, 0.1) && a.Equals(b);
@@ -474,7 +498,16 @@ public class ValueEqualityJoinTests
             """
         );
 
-        await Assert.That(diagnostics.Where(d => d.Code is "MS0063" or "MS0001")).IsEmpty();
+        await Assert
+            .That(
+                diagnostics.Where(d =>
+                    d.Code
+                        is DiagnosticCodes.AmbiguousRuntimeDispatch
+                            or DiagnosticCodes.UnsupportedFeature
+                )
+            )
+            .IsEmpty();
+
         await Assert.That(files["s-eq-only.ts"]).Contains("equals(o: SEqOnly): boolean {");
         await Assert.That(files["s-eq-only.ts"]).DoesNotContain("ByValue");
 
@@ -682,5 +715,154 @@ public class ValueEqualityJoinTests
         return IrClassExtractor
             .Extract(type, new IrExtractionContext(Compilation: compilation))
             .Semantics.ValueEquality;
+    }
+
+    /// <summary>
+    /// Only the <c>Equals</c> name is freed for a struct's explicit
+    /// <c>IEquatable&lt;S&gt;.Equals</c>, and only for a target that names the
+    /// synthesized member: an explicit <c>IFormattable.ToString</c> stays dropped
+    /// behind <c>System.ValueType</c>'s member, and an explicit
+    /// <c>GetHashCode</c> keeps its <c>MS0031</c> conflict.
+    /// </summary>
+    [Test]
+    public async Task ExplicitValueTypeMembers_KeepTheirFate()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Pt : System.IFormattable { public int X; public Pt(int x) { X = x; } string System.IFormattable.ToString(string? f, System.IFormatProvider? p) => "P"; }
+            """
+        );
+
+        await Assert.That(files["pt.ts"]).DoesNotContain("IFormatProvider");
+        await Assert.That(files["pt.ts"]).DoesNotContain("toString(");
+
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IHashy { int GetHashCode(); }
+
+            [Transpile]
+            public struct HExpl : IHashy { public int X; int IHashy.GetHashCode() => 42; }
+            """
+        );
+
+        var conflict = diagnostics.Single(d => d.Severity == MetanoDiagnosticSeverity.Error);
+
+        await Assert.That(conflict.Code).IsEqualTo(DiagnosticCodes.ExplicitImplementationConflict);
+        await Assert.That(conflict.Message).Contains("'ValueType.GetHashCode' already uses");
+    }
+
+    /// <summary>
+    /// The Dart target supplies no synthesized member names: the struct shapes —
+    /// an explicit <c>IEquatable&lt;S&gt;.Equals</c>, an explicit
+    /// <c>IFormattable.ToString</c>, an interface-implementing <c>Equals(S)</c>, an
+    /// <c>override Equals(object)</c> — keep the output they had before the
+    /// value-equality join (DECIDED-35).
+    /// </summary>
+    [Test]
+    public async Task DartStructShapes_MatchTheGolden()
+    {
+        var (files, _) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+
+            [Transpile]
+            public interface IEq<T> { bool Equals(T o); }
+
+            [Transpile]
+            public struct SExpl : System.IEquatable<SExpl> { public int X; public SExpl(int x) { X = x; } bool System.IEquatable<SExpl>.Equals(SExpl o) => o.X == X; }
+
+            [Transpile]
+            public struct Pt : System.IFormattable { public int X; public Pt(int x) { X = x; } string System.IFormattable.ToString(string? f, System.IFormatProvider? p) => "P"; }
+
+            [Transpile]
+            public struct SE : IEq<SE> { public int X; public SE(int x) { X = x; } public bool Equals(SE o) => o.X == X; }
+
+            [Transpile]
+            public struct SObj { public int X; public SObj(int x) { X = x; } public override bool Equals(object? o) => o is SObj s && s.X == X; public override int GetHashCode() => X; }
+            """
+        );
+
+        var output = string.Join(
+            "\n// ----\n",
+            files
+                .OrderBy(file => file.Key, StringComparer.Ordinal)
+                .Select(file => $"// {file.Key}\n{file.Value}")
+        );
+
+        await TranspileHelper.AssertGolden("dart-value-equality-structs.dart", output);
+    }
+
+    /// <summary>
+    /// A consumer of a library record that joined calls its stable fast paths
+    /// (FR-043, contracts/value-equality-members.md § 8): the implicit
+    /// <c>Equals</c>, a folded <c>override GetHashCode()</c> and a <c>with</c>.
+    /// </summary>
+    [Test]
+    public async Task CrossPackage_CallsTheStableFastPaths()
+    {
+        const string library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+            namespace Lib;
+            public record LTol(double V) { public bool Equals(LTol o, double tol) => System.Math.Abs(o.V - V) <= tol; public LTol With(double v) => new LTol(v); }
+            public record LHash(int V) { public override int GetHashCode() => V; public int HashCode(int seed) => V + seed; }
+            """;
+
+        const string consumer = """
+            [assembly: TranspileAssembly]
+            namespace App;
+            public static class Use
+            {
+                public static bool Same(Lib.LTol a, Lib.LTol b) => a.Equals(b);
+                public static Lib.LTol Copy(Lib.LTol a) => a with { V = 2 };
+                public static int Hash(Lib.LHash a) => a.GetHashCode();
+            }
+            """;
+
+        var files = TranspileHelper.TranspileWithLibraryImage(library, consumer);
+        var use = files["app/use.ts"];
+
+        await Assert.That(use).Contains("a.equalsByValue(b)");
+        await Assert.That(use).Contains("a.withByValue({ v: 2 })");
+        await Assert.That(use).Contains("a.hashCodeByValue()");
+    }
+
+    /// <summary>
+    /// A group takes one synthesized member under the spelling that matched it:
+    /// <c>[Name("equals")] With(int)</c> joins <c>Equals</c> and not the copy. Two
+    /// methods both spelled <c>equals</c> by <c>[Name]</c> report <c>MS0001</c>.
+    /// </summary>
+    [Test]
+    public async Task JoinedGroup_KeepsTheSpellingThatMatched()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record W2(int A) { [Name("equals")] public W2 With(int a) => new W2(a); }
+            """
+        );
+
+        var w2 = files["w2.ts"];
+
+        await Assert.That(w2.Split("equalsByValue(other: any)").Length).IsEqualTo(2);
+        await Assert.That(w2).DoesNotContain("withByValue");
+
+        await Assert
+            .That(diagnostics.Any(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsFalse();
+
+        var (_, twice) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record N9(int V) { [Name("equals")] public bool SameA(N9 o, int t) => true; [Name("equals")] public bool SameB(N9 o, string t) => true; }
+            """
+        );
+
+        var error = twice.Single(d => d.Severity == MetanoDiagnosticSeverity.Error);
+
+        await Assert.That(error.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        await Assert.That(error.Message).Contains("'N9.SameB' is emitted as 'equals'");
     }
 }
