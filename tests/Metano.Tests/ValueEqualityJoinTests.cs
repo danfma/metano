@@ -1,4 +1,7 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
+using Metano.Tests.IR;
 
 namespace Metano.Tests;
 
@@ -73,9 +76,11 @@ public class ValueEqualityJoinTests
         var files = TranspileHelper.Transpile(Collisions);
 
         await Assert.That(files["q-with.ts"]).Contains("withA(a: number): QWith {");
+
         await Assert
             .That(files["q-with.ts"])
             .Contains("withByValue(overrides?: Partial<QWith>): QWith {");
+
         await Assert.That(files["q-with.ts"]).Contains("with(overrides?: Partial<QWith>): QWith;");
         await Assert.That(files["q-hash-m.ts"]).Contains("hashCodeSeed(seed: number): number {");
         await Assert.That(files["q-hash-m.ts"]).Contains("hashCodeByValue(): number {");
@@ -149,9 +154,11 @@ public class ValueEqualityJoinTests
         await Assert.That(der).Contains("override hashCodeByValue(): number {");
         await Assert.That(der).Contains("hc.add(super.hashCodeByValue());");
         await Assert.That(der).DoesNotContain("...args");
+
         await Assert
             .That(files["a-other.ts"])
             .Contains("override equalsByValue(other: any): boolean {");
+
         await Assert.That(files["a-other.ts"]).Contains("override hashCodeByValue(): number {");
     }
 
@@ -177,13 +184,17 @@ public class ValueEqualityJoinTests
         );
 
         await Assert.That(files["h-top.ts"]).Contains("equals(other: any): boolean {");
+
         await Assert
             .That(files["h-mid.ts"])
             .Contains("override equals(...args: unknown[]): boolean {");
+
         await Assert.That(files["h-mid.ts"]).Contains("return super.equals(other) && ");
+
         await Assert
             .That(files["h-low.ts"])
             .Contains("override equalsByValue(other: any): boolean {");
+
         await Assert.That(files["h-low.ts"]).Contains("return super.equalsByValue(other) && ");
     }
 
@@ -205,6 +216,7 @@ public class ValueEqualityJoinTests
             public record UBoth(double V)
             {
                 public virtual bool Equals(UBoth? o) => o is not null && o.V == V;
+
                 public override int GetHashCode() => 1;
                 public bool Equals(UBoth o, double tol) => System.Math.Abs(o.V - V) <= tol;
             }
@@ -244,9 +256,11 @@ public class ValueEqualityJoinTests
             .ToList();
 
         await Assert.That(warnings.Count).IsEqualTo(2);
+
         await Assert
             .That(diagnostics.Any(d => d.Severity == MetanoDiagnosticSeverity.Error))
             .IsFalse();
+
         await Assert.That(files["us-both.ts"]).Contains("equalsByValue(other: any): boolean {");
         await Assert.That(files["us-both.ts"]).DoesNotContain("this.equalsO(args[0]");
         await Assert.That(files["g-rec.ts"]).Contains("withV(v: T): GRec<T> {");
@@ -309,9 +323,11 @@ public class ValueEqualityJoinTests
         await Assert
             .That(files["app/pub-der.ts"])
             .Contains("override equalsByValue(other: any): boolean {");
+
         await Assert
             .That(files["app/priv-der.ts"])
             .Contains("override equals(other: any): boolean {");
+
         await Assert.That(files["app/priv-der.ts"]).DoesNotContain("ByValue");
     }
 
@@ -375,5 +391,296 @@ public class ValueEqualityJoinTests
             "value-equality-join.ts",
             files["value-equality-join.ts"]
         );
+    }
+
+    /// <summary>
+    /// A lone method whose <c>[Name]</c> spells a synthesized member's name joins
+    /// it like a method whose C# name does (FR-039): the dispatcher keeps the
+    /// shared name, and the <c>[Name]</c> that named the group pins no suffix.
+    /// </summary>
+    [Test]
+    public async Task LoneMethodNamedLikeASynthesizedMember_Joins()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record NEq(double V) { [Name("equals")] public bool Same(NEq o, double tol) => System.Math.Abs(o.V - V) <= tol; }
+
+            [Transpile]
+            public record NEq2(double V) { [Name("equals")] public bool Equals(NEq2 o, double tol) => System.Math.Abs(o.V - V) <= tol; }
+
+            [Transpile]
+            public record NHash(int V) { [Name("hashCode")] public int Seeded(int seed) => V + seed; }
+
+            [Transpile]
+            public record NWith(int A, int B) { [Name("with")] public NWith Replace(int a) => new NWith(a, B); }
+
+            [Transpile]
+            public static class Use
+            {
+                public static bool S(NEq a) => a.Same(a, 0.1);
+
+                public static int H(NHash a) => a.Seeded(1);
+                public static NWith W(NWith a) => a.Replace(2) with { B = 3 };
+            }
+            """
+        );
+
+        await Assert.That(files["n-eq.ts"]).Contains("equalsOTol(o: NEq, tol: number): boolean {");
+        await Assert.That(files["n-eq.ts"]).Contains("equals(...args: unknown[]): boolean {");
+        await Assert.That(files["n-eq2.ts"]).Contains("equalsByValue(other: any): boolean {");
+        await Assert.That(files["n-hash.ts"]).Contains("hashCodeSeed(seed: number): number {");
+        await Assert.That(files["n-hash.ts"]).Contains("hashCode(...args: unknown[]): number {");
+        await Assert.That(files["n-with.ts"]).Contains("withA(a: number): NWith {");
+
+        await Assert
+            .That(files["n-with.ts"])
+            .Contains("withByValue(overrides?: Partial<NWith>): NWith {");
+
+        await Assert.That(files["use.ts"]).Contains("a.equalsOTol(a, 0.1)");
+        await Assert.That(files["use.ts"]).Contains("a.hashCodeSeed(1)");
+        await Assert.That(files["use.ts"]).Contains("a.withA(2).withByValue({ b: 3 })");
+    }
+
+    /// <summary>
+    /// A struct's <c>Equals(S)</c> that implements <c>IEquatable&lt;S&gt;</c>
+    /// (implicitly or explicitly) or a transpiled interface's <c>Equals(S)</c>
+    /// replaces the synthesized equality (FR-045): alone it stays the type's
+    /// <c>equals</c>, which <c>EqualityComparer&lt;S&gt;.Default</c> calls; beside
+    /// another overload the synthesized member routes to it. No diagnostic.
+    /// </summary>
+    [Test]
+    public async Task InterfaceImplementingStructEquals_ReplacesTheSynthesizedEquality()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IEq<T> { bool Equals(T o); }
+
+            [Transpile]
+            public struct SEqOnly : System.IEquatable<SEqOnly> { public int X; public SEqOnly(int x) { X = x; } public bool Equals(SEqOnly o) => o.X == X; public override int GetHashCode() => X; }
+
+            [Transpile]
+            public struct SEqJoin : System.IEquatable<SEqJoin> { public int X; public SEqJoin(int x) { X = x; } public bool Equals(SEqJoin o) => o.X == X; public bool Equals(SEqJoin o, int slack) => System.Math.Abs(o.X - X) <= slack; }
+
+            [Transpile]
+            public struct SExpl : System.IEquatable<SExpl> { public int X; public SExpl(int x) { X = x; } bool System.IEquatable<SExpl>.Equals(SExpl o) => o.X == X; }
+
+            [Transpile]
+            public struct SE : IEq<SE> { public int X; public SE(int x) { X = x; } public bool Equals(SE o) => o.X == X; }
+
+            [Transpile]
+            public struct SEO : IEq<SEO> { public int X; public SEO(int x) { X = x; } public bool Equals(SEO o) => o.X == X; public override bool Equals(object? o) => o is SEO s && Equals(s); public override int GetHashCode() => X; }
+            """
+        );
+
+        await Assert.That(diagnostics.Where(d => d.Code is "MS0063" or "MS0001")).IsEmpty();
+        await Assert.That(files["s-eq-only.ts"]).Contains("equals(o: SEqOnly): boolean {");
+        await Assert.That(files["s-eq-only.ts"]).DoesNotContain("ByValue");
+
+        await Assert
+            .That(files["s-eq-join.ts"])
+            .Contains("return other instanceof SEqJoin ? this.equalsO(other) : false;");
+
+        await Assert.That(files["s-expl.ts"]).Contains("equals(o: SExpl): boolean {");
+        await Assert.That(files["se.ts"]).Contains("equals(o: SE): boolean {");
+        await Assert.That(files["se.ts"]).DoesNotContain("ByValue");
+        await Assert.That(files["seo.ts"]).Contains("equalsSEO(o: SEO): boolean {");
+        await Assert.That(files["seo.ts"]).DoesNotContain("ByValue");
+    }
+
+    /// <summary>
+    /// A struct's <c>Equals(S)</c> that implements nothing replaces nothing
+    /// (<c>ValueType.Equals</c> never calls it): it is shadowed and reports
+    /// <c>MS0063</c>.
+    /// </summary>
+    [Test]
+    public async Task StructEqualsWithoutInterface_IsShadowed()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct SEqNoIface { public int X; public SEqNoIface(int x) { X = x; } public bool Equals(SEqNoIface o) => o.X == X; }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch))
+            .IsEqualTo(1);
+
+        await Assert
+            .That(files["s-eq-no-iface.ts"])
+            .Contains("equalsByValue(other: any): boolean {");
+    }
+
+    /// <summary>
+    /// An overload that overlaps the synthesized <c>hashCode()</c> at zero
+    /// arguments is shadowed (FR-042): <c>MS0063</c>, no duplicate signature and no
+    /// unreachable branch; one that implements a transpiled interface member is
+    /// an error.
+    /// </summary>
+    [Test]
+    public async Task ZeroArgumentOverlap_IsShadowed()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record HZero(int V) { public int HashCode() => 99; }
+
+            [Transpile]
+            public record HOpt(int V) { public int HashCode(int seed = 0) => V + seed; }
+            """
+        );
+
+        var zero = files["h-zero.ts"];
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch))
+            .IsEqualTo(2);
+
+        await Assert.That(zero.Split("hashCode(): number;").Length).IsEqualTo(2);
+        await Assert.That(zero).DoesNotContain("this.hashCodeDefault()");
+
+        var (_, errors) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IHasHash { int HashCode(); }
+
+            [Transpile]
+            public record F6(int V) : IHasHash { public int HashCode() => 99; }
+            """
+        );
+
+        var error = errors.Single(d => d.Severity == MetanoDiagnosticSeverity.Error);
+
+        await Assert.That(error.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
+        await Assert.That(error.Message).Contains("implements 'IHasHash.HashCode'");
+    }
+
+    /// <summary>
+    /// The synthesized fast path keeps its name (FR-042): a user overload whose
+    /// fast path meets it moves (<c>MS0067</c>); a user member holding it is an
+    /// error (<c>MS0068</c>).
+    /// </summary>
+    [Test]
+    public async Task FastPathClashes_MoveTheUserMember()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record F7(int V) { public bool Equals(int byValue) => byValue == V; }
+            """
+        );
+
+        var renamed = diagnostics.Single(d => d.Code == DiagnosticCodes.OverloadNameShadowed);
+
+        await Assert.That(renamed.Message).Contains("it is emitted as 'equalsByValue$'");
+        await Assert.That(files["f7.ts"]).Contains("equalsByValue(other: any): boolean {");
+
+        var (_, hijacks) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record F1(double V) { public bool Equals(F1 o, double tol) => System.Math.Abs(o.V - V) <= tol; public bool EqualsByValue(F1 o) => true; }
+            """
+        );
+
+        await Assert
+            .That(hijacks.Single().Code)
+            .IsEqualTo(DiagnosticCodes.OverloadFastPathHijacked);
+    }
+
+    /// <summary>
+    /// An override of a joined base's overload is anchored on the base's group,
+    /// so a shadowed root reports <c>MS0063</c> once, at the base, and nothing at
+    /// the override (contracts/value-equality-members.md § 3).
+    /// </summary>
+    [Test]
+    public async Task OverrideOfAShadowedRoot_ReportsOnlyAtTheRoot()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IK { }
+
+            [Transpile]
+            public record R0(int A) : IK { public virtual bool Equals(IK o) => false; }
+
+            [Transpile]
+            public record R1(int A, int B) : R0(A) { public override bool Equals(IK o) => true; }
+            """
+        );
+
+        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch);
+
+        await Assert.That(warning.Message).Contains("of 'R0'");
+
+        await Assert
+            .That(diagnostics.Any(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsFalse();
+    }
+
+    /// <summary>The Dart target supplies no synthesized member names (DECIDED-35): nothing joins.</summary>
+    [Test]
+    public async Task Dart_JoinsNothing()
+    {
+        var (files, _) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+
+            [Transpile]
+            public record RTol(double V) { public bool Equals(RTol other, double tol) => System.Math.Abs(other.V - V) <= tol; }
+            """
+        );
+
+        await Assert.That(files.Count).IsGreaterThan(0);
+        await Assert.That(string.Concat(files.Values)).DoesNotContain("ByValue");
+    }
+
+    /// <summary>
+    /// The value-equality shape is read from the symbols (FR-045): which members
+    /// C# synthesizes and which declarations replace them.
+    /// </summary>
+    [Test]
+    public async Task ValueEqualityShape_IsReadFromTheSymbols()
+    {
+        const string source = """
+            using Metano.Annotations;
+
+            public record Plain(int A);
+            public record OwnEq(int A) { public virtual bool Equals(OwnEq? o) => o is not null; }
+            public struct NoIface { public int X; public bool Equals(NoIface o) => true; }
+            public struct WithIface : System.IEquatable<WithIface> { public int X; public bool Equals(WithIface o) => true; public override int GetHashCode() => 1; }
+            public class Klass { }
+            [PlainObject] public record Dto(int A);
+            """;
+
+        await Assert
+            .That(ShapeOf(source, "Plain"))
+            .IsEqualTo(new IrValueEqualityShape(IrValueEqualityKind.Record));
+
+        await Assert
+            .That(ShapeOf(source, "OwnEq"))
+            .IsEqualTo(new IrValueEqualityShape(IrValueEqualityKind.Record, ReplacesEquals: true));
+
+        await Assert
+            .That(ShapeOf(source, "NoIface"))
+            .IsEqualTo(new IrValueEqualityShape(IrValueEqualityKind.Struct));
+
+        await Assert
+            .That(ShapeOf(source, "WithIface"))
+            .IsEqualTo(new IrValueEqualityShape(IrValueEqualityKind.Struct, true, true));
+
+        await Assert.That(ShapeOf(source, "Klass")).IsEqualTo(IrValueEqualityShape.None);
+        await Assert.That(ShapeOf(source, "Dto")).IsEqualTo(IrValueEqualityShape.None);
+    }
+
+    private static IrValueEqualityShape ShapeOf(string source, string typeName)
+    {
+        var compilation = IrTestHelper.Compile(source);
+        var type = compilation.GetTypeByMetadataName(typeName)!;
+
+        return IrClassExtractor
+            .Extract(type, new IrExtractionContext(Compilation: compilation))
+            .Semantics.ValueEquality;
     }
 }
