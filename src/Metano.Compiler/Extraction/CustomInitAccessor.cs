@@ -42,7 +42,7 @@ internal static class CustomInitAccessor
             .SelectMany(property => property.SetMethod!.DeclaringSyntaxReferences)
             .Select(reference => reference.GetSyntax())
             .Any(accessor =>
-                FieldWrites.Within(
+                MemberWrites.Within(
                     accessor,
                     field,
                     compilation.GetSemanticModel(accessor.SyntaxTree)

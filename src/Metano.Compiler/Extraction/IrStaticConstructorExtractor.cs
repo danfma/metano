@@ -46,7 +46,7 @@ public static class IrStaticConstructorExtractor
     /// </summary>
     public static bool WritesMember(ISymbol member, Compilation compilation) =>
         DeclaringSyntaxOf(member.ContainingType) is { } syntax
-        && FieldWrites.Within(syntax, member, compilation.GetSemanticModel(syntax.SyntaxTree));
+        && MemberWrites.Within(syntax, member, compilation.GetSemanticModel(syntax.SyntaxTree));
 
     /// <summary>
     /// The declared static constructor of <paramref name="type"/>, for a

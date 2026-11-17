@@ -10,7 +10,7 @@ namespace Metano.Compiler.Extraction;
 /// argument. Symbol-based: only writes that bind to the member itself count, so
 /// <c>Map["a"] = 1</c> (an indexer write through the member) does not.
 /// </summary>
-internal static class FieldWrites
+internal static class MemberWrites
 {
     public static bool Within(SyntaxNode body, ISymbol member, SemanticModel model) =>
         body.DescendantNodes()
