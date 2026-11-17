@@ -383,7 +383,7 @@ public static class IrToTsOverloadDispatcherBridge
                     group.FastPaths.Select(fastPath => fastPath.Name).ToList(),
                     receiver: null,
                     TypeCheckScope.Empty,
-                    NoMatchingOverload(TypeScriptNaming.ToCamelCaseMember(group.MemberName))
+                    NoMatchingOverload(ErrorNameOf(group, methods[0]))
                 ),
                 Exported: true,
                 Async: plan.IsAsync,
@@ -752,6 +752,15 @@ public static class IrToTsOverloadDispatcherBridge
 
         return body;
     }
+
+    /// <summary>
+    /// The name a companion dispatcher's error spells, as its class
+    /// counterpart does: an operator's name (<c>add</c>), else the camelCased
+    /// C# method name.
+    /// </summary>
+    private static string ErrorNameOf(TsCompanionDispatcher group, IrMethodDeclaration first) =>
+        TsOperatorNaming.OperatorNameOf(first)
+        ?? TypeScriptNaming.ToCamelCaseMember(group.MemberName);
 
     /// <summary>
     /// The end of a dispatcher no branch matched: the legacy error, which

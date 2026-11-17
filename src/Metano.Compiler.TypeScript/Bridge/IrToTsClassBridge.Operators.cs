@@ -118,9 +118,7 @@ internal static partial class IrToTsClassBridge
     /// form (<c>$add</c>).
     /// </summary>
     public static bool HasInstanceForm(IrMethodDeclaration op) =>
-        new[] { op }
-            .Concat(op.Overloads ?? [])
-            .Any(overload => overload.Semantics.TakesDeclaringTypeFirst);
+        IrMethodGroup.Of(op).Members.Any(overload => overload.Semantics.TakesDeclaringTypeFirst);
 
     /// <summary>
     /// Lowers an overloaded operator group (two or more <c>operator +</c>

@@ -341,7 +341,7 @@ internal sealed class TsOverloadClaimPass
     private IEnumerable<IrMethodDeclaration> Conversions() =>
         (_input.Ir.Members ?? [])
             .OfType<IrMethodDeclaration>()
-            .SelectMany(method => new[] { method }.Concat(method.Overloads ?? []))
+            .SelectMany(method => IrMethodGroup.Of(method).Members)
             .Where(method => method.Semantics.ConversionName is not null);
 
     private void ReportConversionCollision(

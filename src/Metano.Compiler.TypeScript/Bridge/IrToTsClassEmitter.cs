@@ -843,9 +843,9 @@ public sealed class IrToTsClassEmitter(
         IrMethodDeclaration primary,
         TsOperatorOwner owner
     ) =>
-        new[] { primary with { Overloads = null } }
-            .Concat(primary.Overloads ?? [])
-            .Select(conversion =>
+        IrMethodGroup
+            .Of(primary)
+            .Members.Select(conversion =>
                 (TsClassMember)
                     IrToTsClassBridge.BuildConversion(
                         conversion,
