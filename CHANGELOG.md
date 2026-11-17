@@ -816,11 +816,18 @@ the rows of `tests/BclReference`.
   and `Box<decimal>` compare by value and `Box<SomeClass>` / `Box<int[]>` by reference as on
   .NET. A plain (non-record) struct now gets a generated `equals` / `hashCode` over its fields
   (.NET's `ValueType.Equals`) unless it declares its own, so a struct behind an `object` or
-  interface field compares by value. A user method spelled like a synthesized member
-  (`Equals(T other, double tol)`, `HashCode(int seed)`, a record's `With(int a)`) is emitted
-  under its overload fast-path name (`equalsOtherTol`, `hashCodeSeed`, `withA`) and its calls
-  follow, so the synthesized `equals` / `hashCode` / `with` the runtime calls keep their names;
-  a field or property emitted as `equals` reports `MS0001` as an error. An array in a `T`, `object` or
+  interface field compares by value; a struct's `Equals(S)` no longer replaces that field
+  comparison (only an `override Equals(object)` does, as on .NET). A user method spelled like a
+  synthesized member (`Equals(T other, double tol)`, `HashCode(int seed)`, a record's
+  `With(int a)`) now shares the name: the synthesized member joins its overload group, the
+  dispatcher keeps `equals` / `hashCode` / `with`, the synthesized member's fast path is
+  `equalsByValue` / `hashCodeByValue` / `withByValue`, and C# calls bind statically to the fast
+  paths (spec 013 FR-038–FR-045). An overload a dispatcher cannot tell from the synthesized
+  member reports `MS0063`; one that implements an interface member reports `MS0001` as an
+  error, as does a field or property emitted as `equals`. A derived record's output changes when
+  its base starts to join, so consumers of a package must re-transpile. Known limitation: a
+  foreign argument a user overload accepts takes that overload through the dispatcher
+  (`object.Equals(a, 1.0)` with a user `Equals(double)`), where .NET calls `Equals(object)`. An array in a `T`, `object` or
   interface position compares element by element, so a tuple there compares by value as on
   .NET; a C# array there also compares element-wise where .NET compares the reference, as in
   2.x (the run time cannot tell a tuple from an array). Fields of a known class type, which 2.x compared structurally,
