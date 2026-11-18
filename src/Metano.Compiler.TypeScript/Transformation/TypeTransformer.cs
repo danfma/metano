@@ -412,9 +412,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ModuleFunctionClaims = moduleFunctionClaims,
         };
 
-        ValidateTypesAndCollectAccessFacts(transpilableTypes, transpilableTypesDict);
+        var facts = ValidateTypesAndCollectFacts(transpilableTypes, transpilableTypesDict);
 
-        var run = TransformGroups(transpilableTypes, nameRenames);
+        _groupFacts = facts;
+
+        var run = TransformGroups(transpilableTypes, nameRenames, facts);
         var files = run.Outcomes.Files.OfType<TsSourceFile>().ToList();
         var groups = run.Groups;
 
@@ -451,9 +453,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// collects the constructor access facts and the overload claims the group
     /// transforms read.
     /// </summary>
-    private void ValidateTypesAndCollectAccessFacts(
-        List<INamedTypeSymbol> transpilableTypes,
-        Dictionary<string, IrTranspilableTypeRef> transpilableTypesDict
+    private GroupTransformFacts ValidateTypesAndCollectFacts(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict
     )
     {
         // Module state of containerless classes (#314): reject the uses the
@@ -479,14 +481,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             jsonConstructedTypes
         );
 
-        _constructorAccessFacts = ConstructorAccessFacts.Collect(
+        var accessFacts = ConstructorAccessFacts.Collect(
             compilation,
             emittedTypes,
             jsonConstructedTypes,
             JsonConstructorSelection.CalledBy(jsonConstructedTypes)
         );
 
-        _overloadClaims = new TsOverloadClaimsRegistry(Context, _constructorAccessFacts);
+        return new GroupTransformFacts(
+            accessFacts,
+            new TsOverloadClaimsRegistry(Context, accessFacts)
+        );
     }
 
     /// <summary>
@@ -497,7 +502,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private GroupTransformRun TransformGroups(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
-        Dictionary<string, string> nameRenames
+        IReadOnlyDictionary<string, string> nameRenames,
+        GroupTransformFacts facts
     )
     {
         // Publish the interface-prefix rename dict for the duration
@@ -513,7 +519,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         try
         {
-            TsOverloadCallSites.Claims = OverloadClaims;
+            TsOverloadCallSites.Claims = facts.OverloadClaims;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
             IrToTsTypeMapper.ExceptionClassesScope = Context.ExceptionClasses;
@@ -560,7 +566,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
-                    : ComputePerGroupClosure(ir, groups, _constructorAccessFacts);
+                    : ComputePerGroupClosure(ir, groups, facts.AccessFacts);
 
             var outcomes = new GroupOutcomes(groups.Count);
             var skippedGroupCount = 0;
@@ -688,8 +694,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private PathNaming _pathNaming = new("");
-    private ConstructorAccessFacts _constructorAccessFacts = ConstructorAccessFacts.Empty;
-    private TsOverloadClaimsRegistry? _overloadClaims;
+    private GroupTransformFacts? _groupFacts;
 
     /// <summary>
     /// Built once after the setup phase of <see cref="TransformAll"/> completes.
@@ -700,15 +705,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private TypeScriptTransformContext? _context;
 
     /// <summary>
-    /// The claim results of the classes this transform emits (spec 013 FR-004),
-    /// created by the setup phase of <see cref="TransformAll"/>.
+    /// The constructor access facts and the claim results of the classes this
+    /// transform emits (spec 013 FR-004), created by the setup phase of
+    /// <see cref="TransformAll"/>.
     /// </summary>
-    private TsOverloadClaimsRegistry OverloadClaims =>
-        _overloadClaims
+    private GroupTransformFacts GroupFacts =>
+        _groupFacts
         ?? throw new InvalidOperationException(
             "The overload claims are not yet initialized — TransformAll() must complete "
                 + "its setup phase before any per-type helper runs."
         );
+
+    private TsOverloadClaimsRegistry OverloadClaims => GroupFacts.OverloadClaims;
 
     /// <summary>Non-nullable view of <see cref="_context"/> — every per-type helper goes
     /// through this property so a misuse (helper called before <see cref="TransformAll"/>
@@ -978,7 +986,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         if (TryEmitPlainObjectViaIr(type, sink, irCache))
             return true;
-        new IrToTsClassEmitter(Context, _constructorAccessFacts, OverloadClaims).Transform(
+        new IrToTsClassEmitter(Context, GroupFacts.AccessFacts, OverloadClaims).Transform(
             type,
             sink
         );
@@ -1458,12 +1466,21 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     /// <summary>
+    /// What the setup phase hands the group transforms: the constructor access
+    /// facts and the overload claims of the classes this transform emits.
+    /// </summary>
+    private sealed record GroupTransformFacts(
+        ConstructorAccessFacts AccessFacts,
+        TsOverloadClaimsRegistry OverloadClaims
+    );
+
+    /// <summary>
     /// One run of the per-group transform: the groups by output file, the closure
     /// hash of each group the per-group cache keys (empty when the cache is off),
     /// and what each group produced.
     /// </summary>
     private sealed record GroupTransformRun(
-        List<TypeFileGroup> Groups,
+        IReadOnlyList<TypeFileGroup> Groups,
         IReadOnlyDictionary<string, string> Closures,
         GroupOutcomes Outcomes
     );
