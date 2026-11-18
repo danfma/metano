@@ -68,7 +68,7 @@ public static class IrMethodExtractor
             IsGenerator: hasYield,
             IsExtension: method.IsExtensionMethod,
             IsOperator: IsOperatorKind(method.MethodKind),
-            OperatorKind: ResolveOperatorKind(method),
+            OperatorKind: OperatorKindOf(method),
             IsAbstract: method.IsAbstract,
             IsVirtual: method.IsVirtual,
             IsOverride: method.IsOverride,
@@ -161,18 +161,21 @@ public static class IrMethodExtractor
         && method.Parameters is [var first, ..]
         && first.Type.IsDeclaringTypeOf(method);
 
-    private static string? ResolveOperatorKind(IMethodSymbol method)
+    /// <summary>
+    /// The operator kind of a user-defined operator or conversion: its
+    /// metadata name without the <c>op_</c> prefix (<c>op_Addition</c> →
+    /// <c>Addition</c>, <c>op_Implicit</c> → <c>Implicit</c>), the one
+    /// spelling its declaration (<see cref="IrMethodSemantics.OperatorKind"/>)
+    /// and its applications (<see cref="IrUserOperator.Kind"/>) share;
+    /// <c>null</c> for any other method.
+    /// </summary>
+    internal static string? OperatorKindOf(IMethodSymbol method)
     {
-        if (method.MethodKind == MethodKind.UserDefinedOperator)
-        {
-            // e.g. "op_Addition" -> "Addition"
-            return method.Name.StartsWith("op_") ? method.Name[3..] : method.Name;
-        }
-        if (method.MethodKind == MethodKind.Conversion)
-        {
-            // op_Implicit / op_Explicit
-            return method.Name.StartsWith("op_") ? method.Name[3..] : method.Name;
-        }
-        return null;
+        if (method.MethodKind is not (MethodKind.UserDefinedOperator or MethodKind.Conversion))
+            return null;
+
+        return method.Name.StartsWith("op_", StringComparison.Ordinal)
+            ? method.Name[3..]
+            : method.Name;
     }
 }

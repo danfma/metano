@@ -42,8 +42,9 @@ public sealed partial class IrExpressionExtractor
             : null;
 
     /// <summary>
-    /// A <c>[JsxComponentBuilder]</c> family, whose conversion to its element
-    /// type is the JSX rendering protocol the JSX bridge lowers itself.
+    /// A <c>[JsxComponentBuilder]</c> family: its conversion to its element
+    /// type is the JSX render protocol, which the core extracts as the JSX
+    /// element itself rather than as an operator call.
     /// </summary>
     private static bool IsJsxComponentFamily(INamedTypeSymbol type) =>
         type.HasJsxComponentBuilder() || type.DerivesFromJsxComponentBuilder();
@@ -149,6 +150,7 @@ public sealed partial class IrExpressionExtractor
         return new IrUserOperator(
             TypeReferenceTo(method.ContainingType),
             definition.Name,
+            IrMethodExtractor.OperatorKindOf(definition)!,
             overload,
             pin,
             ConversionNaming.Of(definition, _target)
@@ -156,12 +158,12 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Whether the type declares other operators under the same metadata
-    /// name: a dispatched group, whose <c>[Name]</c> pins a fast path's
-    /// suffix rather than the helper's name (spec 013 FR-005).
+    /// Whether the operator belongs to a dispatched group under this target's
+    /// grouping policy, whose <c>[Name]</c> pins a fast path's suffix rather
+    /// than the helper's name (spec 013 FR-005).
     /// </summary>
-    private static bool IsOperatorGroup(IMethodSymbol definition) =>
-        definition.ContainingType.GetMembers(definition.Name).OfType<IMethodSymbol>().Count() > 1;
+    private bool IsOperatorGroup(IMethodSymbol definition) =>
+        MethodOverloadGroups.GroupOf(definition, _context.GroupingPolicy) is { IsDispatched: true };
 
     // ── Operators ─────────────────────────────────────────────────────────
 
@@ -419,10 +421,10 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol targetType
     )
     {
-        if (
-            _semantic.GetOperation(cast)
-            is not IConversionOperation { Conversion.IsUserDefined: true } operation
-        )
+        if (ConversionAt(cast) is not { } castConversion)
+            return null;
+
+        if (UserConversionOf(castConversion) is not { } operation)
             return null;
 
         if (UnsupportedUserOperator(operation.OperatorMethod, cast) is { } unsupported)
@@ -452,8 +454,57 @@ public sealed partial class IrExpressionExtractor
             unwraps ? sourceType.UnwrapNullableValueType() : sourceType,
             targetType,
             sourceForm,
-            isLifted: yieldsNull
+            isLifted: yieldsNull,
+            after: ExplicitNumericStepBetween(
+                method.ReturnType,
+                targetType,
+                castConversion.IsChecked
+            )
         );
+    }
+
+    /// <summary>
+    /// The outermost conversion a cast performs. Roslyn reports no operation
+    /// for a cast that runs a user conversion and then a numeric one
+    /// (<c>(byte)zpt</c> over <c>explicit operator int(ZPt)</c>): both
+    /// conversions share the cast's syntax, so they are found in the
+    /// operation of the nearest enclosing node that has one.
+    /// </summary>
+    private IConversionOperation? ConversionAt(CastExpressionSyntax cast)
+    {
+        if (_semantic.GetOperation(cast) is { } operation)
+            return operation as IConversionOperation;
+
+        for (var node = cast.Parent; node is not null; node = node.Parent)
+        {
+            if (_semantic.GetOperation(node) is { } enclosing)
+            {
+                return enclosing
+                    .DescendantsAndSelf()
+                    .OfType<IConversionOperation>()
+                    .FirstOrDefault(conversion => conversion.Syntax == cast);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The user-defined conversion of a cast's <paramref name="conversion"/>:
+    /// itself, or the one of the same cast whose result the numeric
+    /// conversion converts; <c>null</c> when the cast runs none (a cast of a
+    /// value an inner cast converted is that inner cast's own).
+    /// </summary>
+    private static IConversionOperation? UserConversionOf(IConversionOperation conversion)
+    {
+        if (conversion.Conversion.IsUserDefined)
+            return conversion;
+
+        return
+            conversion.Operand is IConversionOperation { Conversion.IsUserDefined: true } inner
+            && inner.Syntax == conversion.Syntax
+            ? inner
+            : null;
     }
 
     /// <summary>
@@ -538,7 +589,8 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol? sourceType,
         ITypeSymbol? targetType,
         IrExpression sourceForm,
-        bool isLifted
+        bool isLifted,
+        IrNumericStep? after = null
     )
     {
         var parameterType = method.Parameters[0].Type;
@@ -558,10 +610,32 @@ public sealed partial class IrExpressionExtractor
         return new IrUserConversion(
             UserOperatorOf(method),
             operand,
-            NumericStepBetween(method.ReturnType, targetType),
+            after ?? NumericStepBetween(method.ReturnType, targetType),
             isLifted,
             sourceForm
         );
+    }
+
+    /// <summary>
+    /// The explicit numeric conversion a cast applies to a user conversion's
+    /// result (<c>(byte)</c> of an <c>int</c>, checked in a checked context),
+    /// when the core lowers it for this target; <c>null</c> otherwise.
+    /// </summary>
+    private IrNumericStep? ExplicitNumericStepBetween(
+        ITypeSymbol? from,
+        ITypeSymbol? to,
+        bool isChecked
+    )
+    {
+        if (
+            NumericEndpoints.Of(from.UnderlyingValueType()) is not { } source
+            || NumericEndpoints.Of(to.UnderlyingValueType()) is not { } target
+            || source == target
+            || !_context.NumericLowering.IsLoweredExplicitly(source, target)
+        )
+            return null;
+
+        return new IrNumericStep(source, target, isChecked);
     }
 
     /// <summary>
