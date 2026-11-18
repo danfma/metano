@@ -773,7 +773,15 @@ public sealed record IrTypeCheck(IrExpression Expression, IrTypeRef Type) : IrEx
 /// <param name="Receiver">The value whose type is read.</param>
 /// <param name="ConstantType">The folded answer, or <c>null</c>.</param>
 public sealed record IrGetTypeExpression(IrExpression Receiver, IrTypeRef? ConstantType)
-    : IrExpression;
+    : IrExpression
+{
+    /// <summary>
+    /// The receiver's static type, so a target that can answer more receivers
+    /// without reading the value (a <c>[PlainObject]</c> with no derived plain
+    /// object, spec 011 FR-020) folds them itself; <c>null</c> when unknown.
+    /// </summary>
+    public IrTypeRef? ReceiverType { get; init; }
+}
 
 /// <summary>C# <c>typeof(T)</c> for a closed, nameable <paramref name="Type"/>.</summary>
 /// <param name="Type">The type whose runtime type the expression denotes.</param>

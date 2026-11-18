@@ -25,6 +25,28 @@ internal sealed record RuntimeTypeReachabilityResult
     /// <summary>The collection definitions a runtime question names (FR-008, stage 011c).</summary>
     public required IReadOnlySet<string> QuestionedCollectionTypes { get; init; }
 
+    /// <summary>
+    /// The <c>[PlainObject]</c> types a runtime test recognizes by their
+    /// synthesized structural guard (FR-020), which the compilation emits.
+    /// </summary>
+    public required IReadOnlySet<SupertypeKey> GuardedPlainObjects { get; init; }
+
+    /// <summary>
+    /// The <c>[PlainObject]</c> types whose <c>GetType()</c> folds to their
+    /// descriptor: no other plain object derives from them (FR-020).
+    /// </summary>
+    public required IReadOnlySet<SupertypeKey> FoldedPlainObjects { get; init; }
+
+    /// <summary>
+    /// The <c>[PlainObject]</c> implementers this compilation declares for a
+    /// tested interface of a referenced library, which the test site augments
+    /// the library descriptor with (<c>withImplementers</c>, FR-019).
+    /// </summary>
+    public required IReadOnlyDictionary<
+        SupertypeKey,
+        IReadOnlyList<SupertypeKey>
+    > LibraryPlainImplementers { get; init; }
+
     /// <summary>The reached classes whose getter overrides one their base declares.</summary>
     public required IReadOnlySet<SupertypeKey> OverridingGetters { get; init; }
 
@@ -39,14 +61,34 @@ internal sealed record RuntimeTypeReachabilityResult
         new()
         {
             Reached = new HashSet<SupertypeKey>(),
+            GuardedPlainObjects = new HashSet<SupertypeKey>(),
+            FoldedPlainObjects = new HashSet<SupertypeKey>(),
+            LibraryPlainImplementers = new Dictionary<SupertypeKey, IReadOnlyList<SupertypeKey>>(),
             PlainImplementers = new Dictionary<SupertypeKey, IReadOnlyList<SupertypeKey>>(),
             QuestionedCollectionTypes = new HashSet<string>(StringComparer.Ordinal),
             OverridingGetters = new HashSet<SupertypeKey>(),
             Undescribable = new HashSet<SupertypeKey>(),
         };
 
+    /// <summary>
+    /// A result for code that renders no output (an ambiguity analysis asking
+    /// whether a type has a check at all): it reaches every type, so it never
+    /// fails the drift assertion. Never a group's result.
+    /// </summary>
+    public static RuntimeTypeReachabilityResult Unchecked { get; } =
+        Empty with
+        {
+            ReachesEverything = true,
+        };
+
+    /// <summary>Whether every type counts as reached (<see cref="Unchecked"/>).</summary>
+    private bool ReachesEverything { get; init; }
+
+    /// <summary>Whether this is <see cref="Unchecked"/>.</summary>
+    public bool IsUnchecked => ReachesEverything;
+
     /// <summary>Whether the descriptor of <paramref name="key"/> is emitted.</summary>
-    public bool Reaches(SupertypeKey key) => Reached.Contains(key);
+    public bool Reaches(SupertypeKey key) => ReachesEverything || Reached.Contains(key);
 
     /// <summary>
     /// The hash of the whole result, which every group-cache key folds in: a
@@ -64,6 +106,17 @@ internal sealed record RuntimeTypeReachabilityResult
                     .. PlainImplementers
                         .Select(entry =>
                             $"plain:{Display(entry.Key)}={string.Join(",", entry.Value.Select(Display))}"
+                        )
+                        .Order(StringComparer.Ordinal),
+                    .. GuardedPlainObjects
+                        .Select(key => $"guarded:{Display(key)}")
+                        .Order(StringComparer.Ordinal),
+                    .. FoldedPlainObjects
+                        .Select(key => $"folded:{Display(key)}")
+                        .Order(StringComparer.Ordinal),
+                    .. LibraryPlainImplementers
+                        .Select(entry =>
+                            $"library:{Display(entry.Key)}={string.Join(",", entry.Value.Select(Display))}"
                         )
                         .Order(StringComparer.Ordinal),
                     .. QuestionedCollectionTypes

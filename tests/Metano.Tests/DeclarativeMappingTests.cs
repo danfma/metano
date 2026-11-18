@@ -229,12 +229,12 @@ public class DeclarativeMappingTests
     }
 
     [Test]
-    public async Task DeclarativeEnumParse_EmbedsTypeArgumentName()
+    public async Task DeclarativeEnumParse_ReadsTheTypeArgumentDescriptor()
     {
-        // Enum.Parse<T>(text) uses the $T0 placeholder in Metano/Runtime/Enums.cs to
-        // embed the user's enum type name into the lowered indexer expression. The
-        // template is `$T0[$0 as keyof typeof $T0]`, so a call like
-        // `Enum.Parse<Status>(text)` lowers to `Status[text as keyof typeof Status]`.
+        // Enum.Parse<T>(text) uses the $R0 placeholder in Metano/Runtime/Enums.cs to
+        // read the type argument's runtime type descriptor (spec 011 FR-024): the
+        // template is `enumFromRaw($R0, $0)`, and the frontend asks for the enum's
+        // descriptor as `typeof(Status)` would.
         var result = TranspileHelper.Transpile(
             """
             using System;
@@ -251,6 +251,7 @@ public class DeclarativeMappingTests
         );
 
         var output = result["status-parser.ts"];
-        await Assert.That(output).Contains("Status[text as keyof typeof Status]");
+        await Assert.That(output).Contains("return enumFromRaw(Status$runtimeType, text);");
+        await Assert.That(result["status.ts"]).Contains("export const Status$runtimeType");
     }
 }

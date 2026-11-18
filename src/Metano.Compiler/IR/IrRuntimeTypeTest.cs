@@ -91,16 +91,21 @@ public abstract record IrRuntimeTypeTest
     /// <summary>
     /// Whether extraction lets a test against <paramref name="type"/> reach a
     /// target that erases static types: a type with a runtime test, a
-    /// <c>[PlainObject]</c> only through its <c>[GenerateGuard]</c> guard, and
-    /// a delegate, whose test the target rejects with its own diagnostic.
-    /// Arrays, iterables, <c>object</c> and the remaining <see cref="None"/>
-    /// types keep the extraction's MS0001.
+    /// <c>[PlainObject]</c> (its shape) and a delegate, whose tests the target
+    /// recognizes or rejects with its own diagnostic.
+    /// A C# array tests as an array, its element erased (MS0046); a collection
+    /// that lowers to an array has no test before stage 011c. Iterables,
+    /// <c>object</c> and the remaining <see cref="None"/> types keep the
+    /// extraction's MS0001.
     /// </summary>
     public static bool ExistsFor(IrTypeRef type) =>
         Of(type) switch
         {
             NominalClass or NominalInterface or Primitive or FixedTuple => true,
-            ErasedShape => type is IrNamedTypeRef { Semantics.HasGeneratedGuard: true },
+            Array => type is IrArrayTypeRef { IsNative: true },
+            // A target recognizes a plain object by a guard it synthesizes, or
+            // reports that it cannot (spec 011 FR-020).
+            ErasedShape => true,
             _ => IsDelegate(type),
         };
 

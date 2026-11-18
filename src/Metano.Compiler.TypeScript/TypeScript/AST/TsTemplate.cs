@@ -19,6 +19,10 @@ namespace Metano.Compiler.TypeScript.AST;
 ///   <see cref="TypeArgumentNames"/>; used to embed the call site's generic method type
 ///   arguments inside the lowered expression (e.g., <c>Enum.Parse&lt;Status&gt;</c>
 ///   → <c>Status[…]</c>)</item>
+///   <item><c>$R0</c>, <c>$R1</c>, … — replaced with the runtime type descriptor of the
+///   corresponding generic method type argument, <see cref="TypeArgumentDescriptors"/>
+///   (<c>Enum.Parse&lt;Status&gt;(s)</c> → <c>enumFromRaw(Status$runtimeType, s)</c>,
+///   spec 011 FR-024)</item>
 /// </list>
 ///
 /// The literal chunks of the template are emitted verbatim by the printer; the value
@@ -62,6 +66,13 @@ public sealed record TsTemplate(
     /// list when it has one and falls back to the names otherwise.
     /// </summary>
     public IReadOnlyList<TsType> TypeArguments { get; init; } = [];
+
+    /// <summary>
+    /// The runtime type descriptors of the call's method type arguments, for
+    /// the <c>$R0</c>, <c>$R1</c>, … placeholders: value expressions that carry
+    /// their own imports; empty when the template reads none.
+    /// </summary>
+    public IReadOnlyList<TsExpression> TypeArgumentDescriptors { get; init; } = [];
     public IReadOnlyList<string> RuntimeImports { get; init; } = [];
     public IReadOnlyList<IrExternalImport> ExternalImports { get; init; } = [];
 }

@@ -398,6 +398,20 @@ public static class DiagnosticCodes
     /// for a delegate (spec 011 stage 011b).</summary>
     public const string UnanswerableRuntimeTypeTest = "MS0045";
 
+    /// <summary>MS0046 — a runtime test of an array whose element type is not
+    /// <c>object</c> (reason 1): the element type is erased, so the test only
+    /// checks the array (<c>Array.isArray</c>). A warning, at the test; the
+    /// output is emitted (spec 011 FR-021). Reason 2 (collections) arrives with
+    /// stage 011c.</summary>
+    public const string ErasedTypeArgumentTest = "MS0046";
+
+    /// <summary>MS0047 — a structural <c>[PlainObject]</c> test that another
+    /// plain object the tested value may hold also passes, since it has every
+    /// member the tested guard requires (spec 009 FR-019 rule 3). A warning, at
+    /// the test, once per tested / overlapping pair; the output is emitted (spec
+    /// 011 FR-020).</summary>
+    public const string PlainObjectShapeOverlap = "MS0047";
+
     /// <summary>MS0048 — <c>GetType()</c> on a receiver whose static type is
     /// <c>object</c>, <c>dynamic</c>, an interface a <c>[PlainObject]</c> implements or
     /// an unconstrained type parameter, in a compilation with a <c>[PlainObject]</c>

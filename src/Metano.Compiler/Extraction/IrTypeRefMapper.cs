@@ -324,7 +324,10 @@ public static class IrTypeRefMapper
 
         // Array types
         if (type is IArrayTypeSymbol array)
-            return new IrArrayTypeRef(Map(array.ElementType, originResolver, target));
+            return new IrArrayTypeRef(Map(array.ElementType, originResolver, target))
+            {
+                IsNative = true,
+            };
 
         if (type is IDynamicTypeSymbol)
             return new IrDynamicTypeRef();

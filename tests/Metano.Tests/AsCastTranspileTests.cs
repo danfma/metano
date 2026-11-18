@@ -6,9 +6,10 @@ namespace Metano.Tests;
 /// <c>x as T</c> lowers to its definition, <c>x is T ? x : null</c>, through
 /// the existing type-pattern test (#279), except where the target is read
 /// through its runtime type descriptor (spec 011 FR-026, D29): an interface
-/// or a primitive lowers to <c>asType(x, descriptor)</c>. A type with no
-/// runtime test in the target reports MS0001, for <c>as</c> and <c>is</c>
-/// alike.
+/// or a primitive lowers to <c>asType(x, descriptor)</c>. A <c>[PlainObject]</c>
+/// tests its shape through its synthesized guard (FR-020); an array tests as
+/// an array, with MS0046 (FR-021). A type with no runtime test in the target
+/// reports MS0001, for <c>as</c> and <c>is</c> alike.
 /// </summary>
 public class AsCastTranspileTests
 {
@@ -16,7 +17,7 @@ public class AsCastTranspileTests
         [Transpile] public class Person { public string Name { get; set; } = ""; }
         [Transpile] public interface IShape { double Area(); }
         [Transpile, GenerateGuard] public interface INamed { string Name { get; } }
-        [Transpile, PlainObject] public record Dto(string Name);
+        [Transpile, PlainObject] public record Dto(string Title);
         [Transpile, PlainObject, GenerateGuard] public record GuardedDto(string Name);
         [Transpile, Branded] public readonly record struct UserId(string Value);
         """;
@@ -163,13 +164,12 @@ public class AsCastTranspileTests
     }
 
     [Test]
-    public async Task AsPlainObjectWithoutGuard_ReportsUnsupported()
+    public async Task AsPlainObjectWithoutGenerateGuard_CallsSynthesizedGuard()
     {
-        var (output, diagnostics) = TranspileCastsWithDiagnostics(
-            "public static Dto? Of(object o) => o as Dto;"
-        );
+        var output = TranspileCasts("public static Dto? Of(object o) => o as Dto;");
 
-        await AssertSingleUnsupported(diagnostics, "o as Dto");
+        await Assert.That(output).Contains("return isDto(o) ? o : null;");
+        await Assert.That(output).Contains("import { isDto, type Dto } from \"./dto\";");
         await Assert.That(output).DoesNotContain("instanceof Dto");
     }
 
@@ -194,13 +194,19 @@ public class AsCastTranspileTests
     }
 
     [Test]
-    public async Task AsArray_ReportsUnsupported()
+    public async Task AsArray_TestsTheArrayAndWarnsErasedElement()
     {
-        var (_, diagnostics) = TranspileCastsWithDiagnostics(
+        var (output, diagnostics) = TranspileCastsWithDiagnostics(
             "public static Person[]? Of(object o) => o as Person[];"
         );
 
-        await AssertSingleUnsupported(diagnostics, "o as Person[]");
+        await Assert.That(output).Contains("return Array.isArray(o) ? o : null;");
+
+        var erased = diagnostics.Single();
+
+        await Assert.That(erased.Code).IsEqualTo(DiagnosticCodes.ErasedTypeArgumentTest);
+        await Assert.That(erased.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(erased.Message).Contains("'o as Person[]'");
     }
 
     [Test]
@@ -217,13 +223,11 @@ public class AsCastTranspileTests
     }
 
     [Test]
-    public async Task IsPlainObjectWithoutGuard_ReportsUnsupported()
+    public async Task IsPlainObjectWithoutGenerateGuard_CallsSynthesizedGuard()
     {
-        var (output, diagnostics) = TranspileCastsWithDiagnostics(
-            "public static bool Of(object o) => o is Dto;"
-        );
+        var output = TranspileCasts("public static bool Of(object o) => o is Dto;");
 
-        await AssertSingleUnsupported(diagnostics, "o is Dto");
+        await Assert.That(output).Contains("return isDto(o);");
         await Assert.That(output).DoesNotContain("instanceof Dto");
     }
 

@@ -7,7 +7,7 @@ namespace Metano.Tests;
 
 /// <summary>
 /// <c>package.json#sideEffects</c> lists the modules that run code when merely imported
-/// (<c>[ModuleEntryPoint]</c> bodies, strict-union-guard registrations) instead of a flat
+/// (<c>[ModuleEntryPoint]</c> bodies) instead of a flat
 /// <c>false</c> that lets bundlers drop them (#356, #368).
 /// </summary>
 public class SideEffectsManifestTests
@@ -70,13 +70,16 @@ public class SideEffectsManifestTests
             .IsEquivalentTo(["./dist/acme/program.js", "./src/acme/program.ts"]);
     }
 
+    /// <summary>
+    /// A strict union registers nothing at load since spec 011 FR-029 (its
+    /// guard module imports the variants), so it lists no module.
+    /// </summary>
     [Test]
-    public async Task StrictUnionVariant_IsListed()
+    public async Task StrictUnionVariant_IsNotListed()
     {
-        var sideEffects = SideEffectsOf(WriteFromSource(StrictUnionSource));
+        var root = WriteFromSource(StrictUnionSource);
 
-        await Assert.That(sideEffects).Contains("./dist/acme/circle.js");
-        await Assert.That(sideEffects).DoesNotContain("./dist/acme/shape.js");
+        await Assert.That(ReadJson(root)["sideEffects"]!.GetValue<bool>()).IsFalse();
     }
 
     [Test]

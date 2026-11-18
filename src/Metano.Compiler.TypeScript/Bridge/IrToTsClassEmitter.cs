@@ -5,6 +5,7 @@ using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
@@ -273,6 +274,9 @@ internal sealed class IrToTsClassEmitter(
                     type,
                     constructor,
                     new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
+                    {
+                        RuntimeTypes = RuntimeTypeReachabilityResult.Unchecked,
+                    }
                 );
             }
 
@@ -702,6 +706,9 @@ internal sealed class IrToTsClassEmitter(
                 type,
                 irMethod,
                 new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
+                {
+                    RuntimeTypes = RuntimeTypeReachabilityResult.Unchecked,
+                }
             );
 
             var dispatcher = TryBuildOverloadDispatcherFromIr(

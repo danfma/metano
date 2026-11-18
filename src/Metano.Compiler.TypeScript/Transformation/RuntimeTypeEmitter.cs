@@ -89,7 +89,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
                 "baseInterfaces",
                 Thunks(type.AllInterfaces, "a base interface thunk")
             ),
-            new TsObjectProperty("plainImplementers", new TsArrayLiteral([])),
+            new TsObjectProperty("plainImplementers", PlainImplementerThunks(type)),
             new TsObjectProperty(
                 "test",
                 Predicate(
@@ -103,6 +103,48 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         ]);
 
         return ExportedDescriptor(exportName, "InterfaceType", SelfType(type, tsName), literal);
+    }
+
+    /// <summary>
+    /// The <c>[PlainObject]</c> implementers' descriptors, as thunks, in the
+    /// deterministic order of the reachability phase (OD-8).
+    /// </summary>
+    private TsArrayLiteral PlainImplementerThunks(INamedTypeSymbol iface) =>
+        new([
+            .. (
+                RuntimeTypes.PlainImplementers.TryGetValue(
+                    RuntimeTypeReachability.KeyOf(iface),
+                    out var implementers
+                )
+                    ? implementers
+                    : []
+            ).Select(key => Thunk(IrToTsRuntimeTypeReferences.LocalExportReference(key))),
+        ]);
+
+    /// <summary>
+    /// A reached <c>[PlainObject]</c>'s exported descriptor literal (FR-020):
+    /// its structural guard is both its <c>guard</c> and its <c>test</c>;
+    /// <c>null</c> when it is not reached.
+    /// </summary>
+    public TsTopLevel? PlainObjectDescriptor(INamedTypeSymbol type, string tsName)
+    {
+        if (!IsReached(type))
+            return null;
+
+        var guard = new TsIdentifier($"is{tsName}");
+
+        var literal = new TsObjectLiteral([
+            .. Identity("plainObject", type),
+            new TsObjectProperty("guard", guard),
+            new TsObjectProperty("test", guard),
+        ]);
+
+        return ExportedDescriptor(
+            $"{tsName}{IrToTsRuntimeTypeReferences.ExportSuffix}",
+            "PlainObjectType",
+            SelfType(type, tsName),
+            literal
+        );
     }
 
     /// <summary>The enum's exported descriptor literal; <c>null</c> when it is not reached.</summary>

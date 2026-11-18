@@ -113,6 +113,7 @@ internal static class RuntimeQuestionFacts
                     Shape = IrQuestionedTypeShape.Named,
                     Key = IrTypeKeys.Of(named),
                     CollectionDefinitionName = CollectionDefinitionNameOf(named),
+                    TypeArguments = [.. named.TypeArguments.Select(QuestionedTypeOf)],
                 },
             _ => Shaped(IrQuestionedTypeShape.Other),
         };

@@ -2,6 +2,7 @@ using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Metano.Compiler.Mappings;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -25,6 +26,12 @@ internal sealed class RuntimeQuestionScanner
     private readonly Compilation _compilation;
     private readonly TargetLanguage _target;
     private readonly GeneratedSourceTrees _generatedSources;
+
+    private readonly IReadOnlyDictionary<
+        (string DeclaringTypeFullName, string MemberName),
+        IReadOnlyList<DeclarativeMappingEntry>
+    > _methodMappings;
+
     private readonly List<MetanoDiagnostic> _diagnostics;
     private readonly List<IrRuntimeQuestion> _questions = [];
 
@@ -32,12 +39,17 @@ internal sealed class RuntimeQuestionScanner
         Compilation compilation,
         TargetLanguage target,
         GeneratedSourceTrees generatedSources,
+        IReadOnlyDictionary<
+            (string DeclaringTypeFullName, string MemberName),
+            IReadOnlyList<DeclarativeMappingEntry>
+        > methodMappings,
         List<MetanoDiagnostic> diagnostics
     )
     {
         _compilation = compilation;
         _target = target;
         _generatedSources = generatedSources;
+        _methodMappings = methodMappings;
         _diagnostics = diagnostics;
     }
 
@@ -46,6 +58,10 @@ internal sealed class RuntimeQuestionScanner
         bool assemblyWideTranspile,
         TargetLanguage target,
         GeneratedSourceTrees generatedSources,
+        IReadOnlyDictionary<
+            (string DeclaringTypeFullName, string MemberName),
+            IReadOnlyList<DeclarativeMappingEntry>
+        > methodMappings,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -53,6 +69,7 @@ internal sealed class RuntimeQuestionScanner
             compilation,
             target,
             generatedSources,
+            methodMappings,
             diagnostics
         );
 
@@ -148,23 +165,47 @@ internal sealed class RuntimeQuestionScanner
         switch (operation)
         {
             case IIsTypeOperation isType:
-                Record(IrRuntimeQuestionKind.Test, isType.TypeOperand, isType.Syntax);
+                Record(
+                    IrRuntimeQuestionKind.Test,
+                    isType.TypeOperand,
+                    isType.Syntax,
+                    isType.ValueOperand.Type
+                );
+
                 break;
             case ITypePatternOperation typePattern:
-                Record(IrRuntimeQuestionKind.Test, typePattern.MatchedType, typePattern.Syntax);
+                Record(
+                    IrRuntimeQuestionKind.Test,
+                    typePattern.MatchedType,
+                    typePattern.Syntax,
+                    typePattern.InputType
+                );
+
                 break;
             case IDeclarationPatternOperation { MatchesNull: false } declaration:
-                Record(IrRuntimeQuestionKind.Test, declaration.MatchedType, declaration.Syntax);
+                Record(
+                    IrRuntimeQuestionKind.Test,
+                    declaration.MatchedType,
+                    declaration.Syntax,
+                    declaration.InputType
+                );
+
                 break;
             case IRecursivePatternOperation recursive:
-                Record(IrRuntimeQuestionKind.Test, recursive.MatchedType, recursive.Syntax);
+                Record(
+                    IrRuntimeQuestionKind.Test,
+                    recursive.MatchedType,
+                    recursive.Syntax,
+                    recursive.InputType
+                );
+
                 break;
             case IConversionOperation { IsTryCast: true } asCast:
-                Record(IrRuntimeQuestionKind.As, asCast.Type, asCast.Syntax);
+                Record(IrRuntimeQuestionKind.As, asCast.Type, asCast.Syntax, asCast.Operand.Type);
                 break;
             case IConversionOperation { Syntax: CastExpressionSyntax } cast
                 when IsCheckedCast(cast, _compilation):
-                Record(IrRuntimeQuestionKind.Cast, cast.Type, cast.Syntax);
+                Record(IrRuntimeQuestionKind.Cast, cast.Type, cast.Syntax, cast.Operand.Type);
                 break;
             case ITypeOfOperation typeOf:
                 InspectTypeOf(typeOf);
@@ -277,6 +318,33 @@ internal sealed class RuntimeQuestionScanner
 
         if (RuntimeQuestionFacts.IsUnsupportedTypeMember(method))
             ReportUnsupportedTypeMember(method, invocation.Syntax);
+
+        RecordDescribedTypeArguments(invocation);
+    }
+
+    /// <summary>
+    /// A mapped generic method whose template reads a type argument's
+    /// descriptor (<c>Enum.Parse&lt;E&gt;</c> → <c>enumFromRaw(E$runtimeType, …)</c>)
+    /// asks for it as <c>typeof(E)</c> does. Every overload's template counts,
+    /// so the scan reaches a superset of what the bridge reads.
+    /// </summary>
+    private void RecordDescribedTypeArguments(IInvocationOperation invocation)
+    {
+        var method = invocation.TargetMethod;
+
+        if (
+            !method.IsGenericMethod
+            || !_methodMappings.TryGetValue(
+                (method.ContainingType.GetStableFullName(), method.Name),
+                out var mappings
+            )
+        )
+            return;
+
+        var indices = mappings.SelectMany(mapping => mapping.DescribedTypeArguments).ToHashSet();
+
+        foreach (var index in indices.Where(index => index < method.TypeArguments.Length))
+            Record(IrRuntimeQuestionKind.TypeOf, method.TypeArguments[index], invocation.Syntax);
     }
 
     private void InspectGetType(IInvocationOperation invocation)
@@ -370,18 +438,36 @@ internal sealed class RuntimeQuestionScanner
         }
     }
 
-    private void Record(IrRuntimeQuestionKind kind, ITypeSymbol? type, SyntaxNode site) =>
-        AddQuestion(kind, type, site.GetLocation());
-
-    private void AddQuestion(IrRuntimeQuestionKind kind, ITypeSymbol? type, Location? location) =>
+    private void Record(
+        IrRuntimeQuestionKind kind,
+        ITypeSymbol? type,
+        SyntaxNode site,
+        ITypeSymbol? inputType = null
+    ) =>
         _questions.Add(
-            new IrRuntimeQuestion
+            Question(kind, type, site.GetLocation()) with
             {
-                Kind = kind,
-                Type = RuntimeQuestionFacts.QuestionedTypeOf(type),
-                Span = location is null ? null : IrSourceSpanLocations.From(location),
+                InputType = inputType is null
+                    ? null
+                    : RuntimeQuestionFacts.QuestionedTypeOf(inputType),
+                Text = site.ToString(),
             }
         );
+
+    private void AddQuestion(IrRuntimeQuestionKind kind, ITypeSymbol? type, Location? location) =>
+        _questions.Add(Question(kind, type, location));
+
+    private static IrRuntimeQuestion Question(
+        IrRuntimeQuestionKind kind,
+        ITypeSymbol? type,
+        Location? location
+    ) =>
+        new()
+        {
+            Kind = kind,
+            Type = RuntimeQuestionFacts.QuestionedTypeOf(type),
+            Span = location is null ? null : IrSourceSpanLocations.From(location),
+        };
 
     private void ReportUnsupportedTypeMember(ISymbol member, SyntaxNode site) =>
         ReportUnsupportedReflection(

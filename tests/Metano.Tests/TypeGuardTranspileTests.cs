@@ -13,9 +13,11 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["point.ts"];
+
         await Assert
             .That(output)
             .Contains("export function isPoint(value: unknown): value is Point");
+
         await Assert.That(output).Contains("value instanceof Point");
         await Assert.That(output).Contains("typeof v.x === \"number\"");
         await Assert.That(output).Contains("typeof v.y === \"number\"");
@@ -37,9 +39,11 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["currency.ts"];
+
         await Assert
             .That(output)
             .Contains("export function isCurrency(value: unknown): value is Currency");
+
         await Assert.That(output).Contains("value === \"BRL\"");
         await Assert.That(output).Contains("value === \"USD\"");
         await Assert.That(output).Contains("value === \"EUR\"");
@@ -56,9 +60,11 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["status.ts"];
+
         await Assert
             .That(output)
             .Contains("export function isStatus(value: unknown): value is Status");
+
         await Assert.That(output).Contains("typeof value === \"number\"");
         await Assert.That(output).Contains("value === 0");
         await Assert.That(output).Contains("value === 1");
@@ -79,9 +85,11 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["i-entity.ts"];
+
         await Assert
             .That(output)
             .Contains("export function isIEntity(value: unknown): value is IEntity");
+
         await Assert.That(output).DoesNotContain("instanceof");
         await Assert.That(output).Contains("typeof v.id === \"string\"");
         await Assert.That(output).Contains("typeof v.name === \"string\"");
@@ -202,9 +210,11 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["counter.ts"];
+
         await Assert
             .That(output)
             .Contains("export function isCounter(value: unknown): value is Counter");
+
         await Assert.That(output).Contains("typeof v.count === \"number\"");
     }
 
@@ -300,9 +310,11 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["point.ts"];
+
         await Assert
             .That(output)
             .Contains("export function assertPoint(value: unknown, message?: string)");
+
         await Assert.That(output).Contains(": asserts value is Point");
         await Assert.That(output).Contains("if (!isPoint(value))");
         await Assert.That(output).Contains("throw new TypeError");
@@ -516,6 +528,7 @@ public class TypeGuardTranspileTests
         var ms0011 = diagnostics.FirstOrDefault(d =>
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidDiscriminator
         );
+
         await Assert.That(ms0011).IsNotNull();
         await Assert.That(ms0011!.Message).Contains("DoesNotExist");
         await Assert.That(ms0011.Message).Contains("Circle");
@@ -544,6 +557,7 @@ public class TypeGuardTranspileTests
         var ms0011 = diagnostics.FirstOrDefault(d =>
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidDiscriminator
         );
+
         await Assert.That(ms0011).IsNotNull();
         await Assert.That(ms0011!.Message).Contains("not a [StringEnum]");
     }
@@ -571,6 +585,7 @@ public class TypeGuardTranspileTests
         var ms0011 = diagnostics.FirstOrDefault(d =>
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidDiscriminator
         );
+
         await Assert.That(ms0011).IsNotNull();
         await Assert.That(ms0011!.Message).Contains("nullable");
     }
@@ -693,14 +708,18 @@ public class TypeGuardTranspileTests
         );
 
         var circle = result["circle.ts"];
+
         await Assert
             .That(circle)
             .Contains("export function isCircle(value: unknown): value is Circle");
+
         await Assert.That(circle).Contains("if (v.kind !== \"Circle\")");
         var square = result["square.ts"];
+
         await Assert
             .That(square)
             .Contains("export function isSquare(value: unknown): value is Square");
+
         await Assert.That(square).Contains("if (v.kind !== \"Square\")");
     }
 
@@ -788,124 +807,77 @@ public class TypeGuardTranspileTests
         await Assert.That(output).DoesNotContain("Leaf | Node");
     }
 
-    // ─── [StrictUnionGuard] registry dispatch ────────────────
+    // ─── [StrictUnionGuard] guard module (spec 011 FR-029) ────────────────
+
+    private const string StrictUnionSource = """
+        using Metano.Annotations.TypeScript;
+
+        [Transpile, StringEnum]
+        public enum ShapeKind { Circle, Square }
+
+        [Transpile, GenerateGuard, StrictUnionGuard]
+        [Discriminator("Kind")]
+        public abstract record Shape(ShapeKind Kind);
+
+        [Transpile, GenerateGuard]
+        [Discriminator("Kind")]
+        public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+        [Transpile, GenerateGuard]
+        [Discriminator("Kind")]
+        public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+        """;
 
     [Test]
-    public async Task StrictUnion_RegistersVariantGuard()
+    public async Task StrictUnion_VariantsRegisterNothing()
     {
-        // Each variant module side-effect-registers its guard on the
-        // runtime registry at load. The base guard then dispatches via
-        // `getUnionGuard(v.kind)` without value-importing variants
-        // (which would form an ESM cycle).
-        var result = TranspileHelper.Transpile(
-            """
-            using Metano.Annotations.TypeScript;
+        // The registry is retired: a variant module declares its guard and
+        // runs nothing at load, so `sideEffects: false` drops nothing needed.
+        var result = TranspileHelper.Transpile(StrictUnionSource);
 
-            [Transpile, StringEnum]
-            public enum ShapeKind { Circle, Square }
-
-            [Transpile, GenerateGuard, StrictUnionGuard]
-            [Discriminator("Kind")]
-            public abstract record Shape(ShapeKind Kind);
-
-            [Transpile, GenerateGuard]
-            [Discriminator("Kind")]
-            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
-
-            [Transpile, GenerateGuard]
-            [Discriminator("Kind")]
-            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
-            """
-        );
-
-        var circle = result["circle.ts"];
-        await Assert.That(circle).Contains("registerUnionGuard(\"Circle\", isCircle)");
-        var square = result["square.ts"];
-        await Assert.That(square).Contains("registerUnionGuard(\"Square\", isSquare)");
-        // Registration ships from metano-runtime — single bundled import.
-        await Assert.That(circle).Contains("registerUnionGuard");
-        await Assert.That(circle).Contains("from \"metano-runtime\"");
+        await Assert.That(result["circle.ts"]).Contains("export function isCircle(");
+        await Assert.That(result["circle.ts"]).DoesNotContain("registerUnionGuard");
+        await Assert.That(result["square.ts"]).DoesNotContain("registerUnionGuard");
     }
 
     [Test]
-    public async Task StrictUnion_BaseGuard_DispatchesToRegistry()
+    public async Task StrictUnion_BaseGuard_LivesInTheGuardModule()
     {
-        // Base file looks the variant guard up via the runtime registry.
-        // No variant import — the registry is the sole runtime link, so
-        // the value-import graph between base and variants stays
-        // acyclic.
-        var result = TranspileHelper.Transpile(
-            """
-            using Metano.Annotations.TypeScript;
+        // The base module keeps the class only: importing it never runs a
+        // variant module (ESM cycle), and its guard moves to shape.guard.ts,
+        // which imports the variants' guards.
+        var result = TranspileHelper.Transpile(StrictUnionSource);
 
-            [Transpile, StringEnum]
-            public enum ShapeKind { Circle, Square }
+        var shape = result["shape.ts"];
+        await Assert.That(shape).DoesNotContain("isShape");
+        await Assert.That(shape).DoesNotContain("import { isCircle");
+        await Assert.That(shape).DoesNotContain("import { isSquare");
 
-            [Transpile, GenerateGuard, StrictUnionGuard]
-            [Discriminator("Kind")]
-            public abstract record Shape(ShapeKind Kind);
-
-            [Transpile, GenerateGuard]
-            [Discriminator("Kind")]
-            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
-
-            [Transpile, GenerateGuard]
-            [Discriminator("Kind")]
-            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
-            """
-        );
-
-        var output = result["shape.ts"];
-        await Assert.That(output).Contains("getUnionGuard(v.kind)");
-        await Assert.That(output).Contains("guard !== undefined");
-        // ESM-cycle guard: the base must not value-import variant guards.
-        await Assert.That(output).DoesNotContain("import { isCircle");
-        await Assert.That(output).DoesNotContain("import { isSquare");
+        var guard = result["shape.guard.ts"];
+        await Assert.That(guard).Contains("import { isCircle, type Circle } from \"./circle\";");
+        await Assert.That(guard).Contains("export function isShape(value: unknown)");
     }
 
     [Test]
-    public async Task StrictUnion_NoVariantRegistered_FallsBackToDiscriminatorOnly()
+    public async Task StrictUnion_UnknownDiscriminator_IsRejected()
     {
-        // When the registry has no entry (variant module not loaded),
-        // the strict guard falls back to `true` — keeping it at least
-        // as permissive as the legacy discriminator-only narrow. This
-        // is the contract that makes opting in safe: strict is never
-        // *more* lenient than non-strict (it rejects unknown
-        // discriminators), but also never *more* restrictive than the
-        // old behavior when variants are missing.
-        var result = TranspileHelper.Transpile(
-            """
-            using Metano.Annotations.TypeScript;
+        // The discriminator picks the variant whose guard validates the shape;
+        // an unknown discriminator answers false.
+        var guard = TranspileHelper.Transpile(StrictUnionSource)["shape.guard.ts"];
 
-            [Transpile, StringEnum]
-            public enum ShapeKind { Circle, Square }
+        await Assert
+            .That(guard)
+            .Contains("const variant = variants[[\"Circle\", \"Square\"].indexOf(v.kind)];");
 
-            [Transpile, GenerateGuard, StrictUnionGuard]
-            [Discriminator("Kind")]
-            public abstract record Shape(ShapeKind Kind);
-
-            [Transpile, GenerateGuard]
-            [Discriminator("Kind")]
-            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
-
-            [Transpile, GenerateGuard]
-            [Discriminator("Kind")]
-            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
-            """
-        );
-
-        var output = result["shape.ts"];
-        // The conditional shape `guard !== undefined ? guard(value) : true`
-        // is the explicit fallback: missing registry entry → permissive.
-        await Assert.That(output).Contains("guard !== undefined ? guard(value) : true");
+        await Assert.That(guard).Contains("return variant !== undefined && variant()(value);");
     }
 
     [Test]
     public async Task StrictUnion_DefaultPath_DiscriminatorOnly_Unchanged()
     {
         // Default path (no [StrictUnionGuard]) must keep the legacy
-        // discriminator-only emission untouched — no registry lookup,
-        // no fallback branch.
+        // discriminator-only emission untouched: no variant table, no guard
+        // module.
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations.TypeScript;
@@ -928,9 +900,12 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["shape.ts"];
-        await Assert.That(output).DoesNotContain("getUnionGuard");
-        await Assert.That(output).DoesNotContain("registerUnionGuard");
-        var circle = result["circle.ts"];
-        await Assert.That(circle).DoesNotContain("registerUnionGuard");
+
+        await Assert
+            .That(output)
+            .Contains("return v.kind === \"Circle\" || v.kind === \"Square\";");
+
+        await Assert.That(output).DoesNotContain("variants");
+        await Assert.That(result.ContainsKey("shape.guard.ts")).IsFalse();
     }
 }

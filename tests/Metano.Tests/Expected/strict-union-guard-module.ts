@@ -1,0 +1,152 @@
+// shapes/circle.ts
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { Shape, type ShapeKind } from "./shape";
+
+export class Circle extends Shape {
+  constructor(kind: ShapeKind, readonly radius: number) {
+    super(kind);
+  }
+
+  override equals(other: any): boolean {
+    return super.equals(other) && valueEquals(this.radius, other.radius);
+  }
+
+  override hashCode(): number {
+    const hc = new HashCode();
+    hc.add(super.hashCode());
+    hc.add(this.radius);
+
+    return hc.toHashCode();
+  }
+
+  override with(overrides?: Partial<Circle>): Circle {
+    return copyRecordWith<Circle>(this, overrides);
+  }
+}
+
+export function isCircle(value: unknown): value is Circle {
+  if (value instanceof Circle) {
+    return true;
+  }
+
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as any;
+
+  return typeof v.radius === "number" && v.kind != null;
+}
+
+export function assertCircle(value: unknown, message?: string): asserts value is Circle {
+  if (!isCircle(value)) {
+    throw new TypeError(message ?? "Value is not a Circle");
+  }
+}
+
+// shapes/index.ts
+export { assertCircle, Circle, isCircle } from "./circle";
+export { assertShape, isShape } from "./shape.guard";
+export { Shape, ShapeKind } from "./shape";
+export { assertSquare, isSquare, Square } from "./square";
+
+// shapes/shape.guard.ts
+import { isCircle, type Circle } from "./circle";
+import { isSquare, type Square } from "./square";
+
+const variants = [
+  () => isCircle,
+  () => isSquare,
+];
+
+export function isShape(value: unknown): value is Circle | Square {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as any;
+  const variant = variants[["Circle", "Square"].indexOf(v.kind)];
+
+  return variant !== undefined && variant()(value);
+}
+
+export function assertShape(value: unknown, message?: string): asserts value is Circle | Square {
+  if (!isShape(value)) {
+    throw new TypeError(message ?? "Value is not a Shape");
+  }
+}
+
+// shapes/shape.ts
+import { HashCode, copyRecordWith } from "metano-runtime";
+
+export const ShapeKind = {
+  Circle: "Circle",
+  Square: "Square",
+} as const;
+
+export type ShapeKind = typeof ShapeKind[keyof typeof ShapeKind];
+
+export abstract class Shape {
+  constructor(readonly kind: ShapeKind) { }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.kind === other.kind;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.kind);
+
+    return hc.toHashCode();
+  }
+
+  with(overrides?: Partial<Shape>): Shape {
+    return copyRecordWith<Shape>(this, overrides);
+  }
+}
+
+// shapes/square.ts
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { Shape, type ShapeKind } from "./shape";
+
+export class Square extends Shape {
+  constructor(kind: ShapeKind, readonly side: number) {
+    super(kind);
+  }
+
+  override equals(other: any): boolean {
+    return super.equals(other) && valueEquals(this.side, other.side);
+  }
+
+  override hashCode(): number {
+    const hc = new HashCode();
+    hc.add(super.hashCode());
+    hc.add(this.side);
+
+    return hc.toHashCode();
+  }
+
+  override with(overrides?: Partial<Square>): Square {
+    return copyRecordWith<Square>(this, overrides);
+  }
+}
+
+export function isSquare(value: unknown): value is Square {
+  if (value instanceof Square) {
+    return true;
+  }
+
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as any;
+
+  return typeof v.side === "number" && v.kind != null;
+}
+
+export function assertSquare(value: unknown, message?: string): asserts value is Square {
+  if (!isSquare(value)) {
+    throw new TypeError(message ?? "Value is not a Square");
+  }
+}

@@ -30,6 +30,16 @@ public class RuntimeTypeSingleClassificationTests
 
     private static readonly IrNamedTypeRef Class = Named("Circle", IrNamedTypeKind.Class);
 
+    private static readonly IrNamedTypeRef PlainObject = new(
+        "Point",
+        "Geo",
+        Semantics: new IrNamedTypeSemantics(
+            IrNamedTypeKind.Record,
+            IsTranspilable: true,
+            IsPlainObject: true
+        )
+    );
+
     [Test]
     [Arguments(nameof(RuntimeTypeDescriptorTests.FactorySource))]
     [Arguments(nameof(RuntimeTypeDescriptorTests.InterfacesSource))]
@@ -85,12 +95,86 @@ public class RuntimeTypeSingleClassificationTests
     {
         var value = new TsIdentifier("value");
 
-        var dispatcher = IrTypeCheckBuilder.Generate(type, value, TypeCheckScope.Empty);
-        var pattern = IrToTsExpressionBridge.BuildTypeTest(value, type, ObjectType, context: null);
+        var reached = RuntimeTypeReachabilityResult.Empty with
+        {
+            Reached = new HashSet<SupertypeKey> { Interface.SupertypeKey },
+        };
+
+        var dispatcher = IrTypeCheckBuilder.Generate(
+            type,
+            value,
+            TypeCheckScope.Empty with
+            {
+                RuntimeTypes = reached,
+            }
+        );
+
+        var pattern = IrToTsExpressionBridge.BuildTypeTest(
+            value,
+            type,
+            ObjectType,
+            IrToTsBridgeContext.ForGroup(null, new GroupCasts(new HashSet<string>()), reached)
+        );
 
         await Assert.That(Print(dispatcher!)).IsEqualTo(Print(pattern));
         await Assert.That(label).IsNotEmpty();
     }
+
+    /// <summary>
+    /// NFR-004 for a <c>[PlainObject]</c> shape (FR-020): the dispatcher, the
+    /// type pattern and a structural JSON case (which stores the test as a
+    /// function, <see cref="IrToTsRuntimeTestBridge.TestFunction"/>) render the
+    /// same synthesized guard call.
+    /// </summary>
+    [Test]
+    public async Task DispatcherPatternAndJsonCase_RenderTheSameShapeTest()
+    {
+        var value = new TsIdentifier("value");
+
+        var reached = RuntimeTypeReachabilityResult.Empty with
+        {
+            GuardedPlainObjects = new HashSet<SupertypeKey> { PlainObject.SupertypeKey },
+        };
+
+        var dispatcher = IrTypeCheckBuilder.Generate(
+            PlainObject,
+            value,
+            TypeCheckScope.Empty with
+            {
+                RuntimeTypes = reached,
+            }
+        );
+
+        var pattern = IrToTsExpressionBridge.BuildTypeTest(
+            value,
+            PlainObject,
+            ObjectType,
+            IrToTsBridgeContext.ForGroup(null, new GroupCasts(new HashSet<string>()), reached)
+        );
+
+        var jsonCase = new TsCallExpression(
+            IrToTsRuntimeTestBridge.TestFunction(PlainObject, reached)!,
+            [value]
+        );
+
+        await Assert.That(Print(pattern)).IsEqualTo("isPoint(value)");
+        await Assert.That(Print(dispatcher!)).IsEqualTo(Print(pattern));
+        await Assert.That(Print(jsonCase)).IsEqualTo(Print(pattern));
+    }
+
+    [Test]
+    public async Task AGuardReadOutsideTheReachedSet_FailsLoudly() =>
+        await Assert
+            .That(() =>
+                IrToTsRuntimeTestBridge.Render(
+                    new TsIdentifier("value"),
+                    PlainObject,
+                    ObjectType,
+                    RuntimeTypeReachabilityResult.Empty
+                )
+            )
+            .Throws<InvalidOperationException>()
+            .WithMessageContaining("Geo.Point");
 
     /// <summary>
     /// The guard builder's structural checks are the runtime-test bridge's: a
@@ -117,7 +201,7 @@ public class RuntimeTypeSingleClassificationTests
                         value,
                         tuple,
                         staticType: null,
-                        context: null
+                        IrToTsBridgeContext.For(null)
                     )
                 )
             )

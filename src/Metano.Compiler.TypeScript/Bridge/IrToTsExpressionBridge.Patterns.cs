@@ -219,8 +219,7 @@ public static partial class IrToTsExpressionBridge
     /// <see cref="IrToTsRuntimeTestBridge"/> renders the type's category, with
     /// the static type of the tested value when extraction knew it
     /// (<paramref name="staticType"/>); a descriptor read is checked against the
-    /// file group's reached set (<paramref name="context"/>, <c>null</c> outside
-    /// a group). Extraction reports MS0001 for a type
+    /// file group's reached set (<paramref name="context"/>). Extraction reports MS0001 for a type
     /// with no test, so none reaches this point but a delegate, whose test the
     /// reachability phase rejected (MS0045): it lowers to a placeholder that
     /// throws.
@@ -229,11 +228,11 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         IrTypeRef targetType,
         IrTypeRef? staticType,
-        IrToTsBridgeContext? context
+        IrToTsBridgeContext context
     )
     {
         if (
-            IrToTsRuntimeTestBridge.Render(value, targetType, staticType, context?.RuntimeTypes) is
+            IrToTsRuntimeTestBridge.Render(value, targetType, staticType, context.RuntimeTypes) is
             { } test
         )
             return test;
@@ -283,12 +282,12 @@ public static partial class IrToTsExpressionBridge
     ///   passes its constructor, <c>castTo(x, Ctor)</c>, which reads no
     ///   descriptor (#669, D29), when <see cref="ReferenceCastLowering"/> lets
     ///   this module import the class;</item>
-    ///   <item>an interface, an enum or a primitive passes its descriptor,
-    ///   <c>castTo(x, IFoo$runtimeType)</c> (D29), <c>castTo(x, DecimalType)</c>
-    ///   for a <c>decimal</c>;</item>
+    ///   <item>an interface, an enum, a primitive or a <c>[PlainObject]</c>
+    ///   passes its descriptor, <c>castTo(x, IFoo$runtimeType)</c> (D29),
+    ///   <c>castTo(x, DecimalType)</c> for a <c>decimal</c>,
+    ///   <c>castTo(x, Dto$runtimeType)</c> for a shape (FR-020);</item>
     ///   <item>any other target (a type parameter, an array, a delegate, a
-    ///   <c>[PlainObject]</c>, a class this module cannot import) is only
-    ///   asserted.</item>
+    ///   class this module cannot import) is only asserted.</item>
     /// </list>
     /// </summary>
     private static TsExpression MapReferenceDowncast(
@@ -344,8 +343,14 @@ public static partial class IrToTsExpressionBridge
         IrRuntimeTypeTest.Of(testedType) switch
         {
             IrRuntimeTypeTest.NominalClass => CheckedClassTarget(conversion, testedType, context),
-            IrRuntimeTypeTest.NominalInterface or IrRuntimeTypeTest.Primitive =>
-                IrToTsRuntimeTypeReferences.Of(testedType, "checked cast", context.RuntimeTypes),
+            // A plain object casts through its shape descriptor (FR-020).
+            IrRuntimeTypeTest.NominalInterface
+            or IrRuntimeTypeTest.Primitive
+            or IrRuntimeTypeTest.ErasedShape => IrToTsRuntimeTypeReferences.Of(
+                testedType,
+                "checked cast",
+                context.RuntimeTypes
+            ),
             _ => null,
         };
 

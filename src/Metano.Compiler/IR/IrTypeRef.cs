@@ -42,7 +42,11 @@ public sealed record IrPrimitiveTypeRef(IrPrimitive Primitive) : IrTypeRef
     /// <see cref="IrPrimitive.Int32"/>), so a runtime type test can check the
     /// value's real range; <c>null</c> for every other primitive. It is a fact
     /// of the source type only and takes no part in equality: two references
-    /// to the folded primitive stay the same type everywhere else.
+    /// to the folded primitive stay the same type everywhere else. Read it only
+    /// at the runtime test site, from the reference extraction gave that site,
+    /// never from a deduplicated or cached reference (which may be either
+    /// spelling). Rebuilding a reference with <c>new IrPrimitiveTypeRef(p)</c>
+    /// drops it: derive a copy with <c>with</c>.
     /// </summary>
     public IrNumericKind? ExactKind { get; init; }
 
@@ -258,7 +262,24 @@ public sealed record IrNullableTypeRef(IrTypeRef Inner) : IrTypeRef;
 /// An ordered collection type (C# <c>List&lt;T&gt;</c>, <c>IEnumerable&lt;T&gt;</c>, etc.).
 /// Each backend decides the representation (TypeScript: <c>T[]</c>, Dart: <c>List&lt;T&gt;</c>).
 /// </summary>
-public sealed record IrArrayTypeRef(IrTypeRef ElementType) : IrTypeRef;
+public sealed record IrArrayTypeRef(IrTypeRef ElementType) : IrTypeRef
+{
+    /// <summary>
+    /// Whether the source type is a C# array (<c>T[]</c>), not a collection
+    /// that lowers to one: a runtime test of an array checks the array, its
+    /// element erased (spec 011 FR-021), while the collections' tests arrive
+    /// with stage 011c. Read it only at the runtime test site: like
+    /// <see cref="IrPrimitiveTypeRef.ExactKind"/> it is not part of equality,
+    /// so a deduplicated ref may lose it, and rebuilding with
+    /// <c>new IrArrayTypeRef(e)</c> drops it (derive a copy with <c>with</c>).
+    /// </summary>
+    public bool IsNative { get; init; }
+
+    public bool Equals(IrArrayTypeRef? other) =>
+        other is not null && ElementType.Equals(other.ElementType);
+
+    public override int GetHashCode() => HashCode.Combine(typeof(IrArrayTypeRef), ElementType);
+}
 
 /// <summary>
 /// A key-value collection (C# <c>Dictionary&lt;K,V&gt;</c>, <c>IDictionary&lt;K,V&gt;</c>).

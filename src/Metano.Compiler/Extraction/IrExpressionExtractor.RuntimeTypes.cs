@@ -35,7 +35,12 @@ public sealed partial class IrExpressionExtractor
             ? null
             : _semantic.GetTypeInfo(receiverSyntax).Type;
 
-        return new IrGetTypeExpression(receiver, FoldedRuntimeTypeOf(receiverType, receiver));
+        return new IrGetTypeExpression(receiver, FoldedRuntimeTypeOf(receiverType, receiver))
+        {
+            ReceiverType = receiverType is null
+                ? null
+                : IrTypeRefMapper.Map(receiverType, _originResolver, _target),
+        };
     }
 
     /// <summary>
@@ -55,11 +60,25 @@ public sealed partial class IrExpressionExtractor
     /// side effect. A sealed class is not folded (its value may be <c>null</c>
     /// and throws), nor is a generic struct or a branded wrapper.
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="type"/> mentions a type parameter, whose runtime
+    /// type only the value knows.
+    /// </summary>
+    private static bool IsOpen(ITypeSymbol type) =>
+        type switch
+        {
+            ITypeParameterSymbol => true,
+            IArrayTypeSymbol array => IsOpen(array.ElementType),
+            INamedTypeSymbol named => named.TypeArguments.Any(IsOpen),
+            _ => false,
+        };
+
     private IrTypeRef? FoldedRuntimeTypeOf(ITypeSymbol? receiverType, IrExpression receiver)
     {
         if (
             receiverType is not { IsValueType: true }
             || receiverType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+            || IsOpen(receiverType)
             || !IrEvaluationTraits.IsSideEffectFree(receiver)
         )
             return null;
@@ -70,9 +89,9 @@ public sealed partial class IrExpressionExtractor
             {
                 Primitive: not (IrPrimitive.Object or IrPrimitive.Void)
             } primitive => primitive,
+            // A closed generic struct folds to its specialization (spec 011 FR-023).
             IrNamedTypeRef
             {
-                TypeArguments: null or { Count: 0 },
                 Semantics.Kind: IrNamedTypeKind.NumericEnum
                     or IrNamedTypeKind.StringEnum
                     or IrNamedTypeKind.Struct

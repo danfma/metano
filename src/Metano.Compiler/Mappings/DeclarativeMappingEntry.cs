@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 namespace Metano.Compiler.Mappings;
 
 /// <summary>
@@ -29,7 +32,7 @@ namespace Metano.Compiler.Mappings;
 /// <see cref="WhenParameterTypes"/> holds the stable full names
 /// (<c>SymbolHelper.GetStableFullName</c>) of the overload's parameter types.
 /// </summary>
-public sealed record DeclarativeMappingEntry(
+public sealed partial record DeclarativeMappingEntry(
     string? JsName,
     string? JsTemplate,
     string? WhenArg0StringEquals = null,
@@ -42,6 +45,19 @@ public sealed record DeclarativeMappingEntry(
     IReadOnlyList<string>? WhenParameterTypes = null
 )
 {
+    /// <summary>
+    /// The indices of the method type arguments whose runtime type descriptor
+    /// the JS template reads (<c>$R0</c>, <c>$R1</c>, …): the frontend asks
+    /// for those descriptors, as <c>typeof</c> would (spec 011 D29).
+    /// </summary>
+    public IReadOnlySet<int> DescribedTypeArguments =>
+        JsTemplate is null
+            ? new HashSet<int>()
+            : DescribedTypeArgumentPattern()
+                .Matches(JsTemplate)
+                .Select(match => int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture))
+                .ToHashSet();
+
     /// <summary>
     /// True when the call site's overload shape satisfies the entry's
     /// overload filters: the argument count when <see cref="WhenArgCount"/>
@@ -98,4 +114,7 @@ public sealed record DeclarativeMappingEntry(
             return [];
         return raw!.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
     }
+
+    [GeneratedRegex(@"\$R(\d+)")]
+    private static partial Regex DescribedTypeArgumentPattern();
 }

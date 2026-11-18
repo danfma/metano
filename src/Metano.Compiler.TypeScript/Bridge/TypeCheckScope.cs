@@ -24,10 +24,11 @@ internal sealed record TypeCheckScope(
     /// <summary>
     /// The reached set a descriptor read the checks render is asserted against
     /// (the file group's <see cref="IrToTsBridgeContext.RuntimeTypes"/>);
-    /// <c>null</c> for a scope that renders no output (an ambiguity analysis)
-    /// or outside a group.
+    /// <see cref="Analysis.RuntimeTypeReachabilityResult.Unchecked"/> for a scope
+    /// that renders no output (an ambiguity analysis).
     /// </summary>
-    public Analysis.RuntimeTypeReachabilityResult? RuntimeTypes { get; init; }
+    public Analysis.RuntimeTypeReachabilityResult RuntimeTypes { get; init; } =
+        Analysis.RuntimeTypeReachabilityResult.Empty;
 
     /// <summary>
     /// The scope of a method: its own type parameters, then its class's, so a

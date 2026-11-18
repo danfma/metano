@@ -2,6 +2,7 @@ using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Analysis;
@@ -48,6 +49,13 @@ internal sealed class RuntimeTypeReachability
     private readonly List<SupertypeKey> _reachedOrder = [];
     private readonly HashSet<SupertypeKey> _reached = [];
     private readonly HashSet<SupertypeKey> _undescribable = [];
+    private readonly HashSet<SupertypeKey> _guarded = [];
+    private readonly HashSet<SupertypeKey> _foldedPlainObjects = [];
+
+    private readonly Dictionary<
+        SupertypeKey,
+        IReadOnlyList<SupertypeKey>
+    > _libraryPlainImplementers = [];
 
     private RuntimeTypeReachability(
         Compilation compilation,
@@ -112,18 +120,20 @@ internal sealed class RuntimeTypeReachability
         {
             case IrRuntimeQuestionKind.Test:
                 ReportDelegateTest(question);
-                ReachTestedType(question.Type, readsEnumDescriptor: false);
+                ReportErasedElementTest(question);
+                ReachTestedType(question, DescriptorRead.None);
                 break;
             case IrRuntimeQuestionKind.As:
                 ReportDelegateTest(question);
-                ReachTestedType(question.Type, readsEnumDescriptor: true);
+                ReportErasedElementTest(question);
+                ReachTestedType(question, DescriptorRead.Enum);
                 break;
             case IrRuntimeQuestionKind.OverloadParameter:
-                ReachTestedType(question.Type, readsEnumDescriptor: false);
+                ReachTestedType(question, DescriptorRead.None);
                 break;
             case IrRuntimeQuestionKind.Cast:
                 ReportUncheckedCast(question);
-                ReachTestedType(question.Type, readsEnumDescriptor: true);
+                ReachTestedType(question, DescriptorRead.EnumAndPlainObject);
                 break;
             case IrRuntimeQuestionKind.TypeOf:
                 ReachTypeOf(question);
@@ -135,34 +145,82 @@ internal sealed class RuntimeTypeReachability
     }
 
     /// <summary>
-    /// TypeScript tests an interface through its descriptor everywhere; an
-    /// enum only where a cast or <c>as</c> checks the value with its
-    /// descriptor (<paramref name="readsEnumDescriptor"/>), since a test or a
-    /// dispatch renders the enum's value test inline; a class, struct or record
-    /// tests by <c>instanceof</c> and reaches nothing. An interface of a
-    /// referenced library has its descriptor there; the classes of this
-    /// compilation that implement it are reached, so their descriptors list it.
+    /// TypeScript tests an interface through its descriptor everywhere. An
+    /// enum is read only where a cast or <c>as</c> checks the value with its
+    /// descriptor, a <c>[PlainObject]</c> only where a cast does (<paramref name="read"/>);
+    /// every other test renders inline (the enum's value test, the plain
+    /// object's synthesized guard, which the test makes the compilation emit).
+    /// A class, struct or record tests by <c>instanceof</c> and reaches nothing.
+    /// An interface of a referenced library has its descriptor there; the
+    /// classes of this compilation that implement it are reached, so their
+    /// descriptors list it, and its <c>[PlainObject]</c> implementers, which the
+    /// test site passes to <c>withImplementers</c>.
     /// </summary>
-    private void ReachTestedType(IrQuestionedType tested, bool readsEnumDescriptor)
+    private void ReachTestedType(IrRuntimeQuestion question, DescriptorRead read)
     {
-        if (
-            DescribableOf(tested) is { } type
-            && (
-                type.Kind is DescriptorKind.Interface
-                || (type.Kind is DescriptorKind.Enum && readsEnumDescriptor)
-            )
-        )
+        if (DescribableOf(question.Type) is { } type)
         {
-            Reach(type);
+            ReachTested(type, question, read);
 
             return;
         }
 
-        if (LibraryInterfaceOf(tested) is not { } iface)
+        if (LibraryInterfaceOf(question.Type) is not { } iface)
             return;
 
         foreach (var implementer in ImplementersOf(iface))
             Reach(implementer);
+
+        var plainImplementers = PlainImplementersOf(iface).ToList();
+
+        foreach (var plain in plainImplementers)
+            Reach(plain);
+
+        if (plainImplementers.Count > 0)
+            _libraryPlainImplementers[KeyOf(iface)] = [.. plainImplementers.Select(p => p.Key)];
+    }
+
+    private void ReachTested(DescribableType type, IrRuntimeQuestion question, DescriptorRead read)
+    {
+        switch (type.Kind)
+        {
+            case DescriptorKind.Interface:
+            case DescriptorKind.Enum when read is not DescriptorRead.None:
+                Reach(type);
+                break;
+            case DescriptorKind.PlainObject:
+                GuardPlainObject(type, question);
+
+                if (read is DescriptorRead.EnumAndPlainObject)
+                    Reach(type);
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A tested <c>[PlainObject]</c> is recognized by its synthesized guard
+    /// (FR-020), which the compilation then emits; one that can get no guard
+    /// reports <c>MS0045</c>.
+    /// </summary>
+    private void GuardPlainObject(DescribableType type, IrRuntimeQuestion? question)
+    {
+        if (TypeGuardBuilder.CanHaveGuard(type.Symbol))
+        {
+            _guarded.Add(type.Key);
+
+            return;
+        }
+
+        _report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnanswerableRuntimeTypeTest,
+                $"'{type.Symbol.ToDisplayString()}' is a [PlainObject] that gets no structural "
+                    + "guard, so no runtime test can recognize it (spec 011 FR-020).",
+                question is null ? type.Symbol.Locations.FirstOrDefault() : LocationOf(question)
+            )
+        );
     }
 
     private INamedTypeSymbol? LibraryInterfaceOf(IrQuestionedType tested) =>
@@ -180,6 +238,7 @@ internal sealed class RuntimeTypeReachability
         if (DescribableOf(question.Type) is { } type)
         {
             Reach(type);
+            ReachTypeArguments(question.Type);
 
             return;
         }
@@ -189,6 +248,22 @@ internal sealed class RuntimeTypeReachability
 
         if (IrTypeKeys.Find(key, _compilation) is { } symbol && !HasRuntimeDescriptor(symbol))
             ReportUndescribableTypeOf(symbol, LocationOf(question));
+    }
+
+    /// <summary>
+    /// A closed generic's descriptor read specializes the open descriptor with
+    /// the arguments' (FR-023), so a describable argument is reached too; an
+    /// argument with none specializes to the <c>UnknownType</c> wildcard.
+    /// </summary>
+    private void ReachTypeArguments(IrQuestionedType type)
+    {
+        foreach (var argument in type.TypeArguments)
+        {
+            if (DescribableOf(argument) is { } describable)
+                Reach(describable);
+
+            ReachTypeArguments(argument);
+        }
     }
 
     /// <summary>
@@ -228,7 +303,7 @@ internal sealed class RuntimeTypeReachability
         switch (receiver.Shape)
         {
             case IrQuestionedTypeShape.Named:
-                ReachNamedReceiver(receiver);
+                ReachNamedReceiver(receiver, question);
                 break;
             case IrQuestionedTypeShape.TypeParameter when receiver.Constraints.Count > 0:
                 foreach (var constraint in receiver.Constraints)
@@ -237,7 +312,8 @@ internal sealed class RuntimeTypeReachability
                         {
                             Shape = IrQuestionedTypeShape.Named,
                             Key = constraint,
-                        }
+                        },
+                        question
                     );
 
                 break;
@@ -252,16 +328,23 @@ internal sealed class RuntimeTypeReachability
             ReportPlainObjectReceiver(question);
     }
 
-    private void ReachNamedReceiver(IrQuestionedType receiver)
+    private void ReachNamedReceiver(IrQuestionedType receiver, IrRuntimeQuestion question)
     {
         if (DescribableOf(receiver) is not { } type)
             return;
 
         switch (type.Kind)
         {
+            case DescriptorKind.PlainObject:
+                ReachPlainObjectReceiver(type, question);
+                break;
             case DescriptorKind.Class:
                 foreach (var derived in _types.Where(candidate => candidate.DerivesFrom(type)))
                     Reach(derived);
+
+                // A struct receiver folds to its specialized descriptor.
+                if (type.Symbol.IsValueType)
+                    ReachTypeArguments(receiver);
 
                 break;
             case DescriptorKind.Enum:
@@ -273,6 +356,40 @@ internal sealed class RuntimeTypeReachability
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// <c>dto.GetType()</c> on a static <c>[PlainObject]</c> type folds to its
+    /// descriptor when no other plain object derives from it (FR-020); with
+    /// derived plain objects the runtime answers <c>System.Object</c> for any
+    /// of them, so it warns (MS0048 reason 2).
+    /// </summary>
+    private void ReachPlainObjectReceiver(DescribableType type, IrRuntimeQuestion question)
+    {
+        var hasDerived = _types.Any(candidate =>
+            candidate.Kind is DescriptorKind.PlainObject
+            && !ReferenceEquals(candidate, type)
+            && candidate.DerivesFrom(type)
+        );
+
+        if (!hasDerived)
+        {
+            _foldedPlainObjects.Add(type.Key);
+            Reach(type);
+
+            return;
+        }
+
+        _report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.RuntimeTypeOfPlainObject,
+                $"GetType() on a '{type.Symbol.Name}' answers 'System.Object' at runtime: other "
+                    + "[PlainObject] types derive from it, and a plain object has no runtime "
+                    + "identity (spec 011 FR-020).",
+                LocationOf(question)
+            )
+        );
     }
 
     private bool IsPlainObjectInterface(IrQuestionedType receiver) =>
@@ -315,6 +432,26 @@ internal sealed class RuntimeTypeReachability
         );
     }
 
+    /// <summary>
+    /// <c>MS0046</c> reason 1: a test of an array of a non-<c>object</c>
+    /// element checks the array only (a cast reports <c>MS0055</c> instead).
+    /// </summary>
+    private void ReportErasedElementTest(IrRuntimeQuestion question)
+    {
+        if (question.Type is not { Shape: IrQuestionedTypeShape.Array, ElementIsObject: false })
+            return;
+
+        _report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.ErasedTypeArgumentTest,
+                $"'{question.Text}' tests only that the value is an array: an array's element "
+                    + "type is erased at runtime (spec 011 FR-021).",
+                LocationOf(question)
+            )
+        );
+    }
+
     private void ReportUncheckedCast(IrRuntimeQuestion question)
     {
         var reason = question.Type switch
@@ -344,8 +481,13 @@ internal sealed class RuntimeTypeReachability
 
     private void Reach(DescribableType type)
     {
-        if (_reached.Add(type.Key))
-            _reachedOrder.Add(type.Key);
+        if (!_reached.Add(type.Key))
+            return;
+
+        _reachedOrder.Add(type.Key);
+
+        if (type.Kind is DescriptorKind.PlainObject)
+            GuardPlainObject(type, question: null);
     }
 
     /// <summary>
@@ -367,7 +509,9 @@ internal sealed class RuntimeTypeReachability
         type.Kind switch
         {
             DescriptorKind.Class => BasesOf(type),
-            DescriptorKind.Interface => BaseInterfacesOf(type).Concat(ImplementersOf(type)),
+            DescriptorKind.Interface => BaseInterfacesOf(type)
+                .Concat(ImplementersOf(type))
+                .Concat(PlainImplementersOf(type.Symbol)),
             _ => [],
         };
 
@@ -398,10 +542,28 @@ internal sealed class RuntimeTypeReachability
             )
         );
 
+    /// <summary>
+    /// The <c>[PlainObject]</c> types of this compilation that implement
+    /// <paramref name="iface"/>, in declaration order (OD-8).
+    /// </summary>
+    private IEnumerable<DescribableType> PlainImplementersOf(INamedTypeSymbol iface) =>
+        _types.Where(candidate =>
+            candidate.Kind is DescriptorKind.PlainObject
+            && candidate.Symbol.AllInterfaces.Any(implemented =>
+                SymbolEqualityComparer.Default.Equals(
+                    implemented.OriginalDefinition,
+                    iface.OriginalDefinition
+                )
+            )
+        );
+
     private RuntimeTypeReachabilityResult ToResult(IrCompilation ir) =>
         new()
         {
             Reached = _reached,
+            GuardedPlainObjects = _guarded,
+            FoldedPlainObjects = _foldedPlainObjects,
+            LibraryPlainImplementers = _libraryPlainImplementers,
             PlainImplementers = PlainImplementersOfReachedInterfaces(),
             QuestionedCollectionTypes = ir.QuestionedCollectionTypes,
             OverridingGetters = OverridingGetters(),
@@ -419,15 +581,7 @@ internal sealed class RuntimeTypeReachability
                 type => type.Key,
                 type =>
                     (IReadOnlyList<SupertypeKey>)
-                        _plainObjects
-                            .Where(plain =>
-                                plain.AllInterfaces.Contains(
-                                    type.Symbol,
-                                    SymbolEqualityComparer.Default
-                                )
-                            )
-                            .Select(KeyOf)
-                            .ToList()
+                        PlainImplementersOf(type.Symbol).Select(plain => plain.Key).ToList()
             );
 
     /// <summary>
@@ -502,14 +656,27 @@ internal sealed class RuntimeTypeReachability
         Class,
         Interface,
         Enum,
+        PlainObject,
+    }
+
+    /// <summary>Which descriptors a test of a tested type reads.</summary>
+    private enum DescriptorRead
+    {
+        /// <summary>Only an interface's: a test, a pattern, a dispatch.</summary>
+        None,
+
+        /// <summary>An interface's and an enum's: <c>as</c>.</summary>
+        Enum,
+
+        /// <summary>An interface's, an enum's and a plain object's: a cast.</summary>
+        EnumAndPlainObject,
     }
 
     /// <summary>
     /// A type of this compilation that TypeScript can describe: a class,
-    /// record or struct emitted as a class, an emitted interface or an enum.
-    /// <c>[PlainObject]</c> types (stage 011b B2), branded wrappers,
-    /// <c>[JsTuple]</c>s, static classes and types with no emitted declaration
-    /// have none.
+    /// record or struct emitted as a class, a <c>[PlainObject]</c>, an emitted
+    /// interface or an enum. Branded wrappers, <c>[JsTuple]</c>s, static classes
+    /// and types with no emitted declaration have none.
     /// </summary>
     private sealed record DescribableType(INamedTypeSymbol Symbol, DescriptorKind Kind)
     {
@@ -551,6 +718,8 @@ internal sealed class RuntimeTypeReachability
                     DescriptorKind.Interface,
                 TypeKind.Class or TypeKind.Struct when IsEmittedAsClass(type) =>
                     DescriptorKind.Class,
+                TypeKind.Class or TypeKind.Struct when IsPlainObjectShape(type) =>
+                    DescriptorKind.PlainObject,
                 _ => null,
             };
         }
@@ -559,6 +728,12 @@ internal sealed class RuntimeTypeReachability
             SymbolHelper.HasImport(type)
             || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
             || SymbolHelper.HasAttribute(type, "NoEmit");
+
+        private static bool IsPlainObjectShape(INamedTypeSymbol type) =>
+            !type.IsStatic
+            && SymbolHelper.HasPlainObject(type)
+            && !SymbolHelper.HasJsTuple(type)
+            && type.TypeParameters.Length == 0;
 
         private static bool IsEmittedAsClass(INamedTypeSymbol type) =>
             !type.IsStatic

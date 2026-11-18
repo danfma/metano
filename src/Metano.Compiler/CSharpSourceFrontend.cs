@@ -214,6 +214,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     assemblyWideTranspile,
                     target,
                     generatedSources,
+                    declarativeMappings.Methods,
                     diagnostics
                 );
 

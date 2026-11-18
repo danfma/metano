@@ -39,10 +39,12 @@ internal sealed record IrToTsBridgeContext(
 
     /// <summary>
     /// The runtime type descriptors the transform emits (spec 011 D29), which
-    /// every descriptor read the group renders is checked against; <c>null</c>
-    /// outside a group's transform, where no assertion runs.
+    /// every descriptor read the group renders is checked against;
+    /// <see cref="Analysis.RuntimeTypeReachabilityResult.Empty"/> outside a
+    /// group's transform.
     /// </summary>
-    public Analysis.RuntimeTypeReachabilityResult? RuntimeTypes { get; private init; }
+    public Analysis.RuntimeTypeReachabilityResult RuntimeTypes { get; private init; } =
+        Analysis.RuntimeTypeReachabilityResult.Empty;
 
     /// <summary>
     /// Whether the class being emitted overrides <c>Message</c>, so its

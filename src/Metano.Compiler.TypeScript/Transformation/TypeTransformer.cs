@@ -649,11 +649,21 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // The runtime type descriptors (spec 011 D29): one sequential phase over
         // the frontend's questions, before any group lowers a body, so every
         // group agrees and a warm group cache keeps the phase's diagnostics.
+        var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
+
         var runtimeTypes = RuntimeTypeReachability.Compute(
             ir,
             compilation,
-            transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList(),
+            emittedTypes,
             ReportDiagnostic
+        );
+
+        // A tested [PlainObject] is recognized by its synthesized guard
+        // (spec 011 FR-020), emitted and resolved like a JSON one.
+        structuralGuards = structuralGuards.With(
+            emittedTypes.Where(type =>
+                runtimeTypes.GuardedPlainObjects.Contains(RuntimeTypeReachability.KeyOf(type))
+            )
         );
 
         _context = new TypeScriptTransformContext(
@@ -675,9 +685,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
             StructuralGuardTypes = structuralGuards.Types,
+            GuardModuleTypeKeys = emittedTypes
+                .Where(type => TypeGuardBuilder.HasGuardModule(type, emittedTypes))
+                .Select(type => type.GetCrossAssemblyOriginKey())
+                .ToHashSet(StringComparer.Ordinal),
             ModuleFunctionClaims = moduleFunctionClaims,
             RuntimeTypes = runtimeTypes,
         };
+
+        new PlainObjectOverlapReporter(Context, emittedTypes).Report(ir.RuntimeQuestions);
 
         var facts = ValidateTypesAndCollectFacts(transpilableTypes, transpilableTypesDict);
 
@@ -826,8 +842,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // AND the configuration fingerprint matches the cache
             // file's). Otherwise both stay null and every iteration
             // takes the miss branch.
-            var groups = GroupTypesByFile(transpilableTypes);
-            ReportSameNameTypeClashes(groups, transpilableTypes);
+            var typeGroups = GroupTypesByFile(transpilableTypes);
+            ReportSameNameTypeClashes(typeGroups, transpilableTypes);
+            List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
             var cachedGroups = LoadGroupCacheIfValid();
 
             var perGroupClosure =
@@ -1041,6 +1058,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         EmitGuards(type, sink);
 
+        if (
+            SymbolHelper.HasPlainObject(type)
+            && new RuntimeTypeEmitter(Context).PlainObjectDescriptor(
+                type,
+                Context.ResolveTsName(type)
+            )
+                is { } plainDescriptor
+        )
+            sink.Add(plainDescriptor);
+
         // Process nested types — the ones declared at module level go to the
         // module-level collection, the others to a companion namespace (declaration
         // merging makes `Outer.Inner` read just like in C#).
@@ -1059,10 +1086,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// The guards of <paramref name="type"/>. With <c>[GenerateGuard]</c>:
     /// <c>isT</c> (narrowing predicate) and <c>assertT</c> (throwing variant),
-    /// so a consumer can pick a branch or an exception at a trust boundary,
-    /// plus the <c>registerUnionGuard("Variant", isVariant)</c> side effect of
-    /// a <c>[StrictUnionGuard]</c> variant, which lets the abstract base's
-    /// dispatch pick it up at module load. Without it, a <c>[PlainObject]</c>
+    /// so a consumer can pick a branch or an exception at a trust boundary.
+    /// A top-level <c>[StrictUnionGuard]</c> base emits its guards in its own
+    /// guard module instead (<see cref="TransformGuardModule"/>, spec 011
+    /// FR-029); a base with nested variants emits them here, beside its
+    /// <c>variants</c> table. Without it, a <c>[PlainObject]</c>
     /// variant (or concrete base) of a polymorphic JSON hierarchy still gets
     /// <c>isT</c>, which the serializer selects it with on write (FR-019
     /// rule 1), the predicate only.
@@ -1071,12 +1099,19 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         var guardBuilder = new TypeGuardBuilder(Context);
 
+        if (HasGuardModule(type))
+            return;
+
+        if (TypeGuardBuilder.IsStrictUnionBase(type))
+        {
+            sink.AddRange(guardBuilder.GenerateStrictGuard(type));
+
+            return;
+        }
+
         if (SymbolHelper.HasGenerateGuard(type))
         {
             sink.AddRange(guardBuilder.Generate(type));
-
-            if (guardBuilder.TryBuildVariantRegistration(type) is { } registration)
-                sink.Add(registration);
 
             return;
         }
@@ -1381,6 +1416,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private TsSourceFile? TransformGroup(TypeFileGroup group, IrToTsBridgeContext lowering)
     {
+        if (group.GuardModuleOf is { } strictBase)
+            return TransformGuardModule(group, strictBase);
+
         // Per-group IR cache: each type is extracted at most once, then shared by the
         // bridge converters (BuildTypeStatements) and the runtime-requirement scanner
         // below. Without this, plain-object classes were extracted three times per group.
@@ -1452,6 +1490,36 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrToTsTypeMapper.UsingAliases = previousAliases;
             ModuleLocalNaming.FileScope = previousFileScope;
         }
+    }
+
+    /// <summary>
+    /// The guard module of a top-level <c>[StrictUnionGuard]</c> base (spec 011
+    /// FR-029): its <c>variants</c> thunk table, <c>isT</c> and <c>assertT</c>.
+    /// It imports the variants' guards, which the base module never does, so
+    /// importing the base first runs no variant module.
+    /// </summary>
+    private TsSourceFile TransformGuardModule(TypeFileGroup group, INamedTypeSymbol strictBase)
+    {
+        var statements = new List<TsTopLevel>(
+            new TypeGuardBuilder(Context).GenerateStrictGuard(strictBase)
+        );
+
+        var collected = new ImportCollector(Context, irRuntimeRequirements: null).Collect(
+            strictBase,
+            statements,
+            fileName: group.FileName
+        );
+
+        statements.InsertRange(0, collected.Imports);
+
+        return new TsSourceFile(
+            Context.PathNaming.GetRelativePath(group.Namespace, group.FileName),
+            statements,
+            group.Namespace
+        )
+        {
+            RuntimeHelperAliases = collected.RuntimeHelperAliases,
+        };
     }
 
     /// <summary>
@@ -1751,6 +1819,37 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
     }
 
+    private bool HasGuardModule(INamedTypeSymbol type) =>
+        Context.GuardModuleTypeKeys.Contains(type.GetCrossAssemblyOriginKey());
+
+    /// <summary>
+    /// One guard-module group per top-level <c>[StrictUnionGuard]</c> base with
+    /// variants, beside the base's file: <c>shape.ts</c> → <c>shape.guard.ts</c>
+    /// (spec 011 FR-029).
+    /// </summary>
+    private IEnumerable<TypeFileGroup> GuardModuleGroups(IEnumerable<TypeFileGroup> groups)
+    {
+        var guards = new TypeGuardBuilder(Context);
+
+        foreach (var group in groups)
+        {
+            foreach (var type in group.Types.Where(HasGuardModule))
+            {
+                if (guards.StrictVariantsOf(type) is not { Count: > 0 } variants)
+                    continue;
+
+                yield return new TypeFileGroup(
+                    group.Namespace,
+                    group.FileName + TypeScriptTransformContext.GuardModuleSuffix,
+                    [type, .. variants]
+                )
+                {
+                    GuardModuleOf = type,
+                };
+            }
+        }
+    }
+
     /// <summary>
     /// The module path (relative, without extension) every grouped type is emitted
     /// to, the key the barrel orders its lines by.
@@ -1778,7 +1877,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string Namespace,
         string FileName,
         List<INamedTypeSymbol> Types
-    );
+    )
+    {
+        /// <summary>
+        /// The <c>[StrictUnionGuard]</c> base whose guard module this group
+        /// emits (spec 011 FR-029): the file holds only the base's guards, and
+        /// <see cref="Types"/> lists the base and its variants, whose guards it
+        /// imports, so the group's cache closure covers them.
+        /// </summary>
+        public INamedTypeSymbol? GuardModuleOf { get; init; }
+    }
 
     /// <summary>
     /// What the setup phase hands the group transforms: the constructor access

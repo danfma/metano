@@ -68,7 +68,15 @@ internal static class IrTypeCheckBuilder
     /// <c>false</c> when any value matches.
     /// </summary>
     public static bool HasCheck(IrTypeRef type, TypeCheckScope scope) =>
-        Generate(type, new TsIdentifier("value"), scope) is not null;
+        Generate(
+            type,
+            new TsIdentifier("value"),
+            scope with
+            {
+                RuntimeTypes = Analysis.RuntimeTypeReachabilityResult.Unchecked,
+            }
+        )
+            is not null;
 
     /// <summary>
     /// A class of the BCL or of another non-transpiled assembly, and a BCL

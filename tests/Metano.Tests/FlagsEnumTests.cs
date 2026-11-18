@@ -64,7 +64,7 @@ public class FlagsEnumTests
     }
 
     [Test]
-    public async Task EnumParse_GeneratesIndexAccess()
+    public async Task EnumParse_ReadsTheEnumDescriptor()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -85,6 +85,6 @@ public class FlagsEnumTests
         );
 
         var output = result["parser.ts"];
-        await Assert.That(output).Contains("Color[text as keyof typeof Color]");
+        await Assert.That(output).Contains("return enumFromRaw(Color$runtimeType, text);");
     }
 }

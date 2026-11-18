@@ -2058,8 +2058,7 @@ public sealed partial class IrExpressionExtractor
 
     private static string NoRuntimeTypeTestMessage(string construct, SyntaxNode node) =>
         $"{construct} '{node}' cannot be lowered: its type has no runtime type test in the "
-        + "target (an interface or [PlainObject] needs [GenerateGuard]; type parameters and "
-        + "collections are erased).";
+        + "target (type parameters and collections are erased).";
 
     /// <summary>
     /// TypeScript erases static types, so a type test exists only where

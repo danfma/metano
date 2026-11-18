@@ -32,14 +32,14 @@ internal static class IrToTsRuntimeTypeReferences
     /// The descriptor of <paramref name="type"/>, or <c>null</c> when it has none
     /// (a <c>[PlainObject]</c>, a branded wrapper, a type the analysis reported
     /// as undescribable). <paramref name="site"/> names the construct for the
-    /// drift error; <paramref name="reachability"/> is the reached set, or
-    /// <c>null</c> outside a transform (a bridge driven by a unit test), where
-    /// no assertion runs.
+    /// drift error; <paramref name="reachability"/> is the reached set every
+    /// read is checked against (<see cref="RuntimeTypeReachabilityResult.Empty"/>
+    /// outside a transform).
     /// </summary>
     public static TsExpression? Of(
         IrTypeRef type,
         string site,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     ) =>
         type switch
         {
@@ -68,7 +68,7 @@ internal static class IrToTsRuntimeTypeReferences
     private static TsExpression? NamedDescriptor(
         IrNamedTypeRef named,
         string site,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     )
     {
         if (named.Semantics?.Kind is IrNamedTypeKind.Delegate)
@@ -87,11 +87,14 @@ internal static class IrToTsRuntimeTypeReferences
 
         AssertReached(named, site, reachability);
 
-        return named.Semantics?.Kind switch
+        return named.Semantics switch
         {
-            IrNamedTypeKind.Interface
-            or IrNamedTypeKind.NumericEnum
-            or IrNamedTypeKind.StringEnum => ExportReference(named),
+            { IsPlainObject: true }
+            or {
+                Kind: IrNamedTypeKind.Interface
+                    or IrNamedTypeKind.NumericEnum
+                    or IrNamedTypeKind.StringEnum,
+            } => ExportReference(named),
             _ => Specialized(named, site, reachability),
         };
     }
@@ -99,7 +102,7 @@ internal static class IrToTsRuntimeTypeReferences
     private static TsExpression Specialized(
         IrNamedTypeRef named,
         string site,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     )
     {
         var open = new TsPropertyAccess(ClassReference(named), GetterName);
@@ -124,19 +127,18 @@ internal static class IrToTsRuntimeTypeReferences
     /// </summary>
     public static bool IsDescribable(
         IrNamedTypeRef named,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     )
     {
         if (
             named.Semantics
             is not { IsTranspilable: true, IsExternal: false, IsIgnored: false }
-                or { IsPlainObject: true }
                 or { IsJsTuple: true }
                 or { Kind: IrNamedTypeKind.Branded or IrNamedTypeKind.Unknown }
         )
             return false;
 
-        return reachability?.Undescribable.Contains(named.SupertypeKey) is not true;
+        return !reachability.Undescribable.Contains(named.SupertypeKey);
     }
 
     /// <summary>
@@ -148,12 +150,11 @@ internal static class IrToTsRuntimeTypeReferences
     public static void AssertReached(
         IrNamedTypeRef named,
         string site,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     )
     {
         if (
-            reachability is null
-            || named.Origin is not null
+            named.Origin is not null
             || named.Semantics is not { IsTranspilable: true }
             || reachability.Reaches(named.SupertypeKey)
         )
@@ -164,6 +165,29 @@ internal static class IrToTsRuntimeTypeReferences
                 + $"'{named.Namespace}.{named.Name}' ({site}), but runtime type reachability did not "
                 + "reach it, so the descriptor is not emitted (spec 011 D29). The frontend "
                 + "runtime-question scan and the bridge disagree."
+        );
+    }
+
+    /// <summary>
+    /// Fails loudly when a <c>[PlainObject]</c>'s synthesized guard is called
+    /// but the reachability phase did not ask for it, so it is not emitted.
+    /// </summary>
+    public static void AssertGuarded(
+        IrNamedTypeRef named,
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        if (
+            named.Semantics is { HasGeneratedGuard: true }
+            || reachability.IsUnchecked
+            || reachability.GuardedPlainObjects.Contains(named.SupertypeKey)
+        )
+            return;
+
+        throw new InvalidOperationException(
+            $"Internal error: the TypeScript bridge rendered the structural guard of "
+                + $"'{named.Namespace}.{named.Name}', but runtime type reachability did not ask for "
+                + "it, so the guard is not emitted (spec 011 FR-020)."
         );
     }
 
@@ -201,6 +225,13 @@ internal static class IrToTsRuntimeTypeReferences
             ? new TsTypeReference(exportName, origin)
             : new TsModuleExportReference(exportName, named.Name);
     }
+
+    /// <summary>
+    /// <c>X$runtimeType</c> of a top-level type of this compilation known by its
+    /// reached-set key, imported from the type's own module.
+    /// </summary>
+    public static TsExpression LocalExportReference(SupertypeKey key) =>
+        new TsModuleExportReference($"{key.Name}{ExportSuffix}", key.Name);
 
     private static TsCallExpression Helper(string name, params TsExpression[] arguments) =>
         new(new TsRuntimeHelperReference(name), arguments);

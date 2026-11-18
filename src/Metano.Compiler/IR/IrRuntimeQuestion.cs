@@ -81,6 +81,13 @@ public sealed record IrQuestionedType
     /// <c>null</c> for any other type.
     /// </summary>
     public string? CollectionDefinitionName { get; init; }
+
+    /// <summary>
+    /// The type arguments of a constructed <see cref="IrQuestionedTypeShape.Named"/>
+    /// type, in order, so a target that specializes a generic descriptor
+    /// (spec 011 FR-023) reaches the arguments' descriptors too; empty otherwise.
+    /// </summary>
+    public IReadOnlyList<IrQuestionedType> TypeArguments { get; init; } = [];
 }
 
 /// <summary>
@@ -101,4 +108,13 @@ public sealed record IrRuntimeQuestion
 
     /// <summary>Where the question is asked.</summary>
     public IrSourceSpan? Span { get; init; }
+
+    /// <summary>
+    /// The static type of the tested value of a test, <c>as</c> or cast;
+    /// <c>null</c> for the other kinds or when unknown.
+    /// </summary>
+    public IrQuestionedType? InputType { get; init; }
+
+    /// <summary>The source text of a test, <c>as</c> or cast, for a target's message.</summary>
+    public string? Text { get; init; }
 }

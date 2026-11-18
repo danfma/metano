@@ -9,9 +9,58 @@ using Metano.Annotations;
 // because the method isn't overridden.
 [assembly: MapMethod(typeof(Enum), nameof(Enum.HasFlag), JsTemplate = "($this & $0) === $0")]
 
-// Enum.Parse<T>(text) → T[text as keyof typeof T]
-// Uses the $T0 placeholder to embed the call site's generic method type-argument name
-// (the enum type) into the lowered expression. So `Enum.Parse<Status>("Active")` lowers
-// to `Status["Active" as keyof typeof Status]`, which TypeScript validates against the
-// enum's known member names at compile time.
-[assembly: MapMethod(typeof(Enum), nameof(Enum.Parse), JsTemplate = "$T0[$0 as keyof typeof $T0]")]
+// Enum.Parse / Enum.ToObject / Enum.IsDefined read the enum's runtime type descriptor
+// (spec 011 FR-024): `enumFromRaw` accepts a declared name, a comma-separated [Flags]
+// combination and a numeric string as .NET does, and throws ArgumentException for an
+// unknown name; `ToObject` keeps an undeclared integral value, as .NET does. The generic
+// forms read the type argument's descriptor through `$R0`, which also makes the frontend
+// ask for it, as `typeof(E)` does.
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.Parse),
+    WhenParameterTypes = [typeof(string)],
+    JsTemplate = "enumFromRaw($R0, $0)",
+    RuntimeImports = "enumFromRaw"
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.Parse),
+    WhenParameterTypes = [typeof(string), typeof(bool)],
+    JsTemplate = "enumFromRaw($R0, $0, $1)",
+    RuntimeImports = "enumFromRaw"
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.Parse),
+    WhenParameterTypes = [typeof(Type), typeof(string)],
+    JsTemplate = "enumFromRaw($0, $1)",
+    RuntimeImports = "enumFromRaw"
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.Parse),
+    WhenParameterTypes = [typeof(Type), typeof(string), typeof(bool)],
+    JsTemplate = "enumFromRaw($0, $1, $2)",
+    RuntimeImports = "enumFromRaw"
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.ToObject),
+    WhenArgCount = 2,
+    JsTemplate = "enumFromRaw($0, $1)",
+    RuntimeImports = "enumFromRaw"
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.IsDefined),
+    WhenArgCount = 1,
+    JsTemplate = "enumIsDefined($R0, $0)",
+    RuntimeImports = "enumIsDefined"
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.IsDefined),
+    WhenArgCount = 2,
+    JsTemplate = "enumIsDefined($0, $1)",
+    RuntimeImports = "enumIsDefined"
+)]

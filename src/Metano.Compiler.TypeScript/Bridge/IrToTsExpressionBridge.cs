@@ -1132,7 +1132,7 @@ public static partial class IrToTsExpressionBridge
                 : null;
 
             if (mapped is not null)
-                return mapped;
+                return WithTypeArgumentDescriptors(mapped, call, context);
 
             if (IsForeignStatic(call.Origin))
                 ReportUnmappedForeignStaticCall(call.Origin);

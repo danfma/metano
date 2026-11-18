@@ -151,7 +151,7 @@ internal sealed class JsonStructuralVariants(TypeGuardBuilder guards)
     /// <paramref name="covering"/> may accept a value of
     /// <paramref name="covered"/>.
     /// </summary>
-    private static bool Covers(
+    internal static bool Covers(
         IReadOnlyList<GuardedMember> covering,
         IReadOnlyList<GuardedMember> covered
     ) =>

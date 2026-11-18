@@ -44,6 +44,9 @@ public sealed class TypeScriptTransformContext(
     Action<MetanoDiagnostic> reportDiagnostic
 )
 {
+    /// <summary>The suffix of a strict base's guard module file (<c>shape.guard.ts</c>).</summary>
+    public const string GuardModuleSuffix = ".guard";
+
     private IReadOnlyDictionary<string, IrTranspilableTypeRef>? _extensionHelperFunctions;
     private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? _importAliasOverrides;
     private BclExportTypeOverrides? _bclOverrides;
@@ -85,6 +88,14 @@ public sealed class TypeScriptTransformContext(
     /// </summary>
     internal Analysis.RuntimeTypeReachabilityResult RuntimeTypes { get; init; } =
         Analysis.RuntimeTypeReachabilityResult.Empty;
+
+    /// <summary>
+    /// The keys of the top-level <c>[StrictUnionGuard]</c> bases whose guards
+    /// live in their own <c>&lt;base-file&gt;.guard</c> module (spec 011
+    /// FR-029), so a guard reference to one imports it from there.
+    /// </summary>
+    public IReadOnlySet<string> GuardModuleTypeKeys { get; init; } =
+        new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// Maps the camelCase emitted name of every transpilable extension

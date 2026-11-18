@@ -17,6 +17,13 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// Each distinct cycle is reported once — the visited set guarantees we don't re-enter
 /// nodes whose subgraphs have already been explored.
 ///
+/// Only the imports an ES module evaluates are edges (<see cref="LocalImportGraph.ValueImports"/>):
+/// an <c>import type</c> is erased, and TypeScript resolves type-only cycles, so a
+/// cycle that passes through one cannot change the order modules load in. A
+/// reached interface and its <c>[PlainObject]</c> implementer are such a pair (spec
+/// 011 FR-019): the interface's descriptor imports the implementer's, which only
+/// extends the interface's type.
+///
 /// Only intra-project paths (the configurable root alias — <c>#</c> by default, or
 /// <c>#&lt;alias&gt;</c> when <c>--import-alias</c> is set — plus its <c>/</c> subpaths)
 /// participate in the graph. Imports from external packages
@@ -34,7 +41,7 @@ public static class CyclicReferenceDetector
         if (files.Count == 0)
             return;
 
-        var importGraph = LocalImportGraph.AllImports(files, importAlias);
+        var importGraph = LocalImportGraph.ValueImports(files, importAlias);
         var aliasPrefix = importGraph.AliasPrefix;
 
         var graph = importGraph.Files.ToDictionary(

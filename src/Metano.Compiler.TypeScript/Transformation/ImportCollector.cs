@@ -50,6 +50,7 @@ public sealed class ImportCollector(
         "ClassType",
         "InterfaceType",
         "EnumType",
+        "PlainObjectType",
         "RuntimeType",
     };
 
@@ -116,7 +117,11 @@ public sealed class ImportCollector(
     /// collides with a user binding or import — see
     /// <see cref="AliasCollidingRuntimeHelpers"/>).
     /// </summary>
-    internal CollectedImports Collect(INamedTypeSymbol currentType, List<TsTopLevel> statements)
+    internal CollectedImports Collect(
+        INamedTypeSymbol currentType,
+        List<TsTopLevel> statements,
+        string? fileName = null
+    )
     {
         var referencedTypes = new HashSet<string>();
         var valueTypes = new HashSet<string>(); // types used via `new` or `extends` (need runtime import)
@@ -142,7 +147,9 @@ public sealed class ImportCollector(
             linqPipeHelpers,
             ownersByModuleExport
         );
-        _currentFileName = GetFileName(currentType);
+        // A file that is not its type's own (a strict base's guard module)
+        // names itself, so the type's own file is imported, not elided.
+        _currentFileName = fileName ?? GetFileName(currentType);
         CollectReferencedTypeNames(statements, sink);
 
         // C# `using X = Y;` aliases substitute the canonical type name with
@@ -182,8 +189,14 @@ public sealed class ImportCollector(
         var aliasedOrigins = RecoverAliasedOrigins(crossPackageOrigins, valueTypes);
 
         var tsTypeName = _context.ResolveTsName(currentType);
-        referencedTypes.Remove(currentType.Name);
-        referencedTypes.Remove(tsTypeName);
+        var isOwnFile = fileName is null;
+
+        if (isOwnFile)
+        {
+            referencedTypes.Remove(currentType.Name);
+            referencedTypes.Remove(tsTypeName);
+        }
+
         referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
 
         var imports = new List<TsImport>();
@@ -197,7 +210,7 @@ public sealed class ImportCollector(
         // for types co-located via [EmitInFile]. Without this, a multi-type file would
         // try to import its sibling types from their individual paths (which don't
         // exist as separate files when the grouping kicks in).
-        var currentFileName = GetFileName(currentType);
+        var currentFileName = _currentFileName;
 
         // The IR runtime requirement scanner owns helpers visible from type
         // signatures (HashCode for records, Temporal for date types, UUID for
@@ -558,14 +571,20 @@ public sealed class ImportCollector(
             )
             {
                 // Use the file name (not the type name) when computing the path so a
-                // guard for a [EmitInFile]-grouped type points at the merged file.
-                if (guarded.Namespace == currentNs && guarded.FileName == currentFileName)
+                // guard for a [EmitInFile]-grouped type points at the merged file; a
+                // strict base's guard lives in its guard module (spec 011 FR-029).
+                var guardFileName = _context.GuardModuleTypeKeys.Contains(guarded.Key)
+                    ? guarded.FileName + TypeScriptTransformContext.GuardModuleSuffix
+                    : guarded.FileName;
+
+                if (guarded.Namespace == currentNs && guardFileName == currentFileName)
                     continue; // same file
                 var guardPath = _context.PathNaming.ComputeRelativeImportPath(
                     currentNs,
                     guarded.Namespace,
-                    guarded.FileName
+                    guardFileName
                 );
+
                 // Guards are functions → always imported as values, never type-only.
                 AddLocal(guardPath, typeName, typeOnly: false);
                 continue;
@@ -1725,6 +1744,13 @@ public sealed class ImportCollector(
                     names.Add(bareId.Name);
                     valueNames.Add(bareId.Name);
                 }
+                // A guard used as a value (a strict guard's `variants` thunk,
+                // spec 011 FR-029) imports it as a call does.
+                else if (_context.TryResolveGuardImport(bareId.Name, out _))
+                {
+                    names.Add(bareId.Name);
+                    valueNames.Add(bareId.Name);
+                }
                 break;
             case TsNewExpression newExpr:
                 if (newExpr.Callee is TsIdentifier localId && sink.IsLocallyBound(localId.Name))
@@ -1923,6 +1949,9 @@ public sealed class ImportCollector(
 
                 foreach (var arg in template.Arguments)
                     CollectFromExpression(arg, sink);
+
+                foreach (var descriptor in template.TypeArgumentDescriptors)
+                    CollectFromExpression(descriptor, sink);
 
                 // Full `TsType` placeholders (a constructor mapping's type
                 // arguments) sit in type positions: walked as type references.

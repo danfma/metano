@@ -46,14 +46,14 @@ internal static class IrToTsRuntimeTestBridge
         TsExpression value,
         IrTypeRef type,
         IrTypeRef? staticType,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     ) => Render(value, type, Classify(value, type, staticType), reachability);
 
     private static TsExpression? Render(
         TsExpression value,
         IrTypeRef type,
         IrRuntimeTypeTest test,
-        RuntimeTypeReachabilityResult? reachability
+        RuntimeTypeReachabilityResult reachability
     ) =>
         test switch
         {
@@ -62,7 +62,7 @@ internal static class IrToTsRuntimeTestBridge
             ),
             IrRuntimeTypeTest.NominalClass => ClassTest(value, type),
             IrRuntimeTypeTest.NominalInterface => DescriptorTest(value, type, reachability),
-            IrRuntimeTypeTest.ErasedShape => GuardTest(value, type),
+            IrRuntimeTypeTest.ErasedShape => ShapeTest(value, type, reachability),
             IrRuntimeTypeTest.Primitive primitive => PrimitiveOrEnumTest(value, type, primitive),
             IrRuntimeTypeTest.FixedTuple { Arity: var arity } => FixedTupleTest(value, arity),
             IrRuntimeTypeTest.Array => ArrayTest(value),
@@ -114,27 +114,120 @@ internal static class IrToTsRuntimeTestBridge
                 $"Type '{type}' tests nominally but maps to no TypeScript class."
             );
 
-    /// <summary><c>isType(value, descriptor)</c>: the nominal interface test.</summary>
+    /// <summary>
+    /// <c>isType(value, descriptor)</c>: the nominal interface test. An
+    /// interface of a referenced library that this compilation's
+    /// <c>[PlainObject]</c> types implement is augmented with them at the test
+    /// site, <c>withImplementers(IFoo$runtimeType, [Dto$runtimeType])</c>
+    /// (FR-019): no registration, no mutation of the library descriptor.
+    /// </summary>
     private static TsExpression? DescriptorTest(
         TsExpression value,
         IrTypeRef type,
-        RuntimeTypeReachabilityResult? reachability
-    ) =>
-        IrToTsRuntimeTypeReferences.Of(type, "type test", reachability) is { } descriptor
-            ? IsTypeCall(value, descriptor)
-            : null;
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        if (IrToTsRuntimeTypeReferences.Of(type, "type test", reachability) is not { } descriptor)
+            return null;
+
+        if (
+            type is IrNamedTypeRef { Origin: not null } named
+            && reachability.LibraryPlainImplementers.TryGetValue(
+                named.SupertypeKey,
+                out var implementers
+            )
+        )
+        {
+            descriptor = new TsCallExpression(
+                new TsRuntimeHelperReference("withImplementers"),
+                [
+                    descriptor,
+                    new TsArrayLiteral([
+                        .. implementers.Select(IrToTsRuntimeTypeReferences.LocalExportReference),
+                    ]),
+                ]
+            );
+        }
+
+        return IsTypeCall(value, descriptor);
+    }
 
     /// <summary><c>isType(value, descriptor)</c>.</summary>
     public static TsExpression IsTypeCall(TsExpression value, TsExpression descriptor) =>
         new TsCallExpression(new TsRuntimeHelperReference("isType"), [value, descriptor]);
 
-    private static TsExpression? GuardTest(TsExpression value, IrTypeRef type) =>
-        type is IrNamedTypeRef { Semantics.HasGeneratedGuard: true } named
-            ? new TsCallExpression(new TsIdentifier($"is{GuardTypeName(named)}"), [value])
-            : null;
+    /// <summary>
+    /// The test of <paramref name="type"/> as a function value, for a site that
+    /// stores it (a polymorphic JSON case's <c>test</c>, NFR-004): the guard
+    /// itself when the test calls one on the value (<c>isPoint</c>), else
+    /// <c>(v: unknown): boolean =&gt; …</c> over the same rendering.
+    /// </summary>
+    public static TsExpression? TestFunction(
+        IrTypeRef type,
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        var parameter = new TsIdentifier("v");
 
-    private static string GuardTypeName(IrNamedTypeRef named) =>
-        IrToTsTypeMapper.Map(named) is TsNamedType mapped ? mapped.Name : named.Name;
+        return Render(parameter, type, staticType: null, reachability) switch
+        {
+            null => null,
+            TsCallExpression { Arguments: [TsIdentifier { Name: "v" }] } call => call.Callee,
+            var test => new TsArrowFunction(
+                [new TsParameter(parameter.Name, new TsNamedType("unknown"))],
+                [new TsReturnStatement(test)]
+            ),
+        };
+    }
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> tests its shape (FR-020): the structural guard
+    /// synthesized for it, <c>isDto(value)</c>, a referenced library's
+    /// imported from its package. A guard the reachability phase did not ask
+    /// for is an internal error, as a descriptor read is.
+    /// </summary>
+    private static TsExpression? ShapeTest(
+        TsExpression value,
+        IrTypeRef type,
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        if (type is not IrNamedTypeRef named)
+            return null;
+
+        if (named.Origin is null)
+            IrToTsRuntimeTypeReferences.AssertGuarded(named, reachability);
+
+        return new TsCallExpression(GuardReference(named), [value]);
+    }
+
+    /// <summary>
+    /// The synthesized guard of <paramref name="named"/>, named as
+    /// <see cref="Transformation.TypeGuardBuilder"/> declares it: <c>isPoint</c>
+    /// (a local import, or from the type's package); a nested type's,
+    /// <c>Shape.isCircle</c>, sits in its companion namespace.
+    /// </summary>
+    public static TsExpression GuardReference(IrNamedTypeRef named)
+    {
+        var mapped = IrToTsTypeMapper.Map(named) as TsNamedType;
+        var segments = (mapped?.Name ?? named.Name).Split('.');
+        var guardName = $"is{segments[^1]}";
+        var origin = mapped?.Origin;
+
+        if (segments.Length == 1)
+            return origin is null
+                ? new TsIdentifier(guardName)
+                : new TsTypeReference(guardName, origin);
+
+        TsExpression root = origin is null
+            ? new TsIdentifier(segments[0])
+            : new TsTypeReference(segments[0], origin);
+
+        var container = segments[1..^1]
+            .Aggregate(root, (outer, segment) => new TsPropertyAccess(outer, segment));
+
+        return new TsPropertyAccess(container, guardName);
+    }
 
     /// <summary>
     /// An enum tests its values inline (<see cref="IrToTsEnumValueTest"/>); any

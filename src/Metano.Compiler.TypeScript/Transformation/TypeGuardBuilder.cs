@@ -25,6 +25,9 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 {
+    /// <summary>The strict guard's thunk table of variant guards (spec 011 FR-029).</summary>
+    private const string VariantTableName = "variants";
+
     private readonly TypeScriptTransformContext _context = context;
 
     private TsType MapType(ITypeSymbol symbol) =>
@@ -77,22 +80,26 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     internal bool CanGenerateGuard(INamedTypeSymbol type) => TryBuildPredicate(type) is not null;
 
     /// <summary>
+    /// Whether <paramref name="type"/> can get a guard at all: not an
+    /// exception, an <c>[ExportedAsModule]</c> / <c>[NoContainer]</c> class, a
+    /// class with extension members or an <c>[Import]</c> type. The runtime
+    /// type reachability reports MS0045 for a <c>[PlainObject]</c> test that
+    /// fails it (spec 011 FR-020).
+    /// </summary>
+    internal static bool CanHaveGuard(INamedTypeSymbol type) =>
+        !TypeTransformer.IsExceptionType(type)
+        && !SymbolHelper.HasExportedAsModule(type)
+        && !SymbolHelper.HasNoContainer(type)
+        && !TypeTransformer.HasExtensionMembers(type)
+        && !SymbolHelper.HasImport(type);
+
+    /// <summary>
     /// The <c>isT</c> function of <paramref name="type"/> and the type it
     /// narrows to, or <c>null</c> when the type gets no guard.
     /// </summary>
     private (TsFunction Guard, TsType PredicateType)? TryBuildPredicate(INamedTypeSymbol type)
     {
-        if (TypeTransformer.IsExceptionType(type))
-            return null;
-
-        if (
-            SymbolHelper.HasExportedAsModule(type)
-            || SymbolHelper.HasNoContainer(type)
-            || TypeTransformer.HasExtensionMembers(type)
-        )
-            return null;
-
-        if (SymbolHelper.HasImport(type))
+        if (!CanHaveGuard(type))
             return null;
 
         // A private nested type is declared under its module-local identifier (#412).
@@ -133,42 +140,20 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
     private IReadOnlyList<INamedTypeSymbol>? TryFindDiscriminatedVariants(INamedTypeSymbol baseType)
     {
-        if (baseType.TypeKind is not (TypeKind.Class or TypeKind.Interface))
-            return null;
-        var baseField = SymbolHelper.GetDiscriminatorFieldName(baseType);
-        if (baseField is null)
-            return null;
-        if (baseType.TypeKind == TypeKind.Class && !baseType.IsAbstract)
-            return null;
-
-        var variants = new List<INamedTypeSymbol>();
-        foreach (var candidate in EnumerateAssemblyTypes(_context.CurrentAssembly))
-        {
-            if (SymbolEqualityComparer.Default.Equals(candidate, baseType))
-                continue;
-            if (!IsDerivedFrom(candidate, baseType))
-                continue;
-            if (!SymbolHelper.HasGenerateGuard(candidate))
-                continue;
-            if (
-                !SymbolHelper.IsTranspilable(
+        var candidates = EnumerateAssemblyTypes(_context.CurrentAssembly)
+            .Where(candidate =>
+                SymbolHelper.IsTranspilable(
                     candidate,
                     _context.AssemblyWideTranspile,
                     _context.CurrentAssembly
                 )
-            )
-                continue;
-            var variantField = SymbolHelper.GetDiscriminatorFieldName(candidate);
-            if (
-                variantField is not null
-                && !string.Equals(variantField, baseField, StringComparison.Ordinal)
-            )
-                continue;
-            variants.Add(candidate);
-        }
+            );
+
+        var variants = DiscriminatedVariantsOf(baseType, candidates).ToList();
 
         if (variants.Count == 0)
             return null;
+
         variants.Sort(
             (a, b) =>
                 string.Compare(
@@ -177,8 +162,41 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                     StringComparison.Ordinal
                 )
         );
+
         return variants;
     }
+
+    /// <summary>
+    /// The <c>[GenerateGuard]</c> types of <paramref name="candidates"/> that
+    /// derive from the discriminated abstract class or interface
+    /// <paramref name="baseType"/> and share its discriminator field.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> DiscriminatedVariantsOf(
+        INamedTypeSymbol baseType,
+        IEnumerable<INamedTypeSymbol> candidates
+    )
+    {
+        var baseField = SymbolHelper.GetDiscriminatorFieldName(baseType);
+
+        if (
+            baseType.TypeKind is not (TypeKind.Class or TypeKind.Interface)
+            || baseField is null
+            || (baseType.TypeKind == TypeKind.Class && !baseType.IsAbstract)
+        )
+            return [];
+
+        return candidates.Where(candidate =>
+            !SymbolEqualityComparer.Default.Equals(candidate, baseType)
+            && IsDerivedFrom(candidate, baseType)
+            && SymbolHelper.HasGenerateGuard(candidate)
+            && SharesDiscriminator(candidate, baseField)
+        );
+    }
+
+    /// <summary>A variant names no discriminator of its own, or the base's.</summary>
+    private static bool SharesDiscriminator(INamedTypeSymbol variant, string baseField) =>
+        SymbolHelper.GetDiscriminatorFieldName(variant) is not { } field
+        || string.Equals(field, baseField, StringComparison.Ordinal);
 
     private static IEnumerable<INamedTypeSymbol> EnumerateAssemblyTypes(IAssemblySymbol? assembly)
     {
@@ -276,7 +294,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
         if (SymbolHelper.HasStrictUnionGuard(baseType))
-            AppendStrictUnionBody(body, discriminatorMatch, discriminatorTsName);
+            body.AddRange(StrictVariantDispatch(variants, discriminatorTsName));
         else
             body.Add(new TsReturnStatement(discriminatorMatch));
 
@@ -289,112 +307,121 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     }
 
     /// <summary>
-    /// Strict path: short-circuit <c>false</c> when the discriminator
-    /// doesn't match any known variant, look the variant guard up in
-    /// the runtime registry, delegate to it when present, fall back to
-    /// <c>true</c> otherwise. The fallback keeps the strict guard at
-    /// least as permissive as the legacy discriminator-only narrow —
-    /// never tighter when variant modules aren't loaded, so opting in
-    /// can't accidentally start rejecting previously-accepted shapes.
+    /// Strict path (spec 011 FR-029): the discriminator picks the variant,
+    /// whose own guard then validates the shape,
+    /// <c>const variant = variants[["Circle", "Square"].indexOf(v.kind)];
+    /// return variant !== undefined &amp;&amp; variant()(value);</c>; an unknown
+    /// discriminator picks none. The <c>variants</c> thunk table
+    /// (<see cref="VariantTable"/>) sits beside the guard, in the base's guard
+    /// module for top-level variants, so the base module never imports a
+    /// variant (an ESM cycle: a variant extends the base at load).
     /// </summary>
-    private static void AppendStrictUnionBody(
-        List<TsStatement> body,
-        TsExpression discriminatorMatch,
+    private IReadOnlyList<TsStatement> StrictVariantDispatch(
+        IReadOnlyList<INamedTypeSymbol> variants,
         string discriminatorTsName
     )
     {
-        body.Add(
-            new TsIfStatement(
-                new TsUnaryExpression("!", discriminatorMatch),
-                [new TsReturnStatement(new TsLiteral("false"))]
-            )
+        var discriminators = new TsArrayLiteral([
+            .. variants.Select(variant =>
+                (TsExpression)new TsStringLiteral(_context.ResolveOwnTsName(variant))
+            ),
+        ]);
+
+        var index = new TsCallExpression(
+            new TsPropertyAccess(discriminators, "indexOf"),
+            [new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName)]
         );
-        body.Add(
+
+        var variant = new TsIdentifier("variant");
+
+        return
+        [
             new TsVariableDeclaration(
-                "guard",
-                new TsCallExpression(
-                    new TsRuntimeHelperReference("getUnionGuard"),
-                    [new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName)]
-                )
-            )
-        );
-        body.Add(
+                variant.Name,
+                new TsElementAccess(new TsIdentifier(VariantTableName), index)
+            ),
             new TsReturnStatement(
-                new TsConditionalExpression(
-                    new TsBinaryExpression(
-                        new TsIdentifier("guard"),
-                        "!==",
-                        new TsLiteral("undefined")
-                    ),
-                    new TsCallExpression(new TsIdentifier("guard"), [new TsIdentifier("value")]),
-                    new TsLiteral("true")
+                new TsBinaryExpression(
+                    new TsBinaryExpression(variant, "!==", new TsLiteral("undefined")),
+                    "&&",
+                    new TsCallExpression(
+                        new TsCallExpression(variant, []),
+                        [new TsIdentifier("value")]
+                    )
                 )
-            )
-        );
+            ),
+        ];
     }
 
     /// <summary>
-    /// When the variant participates in a <c>[StrictUnionGuard]</c>
-    /// hierarchy, returns the side-effect statement that registers the
-    /// variant's guard on the shared <c>UnionGuardRegistry</c> at module
-    /// load. Emitted as a top-level <c>registerUnionGuard("Circle",
-    /// isCircle)</c> call alongside the generated <c>isCircle</c>
-    /// function. Returns <c>null</c> for types whose base hierarchy
-    /// doesn't opt into strict guards — keeping the default emission
-    /// path untouched.
+    /// Whether <paramref name="type"/> is a <c>[StrictUnionGuard]</c> base whose
+    /// strict guard dispatches to its variants' guards.
     /// </summary>
-    public TsTopLevelStatement? TryBuildVariantRegistration(INamedTypeSymbol type)
+    internal static bool IsStrictUnionBase(INamedTypeSymbol type) =>
+        SymbolHelper.HasStrictUnionGuard(type)
+        && SymbolHelper.HasGenerateGuard(type)
+        && SymbolHelper.GetDiscriminatorFieldName(type) is not null;
+
+    /// <summary>
+    /// Whether the strict guard of <paramref name="type"/> lives in its own
+    /// <c>&lt;base-file&gt;.guard.ts</c> module (FR-029): a top-level strict base
+    /// with a top-level variant among <paramref name="emittedTypes"/>, which the
+    /// base module cannot import. A base whose variants are all nested in it
+    /// declares them in its own file, so its guard stays there.
+    /// </summary>
+    internal static bool HasGuardModule(
+        INamedTypeSymbol type,
+        IEnumerable<INamedTypeSymbol> emittedTypes
+    ) =>
+        type.ContainingType is null
+        && IsStrictUnionBase(type)
+        && DiscriminatedVariantsOf(type, emittedTypes)
+            .Any(variant => variant.ContainingType is null);
+
+    /// <summary>
+    /// The statements of a strict base's guard: the <c>variants</c> thunk table,
+    /// <c>isT</c> and <c>assertT</c>; empty when the base has no variant.
+    /// </summary>
+    public IReadOnlyList<TsTopLevel> GenerateStrictGuard(INamedTypeSymbol type)
     {
-        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
-            return null;
-        if (!SymbolHelper.HasGenerateGuard(type))
-            return null;
+        var variants = TryFindDiscriminatedVariants(type);
 
-        var strictBase = FindStrictUnionBase(type);
-        if (strictBase is null)
-            return null;
+        if (variants is not { Count: > 0 })
+            return Generate(type);
 
-        var variantTsName = _context.ResolveOwnTsName(type);
-        var guardName = $"is{_context.ResolveTsName(type)}";
+        return [VariantTable(variants), .. Generate(type)];
+    }
 
-        // The discriminator value the registry keys on is the variant's
-        // own TS name — matches the per-variant guard convention
-        // (`v.kind === "Circle"`). Reading the variant's own
-        // discriminator field isn't needed: the registry's key space is
-        // the discriminator-value vocabulary, and the variant's emitted
-        // discriminator literal is its TS name.
-        var call = new TsCallExpression(
-            new TsRuntimeHelperReference("registerUnionGuard"),
-            [new TsStringLiteral(variantTsName), new TsIdentifier(guardName)]
+    /// <summary>
+    /// The variant's guard as the runtime-test bridge names it: <c>isCircle</c>,
+    /// or <c>Result.isEmpty</c> for a variant nested in the base.
+    /// </summary>
+    private TsExpression GuardReferenceOf(INamedTypeSymbol variant) =>
+        IrTypeRefMapper.Map(variant, _context.OriginResolver, TargetLanguage.TypeScript)
+            is IrNamedTypeRef named
+            ? IrToTsRuntimeTestBridge.GuardReference(named)
+            : new TsIdentifier($"is{_context.ResolveTsName(variant)}");
+
+    /// <summary>The variants a strict base's guard dispatches to, in the guard's order.</summary>
+    internal IReadOnlyList<INamedTypeSymbol> StrictVariantsOf(INamedTypeSymbol type) =>
+        TryFindDiscriminatedVariants(type) ?? [];
+
+    /// <summary><c>const variants = [() =&gt; isCircle, () =&gt; isSquare];</c>, in the guard's order.</summary>
+    private TsTopLevelStatement VariantTable(IReadOnlyList<INamedTypeSymbol> variants) =>
+        new(
+            new TsVariableDeclaration(
+                VariantTableName,
+                new TsArrayLiteral([
+                    .. variants.Select(variant =>
+                        (TsExpression)
+                            new TsArrowFunction(
+                                [],
+                                [new TsReturnStatement(GuardReferenceOf(variant))]
+                            )
+                    ),
+                ])
+            )
         );
-
-        return new TsTopLevelStatement(new TsExpressionStatement(call), RunsOnImport: true);
-    }
-
-    private static INamedTypeSymbol? FindStrictUnionBase(INamedTypeSymbol type)
-    {
-        var current = type.BaseType;
-        while (current is not null && current.SpecialType == SpecialType.None)
-        {
-            if (
-                SymbolHelper.HasStrictUnionGuard(current)
-                && SymbolHelper.HasGenerateGuard(current)
-                && SymbolHelper.GetDiscriminatorFieldName(current) is not null
-            )
-                return current;
-            current = current.BaseType;
-        }
-        foreach (var iface in type.AllInterfaces)
-        {
-            if (
-                SymbolHelper.HasStrictUnionGuard(iface)
-                && SymbolHelper.HasGenerateGuard(iface)
-                && SymbolHelper.GetDiscriminatorFieldName(iface) is not null
-            )
-                return iface;
-        }
-        return null;
-    }
 
     private static TsFunction GenerateAssert(
         string tsName,

@@ -3,7 +3,7 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// One test per reason of the spec 011 stage 011b B1 diagnostics
+/// One test per reason of the spec 011 stage 011b B1 and B2 diagnostics
 /// (contracts/diagnostics.md): code, severity and location; a warning also
 /// asserts that the output is emitted.
 /// </summary>
@@ -149,6 +149,106 @@ public class RuntimeTypeDiagnosticsTests
 
         await AssertUncheckedCast(result, "(T)o");
         await Assert.That(result.Output).Contains("return o as T;");
+    }
+
+    [Test]
+    public async Task Ms0045_Reason3_APlainObjectWithNoGuard()
+    {
+        var result = Transpile(
+            "public static bool Of(object o) => o is Oops;",
+            "[Transpile, PlainObject] public class Oops : Exception { }"
+        );
+
+        await AssertSingle(result, DiagnosticCodes.UnanswerableRuntimeTypeTest, "o is Oops");
+
+        await Assert
+            .That(Single(result.Diagnostics, DiagnosticCodes.UnanswerableRuntimeTypeTest).Severity)
+            .IsEqualTo(MetanoDiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task Ms0046_Reason1_ATestOfAnArrayOfAnErasedElement()
+    {
+        var result = Transpile("public static bool Of(object o) => o is int[];");
+
+        await AssertSingle(result, DiagnosticCodes.ErasedTypeArgumentTest, "o is int[]");
+
+        await Assert
+            .That(Single(result.Diagnostics, DiagnosticCodes.ErasedTypeArgumentTest).Severity)
+            .IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
+        await Assert.That(result.Output).Contains("return Array.isArray(o);");
+    }
+
+    [Test]
+    public async Task Ms0046_IsNotReportedForAnArrayOfObjects()
+    {
+        var result = Transpile("public static bool Of(object o) => o is object[];");
+
+        await Assert
+            .That(result.Diagnostics.Where(d => d.Code == DiagnosticCodes.ErasedTypeArgumentTest))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task Ms0047_AStructuralTestAnotherPlainObjectPasses()
+    {
+        var result = Transpile(
+            """
+            public static bool Of(object o) => o is Named;
+
+            public static bool Again(object o) => o is Named;
+            """,
+            """
+            [Transpile, PlainObject] public record Named(string Label);
+            [Transpile, PlainObject] public record Tagged(string Label, int Count);
+            """
+        );
+
+        await AssertSingle(result, DiagnosticCodes.PlainObjectShapeOverlap, "o is Named");
+
+        var overlap = Single(result.Diagnostics, DiagnosticCodes.PlainObjectShapeOverlap);
+
+        await Assert.That(overlap.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(overlap.Message).Contains("'Tagged' also satisfies the shape { label }");
+        await Assert.That(result.Output).Contains("return isNamed(o);");
+    }
+
+    [Test]
+    public async Task Ms0047_IsNotReportedWhenTheStaticTypeCannotHoldTheOther()
+    {
+        var result = Transpile(
+            "public static bool Of(IHasLabel o) => o is Named;",
+            """
+            [Transpile] public interface IHasLabel { string Label { get; } }
+            [Transpile, PlainObject] public record Named(string Label) : IHasLabel;
+            [Transpile, PlainObject] public record Tagged(string Label, int Count);
+            """
+        );
+
+        await Assert
+            .That(result.Diagnostics.Where(d => d.Code == DiagnosticCodes.PlainObjectShapeOverlap))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task Ms0048_Reason2_GetTypeOnAPlainObjectOthersDeriveFrom()
+    {
+        var result = Transpile(
+            "public static string Of(Base b) => b.GetType().Name;",
+            """
+            [Transpile, PlainObject] public record Base(string Label);
+            [Transpile, PlainObject] public record Derived(string Label, int Count) : Base(Label);
+            """
+        );
+
+        await AssertSingle(result, DiagnosticCodes.RuntimeTypeOfPlainObject, "b.GetType()");
+
+        await Assert
+            .That(Single(result.Diagnostics, DiagnosticCodes.RuntimeTypeOfPlainObject).Severity)
+            .IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
+        await Assert.That(result.Output).Contains("return getRuntimeType(b).name;");
     }
 
     private static async Task AssertUncheckedCast(Transpiled result, string cast)

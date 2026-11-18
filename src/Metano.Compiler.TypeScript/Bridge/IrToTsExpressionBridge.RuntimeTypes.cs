@@ -1,6 +1,8 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Parenthesization.Templates;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -78,10 +80,79 @@ public static partial class IrToTsExpressionBridge
         )
             return folded;
 
+        if (FoldedPlainObjectOf(getType, context) is { } plain)
+            return FoldedPlainObjectRead(getType.Receiver, plain, context);
+
         return new TsCallExpression(
             new TsRuntimeHelperReference("getRuntimeType"),
             [Map(getType.Receiver, context)]
         );
+    }
+
+    /// <summary>
+    /// A mapped template that reads its type arguments' descriptors
+    /// (<c>$R0</c>: <c>Enum.Parse&lt;E&gt;</c> → <c>enumFromRaw(E$runtimeType, …)</c>)
+    /// gets them here; a type argument with no descriptor reads the
+    /// <c>UnknownType</c> wildcard, as a specialization's does (FR-023).
+    /// </summary>
+    private static TsExpression WithTypeArgumentDescriptors(
+        TsExpression mapped,
+        IrCallExpression call,
+        IrToTsBridgeContext context
+    ) =>
+        mapped is TsTemplate template
+        && TsTemplatePlaceholder.ReferencesTypeArgumentDescriptor(template.Template)
+            ? template with
+            {
+                TypeArgumentDescriptors =
+                [
+                    .. (call.TypeArguments ?? []).Select(argument =>
+                        IrToTsRuntimeTypeReferences.Of(
+                            argument,
+                            "mapped type argument",
+                            context.RuntimeTypes
+                        ) ?? new TsRuntimeHelperReference("UnknownType")
+                    ),
+                ],
+            }
+            : mapped;
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> receiver with no derived plain object answers its
+    /// own descriptor (FR-020): a plain object has no runtime identity to ask.
+    /// </summary>
+    private static IrNamedTypeRef? FoldedPlainObjectOf(
+        IrGetTypeExpression getType,
+        IrToTsBridgeContext context
+    ) =>
+        getType.ReceiverType is IrNamedTypeRef { Semantics.IsPlainObject: true } plain
+        && context.RuntimeTypes.FoldedPlainObjects.Contains(plain.SupertypeKey)
+            ? plain
+            : null;
+
+    /// <summary>
+    /// <c>Dto$runtimeType</c> for a receiver that cannot be <c>null</c> (a
+    /// <c>new</c> or <c>this</c>); any other receiver still runs and still
+    /// throws <c>NullReferenceException</c> on <c>null</c>, as .NET does:
+    /// <c>(getRuntimeType(dto), Dto$runtimeType)</c>.
+    /// </summary>
+    private static TsExpression FoldedPlainObjectRead(
+        IrExpression receiver,
+        IrNamedTypeRef plain,
+        IrToTsBridgeContext context
+    )
+    {
+        var descriptor = IrToTsRuntimeTypeReferences.Of(plain, "GetType()", context.RuntimeTypes)!;
+
+        if (receiver is IrNewExpression or IrThisExpression)
+            return descriptor;
+
+        var nullChecked = new TsCallExpression(
+            new TsRuntimeHelperReference("getRuntimeType"),
+            [Map(receiver, context)]
+        );
+
+        return new TsParenthesized(new TsBinaryExpression(nullChecked, ",", descriptor));
     }
 
     /// <summary>

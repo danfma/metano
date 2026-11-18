@@ -13,6 +13,9 @@ internal enum TsTemplatePlaceholderKind
     /// <summary><c>$TN</c>: the N-th generic type-argument name.</summary>
     TypeArgument,
 
+    /// <summary><c>$RN</c>: the runtime type descriptor of the N-th generic type argument.</summary>
+    TypeArgumentDescriptor,
+
     /// <summary>
     /// <c>$Type</c>: the receiver's type, spelled by its own exported name (never a
     /// <c>using</c> alias of it) and imported as a value. It declares what the
@@ -67,6 +70,13 @@ internal readonly record struct TsTemplatePlaceholder(
         if (rest is ['$', 'T', var digit, ..] && char.IsAsciiDigit(digit))
             return Numbered(TsTemplatePlaceholderKind.TypeArgument, rest, prefixLength: 2);
 
+        if (rest is ['$', 'R', var descriptorDigit, ..] && char.IsAsciiDigit(descriptorDigit))
+            return Numbered(
+                TsTemplatePlaceholderKind.TypeArgumentDescriptor,
+                rest,
+                prefixLength: 2
+            );
+
         if (rest is ['$', var first, ..] && char.IsAsciiDigit(first))
             return Numbered(TsTemplatePlaceholderKind.Argument, rest, prefixLength: 1);
 
@@ -103,6 +113,16 @@ internal readonly record struct TsTemplatePlaceholder(
     public static bool ReferencesReceiverType(string text) =>
         Occurrences(text)
             .Any(placeholder => placeholder.Kind is TsTemplatePlaceholderKind.ReceiverType);
+
+    /// <summary>
+    /// Whether <paramref name="text"/> reads a type argument's runtime type
+    /// descriptor (<c>$R0</c>).
+    /// </summary>
+    public static bool ReferencesTypeArgumentDescriptor(string text) =>
+        Occurrences(text)
+            .Any(placeholder =>
+                placeholder.Kind is TsTemplatePlaceholderKind.TypeArgumentDescriptor
+            );
 
     /// <summary>
     /// <c>$Type</c> not glued to a longer identifier (<c>$Types</c> is not it).
@@ -147,6 +167,9 @@ internal readonly record struct TsTemplatePlaceholder(
             TsTemplatePlaceholderKind.ReceiverType => template.ReceiverType,
             TsTemplatePlaceholderKind.Argument when Index < template.Arguments.Count =>
                 template.Arguments[Index],
+            TsTemplatePlaceholderKind.TypeArgumentDescriptor
+                when Index < template.TypeArgumentDescriptors.Count =>
+                template.TypeArgumentDescriptors[Index],
             _ => null,
         };
 

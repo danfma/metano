@@ -21,14 +21,20 @@ internal sealed record FunctionOverloadShape(
     public static FunctionOverloadShape Of(IrMethodDeclaration method) =>
         new(
             method.Parameters,
-            TypeCheckScope.ForMethod(method, [], typeOverrides: null),
+            TypeCheckScope.ForMethod(method, [], typeOverrides: null) with
+            {
+                RuntimeTypes = Analysis.RuntimeTypeReachabilityResult.Unchecked,
+            },
             method.Semantics.IsOperator
         );
 
     public static FunctionOverloadShape Of(IrModuleFunction function) =>
         new(
             function.Parameters,
-            new TypeCheckScope(function.TypeParameters ?? [], null),
+            new TypeCheckScope(function.TypeParameters ?? [], null)
+            {
+                RuntimeTypes = Analysis.RuntimeTypeReachabilityResult.Unchecked,
+            },
             IsOperator: false
         );
 }

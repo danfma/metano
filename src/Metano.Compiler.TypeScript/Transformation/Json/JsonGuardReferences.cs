@@ -1,48 +1,37 @@
+using Metano.Annotations;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
 
 /// <summary>
-/// The expression a polymorphic descriptor uses to reference the synthesized
-/// guard of a <c>[PlainObject]</c> type (FR-019 rule 1, FR-041): a value
-/// import from the type's own module, resolved like the type itself.
-/// <list type="bullet">
-///   <item>a top-level type of this project → <c>isPoint</c>, imported from
-///     the type's file (<see cref="TsModuleExportReference"/>);</item>
-///   <item>a type of a referenced Metano package → <c>isPoint</c> with the
-///     type's package origin (<see cref="TsTypeReference"/>);</item>
-///   <item>a nested type → <c>Shape.isCircle</c>: its guard is declared in
-///     the companion namespace, next to the type.</item>
-/// </list>
-/// The guard name is the one <see cref="TypeGuardBuilder"/> declares,
-/// <c>is</c> + the type's TS name.
+/// The <c>test</c> a polymorphic descriptor stores for a structural
+/// <c>[PlainObject]</c> case (FR-019 rule 1, FR-041): the runtime-test
+/// bridge's test of the type as a function value (spec 011 NFR-004), so a
+/// JSON case, a type pattern and a dispatcher branch test the same way. For
+/// a plain object that is its synthesized guard: <c>isPoint</c>, imported
+/// from the type's module or package; <c>Shape.isCircle</c> for a nested
+/// type, whose guard is declared in the companion namespace.
 /// </summary>
 internal sealed class JsonGuardReferences(TypeScriptTransformContext context)
 {
     private readonly TypeScriptTransformContext _context = context;
 
-    public TsExpression GuardReferenceOf(INamedTypeSymbol type)
-    {
-        var guardName = $"is{_context.ResolveTsName(type)}";
-        var mapped = (TsNamedType)JsonTsTypes.MapContract(_context, type);
-        var qualifiers = mapped.Name.Split('.').SkipLast(1).ToList();
-
-        if (qualifiers.Count == 0)
-        {
-            return mapped.Origin is null
-                ? new TsModuleExportReference(guardName, type.Name)
-                : new TsTypeReference(guardName, mapped.Origin);
-        }
-
-        TsExpression root = mapped.Origin is null
-            ? new TsIdentifier(qualifiers[0])
-            : new TsTypeReference(qualifiers[0], mapped.Origin);
-
-        var container = qualifiers
-            .Skip(1)
-            .Aggregate(root, (outer, qualifier) => new TsPropertyAccess(outer, qualifier));
-
-        return new TsPropertyAccess(container, guardName);
-    }
+    /// <summary>
+    /// The JSON contract's structural guards are emitted by their own set
+    /// (<see cref="TypeScriptTransformContext.StructuralGuardTypes"/>), not
+    /// asked of the runtime type reachability, so the test reads them unchecked.
+    /// </summary>
+    public TsExpression GuardReferenceOf(INamedTypeSymbol type) =>
+        IrToTsRuntimeTestBridge.TestFunction(
+            IrTypeRefMapper.Map(type, _context.OriginResolver, TargetLanguage.TypeScript),
+            RuntimeTypeReachabilityResult.Unchecked
+        )
+        ?? throw new InvalidOperationException(
+            $"Internal error: the structural JSON case '{type.ToDisplayString()}' has no "
+                + "runtime type test (spec 011 NFR-004)."
+        );
 }
