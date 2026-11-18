@@ -622,8 +622,12 @@ interface SpecPlans {
  * the `exact` plans exist only for the specs it reads that way.
  */
 const specPlansByTreeNumbers: Readonly<Record<TreeNumbers, ConverterSetCache<SpecPlans>>> = {
-  parsed: createConverterSetCache((converters) => createSpecPlans(converters, "parsed")),
-  exact: createConverterSetCache((converters) => createSpecPlans(converters, "exact")),
+  parsed: /* @__PURE__ */ createConverterSetCache((converters) =>
+    createSpecPlans(converters, "parsed"),
+  ),
+  exact: /* @__PURE__ */ createConverterSetCache((converters) =>
+    createSpecPlans(converters, "exact"),
+  ),
 };
 
 function specPlansFor(

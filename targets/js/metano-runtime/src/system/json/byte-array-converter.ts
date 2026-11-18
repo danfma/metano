@@ -1,9 +1,12 @@
 import type { ValueConverter } from "./value-converter.ts";
 import { JsonException } from "./errors.ts";
+import { lazyValue } from "../lazy-value.ts";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-const SEXTET_OF = new Map([...ALPHABET].map((character, sextet) => [character, sextet]));
+const SEXTET_OF = /* @__PURE__ */ lazyValue(
+  () => new Map([...ALPHABET].map((character, sextet) => [character, sextet])),
+);
 
 const IGNORED_WHITESPACE = /[ \t\r\n]/g;
 
@@ -119,7 +122,7 @@ function readQuartet(quartet: string, isLastQuartet: boolean): number[] | undefi
   const hasInvalidPadding = paddingLength > MAX_PADDING;
 
   const sextets = [...quartet.slice(0, CHARACTERS_PER_GROUP - paddingLength)].map((character) =>
-    SEXTET_OF.get(character),
+    SEXTET_OF().get(character),
   );
 
   const hasUnknownCharacter = sextets.some((sextet) => sextet === undefined);

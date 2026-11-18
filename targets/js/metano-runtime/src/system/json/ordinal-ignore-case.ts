@@ -11,6 +11,8 @@
  * U+A7CF, U+A7D3, U+A7D5).
  */
 
+import { lazyValue } from "../lazy-value.ts";
+
 type CasePair = readonly [character: string, uppercase: string];
 
 /**
@@ -31,20 +33,23 @@ function rangePairs(first: number, last: number, firstUppercase: number): Readon
  * prosgegrammeni, which is their simple uppercase; the full mapping splits
  * them into a capital and `Ι`.
  */
-const ORDINAL_UPPERCASE_EXCEPTIONS: ReadonlyMap<string, string> = new Map<string, string>([
-  ["ı", "ı"],
-  ["ſ", "ſ"],
-  // ᾀ–ᾇ (alpha with psili / dasia and accents) → ᾈ–ᾏ
-  ...rangePairs(0x1f80, 0x1f87, 0x1f88),
-  // ᾐ–ᾗ (eta with psili / dasia and accents) → ᾘ–ᾟ
-  ...rangePairs(0x1f90, 0x1f97, 0x1f98),
-  // ᾠ–ᾧ (omega with psili / dasia and accents) → ᾨ–ᾯ
-  ...rangePairs(0x1fa0, 0x1fa7, 0x1fa8),
-  // ᾳ, ῃ, ῳ (alpha, eta, omega with ypogegrammeni) → ᾼ, ῌ, ῼ
-  ...rangePairs(0x1fb3, 0x1fb3, 0x1fbc),
-  ...rangePairs(0x1fc3, 0x1fc3, 0x1fcc),
-  ...rangePairs(0x1ff3, 0x1ff3, 0x1ffc),
-]);
+const ORDINAL_UPPERCASE_EXCEPTIONS = /* @__PURE__ */ lazyValue(
+  (): ReadonlyMap<string, string> =>
+    new Map<string, string>([
+      ["ı", "ı"],
+      ["ſ", "ſ"],
+      // ᾀ–ᾇ (alpha with psili / dasia and accents) → ᾈ–ᾏ
+      ...rangePairs(0x1f80, 0x1f87, 0x1f88),
+      // ᾐ–ᾗ (eta with psili / dasia and accents) → ᾘ–ᾟ
+      ...rangePairs(0x1f90, 0x1f97, 0x1f98),
+      // ᾠ–ᾧ (omega with psili / dasia and accents) → ᾨ–ᾯ
+      ...rangePairs(0x1fa0, 0x1fa7, 0x1fa8),
+      // ᾳ, ῃ, ῳ (alpha, eta, omega with ypogegrammeni) → ᾼ, ῌ, ῼ
+      ...rangePairs(0x1fb3, 0x1fb3, 0x1fbc),
+      ...rangePairs(0x1fc3, 0x1fc3, 0x1fcc),
+      ...rangePairs(0x1ff3, 0x1ff3, 0x1ffc),
+    ]),
+);
 
 /** The key under which `name` equals every name that matches it ignoring case. */
 export function ordinalIgnoreCaseKeyOf(name: string): string {
@@ -53,7 +58,7 @@ export function ordinalIgnoreCaseKeyOf(name: string): string {
 
 /** The ordinal uppercase of one code point (`character` may be a surrogate pair). */
 function ordinalUppercaseOf(character: string): string {
-  const exception = ORDINAL_UPPERCASE_EXCEPTIONS.get(character);
+  const exception = ORDINAL_UPPERCASE_EXCEPTIONS().get(character);
 
   if (exception !== undefined) {
     return exception;

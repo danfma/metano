@@ -42,15 +42,16 @@ import {
  */
 const MAX_TEXT_DEPTH = 1000;
 
+/** The message for a text deeper than {@link MAX_TEXT_DEPTH} (1000) levels. */
 const TOO_DEEP =
-  `The JSON text nests containers deeper than ${MAX_TEXT_DEPTH} levels, which ` +
+  "The JSON text nests containers deeper than 1000 levels, which " +
   "deserializeText does not read.";
 
 /** A number text with at most this many significant digits is exact as a double. */
 const DOUBLE_EXACT_DIGITS = 15;
 
-/** The shortest run of `[0-9.]` that can hold a mantissa of more than 15 digits. */
-const INEXACT_RUN_LENGTH = DOUBLE_EXACT_DIGITS + 1;
+/** The shortest run of `[0-9.]` that can hold a mantissa of more than 15 digits: {@link DOUBLE_EXACT_DIGITS} + 1. */
+const INEXACT_RUN_LENGTH = 16;
 
 const TAB = 0x09;
 const LINE_FEED = 0x0a;
@@ -79,7 +80,7 @@ const CLOSE_BRACE = 0x7d;
 const LAST_PRINTABLE = 0x7e;
 
 /** The characters `\` may escape besides `u`: `"`, `\`, `/`, `b`, `f`, `n`, `r`, `t`. */
-const SIMPLE_ESCAPES = new Set([0x22, 0x5c, 0x2f, 0x62, 0x66, 0x6e, 0x72, 0x74]);
+const SIMPLE_ESCAPES = /* @__PURE__ */ new Set([0x22, 0x5c, 0x2f, 0x62, 0x66, 0x6e, 0x72, 0x74]);
 
 const UNICODE_ESCAPE_DIGITS = 4;
 

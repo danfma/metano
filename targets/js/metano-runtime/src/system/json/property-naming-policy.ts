@@ -1,3 +1,5 @@
+import { lazyValue } from "../lazy-value.ts";
+
 /**
  * Naming policy for converting C# PascalCase property names to JSON wire names.
  *
@@ -7,11 +9,27 @@
 export abstract class PropertyNamingPolicy {
   abstract convert(name: string): string;
 
-  static readonly camelCase: PropertyNamingPolicy;
-  static readonly snakeCaseLower: PropertyNamingPolicy;
-  static readonly snakeCaseUpper: PropertyNamingPolicy;
-  static readonly kebabCaseLower: PropertyNamingPolicy;
-  static readonly kebabCaseUpper: PropertyNamingPolicy;
+  // Lazy static getters: each policy is built on first read, so the module
+  // evaluates nothing at load (spec 011 FR-043).
+  static get camelCase(): PropertyNamingPolicy {
+    return camelCasePolicy();
+  }
+
+  static get snakeCaseLower(): PropertyNamingPolicy {
+    return snakeCaseLowerPolicy();
+  }
+
+  static get snakeCaseUpper(): PropertyNamingPolicy {
+    return snakeCaseUpperPolicy();
+  }
+
+  static get kebabCaseLower(): PropertyNamingPolicy {
+    return kebabCaseLowerPolicy();
+  }
+
+  static get kebabCaseUpper(): PropertyNamingPolicy {
+    return kebabCaseUpperPolicy();
+  }
 }
 
 // ─── Character classes ──────────────────────────────────────────────────────
@@ -64,17 +82,20 @@ const iotaSubscriptBlockStarts = [0x1f80, 0x1f90, 0x1fa0] as const;
 const greekCaseOffset = 8;
 
 /** Simple uppercase of the Greek letters with ypogegrammeni, which JS expands to two letters. */
-const iotaSubscriptUpper: Readonly<Record<string, string>> = Object.fromEntries([
-  ...iotaSubscriptBlockStarts.flatMap((start) =>
-    Array.from({ length: greekCaseOffset }, (_, offset) => [
-      String.fromCharCode(start + offset),
-      String.fromCharCode(start + offset + greekCaseOffset),
+const iotaSubscriptUpper = /* @__PURE__ */ lazyValue(
+  (): Readonly<Record<string, string>> =>
+    Object.fromEntries([
+      ...iotaSubscriptBlockStarts.flatMap((start) =>
+        Array.from({ length: greekCaseOffset }, (_, offset) => [
+          String.fromCharCode(start + offset),
+          String.fromCharCode(start + offset + greekCaseOffset),
+        ]),
+      ),
+      ["\u1fb3", "\u1fbc"], // ᾳ → ᾼ
+      ["\u1fc3", "\u1fcc"], // ῃ → ῌ
+      ["\u1ff3", "\u1ffc"], // ῳ → ῼ
     ]),
-  ),
-  ["\u1fb3", "\u1fbc"], // ᾳ → ᾼ
-  ["\u1fc3", "\u1fcc"], // ῃ → ῌ
-  ["\u1ff3", "\u1ffc"], // ῳ → ῼ
-]);
+);
 
 /**
  * .NET's `char.ToUpperInvariant`: a one-to-one mapping that keeps the dotless
@@ -84,7 +105,7 @@ const iotaSubscriptUpper: Readonly<Record<string, string>> = Object.fromEntries(
 function toUpperChar(ch: string): string {
   const upper = ch === "ı" ? ch : ch.toUpperCase();
 
-  return upper.length === 1 ? upper : (iotaSubscriptUpper[ch] ?? ch);
+  return upper.length === 1 ? upper : (iotaSubscriptUpper()[ch] ?? ch);
 }
 
 // ─── Word separation ────────────────────────────────────────────────────────
@@ -227,12 +248,11 @@ class KebabCaseUpperPolicy extends PropertyNamingPolicy {
   }
 }
 
-// ─── Static Initialization ──────────────────────────────────────────────────
-// Assigned after subclasses are defined to avoid TDZ issues.
+// ─── The policies ───────────────────────────────────────────────────────────
+// Built on first read of the PropertyNamingPolicy getters above.
 
-const pnp = PropertyNamingPolicy as unknown as Record<string, PropertyNamingPolicy>;
-pnp.camelCase = new CamelCasePolicy();
-pnp.snakeCaseLower = new SnakeCaseLowerPolicy();
-pnp.snakeCaseUpper = new SnakeCaseUpperPolicy();
-pnp.kebabCaseLower = new KebabCaseLowerPolicy();
-pnp.kebabCaseUpper = new KebabCaseUpperPolicy();
+const camelCasePolicy = /* @__PURE__ */ lazyValue(() => new CamelCasePolicy());
+const snakeCaseLowerPolicy = /* @__PURE__ */ lazyValue(() => new SnakeCaseLowerPolicy());
+const snakeCaseUpperPolicy = /* @__PURE__ */ lazyValue(() => new SnakeCaseUpperPolicy());
+const kebabCaseLowerPolicy = /* @__PURE__ */ lazyValue(() => new KebabCaseLowerPolicy());
+const kebabCaseUpperPolicy = /* @__PURE__ */ lazyValue(() => new KebabCaseUpperPolicy());

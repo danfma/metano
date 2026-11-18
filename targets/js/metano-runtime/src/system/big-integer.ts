@@ -10,7 +10,7 @@
 import { OverflowException } from "./exceptions/index.ts";
 import { checkedNarrow } from "./int64.ts";
 
-const INT32_MIN = -2147483648n;
+const INT32_MIN = /* @__PURE__ */ BigInt("-2147483648");
 const INT32_MAX = 2147483647n;
 const UINT32_MAX = 4294967295n;
 

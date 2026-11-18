@@ -23,7 +23,7 @@ import { REAL_NUMBER_PATTERN, significandPartsOf } from "./number-from-string.ts
 /** `⌊(2^96 − 1) / 10⌋`: the largest integer that takes one more digit. */
 const LAST_EXTENSIBLE = 7_922_816_251_426_433_759_354_395_033n;
 
-const INTEGER_LIMIT = 2n ** 96n;
+const INTEGER_LIMIT = 79_228_162_514_264_337_593_543_950_336n; // 2n ** 96n
 
 const MAX_SCALE = 28;
 

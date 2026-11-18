@@ -60,7 +60,7 @@ const DECIMAL_JS_ROUNDING = [
 ] as const;
 
 /** Number of {@link MidpointRounding} modes; the values run from 0 upward. */
-const MIDPOINT_ROUNDING_MODE_COUNT = Object.keys(MidpointRounding).length;
+const MIDPOINT_ROUNDING_MODE_COUNT = 5;
 
 /** Structural view of a `decimal.js` `Decimal`, the only operation the helper uses. */
 export interface DecimalRoundable<D> {

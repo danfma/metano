@@ -31,14 +31,14 @@ export type ParseResult<T> = readonly [found: boolean, value: T];
 const FLOAT = /^[+-]?(?:\d[\d,]*(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 /** The symbols `double.Parse` accepts for the special values, compared case-insensitively. */
-const SPECIAL_FLOATS = new Map<string, number>([
-  ["nan", Number.NaN],
-  ["infinity", Number.POSITIVE_INFINITY],
-  ["+infinity", Number.POSITIVE_INFINITY],
-  ["-infinity", Number.NEGATIVE_INFINITY],
-  ["∞", Number.POSITIVE_INFINITY],
-  ["+∞", Number.POSITIVE_INFINITY],
-  ["-∞", Number.NEGATIVE_INFINITY],
+const SPECIAL_FLOATS = /* @__PURE__ */ new Map<string, number>([
+  ["nan", NaN],
+  ["infinity", Infinity],
+  ["+infinity", Infinity],
+  ["-infinity", -Infinity],
+  ["∞", Infinity],
+  ["+∞", Infinity],
+  ["-∞", -Infinity],
 ]);
 
 /** The integer type of `bits` bits, signed or not, named `typeName` in .NET's overflow message. */
@@ -54,12 +54,12 @@ function integerRange(bits: number, signed: boolean, typeName: string): IntegerR
   };
 }
 
-const INT32 = integerRange(32, true, "an Int32");
-const UINT32 = integerRange(32, false, "a UInt32");
-const INT16 = integerRange(16, true, "an Int16");
-const UINT16 = integerRange(16, false, "a UInt16");
-const BYTE = integerRange(8, false, "an unsigned byte");
-const SBYTE = integerRange(8, true, "a signed byte");
+const INT32 = /* @__PURE__ */ integerRange(32, true, "an Int32");
+const UINT32 = /* @__PURE__ */ integerRange(32, false, "a UInt32");
+const INT16 = /* @__PURE__ */ integerRange(16, true, "an Int16");
+const UINT16 = /* @__PURE__ */ integerRange(16, false, "a UInt16");
+const BYTE = /* @__PURE__ */ integerRange(8, false, "an unsigned byte");
+const SBYTE = /* @__PURE__ */ integerRange(8, true, "a signed byte");
 
 /**
  * Mirrors `int.Parse(string)` and its `NumberStyles` overloads.

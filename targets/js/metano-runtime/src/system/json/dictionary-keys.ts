@@ -19,6 +19,7 @@ import {
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 import { readTemporalText } from "./temporal-reads.ts";
+import { lazyValue } from "../lazy-value.ts";
 
 const BOOLEAN_TYPE_NAME = "System.Boolean";
 
@@ -26,10 +27,13 @@ const GUID_TYPE_NAME = "System.Guid";
 
 const DECIMAL_TYPE_NAME = "System.Decimal";
 
-const BOOLEAN_KEYS: ReadonlyMap<string, boolean> = new Map([
-  [ordinalIgnoreCaseKeyOf("true"), true],
-  [ordinalIgnoreCaseKeyOf("false"), false],
-]);
+const BOOLEAN_KEYS = /* @__PURE__ */ lazyValue(
+  (): ReadonlyMap<string, boolean> =>
+    new Map([
+      [ordinalIgnoreCaseKeyOf("true"), true],
+      [ordinalIgnoreCaseKeyOf("false"), false],
+    ]),
+);
 
 /** `Guid` property names are read in the `D` format only (`8-4-4-4-12`). */
 const GUID_D_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -39,13 +43,13 @@ const DEFAULT_ENUM_INTEGER_TYPE: IntegerTypeName = "System.Int32";
 
 const ENUM_NAME_SEPARATOR = ",";
 
-const booleanKeyConverter = keyConverter(
+const booleanKeyConverter = /* @__PURE__ */ keyConverter(
   (value) => (value ? "True" : "False"),
-  (name) => BOOLEAN_KEYS.get(ordinalIgnoreCaseKeyOf(name)),
+  (name) => BOOLEAN_KEYS().get(ordinalIgnoreCaseKeyOf(name)),
   BOOLEAN_TYPE_NAME,
 );
 
-const guidKeyConverter = keyConverter(
+const guidKeyConverter = /* @__PURE__ */ keyConverter(
   String,
   (name) => (GUID_D_FORMAT.test(name) ? name.toLowerCase() : undefined),
   GUID_TYPE_NAME,

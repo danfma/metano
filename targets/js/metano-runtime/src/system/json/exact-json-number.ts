@@ -17,6 +17,8 @@
  * as the `number` `JSON.parse` gives.
  */
 
+import { lazyValue } from "../lazy-value.ts";
+
 /** Builds the JSON leaf of a number from its exact text. */
 export type ExactNumberWriter = (text: string, approximate: () => number) => unknown;
 
@@ -24,14 +26,15 @@ type RawJson = (text: string) => unknown;
 
 type IsRawJson = (value: unknown) => boolean;
 
-/** This engine's `JSON.rawJSON` / `JSON.isRawJSON`, detected once when the module loads. */
-const engineJson = JSON as { rawJSON?: unknown; isRawJSON?: unknown };
+/** This engine's `JSON.rawJSON` / `JSON.isRawJSON`, detected once, on first use. */
+const engineJson = /* @__PURE__ */ lazyValue(() => {
+  const json = JSON as { rawJSON?: unknown; isRawJSON?: unknown };
 
-const engineRawJson =
-  typeof engineJson.rawJSON === "function" ? (engineJson.rawJSON as RawJson) : undefined;
-
-const engineIsRawJson =
-  typeof engineJson.isRawJSON === "function" ? (engineJson.isRawJSON as IsRawJson) : undefined;
+  return {
+    rawJson: typeof json.rawJSON === "function" ? (json.rawJSON as RawJson) : undefined,
+    isRawJson: typeof json.isRawJSON === "function" ? (json.isRawJSON as IsRawJson) : undefined,
+  };
+});
 
 /**
  * The writer for an engine whose `JSON.rawJSON` is `rawJson`: the raw JSON
@@ -45,8 +48,11 @@ export function exactNumberWriterOf(rawJson: RawJson | undefined): ExactNumberWr
   return (text) => rawJson(text);
 }
 
+const engineWriter = /* @__PURE__ */ lazyValue(() => exactNumberWriterOf(engineJson().rawJson));
+
 /** The writer of this engine. */
-export const writeExactNumber: ExactNumberWriter = exactNumberWriterOf(engineRawJson);
+export const writeExactNumber: ExactNumberWriter = (text, approximate) =>
+  engineWriter()(text, approximate);
 
 /**
  * The text of a `JSON.rawJSON` leaf, so the tree `serialize` returns can be
@@ -54,7 +60,7 @@ export const writeExactNumber: ExactNumberWriter = exactNumberWriterOf(engineRaw
  * `undefined` for any other value.
  */
 export function rawJsonTextOf(value: unknown): string | undefined {
-  const isLeaf = typeof value === "object" && engineIsRawJson?.(value) === true;
+  const isLeaf = typeof value === "object" && engineJson().isRawJson?.(value) === true;
 
   return isLeaf ? (value as { readonly rawJSON: string }).rawJSON : undefined;
 }

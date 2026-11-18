@@ -77,9 +77,9 @@ const MILLISECOND_IN_NANOSECONDS = 1_000_000n;
 const MINUTE_IN_NANOSECONDS = 60_000_000_000n;
 
 /** The `TimeSpan` range in ticks: the whole signed 64-bit domain. */
-const MIN_TIME_SPAN_TICKS = -(2n ** 63n);
+const MIN_TIME_SPAN_TICKS = /* @__PURE__ */ BigInt("-9223372036854775808");
 
-const MAX_TIME_SPAN_TICKS = 2n ** 63n - 1n;
+const MAX_TIME_SPAN_TICKS = 9_223_372_036_854_775_807n;
 
 /** The longest digit run kept exact; a longer run is far past every bound. */
 const MAX_DIGITS = 15;
@@ -89,11 +89,12 @@ type TemporalReader = (text: string) => unknown;
 
 /** The readers by the CLR name the descriptor's `typeName` carries. */
 const READERS_BY_TYPE_NAME: Record<string, (text: string, error: ErrorTypeName) => unknown> = {
-  [TIME_ONLY_NAME]: readTimeOnly,
-  [DATE_ONLY_NAME]: readDateOnly,
-  [DATE_TIME_NAME]: readDateTime,
-  [DATE_TIME_OFFSET_NAME]: readDateTimeOffset,
-  [TIME_SPAN_NAME]: readTimeSpan,
+  // Literal keys (the *_NAME constants): a computed key keeps the table at load.
+  "System.TimeOnly": readTimeOnly,
+  "System.DateOnly": readDateOnly,
+  "System.DateTime": readDateTime,
+  "System.DateTimeOffset": readDateTimeOffset,
+  "System.TimeSpan": readTimeSpan,
 };
 
 /**

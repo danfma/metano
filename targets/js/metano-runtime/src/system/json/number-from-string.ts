@@ -1,4 +1,5 @@
 import type { IntegerTypeName, NumberTypeName } from "./types.ts";
+import { lazyValue } from "../lazy-value.ts";
 
 /**
  * System.Text.Json's grammar for numbers read from JSON strings
@@ -47,10 +48,10 @@ export const REAL_NUMBER_PATTERN =
 const LEADING_ZEROS_PATTERN = /^0+/;
 
 /** The named floating-point literals, matched case-sensitively. */
-const FLOATING_POINT_LITERALS: ReadonlyMap<string, number> = new Map([
-  ["NaN", Number.NaN],
-  ["Infinity", Number.POSITIVE_INFINITY],
-  ["-Infinity", Number.NEGATIVE_INFINITY],
+const FLOATING_POINT_LITERALS: ReadonlyMap<string, number> = /* @__PURE__ */ new Map([
+  ["NaN", NaN],
+  ["Infinity", Infinity],
+  ["-Infinity", -Infinity],
 ]);
 
 /** A positive bound written as `limit × 10^-scale`. */
@@ -65,9 +66,13 @@ interface Bound {
  * reads, the exact midpoint throws). It is a double, so a parsed double
  * equal to it is the only case the text itself must decide.
  */
-const SINGLE_OVERFLOW: Bound = { limit: 2n ** 128n - 2n ** 103n, scale: 0 };
+const SINGLE_OVERFLOW: Bound = {
+  limit: 340_282_356_779_733_661_637_539_395_458_142_568_448n,
+  scale: 0,
+};
 
-const SINGLE_OVERFLOW_AS_DOUBLE = Number(SINGLE_OVERFLOW.limit);
+/** {@link SINGLE_OVERFLOW} as a double: 2^128 − 2^103 is one. */
+const SINGLE_OVERFLOW_AS_DOUBLE = 3.4028235677973366e38;
 
 /** A matched number text as `significand × 10^exponent`, without its sign. */
 export interface SignificandParts {
@@ -160,26 +165,28 @@ function fitsSingle(parts: RegExpExecArray, value: number): boolean {
 }
 
 /** The range of each integer type. */
-const INTEGER_RANGES: Readonly<Record<IntegerTypeName, readonly [min: bigint, max: bigint]>> = {
-  "System.Byte": [0n, 255n],
-  "System.SByte": [-128n, 127n],
-  "System.Int16": [-32_768n, 32_767n],
-  "System.UInt16": [0n, 65_535n],
-  "System.Int32": [-2_147_483_648n, 2_147_483_647n],
-  "System.UInt32": [0n, 4_294_967_295n],
-  "System.Int64": [-9_223_372_036_854_775_808n, 9_223_372_036_854_775_807n],
-  "System.UInt64": [0n, 18_446_744_073_709_551_615n],
-};
+const INTEGER_RANGES = /* @__PURE__ */ lazyValue(
+  (): Readonly<Record<IntegerTypeName, readonly [min: bigint, max: bigint]>> => ({
+    "System.Byte": [0n, 255n],
+    "System.SByte": [-128n, 127n],
+    "System.Int16": [-32_768n, 32_767n],
+    "System.UInt16": [0n, 65_535n],
+    "System.Int32": [-2_147_483_648n, 2_147_483_647n],
+    "System.UInt32": [0n, 4_294_967_295n],
+    "System.Int64": [-9_223_372_036_854_775_808n, 9_223_372_036_854_775_807n],
+    "System.UInt64": [0n, 18_446_744_073_709_551_615n],
+  }),
+);
 
 /** Whether `value` fits `numberType`'s integer range. */
 export function isWithinIntegerRange(value: bigint, numberType: IntegerTypeName): boolean {
-  const [min, max] = INTEGER_RANGES[numberType];
+  const [min, max] = INTEGER_RANGES()[numberType];
 
   return isWithinRange(value, min, max);
 }
 
 /** The unsigned integer types, read from digits only. */
-const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
+const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = /* @__PURE__ */ new Set([
   "System.Byte",
   "System.UInt16",
   "System.UInt32",
@@ -187,7 +194,7 @@ const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
 ]);
 
 /** The integers that read exactly, as the `bigint` they compute (spec 012 FR-054). */
-const EXACT_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
+const EXACT_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = /* @__PURE__ */ new Set([
   "System.Int64",
   "System.UInt64",
 ]);
@@ -206,7 +213,7 @@ function integerTextReader<T extends number | bigint>(
   pattern: RegExp,
   ofValue: (value: bigint) => T,
 ): TextReader<T> {
-  const [min, max] = INTEGER_RANGES[numberType];
+  const [min, max] = INTEGER_RANGES()[numberType];
 
   return integerReader(pattern, min, max, ofValue);
 }
@@ -216,7 +223,7 @@ function integerReadersOf<T extends number | bigint>(
   patternOf: (numberType: IntegerTypeName) => RegExp,
   ofValue: (numberType: IntegerTypeName) => (value: bigint) => T,
 ): Readonly<Record<IntegerTypeName, TextReader<T>>> {
-  const numberTypes = Object.keys(INTEGER_RANGES) as IntegerTypeName[];
+  const numberTypes = Object.keys(INTEGER_RANGES()) as IntegerTypeName[];
 
   return Object.fromEntries(
     numberTypes.map((numberType) => [
@@ -227,7 +234,7 @@ function integerReadersOf<T extends number | bigint>(
 }
 
 /** Signed integer types take an optional sign; unsigned ones digits only. */
-const STRICT_INTEGER_READERS = integerReadersOf(
+const STRICT_INTEGER_READERS = /* @__PURE__ */ integerReadersOf(
   (numberType) =>
     UNSIGNED_INTEGER_TYPES.has(numberType) ? UNSIGNED_INTEGER_PATTERN : SIGNED_INTEGER_PATTERN,
   integerValueOf,
@@ -235,14 +242,14 @@ const STRICT_INTEGER_READERS = integerReadersOf(
 
 /** Every integer type with an optional sign, as `Enum.TryParse` reads one (`readEnumIntegerText`). */
 const ENUM_INTEGER_READERS: Readonly<Record<IntegerTypeName, TextReader<number>>> =
-  integerReadersOf(
+  /* @__PURE__ */ integerReadersOf(
     () => SIGNED_INTEGER_PATTERN,
     () => (value) => Number(value),
   );
 
 /** Every integer type's number-leaf tokens, answered as the exact `bigint` in range. */
 const INTEGER_TOKEN_READERS: Readonly<Record<IntegerTypeName, TextReader<bigint>>> =
-  integerReadersOf(
+  /* @__PURE__ */ integerReadersOf(
     (numberType) =>
       UNSIGNED_INTEGER_TYPES.has(numberType)
         ? UNSIGNED_INTEGER_TOKEN_PATTERN
@@ -250,11 +257,13 @@ const INTEGER_TOKEN_READERS: Readonly<Record<IntegerTypeName, TextReader<bigint>
     () => (value) => value,
   );
 
-const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, TextReader<number | bigint>>> = {
-  ...STRICT_INTEGER_READERS,
-  "System.Single": floatingPointReader(fitsSingle),
-  "System.Double": floatingPointReader(fitsDouble),
-};
+const NUMBER_TEXT_READERS = /* @__PURE__ */ lazyValue(
+  (): Readonly<Record<NumberTypeName, TextReader<number | bigint>>> => ({
+    ...STRICT_INTEGER_READERS,
+    "System.Single": floatingPointReader(fitsSingle),
+    "System.Double": floatingPointReader(fitsDouble),
+  }),
+);
 
 /**
  * The number `text` spells as a `numberType`, or `undefined` when System.Text.Json
@@ -265,7 +274,7 @@ export function readExactNumberText(
   text: string,
   numberType: NumberTypeName,
 ): number | bigint | undefined {
-  return NUMBER_TEXT_READERS[numberType](text);
+  return NUMBER_TEXT_READERS()[numberType](text);
 }
 
 /**

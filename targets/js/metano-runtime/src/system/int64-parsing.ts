@@ -14,6 +14,7 @@ import {
   OverflowException,
 } from "./exceptions/index.ts";
 import { INT64_MAX, INT64_MIN, UINT64_MAX } from "./int64.ts";
+import { lazyValue } from "./lazy-value.ts";
 
 /** The result of a `TryParse` call: whether it succeeded and the parsed value (`0n` on failure). */
 export type Int64ParseResult = readonly [found: boolean, value: bigint];
@@ -42,12 +43,15 @@ const WHITE_SPACE = "[\\t\\n\\v\\f\\r ]*";
  * and the trailing sign. Trailing `\0` characters are removed first, as .NET
  * ignores them.
  */
-const GRAMMARS = new Map<number, RegExp>([
-  [INTEGER_STYLE, grammar("([+-]?)(\\d+)()")],
-  [HEX_NUMBER_STYLE, grammar("()([0-9A-Fa-f]+)()")],
-  [INTEGER_THOUSANDS_STYLE, grammar("([+-]?)(\\d[\\d,]*)()")],
-  [NUMBER_STYLE, grammar(`([+-]?)(\\d[\\d,]*(?:\\.\\d*)?|\\.\\d+)(?:${WHITE_SPACE}([+-]))?`)],
-]);
+const GRAMMARS = /* @__PURE__ */ lazyValue(
+  () =>
+    new Map<number, RegExp>([
+      [INTEGER_STYLE, grammar("([+-]?)(\\d+)()")],
+      [HEX_NUMBER_STYLE, grammar("()([0-9A-Fa-f]+)()")],
+      [INTEGER_THOUSANDS_STYLE, grammar("([+-]?)(\\d[\\d,]*)()")],
+      [NUMBER_STYLE, grammar(`([+-]?)(\\d[\\d,]*(?:\\.\\d*)?|\\.\\d+)(?:${WHITE_SPACE}([+-]))?`)],
+    ]),
+);
 
 /** The parts of a number the grammars capture. */
 type ParsedNumber = {
@@ -169,7 +173,7 @@ function parseResult(outcome: ParseOutcome): Int64ParseResult {
 }
 
 function parse(text: string | null | undefined, style: number, range: IntegerRange): ParseOutcome {
-  const pattern = GRAMMARS.get(style);
+  const pattern = GRAMMARS().get(style);
 
   if (pattern === undefined) {
     throw new NotSupportedException(

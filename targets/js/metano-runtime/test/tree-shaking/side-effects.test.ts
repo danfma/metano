@@ -32,31 +32,8 @@ import {
  * landed. Growing the list means growing this set too, which a review sees.
  */
 const MAXIMAL_ALLOWLIST: ReadonlySet<string> = new Set([
-  "system/big-integer",
   "system/collections/immutable-collection",
   "system/decimal",
-  "system/decimal-parsing",
-  "system/delegates",
-  "system/int64",
-  "system/int64-convert",
-  "system/int64-parsing",
-  "system/json/byte-array-converter",
-  "system/json/container-depth",
-  "system/json/converters",
-  "system/json/decimal-text",
-  "system/json/dictionary-keys",
-  "system/json/exact-json-number",
-  "system/json/json-text-reader",
-  "system/json/number-from-string",
-  "system/json/numeric-converters",
-  "system/json/ordinal-ignore-case",
-  "system/json/property-naming-policy",
-  "system/json/serializer-context",
-  "system/json/temporal-reads",
-  "system/math",
-  "system/number-parsing",
-  "system/temporal-helpers",
-  "system/time-span",
   "system/uuid",
 ]);
 

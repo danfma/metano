@@ -43,7 +43,7 @@ export const nullableTypeName: ErrorTypeName = (clrName) => `System.Nullable\`1[
  * `7.9228162514264337593543950335e28` all read as MaxValue in
  * System.Text.Json and all parse to this double (measured).
  */
-const DECIMAL_MAX_AS_DOUBLE = Number("79228162514264337593543950335");
+const DECIMAL_MAX_AS_DOUBLE = 7.922816251426434e28; // Number("79228162514264337593543950335")
 
 /**
  * A double prints at most 17 significant digits, so one of at least

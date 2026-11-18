@@ -10,7 +10,7 @@
 import { DivideByZeroException, OverflowException } from "./exceptions/index.ts";
 
 /** `long.MinValue`. */
-export const INT64_MIN = -9223372036854775808n;
+export const INT64_MIN = /* @__PURE__ */ BigInt("-9223372036854775808");
 
 /** `long.MaxValue`. */
 export const INT64_MAX = 9223372036854775807n;
@@ -25,17 +25,17 @@ const INT64_RANGE_MESSAGE = "Value was either too large or too small for an Int6
 const UINT64_RANGE_MESSAGE = "Value was either too large or too small for a UInt64.";
 
 /** 2^31, 2^32, 2^63 and 2^64: the exclusive bounds of the integer ranges, as doubles. */
-const TWO_TO_THE_31 = 2 ** 31;
-const TWO_TO_THE_32 = 2 ** 32;
-const TWO_TO_THE_63 = 2 ** 63;
-const TWO_TO_THE_64 = 2 ** 64;
+const TWO_TO_THE_31 = 2_147_483_648; // 2**31
+const TWO_TO_THE_32 = 4_294_967_296; // 2**32
+const TWO_TO_THE_63 = 9.223372036854776e18; // 2 ** 63, exactly
+const TWO_TO_THE_64 = 1.8446744073709552e19; // 2 ** 64, exactly
 
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
 const UINT32_MAX = 4294967295;
 
 /** `BigInteger` keeps values above `int.MinValue` inline (see {@link uint64FromBigInteger}). */
-const INT32_MIN_BIGINT = -2147483648n;
+const INT32_MIN_BIGINT = /* @__PURE__ */ BigInt("-2147483648");
 
 /** The significand width of a double; {@link int64ToSingle} rounds to it. */
 const DOUBLE_SIGNIFICAND_BITS = 53;

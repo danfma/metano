@@ -7,7 +7,7 @@ import type {
 } from "./types.ts";
 
 /** System.Text.Json's default read behavior: no option set. */
-const DEFAULT_READ_OPTIONS: JsonReadOptions = Object.freeze({});
+const DEFAULT_READ_OPTIONS: JsonReadOptions = /* @__PURE__ */ Object.freeze({});
 
 function hasNoOptions(readOptions: JsonReadOptions): boolean {
   return Object.keys(readOptions).length === 0;

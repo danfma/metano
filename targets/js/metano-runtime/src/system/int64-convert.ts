@@ -14,6 +14,7 @@ import {
 } from "./exceptions/index.ts";
 import { INT64_MAX, INT64_MIN, UINT64_MAX } from "./int64.ts";
 import { parseInt64, parseUInt64 } from "./int64-parsing.ts";
+import { lazyValue } from "./lazy-value.ts";
 
 /** The .NET type a `Convert.ToXxx` call narrows a 64-bit value to. */
 export type ConvertTarget =
@@ -38,26 +39,28 @@ type RoundableDecimal = {
 /** The range and the noun of .NET's `Value was either too large or too small for …` message. */
 type ConvertRange = { readonly min: bigint; readonly max: bigint; readonly noun: string };
 
-const CONVERT_RANGES: Readonly<Record<ConvertTarget, ConvertRange>> = {
-  SByte: { min: -128n, max: 127n, noun: "a signed byte" },
-  Byte: { min: 0n, max: 255n, noun: "an unsigned byte" },
-  Int16: { min: -32768n, max: 32767n, noun: "an Int16" },
-  UInt16: { min: 0n, max: 65535n, noun: "a UInt16" },
-  Int32: { min: -2147483648n, max: 2147483647n, noun: "an Int32" },
-  UInt32: { min: 0n, max: 4294967295n, noun: "a UInt32" },
-  Int64: { min: INT64_MIN, max: INT64_MAX, noun: "an Int64" },
-  UInt64: { min: 0n, max: UINT64_MAX, noun: "a UInt64" },
-  Char: { min: 0n, max: 65535n, noun: "a character" },
-};
+const CONVERT_RANGES = /* @__PURE__ */ lazyValue(
+  (): Readonly<Record<ConvertTarget, ConvertRange>> => ({
+    SByte: { min: -128n, max: 127n, noun: "a signed byte" },
+    Byte: { min: 0n, max: 255n, noun: "an unsigned byte" },
+    Int16: { min: -32768n, max: 32767n, noun: "an Int16" },
+    UInt16: { min: 0n, max: 65535n, noun: "a UInt16" },
+    Int32: { min: -2147483648n, max: 2147483647n, noun: "an Int32" },
+    UInt32: { min: 0n, max: 4294967295n, noun: "a UInt32" },
+    Int64: { min: INT64_MIN, max: INT64_MAX, noun: "an Int64" },
+    UInt64: { min: 0n, max: UINT64_MAX, noun: "a UInt64" },
+    Char: { min: 0n, max: 65535n, noun: "a character" },
+  }),
+);
 
 /** decimal.js's `ROUND_HALF_EVEN`. */
 const DECIMAL_ROUND_HALF_EVEN = 6;
 
-const TWO_TO_THE_63 = 2 ** 63;
-const TWO_TO_THE_64 = 2 ** 64;
+const TWO_TO_THE_63 = 9.223372036854776e18; // 2 ** 63, exactly
+const TWO_TO_THE_64 = 1.8446744073709552e19; // 2 ** 64, exactly
 
 /** The bases `Convert.ToInt64(string, int)` accepts. */
-const SUPPORTED_BASES = new Set([2, 8, 10, 16]);
+const SUPPORTED_BASES = /* @__PURE__ */ new Set([2, 8, 10, 16]);
 
 /** decimal.js prints an integral value as an optional minus and digits. */
 const INTEGER_TEXT = /^-?\d+$/;
@@ -70,7 +73,7 @@ const INTEGER_TEXT = /^-?\d+$/;
  * @throws OverflowException("Value was either too large or too small for an Int32.") and its family otherwise.
  */
 export function convertNarrow(value: bigint, target: ConvertTarget): bigint {
-  const range = CONVERT_RANGES[target];
+  const range = CONVERT_RANGES()[target];
 
   if (value < range.min || value > range.max) {
     throw rangeOverflow(range);
@@ -99,12 +102,12 @@ export function convertDoubleToUInt64(value: number): bigint {
  * @throws OverflowException("Value was either too large or too small for an Int64.") outside it.
  */
 export function convertDecimalToInt64(value: RoundableDecimal): bigint {
-  return convertNarrow(roundedDecimal(value, CONVERT_RANGES.Int64), "Int64");
+  return convertNarrow(roundedDecimal(value, CONVERT_RANGES().Int64), "Int64");
 }
 
 /** `Convert.ToUInt64(decimal)`: rounds half to even, then checks the range ("… for a UInt64."). */
 export function convertDecimalToUInt64(value: RoundableDecimal): bigint {
-  return convertNarrow(roundedDecimal(value, CONVERT_RANGES.UInt64), "UInt64");
+  return convertNarrow(roundedDecimal(value, CONVERT_RANGES().UInt64), "UInt64");
 }
 
 /**

@@ -9,13 +9,17 @@
 import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
 import { FormatException } from "./exceptions/format-exception.ts";
 import { OverflowException } from "./exceptions/overflow-exception.ts";
+import { lazyValue } from "./lazy-value.ts";
 
 /** .NET's white space around a number: U+0009–U+000D and U+0020. */
 const WHITE_SPACE = "[\\t\\n\\v\\f\\r ]*";
 
 /** `NumberStyles.Number`, capturing the leading sign, the body and the trailing sign. */
-const NUMBER = new RegExp(
-  `^${WHITE_SPACE}([+-]?)(\\d[\\d,]*(?:\\.\\d*)?|\\.\\d+)(?:${WHITE_SPACE}([+-]))?${WHITE_SPACE}$`,
+const NUMBER = /* @__PURE__ */ lazyValue(
+  () =>
+    new RegExp(
+      `^${WHITE_SPACE}([+-]?)(\\d[\\d,]*(?:\\.\\d*)?|\\.\\d+)(?:${WHITE_SPACE}([+-]))?${WHITE_SPACE}$`,
+    ),
 );
 
 /** The largest integer part a `decimal` holds: `decimal.MaxValue`. */
@@ -35,7 +39,7 @@ export function parseDecimalText(text: string | null | undefined): string {
     throw new ArgumentNullException("s");
   }
 
-  const parts = NUMBER.exec(text.replace(/\0+$/, ""));
+  const parts = NUMBER().exec(text.replace(/\0+$/, ""));
 
   if (parts === null) {
     throw formatException(text);

@@ -108,6 +108,7 @@
     "system/json/types",
     "system/json/union-guard-registry",
     "system/json/value-converter",
+    "system/lazy-value",
     "system/linq/compare-keys",
     "system/linq/decimal-terminals",
     "system/linq/expr-tree-visitor",

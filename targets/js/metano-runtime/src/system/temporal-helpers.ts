@@ -1,7 +1,9 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { ArgumentOutOfRangeException } from "./exceptions/index.ts";
+import { lazyValue } from "./lazy-value.ts";
 
-const referenceDate = Temporal.PlainDate.from("0001-01-01");
+/** `DateOnly.MinValue`, the origin of day numbers and ticks; built on first use. */
+const referenceDate = /* @__PURE__ */ lazyValue(() => Temporal.PlainDate.from("0001-01-01"));
 
 /** Nanoseconds per .NET tick (100 ns). */
 const NANOSECONDS_PER_TICK = 100n;
@@ -49,7 +51,7 @@ export function dayNumber(date: Temporal.PlainDate | { toString(): string }): nu
     date instanceof Temporal.PlainDate ? date : date.toString(),
   );
 
-  return referenceDate.until(current, { largestUnit: "days" }).days;
+  return referenceDate().until(current, { largestUnit: "days" }).days;
 }
 
 /**
@@ -99,7 +101,7 @@ export function plainDateTimeFromTicks(ticks: bigint): Temporal.PlainDateTime {
     throw new ArgumentOutOfRangeException("ticks", null, DATE_TIME_TICKS_MESSAGE);
   }
 
-  const date = referenceDate.add({ days: Number(ticks / TICKS_PER_DAY) });
+  const date = referenceDate().add({ days: Number(ticks / TICKS_PER_DAY) });
   const timeOfDay = durationFromTicks(ticks % TICKS_PER_DAY);
 
   return date.toPlainDateTime().add(timeOfDay);

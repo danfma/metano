@@ -3,10 +3,10 @@ import { JsonException } from "./errors.ts";
 /** System.Text.Json's default `JsonSerializerOptions.MaxDepth`. */
 const MAX_JSON_DEPTH = 64;
 
-/** The STJ metadata-mode message for a write deeper than the maximum depth (FR-016). */
+/** The STJ metadata-mode message for a write deeper than the maximum depth (FR-016); 64 is {@link MAX_JSON_DEPTH}. */
 const WRITE_DEPTH_MESSAGE =
   "A possible object cycle was detected. This can either be due to a cycle or if the object " +
-  `depth is larger than the maximum allowed depth of ${MAX_JSON_DEPTH}. Consider using ` +
+  "depth is larger than the maximum allowed depth of 64. Consider using " +
   "ReferenceHandler.Preserve on JsonSerializerOptions to support cycles.";
 
 /** The JSON container a read enters, named as STJ's reader names it. */

@@ -24,7 +24,7 @@ const TICKS_PER_DAY = 864_000_000_000n;
 
 /** `TimeSpan.MaxValue.Ticks` and `TimeSpan.MinValue.Ticks`. */
 const MAX_TICKS = 9_223_372_036_854_775_807n;
-const MIN_TICKS = -9_223_372_036_854_775_808n;
+const MIN_TICKS = /* @__PURE__ */ BigInt("-9223372036854775808");
 
 /** The most microseconds the component constructor accepts (`TimeSpan.MaxValue` in microseconds). */
 const MAX_MICROSECONDS = 922_337_203_685_477_580n;
@@ -34,7 +34,7 @@ const TIME_SPAN_OVERFLOW_MESSAGE = "TimeSpan overflowed because the duration is 
 const NOT_A_NUMBER_MESSAGE = "TimeSpan does not accept floating point Not-a-Number values.";
 
 /** `TimeSpan.Zero`. */
-export const timeSpanZero: Temporal.Duration = durationFromTicks(0n);
+export const timeSpanZero: Temporal.Duration = /* @__PURE__ */ durationFromTicks(0n);
 
 /**
  * `new TimeSpan(hours, minutes, seconds)`, `new TimeSpan(days, hours, minutes, seconds)`

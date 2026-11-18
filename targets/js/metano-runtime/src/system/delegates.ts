@@ -13,7 +13,7 @@
  * Zero overhead when `+=` is never used: the function stays a plain function.
  */
 
-const DELEGATE_LISTENERS = Symbol("delegate_listeners");
+const DELEGATE_LISTENERS = /* @__PURE__ */ Symbol("delegate_listeners");
 
 type AnyFunc = (...args: any[]) => any;
 
