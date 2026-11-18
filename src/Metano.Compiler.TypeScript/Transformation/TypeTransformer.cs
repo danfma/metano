@@ -262,7 +262,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         statement switch
         {
             TsClass declaration => declaration with { Exported = false },
-            TsEnum declaration => declaration with { Exported = false },
             TsInterface declaration => declaration with { Exported = false },
             TsTypeAlias declaration => declaration with { Exported = false },
             TsFunction declaration => declaration with { Exported = false },

@@ -23,6 +23,7 @@ public class NameAttributeConsistencyTests
             .Contains(
                 "other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this)"
             );
+
         await Assert.That(ts).Contains("copyRecordWith<Renamed>(this, overrides)");
         // Should NOT contain the original C# name in the declaration
         await Assert.That(ts).DoesNotContain("export class Original");
@@ -71,8 +72,8 @@ public class NameAttributeConsistencyTests
 
         await Assert.That(result).ContainsKey("status-code.ts");
         var ts = result["status-code.ts"];
-        await Assert.That(ts).Contains("export enum StatusCode");
-        await Assert.That(ts).DoesNotContain("export enum Status {");
+        await Assert.That(ts).Contains("export const StatusCode = {");
+        await Assert.That(ts).DoesNotContain("export const Status = {");
     }
 
     [Test]

@@ -6,12 +6,16 @@ using Metano.Compiler.TypeScript.Transformation;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Converts an <see cref="IrEnumDeclaration"/> to TypeScript AST statements.
-/// Two shapes are produced depending on <see cref="IrEnumDeclaration.Style"/>:
+/// Converts an <see cref="IrEnumDeclaration"/> to TypeScript AST statements: an
+/// <c>as const</c> object (<see cref="TsConstObject"/>) holding the members, plus a
+/// companion <see cref="TsTypeAlias"/> of the same name (spec 011 FR-044). Never a TS
+/// <c>enum</c>, whose compiled form is an IIFE every bundler keeps.
 /// <list type="bullet">
-///   <item><see cref="IrEnumStyle.Numeric"/> → a single <see cref="TsEnum"/>.</item>
-///   <item><see cref="IrEnumStyle.String"/> → a <see cref="TsConstObject"/> plus a
-///   companion <see cref="TsTypeAlias"/> that gives the string union type.</item>
+///   <item><see cref="IrEnumStyle.String"/> and a plain numeric enum: the closed union
+///   of the member values, <c>typeof E[keyof typeof E]</c>.</item>
+///   <item>A <c>[Flags]</c> numeric enum: the brand
+///   <c>number &amp; { readonly __enum?: "E" }</c>, so bit combinations, <c>0</c> and
+///   casts type-check while another enum's values do not.</item>
 /// </list>
 /// </summary>
 public static class IrToTsEnumBridge
@@ -20,37 +24,34 @@ public static class IrToTsEnumBridge
     {
         var tsName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
 
-        if (ir.Style == IrEnumStyle.String)
-        {
-            var entries = ir
-                .Members.Select(m =>
-                    (
-                        Key: m.Name,
-                        Value: (TsExpression)
-                            new TsStringLiteral(
-                                IrToTsNamingPolicy.ToEnumMemberName(m.Name, m.Attributes)
-                            )
-                    )
-                )
-                .ToList();
+        var entries = ir
+            .Members.Select(member => (Key: MemberKey(ir, member), Value: MemberValue(ir, member)))
+            .ToList();
 
-            statements.Add(new TsConstObject(tsName, entries));
-            statements.Add(
-                new TsTypeAlias(tsName, new TsNamedType($"typeof {tsName}[keyof typeof {tsName}]"))
-            );
-        }
-        else
-        {
-            var members = ir
-                .Members.Select(m => new TsEnumMember(
-                    IrToTsNamingPolicy.ToEnumMemberName(m.Name, m.Attributes),
-                    new TsLiteral(NumericMemberValue(m.Value))
-                ))
-                .ToList();
-
-            statements.Add(new TsEnum(tsName, members));
-        }
+        statements.Add(new TsConstObject(tsName, entries));
+        statements.Add(new TsTypeAlias(tsName, AliasType(ir, tsName)));
     }
+
+    /// <summary>
+    /// The key of a member: its C# name for a string enum (whose value is the emitted
+    /// name), its emitted name for a numeric enum.
+    /// </summary>
+    private static string MemberKey(IrEnumDeclaration ir, IrEnumMember member) =>
+        ir.Style == IrEnumStyle.String
+            ? member.Name
+            : IrToTsNamingPolicy.ToEnumMemberName(member.Name, member.Attributes);
+
+    private static TsExpression MemberValue(IrEnumDeclaration ir, IrEnumMember member) =>
+        ir.Style == IrEnumStyle.String
+            ? new TsStringLiteral(
+                IrToTsNamingPolicy.ToEnumMemberName(member.Name, member.Attributes)
+            )
+            : new TsLiteral(NumericMemberValue(member.Value));
+
+    private static TsType AliasType(IrEnumDeclaration ir, string tsName) =>
+        ir is { Style: IrEnumStyle.Numeric, IsFlags: true }
+            ? new TsNamedType($"number & {{ readonly __enum?: \"{tsName}\" }}")
+            : new TsNamedType($"typeof {tsName}[keyof typeof {tsName}]");
 
     /// <summary>
     /// The value a numeric member prints. A 64-bit value prints as the double

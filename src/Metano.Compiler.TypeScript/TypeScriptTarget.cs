@@ -95,7 +95,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             $"namespaceBarrels={namespaceBarrels}",
             $"stripInterfacePrefix={stripInterfacePrefix}",
             $"importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}",
-            "int64=bigint"
+            "int64=bigint",
+            "runtime-types-v1"
         );
 
     /// <summary>

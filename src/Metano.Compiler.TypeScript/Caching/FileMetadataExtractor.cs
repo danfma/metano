@@ -89,7 +89,6 @@ public static class FileMetadataExtractor
         {
             TsClass c when c.Exported => new CachedExport(c.Name, CachedExportKind.Class),
             TsFunction f when f.Exported => new CachedExport(f.Name, CachedExportKind.Function),
-            TsEnum e when e.Exported => new CachedExport(e.Name, CachedExportKind.Enum),
             TsConstObject co when co.Exported => new CachedExport(
                 co.Name,
                 CachedExportKind.ConstObject
@@ -126,7 +125,6 @@ public static class FileMetadataExtractor
             // Non-exported variants — body still ships on disk.
             case TsClass:
             case TsFunction:
-            case TsEnum:
             case TsConstObject:
             case TsNamespaceDeclaration:
             case TsTypeAlias:
@@ -208,7 +206,6 @@ public static class FileMetadataExtractor
                 ReturnType: new TsVoidType(),
                 Body: []
             ),
-            CachedExportKind.Enum => new TsEnum(export.Name, Members: []),
             CachedExportKind.ConstObject => new TsConstObject(export.Name, Entries: []),
             CachedExportKind.Namespace => new TsNamespaceDeclaration(export.Name, Functions: []),
             CachedExportKind.TypeAlias => new TsTypeAlias(export.Name, Type: new TsAnyType()),

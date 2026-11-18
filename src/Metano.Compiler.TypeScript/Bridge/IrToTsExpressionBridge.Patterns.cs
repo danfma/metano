@@ -296,7 +296,8 @@ public static partial class IrToTsExpressionBridge
     /// predicate) the cast stays a TS assertion for the result to type-check.
     /// So does a cast the compiler synthesized as an assertion. An explicit
     /// reference conversion is typed, and checked where it can be
-    /// (<see cref="ReferenceCastLowering"/>).
+    /// (<see cref="ReferenceCastLowering"/>). A cast to a numeric enum is
+    /// asserted (<see cref="EnumValueAssertion"/>).
     /// </summary>
     private static TsExpression MapCast(IrCastExpression cast, IrToTsBridgeContext context)
     {
@@ -312,7 +313,7 @@ public static partial class IrToTsExpressionBridge
             cast.ReferenceConversion is { } conversion
             && ReferenceCastLowering.TypesResult(conversion)
             ? MapReferenceDowncast(cast, conversion, value, testedType, context)
-            : value;
+            : EnumValueAssertion.Wrap(value, cast.TargetType);
     }
 
     /// <summary>

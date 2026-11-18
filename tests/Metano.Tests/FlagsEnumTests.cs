@@ -3,7 +3,7 @@ namespace Metano.Tests;
 public class FlagsEnumTests
 {
     [Test]
-    public async Task FlagsEnum_GeneratesNumericEnum()
+    public async Task FlagsEnum_GeneratesBrandedConstObject()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -21,12 +21,18 @@ public class FlagsEnumTests
         );
 
         var output = result["file-permissions.ts"];
-        await Assert.That(output).Contains("export enum FilePermissions");
-        await Assert.That(output).Contains("None = 0,");
-        await Assert.That(output).Contains("Read = 1,");
-        await Assert.That(output).Contains("Write = 2,");
-        await Assert.That(output).Contains("Execute = 4,");
-        await Assert.That(output).Contains("All = 7,");
+        await Assert.That(output).Contains("export const FilePermissions = {");
+        await Assert.That(output).Contains("None: 0,");
+        await Assert.That(output).Contains("Read: 1,");
+        await Assert.That(output).Contains("Write: 2,");
+        await Assert.That(output).Contains("Execute: 4,");
+        await Assert.That(output).Contains("All: 7,");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "export type FilePermissions = number & { readonly __enum?: \"FilePermissions\" };"
+            );
     }
 
     [Test]

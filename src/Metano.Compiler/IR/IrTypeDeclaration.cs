@@ -106,14 +106,16 @@ public sealed record IrInterfaceDeclaration(
 ) : IrTypeDeclaration(Name, Visibility, TypeParameters, Attributes);
 
 /// <summary>
-/// An enum declaration.
+/// An enum declaration. <paramref name="IsFlags"/> is set when the enum carries
+/// <c>[System.Flags]</c>, so its values are bit combinations of the members.
 /// </summary>
 public sealed record IrEnumDeclaration(
     string Name,
     IrVisibility Visibility,
     IReadOnlyList<IrEnumMember> Members,
     IrEnumStyle Style = IrEnumStyle.Numeric,
-    IReadOnlyList<IrAttribute>? Attributes = null
+    IReadOnlyList<IrAttribute>? Attributes = null,
+    bool IsFlags = false
 ) : IrTypeDeclaration(Name, Visibility, Attributes: Attributes);
 
 /// <summary>

@@ -101,14 +101,23 @@ public static partial class IrToTsExpressionBridge
             IrCallExpression call => MapCall(call, context),
             IrBaseObjectMemberCall baseCall => MapBaseObjectMemberCall(baseCall, context),
             IrNewExpression ne => MapNewExpression(ne, context),
-            IrBinaryExpression bin => MapBinary(bin, context),
-            IrUnaryExpression un when un.IsPrefix => new TsUnaryExpression(
-                PrefixOperatorToken(un.Operator),
-                MapMutatedOperand(un, context)
+            IrBinaryExpression bin => EnumValueAssertion.Wrap(
+                MapBinary(bin, context),
+                bin.EnumResultType
             ),
-            IrUnaryExpression un => new TsPostfixUnaryExpression(
-                MapMutatedOperand(un, context),
-                PostfixOperatorToken(un.Operator)
+            IrUnaryExpression un when un.IsPrefix => EnumValueAssertion.Wrap(
+                new TsUnaryExpression(
+                    PrefixOperatorToken(un.Operator),
+                    MapMutatedOperand(un, context)
+                ),
+                un.EnumResultType
+            ),
+            IrUnaryExpression un => EnumValueAssertion.Wrap(
+                new TsPostfixUnaryExpression(
+                    MapMutatedOperand(un, context),
+                    PostfixOperatorToken(un.Operator)
+                ),
+                un.EnumResultType
             ),
             IrConditionalExpression cond => new TsConditionalExpression(
                 Map(cond.Condition, context),
@@ -121,9 +130,9 @@ public static partial class IrToTsExpressionBridge
                 context
             ),
             IrCastExpression cast => MapCast(cast, context),
-            IrNumericConversion conversion => IrToTsNumericConversionBridge.Map(
-                conversion,
-                Map(conversion.Operand, context)
+            IrNumericConversion conversion => EnumValueAssertion.Wrap(
+                IrToTsNumericConversionBridge.Map(conversion, Map(conversion.Operand, context)),
+                conversion.To.IsEnum ? conversion.CastType : null
             ),
             IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(overflow, value =>
                 Map(value, context)

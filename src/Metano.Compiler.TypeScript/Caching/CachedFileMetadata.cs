@@ -62,7 +62,6 @@ public enum CachedExportKind
 {
     Class,
     Function,
-    Enum,
     ConstObject,
     Namespace,
     TypeAlias,

@@ -62,7 +62,7 @@ export class ShotSchedule {
 
   static total(name: string): number {
     const entry = new ShotSchedule$ShotEntry(name, 3);
-    const kind = ShotSchedule.Kind.B;
+    const kind = ShotSchedule.Kind.B as ShotSchedule.Kind;
     const box = new ShotSchedule.Box(entry);
     const boxed = entry;
     const isEntry = boxed instanceof ShotSchedule$ShotEntry ? 1 : 0;
@@ -81,10 +81,12 @@ export class ShotSchedule {
 }
 
 export namespace ShotSchedule {
-  export enum Kind {
-    A = 0,
-    B = 1,
-  }
+  export const Kind = {
+    A: 0,
+    B: 1,
+  } as const;
+
+  export type Kind = typeof Kind[keyof typeof Kind];
 
   export class Slot {
     constructor(readonly index: number) { }

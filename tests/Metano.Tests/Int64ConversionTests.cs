@@ -171,8 +171,8 @@ public class Int64ConversionTests
     {
         var (files, _) = ConversionOutput.Value;
 
-        await Assert.That(files["big.ts"]).Contains("B = 1099511627776,");
-        await Assert.That(files["big.ts"]).Contains("C = 9007199254740992,");
+        await Assert.That(files["big.ts"]).Contains("B: 1099511627776,");
+        await Assert.That(files["big.ts"]).Contains("C: 9007199254740992,");
     }
 
     [Test]

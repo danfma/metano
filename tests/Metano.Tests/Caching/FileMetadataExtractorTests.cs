@@ -30,9 +30,11 @@ public class FileMetadataExtractorTests
         await Assert.That(meta.Imports[0].From).IsEqualTo("#/shared-kernel/user-id");
         await Assert.That(meta.Imports[0].Names[0]).IsEqualTo("UserId");
         await Assert.That(meta.Exports.Count).IsEqualTo(2);
+
         await Assert
             .That(meta.Exports.Any(e => e.Name == "Bar" && e.Kind == CachedExportKind.Class))
             .IsTrue();
+
         await Assert
             .That(
                 meta.Exports.Any(e =>
@@ -50,7 +52,6 @@ public class FileMetadataExtractorTests
             [
                 new TsClass("CClass", null, [], Exported: true),
                 new TsFunction("fFunc", [], new TsVoidType(), [], Exported: true),
-                new TsEnum("EEnum", [], Exported: true),
                 new TsConstObject("CoConst", [], Exported: true),
                 new TsNamespaceDeclaration("NNamespace", [], Exported: true),
                 new TsTypeAlias("TAlias", new TsAnyType(), Exported: true),
@@ -63,21 +64,23 @@ public class FileMetadataExtractorTests
         await Assert
             .That(meta.Exports.Single(e => e.Name == "CClass").Kind)
             .IsEqualTo(CachedExportKind.Class);
+
         await Assert
             .That(meta.Exports.Single(e => e.Name == "fFunc").Kind)
             .IsEqualTo(CachedExportKind.Function);
-        await Assert
-            .That(meta.Exports.Single(e => e.Name == "EEnum").Kind)
-            .IsEqualTo(CachedExportKind.Enum);
+
         await Assert
             .That(meta.Exports.Single(e => e.Name == "CoConst").Kind)
             .IsEqualTo(CachedExportKind.ConstObject);
+
         await Assert
             .That(meta.Exports.Single(e => e.Name == "NNamespace").Kind)
             .IsEqualTo(CachedExportKind.Namespace);
+
         await Assert
             .That(meta.Exports.Single(e => e.Name == "TAlias").Kind)
             .IsEqualTo(CachedExportKind.TypeAlias);
+
         await Assert
             .That(meta.Exports.Single(e => e.Name == "IIface").Kind)
             .IsEqualTo(CachedExportKind.Interface);
@@ -112,7 +115,6 @@ public class FileMetadataExtractorTests
             [
                 new CachedExport("CClass", CachedExportKind.Class),
                 new CachedExport("fFunc", CachedExportKind.Function),
-                new CachedExport("EEnum", CachedExportKind.Enum),
                 new CachedExport("CoConst", CachedExportKind.ConstObject),
                 new CachedExport("NNamespace", CachedExportKind.Namespace),
                 new CachedExport("TAlias", CachedExportKind.TypeAlias),
@@ -124,32 +126,35 @@ public class FileMetadataExtractorTests
 
         await Assert.That(stub.FileName).IsEqualTo("foo/bar.ts");
         await Assert.That(stub.Statements.OfType<TsImport>().Count()).IsEqualTo(1);
+
         await Assert
             .That(stub.Statements.OfType<TsClass>().Any(c => c.Name == "CClass" && c.Exported))
             .IsTrue();
+
         await Assert
             .That(stub.Statements.OfType<TsFunction>().Any(f => f.Name == "fFunc" && f.Exported))
             .IsTrue();
-        await Assert
-            .That(stub.Statements.OfType<TsEnum>().Any(e => e.Name == "EEnum" && e.Exported))
-            .IsTrue();
+
         await Assert
             .That(
                 stub.Statements.OfType<TsConstObject>()
                     .Any(co => co.Name == "CoConst" && co.Exported)
             )
             .IsTrue();
+
         await Assert
             .That(
                 stub.Statements.OfType<TsNamespaceDeclaration>()
                     .Any(ns => ns.Name == "NNamespace" && ns.Exported)
             )
             .IsTrue();
+
         await Assert
             .That(
                 stub.Statements.OfType<TsTypeAlias>().Any(ta => ta.Name == "TAlias" && ta.Exported)
             )
             .IsTrue();
+
         await Assert
             .That(stub.Statements.OfType<TsInterface>().Any(i => i.Name == "IIface" && i.Exported))
             .IsTrue();
@@ -229,7 +234,6 @@ public class FileMetadataExtractorTests
         {
             [typeof(TsClass)] = new TsClass("CCls", null, []),
             [typeof(TsFunction)] = new TsFunction("fFn", [], new TsVoidType(), []),
-            [typeof(TsEnum)] = new TsEnum("EEn", []),
             [typeof(TsConstObject)] = new TsConstObject("CoCo", []),
             [typeof(TsNamespaceDeclaration)] = new TsNamespaceDeclaration("NNs", []),
             [typeof(TsTypeAlias)] = new TsTypeAlias("TTa", new TsAnyType()),

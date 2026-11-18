@@ -341,6 +341,16 @@ public static class IrToTsStatementBridge
                     Const: vd.IsConst,
                     Type: new TsAnyType()
                 ),
+            IrVariableDeclaration { Initializer: { } initializer } vd
+                when EnumValueAssertion.IsClosedNumericEnum(vd.Type ?? vd.InferredType) =>
+                new TsVariableDeclaration(
+                    IrToTsNamingPolicy.ToLocalName(vd.Name),
+                    EnumValueAssertion.AsEnum(
+                        IrToTsExpressionBridge.Map(initializer, context),
+                        (vd.Type ?? vd.InferredType)!
+                    ),
+                    Const: vd.IsConst
+                ),
             IrVariableDeclaration vd => new TsVariableDeclaration(
                 IrToTsNamingPolicy.ToLocalName(vd.Name),
                 vd.Initializer is not null

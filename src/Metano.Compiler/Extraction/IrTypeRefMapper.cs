@@ -398,7 +398,8 @@ public static class IrTypeRefMapper
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 EnumZeroMember: ExtractEnumZeroMember(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
-                IsValueType: true
+                IsValueType: true,
+                IsFlagsEnum: named.HasFlags()
             );
         }
 

@@ -983,7 +983,6 @@ public sealed class ImportCollector(
             TsFunction function => [function.Name],
             TsClass cls => [cls.Name],
             TsInterface iface => [iface.Name],
-            TsEnum enumDeclaration => [enumDeclaration.Name],
             TsConstObject constObject => [constObject.Name],
             TsTypeAlias typeAlias => [typeAlias.Name],
             TsNamespaceDeclaration namespaceDeclaration => [namespaceDeclaration.Name],

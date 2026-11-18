@@ -154,9 +154,10 @@ export type EnumDescriptor = WithClrTypeName & {
 };
 
 /**
- * Numeric enum — passthrough both ways. `values` is the TS enum object itself,
- * whose reverse mapping (`Level[0] === "Low"`) adds string values; only the
- * numbers are valid members.
+ * Numeric enum — passthrough both ways. `values` is the enum's `as const`
+ * object (`{ Low: 0, High: 1 }`, spec 011 FR-044); only its number values are
+ * valid members, which also keeps a hand-written TS `enum` object (whose
+ * reverse mapping adds string values) working.
  */
 export type NumericEnumDescriptor = WithClrTypeName & {
   readonly kind: "numericEnum";

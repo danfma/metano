@@ -240,11 +240,11 @@ export class Conv {
   }
 
   toEnum(l: bigint): Color {
-    return Number(BigInt.asIntN(32, l));
+    return Number(BigInt.asIntN(32, l)) as Color;
   }
 
   toBigEnum(l: bigint): Big {
-    return Number(l);
+    return Number(l) as Big;
   }
 
   fromBigEnum(e: Big): bigint {

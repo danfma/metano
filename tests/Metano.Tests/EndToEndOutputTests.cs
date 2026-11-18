@@ -133,10 +133,12 @@ public class EndToEndOutputTests
             + "  }\n"
             + "}\n"
             + "\n"
-            + "export enum IssueStatus {\n"
-            + "  Open = 0,\n"
-            + "  Closed = 1,\n"
-            + "}\n";
+            + "export const IssueStatus = {\n"
+            + "  Open: 0,\n"
+            + "  Closed: 1,\n"
+            + "} as const;\n"
+            + "\n"
+            + "export type IssueStatus = typeof IssueStatus[keyof typeof IssueStatus];\n";
 
         await Assert.That(actual).IsEqualTo(expected);
     }

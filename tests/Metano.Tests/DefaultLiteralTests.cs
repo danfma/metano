@@ -35,7 +35,7 @@ public class DefaultLiteralTests
     [Arguments("long l = default; return l;", "const l = 0n;")]
     [Arguments("decimal m = default; return m;", "const m = new Decimal(\"0\");")]
     [Arguments("char c = default; return c;", "const c = \"\\u0000\";")]
-    [Arguments("Mode m = default; return m;", "const m = Mode.Off;")]
+    [Arguments("Mode m = default; return m;", "const m = Mode.Off as Mode;")]
     [Arguments("Level v = default; return v;", "const v = 0 as Level;")]
     [Arguments("string? s = default; return s;", "const s = null as string | null;")]
     [Arguments("int? n = default; return n;", "const n = null as number | null;")]

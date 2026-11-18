@@ -277,7 +277,7 @@ public class CheckedContextTests
         """;
 
     [Test]
-    [Arguments("return 44;")]
+    [Arguments("return 44 as Level;")]
     [Arguments("return \"\u1170\".toString();")]
     [Arguments("letter(): string {\n    return \"\u1170\";")]
     [Arguments("code(): number {\n    return 4464;")]

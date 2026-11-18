@@ -37,8 +37,10 @@ public sealed record GroupCacheFile(
     // group cache from scratch. v4 added the per-group cross-package
     // Dependencies (#299) so a reused group still reports them. v6 added
     // the per-group CheckedCasts (#669, #685) so a reused group on an import
-    // cycle is not transformed again only to read them.
-    public const int CurrentFormatVersion = 6;
+    // cycle is not transformed again only to read them. v7 dropped the
+    // `Enum` export kind: a numeric enum is a const object since spec 011
+    // FR-044, and a v6 file naming it would not deserialize.
+    public const int CurrentFormatVersion = 7;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()

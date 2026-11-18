@@ -274,7 +274,8 @@ public class Int32WrapTests
 
     /// <summary>
     /// The difference of two enum values is an <c>int</c> and wraps; an enum
-    /// plus an <c>int</c> is an enum and does not (FR-074).
+    /// plus an <c>int</c> is an enum and does not (FR-074): it is asserted as
+    /// the enum's closed union instead (spec 011 FR-044).
     /// </summary>
     [Test]
     public async Task EnumArithmetic_WrapsOnlyAnIntResult()
@@ -295,7 +296,7 @@ public class Int32WrapTests
         var levels = files["levels.ts"];
 
         await Assert.That(BodyOf(levels, "distance")).IsEqualTo("return (a - b) | 0;");
-        await Assert.That(BodyOf(levels, "step")).IsEqualTo("return a + 1;");
+        await Assert.That(BodyOf(levels, "step")).IsEqualTo("return a + 1 as Levels.Level;");
     }
 
     [Test]

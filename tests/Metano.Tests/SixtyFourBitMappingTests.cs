@@ -85,7 +85,7 @@ public class SixtyFourBitMappingTests
     {
         var target = new TypeScriptTarget();
 
-        await Assert.That(target.ConfigurationFingerprint).EndsWith(";int64=bigint");
+        await Assert.That(target.ConfigurationFingerprint).Contains(";int64=bigint");
     }
 
     /// <summary><c>nint</c> / <c>nuint</c> are 64-bit (DECIDED-2), so they map to <c>bigint</c> like <c>long</c>.</summary>

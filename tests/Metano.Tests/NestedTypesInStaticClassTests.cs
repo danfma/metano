@@ -229,8 +229,8 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["palette.ts"];
-        await Assert.That(output).Contains("enum Palette$Tone {");
-        await Assert.That(output).DoesNotContain("export enum Palette$Tone");
+        await Assert.That(output).Contains("const Palette$Tone = {");
+        await Assert.That(output).DoesNotContain("export const Palette$Tone");
         await Assert.That(output).Contains("return Palette$Tone.Dark;");
     }
 
@@ -254,7 +254,7 @@ public class NestedTypesInStaticClassTests
 
         var output = result["registry.ts"];
         await Assert.That(output).Contains("return Registry.Level.High;");
-        await Assert.That(output).Contains("export enum Level {");
+        await Assert.That(output).Contains("export const Level = {");
         // Outside [assembly: TranspileAssembly] a nested type still needs its own
         // [Transpile] opt-in, whatever its accessibility.
         await Assert.That(output).DoesNotContain("Untracked");
@@ -385,7 +385,7 @@ public class NestedTypesInStaticClassTests
         var result = TranspileHelper.Transpile(ShotScheduleSource);
 
         var output = result["shot-schedule.ts"];
-        await Assert.That(output).Contains("export enum Kind {");
+        await Assert.That(output).Contains("export const Kind = {");
         await Assert.That(output).DoesNotContain("ShotSchedule$Kind");
     }
 

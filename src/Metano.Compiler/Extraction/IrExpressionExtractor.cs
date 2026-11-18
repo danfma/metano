@@ -268,7 +268,12 @@ public sealed partial class IrExpressionExtractor
             // `checked(e)` / `unchecked(e)` lowers to its operand; see
             // IrExpressionExtractor.CheckedContext.cs.
             CheckedExpressionSyntax context => Extract(context.Expression),
-            BinaryExpressionSyntax bin => ExtractBinary(bin),
+            BinaryExpressionSyntax bin => WithEnumResultType(bin, ExtractBinary(bin)),
+            AssignmentExpressionSyntax assign
+                when !assign.IsKind(SyntaxKind.SimpleAssignmentExpression) => WithEnumResultType(
+                assign,
+                ExtractAssignment(assign)
+            ),
             AssignmentExpressionSyntax assign => ExtractAssignment(assign),
             MemberAccessExpressionSyntax member => ExtractMemberAccess(
                 QualifiedMemberSyntax.Of(member)
@@ -280,8 +285,14 @@ public sealed partial class IrExpressionExtractor
                 Extract(cond.WhenTrue),
                 Extract(cond.WhenFalse)
             ),
-            PrefixUnaryExpressionSyntax pre => ExtractUnary(pre, isPrefix: true),
-            PostfixUnaryExpressionSyntax post => ExtractUnary(post, isPrefix: false),
+            PrefixUnaryExpressionSyntax pre => WithEnumResultType(
+                pre,
+                ExtractUnary(pre, isPrefix: true)
+            ),
+            PostfixUnaryExpressionSyntax post => WithEnumResultType(
+                post,
+                ExtractUnary(post, isPrefix: false)
+            ),
             CastExpressionSyntax cast => ExtractCast(cast),
             AwaitExpressionSyntax aw => new IrAwaitExpression(Extract(aw.Expression)),
             ThrowExpressionSyntax throwExpr => new IrThrowExpression(Extract(throwExpr.Expression)),
@@ -1801,6 +1812,30 @@ public sealed partial class IrExpressionExtractor
                 _semantic.GetOperation(bin),
                 BuildBinary(bin, op, LeftOperandOf(bin), OperandOf(bin.Right), isLifted: false)
             );
+    }
+
+    /// <summary>
+    /// Records the enum type of a built-in enum operator's result on the
+    /// lowered operator (<see cref="IrBinaryExpression.EnumResultType"/>,
+    /// <see cref="IrUnaryExpression.EnumResultType"/>): an arithmetic or
+    /// bitwise operator, a compound assignment or an increment whose C# type
+    /// is an enum, so a target whose enum type is narrower than the underlying
+    /// integer can type the value. A comparison yields a <c>bool</c> and is
+    /// left as it is; a user-defined operator lowers to a call.
+    /// </summary>
+    private IrExpression WithEnumResultType(ExpressionSyntax node, IrExpression lowered)
+    {
+        if (_semantic.GetTypeInfo(node).Type is not { TypeKind: TypeKind.Enum } enumType)
+            return lowered;
+
+        var enumTypeRef = IrTypeRefMapper.Map(enumType, _originResolver, _target);
+
+        return lowered switch
+        {
+            IrBinaryExpression binary => binary with { EnumResultType = enumTypeRef },
+            IrUnaryExpression unary => unary with { EnumResultType = enumTypeRef },
+            _ => lowered,
+        };
     }
 
     /// <summary>

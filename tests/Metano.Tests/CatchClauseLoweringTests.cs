@@ -713,6 +713,7 @@ public class CatchClauseLoweringTests
         await Assert
             .That(panel)
             .Contains("if (e0 instanceof LoadException && tryFilter(() => props$quiet)) {");
+
         await Assert.That(panel).Contains("throw e$;");
     }
 

@@ -208,7 +208,6 @@ public static class BarrelFileGenerator
         {
             TsClass { Exported: true } c => c.Name,
             TsFunction { Exported: true } f => f.Name,
-            TsEnum { Exported: true } e => e.Name,
             TsTypeAlias { Exported: true } t => t.Name,
             TsInterface { Exported: true } i => i.Name,
             TsConstObject { Exported: true } co => co.Name,

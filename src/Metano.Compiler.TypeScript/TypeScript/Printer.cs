@@ -300,9 +300,6 @@ public sealed class Printer(string indent = "  ")
             case TsFunction n:
                 PrintFunction(n);
                 break;
-            case TsEnum n:
-                PrintEnum(n);
-                break;
             case TsConstObject n:
                 PrintConstObject(n);
                 break;
@@ -570,29 +567,6 @@ public sealed class Printer(string indent = "  ")
         PrintType(overload.ReturnType);
         _sb.Write(";");
         _sb.WriteLn();
-    }
-
-    private void PrintEnum(TsEnum tsEnum)
-    {
-        if (tsEnum.Exported)
-            _sb.Write("export ");
-        _sb.Write("enum ");
-        _sb.Write(tsEnum.Name);
-        _sb.WriteBlock(() =>
-        {
-            foreach (var member in tsEnum.Members)
-            {
-                _sb.Write(member.Name);
-                if (member.Value is not null)
-                {
-                    _sb.Write(" = ");
-                    PrintExpression(member.Value);
-                }
-
-                _sb.Write(",");
-                _sb.WriteLn();
-            }
-        });
     }
 
     private void PrintNamespace(TsNamespaceDeclaration ns)

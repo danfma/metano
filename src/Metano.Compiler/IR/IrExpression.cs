@@ -557,20 +557,31 @@ public sealed record IrMemberInit(
 /// target only. <c>null</c> for any other operator, including enum and
 /// user-defined ones, and for every other compound assignment.
 /// </param>
+/// <param name="EnumResultType">The enum type of the result of a built-in
+/// enum operator that computes a new value (<c>e + 1</c>, <c>a | b</c>,
+/// <c>e - 1</c>, and the compound <c>e += 1</c> / <c>e |= f</c>): C# computes
+/// it over the underlying integer and types it as the enum. <c>null</c> for
+/// every other operator, including comparisons and simple assignments.</param>
 public sealed record IrBinaryExpression(
     IrExpression Left,
     IrBinaryOp Operator,
     IrExpression Right,
-    IrNumericKind? NumericKind = null
+    IrNumericKind? NumericKind = null,
+    IrTypeRef? EnumResultType = null
 ) : IrExpression;
 
 /// <summary>
 /// Unary expression: <c>op operand</c> or <c>operand op</c>.
 /// </summary>
+/// <param name="EnumResultType">The enum type of the result of <c>~e</c>,
+/// <c>e++</c> or <c>--e</c> on an enum (see
+/// <see cref="IrBinaryExpression.EnumResultType"/>); <c>null</c> for every
+/// other operator.</param>
 public sealed record IrUnaryExpression(
     IrUnaryOp Operator,
     IrExpression Operand,
-    bool IsPrefix = true
+    bool IsPrefix = true,
+    IrTypeRef? EnumResultType = null
 ) : IrExpression;
 
 /// <summary>
