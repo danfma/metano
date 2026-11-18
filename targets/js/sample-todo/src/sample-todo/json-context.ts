@@ -1,11 +1,30 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
+let JsonContext$rt: ClassType<JsonContext> | undefined;
+
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _todoItem?: TypeSpec<TodoItem>;
+
+  static get $runtimeType(): ClassType<JsonContext> {
+    return (JsonContext$rt ??= {
+      kind: "class",
+      name: "JsonContext",
+      fullName: "SampleTodo.JsonContext",
+      namespace: "SampleTodo",
+      ctor: JsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new JsonContext(),
+      test: (v: unknown): v is JsonContext => v instanceof JsonContext,
+    });
+  }
 
   static get default(): JsonContext {
     return JsonContext._default;

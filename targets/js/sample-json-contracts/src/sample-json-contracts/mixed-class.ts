@@ -1,10 +1,28 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { MixedBase } from "./mixed-base";
+
+let MixedClass$rt: ClassType<MixedClass> | undefined;
 
 export class MixedClass extends MixedBase {
   constructor(readonly w: number) {
     super();
+  }
+
+  static override get $runtimeType(): ClassType<MixedClass> {
+    return (MixedClass$rt ??= {
+      kind: "class",
+      name: "MixedClass",
+      fullName: "SampleJsonContracts.MixedClass",
+      namespace: "SampleJsonContracts",
+      ctor: MixedClass,
+      base: () => MixedBase.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is MixedClass => v instanceof MixedClass,
+    });
   }
 
   override equals(other: any): boolean {

@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import type { Priority } from "./priority";
+
+let TodoItem$rt: ClassType<TodoItem> | undefined;
 
 export class TodoItem {
   constructor(
@@ -8,6 +10,21 @@ export class TodoItem {
     readonly completed: boolean = false,
     readonly priority: Priority = "medium",
   ) {}
+
+  static get $runtimeType(): ClassType<TodoItem> {
+    return (TodoItem$rt ??= {
+      kind: "class",
+      name: "TodoItem",
+      fullName: "SampleTodo.TodoItem",
+      namespace: "SampleTodo",
+      ctor: TodoItem,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is TodoItem => v instanceof TodoItem,
+    });
+  }
 
   toggleCompleted(): TodoItem {
     return this.with({ completed: !this.completed });

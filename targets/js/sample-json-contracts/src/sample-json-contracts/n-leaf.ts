@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { NMid } from "./n-mid";
+
+let NLeaf$rt: ClassType<NLeaf> | undefined;
 
 export class NLeaf extends NMid {
   constructor(
@@ -9,6 +11,22 @@ export class NLeaf extends NMid {
     readonly c: number,
   ) {
     super(a, b);
+  }
+
+  static override get $runtimeType(): ClassType<NLeaf> {
+    return (NLeaf$rt ??= {
+      kind: "class",
+      name: "NLeaf",
+      fullName: "SampleJsonContracts.NLeaf",
+      namespace: "SampleJsonContracts",
+      ctor: NLeaf,
+      base: () => NMid.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is NLeaf => v instanceof NLeaf,
+    });
   }
 
   override equals(other: any): boolean {

@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { Clip } from "./clip";
+
+let Group$rt: ClassType<Group> | undefined;
 
 export class Group extends Clip {
   constructor(
@@ -8,6 +10,22 @@ export class Group extends Clip {
     readonly members: Clip[],
   ) {
     super(0);
+  }
+
+  static override get $runtimeType(): ClassType<Group> {
+    return (Group$rt ??= {
+      kind: "class",
+      name: "Group",
+      fullName: "SampleJsonContracts.Group",
+      namespace: "SampleJsonContracts",
+      ctor: Group,
+      base: () => Clip.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Group => v instanceof Group,
+    });
   }
 
   override equals(other: any): boolean {

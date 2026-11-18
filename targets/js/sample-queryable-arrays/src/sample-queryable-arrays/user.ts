@@ -1,5 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let User$rt: ClassType<User> | undefined;
 
 export class User {
   constructor(
@@ -7,6 +9,21 @@ export class User {
     readonly age: number,
     readonly active: boolean,
   ) {}
+
+  static get $runtimeType(): ClassType<User> {
+    return (User$rt ??= {
+      kind: "class",
+      name: "User",
+      fullName: "SampleQueryableArrays.User",
+      namespace: "SampleQueryableArrays",
+      ctor: User,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is User => v instanceof User,
+    });
+  }
 
   equals(other: any): boolean {
     return (

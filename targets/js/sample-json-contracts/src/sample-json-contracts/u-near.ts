@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let UNear$rt: ClassType<UNear> | undefined;
 
 export abstract class UNear {
   constructor(readonly a: number) {}
+
+  static get $runtimeType(): ClassType<UNear> {
+    return (UNear$rt ??= {
+      kind: "class",
+      name: "UNear",
+      fullName: "SampleJsonContracts.UNear",
+      namespace: "SampleJsonContracts",
+      ctor: UNear,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: true,
+      isValueType: false,
+      test: (v: unknown): v is UNear => v instanceof UNear,
+    });
+  }
 
   equals(other: any): boolean {
     return (

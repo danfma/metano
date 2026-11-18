@@ -1,4 +1,4 @@
-import { checkedInt32, checkedNarrowNumber, checkedUInt32, int32FromDouble, intDiv } from "metano-runtime";
+import { checkedInt32, checkedNarrowNumber, checkedUInt32, int32FromDouble, intDiv, type ClassType } from "metano-runtime";
 
 const LowByte: number = 255;
 const runtimeLowByte: number = 255;
@@ -475,6 +475,8 @@ export class NarrowStatics {
   constructor() { }
 }
 
+let NarrowSource$rt: ClassType<NarrowSource> | undefined;
+
 export class NarrowSource {
   value: number = 0;
   signed: number = 0;
@@ -484,12 +486,29 @@ export class NarrowSource {
     this.value = value;
   }
 
+  static get $runtimeType(): ClassType<NarrowSource> {
+    return (NarrowSource$rt ??= {
+      kind: "class",
+      name: "NarrowSource",
+      fullName: "SampleInt64Conformance.NarrowSource",
+      namespace: "SampleInt64Conformance",
+      ctor: NarrowSource,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is NarrowSource => v instanceof NarrowSource,
+    });
+  }
+
   next(): NarrowSource {
     this.evaluations = (this.evaluations + 1) | 0;
 
     return this;
   }
 }
+
+let ShiftCells$rt: ClassType<ShiftCells> | undefined;
 
 export class ShiftCells {
   signed: number = 0;
@@ -506,6 +525,21 @@ export class ShiftCells {
   constructor(seed: number) {
     this.signed = seed;
     this.slots = [seed, seed];
+  }
+
+  static get $runtimeType(): ClassType<ShiftCells> {
+    return (ShiftCells$rt ??= {
+      kind: "class",
+      name: "ShiftCells",
+      fullName: "SampleInt64Conformance.ShiftCells",
+      namespace: "SampleInt64Conformance",
+      ctor: ShiftCells,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is ShiftCells => v instanceof ShiftCells,
+    });
   }
 
   get tracked(): number {

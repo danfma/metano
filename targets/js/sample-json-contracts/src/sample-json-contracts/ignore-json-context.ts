@@ -1,9 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { IgnAbs } from "./ign-abs";
 import { IgnAbsDer } from "./ign-abs-der";
 import { IgnBase } from "./ign-base";
 import { IgnDer } from "./ign-der";
+
+let IgnoreJsonContext$rt: ClassType<IgnoreJsonContext> | undefined;
 
 export class IgnoreJsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new IgnoreJsonContext() as IgnoreJsonContext;
@@ -11,6 +14,22 @@ export class IgnoreJsonContext extends SerializerContext {
   private _ignAbs?: TypeSpec<IgnAbs>;
   private _ignDer?: TypeSpec<IgnDer>;
   private _ignAbsDer?: TypeSpec<IgnAbsDer>;
+
+  static get $runtimeType(): ClassType<IgnoreJsonContext> {
+    return (IgnoreJsonContext$rt ??= {
+      kind: "class",
+      name: "IgnoreJsonContext",
+      fullName: "SampleJsonContracts.IgnoreJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: IgnoreJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new IgnoreJsonContext(),
+      test: (v: unknown): v is IgnoreJsonContext => v instanceof IgnoreJsonContext,
+    });
+  }
 
   static get default(): IgnoreJsonContext {
     return IgnoreJsonContext._default;

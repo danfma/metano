@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Clip } from "./clip";
+
+let Timeline$rt: ClassType<Timeline> | undefined;
 
 export class Timeline {
   constructor(
@@ -8,6 +10,21 @@ export class Timeline {
     readonly main: Clip,
     readonly clips: Clip[],
   ) {}
+
+  static get $runtimeType(): ClassType<Timeline> {
+    return (Timeline$rt ??= {
+      kind: "class",
+      name: "Timeline",
+      fullName: "SampleJsonContracts.Timeline",
+      namespace: "SampleJsonContracts",
+      ctor: Timeline,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Timeline => v instanceof Timeline,
+    });
+  }
 
   equals(other: any): boolean {
     return (

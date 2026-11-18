@@ -1,9 +1,26 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { SPoint } from "./s-point";
+
+let HolderSPoint$rt: ClassType<HolderSPoint> | undefined;
 
 export class HolderSPoint {
   constructor(readonly s: SPoint) {}
+
+  static get $runtimeType(): ClassType<HolderSPoint> {
+    return (HolderSPoint$rt ??= {
+      kind: "class",
+      name: "HolderSPoint",
+      fullName: "SampleJsonContracts.HolderSPoint",
+      namespace: "SampleJsonContracts",
+      ctor: HolderSPoint,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is HolderSPoint => v instanceof HolderSPoint,
+    });
+  }
 
   equals(other: any): boolean {
     return (

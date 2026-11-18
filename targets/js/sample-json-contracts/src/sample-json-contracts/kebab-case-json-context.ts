@@ -1,11 +1,30 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Stats } from "./stats";
+
+let KebabCaseJsonContext$rt: ClassType<KebabCaseJsonContext> | undefined;
 
 export class KebabCaseJsonContext extends SerializerContext {
   private static readonly _default =
     /* @__PURE__ */ new KebabCaseJsonContext() as KebabCaseJsonContext;
   private _stats?: TypeSpec<Stats>;
+
+  static get $runtimeType(): ClassType<KebabCaseJsonContext> {
+    return (KebabCaseJsonContext$rt ??= {
+      kind: "class",
+      name: "KebabCaseJsonContext",
+      fullName: "SampleJsonContracts.KebabCaseJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: KebabCaseJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new KebabCaseJsonContext(),
+      test: (v: unknown): v is KebabCaseJsonContext => v instanceof KebabCaseJsonContext,
+    });
+  }
 
   static get default(): KebabCaseJsonContext {
     return KebabCaseJsonContext._default;

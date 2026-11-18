@@ -1,5 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let Blob$rt: ClassType<Blob> | undefined;
 
 export class Blob {
   constructor(
@@ -7,6 +9,21 @@ export class Blob {
     readonly maybe: number[] | null,
     readonly numbers: number[],
   ) {}
+
+  static get $runtimeType(): ClassType<Blob> {
+    return (Blob$rt ??= {
+      kind: "class",
+      name: "Blob",
+      fullName: "SampleJsonContracts.Blob",
+      namespace: "SampleJsonContracts",
+      ctor: Blob,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Blob => v instanceof Blob,
+    });
+  }
 
   equals(other: any): boolean {
     return (

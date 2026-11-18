@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import { implementsInterface, type InterfaceType } from "metano-runtime";
 import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
 import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 import type { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
@@ -22,3 +23,13 @@ export interface IIssueRepository {
     page: PageRequest,
   ): Promise<PageResult<Issue>>;
 }
+
+export const IIssueRepository$runtimeType: InterfaceType<IIssueRepository> = {
+  kind: "interface",
+  name: "IIssueRepository",
+  fullName: "SampleIssueTracker.Issues.Application.IIssueRepository",
+  namespace: "SampleIssueTracker.Issues.Application",
+  baseInterfaces: [],
+  plainImplementers: [],
+  test: (v: unknown): v is IIssueRepository => implementsInterface(v, IIssueRepository$runtimeType),
+};

@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { publicJsonShape } from "metano-runtime";
+import { publicJsonShape, type ClassType } from "metano-runtime";
 import { OBase } from "./o-base";
+
+let ODer$rt: ClassType<ODer> | undefined;
 
 export class ODer extends OBase {
   readonly x: number = 0;
@@ -8,6 +10,23 @@ export class ODer extends OBase {
 
   constructor() {
     super();
+  }
+
+  static override get $runtimeType(): ClassType<ODer> {
+    return (ODer$rt ??= {
+      kind: "class",
+      name: "ODer",
+      fullName: "SampleJsonContracts.ODer",
+      namespace: "SampleJsonContracts",
+      ctor: ODer,
+      base: () => OBase.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new ODer(),
+      test: (v: unknown): v is ODer => v instanceof ODer,
+    });
   }
 
   get name(): string {

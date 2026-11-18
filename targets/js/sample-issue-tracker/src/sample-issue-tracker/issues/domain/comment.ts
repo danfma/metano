@@ -1,8 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
+
+let Comment$rt: ClassType<Comment> | undefined;
 
 export class Comment {
   constructor(
@@ -11,6 +13,21 @@ export class Comment {
     readonly createdAt: Temporal.ZonedDateTime,
     readonly isSystem: boolean = false,
   ) {}
+
+  static get $runtimeType(): ClassType<Comment> {
+    return (Comment$rt ??= {
+      kind: "class",
+      name: "Comment",
+      fullName: "SampleIssueTracker.Issues.Domain.Comment",
+      namespace: "SampleIssueTracker.Issues.Domain",
+      ctor: Comment,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Comment => v instanceof Comment,
+    });
+  }
 
   static system(message: string, createdAt: Temporal.ZonedDateTime): Comment {
     return new Comment(UserId.system(), message, createdAt, true);

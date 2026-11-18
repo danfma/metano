@@ -1,7 +1,9 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
 import type { Color } from "./color";
+
+let SoftNums$rt: ClassType<SoftNums> | undefined;
 
 export class SoftNums {
   constructor(
@@ -10,6 +12,21 @@ export class SoftNums {
     readonly x: number | null,
     readonly c: Color | null,
   ) {}
+
+  static get $runtimeType(): ClassType<SoftNums> {
+    return (SoftNums$rt ??= {
+      kind: "class",
+      name: "SoftNums",
+      fullName: "SampleJsonContracts.SoftNums",
+      namespace: "SampleJsonContracts",
+      ctor: SoftNums,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is SoftNums => v instanceof SoftNums,
+    });
+  }
 
   equals(other: any): boolean {
     return (

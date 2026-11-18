@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import type { Comment } from "./comment";
@@ -9,6 +9,8 @@ import type { IssueId } from "./issue-id";
 import type { IssuePriority } from "./issue-priority";
 import type { IssueStatus } from "./issue-status";
 import type { IssueType } from "./issue-type";
+
+let IssueSnapshot$rt: ClassType<IssueSnapshot> | undefined;
 
 export class IssueSnapshot {
   constructor(
@@ -25,6 +27,21 @@ export class IssueSnapshot {
     readonly estimatedHours: Decimal,
     readonly comments: Comment[],
   ) {}
+
+  static get $runtimeType(): ClassType<IssueSnapshot> {
+    return (IssueSnapshot$rt ??= {
+      kind: "class",
+      name: "IssueSnapshot",
+      fullName: "SampleIssueTracker.Issues.Domain.IssueSnapshot",
+      namespace: "SampleIssueTracker.Issues.Domain",
+      ctor: IssueSnapshot,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IssueSnapshot => v instanceof IssueSnapshot,
+    });
+  }
 
   equals(other: any): boolean {
     return (

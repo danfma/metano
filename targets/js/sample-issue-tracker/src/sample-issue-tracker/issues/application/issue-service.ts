@@ -1,22 +1,45 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { isString } from "metano-runtime";
+import { isString, isType, type ClassType } from "metano-runtime";
 import { Issue } from "#/sample-issue-tracker/issues/domain/issue";
 import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
-import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
+import {
+  IssuePriority,
+  IssuePriority$runtimeType,
+} from "#/sample-issue-tracker/issues/domain/issue-priority";
 import type { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import type { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
+import {
+  IssueType$runtimeType,
+  type IssueType,
+} from "#/sample-issue-tracker/issues/domain/issue-type";
 import { OperationResult } from "#/sample-issue-tracker/shared-kernel/operation-result";
 import type { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
 import type { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import type { IIssueRepository } from "./i-issue-repository";
 
+let IssueService$rt: ClassType<IssueService> | undefined;
+
 export class IssueService {
   private readonly _repository: IIssueRepository;
 
   constructor(repository: IIssueRepository) {
     this._repository = repository;
+  }
+
+  static get $runtimeType(): ClassType<IssueService> {
+    return (IssueService$rt ??= {
+      kind: "class",
+      name: "IssueService",
+      fullName: "SampleIssueTracker.Issues.Application.IssueService",
+      namespace: "SampleIssueTracker.Issues.Application",
+      ctor: IssueService,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IssueService => v instanceof IssueService,
+    });
   }
 
   async createAsyncTitleDescriptionTypePriority(
@@ -56,8 +79,8 @@ export class IssueService {
       args.length === 4 &&
       isString(args[0]) &&
       isString(args[1]) &&
-      (args[2] === "story" || args[2] === "bug" || args[2] === "chore" || args[2] === "spike") &&
-      (args[3] === "low" || args[3] === "medium" || args[3] === "high" || args[3] === "urgent")
+      isType(args[2], IssueType$runtimeType) &&
+      isType(args[3], IssuePriority$runtimeType)
     ) {
       return this.createAsyncTitleDescriptionTypePriority(
         args[0] as string,
@@ -71,7 +94,7 @@ export class IssueService {
       args.length === 3 &&
       isString(args[0]) &&
       isString(args[1]) &&
-      (args[2] === "story" || args[2] === "bug" || args[2] === "chore" || args[2] === "spike")
+      isType(args[2], IssueType$runtimeType)
     ) {
       return this.createAsyncTitleDescriptionType(
         args[0] as string,
@@ -149,12 +172,7 @@ export class IssueService {
   ): Promise<OperationResult<Issue>>;
   addCommentAsync(issue: Issue, authorId: UserId, message: string): Promise<OperationResult<Issue>>;
   async addCommentAsync(...args: unknown[]): Promise<OperationResult<Issue>> {
-    if (
-      args.length === 3 &&
-      typeof args[0] === "string" &&
-      typeof args[1] === "string" &&
-      isString(args[2])
-    ) {
+    if (args.length === 3 && isString(args[0]) && isString(args[1]) && isString(args[2])) {
       return this.addCommentAsyncIssueIdAuthorIdMessage(
         args[0] as IssueId,
         args[1] as UserId,
@@ -162,12 +180,7 @@ export class IssueService {
       );
     }
 
-    if (
-      args.length === 3 &&
-      args[0] instanceof Issue &&
-      typeof args[1] === "string" &&
-      isString(args[2])
-    ) {
+    if (args.length === 3 && args[0] instanceof Issue && isString(args[1]) && isString(args[2])) {
       return this.addCommentAsyncIssueAuthorIdMessage(
         args[0] as Issue,
         args[1] as UserId,

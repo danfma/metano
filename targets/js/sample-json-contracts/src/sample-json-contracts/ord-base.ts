@@ -1,5 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let OrdBase$rt: ClassType<OrdBase> | undefined;
 
 export class OrdBase {
   constructor(
@@ -7,6 +9,21 @@ export class OrdBase {
     readonly first: number,
     readonly third: number,
   ) {}
+
+  static get $runtimeType(): ClassType<OrdBase> {
+    return (OrdBase$rt ??= {
+      kind: "class",
+      name: "OrdBase",
+      fullName: "SampleJsonContracts.OrdBase",
+      namespace: "SampleJsonContracts",
+      ctor: OrdBase,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is OrdBase => v instanceof OrdBase,
+    });
+  }
 
   equals(other: any): boolean {
     return (

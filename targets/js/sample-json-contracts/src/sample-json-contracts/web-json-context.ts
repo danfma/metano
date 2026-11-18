@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import {
   SerializerContext,
@@ -17,6 +18,8 @@ import { Nums } from "./nums";
 import { SilenceClip } from "./silence-clip";
 import { SoftNums } from "./soft-nums";
 
+let WebJsonContext$rt: ClassType<WebJsonContext> | undefined;
+
 export class WebJsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new WebJsonContext() as WebJsonContext;
   private _clip?: TypeSpec<Clip>;
@@ -29,6 +32,22 @@ export class WebJsonContext extends SerializerContext {
   private _group?: TypeSpec<Group>;
   private _iA?: TypeSpec<IA>;
   private _iS?: TypeSpec<IS>;
+
+  static get $runtimeType(): ClassType<WebJsonContext> {
+    return (WebJsonContext$rt ??= {
+      kind: "class",
+      name: "WebJsonContext",
+      fullName: "SampleJsonContracts.WebJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: WebJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new WebJsonContext(),
+      test: (v: unknown): v is WebJsonContext => v instanceof WebJsonContext,
+    });
+  }
 
   static get default(): WebJsonContext {
     return WebJsonContext._default;

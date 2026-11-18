@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { UNearA } from "./u-near-a";
+
+let UNearB$rt: ClassType<UNearB> | undefined;
 
 export class UNearB extends UNearA {
   constructor(
@@ -9,6 +11,22 @@ export class UNearB extends UNearA {
     readonly c: number,
   ) {
     super(a, b);
+  }
+
+  static override get $runtimeType(): ClassType<UNearB> {
+    return (UNearB$rt ??= {
+      kind: "class",
+      name: "UNearB",
+      fullName: "SampleJsonContracts.UNearB",
+      namespace: "SampleJsonContracts",
+      ctor: UNearB,
+      base: () => UNearA.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is UNearB => v instanceof UNearB,
+    });
   }
 
   override equals(other: any): boolean {

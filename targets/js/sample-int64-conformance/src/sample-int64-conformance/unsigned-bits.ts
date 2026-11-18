@@ -1,3 +1,5 @@
+import type { ClassType } from "metano-runtime";
+
 export function uIntAnd(a: number, b: number): number {
   return (a & b) >>> 0;
 }
@@ -183,10 +185,27 @@ export function uIntFieldCompound(start: number, mask: number): number {
   return flags.value;
 }
 
+let FlagSet$rt: ClassType<FlagSet> | undefined;
+
 export class FlagSet {
   value: number = 0;
 
   constructor(value: number) {
     this.value = value;
+  }
+
+  static get $runtimeType(): ClassType<FlagSet> {
+    return (FlagSet$rt ??= {
+      kind: "class",
+      name: "FlagSet",
+      fullName: "SampleInt64Conformance.FlagSet",
+      namespace: "SampleInt64Conformance",
+      ctor: FlagSet,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is FlagSet => v instanceof FlagSet,
+    });
   }
 }

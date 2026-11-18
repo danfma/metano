@@ -1,8 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
-import { HashSet, dayNumber } from "metano-runtime";
+import { HashSet, dayNumber, type ClassType } from "metano-runtime";
 import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
+
+let Sprint$rt: ClassType<Sprint> | undefined;
 
 export class Sprint {
   private readonly _plannedIssues: HashSet<IssueId> = new HashSet<IssueId>();
@@ -13,6 +15,21 @@ export class Sprint {
     public startDate: Temporal.PlainDate,
     public endDate: Temporal.PlainDate,
   ) {}
+
+  static get $runtimeType(): ClassType<Sprint> {
+    return (Sprint$rt ??= {
+      kind: "class",
+      name: "Sprint",
+      fullName: "SampleIssueTracker.Planning.Domain.Sprint",
+      namespace: "SampleIssueTracker.Planning.Domain",
+      ctor: Sprint,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Sprint => v instanceof Sprint,
+    });
+  }
 
   get plannedIssues(): Iterable<IssueId> {
     return this._plannedIssues;

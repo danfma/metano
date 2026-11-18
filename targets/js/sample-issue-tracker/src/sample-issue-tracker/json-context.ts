@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
+import type { ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { ActivityFeed } from "#/sample-issue-tracker/issues/domain/activity-feed";
@@ -15,6 +16,8 @@ import { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
 import { SnowflakeId } from "#/sample-issue-tracker/shared-kernel/snowflake-id";
 import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
+let JsonContext$rt: ClassType<JsonContext> | undefined;
+
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _issueSnapshot?: TypeSpec<IssueSnapshot>;
@@ -23,6 +26,22 @@ export class JsonContext extends SerializerContext {
   private _issueActivity?: TypeSpec<IssueActivity>;
   private _issueActivityArray?: ValueSpec<IssueActivity[] | null>;
   private _activityFeed?: TypeSpec<ActivityFeed>;
+
+  static get $runtimeType(): ClassType<JsonContext> {
+    return (JsonContext$rt ??= {
+      kind: "class",
+      name: "JsonContext",
+      fullName: "SampleIssueTracker.JsonContext",
+      namespace: "SampleIssueTracker",
+      ctor: JsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new JsonContext(),
+      test: (v: unknown): v is JsonContext => v instanceof JsonContext,
+    });
+  }
 
   static get default(): JsonContext {
     return JsonContext._default;

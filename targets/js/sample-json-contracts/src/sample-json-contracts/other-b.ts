@@ -1,9 +1,26 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
-import type { IShapeB } from "./i-shape-b";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import { IShapeB$runtimeType, type IShapeB } from "./i-shape-b";
+
+let OtherB$rt: ClassType<OtherB> | undefined;
 
 export class OtherB implements IShapeB {
   constructor(readonly area: number) {}
+
+  static get $runtimeType(): ClassType<OtherB> {
+    return (OtherB$rt ??= {
+      kind: "class",
+      name: "OtherB",
+      fullName: "SampleJsonContracts.OtherB",
+      namespace: "SampleJsonContracts",
+      ctor: OtherB,
+      interfaces: [() => IShapeB$runtimeType],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is OtherB => v instanceof OtherB,
+    });
+  }
 
   equals(other: any): boolean {
     return (

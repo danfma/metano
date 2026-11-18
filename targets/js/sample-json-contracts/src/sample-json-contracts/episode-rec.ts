@@ -1,12 +1,29 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import type { Title } from "./title";
+
+let EpisodeRec$rt: ClassType<EpisodeRec> | undefined;
 
 export class EpisodeRec {
   constructor(
     readonly id: string,
     readonly note: Title,
   ) {}
+
+  static get $runtimeType(): ClassType<EpisodeRec> {
+    return (EpisodeRec$rt ??= {
+      kind: "class",
+      name: "EpisodeRec",
+      fullName: "SampleJsonContracts.EpisodeRec",
+      namespace: "SampleJsonContracts",
+      ctor: EpisodeRec,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is EpisodeRec => v instanceof EpisodeRec,
+    });
+  }
 
   equals(other: any): boolean {
     return (

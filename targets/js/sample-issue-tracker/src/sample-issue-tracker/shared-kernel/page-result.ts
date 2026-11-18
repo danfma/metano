@@ -1,7 +1,15 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { HashCode, copyRecordWith, int32FromDouble, valueEquals } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  int32FromDouble,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import type { PageRequest } from "./page-request";
+
+let PageResult$rt: ClassType<PageResult<unknown>> | undefined;
 
 export class PageResult<T> {
   constructor(
@@ -9,6 +17,21 @@ export class PageResult<T> {
     readonly totalCount: number,
     readonly page: PageRequest,
   ) {}
+
+  static get $runtimeType(): ClassType<PageResult<unknown>> {
+    return (PageResult$rt ??= {
+      kind: "class",
+      name: "PageResult`1",
+      fullName: "SampleIssueTracker.SharedKernel.PageResult`1",
+      namespace: "SampleIssueTracker.SharedKernel",
+      ctor: PageResult,
+      interfaces: [],
+      typeParameters: ["T"],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is PageResult<unknown> => v instanceof PageResult,
+    });
+  }
 
   get totalPages(): number {
     return this.totalCount === 0

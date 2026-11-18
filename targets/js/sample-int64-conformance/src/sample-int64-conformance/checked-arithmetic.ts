@@ -1,4 +1,4 @@
-import { checkedInt32, checkedNarrowNumber, checkedUInt32 } from "metano-runtime";
+import { checkedInt32, checkedNarrowNumber, checkedUInt32, type ClassType } from "metano-runtime";
 
 export function intAddChecked(a: number, b: number): number {
   return checkedInt32(a + b);
@@ -215,10 +215,27 @@ export function intFieldCompoundChecked(start: number, amount: number): number {
   return tally.total;
 }
 
+let Tally$rt: ClassType<Tally> | undefined;
+
 export class Tally {
   total: number = 0;
 
   constructor(total: number) {
     this.total = total;
+  }
+
+  static get $runtimeType(): ClassType<Tally> {
+    return (Tally$rt ??= {
+      kind: "class",
+      name: "Tally",
+      fullName: "SampleInt64Conformance.Tally",
+      namespace: "SampleInt64Conformance",
+      ctor: Tally,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Tally => v instanceof Tally,
+    });
   }
 }

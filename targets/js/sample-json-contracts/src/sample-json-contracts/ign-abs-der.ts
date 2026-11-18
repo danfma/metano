@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { IgnAbs } from "./ign-abs";
+
+let IgnAbsDer$rt: ClassType<IgnAbsDer> | undefined;
 
 export class IgnAbsDer extends IgnAbs {
   constructor(
@@ -8,6 +10,22 @@ export class IgnAbsDer extends IgnAbs {
     readonly w: number,
   ) {
     super(v);
+  }
+
+  static override get $runtimeType(): ClassType<IgnAbsDer> {
+    return (IgnAbsDer$rt ??= {
+      kind: "class",
+      name: "IgnAbsDer",
+      fullName: "SampleJsonContracts.IgnAbsDer",
+      namespace: "SampleJsonContracts",
+      ctor: IgnAbsDer,
+      base: () => IgnAbs.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IgnAbsDer => v instanceof IgnAbsDer,
+    });
   }
 
   override equals(other: any): boolean {

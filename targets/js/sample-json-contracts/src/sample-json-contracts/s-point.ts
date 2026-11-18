@@ -1,11 +1,28 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let SPoint$rt: ClassType<SPoint> | undefined;
 
 export class SPoint {
   constructor(
     readonly x: number,
     readonly y: number,
   ) {}
+
+  static get $runtimeType(): ClassType<SPoint> {
+    return (SPoint$rt ??= {
+      kind: "class",
+      name: "SPoint",
+      fullName: "SampleJsonContracts.SPoint",
+      namespace: "SampleJsonContracts",
+      ctor: SPoint,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: true,
+      test: (v: unknown): v is SPoint => v instanceof SPoint,
+    });
+  }
 
   equals(other: any): boolean {
     return (

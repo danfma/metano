@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
-import { type HashSet, UUID } from "metano-runtime";
+import { type HashSet, UUID, type ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
@@ -61,6 +61,8 @@ import { UFailY } from "./u-fail-y";
 import { UNear } from "./u-near";
 import { UNearA } from "./u-near-a";
 import { UNearAbs } from "./u-near-abs";
+
+let StudioJsonContext$rt: ClassType<StudioJsonContext> | undefined;
 
 export class StudioJsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new StudioJsonContext() as StudioJsonContext;
@@ -156,6 +158,22 @@ export class StudioJsonContext extends SerializerContext {
   private _rect?: TypeSpec<Rect>;
   private _mixedClass?: TypeSpec<MixedClass>;
   private _mixedPoint?: TypeSpec<MixedPoint>;
+
+  static get $runtimeType(): ClassType<StudioJsonContext> {
+    return (StudioJsonContext$rt ??= {
+      kind: "class",
+      name: "StudioJsonContext",
+      fullName: "SampleJsonContracts.StudioJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: StudioJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new StudioJsonContext(),
+      test: (v: unknown): v is StudioJsonContext => v instanceof StudioJsonContext,
+    });
+  }
 
   static get default(): StudioJsonContext {
     return StudioJsonContext._default;

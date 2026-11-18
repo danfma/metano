@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { isBool, isInt32, isString } from "metano-runtime";
+import { isBool, isInt32, isString, isType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Currency } from "./currency";
+import { Currency, Currency$runtimeType } from "./currency";
 
 export class PriceRule {
   protected static readonly byPriceRulePercent = /* @__PURE__ */ Symbol("PriceRule(int percent)");
@@ -73,7 +73,7 @@ export class PriceRule {
       return this.labelUpper(args[0] as boolean);
     }
 
-    if (args.length <= 1 && (args[0] === undefined || isInt32(args[0]))) {
+    if (args.length <= 1 && (args[0] === undefined || isType(args[0], Currency$runtimeType))) {
       return this.labelCurrency(args[0] as Currency);
     }
 

@@ -1,10 +1,28 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { DBase } from "./d-base";
+
+let DBer$rt: ClassType<DBer> | undefined;
 
 export class DBer extends DBase {
   constructor(readonly w: number) {
     super();
+  }
+
+  static override get $runtimeType(): ClassType<DBer> {
+    return (DBer$rt ??= {
+      kind: "class",
+      name: "DBer",
+      fullName: "SampleJsonContracts.DBer",
+      namespace: "SampleJsonContracts",
+      ctor: DBer,
+      base: () => DBase.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is DBer => v instanceof DBer,
+    });
   }
 
   override equals(other: any): boolean {

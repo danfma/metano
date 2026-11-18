@@ -1,4 +1,6 @@
-import { checkedInt64, checkedUInt64, remInt64 } from "metano-runtime";
+import { checkedInt64, checkedUInt64, remInt64, type ClassType } from "metano-runtime";
+
+let Counter$rt: ClassType<Counter> | undefined;
 
 export class Counter {
   private readonly _slots: bigint[];
@@ -10,6 +12,21 @@ export class Counter {
     this._field = seed;
     this._slots = [0n, seed];
     this.total = seed;
+  }
+
+  static get $runtimeType(): ClassType<Counter> {
+    return (Counter$rt ??= {
+      kind: "class",
+      name: "Counter",
+      fullName: "SampleInt64Conformance.Counter",
+      namespace: "SampleInt64Conformance",
+      ctor: Counter,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Counter => v instanceof Counter,
+    });
   }
 
   incrementField(): bigint {

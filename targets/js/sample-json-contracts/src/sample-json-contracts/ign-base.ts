@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let IgnBase$rt: ClassType<IgnBase> | undefined;
 
 export class IgnBase {
   constructor(readonly v: number) {}
+
+  static get $runtimeType(): ClassType<IgnBase> {
+    return (IgnBase$rt ??= {
+      kind: "class",
+      name: "IgnBase",
+      fullName: "SampleJsonContracts.IgnBase",
+      namespace: "SampleJsonContracts",
+      ctor: IgnBase,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IgnBase => v instanceof IgnBase,
+    });
+  }
 
   equals(other: any): boolean {
     return (

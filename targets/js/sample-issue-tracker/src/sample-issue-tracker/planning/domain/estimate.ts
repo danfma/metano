@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { isInt32, isString } from "metano-runtime";
+import { isInt32, isString, type ClassType } from "metano-runtime";
+
+let Estimate$rt: ClassType<Estimate> | undefined;
 
 export class Estimate {
   protected static readonly byEstimatePoints = /* @__PURE__ */ Symbol("Estimate(int points)");
@@ -102,6 +104,21 @@ export class Estimate {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static get $runtimeType(): ClassType<Estimate> {
+    return (Estimate$rt ??= {
+      kind: "class",
+      name: "Estimate",
+      fullName: "SampleIssueTracker.Planning.Domain.Estimate",
+      namespace: "SampleIssueTracker.Planning.Domain",
+      ctor: Estimate,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Estimate => v instanceof Estimate,
+    });
   }
 
   static fromPoints(points: number): Estimate {

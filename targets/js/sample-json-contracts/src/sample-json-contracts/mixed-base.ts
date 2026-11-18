@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let MixedBase$rt: ClassType<MixedBase> | undefined;
 
 export abstract class MixedBase {
   constructor() {}
+
+  static get $runtimeType(): ClassType<MixedBase> {
+    return (MixedBase$rt ??= {
+      kind: "class",
+      name: "MixedBase",
+      fullName: "SampleJsonContracts.MixedBase",
+      namespace: "SampleJsonContracts",
+      ctor: MixedBase,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: true,
+      isValueType: false,
+      test: (v: unknown): v is MixedBase => v instanceof MixedBase,
+    });
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this);

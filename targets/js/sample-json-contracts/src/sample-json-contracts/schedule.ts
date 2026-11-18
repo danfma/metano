@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+
+let Schedule$rt: ClassType<Schedule> | undefined;
 
 export class Schedule {
   constructor(
@@ -10,6 +12,21 @@ export class Schedule {
     readonly duration: Temporal.Duration,
     readonly moment: Temporal.ZonedDateTime,
   ) {}
+
+  static get $runtimeType(): ClassType<Schedule> {
+    return (Schedule$rt ??= {
+      kind: "class",
+      name: "Schedule",
+      fullName: "SampleJsonContracts.Schedule",
+      namespace: "SampleJsonContracts",
+      ctor: Schedule,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Schedule => v instanceof Schedule,
+    });
+  }
 
   equals(other: any): boolean {
     return (

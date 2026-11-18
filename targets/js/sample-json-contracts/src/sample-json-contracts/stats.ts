@@ -1,5 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+
+let Stats$rt: ClassType<Stats> | undefined;
 
 export class Stats {
   constructor(
@@ -7,6 +9,21 @@ export class Stats {
     readonly ratio: number,
     readonly userName: string,
   ) {}
+
+  static get $runtimeType(): ClassType<Stats> {
+    return (Stats$rt ??= {
+      kind: "class",
+      name: "Stats",
+      fullName: "SampleJsonContracts.Stats",
+      namespace: "SampleJsonContracts",
+      ctor: Stats,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Stats => v instanceof Stats,
+    });
+  }
 
   equals(other: any): boolean {
     return (

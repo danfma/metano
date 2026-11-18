@@ -1,10 +1,27 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let InitRec$rt: ClassType<InitRec> | undefined;
 
 export class InitRec {
   readonly note: string | null = null;
 
   constructor(readonly a: number) {}
+
+  static get $runtimeType(): ClassType<InitRec> {
+    return (InitRec$rt ??= {
+      kind: "class",
+      name: "InitRec",
+      fullName: "SampleJsonContracts.InitRec",
+      namespace: "SampleJsonContracts",
+      ctor: InitRec,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is InitRec => v instanceof InitRec,
+    });
+  }
 
   equals(other: any): boolean {
     return (

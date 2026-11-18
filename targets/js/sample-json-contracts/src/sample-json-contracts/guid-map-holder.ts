@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, type UUID, copyRecordWith } from "metano-runtime";
+import { HashCode, type UUID, copyRecordWith, type ClassType } from "metano-runtime";
+
+let GuidMapHolder$rt: ClassType<GuidMapHolder> | undefined;
 
 export class GuidMapHolder {
   constructor(readonly byId: Map<UUID, string>) {}
+
+  static get $runtimeType(): ClassType<GuidMapHolder> {
+    return (GuidMapHolder$rt ??= {
+      kind: "class",
+      name: "GuidMapHolder",
+      fullName: "SampleJsonContracts.GuidMapHolder",
+      namespace: "SampleJsonContracts",
+      ctor: GuidMapHolder,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is GuidMapHolder => v instanceof GuidMapHolder,
+    });
+  }
 
   equals(other: any): boolean {
     return (

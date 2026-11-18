@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import type { ClassType } from "metano-runtime";
 import {
   firstOrDefault,
   linq,
@@ -18,12 +19,30 @@ import type { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-sta
 import type { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
 import { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
-import type { IIssueRepository } from "./i-issue-repository";
+import { IIssueRepository$runtimeType, type IIssueRepository } from "./i-issue-repository";
+
+let InMemoryIssueRepository$rt: ClassType<InMemoryIssueRepository> | undefined;
 
 export class InMemoryIssueRepository implements IIssueRepository {
   private readonly _issues: Issue[] = [];
 
   constructor() {}
+
+  static get $runtimeType(): ClassType<InMemoryIssueRepository> {
+    return (InMemoryIssueRepository$rt ??= {
+      kind: "class",
+      name: "InMemoryIssueRepository",
+      fullName: "SampleIssueTracker.Issues.Application.InMemoryIssueRepository",
+      namespace: "SampleIssueTracker.Issues.Application",
+      ctor: InMemoryIssueRepository,
+      interfaces: [() => IIssueRepository$runtimeType],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new InMemoryIssueRepository(),
+      test: (v: unknown): v is InMemoryIssueRepository => v instanceof InMemoryIssueRepository,
+    });
+  }
 
   getByIdAsync(id: IssueId): Promise<Issue | null> {
     return Promise.resolve(

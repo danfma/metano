@@ -1,7 +1,9 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { isString } from "metano-runtime";
+import { isString, type ClassType } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
+
+let CurrencyConversionException$rt: ClassType<CurrencyConversionException> | undefined;
 
 export class CurrencyConversionException extends Exception {
   protected static readonly byCurrencyConversionExceptionFromCodeToCode = /* @__PURE__ */ Symbol(
@@ -95,6 +97,23 @@ export class CurrencyConversionException extends Exception {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static override get $runtimeType(): ClassType<CurrencyConversionException> {
+    return (CurrencyConversionException$rt ??= {
+      kind: "class",
+      name: "CurrencyConversionException",
+      fullName: "SampleOperatorOverloading.CurrencyConversionException",
+      namespace: "SampleOperatorOverloading",
+      ctor: CurrencyConversionException,
+      base: () => Exception.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is CurrencyConversionException =>
+        v instanceof CurrencyConversionException,
+    });
   }
 
   protected override get $typeName(): string {

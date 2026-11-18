@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+
+let Clip$rt: ClassType<Clip> | undefined;
 
 export abstract class Clip {
   constructor(readonly seconds: number) {}
+
+  static get $runtimeType(): ClassType<Clip> {
+    return (Clip$rt ??= {
+      kind: "class",
+      name: "Clip",
+      fullName: "SampleJsonContracts.Clip",
+      namespace: "SampleJsonContracts",
+      ctor: Clip,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: true,
+      isValueType: false,
+      test: (v: unknown): v is Clip => v instanceof Clip,
+    });
+  }
 
   equals(other: any): boolean {
     return (

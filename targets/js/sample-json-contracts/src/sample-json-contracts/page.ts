@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let Page$rt: ClassType<Page<unknown>> | undefined;
 
 export class Page<T> {
   constructor(readonly items: T[]) {}
+
+  static get $runtimeType(): ClassType<Page<unknown>> {
+    return (Page$rt ??= {
+      kind: "class",
+      name: "Page`1",
+      fullName: "SampleJsonContracts.Page`1",
+      namespace: "SampleJsonContracts",
+      ctor: Page,
+      interfaces: [],
+      typeParameters: ["T"],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Page<unknown> => v instanceof Page,
+    });
+  }
 
   equals(other: any): boolean {
     return (

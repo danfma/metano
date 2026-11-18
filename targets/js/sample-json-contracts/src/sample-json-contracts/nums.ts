@@ -1,7 +1,9 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
 import type { Color } from "./color";
+
+let Nums$rt: ClassType<Nums> | undefined;
 
 export class Nums {
   constructor(
@@ -13,6 +15,21 @@ export class Nums {
     readonly map: Map<string, number>,
     readonly c: Color,
   ) {}
+
+  static get $runtimeType(): ClassType<Nums> {
+    return (Nums$rt ??= {
+      kind: "class",
+      name: "Nums",
+      fullName: "SampleJsonContracts.Nums",
+      namespace: "SampleJsonContracts",
+      ctor: Nums,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Nums => v instanceof Nums,
+    });
+  }
 
   equals(other: any): boolean {
     return (

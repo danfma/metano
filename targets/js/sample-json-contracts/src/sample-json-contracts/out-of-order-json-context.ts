@@ -1,9 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { SerializerContext, type JsonReadOptions, type TypeSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
 import { Group } from "./group";
 import { ImageClip } from "./image-clip";
 import { SilenceClip } from "./silence-clip";
+
+let OutOfOrderJsonContext$rt: ClassType<OutOfOrderJsonContext> | undefined;
 
 export class OutOfOrderJsonContext extends SerializerContext {
   private static readonly _default =
@@ -12,6 +15,22 @@ export class OutOfOrderJsonContext extends SerializerContext {
   private _imageClip?: TypeSpec<ImageClip>;
   private _silenceClip?: TypeSpec<SilenceClip>;
   private _group?: TypeSpec<Group>;
+
+  static get $runtimeType(): ClassType<OutOfOrderJsonContext> {
+    return (OutOfOrderJsonContext$rt ??= {
+      kind: "class",
+      name: "OutOfOrderJsonContext",
+      fullName: "SampleJsonContracts.OutOfOrderJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: OutOfOrderJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new OutOfOrderJsonContext(),
+      test: (v: unknown): v is OutOfOrderJsonContext => v instanceof OutOfOrderJsonContext,
+    });
+  }
 
   static get default(): OutOfOrderJsonContext {
     return OutOfOrderJsonContext._default;

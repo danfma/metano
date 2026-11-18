@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
+
+let Product$rt: ClassType<Product> | undefined;
 
 export class Product {
   constructor(
@@ -11,6 +13,21 @@ export class Product {
     readonly stockCount: number,
     readonly isActive: boolean,
   ) {}
+
+  static get $runtimeType(): ClassType<Product> {
+    return (Product$rt ??= {
+      kind: "class",
+      name: "Product",
+      fullName: "SampleQueryableSqlite.Product",
+      namespace: "SampleQueryableSqlite",
+      ctor: Product,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Product => v instanceof Product,
+    });
+  }
 
   equals(other: any): boolean {
     return (

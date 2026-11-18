@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let IntMapHolder$rt: ClassType<IntMapHolder> | undefined;
 
 export class IntMapHolder {
   constructor(readonly byKey: Map<number, string>) {}
+
+  static get $runtimeType(): ClassType<IntMapHolder> {
+    return (IntMapHolder$rt ??= {
+      kind: "class",
+      name: "IntMapHolder",
+      fullName: "SampleJsonContracts.IntMapHolder",
+      namespace: "SampleJsonContracts",
+      ctor: IntMapHolder,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IntMapHolder => v instanceof IntMapHolder,
+    });
+  }
 
   equals(other: any): boolean {
     return (

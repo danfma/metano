@@ -1,5 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let Int64Box$rt: ClassType<Int64Box> | undefined;
 
 export class Int64Box {
   constructor(
@@ -7,6 +9,21 @@ export class Int64Box {
     readonly mask: bigint,
     readonly parent: bigint | null,
   ) {}
+
+  static get $runtimeType(): ClassType<Int64Box> {
+    return (Int64Box$rt ??= {
+      kind: "class",
+      name: "Int64Box",
+      fullName: "SampleJsonContracts.Int64Box",
+      namespace: "SampleJsonContracts",
+      ctor: Int64Box,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Int64Box => v instanceof Int64Box,
+    });
+  }
 
   equals(other: any): boolean {
     return (

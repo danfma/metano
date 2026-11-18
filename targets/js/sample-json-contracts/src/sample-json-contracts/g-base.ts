@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, defaultEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, defaultEquals, type ClassType } from "metano-runtime";
+
+let GBase$rt: ClassType<GBase<unknown>> | undefined;
 
 export abstract class GBase<T> {
   constructor(readonly value: T) {}
+
+  static get $runtimeType(): ClassType<GBase<unknown>> {
+    return (GBase$rt ??= {
+      kind: "class",
+      name: "GBase`1",
+      fullName: "SampleJsonContracts.GBase`1",
+      namespace: "SampleJsonContracts",
+      ctor: GBase,
+      interfaces: [],
+      typeParameters: ["T"],
+      isAbstract: true,
+      isValueType: false,
+      test: (v: unknown): v is GBase<unknown> => v instanceof GBase,
+    });
+  }
 
   equals(other: any): boolean {
     return (

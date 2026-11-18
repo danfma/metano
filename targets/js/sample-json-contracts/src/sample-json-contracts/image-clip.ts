@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { Clip } from "./clip";
+
+let ImageClip$rt: ClassType<ImageClip> | undefined;
 
 export class ImageClip extends Clip {
   constructor(
@@ -8,6 +10,22 @@ export class ImageClip extends Clip {
     seconds: number,
   ) {
     super(seconds);
+  }
+
+  static override get $runtimeType(): ClassType<ImageClip> {
+    return (ImageClip$rt ??= {
+      kind: "class",
+      name: "ImageClip",
+      fullName: "SampleJsonContracts.ImageClip",
+      namespace: "SampleJsonContracts",
+      ctor: ImageClip,
+      base: () => Clip.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is ImageClip => v instanceof ImageClip,
+    });
   }
 
   override equals(other: any): boolean {

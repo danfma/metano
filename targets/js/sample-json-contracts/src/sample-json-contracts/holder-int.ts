@@ -1,8 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let HolderInt$rt: ClassType<HolderInt> | undefined;
 
 export class HolderInt {
   constructor(readonly n: number) {}
+
+  static get $runtimeType(): ClassType<HolderInt> {
+    return (HolderInt$rt ??= {
+      kind: "class",
+      name: "HolderInt",
+      fullName: "SampleJsonContracts.HolderInt",
+      namespace: "SampleJsonContracts",
+      ctor: HolderInt,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is HolderInt => v instanceof HolderInt,
+    });
+  }
 
   equals(other: any): boolean {
     return (

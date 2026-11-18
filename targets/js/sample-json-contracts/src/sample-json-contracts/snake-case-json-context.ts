@@ -1,11 +1,30 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Stats } from "./stats";
+
+let SnakeCaseJsonContext$rt: ClassType<SnakeCaseJsonContext> | undefined;
 
 export class SnakeCaseJsonContext extends SerializerContext {
   private static readonly _default =
     /* @__PURE__ */ new SnakeCaseJsonContext() as SnakeCaseJsonContext;
   private _stats?: TypeSpec<Stats>;
+
+  static get $runtimeType(): ClassType<SnakeCaseJsonContext> {
+    return (SnakeCaseJsonContext$rt ??= {
+      kind: "class",
+      name: "SnakeCaseJsonContext",
+      fullName: "SampleJsonContracts.SnakeCaseJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: SnakeCaseJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new SnakeCaseJsonContext(),
+      test: (v: unknown): v is SnakeCaseJsonContext => v instanceof SnakeCaseJsonContext,
+    });
+  }
 
   static get default(): SnakeCaseJsonContext {
     return SnakeCaseJsonContext._default;

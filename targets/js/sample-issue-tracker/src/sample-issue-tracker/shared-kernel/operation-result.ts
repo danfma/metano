@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { HashCode, copyRecordWith, defaultEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, defaultEquals, type ClassType } from "metano-runtime";
+
+let OperationResult$rt: ClassType<OperationResult<unknown>> | undefined;
 
 export class OperationResult<T> {
   constructor(
@@ -9,6 +11,21 @@ export class OperationResult<T> {
     readonly errorCode: string | null = null,
     readonly errorMessage: string | null = null,
   ) {}
+
+  static get $runtimeType(): ClassType<OperationResult<unknown>> {
+    return (OperationResult$rt ??= {
+      kind: "class",
+      name: "OperationResult`1",
+      fullName: "SampleIssueTracker.SharedKernel.OperationResult`1",
+      namespace: "SampleIssueTracker.SharedKernel",
+      ctor: OperationResult,
+      interfaces: [],
+      typeParameters: ["T"],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is OperationResult<unknown> => v instanceof OperationResult,
+    });
+  }
 
   get hasValue(): boolean {
     return this.success && !(this.value == null);

@@ -1,10 +1,28 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import { IBase } from "./i-base";
+
+let IS$rt: ClassType<IS> | undefined;
 
 export class IS extends IBase {
   constructor(readonly y: number) {
     super();
+  }
+
+  static override get $runtimeType(): ClassType<IS> {
+    return (IS$rt ??= {
+      kind: "class",
+      name: "IS",
+      fullName: "SampleJsonContracts.IS",
+      namespace: "SampleJsonContracts",
+      ctor: IS,
+      base: () => IBase.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IS => v instanceof IS,
+    });
   }
 
   override equals(other: any): boolean {

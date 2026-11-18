@@ -1,15 +1,17 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
-import { isString } from "metano-runtime";
+import { isString, isType, type ClassType } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
 import type { IssuePriority } from "./issue-priority";
-import { IssueStatus } from "./issue-status";
+import { IssueStatus, IssueStatus$runtimeType } from "./issue-status";
 import type { IssueType } from "./issue-type";
 import { IssueWorkflow } from "./issue-workflow";
+
+let Issue$rt: ClassType<Issue> | undefined;
 
 export class Issue {
   status: IssueStatus = IssueStatus.Backlog;
@@ -26,6 +28,21 @@ export class Issue {
     readonly type: IssueType,
     public priority: IssuePriority = "medium",
   ) {}
+
+  static get $runtimeType(): ClassType<Issue> {
+    return (Issue$rt ??= {
+      kind: "class",
+      name: "Issue",
+      fullName: "SampleIssueTracker.Issues.Domain.Issue",
+      namespace: "SampleIssueTracker.Issues.Domain",
+      ctor: Issue,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Issue => v instanceof Issue,
+    });
+  }
 
   get comments(): Comment[] {
     return this._comments;
@@ -96,9 +113,9 @@ export class Issue {
   addComment(...args: unknown[]): void {
     if (
       args.length === 3 &&
-      typeof args[0] === "string" &&
+      isString(args[0]) &&
       isString(args[1]) &&
-      typeof args[2] === "object"
+      args[2] instanceof Temporal.ZonedDateTime
     ) {
       this.addCommentAuthorIdMessageCreatedAt(
         args[0] as UserId,
@@ -109,7 +126,7 @@ export class Issue {
       return;
     }
 
-    if (args.length === 2 && typeof args[0] === "string" && isString(args[1])) {
+    if (args.length === 2 && isString(args[0]) && isString(args[1])) {
       this.addCommentAuthorIdMessage(args[0] as UserId, args[1] as string);
 
       return;
@@ -154,14 +171,9 @@ export class Issue {
   transitionTo(...args: unknown[]): void {
     if (
       args.length === 3 &&
-      (args[0] === "backlog" ||
-        args[0] === "ready" ||
-        args[0] === "in-progress" ||
-        args[0] === "in-review" ||
-        args[0] === "done" ||
-        args[0] === "cancelled") &&
-      typeof args[1] === "string" &&
-      typeof args[2] === "object"
+      isType(args[0], IssueStatus$runtimeType) &&
+      isString(args[1]) &&
+      args[2] instanceof Temporal.ZonedDateTime
     ) {
       this.transitionToNextStatusActorIdChangedAt(
         args[0] as IssueStatus,
@@ -172,16 +184,7 @@ export class Issue {
       return;
     }
 
-    if (
-      args.length === 2 &&
-      (args[0] === "backlog" ||
-        args[0] === "ready" ||
-        args[0] === "in-progress" ||
-        args[0] === "in-review" ||
-        args[0] === "done" ||
-        args[0] === "cancelled") &&
-      typeof args[1] === "string"
-    ) {
+    if (args.length === 2 && isType(args[0], IssueStatus$runtimeType) && isString(args[1])) {
       this.transitionToNextStatusActorId(args[0] as IssueStatus, args[1] as UserId);
 
       return;

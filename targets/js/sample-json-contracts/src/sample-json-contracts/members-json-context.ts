@@ -1,10 +1,13 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Account } from "./account";
 import { Blob } from "./blob";
 import { InitRec } from "./init-rec";
 import { OrdBase } from "./ord-base";
 import { SetClass } from "./set-class";
+
+let MembersJsonContext$rt: ClassType<MembersJsonContext> | undefined;
 
 export class MembersJsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new MembersJsonContext() as MembersJsonContext;
@@ -13,6 +16,22 @@ export class MembersJsonContext extends SerializerContext {
   private _ordBase?: TypeSpec<OrdBase>;
   private _initRec?: TypeSpec<InitRec>;
   private _setClass?: TypeSpec<SetClass>;
+
+  static get $runtimeType(): ClassType<MembersJsonContext> {
+    return (MembersJsonContext$rt ??= {
+      kind: "class",
+      name: "MembersJsonContext",
+      fullName: "SampleJsonContracts.MembersJsonContext",
+      namespace: "SampleJsonContracts",
+      ctor: MembersJsonContext,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new MembersJsonContext(),
+      test: (v: unknown): v is MembersJsonContext => v instanceof MembersJsonContext,
+    });
+  }
 
   static get default(): MembersJsonContext {
     return MembersJsonContext._default;

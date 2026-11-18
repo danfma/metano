@@ -1,4 +1,4 @@
-import { checkedNarrowNumber, intDiv } from "metano-runtime";
+import { checkedNarrowNumber, intDiv, type ClassType } from "metano-runtime";
 
 export function sByteAdd(a: number, b: number): number {
   a = ((a + b) << 24) >> 24;
@@ -789,6 +789,8 @@ export function stepsUntilWrap(start: number): number {
   return steps;
 }
 
+let NarrowCells$rt: ClassType<NarrowCells> | undefined;
+
 export class NarrowCells {
   private static readonly notReadOnce: number = 65535;
   private readonly _cells: number[];
@@ -799,6 +801,21 @@ export class NarrowCells {
 
   constructor(seed: number) {
     this._cells = [0, seed];
+  }
+
+  static get $runtimeType(): ClassType<NarrowCells> {
+    return (NarrowCells$rt ??= {
+      kind: "class",
+      name: "NarrowCells",
+      fullName: "SampleInt64Conformance.NarrowCells",
+      namespace: "SampleInt64Conformance",
+      ctor: NarrowCells,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is NarrowCells => v instanceof NarrowCells,
+    });
   }
 
   addToCell(amount: number): number {

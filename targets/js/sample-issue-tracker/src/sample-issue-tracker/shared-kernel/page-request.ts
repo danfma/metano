@@ -1,12 +1,29 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+
+let PageRequest$rt: ClassType<PageRequest> | undefined;
 
 export class PageRequest {
   constructor(
     readonly number: number = 1,
     readonly size: number = 20,
   ) {}
+
+  static get $runtimeType(): ClassType<PageRequest> {
+    return (PageRequest$rt ??= {
+      kind: "class",
+      name: "PageRequest",
+      fullName: "SampleIssueTracker.SharedKernel.PageRequest",
+      namespace: "SampleIssueTracker.SharedKernel",
+      ctor: PageRequest,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is PageRequest => v instanceof PageRequest,
+    });
+  }
 
   get safeNumber(): number {
     return Math.max(1, this.number);

@@ -1,13 +1,31 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { addEntry, tryGetValue } from "metano-runtime";
+import { addEntry, tryGetValue, type ClassType } from "metano-runtime";
 import { linq, orderBy, sumInt64, toArray, where } from "metano-runtime/system/linq";
 import type { IssueActivity } from "#/sample-issue-tracker/issues/domain/issue-activity";
+
+let IssueActivityLog$rt: ClassType<IssueActivityLog> | undefined;
 
 export class IssueActivityLog {
   private readonly _activities: Map<bigint, IssueActivity> = new Map<bigint, IssueActivity>();
 
   constructor() {}
+
+  static get $runtimeType(): ClassType<IssueActivityLog> {
+    return (IssueActivityLog$rt ??= {
+      kind: "class",
+      name: "IssueActivityLog",
+      fullName: "SampleIssueTracker.Issues.Application.IssueActivityLog",
+      namespace: "SampleIssueTracker.Issues.Application",
+      ctor: IssueActivityLog,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new IssueActivityLog(),
+      test: (v: unknown): v is IssueActivityLog => v instanceof IssueActivityLog,
+    });
+  }
 
   get activities(): Map<bigint, IssueActivity> {
     return this._activities;

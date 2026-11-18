@@ -1,9 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, durationFromTicks } from "metano-runtime";
+import { HashCode, copyRecordWith, durationFromTicks, type ClassType } from "metano-runtime";
 import type { SnowflakeId } from "#/sample-issue-tracker/shared-kernel/snowflake-id";
 import type { IssueActivityKind } from "./issue-activity-kind";
+
+let IssueActivity$rt: ClassType<IssueActivity> | undefined;
 
 export class IssueActivity {
   constructor(
@@ -13,6 +15,21 @@ export class IssueActivity {
     readonly occurredAtTicks: bigint,
     readonly durationTicks: bigint | null,
   ) {}
+
+  static get $runtimeType(): ClassType<IssueActivity> {
+    return (IssueActivity$rt ??= {
+      kind: "class",
+      name: "IssueActivity",
+      fullName: "SampleIssueTracker.Issues.Domain.IssueActivity",
+      namespace: "SampleIssueTracker.Issues.Domain",
+      ctor: IssueActivity,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is IssueActivity => v instanceof IssueActivity,
+    });
+  }
 
   elapsedTicksUntil(endTicks: bigint): bigint {
     return BigInt.asIntN(64, endTicks - this.occurredAtTicks);

@@ -1,9 +1,26 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import type { Level } from "./level";
+
+let LevelMapHolder$rt: ClassType<LevelMapHolder> | undefined;
 
 export class LevelMapHolder {
   constructor(readonly byLevel: Map<Level, string>) {}
+
+  static get $runtimeType(): ClassType<LevelMapHolder> {
+    return (LevelMapHolder$rt ??= {
+      kind: "class",
+      name: "LevelMapHolder",
+      fullName: "SampleJsonContracts.LevelMapHolder",
+      namespace: "SampleJsonContracts",
+      ctor: LevelMapHolder,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is LevelMapHolder => v instanceof LevelMapHolder,
+    });
+  }
 
   equals(other: any): boolean {
     return (
