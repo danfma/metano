@@ -351,6 +351,11 @@ A Bun test imports `./shape` first, unbundled, then `./shape.guard`, and calls `
 ```ts
 export const Color = { Red: 0, Green: 1 } as const;
 export type Color = typeof Color[keyof typeof Color];
+const fromNumber = n as Color;          // (Color)n
+const next = c + 1 as Color;            // c + 1
+const both = (c | Color.Green) as Color;
+(c as number) += 1;                     // c += 1
+(c as number)++;                        // c++
 ```
 
 ```csharp
