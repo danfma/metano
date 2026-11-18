@@ -3116,7 +3116,7 @@ public sealed partial class IrExpressionExtractor
         symbol is { IsStatic: false }
         && (
             symbol.ContainingType.SpecialType == SpecialType.System_Object
-            || !MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
+            || !EmittedTypes.IsEmittedBase(symbol.ContainingType, _target)
         )
         && symbol.Name switch
         {
@@ -3176,7 +3176,7 @@ public sealed partial class IrExpressionExtractor
     }
 
     private bool IsDispatchedOnEmittedBase(IMethodSymbol symbol) =>
-        MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
+        EmittedTypes.IsEmittedBase(symbol.ContainingType, _target)
         && MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _context.GroupingPolicy)
             is { IsDispatched: true };
 

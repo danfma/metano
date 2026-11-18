@@ -154,7 +154,7 @@ internal static class IrSynthesizedMemberExtractor
         IrExtractionContext context
     ) =>
         new(
-            new IrMemberAccess(new IrThisExpression(), MethodOverloadGroups.GroupNameOf(routed)),
+            new IrMemberAccess(new IrThisExpression(), OverloadGroupName.Of(routed)),
             [new IrArgument(argument)]
         )
         {

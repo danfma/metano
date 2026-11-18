@@ -57,7 +57,7 @@ internal static partial class MethodOverloadGroups
     {
         for (
             var ancestor = type.BaseType;
-            IsEmittedBase(ancestor, policy.Target);
+            EmittedTypes.IsEmittedBase(ancestor, policy.Target);
             ancestor = ancestor!.BaseType
         )
         {
@@ -86,14 +86,4 @@ internal static partial class MethodOverloadGroups
 
         return null;
     }
-
-    /// <summary>
-    /// A class the target emits, whose dispatched groups a derived class and
-    /// a <c>base.M(...)</c> call can reach by fast path: transpiled, not
-    /// <c>[External]</c>, not a BCL or special type.
-    /// </summary>
-    internal static bool IsEmittedBase(INamedTypeSymbol? type, TargetLanguage? target) =>
-        type is { TypeKind: TypeKind.Class, SpecialType: SpecialType.None }
-        && IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
-        && !SymbolHelper.HasExternal(type.OriginalDefinition);
 }

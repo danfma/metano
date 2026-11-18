@@ -92,7 +92,7 @@ internal static class SynthesizedShadowingReporter
     ) =>
         type
             .AllInterfaces.Where(candidate =>
-                MethodOverloadGroups.IsTranspiledInterface(candidate, policy.Target)
+                EmittedTypes.IsTranspiledInterface(candidate, policy.Target)
             )
             .SelectMany(candidate => candidate.GetMembers().OfType<IMethodSymbol>())
             .FirstOrDefault(candidate =>

@@ -80,7 +80,7 @@ internal static partial class MethodOverloadGroups
     ) =>
         type.BaseType is { } baseType
         && baseType.FindImplementationForInterfaceMember(root) is IMethodSymbol implementation
-        && IsEmittedBase(implementation.ContainingType, target);
+        && EmittedTypes.IsEmittedBase(implementation.ContainingType, target);
 
     private static IrOverloadAnchorKind KindOf(IMethodSymbol method) =>
         method.IsOverride ? IrOverloadAnchorKind.Override : IrOverloadAnchorKind.Implementation;
@@ -100,7 +100,9 @@ internal static partial class MethodOverloadGroups
         // the chain continues into a BCL virtual (`object.Equals`) that no
         // emitted class owns.
         var firstEmitted = OverrideChainOf(method)
-            .LastOrDefault(declaration => IsEmittedBase(declaration.ContainingType, policy.Target));
+            .LastOrDefault(declaration =>
+                EmittedTypes.IsEmittedBase(declaration.ContainingType, policy.Target)
+            );
 
         return firstEmitted is not null && GroupOf(firstEmitted, policy) is { IsDispatched: true }
             ? firstEmitted
@@ -136,7 +138,7 @@ internal static partial class MethodOverloadGroups
 
         foreach (var implemented in type.AllInterfaces)
         {
-            if (!IsTranspiledInterface(implemented, target))
+            if (!EmittedTypes.IsTranspiledInterface(implemented, target))
                 continue;
 
             foreach (var member in implemented.GetMembers().OfType<IMethodSymbol>())
@@ -187,13 +189,4 @@ internal static partial class MethodOverloadGroups
 
         return false;
     }
-
-    /// <summary>
-    /// A transpiled interface whose groups implementers anchor on: emitted
-    /// (not <c>[External]</c>) and a real type (not <c>[JsCallable]</c>).
-    /// </summary>
-    internal static bool IsTranspiledInterface(INamedTypeSymbol type, TargetLanguage? target) =>
-        IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
-        && !SymbolHelper.HasExternal(type.OriginalDefinition)
-        && !SymbolHelper.HasJsCallable(type.OriginalDefinition);
 }

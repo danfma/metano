@@ -112,13 +112,6 @@ internal static partial class MethodOverloadGroups
             ?.MemberOf(method.OriginalDefinition)
             ?.SynthesizedKind;
 
-    /// <summary>
-    /// The name a method groups under: its C# name, or an explicit
-    /// implementation's interface member name.
-    /// </summary>
-    public static string GroupNameOf(IMethodSymbol method) =>
-        ExplicitImplementationLowering.ImplementedInterfaceMember(method)?.Name ?? method.Name;
-
     private static IReadOnlyList<MethodOverloadGroup> Compute(
         INamedTypeSymbol type,
         OverloadGroupingPolicy policy
@@ -127,7 +120,7 @@ internal static partial class MethodOverloadGroups
         var declared = DeclaredMethods(type, policy).ToList();
 
         var groups = declared
-            .GroupBy(GroupNameOf, StringComparer.Ordinal)
+            .GroupBy(OverloadGroupName.Of, StringComparer.Ordinal)
             .SelectMany(methods => GroupsNamed(type, methods.Key, methods.ToList(), policy))
             .ToList();
 
@@ -233,7 +226,7 @@ internal static partial class MethodOverloadGroups
         while (root.OverriddenMethod is { } overridden)
             root = overridden.OriginalDefinition;
 
-        return !IsEmittedBase(root.ContainingType, target);
+        return !EmittedTypes.IsEmittedBase(root.ContainingType, target);
     }
 
     /// <summary>
