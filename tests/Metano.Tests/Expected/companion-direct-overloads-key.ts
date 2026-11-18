@@ -59,12 +59,10 @@ function Key$vL(l: bigint): string {
   return "long";
 }
 
-/** @internal */
 function Key$vU(u: UId): string {
   return "internal";
 }
 
-/** @internal */
 function Key$vS(s: string): string {
   return "private";
 }
@@ -116,7 +114,26 @@ function Key$d(...args: unknown[]): string {
   throw new Error("No matching overload for d");
 }
 
-export const Key = {
+export const Key: {
+  readonly create: typeof Key$create;
+  readonly xL$: typeof Key$xL$;
+  readonly xU: typeof Key$xU;
+  readonly x: typeof Key$x;
+  readonly xL: typeof Key$xL;
+  readonly pinViaLong: typeof Key$pinViaLong;
+  readonly pinU: typeof Key$pinU;
+  readonly pin: typeof Key$pin;
+  readonly vL: typeof Key$vL;
+  /** @internal */
+  readonly vU: typeof Key$vU;
+  /** @internal */
+  readonly vS: typeof Key$vS;
+  readonly v: typeof Key$v;
+  readonly hidden: typeof Key$hidden;
+  readonly dLN: typeof Key$dLN;
+  readonly dUN: typeof Key$dUN;
+  readonly d: typeof Key$d;
+} = {
   create: Key$create,
   xL$: Key$xL$,
   xU: Key$xU,
@@ -133,4 +150,4 @@ export const Key = {
   dLN: Key$dLN,
   dUN: Key$dUN,
   d: Key$d,
-} as const;
+};

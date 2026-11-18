@@ -334,4 +334,40 @@ public class MemberNameEscapeTests
 
         await Assert.That(result["reader.ts"]).Contains("return s.default_;");
     }
+
+    [Test]
+    public async Task EnumMemberNamedProto_IsAComputedKey()
+    {
+        // A plain `__proto__:` key in an object literal sets the prototype instead of
+        // defining the member, so `E.__proto__` would read Object.prototype.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public enum Slot { __proto__, Other }
+            """
+        );
+
+        var output = result["slot.ts"];
+
+        await Assert.That(output).Contains("[\"__proto__\"]: 0,");
+        await Assert.That(output).DoesNotContain(" __proto__: 0");
+    }
+
+    [Test]
+    public async Task CompanionMemberNamedProto_IsAComputedKey()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, InlineWrapper]
+            public readonly record struct UserId(string Value)
+            {
+                public static UserId __proto__() => new("x");
+            }
+            """
+        );
+
+        var output = result["user-id.ts"];
+
+        await Assert.That(output).Contains("[\"__proto__\"]: UserId$__proto__,");
+    }
 }

@@ -104,20 +104,42 @@ public static class IrToTsBrandedBridge
             functions.AddRange(ConvertStaticMethodGroup(group, companion, context));
 
         sink.AddRange(functions.Select(function => AsModuleFunction(function, tsTypeName)));
+        sink.Add(CompanionObject(tsTypeName, functions));
+    }
 
-        sink.Add(
-            new TsConstObject(
-                tsTypeName,
-                [
-                    .. functions.Select(function =>
-                        (
-                            function.Name,
-                            (TsExpression)new TsIdentifier(ModuleName(tsTypeName, function.Name))
-                        )
-                    ),
-                ]
-            )
-        );
+    /// <summary>
+    /// <c>export const Money = { create: Money$create, … } as const;</c>. A member's
+    /// JSDoc (the <c>@internal</c> of an internal or private member) belongs to the
+    /// companion key, not to the module function no consumer names; declaration emit
+    /// strips a key only from a type annotation, so a companion with a tagged member is
+    /// annotated with its written shape instead of <c>as const</c>, and
+    /// <c>stripInternal</c> drops that key from the declarations.
+    /// </summary>
+    private static TsConstObject CompanionObject(
+        string typeName,
+        IReadOnlyList<TsFunction> functions
+    )
+    {
+        var entries = functions
+            .Select(function => new TsConstObjectEntry(
+                function.Name,
+                new TsIdentifier(ModuleName(typeName, function.Name))
+            ))
+            .ToList();
+
+        if (functions.All(function => function.JSDoc is null))
+            return new TsConstObject(typeName, entries);
+
+        var shape = new TsObjectType([
+            .. functions.Select(function => new TsObjectTypeField(
+                function.Name,
+                new TsTypeQuery(ModuleName(typeName, function.Name)),
+                Readonly: true,
+                JSDoc: function.JSDoc
+            )),
+        ]);
+
+        return new TsConstObject(typeName, entries, Shape: shape);
     }
 
     /// <summary>The module-level name of a companion member: <c>Type$member</c>.</summary>
@@ -129,6 +151,7 @@ public static class IrToTsBrandedBridge
         {
             Name = ModuleName(typeName, function.Name),
             Exported = false,
+            JSDoc = null,
         };
 
     /// <summary>

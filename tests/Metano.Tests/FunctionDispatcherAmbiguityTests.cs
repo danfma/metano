@@ -463,7 +463,7 @@ public class FunctionDispatcherAmbiguityTests
             .That(rename.Message)
             .IsEqualTo(
                 "Fast path 'UserId.fromRaw' of 'From(string raw)' is already taken in the "
-                    + "companion namespace; it is emitted as 'fromRaw$' (spec 013 FR-004)."
+                    + "companion object; it is emitted as 'fromRaw$' (spec 013 FR-004)."
             );
 
         await Assert.That(rename.Location).IsNotNull();

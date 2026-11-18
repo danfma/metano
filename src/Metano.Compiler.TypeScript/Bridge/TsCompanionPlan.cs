@@ -292,7 +292,7 @@ internal sealed class TsCompanionPlan
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.OverloadNameShadowed,
                 $"Fast path '{_typeName}.{candidate}' of '{signature}' is already taken in the "
-                    + $"companion namespace; it is emitted as '{claimed}' (spec 013 FR-004).",
+                    + $"companion object; it is emitted as '{claimed}' (spec 013 FR-004).",
                 new OverloadDeclarationSite(overload.Name, Signature: signature)
             );
         }

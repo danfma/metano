@@ -8,4 +8,12 @@ namespace Metano.Compiler.TypeScript.AST;
 /// </summary>
 public sealed record TsObjectType(IReadOnlyList<TsObjectTypeField> Fields) : TsType;
 
-public sealed record TsObjectTypeField(string Name, TsType Type, bool Optional = false);
+/// <param name="Readonly">Printed as <c>readonly name: T</c>.</param>
+/// <param name="JSDoc">The field's JSDoc, printed ahead of it.</param>
+public sealed record TsObjectTypeField(
+    string Name,
+    TsType Type,
+    bool Optional = false,
+    bool Readonly = false,
+    TsJSDoc? JSDoc = null
+);

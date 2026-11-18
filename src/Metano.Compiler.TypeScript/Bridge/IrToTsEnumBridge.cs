@@ -25,7 +25,10 @@ public static class IrToTsEnumBridge
         var tsName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
 
         var entries = ir
-            .Members.Select(member => (Key: MemberKey(ir, member), Value: MemberValue(ir, member)))
+            .Members.Select(member => new TsConstObjectEntry(
+                MemberKey(ir, member),
+                MemberValue(ir, member)
+            ))
             .ToList();
 
         statements.Add(new TsConstObject(tsName, entries));

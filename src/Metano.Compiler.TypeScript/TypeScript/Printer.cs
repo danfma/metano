@@ -14,6 +14,9 @@ public sealed class Printer(string indent = "  ")
     /// <summary>The annotation bundlers read as "no side effects, drop when unused".</summary>
     private const string PureAnnotation = "/* @__PURE__ */ ";
 
+    /// <summary>The one object literal key that is not a plain property.</summary>
+    private const string ProtoKey = "__proto__";
+
     private readonly IndentedStringBuilder _sb = new(indent);
 
     /// <summary>
@@ -654,20 +657,62 @@ public sealed class Printer(string indent = "  ")
             _sb.Write("export ");
         _sb.Write("const ");
         _sb.Write(constObj.Name);
+
+        if (constObj.Shape is { } shape)
+        {
+            _sb.Write(":");
+            PrintObjectTypeBlock(shape);
+        }
+
         _sb.Write(" =");
         _sb.WriteBlock(() =>
         {
-            foreach (var (key, value) in constObj.Entries)
+            foreach (var entry in constObj.Entries)
             {
-                _sb.Write(key);
+                PrintPropertyKey(entry.Key);
                 _sb.Write(": ");
-                PrintExpression(value);
+                PrintExpression(entry.Value);
                 _sb.Write(",");
                 _sb.WriteLn();
             }
         });
-        _sb.Write(" as const;");
+        _sb.Write(constObj.Shape is null ? " as const;" : ";");
     }
+
+    /// <summary>
+    /// An object type one field per line, each after its JSDoc, as the written shape
+    /// of a const object.
+    /// </summary>
+    private void PrintObjectTypeBlock(TsObjectType shape)
+    {
+        _sb.WriteBlock(() =>
+        {
+            foreach (var field in shape.Fields)
+            {
+                PrintJSDoc(field.JSDoc);
+                PrintObjectTypeField(field);
+                _sb.Write(";");
+                _sb.WriteLn();
+            }
+        });
+    }
+
+    private void PrintObjectTypeField(TsObjectTypeField field)
+    {
+        if (field.Readonly)
+            _sb.Write("readonly ");
+
+        _sb.Write(field.Name);
+        _sb.Write(field.Optional ? "?: " : ": ");
+        PrintType(field.Type);
+    }
+
+    /// <summary>
+    /// The key of an object literal entry. A plain <c>__proto__:</c> key sets the
+    /// object's prototype instead of defining a property, so it is printed computed.
+    /// </summary>
+    private void PrintPropertyKey(string key) =>
+        _sb.Write(key == ProtoKey ? $"[\"{ProtoKey}\"]" : key);
 
     // ─── Class ──────────────────────────────────────────────
 
@@ -1129,9 +1174,8 @@ public sealed class Printer(string indent = "  ")
                     if (i > 0)
                         _sb.Write("; ");
                     var field = obj.Fields[i];
-                    _sb.Write(field.Name);
-                    _sb.Write(field.Optional ? "?: " : ": ");
-                    PrintType(field.Type);
+                    PrintInlineJSDoc(field.JSDoc);
+                    PrintObjectTypeField(field);
                 }
                 _sb.Write(" }");
                 break;
@@ -1964,7 +2008,7 @@ public sealed class Printer(string indent = "  ")
         }
         else
         {
-            _sb.Write(prop.Key);
+            PrintPropertyKey(prop.Key);
             _sb.Write(": ");
             PrintListElement(prop.Value);
         }

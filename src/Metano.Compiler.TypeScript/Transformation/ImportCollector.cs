@@ -1288,8 +1288,11 @@ public sealed class ImportCollector(
 
                 break;
             case TsConstObject constObj:
-                foreach (var (_, value) in constObj.Entries)
-                    CollectFromExpression(value, sink);
+                foreach (var entry in constObj.Entries)
+                    CollectFromExpression(entry.Value, sink);
+
+                CollectFromType(constObj.Shape, sink);
+
                 break;
             case TsNamespaceDeclaration ns:
                 // Companion namespaces hold both branded-companion functions and nested
