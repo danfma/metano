@@ -177,7 +177,10 @@ public sealed class TsOverloadClaimsRegistry(
             OriginResolver = _shapeOriginResolver,
         };
 
-        return IrEmissionNormalizer.Normalize(IrClassExtractor.Extract(type, extraction), type);
+        return IrEmissionNormalizer.Normalize(
+            IrClassExtractor.Extract(type, extraction),
+            _context.NestedTypes.ModuleLevelName(type)
+        );
     }
 
     private IrInterfaceDeclaration InterfaceShapeOf(INamedTypeSymbol type)

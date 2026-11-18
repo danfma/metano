@@ -1,12 +1,15 @@
 namespace Metano.Tests;
 
 /// <summary>
-/// Pins the companion-namespace emission of nested types whatever their C#
-/// accessibility (#264). A static class holding a <c>private</c> nested record used
-/// to emit references (<c>new ShotSchedule.ShotEntry(…)</c>) to a type that was never
-/// declared (TS2702 / TS2339); unqualified value-position references inside the
-/// container (<c>Kind.B</c>) and explicit ones from outside
-/// (<c>ShotSchedule.Slot.Create()</c>) also lowered to unresolvable names.
+/// Pins the emission of nested types whatever their C# accessibility (#264). A static
+/// class holding a <c>private</c> nested record used to emit references
+/// (<c>new ShotSchedule.ShotEntry(…)</c>) to a type that was never declared (TS2702 /
+/// TS2339); unqualified value-position references inside the container (<c>Kind.B</c>)
+/// and explicit ones from outside (<c>ShotSchedule.Slot.Create()</c>) also lowered to
+/// unresolvable names. A container emitted as a class declares its nested types at
+/// module level (<c>ShotSchedule$Slot</c>) and exposes them through static getters
+/// and an erased <c>declare namespace</c> (spec 011 FR-040); other containers keep a
+/// companion namespace.
 /// </summary>
 public class NestedTypesInStaticClassTests
 {
@@ -253,8 +256,9 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["registry.ts"];
-        await Assert.That(output).Contains("return Registry.Level.High;");
-        await Assert.That(output).Contains("export const Level = {");
+        await Assert.That(output).Contains("return Registry$Level.High;");
+        await Assert.That(output).Contains("const Registry$Level = {");
+        await Assert.That(output).Contains("export type Level = Registry$Level;");
         // Outside [assembly: TranspileAssembly] a nested type still needs its own
         // [Transpile] opt-in, whatever its accessibility.
         await Assert.That(output).DoesNotContain("Untracked");
@@ -324,7 +328,7 @@ public class NestedTypesInStaticClassTests
     }
 
     [Test]
-    public async Task PrivateNestedType_NextToPublicOne_LeavesOnlyThePublicOneInTheNamespace()
+    public async Task PrivateNestedType_NextToPublicOne_LeavesOnlyThePublicOneExposed()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -342,15 +346,19 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["catalog.ts"];
-        await Assert.That(output).Contains("export namespace Catalog {");
-        await Assert.That(output).Contains("export class Entry {");
+        await Assert.That(output).Contains("class Catalog$Entry {");
+        await Assert.That(output).Contains("static get Entry(): typeof Catalog$Entry {");
+        await Assert.That(output).Contains("export declare namespace Catalog {");
+        await Assert.That(output).Contains("export type Entry = Catalog$Entry;");
         await Assert.That(output).Contains("class Catalog$Cursor {");
-        await Assert.That(output).DoesNotContain("export class Catalog$Cursor");
+        await Assert.That(output).DoesNotContain("export class Catalog$");
+        await Assert.That(output).DoesNotContain("get Cursor");
+        await Assert.That(output).DoesNotContain("type Cursor");
         await Assert.That(output).DoesNotContain("Catalog.Cursor");
     }
 
     [Test]
-    public async Task ProtectedNestedTypes_StayExportedForDerivedTypesInOtherFiles()
+    public async Task ProtectedNestedTypes_StayReachableForDerivedTypesInOtherFiles()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -373,20 +381,22 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["base.ts"];
-        await Assert.That(output).Contains("export namespace Base {");
-        await Assert.That(output).Contains("export class Token {");
-        await Assert.That(output).Contains("export class Secret {");
-        await Assert.That(output).DoesNotContain("Base$");
+        await Assert.That(output).Contains("static get Token(): typeof Base$Token {");
+        await Assert.That(output).Contains("static get Secret(): typeof Base$Secret {");
+        await Assert.That(output).Contains("export type Token = Base$Token;");
+        await Assert.That(output).Contains("export type Secret = Base$Secret;");
+        await Assert.That(output).DoesNotContain("namespace Base {\n  export class");
     }
 
     [Test]
-    public async Task InternalNestedType_StaysExportedForTheRestOfTheAssembly()
+    public async Task InternalNestedType_StaysReachableForTheRestOfTheAssembly()
     {
         var result = TranspileHelper.Transpile(ShotScheduleSource);
 
         var output = result["shot-schedule.ts"];
-        await Assert.That(output).Contains("export const Kind = {");
-        await Assert.That(output).DoesNotContain("ShotSchedule$Kind");
+        await Assert.That(output).Contains("static get Kind(): typeof ShotSchedule$Kind {");
+        await Assert.That(output).Contains("export type Kind = ShotSchedule$Kind;");
+        await Assert.That(output).DoesNotContain("export const ShotSchedule$Kind");
     }
 
     [Test]
@@ -397,9 +407,12 @@ public class NestedTypesInStaticClassTests
         var output = result["shot-schedule.ts"];
         await Assert.That(output).Contains("class ShotSchedule$ShotEntry {");
         await Assert.That(output).Contains("class ShotSchedule$Deep {");
-        await Assert.That(output).Contains("namespace ShotSchedule$Deep {");
+        await Assert.That(output).Contains("class ShotSchedule$Deep$Leaf {");
         await Assert.That(output).DoesNotContain("export class ShotSchedule$");
-        await Assert.That(output).DoesNotContain("export namespace ShotSchedule$");
+        await Assert.That(output).DoesNotContain("namespace ShotSchedule$");
+        await Assert.That(output).DoesNotContain("get ShotEntry");
+        await Assert.That(output).DoesNotContain("get Deep");
+        await Assert.That(output).DoesNotContain("get Leaf");
     }
 
     [Test]
@@ -427,9 +440,13 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(output.IndexOf("class Holder$P {"))
+            .IsLessThan(output.IndexOf("class Holder$Pub {"));
+
+        await Assert
+            .That(output.IndexOf("class Holder$Pub {"))
             .IsLessThan(output.IndexOf("export class Holder {"));
 
-        await Assert.That(output).Contains("new Holder.Pub(new Holder$P(0).v)");
+        await Assert.That(output).Contains("new Holder$Pub(new Holder$P(0).v)");
     }
 
     [Test]
@@ -484,7 +501,7 @@ public class NestedTypesInStaticClassTests
     }
 
     [Test]
-    public async Task PrivateNestedType_ExtendingAMemberOfTheOwnerNamespace_FollowsIt()
+    public async Task PrivateNestedType_ExtendingAHoistedSibling_FollowsIt()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -507,8 +524,12 @@ public class NestedTypesInStaticClassTests
         var output = result["outer.ts"];
 
         await Assert
-            .That(output.IndexOf("class Outer$Impl extends Outer.PublicBase"))
-            .IsGreaterThan(output.IndexOf("export class PublicBase"));
+            .That(output.IndexOf("class Outer$Impl extends Outer$PublicBase"))
+            .IsGreaterThan(output.IndexOf("class Outer$PublicBase {"));
+
+        await Assert
+            .That(output.IndexOf("class Outer$Impl extends Outer$PublicBase"))
+            .IsLessThan(output.IndexOf("export class Outer {"));
     }
 
     [Test]
@@ -559,7 +580,8 @@ public class NestedTypesInStaticClassTests
         await Assert.That(output).Contains("\nclass Outer$Mid$Leaf {");
         await Assert.That(output).DoesNotContain("export class Outer$Mid$Leaf");
         await Assert.That(output).Contains("return new Outer$Mid$Leaf(1).n;");
-        await Assert.That(output).Contains("export class Mid {");
+        await Assert.That(output).Contains("\nclass Outer$Mid {");
+        await Assert.That(output).DoesNotContain("export class Outer$Mid");
     }
 
     [Test]
@@ -670,7 +692,7 @@ public class NestedTypesInStaticClassTests
     }
 
     [Test]
-    public async Task PrivateNestedType_WhoseStaticInitializerConstructsAPublicSibling_FollowsTheNamespace()
+    public async Task PrivateNestedType_WhoseStaticInitializerConstructsAPublicSibling_FollowsIt()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -694,11 +716,15 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(output.IndexOf("class Shelf$Cache {"))
-            .IsGreaterThan(output.IndexOf("export namespace Shelf {"));
+            .IsGreaterThan(output.IndexOf("class Shelf$Book {"));
+
+        await Assert
+            .That(output.IndexOf("class Shelf$Cache {"))
+            .IsLessThan(output.IndexOf("export class Shelf {"));
 
         await Assert
             .That(output)
-            .Contains("static readonly item = /* @__PURE__ */ new Shelf.Book(9) as Shelf.Book;");
+            .Contains("static readonly item = /* @__PURE__ */ new Shelf$Book(9) as Shelf$Book;");
     }
 
     [Test]
@@ -765,10 +791,10 @@ public class NestedTypesInStaticClassTests
     }
 
     [Test]
-    public async Task PrivateNestedType_InsideAPublicNestedType_ExtendingTheOwnerNamespace_FollowsIt()
+    public async Task PrivateNestedType_InsideAPublicNestedType_ExtendingAHoistedType_FollowsIt()
     {
-        // The placement is decided against the module-level owner, not the immediate
-        // container: `Outer.PubBase` is declared in the owner's namespace.
+        // The order is decided among the module-level declarations of the owner's
+        // module, not within the immediate container: `Outer.PubBase` is hoisted.
         var result = TranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
@@ -795,8 +821,8 @@ public class NestedTypesInStaticClassTests
         var output = result["outer.ts"];
 
         await Assert
-            .That(output.IndexOf("class Outer$Mid$Leaf extends Outer.PubBase {"))
-            .IsGreaterThan(output.IndexOf("export namespace Outer {"));
+            .That(output.IndexOf("class Outer$Mid$Leaf extends Outer$PubBase {"))
+            .IsGreaterThan(output.IndexOf("class Outer$PubBase {"));
     }
 
     [Test]
@@ -1050,5 +1076,88 @@ public class NestedTypesInStaticClassTests
 
         await Assert.That(output).Contains("namespace Plain$Box {");
         await Assert.That(output).Contains("return Plain$Box.dbl({ x: 5 });");
+    }
+
+    [Test]
+    public async Task NestedEnum_InAJsonContractOfAnotherFile_IsReachedThroughItsOwner()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+
+            [assembly: TranspileAssembly]
+
+            public class Outer
+            {
+                public record Payload(int Id, Kind Kind);
+
+                public enum Kind { A, B }
+            }
+
+            [JsonSerializable(typeof(Outer.Payload))]
+            public partial class Ctx : JsonSerializerContext
+            {
+                public Ctx() : base(new JsonSerializerOptions()) { }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        );
+
+        var context = result["ctx.ts"];
+
+        await Assert.That(result["outer.ts"]).Contains("static get Kind(): typeof Outer$Kind {");
+        await Assert.That(context).Contains("values: Outer.Kind,");
+        await Assert.That(context).Contains("type: Outer.Payload,");
+        await Assert.That(context).Contains("import { Outer } from \"./outer\";");
+    }
+
+    [Test]
+    public async Task HoistedNestedDescriptor_IsReachedThroughItsOwnerAndStaysOutOfTheBarrel()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            namespace Nesting;
+
+            public class Outer
+            {
+                public enum Kind { A, B }
+
+                public interface IShape { int Area(); }
+            }
+
+            public static class Use
+            {
+                public static System.Type K() => typeof(Outer.Kind);
+
+                public static bool Is(object o) => o is Outer.IShape;
+            }
+            """
+        );
+
+        var outer = result["nesting/outer.ts"];
+        var use = result["nesting/use.ts"];
+
+        await Assert
+            .That(outer)
+            .Contains("\nconst Outer$Kind$runtimeType: EnumType<Outer$Kind> = {");
+
+        await Assert
+            .That(outer)
+            .Contains("static get Kind$runtimeType(): typeof Outer$Kind$runtimeType {");
+
+        await Assert
+            .That(outer)
+            .Contains("static get IShape$runtimeType(): typeof Outer$IShape$runtimeType {");
+
+        await Assert.That(outer).DoesNotContain("export const Outer$");
+        await Assert.That(use).Contains("return Outer.Kind$runtimeType;");
+        await Assert.That(use).Contains("Outer.IShape$runtimeType");
+        await Assert.That(result["nesting/index.ts"]).DoesNotContain("$runtimeType");
     }
 }

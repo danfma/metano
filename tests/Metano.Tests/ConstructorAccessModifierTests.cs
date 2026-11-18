@@ -675,7 +675,7 @@ public class ConstructorAccessModifierTests
             .That(output)
             .Contains("export abstract class Result {\n  protected constructor() { }");
 
-        await Assert.That(output).Contains("export class Ok extends Result {");
+        await Assert.That(output).Contains("class Result$Ok extends Result {");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
 

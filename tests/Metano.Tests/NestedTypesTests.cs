@@ -3,7 +3,7 @@ namespace Metano.Tests;
 public class NestedTypesTests
 {
     [Test]
-    public async Task NestedClass_GeneratesCompanionNamespace()
+    public async Task NestedClass_IsHoistedAndExposedThroughItsOwner()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -25,8 +25,12 @@ public class NestedTypesTests
 
         var output = result["outer.ts"];
         await Assert.That(output).Contains("export class Outer");
-        await Assert.That(output).Contains("export namespace Outer");
-        await Assert.That(output).Contains("export class Inner");
+        await Assert.That(output).DoesNotContain("export class Outer$Inner");
+        await Assert.That(output).Contains("class Outer$Inner {");
+        await Assert.That(output).Contains("static get Inner(): typeof Outer$Inner {");
+        await Assert.That(output).Contains("export declare namespace Outer {");
+        await Assert.That(output).Contains("export type Inner = Outer$Inner;");
+        await Assert.That(output).DoesNotContain("export namespace Outer");
     }
 
     [Test]
@@ -48,8 +52,9 @@ public class NestedTypesTests
 
         var output = result["container.ts"];
         await Assert.That(output).Contains("export class Container");
-        await Assert.That(output).Contains("export namespace Container");
-        await Assert.That(output).Contains("Status");
+        await Assert.That(output).Contains("const Container$Status = {");
+        await Assert.That(output).Contains("static get Status(): typeof Container$Status {");
+        await Assert.That(output).Contains("export type Status = Container$Status;");
     }
 
     [Test]

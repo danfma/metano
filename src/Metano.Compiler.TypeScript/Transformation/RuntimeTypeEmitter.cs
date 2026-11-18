@@ -109,7 +109,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     public TsTopLevel? EnumDescriptor(
         INamedTypeSymbol type,
         IrEnumDeclaration ir,
-        IReadOnlyList<(string Key, TsExpression Value)> entries,
+        IReadOnlyList<TsConstObjectEntry> entries,
         string tsName
     )
     {
@@ -361,7 +361,8 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
 
     /// <summary>
     /// The module-level memo of a class getter, named after the class's
-    /// containment path so a nested class's memo never clashes with another's.
+    /// containment path of own names, so a nested class's memo never clashes with
+    /// another's and follows its module-local identifier (<c>Outer$Inner$rt</c>).
     /// </summary>
     private string MemoNameOf(INamedTypeSymbol type)
     {
@@ -372,7 +373,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             current is not null;
             current = current.ContainingType
         )
-            path.Insert(0, _context.ResolveTsName(current));
+            path.Insert(0, _context.ResolveOwnTsName(current));
 
         return $"{string.Join("$", path)}{IrToTsRuntimeTypeReferences.MemoSuffix}";
     }

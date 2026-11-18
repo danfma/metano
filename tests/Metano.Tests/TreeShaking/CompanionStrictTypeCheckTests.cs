@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Metano.Tests.TreeShaking;
 
 /// <summary>
@@ -76,23 +74,10 @@ public class CompanionStrictTypeCheckTests
         await Assert.That(library["acme/money.ts"]).Contains("export const Money = {");
         await Assert.That(consumer["app/wallet.ts"]).Contains("from \"acme-lib/acme\"");
 
-        var root = Directory.CreateTempSubdirectory("metano-companion-strict-").FullName;
+        var (exitCode, output) = await StrictTypeCheck.Run(library, consumer);
 
-        try
-        {
-            WriteFiles(Path.Combine(root, "lib"), library);
-            WriteFiles(Path.Combine(root, "app"), consumer);
-            File.WriteAllText(Path.Combine(root, "tsconfig.json"), TsConfig());
-
-            var (exitCode, output) = await RunTsgo(root);
-
-            await Assert.That(output).IsEmpty();
-            await Assert.That(exitCode).IsEqualTo(0);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
     }
 
     [Test]
@@ -103,11 +88,11 @@ public class CompanionStrictTypeCheckTests
 
         try
         {
-            WriteFiles(Path.Combine(root, "lib"), library);
+            StrictTypeCheck.WriteFiles(Path.Combine(root, "lib"), library);
             File.WriteAllText(Path.Combine(root, "lib", "runtime.d.ts"), RuntimeStub);
             File.WriteAllText(Path.Combine(root, "tsconfig.json"), DeclarationTsConfig());
 
-            var (exitCode, output) = await RunTsgo(root);
+            var (exitCode, output) = await StrictTypeCheck.RunTsgo(root);
 
             await Assert.That(output).IsEmpty();
             await Assert.That(exitCode).IsEqualTo(0);
@@ -122,45 +107,6 @@ public class CompanionStrictTypeCheckTests
         {
             Directory.Delete(root, recursive: true);
         }
-    }
-
-    private static void WriteFiles(string directory, IReadOnlyDictionary<string, string> files)
-    {
-        foreach (var (name, content) in files)
-        {
-            var path = Path.Combine(directory, name);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, content);
-        }
-    }
-
-    private static string TsConfig()
-    {
-        var runtimeSource = Path.Combine(RuntimeDirectory(), "src").Replace('\\', '/');
-
-        return $$"""
-            {
-              "compilerOptions": {
-                "strict": true,
-                "noEmit": true,
-                "target": "es2022",
-                "lib": ["ESNext", "DOM"],
-                "module": "esnext",
-                "moduleResolution": "bundler",
-                "allowImportingTsExtensions": true,
-                "skipLibCheck": true,
-                "types": [],
-                "paths": {
-                  "acme-lib/*": ["./lib/*", "./lib/*/index.ts"],
-                  "metano-runtime": ["{{runtimeSource}}/index.ts"],
-                  "metano-runtime/*": ["{{runtimeSource}}/*.ts", "{{runtimeSource}}/*/index.ts"],
-                  "#/*": ["./app/*"]
-                }
-              },
-              "include": ["app/**/*.ts", "lib/**/*.ts"]
-            }
-            """;
     }
 
     /// <summary>
@@ -188,32 +134,4 @@ public class CompanionStrictTypeCheckTests
               "include": ["lib/**/*.ts"]
             }
             """;
-
-    private static string RuntimeDirectory() =>
-        Path.Combine(TranspileHelper.RepositoryRoot(), "targets", "js", "metano-runtime");
-
-    private static async Task<(int ExitCode, string Output)> RunTsgo(string root)
-    {
-        var tsgo = new[]
-        {
-            Path.Combine(RuntimeDirectory(), "node_modules", ".bin", "tsgo"),
-            Path.Combine(TranspileHelper.RepositoryRoot(), "node_modules", ".bin", "tsgo"),
-        }.First(File.Exists);
-
-        var start = new ProcessStartInfo(tsgo, ["-p", root])
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
-        using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("tsgo did not start");
-
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-
-        await process.WaitForExitAsync();
-
-        return (process.ExitCode, (await output + await error).Trim());
-    }
 }

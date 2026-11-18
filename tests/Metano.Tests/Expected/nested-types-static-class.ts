@@ -28,92 +28,108 @@ class ShotSchedule$ShotEntry {
   }
 }
 
-class ShotSchedule$Deep {
-  constructor() { }
+const ShotSchedule$Kind = {
+  A: 0,
+  B: 1,
+} as const;
 
-  static make(): ShotSchedule$Deep.Leaf {
-    return new ShotSchedule$Deep.Leaf(5);
+type ShotSchedule$Kind = typeof ShotSchedule$Kind[keyof typeof ShotSchedule$Kind];
+
+class ShotSchedule$Slot {
+  constructor(readonly index: number) { }
+
+  static create(): ShotSchedule$Slot {
+    return new ShotSchedule$Slot(7);
+  }
+
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.index === other.index;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.index);
+
+    return hc.toHashCode();
+  }
+
+  with(overrides?: Partial<ShotSchedule$Slot>): ShotSchedule$Slot {
+    return copyRecordWith<ShotSchedule$Slot>(this, overrides);
   }
 }
 
-namespace ShotSchedule$Deep {
-  export class Leaf {
-    constructor(readonly n: number) { }
+class ShotSchedule$Box<T> {
+  constructor(readonly value: T) {
+    this.value = value;
+  }
+}
 
-    equals(other: any): boolean {
-      return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.n === other.n;
-    }
+class ShotSchedule$Deep {
+  constructor() { }
 
-    hashCode(): number {
-      const hc = new HashCode();
-      hc.add(this.n);
+  static make(): ShotSchedule$Deep$Leaf {
+    return new ShotSchedule$Deep$Leaf(5);
+  }
+}
 
-      return hc.toHashCode();
-    }
+class ShotSchedule$Deep$Leaf {
+  constructor(readonly n: number) { }
 
-    with(overrides?: Partial<Leaf>): Leaf {
-      return copyRecordWith<Leaf>(this, overrides);
-    }
+  equals(other: any): boolean {
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.n === other.n;
+  }
+
+  hashCode(): number {
+    const hc = new HashCode();
+    hc.add(this.n);
+
+    return hc.toHashCode();
+  }
+
+  with(overrides?: Partial<ShotSchedule$Deep$Leaf>): ShotSchedule$Deep$Leaf {
+    return copyRecordWith<ShotSchedule$Deep$Leaf>(this, overrides);
   }
 }
 
 export class ShotSchedule {
   constructor() { }
 
+  static get Kind(): typeof ShotSchedule$Kind {
+    return ShotSchedule$Kind;
+  }
+
+  static get Slot(): typeof ShotSchedule$Slot {
+    return ShotSchedule$Slot;
+  }
+
+  static get Box(): typeof ShotSchedule$Box {
+    return ShotSchedule$Box;
+  }
+
   static total(name: string): number {
     const entry = new ShotSchedule$ShotEntry(name, 3);
-    const kind = ShotSchedule.Kind.B as ShotSchedule.Kind;
-    const box = new ShotSchedule.Box(entry);
+    const kind = ShotSchedule$Kind.B as ShotSchedule$Kind;
+    const box = new ShotSchedule$Box(entry);
     const boxed = entry;
     const isEntry = boxed instanceof ShotSchedule$ShotEntry ? 1 : 0;
 
-    return (box.value.frames + (kind === ShotSchedule.Kind.B ? 1 : 0) + ShotSchedule$ShotEntry.empty().frames + isEntry + ShotSchedule.Slot.create().index + ShotSchedule$Deep.make().n + new ShotSchedule$Deep.Leaf(1).n + entry.twice().frames) | 0;
+    return (box.value.frames + (kind === ShotSchedule$Kind.B ? 1 : 0) + ShotSchedule$ShotEntry.empty().frames + isEntry + ShotSchedule$Slot.create().index + ShotSchedule$Deep.make().n + new ShotSchedule$Deep$Leaf(1).n + entry.twice().frames) | 0;
   }
 
   /** @internal */
-  static kindValue(kind: ShotSchedule.Kind = ShotSchedule.Kind.B): number {
+  static kindValue(kind: ShotSchedule$Kind = ShotSchedule$Kind.B): number {
     return kind;
   }
 
-  static first(): ShotSchedule.Slot {
-    return new ShotSchedule.Slot(0);
+  static first(): ShotSchedule$Slot {
+    return new ShotSchedule$Slot(0);
   }
 }
 
-export namespace ShotSchedule {
-  export const Kind = {
-    A: 0,
-    B: 1,
-  } as const;
+export declare namespace ShotSchedule {
+  export type Kind = ShotSchedule$Kind;
 
-  export type Kind = typeof Kind[keyof typeof Kind];
+  export type Slot = ShotSchedule$Slot;
 
-  export class Slot {
-    constructor(readonly index: number) { }
-
-    static create(): ShotSchedule.Slot {
-      return new ShotSchedule.Slot(7);
-    }
-
-    equals(other: any): boolean {
-      return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.index === other.index;
-    }
-
-    hashCode(): number {
-      const hc = new HashCode();
-      hc.add(this.index);
-
-      return hc.toHashCode();
-    }
-
-    with(overrides?: Partial<Slot>): Slot {
-      return copyRecordWith<Slot>(this, overrides);
-    }
-  }
-
-  export class Box<T> {
-    constructor(readonly value: T) {
-      this.value = value;
-    }
-  }
+  export type Box<T> = ShotSchedule$Box<T>;
 }

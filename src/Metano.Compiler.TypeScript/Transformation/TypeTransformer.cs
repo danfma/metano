@@ -178,18 +178,23 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// Emits the nested types of <paramref name="parent"/>. Every non-private one becomes
-    /// a member of the companion namespace added to <paramref name="statements"/> —
-    /// TS declaration merging makes `Outer.Inner` read just like in C#.
-    /// <para>
-    /// A <c>private</c> nested type is not part of the container's surface (#412): it
-    /// is declared module-local and unexported under <see cref="ModuleLocalNaming"/>'s
-    /// identifier, so the namespace — and with it the barrel and the package — never
-    /// exposes it. It goes to <paramref name="moduleLocal"/>, which places it before or
-    /// after the module-level owner's declarations by its load-time dependencies
-    /// (<see cref="ModuleLocalPlacement"/>) once the owner is built
-    /// (<see cref="BuildTypeStatements"/>).
-    /// </para>
+    /// Emits the nested types of <paramref name="parent"/>. One declared at module level
+    /// (<see cref="NestedTypeHoisting"/>) goes to <paramref name="moduleLocal"/>, which
+    /// places it before or after the module-level owner's declarations by its load-time
+    /// dependencies (<see cref="ModuleLocalPlacement"/>) once the owner is built
+    /// (<see cref="BuildTypeStatements"/>):
+    /// <list type="bullet">
+    ///   <item>a <c>private</c> one (#412) is not part of the container's surface: it is
+    ///   declared unexported under <see cref="ModuleLocalNaming"/>'s identifier, so
+    ///   neither the barrel nor the package exposes it;</item>
+    ///   <item>a hoisted one (spec 011 FR-040) is declared the same way and reached
+    ///   through its container (<see cref="ExposeHoistedNestedTypes"/>), so
+    ///   <c>Outer.Inner</c> reads as in C# without the IIFE a namespace compiles
+    ///   to.</item>
+    /// </list>
+    /// Every other nested type becomes a member of the companion namespace added to
+    /// <paramref name="statements"/>, which TS declaration merging reads as
+    /// <c>Outer.Inner</c>.
     /// </summary>
     private void TransformNestedTypes(
         INamedTypeSymbol parent,
@@ -211,7 +216,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // emitted without going through the file-grouping pipeline. Imports and
             // path computation are the parent file's responsibility (the parent's
             // ImportCollector already walks these statements).
-            if (!SymbolHelper.IsContainerPrivateNestedType(nestedType))
+            if (!Context.NestedTypes.IsModuleLevel(nestedType))
             {
                 BuildTypeStatements(
                     nestedType,
@@ -239,9 +244,128 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     Functions: [],
                     // A companion merged with an emitted class must share its `export`
                     // modifier (TS2395); a module-local container is itself unexported.
-                    Exported: !SymbolHelper.IsContainerPrivateNestedType(parent),
+                    Exported: !Context.NestedTypes.IsModuleLevel(parent),
                     Members: namespaceMembers
                 )
+            );
+        }
+
+        ExposeHoistedNestedTypes(parent, statements, moduleLocal);
+    }
+
+    /// <summary>
+    /// Reaches the exposed hoisted nested types of <paramref name="parent"/> through it:
+    /// a static getter per value (<c>static get Inner() { return Outer$Inner; }</c>,
+    /// pure and free of load order, where a <c>static readonly</c> copy would read a
+    /// nested class declared after the owner), and, on the module-level owner, an
+    /// erased <c>declare namespace</c> aliasing every exposed type at any depth
+    /// (<c>type Inner = Outer$Inner;</c>), so <c>Outer.Inner</c> stays a type.
+    /// </summary>
+    private void ExposeHoistedNestedTypes(
+        INamedTypeSymbol parent,
+        List<TsTopLevel> statements,
+        ModuleLocalDeclarations moduleLocal
+    )
+    {
+        var exposed = moduleLocal.ExposedIn(parent);
+
+        if (exposed.Count == 0)
+            return;
+
+        var parentName = Context.ResolveTsName(parent);
+
+        var index = statements.FindIndex(statement =>
+            statement is TsClass cls && cls.Name == parentName
+        );
+
+        if (index < 0)
+        {
+            throw new InvalidOperationException(
+                $"'{parent.ToDisplayString()}' hoists its nested types but emitted no class "
+                    + $"'{parentName}' to expose them through."
+            );
+        }
+
+        var owner = (TsClass)statements[index];
+
+        statements[index] = owner with
+        {
+            Members = [.. owner.Members, .. exposed.SelectMany(GettersOf)],
+        };
+
+        if (parent.ContainingType is null)
+        {
+            statements.Insert(
+                index + 1,
+                new TsNamespaceDeclaration(
+                    parentName,
+                    Functions: [],
+                    Exported: owner.Exported,
+                    Members: TypeAliasesOf(exposed, moduleLocal),
+                    Declare: true
+                )
+            );
+        }
+    }
+
+    /// <summary>
+    /// The getters of <paramref name="nested"/> on its container: its value, and its
+    /// runtime type descriptor literal (<c>Outer.Kind$runtimeType</c>, spec 011 FR-018).
+    /// </summary>
+    private static IEnumerable<TsGetterMember> GettersOf(HoistedNestedType nested)
+    {
+        if (nested.HasValue)
+            yield return Getter(nested.Name, nested.DeclaredName);
+
+        if (nested.DescriptorName is { } descriptor)
+        {
+            yield return Getter(
+                $"{nested.Name}{IrToTsRuntimeTypeReferences.ExportSuffix}",
+                descriptor
+            );
+        }
+    }
+
+    private static TsGetterMember Getter(string name, string declaredName) =>
+        new(
+            name,
+            new TsTypeQuery(declaredName),
+            [new TsReturnStatement(new TsIdentifier(declaredName))],
+            Static: true
+        );
+
+    private static IReadOnlyList<TsTopLevel> TypeAliasesOf(
+        IReadOnlyList<HoistedNestedType> exposed,
+        ModuleLocalDeclarations moduleLocal
+    ) => [.. exposed.SelectMany(nested => TypeAliasOf(nested, moduleLocal))];
+
+    /// <summary>
+    /// <c>type Inner&lt;T&gt; = Outer$Inner&lt;T&gt;;</c>, followed by
+    /// <c>namespace Inner { … }</c> for the types exposed under it.
+    /// </summary>
+    private static IEnumerable<TsTopLevel> TypeAliasOf(
+        HoistedNestedType nested,
+        ModuleLocalDeclarations moduleLocal
+    )
+    {
+        var typeArguments = nested
+            .TypeParameters?.Select(parameter => (TsType)new TsNamedType(parameter.Name))
+            .ToList();
+
+        yield return new TsTypeAlias(
+            nested.Name,
+            new TsNamedType(nested.DeclaredName, typeArguments),
+            TypeParameters: nested.TypeParameters
+        );
+
+        var children = moduleLocal.ExposedIn(nested.Symbol);
+
+        if (children.Count > 0)
+        {
+            yield return new TsNamespaceDeclaration(
+                nested.Name,
+                Functions: [],
+                Members: TypeAliasesOf(children, moduleLocal)
             );
         }
     }
@@ -257,7 +381,72 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         BuildTypeStatements(type, declarations, lowering, moduleLocal: moduleLocal);
         sink.AddRange(declarations.Select(WithoutExport));
+
+        if (
+            Context.NestedTypes.IsExposed(type)
+            && HoistedNestedTypeOf(type, declarations) is { } hoisted
+        )
+            moduleLocal.Expose(type.ContainingType!, hoisted);
     }
+
+    /// <summary>
+    /// How the hoisted <paramref name="type"/> is reached through its container, read
+    /// from its declarations: a class or an enum object carries a value, and the
+    /// declaration's type parameters are the alias's.
+    /// </summary>
+    private HoistedNestedType? HoistedNestedTypeOf(
+        INamedTypeSymbol type,
+        IReadOnlyList<TsTopLevel> declarations
+    )
+    {
+        var declaredName = Context.ResolveTsName(type);
+
+        var named = declarations
+            .Where(statement => DeclaredNameOf(statement) == declaredName)
+            .ToList();
+
+        if (named.Count == 0)
+            return null;
+
+        var hasValue = named.Any(statement => statement is TsClass or TsConstObject);
+        var descriptorName = $"{declaredName}{IrToTsRuntimeTypeReferences.ExportSuffix}";
+        var hasDescriptor = declarations.Any(statement =>
+            DeclaredNameOf(statement) == descriptorName
+        );
+
+        var typeParameters = named
+            .Select(TypeParametersOf)
+            .FirstOrDefault(parameters => parameters is not null);
+
+        return new HoistedNestedType(
+            Context.ResolveOwnTsName(type),
+            declaredName,
+            type,
+            hasValue,
+            typeParameters,
+            hasDescriptor ? descriptorName : null
+        );
+    }
+
+    private static string? DeclaredNameOf(TsTopLevel statement) =>
+        statement switch
+        {
+            TsClass declaration => declaration.Name,
+            TsInterface declaration => declaration.Name,
+            TsTypeAlias declaration => declaration.Name,
+            TsConstObject declaration => declaration.Name,
+            TsTopLevelStatement { Inner: TsVariableDeclaration variable } => variable.Name,
+            _ => null,
+        };
+
+    private static IReadOnlyList<TsTypeParameter>? TypeParametersOf(TsTopLevel statement) =>
+        statement switch
+        {
+            TsClass { TypeParameters.Count: > 0 } declaration => declaration.TypeParameters,
+            TsInterface { TypeParameters.Count: > 0 } declaration => declaration.TypeParameters,
+            TsTypeAlias { TypeParameters.Count: > 0 } declaration => declaration.TypeParameters,
+            _ => null,
+        };
 
     private static TsTopLevel WithoutExport(TsTopLevel statement) =>
         statement switch
@@ -268,25 +457,24 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsFunction declaration => declaration with { Exported = false },
             TsConstObject declaration => declaration with { Exported = false },
             TsNamespaceDeclaration declaration => declaration with { Exported = false },
+            TsTopLevelStatement { Inner: TsVariableDeclaration variable } declaration =>
+                declaration with
+                {
+                    Inner = variable with { Exported = false },
+                },
             // Statements with no `export` modifier of their own (side-effect
             // registrations, imports) pass through unchanged.
             _ => statement,
         };
 
     /// <summary>
-    /// A nested type is emitted into its parent's companion namespace whenever it is
-    /// transpilable, whatever its C# accessibility: the parent's members (and, for
-    /// <c>internal</c>, other files) reference it as <c>Outer.Inner</c>, which only
-    /// resolves through an exported namespace member. The barrel re-exports only the
-    /// top-level parent, so a non-public nested type never gets its own barrel entry.
-    /// A <c>private</c> one is the exception to the namespace placement: it is declared
-    /// module-local (<see cref="TransformNestedTypes"/>).
+    /// Whether a nested type is emitted (<see cref="NestedTypeHoisting.Emits"/>):
+    /// whenever it is transpilable, whatever its C# accessibility. The barrel
+    /// re-exports only the top-level parent, so a non-public nested type never gets
+    /// its own barrel entry.
     /// </summary>
     private bool ShouldEmitNestedType(INamedTypeSymbol type) =>
-        // Assembly-wide opt-in already rejects implicit nested types; this guard
-        // keeps the explicit-[Transpile] path equally strict.
-        !type.IsImplicitlyDeclared
-        && SymbolHelper.IsTranspilable(type, _assemblyWideTranspile, _currentAssembly);
+        NestedTypeHoisting.IsEmitted(type, _assemblyWideTranspile, _currentAssembly);
 
     /// <summary>
     /// Discovers all types with [Transpile] and transforms each into a TsSourceFile.
@@ -806,11 +994,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         EmitGuards(type, sink);
 
-        // Process nested types — the non-private ones go to a companion namespace
-        // (declaration merging makes `Outer.Inner` read just like in C#), the private
-        // ones to the module-level collection.
+        // Process nested types — the ones declared at module level go to the
+        // module-level collection, the others to a companion namespace (declaration
+        // merging makes `Outer.Inner` read just like in C#).
         var collectedModuleLocal = moduleLocal
-            ?? new ModuleLocalDeclarations(type, Context.Compilation);
+            ?? new ModuleLocalDeclarations(type, Context.Compilation, Context.NestedTypes);
 
         TransformNestedTypes(type, sink, collectedModuleLocal, lowering);
 
@@ -1167,6 +1355,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousAliases = IrToTsTypeMapper.UsingAliases;
         IrToTsTypeMapper.UsingAliases = MergeAliasesForGroup(primarySyntaxTree);
 
+        // The nested types this file declares at module level: a reference from
+        // the file spells their module-local identifier (ModuleLocalNaming.Flatten).
+        var previousFileScope = ModuleLocalNaming.FileScope;
+
+        ModuleLocalNaming.FileScope = group
+            .Types.SelectMany(Context.NestedTypes.ModuleLevelNamesUnder)
+            .ToHashSet(StringComparer.Ordinal);
+
         try
         {
             foreach (var type in group.Types)
@@ -1207,6 +1403,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         finally
         {
             IrToTsTypeMapper.UsingAliases = previousAliases;
+            ModuleLocalNaming.FileScope = previousFileScope;
         }
     }
 
@@ -2632,7 +2829,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _ => null,
         };
 
-        var normalized = ir is null ? null : IrEmissionNormalizer.Normalize(ir, type);
+        var normalized = ir is null
+            ? null
+            : IrEmissionNormalizer.Normalize(ir, Context.NestedTypes.ModuleLevelName(type));
 
         if (normalized is not null && irCache is not null)
             irCache[type] = normalized;

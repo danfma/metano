@@ -52,6 +52,7 @@ public class NestedRecordVariantImportTests
         await Assert
             .That(output)
             .Contains("import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\"");
+
         await Assert.That(output).Contains("valueEquals(this.userProfile, other.userProfile)");
     }
 
@@ -77,7 +78,7 @@ public class NestedRecordVariantImportTests
         var output = result["result.ts"];
         // Pair the negation with a positive that proves the strict variant WAS emitted with
         // a strict comparison, so the DoesNotContain can only fail for the real reason.
-        await Assert.That(output).Contains("class Loaded");
+        await Assert.That(output).Contains("class Result$Loaded");
         await Assert.That(output).Contains("this.count === other.count");
         await Assert.That(output).DoesNotContain("valueEquals");
     }

@@ -67,7 +67,7 @@ internal sealed class IrToTsClassEmitter(
         // in scope here).
         var ir = IrEmissionNormalizer.Normalize(
             IrClassExtractor.Extract(type, _context.Extraction),
-            type
+            _context.NestedTypes.ModuleLevelName(type)
         );
 
         // A class overriding `Message` keeps its base message in a private

@@ -101,6 +101,12 @@ public sealed class TypeScriptTransformContext(
     public IReadOnlyDictionary<string, IrTranspilableTypeRef> ExtensionHelperFunctions =>
         _extensionHelperFunctions ??= BuildExtensionHelperFunctions();
 
+    /// <summary>
+    /// Which nested types this transform declares at module level (spec 011 FR-040).
+    /// </summary>
+    internal NestedTypeHoisting NestedTypes =>
+        field ??= new NestedTypeHoisting(AssemblyWideTranspile, CurrentAssembly);
+
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
@@ -487,13 +493,14 @@ public sealed class TypeScriptTransformContext(
 
     /// <summary>
     /// The identifier <paramref name="type"/> is declared under in its TypeScript
-    /// module: the module-local identifier of a <c>private</c> nested type
-    /// (<see cref="ModuleLocalNaming.DeclaredName"/>, #412), otherwise its own name
-    /// (<see cref="ResolveOwnTsName"/>). Declarations and the identifiers that must
-    /// match them (predicate types, <c>instanceof</c> operands) read this.
+    /// module: the module-local identifier of a nested type declared at module level
+    /// (a <c>private</c> one, #412, or a hoisted one, <see cref="NestedTypes"/>),
+    /// otherwise its own name (<see cref="ResolveOwnTsName"/>). Declarations and the
+    /// identifiers that must match them (predicate types, <c>instanceof</c> operands)
+    /// read this.
     /// </summary>
     public string ResolveTsName(INamedTypeSymbol type) =>
-        ModuleLocalNaming.DeclaredName(type) ?? ResolveOwnTsName(type);
+        NestedTypes.ModuleLevelName(type) ?? ResolveOwnTsName(type);
 
     /// <summary>
     /// The target-facing name of <paramref name="type"/> itself, read from the

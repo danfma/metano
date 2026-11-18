@@ -623,8 +623,13 @@ public sealed class Printer(string indent = "  ")
     {
         if (ns.Exported)
             _sb.Write("export ");
+
+        if (ns.Declare)
+            _sb.Write("declare ");
+
         _sb.Write("namespace ");
         _sb.Write(ns.Name);
+
         _sb.WriteBlock(() =>
         {
             // Functions (used by Branded companions)
@@ -665,6 +670,7 @@ public sealed class Printer(string indent = "  ")
         }
 
         _sb.Write(" =");
+
         _sb.WriteBlock(() =>
         {
             foreach (var entry in constObj.Entries)
@@ -676,6 +682,7 @@ public sealed class Printer(string indent = "  ")
                 _sb.WriteLn();
             }
         });
+
         _sb.Write(constObj.Shape is null ? " as const;" : ";");
     }
 
@@ -1168,15 +1175,18 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("{}");
                     break;
                 }
+
                 _sb.Write("{ ");
+
                 for (var i = 0; i < obj.Fields.Count; i++)
                 {
                     if (i > 0)
                         _sb.Write("; ");
-                    var field = obj.Fields[i];
-                    PrintInlineJSDoc(field.JSDoc);
-                    PrintObjectTypeField(field);
+
+                    PrintInlineJSDoc(obj.Fields[i].JSDoc);
+                    PrintObjectTypeField(obj.Fields[i]);
                 }
+
                 _sb.Write(" }");
                 break;
         }

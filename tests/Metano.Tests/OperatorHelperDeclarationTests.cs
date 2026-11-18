@@ -379,7 +379,11 @@ public class OperatorHelperDeclarationTests
     private static IReadOnlyList<string> CompanionFunctionNamesOf(Compilation compilation)
     {
         var type = compilation.GetTypeByMetadataName("Slug")!;
-        var ir = IrEmissionNormalizer.Normalize(IrClassExtractor.Extract(type), type);
+
+        var ir = IrEmissionNormalizer.Normalize(
+            IrClassExtractor.Extract(type),
+            moduleLevelName: null
+        );
 
         return TsCompanionPlan.Of(ir)!.Groups.Select(group => group.FunctionName).ToList();
     }

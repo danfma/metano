@@ -8,23 +8,19 @@ namespace Metano.Tests.TreeShaking;
 /// and bundled as a side-effect-only import by bun, esbuild and Rollup with every
 /// import external, keeps no code evaluated at module load. The tooling is the
 /// runtime's <c>test/tree-shaking/golden-bundle.ts</c>; this test owns the
-/// verdict. <c>allowlist.txt</c> names the goldens that still keep code (it only
-/// shrinks), and <c>entry-points.txt</c> the exempt <c>[ModuleEntryPoint]</c>
+/// verdict. <c>allowlist.txt</c> names the goldens that still keep code (empty
+/// since stage 011a), and <c>entry-points.txt</c> the exempt <c>[ModuleEntryPoint]</c>
 /// goldens.
 /// </summary>
 public class ExpectedOutputBundleTests
 {
     /// <summary>
-    /// The most <c>allowlist.txt</c> may ever hold: the measured state when the
-    /// check landed. Growing the list means growing this set too.
+    /// The most <c>allowlist.txt</c> may ever hold: nothing, since stage 011a left no
+    /// golden that keeps module-load code (the 3.0.0 gate of spec 011 FR-040).
     /// </summary>
     private static readonly IReadOnlySet<string> MaximalAllowlist = new HashSet<string>(
         StringComparer.Ordinal
-    )
-    {
-        "nested-types-static-class.ts",
-        "overload-calls-nested.ts",
-    };
+    );
 
     private static readonly Lazy<Task<BundleReport>> Report = new(RunGoldenBundleCheck);
 

@@ -1,5 +1,13 @@
 import { isBool, isInt32, isString } from "metano-runtime";
 
+class Owner$Maker {
+  constructor() { }
+
+  make(): Owner {
+    return Owner.fromCode("made");
+  }
+}
+
 export class Owner {
   protected static readonly byOwnerId = /* @__PURE__ */ Symbol("Owner(int id)");
   protected static readonly byOwnerCode = /* @__PURE__ */ Symbol("Owner(string code)");
@@ -62,6 +70,10 @@ export class Owner {
     throw new Error("No matching constructor");
   }
 
+  static get Maker(): typeof Owner$Maker {
+    return Owner$Maker;
+  }
+
   static fromId(id: number): Owner {
     return new Owner(Owner.byOwnerId, id);
   }
@@ -75,12 +87,6 @@ export class Owner {
   }
 }
 
-export namespace Owner {
-  export class Maker {
-    constructor() { }
-
-    make(): Owner {
-      return Owner.fromCode("made");
-    }
-  }
+export declare namespace Owner {
+  export type Maker = Owner$Maker;
 }

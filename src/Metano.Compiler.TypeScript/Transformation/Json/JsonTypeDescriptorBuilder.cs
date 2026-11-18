@@ -280,18 +280,19 @@ internal sealed class JsonTypeDescriptorBuilder(
     }
 
     /// <summary>
-    /// An enum descriptor: its TS enum object for the member values, plus the
+    /// An enum descriptor: its TS enum object for the member values (reached like
+    /// any type reference, so a nested enum reads <c>Outer.Kind</c>), plus the
     /// CLR <c>typeName</c> the runtime's conversion errors and JSON `null`
     /// rule name (#471, and the dictionary keys of #479). A key descriptor
     /// does not repeat it (<see cref="KeyDescriptorCarriesTypeName"/>).
     /// </summary>
     private TsObjectLiteral BuildEnumValuesDescriptor(ITypeSymbol type, JsonPropertyKind kind)
     {
-        var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
+        var values = QualifiedReference(TypeReferenceName((INamedTypeSymbol)type));
 
         return new TsObjectLiteral([
             KindProperty(kind),
-            new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
+            new TsObjectProperty("values", values),
             new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
     }
