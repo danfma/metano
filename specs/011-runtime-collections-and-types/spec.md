@@ -229,7 +229,7 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
 1. **Given** `import "metano-runtime"` and nothing else, **When** bundled with bun, esbuild and Rollup (`moduleSideEffects: true`), **Then** the output is ≤ 0.1 KB gz (today: 16 B).
 2. **Given** an entry that uses only `List`, **When** bundled, **Then** the output is ≤ 2.5 KB gz and contains no `Dictionary`, `HashSet`, `Exception` subclass other than `ArgumentOutOfRangeException` / `InvalidOperationException` / `NotSupportedException`, and no `Temporal`.
 3. **Given** an entry that throws one `InvalidOperationException`, **When** bundled, **Then** the output is ≤ 0.65 KB gz and contains no other exception class.
-4. **Given** an entry that calls `isType(x, Circle.$runtimeType)` on a generated `Circle`, **When** bundled, **Then** the output is ≤ 1.2 KB gz for `isType` + `getRuntimeType` + the one descriptor, and contains no `Square`.
+4. **Given** an entry that calls `isType(x, Circle.$runtimeType)` on a generated `Circle`, **When** bundled, **Then** the output is ≤ 1.7 KB gz (NFR-008) for `isType` + `getRuntimeType` + the one descriptor, and contains no `Square`.
 5. **Given** a generated `[StrictUnionGuard]` base `Shape` with variants `Circle` / `Square`, **When** bundled with `sideEffects: false`, **Then** the strict dispatch still works, because `isShape` lives in its own module (`shape.guard.ts`) that imports the base and the variants, with no registry; **and** **Given** `import "./shape"` evaluated first, unbundled, in Bun, **Then** no `ReferenceError` / TDZ error occurs, because the base module never imports a variant (FR-029).
 6. **Given** every golden under `tests/Metano.Tests/Expected/`, **When** compiled with tsgo and each compiled module is bundled as a side-effect-only import with every package external, **Then** every golden outside the allowlist bundles to nothing but its external `import` statements (no code is evaluated at module load); `[ModuleEntryPoint]` goldens are exempt, and the allowlist is empty.
 
@@ -514,7 +514,7 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
   | `SortedSet` / `SortedDictionary` / `SortedList` alone | ≤ 2.5 / 3.0 / 2.5 KB (proposed) |
   | `ConcurrentDictionary` alone (with the shared hash core, without `Dictionary`) | ≤ 3.5 KB (proposed) |
   | one exception class (`throw new InvalidOperationException()`, literal getter) | ≤ 0.65 KB (raised from 0.5 KB in stage 011a: the real class with its full contract literal measured 0.58–0.60 KB) |
-  | `isType` + `getRuntimeType` + one class descriptor | ≤ 1.2 KB |
+  | `isType` + `getRuntimeType` + one class descriptor | ≤ 1.7 KB (raised from 1.2 KB in stage 011b: measured bun 1646 B / esbuild 1620 B, of which the entry class with its getter and `isType` ~241 B, the `NullReferenceException` chain that `getRuntimeType(null)` throws ~599 B, and `getRuntimeType` with every descriptor it answers plus `getNumberType` ~800 B) |
   | one primitive descriptor (`Int32Type` with `isInt32`) | ≤ 0.2 KB |
   | LINQ `where` + `select` + `toArray` | ≤ 0.5 KB |
   | `box` + `Boxed` (a boxed enum) | ≤ 0.3 KB (proposed; FR-043 measures) |
