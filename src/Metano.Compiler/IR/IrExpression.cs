@@ -256,6 +256,50 @@ public sealed record IrNullConditionalAccess(IrExpression Receiver, IrExpression
 /// </summary>
 public sealed record IrConditionalReceiver : IrExpression;
 
+// -- Dynamic (spec 011 FR-030) --
+
+/// <summary>
+/// A member read off a <c>dynamic</c> receiver (<c>d.Foo</c>): the runtime
+/// binder resolves it, so no symbol exists and <see cref="MemberName"/> is
+/// the source spelling, emitted verbatim (no naming policy, no
+/// <c>[Name]</c>; OD-11).
+/// </summary>
+public sealed record IrDynamicMemberAccess(IrExpression Receiver, string MemberName) : IrExpression;
+
+/// <summary>
+/// A call bound at run time whose target is <c>dynamic</c>: a method of a
+/// <c>dynamic</c> receiver (<c>d.Foo(1)</c>, <see cref="Target"/> an
+/// <see cref="IrDynamicMemberAccess"/>) or a <c>dynamic</c> value invoked as a
+/// function (<c>d(1)</c>). The arguments are positional; the written type
+/// arguments of a generic call are not carried.
+/// </summary>
+public sealed record IrDynamicInvocation(IrExpression Target, IReadOnlyList<IrExpression> Arguments)
+    : IrExpression;
+
+/// <summary>
+/// An indexer read or write on a <c>dynamic</c> receiver (<c>d[i]</c>), with
+/// its single positional index.
+/// </summary>
+public sealed record IrDynamicIndexerAccess(IrExpression Receiver, IrExpression Index)
+    : IrExpression;
+
+/// <summary>
+/// An explicit numeric cast of a <c>dynamic</c> value (<c>(int)d</c>,
+/// <c>(long?)d</c>): the runtime binder converts from the value's runtime
+/// type, which the compiler does not know, so a target checks the value at
+/// run time and converts it as the cast from that runtime type would.
+/// </summary>
+/// <param name="Operand">The <c>dynamic</c> value.</param>
+/// <param name="Target">The numeric type cast to (<c>char</c> included).</param>
+/// <param name="IsChecked">The cast sits in a checked context.</param>
+/// <param name="IsLifted">The cast is to <c>T?</c>, which lets <c>null</c> through.</param>
+public sealed record IrDynamicNumericConversion(
+    IrExpression Operand,
+    IrNumericKind Target,
+    bool IsChecked,
+    bool IsLifted
+) : IrExpression;
+
 // -- Invocations --
 
 /// <summary>
@@ -310,6 +354,14 @@ public sealed record IrCallExpression(
     /// unifies them all) passes the written ones through.
     /// </summary>
     public bool HasExplicitTypeArguments { get; init; }
+
+    /// <summary>
+    /// Whether the call is bound at run time (spec 011 FR-030): a
+    /// <c>dynamic</c> argument left Roslyn several candidates, exactly the
+    /// overloads of one dispatched group, so a target calls the group's
+    /// runtime dispatcher, which chooses on the arguments' runtime values.
+    /// </summary>
+    public bool IsLateBound { get; init; }
 }
 
 /// <summary>
@@ -469,6 +521,13 @@ public sealed record IrNewExpression(
     /// <see cref="IrCallExpression.EvaluationOrder"/>.
     /// </summary>
     public IReadOnlyList<int>? EvaluationOrder { get; init; }
+
+    /// <summary>
+    /// Whether the construction is bound at run time (spec 011 FR-030): a
+    /// <c>dynamic</c> argument left Roslyn every constructor of a dispatched
+    /// set, so a target constructs through the runtime dispatcher.
+    /// </summary>
+    public bool IsLateBound { get; init; }
 }
 
 /// <summary>

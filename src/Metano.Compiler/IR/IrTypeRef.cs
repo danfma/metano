@@ -316,6 +316,14 @@ public sealed record IrKeyValuePairTypeRef(IrTypeRef KeyType, IrTypeRef ValueTyp
 public sealed record IrGroupingTypeRef(IrTypeRef KeyType, IrTypeRef ElementType) : IrTypeRef;
 
 /// <summary>
+/// The C# <c>dynamic</c> type (spec 011 FR-030): a value with no static type
+/// guarantee, whose member accesses, invocations and indexers bind at run
+/// time. Targets render it as their own dynamic type (TS <c>any</c>, Dart
+/// <c>dynamic</c>).
+/// </summary>
+public sealed record IrDynamicTypeRef : IrTypeRef;
+
+/// <summary>
 /// Fallback for types that cannot be mapped. Backends should render this as their
 /// "any" or "dynamic" equivalent and optionally emit a diagnostic.
 /// </summary>

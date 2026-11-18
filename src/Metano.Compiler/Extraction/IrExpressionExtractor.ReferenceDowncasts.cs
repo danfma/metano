@@ -23,7 +23,7 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol targetType
     )
     {
-        var conversion = _semantic.ClassifyConversion(cast.Expression, targetType);
+        var conversion = ConversionOfCast(cast, targetType);
 
         if (conversion is not { IsReference: true, IsExplicit: true })
             return null;
@@ -34,6 +34,22 @@ public sealed partial class IrExpressionExtractor
             InInlineExpansion: _inlineExpanding.Count > 0,
             TargetMentionsTypeParameter: MentionsTypeParameter(targetType)
         );
+    }
+
+    /// <summary>
+    /// The conversion the cast performs; a cast of a <c>dynamic</c> value is
+    /// classified as the same cast of an <c>object</c> one (spec 011 FR-030),
+    /// since the runtime binder converts from whatever the value holds.
+    /// </summary>
+    private Conversion ConversionOfCast(CastExpressionSyntax cast, ITypeSymbol targetType)
+    {
+        if (_semantic.GetTypeInfo(cast.Expression).Type is not IDynamicTypeSymbol)
+            return _semantic.ClassifyConversion(cast.Expression, targetType);
+
+        var compilation = (CSharpCompilation)_semantic.Compilation;
+        var objectType = compilation.GetSpecialType(SpecialType.System_Object);
+
+        return compilation.ClassifyConversion(objectType, targetType);
     }
 
     private static bool MentionsTypeParameter(ITypeSymbol type) =>

@@ -45,7 +45,7 @@ public static class IrToDartTypeMapper
             ),
             IrTypeParameterRef tp => new DartNamedType(tp.Name),
             IrNamedTypeRef named => MapNamed(named),
-            IrUnknownTypeRef => new DartNamedType("dynamic"),
+            IrUnknownTypeRef or IrDynamicTypeRef => new DartNamedType("dynamic"),
             _ => new DartNamedType("dynamic"),
         };
 

@@ -74,7 +74,7 @@ public static class IrToTsTypeMapper
             ),
             IrTypeParameterRef tp => new TsNamedType(tp.Name),
             IrNamedTypeRef named => MapNamed(named, overrides),
-            IrUnknownTypeRef => new TsAnyType(),
+            IrUnknownTypeRef or IrDynamicTypeRef => new TsAnyType(),
             OutResultTypeRef outResult => MapOutResult(outResult, overrides),
             _ => new TsAnyType(),
         };

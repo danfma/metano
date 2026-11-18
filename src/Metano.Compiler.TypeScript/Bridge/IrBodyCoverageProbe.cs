@@ -76,6 +76,12 @@ public static class IrBodyCoverageProbe
             IrBaseExpression => true,
             IrMemberAccess ma => IsCoveredExpression(ma.Target),
             IrElementAccess ea => IsCoveredExpression(ea.Target) && IsCoveredExpression(ea.Index),
+            IrDynamicMemberAccess access => IsCoveredExpression(access.Receiver),
+            IrDynamicInvocation invocation => IsCoveredExpression(invocation.Target)
+                && invocation.Arguments.All(IsCoveredExpression),
+            IrDynamicIndexerAccess indexer => IsCoveredExpression(indexer.Receiver)
+                && IsCoveredExpression(indexer.Index),
+            IrDynamicNumericConversion conversion => IsCoveredExpression(conversion.Operand),
             IrSliceExpression slice => IsCoveredExpression(slice.Target)
                 && (slice.Start is null || IsCoveredExpression(slice.Start))
                 && (slice.End is null || IsCoveredExpression(slice.End)),

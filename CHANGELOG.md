@@ -10,6 +10,15 @@ Pre-release notes for the 3.0.0 breaking changes that are already merged;
 the release regenerates the released sections, and these notes carry forward
 the migration list.
 
+### `dynamic` (spec 011 FR-030, #335)
+
+- Operations on a `dynamic` receiver keep their C# member names verbatim (`d.AppName`, `d.Run()`), where 2.x camelCased them (`d.appName`); `ToString` / `GetHashCode` / `Equals` / `GetType` keep the `object` lowering. Type arguments of a dynamic generic call are dropped.
+- Explicit numeric casts of a `dynamic` value convert it at run time through `metano-runtime` helpers (`numberFromDynamic`, `bigintFromDynamic`, `charFromDynamic`, `decimalSourceFromDynamic`), which throw `InvalidCastException` for `null` or a non-numeric value; 2.x emitted the bare value. A cast to a class is checked with `castTo` as from `object`.
+- A call of a typed receiver with a `dynamic` argument binds to its single candidate (with its mapping, qualifier and name) or to the overload group's runtime dispatcher; 2.x emitted an unmapped, sometimes unqualified call (`Console.writeLine(d)`, `sOv(d)`).
+- Operators with a `dynamic` operand are plain JavaScript operators (`i += d` is no longer wrapped to 32 bits, `d + 1L` adds `1`).
+- An explicitly typed `dynamic` local is annotated `: any`.
+- New error `MS0053` for what cannot pass through (initializers on a late-bound `new`, named or `ref` arguments on a dynamic call, user-defined operators and conversions bound at run time, `Console.WriteLine(d)`-style calls over several candidates). See `docs/runtime-types.md` § dynamic.
+
 ### LINQ aggregates and set operators (spec FR-056 to FR-058)
 
 - `Min` / `Max` / `MinBy` / `MaxBy` over empty or nullable sequences, and `Sum` / `Average` / `Min` / `Max` over `decimal`, `string` and other non-`number` elements, now match .NET (an empty `Max()` throws instead of `-Infinity`; `[null, 4].Min()` is `4`; `decimal` sums are decimal.js sums). Strings order by code unit, not by culture (#618, #657).

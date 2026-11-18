@@ -411,6 +411,19 @@ public static class DiagnosticCodes
     /// clause. An error, at the argument or hole (spec 011 FR-031).</summary>
     public const string InvalidInlineCode = "MS0052";
 
+    /// <summary>MS0053 — an operation bound at run time on a <c>dynamic</c> value that
+    /// the target cannot pass through (spec 011 FR-030, contracts/diagnostics.md): an
+    /// initializer on a dynamically bound <c>new</c>, or a collection initializer element
+    /// left with several <c>Add</c> candidates (reason 1); a named or <c>ref</c> /
+    /// <c>out</c> / <c>in</c> argument of a call or indexer whose receiver is
+    /// <c>dynamic</c> (reason 2); a user-defined operator declared by the statically
+    /// typed operand of an operator whose other operand is <c>dynamic</c>, or a cast or
+    /// implicit conversion of a <c>dynamic</c> value to a type that declares a
+    /// user-defined conversion (reason 4); a call or <c>new</c> whose <c>dynamic</c>
+    /// argument leaves several candidates that are not exactly the overloads of one
+    /// dispatched group (reason 5). An error at the operation.</summary>
+    public const string UnsupportedDynamicOperation = "MS0053";
+
     /// <summary>MS0056 — a <c>Js.Code</c> hole that falls inside a JS string literal
     /// of the inline text, so the value is spliced as code rather than quoted. A
     /// warning, at the hole; the TypeScript target decides it (spec 011 FR-031).</summary>

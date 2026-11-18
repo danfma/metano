@@ -349,6 +349,16 @@ public static class IrToTsStatementBridge
                     Const: vd.IsConst,
                     Type: arrayType
                 ),
+            // A `dynamic` local keeps its `any` annotation: TypeScript would
+            // otherwise narrow it to its initializer (`dynamic d = 1` to
+            // `number`) and reject the operations bound at run time on it.
+            IrVariableDeclaration { Type: IrDynamicTypeRef, Initializer: { } initializer } vd =>
+                new TsVariableDeclaration(
+                    IrToTsNamingPolicy.ToLocalName(vd.Name),
+                    IrToTsExpressionBridge.Map(initializer, context),
+                    Const: vd.IsConst,
+                    Type: new TsAnyType()
+                ),
             IrVariableDeclaration vd => new TsVariableDeclaration(
                 IrToTsNamingPolicy.ToLocalName(vd.Name),
                 vd.Initializer is not null

@@ -81,6 +81,19 @@ public static partial class IrToTsExpressionBridge
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, context),
             IrElementAccess ea => MapElementAccess(ea, context),
+            IrDynamicMemberAccess access => IrToTsDynamicBridge.MapMemberAccess(access, context),
+            IrDynamicInvocation invocation => IrToTsDynamicBridge.MapInvocation(
+                invocation,
+                context
+            ),
+            IrDynamicIndexerAccess indexer => IrToTsDynamicBridge.MapIndexerAccess(
+                indexer,
+                context
+            ),
+            IrDynamicNumericConversion conversion => IrToTsDynamicBridge.MapNumericConversion(
+                conversion,
+                context
+            ),
             IrSliceExpression slice => MapSlice(slice, context),
             // An optional call (`handler?.(x)`) yields `undefined` for a null
             // delegate; read as a value it becomes the C# `null`.

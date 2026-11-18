@@ -30,3 +30,4 @@ export * from "./decimal-parsing.ts";
 export * from "./array-length.ts";
 export * from "./argument-guards.ts";
 export * from "./reference-cast.ts";
+export * from "./dynamic-conversion.ts";

@@ -316,6 +316,9 @@ public static class IrTypeRefMapper
         if (type is IArrayTypeSymbol array)
             return new IrArrayTypeRef(Map(array.ElementType, originResolver, target));
 
+        if (type is IDynamicTypeSymbol)
+            return new IrDynamicTypeRef();
+
         return new IrUnknownTypeRef();
     }
 

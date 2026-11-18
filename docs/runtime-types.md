@@ -35,9 +35,9 @@ var any = order.AsDynamic();           // (order as any)
   (`TypeError`) where TypeScript does not.
 - **`AsDynamic()`** returns its argument unchanged. Member names after a `dynamic`
   value are verbatim, so a Metano member `Total`, emitted as `total`, would read
-  `undefined` through `x.AsDynamic().Total`. Until dynamic member access lands
-  (spec 011 FR-030), a member access on an `AsDynamic()` result reports `MS0001`;
-  use `Js.Code` for the access instead.
+  `undefined` through `x.AsDynamic().Total`. A member access on an `AsDynamic()`
+  result still reports `MS0001` (see the status below); use `Js.Code` for the access
+  instead.
 
 **Status (3.0.0 stages).** `UnsafeCast<T>()` and `AsDynamic()` are delivered (stage
 011f). `dynamic` member access on an `AsDynamic()` result and its `MS0057` warning
@@ -47,3 +47,52 @@ class target the module can import, and asserted without a check (and without
 `MS0055`) for an interface, a generic or an erased target, until stage 011b's runtime
 descriptors land. `Js.Code` inline TypeScript is described in
 [BCL mappings § Adding your own mappings](bcl-mappings.md#4-jscode--inline-typescript-at-one-use-site).
+
+## dynamic
+
+A C# `dynamic` value is TypeScript `any` (spec 011 FR-030, D11). The C# runtime binder (the
+DLR) resolves every operation on it at run time; Metano does not emit the binder, so each
+operation becomes the plain JavaScript one.
+
+| C# | TypeScript |
+|---|---|
+| `dynamic d` (field, parameter, return, local) | `d: any` |
+| `d.Name`, `d.Name = v`, `d.Run(1, x)`, `d[i]`, `d(3)` | the same, **member names verbatim**: `d.Name`, `d.Run(1, x)` |
+| `d.ToString()`, `d.GetHashCode()`, `d.Equals(x)`, `d.GetType()` | as on an `object` receiver: `d.toString()`, `valueHashCode(d)`, … |
+| `d.M<int>()` | `d.M()` (type arguments dropped) |
+| `d + 1`, `d == x`, `-d`, `d += 1L`, `i += d` | the JavaScript operator, with no `int` wrapping, `bigint`, `Decimal` or `char` lowering (`d += 1L` is `d += 1`) |
+| `string s = d;`, `F(d)` for `F(string)`, `return d;`, `if (d)`, `$"{d}"`, `foreach (var x in d)`, `await d` | nothing: an implicit conversion out of `dynamic` is not checked |
+| `(int)d`, `(byte)d`, `(double)d`, `(char)d` | `numberFromDynamic(d, "Int32")`, …, `charFromDynamic(d)` |
+| `(long)d`, `(ulong)d`, `(BigInteger)d` | `bigintFromDynamic(d, "Int64")`, … |
+| `(decimal)d` | `new Decimal(decimalSourceFromDynamic(d))` |
+| `(int?)d` | `d == null ? null : numberFromDynamic(d, "Int32")` |
+| `(Circle)d`, `(IShape)d`, `d as Circle`, `d is Circle c`, `d switch { int n => … }` | as the same test or cast of an `object` value |
+| `F(d)` with one candidate, `k.Ov(d)` / `new C(d)` whose candidates are exactly one overload group | the bound call, or the group's runtime dispatcher |
+
+The numeric helpers convert from the value the `dynamic` holds: an integer `number` in the
+32-bit range as an integer (wrapped, or range-checked in a checked context), any other `number`
+as a `double` (truncated and saturated), a `bigint` as a 64-bit integer, a `Decimal` as a
+`decimal` (out of range it throws `OverflowException`). `null` throws `InvalidCastException`
+for a non-nullable target, and so does a value that is not numeric (`"42"`, `true`).
+
+`MS0053` (error) reports what cannot pass through: an initializer on a construction bound at
+run time, a named or `ref` / `out` argument on a call of a `dynamic` receiver, a user-defined
+operator or conversion the binder would choose at run time (`money + d`, `(Money)d`,
+`Money m = d;`), and a call whose `dynamic` argument leaves several candidates that no single
+dispatcher covers (`Console.WriteLine(d)`: write `Console.WriteLine((object)d)`).
+
+Differences from .NET, documented and not diagnosed (OD-11, OD-12):
+
+- Member names are verbatim, so a Metano object read through `dynamic` misses its emitted
+  names: `dog.Name` is `undefined`, since the class emits `name`.
+- `==` with mixed types (`1 == "1"`, which .NET rejects), `+` with `null`, and integer division
+  (`7 / 2` is `3.5`) follow JavaScript.
+- A failed conversion throws `InvalidCastException`; .NET throws `RuntimeBinderException`.
+- An overload dispatcher chooses on the runtime values of every argument, where the binder uses
+  the static types of the arguments that are not `dynamic`.
+- An implicit conversion passes the value as is: `F(long x)` called as `F(d)` passes a `number`
+  where a `bigint` is expected.
+- A `char` held in a `dynamic` is a one-character string: only a `char` target accepts it.
+- `d.E += h` on an event passes through as a compound assignment; `d + d` with a user-defined
+  operator is not detected; `using (d)` reports `MS0001`, as `using` does for any operand.
+- Until stage 011b, a cast to an interface (`(IShape)d`) is not checked.

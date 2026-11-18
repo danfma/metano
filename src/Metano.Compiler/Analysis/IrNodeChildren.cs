@@ -17,6 +17,10 @@ public static class IrNodeChildren
         {
             IrMemberAccess access => [access.Target],
             IrElementAccess element => [element.Target, element.Index],
+            IrDynamicMemberAccess access => [access.Receiver],
+            IrDynamicInvocation invocation => [invocation.Target, .. invocation.Arguments],
+            IrDynamicIndexerAccess indexer => [indexer.Receiver, indexer.Index],
+            IrDynamicNumericConversion conversion => [conversion.Operand],
             IrSliceExpression slice => new[]
             {
                 slice.Target,

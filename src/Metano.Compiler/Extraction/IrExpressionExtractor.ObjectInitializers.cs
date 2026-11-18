@@ -212,12 +212,20 @@ public sealed partial class IrExpressionExtractor
     /// One collection-initializer element: <c>x</c> calls <c>Add(x)</c> and
     /// <c>{ k, v }</c> calls <c>Add(k, v)</c> on the receiver, through the
     /// <c>Add</c> overload Roslyn bound. An element bound to an extension or
-    /// call-site-inlined <c>Add</c>, or to no <c>Add</c> at all (a
-    /// <c>dynamic</c> receiver), is reported as unsupported.
+    /// call-site-inlined <c>Add</c>, or to no <c>Add</c> at all, is reported
+    /// as unsupported; one a <c>dynamic</c> value left with several
+    /// <c>Add</c> candidates reports <c>MS0053</c> (spec 011 FR-030).
     /// </summary>
     private IrExpression CollectionInitializerAdd(IrExpression receiver, ExpressionSyntax element)
     {
-        var add = _semantic.GetCollectionInitializerSymbolInfo(element).Symbol as IMethodSymbol;
+        var addInfo = _semantic.GetCollectionInitializerSymbolInfo(element);
+        var add = addInfo.Symbol as IMethodSymbol;
+
+        if (add is null && addInfo.CandidateReason == CandidateReason.LateBound)
+            return ReportUnsupportedDynamic(
+                element,
+                $"Collection initializer element '{element}' is bound at run time by a dynamic value among several 'Add' overloads; cast it to the element type."
+            );
 
         if (!IsInstanceAdd(add))
             return ReportUnsupported(

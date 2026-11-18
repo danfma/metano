@@ -239,6 +239,7 @@ public sealed partial class IrExpressionExtractor
         // IrExpressionExtractor.NumericConversions.cs and .CheckedContext.cs.
         var value = UnsupportedUserTruthTest(expression)
             ?? UnsupportedInteropUse(expression)
+            ?? UnsupportedDynamicUserConversion(expression)
             ?? ImportFacadeMethodGroupOf(expression)
             ?? FoldedInt64Constant(expression)
             ?? FoldedCheckedContextConstant(expression)
@@ -1786,6 +1787,9 @@ public sealed partial class IrExpressionExtractor
         if (MapBinaryOp(bin.Kind()) is not { } mappedOp)
             return ReportUnsupported(bin, bin.Kind().ToString());
 
+        if (TryExtractDynamicBinary(bin, mappedOp) is { } dynamicBinary)
+            return dynamicBinary;
+
         var op = NarrowBuiltinOperator(mappedOp, bin);
 
         return TryExtractUserBinary(bin, op)
@@ -1963,6 +1967,9 @@ public sealed partial class IrExpressionExtractor
     {
         if (TryReportTupleElementWrite(assign, assign.Left) is { } unsupportedWrite)
             return unsupportedWrite;
+
+        if (TryExtractDynamicCompoundAssignment(assign) is { } dynamicCompound)
+            return dynamicCompound;
 
         // Extension property assignment (`receiver.Prop = value` or any
         // compound form) — rewrite to a helper call against the property's
@@ -2310,6 +2317,9 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractMemberAccess(QualifiedMemberSyntax member)
     {
+        if (TryExtractDynamicMemberAccess(member) is { } dynamicMember)
+            return dynamicMember;
+
         // `decimal.Zero` / `.One` / `.MinusOne` — no static counterpart in
         // decimal.js, so synthesize `new Decimal(N)` matching the legacy
         // BclMapper behavior. Similarly `decimal.Parse(s)` rewrites to
@@ -2733,6 +2743,9 @@ public sealed partial class IrExpressionExtractor
     {
         if (TryExtractConstantInvocation(inv) is { } constant)
             return constant;
+
+        if (TryExtractDynamicInvocation(inv) is { } dynamicCall)
+            return dynamicCall;
 
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
         ReportTupleValueLookup(inv, symbol);
@@ -3543,6 +3556,9 @@ public sealed partial class IrExpressionExtractor
         BracketedArgumentListSyntax arguments
     )
     {
+        if (TryExtractDynamicIndexer(node, receiverSyntax, arguments) is { } dynamicIndexer)
+            return dynamicIndexer;
+
         if (TryExtractIndexOrRangeAccess(node, receiverSyntax, arguments) is { } indexOrRangeAccess)
             return indexOrRangeAccess;
 
@@ -4823,7 +4839,14 @@ public sealed partial class IrExpressionExtractor
     /// (<see cref="DispatchedConstructorCalls.ConstructionTarget"/>) takes
     /// Roslyn's bound arguments; every other one takes its source arguments.
     /// </summary>
-    private IrExpression ExtractCreation(BaseObjectCreationExpressionSyntax creation)
+    private IrExpression ExtractCreation(BaseObjectCreationExpressionSyntax creation) =>
+        TryExtractDynamicCreation(creation) ?? ExtractTypedCreation(creation);
+
+    /// <summary>
+    /// A construction through the constructor Roslyn resolved, or through the
+    /// dispatcher when it resolved none (a late-bound one included).
+    /// </summary>
+    private IrExpression ExtractTypedCreation(BaseObjectCreationExpressionSyntax creation)
     {
         var ctorSymbol = _semantic.GetSymbolInfo(creation).Symbol as IMethodSymbol;
         var bound = TryBindToResolvedOverload(creation, ctorSymbol);
@@ -5336,6 +5359,9 @@ public sealed partial class IrExpressionExtractor
 
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
+
+        if (TryExtractDynamicCast(cast, inner, sourceType, targetType) is { } dynamicCast)
+            return dynamicCast;
 
         if (TryExtractUserCast(cast, inner, sourceType, targetType) is { } user)
             return user;
