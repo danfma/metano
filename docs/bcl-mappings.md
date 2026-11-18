@@ -885,7 +885,7 @@ reduced value (`i = (i + 1) | 0;`, `u = Math.imul(u, k) >>> 0;`). `int.MaxValue 
   return value, a store and a checked operation keep the wrap.
 - Not reduced: `/`, `%` (`int.MinValue / -1` still returns `2147483648`), results of an
   enum type, user-defined operators, `[Queryable]` expression trees, constants.
-- A wrapped store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a
+- A non-lifted wrapped store on a dictionary entry (`counts[key]++`, `counts[key] += n` on a
   `Dictionary<_, int>`) reports an `MS0001` error, so the build fails as `tsc` did before; the
   checked and narrow-type forms keep their warning.
 - Cost: in range the wrap is as fast as the unwrapped `number`; an accumulator that
