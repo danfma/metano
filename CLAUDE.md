@@ -145,7 +145,7 @@ All attributes live in the `Metano.Annotations` namespace inside the `src/Metano
 
 Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, runs the transformer, and returns `filename → TS content`. For cross-package tests, use `TranspileHelper.TranspileWithLibrary(libSource, consumerSource)`. Expected output files live in `tests/Metano.Tests/Expected/`.
 
-Golden tests compare through `TranspileHelper.AssertGolden(name, actual)` — the only code that reads `Expected/` (`GoldenAccessTests` fails on any other access). The tests read the copy under `bin/`, not the source tree, so editing or regenerating a golden needs the update mode, which writes back to `tests/Metano.Tests/Expected/`: `METANO_UPDATE_GOLDENS=1 dotnet run --project tests/Metano.Tests/ --no-build`. Rebuild afterwards so the output copy catches up, then review the `git diff` of `Expected/`; CI never sets the variable.
+Golden tests compare through `TranspileHelper.AssertGolden(name, actual)` — the only code that reads `Expected/` (`GoldenAccessTests` fails on any other access). The tests read the copy under `bin/`, not the source tree, so editing or regenerating a golden needs the update mode, which writes back to `tests/Metano.Tests/Expected/`: `METANO_UPDATE_GOLDENS=1 dotnet run --project tests/Metano.Tests/ --no-build` (build the tests first, so they run against the current sources). Rebuild afterwards so the output copy catches up, then review the `git diff` of `Expected/`; CI never sets the variable.
 
 ## Tech Stack
 

@@ -40,7 +40,7 @@ public async Task JsCallable_OverloadedInvoke_LowersToDirectCall()
             public static void Run(ISetter<int> s) { s.Invoke(5); s.Invoke(c => c + 1); }
         }
         """);
-    await Assert.That(result["demo.ts"]).IsEqualTo(TranspileHelper.ReadExpected("jscallable-overload.ts"));
+    await TranspileHelper.AssertGolden("jscallable-overload.ts", result["demo.ts"]);
 }
 ```
 

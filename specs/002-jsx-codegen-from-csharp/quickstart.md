@@ -37,8 +37,7 @@ public async Task Counter_LowersToFunctionComponent()
                 new Html.Span { Children = [Text(Count)] };
         }
         """);
-    var expected = TranspileHelper.ReadExpected("counter-span.tsx");
-    await Assert.That(result["counter.tsx"]).IsEqualTo(expected);
+    await TranspileHelper.AssertGolden("counter-span.tsx", result["counter.tsx"]);
 }
 ```
 Cross-package / imported-renderable test (SC-004) uses `TranspileHelper.TranspileWithLibrary(librarySource, consumerSource)`.
