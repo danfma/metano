@@ -11,8 +11,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>Int32Type</c> and the other <c>metano-runtime</c> constants for the
 /// primitives, <c>specialize(C.$runtimeType, [...])</c> for a closed generic
 /// class. Every read of a descriptor this compilation declares is checked
-/// against the reached set of <see cref="RuntimeTypeScope.Current"/>: a read
-/// outside it is an internal error, so a drift between the reachability phase
+/// against the reached set the caller passes (the file group's
+/// <see cref="IrToTsBridgeContext.RuntimeTypes"/>): a read outside it is an
+/// internal error, so a drift between the reachability phase
 /// and the bridges fails loudly instead of emitting a reference to a getter or
 /// an export that does not exist (D29).
 /// </summary>
@@ -31,22 +32,32 @@ internal static class IrToTsRuntimeTypeReferences
     /// The descriptor of <paramref name="type"/>, or <c>null</c> when it has none
     /// (a <c>[PlainObject]</c>, a branded wrapper, a type the analysis reported
     /// as undescribable). <paramref name="site"/> names the construct for the
-    /// drift error.
+    /// drift error; <paramref name="reachability"/> is the reached set, or
+    /// <c>null</c> outside a transform (a bridge driven by a unit test), where
+    /// no assertion runs.
     /// </summary>
-    public static TsExpression? Of(IrTypeRef type, string site) =>
+    public static TsExpression? Of(
+        IrTypeRef type,
+        string site,
+        RuntimeTypeReachabilityResult? reachability
+    ) =>
         type switch
         {
             _ when type.IsObject => new TsRuntimeHelperReference("ObjectType"),
-            IrNullableTypeRef { Inner: var inner } => Of(inner, site) is { } innerDescriptor
+            IrNullableTypeRef { Inner: var inner } => Of(inner, site, reachability)
+                is { } innerDescriptor
                 ? Helper("nullableType", innerDescriptor)
                 : null,
-            IrPrimitiveTypeRef { Primitive: var primitive } => PrimitiveConstantName(primitive)
-                is { } constant
-                ? new TsRuntimeHelperReference(constant)
+            IrPrimitiveTypeRef primitive => TsRuntimePrimitive.Of(
+                primitive.Primitive,
+                primitive.ExactKind
+            )
+                is { } runtime
+                ? new TsRuntimeHelperReference(runtime.Descriptor)
                 : null,
             IrArrayTypeRef => new TsRuntimeHelperReference("ArrayType"),
             IrFunctionTypeRef => new TsRuntimeHelperReference("DelegateType"),
-            IrNamedTypeRef named => NamedDescriptor(named, site),
+            IrNamedTypeRef named => NamedDescriptor(named, site, reachability),
             _ => null,
         };
 
@@ -54,7 +65,11 @@ internal static class IrToTsRuntimeTypeReferences
     /// The descriptor of a named type; a type argument with no descriptor
     /// specializes to the <c>UnknownType</c> wildcard.
     /// </summary>
-    private static TsExpression? NamedDescriptor(IrNamedTypeRef named, string site)
+    private static TsExpression? NamedDescriptor(
+        IrNamedTypeRef named,
+        string site,
+        RuntimeTypeReachabilityResult? reachability
+    )
     {
         if (named.Semantics?.Kind is IrNamedTypeKind.Delegate)
             return new TsRuntimeHelperReference("DelegateType");
@@ -67,21 +82,25 @@ internal static class IrToTsRuntimeTypeReferences
                 )
                 : null;
 
-        if (!IsDescribable(named))
+        if (!IsDescribable(named, reachability))
             return null;
 
-        AssertReached(named, site);
+        AssertReached(named, site, reachability);
 
         return named.Semantics?.Kind switch
         {
             IrNamedTypeKind.Interface
             or IrNamedTypeKind.NumericEnum
             or IrNamedTypeKind.StringEnum => ExportReference(named),
-            _ => Specialized(named, site),
+            _ => Specialized(named, site, reachability),
         };
     }
 
-    private static TsExpression Specialized(IrNamedTypeRef named, string site)
+    private static TsExpression Specialized(
+        IrNamedTypeRef named,
+        string site,
+        RuntimeTypeReachabilityResult? reachability
+    )
     {
         var open = new TsPropertyAccess(ClassReference(named), GetterName);
 
@@ -89,7 +108,9 @@ internal static class IrToTsRuntimeTypeReferences
             return open;
 
         var descriptors = arguments
-            .Select(argument => Of(argument, site) ?? new TsRuntimeHelperReference("UnknownType"))
+            .Select(argument =>
+                Of(argument, site, reachability) ?? new TsRuntimeHelperReference("UnknownType")
+            )
             .ToList();
 
         return Helper("specialize", open, new TsArrayLiteral(descriptors));
@@ -99,9 +120,12 @@ internal static class IrToTsRuntimeTypeReferences
     /// Whether a named type has a descriptor TypeScript can name: a class,
     /// record, struct, interface or enum that is neither a plain object, a
     /// branded wrapper nor a <c>[JsTuple]</c>, and that the analysis did not
-    /// report as undescribable.
+    /// report as undescribable in <paramref name="reachability"/>.
     /// </summary>
-    public static bool IsDescribable(IrNamedTypeRef named)
+    public static bool IsDescribable(
+        IrNamedTypeRef named,
+        RuntimeTypeReachabilityResult? reachability
+    )
     {
         if (
             named.Semantics
@@ -112,7 +136,7 @@ internal static class IrToTsRuntimeTypeReferences
         )
             return false;
 
-        return RuntimeTypeScope.Current?.Undescribable.Contains(named.SupertypeKey) is not true;
+        return reachability?.Undescribable.Contains(named.SupertypeKey) is not true;
     }
 
     /// <summary>
@@ -121,10 +145,14 @@ internal static class IrToTsRuntimeTypeReferences
     /// has its descriptor (D29), and so does a type the BCL lowers to a runtime
     /// class.
     /// </summary>
-    public static void AssertReached(IrNamedTypeRef named, string site)
+    public static void AssertReached(
+        IrNamedTypeRef named,
+        string site,
+        RuntimeTypeReachabilityResult? reachability
+    )
     {
         if (
-            RuntimeTypeScope.Current is not { } reachability
+            reachability is null
             || named.Origin is not null
             || named.Semantics is not { IsTranspilable: true }
             || reachability.Reaches(named.SupertypeKey)
@@ -176,30 +204,4 @@ internal static class IrToTsRuntimeTypeReferences
 
     private static TsCallExpression Helper(string name, params TsExpression[] arguments) =>
         new(new TsRuntimeHelperReference(name), arguments);
-
-    /// <summary>The <c>metano-runtime</c> constant that describes <paramref name="primitive"/>.</summary>
-    public static string? PrimitiveConstantName(IrPrimitive primitive) =>
-        primitive switch
-        {
-            IrPrimitive.Boolean => "BooleanType",
-            IrPrimitive.Byte => "ByteType",
-            IrPrimitive.Int16 => "Int16Type",
-            IrPrimitive.Int32 => "Int32Type",
-            IrPrimitive.Int64 => "Int64Type",
-            IrPrimitive.UInt64 => "UInt64Type",
-            IrPrimitive.Float32 => "SingleType",
-            IrPrimitive.Float64 => "DoubleType",
-            IrPrimitive.Decimal => "DecimalType",
-            IrPrimitive.BigInteger => "BigIntegerType",
-            IrPrimitive.String => "StringType",
-            IrPrimitive.Char => "CharType",
-            IrPrimitive.Guid => "GuidType",
-            IrPrimitive.DateTime => "DateTimeType",
-            IrPrimitive.DateTimeOffset => "DateTimeOffsetType",
-            IrPrimitive.DateOnly => "DateOnlyType",
-            IrPrimitive.TimeOnly => "TimeOnlyType",
-            IrPrimitive.TimeSpan => "TimeSpanType",
-            IrPrimitive.Object => "ObjectType",
-            _ => null,
-        };
 }

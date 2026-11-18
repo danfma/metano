@@ -90,6 +90,7 @@ Round3Probes.mathCalls = v1E+21|1E-07|2||1.7976931348623157E+308|1|2|-1
 Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operators with Temporal objects. When comparing, use Temporal.PlainDateTime.compare(obj1, obj2), not obj1 > obj2. When coercing to strings, use `${obj}` or String(obj), not '' + obj. When coercing to numbers, use properties or methods of the object, not `+obj`. When concatenating with strings, use `${str}${obj}` or str.concat(obj), not str + obj. In React, coerce to a string before rendering a Temporal object.
 Round4Probes.compoundIndexOnce = nullx,by,null|3|pq|1
 Round4Probes.compoundReceiverOnce = nullx|sy|nullz|4
+RuntimeTypeProbes.enumMembership = True|True
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function
 StringProbes.compare THROWS TypeError: String.compare is not a function

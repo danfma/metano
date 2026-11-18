@@ -79,14 +79,24 @@ public static class IrTypeRefMapper
             case SpecialType.System_Boolean:
                 return new IrPrimitiveTypeRef(IrPrimitive.Boolean);
             case SpecialType.System_Byte:
-            case SpecialType.System_SByte:
                 return new IrPrimitiveTypeRef(IrPrimitive.Byte);
+            case SpecialType.System_SByte:
+                return new IrPrimitiveTypeRef(IrPrimitive.Byte) { ExactKind = IrNumericKind.SByte };
             case SpecialType.System_Int16:
-            case SpecialType.System_UInt16:
                 return new IrPrimitiveTypeRef(IrPrimitive.Int16);
+            case SpecialType.System_UInt16:
+                return new IrPrimitiveTypeRef(IrPrimitive.Int16)
+                {
+                    ExactKind = IrNumericKind.UInt16,
+                };
             case SpecialType.System_Int32:
-            case SpecialType.System_UInt32:
                 return new IrPrimitiveTypeRef(IrPrimitive.Int32);
+            case SpecialType.System_UInt32:
+                return new IrPrimitiveTypeRef(IrPrimitive.Int32)
+                {
+                    ExactKind = IrNumericKind.UInt32,
+                };
+
             // nint / nuint are 64-bit on every host Metano targets (spec 012
             // DECIDED-2).
             case SpecialType.System_Int64:
@@ -402,6 +412,7 @@ public static class IrTypeRefMapper
             )
             {
                 IsFlagsEnum = named.HasFlags(),
+                EnumUnderlyingKind = NumericKindOf(named.EnumUnderlyingType),
             };
         }
 
@@ -540,6 +551,21 @@ public static class IrTypeRefMapper
 
         return supertypes.Count == 0 ? null : supertypes;
     }
+
+    /// <summary>The integral kind of an enum's underlying type; <c>null</c> for none.</summary>
+    private static IrNumericKind? NumericKindOf(INamedTypeSymbol? underlying) =>
+        underlying?.SpecialType switch
+        {
+            SpecialType.System_SByte => IrNumericKind.SByte,
+            SpecialType.System_Byte => IrNumericKind.Byte,
+            SpecialType.System_Int16 => IrNumericKind.Int16,
+            SpecialType.System_UInt16 => IrNumericKind.UInt16,
+            SpecialType.System_Int32 => IrNumericKind.Int32,
+            SpecialType.System_UInt32 => IrNumericKind.UInt32,
+            SpecialType.System_Int64 => IrNumericKind.Int64,
+            SpecialType.System_UInt64 => IrNumericKind.UInt64,
+            _ => null,
+        };
 
     /// <summary>
     /// The key a reference to <paramref name="type"/> carries as

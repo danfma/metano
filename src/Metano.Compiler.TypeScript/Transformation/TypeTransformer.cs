@@ -548,7 +548,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousOverloadClaims = TsOverloadCallSites.Claims;
         var previousBclOverrides = IrToTsTypeMapper.BclOverrides;
         var previousExceptionClasses = IrToTsTypeMapper.ExceptionClassesScope;
-        var previousRuntimeTypes = RuntimeTypeScope.Current;
 
         try
         {
@@ -556,7 +555,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
             IrToTsTypeMapper.ExceptionClassesScope = Context.ExceptionClasses;
-            RuntimeTypeScope.Current = Context.RuntimeTypes;
 
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
@@ -646,7 +644,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsOverloadCallSites.Claims = previousOverloadClaims;
             IrToTsTypeMapper.BclOverrides = previousBclOverrides;
             IrToTsTypeMapper.ExceptionClassesScope = previousExceptionClasses;
-            RuntimeTypeScope.Current = previousRuntimeTypes;
         }
     }
 
@@ -1110,7 +1107,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var produced = TransformGroup(
             group,
-            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts)
+            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
         );
 
         outcomes.Files[index] = produced;

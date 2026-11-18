@@ -4,17 +4,18 @@ namespace Metano.Tests;
 /// The runtime tests a `decimal` type pattern lowers to (#505). A C# `decimal`
 /// is a decimal.js `Decimal` instance in the generated TypeScript, so every
 /// type test (`is`, `is not`, switch arms, `as decimal?`, dispatcher guards,
-/// generated guards) must test `instanceof Decimal` — `typeof === "number"`
+/// generated guards) must test `isDecimal` (its decimal.js tag, one rule with
+/// the `DecimalType` descriptor, spec 011 NFR-004) — `typeof === "number"`
 /// matches plain JS numbers C# would reject and rejects every real decimal.
 /// </summary>
 public class DecimalTypePatternTests
 {
     // Probed on .NET: boxed `1.5m` answers `is decimal` = true and
     // `is int` = false, so the two checks must stay distinguishable — exactly
-    // what `instanceof` vs `typeof "number"` gives.
+    // what `isDecimal` vs `isInt32` gives.
 
     [Test]
-    public async Task IsDecimal_TestsInstanceofDecimal()
+    public async Task IsDecimal_TestsIsDecimal()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -28,16 +29,17 @@ public class DecimalTypePatternTests
 
         var output = result["checker.ts"];
 
+        // The user's `isDecimal` claims the name, so the runtime check is aliased.
         await Assert
             .That(output)
-            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+            .Contains("import { isDecimal as isDecimal$rt } from \"metano-runtime\";");
 
-        await Assert.That(output).Contains("return o instanceof Decimal;");
+        await Assert.That(output).Contains("return isDecimal$rt(o);");
         await Assert.That(output).DoesNotContain("typeof o === \"number\"");
     }
 
     [Test]
-    public async Task IsNotDecimal_NegatesTheInstanceofTest()
+    public async Task IsNotDecimal_NegatesTheDecimalTest()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -50,7 +52,7 @@ public class DecimalTypePatternTests
         );
 
         var output = result["checker.ts"];
-        await Assert.That(output).Contains("return !(o instanceof Decimal);");
+        await Assert.That(output).Contains("return !isDecimal(o);");
         await Assert.That(output).DoesNotContain("typeof o === \"number\"");
     }
 
@@ -73,12 +75,12 @@ public class DecimalTypePatternTests
         var output = result["checker.ts"];
 
         await Assert.That(output).Contains("let d: Decimal;");
-        await Assert.That(output).Contains("o instanceof Decimal && (d = o, true)");
+        await Assert.That(output).Contains("isDecimal(o) && (d = o, true)");
         await Assert.That(output).DoesNotContain("let d: number;");
     }
 
     [Test]
-    public async Task SwitchStatement_DecimalArm_TestsInstanceofDecimal()
+    public async Task SwitchStatement_DecimalArm_TestsIsDecimal()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -103,12 +105,12 @@ public class DecimalTypePatternTests
         // A decimal and an int arm can no longer share one `typeof` test —
         // the decimal arm runs first, as a boxed decimal is not an int in C#.
         // The int arm validates the value (spec 011 FR-022).
-        await Assert.That(output).Contains("case o instanceof Decimal:");
+        await Assert.That(output).Contains("case isDecimal(o):");
         await Assert.That(output).Contains("case isInt32(o):");
     }
 
     [Test]
-    public async Task SwitchExpression_DecimalArm_TestsInstanceofDecimal()
+    public async Task SwitchExpression_DecimalArm_TestsIsDecimal()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -129,11 +131,11 @@ public class DecimalTypePatternTests
 
         await Assert
             .That(output)
-            .Contains("o instanceof Decimal ? \"dec\" : isFloat64(o) ? \"dbl\" : \"other\"");
+            .Contains("isDecimal(o) ? \"dec\" : isFloat64(o) ? \"dbl\" : \"other\"");
     }
 
     [Test]
-    public async Task AsDecimalNullable_NarrowsWithInstanceof()
+    public async Task AsDecimalNullable_ReadsTheDecimalDescriptor()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -147,15 +149,13 @@ public class DecimalTypePatternTests
 
         var output = result["defaults.ts"];
 
-        await Assert
-            .That(output)
-            .Contains("return (o instanceof Decimal ? o : null) ?? new Decimal(\"0\");");
+        await Assert.That(output).Contains("return asType(o, DecimalType) ?? new Decimal(\"0\");");
 
         await Assert.That(output).DoesNotContain("typeof o === \"number\"");
     }
 
     [Test]
-    public async Task GeneratedGuard_DecimalField_TestsInstanceofDecimal()
+    public async Task GeneratedGuard_DecimalField_TestsIsDecimal()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -169,12 +169,12 @@ public class DecimalTypePatternTests
 
         // The shape check must reject a plain number and accept a Decimal —
         // a bare `!= null` accepts both.
-        await Assert.That(output).Contains("v.amount instanceof Decimal;");
+        await Assert.That(output).Contains("isDecimal(v.amount);");
         await Assert.That(output).DoesNotContain("return v.amount != null;");
     }
 
     [Test]
-    public async Task GeneratedGuard_NullableDecimalField_TestsInstanceofPerBranch()
+    public async Task GeneratedGuard_NullableDecimalField_TestsIsDecimalPerBranch()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -185,11 +185,11 @@ public class DecimalTypePatternTests
         );
 
         var output = result["maybe-priced.ts"];
-        await Assert.That(output).Contains("v.amount == null || v.amount instanceof Decimal;");
+        await Assert.That(output).Contains("v.amount == null || isDecimal(v.amount);");
     }
 
     [Test]
-    public async Task BrandedCompanion_DecimalOverload_TestsInstanceofDecimal()
+    public async Task BrandedCompanion_DecimalOverload_TestsIsDecimal()
     {
         // Companion-namespace dispatchers build their guards without the
         // class emitter's [ExportFromBcl] overrides, so the decimal check
@@ -213,12 +213,12 @@ public class DecimalTypePatternTests
         );
 
         var output = result["amount.ts"];
-        await Assert.That(output).Contains("args[0] instanceof Decimal");
+        await Assert.That(output).Contains("isDecimal(args[0])");
         await Assert.That(output).DoesNotContain("typeof args[0] === \"number\"");
     }
 
     [Test]
-    public async Task ClassDispatcher_DecimalOverload_KeepsInstanceofDecimal()
+    public async Task ClassDispatcher_DecimalOverload_TestsIsDecimal()
     {
         // The class emitter resolves decimal through the [ExportFromBcl]
         // overrides already; pin that the dispatcher guard says instanceof.
@@ -234,7 +234,7 @@ public class DecimalTypePatternTests
         );
 
         var output = result["classifier.ts"];
-        await Assert.That(output).Contains("args[0] instanceof Decimal");
+        await Assert.That(output).Contains("isDecimal(args[0])");
         await Assert.That(output).DoesNotContain("isFloat64");
     }
 

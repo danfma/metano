@@ -161,7 +161,7 @@ internal static class IrToTsCatchChainBridge
     )
     {
         var condition = IrTypeCheckBuilder.AllOf([
-            MapTypeTest(clause, subject),
+            MapTypeTest(clause, subject, context),
             MapFilter(clause, subject, context),
         ]);
 
@@ -176,9 +176,18 @@ internal static class IrToTsCatchChainBridge
     /// tested at runtime, which extraction reported (MS0001, or MS0045 for an
     /// exception without a runtime class) and the arm then takes every value.
     /// </summary>
-    private static TsExpression? MapTypeTest(IrCatchClause clause, string caught) =>
+    private static TsExpression? MapTypeTest(
+        IrCatchClause clause,
+        string caught,
+        IrToTsBridgeContext context
+    ) =>
         NarrowedType(clause) is { } type && CanBeTested(type)
-            ? IrToTsExpressionBridge.BuildTypeTest(new TsIdentifier(caught), type)
+            ? IrToTsExpressionBridge.BuildTypeTest(
+                new TsIdentifier(caught),
+                type,
+                staticType: null,
+                context
+            )
             : null;
 
     /// <summary>The type the clause narrows to; <c>null</c> for one that takes every exception.</summary>

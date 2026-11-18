@@ -267,8 +267,6 @@ public sealed class DartIrRewriter
                 new IrUnknownTypeRef()
             ),
             IrInlineCodeExpression inlineCode => DartInlineCodePlaceholder.Of(inlineCode.Span),
-            IrGetTypeExpression => DartRuntimeTypePlaceholder.Of("GetType"),
-            IrTypeOfExpression => DartRuntimeTypePlaceholder.Of("TypeOfExpression"),
             _ => expr,
         };
 

@@ -1,6 +1,6 @@
-import { isBool, isInt32, isString, isType } from "metano-runtime";
+import { isBool, isDecimal, isInt32, isString } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Color, Color$runtimeType } from "./color";
+import { Color } from "./color";
 
 export class Painter {
   protected static readonly byPainterC = /* @__PURE__ */ Symbol("Painter(Color c)");
@@ -33,7 +33,7 @@ export class Painter {
       return;
     }
 
-    if (args.length <= 1 && (args[0] === undefined || isType(args[0], Color$runtimeType))) {
+    if (args.length <= 1 && (args[0] === undefined || isInt32(args[0]))) {
       const c = (args[0] === undefined ? Color.Green : args[0]) as Color;
       this.log = "color:" + c;
 
@@ -66,7 +66,7 @@ export class Painter {
       return this.dB(args[0] as boolean);
     }
 
-    if (args.length <= 1 && (args[0] === undefined || isType(args[0], Color$runtimeType))) {
+    if (args.length <= 1 && (args[0] === undefined || isInt32(args[0]))) {
       return this.dC(args[0] as Color);
     }
 
@@ -88,7 +88,7 @@ export class Painter {
       return Painter.fS(args[0] as string);
     }
 
-    if (args.length >= 1 && args.length <= 2 && isInt32(args[0]) && (args[1] === undefined || args[1] instanceof Decimal)) {
+    if (args.length >= 1 && args.length <= 2 && isInt32(args[0]) && (args[1] === undefined || isDecimal(args[1]))) {
       return Painter.fAD(args[0] as number, args[1] as Decimal);
     }
 

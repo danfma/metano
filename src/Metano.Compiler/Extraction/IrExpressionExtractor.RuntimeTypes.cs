@@ -25,7 +25,7 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? method
     )
     {
-        if (!IsObjectGetType(method))
+        if (_context.KeepsReflectionSourceForms || !IsObjectGetType(method))
             return null;
 
         var receiverSyntax = (inv.Expression as MemberAccessExpressionSyntax)?.Expression;
@@ -91,6 +91,9 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ExtractTypeOf(TypeOfExpressionSyntax typeOf)
     {
         var type = _semantic.GetTypeInfo(typeOf.Type).Type;
+
+        if (_context.KeepsReflectionSourceForms)
+            return ReportUnsupported(typeOf, typeOf.Kind().ToString());
 
         if (type is null || RuntimeQuestionFacts.IsUnsupportedTypeOf(type))
             return new IrUnsupportedExpression(typeOf.Kind().ToString());

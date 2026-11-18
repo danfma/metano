@@ -85,17 +85,18 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
+
         await Assert.That(printed).Contains("isInt32(args[0])");
         await Assert.That(printed).Contains("isFloat64(args[0])");
     }
 
     [Test]
-    public async Task DecimalOverload_WithoutBclOverride_ChecksInstanceofDecimal()
+    public async Task DecimalOverload_WithoutBclOverride_ChecksIsDecimal()
     {
         // A decimal is a decimal.js `Decimal` instance at runtime even where
         // the scope carries no [ExportFromBcl] overrides (companion
         // namespaces build their guards from an empty scope): the guard tests
-        // `instanceof Decimal`, because `typeof === "number"` would accept
+        // `isDecimal`, because `typeof === "number"` would accept
         // plain JS numbers no C# decimal produces (#505).
         var (primary, containingTypeName) = ExtractOverloadGroup(
             """
@@ -118,7 +119,8 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
-        await Assert.That(printed).Contains("args[0] instanceof Decimal");
+
+        await Assert.That(printed).Contains("isDecimal(args[0])");
         await Assert.That(printed).DoesNotContain("typeof args[0] === \"number\"");
     }
 
@@ -149,6 +151,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
+
         // Both overloads share the same parameter name (`value`), so the naming
         // policy falls back to the type spellings. A type parameter spells its
         // own name (spec 013 FR-002), so the generic fast path is still
@@ -177,6 +180,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             CandidateFastPathNames(primary),
             IrToTsBridgeContext.For(null)
         );
+
         var printed = PrintMembers(members, containingTypeName);
         await Assert.That(printed).Contains("static abs(...args: unknown[])");
         // Static overloads delegate through the class name, not `this`. Both
@@ -218,6 +222,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
+
         await Assert.That(printed).Contains("args[0] === \"Low\"");
         await Assert.That(printed).Contains("args[0] === \"Medium\"");
         await Assert.That(printed).Contains("args[0] === \"High\"");
@@ -252,6 +257,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
+
         await Assert.That(printed).Contains("isInt32(args[0])");
         await Assert.That(printed).DoesNotContain("instanceof Status");
     }
@@ -285,6 +291,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
+
         await Assert.That(printed).Contains("typeof args[0] === \"object\"");
         await Assert.That(printed).DoesNotContain("instanceof IShape");
     }
@@ -303,6 +310,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             """,
             methodName: "Sum"
         );
+
         var members = IrToTsOverloadDispatcherBridge.BuildMethod(
             primary,
             containingTypeName,
@@ -310,6 +318,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             CandidateFastPathNames(primary),
             IrToTsBridgeContext.For(null)
         );
+
         await Assert.That(members).IsEmpty();
     }
 
@@ -337,6 +346,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             .Extract(typeSymbol, new IrExtractionContext(Compilation: compilation))
             .Members!.OfType<IrMethodDeclaration>()
             .Single(m => m.Name == methodName);
+
         return (primary, typeSymbol.Name);
     }
 

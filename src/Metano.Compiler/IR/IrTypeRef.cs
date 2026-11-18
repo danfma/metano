@@ -33,7 +33,25 @@ public interface IIrCompositeTypeRef
 /// <summary>
 /// A well-known primitive type. See <see cref="IrPrimitive"/> for the semantic catalog.
 /// </summary>
-public sealed record IrPrimitiveTypeRef(IrPrimitive Primitive) : IrTypeRef;
+public sealed record IrPrimitiveTypeRef(IrPrimitive Primitive) : IrTypeRef
+{
+    /// <summary>
+    /// The C# numeric type when <see cref="Primitive"/> folds it into a signed
+    /// counterpart (<c>sbyte</c> → <see cref="IrPrimitive.Byte"/>,
+    /// <c>ushort</c> → <see cref="IrPrimitive.Int16"/>, <c>uint</c> →
+    /// <see cref="IrPrimitive.Int32"/>), so a runtime type test can check the
+    /// value's real range; <c>null</c> for every other primitive. It is a fact
+    /// of the source type only and takes no part in equality: two references
+    /// to the folded primitive stay the same type everywhere else.
+    /// </summary>
+    public IrNumericKind? ExactKind { get; init; }
+
+    /// <summary>Equality by <see cref="Primitive"/> alone.</summary>
+    public bool Equals(IrPrimitiveTypeRef? other) =>
+        other is not null && other.Primitive == Primitive;
+
+    public override int GetHashCode() => Primitive.GetHashCode();
+}
 
 /// <summary>
 /// A named type reference — classes, interfaces, records, structs, or any user-defined type.
@@ -181,6 +199,12 @@ public sealed record IrNamedTypeSemantics(
     /// bit combinations of the members rather than one of them.
     /// </summary>
     public bool IsFlagsEnum { get; init; }
+
+    /// <summary>
+    /// The underlying numeric type of a numeric enum (<c>enum E : byte</c>), the
+    /// range a runtime test of the enum checks; <c>null</c> for every other kind.
+    /// </summary>
+    public IrNumericKind? EnumUnderlyingKind { get; init; }
 }
 
 /// <summary>

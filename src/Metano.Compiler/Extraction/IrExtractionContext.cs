@@ -61,6 +61,15 @@ public sealed record IrExtractionContext(
     internal bool KeepsDynamicSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target keeps <c>GetType()</c> and <c>typeof</c> in the form
+    /// the extraction gave them before spec 011 stage 011b (Dart until after
+    /// 3.0.0, D28): <c>GetType()</c> as an ordinary call and <c>typeof</c> as an
+    /// unsupported expression (MS0001), with no runtime-type node, so its output
+    /// and diagnostics stay as they were.
+    /// </summary>
+    internal bool KeepsReflectionSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// The port through which a target says which types it emits with an
     /// addressable form per constructor overload — TypeScript a selector and,
     /// for a concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10),

@@ -179,6 +179,9 @@ public sealed record IrCompilation(
     /// collection kinds carry their type arguments at runtime (spec 011
     /// FR-008).
     /// </summary>
-    public IReadOnlySet<string> QuestionedCollectionTypes { get; init; } =
-        new HashSet<string>(StringComparer.Ordinal);
+    public IReadOnlySet<string> QuestionedCollectionTypes =>
+        RuntimeQuestions
+            .Select(question => question.Type.CollectionDefinitionName)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
 }

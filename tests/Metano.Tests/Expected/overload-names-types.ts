@@ -1,4 +1,4 @@
-import { isInt32, isInt64, isString, isUInt64 } from "metano-runtime";
+import { isInt32, isInt64, isString, isUInt32, isUInt64 } from "metano-runtime";
 import { Point } from "./point";
 
 export class Names {
@@ -85,7 +85,7 @@ export class Names {
       return this.uInt32(args[0] as number);
     }
 
-    if (args.length === 1 && isInt32(args[0])) {
+    if (args.length === 1 && isUInt32(args[0])) {
       return this.uUInt32(args[0] as number);
     }
 

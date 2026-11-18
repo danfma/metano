@@ -38,6 +38,13 @@ internal sealed record IrToTsBridgeContext(
     public GroupCasts? Casts { get; private init; }
 
     /// <summary>
+    /// The runtime type descriptors the transform emits (spec 011 D29), which
+    /// every descriptor read the group renders is checked against; <c>null</c>
+    /// outside a group's transform, where no assertion runs.
+    /// </summary>
+    public Analysis.RuntimeTypeReachabilityResult? RuntimeTypes { get; private init; }
+
+    /// <summary>
     /// Whether the class being emitted overrides <c>Message</c>, so its
     /// <c>base.Message</c> reads lower to the kept base message
     /// (<see cref="IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead"/>).
@@ -66,13 +73,15 @@ internal sealed record IrToTsBridgeContext(
     /// position outside class emission (module functions, plain objects,
     /// branded structs, static operators, JSX components, entry-point bodies),
     /// where no backing field is ever recognized and no type override applies,
-    /// carrying the group's <paramref name="casts"/>. A class emission derives
+    /// carrying the group's <paramref name="casts"/> and the transform's
+    /// <paramref name="runtimeTypes"/>. A class emission derives
     /// its own context from it.
     /// </summary>
     public static IrToTsBridgeContext ForGroup(
         DeclarativeMappingRegistry? bclRegistry,
-        GroupCasts casts
-    ) => For(bclRegistry) with { Casts = casts };
+        GroupCasts casts,
+        Analysis.RuntimeTypeReachabilityResult runtimeTypes
+    ) => For(bclRegistry) with { Casts = casts, RuntimeTypes = runtimeTypes };
 
     /// <summary>
     /// A context outside any file group's transform: no backing field, no type

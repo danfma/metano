@@ -110,16 +110,20 @@ internal sealed class RuntimeTypeReachability
     {
         switch (question.Kind)
         {
-            case IrRuntimeQuestionKind.Test or IrRuntimeQuestionKind.As:
+            case IrRuntimeQuestionKind.Test:
                 ReportDelegateTest(question);
-                ReachTestedType(question.Type);
+                ReachTestedType(question.Type, readsEnumDescriptor: false);
+                break;
+            case IrRuntimeQuestionKind.As:
+                ReportDelegateTest(question);
+                ReachTestedType(question.Type, readsEnumDescriptor: true);
                 break;
             case IrRuntimeQuestionKind.OverloadParameter:
-                ReachTestedType(question.Type);
+                ReachTestedType(question.Type, readsEnumDescriptor: false);
                 break;
             case IrRuntimeQuestionKind.Cast:
                 ReportUncheckedCast(question);
-                ReachTestedType(question.Type);
+                ReachTestedType(question.Type, readsEnumDescriptor: true);
                 break;
             case IrRuntimeQuestionKind.TypeOf:
                 ReachTypeOf(question);
@@ -131,15 +135,23 @@ internal sealed class RuntimeTypeReachability
     }
 
     /// <summary>
-    /// TypeScript tests an interface and an enum through their descriptor; a
-    /// class, struct or record tests by <c>instanceof</c> and reaches nothing.
-    /// An interface of a referenced library has its descriptor there; the
-    /// classes of this compilation that implement it are reached, so their
-    /// descriptors list it.
+    /// TypeScript tests an interface through its descriptor everywhere; an
+    /// enum only where a cast or <c>as</c> checks the value with its
+    /// descriptor (<paramref name="readsEnumDescriptor"/>), since a test or a
+    /// dispatch renders the enum's value test inline; a class, struct or record
+    /// tests by <c>instanceof</c> and reaches nothing. An interface of a
+    /// referenced library has its descriptor there; the classes of this
+    /// compilation that implement it are reached, so their descriptors list it.
     /// </summary>
-    private void ReachTestedType(IrQuestionedType tested)
+    private void ReachTestedType(IrQuestionedType tested, bool readsEnumDescriptor)
     {
-        if (DescribableOf(tested) is { Kind: not DescriptorKind.Class } type)
+        if (
+            DescribableOf(tested) is { } type
+            && (
+                type.Kind is DescriptorKind.Interface
+                || (type.Kind is DescriptorKind.Enum && readsEnumDescriptor)
+            )
+        )
         {
             Reach(type);
 
@@ -176,18 +188,22 @@ internal sealed class RuntimeTypeReachability
             return;
 
         if (IrTypeKeys.Find(key, _compilation) is { } symbol && !HasRuntimeDescriptor(symbol))
-            ReportUndescribableTypeOf(symbol, question.Location);
+            ReportUndescribableTypeOf(symbol, LocationOf(question));
     }
 
     /// <summary>
-    /// A type outside this compilation has a descriptor when an
-    /// <c>[EmitPackage]</c> library emits it (D29: libraries are complete) or
-    /// when it is an exception with a runtime class.
+    /// A type outside this compilation has a descriptor when it emits a
+    /// declaration that carries one: a public type of an <c>[EmitPackage]</c>
+    /// library (D29: libraries are complete) or an exception with a runtime
+    /// class; never an <c>[Import]</c>, <c>[External]</c> or ignored type, nor
+    /// one shaped without a class (a plain object, a branded wrapper).
     /// </summary>
     private bool HasRuntimeDescriptor(INamedTypeSymbol type) =>
         !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly)
-            && type.ContainingAssembly.HasTranspileAssembly()
-        || IsException(type);
+        && DescribableType.Of(type) is not null
+        && (
+            IsException(type) || (type.ContainingAssembly.HasTranspileAssembly() && IsPublic(type))
+        );
 
     private void ReportUndescribableTypeOf(INamedTypeSymbol type, Location? location)
     {
@@ -278,7 +294,7 @@ internal sealed class RuntimeTypeReachability
                 "GetType() on a value whose static type may hold a [PlainObject] answers "
                     + "'System.Object' for a plain object: a plain object has no runtime identity "
                     + "(spec 011 FR-020).",
-                question.Location
+                LocationOf(question)
             )
         );
     }
@@ -294,7 +310,7 @@ internal sealed class RuntimeTypeReachability
                 DiagnosticCodes.UnanswerableRuntimeTypeTest,
                 "A delegate type has no runtime type test in TypeScript: a function carries no "
                     + "signature to test (spec 011 FR-021).",
-                question.Location
+                LocationOf(question)
             )
         );
     }
@@ -321,7 +337,7 @@ internal sealed class RuntimeTypeReachability
                 DiagnosticCodes.UncheckedCast,
                 $"The cast is emitted unchecked because {reason} (spec 011 FR-026). "
                     + UnsafeCastHint,
-                question.Location
+                LocationOf(question)
             )
         );
     }
@@ -415,9 +431,11 @@ internal sealed class RuntimeTypeReachability
             );
 
     /// <summary>
-    /// A reached class overrides its base's getter when the base has one: a
-    /// transpiled base (reached with the whole chain), a library class, or a
-    /// runtime exception class.
+    /// A reached class overrides its base's getter only when the base actually
+    /// emits one: a describable base of this compilation (reached with the
+    /// whole chain), or a type of another assembly with a descriptor
+    /// (<see cref="HasRuntimeDescriptor"/>). An <c>[Import]</c>,
+    /// <c>[External]</c> or ignored base has none.
     /// </summary>
     private HashSet<SupertypeKey> OverridingGetters() =>
         _reachedOrder
@@ -443,9 +461,10 @@ internal sealed class RuntimeTypeReachability
             : null;
 
     private static bool HasEmitRuntimeType(ISymbol symbol) =>
-        symbol
-            .GetAttributes()
-            .Any(attribute => attribute.AttributeClass?.Name is nameof(EmitRuntimeTypeAttribute));
+        symbol.HasAttribute(nameof(EmitRuntimeTypeAttribute));
+
+    private static Location? LocationOf(IrRuntimeQuestion question) =>
+        question.Span is { } span ? IrSourceSpanLocations.ToLocation(span) : null;
 
     private static bool IsPublic(INamedTypeSymbol type)
     {

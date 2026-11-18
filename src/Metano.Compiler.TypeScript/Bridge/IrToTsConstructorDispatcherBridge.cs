@@ -229,7 +229,12 @@ public static class IrToTsConstructorDispatcherBridge
         var arguments = new OverloadArgumentShape(ctor.PlainParameters);
 
         return new TsIfStatement(
-            arguments.Guard(new TypeCheckScope(typeParameters, context.TypeOverrides)),
+            arguments.Guard(
+                new TypeCheckScope(typeParameters, context.TypeOverrides)
+                {
+                    RuntimeTypes = context.RuntimeTypes,
+                }
+            ),
             BuildBranchBody(ctor, arguments, baseCall, context)
         );
     }

@@ -12,36 +12,58 @@ public static partial class IrToTsExpressionBridge
 {
     /// <summary>
     /// <c>x as T</c>: <c>asType(x, descriptor)</c> for an interface, an enum or
-    /// a primitive with a descriptor, which evaluates <c>x</c> once; every other
-    /// target (a class, which keeps <c>x instanceof C ? x : null</c> and reads
-    /// no descriptor, D29; a <c>decimal</c>, whose descriptor types its value as
-    /// an <c>object</c>) lowers through the conditional that defines it.
+    /// a primitive with a descriptor; every other target (a class, which keeps
+    /// <c>x instanceof C ? x : null</c> and reads no descriptor, D29) lowers
+    /// through the conditional that defines it.
     /// </summary>
     private static TsExpression MapAsCast(
         IrConditionalExpression asCast,
         IrToTsBridgeContext context
-    )
-    {
-        if (
-            asCast.Condition is IrIsPatternExpression { Pattern: IrTypePattern pattern } test
-            && IrRuntimeTypeTest.Of(pattern.Type, pattern.InputType)
-                is IrRuntimeTypeTest.NominalInterface
-                    or IrRuntimeTypeTest.Primitive { PrimitiveKind: not IrPrimitive.Decimal }
-            && IrToTsRuntimeTypeReferences.Of(pattern.Type, "as") is { } descriptor
-        )
-        {
-            return new TsCallExpression(
-                new TsRuntimeHelperReference("asType"),
-                [Map(test.Expression, context), descriptor]
+    ) =>
+        AsTypeDescriptorOf(asCast, context) is { } descriptor
+            ? AsTypeCall(Map(AsOperandOf(asCast)!, context), descriptor)
+            : new TsConditionalExpression(
+                Map(asCast.Condition, context),
+                Map(asCast.WhenTrue, context),
+                Map(asCast.WhenFalse, context)
             );
-        }
 
-        return new TsConditionalExpression(
-            Map(asCast.Condition, context),
-            Map(asCast.WhenTrue, context),
-            Map(asCast.WhenFalse, context)
-        );
-    }
+    /// <summary>
+    /// An <c>as</c> whose operand extraction bound once
+    /// (<c>let $v = x in $v is T ? $v : null</c>): <c>asType</c> evaluates its
+    /// argument once itself, so the binding is dropped,
+    /// <c>asType(x, descriptor)</c>, with no immediately invoked function (D4).
+    /// <c>null</c> for any other binding.
+    /// </summary>
+    private static TsExpression? TryMapBoundAsCast(
+        IrLetExpression let,
+        IrToTsBridgeContext context
+    ) =>
+        let.Body is IrConditionalExpression { AsTarget: not null } asCast
+        && AsOperandOf(asCast) is IrIdentifier { Name: var bound }
+        && bound == let.Name
+        && AsTypeDescriptorOf(asCast, context) is { } descriptor
+            ? AsTypeCall(Map(let.Value, context), descriptor)
+            : null;
+
+    private static IrExpression? AsOperandOf(IrConditionalExpression asCast) =>
+        asCast.Condition is IrIsPatternExpression { Pattern: IrTypePattern } test
+            ? test.Expression
+            : null;
+
+    private static TsExpression? AsTypeDescriptorOf(
+        IrConditionalExpression asCast,
+        IrToTsBridgeContext context
+    ) =>
+        asCast.Condition is IrIsPatternExpression { Pattern: IrTypePattern pattern }
+        && IrRuntimeTypeTest.Of(pattern.Type, pattern.InputType)
+            is IrRuntimeTypeTest.NominalInterface
+                or IrRuntimeTypeTest.Primitive
+            ? IrToTsRuntimeTypeReferences.Of(pattern.Type, "as", context.RuntimeTypes)
+            : null;
+
+    private static TsCallExpression AsTypeCall(TsExpression value, TsExpression descriptor) =>
+        new(new TsRuntimeHelperReference("asType"), [value, descriptor]);
 
     /// <summary>
     /// <c>x.GetType()</c>: the folded descriptor of a primitive, enum or struct
@@ -51,7 +73,8 @@ public static partial class IrToTsExpressionBridge
     {
         if (
             getType.ConstantType is { } constant
-            && IrToTsRuntimeTypeReferences.Of(constant, "GetType()") is { } folded
+            && IrToTsRuntimeTypeReferences.Of(constant, "GetType()", context.RuntimeTypes)
+                is { } folded
         )
             return folded;
 
@@ -65,7 +88,7 @@ public static partial class IrToTsExpressionBridge
     /// <c>typeof(T)</c>: the type's descriptor, or the throwing placeholder for
     /// a type the reachability phase reported as having none.
     /// </summary>
-    private static TsExpression MapTypeOf(IrTypeOfExpression typeOf) =>
-        IrToTsRuntimeTypeReferences.Of(typeOf.Type, "typeof")
+    private static TsExpression MapTypeOf(IrTypeOfExpression typeOf, IrToTsBridgeContext context) =>
+        IrToTsRuntimeTypeReferences.Of(typeOf.Type, "typeof", context.RuntimeTypes)
         ?? MapUnsupported(new IrUnsupportedExpression("TypeOfExpression"));
 }

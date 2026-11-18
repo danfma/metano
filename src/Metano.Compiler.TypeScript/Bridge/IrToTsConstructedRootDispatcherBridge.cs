@@ -32,7 +32,10 @@ internal static class IrToTsConstructedRootDispatcherBridge
         var typeOverrides = context.TypeOverrides;
         var sorted = OverloadDispatchOrder.Sort(implementations, m => m.Parameters);
         var isAsync = sorted.Any(method => method.Semantics.IsAsync);
-        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides);
+        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
+        {
+            RuntimeTypes = context.RuntimeTypes,
+        };
 
         var body = sorted
             .Select(method => (TsStatement)BuildBranch(method, classScope, context))
@@ -84,11 +87,7 @@ internal static class IrToTsConstructedRootDispatcherBridge
     {
         var arguments = new OverloadArgumentShape(method.Parameters);
 
-        var scope = TypeCheckScope.ForMethod(
-            method,
-            classScope.TypeParameters,
-            classScope.TypeOverrides
-        );
+        var scope = classScope.Within(method);
 
         var statements = method
             .Parameters.Select(

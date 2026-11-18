@@ -1,4 +1,3 @@
-using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
@@ -25,8 +24,9 @@ namespace Metano.Compiler.TypeScript.Transformation;
 ///   <item>an interface gets <c>export const IFoo$runtimeType: InterfaceType&lt;IFoo&gt;</c>
 ///   after its declaration;</item>
 ///   <item>an enum gets <c>export const E$runtimeType: EnumType&lt;E&gt;</c> after
-///   its <c>as const</c> object, with an import-free membership test (every
-///   valid bit combination for a <c>[Flags]</c> enum).</item>
+///   its <c>as const</c> object, whose <c>test</c> is the enum's value test
+///   (<see cref="IrToTsEnumValueTest"/>), the one every other enum test
+///   renders.</item>
 /// </list>
 /// </summary>
 internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
@@ -131,7 +131,10 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             new TsObjectProperty("isFlags", BooleanLiteral(ir.IsFlags)),
             new TsObjectProperty(
                 "test",
-                Predicate(enumType, ir.IsFlags ? FlagsTest(ir) : MembershipTest(values))
+                Predicate(
+                    enumType,
+                    IrToTsEnumValueTest.Of(new TsIdentifier(ValueParameter), EnumRef(type))
+                )
             ),
         ]);
 
@@ -319,14 +322,19 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
                 && iface.DeclaredAccessibility is Accessibility.Public;
 
     private TsExpression? DescriptorOf(INamedTypeSymbol type, string site) =>
-        IrToTsRuntimeTypeReferences.Of(
-            IrTypeRefMapper.Map(
-                type.OriginalDefinition,
-                _context.OriginResolver,
-                TargetLanguage.TypeScript
-            ),
-            site
+        IrToTsRuntimeTypeReferences.Of(ReferenceTo(type), site, RuntimeTypes);
+
+    private IrTypeRef ReferenceTo(INamedTypeSymbol type) =>
+        IrTypeRefMapper.Map(
+            type.OriginalDefinition,
+            _context.OriginResolver,
+            TargetLanguage.TypeScript
         );
+
+    /// <summary>The reference to an enum the value test of its literal reads.</summary>
+    private IrNamedTypeRef EnumRef(INamedTypeSymbol type) =>
+        ReferenceTo(type) as IrNamedTypeRef
+        ?? throw new InvalidOperationException($"Enum '{type}' maps to no named type.");
 
     private static IEnumerable<TsObjectProperty> Identity(string kind, INamedTypeSymbol type) =>
         [
@@ -428,51 +436,4 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         new([], [new TsReturnStatement(value)]);
 
     private static TsLiteral BooleanLiteral(bool value) => new(value ? "true" : "false");
-
-    /// <summary><c>v === 0 || v === 1 || …</c>; <c>false</c> for an enum without members.</summary>
-    private static TsExpression MembershipTest(IReadOnlyList<TsExpression> values) =>
-        values.Count == 0
-            ? BooleanLiteral(false)
-            : values
-                .Select(value =>
-                    (TsExpression)
-                        new TsBinaryExpression(new TsIdentifier(ValueParameter), "===", value)
-                )
-                .Aggregate((left, right) => new TsBinaryExpression(left, "||", right));
-
-    /// <summary>
-    /// Every valid bit combination of a <c>[Flags]</c> enum: an integer with no
-    /// bit outside the members' union.
-    /// </summary>
-    private static TsExpression FlagsTest(IrEnumDeclaration ir)
-    {
-        var mask = ir.Members.Aggregate(0L, (all, member) =>
-            all | Convert.ToInt64(member.Value, CultureInfo.InvariantCulture)
-        );
-
-        var value = new TsIdentifier(ValueParameter);
-
-        return new TsBinaryExpression(
-            new TsBinaryExpression(
-                IrToTsRuntimeTestBridge.TypeofTest(value, "number"),
-                "&&",
-                new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier("Number"), "isInteger"),
-                    [value]
-                )
-            ),
-            "&&",
-            new TsBinaryExpression(
-                new TsParenthesized(
-                    new TsBinaryExpression(
-                        value,
-                        "&",
-                        new TsLiteral($"~{mask.ToString(CultureInfo.InvariantCulture)}")
-                    )
-                ),
-                "===",
-                new TsLiteral("0")
-            )
-        );
-    }
 }

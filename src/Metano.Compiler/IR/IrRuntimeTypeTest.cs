@@ -23,14 +23,9 @@ public abstract record IrRuntimeTypeTest
     /// <summary>
     /// A transpiled interface, tested nominally: a class instance implements it
     /// when its class declares it (directly or through a base or a base
-    /// interface). <paramref name="Implementers"/> are the <c>[PlainObject]</c>
-    /// types that implement it, in a deterministic order, which test a value
-    /// that has no class; empty when the classification is made from the type
-    /// alone (a target that renders the fallback computes them over the whole
-    /// compilation).
+    /// interface).
     /// </summary>
-    public sealed record NominalInterface(IReadOnlyList<IrTypeRef> Implementers)
-        : IrRuntimeTypeTest;
+    public sealed record NominalInterface : IrRuntimeTypeTest;
 
     /// <summary>A <c>[PlainObject]</c>: the type has no runtime class, only a shape.</summary>
     public sealed record ErasedShape : IrRuntimeTypeTest;
@@ -47,7 +42,16 @@ public abstract record IrRuntimeTypeTest
     /// decide (<c>object</c>, an interface, a type parameter).
     /// </summary>
     public sealed record Primitive(IrPrimitive PrimitiveKind, IrPrimitive? StaticPrimitive)
-        : IrRuntimeTypeTest;
+        : IrRuntimeTypeTest
+    {
+        /// <summary>
+        /// The C# numeric type whose range the value must be in when
+        /// <see cref="PrimitiveKind"/> folds it (<c>uint</c>, <c>ushort</c>,
+        /// <c>sbyte</c>), or the underlying type of a numeric enum; <c>null</c>
+        /// otherwise.
+        /// </summary>
+        public IrNumericKind? ExactKind { get; init; }
+    }
 
     /// <summary>
     /// The type lowers to a fixed-length JS array (a <c>[JsTuple]</c>), so the
@@ -115,9 +119,9 @@ public abstract record IrRuntimeTypeTest
     private static IrRuntimeTypeTest OfType(IrTypeRef type, IrPrimitive? staticPrimitive) =>
         type switch
         {
-            IrPrimitiveTypeRef { Primitive: var primitive } => OfPrimitive(
-                primitive,
-                staticPrimitive
+            IrPrimitiveTypeRef { Primitive: var primitive } primitiveType => WithExactKind(
+                OfPrimitive(primitive, staticPrimitive),
+                primitiveType.ExactKind
             ),
             IrNamedTypeRef { Semantics: var semantics } => OfNamed(semantics, staticPrimitive),
             IrArrayTypeRef => new Array(),
@@ -154,7 +158,10 @@ public abstract record IrRuntimeTypeTest
         semantics switch
         {
             null => new NominalClass(),
-            { Kind: IrNamedTypeKind.NumericEnum } => new Primitive(IrPrimitive.Int32, null),
+            { Kind: IrNamedTypeKind.NumericEnum } => new Primitive(IrPrimitive.Int32, null)
+            {
+                ExactKind = semantics.EnumUnderlyingKind,
+            },
             { Kind: IrNamedTypeKind.StringEnum } => new Primitive(IrPrimitive.String, null),
             { Kind: IrNamedTypeKind.Branded } => OfBranded(
                 semantics.BrandedUnderlyingPrimitive,
@@ -167,13 +174,21 @@ public abstract record IrRuntimeTypeTest
             _ => new NominalClass(),
         };
 
+    private static IrRuntimeTypeTest WithExactKind(IrRuntimeTypeTest test, IrNumericKind? kind) =>
+        test is Primitive primitive && kind is not null
+            ? primitive with
+            {
+                ExactKind = kind,
+            }
+            : test;
+
     /// <summary>
     /// An interface has a runtime identity only where the compilation emits
     /// it: a transpiled interface that is neither external nor ignored.
     /// </summary>
     private static IrRuntimeTypeTest OfInterface(IrNamedTypeSemantics semantics) =>
         semantics is { IsTranspilable: true, IsExternal: false, IsIgnored: false }
-            ? new NominalInterface([])
+            ? new NominalInterface()
             : new None();
 
     /// <summary>

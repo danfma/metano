@@ -38,7 +38,7 @@ export class Circle extends Shape implements IHasArea {
 }
 
 // receivers/color.ts
-import type { EnumType } from "metano-runtime";
+import { isInt32, type EnumType } from "metano-runtime";
 
 export const Color = {
   Red: 0,
@@ -55,7 +55,7 @@ export const Color$runtimeType: EnumType<Color> = {
   values: [0, 1],
   names: ["Red", "Green"],
   isFlags: false,
-  test: (v: unknown): v is Color => v === 0 || v === 1,
+  test: (v: unknown): v is Color => isInt32(v),
 };
 
 // receivers/dto.ts

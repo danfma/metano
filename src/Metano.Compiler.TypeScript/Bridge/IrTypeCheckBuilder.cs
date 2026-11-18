@@ -37,6 +37,14 @@ internal static class IrTypeCheckBuilder
             IrTypeParameterRef typeParameter => TypeParameterCheck(typeParameter, value, scope),
             // `object` accepts every value, a string or a number included.
             _ when type.IsObject => null,
+            // A decimal tests like everywhere else (`isDecimal`, spec 011
+            // NFR-004), whatever [ExportFromBcl] class it lowers to.
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } => IrToTsRuntimeTestBridge.Render(
+                value,
+                type,
+                staticType: null,
+                scope.RuntimeTypes
+            ),
             _ when scope.TypeOverrides?.TryResolve(type) is TsNamedType exported =>
                 new TsBinaryExpression(
                     value,
@@ -51,7 +59,8 @@ internal static class IrTypeCheckBuilder
                 ),
             IrFunctionTypeRef func => FunctionCheck(func, value),
             IrNamedTypeRef named when HasNoNameableRuntimeClass(named) => TypeofObject(value),
-            _ => IrToTsRuntimeTestBridge.Render(value, type) ?? TypeofObject(value),
+            _ => IrToTsRuntimeTestBridge.Render(value, type, staticType: null, scope.RuntimeTypes)
+                ?? TypeofObject(value),
         };
 
     /// <summary>

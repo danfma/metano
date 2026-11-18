@@ -2,6 +2,7 @@ using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
@@ -772,12 +773,18 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 GuardTestKind.Object
             ),
 
-            // A BCL-exported class (decimal → decimal.js `Decimal`) is a
+            // A BCL-exported class (an [ExportFromBcl] mapping other than decimal) is a
             // runtime constructor the compilation imports, not a project type
             // with its own guard: test the constructor. A bare presence check
             // would accept plain JS numbers no C# decimal ever produces. The
             // node's own origin (#477) is the test — a project type named
             // Decimal has none and falls to its guard below.
+            // A decimal tests as everywhere else, by its tag (spec 011 NFR-004).
+            TsNamedType named when IsDecimal(named) => Required(
+                IrToTsRuntimeTestBridge.PrimitiveTest(fieldAccess, IrPrimitive.Decimal),
+                GuardTestKind.Object
+            ),
+
             TsNamedType { Origin: not null } named when IsBclExportedClass(named) => Required(
                 InstanceofCheck(fieldAccess, named.Name, named.Origin),
                 GuardTestKind.Object
@@ -852,6 +859,12 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         _context.BclExportMap.Values.Any(entry =>
             entry.ExportedName == named.Name && entry.FromPackage == named.Origin?.PackageName
         );
+
+    /// <summary>The decimal.js class a C# <c>decimal</c> lowers to.</summary>
+    private static bool IsDecimal(TsNamedType named) =>
+        IrToTsExpressionBridge.BclDecimalValueReference() is TsTypeReference decimalClass
+        && named.Name == decimalClass.Name
+        && named.Origin == decimalClass.Origin;
 
     private static GuardFieldTest Required(TsExpression check, GuardTestKind kind) =>
         new(check, kind, AcceptsAbsent: false);

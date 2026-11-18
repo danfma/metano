@@ -1171,11 +1171,12 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task BareEnumTypeArm_TestsMembershipThroughTheDescriptor()
+    public async Task BareEnumTypeArm_TestsTheEnumValuesInline()
     {
         // An enum lowers to a number / string union with no class value, so
-        // `instanceof Color` would throw at runtime; the arm tests membership
-        // in the declared values through the enum's descriptor (spec 011 FR-049).
+        // `instanceof Color` would throw at runtime; the arm tests an integral
+        // number in its range (numeric) or one of its strings ([StringEnum]),
+        // inline, with no descriptor read (spec 011 FR-049 as decided).
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations.TypeScript;
@@ -1200,8 +1201,8 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["kinds.ts"];
-        await Assert.That(output).Contains("isType(o, Color$runtimeType) ? \"color\"");
-        await Assert.That(output).Contains("isType(o, Size$runtimeType) ? \"size\"");
+        await Assert.That(output).Contains("isInt32(o) ? \"color\"");
+        await Assert.That(output).Contains("o === \"Small\" || o === \"Large\" ? \"size\"");
         await Assert.That(output).DoesNotContain("instanceof");
     }
 

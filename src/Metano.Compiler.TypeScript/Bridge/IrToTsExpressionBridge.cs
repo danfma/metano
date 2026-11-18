@@ -121,7 +121,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrConditionalExpression { AsTarget: not null } asCast => MapAsCast(asCast, context),
             IrGetTypeExpression getType => MapGetType(getType, context),
-            IrTypeOfExpression typeOf => MapTypeOf(typeOf),
+            IrTypeOfExpression typeOf => MapTypeOf(typeOf, context),
             IrConditionalExpression cond => new TsConditionalExpression(
                 Map(cond.Condition, context),
                 Map(cond.WhenTrue, context),
@@ -172,7 +172,8 @@ public static partial class IrToTsExpressionBridge
                 Array.Empty<TsExpression>()
             ),
             IrLinqChain chain => MapLinqChain(chain, context),
-            IrLetExpression let => MapLetExpression(let, context),
+            IrLetExpression let => TryMapBoundAsCast(let, context)
+                ?? MapLetExpression(let, context),
             IrSequenceExpression sequence => MapSequence(sequence, context),
             IrOutArgumentCall outCall => MapOutArgumentCall(outCall, context),
             IrNullConditionalAccess access => MapNullConditionalAccess(access, context),

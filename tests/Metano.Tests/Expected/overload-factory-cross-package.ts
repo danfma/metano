@@ -1,6 +1,6 @@
-import { isString } from "metano-runtime";
+import { isDecimal, isString } from "metano-runtime";
 import { Money } from "lib/lib";
-import { Decimal } from "metano-runtime/system/decimal";
+import type { Decimal } from "metano-runtime/system/decimal";
 
 export class Receipt extends Money {
   protected static readonly byReceiptAmount = /* @__PURE__ */ Symbol("Receipt(decimal amount)");
@@ -25,7 +25,7 @@ export class Receipt extends Money {
       return;
     }
 
-    if (args.length === 1 && args[0] instanceof Decimal) {
+    if (args.length === 1 && isDecimal(args[0])) {
       const amount = args[0] as Decimal;
       super(Money.byMoneyAmount, amount);
 

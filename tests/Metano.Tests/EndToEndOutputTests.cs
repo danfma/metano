@@ -111,7 +111,7 @@ public class EndToEndOutputTests
         // An [EmitPackage] library emits the descriptor of every public type
         // (spec 011 D29).
         var expected =
-            "import { HashCode, copyRecordWith, valueEquals, type ClassType, type EnumType } from \"metano-runtime\";\n"
+            "import { HashCode, copyRecordWith, isInt32, valueEquals, type ClassType, type EnumType } from \"metano-runtime\";\n"
             + "import type { Decimal } from \"metano-runtime/system/decimal\";\n"
             + "\n"
             + "let Issue$rt: ClassType<Issue> | undefined;\n"
@@ -167,7 +167,7 @@ public class EndToEndOutputTests
             + "  values: [0, 1],\n"
             + "  names: [\"Open\", \"Closed\"],\n"
             + "  isFlags: false,\n"
-            + "  test: (v: unknown): v is IssueStatus => v === 0 || v === 1,\n"
+            + "  test: (v: unknown): v is IssueStatus => isInt32(v),\n"
             + "};\n";
 
         await Assert.That(actual).IsEqualTo(expected);

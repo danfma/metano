@@ -823,7 +823,10 @@ internal sealed class IrToTsClassEmitter(
                 perParams,
                 perReturns,
                 perParamIrTypes,
-                new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides),
+                new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
+                {
+                    RuntimeTypes = _groupLowering.RuntimeTypes,
+                },
                 claims.FastPathNameOf,
                 _groupLowering
             );

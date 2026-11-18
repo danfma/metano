@@ -375,7 +375,7 @@ public class BclExportNameClashTests
             .That(output)
             .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
 
-        await Assert.That(output).Contains("instanceof Decimal");
+        await Assert.That(output).Contains("isDecimal(");
     }
 
     /// <summary>

@@ -10,6 +10,7 @@ AliasProbes.*                         #573  Node rejects the `#/` subpath specif
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
 CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
 CastProbes.genericFail                none  a generic down cast is not checked (TypeError at the first member access)
+RuntimeTypeProbes.enumMembership      none  a raw int and a boxed enum are both plain numbers: an int in the enum's range tests as the enum (spec 011 FR-049 decision (a))
 CastProbes.enums                      none  a numeric enum prints its number, .NET prints the member name
 TextProbes.enumsText                  none  a numeric enum prints its number, .NET prints the member name
 CatchProbes.all                       none  an out-of-range index and a missing dictionary key do not throw

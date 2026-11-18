@@ -222,7 +222,10 @@ public static class IrToTsOverloadDispatcherBridge
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
         var name = TsClassMemberTable.MethodNameOf(group.Primary);
         var receiver = DispatchReceiver(group.Primary.IsStatic, containingTypeName);
-        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides);
+        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
+        {
+            RuntimeTypes = context.RuntimeTypes,
+        };
 
         var unmatched = overridesInherited
             ? ForwardToBase(name, inherited)
@@ -384,7 +387,10 @@ public static class IrToTsOverloadDispatcherBridge
                     methods,
                     group.FastPaths.Select(fastPath => fastPath.Name).ToList(),
                     receiver: companion,
-                    TypeCheckScope.Empty,
+                    TypeCheckScope.Empty with
+                    {
+                        RuntimeTypes = context.RuntimeTypes,
+                    },
                     NoMatchingOverload(ErrorNameOf(group, methods[0]))
                 ),
                 Exported: true,
@@ -727,11 +733,7 @@ public static class IrToTsOverloadDispatcherBridge
             var method = sorted[i];
             var arguments = new OverloadArgumentShape(method.Parameters);
 
-            var scope = TypeCheckScope.ForMethod(
-                method,
-                classScope.TypeParameters,
-                classScope.TypeOverrides
-            );
+            var scope = classScope.Within(method);
 
             var delegateCall = new TsCallExpression(
                 FastPathCallee(receiver, fastPathNames[i]),

@@ -85,7 +85,7 @@ public static partial class IrToTsExpressionBridge
                     context
                 );
             case IrTypePattern typePat:
-                return BuildTypeTest(lowered, typePat.Type, typePat.InputType);
+                return BuildTypeTest(lowered, typePat.Type, typePat.InputType, context);
             case IrDiscardPattern:
                 return new TsLiteral("true");
             case IrPropertyPattern prop:
@@ -170,7 +170,7 @@ public static partial class IrToTsExpressionBridge
                 constant.Value,
                 context
             ),
-            IrTypePattern typePat => BuildTypeTest(value, typePat.Type, typePat.InputType),
+            IrTypePattern typePat => BuildTypeTest(value, typePat.Type, typePat.InputType, context),
             IrDiscardPattern => new TsLiteral("true"),
             IrVarPattern => new TsLiteral("true"),
             IrPropertyPattern prop => BuildPropertyPatternTest(value, prop, context),
@@ -218,7 +218,9 @@ public static partial class IrToTsExpressionBridge
     /// The runtime test a type pattern performs, as
     /// <see cref="IrToTsRuntimeTestBridge"/> renders the type's category, with
     /// the static type of the tested value when extraction knew it
-    /// (<paramref name="staticType"/>). Extraction reports MS0001 for a type
+    /// (<paramref name="staticType"/>); a descriptor read is checked against the
+    /// file group's reached set (<paramref name="context"/>, <c>null</c> outside
+    /// a group). Extraction reports MS0001 for a type
     /// with no test, so none reaches this point but a delegate, whose test the
     /// reachability phase rejected (MS0045): it lowers to a placeholder that
     /// throws.
@@ -226,10 +228,14 @@ public static partial class IrToTsExpressionBridge
     internal static TsExpression BuildTypeTest(
         TsExpression value,
         IrTypeRef targetType,
-        IrTypeRef? staticType = null
+        IrTypeRef? staticType,
+        IrToTsBridgeContext? context
     )
     {
-        if (IrToTsRuntimeTestBridge.Render(value, targetType, staticType) is { } test)
+        if (
+            IrToTsRuntimeTestBridge.Render(value, targetType, staticType, context?.RuntimeTypes) is
+            { } test
+        )
             return test;
 
         return IrRuntimeTypeTest.IsDelegate(targetType)
@@ -278,9 +284,8 @@ public static partial class IrToTsExpressionBridge
     ///   descriptor (#669, D29), when <see cref="ReferenceCastLowering"/> lets
     ///   this module import the class;</item>
     ///   <item>an interface, an enum or a primitive passes its descriptor,
-    ///   <c>castTo(x, IFoo$runtimeType)</c> (D29); a <c>decimal</c> passes its
-    ///   decimal.js class, whose descriptor types its value as an
-    ///   <c>object</c>;</item>
+    ///   <c>castTo(x, IFoo$runtimeType)</c> (D29), <c>castTo(x, DecimalType)</c>
+    ///   for a <c>decimal</c>;</item>
     ///   <item>any other target (a type parameter, an array, a delegate, a
     ///   <c>[PlainObject]</c>, a class this module cannot import) is only
     ///   asserted.</item>
@@ -307,8 +312,8 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The type a checked cast's result takes: the target's, except that a
-    /// <c>decimal</c> names its decimal.js class, the value <c>castTo</c>
-    /// checks against, whatever <c>[ExportFromBcl]</c> override the position
+    /// <c>decimal</c> names its decimal.js class, the type <c>DecimalType</c>
+    /// describes, whatever <c>[ExportFromBcl]</c> override the position
     /// carries.
     /// </summary>
     private static TsType CheckedResultType(IrTypeRef target, IrTypeRef testedType, TsType mapped)
@@ -339,10 +344,8 @@ public static partial class IrToTsExpressionBridge
         IrRuntimeTypeTest.Of(testedType) switch
         {
             IrRuntimeTypeTest.NominalClass => CheckedClassTarget(conversion, testedType, context),
-            IrRuntimeTypeTest.Primitive { PrimitiveKind: IrPrimitive.Decimal } =>
-                BclDecimalValueReference(),
             IrRuntimeTypeTest.NominalInterface or IrRuntimeTypeTest.Primitive =>
-                IrToTsRuntimeTypeReferences.Of(testedType, "checked cast"),
+                IrToTsRuntimeTypeReferences.Of(testedType, "checked cast", context.RuntimeTypes),
             _ => null,
         };
 
@@ -471,7 +474,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var typeTest = PositionalTypeTest(value, pattern);
+        var typeTest = PositionalTypeTest(value, pattern, context);
 
         var elementTests = pattern.Elements.Select(
             (element, i) =>
@@ -483,10 +486,14 @@ public static partial class IrToTsExpressionBridge
         return tests.Count == 0 ? new TsLiteral("true") : JoinWithAnd(tests);
     }
 
-    private static TsExpression? PositionalTypeTest(TsExpression value, IrPositionalPattern pattern)
+    private static TsExpression? PositionalTypeTest(
+        TsExpression value,
+        IrPositionalPattern pattern,
+        IrToTsBridgeContext context
+    )
     {
         if (pattern.Type is not null)
-            return BuildTypeTest(value, pattern.Type);
+            return BuildTypeTest(value, pattern.Type, staticType: null, context);
 
         return pattern.InputMayBeNull ? NonNullTest(value) : null;
     }
@@ -537,7 +544,7 @@ public static partial class IrToTsExpressionBridge
     {
         var typeTest = pattern.Type is null
             ? NonNullTest(value)
-            : BuildTypeTest(value, pattern.Type);
+            : BuildTypeTest(value, pattern.Type, staticType: null, context);
 
         var memberTests = pattern.Subpatterns.Select(sub =>
             BuildPatternTestOrNull(PropertyPatternMemberAccess(value, sub), sub.Pattern, context)

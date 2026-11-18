@@ -30,7 +30,7 @@ public static partial class IrToTsExpressionBridge
         pattern switch
         {
             IrTypePattern { Designator: { } designator } typePattern => new TsBinaryExpression(
-                BuildTypeTest(value, typePattern.Type),
+                BuildTypeTest(value, typePattern.Type, typePattern.InputType, context),
                 "&&",
                 AssignDesignator(designator, value)
             ),
@@ -83,7 +83,7 @@ public static partial class IrToTsExpressionBridge
     {
         var typeTest = pattern.Type is null
             ? NonNullTest(value)
-            : BuildTypeTest(value, pattern.Type);
+            : BuildTypeTest(value, pattern.Type, staticType: null, context);
 
         var memberTests = pattern.Subpatterns.Select(sub =>
             BuildBindingPatternTestOrNull(
@@ -115,7 +115,7 @@ public static partial class IrToTsExpressionBridge
                 )
         );
 
-        var tests = new[] { PositionalTypeTest(value, pattern) }
+        var tests = new[] { PositionalTypeTest(value, pattern, context) }
             .Concat(OwnDesignatorAssignment(pattern.Designator, value))
             .Concat(elementTests)
             .OfType<TsExpression>()

@@ -1,5 +1,5 @@
-import { isInt32 } from "metano-runtime";
-import { Decimal } from "metano-runtime/system/decimal";
+import { isDecimal, isInt32 } from "metano-runtime";
+import type { Decimal } from "metano-runtime/system/decimal";
 
 export class Cash {
   protected static readonly byCashAmount = /* @__PURE__ */ Symbol("Cash(decimal amount)");
@@ -25,7 +25,7 @@ export class Cash {
       return;
     }
 
-    if (args.length === 1 && args[0] instanceof Decimal) {
+    if (args.length === 1 && isDecimal(args[0])) {
       const amount = args[0] as Decimal;
       this.how = "amount";
 
@@ -61,7 +61,7 @@ export class Cash {
   static from(amount: Decimal): Cash;
   static from(cents: number): Cash;
   static from(...args: unknown[]): Cash {
-    if (args.length === 1 && args[0] instanceof Decimal) {
+    if (args.length === 1 && isDecimal(args[0])) {
       return Cash.fromAmount$(args[0] as Decimal);
     }
 

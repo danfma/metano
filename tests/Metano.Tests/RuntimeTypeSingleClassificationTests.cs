@@ -49,45 +49,29 @@ public class RuntimeTypeSingleClassificationTests
     }
 
     [Test]
-    public async Task DescriptorReadOutsideTheReachedSet_FailsLoudly()
-    {
-        var previous = RuntimeTypeScope.Current;
-
-        try
-        {
-            RuntimeTypeScope.Current = RuntimeTypeReachabilityResult.Empty;
-
-            await Assert
-                .That(() => IrToTsRuntimeTypeReferences.Of(Interface, "a test"))
-                .Throws<InvalidOperationException>()
-                .WithMessageContaining("Geo.IShape");
-        }
-        finally
-        {
-            RuntimeTypeScope.Current = previous;
-        }
-    }
+    public async Task DescriptorReadOutsideTheReachedSet_FailsLoudly() =>
+        await Assert
+            .That(() =>
+                IrToTsRuntimeTypeReferences.Of(
+                    Interface,
+                    "a test",
+                    RuntimeTypeReachabilityResult.Empty
+                )
+            )
+            .Throws<InvalidOperationException>()
+            .WithMessageContaining("Geo.IShape");
 
     [Test]
     public async Task DescriptorReadInsideTheReachedSet_RendersTheExport()
     {
-        var previous = RuntimeTypeScope.Current;
-
-        try
+        var reachability = RuntimeTypeReachabilityResult.Empty with
         {
-            RuntimeTypeScope.Current = RuntimeTypeReachabilityResult.Empty with
-            {
-                Reached = new HashSet<SupertypeKey> { Interface.SupertypeKey },
-            };
+            Reached = new HashSet<SupertypeKey> { Interface.SupertypeKey },
+        };
 
-            var descriptor = IrToTsRuntimeTypeReferences.Of(Interface, "a test")!;
+        var descriptor = IrToTsRuntimeTypeReferences.Of(Interface, "a test", reachability)!;
 
-            await Assert.That(Print(descriptor)).IsEqualTo("IShape$runtimeType");
-        }
-        finally
-        {
-            RuntimeTypeScope.Current = previous;
-        }
+        await Assert.That(Print(descriptor)).IsEqualTo("IShape$runtimeType");
     }
 
     /// <summary>
@@ -102,7 +86,7 @@ public class RuntimeTypeSingleClassificationTests
         var value = new TsIdentifier("value");
 
         var dispatcher = IrTypeCheckBuilder.Generate(type, value, TypeCheckScope.Empty);
-        var pattern = IrToTsExpressionBridge.BuildTypeTest(value, type, ObjectType);
+        var pattern = IrToTsExpressionBridge.BuildTypeTest(value, type, ObjectType, context: null);
 
         await Assert.That(Print(dispatcher!)).IsEqualTo(Print(pattern));
         await Assert.That(label).IsNotEmpty();
@@ -127,7 +111,16 @@ public class RuntimeTypeSingleClassificationTests
         };
 
         await Assert
-            .That(Print(IrToTsExpressionBridge.BuildTypeTest(value, tuple)))
+            .That(
+                Print(
+                    IrToTsExpressionBridge.BuildTypeTest(
+                        value,
+                        tuple,
+                        staticType: null,
+                        context: null
+                    )
+                )
+            )
             .IsEqualTo(Print(IrToTsRuntimeTestBridge.FixedTupleTest(value, 2)));
 
         await Assert

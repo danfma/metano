@@ -1,4 +1,5 @@
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 
@@ -37,7 +38,9 @@ public class ReferenceCastContextTests
     {
         var casts = new GroupCasts(new HashSet<string>(StringComparer.Ordinal));
 
-        var lowered = Lower(IrToTsBridgeContext.ForGroup(null, casts));
+        var lowered = Lower(
+            IrToTsBridgeContext.ForGroup(null, casts, RuntimeTypeReachabilityResult.Empty)
+        );
 
         await Assert.That(IsChecked(lowered)).IsTrue();
         await Assert.That(casts.Checked).IsEquivalentTo(["Circle"]);
@@ -48,7 +51,9 @@ public class ReferenceCastContextTests
     {
         var casts = new GroupCasts(new HashSet<string>(["Circle"], StringComparer.Ordinal));
 
-        var lowered = Lower(IrToTsBridgeContext.ForGroup(null, casts));
+        var lowered = Lower(
+            IrToTsBridgeContext.ForGroup(null, casts, RuntimeTypeReachabilityResult.Empty)
+        );
 
         await Assert.That(lowered is TsCastExpression).IsTrue();
         await Assert.That(casts.Checked).IsEmpty();

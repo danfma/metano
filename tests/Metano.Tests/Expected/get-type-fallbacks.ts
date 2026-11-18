@@ -88,7 +88,7 @@ export class Meter {
 }
 
 // fallbacks/mode.ts
-import type { EnumType } from "metano-runtime";
+import { isInt32, type EnumType } from "metano-runtime";
 
 export const Mode = {
   A: 0,
@@ -105,7 +105,7 @@ export const Mode$runtimeType: EnumType<Mode> = {
   values: [0, 1],
   names: ["A", "B"],
   isFlags: false,
-  test: (v: unknown): v is Mode => v === 0 || v === 1,
+  test: (v: unknown): v is Mode => isInt32(v),
 };
 
 // fallbacks/reflect.ts

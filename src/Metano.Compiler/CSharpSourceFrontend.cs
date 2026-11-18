@@ -204,15 +204,18 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         ValidateSubpathRoot(packageInfo, target, diagnostics);
 
-        var runtimeQuestions = compilation is null
-            ? RuntimeQuestionSet.Empty
-            : RuntimeQuestionScanner.Scan(
-                compilation,
-                assemblyWideTranspile,
-                target,
-                generatedSources,
-                diagnostics
-            );
+        // Dart keeps the reflection source forms until after 3.0.0 (D28): it
+        // asks no runtime question, so its diagnostics stay as they were.
+        IReadOnlyList<IrRuntimeQuestion> runtimeQuestions =
+            compilation is null || target is TargetLanguage.Dart
+                ? []
+                : RuntimeQuestionScanner.Scan(
+                    compilation,
+                    assemblyWideTranspile,
+                    target,
+                    generatedSources,
+                    diagnostics
+                );
 
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
@@ -244,8 +247,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             PackageSubpathRoot: packageInfo?.SubpathRoot ?? PackageSubpathRoot.None
         )
         {
-            RuntimeQuestions = runtimeQuestions.Questions,
-            QuestionedCollectionTypes = runtimeQuestions.QuestionedCollectionTypes,
+            RuntimeQuestions = runtimeQuestions,
         };
     }
 

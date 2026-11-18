@@ -35,7 +35,7 @@ export class Circle extends Shape implements IHasArea {
 }
 
 // casts/color.ts
-import type { EnumType } from "metano-runtime";
+import { isInt32, type EnumType } from "metano-runtime";
 
 export const Color = {
   Red: 0,
@@ -52,12 +52,12 @@ export const Color$runtimeType: EnumType<Color> = {
   values: [0, 1],
   names: ["Red", "Green"],
   isFlags: false,
-  test: (v: unknown): v is Color => v === 0 || v === 1,
+  test: (v: unknown): v is Color => isInt32(v),
 };
 
 // casts/conversions.ts
-import { asType, castTo, Int32Type, Int64Type, StringType } from "metano-runtime";
-import { Decimal } from "metano-runtime/system/decimal";
+import { asType, castTo, DecimalType, Int32Type, Int64Type, StringType } from "metano-runtime";
+import type { Decimal } from "metano-runtime/system/decimal";
 import { Circle } from "./circle";
 import { Color$runtimeType, type Color } from "./color";
 import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
@@ -89,7 +89,7 @@ export class Conversions {
   }
 
   static toDecimal(o: Object): Decimal {
-    return castTo<Decimal>(o, Decimal);
+    return castTo<Decimal>(o, DecimalType);
   }
 
   static toColor(o: Object): Color {
@@ -177,7 +177,7 @@ export class Meter {
 }
 
 // casts/perms.ts
-import type { EnumType } from "metano-runtime";
+import { isInt32, type EnumType } from "metano-runtime";
 
 export const Perms = {
   None: 0,
@@ -195,7 +195,7 @@ export const Perms$runtimeType: EnumType<Perms> = {
   values: [0, 1, 2],
   names: ["None", "Read", "Write"],
   isFlags: true,
-  test: (v: unknown): v is Perms => typeof v === "number" && Number.isInteger(v) && (v & ~3) === 0,
+  test: (v: unknown): v is Perms => isInt32(v),
 };
 
 // casts/shape.ts

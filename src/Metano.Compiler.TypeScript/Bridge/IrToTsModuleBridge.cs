@@ -176,7 +176,7 @@ public static class IrToTsModuleBridge
                 dispatcherName,
                 IrToTsOverloadDispatcherBridge.DispatcherParameters(),
                 plan.CommonReturn,
-                BuildModuleDispatcherBody(plan.Sorted, fastPathNames),
+                BuildModuleDispatcherBody(plan.Sorted, fastPathNames, context),
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
             )
@@ -241,13 +241,14 @@ public static class IrToTsModuleBridge
     /// </summary>
     private static List<TsStatement> BuildModuleDispatcherBody(
         IReadOnlyList<IrModuleFunction> sorted,
-        IReadOnlyList<string> fastPathNames
+        IReadOnlyList<string> fastPathNames,
+        IrToTsBridgeContext context
     )
     {
         var body = new List<TsStatement>();
 
         for (var i = 0; i < sorted.Count; i++)
-            body.Add(BranchFor(sorted[i], fastPathNames[i]));
+            body.Add(BranchFor(sorted[i], fastPathNames[i], context));
 
         body.Add(
             IrToTsOverloadDispatcherBridge.NoMatchingOverload(
@@ -259,7 +260,11 @@ public static class IrToTsModuleBridge
     }
 
     /// <summary>One dispatcher branch: the overload's guard delegating to its fast path.</summary>
-    private static TsIfStatement BranchFor(IrModuleFunction fn, string fastPathName)
+    private static TsIfStatement BranchFor(
+        IrModuleFunction fn,
+        string fastPathName,
+        IrToTsBridgeContext context
+    )
     {
         var argumentShape = new OverloadArgumentShape(fn.Parameters);
 
@@ -277,7 +282,12 @@ public static class IrToTsModuleBridge
             : new List<TsStatement> { new TsReturnStatement(delegateCall) };
 
         return new TsIfStatement(
-            argumentShape.Guard(new TypeCheckScope(fn.TypeParameters ?? [], null)),
+            argumentShape.Guard(
+                new TypeCheckScope(fn.TypeParameters ?? [], null)
+                {
+                    RuntimeTypes = context.RuntimeTypes,
+                }
+            ),
             branchStatements
         );
     }

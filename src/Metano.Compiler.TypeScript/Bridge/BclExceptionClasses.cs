@@ -133,18 +133,21 @@ public sealed class BclExceptionClasses
 
     /// <summary>
     /// The runtime type test (<c>is</c>, <c>as</c>, a pattern, a dispatcher
-    /// arm) of a mapped BCL exception: <c>instanceof</c> its class, or the
-    /// built-in <c>Error</c> for <c>System.Exception</c> itself
-    /// (<see cref="TsExceptionClass.InstanceofTest"/>). An unmapped type has no
-    /// test (extraction reports MS0045, a dispatcher keeps its object check);
-    /// reaching here with one is an internal error.
+    /// arm) of a mapped BCL exception, as <see cref="IrToTsRuntimeTestBridge"/>
+    /// renders it: <c>instanceof</c> its class, or the built-in <c>Error</c> for
+    /// <c>System.Exception</c> itself (<see cref="TsExceptionClass.InstanceofTest"/>).
+    /// An unmapped type has no test: extraction reports MS0045 at a test, and
+    /// the dispatcher policy (<see cref="IrTypeCheckBuilder"/>) gives it the
+    /// <c>typeof "object"</c> check, so reaching here with one is an internal
+    /// error.
     /// </summary>
     public TsExpression InstanceofTest(TsExpression value, IrNamedTypeRef type) =>
         IsMapped(type)
             ? ClassOf(type).InstanceofTest(value)
             : throw new InvalidOperationException(
                 $"Internal error: '{type.Name}' has no runtime class, so no type test can tell "
-                    + "it apart; extraction must report MS0045 first."
+                    + "it apart; extraction reports MS0045 at a test and the dispatcher policy "
+                    + "checks it as an object."
             );
 
     /// <summary>Whether a BCL exception type has a mapped class of its own.</summary>

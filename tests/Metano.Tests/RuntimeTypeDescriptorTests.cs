@@ -504,15 +504,13 @@ public class RuntimeTypeDescriptorTests
     }
 
     [Test]
-    public async Task FlagsEnum_TestsEveryValidBitCombination()
+    public async Task FlagsEnum_TestsTheUnderlyingRange()
     {
         var files = TranspileHelper.Transpile(CastsSource);
 
         await Assert
             .That(files["casts/perms.ts"])
-            .Contains(
-                "test: (v: unknown): v is Perms => typeof v === \"number\" && Number.isInteger(v) && (v & ~3) === 0,"
-            );
+            .Contains("test: (v: unknown): v is Perms => isInt32(v),");
     }
 
     [Test]
@@ -572,6 +570,117 @@ public class RuntimeTypeDescriptorTests
 
         await Assert.That(clash.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
         await Assert.That(clash.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task ImportedBase_DoesNotMakeTheGetterAnOverride()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitRuntimeType]
+
+            namespace Bases;
+
+            [Import("Widget", from: "widgets")]
+            public class Widget { }
+
+            public class Gadget : Widget { }
+            """
+        );
+
+        var gadget = files["bases/gadget.ts"];
+
+        await Assert.That(gadget).Contains("  static get $runtimeType(): ClassType<Gadget> {");
+        await Assert.That(gadget).DoesNotContain("override get $runtimeType");
+        await Assert.That(gadget).DoesNotContain("base: () =>");
+    }
+
+    /// <summary>
+    /// The folded unsigned and signed-byte integral types test and cast by
+    /// their own range (spec 011 FR-022): <c>uint</c>, <c>ushort</c> and
+    /// <c>sbyte</c> keep their C# type although the IR folds them.
+    /// </summary>
+    [Test]
+    public async Task FoldedIntegralTypes_TestAndCastTheirOwnRange()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Ranges;
+
+            public static class Checks
+            {
+                public static uint ToUInt(object o) => (uint)o;
+
+                public static ushort ToUShort(object o) => (ushort)o;
+
+                public static sbyte ToSByte(object o) => (sbyte)o;
+
+                public static bool IsUInt(object o) => o is uint;
+
+                public static bool IsUShort(object o) => o is ushort;
+
+                public static bool IsSByte(object o) => o is sbyte;
+            }
+            """
+        );
+
+        var checks = files["ranges/checks.ts"];
+
+        await Assert.That(checks).Contains("castTo<number>(o, UInt32Type)");
+        await Assert.That(checks).Contains("castTo<number>(o, UInt16Type)");
+        await Assert.That(checks).Contains("castTo<number>(o, SByteType)");
+        await Assert.That(checks).Contains("return isUInt32(o);");
+        await Assert.That(checks).Contains("return isUInt16(o);");
+        await Assert.That(checks).Contains("return isSByte(o);");
+    }
+
+    /// <summary>
+    /// A numeric enum test is the range of its underlying type wherever it is
+    /// rendered, inline, with no descriptor read (spec 011 FR-049 as decided):
+    /// a pattern, a dispatcher and the descriptor's own <c>test</c>.
+    /// </summary>
+    [Test]
+    public async Task NumericEnum_TestsTheUnderlyingRangeInline()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Levels;
+
+            public enum Level : byte { Low, High }
+
+            public static class Use
+            {
+                public static bool IsLevel(object o) => o is Level;
+
+                public static Level ToLevel(object o) => (Level)o;
+
+                public static string Of(Level level) => "level";
+
+                public static string Of(string text) => text;
+            }
+            """
+        );
+
+        var use = files["levels/use.ts"];
+
+        await Assert.That(use).Contains("return isByte(o);");
+        await Assert.That(use).Contains("isByte(args[0])");
+        await Assert.That(use).Contains("castTo<Level>(o, Level$runtimeType)");
+
+        await Assert
+            .That(files["levels/level.ts"])
+            .Contains("test: (v: unknown): v is Level => isByte(v),");
     }
 
     /// <summary>A multi-file transpile as one golden: every file, in path order.</summary>

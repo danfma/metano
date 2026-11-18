@@ -1,4 +1,4 @@
-import { isInt32 } from "metano-runtime";
+import { isInt32, isUInt32 } from "metano-runtime";
 
 export class Money {
   constructor() { }
@@ -23,7 +23,7 @@ export class Money {
       return Money.__addMoneyInt32(args[0] as Money, args[1] as number);
     }
 
-    if (args.length === 2 && args[0] instanceof Money && isInt32(args[1])) {
+    if (args.length === 2 && args[0] instanceof Money && isUInt32(args[1])) {
       return Money.__addMoneyUInt32(args[0] as Money, args[1] as number);
     }
 
@@ -42,7 +42,7 @@ export class Money {
       return Money.__addMoneyInt32(this, args[0] as number);
     }
 
-    if (args.length === 1 && isInt32(args[0])) {
+    if (args.length === 1 && isUInt32(args[0])) {
       return Money.__addMoneyUInt32(this, args[0] as number);
     }
 

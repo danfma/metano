@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace Metano.Compiler.IR;
 
 /// <summary>What a runtime question asks (spec 011 FR-027).</summary>
@@ -102,5 +100,5 @@ public sealed record IrRuntimeQuestion
     public required IrQuestionedType Type { get; init; }
 
     /// <summary>Where the question is asked.</summary>
-    public Location? Location { get; init; }
+    public IrSourceSpan? Span { get; init; }
 }

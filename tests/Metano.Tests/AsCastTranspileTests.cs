@@ -91,6 +91,24 @@ public class AsCastTranspileTests
             );
     }
 
+    /// <summary>
+    /// <c>asType</c> evaluates its argument once, so a non-stable operand
+    /// is passed straight in, with no immediately invoked function (D4).
+    /// </summary>
+    [Test]
+    public async Task AsInterfaceOnANonStableOperand_PassesItToAsType()
+    {
+        var output = TranspileCasts(
+            """
+            private static object Next() => new Person();
+            public static IShape? Of() => Next() as IShape;
+            """
+        );
+
+        await Assert.That(output).Contains("return asType(Casts.next(), IShape$runtimeType);");
+        await Assert.That(output).DoesNotContain("receiver$temp$");
+    }
+
     [Test]
     public async Task AsInsideConditionAndCoalesceChain_KeepsGrouping()
     {

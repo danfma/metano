@@ -12,65 +12,59 @@ public class RuntimeTypeDiagnosticsTests
     [Test]
     public async Task Ms0045_Reason1_TestAgainstADelegate()
     {
-        var (_, diagnostics) = Transpile("public static bool Of(object o) => o is Action;");
+        var result = Transpile("public static bool Of(object o) => o is Action;");
 
-        await AssertSingle(diagnostics, DiagnosticCodes.UnanswerableRuntimeTypeTest, "o is Action");
+        await AssertSingle(result, DiagnosticCodes.UnanswerableRuntimeTypeTest, "o is Action");
 
         await Assert
-            .That(Single(diagnostics, DiagnosticCodes.UnanswerableRuntimeTypeTest).Severity)
+            .That(Single(result.Diagnostics, DiagnosticCodes.UnanswerableRuntimeTypeTest).Severity)
             .IsEqualTo(MetanoDiagnosticSeverity.Error);
     }
 
     [Test]
     public async Task Ms0048_Reason1_GetTypeOnAnObjectWhenAPlainObjectExists()
     {
-        var (output, diagnostics) = Transpile(
+        var result = Transpile(
             "public static string Of(object o) => o.GetType().Name;",
             "[Transpile, PlainObject] public record Dto(string Name);"
         );
 
-        await AssertSingle(diagnostics, DiagnosticCodes.RuntimeTypeOfPlainObject, "o.GetType()");
+        await AssertSingle(result, DiagnosticCodes.RuntimeTypeOfPlainObject, "o.GetType()");
 
         await Assert
-            .That(Single(diagnostics, DiagnosticCodes.RuntimeTypeOfPlainObject).Severity)
+            .That(Single(result.Diagnostics, DiagnosticCodes.RuntimeTypeOfPlainObject).Severity)
             .IsEqualTo(MetanoDiagnosticSeverity.Warning);
 
-        await Assert.That(output).Contains("return getRuntimeType(o).name;");
+        await Assert.That(result.Output).Contains("return getRuntimeType(o).name;");
     }
 
     [Test]
     public async Task Ms0048_IsNotReportedWithoutAPlainObject()
     {
-        var (_, diagnostics) = Transpile("public static string Of(object o) => o.GetType().Name;");
+        var result = Transpile("public static string Of(object o) => o.GetType().Name;");
 
         await Assert
-            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.RuntimeTypeOfPlainObject))
+            .That(result.Diagnostics.Where(d => d.Code == DiagnosticCodes.RuntimeTypeOfPlainObject))
             .IsEmpty();
     }
 
     [Test]
     public async Task Ms0049_Reason1_ATypeMemberOutsideTheSurface()
     {
-        var (_, diagnostics) = Transpile(
-            "public static bool Of(Type t) => t.GetMethod(\"Run\") != null;"
-        );
+        var result = Transpile("public static bool Of(Type t) => t.GetMethod(\"Run\") != null;");
 
-        await AssertSingle(
-            diagnostics,
-            DiagnosticCodes.UnsupportedReflection,
-            "t.GetMethod(\"Run\")"
-        );
+        await AssertSingle(result, DiagnosticCodes.UnsupportedReflection, "t.GetMethod(\"Run\")");
     }
 
     [Test]
     public async Task Ms0049_Reason2_AnOpenGenericDefinition()
     {
-        var (_, diagnostics) = Transpile(
+        var result = Transpile(
             "public static Type Of() => typeof(System.Collections.Generic.List<>);"
         );
 
         await AssertSingle(
-            diagnostics,
+            result,
             DiagnosticCodes.UnsupportedReflection,
             "typeof(System.Collections.Generic.List<>)"
         );
@@ -79,20 +73,18 @@ public class RuntimeTypeDiagnosticsTests
     [Test]
     public async Task Ms0049_Reason2_TypeOfVoid()
     {
-        var (_, diagnostics) = Transpile("public static Type Of() => typeof(void);");
+        var result = Transpile("public static Type Of() => typeof(void);");
 
-        await AssertSingle(diagnostics, DiagnosticCodes.UnsupportedReflection, "typeof(void)");
+        await AssertSingle(result, DiagnosticCodes.UnsupportedReflection, "typeof(void)");
     }
 
     [Test]
     public async Task Ms0049_Reason2_ActivatorCreateInstance()
     {
-        var (_, diagnostics) = Transpile(
-            "public static object? Of(Type t) => Activator.CreateInstance(t);"
-        );
+        var result = Transpile("public static object? Of(Type t) => Activator.CreateInstance(t);");
 
         await AssertSingle(
-            diagnostics,
+            result,
             DiagnosticCodes.UnsupportedReflection,
             "Activator.CreateInstance(t)"
         );
@@ -101,12 +93,10 @@ public class RuntimeTypeDiagnosticsTests
     [Test]
     public async Task Ms0049_Reason2_TypeGetTypeOfAName()
     {
-        var (_, diagnostics) = Transpile(
-            "public static Type? Of() => Type.GetType(\"Shop.Order\");"
-        );
+        var result = Transpile("public static Type? Of() => Type.GetType(\"Shop.Order\");");
 
         await AssertSingle(
-            diagnostics,
+            result,
             DiagnosticCodes.UnsupportedReflection,
             "Type.GetType(\"Shop.Order\")"
         );
@@ -115,10 +105,10 @@ public class RuntimeTypeDiagnosticsTests
     [Test]
     public async Task Ms0049_Reason3_GetTypeOnANullLiteral()
     {
-        var (_, diagnostics) = Transpile("public static Type Of() => ((object)null!).GetType();");
+        var result = Transpile("public static Type Of() => ((object)null!).GetType();");
 
         await AssertSingle(
-            diagnostics,
+            result,
             DiagnosticCodes.UnsupportedReflection,
             "((object)null!).GetType()"
         );
@@ -127,48 +117,45 @@ public class RuntimeTypeDiagnosticsTests
     [Test]
     public async Task Ms0055_Reason1_ACastToAnArrayOfAnErasedElement()
     {
-        var (output, diagnostics) = Transpile("public static int[] Of(object o) => (int[])o;");
+        var result = Transpile("public static int[] Of(object o) => (int[])o;");
 
-        await AssertUncheckedCast(diagnostics, "(int[])o");
-        await Assert.That(output).Contains("return o as number[];");
+        await AssertUncheckedCast(result, "(int[])o");
+        await Assert.That(result.Output).Contains("return o as number[];");
     }
 
     [Test]
     public async Task Ms0055_IsNotReportedForAnArrayOfObjects()
     {
-        var (_, diagnostics) = Transpile("public static object[] Of(object o) => (object[])o;");
+        var result = Transpile("public static object[] Of(object o) => (object[])o;");
 
         await Assert
-            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UncheckedCast))
+            .That(result.Diagnostics.Where(d => d.Code == DiagnosticCodes.UncheckedCast))
             .IsEmpty();
     }
 
     [Test]
     public async Task Ms0055_Reason2_ACastToADelegate()
     {
-        var (output, diagnostics) = Transpile("public static Action Of(object o) => (Action)o;");
+        var result = Transpile("public static Action Of(object o) => (Action)o;");
 
-        await AssertUncheckedCast(diagnostics, "(Action)o");
-        await Assert.That(output).Contains("return o as () => void;");
+        await AssertUncheckedCast(result, "(Action)o");
+        await Assert.That(result.Output).Contains("return o as () => void;");
     }
 
     [Test]
     public async Task Ms0055_Reason3_ACastToATypeParameter()
     {
-        var (output, diagnostics) = Transpile("public static T Of<T>(object o) => (T)o;");
+        var result = Transpile("public static T Of<T>(object o) => (T)o;");
 
-        await AssertUncheckedCast(diagnostics, "(T)o");
-        await Assert.That(output).Contains("return o as T;");
+        await AssertUncheckedCast(result, "(T)o");
+        await Assert.That(result.Output).Contains("return o as T;");
     }
 
-    private static async Task AssertUncheckedCast(
-        IReadOnlyList<MetanoDiagnostic> diagnostics,
-        string cast
-    )
+    private static async Task AssertUncheckedCast(Transpiled result, string cast)
     {
-        await AssertSingle(diagnostics, DiagnosticCodes.UncheckedCast, cast);
+        await AssertSingle(result, DiagnosticCodes.UncheckedCast, cast);
 
-        var diagnostic = Single(diagnostics, DiagnosticCodes.UncheckedCast);
+        var diagnostic = Single(result.Diagnostics, DiagnosticCodes.UncheckedCast);
 
         await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
 
@@ -177,17 +164,13 @@ public class RuntimeTypeDiagnosticsTests
             .EndsWith("Use x.UnsafeCast<T>() to state that the cast is intentionally unchecked.");
     }
 
-    private static async Task AssertSingle(
-        IReadOnlyList<MetanoDiagnostic> diagnostics,
-        string code,
-        string site
-    )
+    private static async Task AssertSingle(Transpiled result, string code, string site)
     {
-        var matching = diagnostics.Where(d => d.Code == code).ToList();
+        var matching = result.Diagnostics.Where(d => d.Code == code).ToList();
 
         await Assert.That(matching).HasSingleItem();
         await Assert.That(matching[0].Location).IsNotNull();
-        await Assert.That(SourceTextAt(matching[0])).IsEqualTo(site);
+        await Assert.That(SourceTextAt(matching[0], result.Source)).IsEqualTo(site);
     }
 
     private static MetanoDiagnostic Single(
@@ -195,16 +178,20 @@ public class RuntimeTypeDiagnosticsTests
         string code
     ) => diagnostics.Single(d => d.Code == code);
 
-    private static string SourceTextAt(MetanoDiagnostic diagnostic) =>
-        diagnostic.Location!.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+    /// <summary>
+    /// The source text a diagnostic points at: a phase diagnostic carries a
+    /// file location built from its recorded span, so the span is read off the
+    /// compiled source.
+    /// </summary>
+    private static string SourceTextAt(MetanoDiagnostic diagnostic, string source) =>
+        source.Substring(
+            diagnostic.Location!.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length
+        );
 
-    private static (string Output, IReadOnlyList<MetanoDiagnostic> Diagnostics) Transpile(
-        string members,
-        string types = ""
-    )
+    private static Transpiled Transpile(string members, string types = "")
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            $$"""
+        var source = $$"""
             #nullable enable
             using System;
             using Metano.Annotations;
@@ -218,9 +205,20 @@ public class RuntimeTypeDiagnosticsTests
             {
                 {{members}}
             }
-            """
-        );
+            """;
 
-        return (files["probe/questions.ts"], diagnostics);
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
+
+        // TranspileHelper compiles the source behind its implicit usings.
+        const string compiledPrefix =
+            "using System;\nusing System.Threading.Tasks;\nusing Metano.Annotations;\n";
+
+        return new Transpiled(files["probe/questions.ts"], diagnostics, compiledPrefix + source);
     }
+
+    private sealed record Transpiled(
+        string Output,
+        IReadOnlyList<MetanoDiagnostic> Diagnostics,
+        string Source
+    );
 }

@@ -10,21 +10,6 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Metano.Compiler.Frontend.Roslyn;
 
 /// <summary>
-/// The runtime questions of the compilation (spec 011 FR-027, D29), as neutral
-/// facts on <see cref="IrCompilation.RuntimeQuestions"/>.
-/// </summary>
-/// <param name="Questions">Every question, in source order.</param>
-/// <param name="QuestionedCollectionTypes">The collection definitions the questions name.</param>
-internal sealed record RuntimeQuestionSet(
-    IReadOnlyList<IrRuntimeQuestion> Questions,
-    IReadOnlySet<string> QuestionedCollectionTypes
-)
-{
-    public static RuntimeQuestionSet Empty { get; } =
-        new([], new HashSet<string>(StringComparer.Ordinal));
-}
-
-/// <summary>
 /// Walks the code every transpilable type contributes to the output (bodies,
 /// lambdas, local functions, field / property / constructor initializers,
 /// parameter defaults, switch expressions and patterns), as
@@ -56,7 +41,7 @@ internal sealed class RuntimeQuestionScanner
         _diagnostics = diagnostics;
     }
 
-    public static RuntimeQuestionSet Scan(
+    public static IReadOnlyList<IrRuntimeQuestion> Scan(
         Compilation compilation,
         bool assemblyWideTranspile,
         TargetLanguage target,
@@ -77,17 +62,7 @@ internal sealed class RuntimeQuestionScanner
                 scanner.ScanType(type);
         });
 
-        return scanner.ToSet();
-    }
-
-    private RuntimeQuestionSet ToSet()
-    {
-        var collections = _questions
-            .Select(question => question.Type.CollectionDefinitionName)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
-
-        return new RuntimeQuestionSet(_questions, collections);
+        return scanner._questions;
     }
 
     private bool IsScannedType(INamedTypeSymbol type, bool assemblyWideTranspile) =>
@@ -404,7 +379,7 @@ internal sealed class RuntimeQuestionScanner
             {
                 Kind = kind,
                 Type = RuntimeQuestionFacts.QuestionedTypeOf(type),
-                Location = location,
+                Span = location is null ? null : IrSourceSpanLocations.From(location),
             }
         );
 
