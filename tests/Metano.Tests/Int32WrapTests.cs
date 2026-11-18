@@ -433,6 +433,34 @@ public class Int32WrapTests
     }
 
     /// <summary>
+    /// A lifted store on a dictionary entry (<c>int?</c>, <c>uint?</c>) was
+    /// reported as a warning before FR-074, with a throwing placeholder that
+    /// compiles, and still is: only the non-lifted wrapped store is an error.
+    /// </summary>
+    [Test]
+    [Arguments("counts[key]++;", "int?")]
+    [Arguments("counts[key] += 1u;", "uint?")]
+    public async Task LiftedStoreOnADictionaryEntry_StaysAWarning(string store, string valueType)
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Tally
+            {
+                public void Count(Dictionary<string, {{valueType}}> counts, string key) { {{store}} }
+            }
+            """
+        );
+
+        var unsupported = UnsupportedFeatures(diagnostics);
+
+        await Assert.That(unsupported.Count).IsEqualTo(1);
+        await Assert.That(unsupported[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+    }
+
+    /// <summary>
     /// A checked <c>byte</c> store on a dictionary entry was reported as a
     /// warning before FR-074 and still is, so Dart still transpiles it, and
     /// its output is byte-identical to the integration base's.

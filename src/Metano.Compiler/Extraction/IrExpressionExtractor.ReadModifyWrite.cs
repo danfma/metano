@@ -223,7 +223,7 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A reduced store on a dictionary entry: the read-modify-write cannot
     /// read a missing key as C# does (it throws <c>KeyNotFoundException</c>),
-    /// so it reports MS0001. The store FR-074 adds, an unchecked
+    /// so it reports MS0001. The store FR-074 adds, a non-lifted unchecked
     /// <c>int</c> / <c>uint</c> <c>+=</c>, <c>-=</c>, <c>*=</c>, <c>++</c> or
     /// <c>--</c> that now wraps, is an error: before FR-074 it emitted the
     /// native operator on <c>map.get(key)</c>, which <c>tsc</c> rejected, so
@@ -253,6 +253,9 @@ public sealed partial class IrExpressionExtractor
     /// Whether <paramref name="operation"/> stores the FR-074 wrap of
     /// <c>int</c> / <c>uint</c> arithmetic: an increment, a decrement or an
     /// arithmetic compound assignment whose stored value wraps to 32 bits.
+    /// A lifted store (on an <c>int?</c> / <c>uint?</c> entry) is not one:
+    /// before FR-074 it emitted a throwing placeholder that compiled, so it
+    /// keeps the warning.
     /// </summary>
     private bool StoresAnInt32ArithmeticWrap(ExpressionSyntax operation)
     {
@@ -260,9 +263,10 @@ public sealed partial class IrExpressionExtractor
 
         var isArithmeticStore =
             store
-            is IIncrementOrDecrementOperation
+            is IIncrementOrDecrementOperation { IsLifted: false }
                 or ICompoundAssignmentOperation
                 {
+                    IsLifted: false,
                     OperatorKind: BinaryOperatorKind.Add
                         or BinaryOperatorKind.Subtract
                         or BinaryOperatorKind.Multiply,
