@@ -12,7 +12,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <c>class Leaf extends Node</c> before <c>Node</c> existed). The graph is the one
 /// before any group is transformed again, so an import a reassertion drops never
 /// unblocks another cast. A group reused from the cache carries the casts its
-/// cache entry recorded; one without recorded casts is transformed again first.
+/// cache entry recorded.
 /// </summary>
 internal sealed class ImportCycleCastPass(string? importAlias)
 {
@@ -25,12 +25,9 @@ internal sealed class ImportCycleCastPass(string? importAlias)
     /// <summary>
     /// Runs the pass over <paramref name="outcomes"/>. <paramref name="transformAgain"/>
     /// transforms the group at an index again, asserting the casts to the classes it
-    /// is given, and returns the local classes the new transform's casts check.
+    /// is given.
     /// </summary>
-    public void Run(
-        GroupOutcomes outcomes,
-        Func<int, IReadOnlySet<string>, IReadOnlySet<string>> transformAgain
-    )
+    public void Run(GroupOutcomes outcomes, Action<int, IReadOnlySet<string>> transformAgain)
     {
         var graph = LocalImportGraph.ValueImports(
             [.. outcomes.Files.OfType<TsSourceFile>()],
@@ -42,10 +39,7 @@ internal sealed class ImportCycleCastPass(string? importAlias)
             if (outcomes.Files[index] is not { } file || !IsOnImportCycle(graph, file))
                 continue;
 
-            var checkedCasts = outcomes.CheckedCasts[index]
-                ?? transformAgain(index, NoAssertedCasts);
-
-            var asserted = CastsClosingImportCycles(graph, file, checkedCasts);
+            var asserted = CastsClosingImportCycles(graph, file, outcomes.CheckedCasts[index]);
 
             if (asserted.Count > 0)
                 transformAgain(index, asserted);

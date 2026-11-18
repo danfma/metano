@@ -65,7 +65,10 @@ public class GroupCacheFileTests
                     {
                         ["@acme/shared"] = "^1.2.3",
                     }
-                ),
+                )
+                {
+                    CheckedCasts = ["Leaf"],
+                },
             }
         );
 
@@ -84,6 +87,31 @@ public class GroupCacheFileTests
         await Assert
             .That(roundTripped.Groups["g"].Dependencies["@acme/shared"])
             .IsEqualTo("^1.2.3");
+
+        await Assert.That(roundTripped.Groups["g"].CheckedCasts).IsEquivalentTo(["Leaf"]);
+    }
+
+    [Test]
+    public async Task TryRead_RejectsEntryWithoutCheckedCasts()
+    {
+        var dir = MakeTempDir();
+
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, GroupCacheFile.FileName),
+            $$"""
+            {
+              "formatVersion": {{GroupCacheFile.CurrentFormatVersion}},
+              "configurationFingerprint": "fp",
+              "groups": {
+                "g": { "closureHash": "closure-hash", "files": [], "dependencies": {} }
+              }
+            }
+            """
+        );
+
+        var cache = GroupCacheFile.TryRead(dir);
+
+        await Assert.That(cache).IsNull();
     }
 
     [Test]

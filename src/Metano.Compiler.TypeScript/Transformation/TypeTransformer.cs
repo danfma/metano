@@ -1011,7 +1011,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             Context.TypeMapping!.CrossPackageDependencies.Restore(entry.Dependencies);
             outcomes.Files[index] = stub;
             outcomes.Emissions[index] = new GroupEmission(entry.Files, entry.Dependencies);
-            outcomes.CheckedCasts[index] = entry.CheckedCasts.ToFrozenSet(StringComparer.Ordinal);
+            outcomes.CheckedCasts[index] = entry.CheckedCasts!.ToFrozenSet(StringComparer.Ordinal);
 
             return true;
         }
@@ -1024,10 +1024,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Transforms <paramref name="group"/> and records its file, its cacheable
     /// emission and the local classes its casts check into
-    /// <paramref name="outcomes"/>, and returns those classes. Casts to the
+    /// <paramref name="outcomes"/>. Casts to the
     /// classes in <paramref name="assertedCasts"/> are asserted instead of checked.
     /// </summary>
-    private IReadOnlySet<string> TransformGroupFresh(
+    private void TransformGroupFresh(
         int index,
         TypeFileGroup group,
         GroupOutcomes outcomes,
@@ -1045,7 +1045,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             outcomes.Emissions[index] = GroupEmission.Empty;
 
-            return casts.Checked;
+            return;
         }
 
         // Print once: the printed bytes are what the target emits
@@ -1062,8 +1062,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             dependencies.SnapshotDependencies(),
             IsCacheable: assertedCasts.Count == 0
         );
-
-        return casts.Checked;
     }
 
     /// <summary>
@@ -1708,8 +1706,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
             entries[key] = new GroupCacheEntry(closure, emission.Files, emission.Dependencies)
             {
-                CheckedCasts = outcomes.CheckedCasts[i]?.Order(StringComparer.Ordinal).ToList()
-                    ?? [],
+                CheckedCasts = outcomes.CheckedCasts[i].Order(StringComparer.Ordinal).ToList(),
             };
         }
 
