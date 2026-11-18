@@ -1,12 +1,11 @@
-using System.Diagnostics;
 using System.Text.Json.Nodes;
 
 namespace Metano.Tests.Build;
 
 /// <summary>
-/// Issue #433: the <c>Metano.Build</c> target reruns after a Metano upgrade because its
-/// <c>Inputs</c> list a toolchain key file that <c>_MetanoWriteToolchainKey</c> rewrites
-/// only when the toolchain changes. Each test evaluates the shipped target with a real
+/// Issue #433: the TypeScript transpile target reruns after a Metano upgrade because its
+/// <c>Inputs</c> list a toolchain key file that <c>_MetanoWriteToolchainKeys</c> rewrites
+/// only when the toolchain changes. Each test evaluates the shipped targets with a real
 /// <c>dotnet msbuild</c> run against a bare project, with the global tool store redirected
 /// into a temporary <c>DOTNET_CLI_HOME</c>.
 /// </summary>
@@ -15,8 +14,6 @@ public class ToolchainKeyTests
     private const string ProjectFileName = "App.proj";
 
     private const string ToolStoreRelativePath = ".dotnet/tools/.store/metano.compiler.typescript";
-
-    private static readonly TimeSpan MsBuildTimeout = TimeSpan.FromMinutes(2);
 
     private readonly string _root = Directory
         .CreateTempSubdirectory("metano-toolchain-key-")
@@ -27,7 +24,7 @@ public class ToolchainKeyTests
     private string CliHome => Path.Combine(_root, "home");
 
     private string KeyPath =>
-        Path.Combine(ProjectDir, "obj", $"{ProjectFileName}.MetanoToolchain.cache");
+        Path.Combine(ProjectDir, "obj", $"{ProjectFileName}.MetanoToolchain.typescript.cache");
 
     [Before(Test)]
     public void CreateProject()
@@ -37,7 +34,7 @@ public class ToolchainKeyTests
         var targetsPath = Path.Combine(
             AppContext.BaseDirectory,
             "MetanoBuild",
-            "Metano.Build.targets"
+            "Metano.Build.TypeScript.targets"
         );
 
         File.WriteAllText(
@@ -152,43 +149,25 @@ public class ToolchainKeyTests
         File.WriteAllText(Path.Combine(configDir, "dotnet-tools.json"), manifest.ToJsonString());
     }
 
-    /// <summary>Runs <c>_MetanoWriteToolchainKey</c> and returns the key file's content.</summary>
+    /// <summary>
+    /// Runs <c>_MetanoWriteToolchainKeys</c> with the TypeScript target enabled and returns
+    /// the key file's content.
+    /// </summary>
     private async Task<string> WriteKey(params string[] extraArguments)
     {
-        var startInfo = new ProcessStartInfo("dotnet")
-        {
-            WorkingDirectory = ProjectDir,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
         string[] arguments =
         [
-            "msbuild",
             ProjectFileName,
-            "-t:_MetanoWriteToolchainKey",
-            "-nologo",
-            "-nodeReuse:false",
-            "-p:IntermediateOutputPath=obj/",
-            $"-p:DOTNET_CLI_HOME={CliHome}",
+            "-t:_MetanoWriteToolchainKeys",
+            "-p:MetanoOutputDir=out",
             .. extraArguments,
         ];
 
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
+        var run = await MsBuildProcess.Run(ProjectDir, CliHome, arguments);
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("dotnet could not be started.");
-
-        using var timeout = new CancellationTokenSource(MsBuildTimeout);
-        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        var errors = process.StandardError.ReadToEndAsync(timeout.Token);
-
-        await process.WaitForExitAsync(timeout.Token);
-
-        if (process.ExitCode != 0)
+        if (run.ExitCode != 0)
             throw new InvalidOperationException(
-                $"msbuild exited with {process.ExitCode}:\n{await output}\n{await errors}"
+                $"msbuild exited with {run.ExitCode}:\n{run.Output}"
             );
 
         return File.ReadAllText(KeyPath);

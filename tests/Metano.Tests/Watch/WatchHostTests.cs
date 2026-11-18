@@ -15,7 +15,7 @@ public class WatchHostTests
     [Arguments("Foo.CS", true)]
     [Arguments("Project.csproj", true)]
     [Arguments("Directory.Build.props", true)]
-    [Arguments("Metano.Build.targets", true)]
+    [Arguments("Metano.Build.TypeScript.targets", true)]
     [Arguments("README.md", false)]
     [Arguments("foo.tsbuildinfo", false)]
     [Arguments("noextension", false)]

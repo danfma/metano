@@ -1,17 +1,28 @@
 <Project>
   <!--
-    Metano automatic TypeScript generation target.
+    Metano.Build.TypeScript: automatic TypeScript generation (ADR-0029, FR-085, FR-086).
 
-    Runs the metano-typescript CLI after a successful Build when
-    MetanoOutputDir is set. The CLI reads the compiled assembly via Roslyn,
-    transforms annotated types into a TypeScript AST, and writes .ts files to
-    the output directory.
+    Runs the metano-typescript CLI after a successful Build when the
+    TypeScript output directory resolves to a value. The CLI reads the
+    compiled assembly via Roslyn, transforms annotated types into a TypeScript
+    AST, and writes .ts files to the output directory. The target-independent
+    worker lives in Metano.Build.Common.targets, shipped next to this file.
 
-    Configurable properties (set in the consuming .csproj):
+    Setting resolution (FR-086): every setting S below is read as
+    $(MetanoTs<S>), else $(Metano<S>), else the default; an empty value counts
+    as unset. The unprefixed name is the global setting every enabled Metano
+    target reads, so a single-target project keeps using it. With several
+    targets, prefer the prefixed form for MetanoCompilerProject,
+    MetanoExtraArgs and MetanoPostBuildCommand: the global value reaches every
+    enabled target. Settings are resolved when the build runs, so values set
+    in Directory.Build.targets count.
+
+    Configurable properties (set in the consuming .csproj; S = the name
+    without the `Metano` prefix):
 
       MetanoOutputDir        (required)  Where to write .ts files
       MetanoEnabled          (optional)  Opt-out switch. Defaults to true when
-                                         MetanoOutputDir is set; set to false to
+                                         the output dir resolves; set to false to
                                          skip the transpile target without unsetting
                                          the output dir (e.g., in CI variants that
                                          only want the .NET build).
@@ -36,6 +47,7 @@
       MetanoExtraArgs        (optional)  Additional CLI arguments
       MetanoPostBuildCommand (optional)  Shell command to run after transpilation completes. Receives the consumer's choice of formatter / linter / packager. Stays empty by default so the target ships no tool dependency; consumers opt in per project when they want the post-emit pass.
       MetanoSkipToolCheck    (optional)  true to skip the pre-flight check that the `metano-typescript` .NET tool is installed (default: false). The check only runs when the transpile target is out of date and not in dev mode (MetanoCompilerProject unset); when the tool is missing the build fails with METANOBUILD001 and the install instructions instead of the generic `dotnet-metano-typescript does not exist` message.
+      MetanoCompilerProject  (optional)  Dev mode: path of the compiler .csproj, run with `dotnet run - -project` instead of the installed tool (no tool probe).
 
     Tool requirement:
 
@@ -50,13 +62,13 @@
 
     Incremental builds and Metano upgrades (#433):
 
-      MetanoTranspile is skipped while every input is older than
-      $(MetanoOutputDir)/.metano-stamp. Besides the user's sources, assets and
-      project file, its inputs include a toolchain key file,
-      $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.cache,
+      MetanoTranspileTs is skipped while every input is older than
+      <resolved output dir>/.metano-stamp. Besides the user's sources, assets
+      and project file, its inputs include a toolchain key file,
+      $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.typescript.cache,
       rewritten only when its content changes. The content names the Metano
-      toolchain: the path of this .targets file (inside the versioned
-      Metano.Build package folder), the referenced Metano.dll, and either
+      toolchain: the path of Metano.Build.Common.targets (inside the versioned
+      Metano.Build.TypeScript package folder), the referenced Metano.dll, and either
       MetanoCompilerProject (dev mode) or a hash of the nearest .NET tool
       manifest of each file name (.config/dotnet-tools.json and
       dotnet-tools.json) plus one line per installed global tool version
@@ -108,239 +120,164 @@
       ship the asset to multiple destinations.
   -->
 
-  <ItemDefinitionGroup>
-    <MetanoAsset>
-      <Language>all</Language>
-    </MetanoAsset>
-  </ItemDefinitionGroup>
+  <Import
+    Project="$(MSBuildThisFileDirectory)Metano.Build.Common.targets"
+    Condition="'$(_MetanoBuildCommonImported)' != 'true'"
+  />
 
   <PropertyGroup>
-    <MetanoEnabled Condition="'$(MetanoEnabled)' == '' and '$(MetanoOutputDir)' != ''"
-      >true</MetanoEnabled>
+    <_MetanoResolveTargetsDependsOn>$(_MetanoResolveTargetsDependsOn);_MetanoResolveTs</_MetanoResolveTargetsDependsOn>
+    <_MetanoTranspileTargets>$(_MetanoTranspileTargets);MetanoTranspileTs</_MetanoTranspileTargets>
   </PropertyGroup>
 
-  <!-- User-authored compilation inputs only — exclude items under
-       $(IntermediateOutputPath) (e.g., the auto-generated
-       obj/.../*.AssemblyInfo.cs which MSBuild touches on every build
-       and would otherwise force MetanoTranspile to re-run every time. -->
-  <Target Name="_MetanoCollectUserInputs" BeforeTargets="MetanoTranspile">
-    <ItemGroup>
-      <_MetanoUserCompile
-        Include="@(Compile)"
-        Condition="!$([System.String]::Copy('%(Compile.FullPath)').StartsWith('$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)'))'))"
-      />
-    </ItemGroup>
-  </Target>
-
-  <!-- Toolchain key (#433): one line per piece of the Metano toolchain that
-       produces the output. WriteOnlyWhenDifferent keeps the file's timestamp
-       while the toolchain is unchanged, so an up-to-date build still skips
-       MetanoTranspile; any upgrade rewrites it and reruns the target. -->
-  <Target Name="_MetanoWriteToolchainKey">
+  <!-- FR-086: one line per setting, $(MetanoTs<S>) ?? $(Metano<S>) ?? default. The list is the
+       contract; BuildSettingsContractTests keeps it in sync with the spec. Conditional
+       assignments rather than ValueOrDefault keep any character of the value intact. -->
+  <Target Name="_MetanoResolveTs">
     <PropertyGroup>
-      <_MetanoToolchainKeyFile>$(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.cache</_MetanoToolchainKeyFile>
+      <_MetanoTsOutputDir>$(MetanoOutputDir)</_MetanoTsOutputDir>
+      <_MetanoTsOutputDir Condition="'$(MetanoTsOutputDir)' != ''"
+        >$(MetanoTsOutputDir)</_MetanoTsOutputDir>
+      <_MetanoTsEnabled>$(MetanoEnabled)</_MetanoTsEnabled>
+      <_MetanoTsEnabled Condition="'$(MetanoTsEnabled)' != ''">$(MetanoTsEnabled)</_MetanoTsEnabled>
+      <_MetanoTsEnabled Condition="'$(_MetanoTsEnabled)' == ''">true</_MetanoTsEnabled>
+      <_MetanoTsClean>$(MetanoClean)</_MetanoTsClean>
+      <_MetanoTsClean Condition="'$(MetanoTsClean)' != ''">$(MetanoTsClean)</_MetanoTsClean>
+      <_MetanoTsShowTimings>$(MetanoShowTimings)</_MetanoTsShowTimings>
+      <_MetanoTsShowTimings Condition="'$(MetanoTsShowTimings)' != ''"
+        >$(MetanoTsShowTimings)</_MetanoTsShowTimings>
+      <_MetanoTsDist>$(MetanoDist)</_MetanoTsDist>
+      <_MetanoTsDist Condition="'$(MetanoTsDist)' != ''">$(MetanoTsDist)</_MetanoTsDist>
+      <_MetanoTsPackageRoot>$(MetanoPackageRoot)</_MetanoTsPackageRoot>
+      <_MetanoTsPackageRoot Condition="'$(MetanoTsPackageRoot)' != ''"
+        >$(MetanoTsPackageRoot)</_MetanoTsPackageRoot>
+      <_MetanoTsSrcRoot>$(MetanoSrcRoot)</_MetanoTsSrcRoot>
+      <_MetanoTsSrcRoot Condition="'$(MetanoTsSrcRoot)' != ''">$(MetanoTsSrcRoot)</_MetanoTsSrcRoot>
+      <_MetanoTsImportAlias>$(MetanoImportAlias)</_MetanoTsImportAlias>
+      <_MetanoTsImportAlias Condition="'$(MetanoTsImportAlias)' != ''"
+        >$(MetanoTsImportAlias)</_MetanoTsImportAlias>
+      <_MetanoTsSourceCondition>$(MetanoSourceCondition)</_MetanoTsSourceCondition>
+      <_MetanoTsSourceCondition Condition="'$(MetanoTsSourceCondition)' != ''"
+        >$(MetanoTsSourceCondition)</_MetanoTsSourceCondition>
+      <_MetanoTsSkipPackageJson>$(MetanoSkipPackageJson)</_MetanoTsSkipPackageJson>
+      <_MetanoTsSkipPackageJson Condition="'$(MetanoTsSkipPackageJson)' != ''"
+        >$(MetanoTsSkipPackageJson)</_MetanoTsSkipPackageJson>
+      <_MetanoTsNamespaceBarrels>$(MetanoNamespaceBarrels)</_MetanoTsNamespaceBarrels>
+      <_MetanoTsNamespaceBarrels Condition="'$(MetanoTsNamespaceBarrels)' != ''"
+        >$(MetanoTsNamespaceBarrels)</_MetanoTsNamespaceBarrels>
+      <_MetanoTsStripInterfacePrefix>$(MetanoStripInterfacePrefix)</_MetanoTsStripInterfacePrefix>
+      <_MetanoTsStripInterfacePrefix Condition="'$(MetanoTsStripInterfacePrefix)' != ''"
+        >$(MetanoTsStripInterfacePrefix)</_MetanoTsStripInterfacePrefix>
+      <_MetanoTsFilePrefix>$(MetanoFilePrefix)</_MetanoTsFilePrefix>
+      <_MetanoTsFilePrefix Condition="'$(MetanoTsFilePrefix)' != ''"
+        >$(MetanoTsFilePrefix)</_MetanoTsFilePrefix>
+      <_MetanoTsExtraArgs>$(MetanoExtraArgs)</_MetanoTsExtraArgs>
+      <_MetanoTsExtraArgs Condition="'$(MetanoTsExtraArgs)' != ''"
+        >$(MetanoTsExtraArgs)</_MetanoTsExtraArgs>
+      <_MetanoTsPostBuildCommand>$(MetanoPostBuildCommand)</_MetanoTsPostBuildCommand>
+      <_MetanoTsPostBuildCommand Condition="'$(MetanoTsPostBuildCommand)' != ''"
+        >$(MetanoTsPostBuildCommand)</_MetanoTsPostBuildCommand>
+      <_MetanoTsSkipToolCheck>$(MetanoSkipToolCheck)</_MetanoTsSkipToolCheck>
+      <_MetanoTsSkipToolCheck Condition="'$(MetanoTsSkipToolCheck)' != ''"
+        >$(MetanoTsSkipToolCheck)</_MetanoTsSkipToolCheck>
+      <_MetanoTsCompilerProject>$(MetanoCompilerProject)</_MetanoTsCompilerProject>
+      <_MetanoTsCompilerProject Condition="'$(MetanoTsCompilerProject)' != ''"
+        >$(MetanoTsCompilerProject)</_MetanoTsCompilerProject>
+
+      <_MetanoTsActive Condition="'$(_MetanoTsEnabled)' == 'true' and '$(_MetanoTsOutputDir)' != ''"
+        >true</_MetanoTsActive>
+      <_MetanoTsToolchainKeyFile>$(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.typescript.cache</_MetanoTsToolchainKeyFile>
     </PropertyGroup>
 
-    <!-- Installed tool mode: `dotnet metano-typescript` resolves the nearest
-         tool manifest (either file name) or the global tool store. -->
-    <PropertyGroup Condition="'$(MetanoCompilerProject)' == ''">
-      <_MetanoToolManifestDir>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.config/dotnet-tools.json'))</_MetanoToolManifestDir>
-      <_MetanoToolManifest Condition="'$(_MetanoToolManifestDir)' != ''"
-        >$(_MetanoToolManifestDir)/.config/dotnet-tools.json</_MetanoToolManifest>
-      <_MetanoRootToolManifest>$([MSBuild]::GetPathOfFileAbove('dotnet-tools.json', '$(MSBuildProjectDirectory)'))</_MetanoRootToolManifest>
-      <_MetanoDotnetHome>$(DOTNET_CLI_HOME)</_MetanoDotnetHome>
-      <_MetanoDotnetHome Condition="'$(_MetanoDotnetHome)' == ''"
-        >$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))</_MetanoDotnetHome>
-      <_MetanoGlobalToolStore>$(_MetanoDotnetHome)/.dotnet/tools/.store/metano.compiler.typescript</_MetanoGlobalToolStore>
-    </PropertyGroup>
-
-    <ItemGroup>
-      <_MetanoAnnotationsReference
-        Include="@(ReferencePath)"
-        Condition="'%(ReferencePath.Filename)' == 'Metano'"
+    <ItemGroup Condition="'$(_MetanoTsActive)' == 'true'">
+      <_MetanoEnabledTarget
+        Include="typescript"
+        OutputDir="$(_MetanoTsOutputDir)"
+        OutputDirFull="$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_MetanoTsOutputDir)').TrimEnd('/\'))"
+        ToolchainKeyFile="$(_MetanoTsToolchainKeyFile)"
+        CompilerProject="$(_MetanoTsCompilerProject)"
+        ToolStoreName="metano.compiler.typescript"
+        PostBuildCommand="$([MSBuild]::Escape('$(_MetanoTsPostBuildCommand)'))"
       />
-      <_MetanoToolchainLine Include="build=$(MSBuildThisFileFullPath)" />
-      <_MetanoToolchainLine Include="@(_MetanoAnnotationsReference->'annotations=%(FullPath)')" />
-      <_MetanoToolchainLine
-        Include="compilerProject=$(MetanoCompilerProject)"
-        Condition="'$(MetanoCompilerProject)' != ''"
-      />
-      <_MetanoToolchainLine
-        Include="toolManifest=$(_MetanoToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoToolManifest)'))))"
-        Condition="'$(_MetanoToolManifest)' != ''"
-      />
-      <_MetanoToolchainLine
-        Include="toolManifest=$(_MetanoRootToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoRootToolManifest)'))))"
-        Condition="'$(_MetanoRootToolManifest)' != ''"
-      />
-      <!-- One item per version folder: a text prefix in front of the
-           GetDirectories call would render the array as `System.String[]`.
-           Property functions cannot sort, so the folders keep the file
-           system's enumeration order, which is stable while the store is
-           unchanged. -->
-      <_MetanoGlobalToolVersion
-        Include="$([System.IO.Directory]::GetDirectories('$(_MetanoGlobalToolStore)'))"
-        Condition="Exists('$(_MetanoGlobalToolStore)')"
-      />
-      <_MetanoToolchainLine Include="@(_MetanoGlobalToolVersion->'globalTool=%(Filename)%(Extension)')" />
     </ItemGroup>
-
-    <WriteLinesToFile
-      File="$(_MetanoToolchainKeyFile)"
-      Lines="@(_MetanoToolchainLine)"
-      Overwrite="true"
-      WriteOnlyWhenDifferent="true"
-    />
   </Target>
 
   <Target
-    Name="MetanoTranspile"
-    AfterTargets="Build"
-    DependsOnTargets="_MetanoCollectUserInputs;_MetanoWriteToolchainKey"
-    Condition="'$(MetanoEnabled)' == 'true' and '$(MetanoOutputDir)' != ''"
-    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoToolchainKeyFile)"
-    Outputs="$(MetanoOutputDir)/.metano-stamp"
+    Name="MetanoTranspileTs"
+    DependsOnTargets="_MetanoPrepare"
+    Condition="'$(_MetanoTsActive)' == 'true'"
+    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile)"
+    Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
   >
     <PropertyGroup>
       <!-- Two modes:
            1. Installed tool (default): `dotnet metano-typescript`
-           2. Local project (for development): `dotnet run - -project <path> - -`
-              Set MetanoCompilerProject to the compiler .csproj path to use this mode. -->
-      <_MetanoCmd Condition="'$(MetanoCompilerProject)' == ''">dotnet metano-typescript</_MetanoCmd>
-      <_MetanoCmd Condition="'$(MetanoCompilerProject)' != ''"
-        >dotnet run --project "$(MetanoCompilerProject)" --</_MetanoCmd>
-
-      <!-- Language tag used to filter <MetanoAsset Language="..."> items.
-           The TypeScript build target defaults to "typescript"; downstream
-           Dart-specific MSBuild integrations can override _MetanoTargetLanguage
-           before this target runs to filter accordingly. -->
-      <_MetanoTargetLanguage Condition="'$(_MetanoTargetLanguage)' == ''"
-        >typescript</_MetanoTargetLanguage>
+           2. Local project (for development): `dotnet run - -project <path> - -` -->
+      <_MetanoTsCommand Condition="'$(_MetanoTsCompilerProject)' == ''"
+        >dotnet metano-typescript</_MetanoTsCommand>
+      <_MetanoTsCommand Condition="'$(_MetanoTsCompilerProject)' != ''"
+        >dotnet run --project "$(_MetanoTsCompilerProject)" --</_MetanoTsCommand>
+      <_MetanoTsProbeTool
+        Condition="'$(_MetanoTsCompilerProject)' == '' and '$(_MetanoTsSkipToolCheck)' != 'true'"
+        >true</_MetanoTsProbeTool>
     </PropertyGroup>
 
-    <!-- One MSBuild item per CLI flag, evaluated lazily. Each entry's
-         Condition gates the flag on the corresponding consumer-set
-         property so empty values never reach the command line. Value-
-         bearing flags carry the value inline (quoted) and bare flags
-         render as just the switch token. -->
+    <!-- One MSBuild item per CLI flag. Each entry's Condition gates the flag on the resolved
+         setting so empty values never reach the command line. Value-bearing flags carry the
+         value inline (quoted) and bare flags render as just the switch token. -->
     <ItemGroup>
-      <_MetanoArg Include="-p &quot;$(MSBuildProjectFullPath)&quot;" />
-      <_MetanoArg Include="-o &quot;$(MetanoOutputDir)&quot;" />
-      <_MetanoArg Include="--clean" Condition="'$(MetanoClean)' == 'true'" />
-      <_MetanoArg Include="--time" Condition="'$(MetanoShowTimings)' == 'true'" />
-      <_MetanoArg Include="--dist &quot;$(MetanoDist)&quot;" Condition="'$(MetanoDist)' != ''" />
-      <_MetanoArg
-        Include="--package-root &quot;$(MetanoPackageRoot)&quot;"
-        Condition="'$(MetanoPackageRoot)' != ''"
+      <_MetanoTsArg Include="-p &quot;$(MSBuildProjectFullPath)&quot;" />
+      <_MetanoTsArg Include="-o &quot;$(_MetanoTsOutputDir)&quot;" />
+      <_MetanoTsArg Include="--clean" Condition="'$(_MetanoTsClean)' == 'true'" />
+      <_MetanoTsArg Include="--time" Condition="'$(_MetanoTsShowTimings)' == 'true'" />
+      <_MetanoTsArg
+        Include="--dist &quot;$(_MetanoTsDist)&quot;"
+        Condition="'$(_MetanoTsDist)' != ''"
       />
-      <_MetanoArg
-        Include="--src-root &quot;$(MetanoSrcRoot)&quot;"
-        Condition="'$(MetanoSrcRoot)' != ''"
+      <_MetanoTsArg
+        Include="--package-root &quot;$(_MetanoTsPackageRoot)&quot;"
+        Condition="'$(_MetanoTsPackageRoot)' != ''"
       />
-      <_MetanoArg
-        Include="--import-alias &quot;$(MetanoImportAlias)&quot;"
-        Condition="'$(MetanoImportAlias)' != ''"
+      <_MetanoTsArg
+        Include="--src-root &quot;$(_MetanoTsSrcRoot)&quot;"
+        Condition="'$(_MetanoTsSrcRoot)' != ''"
       />
-      <_MetanoArg
-        Include="--source-condition &quot;$(MetanoSourceCondition)&quot;"
-        Condition="'$(MetanoSourceCondition)' != ''"
+      <_MetanoTsArg
+        Include="--import-alias &quot;$(_MetanoTsImportAlias)&quot;"
+        Condition="'$(_MetanoTsImportAlias)' != ''"
       />
-      <_MetanoArg Include="--skip-package-json" Condition="'$(MetanoSkipPackageJson)' == 'true'" />
-      <_MetanoArg Include="--namespace-barrels" Condition="'$(MetanoNamespaceBarrels)' == 'true'" />
-      <_MetanoArg
+      <_MetanoTsArg
+        Include="--source-condition &quot;$(_MetanoTsSourceCondition)&quot;"
+        Condition="'$(_MetanoTsSourceCondition)' != ''"
+      />
+      <_MetanoTsArg
+        Include="--skip-package-json"
+        Condition="'$(_MetanoTsSkipPackageJson)' == 'true'"
+      />
+      <_MetanoTsArg
+        Include="--namespace-barrels"
+        Condition="'$(_MetanoTsNamespaceBarrels)' == 'true'"
+      />
+      <_MetanoTsArg
         Include="--strip-interface-prefix"
-        Condition="'$(MetanoStripInterfacePrefix)' == 'true'"
+        Condition="'$(_MetanoTsStripInterfacePrefix)' == 'true'"
       />
-      <_MetanoArg
-        Include="--file-prefix &quot;$(MetanoFilePrefix)&quot;"
-        Condition="'$(MetanoFilePrefix)' != ''"
+      <_MetanoTsArg
+        Include="--file-prefix &quot;$(_MetanoTsFilePrefix)&quot;"
+        Condition="'$(_MetanoTsFilePrefix)' != ''"
       />
-      <_MetanoArg Include="$(MetanoExtraArgs)" Condition="'$(MetanoExtraArgs)' != ''" />
-    </ItemGroup>
-
-    <!-- Project @(MetanoAsset) items into asset CLI args.
-         Filter by %(Language) against the active transpiler language;
-         items carrying `all` or matching the language survive. Missing
-         source files are intentionally NOT filtered here — the host
-         must see them so it can raise MS0025 instead of letting a
-         broken manifest pass silently. -->
-    <ItemGroup>
-      <_MetanoAssetSelected
-        Include="@(MetanoAsset)"
-        Condition="
-        '%(MetanoAsset.Language)' == '$(_MetanoTargetLanguage)' or
-          '%(MetanoAsset.Language)' == 'all'"
-      />
-      <_MetanoArg Include="@(_MetanoAssetSelected -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;')" />
+      <_MetanoTsArg Include="$(_MetanoTsExtraArgs)" Condition="'$(_MetanoTsExtraArgs)' != ''" />
     </ItemGroup>
 
     <PropertyGroup>
-      <_MetanoArgs>@(_MetanoArg, ' ')</_MetanoArgs>
+      <_MetanoTsArgs>@(_MetanoTsArg, ' ')</_MetanoTsArgs>
+      <_MetanoTsToolInstallHint>Metano.Build.TypeScript does not bundle the compiler; install it as a local .NET tool from the repository root with `dotnet new tool-manifest` (once) and `dotnet tool install Metano.Compiler.TypeScript`, or globally with `dotnet tool install --global Metano.Compiler.TypeScript`. If the tool is already listed in .config/dotnet-tools.json, run `dotnet tool restore`. Set MetanoSkipToolCheck=true (or MetanoTsSkipToolCheck=true) to bypass this check.</_MetanoTsToolInstallHint>
     </PropertyGroup>
 
-    <!-- Pre-flight: probe the installed tool before invoking it so a
-         missing tool surfaces actionable install instructions instead of
-         the dotnet host's generic "command not found" text. Lives inside
-         this target (not in DependsOnTargets) so it only costs a process
-         start when the transpile actually runs, never on up-to-date builds.
-         Skipped in dev mode, where `dotnet run` builds the compiler itself. -->
-    <PropertyGroup>
-      <_MetanoShouldProbeTool
-        Condition="'$(MetanoCompilerProject)' == '' and '$(MetanoSkipToolCheck)' != 'true'"
-        >true</_MetanoShouldProbeTool>
-    </PropertyGroup>
-    <Exec
-      Condition="'$(_MetanoShouldProbeTool)' == 'true'"
-      Command="$(_MetanoCmd) --version"
-      WorkingDirectory="$(MSBuildProjectDirectory)"
-      EchoOff="true"
-      IgnoreExitCode="true"
-      IgnoreStandardErrorWarningFormat="true"
-      StandardOutputImportance="low"
-      StandardErrorImportance="low"
-    >
-      <Output TaskParameter="ExitCode" PropertyName="_MetanoToolProbeExitCode" />
-    </Exec>
-    <Error
-      Condition="'$(_MetanoShouldProbeTool)' == 'true' and '$(_MetanoToolProbeExitCode)' != '0'"
-      Code="METANOBUILD001"
-      Text="The Metano TypeScript compiler tool (metano-typescript) is not available or could not be started for $(MSBuildProjectName) (`$(_MetanoCmd) --version` exited with code $(_MetanoToolProbeExitCode)). Metano.Build does not bundle the compiler; install it as a local .NET tool from the repository root with `dotnet new tool-manifest` (once) and `dotnet tool install Metano.Compiler.TypeScript`, or globally with `dotnet tool install --global Metano.Compiler.TypeScript`. If the tool is already listed in .config/dotnet-tools.json, run `dotnet tool restore`. Set MetanoSkipToolCheck=true to bypass this check."
-    />
-
-    <Message
-      Importance="high"
-      Text="Metano: Transpiling $(MSBuildProjectName) → $(MetanoOutputDir)"
-    />
-    <Exec
-      Command="$(_MetanoCmd) $(_MetanoArgs)"
-      WorkingDirectory="$(MSBuildProjectDirectory)"
-      ConsoleToMSBuild="true"
-      StandardOutputImportance="High"
-    />
-  </Target>
-
-  <!--
-    Optional post-emit hook. Runs the consumer-provided command in
-    MetanoPostBuildCommand (a verbatim shell line) after transpilation.
-    Use it to run a formatter / linter / packager on the generated output
-    so the committed state matches whatever the consumer's tooling
-    produces. Stays inert when the property is unset, so the target ships
-    no implicit tool dependency.
-  -->
-  <Target
-    Name="MetanoPostBuild"
-    AfterTargets="MetanoTranspile"
-    Condition="'$(MetanoPostBuildCommand)' != ''"
-  >
-    <Message
-      Importance="high"
-      Text="Metano: Running post-build command for $(MSBuildProjectName)"
-    />
-    <Exec
-      Command="$(MetanoPostBuildCommand)"
-      WorkingDirectory="$(MSBuildProjectDirectory)"
-      ConsoleToMSBuild="true"
-      StandardOutputImportance="High"
+    <MSBuild
+      Projects="$(MSBuildProjectFullPath)"
+      Targets="_MetanoTranspileWorker"
+      Properties="_MetanoWorkerLanguage=typescript;_MetanoWorkerOutputDir=$([MSBuild]::Escape('$(_MetanoTsOutputDir)'));_MetanoWorkerCommand=$([MSBuild]::Escape('$(_MetanoTsCommand)'));_MetanoWorkerArguments=$([MSBuild]::Escape('$(_MetanoTsArgs)'));_MetanoWorkerProbeTool=$(_MetanoTsProbeTool);_MetanoWorkerToolDescription=The Metano TypeScript compiler tool (metano-typescript);_MetanoWorkerToolInstallHint=$([MSBuild]::Escape('$(_MetanoTsToolInstallHint)'))"
     />
   </Target>
 </Project>

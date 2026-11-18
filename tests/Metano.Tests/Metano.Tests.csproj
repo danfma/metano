@@ -54,10 +54,11 @@
     <None Include="Expected/**/*.ts" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Expected/**/*.tsx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Expected/**/*.dart" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The toolchain-key tests (#433) evaluate the shipped MSBuild target. -->
+    <!-- The build tests (#433, #328) evaluate the shipped MSBuild targets, copied side by
+         side as in the package so the per-target file finds the common one. -->
     <None
-      Include="../../src/Metano.Build/build/Metano.Build.targets"
-      Link="MetanoBuild/Metano.Build.targets"
+      Include="../../src/Metano.Build.Targets/*.targets"
+      Link="MetanoBuild/%(Filename)%(Extension)"
       CopyToOutputDirectory="PreserveNewest"
     />
   </ItemGroup>

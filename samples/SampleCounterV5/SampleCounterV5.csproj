@@ -16,5 +16,5 @@
     <ProjectReference Include="..\..\bindings\Metano.TypeScript.SolidJs\Metano.TypeScript.SolidJs.csproj" />
   </ItemGroup>
 
-  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
+  <Import Project="../../src/Metano.Build.Targets/Metano.Build.TypeScript.targets" />
 </Project>

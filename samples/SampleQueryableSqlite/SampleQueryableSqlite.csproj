@@ -25,5 +25,5 @@
     <MetanoAsset Include="schema.sql" OutputPath="provider/schema.sql" Language="typescript" />
   </ItemGroup>
 
-  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
+  <Import Project="../../src/Metano.Build.Targets/Metano.Build.TypeScript.targets" />
 </Project>

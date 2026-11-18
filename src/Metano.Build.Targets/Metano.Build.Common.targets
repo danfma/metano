@@ -1,0 +1,237 @@
+<Project>
+  <!--
+    Target-independent half of every Metano.Build.<Target> package (ADR-0029, FR-085, FR-086).
+
+    One source file, linked into each package next to its Metano.Build.<Target>.targets. It never
+    reads a prefixed setting (MSBuild cannot build a property name from parts, MSB4184). Each
+    per-target file resolves its own settings and registers one _MetanoEnabledTarget item per
+    enabled target; this file batches over those items.
+
+    Registration contract (one item per enabled target, added by the target's resolve target,
+    which appends itself to _MetanoResolveTargetsDependsOn; its transpile target appends itself to
+    _MetanoTranspileTargets):
+
+      Include            The language tag (`typescript`), matched against <MetanoAsset Language>.
+      OutputDir          The resolved output directory as the user wrote it.
+      OutputDirFull      The normalized full path, without trailing separators (METANOBUILD002).
+      ToolchainKeyFile   The target's toolchain key file under obj/.
+      CompilerProject    The resolved MetanoCompilerProject (dev mode), or empty.
+      ToolStoreName      The tool's folder in the global tool store (lower-case package id).
+      PostBuildCommand   The resolved post-build command, escaped, or empty.
+
+    Where each part runs:
+
+      Parent instance (every build): user inputs, setting resolution, METANOBUILD002, toolchain
+      keys, the incremental check of each per-target transpile target, the post-build commands.
+      Worker instance (only for an out-of-date target, through the MSBuild task with the resolved
+      values as global properties): the tool probe (METANOBUILD001), the asset projection and the
+      CLI Exec. The worker cannot see items the parent produced by running targets, such as
+      @(ReferencePath), so nothing it runs depends on them.
+
+    Public targets: MetanoTranspile runs after Build; its dependencies prepare every target, user
+    BeforeTargets hooks run next, then its body runs each enabled per-target transpile target, and
+    AfterTargets hooks (MetanoPostBuild among them) run after all of them.
+  -->
+
+  <PropertyGroup>
+    <_MetanoBuildCommonImported>true</_MetanoBuildCommonImported>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <MetanoAsset>
+      <Language>all</Language>
+    </MetanoAsset>
+  </ItemDefinitionGroup>
+
+  <!-- User-authored compilation inputs only: items under $(IntermediateOutputPath), such as the
+       generated obj/.../*.AssemblyInfo.cs that MSBuild touches on every build, would otherwise
+       make every transpile target out of date. -->
+  <Target Name="_MetanoCollectUserInputs">
+    <ItemGroup>
+      <_MetanoUserCompile
+        Include="@(Compile)"
+        Condition="!$([System.String]::Copy('%(Compile.FullPath)').StartsWith('$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)'))'))"
+      />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_MetanoResolveTargets" DependsOnTargets="$(_MetanoResolveTargetsDependsOn)" />
+
+  <!-- METANOBUILD002: batching on OutputDirFull restricts @(_MetanoEnabledTarget) to the targets
+       sharing one directory; batch buckets compare metadata case-insensitively. -->
+  <Target Name="_MetanoCheckOutputCollisions" DependsOnTargets="_MetanoResolveTargets">
+    <Error
+      Condition="'@(_MetanoEnabledTarget->Count())' &gt; '1'"
+      Code="METANOBUILD002"
+      Text="Metano targets @(_MetanoEnabledTarget, ', ') of $(MSBuildProjectName) resolve to the same output directory %(_MetanoEnabledTarget.OutputDirFull). Give each target its own directory with the prefixed setting (for example MetanoTsOutputDir) instead of a shared MetanoOutputDir."
+    />
+  </Target>
+
+  <!-- Toolchain key (#433), one file per enabled target: one line per piece of the Metano
+       toolchain that produces the output. WriteOnlyWhenDifferent keeps the file's timestamp while
+       the toolchain is unchanged, so an up-to-date build still skips the transpile; any upgrade
+       rewrites it and reruns the target. Items are cleared per batch because a batched target
+       keeps the items of earlier batches. -->
+  <Target
+    Name="_MetanoWriteToolchainKeys"
+    DependsOnTargets="_MetanoResolveTargets"
+    Outputs="%(_MetanoEnabledTarget.Identity)"
+  >
+    <PropertyGroup>
+      <_MetanoKeyFile>%(_MetanoEnabledTarget.ToolchainKeyFile)</_MetanoKeyFile>
+      <_MetanoKeyCompilerProject>%(_MetanoEnabledTarget.CompilerProject)</_MetanoKeyCompilerProject>
+      <_MetanoKeyToolStoreName>%(_MetanoEnabledTarget.ToolStoreName)</_MetanoKeyToolStoreName>
+    </PropertyGroup>
+
+    <!-- Installed tool mode: `dotnet <tool>` resolves the nearest tool manifest (either file
+         name) or the global tool store. -->
+    <PropertyGroup Condition="'$(_MetanoKeyCompilerProject)' == ''">
+      <_MetanoToolManifestDir>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.config/dotnet-tools.json'))</_MetanoToolManifestDir>
+      <_MetanoToolManifest Condition="'$(_MetanoToolManifestDir)' != ''"
+        >$(_MetanoToolManifestDir)/.config/dotnet-tools.json</_MetanoToolManifest>
+      <_MetanoRootToolManifest>$([MSBuild]::GetPathOfFileAbove('dotnet-tools.json', '$(MSBuildProjectDirectory)'))</_MetanoRootToolManifest>
+      <_MetanoDotnetHome>$(DOTNET_CLI_HOME)</_MetanoDotnetHome>
+      <_MetanoDotnetHome Condition="'$(_MetanoDotnetHome)' == ''"
+        >$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))</_MetanoDotnetHome>
+      <_MetanoGlobalToolStore>$(_MetanoDotnetHome)/.dotnet/tools/.store/$(_MetanoKeyToolStoreName)</_MetanoGlobalToolStore>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_MetanoToolchainLine Remove="@(_MetanoToolchainLine)" />
+      <_MetanoAnnotationsReference Remove="@(_MetanoAnnotationsReference)" />
+      <_MetanoGlobalToolVersion Remove="@(_MetanoGlobalToolVersion)" />
+      <_MetanoAnnotationsReference
+        Include="@(ReferencePath)"
+        Condition="'%(ReferencePath.Filename)' == 'Metano'"
+      />
+      <_MetanoToolchainLine Include="build=$(MSBuildThisFileFullPath)" />
+      <_MetanoToolchainLine Include="@(_MetanoAnnotationsReference->'annotations=%(FullPath)')" />
+      <_MetanoToolchainLine
+        Include="compilerProject=$(_MetanoKeyCompilerProject)"
+        Condition="'$(_MetanoKeyCompilerProject)' != ''"
+      />
+      <_MetanoToolchainLine
+        Include="toolManifest=$(_MetanoToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoToolManifest)'))))"
+        Condition="'$(_MetanoKeyCompilerProject)' == '' and '$(_MetanoToolManifest)' != ''"
+      />
+      <_MetanoToolchainLine
+        Include="toolManifest=$(_MetanoRootToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoRootToolManifest)'))))"
+        Condition="'$(_MetanoKeyCompilerProject)' == '' and '$(_MetanoRootToolManifest)' != ''"
+      />
+      <!-- One item per version folder: a text prefix in front of the GetDirectories call would
+           render the array as `System.String[]`. Property functions cannot sort, so the folders
+           keep the file system's enumeration order, which is stable while the store is
+           unchanged. -->
+      <_MetanoGlobalToolVersion
+        Include="$([System.IO.Directory]::GetDirectories('$(_MetanoGlobalToolStore)'))"
+        Condition="'$(_MetanoKeyCompilerProject)' == '' and Exists('$(_MetanoGlobalToolStore)')"
+      />
+      <_MetanoToolchainLine Include="@(_MetanoGlobalToolVersion->'globalTool=%(Filename)%(Extension)')" />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      Condition="'$(_MetanoKeyFile)' != ''"
+      File="$(_MetanoKeyFile)"
+      Lines="@(_MetanoToolchainLine)"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+    />
+  </Target>
+
+  <Target
+    Name="_MetanoPrepare"
+    DependsOnTargets="_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys"
+  />
+
+  <!-- The body runs the per-target transpile targets with CallTarget, so a user hook declared
+       with BeforeTargets="MetanoTranspile" still runs before any tool, as in 2.x. Everything the
+       called targets read was produced by _MetanoPrepare, which has finished by then. -->
+  <Target Name="MetanoTranspile" AfterTargets="Build" DependsOnTargets="_MetanoPrepare">
+    <CallTarget
+      Condition="'$(_MetanoTranspileTargets.Trim(`;`))' != ''"
+      Targets="$(_MetanoTranspileTargets)"
+    />
+  </Target>
+
+  <!-- Worker: runs in its own project instance, called by an out-of-date per-target transpile
+       target with the resolved values as global properties (_MetanoWorker*). -->
+  <Target Name="_MetanoTranspileWorker">
+    <!-- Project @(MetanoAsset) items into asset CLI args, keeping the items whose Language is
+         this target's or `all`. Missing source files are not filtered: the host must see them
+         to raise MS0025. -->
+    <ItemGroup>
+      <_MetanoAssetSelected
+        Include="@(MetanoAsset)"
+        Condition="
+        '%(MetanoAsset.Language)' == '$(_MetanoWorkerLanguage)' or
+          '%(MetanoAsset.Language)' == 'all'"
+      />
+      <_MetanoAssetArg Include="@(_MetanoAssetSelected -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;')" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_MetanoWorkerAssetArgs>@(_MetanoAssetArg, ' ')</_MetanoWorkerAssetArgs>
+      <_MetanoWorkerCommandLine>$(_MetanoWorkerCommand) $(_MetanoWorkerArguments)</_MetanoWorkerCommandLine>
+      <_MetanoWorkerCommandLine Condition="'$(_MetanoWorkerAssetArgs)' != ''"
+        >$(_MetanoWorkerCommandLine) $(_MetanoWorkerAssetArgs)</_MetanoWorkerCommandLine>
+    </PropertyGroup>
+
+    <!-- Pre-flight: probe the installed tool before invoking it so a missing tool surfaces
+         actionable install instructions instead of the dotnet host's generic "command not
+         found" text. It only costs a process start when the transpile actually runs. -->
+    <Exec
+      Condition="'$(_MetanoWorkerProbeTool)' == 'true'"
+      Command="$(_MetanoWorkerCommand) --version"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      EchoOff="true"
+      IgnoreExitCode="true"
+      IgnoreStandardErrorWarningFormat="true"
+      StandardOutputImportance="low"
+      StandardErrorImportance="low"
+    >
+      <Output TaskParameter="ExitCode" PropertyName="_MetanoToolProbeExitCode" />
+    </Exec>
+    <Error
+      Condition="'$(_MetanoWorkerProbeTool)' == 'true' and '$(_MetanoToolProbeExitCode)' != '0'"
+      Code="METANOBUILD001"
+      Text="$(_MetanoWorkerToolDescription) is not available or could not be started for $(MSBuildProjectName) (`$(_MetanoWorkerCommand) --version` exited with code $(_MetanoToolProbeExitCode)). $(_MetanoWorkerToolInstallHint)"
+    />
+
+    <Message
+      Importance="high"
+      Text="Metano: Transpiling $(MSBuildProjectName) → $(_MetanoWorkerOutputDir)"
+    />
+    <Exec
+      Command="$(_MetanoWorkerCommandLine)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      ConsoleToMSBuild="true"
+      StandardOutputImportance="High"
+    />
+  </Target>
+
+  <!--
+    Optional post-emit hook, one command per enabled target: the target's resolved
+    PostBuildCommand (a verbatim shell line) runs after MetanoTranspile on every build, also when
+    the transpile was up to date. Use it to run a formatter / linter / packager on the generated
+    output. A disabled target runs none.
+  -->
+  <Target
+    Name="MetanoPostBuild"
+    AfterTargets="MetanoTranspile"
+    DependsOnTargets="_MetanoResolveTargets"
+    Outputs="%(_MetanoEnabledTarget.Identity)"
+  >
+    <Message
+      Condition="'%(_MetanoEnabledTarget.PostBuildCommand)' != ''"
+      Importance="high"
+      Text="Metano: Running post-build command for $(MSBuildProjectName)"
+    />
+    <Exec
+      Condition="'%(_MetanoEnabledTarget.PostBuildCommand)' != ''"
+      Command="%(_MetanoEnabledTarget.PostBuildCommand)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      ConsoleToMSBuild="true"
+      StandardOutputImportance="High"
+    />
+  </Target>
+</Project>

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- This project has no code — it only packages the MSBuild .targets file
-         that hooks the metano-typescript CLI into the consumer's build.
+    <!-- This project has no code — it only packages the MSBuild .targets files
+         that hook the metano-typescript CLI into the consumer's build.
          We target netstandard2.0 for maximum NuGet compatibility and suppress
          the empty-assembly warning. -->
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -10,21 +10,26 @@
     <NoWarn>$(NoWarn);CS8021;NU5128</NoWarn>
 
     <!-- NuGet packaging metadata -->
-    <PackageId>Metano.Build</PackageId>
-    <Description>MSBuild integration for Metano — automatically transpiles annotated C# types to TypeScript on dotnet build.</Description>
+    <PackageId>Metano.Build.TypeScript</PackageId>
+    <Description>MSBuild integration for the Metano TypeScript target — automatically transpiles annotated C# types to TypeScript on dotnet build. Requires the Metano.Compiler.TypeScript .NET tool. Replaces Metano.Build.</Description>
     <IsPackable>true</IsPackable>
     <NoDefaultExcludes>true</NoDefaultExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Embed the single canonical .targets file in BOTH `build/` and
-         `buildTransitive/` so direct and transitive consumers run the
-         exact same target. Previously each path carried its own copy
-         and the transitive one drifted (missing MetanoNamespaceBarrels
-         / MetanoStripInterfacePrefix / MetanoFilePrefix / the
-         MetanoPostBuild target). #230 collapses both onto the
-         `build/` source. -->
-    <None Include="build/Metano.Build.targets" Pack="true" PackagePath="build/" />
-    <None Include="build/Metano.Build.targets" Pack="true" PackagePath="buildTransitive/" />
+    <!-- Both .targets files come from the shared source folder (ADR-0029): the per-target file
+         and the target-independent Metano.Build.Common.targets it imports from its own
+         directory. Each is packed into BOTH `build/` and `buildTransitive/` so direct and
+         transitive consumers run the exact same targets (#230). -->
+    <None
+      Include="../Metano.Build.Targets/Metano.Build.TypeScript.targets"
+      Pack="true"
+      PackagePath="build/;buildTransitive/"
+    />
+    <None
+      Include="../Metano.Build.Targets/Metano.Build.Common.targets"
+      Pack="true"
+      PackagePath="build/;buildTransitive/"
+    />
   </ItemGroup>
 </Project>
