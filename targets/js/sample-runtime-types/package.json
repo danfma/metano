@@ -28,6 +28,16 @@
       "source": "./src/sample-runtime-types/interop/index.ts",
       "types": "./dist/sample-runtime-types/interop/index.d.ts",
       "import": "./dist/sample-runtime-types/interop/index.js"
+    },
+    "./sample-runtime-types/shapes": {
+      "source": "./src/sample-runtime-types/shapes/index.ts",
+      "types": "./dist/sample-runtime-types/shapes/index.d.ts",
+      "import": "./dist/sample-runtime-types/shapes/index.js"
+    },
+    "./sample-runtime-types/unions": {
+      "source": "./src/sample-runtime-types/unions/index.ts",
+      "types": "./dist/sample-runtime-types/unions/index.d.ts",
+      "import": "./dist/sample-runtime-types/unions/index.js"
     }
   }
 }

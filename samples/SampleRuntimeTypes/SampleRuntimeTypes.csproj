@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
     The runtime-types sample of spec 011 (plan.md § Samples): one scenario per
-    user story, each stage adding its own. Stage 011f adds Interop/: Js.Code inline
-    TypeScript and the UnsafeCast / AsDynamic escape hatches (US6).
+    user story, each stage adding its own. Stage 011b adds Shapes/ (US3: runtime type
+    descriptors, nominal interface tests, plain-object shapes, the enum helpers) and
+    Unions/ (the strict union guard module, FR-029). Stage 011f adds Interop/: Js.Code
+    inline TypeScript and the UnsafeCast / AsDynamic escape hatches (US6).
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
