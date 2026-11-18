@@ -88,6 +88,10 @@ Taken after a throwaway spike implemented a runtime `List<T>` end to end (resear
 - **D26 — Production checks opt-out.** A bundle-time constant may remove the bounds checks and the version tracking from production bundles; checks are on by default; disabling them changes semantics, so it is explicit and documented (FR-058).
 - **D27 — Array to interface: option A confirmed.** The conversions C# itself performs from an array to a list interface use FR-003's identity-preserving `List.adopt(arr, { fixedSize: true })`; FR-003 and FR-055 stand as worded. (`Array.AsReadOnly(arr)` and `list.AsReadOnly()` produce a `ReadOnlyList`, its own class, not an adopted `List`; FR-054.)
 
+### Decisions of 2026-11-18 (Dart before 3.0.0)
+
+- **D28 — Dart only keeps compiling until after 3.0.0.** TypeScript is the priority of 3.0.0. Until 3.0.0 ships, the Dart target only has to keep compiling: the existing Dart output stays byte-identical, and an IR node this feature adds MAY lower to an `MS0001` placeholder in Dart. FR-038 (the Dart mapping of each IR node) and the plan's rule that every stage ships its Dart mapping in the same PR are **deferred to after 3.0.0**; User Story 9's scenarios 1, 3 and 4 are deferred with it (scenario 2 holds today: Dart reifies `is T` natively).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Collections behave like .NET collections (Priority: P1)
@@ -223,6 +227,8 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
 6. **Given** every golden under `tests/Metano.Tests/Expected/`, **When** compiled with tsgo and each compiled module is bundled as a side-effect-only import with every package external, **Then** every golden outside the allowlist bundles to nothing but its external `import` statements (no code is evaluated at module load); `[ModuleEntryPoint]` goldens are exempt, and the allowlist names only the #361 shapes.
 
 ### User Story 9 - Dart does not regress (Priority: P3)
+
+**Deferred to after 3.0.0** (D28), except scenario 2. Until then Dart output stays byte-identical and a new IR node may lower to an `MS0001` placeholder.
 
 **Acceptance Scenarios**:
 
@@ -413,6 +419,7 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
 #### H. Dart target
 
 - **FR-038 — Dart implications.** Every IR node this feature adds MUST land with its Dart mapping in the same PR (CI diff-checks `targets/flutter`): `IrCollectionTypeRef` maps `List` → `List`, `ImmutableList` → an unmodifiable `List` (`List.unmodifiable`), `ReadOnlyList` → `UnmodifiableListView`, `Dictionary` / `ConcurrentDictionary` → `Map`, `ImmutableDictionary` → `Map.unmodifiable`, `SortedDictionary` / `SortedList` → `SplayTreeMap` (`SortedList`'s index members report `MS0001` on Dart, FR-054), `HashSet` → `Set`, `ImmutableHashSet` → `Set.unmodifiable`, `SortedSet` → `SplayTreeSet` (`dart:collection`), `Queue` → `Queue` (`dart:collection`), `Stack` → a documented gap (`MS0001` at the type reference until a `metano_runtime` Dart `Stack` exists, #173); `IrDynamicTypeRef` → `dynamic`; `IrRuntimeTypeTest` categories render natively (`x is T`, no descriptors, no hidden parameters); typed catch renders the single-catch chain of FR-015 with `is` tests and `when` filters inside the chain; BCL exceptions map to their Dart counterparts where one exists (`ArgumentError`, `RangeError`, `StateError`, `FormatException`, `UnsupportedError`) and to `Exception` otherwise (shape-only; bodies are not emitted today, #175); `UnsafeCast` / `AsDynamic` → `as T` / `as dynamic`; `Js.*`, `JsArray<T>` and `AsJsArray()` → `MS0051`; `AsSpan()` → the list, `AsReadOnlySpan()` → `UnmodifiableListView(list)` (FR-056). Boxing (FR-050) is not needed in Dart either (a test asserts that the Dart output contains no box): its enums are classes and `is` is native. Runtime collections, descriptors and reified parameters are not needed in Dart because the language already provides nominal `is`, reified generics and throwing collections (research R7). Dart tests cover each item.
+  - **Status: deferred to after 3.0.0** (D28). Until then the Dart target only keeps compiling: its existing output stays byte-identical and a new IR node may lower to an `MS0001` placeholder.
 
 #### I. Release, tests, documentation, tree-shaking
 

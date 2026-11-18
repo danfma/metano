@@ -238,7 +238,7 @@ catch (e$) {
 }
 ```
 
-Dart renders the same chain with `is` tests inside one `catch (e$)` (FR-038).
+Dart renders the same chain with `is` tests inside one `catch (e$)` (FR-038, deferred to after 3.0.0 by D28).
 
 ## JSON link (FR-028)
 
