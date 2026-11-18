@@ -10,6 +10,15 @@ Pre-release notes for the 3.0.0 breaking changes that are already merged;
 the release regenerates the released sections, and these notes carry forward
 the migration list.
 
+### Tree-shakable generated code (spec 011 FR-040, FR-043, FR-044, #335)
+
+- A `[Branded]` / `[InlineWrapper]` companion is no longer a TypeScript `namespace` (an IIFE every bundler keeps): its members are module-level functions and the companion is one pure object literal of them, `export const Money = { create, fromValue } as const;` beside `export type Money`. Call sites (`Money.create(x)`) and imports are unchanged; hand-written TypeScript that merged declarations into the companion namespace must use the object instead.
+- A nested type is a module-level class (`class Owner$Maker`) exposed as a static of its owner (`static readonly Maker = Owner$Maker`), and the type `Owner.Maker` is kept by an erased `declare namespace`. `Owner.Maker` keeps working as a value and as a type.
+- The runtime `UUID` and `ImmutableCollection` take the companion shape (`UUID.newUuid()` is unchanged).
+- A numeric enum is an `as const` object plus a type alias instead of a TS `enum`: the closed union of its values, or for a `[Flags]` enum the brand `number & { readonly __enum?: "E" }`; reverse lookups (`E[0]`) no longer exist.
+- Static state is annotated `/* @__PURE__ */` (JSON-context defaults, static-constructor slots, overload tokens, static field initializers, side-effect-free module state), so a bundle drops a type nothing uses; a pure-annotated static field asserts its type (`= /* @__PURE__ */ new Ctx() as Ctx`) so tsgo and Biome keep the annotation.
+- `metano-runtime` evaluates nothing a bundler must keep at load: a side-effect-only import of any of its modules, the root included, bundles to 0 bytes under bun, esbuild and Rollup, and so does every golden of the test suite (CI gates both).
+
 ### `dynamic` (spec 011 FR-030, #335)
 
 - Operations on a `dynamic` receiver keep their C# member names verbatim (`d.AppName`, `d.Run()`), where 2.x camelCased them (`d.appName`); `ToString` / `GetHashCode` / `Equals` / `GetType` keep the `object` lowering. Type arguments of a dynamic generic call are dropped.
