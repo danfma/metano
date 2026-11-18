@@ -210,7 +210,7 @@ export class JsonException extends Exception {}                 // spec 009 move
 export function toException(value: unknown): Exception;         // FR-015 / FR-052 normalisation: Exception passes through; DOMException "AbortError" → TaskCanceledException; TypeError → NullReferenceException (innerException = cause = the original TypeError, message and stack preserved); any other Error → Exception wrapping it; any other value → Exception(String(value))
 ```
 
-Default messages are those of `IrExceptionConstructionExtractor.DefaultMessages` (e.g. `Operation is not valid due to the current state of the object.`, `Value cannot be null.`, `Specified argument was out of the range of valid values.`); the `(Parameter 'x')` suffix is appended as .NET does. **Budget** (NFR-008): one class with its literal getter ≤ 0.5 KB gz (research R13 measured 0.35 KB for the literal shape on a probe; the real class is re-measured by FR-043); an unused class is 0 bytes.
+Default messages are those of `IrExceptionConstructionExtractor.DefaultMessages` (e.g. `Operation is not valid due to the current state of the object.`, `Value cannot be null.`, `Specified argument was out of the range of valid values.`); the `(Parameter 'x')` suffix is appended as .NET does. **Budget** (NFR-008): one class with its literal getter ≤ 0.65 KB gz (research R13 measured 0.35 KB for the literal shape on a probe; the real class is re-measured by FR-043); an unused class is 0 bytes.
 
 ## Typed catch (FR-015)
 

@@ -382,7 +382,7 @@ A package with `[ModuleEntryPoint]` `Program.Main` in `app/program.ts` and no ot
 
 The entries are sorted ordinally. Both paths are listed because spec 008's `source` condition resolves the package to `.ts` for Vite / `customConditions` consumers and the `import` condition to `dist`.
 
-A package without entry points gets `"sideEffects": []`.
+A package without entry points gets `"sideEffects": false`.
 
 ## `dynamic`, inline code, escape hatches (`dynamic-and-interop.ts`)
 
