@@ -11,11 +11,22 @@ namespace Metano.Compiler.IR;
 public readonly record struct IrOperatorKind
 {
     private const string MetadataPrefix = "op_";
+    private const string CheckedPrefix = "Checked";
 
     private IrOperatorKind(string name) => Name = name;
 
     /// <summary>The kind's name (<c>Addition</c>).</summary>
     public string Name { get; }
+
+    /// <summary>Whether the kind is a <c>checked</c> operator or conversion (<c>CheckedAddition</c>).</summary>
+    public bool IsChecked => Name.StartsWith(CheckedPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The kind's unchecked counterpart (<c>CheckedAddition</c> →
+    /// <c>Addition</c>); the kind itself when it is not checked.
+    /// </summary>
+    public IrOperatorKind Unchecked =>
+        IsChecked ? new IrOperatorKind(Name[CheckedPrefix.Length..]) : this;
 
     /// <summary>The kind of an operator whose metadata name is <paramref name="metadataName"/>.</summary>
     public static IrOperatorKind FromMetadataName(string metadataName)

@@ -16,7 +16,7 @@ internal static class TsOperatorNaming
 {
     private const string StaticPrefix = "__";
     private const string InstancePrefix = "$";
-    private const string CheckedKindPrefix = "Checked";
+    private const string CheckedNamePrefix = "checked";
 
     /// <summary>
     /// The name an operator lowers to (<c>add</c>, <c>negate</c>): a single
@@ -54,9 +54,8 @@ internal static class TsOperatorNaming
     /// with no helper.
     /// </summary>
     public static string? KindNameOf(IrOperatorKind kind) =>
-        kind.Name.StartsWith(CheckedKindPrefix, StringComparison.Ordinal)
-        && UncheckedKindNameOf(kind.Name[CheckedKindPrefix.Length..]) is { } uncheckedName
-            ? "checked" + char.ToUpperInvariant(uncheckedName[0]) + uncheckedName[1..]
+        kind.IsChecked && UncheckedKindNameOf(kind.Unchecked.Name) is { } uncheckedName
+            ? CheckedNamePrefix + char.ToUpperInvariant(uncheckedName[0]) + uncheckedName[1..]
             : UncheckedKindNameOf(kind.Name);
 
     private static string? UncheckedKindNameOf(string kind) =>
