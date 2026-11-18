@@ -3,8 +3,8 @@ import { Money } from "lib/lib";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Receipt extends Money {
-  protected static readonly byReceiptAmount: unique symbol = (/* @__PURE__ */ Symbol("Receipt(decimal amount)"));
-  protected static readonly byReceiptCents: unique symbol = (/* @__PURE__ */ Symbol("Receipt(string cents)"));
+  protected static readonly byReceiptAmount = /* @__PURE__ */ Symbol("Receipt(decimal amount)");
+  protected static readonly byReceiptCents = /* @__PURE__ */ Symbol("Receipt(string cents)");
 
   constructor(overload: typeof Receipt.byReceiptAmount, amount: Decimal);
   constructor(overload: typeof Receipt.byReceiptCents, cents: string);

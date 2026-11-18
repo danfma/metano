@@ -4,9 +4,10 @@ import { Exception } from "metano-runtime/system/exceptions/exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class CurrencyConversionException extends Exception {
-  protected static readonly byCurrencyConversionExceptionFromCodeToCode: unique symbol =
-    /* @__PURE__ */ Symbol("CurrencyConversionException(string fromCode, string toCode)");
-  protected static readonly byCurrencyConversionExceptionFromCodeToCodeReason: unique symbol =
+  protected static readonly byCurrencyConversionExceptionFromCodeToCode = /* @__PURE__ */ Symbol(
+    "CurrencyConversionException(string fromCode, string toCode)",
+  );
+  protected static readonly byCurrencyConversionExceptionFromCodeToCodeReason =
     /* @__PURE__ */ Symbol(
       "CurrencyConversionException(string fromCode, string toCode, Exception reason)",
     );

@@ -3,8 +3,8 @@ import { Inner } from "./inner";
 import { Mood } from "./mood";
 
 export class Day {
-  protected static readonly byDayN: unique symbol = (/* @__PURE__ */ Symbol("Day(int n)"));
-  protected static readonly byDayLabel: unique symbol = (/* @__PURE__ */ Symbol("Day(string label)"));
+  protected static readonly byDayN = /* @__PURE__ */ Symbol("Day(int n)");
+  protected static readonly byDayLabel = /* @__PURE__ */ Symbol("Day(string label)");
   tag: string = "\u0000";
   label: string;
   mood: Mood = Mood.Calm;

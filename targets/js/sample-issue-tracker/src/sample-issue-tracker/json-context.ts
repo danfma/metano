@@ -16,7 +16,7 @@ import { SnowflakeId } from "#/sample-issue-tracker/shared-kernel/snowflake-id";
 import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = /* @__PURE__ */ new JsonContext();
+  private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _issueSnapshot?: TypeSpec<IssueSnapshot>;
   private _comment?: TypeSpec<Comment>;
   private _iReadOnlyListComment?: ValueSpec<Comment[] | null>;

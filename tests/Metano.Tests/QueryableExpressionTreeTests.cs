@@ -761,7 +761,7 @@ public class QueryableExpressionTreeTests
 
         var output = result["user-ext.ts"];
         await Assert.That(output).Contains("\"capture\"");
-        await Assert.That(output).Contains("minAge:");
+        await Assert.That(output).Contains("private static readonly minAge =");
     }
 
     /// <summary>

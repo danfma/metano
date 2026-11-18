@@ -597,7 +597,7 @@ public class NestedTypesInStaticClassTests
         await Assert
             .That(output)
             .Contains(
-                "private static readonly _default: Api$Ctx = (/* @__PURE__ */ new Api$Ctx());"
+                "private static readonly _default = /* @__PURE__ */ new Api$Ctx() as Api$Ctx;"
             );
 
         await Assert.That(output).Contains("get payload(): TypeSpec<Api$Payload>");
@@ -635,7 +635,7 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(output)
-            .Contains("static readonly instance: Settings = (/* @__PURE__ */ new Settings());");
+            .Contains("static readonly instance = /* @__PURE__ */ new Settings() as Settings;");
     }
 
     [Test]
@@ -698,7 +698,7 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(output)
-            .Contains("static readonly item: Shelf.Book = (/* @__PURE__ */ new Shelf.Book(9));");
+            .Contains("static readonly item = /* @__PURE__ */ new Shelf.Book(9) as Shelf.Book;");
     }
 
     [Test]

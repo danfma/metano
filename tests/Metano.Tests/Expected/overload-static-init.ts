@@ -2,9 +2,9 @@ import { isInt32 } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Money {
-  protected static readonly byMoneyAmount: unique symbol = (/* @__PURE__ */ Symbol("Money(decimal amount)"));
-  protected static readonly byMoneyCents: unique symbol = (/* @__PURE__ */ Symbol("Money(int cents)"));
-  static readonly zero: Money = (/* @__PURE__ */ Money.fromCents(0));
+  protected static readonly byMoneyAmount = /* @__PURE__ */ Symbol("Money(decimal amount)");
+  protected static readonly byMoneyCents = /* @__PURE__ */ Symbol("Money(int cents)");
+  static readonly zero = /* @__PURE__ */ Money.fromCents(0) as Money;
   readonly how: string = "";
 
   constructor(overload: typeof Money.byMoneyAmount, amount: Decimal);

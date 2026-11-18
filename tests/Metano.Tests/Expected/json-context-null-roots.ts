@@ -8,7 +8,7 @@ import { SPoint } from "./s-point";
 import { Segment } from "./segment";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
+  private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _sPoint?: TypeSpec<SPoint>;
   private _nullableSPoint?: ValueSpec<SPoint | null>;
   private _segment?: TypeSpec<Segment>;

@@ -1,8 +1,8 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Money {
-  protected static readonly byMoneyText: unique symbol = (/* @__PURE__ */ Symbol("Money(string text)"));
-  protected static readonly byMoneyCents: unique symbol = (/* @__PURE__ */ Symbol("Money(int value)"));
+  protected static readonly byMoneyText = /* @__PURE__ */ Symbol("Money(string text)");
+  protected static readonly byMoneyCents = /* @__PURE__ */ Symbol("Money(int value)");
 
   constructor(overload: typeof Money.byMoneyText, text: string);
   constructor(overload: typeof Money.byMoneyCents, value: number);

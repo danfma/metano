@@ -252,8 +252,8 @@ import { isInt32 } from "metano-runtime";
 import { Trace } from "./trace";
 
 export class Chained {
-  protected static readonly byChainedFD: unique symbol = (/* @__PURE__ */ Symbol("Chained(int f, int d)"));
-  protected static readonly byChainedDefault: unique symbol = (/* @__PURE__ */ Symbol("Chained()"));
+  protected static readonly byChainedFD = /* @__PURE__ */ Symbol("Chained(int f, int d)");
+  protected static readonly byChainedDefault = /* @__PURE__ */ Symbol("Chained()");
   total: number = 0;
 
   constructor(overload: typeof Chained.byChainedFD, f: number, d: number);

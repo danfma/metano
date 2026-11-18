@@ -140,7 +140,7 @@ public class PrimaryConstructorDispatchTests
         await Assert
             .That(output)
             .Contains(
-                "  protected static readonly byPairBoth: unique symbol = (/* @__PURE__ */ Symbol(\"Pair(int both)\"));\n"
+                "  protected static readonly byPairBoth = /* @__PURE__ */ Symbol(\"Pair(int both)\");\n"
                     + "  readonly a: number;\n"
                     + "  readonly b: number;\n"
             );

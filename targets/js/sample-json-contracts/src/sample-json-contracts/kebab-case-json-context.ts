@@ -3,8 +3,8 @@ import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Stats } from "./stats";
 
 export class KebabCaseJsonContext extends SerializerContext {
-  private static readonly _default: KebabCaseJsonContext =
-    /* @__PURE__ */ new KebabCaseJsonContext();
+  private static readonly _default =
+    /* @__PURE__ */ new KebabCaseJsonContext() as KebabCaseJsonContext;
   private _stats?: TypeSpec<Stats>;
 
   static get default(): KebabCaseJsonContext {

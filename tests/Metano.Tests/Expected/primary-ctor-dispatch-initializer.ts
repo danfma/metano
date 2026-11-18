@@ -1,8 +1,8 @@
 import { isString } from "metano-runtime";
 
 export class Init {
-  protected static readonly byInitName: unique symbol = (/* @__PURE__ */ Symbol("Init(string name)"));
-  protected static readonly byInitDefault: unique symbol = (/* @__PURE__ */ Symbol("Init()"));
+  protected static readonly byInitName = /* @__PURE__ */ Symbol("Init(string name)");
+  protected static readonly byInitDefault = /* @__PURE__ */ Symbol("Init()");
   readonly name: string;
 
   constructor(overload: typeof Init.byInitName, name: string);

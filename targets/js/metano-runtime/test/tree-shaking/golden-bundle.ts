@@ -23,7 +23,14 @@ import { basename, join } from "node:path";
 import terser from "@rollup/plugin-terser";
 import * as esbuild from "esbuild";
 import { rollup } from "rollup";
-import { BUNDLERS, type Bundler, CANARY, moduleLoadCode, packageBinary } from "./harness.ts";
+import {
+  BUNDLERS,
+  type Bundler,
+  CANARY,
+  moduleLoadCode,
+  packageBinary,
+  REPOSITORY_ROOT,
+} from "./harness.ts";
 
 type GoldenResult = Partial<Record<Bundler, string>> | { error: string };
 
@@ -46,13 +53,58 @@ try {
   rmSync(work, { recursive: true, force: true });
 }
 
+/**
+ * Checks every golden as emitted and again after Biome formats it with the
+ * repository's settings (a consumer's formatter must not cost the annotations
+ * that keep it shakable, spec 011 K10); a biome-formatted result is reported
+ * under `<bundler> (biome)`.
+ */
 async function check(directory: string) {
   const goldens = readdirSync(directory).filter((file) => file.endsWith(".ts")).sort();
-  const parts = writeParts(directory, goldens);
+  const emitted = await checkVariant(join(work, "emitted"), directory, goldens, false);
+  const formatted = await checkVariant(join(work, "biome"), directory, goldens, true);
+  const results: Record<string, GoldenResult> = {};
 
-  compile();
+  for (const golden of goldens) {
+    results[golden] = mergeVariants(emitted.results[golden], formatted.results[golden]);
+  }
 
-  const out = join(work, "out");
+  return { canary: emitted.canary, goldens: results };
+}
+
+function mergeVariants(emitted: GoldenResult | undefined, formatted: GoldenResult | undefined) {
+  if (emitted === undefined || "error" in emitted) {
+    return emitted ?? { error: "not checked" };
+  }
+
+  if (formatted === undefined || "error" in formatted) {
+    return formatted ?? emitted;
+  }
+
+  const merged: Record<string, string> = { ...emitted };
+
+  for (const [bundler, code] of Object.entries(formatted)) {
+    merged[`${bundler} (biome)`] = code ?? "";
+  }
+
+  return merged;
+}
+
+async function checkVariant(
+  root: string,
+  directory: string,
+  goldens: string[],
+  formatWithBiome: boolean,
+) {
+  const parts = writeParts(root, directory, goldens);
+
+  if (formatWithBiome) {
+    formatSources(root);
+  }
+
+  compile(root);
+
+  const out = join(root, "out");
   writeFileSync(join(out, "package.json"), JSON.stringify({ name: "golden-probe", type: "module" }));
   writeFileSync(join(out, CANARY), "register();\n");
 
@@ -63,12 +115,29 @@ async function check(directory: string) {
     results[golden] = await checkGolden(out, parts.get(golden) ?? []);
   }
 
-  return { canary, goldens: results };
+  return { canary, results };
+}
+
+/** Formats `<root>/src` with Biome under the repository's formatter settings. */
+function formatSources(root: string): void {
+  const settings = JSON.parse(readFileSync(join(REPOSITORY_ROOT, "biome.json"), "utf8"));
+  const config = { formatter: settings.formatter, javascript: settings.javascript };
+
+  writeFileSync(join(root, "biome.json"), JSON.stringify(config));
+
+  const run = spawnSync(packageBinary("biome"), ["format", "--write", "src"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+
+  if (run.status !== 0) {
+    throw new Error(`biome failed (${run.status}): ${run.stdout}${run.stderr}`);
+  }
 }
 
 /** Writes each golden's parts as `src/<golden>__<n>.ts`; returns the part names per golden. */
-function writeParts(directory: string, goldens: string[]): Map<string, string[]> {
-  const src = join(work, "src");
+function writeParts(root: string, directory: string, goldens: string[]): Map<string, string[]> {
+  const src = join(root, "src");
   const parts = new Map<string, string[]>();
 
   mkdirSync(src, { recursive: true });
@@ -115,9 +184,9 @@ function splitConcatenatedFiles(text: string): string[] {
   return parts.map((lines) => lines.join("\n"));
 }
 
-function compile(): void {
+function compile(root: string): void {
   writeFileSync(
-    join(work, "tsconfig.json"),
+    join(root, "tsconfig.json"),
     JSON.stringify({
       compilerOptions: {
         module: "esnext",
@@ -136,7 +205,7 @@ function compile(): void {
     }),
   );
 
-  const run = spawnSync(packageBinary("tsgo"), ["-p", work], { encoding: "utf8" });
+  const run = spawnSync(packageBinary("tsgo"), ["-p", root], { encoding: "utf8" });
 
   if (run.status !== 0 && run.status !== 2) {
     throw new Error(`tsgo failed (${run.status}): ${run.stdout}${run.stderr}`);

@@ -189,38 +189,47 @@ public sealed class Printer(string indent = "  ")
         stmt is TsIfStatement or TsSwitchStatement or TsBlockStatement;
 
     /// <summary>
-    /// The initializer of a static field or of a module variable holding a C# static
-    /// field (<paramref name="isStaticState"/>). A call or <c>new</c> there is part of
-    /// C#'s type initialization, which never runs for a type no code touches, so it
-    /// prints <c>/* @__PURE__ */</c>: a bundle that drops the type drops the
-    /// initializer with it (spec 011 FR-043), and one that keeps the type runs it at
-    /// load, as before. The annotation is part of this node's print, never comment
-    /// trivia a formatter could move.
+    /// Whether <paramref name="initializer"/> is a call or <c>new</c>, the initializers
+    /// a static field or a module variable of C# static state prints as
+    /// <c>/* @__PURE__ */</c>: they are part of C#'s type initialization, which never
+    /// runs for a type no code touches, so a bundle that drops the type drops them
+    /// with it (spec 011 FR-043), and one that keeps the type runs them at load, as
+    /// before. The annotation is part of the node's print, never comment trivia.
     /// </summary>
-    private void PrintStaticStateInitializer(
-        TsExpression initializer,
-        bool isStaticState,
-        bool isPropertyInitializer
-    )
+    private static bool IsPureInitializer(TsExpression? initializer) =>
+        initializer is TsCallExpression or TsNewExpression;
+
+    /// <summary>
+    /// A static field whose initializer is pure-annotated, printed without its type
+    /// annotation: tsgo drops a comment that follows a property's type annotation,
+    /// and Biome removes the parentheses that would protect it. The declared type
+    /// becomes an assertion (<c>= /* @__PURE__ */ new Ctx() as Ctx</c>), which keeps
+    /// it for a later assignment; a <c>unique symbol</c> is inferred from the
+    /// <c>Symbol()</c> call of a readonly static, and an assertion cannot spell it.
+    /// </summary>
+    private void PrintPureStaticFieldInitializer(TsExpression initializer, TsType type)
     {
-        if (!isStaticState || initializer is not (TsCallExpression or TsNewExpression))
-        {
-            PrintExpression(initializer);
-
-            return;
-        }
-
-        // tsgo drops a comment between a class property's type annotation and its
-        // initializer (`static a: C = /* … */ new C()` emits `static a = new C()`)
-        // but keeps one inside parentheses; a variable declaration keeps it as is.
-        if (isPropertyInitializer)
-            _sb.Write("(");
-
+        _sb.Write(" = ");
         _sb.Write(PureAnnotation);
         PrintExpression(initializer);
 
-        if (isPropertyInitializer)
-            _sb.Write(")");
+        if (type is TsUniqueSymbolType)
+            return;
+
+        _sb.Write(" as ");
+        PrintType(type);
+    }
+
+    private void PrintFieldTypeAndInitializer(TsFieldMember field)
+    {
+        _sb.Write(": ");
+        PrintType(field.Type);
+
+        if (field.Initializer is null)
+            return;
+
+        _sb.Write(" = ");
+        PrintExpression(field.Initializer);
     }
 
     private void PrintTry(TsTryStatement tryStmt)
@@ -916,19 +925,11 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("?");
                 else if (field.DefinitelyAssigned && field.Initializer is null)
                     _sb.Write("!");
-                _sb.Write(": ");
-                PrintType(field.Type);
 
-                if (field.Initializer is not null)
-                {
-                    _sb.Write(" = ");
-
-                    PrintStaticStateInitializer(
-                        field.Initializer,
-                        field.Static,
-                        isPropertyInitializer: true
-                    );
-                }
+                if (field.Static && IsPureInitializer(field.Initializer))
+                    PrintPureStaticFieldInitializer(field.Initializer!, field.Type);
+                else
+                    PrintFieldTypeAndInitializer(field);
 
                 _sb.Write(";");
                 _sb.WriteLn();
@@ -1297,11 +1298,10 @@ public sealed class Printer(string indent = "  ")
                 {
                     _sb.Write(" = ");
 
-                    PrintStaticStateInitializer(
-                        varDecl.Initializer,
-                        varDecl.InitializesStaticState,
-                        isPropertyInitializer: false
-                    );
+                    if (varDecl.InitializesStaticState && IsPureInitializer(varDecl.Initializer))
+                        _sb.Write(PureAnnotation);
+
+                    PrintExpression(varDecl.Initializer);
                 }
 
                 _sb.Write(";");

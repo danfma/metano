@@ -10,7 +10,7 @@ import { Square } from "./square";
 import { Stats } from "./stats";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
+  private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _clip?: TypeSpec<Clip>;
   private _shape?: TypeSpec<Shape>;
   private _stats?: TypeSpec<Stats>;

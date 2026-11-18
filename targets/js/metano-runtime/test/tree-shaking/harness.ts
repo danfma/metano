@@ -32,7 +32,7 @@ import { rollup, type Plugin as RollupPlugin } from "rollup";
 export const RUNTIME_DIR = resolve(import.meta.dir, "../..");
 
 /** The repository root, whose `node_modules` holds the workspace's hoisted packages. */
-const REPOSITORY_ROOT = resolve(RUNTIME_DIR, "../../..");
+export const REPOSITORY_ROOT = resolve(RUNTIME_DIR, "../../..");
 
 /**
  * The path of an installed package binary (`tsgo`): the runtime's own

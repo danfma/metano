@@ -1,8 +1,8 @@
 import { HashCode, copyRecordWith, isInt32 } from "metano-runtime";
 
 export class Rec {
-  protected static readonly byRecX: unique symbol = (/* @__PURE__ */ Symbol("Rec(int X)"));
-  protected static readonly byRecDefault: unique symbol = (/* @__PURE__ */ Symbol("Rec()"));
+  protected static readonly byRecX = /* @__PURE__ */ Symbol("Rec(int X)");
+  protected static readonly byRecDefault = /* @__PURE__ */ Symbol("Rec()");
   readonly x: number;
 
   constructor(overload: typeof Rec.byRecX, x: number);

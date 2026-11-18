@@ -9,7 +9,7 @@ import { OrdBase } from "./ord-base";
 import { OrdDer } from "./ord-der";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
+  private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _blob?: TypeSpec<Blob>;
   private _account?: TypeSpec<Account>;
   private _ordDer?: TypeSpec<OrdDer>;

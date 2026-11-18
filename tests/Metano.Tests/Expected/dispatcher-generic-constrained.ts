@@ -1,8 +1,8 @@
 import { isInt32 } from "metano-runtime";
 
 export class RefBox<T> {
-  protected static readonly byRefBoxT: unique symbol = (/* @__PURE__ */ Symbol("RefBox(T x)"));
-  protected static readonly byRefBoxInt32: unique symbol = (/* @__PURE__ */ Symbol("RefBox(int x)"));
+  protected static readonly byRefBoxT = /* @__PURE__ */ Symbol("RefBox(T x)");
+  protected static readonly byRefBoxInt32 = /* @__PURE__ */ Symbol("RefBox(int x)");
 
   constructor(overload: typeof RefBox.byRefBoxT, x: T);
   constructor(overload: typeof RefBox.byRefBoxInt32, x: number);
@@ -49,8 +49,8 @@ import { isInt32 } from "metano-runtime";
 import type { IShape } from "./i-shape";
 
 export class ShapeBox<T extends IShape> {
-  protected static readonly byShapeBoxT: unique symbol = (/* @__PURE__ */ Symbol("ShapeBox(T x)"));
-  protected static readonly byShapeBoxInt32: unique symbol = (/* @__PURE__ */ Symbol("ShapeBox(int x)"));
+  protected static readonly byShapeBoxT = /* @__PURE__ */ Symbol("ShapeBox(T x)");
+  protected static readonly byShapeBoxInt32 = /* @__PURE__ */ Symbol("ShapeBox(int x)");
 
   constructor(overload: typeof ShapeBox.byShapeBoxT, x: T);
   constructor(overload: typeof ShapeBox.byShapeBoxInt32, x: number);
@@ -97,8 +97,8 @@ import { isInt32 } from "metano-runtime";
 import { Animal } from "./animal";
 
 export class AnimalBox<T extends Animal> {
-  protected static readonly byAnimalBoxT: unique symbol = (/* @__PURE__ */ Symbol("AnimalBox(T x)"));
-  protected static readonly byAnimalBoxInt32: unique symbol = (/* @__PURE__ */ Symbol("AnimalBox(int x)"));
+  protected static readonly byAnimalBoxT = /* @__PURE__ */ Symbol("AnimalBox(T x)");
+  protected static readonly byAnimalBoxInt32 = /* @__PURE__ */ Symbol("AnimalBox(int x)");
 
   constructor(overload: typeof AnimalBox.byAnimalBoxT, x: T);
   constructor(overload: typeof AnimalBox.byAnimalBoxInt32, x: number);
@@ -144,8 +144,8 @@ export class AnimalBox<T extends Animal> {
 import { isInt32 } from "metano-runtime";
 
 export class ValBox<T> {
-  protected static readonly byValBoxX: unique symbol = (/* @__PURE__ */ Symbol("ValBox(T x)"));
-  protected static readonly byValBoxXN: unique symbol = (/* @__PURE__ */ Symbol("ValBox(T x, int n)"));
+  protected static readonly byValBoxX = /* @__PURE__ */ Symbol("ValBox(T x)");
+  protected static readonly byValBoxXN = /* @__PURE__ */ Symbol("ValBox(T x, int n)");
 
   constructor(overload: typeof ValBox.byValBoxX, x: T);
   constructor(overload: typeof ValBox.byValBoxXN, x: T, n: number);

@@ -1,8 +1,8 @@
 import { HashCode, typeInitializer } from "metano-runtime";
 
 export class Bag {
-  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("Bag", () => {
-  }));
+  static readonly #$init = /* @__PURE__ */ typeInitializer("Bag", () => {
+  }) as () => void;
 
   w: number = 0;
   count: number = 0;

@@ -1,7 +1,7 @@
 import { typeInitializer } from "metano-runtime";
 
 export class Registry {
-  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("Registry", () => {
+  static readonly #$init = /* @__PURE__ */ typeInitializer("Registry", () => {
     Registry.#log$ = [] as Array<string>;
     Registry.#a$ = Registry.init("A");
     Registry.#b$ = Registry.init("B");
@@ -9,7 +9,7 @@ export class Registry {
     Registry.instance = new Registry();
     const n = 1;
     Registry.log.push("n" + n);
-  }));
+  }) as () => void;
 
   static #log$: string[] | null = null;
   static #a$: number = 0;

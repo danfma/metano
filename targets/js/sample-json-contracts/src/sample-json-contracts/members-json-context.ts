@@ -7,7 +7,7 @@ import { OrdBase } from "./ord-base";
 import { SetClass } from "./set-class";
 
 export class MembersJsonContext extends SerializerContext {
-  private static readonly _default: MembersJsonContext = /* @__PURE__ */ new MembersJsonContext();
+  private static readonly _default = /* @__PURE__ */ new MembersJsonContext() as MembersJsonContext;
   private _blob?: TypeSpec<Blob>;
   private _account?: TypeSpec<Account>;
   private _ordBase?: TypeSpec<OrdBase>;

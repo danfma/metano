@@ -1,8 +1,8 @@
 import { HashCode, isInt32 } from "metano-runtime";
 
 export class Pt {
-  protected static readonly byPtX: unique symbol = (/* @__PURE__ */ Symbol("Pt(int x)"));
-  protected static readonly byPtXY: unique symbol = (/* @__PURE__ */ Symbol("Pt(int x, int y)"));
+  protected static readonly byPtX = /* @__PURE__ */ Symbol("Pt(int x)");
+  protected static readonly byPtXY = /* @__PURE__ */ Symbol("Pt(int x, int y)");
   x: number = 0;
   name: string;
 
@@ -80,8 +80,8 @@ export class Pt {
 import { HashCode, isInt32 } from "metano-runtime";
 
 export class Tick {
-  protected static readonly byTickDefault: unique symbol = (/* @__PURE__ */ Symbol("Tick()"));
-  protected static readonly byTickN: unique symbol = (/* @__PURE__ */ Symbol("Tick(int n)"));
+  protected static readonly byTickDefault = /* @__PURE__ */ Symbol("Tick()");
+  protected static readonly byTickN = /* @__PURE__ */ Symbol("Tick(int n)");
   readonly n: number = 0;
 
   constructor(overload: typeof Tick.byTickDefault);

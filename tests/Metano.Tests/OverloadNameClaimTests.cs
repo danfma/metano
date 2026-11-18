@@ -305,7 +305,7 @@ public class OverloadNameClaimTests
             .Contains("static fromIntBoxValue$(value: number): IntBox {");
         await Assert
             .That(files["int-box.ts"])
-            .Contains("protected static readonly byIntBoxValue$: unique symbol");
+            .Contains("protected static readonly byIntBoxValue$ = /* @__PURE__ */ Symbol(");
         await Assert
             .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed))
             .IsNotNull();

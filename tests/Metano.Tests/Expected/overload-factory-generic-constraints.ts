@@ -3,8 +3,8 @@ import { Box } from "./box";
 import type { IRank } from "./i-rank";
 
 export class SortedBox<T extends IRank<T>> extends Box<T> {
-  protected static readonly bySortedBoxValue: unique symbol = (/* @__PURE__ */ Symbol("SortedBox(T value)"));
-  protected static readonly bySortedBoxN: unique symbol = (/* @__PURE__ */ Symbol("SortedBox(int n)"));
+  protected static readonly bySortedBoxValue = /* @__PURE__ */ Symbol("SortedBox(T value)");
+  protected static readonly bySortedBoxN = /* @__PURE__ */ Symbol("SortedBox(int n)");
 
   constructor(overload: typeof SortedBox.bySortedBoxValue, value: T);
   constructor(overload: typeof SortedBox.bySortedBoxN, n: number);
@@ -55,8 +55,8 @@ import { isInt32 } from "metano-runtime";
 import { Box } from "./box";
 
 export class Pair<K, V> extends Box<K> {
-  protected static readonly byPairValue: unique symbol = (/* @__PURE__ */ Symbol("Pair(K value)"));
-  protected static readonly byPairN: unique symbol = (/* @__PURE__ */ Symbol("Pair(int n)"));
+  protected static readonly byPairValue = /* @__PURE__ */ Symbol("Pair(K value)");
+  protected static readonly byPairN = /* @__PURE__ */ Symbol("Pair(int n)");
 
   constructor(overload: typeof Pair.byPairValue, value: K);
   constructor(overload: typeof Pair.byPairN, n: number);

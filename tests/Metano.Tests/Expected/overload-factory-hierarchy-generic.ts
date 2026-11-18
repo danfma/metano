@@ -2,8 +2,8 @@ import { isBool } from "metano-runtime";
 import { B } from "./b";
 
 export class C<P, Q> extends B<P, Q> {
-  protected static readonly byCKV: unique symbol = (/* @__PURE__ */ Symbol("C(P k, Q v)"));
-  protected static readonly byCVKFlip: unique symbol = (/* @__PURE__ */ Symbol("C(Q v, P k, bool flip)"));
+  protected static readonly byCKV = /* @__PURE__ */ Symbol("C(P k, Q v)");
+  protected static readonly byCVKFlip = /* @__PURE__ */ Symbol("C(Q v, P k, bool flip)");
 
   constructor(overload: typeof C.byCKV, k: P, v: Q);
   constructor(overload: typeof C.byCVKFlip, v: Q, k: P, flip: boolean);

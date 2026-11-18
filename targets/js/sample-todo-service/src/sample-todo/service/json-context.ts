@@ -4,7 +4,7 @@ import { Priority, TodoItem } from "sample-todo/sample-todo";
 import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = /* @__PURE__ */ new JsonContext();
+  private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _storedTodo?: TypeSpec<StoredTodo>;
   private _createTodoDto?: TypeSpec<CreateTodoDto>;
   private _updateTodoDto?: TypeSpec<UpdateTodoDto>;

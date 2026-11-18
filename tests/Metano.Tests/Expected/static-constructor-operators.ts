@@ -1,9 +1,9 @@
 import { isInt32, typeInitializer } from "metano-runtime";
 
 export class Meter {
-  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("Meter", () => {
+  static readonly #$init = /* @__PURE__ */ typeInitializer("Meter", () => {
     Meter.scale = 10;
-  }));
+  }) as () => void;
 
   static #scale$: number = 0;
   v: number = (Meter.#$init(), 0);

@@ -1,12 +1,12 @@
 import { isBool, isChar, isFloat64, isInt32, isString } from "metano-runtime";
 
 export class Acct {
-  protected static readonly byAcctId: unique symbol = (/* @__PURE__ */ Symbol("Acct(int id)"));
-  protected static readonly byAcctCode: unique symbol = (/* @__PURE__ */ Symbol("Acct(string code)"));
-  protected static readonly byAcctIdCode: unique symbol = (/* @__PURE__ */ Symbol("Acct(int id, string code)"));
-  protected static readonly byAcctFlag: unique symbol = (/* @__PURE__ */ Symbol("Acct(bool flag)"));
-  protected static readonly byAcctRate: unique symbol = (/* @__PURE__ */ Symbol("Acct(double rate)"));
-  protected static readonly byAcctTag: unique symbol = (/* @__PURE__ */ Symbol("Acct(char tag)"));
+  protected static readonly byAcctId = /* @__PURE__ */ Symbol("Acct(int id)");
+  protected static readonly byAcctCode = /* @__PURE__ */ Symbol("Acct(string code)");
+  protected static readonly byAcctIdCode = /* @__PURE__ */ Symbol("Acct(int id, string code)");
+  protected static readonly byAcctFlag = /* @__PURE__ */ Symbol("Acct(bool flag)");
+  protected static readonly byAcctRate = /* @__PURE__ */ Symbol("Acct(double rate)");
+  protected static readonly byAcctTag = /* @__PURE__ */ Symbol("Acct(char tag)");
   readonly how: string = "";
 
   constructor(overload: typeof Acct.byAcctId, id: number);

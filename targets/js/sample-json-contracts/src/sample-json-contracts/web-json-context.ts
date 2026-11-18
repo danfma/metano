@@ -18,7 +18,7 @@ import { SilenceClip } from "./silence-clip";
 import { SoftNums } from "./soft-nums";
 
 export class WebJsonContext extends SerializerContext {
-  private static readonly _default: WebJsonContext = /* @__PURE__ */ new WebJsonContext();
+  private static readonly _default = /* @__PURE__ */ new WebJsonContext() as WebJsonContext;
   private _clip?: TypeSpec<Clip>;
   private _imageClip?: TypeSpec<ImageClip>;
   private _iBase?: TypeSpec<IBase>;
