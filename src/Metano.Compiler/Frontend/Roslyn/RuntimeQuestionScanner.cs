@@ -197,18 +197,29 @@ internal sealed class RuntimeQuestionScanner
             case IInvocationOperation invocation:
                 InspectInvocation(invocation);
                 break;
-            case IDynamicInvocationOperation
-            {
-                Operation: IDynamicMemberReferenceOperation { MemberName: "GetType" } member,
-                Arguments.Length: 0,
-            } dynamicGetType:
-                Record(IrRuntimeQuestionKind.GetType, member.Instance?.Type, dynamicGetType.Syntax);
+            case IDynamicInvocationOperation dynamicCall when IsDynamicGetType(dynamicCall):
+                InspectDynamicGetType(dynamicCall);
                 break;
             case IPropertyReferenceOperation property
                 when RuntimeQuestionFacts.IsUnsupportedTypeMember(property.Property):
                 ReportUnsupportedTypeMember(property.Property, property.Syntax);
                 break;
         }
+    }
+
+    /// <summary>A late-bound <c>d.GetType()</c> on a <c>dynamic</c> receiver.</summary>
+    private static bool IsDynamicGetType(IDynamicInvocationOperation call) =>
+        call
+            is {
+                Operation: IDynamicMemberReferenceOperation { MemberName: "GetType" },
+                Arguments.Length: 0,
+            };
+
+    private void InspectDynamicGetType(IDynamicInvocationOperation call)
+    {
+        var receiver = ((IDynamicMemberReferenceOperation)call.Operation).Instance;
+
+        Record(IrRuntimeQuestionKind.GetType, receiver?.Type, call.Syntax);
     }
 
     /// <summary>

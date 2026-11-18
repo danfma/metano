@@ -58,9 +58,11 @@ internal sealed class RuntimeTypeReachability
         _compilation = compilation;
         _report = report;
         _types = [.. emittedTypes.Select(DescribableType.Of).OfType<DescribableType>()];
+
         _typesByKey = _types
             .GroupBy(type => type.Key)
             .ToDictionary(group => group.Key, group => group.First());
+
         _plainObjects = [.. emittedTypes.Where(SymbolHelper.HasPlainObject)];
     }
 

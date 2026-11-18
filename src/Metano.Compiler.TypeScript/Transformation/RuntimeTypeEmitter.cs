@@ -449,6 +449,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         var mask = ir.Members.Aggregate(0L, (all, member) =>
             all | Convert.ToInt64(member.Value, CultureInfo.InvariantCulture)
         );
+
         var value = new TsIdentifier(ValueParameter);
 
         return new TsBinaryExpression(
