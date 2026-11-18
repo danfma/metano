@@ -54,6 +54,15 @@ jobs:
       - name: Smoke-test packed Metano.Build.TypeScript
         run: bash scripts/smoke-test-build-package.sh
 
+      # The tree-shaking gates of spec 011 FR-043, before anything is tagged:
+      # the runtime's side-effect and size-budget suites, and the golden bundle
+      # check of the TUnit suite. Gate-only: they publish nothing.
+      - name: metano-runtime tree-shaking suites
+        run: cd targets/js/metano-runtime && bun run build && bun test test/tree-shaking
+
+      - name: Golden bundle check
+        run: dotnet run --project tests/Metano.Tests/ -- --treenode-filter "/*/*/ExpectedOutputBundleTests/*"
+
       # The 64-bit reference conformance (spec 012 FR-064): the transpiled twin
       # must match the .NET fixtures under bun and Node before anything ships.
       - name: sample-int64-conformance

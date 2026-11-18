@@ -41,6 +41,9 @@ jobs:
             exit 1
           fi
 
+      # Includes the golden bundle check of spec 011 FR-043
+      # (TreeShaking/ExpectedOutputBundleTests), which bundles every golden
+      # with bun, esbuild and Rollup through the runtime's dev dependencies.
       - name: Test
         run: dotnet run --project tests/Metano.Tests/
 
@@ -71,6 +74,12 @@ jobs:
 
       - name: metano-runtime
         run: cd targets/js/metano-runtime && bun run build && bun test
+
+      # Spec 011 FR-043: side-effect-only imports keep no module code (bun,
+      # esbuild, Rollup, after the canary) and the NFR-008 size budgets hold.
+      # `bun test` above runs them too; this step names the gate.
+      - name: metano-runtime tree-shaking suites
+        run: cd targets/js/metano-runtime && bun test test/tree-shaking
 
       # The conformance rows recorded from .NET 10 (tests/BclReference) run
       # under Node as well: Bun and V8 differ on number printing and module
