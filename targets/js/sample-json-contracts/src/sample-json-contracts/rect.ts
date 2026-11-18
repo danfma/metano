@@ -1,4 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { PlainObjectType } from "metano-runtime";
+
 export interface Rect {
   readonly w: number;
   readonly h: number;
@@ -13,3 +15,12 @@ export function isRect(value: unknown): value is Rect {
 
   return typeof v.w === "number" && typeof v.h === "number";
 }
+
+export const Rect$runtimeType: PlainObjectType<Rect> = {
+  kind: "plainObject",
+  name: "Rect",
+  fullName: "SampleJsonContracts.Rect",
+  namespace: "SampleJsonContracts",
+  guard: isRect,
+  test: isRect,
+};

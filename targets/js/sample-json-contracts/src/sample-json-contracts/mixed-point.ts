@@ -1,4 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { PlainObjectType } from "metano-runtime";
+
 export interface MixedPoint {
   readonly x: number;
 }
@@ -12,3 +14,12 @@ export function isMixedPoint(value: unknown): value is MixedPoint {
 
   return typeof v.x === "number";
 }
+
+export const MixedPoint$runtimeType: PlainObjectType<MixedPoint> = {
+  kind: "plainObject",
+  name: "MixedPoint",
+  fullName: "SampleJsonContracts.MixedPoint",
+  namespace: "SampleJsonContracts",
+  guard: isMixedPoint,
+  test: isMixedPoint,
+};

@@ -1,4 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import type { PlainObjectType } from "metano-runtime";
+
 export interface Point {
   readonly x: number;
 }
@@ -12,3 +14,12 @@ export function isPoint(value: unknown): value is Point {
 
   return typeof v.x === "number";
 }
+
+export const Point$runtimeType: PlainObjectType<Point> = {
+  kind: "plainObject",
+  name: "Point",
+  fullName: "SampleJsonContracts.Point",
+  namespace: "SampleJsonContracts",
+  guard: isPoint,
+  test: isPoint,
+};
