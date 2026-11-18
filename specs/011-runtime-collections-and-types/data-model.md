@@ -146,7 +146,8 @@ classDiagram
     class IrUnboxExpression { IrExpression Value; IrTypeRef Target; bool Interop }
     class IrTypeOfExpression { IrTypeRef Type }
     class IrIndexerUpdateExpression { IrExpression Receiver; IrExpression Index; IrLambda Update; bool ReturnsOld }
-    class IrInlineCodeExpression { IReadOnlyList~IrInlineCodePart~ Parts; IrTypeRef? ResultType; TargetLanguage Target; bool IsStatement }
+    class IrInlineCodeExpression { IReadOnlyList~IrInlineCodePart~ Parts; IrTypeRef? ResultType; TargetLanguage Language }
+    class IrInlineCodeStatement { IReadOnlyList~IrInlineCodePart~ Parts; TargetLanguage Language }
     class IrUnsafeCastExpression { IrExpression Value; IrTypeRef Target }
     class IrAsDynamicExpression { IrExpression Value }
     class IrDynamicMemberAccess { IrExpression Receiver; string Name }
@@ -171,7 +172,7 @@ Notes:
 - `ReachabilityResult.QuestionedCollectionKinds` drives FR-008: a collection construction passes `$typeArguments$<Class>` only when its kind is in the set.
 - `IrBoxExpression` / `IrUnboxExpression` come from Roslyn `IConversionOperation` with `Conversion.IsBoxing` over an enum or `[InlineWrapper]` type (FR-050); `Interop` marks the gated unbox at `[Import]` / `[Emit]` / `Js.Code` / `dynamic` / `AsDynamic()` boundaries (FR-051: only when the argument's static type can hold a box and the compilation has a boxing conversion). Both are skipped when `[assembly: DisableBoxing]` is present or the source is an open type parameter. Dart ignores them.
 - `IrIndexerUpdateExpression` is the evaluate-once node for `list[i] op= v`, `list[i]++`, `dict[k] ??= v` (FR-010); it renders as `update` / `updateReturningOld`.
-- `IrInlineCodePart` is `Text(string)` or `Hole(IrExpression)`. `ResultType` is the type argument of `Js.Code<T>` and `null` for the untyped `Js.Code` (whose C# result is `dynamic`), so a target decides the cast from the node alone, independent of how `dynamic` maps; `Target` is the target the API belongs to (`TypeScript` for `Metano.Interop.Js`), a fact of the API, not of the running emission.
+- `IrInlineCodePart` is `Text(string)` or `Hole(IrExpression, IrSourceLocation?)`; the hole's location lets a target report `MS0056`. `ResultType` is the type argument of `Js.Code<T>` and `null` for the untyped `Js.Code` (whose C# result is `dynamic`), so a target decides the cast from the node alone, independent of how `dynamic` maps; `Language` is the target language the API belongs to (`TypeScript` for `Metano.Interop.Js`), a fact of the API, not of the running emission. `IrInlineCodeStatement` is the statement form (a `Js.Code` call that is an expression statement, an expression-bodied `void` member included); the target decides how the text ends.
 - The existing `IrIsPatternExpression` + `IrTypePattern` keep working; `IrTypeTestExpression` is the node the extractor produces for `x is T` without a designator so the target can render helpers without a pattern walk. Both carry the classification so no target recomputes it.
 - `IrCatchClause.Filter` was delivered ahead by #628 (`ExtractCatch` reads `CatchFilterClauseSyntax`), together with the computed `CatchesEveryException` (a general `catch` or `catch (System.Exception)`) and `HandlesEveryException` (that, without a filter), and with `IrRethrowStatement` for `throw;` (TS: `throw e$;`, Dart: `rethrow;`). The try statement keeps its clause list; **each target** renders the single-catch chain from it (FR-015), so the core holds the data and no target recomputes the arm order.
 
@@ -183,7 +184,7 @@ Notes:
 | `Transformation/RuntimeTypeEmitter` | `IrRuntimeTypeDescriptor` → the lazy `static get $runtimeType()` returning a data literal + module-level `let X$rt` on classes; an exported data literal `X$runtimeType` for interfaces, plain objects, enums, unions (FR-018–FR-020, FR-029, FR-044). No factory call is emitted. |
 | `Bridge/IrToTsRuntimeTestBridge` | renders every `IrRuntimeTypeTest` category (replaces `BuildTypeTest`; `IrTypeCheckBuilder.Generate` delegates to it, FR-021); `withImplementers` at cross-package interface tests (FR-019). |
 | `Bridge/IrToTsCatchChainBridge` + `TypeScript/AST/TsTryStatement` | FR-015: a real AST node printed by `Printer`, replacing `MapTry`'s string rendering. |
-| `Bridge/IrToTsInlineCodeBridge` | FR-031 / FR-032. |
+| `Bridge/IrToTsInlineCodeBridge` | FR-031 / FR-032: holes as operand slots, the statement-form `;` rule, and the `MS0056` string-literal lexer (JS lexical knowledge stays in the target). |
 | `Analysis/IrRuntimeRequirementScanner` | imports for `isType`, `asType`, `castTo`, `getRuntimeType`, `getRuntimeTypeFromType`, `getNumberType`, `box`, `unbox`, `enumFromRaw`, `tryFilter`, `withImplementers`, `fromEnd`, `isIterable`, `asArray`, `toException`, descriptors, factories, collection classes and per-class exception modules; nothing for an unreached type. |
 | `Transformation/TypeGuardBuilder` | plain-object guard synthesis shared with 009 / 010; a `[StrictUnionGuard]` base's `isBase` is emitted into a separate `<base>.guard.ts` source file (a new `TsSourceFile` beside the base's) that imports the base and the variant guards and holds the `variants` table; `ImportCollector` resolves `isBase` references to the guard module (FR-029). |
 | `JsonSerializerContextTransformer` | `runtimeType` thunk on specs; `list` / `dictionary` / … descriptor kinds (FR-028). |

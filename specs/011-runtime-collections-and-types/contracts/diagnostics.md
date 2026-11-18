@@ -66,7 +66,7 @@ The containing member or type carrying `[Ignore(<that target>)]` suppresses the 
 
 **MS0052 — InvalidInlineCode** (Error).
 
-1. The `code` argument is not a constant string expression or an interpolated string with constant literal parts.
+1. The `code` argument is not a constant string expression or an interpolated string with constant literal parts (an interpolated string nested in a concatenation included), or `Js.Code` is used as a method group instead of being invoked.
 2. A hole contains a `ref` / `out` argument, a `dynamic`-bound operation that MS0053 rejects, or an `await`.
 3. A hole has an alignment or format clause (`{x,8}`, `{x:F2}`): a hole is code, not formatted text (added by stage 011f).
 
@@ -91,6 +91,8 @@ The containing member or type carrying `[Ignore(<that target>)]` suppresses the 
 Implicit conversions from `dynamic` are **not** a reason (FR-030: they emit nothing and are not diagnosed). The message ends with: `Use x.UnsafeCast<T>() to state that the cast is intentionally unchecked.`
 
 **MS0056 — InlineCodeHoleInStringLiteral** (Warning).
+
+Reported by the TypeScript target, which owns the JS lexical rules (stage 011f).
 
 1. A `Js.Code` hole falls inside a JS string literal of the text (`'…{x}…'`, `"…{x}…"`, `` `…{x}…` `` with no `${`): the hole is spliced as code, not as a quoted value. Tested with a single-quoted, a double-quoted and a template-literal case. The output is emitted.
 

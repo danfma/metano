@@ -387,7 +387,7 @@ A package without entry points gets `"sideEffects": []`.
 ## `dynamic`, inline code, escape hatches (`dynamic-and-interop.ts`)
 
 ```csharp
-dynamic cfg = Js.Code("globalThis.__config");
+dynamic cfg = Js.Code("(globalThis as any).__config");   // `globalThis.__config` alone fails tsgo --strict (TS7017)
 string name = cfg.AppName; int n = (int)cfg.retries; var shape = (Circle)cfg.shape; var ok = cfg is Circle;
 F(cfg); return cfg;   // void F(string s); string-returning method
 var el = Js.Code<HtmlElement>($"document.querySelector({selector})");
@@ -400,7 +400,7 @@ var unchecked1 = (List<string>)boxedJsArray;                 // MS0055
 ```ts
 import { createElement } from "inferno-create-element";
 
-const cfg: any = (globalThis.__config);
+const cfg: any = ((globalThis as any).__config) as any;
 const name = cfg.AppName;                                     // implicit conversion: nothing emitted (FR-030)
 const n = Math.trunc(cfg.retries);                            // the static (int)double lowering
 const shape = castTo(cfg.shape, Circle.$runtimeType);         // explicit reference cast: checked
