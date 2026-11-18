@@ -55,7 +55,8 @@ byte-identical.
 > amendment carries no `compiler=` segment and simply misses once.
 > The `Metano.Build` target reruns on an upgrade through a toolchain
 > key file in its `Inputs`; see the header of
-> `src/Metano.Build/build/Metano.Build.targets`.
+> `src/Metano.Build/build/Metano.Build.targets` (since 3.0.0,
+> `src/Metano.Build.Targets/Metano.Build.TypeScript.targets`, ADR-0029).
 
 `TranspilerHost.RunAsync` short-circuits the pipeline when **all** of
 the following match the cached fingerprint:

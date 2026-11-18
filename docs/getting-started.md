@@ -83,8 +83,8 @@ Edit the generated `.csproj`:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Metano" Version="2.6.*" />
-    <PackageReference Include="Metano.Build" Version="2.6.*" />
+    <PackageReference Include="Metano" Version="3.0.*" />
+    <PackageReference Include="Metano.Build.TypeScript" Version="3.0.*" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -104,15 +104,16 @@ Edit the generated `.csproj`:
 
 - **`Metano`** — the attributes (`[Transpile]`, `[StringEnum]`, etc.) and BCL
   runtime mappings. This is the package your C# code actually references.
-- **`Metano.Build`** — a tiny MSBuild integration that hooks into
+- **`Metano.Build.TypeScript`** — a tiny MSBuild integration that hooks into
   `dotnet build` and runs the transpiler as a post-build step. No code of
-  its own — just a `.targets` file that invokes the `metano-typescript` CLI
-  automatically.
+  its own — just `.targets` files that invoke the `metano-typescript` CLI
+  automatically. (It replaces the 2.x `Metano.Build` package; see
+  [Migrating to 3.0](../README.md#migrating-to-30-build-package).)
 
 **One .NET tool: `Metano.Compiler.TypeScript`**
 
-`Metano.Build` does not bundle the compiler (the target language is your
-choice), so install the TypeScript compiler as a .NET tool. A local tool
+`Metano.Build.TypeScript` does not bundle the compiler (a .NET tool cannot be
+a NuGet dependency), so install the TypeScript compiler as a .NET tool. A local tool
 manifest at the root of your repository pins the version for everyone who
 clones it:
 
@@ -132,7 +133,7 @@ same instructions instead of a generic "command not found" message. Set
 `<MetanoSkipToolCheck>true</MetanoSkipToolCheck>` to bypass the check (for
 example, when a wrapper script provides the tool another way).
 
-**Upgrading Metano.** Bump the `Metano` and `Metano.Build` packages and the
+**Upgrading Metano.** Bump the `Metano` and `Metano.Build.TypeScript` packages and the
 tool (`dotnet tool update Metano.Compiler.TypeScript`) to the same version.
 The next `dotnet build` regenerates the output and the `metano-runtime` range
 in `package.json` even when no C# source changed: the build target tracks the
@@ -141,6 +142,10 @@ incremental cache is keyed on the compiler release. A tool installed with
 `--tool-path` is not tracked; after updating one, delete
 `<MetanoOutputDir>/.metano-stamp` (`dotnet build --no-incremental` does not
 remove it).
+
+Every `Metano*` property can be overridden for the TypeScript target alone
+with its `MetanoTs*` form (`MetanoTsOutputDir`, `MetanoTsImportAlias`, ...);
+the unprefixed name is the global value every enabled Metano target reads.
 
 **Key property: `MetanoOutputDir`**
 

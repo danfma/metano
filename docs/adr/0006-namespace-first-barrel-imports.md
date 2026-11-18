@@ -145,7 +145,7 @@ diagnostics before tsgo chokes on them.
 
 Ships the root-barrel follow-up tracked in issue #22. Packages that
 opt in via `--namespace-barrels` (CLI) or `<MetanoNamespaceBarrels>true</MetanoNamespaceBarrels>`
-(MSBuild, routed through `Metano.Build.targets`) receive an
+(MSBuild, routed through `Metano.Build.targets`; `Metano.Build.TypeScript.targets` since 3.0.0) receive an
 additional `src/index.ts` that aggregates every leaf barrel under
 nested `export namespace` blocks mirroring the C# namespace hierarchy:
 

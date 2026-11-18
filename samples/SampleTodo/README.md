@@ -51,7 +51,7 @@ The generated `package.json` has `"name": "sample-todo"` and is consumed by
 From the repository root:
 
 ```bash
-# Build the C# project (auto-transpiles via Metano.Build integration)
+# Build the C# project (auto-transpiles via the Metano.Build.TypeScript integration)
 dotnet build samples/SampleTodo/SampleTodo.csproj
 
 # Or build everything

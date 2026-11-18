@@ -710,6 +710,32 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   constructor, accessors and methods. Every golden and generated sample changes by blank
   lines only. Dart output is unchanged.
 
+### ⚠ `Metano.Build` becomes `Metano.Build.TypeScript` (baseline FR-085 to FR-087; #328)
+
+- The MSBuild package is now one package per language target (ADR-0029).
+  `Metano.Build.TypeScript` replaces `Metano.Build`, which gets no 3.x version
+  and will be deprecated on nuget.org. Swap the `PackageReference`; every
+  `Metano*` property keeps its name. A project that imports the targets by
+  path imports `Metano.Build.TypeScript.targets` (next to
+  `Metano.Build.Common.targets`).
+- Each setting `Metano<S>` is the global value and `MetanoTs<S>` overrides it
+  for the TypeScript target. With more than one target, prefer the prefixed
+  form of `MetanoCompilerProject`, `MetanoExtraArgs` and
+  `MetanoPostBuildCommand`: the global value reaches every enabled target.
+  Two targets resolving to the same output directory fail with the new
+  `METANOBUILD002` error.
+- Settings are resolved when the build runs, so values set in
+  `Directory.Build.targets` now apply (2.x ignored a `MetanoOutputDir` set
+  there).
+- `MetanoPostBuildCommand` no longer runs for a disabled target
+  (`MetanoEnabled=false`); it still runs on every build of an enabled one,
+  also when the transpile is up to date. `BeforeTargets` / `AfterTargets`
+  hooks on `MetanoTranspile` keep their 2.x order.
+- The toolchain key file is renamed
+  `<project>.MetanoToolchain.typescript.cache`, so the first 3.0 build reruns
+  the transpile once. A `Metano.Build.TypeScript` packaging smoke test now
+  gates CI and the release.
+
 ### Toolchain
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.

@@ -144,18 +144,18 @@ export class TodoItem {
 ## Getting Started
 
 The default walkthrough targets TypeScript, because that is the production path
-and the one wired into `Metano.Build`.
+and the one wired into `Metano.Build.TypeScript`.
 
 Prerequisites: .NET SDK 10.0 or later (stable), the `Metano.Compiler.TypeScript`
 .NET tool, and a JS runtime such as Bun.
 
 ```bash
 dotnet add package Metano
-dotnet add package Metano.Build
+dotnet add package Metano.Build.TypeScript
 ```
 
-`Metano.Build` does not bundle the compiler — the target language is your
-choice — so install the TypeScript compiler as a .NET tool. A local tool
+`Metano.Build.TypeScript` does not bundle the compiler (a .NET tool cannot be a
+NuGet dependency), so install the TypeScript compiler as a .NET tool. A local tool
 manifest at the repository root keeps the version pinned for everyone:
 
 ```bash
@@ -195,6 +195,41 @@ the generated `.ts` files without building `dist` first (Vite
 `"customConditions": ["source"]`). Default resolution keeps using `dist`.
 
 The full walkthrough is in [Getting Started](docs/getting-started.md).
+
+### Migrating to 3.0 (build package)
+
+`Metano.Build` is replaced by `Metano.Build.TypeScript` and gets no 3.x
+version; each language target now has its own `Metano.Build.<Target>` package
+(ADR-0029). Swap the package reference, and keep the tool on the same version:
+
+```xml
+<!-- before -->
+<PackageReference Include="Metano.Build" Version="2.*" />
+<!-- after -->
+<PackageReference Include="Metano.Build.TypeScript" Version="3.*" />
+```
+
+Every `Metano*` property keeps its name and meaning. A project that imports
+the targets by path imports `Metano.Build.TypeScript.targets` instead (it
+loads `Metano.Build.Common.targets` from the same folder). Three behaviour
+changes:
+
+- Settings are read when the build runs, so values set in
+  `Directory.Build.targets` now apply (2.x ignored a `MetanoOutputDir` set
+  there).
+- `MetanoPostBuildCommand` no longer runs for a disabled target
+  (`MetanoEnabled=false`); it still runs on every build of an enabled one.
+- The toolchain key file is now
+  `obj/.../<project>.MetanoToolchain.typescript.cache`, so the first 3.0 build
+  reruns the transpile once.
+
+Several targets per project: each `Metano<S>` setting is the global value and
+`MetanoTs<S>` overrides it for TypeScript only (`MetanoDart<S>` for a future
+Dart package). A global `MetanoCompilerProject`, `MetanoExtraArgs` or
+`MetanoPostBuildCommand` reaches every enabled target, so set the prefixed
+form when you enable more than one. Two targets resolving to the same output
+directory fail with `METANOBUILD002`. Install each target's tool in a
+committed `.config/dotnet-tools.json` and run `dotnet tool restore`.
 
 For the experimental Dart backend:
 

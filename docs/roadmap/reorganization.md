@@ -15,7 +15,7 @@ backend. The current architecture is centered on:
 - `src/Metano.Compiler`: target-agnostic compiler core.
 - `src/Metano.Compiler.TypeScript`: TypeScript target.
 - `src/Metano.Compiler.Dart`: Dart target.
-- `src/Metano.Build`: MSBuild integration.
+- `src/Metano.Build.Targets` + `src/Metano.Build.TypeScript`: MSBuild integration (`src/Metano.Build` before 3.0.0, ADR-0029).
 
 The core currently has these notable folders/namespaces:
 

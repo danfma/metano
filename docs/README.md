@@ -24,7 +24,7 @@ flowchart TD
 
 | Guide | Read when you want to |
 |---|---|
-| [Getting Started](getting-started.md) | Create a first C# source project, configure `Metano.Build`, and consume the generated TypeScript package. |
+| [Getting Started](getting-started.md) | Create a first C# source project, configure `Metano.Build.TypeScript`, and consume the generated TypeScript package. |
 | [Attribute Reference](attributes.md) | Choose the right annotation for selection, naming, output shape, module emission, imports, guards, and target-specific TypeScript behavior. |
 | [BCL Type Mappings](bcl-mappings.md) | Understand how primitives, collections, temporal values, `decimal`, `Guid`, LINQ, async, strings, and math are emitted. The current reference is TypeScript-focused. |
 | [Overloads](overloads.md) | Use the factories and fast paths generated for overloaded constructors and methods, predict or pin their names, and migrate overload code from 2.x. |

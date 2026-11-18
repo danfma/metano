@@ -8,7 +8,7 @@ transpiled into a TypeScript entry module.
 - `Program.cs` — a top-level `Console.WriteLine("Hello, World!")`.
 - `AssemblyInfo.cs` — enables whole-assembly transpilation with
   `[TranspileAssembly]`.
-- `HelloWorld.csproj` — wires `Metano.Build` to generate TypeScript into the
+- `HelloWorld.csproj` — wires `Metano.Build.TypeScript` to generate TypeScript into the
   target package on build.
 
 ## Generated Code

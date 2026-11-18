@@ -1,6 +1,6 @@
 # ADR-0029 — Per-target MSBuild packages with a shared worker
 
-**Status:** Proposed — implemented by #328 (baseline FR-085 to FR-087), ships in 3.0.0
+**Status:** Accepted — implemented by #328 (baseline FR-085 to FR-087), ships in 3.0.0
 **Date:** 2026-11-18
 
 ## Context
@@ -36,16 +36,29 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
   `Metano.Build.Dart` is one `.targets` file plus one `.csproj`. `Metano.Build` gets no 3.x
   version (no stub, no metapackage); it is deprecated on nuget.org after the release.
 - **One shared source file, linked.** `Metano.Build.Common.targets` holds the target-independent
-  worker: user-input collection, toolchain key, tool probe, CLI `Exec`, asset projection,
-  post-build command, the aggregate `MetanoTranspile` / `MetanoPostBuild` targets and the
-  `METANOBUILD002` check. Every package links the same source file next to its own `.targets` in
-  `build/` and `buildTransitive/`; an import guard loads it once when a project references two
-  build packages. No third NuGet package.
+  part: user-input collection, toolchain keys, the `METANOBUILD002` check, the worker (tool
+  probe, asset projection, CLI `Exec`), the post-build commands and the aggregate
+  `MetanoTranspile` / `MetanoPostBuild` targets. Both `.targets` files live in one source folder,
+  `src/Metano.Build.Targets/`; each package project (`src/Metano.Build.TypeScript/`) packs its
+  per-target file and the shared one side by side in `build/` and `buildTransitive/`, so the
+  per-target file imports the shared one from its own directory in the repository and in the
+  package alike. An import guard loads it once when a project references two build packages. No
+  third NuGet package.
+- **Registration contract.** The shared file never reads a prefixed name. Each per-target
+  resolve target registers one `_MetanoEnabledTarget` item per enabled target (language tag,
+  `OutputDir`, `OutputDirFull`, `ToolchainKeyFile`, `CompilerProject`, `ToolStoreName`,
+  `PostBuildCommand`) and appends itself and its transpile target to
+  `_MetanoResolveTargetsDependsOn` / `_MetanoTranspileTargets`; the shared file batches over the
+  items (toolchain keys, `METANOBUILD002`, post-build).
 - **One resolution rule.** Each per-target file spells out one line per setting,
   `$([MSBuild]::ValueOrDefault('$(MetanoTs<S>)', '$(Metano<S>)'))` then the target default,
   inside a resolve target (not at evaluation, so `Directory.Build.targets` values count). The
   unprefixed names stay the global settings, so a single-target project migrates by swapping the
   `PackageReference`.
+- **Hook order kept.** `MetanoTranspile` prepares every target in its dependencies and runs the
+  per-target transpile targets from its body (`CallTarget`; everything they read was produced by
+  the dependencies), so a user `BeforeTargets="MetanoTranspile"` hook still runs before any tool
+  and an `AfterTargets` hook after every target, as in 2.x.
 - **Parent decides, worker executes.** Each per-target MSBuild target (`MetanoTranspileTs`) owns
   its incremental check (`Inputs` = user sources, assets, project file, its toolchain key;
   `Outputs` = its `.metano-stamp`). Only when out of date does it call the shared worker through
@@ -73,6 +86,10 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
 - (−) The override rule is new public surface; the settings list in FR-086 is the contract and a
   test pins it to the `.targets` file.
 - (−) An empty per-target value cannot clear a global one (MSBuild treats empty as unset).
+- (−) A global `MetanoCompilerProject`, `MetanoExtraArgs` or `MetanoPostBuildCommand` reaches
+  every enabled target; the docs recommend the prefixed form with more than one target.
+- (−) A disabled target no longer runs its post-build command (2.x ran it even with
+  `MetanoEnabled=false`); listed in the 3.0 migration notes.
 
 ## Alternatives considered
 
@@ -89,7 +106,10 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
 
 ## References
 
-- `src/Metano.Build/build/Metano.Build.targets` (2.x, to be split)
+- `src/Metano.Build.Targets/Metano.Build.Common.targets`, `src/Metano.Build.Targets/Metano.Build.TypeScript.targets`,
+  `src/Metano.Build.TypeScript/Metano.Build.TypeScript.csproj` (2.x: `src/Metano.Build/build/Metano.Build.targets`)
+- Tests: `tests/Metano.Tests/Build/` (synthetic second target, settings contract, toolchain keys);
+  `scripts/smoke-test-build-package.sh` (packed package, CI and release gate)
 - [ADR-0001](0001-target-agnostic-core.md), [ADR-0021](0021-incremental-cache.md)
 - Issues #328 (this decision), #230 (single canonical `.targets`), #241 (missing-tool detection),
   #28 (Dart target), #32 (tooling and packaging umbrella)

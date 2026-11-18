@@ -84,7 +84,8 @@ src/
 │   ├── Dart/                          ← Dart AST + Printer + IrBodyPrinter
 │   ├── DartTarget.cs                  ← Implements ITranspilerTarget
 │   └── Commands.cs                    ← `metano-dart` CLI
-└── Metano.Build/                      ← MSBuild .targets file
+├── Metano.Build.Targets/              ← MSBuild .targets sources (shared + per target)
+└── Metano.Build.TypeScript/           ← packs the TypeScript MSBuild package
 ```
 
 ## The five-project split
@@ -172,16 +173,21 @@ it to idiomatic code for their language.
 
 - Target: `net10.0`, `OutputType=Exe`, `PackAsTool=true`
 - Depends on: `Metano.Compiler`
-- Shipped as NuGet package `Metano.Compiler.Dart`
+- Not published yet: it is not in `Metano-packages.slnx` (#28)
 
-### `Metano.Build` (assembly / NuGet: `Metano.Build`)
+### `Metano.Build.TypeScript` (NuGet: `Metano.Build.TypeScript`)
 
-A tiny MSBuild integration package. Contains no code — just a `.targets` file
-that hooks into the consumer's `dotnet build` and invokes `metano-typescript`.
+A tiny MSBuild integration package, one per language target (ADR-0029; it
+replaces the 2.x `Metano.Build`). Contains no code — just
+`Metano.Build.TypeScript.targets` (setting resolution, CLI flags, tool command)
+and the shared `Metano.Build.Common.targets` (incremental check helpers,
+toolchain key, worker, post-build), both from `src/Metano.Build.Targets/`. It
+hooks into the consumer's `dotnet build` and invokes `metano-typescript`.
 
 - Target: `netstandard2.0` (for maximum NuGet compatibility)
-- No dependencies
-- Shipped as NuGet package `Metano.Build`
+- No dependencies; the `metano-typescript` tool is installed separately
+- Shipped as NuGet package `Metano.Build.TypeScript`
+- No Dart build package yet (#28)
 
 ## The shared IR
 
