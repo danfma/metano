@@ -128,7 +128,7 @@ public static class IrToDartClassBridge
     /// for its synthesized value equality.
     /// <para>
     /// A record that declares its own equality members
-    /// (<see cref="IrRecordEqualityOverrides"/>) keeps them: a
+    /// (<see cref="IrValueEqualitySynthesis"/>) keeps them: a
     /// <c>GetHashCode</c> override already became the <c>hashCode</c> getter,
     /// so none is synthesized, and with a user <c>Equals(R? other)</c> the
     /// synthesized <c>operator ==</c> delegates to it, as C#'s synthesized
@@ -151,12 +151,12 @@ public static class IrToDartClassBridge
             .ToList();
 
         members.Add(
-            IrRecordEqualityOverrides.DeclaresEquals(ir)
+            IrValueEqualitySynthesis.DeclaresEquals(ir)
                 ? BuildEqualsOperatorOverUserEquals(className)
                 : BuildEqualsOperator(className, fields)
         );
 
-        if (!IrRecordEqualityOverrides.DeclaresHashCode(ir))
+        if (!IrValueEqualitySynthesis.DeclaresHashCode(ir))
             members.Add(BuildHashCodeGetter(fields));
 
         members.Add(BuildCopyWithMethod(className, primaryConstructorName, fields));

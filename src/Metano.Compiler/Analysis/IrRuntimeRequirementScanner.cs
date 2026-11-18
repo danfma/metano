@@ -106,7 +106,7 @@ public static class IrRuntimeRequirementScanner
         {
             // A type that declares its own GetHashCode / Equals gets no
             // synthesized hashCode / equals, so nothing would use the helper.
-            if (!IrRecordEqualityOverrides.DeclaresHashCode(c))
+            if (!IrValueEqualitySynthesis.DeclaresHashCode(c))
                 acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
 
             if (IrValueEqualitySynthesis.SynthesizesRecordMembers(c))
@@ -120,7 +120,7 @@ public static class IrRuntimeRequirementScanner
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
             // line lands only when a non-strict field actually exists.
-            if (!IrRecordEqualityOverrides.DeclaresEquals(c))
+            if (!IrValueEqualitySynthesis.DeclaresEquals(c))
                 AddEqualityHelpers(c, acc);
         }
     }
