@@ -53,11 +53,11 @@ internal static class TsOperatorNaming
     /// (<c>"CheckedAddition"</c> → <c>checkedAdd</c>). <c>null</c> for a kind
     /// with no helper.
     /// </summary>
-    public static string? KindNameOf(string kind) =>
-        kind.StartsWith(CheckedKindPrefix, StringComparison.Ordinal)
-        && UncheckedKindNameOf(kind[CheckedKindPrefix.Length..]) is { } uncheckedName
+    public static string? KindNameOf(IrOperatorKind kind) =>
+        kind.Name.StartsWith(CheckedKindPrefix, StringComparison.Ordinal)
+        && UncheckedKindNameOf(kind.Name[CheckedKindPrefix.Length..]) is { } uncheckedName
             ? "checked" + char.ToUpperInvariant(uncheckedName[0]) + uncheckedName[1..]
-            : UncheckedKindNameOf(kind);
+            : UncheckedKindNameOf(kind.Name);
 
     private static string? UncheckedKindNameOf(string kind) =>
         kind switch

@@ -162,20 +162,15 @@ public static class IrMethodExtractor
         && first.Type.IsDeclaringTypeOf(method);
 
     /// <summary>
-    /// The operator kind of a user-defined operator or conversion: its
-    /// metadata name without the <c>op_</c> prefix (<c>op_Addition</c> →
-    /// <c>Addition</c>, <c>op_Implicit</c> → <c>Implicit</c>), the one
-    /// spelling its declaration (<see cref="IrMethodSemantics.OperatorKind"/>)
-    /// and its applications (<see cref="IrUserOperator.Kind"/>) share;
-    /// <c>null</c> for any other method.
+    /// The operator kind of a user-defined operator or conversion
+    /// (<c>op_Addition</c> → <c>Addition</c>, <c>op_Implicit</c> →
+    /// <c>Implicit</c>); <c>null</c> for any other method.
     /// </summary>
-    internal static string? OperatorKindOf(IMethodSymbol method)
+    internal static IrOperatorKind? OperatorKindOf(IMethodSymbol method)
     {
         if (method.MethodKind is not (MethodKind.UserDefinedOperator or MethodKind.Conversion))
             return null;
 
-        return method.Name.StartsWith("op_", StringComparison.Ordinal)
-            ? method.Name[3..]
-            : method.Name;
+        return IrOperatorKind.FromMetadataName(method.Name);
     }
 }

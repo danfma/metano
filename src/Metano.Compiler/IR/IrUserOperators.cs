@@ -10,7 +10,7 @@ namespace Metano.Compiler.IR;
 /// <param name="MetadataName">The operator's C# metadata name
 /// (<c>op_Addition</c>, <c>op_UnaryNegation</c>, <c>op_Implicit</c>).</param>
 /// <param name="Kind">The operator kind, as
-/// <see cref="IrMethodSemantics.OperatorKind"/> spells it at the declaration
+/// <see cref="IrMethodSemantics.OperatorKind"/> holds it at the declaration
 /// (<c>Addition</c>, <c>CheckedAddition</c>, <c>Implicit</c>).</param>
 /// <param name="Overload">The overload of a dispatched operator group Roslyn
 /// resolved; <c>null</c> for a single operator and for a conversion.</param>
@@ -21,7 +21,7 @@ namespace Metano.Compiler.IR;
 public sealed record IrUserOperator(
     IrTypeReference DeclaringType,
     string MetadataName,
-    string Kind,
+    IrOperatorKind Kind,
     IrOverloadRef? Overload,
     string? Pin,
     IrConversionName? ConversionName

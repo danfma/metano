@@ -692,7 +692,7 @@ public static class IrToDartClassBridge
             IsAsync: method.Semantics.IsAsync,
             Body: rewriter.Rewrite(method.Body),
             OperatorSymbol: method.Semantics.IsOperator
-                ? MapOperatorToDart(method.Semantics.OperatorKind)
+                ? MapOperatorToDart(method.Semantics.OperatorKind?.Name)
                 : null
         );
 
