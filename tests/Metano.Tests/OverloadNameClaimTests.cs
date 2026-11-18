@@ -32,6 +32,7 @@ public class OverloadNameClaimTests
         await Assert.That(report).IsNotNull();
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
         await Assert
             .That(report.Message)
             .IsEqualTo(
@@ -39,6 +40,7 @@ public class OverloadNameClaimTests
                     + "factory and selector are emitted as 'fromCents$' and 'byFeeCents$' "
                     + "(spec 013 FR-004)."
             );
+
         await Assert.That(LineOf(report)).IsEqualTo(8);
         await Assert.That(files["fee.ts"]).Contains("static fromCents$(cents: number): Fee {");
     }
@@ -68,12 +70,14 @@ public class OverloadNameClaimTests
             .ToList();
 
         await Assert.That(reports.Count).IsEqualTo(2);
+
         await Assert
             .That(reports[0].Message)
             .IsEqualTo(
                 "Fast path 'Cash.fromAmount' of 'From(decimal amount)' collides with the factory "
                     + "of 'Cash(decimal amount)'; it is emitted as 'fromAmount$' (spec 013 FR-004)."
             );
+
         await Assert.That(LineOf(reports[0])).IsEqualTo(10);
         await Assert.That(LineOf(reports[1])).IsEqualTo(12);
         await Assert.That(files["cash.ts"]).Contains("return Cash.fromCents$(args[0] as number);");
@@ -106,6 +110,7 @@ public class OverloadNameClaimTests
                 "Selector 'Shape.byShapeScale' collides with the user member 'byShapeScale'; the "
                     + "generated selector is emitted as 'byShapeScale$' (spec 013 FR-004)."
             );
+
         await Assert.That(files["shape.ts"]).Contains("typeof Shape.byShapeScale$, scale: number");
     }
 
@@ -136,6 +141,7 @@ public class OverloadNameClaimTests
                 "Fast path 'Adder.addX' of 'Add(int x)' collides with the user member 'addX'; it "
                     + "is emitted as 'addX$' (spec 013 FR-004)."
             );
+
         await Assert.That(LineOf(report)).IsEqualTo(8);
         await Assert.That(files["adder.ts"]).Contains("return this.addX$(args[0] as number);");
     }
@@ -168,6 +174,7 @@ public class OverloadNameClaimTests
         await Assert.That(report).IsNotNull();
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+
         await Assert
             .That(report.Message)
             .IsEqualTo(
@@ -175,6 +182,7 @@ public class OverloadNameClaimTests
                     + "'Money(decimal amount)'; rename the member or give it [Name], or pin the "
                     + "constructor's suffix with [Name] (spec 013 FR-034)."
             );
+
         await Assert.That(LineOf(report)).IsEqualTo(16);
     }
 
@@ -197,6 +205,7 @@ public class OverloadNameClaimTests
         await Assert.That(files["solo.ts"]).Contains("constructor(v: number)");
         await Assert.That(files["solo.ts"]).DoesNotContain("unique symbol");
         await Assert.That(files["solo.ts"]).DoesNotContain("static fromV(");
+
         await Assert
             .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed))
             .IsNull();
@@ -258,6 +267,7 @@ public class OverloadNameClaimTests
             .ToList();
 
         await Assert.That(reports.Count).IsEqualTo(2);
+
         await Assert
             .That(reports[0].Message)
             .IsEqualTo(
@@ -265,6 +275,7 @@ public class OverloadNameClaimTests
                     + "of 'Money(decimal amount)' inherited from 'Money'; it is emitted as "
                     + "'fromAmount$' (spec 013 FR-004)."
             );
+
         await Assert
             .That(reports[1].Message)
             .IsEqualTo(
@@ -272,6 +283,7 @@ public class OverloadNameClaimTests
                     + "'Money(int cents)' inherited from 'Money'; it is emitted as 'fromCents$' "
                     + "(spec 013 FR-004)."
             );
+
         await Assert.That(files["cash.ts"]).Contains("static fromAmount$(amount: Decimal)");
     }
 
@@ -303,9 +315,11 @@ public class OverloadNameClaimTests
         await Assert
             .That(files["int-box.ts"])
             .Contains("static fromIntBoxValue$(value: number): IntBox {");
+
         await Assert
             .That(files["int-box.ts"])
             .Contains("protected static readonly byIntBoxValue$ = /* @__PURE__ */ Symbol(");
+
         await Assert
             .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed))
             .IsNotNull();
@@ -337,6 +351,7 @@ public class OverloadNameClaimTests
         await Assert
             .That(files["b.ts"])
             .Contains("static override fromKV<K, V>(k: V, v: K): B<K, V> {");
+
         await Assert.That(files["b.ts"]).DoesNotContain("(k: K, v: V): B<K, V>");
     }
 
@@ -370,6 +385,7 @@ public class OverloadNameClaimTests
         await Assert.That(report).IsNotNull();
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
         await Assert
             .That(report.Message)
             .IsEqualTo(
@@ -377,6 +393,7 @@ public class OverloadNameClaimTests
                     + "'Add(int x)' inherited from 'Base'; it is emitted as 'addX$' "
                     + "(spec 013 FR-004)."
             );
+
         await Assert.That(LineOf(report)).IsEqualTo(14);
         await Assert.That(files["hider.ts"]).Contains("  addX$(x: number): number {");
     }
@@ -409,6 +426,7 @@ public class OverloadNameClaimTests
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
         await Assert.That(report).IsNotNull();
+
         await Assert
             .That(report!.Message)
             .IsEqualTo(
@@ -416,6 +434,7 @@ public class OverloadNameClaimTests
                     + "'Add(string s)' inherited from 'Ledger'; it is emitted as 'addS$' "
                     + "(spec 013 FR-004)."
             );
+
         await Assert.That(LineOf(report)).IsEqualTo(14);
         await Assert.That(files["shorty.ts"]).Contains("return this.addS$(args[0] as number);");
     }
@@ -451,6 +470,7 @@ public class OverloadNameClaimTests
         await Assert.That(report).IsNotNull();
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+
         await Assert
             .That(report.Message)
             .IsEqualTo(
@@ -458,6 +478,7 @@ public class OverloadNameClaimTests
                     + "'Base.Add(int x)'; rename the member, or rename the root overload's "
                     + "parameter or pin it with [Name] (spec 013 FR-034)."
             );
+
         await Assert.That(LineOf(report)).IsEqualTo(14);
     }
 
@@ -501,6 +522,7 @@ public class OverloadNameClaimTests
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
 
         await Assert.That(report).IsNotNull();
+
         await Assert
             .That(report!.Message)
             .IsEqualTo(
@@ -508,6 +530,7 @@ public class OverloadNameClaimTests
                     + "rename the member, or rename the root overload's parameter or pin it "
                     + "with [Name] (spec 013 FR-034)."
             );
+
         await Assert.That(files["d4.ts"]).Contains("  rX(x: number): number {");
         await Assert.That(files["d4.ts"]).DoesNotContain("override rX(");
     }
@@ -573,6 +596,7 @@ public class OverloadNameClaimTests
         await Assert
             .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked))
             .IsNull();
+
         await Assert.That(files["d.ts"]).Contains("  override rX(x: number): number {");
         await Assert.That(files["e.ts"]).Contains("  override mX<U>(x: U): number {");
     }
@@ -694,6 +718,7 @@ public class OverloadNameClaimTests
         await Assert
             .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked))
             .IsNull();
+
         await Assert.That(files["d.ts"]).Contains("  override rX(x: Foo): number {");
     }
 
@@ -752,6 +777,7 @@ public class OverloadNameClaimTests
                 )
             )
             .IsGreaterThanOrEqualTo(1);
+
         await Assert.That(files["n2/d.ts"]).DoesNotContain("override rX(");
     }
 
@@ -775,12 +801,15 @@ public class OverloadNameClaimTests
             .ToList();
 
         await Assert.That(reports.Select(LineOf)).IsEquivalentTo([12, 38]);
+
         await Assert
             .That(
                 diagnostics.Any(diagnostic => diagnostic.Severity == MetanoDiagnosticSeverity.Error)
             )
             .IsFalse();
+
         await Assert.That(reports[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+
         await Assert
             .That(reports[0].Message)
             .IsEqualTo(
@@ -865,6 +894,7 @@ public class OverloadNameClaimTests
         await Assert
             .That(diagnostics.Count(diagnostic => diagnostic.Code == "MS0031"))
             .IsEqualTo(1);
+
         await Assert.That(files["clash.ts"]).Contains("areaWH(w: number, h: number): number {");
     }
 

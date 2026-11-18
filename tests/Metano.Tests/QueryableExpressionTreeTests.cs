@@ -903,6 +903,7 @@ public class QueryableExpressionTreeTests
                 )
             )
             .IsEqualTo("firstName");
+
         await Assert
             .That(
                 Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing(
@@ -911,9 +912,11 @@ public class QueryableExpressionTreeTests
                 )
             )
             .IsEqualTo("firstName");
+
         await Assert
             .That(Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing("FirstName", null))
             .IsEqualTo("firstName");
+
         // Already-lowercase identifiers pass through unchanged.
         await Assert
             .That(
@@ -923,6 +926,7 @@ public class QueryableExpressionTreeTests
                 )
             )
             .IsEqualTo("firstName");
+
         // Empty input is preserved (no IndexOutOfRangeException).
         await Assert
             .That(
@@ -1058,6 +1062,7 @@ public class QueryableExpressionTreeTests
         var callCount = System
             .Text.RegularExpressions.Regex.Matches(output, "kind: \"call\"")
             .Count;
+
         await Assert.That(callCount).IsEqualTo(2);
         // No `ref` node could alias a hoisted call — the body still
         // spells out each invocation rather than collapsing them.
