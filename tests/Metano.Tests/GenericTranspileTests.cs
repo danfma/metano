@@ -12,8 +12,7 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("generic-record.ts");
-        await Assert.That(result["result.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("generic-record.ts", result["result.ts"]);
     }
 
     [Test]
@@ -26,8 +25,7 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("generic-multi-param.ts");
-        await Assert.That(result["pair.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("generic-multi-param.ts", result["pair.ts"]);
     }
 
     [Test]
@@ -46,8 +44,7 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("generic-constraint.ts");
-        await Assert.That(result["app/repo.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("generic-constraint.ts", result["app/repo.ts"]);
     }
 
     [Test]
@@ -63,8 +60,7 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("generic-interface.ts");
-        await Assert.That(result["i-repository.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("generic-interface.ts", result["i-repository.ts"]);
     }
 
     [Test]

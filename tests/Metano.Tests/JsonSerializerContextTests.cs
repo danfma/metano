@@ -583,7 +583,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        await Assert.That(ts).IsEqualTo(TranspileHelper.ReadExpected("json-context-closure.ts"));
+        await TranspileHelper.AssertGolden("json-context-closure.ts", ts);
     }
 
     [Test]

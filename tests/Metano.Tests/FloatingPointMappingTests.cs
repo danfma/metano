@@ -333,7 +333,7 @@ public class FloatingPointMappingTests
         // patterns, NaN equality, and the `switch (true)` rewrite.
         var output = TranspileNumbers(GoldenSource);
 
-        await Assert.That(output).IsEqualTo(TranspileHelper.ReadExpected("floating-point.ts"));
+        await TranspileHelper.AssertGolden("floating-point.ts", output);
     }
 
     private const string GoldenSource = """

@@ -12,8 +12,7 @@ public class RecordTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("simple-record.ts");
-        await Assert.That(result["point.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("simple-record.ts", result["point.ts"]);
     }
 
     [Test]

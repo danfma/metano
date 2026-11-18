@@ -28,9 +28,10 @@ public class OverloadDispatchArgumentTests
             """
         );
 
-        await Assert
-            .That(result["opt.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-defaults-params-constructor.ts"));
+        await TranspileHelper.AssertGolden(
+            "dispatcher-defaults-params-constructor.ts",
+            result["opt.ts"]
+        );
     }
 
     [Test]
@@ -54,9 +55,10 @@ public class OverloadDispatchArgumentTests
             """
         );
 
-        await Assert
-            .That(result["ops.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-defaults-params-methods.ts"));
+        await TranspileHelper.AssertGolden(
+            "dispatcher-defaults-params-methods.ts",
+            result["ops.ts"]
+        );
     }
 
     [Test]
@@ -104,9 +106,10 @@ public class OverloadDispatchArgumentTests
             """
         );
 
-        await Assert
-            .That(result["over.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-defaults-params-order.ts"));
+        await TranspileHelper.AssertGolden(
+            "dispatcher-defaults-params-order.ts",
+            result["over.ts"]
+        );
     }
 
     [Test]
@@ -138,9 +141,7 @@ public class OverloadDispatchArgumentTests
             """
         );
 
-        await Assert
-            .That(result["painter.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-defaults-imports.ts"));
+        await TranspileHelper.AssertGolden("dispatcher-defaults-imports.ts", result["painter.ts"]);
     }
 
     [Test]
@@ -184,9 +185,7 @@ public class OverloadDispatchArgumentTests
             """
         );
 
-        await Assert
-            .That(result["tagger.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-optional-attribute.ts"));
+        await TranspileHelper.AssertGolden("dispatcher-optional-attribute.ts", result["tagger.ts"]);
     }
 
     [Test]

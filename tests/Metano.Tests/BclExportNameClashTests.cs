@@ -55,9 +55,10 @@ public class BclExportNameClashTests
     {
         var result = TranspileHelper.Transpile(NumericsSource);
 
-        await Assert
-            .That(result["app/calculator.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("bcl-name-clash-decimal.ts"));
+        await TranspileHelper.AssertGolden(
+            "bcl-name-clash-decimal.ts",
+            result["app/calculator.ts"]
+        );
     }
 
     [Test]

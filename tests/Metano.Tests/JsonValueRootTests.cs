@@ -93,9 +93,8 @@ public class JsonValueRootTests
     public async Task ValueRoots_MatchGolden()
     {
         var ts = TranspileContext(GoldenDeclarations);
-        var expected = TranspileHelper.ReadExpected("json-context-value-roots.ts");
 
-        await Assert.That(ts).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("json-context-value-roots.ts", ts);
     }
 
     [Test]
@@ -109,9 +108,8 @@ public class JsonValueRootTests
         );
 
         var (files, _) = TranspileHelper.TranspileWithJsonSourceGenerator(source);
-        var expected = TranspileHelper.ReadExpected("json-context-value-roots.ts");
 
-        await Assert.That(files[ContextPath]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("json-context-value-roots.ts", files[ContextPath]);
     }
 
     [Test]

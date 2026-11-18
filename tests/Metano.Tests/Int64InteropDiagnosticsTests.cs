@@ -469,13 +469,9 @@ public class Int64InteropDiagnosticsTests
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(PlainObjectSource);
 
-        await Assert
-            .That(files["snowflake-dto.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-plain-object.ts"));
+        await TranspileHelper.AssertGolden("int64-plain-object.ts", files["snowflake-dto.ts"]);
 
-        await Assert
-            .That(files["builder.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-plain-object-builder.ts"));
+        await TranspileHelper.AssertGolden("int64-plain-object-builder.ts", files["builder.ts"]);
     }
 
     private const string PlainObjectSource = """

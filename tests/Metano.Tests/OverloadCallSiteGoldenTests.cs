@@ -106,9 +106,7 @@ public class OverloadCallSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["shop.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-new.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-new.ts", result["shop.ts"]);
     }
 
     [Test]
@@ -184,9 +182,7 @@ public class OverloadCallSiteGoldenTests
             result["circle.ts"]
         );
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-super.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-super.ts", outputs);
     }
 
     [Test]
@@ -244,9 +240,7 @@ public class OverloadCallSiteGoldenTests
 
         var outputs = string.Join("\n", files["shop-json-context.ts"], files["tag.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-json-factory.ts"));
+        await TranspileHelper.AssertGolden("overload-json-factory.ts", outputs);
 
         await Assert
             .That(widened)
@@ -292,9 +286,7 @@ public class OverloadCallSiteGoldenTests
 
         var widened = WidenedFactoryMessagesOf(diagnostics);
 
-        await Assert
-            .That(files["owner.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-nested.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-nested.ts", files["owner.ts"]);
 
         await Assert
             .That(widened)
@@ -313,9 +305,7 @@ public class OverloadCallSiteGoldenTests
             CrossPackageConsumer
         );
 
-        await Assert
-            .That(result["app/till.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-cross-package.ts"));
+        await TranspileHelper.AssertGolden("overload-cross-package.ts", result["app/till.ts"]);
     }
 
     /// <summary>
@@ -330,9 +320,10 @@ public class OverloadCallSiteGoldenTests
             CrossPackageConsumer
         );
 
-        await Assert
-            .That(result["app/till.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-cross-package-metadata.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-cross-package-metadata.ts",
+            result["app/till.ts"]
+        );
     }
 
     /// <summary>
@@ -383,9 +374,7 @@ public class OverloadCallSiteGoldenTests
 
         var outputs = string.Join("\n", result["derived.ts"], result["shop.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-evaluation-order.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-evaluation-order.ts", outputs);
     }
 
     /// <summary>

@@ -68,11 +68,9 @@ public class JsonDictionaryKeyTests
     public async Task DictionaryKeys_MatchGolden()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
-        var expected = TranspileHelper.ReadExpected("json-dictionary-keys.ts");
-
         await Assert.That(JsonDiagnosticsOf(diagnostics)).IsEmpty();
 
-        await Assert.That(files[ContextPath]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("json-dictionary-keys.ts", files[ContextPath]);
     }
 
     [Test]

@@ -33,9 +33,7 @@ public class RequiredMemberTests
             """
         );
 
-        await Assert
-            .That(result["person.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("required-members.ts"));
+        await TranspileHelper.AssertGolden("required-members.ts", result["person.ts"]);
     }
 
     [Test]

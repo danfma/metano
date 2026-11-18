@@ -18,8 +18,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("inheritance-base.ts");
-        await Assert.That(result["app/shape.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("inheritance-base.ts", result["app/shape.ts"]);
     }
 
     [Test]
@@ -41,8 +40,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("inheritance-derived.ts");
-        await Assert.That(result["app/circle.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("inheritance-derived.ts", result["app/circle.ts"]);
     }
 
     [Test]
@@ -173,8 +171,10 @@ public class InheritanceTranspileTests
     {
         var result = TranspileHelper.Transpile(ClipHierarchySource);
 
-        var expected = TranspileHelper.ReadExpected("derived-record-abstract-base.ts");
-        await Assert.That(result["media/clip.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "derived-record-abstract-base.ts",
+            result["media/clip.ts"]
+        );
     }
 
     [Test]
@@ -186,8 +186,10 @@ public class InheritanceTranspileTests
         // C# record equality does.
         var result = TranspileHelper.Transpile(ClipHierarchySource);
 
-        var expected = TranspileHelper.ReadExpected("derived-record-forwarded-param.ts");
-        await Assert.That(result["media/image-clip.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden(
+            "derived-record-forwarded-param.ts",
+            result["media/image-clip.ts"]
+        );
     }
 
     [Test]

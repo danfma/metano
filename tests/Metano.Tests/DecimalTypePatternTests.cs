@@ -254,7 +254,6 @@ public class DecimalTypePatternTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("decimal-type-patterns.ts");
-        await Assert.That(result["checker.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("decimal-type-patterns.ts", result["checker.ts"]);
     }
 }

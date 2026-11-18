@@ -73,13 +73,15 @@ public class ModuleFunctionClaimGoldenTests
             result["ign-host.ts"]
         );
 
-        await Assert
-            .That(result["em-host.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-emit-extension-host.ts"));
+        await TranspileHelper.AssertGolden(
+            "module-claims-emit-extension-host.ts",
+            result["em-host.ts"]
+        );
 
-        await Assert
-            .That(result["priv-host.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-private-extension-host.ts"));
+        await TranspileHelper.AssertGolden(
+            "module-claims-private-extension-host.ts",
+            result["priv-host.ts"]
+        );
 
         // The call sites name the claimed fast paths; the container qualifier
         // they keep is the pre-existing #554.
@@ -184,9 +186,7 @@ public class ModuleFunctionClaimGoldenTests
                     + "emitted as 'fooX$' (spec 013 FR-032).",
             ]);
 
-        await Assert
-            .That(result["res.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-claims-import-host-res.ts"));
+        await TranspileHelper.AssertGolden("module-claims-import-host-res.ts", result["res.ts"]);
 
         await TranspileHelper.AssertGolden("module-claims-import-host-use.ts", result["use.ts"]);
     }

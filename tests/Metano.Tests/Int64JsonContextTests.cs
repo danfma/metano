@@ -90,16 +90,7 @@ public class Int64JsonContextTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ContextSource());
 
-        if (TranspileHelper.UpdateGoldensRequested)
-        {
-            TranspileHelper.WriteExpected(ContextGolden, files[ContextPath]);
-
-            return;
-        }
-
-        await Assert
-            .That(files[ContextPath])
-            .IsEqualTo(TranspileHelper.ReadExpected(ContextGolden));
+        await TranspileHelper.AssertGolden(ContextGolden, files[ContextPath]);
 
         await Assert.That(diagnostics).IsEmpty();
     }

@@ -144,9 +144,7 @@ public class OverloadNamingGoldenTests
         // two project types of one name in one file only report MS0070 so far.
         // The golden freezes the overload names this test is about, not that
         // import: update it when #504 aliases the second type.
-        await Assert
-            .That(result["climbs.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-names-climb.ts"));
+        await TranspileHelper.AssertGolden("overload-names-climb.ts", result["climbs.ts"]);
     }
 
     [Test]
@@ -164,9 +162,7 @@ public class OverloadNamingGoldenTests
             """
         );
 
-        await Assert
-            .That(result["clock.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-names-default.ts"));
+        await TranspileHelper.AssertGolden("overload-names-default.ts", result["clock.ts"]);
     }
 
     [Test]
@@ -186,9 +182,7 @@ public class OverloadNamingGoldenTests
             """
         );
 
-        await Assert
-            .That(result["money.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-names-operators.ts"));
+        await TranspileHelper.AssertGolden("overload-names-operators.ts", result["money.ts"]);
     }
 
     [Test]
@@ -208,9 +202,7 @@ public class OverloadNamingGoldenTests
 
         var deadEnd = diagnostics.Single(d => d.Code == "MS0003");
 
-        await Assert
-            .That(files["generic.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-names-dead-end.ts"));
+        await TranspileHelper.AssertGolden("overload-names-dead-end.ts", files["generic.ts"]);
 
         await Assert.That(deadEnd.Message).Contains("'Int32$1' and 'Int32$2'");
     }

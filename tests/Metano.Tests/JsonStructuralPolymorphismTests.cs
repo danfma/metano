@@ -129,9 +129,7 @@ public class JsonStructuralPolymorphismTests
     {
         var ts = TranspileContext(GoldenDeclarations);
 
-        await Assert
-            .That(ts)
-            .IsEqualTo(TranspileHelper.ReadExpected("json-structural-polymorphic-context.ts"));
+        await TranspileHelper.AssertGolden("json-structural-polymorphic-context.ts", ts);
     }
 
     // FR-019 rule 1: the guard is synthesized in the variant's own file, the

@@ -28,8 +28,7 @@ public class JsTupleTranspileTests
         );
 
         var output = result["pair.ts"];
-        var expected = TranspileHelper.ReadExpected("js-tuple-pair.ts");
-        await Assert.That(output).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("js-tuple-pair.ts", output);
         // No class, no equals/hashCode/with, no constructor, no HashCode import.
         await Assert.That(output).DoesNotContain("class Pair");
         await Assert.That(output).DoesNotContain("equals(");

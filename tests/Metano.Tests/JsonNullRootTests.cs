@@ -61,7 +61,7 @@ public class JsonNullRootTests
     {
         var ts = TranspileContext();
 
-        await Assert.That(ts).IsEqualTo(TranspileHelper.ReadExpected("json-context-null-roots.ts"));
+        await TranspileHelper.AssertGolden("json-context-null-roots.ts", ts);
     }
 
     [Test]

@@ -105,9 +105,7 @@ public class SwitchStatementPatternTests
                 """
         );
 
-        var expected = TranspileHelper.ReadExpected("switch-statement-patterns.ts");
-
-        await Assert.That(result["describer.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("switch-statement-patterns.ts", result["describer.ts"]);
     }
 
     [Test]

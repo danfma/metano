@@ -55,8 +55,7 @@ public class NoContainerTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("exported-as-module-async.ts");
-        await Assert.That(result["api.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("exported-as-module-async.ts", result["api.ts"]);
     }
 
     [Test]

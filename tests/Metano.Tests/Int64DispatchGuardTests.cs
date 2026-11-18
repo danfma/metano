@@ -113,9 +113,7 @@ public class Int64DispatchGuardTests
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(DispatchSource);
 
-        await Assert
-            .That(files["gates.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-guards-dispatch.ts"));
+        await TranspileHelper.AssertGolden("int64-guards-dispatch.ts", files["gates.ts"]);
     }
 
     /// <summary>

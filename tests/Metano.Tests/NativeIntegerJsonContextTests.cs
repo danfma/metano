@@ -63,14 +63,7 @@ public class NativeIntegerJsonContextTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
 
-        if (TranspileHelper.UpdateGoldensRequested)
-        {
-            TranspileHelper.WriteExpected(Golden, files[ContextPath]);
-
-            return;
-        }
-
-        await Assert.That(files[ContextPath]).IsEqualTo(TranspileHelper.ReadExpected(Golden));
+        await TranspileHelper.AssertGolden(Golden, files[ContextPath]);
 
         await Assert.That(diagnostics).IsEmpty();
     }

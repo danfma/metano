@@ -151,9 +151,7 @@ public class JsonMemberOptionsTests
     {
         var ts = TranspileContext(GoldenDeclarations);
 
-        await Assert
-            .That(ts)
-            .IsEqualTo(TranspileHelper.ReadExpected("json-member-options-context.ts"));
+        await TranspileHelper.AssertGolden("json-member-options-context.ts", ts);
     }
 
     [Test]

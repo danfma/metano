@@ -810,8 +810,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("switch-positional-js-tuple.ts");
-        await Assert.That(result["geo/pairs.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("switch-positional-js-tuple.ts", result["geo/pairs.ts"]);
     }
 
     [Test]
@@ -873,8 +872,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("switch-loose-scrutinee.ts");
-        await Assert.That(result["loose.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("switch-loose-scrutinee.ts", result["loose.ts"]);
     }
 
     [Test]
@@ -1105,8 +1103,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("switch-positional-system-tuple.ts");
-        await Assert.That(files["tuples.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("switch-positional-system-tuple.ts", files["tuples.ts"]);
         await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsFalse();
     }
 

@@ -52,9 +52,7 @@ public class ModuleDispatcherGenericGoldenTests
 
         await Assert.That(outputs).DoesNotContain("as T");
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("module-dispatch-generic-group.ts"));
+        await TranspileHelper.AssertGolden("module-dispatch-generic-group.ts", outputs);
     }
 
     [Test]
@@ -137,8 +135,6 @@ public class ModuleDispatcherGenericGoldenTests
 
         await Assert.That(outputs).DoesNotContain("as T");
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("module-dispatch-generic-constrained.ts"));
+        await TranspileHelper.AssertGolden("module-dispatch-generic-constrained.ts", outputs);
     }
 }

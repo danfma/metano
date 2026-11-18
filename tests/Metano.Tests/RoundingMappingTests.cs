@@ -89,7 +89,7 @@ public class RoundingMappingTests
     {
         var output = TranspileNumbers(GoldenSource);
 
-        await Assert.That(output).IsEqualTo(TranspileHelper.ReadExpected("rounding.ts"));
+        await TranspileHelper.AssertGolden("rounding.ts", output);
     }
 
     private const string GoldenSource = """

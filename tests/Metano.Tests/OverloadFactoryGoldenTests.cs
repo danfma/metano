@@ -30,9 +30,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["money.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-basic.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-basic.ts", result["money.ts"]);
     }
 
     [Test]
@@ -56,9 +54,10 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["dimension.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-dispatcher-fallback.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-dispatcher-fallback.ts",
+            result["dimension.ts"]
+        );
     }
 
     [Test]
@@ -111,9 +110,7 @@ public class OverloadFactoryGoldenTests
             result["gift-receipt.ts"]
         );
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-hierarchy.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-hierarchy.ts", outputs);
     }
 
     /// <summary>
@@ -143,9 +140,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(files["coupon.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-user-static.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-user-static.ts", files["coupon.ts"]);
     }
 
     [Test]
@@ -183,9 +178,7 @@ public class OverloadFactoryGoldenTests
 
         var outputs = string.Join("\n", result["box.ts"], result["ranked-box.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-generic.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-generic.ts", outputs);
     }
 
     [Test]
@@ -260,9 +253,7 @@ public class OverloadFactoryGoldenTests
 
         var outputs = string.Join("\n", result["sorted-box.ts"], result["pair.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-generic-constraints.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-generic-constraints.ts", outputs);
     }
 
     [Test]
@@ -290,9 +281,7 @@ public class OverloadFactoryGoldenTests
 
         var outputs = string.Join("\n", result["shape.ts"], result["circle.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-abstract.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-abstract.ts", outputs);
     }
 
     [Test]
@@ -308,9 +297,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["rec.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-record.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-record.ts", result["rec.ts"]);
     }
 
     [Test]
@@ -330,9 +317,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["temp.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-chain.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-chain.ts", result["temp.ts"]);
     }
 
     [Test]
@@ -362,9 +347,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["acct.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-accessibility.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-accessibility.ts", result["acct.ts"]);
     }
 
     [Test]
@@ -424,9 +407,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["opt.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-params.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-params.ts", result["opt.ts"]);
     }
 
     [Test]
@@ -448,9 +429,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["money.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-static-init.ts"));
+        await TranspileHelper.AssertGolden("overload-static-init.ts", result["money.ts"]);
     }
 
     [Test]
@@ -518,9 +497,7 @@ public class OverloadFactoryGoldenTests
 
         var outputs = string.Join("\n", result["cash.ts"], result["fee.ts"]);
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-names-claims.ts"));
+        await TranspileHelper.AssertGolden("overload-names-claims.ts", outputs);
     }
 
     [Test]
@@ -557,9 +534,7 @@ public class OverloadFactoryGoldenTests
             """
         );
 
-        await Assert
-            .That(result["c.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-hierarchy-generic.ts"));
+        await TranspileHelper.AssertGolden("overload-factory-hierarchy-generic.ts", result["c.ts"]);
     }
 
     [Test]
@@ -656,9 +631,10 @@ public class OverloadFactoryGoldenTests
 
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
 
-        await Assert
-            .That(result["app/receipt.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-cross-package.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-factory-cross-package.ts",
+            result["app/receipt.ts"]
+        );
     }
 
     [Test]

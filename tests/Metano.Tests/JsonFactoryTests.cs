@@ -125,7 +125,7 @@ public class JsonFactoryTests
     {
         var ts = TranspileContext(GoldenDeclarations);
 
-        await Assert.That(ts).IsEqualTo(TranspileHelper.ReadExpected("json-context-factory.ts"));
+        await TranspileHelper.AssertGolden("json-context-factory.ts", ts);
     }
 
     [Test]

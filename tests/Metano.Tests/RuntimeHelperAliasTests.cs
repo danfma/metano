@@ -61,9 +61,10 @@ public class RuntimeHelperAliasTests
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
 
-        await Assert
-            .That(files["shared.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-exported-as-module.ts"));
+        await TranspileHelper.AssertGolden(
+            "runtime-helper-alias-exported-as-module.ts",
+            files["shared.ts"]
+        );
     }
 
     /// <summary>
@@ -331,9 +332,10 @@ public class RuntimeHelperAliasTests
         await Assert.That(output).Contains("where$rt(");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
 
-        await Assert
-            .That(files["queries.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-linq-pipe.ts"));
+        await TranspileHelper.AssertGolden(
+            "runtime-helper-alias-linq-pipe.ts",
+            files["queries.ts"]
+        );
     }
 
     /// <summary>
@@ -381,9 +383,10 @@ public class RuntimeHelperAliasTests
         await Assert.That(output).Contains("new HashSet$rt<number>()");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
 
-        await Assert
-            .That(files["sets.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("runtime-helper-alias-class-shaped.ts"));
+        await TranspileHelper.AssertGolden(
+            "runtime-helper-alias-class-shaped.ts",
+            files["sets.ts"]
+        );
     }
 
     /// <summary>

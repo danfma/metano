@@ -44,9 +44,7 @@ public class EnumerableImplementationTests
             """
         );
 
-        await Assert
-            .That(result["bag.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("enumerable-implementation.ts"));
+        await TranspileHelper.AssertGolden("enumerable-implementation.ts", result["bag.ts"]);
 
         await Assert.That(result["i-bag.ts"]).DoesNotContain("Symbol.iterator");
     }

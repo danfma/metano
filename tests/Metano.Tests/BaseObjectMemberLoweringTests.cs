@@ -30,9 +30,7 @@ public class BaseObjectMemberLoweringTests
             """
         );
 
-        await Assert
-            .That(result["box.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("base-object-members.ts"));
+        await TranspileHelper.AssertGolden("base-object-members.ts", result["box.ts"]);
     }
 
     [Test]

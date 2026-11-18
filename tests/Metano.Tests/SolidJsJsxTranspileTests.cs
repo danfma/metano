@@ -4,8 +4,7 @@ namespace Metano.Tests;
 /// Golden tests for the JSX/TSX lowering (feature 002): component records lower
 /// to TSX function components (US1) and JSX-typed object creations lower to JSX
 /// elements (US2). Each test compiles inline C# against the real SolidJS + DOM
-/// bindings and pins the emitted <c>.tsx</c> against the contract fixtures in
-/// <c>Expected/</c>.
+/// bindings and pins the emitted <c>.tsx</c> against the contract golden files.
 /// </summary>
 public class SolidJsJsxTranspileTests
 {
@@ -35,9 +34,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["hello.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-hello.tsx"));
+        await TranspileHelper.AssertGolden("jsx-hello.tsx", result["hello.tsx"]);
     }
 
     [Test]
@@ -56,9 +53,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["counter.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-counter-span.tsx"));
+        await TranspileHelper.AssertGolden("jsx-counter-span.tsx", result["counter.tsx"]);
     }
 
     [Test]
@@ -81,9 +76,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["membership.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-membership.tsx"));
+        await TranspileHelper.AssertGolden("jsx-membership.tsx", result["membership.tsx"]);
     }
 
     [Test]
@@ -102,9 +95,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["app-root.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-named-component.tsx"));
+        await TranspileHelper.AssertGolden("jsx-named-component.tsx", result["app-root.tsx"]);
     }
 
     // ── US2: native element lowering ────────────────────────────────────────
@@ -124,9 +115,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["div-attrs.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-div-attrs.tsx"));
+        await TranspileHelper.AssertGolden("jsx-div-attrs.tsx", result["div-attrs.tsx"]);
     }
 
     [Test]
@@ -148,9 +137,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["button-handler.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-button-handler.tsx"));
+        await TranspileHelper.AssertGolden("jsx-button-handler.tsx", result["button-handler.tsx"]);
     }
 
     [Test]
@@ -177,9 +164,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["div-children.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-div-children.tsx"));
+        await TranspileHelper.AssertGolden("jsx-div-children.tsx", result["div-children.tsx"]);
     }
 
     // ── US3: component composition ──────────────────────────────────────────
@@ -210,9 +195,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["counter-group.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-counter-group.tsx"));
+        await TranspileHelper.AssertGolden("jsx-counter-group.tsx", result["counter-group.tsx"]);
     }
 
     [Test]
@@ -241,9 +224,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["app.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-render-entry.tsx"));
+        await TranspileHelper.AssertGolden("jsx-render-entry.tsx", result["app.tsx"]);
     }
 
     // ── US4: SolidJS reactivity (signal facade elision) ─────────────────────
@@ -319,9 +300,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["counter-list.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-for-helper.tsx"));
+        await TranspileHelper.AssertGolden("jsx-for-helper.tsx", result["counter-list.tsx"]);
     }
 
     // ── US5: imported renderable + JSX-position diagnostic ──────────────────
@@ -354,9 +333,7 @@ public class SolidJsJsxTranspileTests
             """
         );
 
-        await Assert
-            .That(result["app-router.tsx"])
-            .IsEqualTo(TranspileHelper.ReadExpected("jsx-imported-route.tsx"));
+        await TranspileHelper.AssertGolden("jsx-imported-route.tsx", result["app-router.tsx"]);
     }
 
     [Test]

@@ -120,9 +120,7 @@ public class JsonPolymorphicContextTests
     {
         var ts = TranspileContext(GoldenDeclarations);
 
-        await Assert
-            .That(ts)
-            .IsEqualTo(TranspileHelper.ReadExpected("json-polymorphic-context.ts"));
+        await TranspileHelper.AssertGolden("json-polymorphic-context.ts", ts);
     }
 
     // FR-005: dispatch applies through every descriptor that reaches the base,

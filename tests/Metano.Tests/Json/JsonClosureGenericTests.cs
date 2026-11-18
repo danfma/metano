@@ -39,9 +39,7 @@ public class JsonClosureGenericTests
     public async Task GenericPropertyType_MatchesGolden()
     {
         var ts = TranspileContext(FeedDeclarations);
-        var expected = TranspileHelper.ReadExpected("json-closure-generic-context.ts");
-
-        await Assert.That(ts).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("json-closure-generic-context.ts", ts);
     }
 
     [Test]

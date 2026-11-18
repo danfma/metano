@@ -187,7 +187,7 @@ public class JsonWebNamingTests
     {
         var ts = TranspileContext(GoldenDeclarations);
 
-        await Assert.That(ts).IsEqualTo(TranspileHelper.ReadExpected("json-web-context.ts"));
+        await TranspileHelper.AssertGolden("json-web-context.ts", ts);
     }
 
     [Test]

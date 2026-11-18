@@ -29,9 +29,10 @@ public class PrimaryConstructorDispatchTests
             """
         );
 
-        await Assert
-            .That(files["probe/cap.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-dispatch-captured.ts"));
+        await TranspileHelper.AssertGolden(
+            "primary-ctor-dispatch-captured.ts",
+            files["probe/cap.ts"]
+        );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -53,9 +54,10 @@ public class PrimaryConstructorDispatchTests
             """
         );
 
-        await Assert
-            .That(files["probe/init.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-dispatch-initializer.ts"));
+        await TranspileHelper.AssertGolden(
+            "primary-ctor-dispatch-initializer.ts",
+            files["probe/init.ts"]
+        );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
@@ -81,9 +83,10 @@ public class PrimaryConstructorDispatchTests
             """
         );
 
-        await Assert
-            .That(files["probe/deps.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-dispatch-computed.ts"));
+        await TranspileHelper.AssertGolden(
+            "primary-ctor-dispatch-computed.ts",
+            files["probe/deps.ts"]
+        );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }

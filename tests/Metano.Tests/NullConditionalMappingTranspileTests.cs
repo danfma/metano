@@ -346,9 +346,7 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert
-            .That(output)
-            .IsEqualTo(TranspileHelper.ReadExpected("null-conditional-guards.ts"));
+        await TranspileHelper.AssertGolden("null-conditional-guards.ts", output);
     }
 
     private static string TranspileInHelperClass(string members) =>

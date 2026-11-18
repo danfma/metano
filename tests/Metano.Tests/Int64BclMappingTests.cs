@@ -367,9 +367,7 @@ public class Int64BclMappingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ExpressionTreeSource);
 
-        await Assert
-            .That(files["rows.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-expression-tree.ts"));
+        await TranspileHelper.AssertGolden("int64-expression-tree.ts", files["rows.ts"]);
 
         await Assert
             .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))

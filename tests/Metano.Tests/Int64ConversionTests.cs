@@ -163,9 +163,7 @@ public class Int64ConversionTests
     {
         var (files, _) = ConversionOutput.Value;
 
-        await Assert
-            .That(files["conv.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("int64-conversions.ts"));
+        await TranspileHelper.AssertGolden("int64-conversions.ts", files["conv.ts"]);
     }
 
     [Test]

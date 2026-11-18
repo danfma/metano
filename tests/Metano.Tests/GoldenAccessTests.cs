@@ -1,0 +1,77 @@
+namespace Metano.Tests;
+
+/// <summary>
+/// Guards the single entry point to the golden files: every test compares
+/// against <c>Expected/</c> through <see cref="TranspileHelper.AssertGolden"/>,
+/// which is the only code that honours <c>METANO_UPDATE_GOLDENS</c>. A test
+/// that reads a golden any other way reads the stale copy in the output
+/// directory and cannot be regenerated.
+/// </summary>
+public class GoldenAccessTests
+{
+    private const string HelperFile = "TranspileHelper.cs";
+    private const string GuardFile = "GoldenAccessTests.cs";
+
+    private static readonly string[] ForbiddenFragments =
+    [
+        "\"Expected\"",
+        "Expected/",
+        "Expected\\",
+        "METANO_UPDATE_GOLDENS",
+    ];
+
+    [Test]
+    public async Task EveryGoldenReadGoesThroughTheHelper()
+    {
+        var offenders = TestSourceFiles()
+            .Where(file => Path.GetFileName(file) is not (HelperFile or GuardFile))
+            .Where(file => ReferencesGoldens(File.ReadAllText(file)))
+            .Select(file => Path.GetRelativePath(TestProjectDirectory(), file))
+            .Order()
+            .ToList();
+
+        await Assert.That(offenders).IsEmpty();
+    }
+
+    [Test]
+    public async Task TheGuardFindsTheHelperSource()
+    {
+        var helper = TestSourceFiles().Single(file => Path.GetFileName(file) == HelperFile);
+
+        await Assert.That(ReferencesGoldens(File.ReadAllText(helper))).IsTrue();
+    }
+
+    private static bool ReferencesGoldens(string source) =>
+        ForbiddenFragments.Any(fragment => source.Contains(fragment, StringComparison.Ordinal));
+
+    private static IEnumerable<string> TestSourceFiles() =>
+        Directory
+            .EnumerateFiles(TestProjectDirectory(), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file));
+
+    private static bool IsBuildOutput(string file)
+    {
+        var relative = Path.GetRelativePath(TestProjectDirectory(), file);
+        var firstSegment = relative.Split(Path.DirectorySeparatorChar)[0];
+
+        return firstSegment is "bin" or "obj" or "Expected";
+    }
+
+    private static string TestProjectDirectory()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (
+            current is not null
+            && !File.Exists(Path.Combine(current.FullName, "Metano.Tests.csproj"))
+        )
+        {
+            current = current.Parent;
+        }
+
+        return current?.FullName
+            ?? throw new InvalidOperationException(
+                "Metano.Tests.csproj not found above the test output directory"
+            );
+    }
+}

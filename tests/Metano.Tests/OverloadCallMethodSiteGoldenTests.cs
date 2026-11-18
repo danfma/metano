@@ -53,9 +53,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["caller.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-methods.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-methods.ts", result["caller.ts"]);
     }
 
     /// <summary>
@@ -101,9 +99,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["caller.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-defaults.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-defaults.ts", result["caller.ts"]);
     }
 
     /// <summary>
@@ -218,9 +214,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["use.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-generics.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-generics.ts", result["use.ts"]);
     }
 
     [Test]
@@ -246,9 +240,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["ledger.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-operators.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-operators.ts", result["ledger.ts"]);
     }
 
     /// <summary>
@@ -322,9 +314,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["caller.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-receiver-order.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-receiver-order.ts", result["caller.ts"]);
     }
 
     /// <summary>
@@ -695,13 +685,12 @@ public class OverloadCallMethodSiteGoldenTests
                     + "emitted as 'quxX$' (spec 013 FR-032).",
             ]);
 
-        await Assert
-            .That(result["res.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-res.ts"));
+        await TranspileHelper.AssertGolden(
+            "module-import-facade-reserved-res.ts",
+            result["res.ts"]
+        );
 
-        await Assert
-            .That(result["q.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-reserved-q.ts"));
+        await TranspileHelper.AssertGolden("module-import-facade-reserved-q.ts", result["q.ts"]);
 
         await TranspileHelper.AssertGolden("module-import-facade-reserved.ts", result["use.ts"]);
     }
@@ -770,9 +759,7 @@ public class OverloadCallMethodSiteGoldenTests
                     + "emitted as 'fooY$' (spec 013 FR-032).",
             ]);
 
-        await Assert
-            .That(result["res.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("module-import-facade-alias-res.ts"));
+        await TranspileHelper.AssertGolden("module-import-facade-alias-res.ts", result["res.ts"]);
 
         await TranspileHelper.AssertGolden("module-import-facade-alias.ts", result["use.ts"]);
     }
@@ -919,9 +906,7 @@ public class OverloadCallMethodSiteGoldenTests
             """
         );
 
-        await Assert
-            .That(result["use.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-method-groups.ts"));
+        await TranspileHelper.AssertGolden("overload-calls-method-groups.ts", result["use.ts"]);
     }
 
     /// <summary>
@@ -980,9 +965,10 @@ public class OverloadCallMethodSiteGoldenTests
     {
         var result = TranspileHelper.TranspileWithLibrary(MethodLibrary, MethodConsumer);
 
-        await Assert
-            .That(result["app/till.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-cross-package-methods.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-cross-package-methods.ts",
+            result["app/till.ts"]
+        );
     }
 
     /// <summary>
@@ -994,9 +980,10 @@ public class OverloadCallMethodSiteGoldenTests
     {
         var result = TranspileHelper.TranspileWithLibraryImage(MethodLibrary, MethodConsumer);
 
-        await Assert
-            .That(result["app/till.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-cross-package-metadata-methods.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-cross-package-metadata-methods.ts",
+            result["app/till.ts"]
+        );
     }
 
     private const string MethodLibrary = """

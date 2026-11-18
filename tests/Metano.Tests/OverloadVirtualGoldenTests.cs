@@ -121,9 +121,10 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert
-            .That(Joined(result, "repo", "str-repo", "box", "str-box"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-virtual-generic.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-virtual-generic.ts",
+            Joined(result, "repo", "str-repo", "box", "str-box")
+        );
     }
 
     /// <summary>
@@ -152,9 +153,10 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert
-            .That(Joined(result, "widget", "stateful-widget"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-virtual-single.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-virtual-single.ts",
+            Joined(result, "widget", "stateful-widget")
+        );
     }
 
     /// <summary>
@@ -411,9 +413,10 @@ public class OverloadVirtualGoldenTests
             """
         );
 
-        await Assert
-            .That(Joined(result, "x", "x4", "x3", "bn", "dn", "y", "y3"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-interface-reimplementation.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-interface-reimplementation.ts",
+            Joined(result, "x", "x4", "x3", "bn", "dn", "y", "y3")
+        );
     }
 
     /// <summary>
@@ -507,9 +510,10 @@ public class OverloadVirtualGoldenTests
     {
         var result = TranspileHelper.Transpile(ConvSource);
 
-        await Assert
-            .That(Joined(result, "i-conv", "c"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-interface-multiple.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-interface-multiple.ts",
+            Joined(result, "i-conv", "c")
+        );
     }
 
     /// <summary>
@@ -524,9 +528,10 @@ public class OverloadVirtualGoldenTests
     {
         var result = TranspileHelper.Transpile(ConvSource);
 
-        await Assert
-            .That(Joined(result, "d3", "c1", "d4"))
-            .IsEqualTo(TranspileHelper.ReadExpected("overload-interface-multiple-inherited.ts"));
+        await TranspileHelper.AssertGolden(
+            "overload-interface-multiple-inherited.ts",
+            Joined(result, "d3", "c1", "d4")
+        );
     }
 
     internal const string ConvSource = """

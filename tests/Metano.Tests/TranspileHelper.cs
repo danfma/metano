@@ -34,6 +34,16 @@ public static class TranspileHelper
     internal static IReadOnlyList<MetadataReference> BaseReferences { get; } =
         BuildBaseReferences();
 
+    /// <summary>
+    /// The shared local-regeneration switch of the golden tests
+    /// (<c>METANO_UPDATE_GOLDENS=1</c> rewrites the expected files; CI never
+    /// sets it). The golden files are read from the build output (copied to
+    /// <c>bin/</c>), so the update mode writes back to the source tree.
+    /// <see cref="AssertGolden"/> is the only reader of the golden files.
+    /// </summary>
+    private static bool UpdateGoldensRequested =>
+        Environment.GetEnvironmentVariable("METANO_UPDATE_GOLDENS") == "1";
+
     private static List<MetadataReference> BuildBaseReferences()
     {
         var references = new List<MetadataReference>
@@ -711,15 +721,6 @@ public static class TranspileHelper
     }
 
     /// <summary>
-    /// The shared local-regeneration switch of the golden tests
-    /// (<c>METANO_UPDATE_GOLDENS=1</c> rewrites the expected files; CI never
-    /// sets it). A test that sets it writes its golden and skips the assert,
-    /// which would read the stale output-directory copy.
-    /// </summary>
-    internal static bool UpdateGoldensRequested =>
-        Environment.GetEnvironmentVariable("METANO_UPDATE_GOLDENS") == "1";
-
-    /// <summary>
     /// Asserts that <paramref name="actual"/> is the expected file
     /// <paramref name="name"/>, or rewrites that file when
     /// <see cref="UpdateGoldensRequested"/>.
@@ -740,7 +741,7 @@ public static class TranspileHelper
     /// Reads an expected output file (.ts, .tsx or .dart) from the Expected/
     /// directory.
     /// </summary>
-    public static string ReadExpected(string filename)
+    private static string ReadExpected(string filename)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Expected", filename);
         if (!File.Exists(path))
@@ -754,7 +755,7 @@ public static class TranspileHelper
     /// the golden tests that expose <see cref="UpdateGoldensRequested"/>. The
     /// copy in the output directory is build output.
     /// </summary>
-    public static void WriteExpected(string filename, string content)
+    private static void WriteExpected(string filename, string content)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
 

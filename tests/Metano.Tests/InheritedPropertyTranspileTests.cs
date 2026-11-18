@@ -164,8 +164,7 @@ public class InheritedPropertyTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("abstract-property-base.ts");
-        await Assert.That(result["shape.ts"]).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("abstract-property-base.ts", result["shape.ts"]);
         await Assert.That(result["circle.ts"]).Contains("get kind(): string {");
         await Assert.That(result["square.ts"]).Contains("readonly kind$Square_");
         await Assert.That(result["square.ts"]).Contains("get kind(): string {");

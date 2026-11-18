@@ -29,9 +29,7 @@ public class OverloadDispatchGenericTests
             """
         );
 
-        await Assert
-            .That(result["bag.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-unconstrained.ts"));
+        await TranspileHelper.AssertGolden("dispatcher-generic-unconstrained.ts", result["bag.ts"]);
     }
 
     [Test]
@@ -53,9 +51,7 @@ public class OverloadDispatchGenericTests
             """
         );
 
-        await Assert
-            .That(result["mixed.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-mixed.ts"));
+        await TranspileHelper.AssertGolden("dispatcher-generic-mixed.ts", result["mixed.ts"]);
     }
 
     [Test]
@@ -108,9 +104,7 @@ public class OverloadDispatchGenericTests
             result["val-box.ts"]
         );
 
-        await Assert
-            .That(outputs)
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-constrained.ts"));
+        await TranspileHelper.AssertGolden("dispatcher-generic-constrained.ts", outputs);
     }
 
     [Test]
@@ -138,9 +132,7 @@ public class OverloadDispatchGenericTests
             """
         );
 
-        await Assert
-            .That(result["holder.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-methods.ts"));
+        await TranspileHelper.AssertGolden("dispatcher-generic-methods.ts", result["holder.ts"]);
     }
 
     [Test]

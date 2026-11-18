@@ -90,9 +90,7 @@ public class ValueEqualityOperatorTests
             """
         );
 
-        await Assert
-            .That(result["comparisons.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("value-equality-operators.ts"));
+        await TranspileHelper.AssertGolden("value-equality-operators.ts", result["comparisons.ts"]);
     }
 
     [Test]

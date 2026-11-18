@@ -59,8 +59,7 @@ public class DeconstructionTranspileTests
         );
 
         var output = result["program.ts"];
-        var expected = TranspileHelper.ReadExpected("deconstruction-basic.ts");
-        await Assert.That(output).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("deconstruction-basic.ts", output);
     }
 
     // Contract D2 — discard → empty hole.
@@ -77,8 +76,7 @@ public class DeconstructionTranspileTests
         );
 
         var output = result["program.ts"];
-        var expected = TranspileHelper.ReadExpected("deconstruction-discard.ts");
-        await Assert.That(output).IsEqualTo(expected);
+        await TranspileHelper.AssertGolden("deconstruction-discard.ts", output);
         // Only `b` is bound; the discarded slot is an empty hole.
         await Assert.That(output).Contains("const [, b] = makePair();");
     }
