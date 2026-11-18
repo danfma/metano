@@ -60,7 +60,9 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
   hook therefore runs before the settings are resolved and the assets projected, so a property it
   sets or a `MetanoAsset` it adds reaches the tool, and an `AfterTargets` hook runs after every
   target, as in 2.x. Each per-target target (`MetanoTranspileTs`) prepares in its body too, so it
-  also works on its own.
+  also works on its own. A hook that changes settings or assets attaches to `MetanoTranspile`:
+  on `BeforeTargets="MetanoTranspileTs"` it applies only when that target runs on its own, because
+  in a normal build the settings are already resolved when it fires.
 - **Parent decides, worker executes.** Each per-target MSBuild target (`MetanoTranspileTs`) owns
   its incremental check (`Inputs` = user sources, assets, project file, its toolchain key;
   `Outputs` = its `.metano-stamp`). Only when out of date does it call the shared worker through
