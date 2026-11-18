@@ -172,3 +172,17 @@ describe("roundDecimal", () => {
     expect(() => roundingFor(0, -1 as MidpointRounding)).toThrow(ArgumentException);
   });
 });
+
+describe("MidpointRounding modes", () => {
+  test("every mode is accepted and the next value is not (the mode count in math.ts)", () => {
+    const modes = Object.values(MidpointRounding);
+
+    for (const mode of modes) {
+      expect(() => roundNumber(1.5, 0, mode)).not.toThrow();
+    }
+
+    expect(() => roundNumber(1.5, 0, modes.length as MidpointRounding)).toThrow(
+      ArgumentException,
+    );
+  });
+});

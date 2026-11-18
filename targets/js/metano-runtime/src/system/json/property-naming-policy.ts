@@ -10,7 +10,7 @@ export abstract class PropertyNamingPolicy {
   abstract convert(name: string): string;
 
   // Lazy static getters: each policy is built on first read, so the module
-  // evaluates nothing at load (spec 011 FR-043).
+  // keeps nothing a bundler must retain (spec 011 FR-043).
   static get camelCase(): PropertyNamingPolicy {
     return camelCasePolicy();
   }

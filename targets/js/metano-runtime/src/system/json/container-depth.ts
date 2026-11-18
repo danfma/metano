@@ -6,6 +6,7 @@ const MAX_JSON_DEPTH = 64;
 /** The STJ metadata-mode message for a write deeper than the maximum depth (FR-016); 64 is {@link MAX_JSON_DEPTH}. */
 const WRITE_DEPTH_MESSAGE =
   "A possible object cycle was detected. This can either be due to a cycle or if the object " +
+  // 64: keep in sync with MAX_JSON_DEPTH (a substitution would keep the message at load).
   "depth is larger than the maximum allowed depth of 64. Consider using " +
   "ReferenceHandler.Preserve on JsonSerializerOptions to support cycles.";
 

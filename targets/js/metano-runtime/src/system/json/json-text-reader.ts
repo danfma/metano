@@ -44,6 +44,7 @@ const MAX_TEXT_DEPTH = 1000;
 
 /** The message for a text deeper than {@link MAX_TEXT_DEPTH} (1000) levels. */
 const TOO_DEEP =
+  // 1000: keep in sync with MAX_TEXT_DEPTH (a substitution would keep the message at load).
   "The JSON text nests containers deeper than 1000 levels, which " +
   "deserializeText does not read.";
 
@@ -51,7 +52,7 @@ const TOO_DEEP =
 const DOUBLE_EXACT_DIGITS = 15;
 
 /** The shortest run of `[0-9.]` that can hold a mantissa of more than 15 digits: {@link DOUBLE_EXACT_DIGITS} + 1. */
-const INEXACT_RUN_LENGTH = 16;
+const INEXACT_RUN_LENGTH = 16; // keep in sync with DOUBLE_EXACT_DIGITS + 1
 
 const TAB = 0x09;
 const LINE_FEED = 0x0a;

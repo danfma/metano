@@ -24,6 +24,7 @@ const TICKS_PER_DAY = 864_000_000_000n;
 
 /** `TimeSpan.MaxValue.Ticks` and `TimeSpan.MinValue.Ticks`. */
 const MAX_TICKS = 9_223_372_036_854_775_807n;
+// BigInt("-…"), not a negative literal: bun keeps `-…n` in every bundle (spec 011 FR-043).
 const MIN_TICKS = /* @__PURE__ */ BigInt("-9223372036854775808");
 
 /** The most microseconds the component constructor accepts (`TimeSpan.MaxValue` in microseconds). */

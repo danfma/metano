@@ -171,3 +171,11 @@ describe("PropertyNamingPolicy matches System.Text.Json", () => {
     expect(PropertyNamingPolicy.snakeCaseUpper.convert("ᾀb")).toBe("ᾈB");
   });
 });
+
+describe("PropertyNamingPolicy statics", () => {
+  test("each policy is built once and kept", () => {
+    expect(PropertyNamingPolicy.camelCase).toBe(PropertyNamingPolicy.camelCase);
+    expect(PropertyNamingPolicy.snakeCaseLower).toBe(PropertyNamingPolicy.snakeCaseLower);
+    expect(PropertyNamingPolicy.kebabCaseUpper).toBe(PropertyNamingPolicy.kebabCaseUpper);
+  });
+});

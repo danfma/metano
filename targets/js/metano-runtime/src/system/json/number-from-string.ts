@@ -234,32 +234,38 @@ function integerReadersOf<T extends number | bigint>(
 }
 
 /** Signed integer types take an optional sign; unsigned ones digits only. */
-const STRICT_INTEGER_READERS = /* @__PURE__ */ integerReadersOf(
-  (numberType) =>
-    UNSIGNED_INTEGER_TYPES.has(numberType) ? UNSIGNED_INTEGER_PATTERN : SIGNED_INTEGER_PATTERN,
-  integerValueOf,
+const STRICT_INTEGER_READERS = /* @__PURE__ */ lazyValue(() =>
+  integerReadersOf(
+    (numberType) =>
+      UNSIGNED_INTEGER_TYPES.has(numberType) ? UNSIGNED_INTEGER_PATTERN : SIGNED_INTEGER_PATTERN,
+    integerValueOf,
+  ),
 );
 
 /** Every integer type with an optional sign, as `Enum.TryParse` reads one (`readEnumIntegerText`). */
-const ENUM_INTEGER_READERS: Readonly<Record<IntegerTypeName, TextReader<number>>> =
-  /* @__PURE__ */ integerReadersOf(
-    () => SIGNED_INTEGER_PATTERN,
-    () => (value) => Number(value),
-  );
+const ENUM_INTEGER_READERS = /* @__PURE__ */ lazyValue(
+  (): Readonly<Record<IntegerTypeName, TextReader<number>>> =>
+    integerReadersOf(
+      () => SIGNED_INTEGER_PATTERN,
+      () => (value) => Number(value),
+    ),
+);
 
 /** Every integer type's number-leaf tokens, answered as the exact `bigint` in range. */
-const INTEGER_TOKEN_READERS: Readonly<Record<IntegerTypeName, TextReader<bigint>>> =
-  /* @__PURE__ */ integerReadersOf(
-    (numberType) =>
-      UNSIGNED_INTEGER_TYPES.has(numberType)
-        ? UNSIGNED_INTEGER_TOKEN_PATTERN
-        : SIGNED_INTEGER_TOKEN_PATTERN,
-    () => (value) => value,
-  );
+const INTEGER_TOKEN_READERS = /* @__PURE__ */ lazyValue(
+  (): Readonly<Record<IntegerTypeName, TextReader<bigint>>> =>
+    integerReadersOf(
+      (numberType) =>
+        UNSIGNED_INTEGER_TYPES.has(numberType)
+          ? UNSIGNED_INTEGER_TOKEN_PATTERN
+          : SIGNED_INTEGER_TOKEN_PATTERN,
+      () => (value) => value,
+    ),
+);
 
 const NUMBER_TEXT_READERS = /* @__PURE__ */ lazyValue(
   (): Readonly<Record<NumberTypeName, TextReader<number | bigint>>> => ({
-    ...STRICT_INTEGER_READERS,
+    ...STRICT_INTEGER_READERS(),
     "System.Single": floatingPointReader(fitsSingle),
     "System.Double": floatingPointReader(fitsDouble),
   }),
@@ -298,7 +304,7 @@ export function readNumberTextAsNumber(
  * (spec 012 FR-052).
  */
 export function readIntegerToken(text: string, numberType: IntegerTypeName): bigint | undefined {
-  return INTEGER_TOKEN_READERS[numberType](text);
+  return INTEGER_TOKEN_READERS()[numberType](text);
 }
 
 /**
@@ -307,7 +313,7 @@ export function readIntegerToken(text: string, numberType: IntegerTypeName): big
  * reads it (`"+5"` and `"-0"` read for a `byte` enum); `undefined` otherwise.
  */
 export function readEnumIntegerText(text: string, numberType: IntegerTypeName): number | undefined {
-  return ENUM_INTEGER_READERS[numberType](text);
+  return ENUM_INTEGER_READERS()[numberType](text);
 }
 
 /** The digits of a matched number text as `significand × 10^exponent`, without its sign. */

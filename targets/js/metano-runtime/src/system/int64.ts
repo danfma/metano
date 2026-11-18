@@ -10,6 +10,7 @@
 import { DivideByZeroException, OverflowException } from "./exceptions/index.ts";
 
 /** `long.MinValue`. */
+// BigInt("-…"), not a negative literal: bun keeps `-…n` in every bundle (spec 011 FR-043).
 export const INT64_MIN = /* @__PURE__ */ BigInt("-9223372036854775808");
 
 /** `long.MaxValue`. */
@@ -35,6 +36,7 @@ const INT32_MAX = 2147483647;
 const UINT32_MAX = 4294967295;
 
 /** `BigInteger` keeps values above `int.MinValue` inline (see {@link uint64FromBigInteger}). */
+// BigInt("-…"), not a negative literal: bun keeps `-…n` in every bundle (spec 011 FR-043).
 const INT32_MIN_BIGINT = /* @__PURE__ */ BigInt("-2147483648");
 
 /** The significand width of a double; {@link int64ToSingle} rounds to it. */

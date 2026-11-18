@@ -77,6 +77,7 @@ const MILLISECOND_IN_NANOSECONDS = 1_000_000n;
 const MINUTE_IN_NANOSECONDS = 60_000_000_000n;
 
 /** The `TimeSpan` range in ticks: the whole signed 64-bit domain. */
+// BigInt("-…"), not a negative literal: bun keeps `-…n` in every bundle (spec 011 FR-043).
 const MIN_TIME_SPAN_TICKS = /* @__PURE__ */ BigInt("-9223372036854775808");
 
 const MAX_TIME_SPAN_TICKS = 9_223_372_036_854_775_807n;
@@ -89,7 +90,8 @@ type TemporalReader = (text: string) => unknown;
 
 /** The readers by the CLR name the descriptor's `typeName` carries. */
 const READERS_BY_TYPE_NAME: Record<string, (text: string, error: ErrorTypeName) => unknown> = {
-  // Literal keys (the *_NAME constants): a computed key keeps the table at load.
+  // Literal keys, kept in sync with the *_NAME constants above: a computed key keeps
+  // the table at load.
   "System.TimeOnly": readTimeOnly,
   "System.DateOnly": readDateOnly,
   "System.DateTime": readDateTime,

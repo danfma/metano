@@ -22,6 +22,7 @@ describe("lazyValue", () => {
 
   test("keeps an undefined value without building again", () => {
     let builds = 0;
+
     const read = lazyValue(() => {
       builds++;
 
