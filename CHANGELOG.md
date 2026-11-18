@@ -921,8 +921,8 @@ the rows of `tests/BclReference`.
   emitted, the identity unwrap to the underlying primitive included
   (`Slug.__implicitToString(s)` returns `s`), so a package that sees the type only through
   metadata names the same function.
-- A conversion spells a converted type by its emitted name (`[Name("Cash")] class Money` →
-  `__implicitFromCash`).
+- A conversion spells a converted type by its CLR name, as method fast paths do
+  (`[Name("Cash")] class Money` → `__implicitFromMoney(m: Cash)`).
 - Every conversion is declared, so one to a type the target neither emits nor maps
   (`implicit operator System.Text.StringBuilder(Vec v)`) now emits
   `__implicitToStringBuilder(v: Vec): StringBuilder` and fails `tsc` with `TS2304`, where nothing
