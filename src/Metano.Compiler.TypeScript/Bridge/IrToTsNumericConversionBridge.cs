@@ -17,8 +17,6 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class IrToTsNumericConversionBridge
 {
-    private const string LiftedValueName = "value";
-
     private static readonly IrNumericEndpoint CodeUnit = new(IrNumericKind.UInt16);
 
     public static TsExpression Map(IrNumericConversion conversion, TsExpression operand)
@@ -31,34 +29,11 @@ internal static class IrToTsNumericConversionBridge
             : RenderConversion(conversion.From, conversion.To, conversion.IsChecked, operand);
     }
 
-    /// <summary>
-    /// <c>x == null ? null : convert(x)</c> for an operand that is safe to
-    /// read twice, <c>mapNullable(x, (value) =&gt; convert(value))</c>
-    /// otherwise, so the operand is evaluated once (FR-019). The loose
-    /// <c>==</c> also catches the <c>undefined</c> of an optional field.
-    /// </summary>
-    private static TsExpression Lifted(IrNumericConversion conversion, TsExpression operand)
-    {
-        var (from, to, isChecked) = (conversion.From, conversion.To, conversion.IsChecked);
-
-        if (IrEvaluationTraits.IsSideEffectFree(conversion.Operand))
-        {
-            return new TsConditionalExpression(
-                new TsBinaryExpression(operand, "==", new TsLiteral("null")),
-                new TsLiteral("null"),
-                RenderConversion(from, to, isChecked, operand)
-            );
-        }
-
-        var value = new TsIdentifier(LiftedValueName);
-
-        var convert = new TsArrowFunction(
-            [new TsParameter(LiftedValueName, null)],
-            [new TsReturnStatement(RenderConversion(from, to, isChecked, value))]
+    /// <summary>The conversion lifted over <c>null</c> (<see cref="NullLiftedConversion"/>).</summary>
+    private static TsExpression Lifted(IrNumericConversion conversion, TsExpression operand) =>
+        NullLiftedConversion.Map(conversion.Operand, operand, value =>
+            RenderConversion(conversion.From, conversion.To, conversion.IsChecked, value)
         );
-
-        return RuntimeCall(Int64RuntimeHelpers.MapNullable, operand, convert);
-    }
 
     private static TsExpression RenderConversion(
         IrNumericEndpoint from,

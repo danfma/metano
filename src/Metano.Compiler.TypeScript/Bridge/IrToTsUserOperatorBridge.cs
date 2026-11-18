@@ -16,7 +16,6 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class IrToTsUserOperatorBridge
 {
-    private const string LiftedValueName = "value";
     private const string LeftName = "left$lifted";
     private const string RightName = "right$lifted";
 
@@ -46,25 +45,9 @@ internal static class IrToTsUserOperatorBridge
         if (!conversion.IsLifted)
             return Converted(conversion, operand, context);
 
-        if (IrEvaluationTraits.IsSideEffectFree(conversion.Operand))
-        {
-            return new TsConditionalExpression(
-                new TsBinaryExpression(operand, "==", new TsLiteral("null")),
-                new TsLiteral("null"),
-                Converted(conversion, operand, context)
-            );
-        }
-
-        var convert = new TsArrowFunction(
-            [new TsParameter(LiftedValueName, null)],
-            [
-                new TsReturnStatement(
-                    Converted(conversion, new TsIdentifier(LiftedValueName), context)
-                ),
-            ]
+        return NullLiftedConversion.Map(conversion.Operand, operand, value =>
+            Converted(conversion, value, context)
         );
-
-        return RuntimeCall(Int64RuntimeHelpers.MapNullable, operand, convert);
     }
 
     /// <summary>
