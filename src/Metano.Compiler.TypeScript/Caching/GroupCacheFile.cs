@@ -35,8 +35,10 @@ public sealed record GroupCacheFile(
     // `kind` field would default to 0 = Class). Bumping the version
     // invalidates every stale v2 file so the next run rebuilds the
     // group cache from scratch. v4 added the per-group cross-package
-    // Dependencies (#299) so a reused group still reports them.
-    public const int CurrentFormatVersion = 5;
+    // Dependencies (#299) so a reused group still reports them. v6 added
+    // the per-group CheckedCasts (#669, #685) so a reused group on an import
+    // cycle is not transformed again only to read them.
+    public const int CurrentFormatVersion = 6;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -74,7 +76,9 @@ public sealed record GroupCacheFile(
     }
 
     private static bool HasCompleteEntries(GroupCacheFile cache) =>
-        cache.Groups.Values.All(entry => entry is { Files: not null, Dependencies: not null });
+        cache.Groups.Values.All(entry =>
+            entry is { Files: not null, Dependencies: not null, CheckedCasts: not null }
+        );
 
     public void Write(string outputDir)
     {
@@ -93,4 +97,12 @@ public sealed record GroupCacheEntry(
     string ClosureHash,
     IReadOnlyList<CachedFileMetadata> Files,
     IReadOnlyDictionary<string, string> Dependencies
-);
+)
+{
+    /// <summary>
+    /// The local classes the group's reference casts check with <c>castTo</c>,
+    /// by emitted name and in ordinal order, which the import-graph pass of the
+    /// casts reads when the group is reused (#669).
+    /// </summary>
+    public IReadOnlyList<string> CheckedCasts { get; init; } = [];
+}

@@ -11,8 +11,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <c>Leaf</c> extends <c>Node</c>: loading <c>node</c> first evaluated
 /// <c>class Leaf extends Node</c> before <c>Node</c> existed). The graph is the one
 /// before any group is transformed again, so an import a reassertion drops never
-/// unblocks another cast. A group reused from the cache carries no casts to read:
-/// on a cycle it is transformed again first.
+/// unblocks another cast. A group reused from the cache carries the casts its
+/// cache entry recorded; one without recorded casts is transformed again first.
 /// </summary>
 internal sealed class ImportCycleCastPass(string? importAlias)
 {
