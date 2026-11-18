@@ -518,7 +518,7 @@ public class IrClassExtractionTests
 
         var opMethod = ir.Members!.OfType<IrMethodDeclaration>().First(m => m.Semantics.IsOperator);
         await Assert.That(opMethod.Semantics.IsOperator).IsTrue();
-        await Assert.That(opMethod.Semantics.OperatorKind).IsEqualTo("Addition");
+        await Assert.That(opMethod.Semantics.OperatorKind?.Name).IsEqualTo("Addition");
     }
 
     [Test]

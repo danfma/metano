@@ -27,7 +27,7 @@ public sealed record IrMethodSemantics(
     bool IsGenerator = false,
     bool IsExtension = false,
     bool IsOperator = false,
-    string? OperatorKind = null,
+    IrOperatorKind? OperatorKind = null,
     bool IsSynthesized = false,
     bool HasDefaultImplementation = false,
     bool IsAbstract = false,

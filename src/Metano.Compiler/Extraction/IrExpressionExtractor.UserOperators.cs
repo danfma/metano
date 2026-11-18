@@ -156,7 +156,7 @@ public sealed partial class IrExpressionExtractor
         return new IrUserOperator(
             TypeReferenceTo(method.ContainingType),
             definition.Name,
-            IrMethodExtractor.OperatorKindOf(definition)!,
+            IrMethodExtractor.OperatorKindOf(definition)!.Value,
             overload,
             pin,
             ConversionNaming.Of(definition, _target)
