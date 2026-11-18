@@ -102,9 +102,10 @@ public sealed record IrExtractionContext(
     public Func<INamedTypeSymbol, bool>? HasExceptionRuntimeClass { get; init; }
 
     /// <summary>
-    /// The port through which a target says the name it declares a member
-    /// under (its <c>[Name]</c> or its naming policy: TypeScript camelCases
-    /// <c>Total</c> to <c>total</c>), so the extractor can warn when a
+    /// The port through which a target says, best effort from the symbol, the
+    /// name it declares a member under (its <c>[Name]</c> or its naming
+    /// policy: TypeScript camelCases <c>Total</c> to <c>total</c>), so the
+    /// extractor can warn when a
     /// verbatim <c>dynamic</c> access on an <c>AsDynamic()</c> result names a
     /// member of the receiver's static type that is emitted under another
     /// name (<c>MS0057</c>, spec 011 FR-036). <c>null</c>, the default, for a

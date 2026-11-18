@@ -222,6 +222,29 @@ public static class IrToTsNamingPolicy
     }
 
     /// <summary>
+    /// The name a member symbol is declared with, best effort from the symbol
+    /// alone (the port <c>IrExtractionContext.EmittedMemberName</c>): a method
+    /// or event by the method rule (<see cref="HashCodeMethodName"/> for an
+    /// override of <c>object.GetHashCode</c>, otherwise its <c>[Name]</c> or
+    /// camelCase without reserved-word escapes), a field or property by
+    /// <see cref="ToDataMemberName"/>. An overload's suffix, an
+    /// <c>[Ignore]</c> and a BCL mapping are not reflected.
+    /// </summary>
+    public static string DeclaredNameOf(ISymbol member)
+    {
+        var nameOverride = member.GetNameOverride(TargetLanguage.TypeScript);
+
+        return member switch
+        {
+            IMethodSymbol { Name: nameof(GetHashCode), IsOverride: true, Parameters.Length: 0 } =>
+                HashCodeMethodName,
+            IMethodSymbol or IEventSymbol => nameOverride
+                ?? TypeScriptNaming.ToCamelCaseMember(member.Name),
+            _ => ToDataMemberName(member.Name, nameOverride),
+        };
+    }
+
+    /// <summary>
     /// The name a class method is declared with: <see cref="HashCodeMethodName"/>
     /// for an override of <c>object.GetHashCode</c>,
     /// <see cref="ToMethodName(string, IReadOnlyList{IrAttribute})"/> otherwise.

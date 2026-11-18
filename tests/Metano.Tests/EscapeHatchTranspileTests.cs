@@ -128,12 +128,16 @@ public class EscapeHatchTranspileTests
     }
 
     [Test]
-    [Arguments("h.AsDynamic().Total", "total")]
-    [Arguments("h.AsDynamic().Label", "caption")]
-    [Arguments("h.AsDynamic().Describe()", "describe")]
-    [Arguments("InteropExtensions.AsDynamic(h).Total", "total")]
-    [Arguments("h.AsDynamic().Inherited", "inherited")]
-    public async Task AccessToARenamedMember_ReportsMs0057(string site, string emitted)
+    [Arguments("h.AsDynamic().Total")]
+    [Arguments("h.AsDynamic().Label")]
+    [Arguments("h.AsDynamic().Describe()")]
+    [Arguments("h.AsDynamic().Delete()")]
+    [Arguments("InteropExtensions.AsDynamic(h).Total")]
+    [Arguments("h.AsDynamic().Inherited")]
+    [Arguments("h.AsDynamic().Hidden")]
+    [Arguments("h.AsDynamic().Pick(1)")]
+    [Arguments("h.Text.AsDynamic().Length")]
+    public async Task AccessToARenamedMember_ReportsMs0057(string site)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             RenamedMemberSource($"public object F(Holder h) => {site};")
@@ -143,8 +147,11 @@ public class EscapeHatchTranspileTests
             d.Code == DiagnosticCodes.DynamicAccessToRenamedMember
         );
 
+        // The emitted name is not quoted: an overload suffix, an [Ignore] or a
+        // BCL mapping can make the symbol's spelling differ from it.
         await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
-        await Assert.That(warning.Message).Contains($"as '{emitted}'");
+        await Assert.That(warning.Message).Contains("under a different name");
+        await Assert.That(warning.Message).DoesNotContain(" as '");
         await Assert.That(site).StartsWith(LocatedText(warning));
         await Assert.That(files["probe.ts"]).Contains(" as any)");
     }
@@ -162,6 +169,37 @@ public class EscapeHatchTranspileTests
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.DynamicAccessToRenamedMember))
             .IsEmpty();
+    }
+
+    [Test]
+    [Arguments("Delete", "delete")]
+    [Arguments("Default", "default_")]
+    [Arguments("GetHashCode", "hashCode")]
+    [Arguments("Label", "caption")]
+    public async Task DeclaredNameOf_FollowsTheDeclarationRule(string member, string declared)
+    {
+        // Methods take the method rule (no reserved-word escape, `hashCode` for
+        // the GetHashCode override); data members the data-member rule.
+        var compilation = TranspileHelper.CompileLibrary(
+            """
+            public class Shapes
+            {
+                public void Delete() { }
+
+                public int Default { get; set; }
+
+                public override int GetHashCode() => 0;
+
+                [Name("caption")] public string Label { get; set; } = "";
+            }
+            """
+        );
+
+        var symbol = compilation.GetTypeByMetadataName("Shapes")!.GetMembers(member).First();
+
+        await Assert
+            .That(Metano.Compiler.TypeScript.Bridge.IrToTsNamingPolicy.DeclaredNameOf(symbol))
+            .IsEqualTo(declared);
     }
 
     [Test]
@@ -188,6 +226,11 @@ public class EscapeHatchTranspileTests
         + "    public int count;\n"
         + "    [Name(\"caption\")] public string Label { get; set; } = \"\";\n"
         + "    public string Describe() => \"\";\n"
+        + "    public void Delete() { }\n"
+        + "    [Ignore] public int Hidden { get; set; }\n"
+        + "    [Name(\"pickOne\")] public int Pick(int x) => x;\n"
+        + "    public int Pick(string s) => 0;\n"
+        + "    public string Text { get; set; } = \"\";\n"
         + "}\n\n"
         + "[Transpile]\npublic class Probe\n{\n"
         + member

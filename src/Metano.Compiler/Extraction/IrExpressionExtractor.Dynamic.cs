@@ -108,16 +108,16 @@ public sealed partial class IrExpressionExtractor
         if (DeclaredMemberNamed(operandType, name) is not { } declared)
             return;
 
-        var emittedName = emittedNameOf(declared);
-
-        if (emittedName == name)
+        if (emittedNameOf(declared) == name)
             return;
 
+        // The port's name is a best effort (an overload suffix, an [Ignore] or a
+        // BCL mapping can change it), so the message does not quote it.
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.DynamicAccessToRenamedMember,
-                $"'{member.Node}' reads '{name}' verbatim, but '{operandType.ToDisplayString()}' emits that member as '{emittedName}', so the access reads undefined at run time; access it on the typed value instead.",
+                $"'{member.Node}' reads '{name}' verbatim, but '{operandType.ToDisplayString()}' emits its member '{name}' under a different name, so the access does not reach it at run time; access it on the typed value instead.",
                 member.Node.GetLocation()
             )
         );
