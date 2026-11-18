@@ -102,7 +102,8 @@ public sealed record GroupCacheEntry(
     /// <summary>
     /// The local classes the group's reference casts check with <c>castTo</c>,
     /// by emitted name and in ordinal order, which the import-graph pass of the
-    /// casts reads when the group is reused (#669).
+    /// casts reads when the group is reused (#669). Always written; an entry
+    /// read without it is incomplete and discards the cache file.
     /// </summary>
-    public IReadOnlyList<string> CheckedCasts { get; init; } = [];
+    public IReadOnlyList<string>? CheckedCasts { get; init; }
 }
