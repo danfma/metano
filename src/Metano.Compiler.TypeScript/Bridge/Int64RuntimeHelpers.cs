@@ -14,7 +14,6 @@ internal static class Int64RuntimeHelpers
     public const string CheckedInt32 = "checkedInt32";
     public const string CheckedUInt32 = "checkedUInt32";
     public const string CheckedNarrowNumber = "checkedNarrowNumber";
-    public const string MapNullable = "mapNullable";
     public const string Int64FromDouble = "int64FromDouble";
     public const string Int64FromDoubleChecked = "int64FromDoubleChecked";
     public const string UInt64FromDouble = "uint64FromDouble";
