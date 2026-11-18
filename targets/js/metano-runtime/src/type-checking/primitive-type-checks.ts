@@ -4,6 +4,7 @@
  * types that map to the same JS primitive (e.g., int vs double → both number).
  */
 import type { Decimal } from "../system/decimal.ts";
+import type { UUID } from "../system/uuid.ts";
 import { INT64_MAX, INT64_MIN, UINT64_MAX } from "../system/int64.ts";
 
 // ─── String types ───────────────────────────────────────
@@ -92,6 +93,13 @@ export function isBool(value: unknown): value is boolean {
 /** C# `BigInteger` */
 export function isBigInt(value: unknown): value is bigint {
   return typeof value === "bigint";
+}
+
+// ─── Guid ───────────────────────────────────────────────
+
+/** C# `Guid`: a `UUID`, which is a string at run time (the brand is a compile-time fact). */
+export function isGuid(value: unknown): value is UUID {
+  return typeof value === "string";
 }
 
 // ─── Decimal ────────────────────────────────────────────

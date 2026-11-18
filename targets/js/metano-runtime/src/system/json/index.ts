@@ -32,9 +32,4 @@ export { JsonSerializer, BoundSerializer } from "./json-serializer.ts";
 export { PropertyNamingPolicy } from "./property-naming-policy.ts";
 export { collectProperties, collectWireProperties } from "./converters.ts";
 export { JsonException, NotSupportedException } from "./errors.ts";
-export {
-  UnionGuardRegistry,
-  registerUnionGuard,
-  getUnionGuard,
-} from "./union-guard-registry.ts";
 export { publicJsonShape } from "./public-json-shape.ts";

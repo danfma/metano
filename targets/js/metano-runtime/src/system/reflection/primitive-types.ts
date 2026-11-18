@@ -7,6 +7,7 @@ import {
   isDecimal,
   isFloat32,
   isFloat64,
+  isGuid,
   isInt16,
   isInt32,
   isInt64,
@@ -168,7 +169,7 @@ export const GuidType: PrimitiveType<UUID> = {
   fullName: "System.Guid",
   namespace: "System",
   primitive: "Guid",
-  test: (value: unknown): value is UUID => typeof value === "string",
+  test: isGuid,
 };
 
 /** `decimal`: recognized by the decimal.js `Symbol.toStringTag`, so decimal.js is never imported. */

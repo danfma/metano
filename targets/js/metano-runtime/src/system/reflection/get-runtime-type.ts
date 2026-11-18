@@ -19,7 +19,7 @@ import {
   TimeSpanType,
 } from "./temporal-types.ts";
 import { ArrayType, DelegateType, ObjectType } from "./well-known-types.ts";
-import { isInt64, isUInt64 } from "../../type-checking/index.ts";
+import { isDecimal, isInt64, isUInt64 } from "../../type-checking/index.ts";
 
 type Constructor = abstract new (...args: never[]) => unknown;
 
@@ -57,6 +57,7 @@ function getBigIntType(value: bigint): RuntimeType {
 
 function getObjectType(value: object): RuntimeType {
   return (
+    getDecimalType(value) ??
     getTaggedType(toStringTag(value)) ??
     (Array.isArray(value) ? ArrayType : undefined) ??
     ownRuntimeTypeOf(value) ??
@@ -64,11 +65,13 @@ function getObjectType(value: object): RuntimeType {
   );
 }
 
-/** decimal.js and Temporal values, recognized by their `Symbol.toStringTag`. */
+function getDecimalType(value: object): RuntimeType | undefined {
+  return isDecimal(value) ? DecimalType : undefined;
+}
+
+/** Temporal values, recognized by their `Symbol.toStringTag`. */
 function getTaggedType(tag: string): RuntimeType | undefined {
   switch (tag) {
-    case "[object Decimal]":
-      return DecimalType;
     case "[object Temporal.PlainDateTime]":
       return DateTimeType;
     case "[object Temporal.ZonedDateTime]":

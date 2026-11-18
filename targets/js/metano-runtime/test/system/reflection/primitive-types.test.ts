@@ -102,3 +102,10 @@ describe("primitive descriptors", () => {
     expect(DateOnlyType.default).toBeUndefined();
   });
 });
+
+describe("GuidType", () => {
+  test("uses isGuid", () => {
+    expect(GuidType.test("2d9b9d1c-0000-4000-8000-000000000000")).toBe(true);
+    expect(GuidType.test(5)).toBe(false);
+  });
+});
