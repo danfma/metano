@@ -6,20 +6,20 @@ export interface MemoNode<R> {
 
 /** The node for a key tuple under `root`, creating the path on first use. */
 export function memoNodeFor<R>(root: MemoNode<R>, keys: ReadonlyArray<object>): MemoNode<R> {
-  let node = root;
+  return keys.reduce((node, key) => childOf(node, key), root);
+}
 
-  for (const key of keys) {
-    node.children ??= new Map();
+function childOf<R>(node: MemoNode<R>, key: object): MemoNode<R> {
+  const children = (node.children ??= new Map());
+  const known = children.get(key);
 
-    let child = node.children.get(key);
-
-    if (child === undefined) {
-      child = {};
-      node.children.set(key, child);
-    }
-
-    node = child;
+  if (known !== undefined) {
+    return known;
   }
 
-  return node;
+  const created: MemoNode<R> = {};
+
+  children.set(key, created);
+
+  return created;
 }

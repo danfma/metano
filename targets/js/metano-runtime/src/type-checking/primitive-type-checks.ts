@@ -3,6 +3,7 @@
  * Used by Metano-generated overload dispatchers to differentiate
  * types that map to the same JS primitive (e.g., int vs double → both number).
  */
+import type { Decimal } from "../system/decimal.ts";
 import { INT64_MAX, INT64_MIN, UINT64_MAX } from "../system/int64.ts";
 
 // ─── String types ───────────────────────────────────────
@@ -91,4 +92,14 @@ export function isBool(value: unknown): value is boolean {
 /** C# `BigInteger` */
 export function isBigInt(value: unknown): value is bigint {
   return typeof value === "bigint";
+}
+
+// ─── Decimal ────────────────────────────────────────────
+
+/**
+ * C# `decimal`: a decimal.js value, recognized by its `Symbol.toStringTag` so decimal.js is
+ * never imported (an `instanceof` would also miss a value of another decimal.js clone).
+ */
+export function isDecimal(value: unknown): value is Decimal {
+  return Object.prototype.toString.call(value) === "[object Decimal]";
 }

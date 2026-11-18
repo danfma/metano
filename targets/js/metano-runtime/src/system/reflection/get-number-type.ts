@@ -1,8 +1,6 @@
-import type { PrimitiveType } from "./runtime-type.ts";
+import { isInt32 } from "../../type-checking/index.ts";
 import { DoubleType, Int32Type } from "./primitive-types.ts";
-
-const INT32_MIN = -2147483648;
-const INT32_MAX = 2147483647;
+import type { PrimitiveType } from "./runtime-type.ts";
 
 /**
  * The descriptor of a JS number: an integer in the `int` range is `Int32Type`, anything else
@@ -10,5 +8,5 @@ const INT32_MAX = 2147483647;
  * no `Int64Type` for a number: C# `long` is a JS `bigint` (spec 012).
  */
 export function getNumberType(n: number): PrimitiveType<number> {
-  return Number.isInteger(n) && n >= INT32_MIN && n <= INT32_MAX ? Int32Type : DoubleType;
+  return isInt32(n) ? Int32Type : DoubleType;
 }

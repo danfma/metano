@@ -85,4 +85,10 @@ describe("getRuntimeType", () => {
     expect(first.test(new Stranger())).toBe(true);
     expect(first.test({})).toBe(false);
   });
+
+  test("maps an object whose constructor is not a function to ObjectType", () => {
+    const value = Object.create({ constructor: 1 });
+
+    expect(getRuntimeType(value)).toBe(ObjectType);
+  });
 });

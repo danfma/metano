@@ -1,3 +1,4 @@
+import { implementsInterface } from "#/system/reflection/implements-interface.ts";
 import type { ClassType, InterfaceType, PlainObjectType } from "#/system/reflection/index.ts";
 
 /** Hand-written descriptors in the shape the compiler emits, shared by the reflection tests. */
@@ -30,7 +31,7 @@ export const IShape$rt: InterfaceType<IShape> = {
   namespace: "Geo",
   baseInterfaces: [() => IDrawable$rt],
   plainImplementers: [],
-  test: (v: unknown): v is IShape => false,
+  test: (v: unknown): v is IShape => implementsInterface(v, IShape$rt),
 };
 
 export const FlatDto$rt: PlainObjectType<IFlat> = {

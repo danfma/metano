@@ -4,6 +4,7 @@ import {
   isBool,
   isByte,
   isChar,
+  isDecimal,
   isFloat32,
   isFloat64,
   isInt16,
@@ -15,7 +16,8 @@ import {
   isUInt32,
   isUInt64,
 } from "../../type-checking/index.ts";
-import { toStringTag } from "./to-string-tag.ts";
+import type { Decimal } from "../decimal.ts";
+import type { UUID } from "../uuid.ts";
 
 // Plain data literals: they reference the validating checks, never call them at load time.
 // C# `long`, `ulong` and `BigInteger` are JS `bigint` (spec 012), so their checks take a bigint.
@@ -160,21 +162,21 @@ export const StringType: PrimitiveType<string> = {
   default: () => "",
 };
 
-export const GuidType: PrimitiveType<string> = {
+export const GuidType: PrimitiveType<UUID> = {
   kind: "primitive",
   name: "Guid",
   fullName: "System.Guid",
   namespace: "System",
   primitive: "Guid",
-  test: isString,
+  test: (value: unknown): value is UUID => typeof value === "string",
 };
 
 /** `decimal`: recognized by the decimal.js `Symbol.toStringTag`, so decimal.js is never imported. */
-export const DecimalType: PrimitiveType<object> = {
+export const DecimalType: PrimitiveType<Decimal> = {
   kind: "primitive",
   name: "Decimal",
   fullName: "System.Decimal",
   namespace: "System",
   primitive: "Decimal",
-  test: (value: unknown): value is object => toStringTag(value) === "[object Decimal]",
+  test: isDecimal,
 };

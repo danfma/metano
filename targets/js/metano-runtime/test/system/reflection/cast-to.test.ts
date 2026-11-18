@@ -81,3 +81,11 @@ describe("castTo with a described class", () => {
     );
   });
 });
+
+describe("castTo naming an object without a constructor", () => {
+  test("falls back to typeof for Object.create(null)", () => {
+    expect(() => castTo<Circle>(Object.create(null), Circle)).toThrow(
+      "Unable to cast object of type 'object' to type 'Circle'.",
+    );
+  });
+});

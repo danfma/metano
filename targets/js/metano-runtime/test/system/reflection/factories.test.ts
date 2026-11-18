@@ -71,7 +71,8 @@ describe("withImplementers", () => {
   });
 
   test("keeps matching class instances through the original interface", () => {
-    expect(withImplementers(IShape$rt, []).test(new Circle())).toBe(IShape$rt.test(new Circle()));
+    expect(IShape$rt.test(new Circle())).toBe(true);
+    expect(withImplementers(IShape$rt, []).test(new Circle())).toBe(true);
     expect(implementsInterface(new Circle(), IShape$rt)).toBe(true);
   });
 });

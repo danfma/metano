@@ -13,6 +13,7 @@ export const UnknownType: UnknownTypeShape = {
   namespace: "",
   test: (_value: unknown): _value is unknown => true,
 };
+
 export type UnknownType = UnknownTypeShape;
 
 /** `System.Object`: any value but `null` and `undefined`. */
@@ -23,6 +24,7 @@ export const ObjectType: ObjectTypeShape = {
   namespace: "System",
   test: (value: unknown): value is object => value != null,
 };
+
 export type ObjectType = ObjectTypeShape;
 
 /** `System.Array`: a native array, its element type erased. */
@@ -33,6 +35,7 @@ export const ArrayType: ArrayTypeShape = {
   namespace: "System",
   test: (value: unknown): value is unknown[] => Array.isArray(value),
 };
+
 export type ArrayType = ArrayTypeShape;
 
 /** `System.Delegate`: any function. */
@@ -43,4 +46,5 @@ export const DelegateType: DelegateTypeShape = {
   namespace: "System",
   test: (value: unknown): value is (...args: never[]) => unknown => typeof value === "function",
 };
+
 export type DelegateType = DelegateTypeShape;

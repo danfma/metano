@@ -95,23 +95,26 @@ function getAnonymousType(value: object): RuntimeType {
   anonymousTypes ??= new WeakMap();
 
   const ctor = found as Constructor;
-  let type = anonymousTypes.get(ctor);
+  const known = anonymousTypes.get(ctor);
 
-  if (type === undefined) {
-    type = {
-      kind: "class",
-      name: ctor.name,
-      fullName: ctor.name,
-      namespace: "",
-      ctor,
-      interfaces: [],
-      typeParameters: [],
-      isAbstract: false,
-      isValueType: false,
-      test: (candidate: unknown): candidate is unknown => candidate instanceof ctor,
-    };
-    anonymousTypes.set(ctor, type);
+  if (known !== undefined) {
+    return known;
   }
 
-  return type;
+  const created: ClassType<unknown> = {
+    kind: "class",
+    name: ctor.name,
+    fullName: ctor.name,
+    namespace: "",
+    ctor,
+    interfaces: [],
+    typeParameters: [],
+    isAbstract: false,
+    isValueType: false,
+    test: (candidate: unknown): candidate is unknown => candidate instanceof ctor,
+  };
+
+  anonymousTypes.set(ctor, created);
+
+  return created;
 }
