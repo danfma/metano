@@ -104,6 +104,10 @@ jobs:
       - name: sample-int64-conformance
         run: cd targets/js/sample-int64-conformance && bun run build && bun test && bun run test:node
 
+      # The runtime-types sample of spec 011 (Js.Code and the escape hatches, US6).
+      - name: sample-runtime-types
+        run: cd targets/js/sample-runtime-types && bun run build && bun test
+
       # Every other sample must at least build, so a tsconfig or hand-written
       # provider regression cannot go unnoticed (#678).
       - name: Sample builds

@@ -1,0 +1,33 @@
+{
+  "name": "sample-runtime-types",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "source": "./src/*.ts",
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "metano-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "^7.0.0-dev.20260225.1"
+  },
+  "scripts": {
+    "generate": "dotnet run --project ../../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../../samples/SampleRuntimeTypes/SampleRuntimeTypes.csproj -o ./src --clean --time",
+    "build": "tsgo -b .",
+    "test": "bun test"
+  },
+  "exports": {
+    "./sample-runtime-types/interop": {
+      "source": "./src/sample-runtime-types/interop/index.ts",
+      "types": "./dist/sample-runtime-types/interop/index.d.ts",
+      "import": "./dist/sample-runtime-types/interop/index.js"
+    }
+  }
+}

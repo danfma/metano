@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The runtime-types sample of spec 011 (plan.md § Samples): one scenario per
+    user story, each stage adding its own. Stage 011f adds Interop/: Js.Code inline
+    TypeScript and the UnsafeCast / AsDynamic escape hatches (US6).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <MetanoOutputDir>../../targets/js/sample-runtime-types/src</MetanoOutputDir>
+    <MetanoClean>true</MetanoClean>
+    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
+    <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
+    <MetanoPostBuildCommand>bunx biome check --write &quot;$(MetanoOutputDir)&quot;</MetanoPostBuildCommand>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
+</Project>
