@@ -108,10 +108,9 @@ internal static partial class MethodOverloadGroups
         IMethodSymbol method,
         OverloadGroupingPolicy policy
     ) =>
-        GroupOf(method.OriginalDefinition, policy)?.MemberOf(method.OriginalDefinition)
-            is SynthesizedMember synthesized
-            ? synthesized.Kind
-            : null;
+        GroupOf(method.OriginalDefinition, policy)
+            ?.MemberOf(method.OriginalDefinition)
+            ?.SynthesizedKind;
 
     /// <summary>
     /// The name a method groups under: its C# name, or an explicit
@@ -148,12 +147,7 @@ internal static partial class MethodOverloadGroups
         List<IMethodSymbol> declared
     )
     {
-        var first = group.Members[0] switch
-        {
-            DeclaredMember member => member.Symbol,
-            SynthesizedMember member => member.Replacement,
-            _ => null,
-        };
+        var first = group.Members[0].Declaration;
 
         return first is null ? int.MaxValue : declared.IndexOf(first);
     }
@@ -265,9 +259,6 @@ internal static partial class MethodOverloadGroups
         && IsUserMethod(method)
         && !ExplicitImplementationFates.IsDropped(method, policy)
         && !SymbolHelper.IsInlinedAtCallSite(method);
-
-    private static bool IsOperator(IMethodSymbol method) =>
-        method.MethodKind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
 
     private static bool IsUserMethod(IMethodSymbol method) =>
         method.MethodKind

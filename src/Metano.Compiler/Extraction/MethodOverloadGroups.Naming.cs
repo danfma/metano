@@ -28,7 +28,7 @@ internal static partial class MethodOverloadGroups
 
         foreach (var member in group.Members)
         {
-            if (member is SynthesizedMember)
+            if (member.SynthesizedKind is not null)
             {
                 suffixes[member] = SynthesizedSuffixOf(policy);
                 continue;
@@ -41,13 +41,10 @@ internal static partial class MethodOverloadGroups
 
             suffixes[member] = rootSuffix;
 
-            if (
-                anchor.RootMethod is { } rootMethod
-                && member is DeclaredMember { Symbol: var symbol }
-            )
+            if (anchor.RootMethod is { } rootMethod && member.Declaration is { } declaration)
             {
                 OverloadSuffixPin
-                    .Of(symbol, policy.Target)
+                    .Of(declaration, policy.Target)
                     ?.ReportIfIgnoredFor(rootMethod, rootSuffix);
             }
         }

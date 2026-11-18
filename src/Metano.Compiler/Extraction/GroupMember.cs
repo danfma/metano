@@ -26,8 +26,41 @@ internal abstract record GroupMember(int Ordinal, MemberAnchor? Anchor)
     /// <summary>The most arguments a call passes it; <see cref="int.MaxValue"/> with <c>params</c>.</summary>
     public abstract int MaximumArity { get; }
 
+    /// <summary>
+    /// The declaration the member is emitted from: the declared method, or the
+    /// user declaration folded into a synthesized member; <c>null</c> when C#
+    /// synthesizes it.
+    /// </summary>
+    public abstract IMethodSymbol? Declaration { get; }
+
+    /// <summary>The synthesized member it is; <c>null</c> for a declared method.</summary>
+    public virtual IrSynthesizedValueMember? SynthesizedKind => null;
+
+    /// <summary>Whether the member is a user-defined operator or conversion.</summary>
+    public virtual bool IsOperator => false;
+
     /// <summary>Whether the member stands for <paramref name="method"/>.</summary>
     public abstract bool StandsFor(IMethodSymbol method);
+
+    /// <summary>
+    /// Whether the member and <paramref name="other"/> take the same
+    /// parameters: two declared methods of one signature, or two synthesized
+    /// members of one kind.
+    /// </summary>
+    public abstract bool HasSameParametersAs(GroupMember other);
+
+    /// <summary>
+    /// Whether the member, a <c>new</c> method, hides the inherited
+    /// <paramref name="overload"/> of its signature. A synthesized member is
+    /// overridden, never hidden, and hides nothing.
+    /// </summary>
+    public virtual bool Hides(GroupMember overload) => false;
+
+    /// <summary>
+    /// The member as the constructed <paramref name="type"/> declares it: a
+    /// declared method with its type arguments substituted.
+    /// </summary>
+    public virtual GroupMember ConstructedIn(INamedTypeSymbol type) => this;
 }
 
 /// <summary>A method the type declares.</summary>
@@ -45,8 +78,32 @@ internal sealed record DeclaredMember(IMethodSymbol Symbol, int Ordinal, MemberA
             ? int.MaxValue
             : Symbol.Parameters.Length;
 
+    public override IMethodSymbol Declaration => Symbol;
+
+    public override bool IsOperator =>
+        Symbol.MethodKind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
+
     public override bool StandsFor(IMethodSymbol method) =>
         SymbolEqualityComparer.Default.Equals(Symbol.OriginalDefinition, method.OriginalDefinition);
+
+    public override bool HasSameParametersAs(GroupMember other) =>
+        other is DeclaredMember declared && SymbolHelper.HasSameParameters(Symbol, declared.Symbol);
+
+    public override bool Hides(GroupMember overload) =>
+        !Symbol.IsOverride && HasSameParametersAs(overload);
+
+    public override GroupMember ConstructedIn(INamedTypeSymbol type) =>
+        this with
+        {
+            Symbol = type.GetMembers(Symbol.Name)
+                .OfType<IMethodSymbol>()
+                .First(member =>
+                    SymbolEqualityComparer.Default.Equals(
+                        member.OriginalDefinition,
+                        Symbol.OriginalDefinition
+                    )
+                ),
+        };
 }
 
 /// <summary>
@@ -72,10 +129,17 @@ internal sealed record SynthesizedMember(
 
     public override int MaximumArity => Kind is IrSynthesizedValueMember.HashCode ? 0 : 1;
 
+    public override IMethodSymbol? Declaration => Replacement;
+
+    public override IrSynthesizedValueMember? SynthesizedKind => Kind;
+
     public override bool StandsFor(IMethodSymbol method) =>
         Replacement is not null
         && SymbolEqualityComparer.Default.Equals(
             Replacement.OriginalDefinition,
             method.OriginalDefinition
         );
+
+    public override bool HasSameParametersAs(GroupMember other) =>
+        other is SynthesizedMember synthesized && synthesized.Kind == Kind;
 }
