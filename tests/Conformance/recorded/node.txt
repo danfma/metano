@@ -60,6 +60,10 @@ IndexProbes.refArgs = 1,7
 IndexProbes.structElems THROWS Error: Unsupported expression: ArrayCreationExpression
 IndexProbes.swap THROWS Error: Unsupported expression: tuple deconstruction
 IndexProbes.tupleElems THROWS Error: Unsupported expression: DeclarationExpression
+InteropProbes.inlineCodeExpression = 42
+InteropProbes.inlineCodeHoles = 42
+InteropProbes.inlineCodeStatement = 5
+InteropProbes.unsafeCastWrong = cast
 LazyDirectProbes.baseModuleFirst LOADFAIL file://<conformance>/.work/probes/dist/conformance/lazy-barrel/lz-square.js:2
 LazyFieldProbes.structDefaultDoesNotTrigger = start,cctor,ctor,default,get=undefined,ctor,v=3
 LazyStructProbes.paramsConstructorWithoutArguments = start,cctor,W=7:n=0
