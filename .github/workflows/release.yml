@@ -48,6 +48,12 @@ jobs:
       - name: Smoke-test packed metano-runtime
         run: bash scripts/smoke-test-runtime-package.sh
 
+      # Same gate for the NuGet build package: packs Metano-packages.slnx into a
+      # throw-away local feed (nothing is pushed) and builds a consumer through
+      # PackageReference Metano.Build.TypeScript (baseline FR-087, #328).
+      - name: Smoke-test packed Metano.Build.TypeScript
+        run: bash scripts/smoke-test-build-package.sh
+
       # The 64-bit reference conformance (spec 012 FR-064): the transpiled twin
       # must match the .NET fixtures under bun and Node before anything ships.
       - name: sample-int64-conformance

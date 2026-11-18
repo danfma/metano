@@ -44,6 +44,12 @@ jobs:
       - name: Test
         run: dotnet run --project tests/Metano.Tests/
 
+      # Packs Metano-packages.slnx and builds a throw-away consumer through
+      # PackageReference Metano.Build.TypeScript, plus the missing-tool case
+      # (baseline FR-087, #328).
+      - name: Metano.Build.TypeScript packaging smoke test
+        run: bash scripts/smoke-test-build-package.sh
+
       - name: Format check
         run: dotnet csharpier check .
 
