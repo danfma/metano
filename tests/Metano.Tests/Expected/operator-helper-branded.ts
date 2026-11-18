@@ -10,14 +10,14 @@ export namespace Qty {
   }
 
   export function __add(a: Qty, b: Qty): Qty {
-    return Qty.create(a + b);
+    return Qty.create((a + b) | 0);
   }
 
   export function __implicitFromInt32(v: number): Qty {
-    return Qty.create(v * 2);
+    return Qty.create(Math.imul(v, 2));
   }
 
   export function __toInt32(q: Qty): number {
-    return q + 7;
+    return (q + 7) | 0;
   }
 }

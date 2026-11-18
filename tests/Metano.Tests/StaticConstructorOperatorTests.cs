@@ -134,6 +134,6 @@ public class StaticConstructorOperatorTests
     {
         var meter = TranspileHelper.Transpile(Source)["meter.ts"];
 
-        await Assert.That(meter).Contains("return m.v * Meter.scale;");
+        await Assert.That(meter).Contains("return Math.imul(m.v, Meter.scale);");
     }
 }

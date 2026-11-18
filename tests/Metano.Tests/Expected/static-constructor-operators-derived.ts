@@ -27,6 +27,6 @@ export class SubMeter extends Meter {
   static override __toInt32(m: SubMeter): number {
     SubMeter.#$init();
 
-    return m.v + SubMeter.offset;
+    return (m.v + SubMeter.offset) | 0;
   }
 }

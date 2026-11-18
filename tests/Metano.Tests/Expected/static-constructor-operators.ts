@@ -27,13 +27,13 @@ export class Meter {
   static __addMeterMeter(a: Meter, b: Meter): Meter {
     Meter.#$init();
 
-    return new Meter(a.v + b.v);
+    return new Meter((a.v + b.v) | 0);
   }
 
   static __addMeterInt32(a: Meter, k: number): Meter {
     Meter.#$init();
 
-    return new Meter(a.v + k);
+    return new Meter((a.v + k) | 0);
   }
 
   static __add(a: Meter, b: Meter): Meter;
@@ -69,7 +69,7 @@ export class Meter {
   static __negate(a: Meter): Meter {
     Meter.#$init();
 
-    return new Meter(-a.v);
+    return new Meter(-a.v | 0);
   }
 
   $negate(): Meter {
@@ -79,7 +79,7 @@ export class Meter {
   static __toInt32(m: Meter): number {
     Meter.#$init();
 
-    return m.v * Meter.scale;
+    return Math.imul(m.v, Meter.scale);
   }
 
   static __implicitFromInt32(v: number): Meter {
