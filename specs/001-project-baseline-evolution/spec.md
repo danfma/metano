@@ -1250,6 +1250,86 @@ Product requirements added after the migration (normative; each one is traced by
   whitespace only: no token of the generated code changes. Dart output is unchanged (its
   layout does not change before v3).
 
+- **FR-085** (per-target MSBuild packages, #328, ADR-0029): Starting with 3.0.0, the MSBuild
+  integration MUST ship as one NuGet package per language target, named
+  `Metano.Build.<Target>`. The only one in 3.0.0 is `Metano.Build.TypeScript`; it replaces
+  `Metano.Build`, which gets no 3.x version (no stub, no metapackage) and is only deprecated on
+  nuget.org after the release. A `Metano.Build.Dart` package is out of scope until the Dart tool
+  ships (#28).
+  1. *Contents.* Each package carries, in both `build/` and `buildTransitive/`, its own
+     `Metano.Build.<Target>.targets` (the target's setting resolution, its CLI flags, its tool
+     command, its language tag and its `METANOBUILD001` text) and one copy of the shared
+     `Metano.Build.Common.targets` (user-input collection, toolchain key, tool probe, CLI `Exec`,
+     incremental stamp, asset projection, post-build command, `METANOBUILD002`). The shared file
+     has a single source in the repository and is linked into every package, so two packages
+     cannot drift; an import guard makes a project that references two build packages load it
+     once.
+  2. *No compiler inside.* A package MUST NOT bundle or install a compiler: a .NET tool cannot be
+     a NuGet dependency. Each target's tool (`metano-typescript` for TypeScript) is installed
+     separately, preferably through a committed `.config/dotnet-tools.json` and
+     `dotnet tool restore`. When the target is out of date and the tool cannot start, the build
+     fails with `METANOBUILD001`, whose text names that target's tool and its install commands
+     (`MetanoSkipToolCheck=true` and dev mode skip the probe, as today).
+  3. *Versioning.* Every build package version is lock-step with the repository version, so
+     `Metano.Build.TypeScript` starts at 3.0.0.
+  4. *Migration.* A 2.x project migrates by replacing the `Metano.Build` `PackageReference` with
+     `Metano.Build.TypeScript`; every `Metano*` property keeps its name and meaning, and a project
+     that imports the targets by path imports `Metano.Build.TypeScript.targets` instead. The
+     generated output of an unchanged single-target project MUST be byte-identical to the 2.x
+     package's.
+
+- **FR-086** (several targets per project, #328, ADR-0029): A project MAY reference several build
+  packages, and each one MUST resolve every setting it reads by one rule:
+  `<Target>(S) = $(Metano<Prefix><S>) ?? $(Metano<S>) ?? <target default>`, where an empty value
+  counts as unset. The TypeScript prefix is `Ts` (`MetanoTsOutputDir`, `MetanoTsImportAlias`,
+  ...); a future Dart package uses `Dart`. The unprefixed name is the global setting shared by
+  every enabled target, so a single-target project keeps the unprefixed names unchanged.
+  1. *Settings list (the contract).* `Metano.Build.TypeScript` resolves exactly `OutputDir`,
+     `Enabled`, `Clean`, `ShowTimings`, `Dist`, `PackageRoot`, `SrcRoot`, `ImportAlias`,
+     `SourceCondition`, `SkipPackageJson`, `NamespaceBarrels`, `StripInterfacePrefix`,
+     `FilePrefix`, `ExtraArgs`, `PostBuildCommand`, `SkipToolCheck` and `CompilerProject`, each
+     through the rule above; a test asserts that this list and the resolution lines in the
+     `.targets` file match. TypeScript-only settings follow the same rule (no other target reads
+     them). A setting cannot be cleared per target: an empty `MetanoTs<S>` falls back to the
+     global value.
+  2. *Enablement.* A target is enabled when its resolved `OutputDir` is non-empty and its
+     resolved `Enabled` is not `false`; referencing a build package without configuring it stays
+     inert. Settings are resolved when the build runs, not at evaluation, so values set in
+     `Directory.Build.targets` (imported after NuGet package targets) are honoured.
+  3. *Isolation.* Each enabled target runs in its own MSBuild target (`MetanoTranspileTs`, ...)
+     with its own incremental check (`<OutputDir>/.metano-stamp`), its own toolchain key file in
+     `obj/`, its own asset selection (`<MetanoAsset Language="...">`, unchanged) and its own
+     post-build command; one target's settings never reach another's command line. As in 2.x, a
+     post-build command runs on every build, also when its target was up to date; unlike 2.x, a
+     disabled target runs none (2.x ran it even with `MetanoEnabled=false`). The public
+     target names `MetanoTranspile` and `MetanoPostBuild` remain as aggregates that run after
+     every enabled target, so existing `AfterTargets` hooks keep working.
+  4. *Collision.* Two enabled targets whose resolved output directories are the same full path
+     MUST fail the build with `METANOBUILD002` (an error naming both targets and the directory),
+     before any tool runs; a global `MetanoOutputDir` therefore serves a single target only.
+  5. *Up-to-date builds.* An up-to-date target MUST be skipped without starting its tool or
+     spawning its worker, as today.
+
+- **FR-087** (build-package verification and release gate, #328): The repository MUST verify the
+  packed build package the way a NuGet consumer uses it.
+  1. *Pack smoke test.* A script packs `Metano`, `Metano.Compiler.TypeScript` and
+     `Metano.Build.TypeScript` at a throw-away version into a local feed, installs the tool from
+     that feed into a local tool manifest, and builds a throw-away consumer that references
+     `Metano.Build.TypeScript` with `PackageReference`; it asserts the generated `.ts` file,
+     `.metano-stamp` and `package.json`, and that a second build skips the transpile. A negative
+     case without the tool asserts `METANOBUILD001` and its install text. It uses an isolated
+     NuGet package cache and `DOTNET_CLI_HOME`, so it neither reads nor pollutes the developer's.
+  2. *Multi-target tests.* With a test-only `.targets` that declares a synthetic second prefix
+     over the shared file, tests cover precedence (prefixed over global over default),
+     independent stamps, `METANOBUILD002`, the inert unconfigured package and the up-to-date skip.
+  3. *Where it runs.* The smoke test runs in CI on every pull request and, subject to the
+     maintainer's approval of the workflow change, in the release workflow before
+     `semantic-release` (as the `metano-runtime` smoke test does), so a broken package fails the
+     release before a tag exists.
+  4. *Name sweep.* Outside `CHANGELOG.md`, the shipped-feature specs and the deprecation and
+     migration notes, no live document or project still names the `Metano.Build` package or the
+     `Metano.Build.targets` file.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

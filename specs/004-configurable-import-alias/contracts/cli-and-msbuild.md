@@ -47,6 +47,13 @@ File: `src/Metano.Build/build/Metano.Build.targets`.
 </PropertyGroup>
 ```
 
+### 3.0.0 amendment (#328, baseline FR-085 / FR-086, ADR-0029)
+
+From 3.0.0 the property is read by `Metano.Build.TypeScript.targets` (package
+`Metano.Build.TypeScript`, which replaces `Metano.Build`). The name and its flag mapping are
+unchanged. It resolves as `$(MetanoTsImportAlias) ?? $(MetanoImportAlias)`: the prefixed name
+overrides the global one for the TypeScript target only, and an empty value counts as unset.
+
 ## Contract guarantees
 
 - Providing the value with or without a leading `#` yields the same alias key.
