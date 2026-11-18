@@ -21,7 +21,7 @@ function UserId$from(...args: unknown[]): string {
     return UserId.fromRaw$(args[0] as string);
   }
 
-  if (args.length === 1 && typeof args[0] === "string") {
+  if (args.length === 1 && isString(args[0])) {
     return UserId.fromId(args[0] as UserId);
   }
 

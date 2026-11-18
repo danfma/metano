@@ -22,7 +22,7 @@ function Key$x(...args: unknown[]): string {
     return Key.xL$(args[0] as bigint);
   }
 
-  if (args.length === 1 && typeof args[0] === "bigint") {
+  if (args.length === 1 && isInt64(args[0])) {
     return Key.xU(args[0] as UId);
   }
 
@@ -48,7 +48,7 @@ function Key$pin(...args: unknown[]): string {
     return Key.pinViaLong(args[0] as bigint);
   }
 
-  if (args.length === 1 && typeof args[0] === "bigint") {
+  if (args.length === 1 && isInt64(args[0])) {
     return Key.pinU(args[0] as UId);
   }
 
@@ -79,7 +79,7 @@ function Key$v(...args: unknown[]): string {
     return Key.vL(args[0] as bigint);
   }
 
-  if (args.length === 1 && typeof args[0] === "bigint") {
+  if (args.length === 1 && isInt64(args[0])) {
     return Key.vU(args[0] as UId);
   }
 
@@ -109,7 +109,7 @@ function Key$d(...args: unknown[]): string {
     return Key.dLN(args[0] as bigint, args[1] as number);
   }
 
-  if (args.length >= 1 && args.length <= 2 && typeof args[0] === "bigint" && (args[1] === undefined || isInt32(args[1]))) {
+  if (args.length >= 1 && args.length <= 2 && isInt64(args[0]) && (args[1] === undefined || isInt32(args[1]))) {
     return Key.dUN(args[0] as UId, args[1] as number);
   }
 

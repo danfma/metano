@@ -22,7 +22,7 @@ function Tag$s(...args: unknown[]): string {
     return Tag.sL(args[0] as bigint);
   }
 
-  if (args.length === 1 && typeof args[0] === "bigint") {
+  if (args.length === 1 && isInt64(args[0])) {
     return Tag.sU(args[0] as UId);
   }
 

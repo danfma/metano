@@ -22,11 +22,11 @@ function Ticks$__addTicksUId(a: Ticks, b: UId): Ticks {
 function Ticks$__add(a: Ticks, b: bigint): Ticks;
 function Ticks$__add(a: Ticks, b: UId): Ticks;
 function Ticks$__add(...args: unknown[]): Ticks {
-  if (args.length === 2 && typeof args[0] === "bigint" && isInt64(args[1])) {
+  if (args.length === 2 && isInt64(args[0]) && isInt64(args[1])) {
     return Ticks.__addTicksInt64(args[0] as Ticks, args[1] as bigint);
   }
 
-  if (args.length === 2 && typeof args[0] === "bigint" && typeof args[1] === "bigint") {
+  if (args.length === 2 && isInt64(args[0]) && isInt64(args[1])) {
     return Ticks.__addTicksUId(args[0] as Ticks, args[1] as UId);
   }
 
