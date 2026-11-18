@@ -25,12 +25,10 @@ public static class TsGroupingPolicy
                 IrToTsRecordSynthesisBridge.EqualsMethodName,
                 IrToTsNamingPolicy.HashCodeMethodName,
                 IrToTsRecordSynthesisBridge.WithMethodName,
-                FastPathSuffix
+                FastPathSuffix,
+                groupsEquals: true
             )
-        )
-        {
-            GroupsSynthesizedEquals = true,
-        };
+        );
 
     /// <summary>
     /// The name <paramref name="kind"/> is emitted under: the one map from a
