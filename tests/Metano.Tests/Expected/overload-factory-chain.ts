@@ -2,9 +2,7 @@ import { isInt32 } from "metano-runtime";
 
 export class Temp {
   protected static readonly byTempA: unique symbol = Symbol("Temp(int a)");
-
   protected static readonly byTempDefault: unique symbol = Symbol("Temp()");
-
   readonly a: number = 0;
 
   constructor(overload: typeof Temp.byTempA, a: number);

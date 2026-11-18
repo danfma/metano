@@ -7,9 +7,7 @@ export class FieldOrder {
   });
 
   name: string;
-
   a: number = (FieldOrder.#$init(), Counter.take());
-
   b: number = Counter.take();
 
   constructor() { }

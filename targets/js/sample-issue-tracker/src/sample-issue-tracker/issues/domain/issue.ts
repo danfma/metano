@@ -13,15 +13,10 @@ import { IssueWorkflow } from "./issue-workflow";
 
 export class Issue {
   status: IssueStatus = IssueStatus.Backlog;
-
   assigneeId: UserId | null = null;
-
   sprintKey: string | null = null;
-
   readonly createdAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
-
   updatedAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
-
   private readonly _comments: Comment[] = [];
 
   constructor(

@@ -10,23 +10,14 @@ import { OrdDer } from "./ord-der";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _blob?: TypeSpec<Blob>;
-
   private _account?: TypeSpec<Account>;
-
   private _ordDer?: TypeSpec<OrdDer>;
-
   private _byteArray?: ValueSpec<number[] | null>;
-
   private _init?: TypeSpec<Init>;
-
   private _noted?: TypeSpec<Noted>;
-
   private _bX?: TypeSpec<BX>;
-
   private _dX?: TypeSpec<DX>;
-
   private _ordBase?: TypeSpec<OrdBase>;
 
   static get default(): JsonContext {

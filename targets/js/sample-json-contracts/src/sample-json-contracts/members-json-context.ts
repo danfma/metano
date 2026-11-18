@@ -8,15 +8,10 @@ import { SetClass } from "./set-class";
 
 export class MembersJsonContext extends SerializerContext {
   private static readonly _default: MembersJsonContext = new MembersJsonContext();
-
   private _blob?: TypeSpec<Blob>;
-
   private _account?: TypeSpec<Account>;
-
   private _ordBase?: TypeSpec<OrdBase>;
-
   private _initRec?: TypeSpec<InitRec>;
-
   private _setClass?: TypeSpec<SetClass>;
 
   static get default(): MembersJsonContext {

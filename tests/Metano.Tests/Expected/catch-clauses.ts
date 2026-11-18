@@ -37,7 +37,6 @@ export class NotFoundException extends AppException {
 
 export class Handlers {
   private readonly _log: string[] = [] as Array<string>;
-
   verbose: boolean = false;
 
   constructor() { }

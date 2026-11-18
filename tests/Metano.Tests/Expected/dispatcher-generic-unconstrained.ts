@@ -2,9 +2,7 @@ import { isInt32 } from "metano-runtime";
 
 export class Bag<T> {
   protected static readonly byBagItem: unique symbol = Symbol("Bag(T item)");
-
   protected static readonly byBagItemCount: unique symbol = Symbol("Bag(T item, int count)");
-
   readonly log: string = "";
 
   constructor(overload: typeof Bag.byBagItem, item: T);

@@ -2,9 +2,7 @@ import { checkedInt64, divInt64, divUInt64, intDiv, remInt64, remUInt64 } from "
 
 export class Divide {
   private _cursor: number = 0;
-
   total: bigint = 0n;
-
   slots: bigint[] = [1n, 2n, 3n];
 
   constructor() { }

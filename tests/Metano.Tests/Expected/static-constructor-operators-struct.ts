@@ -6,7 +6,6 @@ export class Pt {
   });
 
   static #origin$: number = 0;
-
   x: number = 0;
 
   constructor(x: number) {

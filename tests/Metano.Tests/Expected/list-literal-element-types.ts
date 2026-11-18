@@ -5,7 +5,6 @@ import { Holder } from "./holder";
 
 export class Lists {
   private readonly _field: (number | null)[] = [1];
-
   private _pets: Animal[] = [];
 
   constructor() { }

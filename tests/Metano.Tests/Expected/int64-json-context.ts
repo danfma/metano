@@ -8,19 +8,12 @@ import { TokenId } from "./token-id";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _snowflake?: TypeSpec<Snowflake>;
-
   private _boxes?: TypeSpec<Boxes>;
-
   private _entityId?: ValueSpec<EntityId>;
-
   private _quota?: ValueSpec<Quota>;
-
   private _tokenId?: ValueSpec<TokenId>;
-
   private _int64?: ValueSpec<bigint>;
-
   private _nullableUInt64?: ValueSpec<bigint | null>;
 
   static get default(): JsonContext {

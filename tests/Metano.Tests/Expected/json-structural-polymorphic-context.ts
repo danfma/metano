@@ -17,35 +17,20 @@ import { Sq } from "./sq";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _holder?: TypeSpec<Holder>;
-
   private _shape?: TypeSpec<Shape>;
-
   private _animal?: TypeSpec<Animal>;
-
   private _sAnimal?: TypeSpec<SAnimal>;
-
   private _mixed?: TypeSpec<Mixed>;
-
   private _iShape?: TypeSpec<IShape>;
-
   private _point?: TypeSpec<Point>;
-
   private _point3?: TypeSpec<Point3>;
-
   private _rect?: TypeSpec<Rect>;
-
   private _dog?: TypeSpec<Dog>;
-
   private _sDog?: TypeSpec<SDog>;
-
   private _mP?: TypeSpec<MP>;
-
   private _mC?: TypeSpec<MC>;
-
   private _sq?: TypeSpec<Sq>;
-
   private _circle?: TypeSpec<Circle>;
 
   static get default(): JsonContext {

@@ -3,15 +3,10 @@ import { Exception } from "metano-runtime/system/exceptions/exception";
 
 export class OverloadOverrideException extends Exception {
   protected static readonly byOverloadOverrideExceptionDefault: unique symbol = Symbol("OverloadOverrideException()");
-
   protected static readonly byOverloadOverrideExceptionMessage: unique symbol = Symbol("OverloadOverrideException(string message)");
-
   protected static readonly byOverloadOverrideExceptionMessageInner: unique symbol = Symbol("OverloadOverrideException(string message, Exception inner)");
-
   override readonly name: string = "OverloadOverrideException";
-
   readonly #baseMessage: string;
-
   readonly origin: Exception | null = null;
 
   constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionDefault);

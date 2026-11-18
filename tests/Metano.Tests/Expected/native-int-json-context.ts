@@ -5,15 +5,10 @@ import { NativeQuota } from "./native-quota";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _handles?: TypeSpec<Handles>;
-
   private _nativeId?: ValueSpec<NativeId>;
-
   private _nativeQuota?: ValueSpec<NativeQuota>;
-
   private _intPtr?: ValueSpec<bigint>;
-
   private _nullableUIntPtr?: ValueSpec<bigint | null>;
 
   static get default(): JsonContext {

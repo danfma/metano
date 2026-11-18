@@ -2,9 +2,7 @@ import { isInt32, isString } from "metano-runtime";
 
 export class Opt {
   protected static readonly byOptA: unique symbol = Symbol("Opt(int a)");
-
   protected static readonly byOptSRest: unique symbol = Symbol("Opt(string s, params int[] rest)");
-
   readonly log: string = "";
 
   constructor(overload: typeof Opt.byOptA, a?: number);

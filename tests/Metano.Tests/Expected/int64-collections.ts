@@ -4,7 +4,6 @@ import type { Item } from "./item";
 
 export class Collections {
   private _cursor: number = 0;
-
   slots: bigint[] = new Array<bigint>(4).fill(0n);
 
   constructor() { }

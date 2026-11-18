@@ -5,17 +5,11 @@ import type { Color } from "./color";
 
 export class Conv {
   static readonly huge: bigint = 9007199254740993n;
-
   static readonly uMax: bigint = 18446744073709551615n;
-
   static readonly small: number = 5;
-
   field: bigint = 0n;
-
   uField: bigint = 0n;
-
   nField: bigint | null = null;
-
   initialized: bigint = 7n;
 
   constructor() { }

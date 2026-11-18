@@ -1,8 +1,6 @@
 export class Shift {
   private _cursor: number = 0;
-
   total: bigint = 0n;
-
   slots: bigint[] = [1n, 2n, 3n];
 
   constructor() { }

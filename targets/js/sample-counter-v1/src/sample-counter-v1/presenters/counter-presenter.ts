@@ -5,7 +5,6 @@ import type { ICounterView } from "./i-counter-view";
 
 export class CounterPresenter {
   private _state: Counter;
-
   private readonly _view: ICounterView;
 
   constructor(view: ICounterView, initialState: Counter) {

@@ -12,13 +12,9 @@ export class Registry {
   });
 
   static #log$: string[] | null = null;
-
   static #a$: number = 0;
-
   static #instance$: Registry | null = null;
-
   static #b$: number = 0;
-
   static #untouched$: number = 0;
 
   constructor() {

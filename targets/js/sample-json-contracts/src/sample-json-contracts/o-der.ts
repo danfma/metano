@@ -4,7 +4,6 @@ import { OBase } from "./o-base";
 
 export class ODer extends OBase {
   readonly x: number = 0;
-
   private name$ODer_qoo6r7: string = "";
 
   constructor() {

@@ -7,13 +7,9 @@ import { Video } from "./video";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _video?: TypeSpec<Video>;
-
   private _title?: ValueSpec<Title>;
-
   private _listSlug?: ValueSpec<Slug[] | null>;
-
   private _code?: ValueSpec<Episode.Code>;
 
   static get default(): JsonContext {

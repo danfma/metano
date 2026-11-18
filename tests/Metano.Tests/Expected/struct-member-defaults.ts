@@ -7,15 +7,10 @@ import { Size } from "./size";
 
 export class Segment {
   start: Point = new Point();
-
   origin: Point | null = null;
-
   boxed: Box<number> = new Box<number>();
-
   extent: Size = new Size();
-
   temperature: Celsius;
-
   tally: Counter;
 
   fixed: Point = ((receiver$temp$0) => {

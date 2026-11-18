@@ -470,7 +470,6 @@ export function interpolatedChecked(a: number, b: number): string {
 
 export class NarrowStatics {
   static count: number = 0;
-
   static level: number = 0;
 
   constructor() { }
@@ -478,9 +477,7 @@ export class NarrowStatics {
 
 export class NarrowSource {
   value: number = 0;
-
   signed: number = 0;
-
   evaluations: number = 0;
 
   constructor(value: number) {
@@ -496,23 +493,14 @@ export class NarrowSource {
 
 export class ShiftCells {
   signed: number = 0;
-
   unsigned: number = 0;
-
   small: number = 0;
-
   slots: number[];
-
   unsignedSlots: number[] = new Array<number>(2).fill(0);
-
   evaluations: number = 0;
-
   indexEvaluations: number = 0;
-
   countEvaluations: number = 0;
-
   reads: number = 0;
-
   writes: number = 0;
 
   constructor(seed: number) {

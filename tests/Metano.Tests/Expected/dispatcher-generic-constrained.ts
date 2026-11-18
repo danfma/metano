@@ -2,7 +2,6 @@ import { isInt32 } from "metano-runtime";
 
 export class RefBox<T> {
   protected static readonly byRefBoxT: unique symbol = Symbol("RefBox(T x)");
-
   protected static readonly byRefBoxInt32: unique symbol = Symbol("RefBox(int x)");
 
   constructor(overload: typeof RefBox.byRefBoxT, x: T);
@@ -51,7 +50,6 @@ import type { IShape } from "./i-shape";
 
 export class ShapeBox<T extends IShape> {
   protected static readonly byShapeBoxT: unique symbol = Symbol("ShapeBox(T x)");
-
   protected static readonly byShapeBoxInt32: unique symbol = Symbol("ShapeBox(int x)");
 
   constructor(overload: typeof ShapeBox.byShapeBoxT, x: T);
@@ -100,7 +98,6 @@ import { Animal } from "./animal";
 
 export class AnimalBox<T extends Animal> {
   protected static readonly byAnimalBoxT: unique symbol = Symbol("AnimalBox(T x)");
-
   protected static readonly byAnimalBoxInt32: unique symbol = Symbol("AnimalBox(int x)");
 
   constructor(overload: typeof AnimalBox.byAnimalBoxT, x: T);
@@ -148,7 +145,6 @@ import { isInt32 } from "metano-runtime";
 
 export class ValBox<T> {
   protected static readonly byValBoxX: unique symbol = Symbol("ValBox(T x)");
-
   protected static readonly byValBoxXN: unique symbol = Symbol("ValBox(T x, int n)");
 
   constructor(overload: typeof ValBox.byValBoxX, x: T);

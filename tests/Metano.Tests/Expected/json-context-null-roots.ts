@@ -9,25 +9,15 @@ import { Segment } from "./segment";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _sPoint?: TypeSpec<SPoint>;
-
   private _nullableSPoint?: ValueSpec<SPoint | null>;
-
   private _segment?: TypeSpec<Segment>;
-
   private _boolean?: ValueSpec<boolean>;
-
   private _dateOnly?: ValueSpec<Temporal.PlainDate>;
-
   private _nullableBoolean?: ValueSpec<boolean | null>;
-
   private _level?: ValueSpec<Level>;
-
   private _inner?: TypeSpec<Outer.Inner>;
-
   private _pairInt32?: TypeSpec<Pair<number>>;
-
   private _corner?: TypeSpec<Corner>;
 
   static get default(): JsonContext {

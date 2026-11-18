@@ -4,7 +4,6 @@ import { Widget } from "#/sample-counter-v3/mvu/widget";
 
 export class Heading extends Widget {
   private readonly _level: number;
-
   private readonly _content: string;
 
   constructor(content: string, level: number = 1) {

@@ -2,11 +2,8 @@ import { checkedInt64, checkedUInt64, remInt64 } from "metano-runtime";
 
 export class Counter {
   private readonly _slots: bigint[];
-
   private _field: bigint = 0n;
-
   private _slotReads: number = 0;
-
   total: bigint = 0n;
 
   constructor(seed: bigint) {

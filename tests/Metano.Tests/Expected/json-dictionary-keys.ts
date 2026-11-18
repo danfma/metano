@@ -10,7 +10,6 @@ import { Tag } from "./tag";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _keys?: TypeSpec<Keys>;
 
   static get default(): JsonContext {

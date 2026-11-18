@@ -15,9 +15,7 @@ import { A } from "./a";
 
 export class B {
   protected static readonly byBV: unique symbol = Symbol("B(int v)");
-
   protected static readonly byBText: unique symbol = Symbol("B(string text)");
-
   readonly v: number = 0;
 
   constructor(overload: typeof B.byBV, v: number);

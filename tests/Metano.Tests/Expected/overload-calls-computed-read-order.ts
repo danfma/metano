@@ -90,9 +90,7 @@ import { Trace } from "./trace";
 
 export class Holder {
   field: number = 0;
-
   auto: number = 0;
-
   static shared: number = 0;
 
   first: Label = ((receiver$temp$0) => {

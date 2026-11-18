@@ -5,13 +5,9 @@ import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _storedTodo?: TypeSpec<StoredTodo>;
-
   private _createTodoDto?: TypeSpec<CreateTodoDto>;
-
   private _updateTodoDto?: TypeSpec<UpdateTodoDto>;
-
   private _todoItem?: TypeSpec<TodoItem>;
 
   static get default(): JsonContext {

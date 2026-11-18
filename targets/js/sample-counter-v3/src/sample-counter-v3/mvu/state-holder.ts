@@ -1,7 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export class StateHolder<TState> {
   private _state: TState;
-
   onChange: (() => void) | null = null;
 
   constructor(initial: TState) {

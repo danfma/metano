@@ -4,19 +4,12 @@ import { Mood } from "./mood";
 
 export class Day {
   protected static readonly byDayN: unique symbol = Symbol("Day(int n)");
-
   protected static readonly byDayLabel: unique symbol = Symbol("Day(string label)");
-
   tag: string = "\u0000";
-
   label: string;
-
   mood: Mood = Mood.Calm;
-
   nested: Inner;
-
   id: UUID = UUID.empty;
-
   span: [number, number];
 
   constructor(overload: typeof Day.byDayN, n: number);

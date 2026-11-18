@@ -3,7 +3,6 @@ import { Widget } from "#/sample-counter-v3/mvu/widget";
 
 export class Button extends Widget {
   private readonly _label: string;
-
   private readonly _onPressed: () => void;
 
   constructor(label: string, onPressed: () => void) {

@@ -6,7 +6,6 @@ export class Cell {
   });
 
   v: number = 0;
-
   w: number = 0;
 
   constructor(v: number) {

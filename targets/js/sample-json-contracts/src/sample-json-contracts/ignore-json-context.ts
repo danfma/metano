@@ -7,13 +7,9 @@ import { IgnDer } from "./ign-der";
 
 export class IgnoreJsonContext extends SerializerContext {
   private static readonly _default: IgnoreJsonContext = new IgnoreJsonContext();
-
   private _ignBase?: TypeSpec<IgnBase>;
-
   private _ignAbs?: TypeSpec<IgnAbs>;
-
   private _ignDer?: TypeSpec<IgnDer>;
-
   private _ignAbsDer?: TypeSpec<IgnAbsDer>;
 
   static get default(): IgnoreJsonContext {

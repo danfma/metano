@@ -197,7 +197,6 @@ import { Trace } from "./trace";
 
 export class Holder {
   auto: number = 3;
-
   field: Op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
   constructor() { }
@@ -254,9 +253,7 @@ import { Trace } from "./trace";
 
 export class Chained {
   protected static readonly byChainedFD: unique symbol = Symbol("Chained(int f, int d)");
-
   protected static readonly byChainedDefault: unique symbol = Symbol("Chained()");
-
   total: number = 0;
 
   constructor(overload: typeof Chained.byChainedFD, f: number, d: number);

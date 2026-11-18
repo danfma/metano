@@ -2,7 +2,6 @@ import { isInt32, isInt64 } from "metano-runtime";
 
 export class Box<T> {
   item: T;
-
   count: number = 0;
 
   constructor(item: T, count: number) {

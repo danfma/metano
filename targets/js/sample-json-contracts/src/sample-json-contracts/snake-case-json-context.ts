@@ -4,7 +4,6 @@ import { Stats } from "./stats";
 
 export class SnakeCaseJsonContext extends SerializerContext {
   private static readonly _default: SnakeCaseJsonContext = new SnakeCaseJsonContext();
-
   private _stats?: TypeSpec<Stats>;
 
   static get default(): SnakeCaseJsonContext {

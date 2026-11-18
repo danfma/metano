@@ -3,9 +3,7 @@ import type { Tag } from "./tag";
 
 export class Shelf {
   private readonly _items: number[] = [] as Array<number>;
-
   private readonly _tags: HashSet<Tag> = new HashSet<Tag>();
-
   private readonly _byName: Map<string, Tag | null> = new Map<string, Tag | null>();
 
   constructor() { }

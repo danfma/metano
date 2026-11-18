@@ -791,15 +791,10 @@ export function stepsUntilWrap(start: number): number {
 
 export class NarrowCells {
   private static readonly notReadOnce: number = 65535;
-
   private readonly _cells: number[];
-
   private _cellReads: number = 0;
-
   byteField: number = 0;
-
   sByteField: number = 0;
-
   shortProperty: number = 0;
 
   constructor(seed: number) {

@@ -7,12 +7,9 @@ export class CurrencyConversionException extends Exception {
   protected static readonly byCurrencyConversionExceptionFromCodeToCode: unique symbol = Symbol(
     "CurrencyConversionException(string fromCode, string toCode)",
   );
-
   protected static readonly byCurrencyConversionExceptionFromCodeToCodeReason: unique symbol =
     Symbol("CurrencyConversionException(string fromCode, string toCode, Exception reason)");
-
   override readonly name: string = "CurrencyConversionException";
-
   readonly #baseMessage: string;
 
   constructor(

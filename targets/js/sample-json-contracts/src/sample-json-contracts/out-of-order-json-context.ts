@@ -7,13 +7,9 @@ import { SilenceClip } from "./silence-clip";
 
 export class OutOfOrderJsonContext extends SerializerContext {
   private static readonly _default: OutOfOrderJsonContext = new OutOfOrderJsonContext();
-
   private _clip?: TypeSpec<Clip>;
-
   private _imageClip?: TypeSpec<ImageClip>;
-
   private _silenceClip?: TypeSpec<SilenceClip>;
-
   private _group?: TypeSpec<Group>;
 
   static get default(): OutOfOrderJsonContext {

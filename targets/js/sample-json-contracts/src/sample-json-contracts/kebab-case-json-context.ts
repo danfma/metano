@@ -4,7 +4,6 @@ import { Stats } from "./stats";
 
 export class KebabCaseJsonContext extends SerializerContext {
   private static readonly _default: KebabCaseJsonContext = new KebabCaseJsonContext();
-
   private _stats?: TypeSpec<Stats>;
 
   static get default(): KebabCaseJsonContext {

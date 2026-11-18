@@ -3,7 +3,6 @@ import { Widget } from "#/sample-counter-v3/mvu/widget";
 
 export class Row extends Widget {
   private readonly _gap: number;
-
   private readonly _children: Widget[];
 
   constructor(gap: number, children: Widget[]) {

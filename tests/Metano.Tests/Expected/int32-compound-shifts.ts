@@ -1,12 +1,8 @@
 export class Cells {
   signed: number = 0;
-
   unsigned: number = 0;
-
   small: number = 0;
-
   slots: number[] = new Array<number>(4).fill(0);
-
   tracked: number = 0;
 
   constructor() { }

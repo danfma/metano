@@ -2,9 +2,7 @@ import { isInt32, isString } from "metano-runtime";
 
 export class Fee {
   protected static readonly byFeeText: unique symbol = Symbol("Fee(string text)");
-
   protected static readonly byFeeCents$: unique symbol = Symbol("Fee(int value)");
-
   readonly cents: number = 0;
 
   constructor(overload: typeof Fee.byFeeText, text: string);
