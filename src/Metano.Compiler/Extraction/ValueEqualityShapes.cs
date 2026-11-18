@@ -115,7 +115,7 @@ internal static class ValueEqualityShapes
         OverloadGroupingPolicy policy
     ) =>
         UserMethodsOf(type, policy.Target)
-            .Where(method => OverloadGroupName.Of(method) == nameof(Equals))
+            .Where(method => OverloadGroupNaming.GroupNameOf(method) == nameof(Equals))
             .Where(method => !ExplicitImplementationFates.IsDropped(method, policy));
 
     private static bool IsObjectOverride(IMethodSymbol method, ITypeSymbol parameter) =>

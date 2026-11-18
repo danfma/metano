@@ -120,7 +120,7 @@ internal static partial class MethodOverloadGroups
         var declared = DeclaredMethods(type, policy).ToList();
 
         var groups = declared
-            .GroupBy(OverloadGroupName.Of, StringComparer.Ordinal)
+            .GroupBy(OverloadGroupNaming.GroupNameOf, StringComparer.Ordinal)
             .SelectMany(methods => GroupsNamed(type, methods.Key, methods.ToList(), policy))
             .ToList();
 

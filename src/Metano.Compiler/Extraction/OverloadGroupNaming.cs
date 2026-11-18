@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -16,6 +17,13 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class OverloadGroupNaming
 {
+    /// <summary>
+    /// The name a method groups under (spec 013 FR-038): its C# name, or an
+    /// explicit implementation's interface member name.
+    /// </summary>
+    public static string GroupNameOf(IMethodSymbol method) =>
+        ExplicitImplementationLowering.ImplementedInterfaceMember(method)?.Name ?? method.Name;
+
     /// <summary>
     /// Records a method group's suffixes on its declarations: each parameter's
     /// spelling, the overload name and the signature text.
