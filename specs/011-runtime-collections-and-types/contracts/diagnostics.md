@@ -68,6 +68,7 @@ The containing member or type carrying `[Ignore(<that target>)]` suppresses the 
 
 1. The `code` argument is not a constant string expression or an interpolated string with constant literal parts.
 2. A hole contains a `ref` / `out` argument, a `dynamic`-bound operation that MS0053 rejects, or an `await`.
+3. A hole has an alignment or format clause (`{x,8}`, `{x:F2}`): a hole is code, not formatted text (added by stage 011f).
 
 **MS0053 — UnsupportedDynamicOperation** (Error).
 
