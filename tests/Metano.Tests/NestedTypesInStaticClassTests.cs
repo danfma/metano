@@ -1116,6 +1116,46 @@ public class NestedTypesInStaticClassTests
     }
 
     [Test]
+    public async Task NestedTypeHiddenWithNew_OverridesTheInheritedGetter()
+    {
+        // The derived getter re-declares the base one: `override` for noImplicitOverride
+        // (TS4114), typed as both so the static side still extends the base's (TS2417).
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public class Owner
+            {
+                public class Base { }
+
+                public sealed class Kept { }
+            }
+
+            public class Derived : Owner
+            {
+                public new sealed class Base : Owner.Base
+                {
+                    public Base(int extra) { }
+                }
+            }
+            """
+        );
+
+        var derived = result["derived.ts"];
+
+        await Assert
+            .That(derived)
+            .Contains("static override get Base(): typeof Owner.Base & typeof Derived$Base {");
+
+        await Assert
+            .That(derived)
+            .Contains("return Derived$Base as typeof Owner.Base & typeof Derived$Base;");
+
+        await Assert.That(result["owner.ts"]).Contains("static get Base(): typeof Owner$Base {");
+        await Assert.That(derived).DoesNotContain("get Kept");
+    }
+
+    [Test]
     public async Task HoistedNestedDescriptor_IsReachedThroughItsOwnerAndStaysOutOfTheBarrel()
     {
         var result = TranspileHelper.Transpile(

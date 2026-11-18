@@ -3,7 +3,8 @@ using System.Diagnostics;
 namespace Metano.Tests.TreeShaking;
 
 /// <summary>
-/// Type-checks transpiled packages with <c>tsgo --strict</c> in a scratch directory:
+/// Type-checks transpiled packages with <c>tsgo --strict --noImplicitOverride</c> in a
+/// scratch directory:
 /// a library under <c>lib/</c> (resolved as <c>acme-lib/*</c>), a consumer under
 /// <c>app/</c>, and the runtime from its sources.
 /// </summary>
@@ -78,6 +79,7 @@ internal static class StrictTypeCheck
             {
               "compilerOptions": {
                 "strict": true,
+                "noImplicitOverride": true,
                 "noEmit": true,
                 "target": "es2022",
                 "lib": ["ESNext", "DOM"],

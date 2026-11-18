@@ -6,7 +6,8 @@ namespace Metano.Tests.TreeShaking;
 /// static getters and an erased <c>declare namespace</c>, and a file of the library
 /// and a consumer package reach them as <c>Owner.Inner</c> — as values (construction,
 /// statics, enum members, <c>instanceof</c>) and as types (generic, nested-of-nested,
-/// interface, delegate).
+/// interface, delegate), and a derived owner hides an inherited nested type with
+/// <c>new</c>, whose getter overrides the base one (<c>noImplicitOverride</c>).
 /// </summary>
 public class NestedTypeStrictTypeCheckTests
 {
@@ -24,7 +25,7 @@ public class NestedTypeStrictTypeCheckTests
 
             public Inner First { get; }
 
-            public sealed record Inner(int Value)
+            public record Inner(int Value)
             {
                 public static readonly Inner Zero = new(0);
 
@@ -60,6 +61,15 @@ public class NestedTypeStrictTypeCheckTests
             }
         }
 
+        public class Derived : Owner
+        {
+            public Derived() : base(Inner.Zero) { }
+
+            public new sealed record Inner(int Value, int Extra) : Owner.Inner(Value);
+
+            public new enum Kind { C }
+        }
+
         public static class Reader
         {
             public static int Read(Owner.Inner inner) => inner.Value + Owner.Inner.Zero.Value;
@@ -93,7 +103,9 @@ public class NestedTypeStrictTypeCheckTests
                     + (leaf.Kind == Owner.Kind.B ? 1 : 0)
                     + measure(new Square())
                     + (special is Owner ? 1 : 0)
-                    + Reader.Read(Owner.Seed.First);
+                    + Reader.Read(Owner.Seed.First)
+                    + new Derived.Inner(1, 2).Extra
+                    + (int)Derived.Kind.C;
             }
 
             public static Owner.Mid.Leaf Leaf() => new(Owner.Kind.A);

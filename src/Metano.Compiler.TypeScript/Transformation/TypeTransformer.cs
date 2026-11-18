@@ -288,9 +288,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var owner = (TsClass)statements[index];
 
+        var inherited = new InheritedNestedGetters(
+            InheritedNestedGetterNames(parent),
+            (owner.Extends as TsNamedType)?.Name
+        );
+
         statements[index] = owner with
         {
-            Members = [.. owner.Members, .. exposed.SelectMany(GettersOf)],
+            Members =
+            [
+                .. owner.Members,
+                .. exposed.SelectMany(nested => GettersOf(nested, inherited)),
+            ],
         };
 
         if (parent.ContainingType is null)
@@ -312,27 +321,67 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// The getters of <paramref name="nested"/> on its container: its value, and its
     /// runtime type descriptor literal (<c>Outer.Kind$runtimeType</c>, spec 011 FR-018).
     /// </summary>
-    private static IEnumerable<TsGetterMember> GettersOf(HoistedNestedType nested)
+    private static IEnumerable<TsGetterMember> GettersOf(
+        HoistedNestedType nested,
+        InheritedNestedGetters inherited
+    )
     {
         if (nested.HasValue)
-            yield return Getter(nested.Name, nested.DeclaredName);
+            yield return inherited.Getter(nested.Name, nested.DeclaredName);
 
         if (nested.DescriptorName is { } descriptor)
         {
-            yield return Getter(
+            yield return inherited.Getter(
                 $"{nested.Name}{IrToTsRuntimeTypeReferences.ExportSuffix}",
                 descriptor
             );
         }
     }
 
-    private static TsGetterMember Getter(string name, string declaredName) =>
-        new(
-            name,
-            new TsTypeQuery(declaredName),
-            [new TsReturnStatement(new TsIdentifier(declaredName))],
-            Static: true
-        );
+    /// <summary>
+    /// The static getters the base classes of <paramref name="type"/> declare for their
+    /// own exposed hoisted nested types, by the rule <see cref="GettersOf"/> emits them.
+    /// </summary>
+    private HashSet<string> InheritedNestedGetterNames(INamedTypeSymbol type)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            var definition = baseType.OriginalDefinition;
+
+            if (!DeclaresNestedGetters(definition))
+                continue;
+
+            foreach (var nested in definition.GetTypeMembers().Where(IsExposedHoisted))
+                names.UnionWith(NestedGetterNames(nested));
+        }
+
+        return names;
+    }
+
+    private bool DeclaresNestedGetters(INamedTypeSymbol type) =>
+        Context.NestedTypes.Emits(type)
+        && Context.NestedTypes.IsExposed(type)
+        && Context.NestedTypes.HoistsNestedTypesOf(type);
+
+    private bool IsExposedHoisted(INamedTypeSymbol nested) =>
+        Context.NestedTypes.Emits(nested) && !SymbolHelper.IsContainerPrivateNestedType(nested);
+
+    private IEnumerable<string> NestedGetterNames(INamedTypeSymbol nested)
+    {
+        var name = Context.ResolveOwnTsName(nested);
+
+        if (nested.TypeKind is TypeKind.Class or TypeKind.Struct or TypeKind.Enum)
+            yield return name;
+
+        var hasDescriptor =
+            nested.TypeKind is TypeKind.Enum or TypeKind.Interface
+            && Context.RuntimeTypes.Reaches(RuntimeTypeReachability.KeyOf(nested));
+
+        if (hasDescriptor)
+            yield return $"{name}{IrToTsRuntimeTypeReferences.ExportSuffix}";
+    }
 
     private static IReadOnlyList<TsTopLevel> TypeAliasesOf(
         IReadOnlyList<HoistedNestedType> exposed,
@@ -410,6 +459,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var hasValue = named.Any(statement => statement is TsClass or TsConstObject);
         var descriptorName = $"{declaredName}{IrToTsRuntimeTypeReferences.ExportSuffix}";
+
         var hasDescriptor = declarations.Any(statement =>
             DeclaredNameOf(statement) == descriptorName
         );
