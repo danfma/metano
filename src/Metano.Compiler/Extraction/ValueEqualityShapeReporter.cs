@@ -36,7 +36,7 @@ internal static class ValueEqualityShapeReporter
     {
         // The struct definition the keep rule uses (ExplicitImplementationFates):
         // a plain struct or a record struct.
-        if (!policy.NamesSynthesizedEquals || type.TypeKind is not TypeKind.Struct)
+        if (!policy.GroupsSynthesizedEquals || type.TypeKind is not TypeKind.Struct)
             return;
 
         if (shape.ReplacesEquals)
