@@ -173,7 +173,7 @@ public static class IrToTsRecordSynthesisBridge
     {
         var standalone =
             SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir))
-                .Contains(HashCodeMethodName) && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
+                .Contains(HashCodeMethodName) && !IrValueEqualitySynthesis.DeclaresHashCode(ir);
 
         return standalone
             || SynthesizedGroupMembersOf(ir)
@@ -259,7 +259,7 @@ public static class IrToTsRecordSynthesisBridge
 
     /// <summary>
     /// <c>equals</c> and <c>hashCode</c>, each unless the record declares its
-    /// own (<see cref="IrRecordEqualityOverrides"/>) — C# uses the declared one
+    /// own (<see cref="IrValueEqualitySynthesis"/>) — C# uses the declared one
     /// instead of synthesizing it, and it is emitted under the same name — or
     /// another user member already emits under the name (not in
     /// <paramref name="unclaimedNames"/>).
@@ -273,14 +273,14 @@ public static class IrToTsRecordSynthesisBridge
     {
         var synthesizesEquals =
             unclaimedNames.Contains(EqualsMethodName)
-            && !IrRecordEqualityOverrides.DeclaresEquals(ir);
+            && !IrValueEqualitySynthesis.DeclaresEquals(ir);
 
         if (synthesizesEquals)
             yield return GenerateEquals(fields, overridesBase ? EqualsMethodName : null);
 
         var synthesizesHashCode =
             unclaimedNames.Contains(HashCodeMethodName)
-            && !IrRecordEqualityOverrides.DeclaresHashCode(ir);
+            && !IrValueEqualitySynthesis.DeclaresHashCode(ir);
 
         if (synthesizesHashCode)
             yield return GenerateHashCode(fields, overridesBase ? HashCodeMethodName : null);
