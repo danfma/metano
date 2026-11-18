@@ -1567,8 +1567,18 @@ public sealed class ImportCollector(
                     CollectFromExpression(hole, sink);
 
                 break;
+            case TsTryStatement tryStmt:
+                CollectFromStatements(tryStmt.Body, sink);
+
+                if (tryStmt.Catch is { } handler)
+                    CollectInScope([handler.Parameter], handler.Body, [], sink);
+
+                if (tryStmt.Finally is { } finallyBody)
+                    CollectFromStatements(finallyBody, sink);
+
+                break;
             case TsRawStatement raw:
-                // Loops and try blocks print as raw text; walk the nodes the
+                // Loops print as raw text; walk the nodes the
                 // text was rendered from so their references are imported.
                 CollectFromStatements(raw.EmbeddedStatements, sink);
 
@@ -1602,16 +1612,29 @@ public sealed class ImportCollector(
     private bool NamesTypeValue(string name) =>
         name.Length > 0 && (char.IsUpper(name[0]) || _context.TranspilableTypes.ContainsKey(name));
 
-    private void CollectFromEmbeddedScope(TsEmbeddedScope scope, ImportCollectionSink sink)
+    private void CollectFromEmbeddedScope(TsEmbeddedScope scope, ImportCollectionSink sink) =>
+        CollectInScope(scope.BoundNames, scope.Statements, scope.Expressions, sink);
+
+    /// <summary>
+    /// Walks <paramref name="statements"/> and <paramref name="expressions"/> with
+    /// <paramref name="boundNames"/> bound as locals (a <c>catch</c> parameter, a
+    /// <c>foreach</c> variable), so a local never resolves to an export of another module.
+    /// </summary>
+    private void CollectInScope(
+        IReadOnlyList<string> boundNames,
+        IReadOnlyList<TsStatement> statements,
+        IReadOnlyList<TsExpression> expressions,
+        ImportCollectionSink sink
+    )
     {
-        foreach (var name in scope.BoundNames)
+        foreach (var name in boundNames)
             sink.ShadowingNames.Add(name);
 
-        sink.WithBoundNames(scope.BoundNames, () =>
+        sink.WithBoundNames(boundNames, () =>
         {
-            CollectFromStatements(scope.Statements, sink);
+            CollectFromStatements(statements, sink);
 
-            foreach (var expression in scope.Expressions)
+            foreach (var expression in expressions)
                 CollectFromExpression(expression, sink);
         });
     }

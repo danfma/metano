@@ -185,6 +185,24 @@ public sealed class Printer(string indent = "  ")
     private static bool IsControlFlow(TsStatement stmt) =>
         stmt is TsIfStatement or TsSwitchStatement or TsBlockStatement;
 
+    private void PrintTry(TsTryStatement tryStmt)
+    {
+        _sb.Write("try");
+        _sb.WriteBlock(() => PrintStatementList(tryStmt.Body));
+
+        if (tryStmt.Catch is { } handler)
+        {
+            _sb.Write($" catch ({handler.Parameter})");
+            _sb.WriteBlock(() => PrintStatementList(handler.Body));
+        }
+
+        if (tryStmt.Finally is { } finallyBody)
+        {
+            _sb.Write(" finally");
+            _sb.WriteBlock(() => PrintStatementList(finallyBody));
+        }
+    }
+
     /// <summary>
     /// An expression is "complex" when it shouldn't appear inline inside an
     /// object literal property or array element because doing so produces an
@@ -1213,6 +1231,10 @@ public sealed class Printer(string indent = "  ")
 
             case TsInlineCodeStatement inlineCode:
                 PrintInlineCodeParts(inlineCode.Parts);
+                break;
+
+            case TsTryStatement tryStmt:
+                PrintTry(tryStmt);
                 break;
 
             case TsRawStatement raw:

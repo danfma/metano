@@ -1234,6 +1234,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 || ContainsJsxInStatements(ifStmt.Then)
                 || (ifStmt.Else is { } @else && ContainsJsxInStatements(@else)),
             TsBlockStatement block => ContainsJsxInStatements(block.Statements),
+            TsTryStatement tryStmt => ContainsJsxInStatements(tryStmt.Body)
+                || (tryStmt.Catch is { } handler && ContainsJsxInStatements(handler.Body))
+                || (tryStmt.Finally is { } finallyBody && ContainsJsxInStatements(finallyBody)),
             TsRawStatement raw => ContainsJsxInStatements(raw.EmbeddedStatements)
                 || raw.EmbeddedExpressions.Any(ContainsJsxInExpression)
                 || raw.EmbeddedScopes.Any(scope =>

@@ -366,6 +366,83 @@ public class CatchClauseLoweringTests
         await TranspileHelper.AssertGolden("catch-clauses.ts", result.Files["catch-clauses.ts"]);
     }
 
+    /// <summary>
+    /// The statement shapes around the catch chain (spec 011 FR-015's
+    /// <c>TsTryStatement</c>): a nested <c>try</c>, a <c>try</c> / <c>finally</c>
+    /// without a catch, a <c>throw;</c> inside an arm, an <c>await</c> inside the
+    /// <c>try</c>, and a multi-line template in a <c>try</c> body, which keeps its
+    /// own line breaks.
+    /// </summary>
+    [Test]
+    public async Task TryStatementShapes_PrintThroughTheTryNode()
+    {
+        var result = TranspileHelper.Transpile(
+            """"
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+
+            [Transpile, EmitInFile("try-statement-shapes")]
+            public class Runner
+            {
+                private readonly List<string> _log = new();
+
+                public async Task<string> RunAsync(string name)
+                {
+                    try
+                    {
+                        var text = await LoadAsync(name);
+
+                        try
+                        {
+                            _log.Add(text);
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            _log.Add("inner");
+
+                            throw;
+                        }
+
+                        return text;
+                    }
+                    catch (ArgumentException e) when (e.ParamName == "name")
+                    {
+                        return $"""
+                            bad
+                            {e.Message}
+                            """;
+                    }
+                    finally
+                    {
+                        _log.Add("done");
+                    }
+                }
+
+                public void Guarded()
+                {
+                    var step = 0;
+
+                    try
+                    {
+                        step = 1;
+                    }
+                    finally
+                    {
+                        _log.Add("step " + step);
+                    }
+                }
+
+                private Task<string> LoadAsync(string name) => Task.FromResult(name);
+            }
+            """"
+        );
+
+        await TranspileHelper.AssertGolden(
+            "try-statement-shapes.ts",
+            result["try-statement-shapes.ts"]
+        );
+    }
+
     [Test]
     public async Task LoneCatchAllClause_KeepsThePlainCatch()
     {

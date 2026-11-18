@@ -5,12 +5,6 @@ using Metano.Compiler.TypeScript.AST;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The one JS <c>catch</c> block the catch clauses of a C# <c>try</c> lower to:
-/// its parameter and its statements.
-/// </summary>
-internal sealed record TsCatchHandler(string Parameter, IReadOnlyList<TsStatement> Body);
-
-/// <summary>
 /// Lowers the catch clauses of a C# <c>try</c> statement. JS has a single,
 /// untyped <c>catch</c>, so the clauses become one handler that tests the
 /// caught value against each clause in source order and rethrows it when none
@@ -87,7 +81,7 @@ internal static class IrToTsCatchChainBridge
 
     private const string TryFilterHelper = "tryFilter";
 
-    public static TsCatchHandler Map(
+    public static TsCatchClause Map(
         IReadOnlyList<IrCatchClause> clauses,
         IrToTsBridgeContext context
     )
@@ -100,7 +94,7 @@ internal static class IrToTsCatchChainBridge
         var subject = normalized ?? caught;
         var arms = clauses.Select(clause => MapArm(clause, subject, caught, context));
 
-        return new TsCatchHandler(
+        return new TsCatchClause(
             caught,
             [.. MapNormalization(normalized, caught), .. RenderChain(EndChain(arms, caught))]
         );
@@ -147,13 +141,13 @@ internal static class IrToTsCatchChainBridge
     private static bool ReadsVariable(IrCatchClause clause) =>
         clause.VariableName is { } name && IrReferencedNames.AnyIn(clause.Body, [name]);
 
-    private static TsCatchHandler MapPlainCatch(IrCatchClause clause, IrToTsBridgeContext context)
+    private static TsCatchClause MapPlainCatch(IrCatchClause clause, IrToTsBridgeContext context)
     {
         var parameter = clause.VariableName is { } name
             ? IrToTsNamingPolicy.ToLocalName(name)
             : FreeUnnamedCaughtValueName(clause);
 
-        return new TsCatchHandler(
+        return new TsCatchClause(
             parameter,
             IrToTsStatementBridge.MapBody(clause.Body, context.Rethrowing(parameter))
         );

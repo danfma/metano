@@ -2,7 +2,7 @@ namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// Escape hatch for statements the AST doesn't model yet (for / while /
-/// do-while / foreach / try). The printer emits <see cref="Text"/> verbatim
+/// do-while / foreach). The printer emits <see cref="Text"/> verbatim
 /// at the current indentation and appends a newline — useful while keeping
 /// C# constructs alive through the TS pipeline without bloating the AST
 /// with nodes that have no Metano-level semantics the rest of the
@@ -14,7 +14,7 @@ public sealed record TsRawStatement(string Text) : TsStatement
 {
     /// <summary>
     /// The statements <see cref="Text"/> renders (a loop body, the
-    /// declarations of a <c>for</c> header, a <c>try</c> block), so AST
+    /// declarations of a <c>for</c> header), so AST
     /// walkers such as the import collector still see the identifiers,
     /// types and runtime helpers they reference. Never printed.
     /// </summary>
@@ -29,7 +29,7 @@ public sealed record TsRawStatement(string Text) : TsStatement
 
     /// <summary>
     /// The parts of <see cref="Text"/> that run inside a name the text binds itself
-    /// (a <c>foreach</c> body, a <c>catch</c> block), apart from
+    /// (a <c>foreach</c> body), apart from
     /// <see cref="EmbeddedStatements"/> and <see cref="EmbeddedExpressions"/>, which
     /// bind nothing. Never printed.
     /// </summary>

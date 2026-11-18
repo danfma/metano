@@ -194,33 +194,15 @@ public static class IrToTsStatementBridge
         };
     }
 
-    private static TsStatement MapTry(IrTryStatement ts, IrToTsBridgeContext context)
+    private static TsTryStatement MapTry(IrTryStatement ts, IrToTsBridgeContext context)
     {
-        var body = MapBody(ts.Body, context);
-
         var handler = ts.Catches is { Count: > 0 } clauses
             ? IrToTsCatchChainBridge.Map(clauses, context)
             : null;
 
         var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, context);
 
-        var catchText = handler is null
-            ? ""
-            : $" catch ({handler.Parameter}) {{\n{RenderIndentedBody(handler.Body)}}}";
-
-        var finallyText = finallyBody is null
-            ? ""
-            : $" finally {{\n{RenderIndentedBody(finallyBody)}}}";
-
-        var text = $"try {{\n{RenderIndentedBody(body)}}}{catchText}{finallyText}";
-
-        return new TsRawStatement(text)
-        {
-            EmbeddedStatements = [.. body, .. finallyBody ?? []],
-            EmbeddedScopes = handler is null
-                ? []
-                : [new TsEmbeddedScope([handler.Parameter], handler.Body)],
-        };
+        return new TsTryStatement(MapBody(ts.Body, context), handler, finallyBody);
     }
 
     /// <summary>
