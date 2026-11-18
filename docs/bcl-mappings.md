@@ -1193,6 +1193,35 @@ Declare a C# facade with `[Import(from: "some-pkg")]` and use it as a normal
 type. The transpiler emits import statements and package.json entries but never
 transpiles the declaration itself.
 
+### 4. `Js.Code` — inline TypeScript at one use site
+
+`Metano.Interop.Js.Code("…")` / `Js.Code<T>("…")` emits a compile-time-constant
+string verbatim, for one-off glue that needs no declaration (spec 011 FR-031 –
+FR-034):
+
+```csharp
+var now = Js.Code<double>("performance.now()");   // (performance.now()) as number
+Js.Code($"{element}.scrollIntoView({{ block: {mode} }})");   // statement text
+var div = Js.Code($"{Inferno.CreateElement}('div')");   // the hole pulls the facade's import
+```
+
+The argument is a constant string, or an interpolated string whose holes are C#
+expressions: each hole is transpiled (naming, mappings, imports) and spliced as an
+operand, and `{{` / `}}` escape braces. The text itself is opaque: the import
+collector, the runtime-requirement scanner, the golden bundle check and the
+diagnostics never look inside it, so a name the text spells pulls no import — splice
+a facade in a hole instead. A hole inside a JS string literal of the text (`'{name}'`)
+warns with `MS0056`, because the value is spliced as code, not quoted.
+
+How the four relate: `[MapMethod]` / `[MapProperty]` map an existing BCL member at
+every call site; `[Emit]` and `[Import]` declare a reusable, typed facade for a JS API;
+`Js.Code` is a use-site escape hatch with no declaration, no type and no reuse. Use a
+facade for anything called twice or exposed in a signature, and `Js.Code` for the
+rest. `Js.Code` is TypeScript-only (`MS0051` in any other target, unless the member is
+`[Ignore(TargetLanguage.Dart)]`), and on .NET it throws
+`PlatformNotSupportedException`. The incremental cache stays correct, since the text
+changes with the source.
+
 ## See also
 
 - [Attribute Reference](attributes.md) — `[MapMethod]`, `[Emit]`, `[Import]` details
