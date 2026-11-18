@@ -29,15 +29,11 @@ internal static partial class IrToTsClassBridge
         string operatorName,
         IReadOnlyList<TsParameter> parameters,
         TsType returnType,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         // Operators are static: no class scope, so no backing fields exist.
-        var body = IrToTsBodyHelpers.LowerOrNotImplemented(
-            method.Body,
-            method.Name,
-            IrToTsBridgeContext.For(bclRegistry)
-        );
+        var body = IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context);
 
         var staticName = TsOperatorNaming.StaticHelperName(operatorName);
 
@@ -97,17 +93,13 @@ internal static partial class IrToTsClassBridge
         TsOperatorOwner owner,
         IReadOnlyList<TsParameter> parameters,
         TsType returnType,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     ) =>
         new(
             TsOperatorNaming.ConversionHelperName(conversion.Semantics.ConversionName!),
             parameters,
             returnType,
-            IrToTsBodyHelpers.LowerOrNotImplemented(
-                conversion.Body,
-                conversion.Name,
-                IrToTsBridgeContext.For(bclRegistry)
-            ),
+            IrToTsBodyHelpers.LowerOrNotImplemented(conversion.Body, conversion.Name, context),
             Static: true,
             TypeParameters: owner.TypeParameters
         );
@@ -145,7 +137,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<IReadOnlyList<IrTypeRef>> overloadParamIrTypes,
         TypeCheckScope typeCheckScope,
         Func<IrMethodDeclaration, string> fastPathNameOf,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         var staticName = TsOperatorNaming.StaticHelperName(operatorName);
@@ -187,10 +179,11 @@ internal static partial class IrToTsClassBridge
         for (var k = 0; k < indices.Count; k++)
         {
             var i = indices[k];
+
             var body = IrToTsBodyHelpers.LowerOrNotImplemented(
                 overloads[i].Body,
                 overloads[i].Name,
-                IrToTsBridgeContext.For(bclRegistry)
+                context
             );
 
             members.Add(

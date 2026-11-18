@@ -76,14 +76,6 @@ public static class IrToTsExceptionConstructionBridge
         "System.Runtime.CompilerServices.SwitchExpressionException";
 
     /// <summary>
-    /// Whether the class currently being emitted overrides <c>Message</c> —
-    /// set per class by <see cref="EnterClass"/>. <see cref="AsyncLocal{T}"/>
-    /// scopes it to the emitting execution context, like the type mapper's
-    /// per-file scopes.
-    /// </summary>
-    private static readonly AsyncLocal<bool> _keepsBaseMessage = new();
-
-    /// <summary>
     /// Whether <paramref name="ir"/> is an exception class that itself
     /// declares a (non-ignored) <c>Message</c> override.
     /// </summary>
@@ -100,26 +92,16 @@ public static class IrToTsExceptionConstructionBridge
         );
 
     /// <summary>
-    /// Scopes the emission of one class: while the returned handle is alive,
-    /// <c>base.Message</c> reads (see <see cref="TryMapKeptBaseMessageRead"/>)
-    /// redirect to <c>#baseMessage</c> when <paramref name="keepsBaseMessage"/>
-    /// (the class overrides <c>Message</c>).
-    /// </summary>
-    public static IDisposable EnterClass(bool keepsBaseMessage)
-    {
-        var scope = new ClassScope(_keepsBaseMessage.Value);
-
-        _keepsBaseMessage.Value = keepsBaseMessage;
-
-        return scope;
-    }
-
-    /// <summary>
     /// <c>this.#baseMessage</c> for a <c>base.Message</c> read inside a class
-    /// that keeps its base message; <c>null</c> for every other access.
+    /// that keeps its base message (<see cref="IrToTsBridgeContext.KeepsBaseMessage"/>,
+    /// set by the class emitter when the class overrides <c>Message</c>);
+    /// <c>null</c> for every other access.
     /// </summary>
-    public static TsExpression? TryMapKeptBaseMessageRead(IrMemberAccess access) =>
-        _keepsBaseMessage.Value && access is { Target: IrBaseExpression, MemberName: "Message" }
+    internal static TsExpression? TryMapKeptBaseMessageRead(
+        IrMemberAccess access,
+        IrToTsBridgeContext context
+    ) =>
+        context.KeepsBaseMessage && access is { Target: IrBaseExpression, MemberName: "Message" }
             ? BaseMessageAccess()
             : null;
 
@@ -195,12 +177,6 @@ public static class IrToTsExceptionConstructionBridge
 
     private static TsExpression BaseMessageAccess() =>
         new TsPropertyAccess(new TsIdentifier("this"), BaseMessageField);
-
-    /// <summary>Restores the enclosing emission's kept-base-message state.</summary>
-    private sealed class ClassScope(bool previous) : IDisposable
-    {
-        public void Dispose() => _keepsBaseMessage.Value = previous;
-    }
 
     /// <summary>
     /// Lowers <c>new BclException(...)</c> to the construction of its runtime

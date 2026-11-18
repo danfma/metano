@@ -17,7 +17,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   <item>not inside an <c>[Inline]</c> expansion, whose caller's module the
 ///   bridge cannot see;</item>
 ///   <item>not a class the running group asserts
-///   (<see cref="AssertingClasses"/>): the transformer's import-graph pass
+///   (<see cref="GroupCasts.Asserted"/>): the transformer's import-graph pass
 ///   names the classes whose value import would close a cycle through a
 ///   third module.</item>
 /// </list>
@@ -27,8 +27,6 @@ internal static class ReferenceCastLowering
 {
     /// <summary>The <c>metano-runtime</c> helper that checks a cast.</summary>
     public const string CastHelper = "castTo";
-
-    private static readonly AsyncLocal<GroupCastScope?> _scope = new();
 
     /// <summary>
     /// Whether the cast types its result; a cast an earlier type test narrows,
@@ -46,46 +44,19 @@ internal static class ReferenceCastLowering
     /// <summary>
     /// Whether the cast checks against <paramref name="runtimeClass"/>: any
     /// class but one the running group asserts. A checked local class is
-    /// recorded for the import-graph pass.
+    /// recorded in <paramref name="casts"/> for the import-graph pass;
+    /// without a group (<c>null</c>) every class is checked.
     /// </summary>
-    public static bool Checks(TsExpression runtimeClass)
+    public static bool Checks(TsExpression runtimeClass, GroupCasts? casts)
     {
-        if (runtimeClass is not TsIdentifier { Name: var name } || _scope.Value is not { } scope)
+        if (runtimeClass is not TsIdentifier { Name: var name } || casts is null)
             return true;
 
-        if (scope.Asserted.Contains(name))
+        if (casts.Asserted.Contains(name))
             return false;
 
-        scope.Checked.Add(name);
+        casts.Checked.Add(name);
 
         return true;
-    }
-
-    /// <summary>
-    /// Opens the cast scope of one group's transform: casts to the classes
-    /// named in <paramref name="asserted"/> are asserted, and every local
-    /// class a cast checks is collected into the returned scope.
-    /// </summary>
-    public static GroupCastScope AssertingClasses(IReadOnlySet<string> asserted)
-    {
-        var scope = new GroupCastScope(asserted, _scope.Value);
-        _scope.Value = scope;
-
-        return scope;
-    }
-
-    /// <summary>
-    /// The cast state of one group's transform. Disposing it restores the
-    /// enclosing scope.
-    /// </summary>
-    internal sealed class GroupCastScope(IReadOnlySet<string> asserted, GroupCastScope? previous)
-        : IDisposable
-    {
-        public IReadOnlySet<string> Asserted { get; } = asserted;
-
-        /// <summary>The local classes the group's casts check with <c>castTo</c>, by emitted name.</summary>
-        public HashSet<string> Checked { get; } = new(StringComparer.Ordinal);
-
-        public void Dispose() => _scope.Value = previous;
     }
 }

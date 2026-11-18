@@ -3,8 +3,9 @@ using Metano.Compiler.Mappings;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The one context the TypeScript lowering bridges thread through a class emission:
-/// the declarative BCL mappings (<see cref="Bcl"/>) and the per-class backing fields
+/// The one context the TypeScript lowering bridges thread through a file group's
+/// emission: the declarative BCL mappings (<see cref="Bcl"/>), the group's cast state
+/// (<see cref="Casts"/>) and, inside a class emission, the per-class backing fields
 /// of the class being emitted (<see cref="ClassFields"/> —
 /// <see cref="PerClassBackingFieldScope.None"/> outside any class emission).
 /// <para>
@@ -29,6 +30,21 @@ internal sealed record IrToTsBridgeContext(
 )
 {
     /// <summary>
+    /// The cast state of the file group being transformed
+    /// (<see cref="ReferenceCastLowering"/>): which classes its casts assert,
+    /// and which local classes they check. <c>null</c> outside a group's
+    /// transform, where every cast to a class is checked and none is recorded.
+    /// </summary>
+    public GroupCasts? Casts { get; private init; }
+
+    /// <summary>
+    /// Whether the class being emitted overrides <c>Message</c>, so its
+    /// <c>base.Message</c> reads lower to the kept base message
+    /// (<see cref="IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead"/>).
+    /// </summary>
+    public bool KeepsBaseMessage { get; init; }
+
+    /// <summary>
     /// The parameter of the JS <c>catch</c> the position is lowered into, which
     /// a <c>throw;</c> rethrows; <c>null</c> outside a catch clause's body.
     /// </summary>
@@ -46,12 +62,26 @@ internal sealed record IrToTsBridgeContext(
         };
 
     /// <summary>
-    /// The context of a position outside class emission (module functions, plain
-    /// objects, branded structs, static operators, JSX components, entry-point
-    /// bodies): no backing field is ever recognized. Inside a class emission the
-    /// emitter passes the class's own scope everywhere, including parameter
-    /// defaults and member initializers. No type override applies there: those
-    /// positions map their types without the class emitter's overrides.
+    /// The root context of one file group's transform: the context of a
+    /// position outside class emission (module functions, plain objects,
+    /// branded structs, static operators, JSX components, entry-point bodies),
+    /// where no backing field is ever recognized and no type override applies,
+    /// carrying the group's <paramref name="casts"/>. A class emission derives
+    /// its own context from it.
+    /// </summary>
+    public static IrToTsBridgeContext ForGroup(
+        DeclarativeMappingRegistry? bclRegistry,
+        GroupCasts casts
+    ) => For(bclRegistry) with { Casts = casts };
+
+    /// <summary>
+    /// A context outside any file group's transform: no backing field, no type
+    /// override, no group cast state. Besides tests, it lowers only positions
+    /// that cannot hold an explicit reference cast, so the missing
+    /// <see cref="Casts"/> cannot change their output: the parameterless
+    /// <c>new S()</c> of a struct's default value and the constant default of
+    /// an <c>[ObjectArgs]</c> parameter. Every other position inside a group
+    /// lowers through a context derived from <see cref="ForGroup"/>.
     /// </summary>
     public static IrToTsBridgeContext For(DeclarativeMappingRegistry? bclRegistry) =>
         new(bclRegistry, PerClassBackingFieldScope.None, TypeOverrides: null);

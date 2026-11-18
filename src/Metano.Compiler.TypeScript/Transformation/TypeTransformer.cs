@@ -193,7 +193,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private void TransformNestedTypes(
         INamedTypeSymbol parent,
         List<TsTopLevel> statements,
-        ModuleLocalDeclarations moduleLocal
+        ModuleLocalDeclarations moduleLocal,
+        IrToTsBridgeContext lowering
     )
     {
         var nested = parent.GetTypeMembers().Where(ShouldEmitNestedType).ToList();
@@ -211,14 +212,21 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // ImportCollector already walks these statements).
             if (!SymbolHelper.IsContainerPrivateNestedType(nestedType))
             {
-                BuildTypeStatements(nestedType, namespaceMembers, moduleLocal: moduleLocal);
+                BuildTypeStatements(
+                    nestedType,
+                    namespaceMembers,
+                    lowering,
+                    moduleLocal: moduleLocal
+                );
+
                 continue;
             }
 
             BuildModuleLocalTypeStatements(
                 nestedType,
                 moduleLocal.SinkFor(nestedType),
-                moduleLocal
+                moduleLocal,
+                lowering
             );
         }
 
@@ -240,12 +248,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private void BuildModuleLocalTypeStatements(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
-        ModuleLocalDeclarations moduleLocal
+        ModuleLocalDeclarations moduleLocal,
+        IrToTsBridgeContext lowering
     )
     {
         var declarations = new List<TsTopLevel>();
 
-        BuildTypeStatements(type, declarations, moduleLocal: moduleLocal);
+        BuildTypeStatements(type, declarations, lowering, moduleLocal: moduleLocal);
         sink.AddRange(declarations.Select(WithoutExport));
     }
 
@@ -741,6 +750,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool BuildTypeStatements(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
+        IrToTsBridgeContext lowering,
         IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache = null,
         ModuleLocalDeclarations? moduleLocal = null
     )
@@ -769,12 +779,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             || TryEmitInterface(type, sink, irCache)
             || TryEmitDelegate(type, sink, irCache)
             || TryEmitJsonSerializerContext(type, sink)
-            || TryEmitTopLevelEntryPoint(type, sink)
-            || TryEmitStaticModule(type, sink)
-            || TryEmitBrandedViaIr(type, sink, irCache)
+            || TryEmitTopLevelEntryPoint(type, sink, lowering)
+            || TryEmitStaticModule(type, sink, lowering)
+            || TryEmitBrandedViaIr(type, sink, irCache, lowering)
             || TryEmitJsTuple(type, sink, irCache)
-            || TryEmitJsxComponent(type, sink, irCache)
-            || TryEmitPlainObjectOrClass(type, sink, irCache);
+            || TryEmitJsxComponent(type, sink, irCache, lowering)
+            || TryEmitPlainObjectOrClass(type, sink, irCache, lowering);
 
         if (sink.Count == startCount)
             return false;
@@ -787,7 +797,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var collectedModuleLocal = moduleLocal
             ?? new ModuleLocalDeclarations(type, Context.Compilation);
 
-        TransformNestedTypes(type, sink, collectedModuleLocal);
+        TransformNestedTypes(type, sink, collectedModuleLocal, lowering);
 
         // A nested caller owns the collection; the module-level type places it.
         if (moduleLocal is null)
@@ -932,13 +942,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// class carries the entry-point method whose body lowers to
     /// module-level code instead of a class wrapper.
     /// </summary>
-    private bool TryEmitTopLevelEntryPoint(INamedTypeSymbol type, List<TsTopLevel> sink)
+    private bool TryEmitTopLevelEntryPoint(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IrToTsBridgeContext lowering
+    )
     {
         if (ir.EntryPoint is null)
             return false;
         if (!SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType))
             return false;
-        EmitTopLevelStatements(ir.EntryPoint.Method, sink);
+        EmitTopLevelStatements(ir.EntryPoint.Method, sink, lowering);
         return true;
     }
 
@@ -951,11 +965,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <c>[Import]</c>), the type must not fall through to the
     /// class/struct fallback below.
     /// </summary>
-    private bool TryEmitStaticModule(INamedTypeSymbol type, List<TsTopLevel> sink)
+    private bool TryEmitStaticModule(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IrToTsBridgeContext lowering
+    )
     {
         if (!IsModuleShapedStaticClass(type))
             return false;
-        TryEmitModuleViaIr(type, sink);
+        TryEmitModuleViaIr(type, sink, lowering);
         return true;
     }
 
@@ -980,15 +998,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool TryEmitPlainObjectOrClass(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
-        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache,
+        IrToTsBridgeContext lowering
     )
     {
         if (!type.IsRecord && type.TypeKind is not (TypeKind.Struct or TypeKind.Class))
             return false;
-        if (TryEmitPlainObjectViaIr(type, sink, irCache))
+
+        if (TryEmitPlainObjectViaIr(type, sink, irCache, lowering))
             return true;
 
-        new IrToTsClassEmitter(Context, GroupFacts.AccessFacts, OverloadClaims).Transform(
+        new IrToTsClassEmitter(Context, GroupFacts.AccessFacts, OverloadClaims, lowering).Transform(
             type,
             sink
         );
@@ -1046,9 +1066,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     )
     {
         using var dependencies = Context.TypeMapping!.CrossPackageDependencies.BeginGroup();
-        using var casts = ReferenceCastLowering.AssertingClasses(assertedCasts);
+        var casts = new GroupCasts(assertedCasts);
 
-        var produced = TransformGroup(group);
+        var produced = TransformGroup(
+            group,
+            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts)
+        );
+
         outcomes.Files[index] = produced;
         outcomes.CheckedCasts[index] = casts.Checked;
 
@@ -1083,7 +1107,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// in the group (all types in a valid group share a namespace; conflicts are
     /// flagged as MS0008 by <see cref="GroupTypesByFile"/>).
     /// </summary>
-    private TsSourceFile? TransformGroup(TypeFileGroup group)
+    private TsSourceFile? TransformGroup(TypeFileGroup group, IrToTsBridgeContext lowering)
     {
         // Per-group IR cache: each type is extracted at most once, then shared by the
         // bridge converters (BuildTypeStatements) and the runtime-requirement scanner
@@ -1110,7 +1134,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             foreach (var type in group.Types)
             {
-                if (BuildTypeStatements(type, statements, irCache))
+                if (BuildTypeStatements(type, statements, lowering, irCache))
                     anyEmitted = true;
             }
 
@@ -1896,7 +1920,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// when the body coverage probe rejects it — at which point the caller
     /// produces no output for the type.
     /// </summary>
-    private bool TryEmitModuleViaIr(INamedTypeSymbol type, List<TsTopLevel> sink)
+    private bool TryEmitModuleViaIr(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IrToTsBridgeContext lowering
+    )
     {
         if (!Context.UseIrBodiesWhenCovered)
             return false;
@@ -2020,14 +2048,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         // Module state first: C# runs static initializers before any member of
         // the class is used, and the functions below may read it.
-        IrToTsModuleBridge.ConvertVariables(
-            variables,
-            sink,
-            Context.BclOverrides,
-            Context.DeclarativeMappings
-        );
+        IrToTsModuleBridge.ConvertVariables(variables, sink, Context.BclOverrides, lowering);
 
-        EmitModuleFunctions(type, functions, sink, Context.DeclarativeMappings);
+        EmitModuleFunctions(type, functions, sink, lowering);
 
         // Entry point body flows as top-level module statements after the
         // ordinary functions, so it can reference them.
@@ -2046,9 +2069,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 exportInfo = null;
             }
 
-            var lowered = IrToTsStatementBridge
-                .MapBody(entryBody, IrToTsBridgeContext.For(Context.DeclarativeMappings))
-                .ToList();
+            var lowered = IrToTsStatementBridge.MapBody(entryBody, lowering).ToList();
 
             // The attribute names the C# local, so the declaration is matched
             // on the IR body — under the C# name, exactly as written (#390).
@@ -2201,7 +2222,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         INamedTypeSymbol type,
         IReadOnlyList<IrModuleFunction> functions,
         List<TsTopLevel> sink,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext lowering
     )
     {
         var singles = new List<IrModuleFunction>();
@@ -2243,7 +2264,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             group.Add(fn);
         }
 
-        IrToTsModuleBridge.Convert(singles, sink, bclRegistry);
+        IrToTsModuleBridge.Convert(singles, sink, lowering);
 
         foreach (var (key, group) in groups)
         {
@@ -2257,7 +2278,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 group,
                 Context.ModuleFunctionClaims,
                 sink,
-                bclRegistry
+                lowering
             );
         }
     }
@@ -2324,7 +2345,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <see cref="IrStatementExtractor.ExtractStatements(IReadOnlyList{StatementSyntax})"/>
     /// applies match the body-extraction path.
     /// </summary>
-    private void EmitTopLevelStatements(IMethodSymbol syntheticEntryPoint, List<TsTopLevel> sink)
+    private void EmitTopLevelStatements(
+        IMethodSymbol syntheticEntryPoint,
+        List<TsTopLevel> sink,
+        IrToTsBridgeContext lowering
+    )
     {
         var syntaxRef = syntheticEntryPoint.DeclaringSyntaxReferences.FirstOrDefault();
         if (syntaxRef is null)
@@ -2344,12 +2369,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var irBody = stmtExtractor.ExtractStatements(globalStatements).Statements;
 
-        foreach (
-            var ts in IrToTsStatementBridge.MapBody(
-                irBody,
-                IrToTsBridgeContext.For(Context.DeclarativeMappings)
-            )
-        )
+        foreach (var ts in IrToTsStatementBridge.MapBody(irBody, lowering))
             sink.Add(new TsTopLevelStatement(ts, RunsOnImport: true));
     }
 
@@ -2435,7 +2455,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool TryEmitPlainObjectViaIr(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
-        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache,
+        IrToTsBridgeContext lowering
     )
     {
         if (!SymbolHelper.HasPlainObject(type))
@@ -2445,7 +2466,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, ReportDiagnostic);
 
-        return IrToTsPlainObjectBridge.Convert(ir, sink, Context.DeclarativeMappings);
+        return IrToTsPlainObjectBridge.Convert(ir, sink, lowering);
     }
 
     /// <summary>
@@ -2479,7 +2500,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool TryEmitBrandedViaIr(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
-        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache,
+        IrToTsBridgeContext lowering
     )
     {
         if (OverloadClaims.CompanionPlanOf(type) is not { } plan)
@@ -2498,7 +2520,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
         }
 
-        IrToTsBrandedBridge.Convert(ir, plan, sink, Context.DeclarativeMappings);
+        IrToTsBrandedBridge.Convert(ir, plan, sink, lowering);
 
         return true;
     }
@@ -2515,7 +2537,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool TryEmitJsxComponent(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
-        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache,
+        IrToTsBridgeContext lowering
     )
     {
         if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
@@ -2526,12 +2549,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         )
             return false;
 
-        IrToTsJsxComponentBridge.Convert(
-            ir,
-            Context.ResolveTsName(type),
-            sink,
-            Context.DeclarativeMappings
-        );
+        IrToTsJsxComponentBridge.Convert(ir, Context.ResolveTsName(type), sink, lowering);
         return true;
     }
 

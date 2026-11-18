@@ -40,11 +40,11 @@ public static class IrToTsJsxComponentBridge
     /// <c>[Name]</c>); the props type is <c>&lt;componentName&gt;Props</c> and
     /// the single parameter is <c>props: &lt;componentName&gt;Props</c>.
     /// </summary>
-    public static void Convert(
+    internal static void Convert(
         IrClassDeclaration ir,
         string componentName,
         List<TsTopLevel> sink,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsBridgeContext context
     )
     {
         var propsTypeName = componentName + "Props";
@@ -67,15 +67,15 @@ public static class IrToTsJsxComponentBridge
         var (rewrittenBody, referenced) = RewritePropReferences(renderBody, props);
 
         var statements = new List<TsStatement>();
+
         foreach (var prop in props)
         {
             if (!referenced.Contains(prop.SourceName))
                 continue;
-            statements.Add(BuildHoist(prop, bclRegistry));
+            statements.Add(BuildHoist(prop, context));
         }
-        statements.AddRange(
-            IrToTsStatementBridge.MapBody(rewrittenBody, IrToTsBridgeContext.For(bclRegistry))
-        );
+
+        statements.AddRange(IrToTsStatementBridge.MapBody(rewrittenBody, context));
 
         sink.Add(
             new TsFunction(
@@ -178,14 +178,16 @@ public static class IrToTsJsxComponentBridge
     /// when present, otherwise the C# type default (numeric → <c>0</c>, bool →
     /// <c>false</c>, everything else → <c>null</c>).
     /// </summary>
-    private static TsStatement BuildHoist(PropInfo prop, DeclarativeMappingRegistry? bclRegistry)
+    private static TsStatement BuildHoist(PropInfo prop, IrToTsBridgeContext context)
     {
         var camel = TypeScriptNaming.ToCamelCaseMember(prop.SourceName);
         var local = HoistPrefix + camel;
         var propsAccess = new TsPropertyAccess(new TsIdentifier("props"), camel);
+
         var defaultValue = prop.Initializer is not null
-            ? IrToTsExpressionBridge.Map(prop.Initializer, IrToTsBridgeContext.For(bclRegistry))
+            ? IrToTsExpressionBridge.Map(prop.Initializer, context)
             : DefaultForType(prop.Type);
+
         var initializer = new TsBinaryExpression(propsAccess, "??", defaultValue);
         return new TsVariableDeclaration(local, initializer, Const: true);
     }

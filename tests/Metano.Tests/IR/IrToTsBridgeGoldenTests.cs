@@ -133,7 +133,12 @@ public class IrToTsBridgeGoldenTests
             public record UserDto(string Name, int Age = 0);
             """,
             TypeKind.Class,
-            (type, sink) => IrToTsPlainObjectBridge.Convert(IrClassExtractor.Extract(type), sink)
+            (type, sink) =>
+                IrToTsPlainObjectBridge.Convert(
+                    IrClassExtractor.Extract(type),
+                    sink,
+                    IrToTsBridgeContext.For(null)
+                )
         );
 
         await Assert
@@ -159,12 +164,15 @@ public class IrToTsBridgeGoldenTests
     {
         var compilation = IrTestHelper.Compile(csharpSource);
         INamedTypeSymbol? found = null;
+
         foreach (var tree in compilation.SyntaxTrees)
         {
             var model = compilation.GetSemanticModel(tree);
+
             foreach (var node in tree.GetRoot().DescendantNodes())
             {
                 var symbol = model.GetDeclaredSymbol(node);
+
                 if (
                     symbol is INamedTypeSymbol named
                     && named.TypeKind == kind
@@ -175,9 +183,11 @@ public class IrToTsBridgeGoldenTests
                     break;
                 }
             }
+
             if (found is not null)
                 break;
         }
+
         if (found is null)
             throw new InvalidOperationException($"No [Transpile]-annotated {kind} found.");
 

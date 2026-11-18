@@ -41,7 +41,7 @@ public static class IrToTsBrandedBridge
         IrClassDeclaration ir,
         TsCompanionPlan plan,
         List<TsTopLevel> sink,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsBridgeContext context
     )
     {
         var tsTypeName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
@@ -95,7 +95,7 @@ public static class IrToTsBrandedBridge
         // exported functions in the companion namespace, under the names the
         // plan claimed, bound to the methods of this IR.
         foreach (var group in plan.Bind(ir))
-            functions.AddRange(ConvertStaticMethodGroup(group, bclRegistry));
+            functions.AddRange(ConvertStaticMethodGroup(group, context));
 
         sink.Add(new TsNamespaceDeclaration(tsTypeName, functions));
     }
@@ -107,15 +107,15 @@ public static class IrToTsBrandedBridge
     /// </summary>
     private static IReadOnlyList<TsFunction> ConvertStaticMethodGroup(
         TsCompanionGroup group,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     ) =>
         group switch
         {
             TsCompanionDispatcher dispatcher =>
-                IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(dispatcher, bclRegistry),
+                IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(dispatcher, context),
             TsCompanionFunction function =>
             [
-                ConvertStaticMethod(function.Method, function.FunctionName, bclRegistry),
+                ConvertStaticMethod(function.Method, function.FunctionName, context),
             ],
             _ => throw new UnreachableException(
                 $"Unexpected companion group {group.GetType().Name}."
@@ -125,17 +125,13 @@ public static class IrToTsBrandedBridge
     private static TsFunction ConvertStaticMethod(
         IrMethodDeclaration method,
         string functionName,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     ) =>
         new(
             functionName,
             IrToTsOverloadDispatcherBridge.MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsBodyHelpers.LowerOrNotImplemented(
-                method.Body,
-                method.Name,
-                IrToTsBridgeContext.For(bclRegistry)
-            ),
+            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
             Exported: true,
             Async: method.Semantics.IsAsync
         );

@@ -311,7 +311,7 @@ public static partial class IrToTsExpressionBridge
         return
             cast.ReferenceConversion is { } conversion
             && ReferenceCastLowering.TypesResult(conversion)
-            ? MapReferenceDowncast(cast, conversion, value, testedType)
+            ? MapReferenceDowncast(cast, conversion, value, testedType, context)
             : value;
     }
 
@@ -330,7 +330,8 @@ public static partial class IrToTsExpressionBridge
         IrCastExpression cast,
         IrReferenceConversion conversion,
         TsExpression value,
-        IrTypeRef testedType
+        IrTypeRef testedType,
+        IrToTsBridgeContext context
     )
     {
         var targetType = IrToTsTypeMapper.Map(cast.TargetType);
@@ -339,7 +340,7 @@ public static partial class IrToTsExpressionBridge
             ? RuntimeClassOf(testedType)
             : null;
 
-        return runtimeClass is not null && ReferenceCastLowering.Checks(runtimeClass)
+        return runtimeClass is not null && ReferenceCastLowering.Checks(runtimeClass, context.Casts)
             ? new TsCallExpression(
                 new TsRuntimeHelperReference(ReferenceCastLowering.CastHelper),
                 [value, runtimeClass],

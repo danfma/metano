@@ -37,13 +37,21 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// flows through the IR.
 /// </para>
 /// </summary>
-public sealed class IrToTsClassEmitter(
+internal sealed class IrToTsClassEmitter(
     TypeScriptTransformContext context,
     ConstructorAccessFacts constructorAccessFacts,
-    TsOverloadClaimsRegistry overloadClaims
+    TsOverloadClaimsRegistry overloadClaims,
+    IrToTsBridgeContext groupLowering
 )
 {
     private readonly TypeScriptTransformContext _context = context;
+
+    /// <summary>
+    /// The lowering context of the file group the class belongs to: the
+    /// static operators and conversions lower through it, and the class's own
+    /// context derives from it.
+    /// </summary>
+    private readonly IrToTsBridgeContext _groupLowering = groupLowering;
     private readonly TsOverloadClaimsRegistry _overloadClaims = overloadClaims;
     private readonly ConstructorAccessPolicy _constructorAccessPolicy = new(
         constructorAccessFacts,
@@ -67,16 +75,13 @@ public sealed class IrToTsClassEmitter(
         // class emission.
         var keepsBaseMessage = IrToTsExceptionConstructionBridge.OverridesMessage(ir);
 
-        using var exceptionClassScope = IrToTsExceptionConstructionBridge.EnterClass(
-            keepsBaseMessage
-        );
-
         var backingFields = PerClassBackingFields.For(type);
-        var lowering = new IrToTsBridgeContext(
-            _context.DeclarativeMappings,
-            backingFields.ScopeFor(ir),
-            BclOverrides
-        );
+        var lowering = _groupLowering with
+        {
+            ClassFields = backingFields.ScopeFor(ir),
+            TypeOverrides = BclOverrides,
+            KeepsBaseMessage = keepsBaseMessage,
+        };
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
         var claims = ClaimAndReport(type, ir);
@@ -820,7 +825,7 @@ public sealed class IrToTsClassEmitter(
                 perParamIrTypes,
                 new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides),
                 claims.FastPathNameOf,
-                _context.DeclarativeMappings
+                _groupLowering
             );
         }
 
@@ -830,7 +835,7 @@ public sealed class IrToTsClassEmitter(
             opName,
             OperatorParameters(irOp),
             IrToTsTypeMapper.Map(irOp.ReturnType, BclOverrides),
-            _context.DeclarativeMappings
+            _groupLowering
         );
     }
 
@@ -852,7 +857,7 @@ public sealed class IrToTsClassEmitter(
                         owner,
                         OperatorParameters(conversion),
                         IrToTsTypeMapper.Map(conversion.ReturnType, BclOverrides),
-                        _context.DeclarativeMappings
+                        _groupLowering
                     )
             )
             .ToList();

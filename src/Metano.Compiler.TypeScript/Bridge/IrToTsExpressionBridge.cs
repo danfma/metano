@@ -679,7 +679,10 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapMemberAccess(IrMemberAccess ma, IrToTsBridgeContext context)
     {
-        if (IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma) is { } keptBaseMessage)
+        if (
+            IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma, context) is
+            { } keptBaseMessage
+        )
             return keptBaseMessage;
 
         // A method-group reference into a dispatched group renames the access

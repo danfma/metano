@@ -28,14 +28,14 @@ public static class IrToTsModuleBridge
     /// mappings and the implicit-<c>this</c> synthesis the extractor already
     /// applied for instance members carry through.
     /// </summary>
-    public static void Convert(
+    internal static void Convert(
         IReadOnlyList<IrModuleFunction> functions,
         List<TsTopLevel> statements,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsBridgeContext context
     )
     {
         foreach (var fn in functions)
-            statements.Add(ConvertFunction(fn, bclRegistry));
+            statements.Add(ConvertFunction(fn, context));
     }
 
     /// <summary>
@@ -55,11 +55,11 @@ public static class IrToTsModuleBridge
     /// Computed properties are not variables; the caller reports them before
     /// calling this.
     /// </summary>
-    public static void ConvertVariables(
+    internal static void ConvertVariables(
         IReadOnlyList<IrMemberDeclaration> variables,
         List<TsTopLevel> statements,
-        IrToTsTypeOverrides? typeOverrides = null,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsTypeOverrides? typeOverrides,
+        IrToTsBridgeContext context
     )
     {
         foreach (var variable in variables)
@@ -72,7 +72,7 @@ public static class IrToTsModuleBridge
                     field.Initializer,
                     field.IsReadonly,
                     typeOverrides,
-                    bclRegistry
+                    context
                 ),
                 IrPropertyDeclaration property => ConvertVariable(
                     property,
@@ -82,7 +82,7 @@ public static class IrToTsModuleBridge
                         is IrPropertyAccessors.GetOnly
                             or IrPropertyAccessors.GetInit,
                     typeOverrides,
-                    bclRegistry
+                    context
                 ),
                 _ => throw new UnreachableException(
                     $"Unexpected module variable {variable.GetType().Name}."
@@ -99,11 +99,11 @@ public static class IrToTsModuleBridge
         IrExpression? initializer,
         bool isReadonly,
         IrToTsTypeOverrides? typeOverrides,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         var value = initializer is not null
-            ? IrToTsExpressionBridge.Map(initializer, IrToTsBridgeContext.For(bclRegistry))
+            ? IrToTsExpressionBridge.Map(initializer, context)
             : IrToTsClassBridge.ComputeDefaultInitializer(type);
 
         return new TsVariableDeclaration(
@@ -132,11 +132,11 @@ public static class IrToTsModuleBridge
     /// into one.
     /// </para>
     /// </summary>
-    public static void ConvertDispatchedGroup(
+    internal static void ConvertDispatchedGroup(
         IReadOnlyList<IrModuleFunction> overloads,
         TsModuleFunctionClaims claims,
         List<TsTopLevel> statements,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsBridgeContext context
     )
     {
         var plan = PlanModuleFunctionGroup(overloads);
@@ -156,7 +156,7 @@ public static class IrToTsModuleBridge
             .ToList();
 
         foreach (var (fn, fastPathName) in plan.Sorted.Zip(fastPathNames))
-            statements.Add(ConvertFunction(fn, bclRegistry, fastPathName));
+            statements.Add(ConvertFunction(fn, context, fastPathName));
 
         statements.Add(
             new TsFunction(
@@ -278,14 +278,14 @@ public static class IrToTsModuleBridge
 
     private static TsFunction ConvertFunction(
         IrModuleFunction fn,
-        DeclarativeMappingRegistry? bclRegistry,
+        IrToTsBridgeContext context,
         string? emittedName = null
     )
     {
         var name = emittedName ?? IrToTsNamingPolicy.ToFunctionName(fn);
 
         if (IrToTsObjectArgsBridge.HasObjectArgs(fn.Attributes))
-            return ConvertObjectArgsFunction(fn, name, bclRegistry);
+            return ConvertObjectArgsFunction(fn, name, context);
 
         var parameters = fn
             .Parameters.Select(p => new TsParameter(
@@ -293,19 +293,13 @@ public static class IrToTsModuleBridge
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
                 DefaultValue: p.HasDefaultValue && p.DefaultValue is not null
-                    ? IrToTsExpressionBridge.Map(
-                        p.DefaultValue,
-                        IrToTsBridgeContext.For(bclRegistry)
-                    )
+                    ? IrToTsExpressionBridge.Map(p.DefaultValue, context)
                     : null,
                 Rest: p.IsParams
             ))
             .ToList();
-        var body = IrToTsBodyHelpers.LowerOrNotImplemented(
-            fn.Body,
-            fn.Name,
-            IrToTsBridgeContext.For(bclRegistry)
-        );
+
+        var body = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, context);
 
         return new TsFunction(
             name,
@@ -324,22 +318,16 @@ public static class IrToTsModuleBridge
     private static TsFunction ConvertObjectArgsFunction(
         IrModuleFunction fn,
         string name,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         var (argsParam, destructure) = IrToTsObjectArgsBridge.BuildArgsParam(
             fn.Parameters,
-            bclRegistry
+            context.Bcl
         );
 
         var body = new List<TsStatement> { destructure };
-        body.AddRange(
-            IrToTsBodyHelpers.LowerOrNotImplemented(
-                fn.Body,
-                fn.Name,
-                IrToTsBridgeContext.For(bclRegistry)
-            )
-        );
+        body.AddRange(IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, context));
 
         return new TsFunction(
             name,

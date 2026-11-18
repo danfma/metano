@@ -356,12 +356,12 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     /// <param name="group">A dispatched group: its overloads in dispatch
     /// order, each with its claimed fast path.</param>
-    /// <param name="bclRegistry">
-    /// Optional BCL mapping registry threaded through to the body bridge.
+    /// <param name="context">
+    /// The group's lowering context, threaded through to the body bridge.
     /// </param>
     internal static IReadOnlyList<TsFunction> BuildNamespaceFunctions(
         TsCompanionDispatcher group,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsBridgeContext context
     )
     {
         var methods = group.FastPaths.Select(fastPath => fastPath.Method).ToList();
@@ -369,7 +369,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         var functions = group
             .FastPaths.Select(fastPath =>
-                BuildFastPathFunction(fastPath, plan.Accessibility, bclRegistry)
+                BuildFastPathFunction(fastPath, plan.Accessibility, context)
             )
             .ToList();
 
@@ -599,11 +599,10 @@ public static class IrToTsOverloadDispatcherBridge
     private static TsFunction BuildFastPathFunction(
         TsCompanionFastPath fastPath,
         TsAccessibility groupAccessibility,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         var method = fastPath.Method;
-        var context = IrToTsBridgeContext.For(bclRegistry);
 
         var jsDoc = IrToTsVisibilityMapper.SignatureJSDocOf(
             IrToTsVisibilityMapper.Map(method.Visibility),

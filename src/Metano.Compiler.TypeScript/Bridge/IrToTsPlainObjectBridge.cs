@@ -17,10 +17,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsPlainObjectBridge
 {
-    public static bool Convert(
+    internal static bool Convert(
         IrClassDeclaration ir,
         List<TsTopLevel> sink,
-        DeclarativeMappingRegistry? bclRegistry = null
+        IrToTsBridgeContext context
     )
     {
         if (!ir.Semantics.IsPlainObject)
@@ -64,10 +64,10 @@ public static class IrToTsPlainObjectBridge
                 switch (member)
                 {
                     case IrMethodDeclaration method when !method.IsStatic:
-                        EmitInstanceMethod(method, tsName, sink, bclRegistry);
+                        EmitInstanceMethod(method, tsName, sink, context);
                         break;
                     case IrFieldDeclaration field when field.IsStatic:
-                        EmitStaticField(field, sink, bclRegistry);
+                        EmitStaticField(field, sink, context);
                         break;
                     // Static methods + instance fields stay deferred:
                     // static methods on a `[PlainObject]` record can land
@@ -94,7 +94,7 @@ public static class IrToTsPlainObjectBridge
     private static void EmitStaticField(
         IrFieldDeclaration field,
         List<TsTopLevel> sink,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         // Top-level `export const/let` declarations make the symbol
@@ -123,10 +123,7 @@ public static class IrToTsPlainObjectBridge
         var name = TypeScriptNaming.EscapeIfReserved(
             IrToTsNamingPolicy.ToDeclaredDataMemberName(field.Name, field.Attributes)
         );
-        var initializer = IrToTsExpressionBridge.Map(
-            field.Initializer,
-            IrToTsBridgeContext.For(bclRegistry)
-        );
+        var initializer = IrToTsExpressionBridge.Map(field.Initializer, context);
         // `readonly` C# fields lower to a `const` declaration; the
         // rare mutable-static case (a top-level cache or counter)
         // emits as a `let` so call sites can still rebind it. Both
@@ -148,7 +145,7 @@ public static class IrToTsPlainObjectBridge
         IrMethodDeclaration method,
         string ownerTsName,
         List<TsTopLevel> sink,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         // Inside a [PlainObject] method body `this` references rewrite to the
@@ -157,10 +154,11 @@ public static class IrToTsPlainObjectBridge
         var rewrittenBody = method.Body is null
             ? null
             : (IReadOnlyList<IrStatement>)method.Body.Select(s => RewriteThis(s, "self")).ToList();
+
         var loweredBody = IrToTsBodyHelpers.LowerOrNotImplemented(
             rewrittenBody,
             method.Name,
-            IrToTsBridgeContext.For(bclRegistry)
+            context
         );
 
         // First parameter is always `self: T`; the rest are the C# parameters.

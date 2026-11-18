@@ -174,6 +174,7 @@ public class IrToTsModuleBridgeTests
             """,
             "IntExtensions"
         );
+
         await Assert.That(output).Contains("export function doubled(x: number): number");
         await Assert.That(output).Contains("export function squared$get(x: number): number");
     }
@@ -196,6 +197,7 @@ public class IrToTsModuleBridgeTests
             """,
             "IntExtensions"
         );
+
         await Assert.That(output).Contains("export function double(x: number): number");
     }
 
@@ -215,7 +217,7 @@ public class IrToTsModuleBridgeTests
         );
 
         var statements = new List<TsTopLevel>();
-        IrToTsModuleBridge.Convert(functions, statements);
+        IrToTsModuleBridge.Convert(functions, statements, IrToTsBridgeContext.For(null));
 
         var file = new TsSourceFile($"{className.ToLowerInvariant()}.ts", statements);
         return new Printer().Print(file);
