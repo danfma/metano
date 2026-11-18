@@ -16,9 +16,11 @@ public class InlineWrapperTranspileTests
         );
 
         var output = result["user-id.ts"];
+
         await Assert
             .That(output)
             .Contains("export type UserId = string & { readonly __brand: \"UserId\" };");
+
         await Assert.That(output).Contains("export const UserId = {");
         await Assert.That(output).Contains("function UserId$create(value: string): UserId");
         await Assert.That(output).Contains("function UserId$system(): UserId");
@@ -38,9 +40,11 @@ public class InlineWrapperTranspileTests
         );
 
         var output = result["amount.ts"];
+
         await Assert
             .That(output)
             .Contains("export type Amount = number & { readonly __brand: \"Amount\" };");
+
         await Assert.That(output).Contains("function Amount$create(value: number): Amount");
         await Assert.That(output).Contains("function Amount$toString(value: Amount): string");
     }
