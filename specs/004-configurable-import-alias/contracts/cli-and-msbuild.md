@@ -30,7 +30,7 @@ dotnet run --project src/Metano.Compiler.TypeScript/ -- \
 
 ## MSBuild: `MetanoImportAlias`
 
-File: `src/Metano.Build/build/Metano.Build.targets`.
+File: `src/Metano.Build.Targets/Metano.Build.TypeScript.targets` (package `Metano.Build.TypeScript`; `src/Metano.Build/build/Metano.Build.targets` before 3.0.0).
 
 | Property | Value |
 |----------|-------|

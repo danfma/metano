@@ -1258,25 +1258,38 @@ Product requirements added after the migration (normative; each one is traced by
   ships (#28).
   1. *Contents.* Each package carries, in both `build/` and `buildTransitive/`, its own
      `Metano.Build.<Target>.targets` (the target's setting resolution, its CLI flags, its tool
-     command, its language tag and its `METANOBUILD001` text) and one copy of the shared
-     `Metano.Build.Common.targets` (user-input collection, toolchain key, tool probe, CLI `Exec`,
-     incremental stamp, asset projection, post-build command, `METANOBUILD002`). The shared file
-     has a single source in the repository and is linked into every package, so two packages
-     cannot drift; an import guard makes a project that references two build packages load it
-     once.
-  2. *No compiler inside.* A package MUST NOT bundle or install a compiler: a .NET tool cannot be
+     command, its language tag, its `METANOBUILD001` text and its transpile target with the
+     incremental check) and one copy of the shared `Metano.Build.Common.targets`. The shared
+     file has a single source in the repository (`src/Metano.Build.Targets/`) and is linked into
+     every package, so two packages cannot drift; an import guard makes a project that
+     references two build packages load it once.
+  2. *Where each part runs.* The shared file cannot build a prefixed property name (`MSB4184`)
+     and never reads one. Each per-target resolve target registers one `_MetanoEnabledTarget`
+     item per enabled target, with the metadata `Include` (the language tag), `OutputDir`,
+     `OutputDirFull`, `ToolchainKeyFile`, `CompilerProject`, `ToolStoreName` and
+     `PostBuildCommand`, and appends itself to `_MetanoResolveTargetsDependsOn` and its transpile
+     target to `_MetanoTranspileTargets`; the shared file batches over those items. In the
+     project's own instance, on every build: user-input collection, setting resolution,
+     `METANOBUILD002`, the toolchain keys, each target's incremental check and the post-build
+     commands. In a worker instance (the `MSBuild` task on the same project with the resolved,
+     escaped values as global properties), only for an out-of-date target: the tool probe
+     (`METANOBUILD001`), the asset projection and the CLI `Exec`. The worker does not see items
+     the parent produced by running targets (`@(ReferencePath)`), so nothing it runs depends on
+     them. The FR-087.2 synthetic target uses exactly this contract.
+  3. *No compiler inside.* A package MUST NOT bundle or install a compiler: a .NET tool cannot be
      a NuGet dependency. Each target's tool (`metano-typescript` for TypeScript) is installed
      separately, preferably through a committed `.config/dotnet-tools.json` and
      `dotnet tool restore`. When the target is out of date and the tool cannot start, the build
      fails with `METANOBUILD001`, whose text names that target's tool and its install commands
      (`MetanoSkipToolCheck=true` and dev mode skip the probe, as today).
-  3. *Versioning.* Every build package version is lock-step with the repository version, so
+  4. *Versioning.* Every build package version is lock-step with the repository version, so
      `Metano.Build.TypeScript` starts at 3.0.0.
-  4. *Migration.* A 2.x project migrates by replacing the `Metano.Build` `PackageReference` with
+  5. *Migration.* A 2.x project migrates by replacing the `Metano.Build` `PackageReference` with
      `Metano.Build.TypeScript`; every `Metano*` property keeps its name and meaning, and a project
-     that imports the targets by path imports `Metano.Build.TypeScript.targets` instead. The
-     generated output of an unchanged single-target project MUST be byte-identical to the 2.x
-     package's.
+     that imports the targets by path imports `Metano.Build.TypeScript.targets` instead. For an
+     unchanged single-target project, the same compiler invoked through
+     `Metano.Build.TypeScript` and through the 2.x targets MUST receive the same command line and
+     produce byte-identical output (in this repository: `targets/` regenerates unchanged).
 
 - **FR-086** (several targets per project, #328, ADR-0029): A project MAY reference several build
   packages, and each one MUST resolve every setting it reads by one rule:
@@ -1291,9 +1304,11 @@ Product requirements added after the migration (normative; each one is traced by
      through the rule above; a test asserts that this list and the resolution lines in the
      `.targets` file match. TypeScript-only settings follow the same rule (no other target reads
      them). A setting cannot be cleared per target: an empty `MetanoTs<S>` falls back to the
-     global value.
+     global value. A global `MetanoCompilerProject`, `MetanoExtraArgs` or
+     `MetanoPostBuildCommand` reaches every enabled target, so a project with more than one
+     target should set the prefixed form (documentation only, no warning).
   2. *Enablement.* A target is enabled when its resolved `OutputDir` is non-empty and its
-     resolved `Enabled` is not `false`; referencing a build package without configuring it stays
+     resolved `Enabled` is `true` (its default); referencing a build package without configuring it stays
      inert. Settings are resolved when the build runs, not at evaluation, so values set in
      `Directory.Build.targets` (imported after NuGet package targets) are honoured.
   3. *Isolation.* Each enabled target runs in its own MSBuild target (`MetanoTranspileTs`, ...)
@@ -1302,10 +1317,14 @@ Product requirements added after the migration (normative; each one is traced by
      post-build command; one target's settings never reach another's command line. As in 2.x, a
      post-build command runs on every build, also when its target was up to date; unlike 2.x, a
      disabled target runs none (2.x ran it even with `MetanoEnabled=false`). The public
-     target names `MetanoTranspile` and `MetanoPostBuild` remain as aggregates that run after
-     every enabled target, so existing `AfterTargets` hooks keep working.
+     target names `MetanoTranspile` and `MetanoPostBuild` remain as aggregates: a user hook
+     declared with `BeforeTargets="MetanoTranspile"` still runs before any target's tool and one
+     declared with `AfterTargets="MetanoTranspile"` after every enabled target, as in 2.x
+     (`MetanoTranspile` prepares every target in its dependencies and runs the per-target
+     transpile targets from its body).
   4. *Collision.* Two enabled targets whose resolved output directories are the same full path
-     MUST fail the build with `METANOBUILD002` (an error naming both targets and the directory),
+     (each resolved against the project directory and normalized, trailing separators trimmed,
+     compared case-insensitively) MUST fail the build with `METANOBUILD002` (an error naming both targets and the directory),
      before any tool runs; a global `MetanoOutputDir` therefore serves a single target only.
   5. *Up-to-date builds.* An up-to-date target MUST be skipped without starting its tool or
      spawning its worker, as today.

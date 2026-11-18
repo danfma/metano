@@ -94,13 +94,13 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0057` | `DynamicAccessToRenamedMember` | Warning | A member access on an `AsDynamic()` result names a member of the receiver's static type that is emitted under a different name (`Total` → `total`, or a `[Name]` rename); the verbatim access reads `undefined` at runtime. Suppressed when the names coincide. | [011](../../011-runtime-collections-and-types/contracts/diagnostics.md) |
 | `MS0058` | `TypeQuestionOnUnboxedValue` | Warning | `GetType()` / `is` / `as` / a cast / a pattern on an `object` / `ValueType` / `Enum` / interface receiver that may hold a raw enum or `[InlineWrapper]` value: (1) with boxing disabled (`[assembly: DisableBoxing]`); (2) with boxing on, when the value may be an enum without a descriptor (a BCL, `[Import]` / `[External]` or non-Metano enum) or the result of a conversion to an interface, both of which stay raw. | [011](../../011-runtime-collections-and-types/contracts/diagnostics.md) |
 
-## Build integration (`Metano.Build`)
+## Build integration (`Metano.Build.<Target>` packages)
 
 Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.
 
 | Code | Raised by | Meaning |
 | --- | --- | --- |
-| `METANOBUILD001` | `Metano.Build.targets` | The `metano-typescript` .NET tool is not available; the message lists the local-manifest / global install commands and `dotnet tool restore`. Opt out with `MetanoSkipToolCheck=true` (FR-035). |
+| `METANOBUILD001` | `Metano.Build.Common.targets` (text from `Metano.Build.TypeScript.targets`) | The `metano-typescript` .NET tool is not available; the message lists the local-manifest / global install commands and `dotnet tool restore`. Opt out with `MetanoSkipToolCheck=true` (FR-035). |
 | `METANOBUILD002` | `Metano.Build.Common.targets` | **Planned (3.0.0, FR-086, #328).** Two enabled targets of one project resolve to the same output directory (after `Metano<Prefix>OutputDir` / `MetanoOutputDir` resolution and full-path normalization). Error, raised before any tool runs; the message names both targets and the directory. |
 
 From 3.0.0 (FR-085, #328) `METANOBUILD001` is raised by `Metano.Build.Common.targets` with a per-target text: each `Metano.Build.<Target>` package names its own tool and install commands.
