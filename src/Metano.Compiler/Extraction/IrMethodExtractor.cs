@@ -67,7 +67,7 @@ public static class IrMethodExtractor
             IsAsync: hasYield ? false : method.IsAsync,
             IsGenerator: hasYield,
             IsExtension: method.IsExtensionMethod,
-            IsOperator: IsOperatorKind(method.MethodKind),
+            IsOperator: method.IsUserDefinedOperatorOrConversion(),
             OperatorKind: OperatorKindOf(method),
             IsAbstract: method.IsAbstract,
             IsVirtual: method.IsVirtual,
@@ -149,9 +149,6 @@ public static class IrMethodExtractor
         return syntax?.DescendantNodes().OfType<YieldStatementSyntax>().Any() ?? false;
     }
 
-    private static bool IsOperatorKind(MethodKind kind) =>
-        kind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
-
     /// <summary>
     /// Whether a user-defined operator applies to its declaring type as its
     /// left (or only) operand, which is what an instance form of it needs.
@@ -168,7 +165,7 @@ public static class IrMethodExtractor
     /// </summary>
     internal static IrOperatorKind? OperatorKindOf(IMethodSymbol method)
     {
-        if (method.MethodKind is not (MethodKind.UserDefinedOperator or MethodKind.Conversion))
+        if (!method.IsUserDefinedOperatorOrConversion())
             return null;
 
         return IrOperatorKind.FromMetadataName(method.Name);
