@@ -8,12 +8,15 @@ set -euo pipefail
 #   1. imports the public entry points (and file-level deep imports, such as
 #      the per-class exception modules generated code imports) from plain
 #      Node ESM, checks that an exception the root barrel throws is the class
-#      a per-class module exports, and checks directory subpaths are not
-#      exported;
+#      a per-class module exports, and checks that a directory without an
+#      explicit `exports` entry is not exported;
 #   2. scans the packed JavaScript and declarations for extensionless
 #      relative specifiers;
 #   3. type-checks the entry points under NodeNext resolution with both the
-#      native-preview compiler (tsgo) and stable TypeScript.
+#      native-preview compiler (tsgo) and stable TypeScript;
+#   4. bundles a consumer entry from the installed package with bun and
+#      esbuild (the latter also under the `source` condition, which resolves
+#      the shipped .ts files) and runs each bundle under Node (spec 011 FR-011).
 #
 # Exits non-zero on the first failing check. Used by CI and by the release
 # workflow (before anything is tagged or published).
@@ -31,6 +34,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNTIME_DIR="$REPO_ROOT/targets/js/metano-runtime"
 TSGO="$REPO_ROOT/node_modules/.bin/tsgo"
+# esbuild is a dev dependency of the runtime package; bun installs it there or hoists it.
+ESBUILD="$RUNTIME_DIR/node_modules/.bin/esbuild"
+[ -x "$ESBUILD" ] || ESBUILD="$REPO_ROOT/node_modules/.bin/esbuild"
 
 WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/metano-runtime-smoke.XXXXXX")"
 CONSUMER_DIR="$WORK_DIR/consumer"
@@ -50,6 +56,7 @@ fail() {
 
 assert_prerequisites() {
   [ -x "$TSGO" ] || fail "tsgo not found at $TSGO — run 'bun install' at the repo root first"
+  [ -x "$ESBUILD" ] || fail "esbuild not found at $ESBUILD — run 'bun install' at the repo root first"
   command -v node >/dev/null || fail "node is not on PATH"
 }
 
@@ -101,6 +108,7 @@ import { UUID } from "metano-runtime/system/uuid.js";
 import { UUID as ExtensionlessUUID } from "metano-runtime/system/uuid";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import { Decimal } from "metano-runtime/system/decimal";
+import type { ClassType } from "metano-runtime/system/reflection";
 
 // @ts-expect-error — root: isInt32 returns boolean, not string.
 export const rootIsTyped: string = isInt32(1);
@@ -122,6 +130,13 @@ export const exceptionModuleIsTyped: number = InvalidOperationException;
 
 // @ts-expect-error — system/decimal: the configured Decimal is a class, not a number.
 export const decimalIsTyped: number = Decimal;
+
+// system/reflection: the exception classes' descriptor is a ClassType of the class.
+export const runtimeTypeIsTyped: ClassType<InvalidOperationException> =
+  InvalidOperationException.$runtimeType;
+
+// @ts-expect-error — the descriptor is a ClassType, not a number.
+export const runtimeTypeIsNotANumber: number = InvalidOperationException.$runtimeType;
 TS
 }
 
@@ -152,6 +167,11 @@ const expectedExports = [
   ["metano-runtime/system/uuid", "UUID"],
   ["metano-runtime/system/exceptions/invalid-operation-exception", "InvalidOperationException"],
   ["metano-runtime/system/exceptions/divide-by-zero-exception", "DivideByZeroException"],
+  ["metano-runtime/system/exceptions/divide-by-zero-exception.js", "DivideByZeroException"],
+  ["metano-runtime/system/exceptions", "InvalidOperationException"],
+  ["metano-runtime/system/exceptions/to-exception", "toException"],
+  ["metano-runtime/system/collections", "HashSet"],
+  ["metano-runtime/system/collections/hash-set", "HashSet"],
   ["metano-runtime/system/decimal", "Decimal"],
 ];
 
@@ -191,14 +211,18 @@ if (new Decimal("79228162514264337593543950335").minus(1).toFixed() !== "7922816
 }
 
 console.log("ok   metano-runtime/system/decimal keeps 29 significant digits");
+
+// The types-only reflection module resolves and loads (it has no runtime exports yet).
+await import("metano-runtime/system/reflection");
+console.log("ok   metano-runtime/system/reflection");
 JS
 }
 
 assert_directory_subpath_rejected() {
-  step "Checking that directory subpaths are not exported"
+  step "Checking that a directory without an exports entry is not exported"
 
   (cd "$CONSUMER_DIR" && node --input-type=module) <<'JS'
-const directorySubpath = "metano-runtime/system/collections";
+const directorySubpath = "metano-runtime/system";
 const rejection = await import(directorySubpath).then(
   () => undefined,
   (error) => error,
@@ -255,6 +279,55 @@ assert_nodenext_types() {
   echo "ok   tsc ($(cd "$CONSUMER_DIR" && ./node_modules/.bin/tsc --version))"
 }
 
+write_bundle_entry() {
+  cat >"$CONSUMER_DIR/bundle-entry.js" <<'JS'
+import { intDiv } from "metano-runtime";
+import { InvalidOperationException, toException } from "metano-runtime/system/exceptions";
+
+try {
+  intDiv(1, 0);
+} catch (caught) {
+  console.log(toException(caught).toString());
+}
+
+console.log(new InvalidOperationException().message);
+console.log(InvalidOperationException.$runtimeType.fullName);
+JS
+}
+
+readonly EXPECTED_BUNDLE_OUTPUT="System.DivideByZeroException: Attempted to divide by zero.
+Operation is not valid due to the current state of the object.
+System.InvalidOperationException"
+
+# Runs the bundle at $2 under Node and compares its output; $1 names the bundler.
+assert_bundle_runs() {
+  local output
+  output="$(node "$2")" || fail "$1 bundle failed under Node"
+  [ "$output" = "$EXPECTED_BUNDLE_OUTPUT" ] || fail "$1 bundle printed: $output"
+  echo "ok   $1"
+}
+
+assert_bundlers() {
+  step "Bundling a consumer entry from the installed package"
+
+  write_bundle_entry
+
+  local out="$CONSUMER_DIR/bundles"
+  mkdir -p "$out"
+
+  (cd "$CONSUMER_DIR" && bun build bundle-entry.js --target node --format esm --minify --outfile "$out/bun.js" >/dev/null) ||
+    fail "bun build failed"
+  assert_bundle_runs "bun build" "$out/bun.js"
+
+  (cd "$CONSUMER_DIR" && "$ESBUILD" bundle-entry.js --bundle --minify --format=esm --platform=node --outfile="$out/esbuild.js" --log-level=warning) ||
+    fail "esbuild failed"
+  assert_bundle_runs "esbuild" "$out/esbuild.js"
+
+  (cd "$CONSUMER_DIR" && "$ESBUILD" bundle-entry.js --bundle --minify --format=esm --platform=node --conditions=source --outfile="$out/esbuild-source.js" --log-level=warning) ||
+    fail "esbuild (source condition) failed"
+  assert_bundle_runs "esbuild (source condition)" "$out/esbuild-source.js"
+}
+
 main() {
   assert_prerequisites
   pack_runtime
@@ -263,6 +336,7 @@ main() {
   assert_directory_subpath_rejected
   assert_no_extensionless_specifiers
   assert_nodenext_types
+  assert_bundlers
   step "metano-runtime packaging smoke test passed"
 }
 

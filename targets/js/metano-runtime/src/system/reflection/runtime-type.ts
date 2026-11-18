@@ -46,7 +46,7 @@ export interface RuntimeTypeBase<T> {
 }
 
 /** A class, record or struct lowered to a class, or a runtime exception class. */
-export type ClassType<T> = RuntimeTypeBase<T> & {
+export interface ClassType<T> extends RuntimeTypeBase<T> {
   readonly kind: "class";
   readonly ctor: abstract new (...args: any[]) => T;
   readonly base?: () => ClassType<unknown>;
@@ -61,37 +61,39 @@ export type ClassType<T> = RuntimeTypeBase<T> & {
   readonly isValueType: boolean;
   /** The public parameterless constructor (`new T()`). */
   readonly create?: () => T;
-};
+}
 
-export type InterfaceType<T> = RuntimeTypeBase<T> & {
+export interface InterfaceType<T> extends RuntimeTypeBase<T> {
   readonly kind: "interface";
   readonly baseInterfaces: ReadonlyArray<() => InterfaceType<unknown>>;
   /** The `[PlainObject]` implementers, in a deterministic order. */
   readonly plainImplementers: ReadonlyArray<() => PlainObjectType<unknown>>;
-};
+}
 
-export type PlainObjectType<T> = RuntimeTypeBase<T> & {
+export interface PlainObjectType<T> extends RuntimeTypeBase<T> {
   readonly kind: "plainObject";
   readonly guard: (value: unknown) => value is T;
-};
+}
 
-export type PrimitiveType<T> = RuntimeTypeBase<T> & {
+export interface PrimitiveType<T> extends RuntimeTypeBase<T> {
   readonly kind: "primitive";
   readonly primitive: PrimitiveName;
-};
+}
 
-export type EnumType<T> = RuntimeTypeBase<T> & {
+export interface EnumType<T> extends RuntimeTypeBase<T> {
   readonly kind: "enum" | "stringEnum";
   readonly values: ReadonlyArray<T>;
   /** Parallel to {@link values}. */
   readonly names: ReadonlyArray<string>;
   readonly isFlags: boolean;
-};
+}
 
 /** A native array; the element type is erased. */
-export type ArrayType = RuntimeTypeBase<unknown[]> & { readonly kind: "array" };
+export interface ArrayType extends RuntimeTypeBase<unknown[]> {
+  readonly kind: "array";
+}
 
-export type CollectionType<T> = RuntimeTypeBase<T> & {
+export interface CollectionType<T> extends RuntimeTypeBase<T> {
   readonly kind: "collection";
   readonly collection:
     | "List"
@@ -125,25 +127,31 @@ export type CollectionType<T> = RuntimeTypeBase<T> & {
   /** `UnknownType` is the wildcard. */
   readonly typeArguments: ReadonlyArray<RuntimeType>;
   readonly variance: ReadonlyArray<"invariant" | "covariant">;
-};
+}
 
-export type NullableType<T> = RuntimeTypeBase<T | null> & {
+export interface NullableType<T> extends RuntimeTypeBase<T | null> {
   readonly kind: "nullable";
   readonly inner: () => RuntimeType<T>;
-};
+}
 
-export type UnionType<T> = RuntimeTypeBase<T> & {
+export interface UnionType<T> extends RuntimeTypeBase<T> {
   readonly kind: "union";
   readonly cases: ReadonlyArray<() => RuntimeType>;
-};
+}
 
-export type DelegateType = RuntimeTypeBase<Function> & { readonly kind: "delegate" };
+export interface DelegateType extends RuntimeTypeBase<Function> {
+  readonly kind: "delegate";
+}
 
 /** The wildcard: its test always passes. */
-export type UnknownType = RuntimeTypeBase<unknown> & { readonly kind: "unknown" };
+export interface UnknownType extends RuntimeTypeBase<unknown> {
+  readonly kind: "unknown";
+}
 
 /** `System.Object`: its test is `value != null`. */
-export type ObjectType = RuntimeTypeBase<object> & { readonly kind: "object" };
+export interface ObjectType extends RuntimeTypeBase<object> {
+  readonly kind: "object";
+}
 
 export type RuntimeType<T = unknown> =
   | ClassType<T>
