@@ -7,7 +7,10 @@ namespace Metano.Tests.TreeShaking;
 /// and a consumer package reach them as <c>Owner.Inner</c> — as values (construction,
 /// statics, enum members, <c>instanceof</c>) and as types (generic, nested-of-nested,
 /// interface, delegate), and a derived owner hides an inherited nested type with
-/// <c>new</c>, whose getter overrides the base one (<c>noImplicitOverride</c>).
+/// <c>new</c> by one that extends it, whose getter overrides the base one
+/// (<c>noImplicitOverride</c>) and keeps its own type, so another package reads the
+/// hiding type's members. A hiding type that does not extend the hidden one has no
+/// sound static side: TS2417 stays on the derived class.
 /// </summary>
 public class NestedTypeStrictTypeCheckTests
 {
@@ -25,7 +28,7 @@ public class NestedTypeStrictTypeCheckTests
 
             public Inner First { get; }
 
-            public record Inner(int Value)
+            public sealed record Inner(int Value)
             {
                 public static readonly Inner Zero = new(0);
 
@@ -48,6 +51,11 @@ public class NestedTypeStrictTypeCheckTests
                 public static Leaf Make() => new(Kind.B);
             }
 
+            public class Part
+            {
+                public int Size => 1;
+            }
+
             public interface IShape
             {
                 int Area();
@@ -65,9 +73,10 @@ public class NestedTypeStrictTypeCheckTests
         {
             public Derived() : base(Inner.Zero) { }
 
-            public new sealed record Inner(int Value, int Extra) : Owner.Inner(Value);
-
-            public new enum Kind { C }
+            public new sealed class Part : Owner.Part
+            {
+                public int Extra => 2;
+            }
         }
 
         public static class Reader
@@ -104,8 +113,8 @@ public class NestedTypeStrictTypeCheckTests
                     + measure(new Square())
                     + (special is Owner ? 1 : 0)
                     + Reader.Read(Owner.Seed.First)
-                    + new Derived.Inner(1, 2).Extra
-                    + (int)Derived.Kind.C;
+                    + new Derived.Part().Extra
+                    + new Derived.Part().Size;
             }
 
             public static Owner.Mid.Leaf Leaf() => new(Owner.Kind.A);
@@ -128,5 +137,38 @@ public class NestedTypeStrictTypeCheckTests
 
         await Assert.That(output).IsEmpty();
         await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    private const string IncompatibleHiding = """
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("acme-lib")]
+
+        namespace Acme;
+
+        public class Owner
+        {
+            public enum Kind { A }
+        }
+
+        public class Derived : Owner
+        {
+            public new enum Kind { A = 5 }
+
+            public static int Read() => (int)Kind.A;
+        }
+        """;
+
+    [Test]
+    public async Task HiddenNestedTypeOfAnotherShape_KeepsTheStaticSideError()
+    {
+        var library = TranspileHelper.Transpile(IncompatibleHiding);
+
+        var (exitCode, output) = await StrictTypeCheck.Run(
+            library,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).Contains("error TS2417");
+        await Assert.That(exitCode).IsNotEqualTo(0);
     }
 }

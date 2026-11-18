@@ -288,10 +288,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var owner = (TsClass)statements[index];
 
-        var inherited = new InheritedNestedGetters(
-            InheritedNestedGetterNames(parent),
-            (owner.Extends as TsNamedType)?.Name
-        );
+        var inherited = new InheritedNestedGetters(InheritedNestedGetterNames(parent));
 
         statements[index] = owner with
         {

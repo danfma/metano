@@ -1119,7 +1119,8 @@ public class NestedTypesInStaticClassTests
     public async Task NestedTypeHiddenWithNew_OverridesTheInheritedGetter()
     {
         // The derived getter re-declares the base one: `override` for noImplicitOverride
-        // (TS4114), typed as both so the static side still extends the base's (TS2417).
+        // (TS4114), with its own type, which extends the base's since the hiding class
+        // extends the hidden one.
         var result = TranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
@@ -1135,7 +1136,7 @@ public class NestedTypesInStaticClassTests
             {
                 public new sealed class Base : Owner.Base
                 {
-                    public Base(int extra) { }
+                    public int Extra => 2;
                 }
             }
             """
@@ -1145,11 +1146,9 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(derived)
-            .Contains("static override get Base(): typeof Owner.Base & typeof Derived$Base {");
-
-        await Assert
-            .That(derived)
-            .Contains("return Derived$Base as typeof Owner.Base & typeof Derived$Base;");
+            .Contains(
+                "static override get Base(): typeof Derived$Base {\n    return Derived$Base;"
+            );
 
         await Assert.That(result["owner.ts"]).Contains("static get Base(): typeof Owner$Base {");
         await Assert.That(derived).DoesNotContain("get Kept");
