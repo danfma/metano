@@ -1,7 +1,4 @@
 {
-  "$comment": "Runtime modules whose side-effect-only import still keeps code at load (spec 011 FR-043). The list only shrinks: stage 011a's A2 rewrites the lazy modules, leaving system/uuid (#361) and system/collections/immutable-collection (until 011h).",
-  "modules": [
-    "system/collections/immutable-collection",
-    "system/uuid"
-  ]
+  "$comment": "Runtime modules whose side-effect-only import still keeps code at load (spec 011 FR-043). Empty since stage 011a; the list only shrinks.",
+  "modules": []
 }

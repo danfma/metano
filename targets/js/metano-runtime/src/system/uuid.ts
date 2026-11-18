@@ -14,139 +14,148 @@ import { FormatException } from "./exceptions/format-exception.ts";
  */
 export type UUID = string & { readonly __brand: "UUID" };
 
-// The namespace pattern mirrors generated [InlineWrapper] output so Metano
-// can treat UUID exactly like a user-defined branded type — including in the
-// JSON serializer's `branded` descriptor.
-export namespace UUID {
-  /**
-   * Wraps an existing string as a `UUID` without validation. The caller is
-   * responsible for ensuring the string actually looks like a UUID — this is
-   * the escape hatch for values that come from trusted sources (the server,
-   * the database, `newUuid()` itself).
-   */
-  export function create(value: string): UUID {
-    return value as UUID;
-  }
-
-  /**
-   * Generates a fresh random UUID in the canonical RFC 4122 form
-   * (`"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"`). Mirrors `Guid.NewGuid()`.
-   */
-  export function newUuid(): UUID {
-    return crypto.randomUUID() as UUID;
-  }
-
-  /**
-   * Generates a fresh random UUID in the compact form (no hyphens). Mirrors
-   * `Guid.NewGuid().ToString("N")`.
-   */
-  export function newCompact(): UUID {
-    return crypto.randomUUID().replace(/-/g, "") as UUID;
-  }
-
-  /**
-   * The canonical all-zero UUID (`"00000000-0000-0000-0000-000000000000"`).
-   * Mirrors `Guid.Empty`.
-   */
-  export const empty: UUID = "00000000-0000-0000-0000-000000000000" as UUID;
-
-  /**
-   * Type guard — returns true if `value` is a string shaped like a UUID
-   * (either canonical with hyphens or compact without). The check is a
-   * regular expression match, not full RFC 4122 version/variant validation.
-   */
-  export function isUuid(value: unknown): value is UUID {
-    if (typeof value !== "string") return false;
-    // 8-4-4-4-12 hex groups (canonical form) OR 32 contiguous hex chars (N form)
-    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^[0-9a-fA-F]{32}$/.test(
-      value,
-    );
-  }
-
-  /**
-   * Parses a GUID string the way `Guid.TryParse(string, out Guid)` does: the `D`
-   * (`8-4-4-4-12`), `N` (32 digits), `B` (`{D}`) and `P` (`(D)`) formats, case-insensitive,
-   * with surrounding whitespace ignored. A match is normalized to the lowercase `D` form,
-   * the text C#'s `Guid.ToString()` produces; anything else yields `[false, UUID.empty]`.
-   * The `X` (hexadecimal braces) format is not supported.
-   */
-  export function tryParse(
-    text: string | null | undefined,
-  ): readonly [found: boolean, value: UUID] {
-    const digits = guidDigits(text?.trim() ?? "");
-
-    return digits === null ? [false, empty] : [true, canonicalUuid(digits)];
-  }
-
-  /**
-   * Parses a GUID string the way `Guid.Parse(string)` does: the formats {@link tryParse}
-   * accepts, normalized to the lowercase `D` form `Guid.ToString()` prints, so two spellings
-   * of one GUID compare equal.
-   *
-   * @throws ArgumentNullException for `null`.
-   * @throws FormatException for text that is not a GUID.
-   */
-  export function parse(text: string | null | undefined): UUID {
-    if (text == null) {
-      throw new ArgumentNullException("input");
-    }
-
-    const trimmed = text.trim();
-    const digits = guidDigits(trimmed);
-
-    if (digits === null) {
-      throw new FormatException(unrecognizedMessage(trimmed));
-    }
-
-    return canonicalUuid(digits);
-  }
-
-  /** The `HYPHENATED` shape with any characters in place of the hex digits. */
-  const HYPHENATED_SHAPE = /^[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}$/;
-
-  /** The message .NET gives for `text`: what it found wrong depends on how close it came. */
-  function unrecognizedMessage(text: string): string {
-    const closing = ENCLOSURES[text.charAt(0)];
-    const inner = closing !== undefined && text.endsWith(closing) ? text.slice(1, -1) : text;
-
-    if (HYPHENATED_SHAPE.test(inner)) {
-      return "Guid string should only contain hexadecimal characters.";
-    }
-
-    return text.includes("-")
-      ? "Guid should contain 32 digits with 4 dashes (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
-      : "Unrecognized Guid format.";
-  }
-
-  /** The lowercase `D` form of 32 hex digits. */
-  function canonicalUuid(digits: string): UUID {
-    return [
-      digits.slice(0, 8),
-      digits.slice(8, 12),
-      digits.slice(12, 16),
-      digits.slice(16, 20),
-      digits.slice(20),
-    ]
-      .join("-")
-      .toLowerCase() as UUID;
-  }
-
-  const HEX_DIGITS = /^[0-9a-fA-F]{32}$/;
-
-  const HYPHENATED =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-
-  const ENCLOSURES: Record<string, string> = { "{": "}", "(": ")" };
-
-  /** The 32 hex digits of a `D`, `N`, `B` or `P` GUID string, or `null`. */
-  function guidDigits(text: string): string | null {
-    if (HEX_DIGITS.test(text)) {
-      return text;
-    }
-
-    const closing = ENCLOSURES[text.charAt(0)];
-    const inner = closing !== undefined && text.endsWith(closing) ? text.slice(1, -1) : text;
-
-    return HYPHENATED.test(inner) ? inner.replace(/-/g, "") : null;
-  }
+// The companion object below mirrors generated [InlineWrapper] output so
+// Metano can treat UUID exactly like a user-defined branded type — including
+// in the JSON serializer's `branded` descriptor.
+/**
+ * Wraps an existing string as a `UUID` without validation. The caller is
+ * responsible for ensuring the string actually looks like a UUID — this is
+ * the escape hatch for values that come from trusted sources (the server,
+ * the database, `newUuid()` itself).
+ */
+function UUID$create(value: string): UUID {
+  return value as UUID;
 }
+
+/**
+ * Generates a fresh random UUID in the canonical RFC 4122 form
+ * (`"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"`). Mirrors `Guid.NewGuid()`.
+ */
+function UUID$newUuid(): UUID {
+  return crypto.randomUUID() as UUID;
+}
+
+/**
+ * Generates a fresh random UUID in the compact form (no hyphens). Mirrors
+ * `Guid.NewGuid().ToString("N")`.
+ */
+function UUID$newCompact(): UUID {
+  return crypto.randomUUID().replace(/-/g, "") as UUID;
+}
+
+/**
+ * The canonical all-zero UUID (`"00000000-0000-0000-0000-000000000000"`).
+ * Mirrors `Guid.Empty`.
+ */
+const UUID$empty: UUID = "00000000-0000-0000-0000-000000000000" as UUID;
+
+/**
+ * Type guard — returns true if `value` is a string shaped like a UUID
+ * (either canonical with hyphens or compact without). The check is a
+ * regular expression match, not full RFC 4122 version/variant validation.
+ */
+function UUID$isUuid(value: unknown): value is UUID {
+  if (typeof value !== "string") return false;
+  // 8-4-4-4-12 hex groups (canonical form) OR 32 contiguous hex chars (N form)
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^[0-9a-fA-F]{32}$/.test(
+    value,
+  );
+}
+
+/**
+ * Parses a GUID string the way `Guid.TryParse(string, out Guid)` does: the `D`
+ * (`8-4-4-4-12`), `N` (32 digits), `B` (`{D}`) and `P` (`(D)`) formats, case-insensitive,
+ * with surrounding whitespace ignored. A match is normalized to the lowercase `D` form,
+ * the text C#'s `Guid.ToString()` produces; anything else yields `[false, UUID.empty]`.
+ * The `X` (hexadecimal braces) format is not supported.
+ */
+function UUID$tryParse(text: string | null | undefined): readonly [found: boolean, value: UUID] {
+  const digits = guidDigits(text?.trim() ?? "");
+
+  return digits === null ? [false, UUID$empty] : [true, canonicalUuid(digits)];
+}
+
+/**
+ * Parses a GUID string the way `Guid.Parse(string)` does: the formats {@link tryParse}
+ * accepts, normalized to the lowercase `D` form `Guid.ToString()` prints, so two spellings
+ * of one GUID compare equal.
+ *
+ * @throws ArgumentNullException for `null`.
+ * @throws FormatException for text that is not a GUID.
+ */
+function UUID$parse(text: string | null | undefined): UUID {
+  if (text == null) {
+    throw new ArgumentNullException("input");
+  }
+
+  const trimmed = text.trim();
+  const digits = guidDigits(trimmed);
+
+  if (digits === null) {
+    throw new FormatException(unrecognizedMessage(trimmed));
+  }
+
+  return canonicalUuid(digits);
+}
+
+/** The `HYPHENATED` shape with any characters in place of the hex digits. */
+const HYPHENATED_SHAPE = /^[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}$/;
+
+/** The message .NET gives for `text`: what it found wrong depends on how close it came. */
+function unrecognizedMessage(text: string): string {
+  const closing = ENCLOSURES[text.charAt(0)];
+  const inner = closing !== undefined && text.endsWith(closing) ? text.slice(1, -1) : text;
+
+  if (HYPHENATED_SHAPE.test(inner)) {
+    return "Guid string should only contain hexadecimal characters.";
+  }
+
+  return text.includes("-")
+    ? "Guid should contain 32 digits with 4 dashes (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+    : "Unrecognized Guid format.";
+}
+
+/** The lowercase `D` form of 32 hex digits. */
+function canonicalUuid(digits: string): UUID {
+  return [
+    digits.slice(0, 8),
+    digits.slice(8, 12),
+    digits.slice(12, 16),
+    digits.slice(16, 20),
+    digits.slice(20),
+  ]
+    .join("-")
+    .toLowerCase() as UUID;
+}
+
+const HEX_DIGITS = /^[0-9a-fA-F]{32}$/;
+
+const HYPHENATED = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+const ENCLOSURES: Record<string, string> = { "{": "}", "(": ")" };
+
+/** The 32 hex digits of a `D`, `N`, `B` or `P` GUID string, or `null`. */
+function guidDigits(text: string): string | null {
+  if (HEX_DIGITS.test(text)) {
+    return text;
+  }
+
+  const closing = ENCLOSURES[text.charAt(0)];
+  const inner = closing !== undefined && text.endsWith(closing) ? text.slice(1, -1) : text;
+
+  return HYPHENATED.test(inner) ? inner.replace(/-/g, "") : null;
+}
+
+/**
+ * The UUID companion as one pure object, the shape generated `[InlineWrapper]`
+ * companions take (spec 011 FR-040): `UUID.newUuid()`, `UUID.parse(text)`.
+ */
+export const UUID = {
+  create: UUID$create,
+  newUuid: UUID$newUuid,
+  newCompact: UUID$newCompact,
+  empty: UUID$empty,
+  isUuid: UUID$isUuid,
+  tryParse: UUID$tryParse,
+  parse: UUID$parse,
+} as const;

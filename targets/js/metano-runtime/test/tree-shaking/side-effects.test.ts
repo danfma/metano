@@ -31,10 +31,7 @@ import {
  * The most the allowlist may ever hold: the measured state when the suite
  * landed. Growing the list means growing this set too, which a review sees.
  */
-const MAXIMAL_ALLOWLIST: ReadonlySet<string> = new Set([
-  "system/collections/immutable-collection",
-  "system/uuid",
-]);
+const MAXIMAL_ALLOWLIST: ReadonlySet<string> = new Set<string>([]);
 
 /** The package subpaths a consumer imports, resolved through `node_modules`. */
 const SUBPATH_EXPORTS = [
