@@ -1261,15 +1261,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         foreach (var type in types)
             ScanTypeAndEmittedNested(type, acc, irCache);
 
-        // The core asks for HashCode wherever value equality is synthesized;
-        // the import follows what the bridge actually emits, so a hashCode a
-        // user field keeps leaves no unused HashCode import (noUnusedLocals).
-        var synthesizesHashCode = irCache
-            .Values.OfType<IrClassDeclaration>()
-            .Any(IrToTsRecordSynthesisBridge.SynthesizesHashCode);
-
-        if (!synthesizesHashCode)
-            acc.RemoveWhere(requirement => requirement.Category is IrRuntimeCategory.Hashing);
+        // The core asks for HashCode wherever value equality is synthesized.
+        // The synthesized hashCode references the helper itself
+        // (TsRuntimeHelperReference), as UUID does, so the import follows what
+        // the bridge emits: a hashCode a user field keeps leaves no unused
+        // HashCode import (noUnusedLocals).
+        acc.RemoveWhere(requirement => requirement.Category is IrRuntimeCategory.Hashing);
 
         return acc;
     }

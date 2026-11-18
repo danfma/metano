@@ -165,24 +165,6 @@ public static class IrToTsRecordSynthesisBridge
     }
 
     /// <summary>
-    /// Whether the bridge emits a <c>hashCode</c> body for <paramref name="ir"/>:
-    /// a standalone one, or the fast path of a joined <c>HashCode</c> with no
-    /// user body folded in.
-    /// </summary>
-    internal static bool SynthesizesHashCode(IrClassDeclaration ir)
-    {
-        var standalone =
-            SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir))
-                .Contains(HashCodeMethodName) && !IrValueEqualitySynthesis.DeclaresHashCode(ir);
-
-        return standalone
-            || SynthesizedGroupMembersOf(ir)
-                .Any(member =>
-                    member is { SynthesizedKind: IrSynthesizedValueMember.HashCode, Body: null }
-                );
-    }
-
-    /// <summary>
     /// The fast path of a synthesized member that joined a group (spec 013
     /// FR-041) under its claimed name, with the body the target synthesizes: an
     /// anchored one overrides the base's fast path and chains to it
