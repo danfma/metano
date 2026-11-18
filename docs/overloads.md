@@ -104,7 +104,7 @@ when they differ).
 | a method overload | a **fast path** `<method><Suffix>(…)` with the overload's own accessibility, beside the public dispatcher `<method>(…)` |
 | an operator overload | a public static fast path `__<operator><Suffix>(a, b)` beside the operator helper `__<operator>` |
 | an overloaded module function or extension method | an exported fast path `<function><Suffix>(…)` beside the exported dispatcher, re-exported from the barrel |
-| an overloaded static method of a `[Branded]` type | an exported function `<method><Suffix>(…)` in the companion namespace, beside the exported dispatcher `<method>(…)` |
+| an overloaded static method of a `[Branded]` type | a member `<method><Suffix>(…)` of the companion object, beside the dispatcher `<method>(…)` |
 | `new Dimension(3)` in C# | `Dimension.fromSize(3)` |
 | `: base(size)` | `super(Dimension.byDimensionSize, size)` |
 | `d.Add(1)`, `base.Add(1)`, the method group `d.Add` | `d.addX(1)`, `super.addX(1)`, `d.addX.bind(d)` |
@@ -166,14 +166,14 @@ These shapes are not covered:
   parameters (#376).
 
 A `[Branded]` (or `[InlineWrapper]`) type over a primitive has no class: its
-static methods are functions of a companion namespace. An overloaded group
-there exports one function per overload beside the dispatcher, and generated
+static methods are members of a companion object. An overloaded group
+there has one member per overload beside the dispatcher, and generated
 calls and method groups name the bound one, so `Tag.S(new UId(1))` runs
 `S(UId)` even though a `UId` is a `bigint` at runtime and the dispatcher would
-pick `S(long)`. A function of an overload that is not public is tagged
-`/** @internal */`. Operators and conversions declared on a branded type are
-not applied through their functions yet (#599), so an overloaded operator or
-conversion group keeps its per-overload functions local to the namespace; and
+pick `S(long)`. The companion key of an overload that is not public is tagged
+`/** @internal */` in the companion's written type. Operators and conversions declared on a branded type are
+not applied through their functions yet (#599), so generated code calls none
+of the per-overload members of an overloaded operator or conversion group; and
 a branded type's constructors get no factories.
 
 Generated code only binds a type whose source the compiler can read — the

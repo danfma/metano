@@ -67,7 +67,7 @@ concerns — scope, declaration, inlining, branding, constants:
 | `[Erasable]` | `static class` | Class scope vanishes at the call site. Members emit according to their own attributes (plain body → top-level function in class-named file, `[External]` → ambient, `[Emit(...)]` → template, `[Inline]` → expansion, `[Ignore]` → dropped). |
 | `[External]` | class or member | Runtime-provided. No declaration emitted. Transpiled code can reference the symbol (class-qualified access preserved when the class is *not* also `[Erasable]`). |
 | `[NoEmit]` | type | **Redefined**: .NET-only. The type is painted as non-transpilable; any reference from transpiled code is a compile error (MS0013 `NoEmitReferencedByTranspiledCode`). Previous ambient usages migrate to `[External]`. |
-| `[Branded]` | `struct` / `record` | Branded primitive wrapper with a companion namespace. Renames `[InlineWrapper]` — no behavioral change, just a better name. |
+| `[Branded]` | `struct` / `record` | Branded primitive wrapper with a companion object (a companion namespace before 3.0, see ADR-0005). Renames `[InlineWrapper]` — no behavioral change, just a better name. |
 | `[Constant]` | parameter or field | Value must be a compile-time constant literal. Validator emits MS0014 `InvalidConstant` when violated. Enables literal-type narrowing in `[Emit]` templates and safe `[Inline]` expansion. |
 | `[Inline]` | field, method, or static class | Expansion at the use site. Field: initializer substitutes each access. Expression-bodied method: body substitutes each call with parameter renaming. Static class: propagates `[Inline]` to every member (ergonomic shortcut). |
 

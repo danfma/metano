@@ -68,14 +68,16 @@ arbitrary string" from "a validated UUID".
 ```typescript
 // metano-runtime
 export type UUID = string & { readonly __brand: "UUID" };
-export namespace UUID {
-  export function create(value: string): UUID;
-  export function newUuid(): UUID;
-  export function newCompact(): UUID;
-  export const empty: UUID;
-  export function isUuid(value: unknown): value is UUID;
-  export function tryParse(text: string | null | undefined): readonly [found: boolean, value: UUID];
-}
+// a companion object over module functions (UUID$create, …)
+export const UUID: {
+  create(value: string): UUID;
+  newUuid(): UUID;
+  newCompact(): UUID;
+  empty: UUID;
+  isUuid(value: unknown): value is UUID;
+  tryParse(text: string | null | undefined): readonly [found: boolean, value: UUID];
+  // …
+};
 ```
 
 **Lowerings:**

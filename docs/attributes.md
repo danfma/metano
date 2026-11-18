@@ -227,10 +227,9 @@ Becomes:
 
 ```typescript
 export type UserId = string & { readonly __brand: "UserId" };
-export namespace UserId {
-  export function create(value: string): UserId { return value as UserId; }
-  export function newId(): UserId { return crypto.randomUUID().replace(/-/g, "") as UserId; }
-}
+function UserId$create(value: string): UserId { return value as UserId; }
+function UserId$new_(): UserId { return crypto.randomUUID().replace(/-/g, "") as UserId; }
+export const UserId = { create: UserId$create, new_: UserId$new_ } as const;
 ```
 
 At runtime `UserId` is literally a `string` — no wrapper object. But the type

@@ -142,3 +142,21 @@ module's requirement set), which `IrRuntimeRequirementToTsImport.Convert`
 translates into the concrete `import { UUID } from "metano-runtime"`. See
 [ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md) for
 the wider context.
+
+## Amendment (2026-11-18): companion object
+
+Spec 011 FR-040 (#335) replaces the companion namespace of this decision with a
+companion object: a TypeScript `namespace` compiles to an IIFE every bundler keeps,
+so an unused companion could never be dropped. The members are module-level
+functions under `Type$member`, and the companion is one pure object literal of them:
+
+```ts
+export type UserId = string & { readonly __brand: "UserId" };
+function UserId$create(value: string): UserId { return value as UserId; }
+function UserId$new_(): UserId { return crypto.randomUUID().replace(/-/g, "") as UserId; }
+export const UserId = { create: UserId$create, new_: UserId$new_ } as const;
+```
+
+Call sites (`UserId.create(x)`), imports, cross-package metadata and the JSON
+`branded` descriptor are unchanged. The sections above describe the namespace shape
+as decided in 2026-03; read "companion namespace" there as the companion object.
