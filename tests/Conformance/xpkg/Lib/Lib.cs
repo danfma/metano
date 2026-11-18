@@ -159,3 +159,20 @@ public class LAmount
 
     public static LAmount operator -(LAmount a) => new(-a.V);
 }
+
+/// <summary>A library owner whose nested types are hoisted (spec 011 FR-040).</summary>
+public class LNest
+{
+    public sealed record Item(int N)
+    {
+        public static readonly Item Origin = new(1);
+
+        public static Item Of(int n) => new(n);
+    }
+
+    public enum Tone
+    {
+        Low,
+        High,
+    }
+}
