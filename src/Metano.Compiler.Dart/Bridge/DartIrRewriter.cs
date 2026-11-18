@@ -117,6 +117,9 @@ public sealed class DartIrRewriter
                 Expression = RewriteExpression(s.Expression),
                 Cases = s.Cases.Select(RewriteSwitchCase).ToList(),
             },
+            IrInlineCodeStatement inlineCode => new IrExpressionStatement(
+                DartInlineCodePlaceholder.Of(inlineCode.Span)
+            ),
             _ => stmt,
         };
 
@@ -253,6 +256,17 @@ public sealed class DartIrRewriter
                 Receiver = te.Receiver is null ? null : RewriteExpression(te.Receiver),
                 Arguments = te.Arguments.Select(RewriteExpression).ToList(),
             },
+            // The escape hatches are casts in Dart (spec 011 FR-035, FR-036), so the
+            // printer's cast grouping applies to them unchanged.
+            IrUnsafeCastExpression unsafeCast => new IrCastExpression(
+                RewriteExpression(unsafeCast.Value),
+                unsafeCast.Target
+            ),
+            IrAsDynamicExpression asDynamic => new IrCastExpression(
+                RewriteExpression(asDynamic.Value),
+                new IrUnknownTypeRef()
+            ),
+            IrInlineCodeExpression inlineCode => DartInlineCodePlaceholder.Of(inlineCode.Span),
             _ => expr,
         };
 

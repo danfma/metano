@@ -95,6 +95,9 @@ public static class IrNodeChildren
             IrIntegerOverflow overflow => [overflow.Value],
             IrTypeCheck check => [check.Expression],
             IrLinqChain linq => [linq.Source, .. linq.Stages.SelectMany(s => s.Arguments)],
+            IrInlineCodeExpression inlineCode => IrInlineCodeParts.HolesOf(inlineCode.Parts),
+            IrUnsafeCastExpression unsafeCast => [unsafeCast.Value],
+            IrAsDynamicExpression asDynamic => [asDynamic.Value],
             _ => [],
         };
 
@@ -126,6 +129,7 @@ public static class IrNodeChildren
                 sw.Expression,
                 .. sw.Cases.SelectMany(c => c.Labels).SelectMany(ExpressionsOf),
             ],
+            IrInlineCodeStatement inlineCode => IrInlineCodeParts.HolesOf(inlineCode.Parts),
             _ => [],
         };
 

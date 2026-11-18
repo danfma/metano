@@ -1240,6 +1240,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     ContainsJsxInStatements(scope.Statements)
                     || scope.Expressions.Any(ContainsJsxInExpression)
                 ),
+            TsInlineCodeStatement inlineCode => inlineCode.Holes.Any(ContainsJsxInExpression),
             TsSwitchStatement switchStmt => ContainsJsxInExpression(switchStmt.Discriminant)
                 || switchStmt.Cases.Any(c =>
                     (c.Test is { } test && ContainsJsxInExpression(test))
@@ -1278,6 +1279,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 template.Receiver is { } receiver && ContainsJsxInExpression(receiver)
             ) || template.Arguments.Any(ContainsJsxInExpression),
             TsTemplateLiteral literal => literal.Expressions.Any(ContainsJsxInExpression),
+            TsInlineCode inlineCode => TsInlineCodeHoles
+                .Of(inlineCode.Parts)
+                .Any(ContainsJsxInExpression),
             _ => false,
         };
 

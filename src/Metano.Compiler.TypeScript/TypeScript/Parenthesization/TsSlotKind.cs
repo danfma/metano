@@ -53,4 +53,11 @@ internal enum TsSlotKind
 
     /// <summary>The expression of an expression statement.</summary>
     ExpressionStatement,
+
+    /// <summary>
+    /// A hole of inline TypeScript (<c>Js.Code</c>): the text around it can continue
+    /// it with any token (<c>{a + b}.toFixed()</c>), so it is printed as a member-level
+    /// operand that cannot be read as a block or a declaration either.
+    /// </summary>
+    InlineCodeHole,
 }

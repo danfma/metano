@@ -185,7 +185,7 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
         return context.WithCallerArguments(_helpers.InParameterOrder(args, symbol), symbol);
     }
 
-    private static IrExternalImport ToIrExternalImport(
+    internal static IrExternalImport ToIrExternalImport(
         SymbolHelper.ImportInfo import,
         string? emittedName = null
     ) =>

@@ -12,7 +12,7 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// extractor drops those members, so the diagnostic is the only trace they leave.
 /// Members a source generator added (the System.Text.Json context's
 /// <c>IJsonTypeInfoResolver.GetTypeInfo</c>, for instance) are not user-authored and
-/// are not policed, matching <see cref="IgnoreReferenceValidator"/>.
+/// are not policed, matching <see cref="TranspiledReferenceWalker"/>.
 /// </summary>
 internal sealed class ExplicitImplementationValidator
 {

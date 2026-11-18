@@ -8,16 +8,20 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Metano.Compiler.Frontend.Roslyn;
 
 /// <summary>
-/// Raises <c>MS0013</c>: the <c>[Ignore]</c> attribute means ".NET-only", so any
-/// reference to such a type from a transpilable type's signature OR body is an
-/// error. Signatures (params, return, fields, props, events, base, generic
+/// Walks every type and member reference that a transpilable type's emitted code
+/// makes for the running target, and hands each one to the reference rules:
+/// <see cref="IgnoredReferenceRule"/> (<c>MS0013</c>: the <c>[Ignore]</c> attribute
+/// means ".NET-only", so any reference to such a type from a transpilable type's
+/// signature OR body is an error) and <see cref="TargetSpecificReferenceRule"/>
+/// (<c>MS0051</c>: an interop API of another target language). Signatures (params, return, fields, props, events, base, generic
 /// constraints) are checked from their symbols. The code each member contributes
 /// (bodies, field/property/event initializers, parameter defaults,
 /// constructor-initializer arguments) is walked name by name, so a type or member
 /// spelled anywhere in it raises (#277). Only emitted code is walked, so static
 /// constructors, explicit interface implementations and custom event accessors are
 /// not scanned — the IR does not emit their bodies. A containing type or member that
-/// is itself <c>[Ignore]</c> stays silent, and the scan is target-aware: a
+/// is itself <c>[Ignore]</c> for the target is not walked, so neither rule fires
+/// inside it, and the scan is target-aware: a
 /// <c>[Ignore(TargetLanguage.Dart)]</c> type does not light up under a TypeScript
 /// run.
 /// <para>
@@ -33,7 +37,7 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// </list>
 /// </para>
 /// </summary>
-internal sealed class IgnoreReferenceValidator
+internal sealed class TranspiledReferenceWalker
 {
     /// <summary>
     /// Attributes whose <c>typeof</c> arguments reach the generated code, so they stay
@@ -50,20 +54,19 @@ internal sealed class IgnoreReferenceValidator
     private readonly Compilation _compilation;
     private readonly TargetLanguage _target;
     private readonly GeneratedSourceTrees _generatedSources;
-    private readonly List<MetanoDiagnostic> _diagnostics;
-    private readonly HashSet<Location> _reportedLocations = [];
+    private readonly IReadOnlyList<ITranspiledReferenceRule> _rules;
 
-    private IgnoreReferenceValidator(
+    private TranspiledReferenceWalker(
         Compilation compilation,
         TargetLanguage target,
         GeneratedSourceTrees generatedSources,
-        List<MetanoDiagnostic> diagnostics
+        IReadOnlyList<ITranspiledReferenceRule> rules
     )
     {
         _compilation = compilation;
         _target = target;
         _generatedSources = generatedSources;
-        _diagnostics = diagnostics;
+        _rules = rules;
     }
 
     public static void Validate(
@@ -74,11 +77,14 @@ internal sealed class IgnoreReferenceValidator
         List<MetanoDiagnostic> diagnostics
     )
     {
-        var validator = new IgnoreReferenceValidator(
+        var validator = new TranspiledReferenceWalker(
             compilation,
             target,
             generatedSources,
-            diagnostics
+            [
+                new IgnoredReferenceRule(target, diagnostics),
+                new TargetSpecificReferenceRule(target, diagnostics),
+            ]
         );
 
         CSharpSourceFrontend.CollectTopLevelTypes(compilation.Assembly.GlobalNamespace, type =>
@@ -191,6 +197,7 @@ internal sealed class IgnoreReferenceValidator
             } accessor when !accessor.IsImplicitlyDeclared:
                 // The signature belongs to the property (see ScanProperty).
                 ScanCode(accessor, MemberContributedCode.Executable);
+
                 break;
             case IMethodSymbol method when IsScannedMethod(method):
                 ScanMethod(method);
@@ -307,7 +314,7 @@ internal sealed class IgnoreReferenceValidator
     /// The receiver of an instance access spells no type (<c>m.Value</c>), so the
     /// accessed member's containing type is checked at the receiver. For a static
     /// access (<c>Marker.Value</c>) the name walk reports the same location, and
-    /// <see cref="_reportedLocations"/> keeps it to one diagnostic.
+    /// each rule keeps it to one diagnostic.
     /// </summary>
     private void InspectMemberReceiver(MemberAccessExpressionSyntax access, SemanticModel semantic)
     {
@@ -360,8 +367,8 @@ internal sealed class IgnoreReferenceValidator
 
     private void CheckNamedType(INamedTypeSymbol type, Location location)
     {
-        if (SymbolHelper.HasIgnore(type, _target) && _reportedLocations.Add(location))
-            ReportType(type, location);
+        foreach (var rule in _rules)
+            rule.CheckType(type, location);
     }
 
     private void CheckMember(ISymbol? candidate, Location location)
@@ -369,8 +376,8 @@ internal sealed class IgnoreReferenceValidator
         if (candidate is null || !IsMemberKind(candidate))
             return;
 
-        if (SymbolHelper.HasIgnore(candidate, _target) && _reportedLocations.Add(location))
-            ReportMember(candidate, location);
+        foreach (var rule in _rules)
+            rule.CheckMember(candidate, location);
     }
 
     private static bool IsMemberKind(ISymbol symbol) =>
@@ -379,32 +386,4 @@ internal sealed class IgnoreReferenceValidator
                 or SymbolKind.Property
                 or SymbolKind.Field
                 or SymbolKind.Event;
-
-    private void ReportType(INamedTypeSymbol type, Location location) =>
-        _diagnostics.Add(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.IgnoreReferencedByTranspiledCode,
-                $"Transpilable code references '{type.Name}', which is marked [Ignore] "
-                    + "(.NET-only). Migrate the type to [External] (ambient TS shape) "
-                    + "or remove the dependency from transpiled code.",
-                location
-            )
-        );
-
-    private void ReportMember(ISymbol member, Location location)
-    {
-        var owner = member.ContainingType?.Name ?? "<global>";
-
-        _diagnostics.Add(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.IgnoreReferencedByTranspiledCode,
-                $"Transpilable code references '{owner}.{member.Name}', which is marked [Ignore] "
-                    + "(.NET-only). The member is not emitted; remove the reference or drop "
-                    + "[Ignore] from the member.",
-                location
-            )
-        );
-    }
 }

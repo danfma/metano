@@ -53,6 +53,8 @@ internal static class TsParenthesization
             TsSlotKind.ConciseArrowBody => precedence < TsPrecedence.Assignment
                 || StartsWithObjectLiteral(operand),
             TsSlotKind.ExpressionStatement => StartsLikeADeclaration(operand),
+            TsSlotKind.InlineCodeHole => NeedsParensAsAccessTarget(operand, precedence)
+                || StartsLikeADeclaration(operand),
             _ => true,
         };
     }

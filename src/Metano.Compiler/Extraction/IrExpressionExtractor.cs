@@ -170,6 +170,9 @@ public sealed partial class IrExpressionExtractor
 
         _invocationRewriters = new Invocation.IInvocationRewriter[]
         {
+            // The Metano interop surface (Js.Code, UnsafeCast, AsDynamic) first:
+            // no other lowering applies to it.
+            new Invocation.InteropCallRewriter(RewriteInteropCall),
             new Invocation.DelegateInvokeRewriter(helpers),
             new Invocation.DictionaryKeysContainsRewriter(helpers),
             new Invocation.IntrinsicBclLoweringTable(
@@ -235,6 +238,8 @@ public sealed partial class IrExpressionExtractor
         // checked / unchecked takes Roslyn's wrapped value; see
         // IrExpressionExtractor.NumericConversions.cs and .CheckedContext.cs.
         var value = UnsupportedUserTruthTest(expression)
+            ?? UnsupportedInteropUse(expression)
+            ?? ImportFacadeMethodGroupOf(expression)
             ?? FoldedInt64Constant(expression)
             ?? FoldedCheckedContextConstant(expression)
             ?? FoldedNumberStylesConstant(expression)
@@ -3733,7 +3738,9 @@ public sealed partial class IrExpressionExtractor
             )
                 .ExtractBody(block, arrow: null, isVoid: false)
                 .Statements,
-            ExpressionSyntax expr => LowerExpressionVariables(new IrReturnStatement(Extract(expr))),
+            ExpressionSyntax expr => LowerExpressionVariables(
+                InlineCodeStatementOf(expr) ?? new IrReturnStatement(Extract(expr))
+            ),
             _ => [new IrUnsupportedStatement(body.Kind().ToString())],
         };
 

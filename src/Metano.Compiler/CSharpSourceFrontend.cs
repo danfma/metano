@@ -173,7 +173,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
 
-            IgnoreReferenceValidator.Validate(
+            TranspiledReferenceWalker.Validate(
                 compilation,
                 assemblyWideTranspile,
                 target,

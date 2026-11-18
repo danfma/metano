@@ -291,6 +291,10 @@ public static class IrToTsStatementBridge
             IrExpressionStatement es => new TsExpressionStatement(
                 IrToTsExpressionBridge.MapNullTolerant(es.Expression, context)
             ),
+            IrInlineCodeStatement inlineCode => IrToTsInlineCodeBridge.MapStatement(
+                inlineCode,
+                context
+            ),
             IrReturnStatement ret => new TsReturnStatement(
                 ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, context) : null
             ),

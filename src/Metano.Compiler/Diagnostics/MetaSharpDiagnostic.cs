@@ -397,6 +397,25 @@ public static class DiagnosticCodes
     /// contract still report MS0001 until spec 011's runtime descriptors land.</summary>
     public const string UnanswerableRuntimeTypeTest = "MS0045";
 
+    /// <summary>MS0051 — a reference to an interop API of another target language
+    /// (<c>Metano.Interop.Js</c>, bound to TypeScript by its <c>[TargetSpecific]</c>
+    /// marker) reached by this target's emission. An error, at the reference; the
+    /// containing member or type carrying <c>[Ignore(target)]</c> suppresses it
+    /// (spec 011 FR-033).</summary>
+    public const string TargetSpecificInterop = "MS0051";
+
+    /// <summary>MS0052 — a <c>Js.Code</c> argument that is neither a constant string
+    /// nor an interpolated string with constant literal parts (an interpolation nested
+    /// in a concatenation included), a <c>Js.Code</c> method group, or a hole with an
+    /// <c>await</c>, a <c>ref</c> / <c>out</c> argument, or an alignment or format
+    /// clause. An error, at the argument or hole (spec 011 FR-031).</summary>
+    public const string InvalidInlineCode = "MS0052";
+
+    /// <summary>MS0056 — a <c>Js.Code</c> hole that falls inside a JS string literal
+    /// of the inline text, so the value is spliced as code rather than quoted. A
+    /// warning, at the hole; the TypeScript target decides it (spec 011 FR-031).</summary>
+    public const string InlineCodeHoleInStringLiteral = "MS0056";
+
     /// <summary>MS0059 — the <c>--source-condition</c> (MSBuild
     /// <c>MetanoSourceCondition</c>) value is not a usable package.json export condition
     /// name: it contains a character other than letters, digits, <c>-</c>, <c>_</c>,

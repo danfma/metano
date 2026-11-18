@@ -1211,6 +1211,10 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(";");
                 break;
 
+            case TsInlineCodeStatement inlineCode:
+                PrintInlineCodeParts(inlineCode.Parts);
+                break;
+
             case TsRawStatement raw:
                 // Multi-line raw text needs explicit re-indent on every line:
                 // the underlying builder only applies the indent prefix at the
@@ -1355,6 +1359,29 @@ public sealed class Printer(string indent = "  ")
     /// </summary>
     private static TsOperandSlot AccessObjectSlot(bool optional, bool continuesChain) =>
         optional || continuesChain ? TsOperandSlot.AccessTarget : TsOperandSlot.MemberObject;
+
+    /// <summary>
+    /// Inline TypeScript: the text verbatim (a line break in it is kept as is, so a
+    /// template literal in the text keeps its content), each hole in its operand slot.
+    /// </summary>
+    private void PrintInlineCodeParts(IReadOnlyList<TsInlineCodePart> parts)
+    {
+        foreach (var part in parts)
+        {
+            switch (part)
+            {
+                case TsInlineCodeText text:
+                    _sb.Write(text.Text);
+                    break;
+                case TsInlineCodeHole hole:
+                    PrintOperand(hole.Expression, TsOperandSlot.InlineCodeHole);
+                    break;
+                case TsInlineCodeLineBreak:
+                    _sb.WriteLn();
+                    break;
+            }
+        }
+    }
 
     private void PrintParenthesized(TsExpression expression)
     {
@@ -1569,6 +1596,12 @@ public sealed class Printer(string indent = "  ")
 
             case TsParenthesized paren:
                 PrintParenthesized(paren.Expression);
+                break;
+
+            case TsInlineCode inlineCode:
+                _sb.Write("(");
+                PrintInlineCodeParts(inlineCode.Parts);
+                _sb.Write(")");
                 break;
 
             case TsCastExpression cast:

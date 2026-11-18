@@ -55,6 +55,9 @@ public static class IrBodyCoverageProbe
             IrSwitchStatement sw => IsCoveredExpression(sw.Expression)
                 && sw.Cases.All(c => c.Labels.All(IsCoveredCaseLabel) && IsFullyCovered(c.Body)),
             IrBreakStatement or IrContinueStatement or IrRethrowStatement => true,
+            IrInlineCodeStatement inlineCode => IrInlineCodeParts
+                .HolesOf(inlineCode.Parts)
+                .All(IsCoveredExpression),
             _ => false,
         };
 
@@ -133,6 +136,11 @@ public static class IrBodyCoverageProbe
                 && IsCoveredExpression(access.WhenNotNull),
             IrLinqChain linq => IsCoveredExpression(linq.Source)
                 && linq.Stages.All(s => s.Arguments.All(IsCoveredExpression)),
+            IrInlineCodeExpression inlineCode => IrInlineCodeParts
+                .HolesOf(inlineCode.Parts)
+                .All(IsCoveredExpression),
+            IrUnsafeCastExpression unsafeCast => IsCoveredExpression(unsafeCast.Value),
+            IrAsDynamicExpression asDynamic => IsCoveredExpression(asDynamic.Value),
             _ => false,
         };
 

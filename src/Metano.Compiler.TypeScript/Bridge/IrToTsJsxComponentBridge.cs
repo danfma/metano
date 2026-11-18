@@ -346,6 +346,12 @@ public static class IrToTsJsxComponentBridge
                     ? null
                     : RewriteList(ts.Finally, propNames, referenced),
             },
+            IrInlineCodeStatement inlineCode => inlineCode with
+            {
+                Parts = IrInlineCodeParts.MapHoles(inlineCode.Parts, hole =>
+                    Rewrite(hole, propNames, referenced)
+                ),
+            },
             // True leaves — no nested expression/statement to descend into.
             IrBreakStatement
             or IrContinueStatement
@@ -622,6 +628,20 @@ public static class IrToTsJsxComponentBridge
                         }
                     )
                     .ToList(),
+            },
+            IrInlineCodeExpression inlineCode => inlineCode with
+            {
+                Parts = IrInlineCodeParts.MapHoles(inlineCode.Parts, hole =>
+                    Rewrite(hole, propNames, referenced)
+                ),
+            },
+            IrUnsafeCastExpression unsafeCast => unsafeCast with
+            {
+                Value = Rewrite(unsafeCast.Value, propNames, referenced),
+            },
+            IrAsDynamicExpression asDynamic => asDynamic with
+            {
+                Value = Rewrite(asDynamic.Value, propNames, referenced),
             },
             // True leaves — no nested expression to descend into. An
             // unsupported placeholder was already reported by the extractor.

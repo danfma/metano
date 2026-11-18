@@ -1560,6 +1560,13 @@ public sealed class ImportCollector(
                     CollectFromExpression(varDecl.Initializer, sink);
 
                 break;
+            case TsInlineCodeStatement inlineCode:
+                // The inline text is opaque (spec 011 FR-032): only its holes
+                // reference names.
+                foreach (var hole in inlineCode.Holes)
+                    CollectFromExpression(hole, sink);
+
+                break;
             case TsRawStatement raw:
                 // Loops and try blocks print as raw text; walk the nodes the
                 // text was rendered from so their references are imported.
@@ -1779,6 +1786,13 @@ public sealed class ImportCollector(
             case TsTemplateLiteral tmpl:
                 foreach (var e in tmpl.Expressions)
                     CollectFromExpression(e, sink);
+                break;
+            case TsInlineCode inlineCode:
+                // The inline text is opaque (spec 011 FR-032): only its holes
+                // reference names.
+                foreach (var hole in TsInlineCodeHoles.Of(inlineCode.Parts))
+                    CollectFromExpression(hole, sink);
+
                 break;
             case TsConditionalExpression cond:
                 CollectFromExpression(cond.Condition, sink);

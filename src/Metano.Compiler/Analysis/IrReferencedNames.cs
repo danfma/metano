@@ -86,6 +86,8 @@ public static class IrReferencedNames
             IrTypeReference reference => IsTypeNamed(reference.Name, names),
             IrNewExpression creation => IsTypeNamed(creation.Type, names),
             IrCastExpression cast => IsTypeNamed(cast.TargetType, names),
+            IrUnsafeCastExpression unsafeCast => IsTypeNamed(unsafeCast.Target, names),
+            IrInlineCodeExpression { ResultType: { } resultType } => IsTypeNamed(resultType, names),
             IrTypeCheck check => IsTypeNamed(check.Type, names),
             _ => false,
         };

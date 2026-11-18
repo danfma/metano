@@ -28,6 +28,7 @@ internal static class TsPrecedenceClassifier
             or TsObjectLiteral
             or TsNamedFunctionExpression
             or TsJsxElement
+            or TsInlineCode
             or TsParenthesized => TsPrecedence.Primary,
             TsPropertyAccess
             or TsElementAccess

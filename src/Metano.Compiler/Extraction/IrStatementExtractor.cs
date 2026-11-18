@@ -106,12 +106,10 @@ public sealed class IrStatementExtractor(
 
         if (arrow is not null)
         {
-            var expr = _expressions.Extract(arrow.Expression);
+            var statement = _expressions.InlineCodeStatementOf(arrow.Expression)
+                ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid);
 
-            return new ExtractedBody(
-                _expressions.LowerExpressionVariables(ArrowStatement(expr, isVoid)),
-                localNames
-            );
+            return new ExtractedBody(_expressions.LowerExpressionVariables(statement), localNames);
         }
 
         if (block is null)
@@ -298,6 +296,15 @@ public sealed class IrStatementExtractor(
             : [ExtractStatement(statement)];
 
     private IrStatement ExtractStatement(StatementSyntax statement) =>
+        InlineCodeStatementOf(statement) ?? ExtractOrdinaryStatement(statement);
+
+    /// <summary>A <c>Js.Code</c> call as an expression statement keeps its statement form (spec 011 FR-031).</summary>
+    private IrStatement? InlineCodeStatementOf(StatementSyntax statement) =>
+        statement is ExpressionStatementSyntax expression
+            ? _expressions.InlineCodeStatementOf(expression.Expression)
+            : null;
+
+    private IrStatement ExtractOrdinaryStatement(StatementSyntax statement) =>
         statement switch
         {
             BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),

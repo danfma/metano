@@ -153,6 +153,18 @@ public static partial class IrToTsExpressionBridge
             IrNullConditionalAccess access => MapNullConditionalAccess(access, context),
             IrConditionalReceiver => CurrentConditionalReceiver(),
             IrUnsupportedExpression u => MapUnsupported(u),
+            IrInlineCodeExpression inlineCode => IrToTsInlineCodeBridge.MapExpression(
+                inlineCode,
+                context
+            ),
+            IrUnsafeCastExpression unsafeCast => IrToTsInlineCodeBridge.MapUnsafeCast(
+                unsafeCast,
+                context
+            ),
+            IrAsDynamicExpression asDynamic => IrToTsInlineCodeBridge.MapAsDynamic(
+                asDynamic,
+                context
+            ),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };
     }

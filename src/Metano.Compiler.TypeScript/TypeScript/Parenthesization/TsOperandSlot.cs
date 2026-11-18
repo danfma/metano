@@ -28,6 +28,8 @@ internal readonly record struct TsOperandSlot(TsSlotKind Kind, string? Operator 
 
     public static TsOperandSlot ExpressionStatement { get; } = new(TsSlotKind.ExpressionStatement);
 
+    public static TsOperandSlot InlineCodeHole { get; } = new(TsSlotKind.InlineCodeHole);
+
     /// <summary>The operator of a binary or prefix slot.</summary>
     public string RequiredOperator =>
         Operator ?? throw new InvalidOperationException($"{Kind} slot carries no operator.");

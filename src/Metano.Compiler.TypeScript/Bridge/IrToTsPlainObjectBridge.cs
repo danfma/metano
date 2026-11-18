@@ -214,6 +214,12 @@ public static class IrToTsPlainObjectBridge
             IrBlockStatement block => new IrBlockStatement(
                 RewriteList(block.Statements, identifierName)
             ),
+            IrInlineCodeStatement inlineCode => inlineCode with
+            {
+                Parts = IrInlineCodeParts.MapHoles(inlineCode.Parts, hole =>
+                    RewriteThis(hole, identifierName)
+                ),
+            },
             _ => stmt,
         };
 
@@ -281,6 +287,20 @@ public static class IrToTsPlainObjectBridge
             IrCastExpression cast => cast with
             {
                 Expression = RewriteThis(cast.Expression, identifierName),
+            },
+            IrInlineCodeExpression inlineCode => inlineCode with
+            {
+                Parts = IrInlineCodeParts.MapHoles(inlineCode.Parts, hole =>
+                    RewriteThis(hole, identifierName)
+                ),
+            },
+            IrUnsafeCastExpression unsafeCast => unsafeCast with
+            {
+                Value = RewriteThis(unsafeCast.Value, identifierName),
+            },
+            IrAsDynamicExpression asDynamic => asDynamic with
+            {
+                Value = RewriteThis(asDynamic.Value, identifierName),
             },
             IrNumericConversion conversion => conversion with
             {
