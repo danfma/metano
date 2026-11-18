@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler;
@@ -439,7 +440,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         DrainCrossPackageMisses(typeMappingContext);
         DrainCrossPackageDependencies(typeMappingContext);
 
-        WriteGroupCache(groups, run.Closures, run.Outcomes.Emissions);
+        WriteGroupCache(groups, run.Closures, run.Outcomes);
 
         return files;
     }
@@ -1010,6 +1011,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             Context.TypeMapping!.CrossPackageDependencies.Restore(entry.Dependencies);
             outcomes.Files[index] = stub;
             outcomes.Emissions[index] = new GroupEmission(entry.Files, entry.Dependencies);
+            outcomes.CheckedCasts[index] = entry.CheckedCasts.ToFrozenSet(StringComparer.Ordinal);
 
             return true;
         }
@@ -1680,7 +1682,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private void WriteGroupCache(
         IReadOnlyList<TypeFileGroup> groups,
         IReadOnlyDictionary<string, string> closures,
-        IReadOnlyList<GroupEmission> emissions
+        GroupOutcomes outcomes
     )
     {
         if (CacheOutputDir is null)
@@ -1698,12 +1700,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var key = GroupKey(groups[i]);
             if (!closures.TryGetValue(key, out var closure))
                 continue;
-            var emission = emissions[i] ?? GroupEmission.Empty;
+            var emission = outcomes.Emissions[i] ?? GroupEmission.Empty;
 
             if (emission.Files.Count == 0 || !emission.IsCacheable)
                 continue;
 
-            entries[key] = new GroupCacheEntry(closure, emission.Files, emission.Dependencies);
+            entries[key] = new GroupCacheEntry(closure, emission.Files, emission.Dependencies)
+            {
+                CheckedCasts = outcomes.CheckedCasts[i]?.Order(StringComparer.Ordinal).ToList()
+                    ?? [],
+            };
         }
 
         var cache = new GroupCacheFile(

@@ -1,13 +1,15 @@
 using Metano.Compiler.TypeScript;
+using Metano.Compiler.TypeScript.Caching;
 using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Tests;
 
 /// <summary>
 /// The import-graph decision of a reference cast (#669) under the per-group
-/// cache: a cached group that a later change puts on an import cycle is
-/// transformed again and asserts its cast, and a group that asserted one is not
-/// cached, so the decision follows the graph of every run.
+/// cache: a cached group records the classes its casts check, so a later change
+/// that puts it on an import cycle transforms it again only to assert its cast,
+/// and a group that asserted one is not cached, so the decision follows the
+/// graph of every run.
 /// </summary>
 public class ReferenceDowncastCacheTests
 {
@@ -32,6 +34,20 @@ public class ReferenceDowncastCacheTests
         await Assert.That(acyclic).Contains("castTo<Leaf>(n, Leaf).text");
         await Assert.That(cyclic).Contains("(n as Leaf).text");
         await Assert.That(acyclicAgain).Contains("castTo<Leaf>(n, Leaf).text");
+    }
+
+    [Test]
+    public async Task GroupCache_RecordsTheClassesAGroupsCastsCheck()
+    {
+        var cacheDir = CreateTempDir();
+
+        TransformWithCache(cacheDir, Nodes(describeCallsPrinter: false));
+
+        var printer = GroupCacheFile
+            .TryRead(cacheDir)!
+            .Groups.Values.Single(entry => entry.Files[0].Path == "app/printer.ts");
+
+        await Assert.That(printer.CheckedCasts).IsEquivalentTo(["Leaf"]);
     }
 
     /// <summary>

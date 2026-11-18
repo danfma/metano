@@ -13,7 +13,7 @@ internal sealed class GroupOutcomes(int count)
 
     public GroupEmission[] Emissions { get; } = new GroupEmission[count];
 
-    /// <summary>The local classes each transformed group's casts check; <c>null</c> for a group reused from the cache.</summary>
+    /// <summary>The local classes each group's casts check: a transformed group's, or the ones a reused group's cache entry recorded.</summary>
     public IReadOnlySet<string>?[] CheckedCasts { get; } = new IReadOnlySet<string>?[count];
 }
 
