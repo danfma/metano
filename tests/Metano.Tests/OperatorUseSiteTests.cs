@@ -219,4 +219,138 @@ public class OperatorUseSiteTests
                 d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains(message)
             );
     }
+
+    /// <summary>
+    /// The shapes TypeScript reports as <c>MS0001</c> (baseline FR-077) and
+    /// the compound assignments through an operator the extraction does not
+    /// apply: Dart prints them, and reports nothing, as it did before the
+    /// user-operator nodes. The goldens are the Dart CLI output of the base
+    /// of wave 2 (a3d7a170) for this source.
+    /// </summary>
+    private const string UnsupportedShapesSource = """
+        [assembly: TranspileAssembly]
+
+        namespace DartProbe;
+
+        public class Flag
+        {
+            public int V;
+
+            public Flag(int v)
+            {
+                V = v;
+            }
+
+            public static bool operator true(Flag f) => f.V > 0;
+
+            public static bool operator false(Flag f) => f.V <= 0;
+
+            public static Flag operator &(Flag a, Flag b) => new(Math.Min(a.V, b.V));
+
+            public static Flag operator |(Flag a, Flag b) => new(Math.Max(a.V, b.V));
+        }
+
+        [PlainObject]
+        public record PlainPt(int X)
+        {
+            public static PlainPt operator +(PlainPt a, PlainPt b) => new(a.X + b.X);
+
+            public static PlainPt operator -(PlainPt a) => new(-a.X);
+
+            public static PlainPt operator ++(PlainPt a) => new(a.X + 1);
+
+            public static implicit operator int(PlainPt p) => p.X;
+
+            public static explicit operator PlainPt(int x) => new(x);
+        }
+
+        public class Acc
+        {
+            public int V;
+
+            public void operator +=(int k)
+            {
+                V += k;
+            }
+
+            public void operator ++()
+            {
+                V++;
+            }
+        }
+
+        public static class BclCompound
+        {
+            public static string Run()
+            {
+                var at = new DateTime(2020, 1, 1);
+                at += TimeSpan.FromDays(1);
+                var span = TimeSpan.FromHours(1);
+                span -= TimeSpan.FromMinutes(1);
+                var big = new System.Numerics.BigInteger(5);
+                big *= 3;
+                decimal money = 1m;
+                money += 2m;
+                var flag = new Flag(3);
+                flag &= new Flag(1);
+
+                return at.ToString() + span + big + money + flag.V;
+            }
+        }
+
+        public static class Uses
+        {
+            public static string Run()
+            {
+                var f = new Flag(1);
+                var g = new Flag(0);
+                var t = "";
+
+                if (f)
+                    t += "a";
+
+                while (g)
+                    t += "x";
+
+                t += f ? "c" : "d";
+
+                for (; g; )
+                    t += "y";
+
+                do
+                    t += "z";
+                while (g);
+
+                var both = f && g;
+                var either = f || g;
+                var p = new PlainPt(1) + new PlainPt(2);
+                int i = p;
+                var q = (PlainPt)3;
+                var r = -p;
+                p++;
+                p += new PlainPt(4);
+                var acc = new Acc();
+                acc += 2;
+                acc++;
+                ++acc;
+
+                return t + both.V + either.V + i + q.X + r.X + p.X + acc.V;
+            }
+        }
+        """;
+
+    [Test]
+    public async Task Dart_KeepsTheUnsupportedShapesAndBclCompoundsAsBefore()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(UnsupportedShapesSource);
+
+        await TranspileHelper.AssertGolden("operator-unsupported-shapes.dart", files["uses.dart"]);
+
+        await TranspileHelper.AssertGolden(
+            "operator-bcl-compound.dart",
+            files["bcl_compound.dart"]
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
 }

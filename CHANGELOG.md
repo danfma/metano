@@ -896,7 +896,7 @@ the rows of `tests/BclReference`.
 - `x += y` stores `x = Money.__add(x, y)` and `x++` stores `x = Money.__increment(x)`, evaluating the target once; they called the instance helper (`x = x.$add(y)`) or printed `x++` on the object.
 - Every user-defined conversion runs: `Money m = 7` is `Money.__implicitFromInt32(7)`, `(long)m` is `Money.__toInt64(m)`, `decimal d = m` calls `Money.__implicitToDecimal(m)`, a `foreach (Money m in ints)` variable converts each element, and a condition over `implicit operator bool` calls it. They passed the operand unchanged.
 - Lifted operators and conversions over `Nullable<T>` yield `null` (or `false` for a relational operator); a lifted `==` / `!=` compares `null` as C# does. A test against a constant `null` (`x == null`) stays a plain null check.
-- A user `true` / `false` operator in a condition or `&&` / `||`, a C# 14 instance compound or increment operator and an operator of a `[PlainObject]` type report `MS0001`.
+- A user `true` / `false` operator in a condition or `&&` / `||`, a C# 14 instance compound or increment operator and an operator of a `[PlainObject]` type report `MS0001` in TypeScript.
 - Dart output does not change.
 
 ### ⚠ Operator helpers and conversion statics are renamed (baseline FR-078; #600, #599)
