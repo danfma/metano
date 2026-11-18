@@ -411,6 +411,50 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ModuleFunctionClaims = moduleFunctionClaims,
         };
 
+        ValidateTypesAndCollectAccessFacts(transpilableTypes, transpilableTypesDict);
+
+        var run = TransformGroups(transpilableTypes, nameRenames);
+        var files = run.Outcomes.Files.OfType<TsSourceFile>().ToList();
+        var groups = run.Groups;
+
+        // Generate index.ts barrel files per namespace folder
+        var indexFiles = BarrelFileGenerator.Generate(
+            files,
+            new BarrelOptions(
+                NamespaceBarrels,
+                InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
+            )
+        );
+
+        files.AddRange(indexFiles);
+
+        // Detect cyclic #/ imports between the generated files and emit MS0005
+        // diagnostics for each distinct cycle. Cycles are reported as warnings — the
+        // build proceeds, but the consumer sees the chain in their build log instead
+        // of debugging it through tsgo's downstream error.
+        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
+
+        ReportExportKeyCollisions(files);
+
+        DrainCrossPackageMisses(typeMappingContext);
+        DrainCrossPackageDependencies(typeMappingContext);
+
+        WriteGroupCache(groups, run.Closures, run.Outcomes.Emissions);
+
+        return files;
+    }
+
+    /// <summary>
+    /// Runs the whole-compilation validators — over every type, including the
+    /// groups the per-group cache reuses, so a cache hit still reports — and
+    /// collects the constructor access facts and the overload claims the group
+    /// transforms read.
+    /// </summary>
+    private void ValidateTypesAndCollectAccessFacts(
+        List<INamedTypeSymbol> transpilableTypes,
+        Dictionary<string, IrTranspilableTypeRef> transpilableTypesDict
+    )
+    {
         // Module state of containerless classes (#314): reject the uses the
         // emitted ES module cannot keep, at their C# location. Runs over every
         // type, including the groups the per-group cache reuses below.
@@ -442,36 +486,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
         _overloadClaims = new TsOverloadClaimsRegistry(Context, _constructorAccessFacts);
-
-        var run = TransformGroups(transpilableTypes, nameRenames);
-        var files = run.Outcomes.Files.OfType<TsSourceFile>().ToList();
-        var groups = run.Groups;
-
-        // Generate index.ts barrel files per namespace folder
-        var indexFiles = BarrelFileGenerator.Generate(
-            files,
-            new BarrelOptions(
-                NamespaceBarrels,
-                InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
-            )
-        );
-
-        files.AddRange(indexFiles);
-
-        // Detect cyclic #/ imports between the generated files and emit MS0005
-        // diagnostics for each distinct cycle. Cycles are reported as warnings — the
-        // build proceeds, but the consumer sees the chain in their build log instead
-        // of debugging it through tsgo's downstream error.
-        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
-
-        ReportExportKeyCollisions(files);
-
-        DrainCrossPackageMisses(typeMappingContext);
-        DrainCrossPackageDependencies(typeMappingContext);
-
-        WriteGroupCache(groups, run.Closures, run.Outcomes.Emissions);
-
-        return files;
     }
 
     /// <summary>
