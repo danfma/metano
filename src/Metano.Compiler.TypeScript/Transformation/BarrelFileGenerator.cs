@@ -186,7 +186,7 @@ public static class BarrelFileGenerator
         var ordered = files.OrderBy(f => f.FileName).ToList();
 
         var positions = ordered
-            .Select((file, index) => (Module: ModuleOf(file), index))
+            .Select((file, index) => (Module: ModulePath.Of(file.FileName), index))
             .ToDictionary(entry => entry.Module, entry => entry.index, StringComparer.Ordinal);
 
         var hoisted = hoists
@@ -202,9 +202,6 @@ public static class BarrelFileGenerator
 
         return hoisted.Count == 0 ? ordered : [.. hoisted, .. ordered.Except(hoisted)];
     }
-
-    private static string ModuleOf(TsSourceFile file) =>
-        Path.ChangeExtension(file.FileName, null).Replace('\\', '/');
 
     private static string? GetExportedName(TsTopLevel node) =>
         node switch

@@ -1442,8 +1442,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var group in groups)
         {
-            var path = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName, false);
-            var module = Path.ChangeExtension(path, null).Replace('\\', '/');
+            var module = ModulePath.Of(
+                Context.PathNaming.GetRelativePath(group.Namespace, group.FileName, false)
+            );
 
             foreach (var type in group.Types)
                 modules.TryAdd(type, module);
