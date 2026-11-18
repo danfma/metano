@@ -163,6 +163,98 @@ public class ClassFieldLayoutTests
             );
     }
 
+    [Test]
+    public async Task AdjacentMultiLineFields_AreSeparatedByOneBlankLine()
+    {
+        var output = PrintClass([
+            new TsFieldMember("first", NumberType, FourPropertyObject()),
+            new TsFieldMember("second", NumberType, FourPropertyObject()),
+        ]);
+
+        await Assert
+            .That(output)
+            .IsEqualTo(
+                """
+                export class Probe {
+                  first: number = {
+                    a: 1,
+                    b: 2,
+                    c: 3,
+                    d: 4,
+                  };
+
+                  second: number = {
+                    a: 1,
+                    b: 2,
+                    c: 3,
+                    d: 4,
+                  };
+                }
+
+                """
+            );
+    }
+
+    [Test]
+    public async Task MultiLineFieldFirst_GetsNoBlankLineAfterTheBrace()
+    {
+        var output = PrintClass([
+            new TsFieldMember(
+                "documented",
+                NumberType,
+                new TsLiteral("1"),
+                JSDoc: new TsJSDoc(["The documented field."])
+            ),
+            new TsFieldMember("plain", NumberType, new TsLiteral("2")),
+        ]);
+
+        await Assert
+            .That(output)
+            .IsEqualTo(
+                """
+                export class Probe {
+                  /** The documented field. */
+                  documented: number = 1;
+
+                  plain: number = 2;
+                }
+
+                """
+            );
+    }
+
+    [Test]
+    public async Task MultiLineFieldLast_IsSeparatedFromTheConstructorByOneBlankLine()
+    {
+        var output = PrintClass(
+            [
+                new TsFieldMember("plain", NumberType, new TsLiteral("1")),
+                new TsFieldMember("options", NumberType, FourPropertyObject()),
+            ],
+            new TsConstructor([], [])
+        );
+
+        await Assert
+            .That(output)
+            .IsEqualTo(
+                """
+                export class Probe {
+                  plain: number = 1;
+
+                  options: number = {
+                    a: 1,
+                    b: 2,
+                    c: 3,
+                    d: 4,
+                  };
+
+                  constructor() { }
+                }
+
+                """
+            );
+    }
+
     private static TsObjectLiteral FourPropertyObject() =>
         new([
             new TsObjectProperty("a", new TsLiteral("1")),

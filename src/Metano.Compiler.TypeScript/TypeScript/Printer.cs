@@ -665,13 +665,15 @@ public sealed class Printer(string indent = "  ")
             )
             .ToList();
 
+        var fieldIsMultiLine = fields.Select(PrintsOnMultipleLines).ToArray();
+
         _sb.WriteBlock(() =>
         {
             var firstGroup = true;
 
             void PrintGroup(
                 IReadOnlyList<TsClassMember> members,
-                Func<TsClassMember, TsClassMember, bool> needsBlankLineBetween
+                Func<int, bool> needsBlankLineBefore
             )
             {
                 if (members.Count == 0)
@@ -684,17 +686,18 @@ public sealed class Printer(string indent = "  ")
 
                 for (var i = 0; i < members.Count; i++)
                 {
-                    if (i > 0 && needsBlankLineBetween(members[i - 1], members[i]))
+                    if (i > 0 && needsBlankLineBefore(i))
                         _sb.WriteLn();
+
                     PrintClassMember(members[i]);
                 }
             }
 
             void PrintSeparatedGroup(IReadOnlyList<TsClassMember> members) =>
-                PrintGroup(members, static (_, _) => true);
+                PrintGroup(members, static _ => true);
 
             // Fields first
-            PrintGroup(fields, FieldsNeedBlankLineBetween);
+            PrintGroup(fields, i => FieldsNeedBlankLineBetween(fieldIsMultiLine, i));
 
             // Constructor
             if (tsClass.Constructor is not null)
@@ -720,10 +723,13 @@ public sealed class Printer(string indent = "  ")
     /// The field-block blank-line rule (issue #682): consecutive single-line
     /// fields print one after another, and a field that prints on more than
     /// one line gets a blank line above and below. The rule is symmetric — if
-    /// either side is multi-line, the pair is separated.
+    /// either side is multi-line, the pair is separated. <paramref name="fieldIsMultiLine"/>
+    /// holds each field's <see cref="PrintsOnMultipleLines"/>, measured once per class.
     /// </summary>
-    private static bool FieldsNeedBlankLineBetween(TsClassMember prev, TsClassMember next) =>
-        PrintsOnMultipleLines(prev) || PrintsOnMultipleLines(next);
+    private static bool FieldsNeedBlankLineBetween(
+        IReadOnlyList<bool> fieldIsMultiLine,
+        int nextIndex
+    ) => fieldIsMultiLine[nextIndex - 1] || fieldIsMultiLine[nextIndex];
 
     /// <summary>
     /// Whether a class member prints on more than one line. Measured by
