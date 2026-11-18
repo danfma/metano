@@ -11,7 +11,7 @@ Reviewed by the `backend-reviewer` agent; structure across layers by the `archit
 ## Scope in this repository
 
 - These are the maintainer's general backend rules. Metano-specific conventions in `CLAUDE.md` take precedence when they conflict.
-- The Ports & Adapters section applies as a design principle. Metano's project layout (`Metano`, `Metano.Compiler`, `Metano.Compiler.TypeScript`, `Metano.Compiler.Dart`, `Metano.Build`) is defined by `CLAUDE.md`: the core is target-agnostic and each language target is its own project.
+- The Ports & Adapters section applies as a design principle. Metano's project layout (`Metano`, `Metano.Compiler`, `Metano.Compiler.TypeScript`, `Metano.Compiler.Dart`, `Metano.Build.Targets` + `Metano.Build.TypeScript`) is defined by `CLAUDE.md`: the core is target-agnostic and each language target is its own project.
 - Generated code and test fixtures that intentionally mirror user C# (inline sources in tests, `samples/`) are exempt from naming and value-object rules when the shape under test requires it.
 
 ## Principles
