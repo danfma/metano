@@ -221,7 +221,12 @@ public sealed partial class IrExpressionExtractor
         var addInfo = _semantic.GetCollectionInitializerSymbolInfo(element);
         var add = addInfo.Symbol as IMethodSymbol;
 
-        if (add is null && addInfo.CandidateReason == CandidateReason.LateBound)
+        var isLateBound =
+            add is null
+            && addInfo.CandidateReason == CandidateReason.LateBound
+            && !_context.KeepsDynamicSourceForms;
+
+        if (isLateBound)
             return ReportUnsupportedDynamic(
                 element,
                 $"Collection initializer element '{element}' is bound at run time by a dynamic value among several 'Add' overloads; cast it to the element type."

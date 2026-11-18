@@ -51,6 +51,16 @@ public sealed record IrExtractionContext(
     internal bool KeepsUserOperatorSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target keeps the operations a <c>dynamic</c> value binds at
+    /// run time in the symbol-less form the extraction gave them before
+    /// spec 011 FR-030 (Dart until after 3.0.0, D28): no dynamic nodes, no
+    /// runtime numeric conversions, no late-bound dispatch and no
+    /// <c>MS0053</c>, so its output and diagnostics stay as they were. Only
+    /// the <c>dynamic</c> type itself is mapped, which Dart renders as before.
+    /// </summary>
+    internal bool KeepsDynamicSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// The port through which a target says which types it emits with an
     /// addressable form per constructor overload — TypeScript a selector and,
     /// for a concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10),

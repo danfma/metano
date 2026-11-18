@@ -183,6 +183,38 @@ public static class DynamicProbes
         return a + "," + b;
     }
 
+    public static string CompoundStores()
+    {
+        dynamic one = 1;
+        var i = 2147483647;
+        var c = 'a';
+        short s = 32767;
+        uint u = 0;
+        i += one;
+        c += one;
+        s += one;
+        u -= one;
+
+        return i + "," + c + "," + s + "," + u;
+    }
+
+    public static string DoubleComparisons()
+    {
+        dynamic half = 0.5;
+        var x = 0.5;
+        var y = 0.25;
+
+        return (x == half ? "eq" : "ne") + "," + (y < half ? "lt" : "ge");
+    }
+
+    public static string FractionToByte()
+    {
+        dynamic fraction = 300.5;
+        byte b = (byte)fraction;
+
+        return b.ToString();
+    }
+
     public static string MixedEquality()
     {
         dynamic one = 1;

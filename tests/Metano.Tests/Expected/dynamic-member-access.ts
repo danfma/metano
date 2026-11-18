@@ -141,7 +141,7 @@ export class Probe {
     const neg = -d;
     const not = !d;
     const masked = d & 1;
-    i += d;
+    i = (i + d) | 0;
     d += 1;
     d++;
   }

@@ -354,14 +354,6 @@ public sealed record IrCallExpression(
     /// unifies them all) passes the written ones through.
     /// </summary>
     public bool HasExplicitTypeArguments { get; init; }
-
-    /// <summary>
-    /// Whether the call is bound at run time (spec 011 FR-030): a
-    /// <c>dynamic</c> argument left Roslyn several candidates, exactly the
-    /// overloads of one dispatched group, so a target calls the group's
-    /// runtime dispatcher, which chooses on the arguments' runtime values.
-    /// </summary>
-    public bool IsLateBound { get; init; }
 }
 
 /// <summary>
@@ -521,13 +513,6 @@ public sealed record IrNewExpression(
     /// <see cref="IrCallExpression.EvaluationOrder"/>.
     /// </summary>
     public IReadOnlyList<int>? EvaluationOrder { get; init; }
-
-    /// <summary>
-    /// Whether the construction is bound at run time (spec 011 FR-030): a
-    /// <c>dynamic</c> argument left Roslyn every constructor of a dispatched
-    /// set, so a target constructs through the runtime dispatcher.
-    /// </summary>
-    public bool IsLateBound { get; init; }
 }
 
 /// <summary>

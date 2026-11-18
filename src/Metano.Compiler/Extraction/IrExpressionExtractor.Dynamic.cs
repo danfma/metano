@@ -18,14 +18,17 @@ namespace Metano.Compiler.Extraction;
 ///   as on an <c>object</c> receiver;</item>
 ///   <item>a call, <c>new</c> or indexer of a statically typed receiver with a
 ///   <c>dynamic</c> argument binds to its single candidate through the ordinary
-///   path, or to the runtime dispatcher of the one group whose overloads are
-///   exactly its candidates (<see cref="LateBoundOverloadGroups"/>);</item>
+///   path, or, when its candidates are one overload group
+///   (<see cref="LateBoundOverloadGroups"/>), to the group bound to no
+///   overload;</item>
 ///   <item>an operator with a <c>dynamic</c> operand is the plain operator,
 ///   none of the typed lowerings;</item>
 ///   <item>a numeric cast becomes an <see cref="IrDynamicNumericConversion"/>;
 ///   any other cast is the cast from <c>object</c>.</item>
 /// </list>
-/// What cannot pass through reports <c>MS0053</c>.
+/// What cannot pass through reports <c>MS0053</c>. A target that keeps the
+/// source forms (<see cref="IrExtractionContext.KeepsDynamicSourceForms"/>)
+/// gets none of this.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
@@ -67,13 +70,16 @@ public sealed partial class IrExpressionExtractor
                 WellKnownMemberNames.GreaterThanOrEqualOperatorName,
         };
 
+    /// <summary>Whether the target keeps the forms it had before FR-030 (Dart, D28).</summary>
+    private bool KeepsDynamicSourceForms => _context.KeepsDynamicSourceForms;
+
     /// <summary>
     /// <c>d.Name</c> on a <c>dynamic</c> receiver: the name verbatim.
     /// <c>null</c> for any other member access.
     /// </summary>
     private IrExpression? TryExtractDynamicMemberAccess(QualifiedMemberSyntax member)
     {
-        if (!IsDynamic(member.Receiver))
+        if (KeepsDynamicSourceForms || !IsDynamic(member.Receiver))
             return null;
 
         return new IrDynamicMemberAccess(
@@ -90,6 +96,9 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? TryExtractDynamicInvocation(InvocationExpressionSyntax inv)
     {
+        if (KeepsDynamicSourceForms)
+            return null;
+
         if (_semantic.GetOperation(inv) is not IDynamicInvocationOperation operation)
             return null;
 
@@ -99,7 +108,7 @@ public sealed partial class IrExpressionExtractor
         if (_semantic.GetSymbolInfo(inv).Symbol is not null)
             return null;
 
-        return ExtractLateBoundCall(inv, operation);
+        return UnsupportedLateBoundInteropCall(inv) ?? ExtractLateBoundCall(inv, operation);
     }
 
     private IrExpression ExtractDynamicTargetCall(
@@ -162,8 +171,12 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// A call of a statically typed receiver whose <c>dynamic</c> argument
-    /// left several candidates: the group's runtime dispatcher when the
-    /// candidates are exactly its overloads, <c>MS0053</c> otherwise.
+    /// left several candidates: when the candidates are one overload group,
+    /// a call of the group bound to no overload, <c>MS0053</c> otherwise. The
+    /// call carries no <see cref="IrCallExpression.Overload"/> and no
+    /// <see cref="IrMemberAccess.Overload"/>, so a target names the group
+    /// itself, as for a call it cannot bind (TypeScript: the runtime
+    /// dispatcher, which chooses on the arguments' runtime values).
     /// </summary>
     private IrExpression ExtractLateBoundCall(
         InvocationExpressionSyntax inv,
@@ -192,10 +205,7 @@ public sealed partial class IrExpressionExtractor
             new IrMemberAccess(LateBoundReceiverOf(inv, owner), owner.Name, origin),
             [.. inv.ArgumentList.Arguments.Select(ExtractArgument)],
             Origin: origin
-        )
-        {
-            IsLateBound = true,
-        };
+        );
     }
 
     /// <summary>
@@ -212,14 +222,18 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// A <c>new</c> Roslyn bound at run time with several constructor
-    /// candidates: the runtime dispatcher of a dispatched set whose
-    /// constructors are exactly the candidates, <c>MS0053</c> otherwise. An
+    /// candidates: when they are the constructors of one dispatched set, the
+    /// construction bound to no overload (TypeScript: the constructor
+    /// dispatcher), <c>MS0053</c> otherwise. An
     /// initializer on such a <c>new</c> reports <c>MS0053</c> too. <c>null</c>
     /// for any other construction, which includes a late-bound one with a
     /// single candidate.
     /// </summary>
     private IrExpression? TryExtractDynamicCreation(BaseObjectCreationExpressionSyntax creation)
     {
+        if (KeepsDynamicSourceForms)
+            return null;
+
         if (_semantic.GetOperation(creation) is not IDynamicObjectCreationOperation operation)
             return null;
 
@@ -239,7 +253,8 @@ public sealed partial class IrExpressionExtractor
         if (
             !LateBoundOverloadGroups.IsDispatchedConstructorSet(
                 candidates,
-                operation.Arguments.Length
+                operation.Arguments.Length,
+                _context
             )
         )
             return ReportUnboundCandidates(creation);
@@ -247,12 +262,7 @@ public sealed partial class IrExpressionExtractor
         if (HasNamedOrByReferenceArgument(operation))
             return ReportByNameOrReferenceArgument(creation);
 
-        return ExtractTypedCreation(creation) is IrNewExpression construction
-            ? construction with
-            {
-                IsLateBound = true,
-            }
-            : ReportUnboundCandidates(creation);
+        return ExtractTypedCreation(creation);
     }
 
     /// <summary>
@@ -266,6 +276,9 @@ public sealed partial class IrExpressionExtractor
         BracketedArgumentListSyntax arguments
     )
     {
+        if (KeepsDynamicSourceForms)
+            return null;
+
         if (_semantic.GetOperation(node) is not IDynamicIndexerAccessOperation operation)
             return null;
 
@@ -300,6 +313,9 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? TryExtractDynamicBinary(BinaryExpressionSyntax bin, IrBinaryOp op)
     {
+        if (KeepsDynamicSourceForms)
+            return null;
+
         if (_semantic.GetOperation(bin) is not IBinaryOperation operation)
             return null;
 
@@ -320,15 +336,22 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// <c>target op= value</c> where either side is <c>dynamic</c>: the plain
-    /// compound operator, with none of the typed lowerings of
-    /// <see cref="TryExtractDynamicBinary"/> (<c>i += d</c> is not wrapped to
-    /// 32 bits, <c>d += 1L</c> adds a <c>number</c>). A user-defined operator
-    /// of the statically typed side reports <c>MS0053</c>. <c>null</c> for any
-    /// other assignment.
+    /// <c>target op= value</c> where either side is <c>dynamic</c>, once the
+    /// target-shape lowerings (extension property and indexer setters, events)
+    /// have declined it. A <c>dynamic</c> target is the plain compound
+    /// operator, with none of the typed lowerings of
+    /// <see cref="TryExtractDynamicBinary"/> (<c>d += 1L</c> adds a
+    /// <c>number</c>). A typed target keeps the ordinary compound lowering,
+    /// which converts the result back to the target's type as C# does
+    /// (<c>i += d</c> wraps to 32 bits, <c>c += d</c> stores a code unit). A
+    /// user-defined operator of the statically typed side reports
+    /// <c>MS0053</c>. <c>null</c> for any other assignment.
     /// </summary>
     private IrExpression? TryExtractDynamicCompoundAssignment(AssignmentExpressionSyntax assign)
     {
+        if (KeepsDynamicSourceForms)
+            return null;
+
         if (_semantic.GetOperation(assign) is not ICompoundAssignmentOperation operation)
             return null;
 
@@ -344,6 +367,9 @@ public sealed partial class IrExpressionExtractor
             || DeclaresOperator(operation.Value.Type, operation.OperatorKind)
         )
             return ReportUserOperator(assign, assign.OperatorToken);
+
+        if (operation.Target.Type is not IDynamicTypeSymbol)
+            return null;
 
         return new IrBinaryExpression(
             Extract(assign.Left),
@@ -376,7 +402,7 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol targetType
     )
     {
-        if (sourceType is not IDynamicTypeSymbol)
+        if (KeepsDynamicSourceForms || sourceType is not IDynamicTypeSymbol)
             return null;
 
         if (DynamicNumericTarget(targetType) is { } kind)
@@ -407,6 +433,9 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? UnsupportedDynamicUserConversion(ExpressionSyntax expression)
     {
+        if (KeepsDynamicSourceForms)
+            return null;
+
         var typeInfo = _semantic.GetTypeInfo(expression);
 
         var convertsDynamic =
@@ -449,11 +478,14 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Whether <paramref name="type"/> declares the user-defined operator of
-    /// <paramref name="kind"/>; a <c>string</c>'s equality is the JavaScript one.
+    /// <paramref name="kind"/>. The operators C# predefines are built in: a
+    /// <c>string</c>'s equality and the numeric operators (<c>double</c> and
+    /// <c>float</c> also declare them as members), except <c>decimal</c>'s,
+    /// whose operators are methods of its runtime class.
     /// </summary>
     private static bool DeclaresOperator(ITypeSymbol? type, BinaryOperatorKind kind)
     {
-        if (type is null or IDynamicTypeSymbol || type.SpecialType == SpecialType.System_String)
+        if (type is null or IDynamicTypeSymbol || HasPredefinedOperators(type))
             return false;
 
         if (!OperatorMethodNames.TryGetValue(kind, out var name))
@@ -461,6 +493,10 @@ public sealed partial class IrExpressionExtractor
 
         return type.UnwrapNullableValueType().GetMembers(name).OfType<IMethodSymbol>().Any();
     }
+
+    private static bool HasPredefinedOperators(ITypeSymbol type) =>
+        type.SpecialType == SpecialType.System_String
+        || NumericEndpoints.Of(type) is { IsEnum: false, Kind: not IrNumericKind.Decimal };
 
     private static bool HasNamedOrByReferenceArgument(IDynamicInvocationOperation operation) =>
         HasNamedOrByReferenceArgument(
@@ -503,7 +539,7 @@ public sealed partial class IrExpressionExtractor
     private IrUnsupportedExpression ReportUnboundCandidates(SyntaxNode node) =>
         ReportUnsupportedDynamic(
             node,
-            $"'{node}' is bound at run time by a dynamic argument among overloads the target cannot dispatch on; {ObjectCastHint}."
+            $"'{node}' is bound at run time by a dynamic argument among candidates that are not one overload group; {ObjectCastHint}."
         );
 
     private static IrUnsupportedExpression ReportUserOperator(SyntaxNode node, SyntaxToken token) =>

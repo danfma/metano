@@ -17,17 +17,20 @@ describe("numberFromDynamic", () => {
     expect(numberFromDynamic(40000, "Int16")).toBe(-25536);
   });
 
-  test("converts any other number as a double: truncated and saturated", () => {
+  test("converts any other number as the cast from double does", () => {
     expect(numberFromDynamic(3.7, "Int32")).toBe(3);
     expect(numberFromDynamic(-3.7, "Int32")).toBe(-3);
     expect(numberFromDynamic(1e20, "Int32")).toBe(2147483647);
-    expect(numberFromDynamic(300.5, "Byte")).toBe(255);
+    expect(numberFromDynamic(1e20, "UInt32")).toBe(4294967295);
+    expect(numberFromDynamic(300.5, "Byte")).toBe(44);
     expect(numberFromDynamic(Number.NaN, "Int32")).toBe(0);
   });
 
   test("range-checks in a checked context", () => {
     expect(numberFromDynamic(255, "Byte", true)).toBe(255);
-    expect(() => numberFromDynamic(300, "Byte", true)).toThrow(OverflowException);
+    expect(() => numberFromDynamic(300, "Byte", true)).toThrow(
+      "Arithmetic operation resulted in an overflow.",
+    );
     expect(() => numberFromDynamic(Number.NaN, "Int32", true)).toThrow(OverflowException);
   });
 
@@ -41,7 +44,12 @@ describe("numberFromDynamic", () => {
   test("converts a decimal, throwing out of range in every context", () => {
     expect(numberFromDynamic(new Decimal("3.9"), "Int32")).toBe(3);
     expect(numberFromDynamic(new Decimal("2.5"), "Double")).toBe(2.5);
-    expect(() => numberFromDynamic(new Decimal("1e12"), "Int32")).toThrow(OverflowException);
+    expect(() => numberFromDynamic(new Decimal("1e12"), "Int32")).toThrow(
+      "Value was either too large or too small for an Int32.",
+    );
+    expect(() => numberFromDynamic(new Decimal("1e12"), "UInt32")).toThrow(
+      "Value was either too large or too small for a UInt32.",
+    );
   });
 
   test("keeps a double and rounds a float", () => {
@@ -56,7 +64,10 @@ describe("numberFromDynamic", () => {
     expect(() => numberFromDynamic("abc", "Int32")).toThrow(InvalidCastException);
     expect(() => numberFromDynamic("42", "Int32")).toThrow("Cannot convert type 'string' to 'int'");
     expect(() => numberFromDynamic(true, "Int32")).toThrow("Cannot convert type 'bool' to 'int'");
-    expect(() => numberFromDynamic({}, "Double")).toThrow(InvalidCastException);
+    expect(() => numberFromDynamic({}, "Double")).toThrow("Cannot convert type 'Object' to 'double'");
+    expect(() => numberFromDynamic(Object.create(null), "Double")).toThrow(
+      "Cannot convert type 'object' to 'double'",
+    );
   });
 });
 
@@ -82,14 +93,28 @@ describe("bigintFromDynamic", () => {
     expect(bigintFromDynamic(new Decimal("12.9"), "Int64")).toBe(12n);
   });
 
-  test("range-checks a ulong in a checked context", () => {
+  test("saturates a double and range-checks in a checked context", () => {
+    expect(bigintFromDynamic(1e20, "UInt64")).toBe(18446744073709551615n);
+    expect(bigintFromDynamic(1e20, "Int64")).toBe(9223372036854775807n);
     expect(() => bigintFromDynamic(-1n, "UInt64", true)).toThrow(OverflowException);
+    expect(() => bigintFromDynamic(1e20, "Int64", true)).toThrow(
+      "Arithmetic operation resulted in an overflow.",
+    );
+  });
+
+  test("checks a decimal against the range in every context, with the cast's message", () => {
+    expect(() => bigintFromDynamic(new Decimal("1e30"), "Int64")).toThrow(
+      "Value was either too large or too small for an Int64.",
+    );
   });
 
   test("converts to BigInteger exactly, overflowing on NaN", () => {
-    expect(bigintFromDynamic(2n ** 70n, "BigInteger")).toBe(2n ** 70n);
+    expect(bigintFromDynamic(1180591620717411303424n, "BigInteger")).toBe(1180591620717411303424n);
     expect(bigintFromDynamic(-2.5, "BigInteger")).toBe(-2n);
-    expect(() => bigintFromDynamic(Number.NaN, "BigInteger")).toThrow(OverflowException);
+    expect(() => bigintFromDynamic(Number.NaN, "BigInteger")).toThrow("The value is not a number.");
+    expect(() => bigintFromDynamic(Number.POSITIVE_INFINITY, "BigInteger")).toThrow(
+      "BigInteger cannot represent infinity.",
+    );
   });
 
   test("rejects null and non-numeric values", () => {
@@ -107,10 +132,10 @@ describe("decimalSourceFromDynamic", () => {
     );
   });
 
-  test("overflows on NaN, infinity and a bigint beyond 2^96", () => {
-    expect(() => decimalSourceFromDynamic(Number.NaN)).toThrow(OverflowException);
-    expect(() => decimalSourceFromDynamic(Number.POSITIVE_INFINITY)).toThrow(OverflowException);
-    expect(() => decimalSourceFromDynamic(2n ** 96n)).toThrow(OverflowException);
+  test("overflows on a bigint beyond 2^96", () => {
+    expect(() => decimalSourceFromDynamic(79228162514264337593543950336n)).toThrow(
+      "Value was either too large or too small for a Decimal.",
+    );
   });
 
   test("rejects null and non-numeric values", () => {

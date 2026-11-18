@@ -15,9 +15,9 @@ the migration list.
 - Operations on a `dynamic` receiver keep their C# member names verbatim (`d.AppName`, `d.Run()`), where 2.x camelCased them (`d.appName`); `ToString` / `GetHashCode` / `Equals` / `GetType` keep the `object` lowering. Type arguments of a dynamic generic call are dropped.
 - Explicit numeric casts of a `dynamic` value convert it at run time through `metano-runtime` helpers (`numberFromDynamic`, `bigintFromDynamic`, `charFromDynamic`, `decimalSourceFromDynamic`), which throw `InvalidCastException` for `null` or a non-numeric value; 2.x emitted the bare value. A cast to a class is checked with `castTo` as from `object`.
 - A call of a typed receiver with a `dynamic` argument binds to its single candidate (with its mapping, qualifier and name) or to the overload group's runtime dispatcher; 2.x emitted an unmapped, sometimes unqualified call (`Console.writeLine(d)`, `sOv(d)`).
-- Operators with a `dynamic` operand are plain JavaScript operators (`i += d` is no longer wrapped to 32 bits, `d + 1L` adds `1`).
+- Operators with a `dynamic` operand are plain JavaScript operators (`d + 1L` adds `1`, `x == d` on a `double` is `===`); a compound assignment to a typed target still converts the result back to the target's type (`i += d` wraps to 32 bits, `c += d` stores a code unit).
 - An explicitly typed `dynamic` local is annotated `: any`.
-- New error `MS0053` for what cannot pass through (initializers on a late-bound `new`, named or `ref` arguments on a dynamic call, user-defined operators and conversions bound at run time, `Console.WriteLine(d)`-style calls over several candidates). See `docs/runtime-types.md` § dynamic.
+- New error `MS0053` (TypeScript) for what cannot pass through (initializers on a late-bound `new`, named or `ref` arguments on a dynamic call, user-defined operators and conversions bound at run time, `Console.WriteLine(d)`-style calls over several candidates). See `docs/runtime-types.md` § dynamic.
 
 ### LINQ aggregates and set operators (spec FR-056 to FR-058)
 

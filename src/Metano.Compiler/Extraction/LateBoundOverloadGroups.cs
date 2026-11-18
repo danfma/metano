@@ -4,9 +4,10 @@ namespace Metano.Compiler.Extraction;
 
 /// <summary>
 /// Decides whether a call or <c>new</c> that a <c>dynamic</c> argument left
-/// with several candidates (spec 011 FR-030) can go through a runtime
-/// dispatcher: the candidates must be exactly the overloads one dispatcher
-/// branches over for the call's argument count, compared by symbol identity,
+/// with several candidates (spec 011 FR-030) is a call of one overload group,
+/// left unbound so a target names the group itself (TypeScript: its runtime
+/// dispatcher): the candidates must be exactly the group's overloads for the
+/// call's argument count, compared by symbol identity,
 /// so the dispatcher, which tests the argument count first, chooses among the
 /// same set the runtime binder does. Any other candidate set (a BCL method
 /// group, a group the dispatcher holds more or fewer overloads of, a type with
@@ -47,23 +48,24 @@ internal static class LateBoundOverloadGroups
 
     /// <summary>
     /// Whether <paramref name="candidates"/> are every constructor taking
-    /// <paramref name="argumentCount"/> arguments of one type that emits a
-    /// constructor dispatcher: a dispatched set (two or more
-    /// declared constructors) of a class built from source, not a
-    /// <c>[PlainObject]</c> or <c>[JsTuple]</c> (an object or array literal)
-    /// and without an <c>[ObjectArgs]</c> constructor.
+    /// <paramref name="argumentCount"/> arguments of one dispatched set the
+    /// target emits with an addressable form per overload
+    /// (<see cref="DispatchedConstructorCalls.HasSelectors"/>, asked through
+    /// <see cref="IrExtractionContext.EmitsConstructorSelectors"/>), so a
+    /// construction bound to no overload reaches the set's dispatcher.
     /// </summary>
     public static bool IsDispatchedConstructorSet(
         IReadOnlyList<IMethodSymbol> candidates,
-        int argumentCount
+        int argumentCount,
+        IrExtractionContext context
     )
     {
-        if (candidates.Count < 2)
+        if (candidates.Count < 2 || context.EmitsConstructorSelectors is not { } emitsSelectors)
             return false;
 
         var type = candidates[0].ContainingType.OriginalDefinition;
 
-        if (!EmitsConstructorDispatcher(type))
+        if (!DispatchedConstructorCalls.HasSelectors(type, emitsSelectors))
             return false;
 
         var declared = IrConstructorExtractor
@@ -73,13 +75,6 @@ internal static class LateBoundOverloadGroups
 
         return declared.SetEquals(candidates.Select(candidate => candidate.OriginalDefinition));
     }
-
-    private static bool EmitsConstructorDispatcher(INamedTypeSymbol type) =>
-        IrConstructorExtractor.IsDispatchedSet(type)
-        && !type.DeclaringSyntaxReferences.IsEmpty
-        && !type.HasPlainObject()
-        && !type.HasJsTuple()
-        && !IrConstructorExtractor.AllExplicitConstructors(type).Any(SymbolHelper.HasObjectArgs);
 
     /// <summary>
     /// Whether a call to <paramref name="method"/> could keep its group's

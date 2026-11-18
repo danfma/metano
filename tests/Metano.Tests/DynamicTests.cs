@@ -424,16 +424,29 @@ public class DynamicTests
     }
 
     [Test]
-    public async Task DartTarget_DynamicType_IsDynamic_AndOperationsArePlaceholders()
+    public async Task DartTarget_KeepsTheSourceForms()
     {
-        var (files, _) = DartTranspileHelper.Transpile(
+        // D28: Dart keeps the symbol-less extraction it had before FR-030, so
+        // its output is the same as before the dynamic nodes existed.
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Probe
             {
                 public dynamic Value = null!;
 
-                public dynamic Read(dynamic d) => d.Name;
+                public static void Show(int x) { }
+
+                public static void Show(string s) { }
+
+                public object Read(dynamic d)
+                {
+                    var n = (int)d;
+                    Show(d);
+                    System.Console.WriteLine(d);
+
+                    return d.Name + d[0];
+                }
             }
             """
         );
@@ -441,10 +454,57 @@ public class DynamicTests
         var dart = files["probe.dart"];
 
         await Assert.That(dart).Contains("dynamic value");
+        await Assert.That(dart).Contains("d.name + d[0]");
+        await Assert.That(dart).Contains("d as int");
+        await Assert.That(dart).DoesNotContain("UnsupportedError");
 
         await Assert
-            .That(dart)
-            .Contains("UnsupportedError('Unsupported expression: IrDynamicMemberAccess')");
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedDynamicOperation))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task CompoundAssignments_KeepTheTargetShapeAndStoreConversion()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            public static class BagExtensions
+            {
+                extension(Bag bag)
+                {
+                    public int Twice
+                    {
+                        get => bag.Value * 2;
+                        set => bag.Value = value / 2;
+                    }
+                }
+            }
+
+            [Transpile]
+            public class Bag
+            {
+                public int Value;
+            }
+
+            [Transpile]
+            public class Stores
+            {
+                public void Run(dynamic d, Bag bag, int i, char c, short s, uint u, double x)
+                {
+                    bag.Twice += d;
+                    i += d;
+                    c += d;
+                    s += d;
+                    u -= d;
+                    d += 1L;
+                    var same = x == d;
+                    var less = x < d;
+                }
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden("dynamic-compound-assignments.ts", result["stores.ts"]);
     }
 
     private static async Task<MetanoDiagnostic> SingleDynamicError(string source)

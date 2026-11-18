@@ -420,8 +420,8 @@ public static class DiagnosticCodes
     /// typed operand of an operator whose other operand is <c>dynamic</c>, or a cast or
     /// implicit conversion of a <c>dynamic</c> value to a type that declares a
     /// user-defined conversion (reason 4); a call or <c>new</c> whose <c>dynamic</c>
-    /// argument leaves several candidates that are not exactly the overloads of one
-    /// dispatched group (reason 5). An error at the operation.</summary>
+    /// argument leaves several candidates that are not one overload group (reason 5).
+    /// An error at the operation; TypeScript only (Dart keeps its earlier forms, D28).</summary>
     public const string UnsupportedDynamicOperation = "MS0053";
 
     /// <summary>MS0056 — a <c>Js.Code</c> hole that falls inside a JS string literal

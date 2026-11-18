@@ -1968,9 +1968,6 @@ public sealed partial class IrExpressionExtractor
         if (TryReportTupleElementWrite(assign, assign.Left) is { } unsupportedWrite)
             return unsupportedWrite;
 
-        if (TryExtractDynamicCompoundAssignment(assign) is { } dynamicCompound)
-            return dynamicCompound;
-
         // Extension property assignment (`receiver.Prop = value` or any
         // compound form) — rewrite to a helper call against the property's
         // `$set` companion. Compound operators (`+=`, `++` via this path is
@@ -2038,6 +2035,9 @@ public sealed partial class IrExpressionExtractor
                 [new IrArgument(Extract(assign.Right))]
             );
         }
+
+        if (TryExtractDynamicCompoundAssignment(assign) is { } dynamicCompound)
+            return dynamicCompound;
 
         var target = Extract(assign.Left);
 

@@ -285,9 +285,6 @@ public static class IrBodyPrinter
             case IrBaseObjectMemberCall baseCall:
                 PrintBaseObjectMemberCall(sb, baseCall);
                 break;
-            case var unmapped when IsDynamicOperation(unmapped):
-                PrintUnsupportedPlaceholder(sb, unmapped.GetType().Name);
-                break;
             case IrCallExpression
             {
                 Target: IrMemberAccess hashed,
@@ -484,34 +481,17 @@ public static class IrBodyPrinter
                 PrintExpression(sb, CurrentConditionalReceiver().Expression);
                 break;
             case IrUnsupportedExpression u:
-                // Already reported as MS0001 by the extractor.
-                PrintUnsupportedPlaceholder(sb, u.Kind);
+                // Already reported as MS0001 by the extractor; `throw` is an
+                // expression in Dart, so the placeholder parses anywhere.
+                sb.Append("(throw UnsupportedError('Unsupported expression: ")
+                    .Append(u.Kind)
+                    .Append("'))");
                 break;
             default:
                 sb.Append("/* TODO: ").Append(expr.GetType().Name).Append(" */");
                 break;
         }
     }
-
-    /// <summary>
-    /// Whether <paramref name="expression"/> is a <c>dynamic</c> operation of
-    /// spec 011 FR-030, which has no Dart mapping before 3.0.0 (D28).
-    /// </summary>
-    private static bool IsDynamicOperation(IrExpression expression) =>
-        expression
-            is IrDynamicMemberAccess
-                or IrDynamicInvocation
-                or IrDynamicIndexerAccess
-                or IrDynamicNumericConversion
-                or IrCallExpression { IsLateBound: true }
-                or IrNewExpression { IsLateBound: true };
-
-    /// <summary>
-    /// The placeholder of an expression with no Dart mapping: a <c>throw</c>,
-    /// which is an expression in Dart, so it parses anywhere.
-    /// </summary>
-    private static void PrintUnsupportedPlaceholder(StringBuilder sb, string kind) =>
-        sb.Append("(throw UnsupportedError('Unsupported expression: ").Append(kind).Append("'))");
 
     /// <summary>
     /// Print the operand of a spread element as an iterable: a map spreads its

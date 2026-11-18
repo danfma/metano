@@ -60,7 +60,8 @@ operation becomes the plain JavaScript one.
 | `d.Name`, `d.Name = v`, `d.Run(1, x)`, `d[i]`, `d(3)` | the same, **member names verbatim**: `d.Name`, `d.Run(1, x)` |
 | `d.ToString()`, `d.GetHashCode()`, `d.Equals(x)`, `d.GetType()` | as on an `object` receiver: `d.toString()`, `valueHashCode(d)`, … |
 | `d.M<int>()` | `d.M()` (type arguments dropped) |
-| `d + 1`, `d == x`, `-d`, `d += 1L`, `i += d` | the JavaScript operator, with no `int` wrapping, `bigint`, `Decimal` or `char` lowering (`d += 1L` is `d += 1`) |
+| `d + 1`, `d == x`, `-d`, `d += 1L` | the JavaScript operator, with no `int` wrapping, `bigint`, `Decimal` or `char` lowering (`d += 1L` is `d += 1`) |
+| `i += d`, `c += d`, `s += d` on a typed `int` / `char` / `short` | the JavaScript operator, then the target's store conversion, as for any compound assignment to it (`i = (i + d) \| 0`) |
 | `string s = d;`, `F(d)` for `F(string)`, `return d;`, `if (d)`, `$"{d}"`, `foreach (var x in d)`, `await d` | nothing: an implicit conversion out of `dynamic` is not checked |
 | `(int)d`, `(byte)d`, `(double)d`, `(char)d` | `numberFromDynamic(d, "Int32")`, …, `charFromDynamic(d)` |
 | `(long)d`, `(ulong)d`, `(BigInteger)d` | `bigintFromDynamic(d, "Int64")`, … |
@@ -69,10 +70,11 @@ operation becomes the plain JavaScript one.
 | `(Circle)d`, `(IShape)d`, `d as Circle`, `d is Circle c`, `d switch { int n => … }` | as the same test or cast of an `object` value |
 | `F(d)` with one candidate, `k.Ov(d)` / `new C(d)` whose candidates are exactly one overload group | the bound call, or the group's runtime dispatcher |
 
-The numeric helpers convert from the value the `dynamic` holds: an integer `number` in the
-32-bit range as an integer (wrapped, or range-checked in a checked context), any other `number`
-as a `double` (truncated and saturated), a `bigint` as a 64-bit integer, a `Decimal` as a
-`decimal` (out of range it throws `OverflowException`). `null` throws `InvalidCastException`
+The numeric helpers convert from the value the `dynamic` holds, with the helper the compiler
+uses for the same cast from that type: an integer `number` in the 32-bit range as an integer
+(wrapped, or range-checked in a checked context), any other `number` as a `double`
+(`int32FromDouble`, `int64FromDouble`, …), a `bigint` as a 64-bit integer, a `Decimal` as a
+`decimal` (`int64FromDecimal`, …: out of range it throws `OverflowException` in every context). `null` throws `InvalidCastException`
 for a non-nullable target, and so does a value that is not numeric (`"42"`, `true`).
 
 `MS0053` (error) reports what cannot pass through: an initializer on a construction bound at
@@ -80,6 +82,9 @@ run time, a named or `ref` / `out` argument on a call of a `dynamic` receiver, a
 operator or conversion the binder would choose at run time (`money + d`, `(Money)d`,
 `Money m = d;`), and a call whose `dynamic` argument leaves several candidates that no single
 dispatcher covers (`Console.WriteLine(d)`: write `Console.WriteLine((object)d)`).
+
+The Dart target keeps the form it had before FR-030 until after 3.0.0 (D28): member names
+follow its naming policy, casts are `as T`, and no `MS0053` is reported.
 
 Differences from .NET, documented and not diagnosed (OD-11, OD-12):
 
@@ -95,4 +100,8 @@ Differences from .NET, documented and not diagnosed (OD-11, OD-12):
 - A `char` held in a `dynamic` is a one-character string: only a `char` target accepts it.
 - `d.E += h` on an event passes through as a compound assignment; `d + d` with a user-defined
   operator is not detected; `using (d)` reports `MS0001`, as `using` does for any operand.
+- A `dynamic` value mixed with a `long` (`d + someLong`, `l += d`) throws JavaScript's
+  `TypeError` for mixing a `bigint` with a `number`.
+- A `char` operand of an operator with a `dynamic` operand is its one-character string
+  (`c + d` concatenates), where .NET adds the code.
 - Until stage 011b, a cast to an interface (`(IShape)d`) is not checked.

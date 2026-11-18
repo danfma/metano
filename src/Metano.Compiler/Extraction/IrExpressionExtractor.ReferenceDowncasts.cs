@@ -43,7 +43,10 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private Conversion ConversionOfCast(CastExpressionSyntax cast, ITypeSymbol targetType)
     {
-        if (_semantic.GetTypeInfo(cast.Expression).Type is not IDynamicTypeSymbol)
+        if (
+            _context.KeepsDynamicSourceForms
+            || _semantic.GetTypeInfo(cast.Expression).Type is not IDynamicTypeSymbol
+        )
             return _semantic.ClassifyConversion(cast.Expression, targetType);
 
         var compilation = (CSharpCompilation)_semantic.Compilation;

@@ -1,23 +1,49 @@
 /**
  * The explicit numeric casts of a C# `dynamic` value (`(int)d`, `(long)d`, `(char)d`,
  * `(decimal)d`; spec 011 FR-030). The C# runtime binder converts from the type the value
- * holds at run time, which the compiler does not know, so these helpers look at the value:
+ * holds at run time, which the compiler does not know, so these helpers look at the value and
+ * then convert it with the helper the compiler uses for the same cast from that type:
  *
  * - a `number` that is an integer in the 32-bit range (`int`, `uint` and the narrower
- *   integers hold such values) converts as an integer: wrapped to the target's width, or
- *   range-checked in a checked context;
- * - any other `number` converts as a `double`: truncated toward zero, saturated to the
- *   target's range (NaN gives 0), or range-checked in a checked context;
+ *   integers hold such values) converts as an integer: the low bits of the target's width,
+ *   or range-checked in a checked context;
+ * - any other `number` converts as a `double` (`int32FromDouble`, `int64FromDouble`, …);
  * - a `bigint` (a `long`, `ulong` or `BigInteger`) converts as a 64-bit integer;
- * - a decimal.js value converts as a `decimal`: truncated, and out of range it throws
- *   `OverflowException` in every context, as .NET does;
+ * - a decimal.js value converts as a `decimal` (`int64FromDecimal`, …), which checks the
+ *   range in every context, as .NET does;
  * - a one-character `string` is a `char`, which only the `char` target accepts;
  * - `null`, and any other value (a `string`, a `boolean`, an object), throw
  *   `InvalidCastException`, where .NET throws `RuntimeBinderException`.
  *
  * A cast to `T?` lets `null` through before it calls these helpers.
  */
-import { InvalidCastException, OverflowException } from "./exceptions/index.ts";
+import {
+  bigIntegerFromDecimal,
+  bigIntegerFromDouble,
+  decimalTextFromBigInteger,
+  int32FromBigInteger,
+  narrowFromBigInteger,
+  uint32FromBigInteger,
+} from "./big-integer.ts";
+import { InvalidCastException } from "./exceptions/index.ts";
+import {
+  checkedInt32,
+  checkedInt64,
+  checkedNarrow,
+  checkedNarrowNumber,
+  checkedUInt32,
+  checkedUInt64,
+  int32FromDouble,
+  int32FromDoubleChecked,
+  int64FromDecimal,
+  int64FromDouble,
+  int64FromDoubleChecked,
+  uint32FromDouble,
+  uint32FromDoubleChecked,
+  uint64FromDecimal,
+  uint64FromDouble,
+  uint64FromDoubleChecked,
+} from "./int64.ts";
 
 /** The C# numeric types a `dynamic` value converts to as a `number`. */
 export type DynamicNumberTarget =
@@ -40,28 +66,29 @@ type DecimalValue = {
   toFixed(): string;
 };
 
-type IntegerRange = { readonly bits: number; readonly signed: boolean; readonly name: string };
+type IntegerTarget = Exclude<DynamicNumberTarget, "Single" | "Double"> | "Char";
 
-const INTEGER_RANGES: Readonly<
-  Record<Exclude<DynamicNumberTarget, "Single" | "Double">, IntegerRange>
-> = {
+/** An integer target's width, signedness and C# name (for the cast failure message). */
+type IntegerShape = { readonly bits: 8 | 16 | 32; readonly signed: boolean; readonly name: string };
+
+const INTEGER_SHAPES: Readonly<Record<IntegerTarget, IntegerShape>> = {
   SByte: { bits: 8, signed: true, name: "sbyte" },
   Byte: { bits: 8, signed: false, name: "byte" },
   Int16: { bits: 16, signed: true, name: "short" },
   UInt16: { bits: 16, signed: false, name: "ushort" },
+  Char: { bits: 16, signed: false, name: "char" },
   Int32: { bits: 32, signed: true, name: "int" },
   UInt32: { bits: 32, signed: false, name: "uint" },
 };
 
-const BIGINT_RANGES: Readonly<Record<"Int64" | "UInt64", IntegerRange>> = {
-  Int64: { bits: 64, signed: true, name: "long" },
-  UInt64: { bits: 64, signed: false, name: "ulong" },
+const BIGINT_NAMES: Readonly<Record<DynamicBigIntTarget, string>> = {
+  Int64: "long",
+  UInt64: "ulong",
+  BigInteger: "System.Numerics.BigInteger",
 };
 
-const CHAR_RANGE: IntegerRange = { bits: 16, signed: false, name: "char" };
-
-const INT32_MIN = -(2 ** 31);
-const UINT32_MAX = 2 ** 32 - 1;
+const INT32_MIN = -2147483648;
+const UINT32_MAX = 4294967295;
 
 /**
  * `(T)d` for a `T` held in a `number`: `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`,
@@ -75,18 +102,20 @@ export function numberFromDynamic(
   target: DynamicNumberTarget,
   checked = false,
 ): number {
-  if (target === "Double" || target === "Single") {
-    const double = doubleOf(value, target === "Double" ? "double" : "float");
-
-    return target === "Single" ? Math.fround(double) : double;
+  if (target === "Double") {
+    return doubleOf(value, "double");
   }
 
-  return Number(integerOf(value, INTEGER_RANGES[target], checked));
+  if (target === "Single") {
+    return Math.fround(doubleOf(value, "float"));
+  }
+
+  return integerOf(value, target, checked);
 }
 
 /**
  * `(char)d`: a `char` (a one-character `string`) as is, or the UTF-16 code a numeric value
- * converts to as a `ushort`.
+ * converts to.
  *
  * @throws InvalidCastException for `null` and for a value that is neither a `char` nor numeric.
  * @throws OverflowException for a code outside `char` in a checked context.
@@ -96,7 +125,7 @@ export function charFromDynamic(value: unknown, checked = false): string {
     return value;
   }
 
-  return String.fromCharCode(Number(integerOf(value, CHAR_RANGE, checked)));
+  return String.fromCharCode(integerOf(value, "Char", checked));
 }
 
 /**
@@ -111,38 +140,30 @@ export function bigintFromDynamic(
   target: DynamicBigIntTarget,
   checked = false,
 ): bigint {
-  if (target !== "BigInteger") {
-    return integerOf(value, BIGINT_RANGES[target], checked);
-  }
-
   if (typeof value === "bigint") {
-    return value;
+    return bigintOfInteger(value, target, checked);
   }
 
   if (isDecimalValue(value)) {
-    return truncatedDecimal(value);
+    return bigintOfDecimal(value, target);
   }
 
-  const double = doubleOf(value, "System.Numerics.BigInteger");
-
-  if (!Number.isFinite(double)) {
-    throw new OverflowException();
+  if (typeof value !== "number") {
+    throw cannotConvert(value, BIGINT_NAMES[target]);
   }
 
-  return BigInt(Math.trunc(double));
+  return isThirtyTwoBitInteger(value)
+    ? bigintOfInteger(BigInt(value), target, checked)
+    : bigintOfDouble(value, target, checked);
 }
 
-/** The largest magnitude a `decimal` holds, 2^96 − 1. */
-const DECIMAL_MAX = 2n ** 96n - 1n;
-
-const DECIMAL_RANGE_MESSAGE = "Value was either too large or too small for a Decimal.";
-
 /**
- * The argument `new Decimal(…)` takes for `(decimal)d`: the `number`, or the exact digits
- * of a `bigint` or of a decimal (as text, so this module does not load decimal.js).
+ * The argument `new Decimal(…)` takes for `(decimal)d`: the `number` (converted as the cast
+ * from `double` is), or the exact digits of a `bigint` or of a decimal, as text, so this
+ * module does not load decimal.js.
  *
  * @throws InvalidCastException for `null` and for a value that is not numeric.
- * @throws OverflowException for a NaN or infinite `number` and a `bigint` beyond ±(2^96 − 1).
+ * @throws OverflowException for a `bigint` beyond ±(2^96 − 1).
  */
 export function decimalSourceFromDynamic(value: unknown): number | string {
   if (isDecimalValue(value)) {
@@ -150,20 +171,10 @@ export function decimalSourceFromDynamic(value: unknown): number | string {
   }
 
   if (typeof value === "bigint") {
-    if (value > DECIMAL_MAX || value < -DECIMAL_MAX) {
-      throw new OverflowException(DECIMAL_RANGE_MESSAGE);
-    }
-
-    return value.toString();
+    return decimalTextFromBigInteger(value);
   }
 
-  const double = doubleOf(value, "decimal");
-
-  if (!Number.isFinite(double)) {
-    throw new OverflowException(DECIMAL_RANGE_MESSAGE);
-  }
-
-  return double;
+  return doubleOf(value, "decimal");
 }
 
 /** The value as a `double`: a `number`, a `bigint` or a decimal. */
@@ -180,88 +191,112 @@ function doubleOf(value: unknown, targetName: string): number {
     return value.toNumber();
   }
 
-  throw cannotConvertDynamic(value, targetName);
+  throw cannotConvert(value, targetName);
 }
 
-/** The value converted to the integer `range` describes, as a `bigint`. */
-function integerOf(value: unknown, range: IntegerRange, checked: boolean): bigint {
+/** The value converted to a 32-bit or narrower integer target (`char` as its code). */
+function integerOf(value: unknown, target: IntegerTarget, checked: boolean): number {
+  const shape = INTEGER_SHAPES[target];
+
   if (typeof value === "bigint") {
-    return checked ? requireRange(value, range) : wrapped(value, range);
+    return checked
+      ? Number(checkedNarrow(value, shape.bits, shape.signed))
+      : Number(lowBits(value, shape));
   }
 
   if (isDecimalValue(value)) {
-    return requireRange(truncatedDecimal(value), range);
+    return integerOfDecimal(value, shape);
   }
 
   if (typeof value !== "number") {
-    throw cannotConvertDynamic(value, range.name);
+    throw cannotConvert(value, shape.name);
   }
 
-  if (isThirtyTwoBitInteger(value)) {
-    const integer = BigInt(value);
+  return isThirtyTwoBitInteger(value)
+    ? integerOfInteger(value, shape, checked)
+    : integerOfDouble(value, shape, checked);
+}
 
-    return checked ? requireRange(integer, range) : wrapped(integer, range);
+/** An integer held in a `number` narrowed to `shape`: its low bits, or range-checked. */
+function integerOfInteger(value: number, shape: IntegerShape, checked: boolean): number {
+  if (!checked) {
+    return Number(lowBits(BigInt(value), shape));
   }
 
-  return checked ? requireRange(checkedTruncation(value), range) : saturated(value, range);
+  if (shape.bits === 32) {
+    return shape.signed ? checkedInt32(value) : checkedUInt32(value);
+  }
+
+  return checkedNarrowNumber(value, shape.bits, shape.signed);
+}
+
+/**
+ * A `double` cast to a 32-bit or narrower integer as the compiler casts one (FR-070):
+ * truncated and saturated to `int` (or `uint`), then the low bits of a narrower target; a
+ * checked cast throws outside the target's range.
+ */
+function integerOfDouble(value: number, shape: IntegerShape, checked: boolean): number {
+  if (shape.bits === 32 && !shape.signed) {
+    return checked ? uint32FromDoubleChecked(value) : uint32FromDouble(value);
+  }
+
+  const asInt32 = checked ? int32FromDoubleChecked(value) : int32FromDouble(value);
+
+  return integerOfInteger(asInt32, shape, checked);
+}
+
+/** A decimal cast to a 32-bit or narrower integer: truncated, range-checked in every context. */
+function integerOfDecimal(value: DecimalValue, shape: IntegerShape): number {
+  const integer = bigIntegerFromDecimal(value);
+
+  if (shape.bits === 32) {
+    return shape.signed ? int32FromBigInteger(integer) : uint32FromBigInteger(integer);
+  }
+
+  return narrowFromBigInteger(integer, shape.bits, shape.signed);
+}
+
+function bigintOfInteger(value: bigint, target: DynamicBigIntTarget, checked: boolean): bigint {
+  switch (target) {
+    case "Int64":
+      return checked ? checkedInt64(value) : BigInt.asIntN(64, value);
+    case "UInt64":
+      return checked ? checkedUInt64(value) : BigInt.asUintN(64, value);
+    case "BigInteger":
+      return value;
+  }
+}
+
+function bigintOfDouble(value: number, target: DynamicBigIntTarget, checked: boolean): bigint {
+  switch (target) {
+    case "Int64":
+      return checked ? int64FromDoubleChecked(value) : int64FromDouble(value);
+    case "UInt64":
+      return checked ? uint64FromDoubleChecked(value) : uint64FromDouble(value);
+    case "BigInteger":
+      return bigIntegerFromDouble(value);
+  }
+}
+
+function bigintOfDecimal(value: DecimalValue, target: DynamicBigIntTarget): bigint {
+  switch (target) {
+    case "Int64":
+      return int64FromDecimal(value);
+    case "UInt64":
+      return uint64FromDecimal(value);
+    case "BigInteger":
+      return bigIntegerFromDecimal(value);
+  }
+}
+
+/** The low `bits` of `value`, read signed or unsigned: an unchecked integer narrowing. */
+function lowBits(value: bigint, shape: IntegerShape): bigint {
+  return shape.signed ? BigInt.asIntN(shape.bits, value) : BigInt.asUintN(shape.bits, value);
 }
 
 /** Whether a `number` holds a value an `int`, a `uint` or a narrower integer can hold. */
 function isThirtyTwoBitInteger(value: number): boolean {
   return Number.isInteger(value) && value >= INT32_MIN && value <= UINT32_MAX;
-}
-
-/** The low `bits` of `value`, read signed or unsigned: an unchecked integer narrowing. */
-function wrapped(value: bigint, range: IntegerRange): bigint {
-  return range.signed ? BigInt.asIntN(range.bits, value) : BigInt.asUintN(range.bits, value);
-}
-
-/** An unchecked `double` cast (.NET 9+): truncated, saturated to the range, NaN gives 0. */
-function saturated(value: number, range: IntegerRange): bigint {
-  if (Number.isNaN(value)) {
-    return 0n;
-  }
-
-  const { min, max } = boundsOf(range);
-
-  if (value <= Number(min)) {
-    return min;
-  }
-
-  if (value >= Number(max)) {
-    return max;
-  }
-
-  return BigInt(Math.trunc(value));
-}
-
-/** A checked `double` cast: truncated; NaN and ±Infinity overflow. */
-function checkedTruncation(value: number): bigint {
-  if (!Number.isFinite(value)) {
-    throw new OverflowException();
-  }
-
-  return BigInt(Math.trunc(value));
-}
-
-function requireRange(value: bigint, range: IntegerRange): bigint {
-  const { min, max } = boundsOf(range);
-
-  if (value < min || value > max) {
-    throw new OverflowException();
-  }
-
-  return value;
-}
-
-function boundsOf(range: IntegerRange): { min: bigint; max: bigint } {
-  const span = 1n << BigInt(range.bits);
-
-  return range.signed ? { min: -(span / 2n), max: span / 2n - 1n } : { min: 0n, max: span - 1n };
-}
-
-function truncatedDecimal(value: DecimalValue): bigint {
-  return BigInt(value.trunc().toFixed());
 }
 
 function isDecimalValue(value: unknown): value is DecimalValue {
@@ -274,7 +309,7 @@ function isDecimalValue(value: unknown): value is DecimalValue {
 }
 
 /** .NET's `RuntimeBinderException` text for a dynamic conversion, on an `InvalidCastException`. */
-function cannotConvertDynamic(value: unknown, targetName: string): InvalidCastException {
+function cannotConvert(value: unknown, targetName: string): InvalidCastException {
   if (value == null) {
     return new InvalidCastException(
       `Cannot convert null to '${targetName}' because it is a non-nullable value type`,
@@ -293,7 +328,10 @@ function typeNameOf(value: unknown): string {
     return "bool";
   }
 
-  return typeof value === "object" && value !== null && value.constructor.name !== ""
-    ? value.constructor.name
-    : typeof value;
+  const constructorName =
+    typeof value === "object" && value !== null
+      ? (value as { constructor?: { name?: string } }).constructor?.name
+      : undefined;
+
+  return constructorName ? constructorName : typeof value;
 }
