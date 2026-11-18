@@ -350,7 +350,7 @@ A Bun test imports `./shape` first, unbundled, then `./shape.guard`, and calls `
 
 ```ts
 export const Color = { Red: 0, Green: 1 } as const;
-export type Color = (typeof Color)[keyof typeof Color];
+export type Color = typeof Color[keyof typeof Color];
 ```
 
 ```csharp
@@ -377,10 +377,10 @@ The golden also contains `p &= ~Perms.Read`, `p ^ Perms.Write`, a `switch` over 
 A package with `[ModuleEntryPoint]` `Program.Main` in `app/program.ts` and no other entry point:
 
 ```json
-{ "sideEffects": ["./src/app/program.ts", "./dist/app/program.js"] }
+{ "sideEffects": ["./dist/app/program.js", "./src/app/program.ts"] }
 ```
 
-Both paths are listed because spec 008's `source` condition resolves the package to `.ts` for Vite / `customConditions` consumers and the `import` condition to `dist`.
+The entries are sorted ordinally. Both paths are listed because spec 008's `source` condition resolves the package to `.ts` for Vite / `customConditions` consumers and the `import` condition to `dist`.
 
 A package without entry points gets `"sideEffects": []`.
 

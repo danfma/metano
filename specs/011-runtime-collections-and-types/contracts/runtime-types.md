@@ -135,7 +135,7 @@ export function isAreaDto(value: unknown): value is AreaDto { … }       // syn
 export const AreaDto$runtimeType: PlainObjectType<AreaDto> = { kind: "plainObject", name: "AreaDto", fullName: "Geometry.AreaDto", namespace: "Geometry", guard: isAreaDto, test: isAreaDto };
 // numeric enum (FR-044) + descriptor when reached
 export const Color = { Red: 0, Green: 1 } as const;
-export type Color = (typeof Color)[keyof typeof Color];
+export type Color = typeof Color[keyof typeof Color];
 export const Color$runtimeType: EnumType<Color> = { kind: "enum", name: "Color", fullName: "Geometry.Color", namespace: "Geometry", values: [0, 1], names: ["Red", "Green"], isFlags: false, test: (v): v is Color => v === 0 || v === 1 };   // import-free membership test (FR-049); isType / asType / castTo unwrap a Boxed before calling it
 // [Flags] numeric enum (FR-044)
 export const Perms = { Read: 1, Write: 2, Execute: 4 } as const;
