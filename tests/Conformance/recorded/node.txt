@@ -91,6 +91,8 @@ Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operator
 Round4Probes.compoundIndexOnce = nullx,by,null|3|pq|1
 Round4Probes.compoundReceiverOnce = nullx|sy|nullz|4
 RuntimeTypeProbes.enumMembership = True|True
+RuntimeTypeShapeProbes.closedGenericName = RtBox`1<Int32>|Conformance
+RuntimeTypeShapeProbes.plainObjectIsStructural = True|True|False
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function
 StringProbes.compare THROWS TypeError: String.compare is not a function

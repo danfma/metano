@@ -101,3 +101,5 @@ InteropProbes.inlineCodeExpression    none  by design (FR-031: Js.Code is TS-onl
 InteropProbes.inlineCodeHoles         none  by design (FR-031: Js.Code is TS-only; .NET throws PlatformNotSupportedException)
 InteropProbes.inlineCodeStatement     none  by design (FR-031: Js.Code is TS-only; .NET throws PlatformNotSupportedException)
 InteropProbes.unsafeCastWrong         none  by design (OD-15: UnsafeCast is checked on .NET, unchecked in TS)
+RuntimeTypeShapeProbes.plainObjectIsStructural  none  a [PlainObject] test is structural (spec 011 FR-020): another plain object with every member the guard requires tests as the type too, and MS0047 warns at the test
+RuntimeTypeShapeProbes.closedGenericName  none  the runtime's specialize() names a closed generic "RtBox`1<Int32>"; .NET's Type.Name of a closed generic is the open name "RtBox`1" (runtime follow-up)
