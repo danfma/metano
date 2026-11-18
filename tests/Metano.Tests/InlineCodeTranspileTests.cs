@@ -222,6 +222,7 @@ public class InlineCodeTranspileTests
     [Arguments("Js.Code(text)", "public string F(string text) => {0};")]
     [Arguments("Js.Code(\"a\" + $\"{x}\")", "public string F(int x) => {0};")]
     [Arguments("Js.Code(null!)", "public string F() => {0};")]
+    [Arguments("Js.Code(d)", "public string F(dynamic d) => {0};")]
     public async Task NonConstantArgument_ReportsMs0052(string call, string member)
     {
         var diagnostics = InlineCodeErrors(member.Replace("{0}", call));

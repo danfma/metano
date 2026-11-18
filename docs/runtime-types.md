@@ -30,7 +30,9 @@ var any = order.AsDynamic();           // (order as any)
 - **`UnsafeCast<T>()`** is compile-time only: no check, no descriptor, no helper call
   and no diagnostic in TypeScript. On .NET it is `(T)value`, which throws
   `InvalidCastException` for a value of another type where TypeScript succeeds
-  silently (OD-15): keep it for values whose shape you know.
+  silently (OD-15): keep it for values whose shape you know. Dart has no unchecked
+  cast, so there `UnsafeCast<T>()` lowers to a checked `as T`, which throws
+  (`TypeError`) where TypeScript does not.
 - **`AsDynamic()`** returns its argument unchanged. Member names after a `dynamic`
   value are verbatim, so a Metano member `Total`, emitted as `total`, would read
   `undefined` through `x.AsDynamic().Total`. Until dynamic member access lands
@@ -38,7 +40,8 @@ var any = order.AsDynamic();           // (order as any)
   use `Js.Code` for the access instead.
 
 **Status (3.0.0 stages).** `UnsafeCast<T>()` and `AsDynamic()` are delivered (stage
-011f). `dynamic` member access and its `MS0057` warning arrive with stage 011e. The
+011f). `dynamic` member access on an `AsDynamic()` result and its `MS0057` warning
+arrive in the 011e/011f follow-up that replaces the interim `MS0001` guard. The
 last row is the target text: today an explicit cast is checked with `castTo` for a
 class target the module can import, and asserted without a check (and without
 `MS0055`) for an interface, a generic or an erased target, until stage 011b's runtime

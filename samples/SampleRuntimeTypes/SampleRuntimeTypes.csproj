@@ -18,5 +18,5 @@
     <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
   </ItemGroup>
 
-  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
+  <Import Project="../../src/Metano.Build.Targets/Metano.Build.TypeScript.targets" />
 </Project>

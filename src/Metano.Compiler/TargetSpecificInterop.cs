@@ -11,8 +11,11 @@ namespace Metano.Compiler;
 /// </summary>
 public static class TargetSpecificInterop
 {
-    /// <summary>The full metadata name of the marker attribute.</summary>
-    public const string AttributeName = "Metano.Interop.TargetSpecificAttribute";
+    /// <summary>The namespace of the marker attribute.</summary>
+    public const string AttributeNamespace = "Metano.Interop";
+
+    /// <summary>The metadata name of the marker attribute.</summary>
+    public const string AttributeMetadataName = "TargetSpecificAttribute";
 
     /// <summary>
     /// The target language <paramref name="symbol"/> is bound to: its own marker,
@@ -34,9 +37,15 @@ public static class TargetSpecificInterop
     private static TargetLanguage? DeclaredLanguageOf(ISymbol symbol) =>
         symbol
             .GetAttributes()
-            .Where(attribute => attribute.AttributeClass?.ToDisplayString() == AttributeName)
-            .Select(attribute => attribute.ConstructorArguments[0].Value)
+            .Where(attribute => IsMarker(attribute.AttributeClass))
+            .Select(attribute => attribute.ConstructorArguments)
+            .Where(arguments => arguments.Length == 1)
+            .Select(arguments => arguments[0].Value)
             .OfType<int>()
             .Select(value => (TargetLanguage?)(TargetLanguage)value)
             .FirstOrDefault();
+
+    private static bool IsMarker(INamedTypeSymbol? attributeClass) =>
+        attributeClass is { MetadataName: AttributeMetadataName }
+        && attributeClass.ContainingNamespace?.ToDisplayString() == AttributeNamespace;
 }

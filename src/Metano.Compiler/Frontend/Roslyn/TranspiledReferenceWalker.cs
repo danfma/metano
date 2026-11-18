@@ -13,8 +13,9 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// <see cref="IgnoredReferenceRule"/> (<c>MS0013</c>: the <c>[Ignore]</c> attribute
 /// means ".NET-only", so any reference to such a type from a transpilable type's
 /// signature OR body is an error) and <see cref="TargetSpecificReferenceRule"/>
-/// (<c>MS0051</c>: an interop API of another target language). Signatures (params, return, fields, props, events, base, generic
-/// constraints) are checked from their symbols. The code each member contributes
+/// (<c>MS0051</c>: an interop API of another target language). Signatures (params,
+/// return, fields, props, events, base, generic constraints) are checked from their
+/// symbols. The code each member contributes
 /// (bodies, field/property/event initializers, parameter defaults,
 /// constructor-initializer arguments) is walked name by name, so a type or member
 /// spelled anywhere in it raises (#277). Only emitted code is walked, so static

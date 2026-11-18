@@ -38,8 +38,35 @@ public sealed partial class IrExpressionExtractor
             InteropMethodKind.AsDynamic => new IrAsDynamicExpression(
                 ExtractInteropOperand(call, method!)
             ),
+            _ when method is null => UnsupportedLateBoundInteropCall(call),
             _ => null,
         };
+
+    /// <summary>
+    /// A <c>Js.Code</c> call C# binds at run time because its argument is
+    /// <c>dynamic</c> (<c>Js.Code(d)</c>): its text is not a constant, so it reports
+    /// <c>MS0052</c> instead of being emitted as a call. <c>null</c> for any other
+    /// late-bound call. (The escape hatches take <c>object</c>, so a <c>dynamic</c>
+    /// argument binds them statically.)
+    /// </summary>
+    private IrExpression? UnsupportedLateBoundInteropCall(InvocationExpressionSyntax call)
+    {
+        var bindsJsCode = _semantic
+            .GetSymbolInfo(call)
+            .CandidateSymbols.OfType<IMethodSymbol>()
+            .Any(candidate => InteropMethods.KindOf(candidate) is InteropMethodKind.Code);
+
+        if (!bindsJsCode)
+            return null;
+
+        ReportInvalidInlineCode(
+            call.ArgumentList.Arguments.FirstOrDefault()?.Expression ?? (SyntaxNode)call,
+            "The Js.Code argument is dynamic, so the call binds at run time and has no "
+                + "constant text; pass a constant or an interpolated string."
+        );
+
+        return new IrUnsupportedExpression(InvalidInlineCodeKind);
+    }
 
     /// <summary>
     /// The statement form of a <c>Js.Code</c> call whose value is discarded (an
@@ -85,11 +112,18 @@ public sealed partial class IrExpressionExtractor
         return new IrInlineCodeExpression(parts, resultType, LanguageOf(call), SpanOf(call));
     }
 
+    /// <summary>
+    /// The language the interop API of <paramref name="call"/> is bound to. Every
+    /// inline-code API carries the marker, so a missing one is a broken package.
+    /// </summary>
     private TargetLanguage LanguageOf(InvocationExpressionSyntax call) =>
         _semantic.GetSymbolInfo(call).Symbol is { } method
         && TargetSpecificInterop.LanguageOf(method) is { } language
             ? language
-            : TargetLanguage.TypeScript;
+            : throw new InvalidOperationException(
+                $"'{call.Expression}' has no [TargetSpecific] marker; the Metano package is "
+                    + "inconsistent with this compiler."
+            );
 
     /// <summary>
     /// The operand of <c>UnsafeCast</c> / <c>AsDynamic</c>: the receiver of the
