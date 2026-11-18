@@ -677,6 +677,10 @@ public static class SymbolHelper
                     }
             );
 
+    /// <summary>A user-defined operator or conversion (<c>operator +</c>, <c>implicit operator</c>).</summary>
+    public static bool IsUserDefinedOperatorOrConversion(this IMethodSymbol method) =>
+        method.MethodKind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
+
     /// <summary>
     /// A method whose every call site is rewritten, so it is never declared as a
     /// member. <c>[Emit]</c> methods are inline templates with no real body: a

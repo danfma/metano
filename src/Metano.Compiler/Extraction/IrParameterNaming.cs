@@ -73,11 +73,7 @@ internal static class IrParameterNaming
         && !method.HasObjectArgs();
 
     private static bool IsOperator(ISymbol owner) =>
-        owner
-            is IMethodSymbol
-            {
-                MethodKind: MethodKind.UserDefinedOperator or MethodKind.Conversion
-            };
+        owner is IMethodSymbol method && method.IsUserDefinedOperatorOrConversion();
 
     private static HashSet<string> CollidingNamesOf(
         ISymbol owner,

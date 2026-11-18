@@ -80,8 +80,7 @@ internal sealed record DeclaredMember(IMethodSymbol Symbol, int Ordinal, MemberA
 
     public override IMethodSymbol Declaration => Symbol;
 
-    public override bool IsOperator =>
-        Symbol.MethodKind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
+    public override bool IsOperator => Symbol.IsUserDefinedOperatorOrConversion();
 
     public override bool StandsFor(IMethodSymbol method) =>
         SymbolEqualityComparer.Default.Equals(Symbol.OriginalDefinition, method.OriginalDefinition);

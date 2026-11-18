@@ -255,7 +255,7 @@ internal static class SynthesizedGroupMembers
         if (group.IsSegregatedOverrides || group.Members.Any(member => member.IsStatic))
             return false;
 
-        if (group.DeclaredMembers.Any(member => IsOperator(member.Symbol)))
+        if (group.DeclaredMembers.Any(member => member.IsOperator))
             return false;
 
         return SpellingOf(group, target) == name;
@@ -276,9 +276,6 @@ internal static class SynthesizedGroupMembers
             ExplicitImplementationLowering.ImplementedInterfaceMember(member.Symbol)
             ?? member.Symbol
         ).GetNameOverride(target);
-
-    private static bool IsOperator(IMethodSymbol method) =>
-        method.MethodKind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
 
     /// <summary>
     /// Whether the group holds a method besides the declarations that replace
