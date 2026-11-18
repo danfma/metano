@@ -1,5 +1,6 @@
 import { bigintFromDynamic, castTo, charFromDynamic, decimalSourceFromDynamic, numberFromDynamic } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
+import type { Color } from "./color";
 import type { IHasArea } from "./i-has-area";
 import { Shape } from "./shape";
 
@@ -22,7 +23,7 @@ export class Casts {
     const area = d as IHasArea;
     const text = d as string;
     const o = d;
-    const color = d;
+    const color = d as Color;
     const point = d;
     const flag = d;
   }

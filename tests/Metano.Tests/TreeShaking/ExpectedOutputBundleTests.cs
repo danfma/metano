@@ -34,6 +34,7 @@ public class ExpectedOutputBundleTests
         "dispatcher-generic-constrained.ts",
         "dispatcher-generic-mixed.ts",
         "dispatcher-generic-unconstrained.ts",
+        "dynamic-member-access.ts",
         "exception-overload-message-override.ts",
         "int64-json-context.ts",
         "json-closure-generic-context.ts",
