@@ -22,16 +22,8 @@ public class ExpectedOutputBundleTests
         StringComparer.Ordinal
     )
     {
-        "branded-value-object.ts",
-        "companion-direct-overloads-key.ts",
-        "companion-direct-overloads-operators.ts",
-        "companion-direct-overloads-renamed.ts",
-        "companion-direct-overloads-tag.ts",
-        "dispatcher-defaults-params-branded.ts",
         "nested-types-static-class.ts",
-        "operator-helper-branded.ts",
         "overload-calls-nested.ts",
-        "overload-name-pin-json-factory.ts",
     };
 
     private static readonly Lazy<Task<BundleReport>> Report = new(RunGoldenBundleCheck);

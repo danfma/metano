@@ -348,19 +348,21 @@ public static class IrToTsOverloadDispatcherBridge
 
     /// <summary>
     /// Builds the dispatcher + fast paths for a group of static overloads
-    /// that lowers to free functions inside a TS namespace (the
+    /// that lowers to free functions of a companion object (the
     /// <c>[Branded]</c> companion) instead of class members, under the names
-    /// its plan claimed. The dispatcher branches to the fast paths by bare
-    /// name and carries the overload signatures; the fast paths are exported
-    /// too when generated call sites name them (#569).
+    /// its plan claimed. The dispatcher branches to the fast paths through
+    /// <paramref name="companion"/> (<c>Money.fromValue(…)</c>) and carries the
+    /// overload signatures; generated call sites name the fast paths too (#569).
     /// </summary>
     /// <param name="group">A dispatched group: its overloads in dispatch
     /// order, each with its claimed fast path.</param>
+    /// <param name="companion">The companion object the fast paths are members of.</param>
     /// <param name="context">
     /// The group's lowering context, threaded through to the body bridge.
     /// </param>
-    internal static IReadOnlyList<TsFunction> BuildNamespaceFunctions(
+    internal static IReadOnlyList<TsFunction> BuildCompanionFunctions(
         TsCompanionDispatcher group,
+        TsExpression companion,
         IrToTsBridgeContext context
     )
     {
@@ -381,7 +383,7 @@ public static class IrToTsOverloadDispatcherBridge
                 BuildDispatcherBody(
                     methods,
                     group.FastPaths.Select(fastPath => fastPath.Name).ToList(),
-                    receiver: null,
+                    receiver: companion,
                     TypeCheckScope.Empty,
                     NoMatchingOverload(ErrorNameOf(group, methods[0]))
                 ),
@@ -870,8 +872,8 @@ public static class IrToTsOverloadDispatcherBridge
             : IrToTsTypeMapper.MapParameterType(parameter, typeOverrides);
 
     /// <summary>
-    /// A null receiver means the fast path is a function of the dispatcher's
-    /// own namespace, reachable by bare name.
+    /// A null receiver means the fast path is a function in the dispatcher's
+    /// own scope, reachable by bare name.
     /// </summary>
     private static TsExpression FastPathCallee(TsExpression? receiver, string fastPathName) =>
         receiver is null

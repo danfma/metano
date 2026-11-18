@@ -147,9 +147,9 @@ public class OperatorHelperDeclarationTests
             .That(result["slug.ts"])
             .Contains(
                 """
-                  export function __implicitToString(s: Slug): string {
-                    return s;
-                  }
+                function Slug$__implicitToString(s: Slug): string {
+                  return s;
+                }
                 """
             );
     }

@@ -4,24 +4,29 @@ import { InvalidOperationException } from "metano-runtime/system/exceptions/inva
 
 export type SnowflakeId = bigint & { readonly __brand: "SnowflakeId" };
 
-export namespace SnowflakeId {
-  export function create(value: bigint): SnowflakeId {
-    return value as SnowflakeId;
-  }
-
-  export function toString(value: SnowflakeId): string {
-    return String(value);
-  }
-
-  export function from(value: bigint): SnowflakeId {
-    if (value <= 0n) {
-      throw new InvalidOperationException("A snowflake id must be positive.");
-    }
-
-    return SnowflakeId.create(value);
-  }
-
-  export function timestampMilliseconds(id: SnowflakeId): bigint {
-    return BigInt.asIntN(64, BigInt.asUintN(64, id) >> 22n);
-  }
+function SnowflakeId$create(value: bigint): SnowflakeId {
+  return value as SnowflakeId;
 }
+
+function SnowflakeId$toString(value: SnowflakeId): string {
+  return String(value);
+}
+
+function SnowflakeId$from(value: bigint): SnowflakeId {
+  if (value <= 0n) {
+    throw new InvalidOperationException("A snowflake id must be positive.");
+  }
+
+  return SnowflakeId.create(value);
+}
+
+function SnowflakeId$timestampMilliseconds(id: SnowflakeId): bigint {
+  return BigInt.asIntN(64, BigInt.asUintN(64, id) >> 22n);
+}
+
+export const SnowflakeId = {
+  create: SnowflakeId$create,
+  toString: SnowflakeId$toString,
+  from: SnowflakeId$from,
+  timestampMilliseconds: SnowflakeId$timestampMilliseconds,
+} as const;

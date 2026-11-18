@@ -9,15 +9,19 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <summary>
 /// Lowers an <see cref="IrClassDeclaration"/> whose
 /// <see cref="IrTypeSemantics.IsBranded"/> is set into the canonical
-/// TypeScript brand-type + companion-namespace shape:
+/// TypeScript brand type plus its companion object (spec 011 FR-040):
 /// <code>
 /// export type UserId = string &amp; { readonly __brand: "UserId" };
-/// export namespace UserId {
-///     export function create(value: string): UserId { return value as UserId; }
-///     // toString(value) only when the wrapped primitive isn't already string
-///     // ...plus any user-declared static methods on the struct
-/// }
+/// function UserId$create(value: string): UserId { return value as UserId; }
+/// // UserId$toString(value) only when the wrapped primitive isn't already string
+/// // ...plus any user-declared static methods on the struct
+/// export const UserId = { create: UserId$create, … } as const;
 /// </code>
+/// The companion is a pure object literal, so a bundle drops it when nothing
+/// uses it, where a TypeScript <c>namespace</c> compiles to an IIFE every
+/// bundler keeps; call sites (<c>UserId.create(x)</c>) are the same. Each
+/// function is module-level under <c>Type$member</c>, which no C# name or
+/// import spells.
 /// The caller builds the <see cref="TsCompanionPlan"/> first: a type without
 /// one (no <c>IsBranded</c> flag, or a wrapped type a brand cannot intersect)
 /// falls through to the next per-shape handler.
@@ -92,13 +96,39 @@ public static class IrToTsBrandedBridge
         // User-declared static methods on the wrapper struct. Visibility +
         // [Ignore] + [Emit] filtering already happened in the extractor; we
         // just emit each remaining static method (or overload group) as
-        // exported functions in the companion namespace, under the names the
-        // plan claimed, bound to the methods of this IR.
-        foreach (var group in plan.Bind(ir))
-            functions.AddRange(ConvertStaticMethodGroup(group, context));
+        // companion functions, under the names the plan claimed, bound to
+        // the methods of this IR.
+        var companion = new TsIdentifier(tsTypeName);
 
-        sink.Add(new TsNamespaceDeclaration(tsTypeName, functions));
+        foreach (var group in plan.Bind(ir))
+            functions.AddRange(ConvertStaticMethodGroup(group, companion, context));
+
+        sink.AddRange(functions.Select(function => AsModuleFunction(function, tsTypeName)));
+        sink.Add(
+            new TsConstObject(
+                tsTypeName,
+                [
+                    .. functions.Select(function =>
+                        (
+                            function.Name,
+                            (TsExpression)new TsIdentifier(ModuleName(tsTypeName, function.Name))
+                        )
+                    ),
+                ]
+            )
+        );
     }
+
+    /// <summary>The module-level name of a companion member: <c>Type$member</c>.</summary>
+    private static string ModuleName(string typeName, string member) =>
+        $"{typeName}{ModuleLocalNaming.Separator}{member}";
+
+    private static TsFunction AsModuleFunction(TsFunction function, string typeName) =>
+        function with
+        {
+            Name = ModuleName(typeName, function.Name),
+            Exported = false,
+        };
 
     /// <summary>
     /// Lowers one static group as the plan names it. A single method becomes
@@ -107,12 +137,17 @@ public static class IrToTsBrandedBridge
     /// </summary>
     private static IReadOnlyList<TsFunction> ConvertStaticMethodGroup(
         TsCompanionGroup group,
+        TsExpression companion,
         IrToTsBridgeContext context
     ) =>
         group switch
         {
             TsCompanionDispatcher dispatcher =>
-                IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(dispatcher, context),
+                IrToTsOverloadDispatcherBridge.BuildCompanionFunctions(
+                    dispatcher,
+                    companion,
+                    context
+                ),
             TsCompanionFunction function =>
             [
                 ConvertStaticMethod(function.Method, function.FunctionName, context),

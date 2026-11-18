@@ -1,13 +1,5 @@
 # Goldens whose side-effect-only import still keeps module-load code (spec 011 FR-043),
-# fed to ExpectedOutputBundleTests. The list only shrinks: every entry is a #361
-# namespace companion (an IIFE), which the next 011a part removes, leaving it empty.
-branded-value-object.ts
-companion-direct-overloads-key.ts
-companion-direct-overloads-operators.ts
-companion-direct-overloads-renamed.ts
-companion-direct-overloads-tag.ts
-dispatcher-defaults-params-branded.ts
+# fed to ExpectedOutputBundleTests. The list only shrinks: the two nested-type namespaces
+# left are removed by the 011a part that lowers nested types to module-level classes.
 nested-types-static-class.ts
-operator-helper-branded.ts
 overload-calls-nested.ts
-overload-name-pin-json-factory.ts

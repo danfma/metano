@@ -223,11 +223,11 @@ public class BrandedValueObjectTests
 
         await Assert
             .That(output)
-            .Contains("export function __implicitFromString(raw: string): ScriptWordId");
+            .Contains("function ScriptWordId$__implicitFromString(raw: string): ScriptWordId");
 
         await Assert
             .That(output)
-            .Contains("export function __implicitToString(self: ScriptWordId): string");
+            .Contains("function ScriptWordId$__implicitToString(self: ScriptWordId): string");
 
         await Assert.That(output).DoesNotContain("...args");
     }
@@ -255,14 +255,14 @@ public class BrandedValueObjectTests
         );
 
         var output = result["seconds.ts"];
-        await Assert.That(output).Contains("export function combine(value: number): Seconds;");
+        await Assert.That(output).Contains("function Seconds$combine(value: number): Seconds;");
 
         await Assert
             .That(output)
-            .Contains("export function combine(a: Seconds, b: Seconds): Seconds;");
+            .Contains("function Seconds$combine(a: Seconds, b: Seconds): Seconds;");
 
         await Assert.That(output).Contains("return Seconds.create(a + b);");
-        await Assert.That(output).Contains("return combineValue(args[0] as number);");
+        await Assert.That(output).Contains("return Seconds.combineValue(args[0] as number);");
     }
 
     [Test]
@@ -340,9 +340,9 @@ public class BrandedValueObjectTests
         );
 
         var output = result["slug.ts"];
-        await Assert.That(output).Contains("function fromValue$(value: string): Slug");
-        await Assert.That(output).Contains("return fromValue$(args[0] as string);");
-        await Assert.That(output).Contains("export function fromValue(x: number): Slug");
+        await Assert.That(output).Contains("function Slug$fromValue$(value: string): Slug");
+        await Assert.That(output).Contains("return Slug.fromValue$(args[0] as string);");
+        await Assert.That(output).Contains("function Slug$fromValue(x: number): Slug");
     }
 
     [Test]
@@ -364,10 +364,10 @@ public class BrandedValueObjectTests
         );
 
         var output = result["slug.ts"];
-        await Assert.That(output).Contains("export function pick<T>(a: T): T;");
-        await Assert.That(output).Contains("export function pick<T>(a: T, b: T): T;");
-        await Assert.That(output).Contains("export function pick(...args: unknown[]): any");
-        await Assert.That(output).Contains("return pickAB(args[0] as any, args[1] as any);");
+        await Assert.That(output).Contains("function Slug$pick<T>(a: T): T;");
+        await Assert.That(output).Contains("function Slug$pick<T>(a: T, b: T): T;");
+        await Assert.That(output).Contains("function Slug$pick(...args: unknown[]): any");
+        await Assert.That(output).Contains("return Slug.pickAB(args[0] as any, args[1] as any);");
     }
 
     [Test]
@@ -392,8 +392,8 @@ public class BrandedValueObjectTests
         );
 
         var output = result["slug.ts"];
-        var firstBranch = output.IndexOf("return fromValue(", StringComparison.Ordinal);
-        var secondBranch = output.IndexOf("return fromOther(", StringComparison.Ordinal);
+        var firstBranch = output.IndexOf("return Slug.fromValue(", StringComparison.Ordinal);
+        var secondBranch = output.IndexOf("return Slug.fromOther(", StringComparison.Ordinal);
         await Assert.That(firstBranch).IsGreaterThan(-1);
         await Assert.That(secondBranch).IsGreaterThan(firstBranch);
     }

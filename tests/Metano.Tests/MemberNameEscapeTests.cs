@@ -84,9 +84,8 @@ public class MemberNameEscapeTests
 
         var idOutput = result["user-id.ts"];
         var svcOutput = result["service.ts"];
-        // Declaration uses the escaped form because namespace `function new() {}`
-        // is a parse error.
-        await Assert.That(idOutput).Contains("function new_");
+        // The companion member keeps the escaped name its call sites read.
+        await Assert.That(idOutput).Contains("function UserId$new_");
         // Call site matches.
         await Assert.That(svcOutput).Contains("UserId.new_()");
     }

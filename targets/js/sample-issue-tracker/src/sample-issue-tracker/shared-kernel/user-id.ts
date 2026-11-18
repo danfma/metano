@@ -5,24 +5,29 @@ import { InvalidOperationException } from "metano-runtime/system/exceptions/inva
 
 export type UserId = string & { readonly __brand: "UserId" };
 
-export namespace UserId {
-  export function create(value: string): UserId {
-    return value as UserId;
-  }
-
-  export function new_(): UserId {
-    return UserId.create(UUID.newUuid().replace(/-/g, ""));
-  }
-
-  export function system(): UserId {
-    return UserId.create("system");
-  }
-
-  export function from(value: string): UserId {
-    if (isNullOrWhiteSpace(value)) {
-      throw new InvalidOperationException("A user id cannot be blank.");
-    }
-
-    return UserId.create(value.trim());
-  }
+function UserId$create(value: string): UserId {
+  return value as UserId;
 }
+
+function UserId$new_(): UserId {
+  return UserId.create(UUID.newUuid().replace(/-/g, ""));
+}
+
+function UserId$system(): UserId {
+  return UserId.create("system");
+}
+
+function UserId$from(value: string): UserId {
+  if (isNullOrWhiteSpace(value)) {
+    throw new InvalidOperationException("A user id cannot be blank.");
+  }
+
+  return UserId.create(value.trim());
+}
+
+export const UserId = {
+  create: UserId$create,
+  new_: UserId$new_,
+  system: UserId$system,
+  from: UserId$from,
+} as const;

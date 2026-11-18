@@ -19,12 +19,12 @@ public class InlineWrapperTranspileTests
         await Assert
             .That(output)
             .Contains("export type UserId = string & { readonly __brand: \"UserId\" };");
-        await Assert.That(output).Contains("export namespace UserId");
-        await Assert.That(output).Contains("function create(value: string): UserId");
-        await Assert.That(output).Contains("function system(): UserId");
+        await Assert.That(output).Contains("export const UserId = {");
+        await Assert.That(output).Contains("function UserId$create(value: string): UserId");
+        await Assert.That(output).Contains("function UserId$system(): UserId");
         await Assert.That(output).DoesNotContain("class UserId");
         // String wrappers don't need toString
-        await Assert.That(output).DoesNotContain("function toString");
+        await Assert.That(output).DoesNotContain("function UserId$toString");
     }
 
     [Test]
@@ -41,8 +41,8 @@ public class InlineWrapperTranspileTests
         await Assert
             .That(output)
             .Contains("export type Amount = number & { readonly __brand: \"Amount\" };");
-        await Assert.That(output).Contains("function create(value: number): Amount");
-        await Assert.That(output).Contains("function toString(value: Amount): string");
+        await Assert.That(output).Contains("function Amount$create(value: number): Amount");
+        await Assert.That(output).Contains("function Amount$toString(value: Amount): string");
     }
 
     [Test]
@@ -78,6 +78,6 @@ public class InlineWrapperTranspileTests
 
         var output = result["composite-id.ts"];
         await Assert.That(output).Contains("class CompositeId");
-        await Assert.That(output).DoesNotContain("export namespace CompositeId");
+        await Assert.That(output).DoesNotContain("export const CompositeId = {");
     }
 }

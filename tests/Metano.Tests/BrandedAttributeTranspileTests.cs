@@ -31,9 +31,9 @@ public class BrandedAttributeTranspileTests
         await Assert
             .That(output)
             .Contains("export type UserId = string & { readonly __brand: \"UserId\" };");
-        await Assert.That(output).Contains("export namespace UserId");
-        await Assert.That(output).Contains("function create(value: string): UserId");
-        await Assert.That(output).Contains("function system(): UserId");
+        await Assert.That(output).Contains("export const UserId = {");
+        await Assert.That(output).Contains("function UserId$create(value: string): UserId");
+        await Assert.That(output).Contains("function UserId$system(): UserId");
         await Assert.That(output).DoesNotContain("class UserId");
     }
 
@@ -53,8 +53,8 @@ public class BrandedAttributeTranspileTests
         await Assert
             .That(output)
             .Contains("export type Amount = number & { readonly __brand: \"Amount\" };");
-        await Assert.That(output).Contains("function create(value: number): Amount");
-        await Assert.That(output).Contains("function toString(value: Amount): string");
+        await Assert.That(output).Contains("function Amount$create(value: number): Amount");
+        await Assert.That(output).Contains("function Amount$toString(value: Amount): string");
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class BrandedAttributeTranspileTests
         // No brand-type alias, no companion namespace — the struct
         // falls through to the regular record emission path.
         await Assert.That(output).DoesNotContain("__brand");
-        await Assert.That(output).DoesNotContain("export namespace Regular");
+        await Assert.That(output).DoesNotContain("export const Regular = {");
     }
 
     [Test]
