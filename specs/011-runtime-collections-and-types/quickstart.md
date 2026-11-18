@@ -2,7 +2,7 @@
 
 ## Set up a worktree (one per stage)
 
-Each stage of plan.md gets its own worktree and branch from the `release/3.0` integration branch (or `origin/main` until it exists). Example for 011a:
+Each stage of plan.md gets its own worktree and branch from the current 3.0 wave integration branch (or `origin/main`); 3.0.0 is cut from `main`, there is no `release/3.0` branch. Example for 011a:
 
 ```bash
 git fetch origin
