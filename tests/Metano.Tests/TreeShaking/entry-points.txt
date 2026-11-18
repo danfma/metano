@@ -1,0 +1,5 @@
+# Goldens of [ModuleEntryPoint] sources, exempt from the golden bundle check: their
+# top-level code is the feature, and FR-045 lists their modules in sideEffects.
+deconstruction-basic.ts
+deconstruction-discard.ts
+signal-composition.ts

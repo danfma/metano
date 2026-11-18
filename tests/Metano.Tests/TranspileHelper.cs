@@ -52,12 +52,15 @@ public static class TranspileHelper
             MetadataReference.CreateFromFile(typeof(Console).Assembly.Location),
             MetadataReference.CreateFromFile(typeof(TranspileAttribute).Assembly.Location),
         };
+
         var seen = new HashSet<string>(references.Select(r => r.Display!), StringComparer.Ordinal);
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+
         foreach (var dll in Directory.GetFiles(runtimeDir, "*.dll"))
         {
             if (!seen.Add(dll))
                 continue;
+
             try
             {
                 references.Add(MetadataReference.CreateFromFile(dll));
@@ -67,9 +70,12 @@ public static class TranspileHelper
                 // Skip assemblies that can't be loaded (design-time-only, ref-only, etc.).
             }
         }
+
         var netstandardPath = Path.Combine(runtimeDir, "netstandard.dll");
+
         if (File.Exists(netstandardPath) && seen.Add(netstandardPath))
             references.Add(MetadataReference.CreateFromFile(netstandardPath));
+
         return references;
     }
 
@@ -279,6 +285,7 @@ public static class TranspileHelper
             OutputKind.DynamicallyLinkedLibrary,
             extraReferences: JsxBindingReferences
         );
+
         return TranspileCore(compilation).Files;
     }
 
@@ -298,6 +305,7 @@ public static class TranspileHelper
             OutputKind.DynamicallyLinkedLibrary,
             extraReferences: JsxBindingReferences
         );
+
         return TranspileCore(compilation);
     }
 
@@ -314,6 +322,7 @@ public static class TranspileHelper
             "TestAssembly",
             OutputKind.DynamicallyLinkedLibrary
         );
+
         return TranspileCore(compilation, namespaceBarrels: true).Files;
     }
 
@@ -333,6 +342,7 @@ public static class TranspileHelper
             "TestAssembly",
             OutputKind.DynamicallyLinkedLibrary
         );
+
         return TranspileCore(compilation, stripInterfacePrefix: true);
     }
 
@@ -348,6 +358,7 @@ public static class TranspileHelper
             "TestAssembly",
             OutputKind.DynamicallyLinkedLibrary
         );
+
         return TranspileCore(compilation, useIrBodies: true).Files;
     }
 
@@ -365,6 +376,7 @@ public static class TranspileHelper
             "TestAssembly",
             OutputKind.DynamicallyLinkedLibrary
         );
+
         return TranspileCore(compilation, importAlias: importAlias);
     }
 
@@ -608,12 +620,14 @@ public static class TranspileHelper
             OutputKind.DynamicallyLinkedLibrary,
             extraReferences: JsxBindingReferences
         );
+
         var consumerCompilation = CompileAssembly(
             consumerSource,
             "TestConsumer",
             OutputKind.DynamicallyLinkedLibrary,
             extraReferences: JsxBindingReferences.Append(libCompilation.ToMetadataReference())
         );
+
         return TranspileCore(consumerCompilation).Files;
     }
 
@@ -744,8 +758,10 @@ public static class TranspileHelper
     private static string ReadExpected(string filename)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Expected", filename);
+
         if (!File.Exists(path))
             throw new FileNotFoundException($"Expected file not found: {path}");
+
         return File.ReadAllText(path);
     }
 
@@ -756,6 +772,22 @@ public static class TranspileHelper
     /// copy in the output directory is build output.
     /// </summary>
     private static void WriteExpected(string filename, string content)
+    {
+        var path = Path.Combine(SourceGoldenDirectory(), filename);
+
+        File.WriteAllText(path, content.EndsWith('\n') ? content : content + "\n");
+    }
+
+    /// <summary>
+    /// The source tree's <c>tests/Metano.Tests/Expected/</c> directory, for a
+    /// check that reads every golden as a whole (the golden bundle check of
+    /// spec 011 FR-043) instead of comparing one.
+    /// </summary>
+    public static string SourceGoldenDirectory() =>
+        Path.Combine(RepositoryRoot(), "tests", "Metano.Tests", "Expected");
+
+    /// <summary>The repository root: the first directory above the test output that holds the goldens.</summary>
+    public static string RepositoryRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
 
@@ -769,16 +801,10 @@ public static class TranspileHelper
             current = current.Parent;
         }
 
-        if (current is null)
-        {
-            throw new InvalidOperationException(
+        return current?.FullName
+            ?? throw new InvalidOperationException(
                 "tests/Metano.Tests/Expected not found above the test output directory"
             );
-        }
-
-        var path = Path.Combine(current.FullName, "tests", "Metano.Tests", "Expected", filename);
-
-        File.WriteAllText(path, content.EndsWith('\n') ? content : content + "\n");
     }
 
     public static (
@@ -790,30 +816,37 @@ public static class TranspileHelper
             csharpSource,
             new CSharpParseOptions(LanguageVersion.Preview)
         );
+
         var compilation = CSharpCompilation.Create(
             assemblyName,
             [syntaxTree],
             BaseReferences,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
+
         var errors = compilation
             .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
+
         if (errors.Count > 0)
             throw new InvalidOperationException(
                 "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
             );
+
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(
             compilation,
             TargetLanguage.Dart
         );
+
         var transformer = new Metano.Compiler.Dart.Transformation.DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
         var printer = new Metano.Compiler.Dart.Printer();
         var result = new Dictionary<string, string>();
+
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);
+
         return (result, transformer.Diagnostics);
     }
 }
