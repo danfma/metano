@@ -150,6 +150,32 @@ public readonly struct UZWide
     public static implicit operator long(UZWide w) => w.V;
 }
 
+public readonly struct UFromNums
+{
+    public readonly string Text;
+
+    public UFromNums(string text)
+    {
+        Text = text;
+    }
+
+    public static explicit operator UFromNums(int v) => new("i" + v);
+
+    public static explicit operator UFromNums(double v) => new("d" + v);
+}
+
+public readonly struct UKelvin
+{
+    public readonly double K;
+
+    public UKelvin(double k)
+    {
+        K = k;
+    }
+
+    public static implicit operator UKelvin(double k) => new(k);
+}
+
 /// <summary>
 /// The use sites of user-defined operators and conversions (baseline FR-077,
 /// FR-079): every application runs the operator C# bound.
@@ -403,5 +429,39 @@ public static class OperatorUseProbes
         {
             return "OverflowException";
         }
+    }
+
+    public static string CastsFromAChar()
+    {
+        var ch = 'a';
+        var s = "xyz";
+        char? maybe = 'c';
+        var a = (UFromNums)ch;
+        var b = (UFromNums)s[1];
+        var c = (UFromNums)(char)(ch + 1);
+        var d = (UFromNums)maybe;
+        var e = (UFromNums)(ch);
+        var f = (UFromNums)'b';
+        var k = (UKelvin)ch;
+        var literalK = (UKelvin)'b';
+        UKelvin implicitK = ch;
+
+        return a.Text
+            + "|"
+            + b.Text
+            + "|"
+            + c.Text
+            + "|"
+            + d.Text
+            + "|"
+            + e.Text
+            + "|"
+            + f.Text
+            + "|"
+            + k.K
+            + "|"
+            + literalK.K
+            + "|"
+            + implicitK.K;
     }
 }
