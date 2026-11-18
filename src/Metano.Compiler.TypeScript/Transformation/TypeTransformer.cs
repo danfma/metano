@@ -443,11 +443,48 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         _overloadClaims = new TsOverloadClaimsRegistry(Context, _constructorAccessFacts);
 
-        var files = new List<TsSourceFile>();
-        var groups = new List<TypeFileGroup>();
-        var perGroupClosure = new Dictionary<string, string>(StringComparer.Ordinal);
-        var perGroupEmissions = Array.Empty<GroupEmission>();
+        var run = TransformGroups(transpilableTypes, nameRenames);
+        var files = run.Outcomes.Files.OfType<TsSourceFile>().ToList();
+        var groups = run.Groups;
 
+        // Generate index.ts barrel files per namespace folder
+        var indexFiles = BarrelFileGenerator.Generate(
+            files,
+            new BarrelOptions(
+                NamespaceBarrels,
+                InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
+            )
+        );
+
+        files.AddRange(indexFiles);
+
+        // Detect cyclic #/ imports between the generated files and emit MS0005
+        // diagnostics for each distinct cycle. Cycles are reported as warnings — the
+        // build proceeds, but the consumer sees the chain in their build log instead
+        // of debugging it through tsgo's downstream error.
+        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
+
+        ReportExportKeyCollisions(files);
+
+        DrainCrossPackageMisses(typeMappingContext);
+        DrainCrossPackageDependencies(typeMappingContext);
+
+        WriteGroupCache(groups, run.Closures, run.Outcomes.Emissions);
+
+        return files;
+    }
+
+    /// <summary>
+    /// Groups the types by output file and transforms every group, reusing the
+    /// ones the per-group cache still holds, then runs the import-graph pass of
+    /// the reference casts. The type-mapping statics the bridges read are
+    /// published for the duration of the run and restored afterwards.
+    /// </summary>
+    private GroupTransformRun TransformGroups(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        Dictionary<string, string> nameRenames
+    )
+    {
         // Publish the interface-prefix rename dict for the duration
         // of this transform so `IrToTsTypeMapper.MapNamed` rewrites
         // every TsNamedType identifier emitted below. The try/finally
@@ -501,17 +538,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // AND the configuration fingerprint matches the cache
             // file's). Otherwise both stay null and every iteration
             // takes the miss branch.
-            groups = GroupTypesByFile(transpilableTypes);
+            var groups = GroupTypesByFile(transpilableTypes);
             ReportSameNameTypeClashes(groups, transpilableTypes);
             var cachedGroups = LoadGroupCacheIfValid();
 
-            perGroupClosure =
+            var perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
                     : ComputePerGroupClosure(ir, groups, _constructorAccessFacts);
 
             var outcomes = new GroupOutcomes(groups.Count);
-            perGroupEmissions = outcomes.Emissions;
             var skippedGroupCount = 0;
 
             Parallel.For(0, groups.Count, index =>
@@ -534,14 +570,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 TransformGroupFresh(index, groups[index], outcomes, asserted)
             );
 
-            files.AddRange(outcomes.Files.OfType<TsSourceFile>());
-
             if (skippedGroupCount > 0)
             {
                 Console.WriteLine(
                     $"  Per-group cache: {skippedGroupCount}/{groups.Count} group(s) reused from cache."
                 );
             }
+
+            return new GroupTransformRun(groups, perGroupClosure, outcomes);
         }
         finally
         {
@@ -551,32 +587,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrToTsTypeMapper.BclOverrides = previousBclOverrides;
             IrToTsTypeMapper.ExceptionClassesScope = previousExceptionClasses;
         }
-
-        // Generate index.ts barrel files per namespace folder
-        var indexFiles = BarrelFileGenerator.Generate(
-            files,
-            new BarrelOptions(
-                NamespaceBarrels,
-                InitializerCycleHoists.Collect(compilation, ModulesOf(groups))
-            )
-        );
-
-        files.AddRange(indexFiles);
-
-        // Detect cyclic #/ imports between the generated files and emit MS0005
-        // diagnostics for each distinct cycle. Cycles are reported as warnings — the
-        // build proceeds, but the consumer sees the chain in their build log instead
-        // of debugging it through tsgo's downstream error.
-        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
-
-        ReportExportKeyCollisions(files);
-
-        DrainCrossPackageMisses(typeMappingContext);
-        DrainCrossPackageDependencies(typeMappingContext);
-
-        WriteGroupCache(groups, perGroupClosure, perGroupEmissions);
-
-        return files;
     }
 
     /// <summary>
@@ -1430,6 +1440,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string Namespace,
         string FileName,
         List<INamedTypeSymbol> Types
+    );
+
+    /// <summary>
+    /// One run of the per-group transform: the groups by output file, the closure
+    /// hash of each group the per-group cache keys (empty when the cache is off),
+    /// and what each group produced.
+    /// </summary>
+    private sealed record GroupTransformRun(
+        List<TypeFileGroup> Groups,
+        IReadOnlyDictionary<string, string> Closures,
+        GroupOutcomes Outcomes
     );
 
     /// <summary>
