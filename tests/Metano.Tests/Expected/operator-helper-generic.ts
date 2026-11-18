@@ -11,11 +11,11 @@ export class Box<T> {
   }
 
   static __addBoxOfTInt32<T>(b: Box<T>, n: number): Box<T> {
-    return new Box(b.item, b.count + n);
+    return new Box(b.item, (b.count + n) | 0);
   }
 
   static __addBoxOfTInt64<T>(b: Box<T>, n: bigint): Box<T> {
-    return new Box(b.item, b.count + Number(BigInt.asIntN(32, n)));
+    return new Box(b.item, (b.count + Number(BigInt.asIntN(32, n))) | 0);
   }
 
   static __add<T>(b: Box<T>, n: number): Box<T>;
@@ -47,7 +47,7 @@ export class Box<T> {
   }
 
   static __subtract<T>(b: Box<T>, n: number): Box<T> {
-    return new Box(b.item, b.count - n);
+    return new Box(b.item, (b.count - n) | 0);
   }
 
   $subtract(n: number): Box<T> {

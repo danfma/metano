@@ -7,7 +7,7 @@ export class Der extends Base {
   }
 
   static override __toInt32(d: Der): number {
-    return d.v * 2;
+    return Math.imul(d.v, 2);
   }
 
   static __addDerDer(a: Der, b: Der): Der {

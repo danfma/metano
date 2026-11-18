@@ -21,7 +21,7 @@ export class Uses {
 
       return receiver$temp$0;
     })(m);
-    ((receiver$temp$1) => arr[receiver$temp$1] = Money.__add(arr[receiver$temp$1]!, m))(i++);
+    ((receiver$temp$1) => arr[receiver$temp$1] = Money.__add(arr[receiver$temp$1]!, m))(((i = (i + 1) | 0) - 1) | 0);
 
     return Money.__toInt64(before);
   }

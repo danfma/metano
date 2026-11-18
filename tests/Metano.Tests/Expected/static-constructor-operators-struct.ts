@@ -28,7 +28,7 @@ export class Pt {
   static __subtract(a: Pt, b: Pt): Pt {
     Pt.#$init();
 
-    return new Pt(a.x - b.x);
+    return new Pt((a.x - b.x) | 0);
   }
 
   $subtract(b: Pt): Pt {

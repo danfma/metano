@@ -8,7 +8,7 @@ export class Meters {
   }
 
   static __negate(a: Meters): Meters {
-    return new Meters(-a.v);
+    return new Meters(-a.v | 0);
   }
 
   $negate(): Meters {
@@ -24,7 +24,7 @@ export class Meters {
   }
 
   static __subtract(a: Meters, b: Meters): Meters {
-    return new Meters(a.v - b.v);
+    return new Meters((a.v - b.v) | 0);
   }
 
   $subtract(b: Meters): Meters {
@@ -32,11 +32,11 @@ export class Meters {
   }
 
   static __add(a: number, m: Meters): Meters {
-    return new Meters(a + m.v);
+    return new Meters((a + m.v) | 0);
   }
 
   static __increment(a: Meters): Meters {
-    return new Meters(a.v + 1);
+    return new Meters((a.v + 1) | 0);
   }
 
   $increment(): Meters {
@@ -44,7 +44,7 @@ export class Meters {
   }
 
   static __decrement(a: Meters): Meters {
-    return new Meters(a.v - 1);
+    return new Meters((a.v - 1) | 0);
   }
 
   $decrement(): Meters {
@@ -68,11 +68,11 @@ export class Meters {
   }
 
   static __multiplyMetersInt32(a: Meters, k: number): Meters {
-    return new Meters(a.v * k);
+    return new Meters(Math.imul(a.v, k));
   }
 
   static __multiplyInt32Meters(k: number, a: Meters): Meters {
-    return new Meters(a.v * k * 10);
+    return new Meters(Math.imul(Math.imul(a.v, k), 10));
   }
 
   static __multiply(a: Meters, k: number): Meters;
