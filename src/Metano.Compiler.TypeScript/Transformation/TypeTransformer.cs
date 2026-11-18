@@ -39,6 +39,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private readonly object _diagnosticsLock = new();
 
+    private GroupTransformFacts? _groupFacts;
+
     /// <summary>
     /// Forwarded to <see cref="TypeScriptTransformContext.UseIrBodiesWhenCovered"/>.
     /// Always <c>true</c> in production — the IR pipeline is the only path for
@@ -138,6 +140,20 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     public IReadOnlyDictionary<string, string> CrossPackageDependencies =>
         _crossPackageDependencies;
+
+    /// <summary>
+    /// The constructor access facts and the claim results of the classes this
+    /// transform emits (spec 013 FR-004), created by the setup phase of
+    /// <see cref="TransformAll"/>.
+    /// </summary>
+    private GroupTransformFacts GroupFacts =>
+        _groupFacts
+        ?? throw new InvalidOperationException(
+            "The overload claims are not yet initialized — TransformAll() must complete "
+                + "its setup phase before any per-type helper runs."
+        );
+
+    private TsOverloadClaimsRegistry OverloadClaims => GroupFacts.OverloadClaims;
 
     /// <summary>
     /// Thread-safe sink for diagnostic emission (#218 / #226). Every
@@ -694,7 +710,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private PathNaming _pathNaming = new("");
-    private GroupTransformFacts? _groupFacts;
 
     /// <summary>
     /// Built once after the setup phase of <see cref="TransformAll"/> completes.
@@ -703,20 +718,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// to fail fast if a per-type helper is invoked before <see cref="TransformAll"/>.
     /// </summary>
     private TypeScriptTransformContext? _context;
-
-    /// <summary>
-    /// The constructor access facts and the claim results of the classes this
-    /// transform emits (spec 013 FR-004), created by the setup phase of
-    /// <see cref="TransformAll"/>.
-    /// </summary>
-    private GroupTransformFacts GroupFacts =>
-        _groupFacts
-        ?? throw new InvalidOperationException(
-            "The overload claims are not yet initialized — TransformAll() must complete "
-                + "its setup phase before any per-type helper runs."
-        );
-
-    private TsOverloadClaimsRegistry OverloadClaims => GroupFacts.OverloadClaims;
 
     /// <summary>Non-nullable view of <see cref="_context"/> — every per-type helper goes
     /// through this property so a misuse (helper called before <see cref="TransformAll"/>
@@ -986,10 +987,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         if (TryEmitPlainObjectViaIr(type, sink, irCache))
             return true;
+
         new IrToTsClassEmitter(Context, GroupFacts.AccessFacts, OverloadClaims).Transform(
             type,
             sink
         );
+
         return true;
     }
 
