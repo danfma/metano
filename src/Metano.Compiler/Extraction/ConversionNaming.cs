@@ -73,11 +73,7 @@ internal static class ConversionNaming
 
         IReadOnlyList<IrNamingComponent> components = pin is not null
             ? [new IrNamingComponent(NamingText.Capitalize(pin), [])]
-            :
-            [
-                new IrNamingComponent(prefix, []),
-                .. ConvertedSpelling(conversion, direction, target),
-            ];
+            : [new IrNamingComponent(prefix, []), .. ConvertedSpelling(conversion, direction)];
 
         return new ConversionDraft(direction, kind, prefix, pin, components);
     }
@@ -92,8 +88,7 @@ internal static class ConversionNaming
 
     private static IReadOnlyList<IrNamingComponent> ConvertedSpelling(
         IMethodSymbol conversion,
-        IrConversionDirection direction,
-        TargetLanguage? target
+        IrConversionDirection direction
     )
     {
         var converted =
@@ -101,7 +96,7 @@ internal static class ConversionNaming
                 ? conversion.ReturnType
                 : conversion.Parameters[0].Type;
 
-        return IrNamingSpellingExtractor.ExtractConverted(converted, target).Components;
+        return IrNamingSpellingExtractor.Extract(converted).Components;
     }
 
     private static string? PinOf(IMethodSymbol conversion, TargetLanguage? target) =>

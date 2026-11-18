@@ -217,7 +217,7 @@ public class OperatorHelperDeclarationTests
     }
 
     [Test]
-    public async Task AConversion_SpellsTheConvertedTypeByItsEmittedName()
+    public async Task AConversion_SpellsTheConvertedTypeByItsClrName()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -242,8 +242,8 @@ public class OperatorHelperDeclarationTests
         var wallet = files["wallet.ts"];
 
         await Assert.That(diagnostics).IsEmpty();
-        await Assert.That(wallet).Contains("static __implicitFromCash(m: Cash): Wallet {");
-        await Assert.That(wallet).Contains("static __toCashOrNull(w: Wallet): Cash | null {");
+        await Assert.That(wallet).Contains("static __implicitFromMoney(m: Cash): Wallet {");
+        await Assert.That(wallet).Contains("static __toMoneyOrNull(w: Wallet): Cash | null {");
         await Assert.That(wallet).Contains("static __toCoin(w: Wallet): Coin {");
     }
 

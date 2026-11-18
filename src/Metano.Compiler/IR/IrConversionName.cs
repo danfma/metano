@@ -37,8 +37,8 @@ public enum IrConversionKind
 /// types, never by its arguments, so each conversion is named on its own —
 /// its kind's prefix (<c>Implicit</c>, none for an explicit one,
 /// <c>Checked</c>), then <c>To</c> + the target type's spelling or
-/// <c>From</c> + the source type's, with spec 013's spellings (a named
-/// converted type by the name the target emits it with) and climb
+/// <c>From</c> + the source type's, with spec 013's CLR spellings (a
+/// converted type's <c>[Name]</c> does not change them) and climb
 /// (<c>ToInt64</c>, <c>ImplicitFromInt32</c>, <c>CheckedToInt32</c>). The core
 /// computes it once per conversion and target from the Roslyn symbol, at the
 /// declaration and at every use, the kind and direction words included; a

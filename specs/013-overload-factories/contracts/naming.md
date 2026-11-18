@@ -34,7 +34,8 @@ or module function; for virtual and interface members, the **root** group of § 
    `Int32` / `String`). Operator groups start here: their suffix is always the type spellings
    (FR-033, today's convention). A conversion operator is not named here: each conversion is its
    own static named `To` + the target type's spelling (a conversion out of the declaring type)
-   or `From` + the source type's spelling (a conversion into it), after `Implicit` for an
+   or `From` + the source type's spelling (a conversion into it), the CLR spellings below (a
+   converted type's `[Name]` does not change them), after `Implicit` for an
    implicit conversion and `Checked` for a `checked` one, because C# tells conversions apart by
    their source and target types (`explicit operator int(Money m)` /
    `explicit operator long(Money m)` → `__toInt32` / `__toInt64` in TypeScript,

@@ -1072,11 +1072,13 @@ Product requirements added after the migration (normative; each one is traced by
   C# forbids an implicit and an explicit conversion between the same two types (CS0557), so
   the kind never tells two conversions apart; it is in the name so a reader sees it, and
   switching a conversion between implicit and explicit renames its TypeScript static (a 3.0
-  API note). The spellings are spec 013's, except that a named converted type is spelled by
-  the name the target emits it with, its `[Name]` for that target when it has one
-  (`[Name("Cash")] class Money`: `implicit operator Wallet(Money m)` → `__implicitFromCash`);
-  its climb qualifiers stay the CLR ones. A conversion group's overload suffix is the same
-  candidate for the same target, so the core holds one name per conversion.
+  API note). The spellings are spec 013's CLR spellings (DECIDED-3), the rule its method
+  suffixes follow: a converted type's `[Name]` does not change them
+  (`[Name("Cash")] class Money`: `implicit operator Wallet(Money m)` → `__implicitFromMoney`,
+  `explicit operator Money?(Wallet w)` → `__toMoneyOrNull`; maintainer decision), and nested
+  type arguments stay CLR (`__toListOfMoney`). A `[Name]` on the conversion operator itself
+  still names it whole. A conversion group's overload suffix is the same candidate for the same
+  target, so the core holds one name per conversion.
   The core keeps grouping conversion operators as it does today (`MethodOverloadGroups` is not
   restructured) and adds one neutral fact per conversion declaration,
   `IrConversionName { Direction (To / From), Kind (Implicit / Explicit / Checked), Spelling, Pin }` on

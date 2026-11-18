@@ -169,9 +169,9 @@ internal static class OverloadGroupNaming
     /// A conversion operator group's suffixes: each conversion's own name
     /// candidate for <paramref name="target"/> (<see cref="ConversionNaming"/>,
     /// baseline FR-078), the one rule that names conversions, so the suffix is
-    /// the <see cref="IrMethodSemantics.ConversionName"/> the target emits —
-    /// its <c>[Name]</c> pin and the emitted names of the converted types
-    /// included. They report nothing: the declaration reports a dead end
+    /// the <see cref="IrMethodSemantics.ConversionName"/> the target emits,
+    /// its <c>[Name]</c> pin included. They report nothing: the declaration
+    /// reports a dead end
     /// (<see cref="ConversionNaming.ReportIfDeadEnd"/>).
     /// </summary>
     private static IReadOnlyList<string> ConversionSuffixesOf(
