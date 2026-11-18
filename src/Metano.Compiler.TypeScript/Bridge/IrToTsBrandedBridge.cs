@@ -104,6 +104,7 @@ public static class IrToTsBrandedBridge
             functions.AddRange(ConvertStaticMethodGroup(group, companion, context));
 
         sink.AddRange(functions.Select(function => AsModuleFunction(function, tsTypeName)));
+
         sink.Add(
             new TsConstObject(
                 tsTypeName,
