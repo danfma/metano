@@ -1270,12 +1270,13 @@ Product requirements added after the migration (normative; each one is traced by
      `PostBuildCommand`, and appends itself to `_MetanoResolveTargetsDependsOn` and its transpile
      target to `_MetanoTranspileTargets`; the shared file batches over those items. In the
      project's own instance, on every build: user-input collection, setting resolution,
-     `METANOBUILD002`, the toolchain keys, each target's incremental check and the post-build
-     commands. In a worker instance (the `MSBuild` task on the same project with the resolved,
-     escaped values as global properties), only for an out-of-date target: the tool probe
-     (`METANOBUILD001`), the asset projection and the CLI `Exec`. The worker does not see items
-     the parent produced by running targets (`@(ReferencePath)`), so nothing it runs depends on
-     them. The FR-087.2 synthetic target uses exactly this contract.
+     `METANOBUILD002`, the toolchain keys, the asset projection, each target's incremental check
+     and argument line, and the post-build commands. In a worker instance (the `MSBuild` task on
+     the same project with the resolved, escaped values as global properties), only for an
+     out-of-date target: the tool probe (`METANOBUILD001`) and the CLI `Exec`. The worker is a
+     fresh evaluation: it sees neither items the parent produced by running targets
+     (`@(ReferencePath)`) nor items or properties a user target added, so it reads no item and
+     no setting of its own. The FR-087.2 synthetic target uses exactly this contract.
   3. *No compiler inside.* A package MUST NOT bundle or install a compiler: a .NET tool cannot be
      a NuGet dependency. Each target's tool (`metano-typescript` for TypeScript) is installed
      separately, preferably through a committed `.config/dotnet-tools.json` and
@@ -1318,10 +1319,12 @@ Product requirements added after the migration (normative; each one is traced by
      post-build command runs on every build, also when its target was up to date; unlike 2.x, a
      disabled target runs none (2.x ran it even with `MetanoEnabled=false`). The public
      target names `MetanoTranspile` and `MetanoPostBuild` remain as aggregates: a user hook
-     declared with `BeforeTargets="MetanoTranspile"` still runs before any target's tool and one
-     declared with `AfterTargets="MetanoTranspile"` after every enabled target, as in 2.x
-     (`MetanoTranspile` prepares every target in its dependencies and runs the per-target
-     transpile targets from its body).
+     declared with `BeforeTargets="MetanoTranspile"` runs before any setting is resolved or asset
+     projected, so a `Metano*` property it sets or a `MetanoAsset` it adds reaches the tool, and
+     one declared with `AfterTargets="MetanoTranspile"` runs after every enabled target, as in
+     2.x (`MetanoTranspile` has no dependencies; its body prepares and then runs the per-target
+     transpile targets). Each per-target target (`MetanoTranspileTs`) prepares in its body as
+     well, so it can be run on its own.
   4. *Collision.* Two enabled targets whose resolved output directories are the same full path
      (each resolved against the project directory and normalized, trailing separators trimmed,
      compared case-insensitively) MUST fail the build with `METANOBUILD002` (an error naming both targets and the directory),

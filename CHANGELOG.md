@@ -730,7 +730,8 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
 - `MetanoPostBuildCommand` no longer runs for a disabled target
   (`MetanoEnabled=false`); it still runs on every build of an enabled one,
   also when the transpile is up to date. `BeforeTargets` / `AfterTargets`
-  hooks on `MetanoTranspile` keep their 2.x order.
+  hooks on `MetanoTranspile` keep their 2.x order: a `BeforeTargets` hook can
+  still set `Metano*` properties or add `MetanoAsset` items.
 - The toolchain key file is renamed
   `<project>.MetanoToolchain.typescript.cache`, so the first 3.0 build reruns
   the transpile once. A `Metano.Build.TypeScript` packaging smoke test now

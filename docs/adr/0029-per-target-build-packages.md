@@ -36,8 +36,8 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
   `Metano.Build.Dart` is one `.targets` file plus one `.csproj`. `Metano.Build` gets no 3.x
   version (no stub, no metapackage); it is deprecated on nuget.org after the release.
 - **One shared source file, linked.** `Metano.Build.Common.targets` holds the target-independent
-  part: user-input collection, toolchain keys, the `METANOBUILD002` check, the worker (tool
-  probe, asset projection, CLI `Exec`), the post-build commands and the aggregate
+  part: user-input collection, toolchain keys, the `METANOBUILD002` check, the asset projection,
+  the worker (tool probe and CLI `Exec`), the post-build commands and the aggregate
   `MetanoTranspile` / `MetanoPostBuild` targets. Both `.targets` files live in one source folder,
   `src/Metano.Build.Targets/`; each package project (`src/Metano.Build.TypeScript/`) packs its
   per-target file and the shared one side by side in `build/` and `buildTransitive/`, so the
@@ -55,16 +55,19 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
   inside a resolve target (not at evaluation, so `Directory.Build.targets` values count). The
   unprefixed names stay the global settings, so a single-target project migrates by swapping the
   `PackageReference`.
-- **Hook order kept.** `MetanoTranspile` prepares every target in its dependencies and runs the
-  per-target transpile targets from its body (`CallTarget`; everything they read was produced by
-  the dependencies), so a user `BeforeTargets="MetanoTranspile"` hook still runs before any tool
-  and an `AfterTargets` hook after every target, as in 2.x.
+- **Hook order kept.** `MetanoTranspile` has no dependencies; its body runs
+  `CallTarget Targets="_MetanoPrepare;<per-target targets>"`. A user `BeforeTargets="MetanoTranspile"`
+  hook therefore runs before the settings are resolved and the assets projected, so a property it
+  sets or a `MetanoAsset` it adds reaches the tool, and an `AfterTargets` hook runs after every
+  target, as in 2.x. Each per-target target (`MetanoTranspileTs`) prepares in its body too, so it
+  also works on its own.
 - **Parent decides, worker executes.** Each per-target MSBuild target (`MetanoTranspileTs`) owns
   its incremental check (`Inputs` = user sources, assets, project file, its toolchain key;
   `Outputs` = its `.metano-stamp`). Only when out of date does it call the shared worker through
   the `MSBuild` task with the resolved, escaped values as global properties, so an up-to-date
-  build spawns no worker and starts no tool. Values that need `@(ReferencePath)` are resolved in
-  the parent.
+  build spawns no worker and starts no tool. The whole argument line, assets included, is
+  composed in the parent: the worker is a fresh evaluation and sees neither the items the parent
+  produced by running targets (`@(ReferencePath)`) nor items or properties a user target added.
 - **Collisions are errors.** Two enabled targets resolving to the same output directory fail
   with `METANOBUILD002` before any tool runs.
 - **Tools stay separate.** A NuGet package cannot install a .NET tool, so the build package

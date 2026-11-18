@@ -181,7 +181,7 @@ A tiny MSBuild integration package, one per language target (ADR-0029; it
 replaces the 2.x `Metano.Build`). Contains no code — just
 `Metano.Build.TypeScript.targets` (setting resolution, CLI flags, tool command)
 and the shared `Metano.Build.Common.targets` (incremental check helpers,
-toolchain key, worker, post-build), both from `src/Metano.Build.Targets/`. It
+toolchain key, assets, worker, post-build), both from `src/Metano.Build.Targets/`. It
 hooks into the consumer's `dotnet build` and invokes `metano-typescript`.
 
 - Target: `netstandard2.0` (for maximum NuGet compatibility)
