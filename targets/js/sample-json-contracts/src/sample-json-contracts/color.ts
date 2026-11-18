@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { EnumType } from "metano-runtime";
+import { isInt32, type EnumType } from "metano-runtime";
 
 export const Color = {
   Red: 0,
@@ -17,5 +17,5 @@ export const Color$runtimeType: EnumType<Color> = {
   values: [0, 1, 2],
   names: ["Red", "Green", "Blue"],
   isFlags: false,
-  test: (v: unknown): v is Color => v === 0 || v === 1 || v === 2,
+  test: (v: unknown): v is Color => isInt32(v),
 };

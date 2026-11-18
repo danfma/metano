@@ -1,13 +1,13 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
-import { isString, isType, type ClassType } from "metano-runtime";
+import { isString, type ClassType } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
 import type { IssuePriority } from "./issue-priority";
-import { IssueStatus, IssueStatus$runtimeType } from "./issue-status";
+import { IssueStatus } from "./issue-status";
 import type { IssueType } from "./issue-type";
 import { IssueWorkflow } from "./issue-workflow";
 
@@ -171,7 +171,12 @@ export class Issue {
   transitionTo(...args: unknown[]): void {
     if (
       args.length === 3 &&
-      isType(args[0], IssueStatus$runtimeType) &&
+      (args[0] === "backlog" ||
+        args[0] === "ready" ||
+        args[0] === "in-progress" ||
+        args[0] === "in-review" ||
+        args[0] === "done" ||
+        args[0] === "cancelled") &&
       isString(args[1]) &&
       args[2] instanceof Temporal.ZonedDateTime
     ) {
@@ -184,7 +189,16 @@ export class Issue {
       return;
     }
 
-    if (args.length === 2 && isType(args[0], IssueStatus$runtimeType) && isString(args[1])) {
+    if (
+      args.length === 2 &&
+      (args[0] === "backlog" ||
+        args[0] === "ready" ||
+        args[0] === "in-progress" ||
+        args[0] === "in-review" ||
+        args[0] === "done" ||
+        args[0] === "cancelled") &&
+      isString(args[1])
+    ) {
       this.transitionToNextStatusActorId(args[0] as IssueStatus, args[1] as UserId);
 
       return;

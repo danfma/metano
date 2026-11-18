@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { isString, isType, type ClassType } from "metano-runtime";
+import { isString, type ClassType } from "metano-runtime";
 import { any, count, firstOrDefault, linq } from "metano-runtime/system/linq";
-import { Priority$runtimeType, type Priority } from "./priority";
+import type { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
 let TodoList$rt: ClassType<TodoList> | undefined;
@@ -57,7 +57,11 @@ export class TodoList {
   add(item: TodoItem): void;
   add(title: string): void;
   add(...args: unknown[]): void {
-    if (args.length === 2 && isString(args[0]) && isType(args[1], Priority$runtimeType)) {
+    if (
+      args.length === 2 &&
+      isString(args[0]) &&
+      (args[1] === "low" || args[1] === "medium" || args[1] === "high")
+    ) {
       this.addTitlePriority(args[0] as string, args[1] as Priority);
 
       return;

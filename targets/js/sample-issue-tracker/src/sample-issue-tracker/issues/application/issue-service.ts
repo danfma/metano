@@ -1,17 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { isString, isType, type ClassType } from "metano-runtime";
+import { isString, type ClassType } from "metano-runtime";
 import { Issue } from "#/sample-issue-tracker/issues/domain/issue";
 import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
-import {
-  IssuePriority,
-  IssuePriority$runtimeType,
-} from "#/sample-issue-tracker/issues/domain/issue-priority";
+import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
 import type { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import {
-  IssueType$runtimeType,
-  type IssueType,
-} from "#/sample-issue-tracker/issues/domain/issue-type";
+import type { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
 import { OperationResult } from "#/sample-issue-tracker/shared-kernel/operation-result";
 import type { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
 import type { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
@@ -79,8 +73,8 @@ export class IssueService {
       args.length === 4 &&
       isString(args[0]) &&
       isString(args[1]) &&
-      isType(args[2], IssueType$runtimeType) &&
-      isType(args[3], IssuePriority$runtimeType)
+      (args[2] === "story" || args[2] === "bug" || args[2] === "chore" || args[2] === "spike") &&
+      (args[3] === "low" || args[3] === "medium" || args[3] === "high" || args[3] === "urgent")
     ) {
       return this.createAsyncTitleDescriptionTypePriority(
         args[0] as string,
@@ -94,7 +88,7 @@ export class IssueService {
       args.length === 3 &&
       isString(args[0]) &&
       isString(args[1]) &&
-      isType(args[2], IssueType$runtimeType)
+      (args[2] === "story" || args[2] === "bug" || args[2] === "chore" || args[2] === "spike")
     ) {
       return this.createAsyncTitleDescriptionType(
         args[0] as string,
