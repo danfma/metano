@@ -669,23 +669,32 @@ public sealed class Printer(string indent = "  ")
         {
             var firstGroup = true;
 
-            void PrintGroup(IReadOnlyList<TsClassMember> members)
+            void PrintGroup(
+                IReadOnlyList<TsClassMember> members,
+                Func<TsClassMember, TsClassMember, bool> needsBlankLineBetween
+            )
             {
                 if (members.Count == 0)
                     return;
+
                 if (!firstGroup)
                     _sb.WriteLn();
+
                 firstGroup = false;
+
                 for (var i = 0; i < members.Count; i++)
                 {
-                    if (i > 0)
+                    if (i > 0 && needsBlankLineBetween(members[i - 1], members[i]))
                         _sb.WriteLn();
                     PrintClassMember(members[i]);
                 }
             }
 
+            void PrintSeparatedGroup(IReadOnlyList<TsClassMember> members) =>
+                PrintGroup(members, static (_, _) => true);
+
             // Fields first
-            PrintGroup(fields);
+            PrintGroup(fields, FieldsNeedBlankLineBetween);
 
             // Constructor
             if (tsClass.Constructor is not null)
@@ -697,14 +706,40 @@ public sealed class Printer(string indent = "  ")
             }
 
             // Getters / setters
-            PrintGroup(accessors);
+            PrintSeparatedGroup(accessors);
 
             // Methods
-            PrintGroup(methods);
+            PrintSeparatedGroup(methods);
 
             // Anything else
-            PrintGroup(others);
+            PrintSeparatedGroup(others);
         });
+    }
+
+    /// <summary>
+    /// The field-block blank-line rule (issue #682): consecutive single-line
+    /// fields print one after another, and a field that prints on more than
+    /// one line gets a blank line above and below. The rule is symmetric — if
+    /// either side is multi-line, the pair is separated.
+    /// </summary>
+    private static bool FieldsNeedBlankLineBetween(TsClassMember prev, TsClassMember next) =>
+        PrintsOnMultipleLines(prev) || PrintsOnMultipleLines(next);
+
+    /// <summary>
+    /// Whether a class member prints on more than one line. Measured by
+    /// rendering the member with a scratch printer, so the spacing rule
+    /// cannot drift from the real layout: a multi-line initializer (object
+    /// literal, arrow function, raw text with newlines) counts, and so does
+    /// a doc comment, which prints on its own line(s) above the declaration.
+    /// Anything else printed on its own line above a member (for example a
+    /// decorator, should the AST grow one) counts the same way.
+    /// </summary>
+    private static bool PrintsOnMultipleLines(TsClassMember member)
+    {
+        var scratch = new Printer();
+        scratch.PrintClassMember(member);
+
+        return scratch._sb.GetRawString().TrimEnd('\n').Contains('\n');
     }
 
     private void PrintConstructor(TsConstructor ctor)

@@ -701,6 +701,15 @@ The full guide, naming rule included, is [docs/overloads.md](docs/overloads.md).
   value used to become the identifier) and the enum declares `final String value;` and
   `const E(this.value);`.
 
+### Class fields print without blank lines between them (baseline FR-084; #682)
+
+- Formatting only, no behaviour change: in generated TypeScript, consecutive single-line
+  class fields print one after another, with no blank line between them. A field that prints
+  on more than one line (a block-form initializer, or a field with a doc comment) keeps a
+  blank line above and below. One blank line still separates the fields from the
+  constructor, accessors and methods. Every golden and generated sample changes by blank
+  lines only. Dart output is unchanged.
+
 ### Toolchain
 
 - The Roslyn packages (`Microsoft.CodeAnalysis.*`) move from 5.3.0 to 5.9.0.

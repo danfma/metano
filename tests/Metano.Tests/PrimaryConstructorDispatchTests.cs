@@ -32,6 +32,7 @@ public class PrimaryConstructorDispatchTests
         await Assert
             .That(files["probe/cap.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-dispatch-captured.ts"));
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
@@ -55,6 +56,7 @@ public class PrimaryConstructorDispatchTests
         await Assert
             .That(files["probe/init.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-dispatch-initializer.ts"));
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
@@ -82,6 +84,7 @@ public class PrimaryConstructorDispatchTests
         await Assert
             .That(files["probe/deps.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("primary-ctor-dispatch-computed.ts"));
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
@@ -110,6 +113,7 @@ public class PrimaryConstructorDispatchTests
                     + "        this._name = name;\n"
                     + "        this._n = n;\n"
             );
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
@@ -134,14 +138,14 @@ public class PrimaryConstructorDispatchTests
             .That(output)
             .Contains(
                 "  protected static readonly byPairBoth: unique symbol = Symbol(\"Pair(int both)\");\n"
-                    + "\n"
                     + "  readonly a: number;\n"
-                    + "\n"
                     + "  readonly b: number;\n"
             );
+
         await Assert
             .That(output)
             .Contains("  constructor(a: number, b: number);\n  constructor(both: number);\n");
+
         await Assert
             .That(output)
             .Contains(
@@ -150,6 +154,7 @@ public class PrimaryConstructorDispatchTests
                     + "        this.a = a;\n"
                     + "        this.b = b;\n"
             );
+
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 

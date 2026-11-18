@@ -70,7 +70,6 @@ public class EndToEndOutputTests
             + "\n"
             + "export class Tracker {\n"
             + "  current: Issue | null = null;\n"
-            + "\n"
             + "  status: IssueStatus = IssueStatus.Open;\n"
             + "\n"
             + "  constructor() { }\n"

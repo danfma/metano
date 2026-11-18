@@ -43,7 +43,7 @@ public class InternalVisibilityMappingTests
     [Arguments(
         "protected internal",
         "{\n  count: number = 0;",
-        "\n\n  steps: number = 0;",
+        "  count: number = 0;\n  steps: number = 0;",
         "\n\n  reset(): void"
     )]
     [Arguments(
