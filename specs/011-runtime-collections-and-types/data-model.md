@@ -75,11 +75,11 @@ classDiagram
         <<abstract>>
         +Of(IrTypeRef, IrTypeRef staticType) IrRuntimeTypeTest
     }
-    class Instanceof
-    class Interface { IrNamedTypeRef Descriptor; IReadOnlyList~IrNamedTypeRef~ ConsumerImplementers }
-    class Structural { string GuardName }
-    class Typeof { IrPrimitive Primitive; bool Validating }
-    class ArrayTuple { int Arity }
+    class NominalClass
+    class NominalInterface { IReadOnlyList~IrTypeRef~ Implementers }
+    class ErasedShape
+    class Primitive { IrPrimitive Primitive; IrPrimitive? StaticPrimitive }
+    class FixedTuple { int Arity }
     class Array
     class Collection { IrCollectionKind Kind; IReadOnlyList~IrTypeRef~ TypeArguments; IReadOnlyList~IrVariance~ Variance }
     class Reified { string TypeParameter }
@@ -89,11 +89,11 @@ classDiagram
     class Union { IReadOnlyList~IrTypeRef~ Cases }
     class Constant { bool Result }
     class None
-    IrRuntimeTypeTest <|-- Instanceof
-    IrRuntimeTypeTest <|-- Interface
-    IrRuntimeTypeTest <|-- Structural
-    IrRuntimeTypeTest <|-- Typeof
-    IrRuntimeTypeTest <|-- ArrayTuple
+    IrRuntimeTypeTest <|-- NominalClass
+    IrRuntimeTypeTest <|-- NominalInterface
+    IrRuntimeTypeTest <|-- ErasedShape
+    IrRuntimeTypeTest <|-- Primitive
+    IrRuntimeTypeTest <|-- FixedTuple
     IrRuntimeTypeTest <|-- Array
     IrRuntimeTypeTest <|-- Collection
     IrRuntimeTypeTest <|-- Reified
@@ -116,18 +116,15 @@ classDiagram
         IReadOnlyList~IrReifiedTypeParameter~ ReifiedTypeParameters
         string? TypeArgumentSlot
         IReadOnlyList~IrTypeRef~ BaseTypeArguments
-        IrRuntimeTypeDescriptor? Descriptor
     }
-    class IrRuntimeTypeDescriptor {
-        string Name
-        string FullName
-        string Namespace
-        IrTypeRef? Base
-        IReadOnlyList~IrTypeRef~ Interfaces
-        IReadOnlyList~IrTypeRef~ PlainImplementers
-        bool IsAbstract
-        bool IsValueType
-        bool HasParameterlessCtor
+    class IrRuntimeQuestion {
+        IrTypeRef Tested
+        IrRuntimeQuestionKind Kind
+        IrTypeRef? ReceiverStaticType
+    }
+    class IrCompilation {
+        IReadOnlyList~IrRuntimeQuestion~ RuntimeQuestions
+        IReadOnlySet~string~ QuestionedCollectionTypes
     }
     class IrCatchClause {
         IrTypeRef? ExceptionType
@@ -153,23 +150,17 @@ classDiagram
     class IrDynamicMemberAccess { IrExpression Receiver; string Name }
     class IrDynamicInvocation { IrExpression Target; IReadOnlyList~IrExpression~ Arguments }
     class IrDynamicIndexerAccess { IrExpression Receiver; IReadOnlyList~IrExpression~ Arguments }
-    class RuntimeTypeReachability {
-        +Compute(IrCompilation) ReachabilityResult
-    }
-    class ReachabilityResult {
-        IReadOnlySet~IrTypeRef~ ReachedTypes
-        IReadOnlySet~IrCollectionKind~ QuestionedCollectionKinds
-    }
 ```
 
 Notes:
 
 - `IrCollectionKind` has one value per runtime class and interface of FR-001 / FR-054; stage 011c adds the `List`, `HashSet`, `Dictionary`, `Queue`, `Stack` values with their interfaces and views, stage 011h the read-only, immutable, sorted and concurrent ones. Until 011h lands those types keep their 2.x IR.
 - `IrArrayTypeRef.SpanKind` marks a `Span<T>` (`Span`) or `ReadOnlySpan<T>` (`ReadOnlySpan`, never with a `char` element, which is a string); the value is still the native array (a view of a `List<T>` is its backing array, FR-056, FR-057), only the TS type differs: the runtime `Span<T>` interface or `ReadonlyArray<T>`. `None` is every other array. Dart ignores `SpanKind` and maps the node to `List<T>` as any array.
-- `IrRuntimeTypeTest.Of(type, staticType)` gains the static type of the tested expression so that `Typeof.Validating` and `Constant` can be decided in one place (FR-022). Every existing caller passes `staticType: null` and gets today's behaviour plus the new categories; `ArrayTuple` is kept unchanged.
+- `IrRuntimeTypeTest.Of(type, staticType)` gains the static type of the tested expression so that `Primitive.StaticPrimitive` and `Constant` are decided in one place (FR-022). The categories are neutral (stage 011b, plan.md): `NominalClass` (classes, records, structs, exceptions, temporal types), `NominalInterface(Implementers)`, `ErasedShape` (`[PlainObject]`; `[InlineWrapper]` is classified explicitly by its underlying primitive), `Primitive`, `FixedTuple` (the former `ArrayTuple`), `Array`, `Iterable`, `Null`, `Object`, `Constant`, `None`; the collection, reified and union categories come with stages 011c, 011d and spec 010. Whether a test renders `instanceof`, `typeof`, a validating helper, a guard name or a descriptor is the TypeScript bridge's decision; `MS0045` for `None` is a TypeScript diagnostic.
+- `IrCompilation.RuntimeQuestions` (an init property) is the frontend's scan of the Roslyn operations of every transpilable type: per runtime question of FR-027 the tested type, the kind (`Test`, `As`, `Cast`, `GetType`, `TypeOf`) and the receiver's static type; `QuestionedCollectionTypes` holds the questioned collection types by CLR definition name (``System.Collections.Generic.List`1``), which stage 011c maps to `IrCollectionKind`. The closure over them (`RuntimeTypeReachability`) is a TypeScript analysis (D29, plan.md stage 011b).
 - `IrReifiedTypeParameter.Position` is the index in the emitted parameter list after the trailing rule of OD-7; `HasDefault` is `true` when a preceding parameter is optional. A generic class's `ReifiedTypeParameters` describe its hidden constructor parameter and `TypeArgumentSlot` names the per-declaring-class slot it defines (`$typeArguments$Box`), `null` for a class that defines none; `BaseTypeArguments` are the descriptors a derived class passes to `super` (FR-024). The variant guards of a `[StrictUnionGuard]` base are data of the guard emitter, not of the descriptor.
-- `IrRuntimeTypeDescriptor` is attached to a declaration only when `RuntimeTypeReachability` reaches it (FR-027); exception classes always carry one. The Dart target ignores it.
-- `ReachabilityResult.QuestionedCollectionKinds` drives FR-008: a collection construction passes `$typeArguments$<Class>` only when its kind is in the set.
+- There is no descriptor node in the IR: the TypeScript `RuntimeTypeEmitter` projects a reached declaration's data (name, namespace, base, `AllInterfaces`, abstractness, value-type-ness, a public parameterless constructor) into the literal.
+- The questioned collection types drive FR-008: a collection construction passes `$typeArguments$<Class>` only when its kind is in the set.
 - `IrBoxExpression` / `IrUnboxExpression` come from Roslyn `IConversionOperation` with `Conversion.IsBoxing` over an enum or `[InlineWrapper]` type (FR-050); `Interop` marks the gated unbox at `[Import]` / `[Emit]` / `Js.Code` / `dynamic` / `AsDynamic()` boundaries (FR-051: only when the argument's static type can hold a box and the compilation has a boxing conversion). Both are skipped when `[assembly: DisableBoxing]` is present or the source is an open type parameter. Dart ignores them.
 - `IrIndexerUpdateExpression` is the evaluate-once node for `list[i] op= v`, `list[i]++`, `dict[k] ??= v` (FR-010); it renders as `update` / `updateReturningOld`.
 - `IrInlineCodePart` is `Text(string)` or `Hole(IrExpression, IrSourceLocation?)`; the hole's location lets a target report `MS0056`. `ResultType` is the type argument of `Js.Code<T>` and `null` for the untyped `Js.Code` (whose C# result is `dynamic`), so a target decides the cast from the node alone, independent of how `dynamic` maps; `Language` is the target language the API belongs to (`TypeScript` for `Metano.Interop.Js`), a fact of the API, not of the running emission. `IrInlineCodeStatement` is the statement form (a `Js.Code` call that is an expression statement, an expression-bodied `void` member included); the target decides how the text ends.
@@ -181,7 +172,8 @@ Notes:
 | Component | Role |
 |---|---|
 | `Bridge/IrToTsCollectionBridge` | `IrCollectionTypeRef` → runtime class / interface type refs; a `foreach` whose collection is `IrCollectionTypeRef(List)` → the indexed loop over `_items`, with the receiver always bound once to a temporary (a local can be reassigned in the body), that checks `_version` and the recorded length at the start of every step including the final one, so never after a `break` / `return` (FR-057; each check carries FR-058's inline guard), every other `foreach` stays `for..of`; `IrArrayTypeRef.SpanKind` → `Span<T>` (imported from `metano-runtime/system/collections`) / `ReadonlyArray<T>` (FR-056); factories for `new` / both initializer forms / collection expressions; `adopt(…, { fixedSize: true })` at array→interface conversions (FR-003); `$typeArguments$<Class>` only for questioned kinds (FR-008); `IrIndexerUpdateExpression` → `update` / `updateReturningOld`. |
-| `Transformation/RuntimeTypeEmitter` | `IrRuntimeTypeDescriptor` → the lazy `static get $runtimeType()` returning a data literal + module-level `let X$rt` on classes; an exported data literal `X$runtimeType` for interfaces, plain objects, enums, unions (FR-018–FR-020, FR-029, FR-044). No factory call is emitted. |
+| `Analysis/RuntimeTypeReachability` | the sequential closure over `IrCompilation.RuntimeQuestions` before the group transforms (D29: descriptor reads only, whole base chains, `AllInterfaces` implementers, `[EmitPackage]` public types, `[EmitRuntimeType]`); reports `MS0047` / `MS0048` / `MS0055`; its result hash joins every group-cache key. |
+| `Transformation/RuntimeTypeEmitter` | a reached declaration's data → the lazy `static get $runtimeType()` returning a data literal + module-level `let X$rt` on classes; an exported data literal `X$runtimeType` for interfaces, plain objects, enums, unions (FR-018–FR-020, FR-029, FR-044). No factory call is emitted. |
 | `Bridge/IrToTsRuntimeTestBridge` | renders every `IrRuntimeTypeTest` category (replaces `BuildTypeTest`; `IrTypeCheckBuilder.Generate` delegates to it, FR-021); `withImplementers` at cross-package interface tests (FR-019). |
 | `Bridge/IrToTsCatchChainBridge` + `TypeScript/AST/TsTryStatement` | FR-015: a real AST node printed by `Printer`, replacing `MapTry`'s string rendering. |
 | `Bridge/IrToTsInlineCodeBridge` | FR-031 / FR-032: holes as operand slots, the statement-form `;` rule, and the `MS0056` string-literal lexer (JS lexical knowledge stays in the target). |
