@@ -33,10 +33,7 @@ public sealed partial class IrExpressionExtractor
                 IsStatic: true,
                 ContainingType.TypeKind: TypeKind.Class or TypeKind.Struct,
             }
-        && DispatchedMethodCalls.IsEmittedContainingType(
-            method.ContainingType.OriginalDefinition,
-            _target
-        )
+        && EmittedTypes.IsEmittedContainingType(method.ContainingType.OriginalDefinition, _target)
         && !IsJsxComponentFamily(method.ContainingType)
             ? method
             : null;

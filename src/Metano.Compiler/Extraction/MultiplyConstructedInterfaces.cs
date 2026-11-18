@@ -182,7 +182,7 @@ public static class MultiplyConstructedInterfaces
         INamedTypeSymbol definition,
         TargetLanguage? target
     ) =>
-        MethodOverloadGroups.IsTranspiledInterface(definition, target)
+        EmittedTypes.IsTranspiledInterface(definition, target)
         && GroupNamesOf(definition, target).Count > 0
         && ConstructionsOf(type, definition).Count >= 2;
 

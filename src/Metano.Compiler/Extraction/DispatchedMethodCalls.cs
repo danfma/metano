@@ -48,7 +48,7 @@ internal static class DispatchedMethodCalls
         if (IsExcludedMember(definition) || !HasSourceIr(containingType))
             return null;
 
-        if (!IsEmittedContainingType(containingType, target))
+        if (!EmittedTypes.IsEmittedContainingType(containingType, target))
             return null;
 
         if (KeepsBrandedDispatcher(definition, context))
@@ -121,27 +121,6 @@ internal static class DispatchedMethodCalls
             type.TypeKind == TypeKind.Error
             || (type is INamedTypeSymbol named && named.IsAnonymousType)
         );
-
-    /// <summary>
-    /// Whether <paramref name="type"/> — the declaring type of a candidate
-    /// direct call — emits the member the call site needs: a transpilable
-    /// class, or a transpiled interface, none of the keep-today's-emission
-    /// shapes of DECIDED-10: <c>[External]</c> and <c>[PlainObject]</c> are
-    /// excluded here, and <c>[JsCallable]</c>, which only an interface
-    /// carries, through <see cref="MethodOverloadGroups.IsTranspiledInterface"/>.
-    /// A <c>[Branded]</c> type is judged per method
-    /// (<see cref="KeepsBrandedDispatcher"/>).
-    /// </summary>
-    internal static bool IsEmittedContainingType(INamedTypeSymbol type, TargetLanguage? target)
-    {
-        if (type.TypeKind == TypeKind.Interface)
-            return MethodOverloadGroups.IsTranspiledInterface(type, target);
-
-        return type.TypeKind is TypeKind.Class or TypeKind.Struct
-            && IrTypeRefMapper.IsTranspilableType(type, target)
-            && !SymbolHelper.HasExternal(type)
-            && !SymbolHelper.HasPlainObject(type);
-    }
 
     /// <summary>
     /// Whether a call to <paramref name="method"/> keeps the dispatcher

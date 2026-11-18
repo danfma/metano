@@ -7,7 +7,7 @@ namespace Metano.Tests;
 /// (<c>[External]</c>, <c>[PlainObject]</c>, <c>[JsCallable]</c>) get no
 /// factories, selectors or fast paths, so a call to their overloaded members
 /// must keep the dispatcher name instead of lowering to a fast path the type
-/// never declares (<c>DispatchedMethodCalls.IsEmittedContainingType</c>,
+/// never declares (<c>EmittedTypes.IsEmittedContainingType</c>,
 /// issue #536). A control class pins that the same call does lower to a fast
 /// path, and so does a <c>[Branded]</c> / <c>[InlineWrapper]</c> companion,
 /// whose static groups export their fast paths since #569.
@@ -216,7 +216,7 @@ public class OverloadDirectCallExclusionTests
             );
     }
 
-    // Pins MethodOverloadGroups.IsTranspiledInterface: [JsCallable] only applies
+    // Pins EmittedTypes.IsTranspiledInterface: [JsCallable] only applies
     // to an interface, which reaches the interface branch of the gate.
     [Test]
     public async Task JsCallableInterface_KeepsTheDispatcherThroughIsTranspiledInterface()

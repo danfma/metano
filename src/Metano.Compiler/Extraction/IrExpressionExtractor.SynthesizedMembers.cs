@@ -90,7 +90,7 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The synthesized <paramref name="kind"/> member of an emitted type
-    /// (<see cref="DispatchedMethodCalls.IsEmittedContainingType"/>), declared here
+    /// (<see cref="EmittedTypes.IsEmittedContainingType"/>), declared here
     /// or in a referenced package, when it joined a group; <c>null</c> otherwise.
     /// A referenced package's claims may be unreadable: the member's fast path
     /// keeps its stable name there (contracts/value-equality-members.md § 8).
@@ -99,7 +99,7 @@ public sealed partial class IrExpressionExtractor
     {
         var definition = type.OriginalDefinition;
 
-        if (!DispatchedMethodCalls.IsEmittedContainingType(definition, _target))
+        if (!EmittedTypes.IsEmittedContainingType(definition, _target))
             return null;
 
         return MethodOverloadGroups.SynthesizedRefOf(definition, kind, _context.GroupingPolicy);

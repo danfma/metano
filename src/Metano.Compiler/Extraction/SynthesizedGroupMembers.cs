@@ -376,7 +376,7 @@ internal static class SynthesizedGroupMembers
     {
         for (
             var ancestor = type.BaseType;
-            MethodOverloadGroups.IsEmittedBase(ancestor, policy.Target);
+            EmittedTypes.IsEmittedBase(ancestor, policy.Target);
             ancestor = ancestor!.BaseType
         )
             yield return ancestor!;
