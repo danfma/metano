@@ -451,7 +451,7 @@ public sealed partial class IrExpressionExtractor
         return UserConversion(
             method,
             throwsOnNull ? unwrapped : inner,
-            unwraps ? sourceType.UnwrapNullableValueType() : sourceType,
+            unwraps ? sourceType.UnwrapNullableValueType() : CastOperandType(cast, sourceType),
             targetType,
             sourceForm,
             isLifted: yieldsNull,
@@ -461,6 +461,23 @@ public sealed partial class IrExpressionExtractor
                 castConversion.IsChecked
             )
         );
+    }
+
+    /// <summary>
+    /// The type the extracted operand of <paramref name="cast"/> reaches: the
+    /// type Roslyn converts it to when it reports an implicit conversion of
+    /// the operand (<c>char</c> to <c>int</c> before <c>explicit operator
+    /// T(int)</c>), which the operand's extraction already applied;
+    /// <paramref name="sourceType"/> otherwise.
+    /// </summary>
+    private ITypeSymbol CastOperandType(CastExpressionSyntax cast, ITypeSymbol sourceType)
+    {
+        var conversion = _semantic.GetConversion(cast.Expression);
+
+        if (!conversion.IsImplicit || conversion.IsIdentity)
+            return sourceType;
+
+        return _semantic.GetTypeInfo(cast.Expression).ConvertedType ?? sourceType;
     }
 
     /// <summary>
