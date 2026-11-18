@@ -1,0 +1,224 @@
+namespace Metano.Tests.Build;
+
+/// <summary>
+/// FR-086 / FR-087.2 (#328): several Metano targets in one project. Two synthetic targets
+/// (<see cref="SyntheticTargetFile"/>, prefixes <c>A</c> and <c>B</c>) run over the shipped
+/// <c>Metano.Build.Common.targets</c> through a real <c>dotnet msbuild</c>, so the tests
+/// exercise exactly the registration contract a real per-target package uses.
+/// </summary>
+public class MultiTargetBuildTests
+{
+    private const string ProjectFileName = "App.proj";
+
+    private readonly string _root = Directory
+        .CreateTempSubdirectory("metano-multi-target-")
+        .FullName;
+
+    private string ProjectDir => Path.Combine(_root, "app");
+
+    private string CliHome => Path.Combine(_root, "home");
+
+    [Before(Test)]
+    public void CopyTargets()
+    {
+        Directory.CreateDirectory(ProjectDir);
+
+        var shippedTargets = Path.Combine(AppContext.BaseDirectory, "MetanoBuild");
+
+        foreach (var file in Directory.GetFiles(shippedTargets, "*.targets"))
+            File.Copy(file, Path.Combine(ProjectDir, Path.GetFileName(file)));
+
+        foreach (var prefix in (string[])["A", "B"])
+        {
+            File.WriteAllText(
+                Path.Combine(ProjectDir, SyntheticTargetFile.FileNameOf(prefix)),
+                SyntheticTargetFile.ContentOf(prefix)
+            );
+        }
+
+        WriteProject();
+    }
+
+    [After(Test)]
+    public void DeleteTempDir()
+    {
+        if (Directory.Exists(_root))
+            Directory.Delete(_root, recursive: true);
+    }
+
+    [Test]
+    public async Task UnconfiguredTargets_StayInert()
+    {
+        var run = await Transpile();
+
+        await Assert.That(run.ExitCode).IsEqualTo(0);
+        await Assert.That(run.Output).DoesNotContain("Metano: Transpiling");
+        await Assert.That(Directory.Exists(Path.Combine(ProjectDir, "obj"))).IsFalse();
+    }
+
+    [Test]
+    public async Task TwoTargets_EachRunWithItsOwnSettingsAndStamp()
+    {
+        var run = await Transpile(
+            "-p:MetanoFakeAOutputDir=outA",
+            "-p:MetanoFakeBOutputDir=outB",
+            "-p:MetanoFilePrefix=global",
+            "-p:MetanoFakeBFilePrefix=only-b"
+        );
+
+        await Assert.That(run.ExitCode).IsEqualTo(0);
+        await Assert.That(run.Output).Contains("Metano: Transpiling App → outA");
+        await Assert.That(run.Output).Contains("Metano: Transpiling App → outB");
+        await Assert.That(run.Output).Contains("FAKE-A [global]");
+        await Assert.That(run.Output).Contains("FAKE-B [only-b]");
+        await Assert.That(File.Exists(StampOf("outA"))).IsTrue();
+        await Assert.That(File.Exists(StampOf("outB"))).IsTrue();
+    }
+
+    [Test]
+    public async Task UpToDateTargets_AreSkipped_AndOnlyTheStaleOneReruns()
+    {
+        string[] settings = ["-p:MetanoFakeAOutputDir=outA", "-p:MetanoFakeBOutputDir=outB"];
+        await Transpile(settings);
+
+        var upToDate = await Transpile(settings);
+        File.Delete(StampOf("outA"));
+        var afterDeletingA = await Transpile(settings);
+
+        await Assert.That(upToDate.Output).DoesNotContain("Metano: Transpiling");
+        await Assert.That(afterDeletingA.Output).Contains("Metano: Transpiling App → outA");
+        await Assert.That(afterDeletingA.Output).DoesNotContain("Metano: Transpiling App → outB");
+    }
+
+    [Test]
+    public async Task Assets_ReachOnlyTheTargetOfTheirLanguage()
+    {
+        WriteProject(
+            $"""<ItemGroup><MetanoAsset Include="{ProjectFileName}" Language="{SyntheticTargetFile.LanguageOf(
+                "A"
+            )}" /></ItemGroup>"""
+        );
+
+        var run = await Transpile("-p:MetanoFakeAOutputDir=outA", "-p:MetanoFakeBOutputDir=outB");
+
+        await Assert.That(run.Output).Contains("FAKE-A [] --asset");
+        await Assert.That(run.Output).DoesNotContain("FAKE-B [] --asset");
+    }
+
+    [Test]
+    [Arguments("-p:MetanoOutputDir=out", "-p:MetanoOutputDir=out")]
+    [Arguments("-p:MetanoFakeAOutputDir=out/", "-p:MetanoFakeBOutputDir=./OUT")]
+    public async Task SameOutputDirectory_FailsWithMetanoBuild002(string settingA, string settingB)
+    {
+        var run = await Transpile(settingA, settingB);
+
+        await Assert.That(run.ExitCode).IsNotEqualTo(0);
+        await Assert.That(run.Output).Contains("METANOBUILD002");
+        await Assert.That(run.Output).Contains("fake-A, fake-B");
+        await Assert.That(run.Output).DoesNotContain("Metano: Transpiling");
+    }
+
+    [Test]
+    public async Task DisabledTarget_RunsNeitherTranspileNorPostBuild()
+    {
+        var run = await Transpile(
+            "-p:MetanoFakeAOutputDir=outA",
+            "-p:MetanoFakeBOutputDir=outB",
+            "-p:MetanoFakeBEnabled=false",
+            "-p:MetanoPostBuildCommand=echo POST-GLOBAL"
+        );
+
+        await Assert.That(run.Output).Contains("Metano: Transpiling App → outA");
+        await Assert.That(run.Output).DoesNotContain("Metano: Transpiling App → outB");
+        await Assert.That(CountOf("POST-GLOBAL", run.Output)).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task PostBuildCommand_RunsOnEveryBuild_PerEnabledTarget()
+    {
+        string[] settings =
+        [
+            "-p:MetanoFakeAOutputDir=outA",
+            "-p:MetanoFakeBOutputDir=outB",
+            "-p:MetanoPostBuildCommand=echo POST-GLOBAL",
+            "-p:MetanoFakeBPostBuildCommand=echo POST-B",
+        ];
+        await Transpile(settings);
+
+        var upToDate = await Transpile(settings);
+
+        await Assert.That(upToDate.Output).DoesNotContain("Metano: Transpiling");
+        await Assert.That(CountOf("POST-GLOBAL", upToDate.Output)).IsEqualTo(1);
+        await Assert.That(CountOf("POST-B", upToDate.Output)).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task BeforeAndAfterHooks_KeepTheirPlaceAroundEveryTarget()
+    {
+        WriteProject(
+            """
+            <Target Name="UserBefore" BeforeTargets="MetanoTranspile"><Message Importance="high" Text="HOOK-BEFORE" /></Target>
+            <Target Name="UserAfter" AfterTargets="MetanoTranspile"><Message Importance="high" Text="HOOK-AFTER" /></Target>
+            """
+        );
+
+        var run = await Transpile("-p:MetanoFakeAOutputDir=outA", "-p:MetanoFakeBOutputDir=outB");
+
+        var before = run.Output.IndexOf("HOOK-BEFORE", StringComparison.Ordinal);
+        var firstTranspile = run.Output.IndexOf("Metano: Transpiling", StringComparison.Ordinal);
+        var lastTranspile = run.Output.LastIndexOf("Metano: Transpiling", StringComparison.Ordinal);
+        var after = run.Output.IndexOf("HOOK-AFTER", StringComparison.Ordinal);
+
+        await Assert.That(before).IsGreaterThanOrEqualTo(0);
+        await Assert.That(before).IsLessThan(firstTranspile);
+        await Assert.That(lastTranspile).IsLessThan(after);
+    }
+
+    /// <summary>
+    /// A multi-line <c>MetanoFilePrefix</c> with a <c>;</c> reaches the worker instance intact
+    /// through <c>MSBuild::Escape</c> and the global properties of the <c>MSBuild</c> task.
+    /// </summary>
+    [Test]
+    public async Task MultiLineFilePrefix_ReachesTheWorkerIntact()
+    {
+        WriteProject(
+            """
+            <PropertyGroup>
+              <MetanoFilePrefix>first line;
+            second line</MetanoFilePrefix>
+            </PropertyGroup>
+            """
+        );
+
+        var run = await Transpile("-p:MetanoFakeAOutputDir=outA");
+
+        await Assert.That(run.ExitCode).IsEqualTo(0);
+        await Assert.That(run.Output).Contains("FAKE-A [first line;");
+        await Assert.That(run.Output).Contains("second line]");
+    }
+
+    private void WriteProject(string body = "")
+    {
+        var content = $"""
+            <Project>
+              <Import Project="{SyntheticTargetFile.FileNameOf("A")}" />
+              <Import Project="{SyntheticTargetFile.FileNameOf("B")}" />
+              {body}
+            </Project>
+            """;
+
+        File.WriteAllText(Path.Combine(ProjectDir, ProjectFileName), content);
+    }
+
+    private string StampOf(string outputDir) =>
+        Path.Combine(ProjectDir, outputDir, ".metano-stamp");
+
+    private static int CountOf(string text, string output) => output.Split(text).Length - 1;
+
+    private Task<MsBuildRun> Transpile(params string[] settings) =>
+        MsBuildProcess.Run(
+            ProjectDir,
+            CliHome,
+            [ProjectFileName, "-t:MetanoTranspile", .. settings]
+        );
+}
