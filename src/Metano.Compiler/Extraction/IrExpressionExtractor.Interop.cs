@@ -48,7 +48,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     public IrStatement? InlineCodeStatementOf(ExpressionSyntax expression)
     {
-        if (!IsDiscardedInlineCodeCall(expression, out var call))
+        if (DiscardedInlineCodeCallOf(expression) is not { } call)
             return null;
 
         return InlineCodePartsOf(call) is { } parts
@@ -56,25 +56,18 @@ public sealed partial class IrExpressionExtractor
             : new IrExpressionStatement(new IrUnsupportedExpression(InvalidInlineCodeKind));
     }
 
-    private bool IsDiscardedInlineCodeCall(
-        ExpressionSyntax expression,
-        out InvocationExpressionSyntax call
-    )
+    private InvocationExpressionSyntax? DiscardedInlineCodeCallOf(ExpressionSyntax expression)
     {
-        call = null!;
-
         if (
-            expression is not InvocationExpressionSyntax invocation
-            || !NamesInteropMethod(invocation.Expression)
+            expression is not InvocationExpressionSyntax call
+            || !NamesInteropMethod(call.Expression)
         )
-            return false;
+            return null;
 
-        call = invocation;
+        var method = _semantic.GetSymbolInfo(call).Symbol as IMethodSymbol;
+        var isDiscarded = _semantic.GetOperation(call)?.Parent is IExpressionStatementOperation;
 
-        var method = _semantic.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-
-        return InteropMethods.KindOf(method) is InteropMethodKind.Code
-            && _semantic.GetOperation(invocation)?.Parent is IExpressionStatementOperation;
+        return InteropMethods.KindOf(method) is InteropMethodKind.Code && isDiscarded ? call : null;
     }
 
     private IrExpression InlineCodeExpressionOf(

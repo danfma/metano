@@ -151,6 +151,31 @@ public class InlineCodeTranspileTests
     }
 
     [Test]
+    public async Task Holes_AreRewrittenLikeAnyOtherBodyExpression()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Interop;
+
+            [Transpile]
+            public class Greeter(string name)
+            {
+                public string Greet() => Js.Code<string>($"'hi ' + {name}");
+            }
+
+            [Transpile, PlainObject]
+            public record Size(int Width, int Height)
+            {
+                public int Area() => Js.Code<int>($"{Width} * {this.Height}");
+            }
+            """
+        );
+
+        await Assert.That(result["greeter.ts"]).Contains("('hi ' + this._name) as string");
+        await Assert.That(result["size.ts"]).DoesNotContain("this.");
+    }
+
+    [Test]
     public async Task HoleInsideAJsStringLiteral_WarnsMs0056AndStillEmits()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

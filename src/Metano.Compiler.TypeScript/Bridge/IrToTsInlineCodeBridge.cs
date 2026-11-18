@@ -111,12 +111,12 @@ internal static class IrToTsInlineCodeBridge
     }
 
     private static bool EndsWithSemicolon(IReadOnlyList<IrInlineCodePart> parts) =>
-        parts.LastOrDefault(part =>
-            part is IrInlineCodeHole
-            || part is IrInlineCodeText { Text: var text } && !string.IsNullOrWhiteSpace(text)
-        )
-            is IrInlineCodeText last
+        parts.LastOrDefault(IsPrinted) is IrInlineCodeText last
         && last.Text.TrimEnd().EndsWith(';');
+
+    /// <summary>A part that prints something other than white space.</summary>
+    private static bool IsPrinted(IrInlineCodePart part) =>
+        part is not IrInlineCodeText { Text: var text } || !string.IsNullOrWhiteSpace(text);
 
     private static void ReportHolesInStringLiterals(InlineCodeScan scan)
     {
