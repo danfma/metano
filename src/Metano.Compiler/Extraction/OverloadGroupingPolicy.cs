@@ -7,20 +7,60 @@ namespace Metano.Compiler.Extraction;
 /// The names a target emits a type's synthesized value-equality members under
 /// (spec 013 FR-039): the ones its runtime calls. A <c>null</c> name keeps
 /// that member out of every group. Plain strings, so the record compares by
-/// value and keys the groups' cache.
+/// value and keys the groups' cache. Its members are set only at construction,
+/// so a <c>with</c> expression cannot break the invariant it checks there.
 /// </summary>
-/// <param name="EqualsName">The synthesized <c>Equals(object)</c>'s.</param>
-/// <param name="HashCodeName">The synthesized <c>GetHashCode()</c>'s.</param>
-/// <param name="CopyName">A record's copy behind <c>with</c>.</param>
-/// <param name="FastPathSuffix">The suffix pinned on every synthesized member
-/// that joins a group (DECIDED-34), the same at every level and package.</param>
-public sealed record SynthesizedMemberNames(
-    string? EqualsName,
-    string? HashCodeName,
-    string? CopyName,
-    string FastPathSuffix
-)
+public sealed record SynthesizedMemberNames
 {
+    /// <param name="equalsName">The synthesized <c>Equals(object)</c>'s.</param>
+    /// <param name="hashCodeName">The synthesized <c>GetHashCode()</c>'s.</param>
+    /// <param name="copyName">A record's copy behind <c>with</c>.</param>
+    /// <param name="fastPathSuffix">The suffix pinned on every synthesized member
+    /// that joins a group (DECIDED-34), the same at every level and package.</param>
+    /// <param name="groupsEquals">Whether the target groups the synthesized
+    /// <c>Equals</c> with the user's <c>Equals</c> overloads, which needs
+    /// <paramref name="equalsName"/>.</param>
+    public SynthesizedMemberNames(
+        string? equalsName,
+        string? hashCodeName,
+        string? copyName,
+        string fastPathSuffix,
+        bool groupsEquals = false
+    )
+    {
+        if (groupsEquals && equalsName is null)
+        {
+            throw new ArgumentException(
+                "A target that groups the synthesized Equals must name it.",
+                nameof(groupsEquals)
+            );
+        }
+
+        EqualsName = equalsName;
+        HashCodeName = hashCodeName;
+        CopyName = copyName;
+        FastPathSuffix = fastPathSuffix;
+        GroupsEquals = groupsEquals;
+    }
+
+    /// <summary>The synthesized <c>Equals(object)</c>'s name.</summary>
+    public string? EqualsName { get; }
+
+    /// <summary>The synthesized <c>GetHashCode()</c>'s name.</summary>
+    public string? HashCodeName { get; }
+
+    /// <summary>The name of a record's copy behind <c>with</c>.</summary>
+    public string? CopyName { get; }
+
+    /// <summary>The suffix pinned on every synthesized member that joins a group (DECIDED-34).</summary>
+    public string FastPathSuffix { get; }
+
+    /// <summary>
+    /// Whether the target groups the synthesized <c>Equals</c> with the user's
+    /// <c>Equals</c> overloads (spec 013 FR-045); always named.
+    /// </summary>
+    public bool GroupsEquals { get; }
+
     /// <summary>The name <paramref name="member"/> is emitted under; <c>null</c> when the target supplies none.</summary>
     public string? NameOf(IrSynthesizedValueMember member) =>
         member switch
@@ -50,20 +90,10 @@ public sealed record OverloadGroupingPolicy(
     /// Whether the target groups the synthesized <c>Equals</c> with the user's
     /// <c>Equals</c> overloads: it joins a user group, and a struct's explicit
     /// <c>IEquatable&lt;T&gt;.Equals</c> superseded only for its name is kept
-    /// (spec 013 FR-045). A capability the target states, which needs a name
-    /// for the synthesized <c>Equals</c>.
+    /// (spec 013 FR-045). The capability its names state
+    /// (<see cref="SynthesizedMemberNames.GroupsEquals"/>).
     /// </summary>
-    public bool GroupsSynthesizedEquals
-    {
-        get;
-        init =>
-            field =
-                !value || NameOf(IrSynthesizedValueMember.Equals) is not null
-                    ? value
-                    : throw new InvalidOperationException(
-                        "A target that groups the synthesized Equals must name it."
-                    );
-    }
+    public bool GroupsSynthesizedEquals => ValueEqualityNames?.GroupsEquals is true;
 
     /// <summary>The policy of a target that supplies no synthesized member names.</summary>
     public static OverloadGroupingPolicy For(TargetLanguage? target) => new(target, null);
