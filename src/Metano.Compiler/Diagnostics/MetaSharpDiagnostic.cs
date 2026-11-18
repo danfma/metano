@@ -424,6 +424,13 @@ public static class DiagnosticCodes
     /// An error at the operation; TypeScript only (Dart keeps its earlier forms, D28).</summary>
     public const string UnsupportedDynamicOperation = "MS0053";
 
+    /// <summary>MS0057 — a member access on an <c>AsDynamic()</c> result names a member
+    /// that the static type of the receiver declares under another emitted name
+    /// (<c>Total</c> emitted as <c>total</c>, or a <c>[Name]</c> rename), so the verbatim
+    /// access reads <c>undefined</c> at run time. A warning at the access; the access is
+    /// still emitted (spec 011 FR-036, OD-22).</summary>
+    public const string DynamicAccessToRenamedMember = "MS0057";
+
     /// <summary>MS0056 — a <c>Js.Code</c> hole that falls inside a JS string literal
     /// of the inline text, so the value is spliced as code rather than quoted. A
     /// warning, at the hole; the TypeScript target decides it (spec 011 FR-031).</summary>

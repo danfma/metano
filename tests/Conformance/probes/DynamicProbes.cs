@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Metano.Interop;
 
 namespace Conformance;
 
@@ -234,6 +235,23 @@ public static class DynamicProbes
     {
         dynamic dog = new Dog();
         string name = dog.Name;
+
+        return name ?? "null";
+    }
+
+    public static string AsDynamicField()
+    {
+        var bag = new DynBag();
+        int count = bag.AsDynamic().count;
+        bag.AsDynamic().count = 9;
+
+        return count + "," + bag.count;
+    }
+
+    public static string AsDynamicRenamedMember()
+    {
+        var dog = new Dog();
+        string name = dog.AsDynamic().Name;
 
         return name ?? "null";
     }

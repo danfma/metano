@@ -82,10 +82,88 @@ public sealed partial class IrExpressionExtractor
         if (KeepsDynamicSourceForms || !IsDynamic(member.Receiver))
             return null;
 
+        ReportRenamedMemberAccess(member);
+
         return new IrDynamicMemberAccess(
             Extract(member.Receiver),
             member.Name.Identifier.ValueText
         );
+    }
+
+    /// <summary>
+    /// <c>MS0057</c> for <c>x.AsDynamic().Member</c> where the static type of
+    /// <c>x</c> declares <c>Member</c> under another emitted name: the
+    /// verbatim access misses it at run time (spec 011 FR-036, OD-22).
+    /// </summary>
+    private void ReportRenamedMemberAccess(QualifiedMemberSyntax member)
+    {
+        if (_context.EmittedMemberName is not { } emittedNameOf)
+            return;
+
+        if (AsDynamicOperandType(member.Receiver) is not { } operandType)
+            return;
+
+        var name = member.Name.Identifier.ValueText;
+
+        if (DeclaredMemberNamed(operandType, name) is not { } declared)
+            return;
+
+        var emittedName = emittedNameOf(declared);
+
+        if (emittedName == name)
+            return;
+
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.DynamicAccessToRenamedMember,
+                $"'{member.Node}' reads '{name}' verbatim, but '{operandType.ToDisplayString()}' emits that member as '{emittedName}', so the access reads undefined at run time; access it on the typed value instead.",
+                member.Node.GetLocation()
+            )
+        );
+    }
+
+    /// <summary>
+    /// The static type of <c>x</c> when <paramref name="receiver"/> is
+    /// <c>x.AsDynamic()</c> (or <c>InteropExtensions.AsDynamic(x)</c>);
+    /// <c>null</c> for any other receiver.
+    /// </summary>
+    private ITypeSymbol? AsDynamicOperandType(ExpressionSyntax receiver)
+    {
+        if (!IsAsDynamicCall(receiver))
+            return null;
+
+        var call = (InvocationExpressionSyntax)Unparenthesized(receiver);
+
+        var operand =
+            call.Expression is MemberAccessExpressionSyntax access
+            && call.ArgumentList.Arguments.Count == 0
+                ? access.Expression
+                : call.ArgumentList.Arguments.FirstOrDefault()?.Expression;
+
+        return operand is null ? null : _semantic.GetTypeInfo(operand).Type;
+    }
+
+    /// <summary>
+    /// The member named <paramref name="name"/> that <paramref name="type"/>
+    /// declares or inherits (its base classes, then its interfaces).
+    /// </summary>
+    private static ISymbol? DeclaredMemberNamed(ITypeSymbol type, string name)
+    {
+        IEnumerable<ITypeSymbol> declaringTypes = [.. BaseTypesOf(type), .. type.AllInterfaces];
+
+        return declaringTypes
+            .SelectMany(declaring => declaring.GetMembers(name))
+            .FirstOrDefault(symbol =>
+                symbol is IPropertySymbol or IFieldSymbol or IMethodSymbol or IEventSymbol
+                && !symbol.IsImplicitlyDeclared
+            );
+    }
+
+    private static IEnumerable<ITypeSymbol> BaseTypesOf(ITypeSymbol type)
+    {
+        for (ITypeSymbol? current = type; current is not null; current = current.BaseType)
+            yield return current;
     }
 
     /// <summary>

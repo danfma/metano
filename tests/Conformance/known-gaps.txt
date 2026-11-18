@@ -100,6 +100,7 @@ LazyStructProbes.structAutoPropertyRead none  a struct's instance auto-property 
 DynamicProbes.integerDivision         none  dynamic operators are the JavaScript ones (spec 011 OD-12): 7 / 2 is 3.5
 DynamicProbes.mixedEquality           none  dynamic == is JavaScript's (spec 011 OD-12): no RuntimeBinderException for int == string
 DynamicProbes.metanoMemberName        none  dynamic member names are verbatim (spec 011 OD-11): dog.Name misses the emitted `name`
+DynamicProbes.asDynamicRenamedMember  none  AsDynamic() member names are verbatim (spec 011 OD-11, MS0057 warns): dog.Name misses the emitted `name`
 InteropProbes.inlineCodeExpression    none  by design (FR-031: Js.Code is TS-only; .NET throws PlatformNotSupportedException)
 InteropProbes.inlineCodeHoles         none  by design (FR-031: Js.Code is TS-only; .NET throws PlatformNotSupportedException)
 InteropProbes.inlineCodeStatement     none  by design (FR-031: Js.Code is TS-only; .NET throws PlatformNotSupportedException)

@@ -19,6 +19,11 @@ the migration list.
 - An explicitly typed `dynamic` local is annotated `: any`.
 - New error `MS0053` (TypeScript) for what cannot pass through (initializers on a late-bound `new`, named or `ref` arguments on a dynamic call, user-defined operators and conversions bound at run time, `Console.WriteLine(d)`-style calls over several candidates). See `docs/runtime-types.md` § dynamic.
 
+### Member access on `AsDynamic()` (spec 011 FR-036, #335)
+
+- `x.AsDynamic().Member`, `.Member()`, `?.Member`, `[i]` and their assignments, compound assignments and `++` are now `dynamic` accesses with verbatim names (`(x as any).Member`), where they reported the interim `MS0001`. Dart keeps the `MS0001` until after 3.0.0.
+- New warning `MS0057` when the static type of `x` emits `Member` under another name (`Total` is `total`, or a `[Name]` rename), since the verbatim access reads `undefined`.
+
 ### LINQ aggregates and set operators (spec FR-056 to FR-058)
 
 - `Min` / `Max` / `MinBy` / `MaxBy` over empty or nullable sequences, and `Sum` / `Average` / `Min` / `Max` over `decimal`, `string` and other non-`number` elements, now match .NET (an empty `Max()` throws instead of `-Infinity`; `[null, 4].Min()` is `4`; `decimal` sums are decimal.js sums). Strings order by code unit, not by culture (#618, #657).

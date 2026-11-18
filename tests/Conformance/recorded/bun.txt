@@ -41,6 +41,7 @@ DefaultProbes.structParam THROWS TypeError: undefined is not an object (evaluati
 DefaultProbes.structs THROWS TypeError: undefined is not an object (evaluating '(void 0).x')
 DefaultProbes.tuples THROWS TypeError: undefined is not an object (evaluating '(void 0)[0]')
 DispatchProbes.equalsPair = TTFFFTF
+DynamicProbes.asDynamicRenamedMember = null
 DynamicProbes.integerDivision = 3.5
 DynamicProbes.metanoMemberName = null
 DynamicProbes.mixedEquality = no

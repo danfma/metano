@@ -35,13 +35,14 @@ var any = order.AsDynamic();           // (order as any)
   (`TypeError`) where TypeScript does not.
 - **`AsDynamic()`** returns its argument unchanged. Member names after a `dynamic`
   value are verbatim, so a Metano member `Total`, emitted as `total`, would read
-  `undefined` through `x.AsDynamic().Total`. A member access on an `AsDynamic()`
-  result still reports `MS0001` (see the status below); use `Js.Code` for the access
-  instead.
+  `undefined` through `x.AsDynamic().Total`: `MS0057` (a warning) reports such an
+  access when the static type of `x` emits the member under another name (camelCase or
+  a `[Name]` rename). An access that names a member the type lacks, or one spelled the
+  same, is emitted without a warning: `x.AsDynamic().extra` is `(x as any).extra`.
 
 **Status (3.0.0 stages).** `UnsafeCast<T>()` and `AsDynamic()` are delivered (stage
-011f). `dynamic` member access on an `AsDynamic()` result and its `MS0057` warning
-arrive in the 011e/011f follow-up that replaces the interim `MS0001` guard. The
+011f), and so is member access on an `AsDynamic()` result with its `MS0057` warning
+(TypeScript; Dart keeps reporting `MS0001` for it until after 3.0.0, D28). The
 last row is the target text: today an explicit cast is checked with `castTo` for a
 class target the module can import, and asserted without a check (and without
 `MS0055`) for an interface, a generic or an erased target, until stage 011b's runtime

@@ -558,6 +558,11 @@ public sealed class TypeScriptTransformContext(
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
+            EmittedMemberName = member =>
+                IrToTsNamingPolicy.ToDataMemberName(
+                    member.Name,
+                    member.GetNameOverride(TargetLanguage.TypeScript)
+                ),
             KeepsArgumentEvaluationOrder = true,
             FormatStrings = TsFormatStrings.Instance,
             LowersByDeclarativeMapping = (method, argumentCount) =>

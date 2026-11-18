@@ -256,19 +256,24 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A use of an interop method the targets have no function for, reported loudly:
     /// a method group of <c>Js.Code</c> (<c>MS0052</c>) or of <c>UnsafeCast</c> /
-    /// <c>AsDynamic</c> (<c>MS0001</c>), and a member access on an
-    /// <c>AsDynamic()</c> result, until dynamic member access is lowered
-    /// (<c>MS0001</c>; a camelCased name would read the wrong member). <c>null</c>
-    /// for any other expression.
+    /// <c>AsDynamic</c> (<c>MS0001</c>), and, for a target that keeps the
+    /// <c>dynamic</c> source forms (Dart, D28), a member access on an
+    /// <c>AsDynamic()</c> result (<c>MS0001</c>; its symbol-less extraction
+    /// would apply the naming policy). Any other target lowers that access as
+    /// a <c>dynamic</c> one (spec 011 FR-030, FR-036). <c>null</c> for any
+    /// other expression.
     /// </summary>
     private IrExpression? UnsupportedInteropUse(ExpressionSyntax expression)
     {
         if (InteropMethodGroupOf(expression) is { } method)
             return UnsupportedInteropMethodGroup(expression, method);
 
-        return AccessedReceiverOf(expression) is { } receiver && IsAsDynamicCall(receiver)
-            ? UnsupportedAsDynamicAccess(expression)
-            : null;
+        var keepsUnsupportedAccess =
+            _context.KeepsDynamicSourceForms
+            && AccessedReceiverOf(expression) is { } receiver
+            && IsAsDynamicCall(receiver);
+
+        return keepsUnsupportedAccess ? UnsupportedAsDynamicAccess(expression) : null;
     }
 
     /// <summary>The receiver an access reads from: <c>r.M</c>, <c>r[i]</c>, <c>r?.M</c>.</summary>
