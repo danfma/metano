@@ -27,7 +27,22 @@ interface Budget {
 
 const SIZE_BUNDLERS = ["bun", "esbuild"] as const;
 
-const budgets = JSON.parse(readFileSync(join(import.meta.dir, "size-budgets.json"), "utf8"));
+interface SizeBudgets {
+  readonly budgets: readonly Budget[];
+  readonly modules: readonly string[];
+}
+
+/** Bundling every entry with two bundlers takes a few seconds on a slow runner. */
+const BUNDLE_TIMEOUT_MS = 60_000;
+
+const sizeBudgets: SizeBudgets = JSON.parse(
+  readFileSync(join(import.meta.dir, "size-budgets.json"), "utf8"),
+);
+
+/** Each budget under each size bundler, so a failure names both. */
+const cases = sizeBudgets.budgets.flatMap((budget) =>
+  SIZE_BUNDLERS.map((bundler) => ({ ...budget, bundler })),
+);
 
 let directory: BundleDirectory;
 
@@ -40,30 +55,28 @@ afterAll(() => {
 });
 
 describe("size budgets", () => {
-  test.each(budgets.budgets as Budget[])("$name", async (budget) => {
-    const source = readFileSync(join(import.meta.dir, budget.entry), "utf8");
-
-    for (const bundler of SIZE_BUNDLERS) {
-      const code = await bundle(bundler, directory, source);
+  test.each(cases)(
+    "$name ($bundler)",
+    async (budget) => {
+      const source = readFileSync(join(import.meta.dir, budget.entry), "utf8");
+      const code = await bundle(budget.bundler, directory, source);
 
       if (budget.maxGzip !== undefined) {
-        expect({ bundler, size: Math.min(gzipSize(code), budget.maxGzip) }).toEqual({
-          bundler,
-          size: gzipSize(code),
-        });
+        expect(gzipSize(code)).toBeLessThanOrEqual(budget.maxGzip);
       }
 
       for (const text of budget.mustContain ?? []) {
-        expect({ bundler, contains: code.includes(text) }).toEqual({ bundler, contains: true });
+        expect(code).toContain(text);
       }
 
       for (const text of budget.mustNotContain ?? []) {
-        expect({ bundler, contains: code.includes(text) }).toEqual({ bundler, contains: false });
+        expect(code).not.toContain(text);
       }
-    }
-  });
+    },
+    BUNDLE_TIMEOUT_MS,
+  );
 });
 
 test("size-budgets.json lists every runtime module", () => {
-  expect(budgets.modules).toEqual(listModules(DIST_DIR).map(moduleName));
+  expect(sizeBudgets.modules).toEqual(listModules(DIST_DIR).map(moduleName));
 });

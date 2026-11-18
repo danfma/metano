@@ -65,8 +65,8 @@ export class Exception extends Error {
    * Every runtime exception class declares its own; a static getter is inherited,
    * though, so a class without one (the module-internal `NamedException`) answers
    * its base's descriptor. Read a value's descriptor through its constructor's own
-   * property (`Object.hasOwn(ctor, "$runtimeType")`, as `getRuntimeType` does),
-   * never through `X.$runtimeType` on an arbitrary class.
+   * property (`Object.hasOwn(ctor, "$runtimeType")`, the check spec 011 FR-018
+   * prescribes for `GetType()`), never through `X.$runtimeType` on an arbitrary class.
    */
   static get $runtimeType(): ClassType<Exception> {
     return (Exception$rt ??= {

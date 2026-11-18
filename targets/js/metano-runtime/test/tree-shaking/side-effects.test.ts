@@ -5,7 +5,7 @@
  * under the same configuration and must be kept, so a configuration that
  * trusted `sideEffects: false` would fail here before passing a real module.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -69,6 +69,9 @@ const SUBPATH_EXPORTS = [
   "metano-runtime/system/exceptions",
   "metano-runtime/system/reflection",
 ];
+
+/** Each test bundles with up to three bundlers; a slow runner needs more than the default 5 s. */
+setDefaultTimeout(60_000);
 
 const allowlist: string[] = JSON.parse(
   readFileSync(join(import.meta.dir, "allowlist.json"), "utf8"),
@@ -149,7 +152,7 @@ describe("a side-effect-only import keeps no module code", () => {
     }
   });
 
-  test("the root index keeps exactly the allowlisted modules' code", async () => {
+  test("the root index keeps no code beyond the allowlisted modules'", async () => {
     for (const bundler of BUNDLERS) {
       expect(await loadCode(bundler, tracked, "index.js")).toBe("");
     }

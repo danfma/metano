@@ -23,7 +23,7 @@ import { basename, join } from "node:path";
 import terser from "@rollup/plugin-terser";
 import * as esbuild from "esbuild";
 import { rollup } from "rollup";
-import { BUNDLERS, type Bundler, CANARY, moduleLoadCode, RUNTIME_DIR } from "./harness.ts";
+import { BUNDLERS, type Bundler, CANARY, moduleLoadCode, packageBinary } from "./harness.ts";
 
 type GoldenResult = Partial<Record<Bundler, string>> | { error: string };
 
@@ -136,8 +136,7 @@ function compile(): void {
     }),
   );
 
-  const tsgo = join(RUNTIME_DIR, "node_modules", ".bin", "tsgo");
-  const run = spawnSync(tsgo, ["-p", work], { encoding: "utf8" });
+  const run = spawnSync(packageBinary("tsgo"), ["-p", work], { encoding: "utf8" });
 
   if (run.status !== 0 && run.status !== 2) {
     throw new Error(`tsgo failed (${run.status}): ${run.stdout}${run.stderr}`);
@@ -170,9 +169,8 @@ async function bundleAll(out: string, module: string): Promise<Record<Bundler, s
   writeFileSync(entry, `import "./${module}";\n`);
 
   const isExternal = (specifier: string, importer: string | undefined) =>
-    importer !== undefined && importer !== entry && importer.length > 0
-      ? true
-      : !(specifier === `./${module}` || specifier === target);
+    (importer !== undefined && importer !== entry && importer.length > 0) ||
+    !(specifier === `./${module}` || specifier === target);
 
   return {
     bun: moduleLoadCode(await withBun(entry, isExternal)),

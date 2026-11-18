@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { packageBinary } from "../tree-shaking/harness.ts";
 
 const RUNTIME_DIR = resolve(import.meta.dir, "../..");
 const EXPECTED_DIR = resolve(RUNTIME_DIR, "../../../tests/Metano.Tests/Expected");
@@ -44,10 +45,8 @@ test("the enum goldens type-check under tsgo --strict", () => {
     writeFileSync(join(directory, "cross-enum.ts"), CROSS_ENUM_FIXTURE);
 
     const run = spawnSync(
-      process.execPath,
+      packageBinary("tsgo"),
       [
-        "x",
-        "tsgo",
         "--ignoreConfig",
         "--strict",
         "--noEmit",

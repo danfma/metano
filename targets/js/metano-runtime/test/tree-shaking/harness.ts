@@ -13,6 +13,7 @@
  */
 import {
   cpSync,
+  existsSync,
   mkdtempSync,
   readdirSync,
   realpathSync,
@@ -29,6 +30,19 @@ import { rollup, type Plugin as RollupPlugin } from "rollup";
 
 /** The runtime package's directory. */
 export const RUNTIME_DIR = resolve(import.meta.dir, "../..");
+
+/** The repository root, whose `node_modules` holds the workspace's hoisted packages. */
+const REPOSITORY_ROOT = resolve(RUNTIME_DIR, "../../..");
+
+/**
+ * The path of an installed package binary (`tsgo`): the runtime's own
+ * `node_modules/.bin`, or the repository root's when bun hoisted it there.
+ */
+export function packageBinary(name: string): string {
+  const local = join(RUNTIME_DIR, "node_modules", ".bin", name);
+
+  return existsSync(local) ? local : join(REPOSITORY_ROOT, "node_modules", ".bin", name);
+}
 
 /** The built modules every suite bundles from. */
 export const DIST_DIR = join(RUNTIME_DIR, "dist");

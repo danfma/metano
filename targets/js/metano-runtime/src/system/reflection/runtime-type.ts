@@ -48,7 +48,7 @@ export interface RuntimeTypeBase<T> {
 /** A class, record or struct lowered to a class, or a runtime exception class. */
 export interface ClassType<T> extends RuntimeTypeBase<T> {
   readonly kind: "class";
-  readonly ctor: abstract new (...args: any[]) => T;
+  readonly ctor: abstract new (...args: never[]) => T;
   readonly base?: () => ClassType<unknown>;
   /** Direct and inherited interfaces, deduplicated, in declaration order. */
   readonly interfaces: ReadonlyArray<() => InterfaceType<unknown>>;
@@ -122,7 +122,7 @@ export interface CollectionType<T> extends RuntimeTypeBase<T> {
     | "IReadOnlySet";
   /** Classes only. */
   readonly ctor?: abstract new (
-    ...args: any[]
+    ...args: never[]
   ) => T;
   /** `UnknownType` is the wildcard. */
   readonly typeArguments: ReadonlyArray<RuntimeType>;
@@ -139,7 +139,7 @@ export interface UnionType<T> extends RuntimeTypeBase<T> {
   readonly cases: ReadonlyArray<() => RuntimeType>;
 }
 
-export interface DelegateType extends RuntimeTypeBase<Function> {
+export interface DelegateType extends RuntimeTypeBase<(...args: never[]) => unknown> {
   readonly kind: "delegate";
 }
 
@@ -161,7 +161,7 @@ export type RuntimeType<T = unknown> =
   | EnumType<T>
   | ArrayType
   | CollectionType<T>
-  | NullableType<any>
+  | NullableType<unknown>
   | UnionType<T>
   | DelegateType
   | UnknownType
