@@ -4,7 +4,7 @@ import { NativeId } from "./native-id";
 import { NativeQuota } from "./native-quota";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
   private _handles?: TypeSpec<Handles>;
   private _nativeId?: ValueSpec<NativeId>;
   private _nativeQuota?: ValueSpec<NativeQuota>;

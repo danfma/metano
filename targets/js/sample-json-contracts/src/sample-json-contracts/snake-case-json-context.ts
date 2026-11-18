@@ -3,7 +3,8 @@ import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Stats } from "./stats";
 
 export class SnakeCaseJsonContext extends SerializerContext {
-  private static readonly _default: SnakeCaseJsonContext = new SnakeCaseJsonContext();
+  private static readonly _default: SnakeCaseJsonContext =
+    /* @__PURE__ */ new SnakeCaseJsonContext();
   private _stats?: TypeSpec<Stats>;
 
   static get default(): SnakeCaseJsonContext {

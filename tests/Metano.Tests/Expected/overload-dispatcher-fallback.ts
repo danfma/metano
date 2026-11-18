@@ -1,8 +1,8 @@
 import { isInt32 } from "metano-runtime";
 
 export class Dimension {
-  protected static readonly byDimensionSize: unique symbol = Symbol("Dimension(int size)");
-  protected static readonly byDimensionWidthHeight: unique symbol = Symbol("Dimension(int width, int height)");
+  protected static readonly byDimensionSize: unique symbol = (/* @__PURE__ */ Symbol("Dimension(int size)"));
+  protected static readonly byDimensionWidthHeight: unique symbol = (/* @__PURE__ */ Symbol("Dimension(int width, int height)"));
   readonly size: number = 0;
   readonly width: number = 0;
   readonly height: number = 0;

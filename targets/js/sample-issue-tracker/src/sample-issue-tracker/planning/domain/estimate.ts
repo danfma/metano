@@ -3,14 +3,15 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Estimate {
-  protected static readonly byEstimatePoints: unique symbol = Symbol("Estimate(int points)");
-  protected static readonly byEstimatePointsNote: unique symbol = Symbol(
+  protected static readonly byEstimatePoints: unique symbol =
+    /* @__PURE__ */ Symbol("Estimate(int points)");
+  protected static readonly byEstimatePointsNote: unique symbol = /* @__PURE__ */ Symbol(
     "Estimate(int points, string note)",
   );
-  protected static readonly byEstimateFirstSecond: unique symbol = Symbol(
+  protected static readonly byEstimateFirstSecond: unique symbol = /* @__PURE__ */ Symbol(
     "Estimate(Estimate first, Estimate second)",
   );
-  static readonly none: Estimate = Estimate.fromPoints(0);
+  static readonly none: Estimate = /* @__PURE__ */ Estimate.fromPoints(0);
   readonly points: number = 0;
   readonly note: string;
 

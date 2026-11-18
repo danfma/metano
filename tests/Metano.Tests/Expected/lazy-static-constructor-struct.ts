@@ -2,8 +2,8 @@ import { HashCode, typeInitializer } from "metano-runtime";
 import { Seed } from "./seed";
 
 export class Cell {
-  static readonly #$init: () => void = typeInitializer("Cell", () => {
-  });
+  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("Cell", () => {
+  }));
 
   v: number = 0;
   w: number = 0;

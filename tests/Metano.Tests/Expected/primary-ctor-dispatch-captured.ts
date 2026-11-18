@@ -1,8 +1,8 @@
 import { isString } from "metano-runtime";
 
 export class Cap {
-  protected static readonly byCapName: unique symbol = Symbol("Cap(string name)");
-  protected static readonly byCapDefault: unique symbol = Symbol("Cap()");
+  protected static readonly byCapName: unique symbol = (/* @__PURE__ */ Symbol("Cap(string name)"));
+  protected static readonly byCapDefault: unique symbol = (/* @__PURE__ */ Symbol("Cap()"));
   private readonly _name: string;
 
   constructor(overload: typeof Cap.byCapName, name: string);

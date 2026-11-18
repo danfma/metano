@@ -2,8 +2,8 @@ import { isInt32 } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Money {
-  protected static readonly byMoneyAmount: unique symbol = Symbol("Money(decimal amount)");
-  protected static readonly byMoneyCents: unique symbol = Symbol("Money(int cents)");
+  protected static readonly byMoneyAmount: unique symbol = (/* @__PURE__ */ Symbol("Money(decimal amount)"));
+  protected static readonly byMoneyCents: unique symbol = (/* @__PURE__ */ Symbol("Money(int cents)"));
   readonly how: string = "";
 
   constructor(overload: typeof Money.byMoneyAmount, amount: Decimal);

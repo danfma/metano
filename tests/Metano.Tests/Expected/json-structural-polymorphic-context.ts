@@ -16,7 +16,7 @@ import type { Shape } from "./shape";
 import { Sq } from "./sq";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
   private _holder?: TypeSpec<Holder>;
   private _shape?: TypeSpec<Shape>;
   private _animal?: TypeSpec<Animal>;

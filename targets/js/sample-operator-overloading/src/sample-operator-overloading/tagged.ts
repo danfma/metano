@@ -2,9 +2,11 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Tagged<T> {
-  protected static readonly byTaggedValue: unique symbol = Symbol("Tagged(T value)");
-  protected static readonly byTaggedCode: unique symbol = Symbol("Tagged(int code)");
-  protected static readonly byTaggedValueLabel: unique symbol = Symbol(
+  protected static readonly byTaggedValue: unique symbol =
+    /* @__PURE__ */ Symbol("Tagged(T value)");
+  protected static readonly byTaggedCode: unique symbol =
+    /* @__PURE__ */ Symbol("Tagged(int code)");
+  protected static readonly byTaggedValueLabel: unique symbol = /* @__PURE__ */ Symbol(
     "Tagged(T value, string label)",
   );
   readonly kind: string;

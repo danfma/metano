@@ -22,4 +22,15 @@ public sealed record TsVariableDeclaration(
     TsType? Type = null,
     bool DefinitelyAssigned = false,
     TsJSDoc? JSDoc = null
-) : TsStatement;
+) : TsStatement
+{
+    /// <summary>
+    /// The declaration holds a C# static field's state (a <c>[NoContainer]</c> or
+    /// <c>[ExportedAsModule]</c> module variable) whose initializer has no observable
+    /// effect (a C# default or a side-effect-free value): a call or <c>new</c>
+    /// initializer prints <c>/* @__PURE__ */</c>, so a bundle may drop it with the
+    /// variable (spec 011 FR-043). Never set for a <c>[ModuleEntryPoint]</c>
+    /// statement.
+    /// </summary>
+    public bool InitializesStaticState { get; init; }
+}

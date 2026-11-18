@@ -1,8 +1,8 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Ledger {
-  protected static readonly byLedgerSeed: unique symbol = Symbol("Ledger(int seed)");
-  protected static readonly byLedgerName: unique symbol = Symbol("Ledger(string name)");
+  protected static readonly byLedgerSeed: unique symbol = (/* @__PURE__ */ Symbol("Ledger(int seed)"));
+  protected static readonly byLedgerName: unique symbol = (/* @__PURE__ */ Symbol("Ledger(string name)"));
 
   constructor(overload: typeof Ledger.byLedgerSeed, seed: number);
   /** @internal */

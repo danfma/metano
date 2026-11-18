@@ -1,9 +1,9 @@
 import { HashCode, typeInitializer } from "metano-runtime";
 
 export class Pt {
-  static readonly #$init: () => void = typeInitializer("Pt", () => {
+  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("Pt", () => {
     Pt.origin = 1;
-  });
+  }));
 
   static #origin$: number = 0;
   x: number = 0;

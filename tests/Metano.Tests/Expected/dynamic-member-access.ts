@@ -1,9 +1,9 @@
 import { isInt32, isString, valueHashCode } from "metano-runtime";
 
 export class Probe {
-  protected static readonly byProbeDefault: unique symbol = Symbol("Probe()");
-  protected static readonly byProbeX: unique symbol = Symbol("Probe(int x)");
-  protected static readonly byProbeS: unique symbol = Symbol("Probe(string s)");
+  protected static readonly byProbeDefault: unique symbol = (/* @__PURE__ */ Symbol("Probe()"));
+  protected static readonly byProbeX: unique symbol = (/* @__PURE__ */ Symbol("Probe(int x)"));
+  protected static readonly byProbeS: unique symbol = (/* @__PURE__ */ Symbol("Probe(string s)"));
   value: any = null;
   items: any[] = [] as Array<any>;
 

@@ -3,8 +3,8 @@ import { Decimal } from "metano-runtime/system/decimal";
 import { Color } from "./color";
 
 export class Painter {
-  protected static readonly byPainterC: unique symbol = Symbol("Painter(Color c)");
-  protected static readonly byPainterFlag: unique symbol = Symbol("Painter(bool flag)");
+  protected static readonly byPainterC: unique symbol = (/* @__PURE__ */ Symbol("Painter(Color c)"));
+  protected static readonly byPainterFlag: unique symbol = (/* @__PURE__ */ Symbol("Painter(bool flag)"));
   readonly log: string = "";
 
   constructor(overload: typeof Painter.byPainterC, c?: Color);

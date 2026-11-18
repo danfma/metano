@@ -1,8 +1,8 @@
 import { isString } from "metano-runtime";
 
 export class Deps {
-  protected static readonly byDepsName: unique symbol = Symbol("Deps(string name)");
-  protected static readonly byDepsDefault: unique symbol = Symbol("Deps()");
+  protected static readonly byDepsName: unique symbol = (/* @__PURE__ */ Symbol("Deps(string name)"));
+  protected static readonly byDepsDefault: unique symbol = (/* @__PURE__ */ Symbol("Deps()"));
   readonly name: string;
   private readonly _len: number = 0;
 

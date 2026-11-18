@@ -1,7 +1,7 @@
 import { B } from "./b";
 
 export class A {
-  static readonly seed: B = B.fromV(1);
+  static readonly seed: B = (/* @__PURE__ */ B.fromV(1));
 
   constructor() { }
 
@@ -14,8 +14,8 @@ import { isInt32, isString } from "metano-runtime";
 import { A } from "./a";
 
 export class B {
-  protected static readonly byBV: unique symbol = Symbol("B(int v)");
-  protected static readonly byBText: unique symbol = Symbol("B(string text)");
+  protected static readonly byBV: unique symbol = (/* @__PURE__ */ Symbol("B(int v)"));
+  protected static readonly byBText: unique symbol = (/* @__PURE__ */ Symbol("B(string text)"));
   readonly v: number = 0;
 
   constructor(overload: typeof B.byBV, v: number);

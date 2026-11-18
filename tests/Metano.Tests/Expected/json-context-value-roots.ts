@@ -10,7 +10,7 @@ import { Mood } from "./mood";
 import { ShotTiming } from "./shot-timing";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
   private _episodeSummary?: TypeSpec<EpisodeSummary>;
   private _iReadOnlyListEpisodeSummary?: ValueSpec<EpisodeSummary[] | null>;
   private _episodeSummaryArray?: ValueSpec<EpisodeSummary[] | null>;

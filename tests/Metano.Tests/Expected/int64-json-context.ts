@@ -7,7 +7,7 @@ import { Snowflake } from "./snowflake";
 import { TokenId } from "./token-id";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
   private _snowflake?: TypeSpec<Snowflake>;
   private _boxes?: TypeSpec<Boxes>;
   private _entityId?: ValueSpec<EntityId>;

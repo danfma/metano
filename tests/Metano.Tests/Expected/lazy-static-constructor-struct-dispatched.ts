@@ -1,11 +1,11 @@
 import { HashCode, isInt32, isString, typeInitializer } from "metano-runtime";
 
 export class Pair {
-  static readonly #$init: () => void = typeInitializer("Pair", () => {
-  });
+  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("Pair", () => {
+  }));
 
-  protected static readonly byPairV: unique symbol = Symbol("Pair(int v)");
-  protected static readonly byPairText: unique symbol = Symbol("Pair(string text)");
+  protected static readonly byPairV: unique symbol = (/* @__PURE__ */ Symbol("Pair(int v)"));
+  protected static readonly byPairText: unique symbol = (/* @__PURE__ */ Symbol("Pair(string text)"));
   w: number = 0;
   v: number = 0;
 

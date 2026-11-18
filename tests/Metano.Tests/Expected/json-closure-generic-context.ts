@@ -4,7 +4,7 @@ import { Feed } from "./feed";
 import { Page } from "./page";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
   private _feed?: TypeSpec<Feed>;
   private _pageEpisodeSummary?: TypeSpec<Page<EpisodeSummary>>;
   private _episodeSummary?: TypeSpec<EpisodeSummary>;

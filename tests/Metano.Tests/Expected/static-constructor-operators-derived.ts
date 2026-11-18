@@ -2,9 +2,9 @@ import { typeInitializer } from "metano-runtime";
 import { Meter } from "./meter";
 
 export class SubMeter extends Meter {
-  static readonly #$init: () => void = typeInitializer("SubMeter", () => {
+  static readonly #$init: () => void = (/* @__PURE__ */ typeInitializer("SubMeter", () => {
     SubMeter.offset = 1;
-  });
+  }));
 
   static #offset$: number = 0;
 

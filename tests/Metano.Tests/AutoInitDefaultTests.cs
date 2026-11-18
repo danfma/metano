@@ -338,7 +338,7 @@ public class AutoInitDefaultTests
 
         var output = result["shape.ts"];
         await Assert.That(output).Contains("center: Point = new Point();");
-        await Assert.That(output).Contains("static zero: Point = new Point();");
+        await Assert.That(output).Contains("static zero: Point = (/* @__PURE__ */ new Point());");
         await Assert.That(output).Contains("import { Point } from \"./point\";");
     }
 

@@ -2,7 +2,7 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Counter {
-  static readonly zero: Counter = new Counter(0);
+  static readonly zero: Counter = /* @__PURE__ */ new Counter(0);
 
   constructor(readonly count: number) {}
 

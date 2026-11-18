@@ -2,8 +2,8 @@ import { isInt32 } from "metano-runtime";
 import type { IRank } from "./i-rank";
 
 export class Box<T extends IRank<T>> {
-  protected static readonly byBoxValue: unique symbol = Symbol("Box(T value)");
-  protected static readonly byBoxN: unique symbol = Symbol("Box(int n)");
+  protected static readonly byBoxValue: unique symbol = (/* @__PURE__ */ Symbol("Box(T value)"));
+  protected static readonly byBoxN: unique symbol = (/* @__PURE__ */ Symbol("Box(int n)"));
   readonly value: T | null = null;
   readonly n: number = 0;
 
@@ -57,8 +57,8 @@ import { Box } from "./box";
 import type { IRank } from "./i-rank";
 
 export class RankedBox<T extends IRank<T>> extends Box<T> {
-  protected static readonly byRankedBoxValue: unique symbol = Symbol("RankedBox(T value)");
-  protected static readonly byRankedBoxN: unique symbol = Symbol("RankedBox(int n)");
+  protected static readonly byRankedBoxValue: unique symbol = (/* @__PURE__ */ Symbol("RankedBox(T value)"));
+  protected static readonly byRankedBoxN: unique symbol = (/* @__PURE__ */ Symbol("RankedBox(int n)"));
 
   constructor(overload: typeof RankedBox.byRankedBoxValue, value: T);
   constructor(overload: typeof RankedBox.byRankedBoxN, n: number);

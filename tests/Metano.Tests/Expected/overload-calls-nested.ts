@@ -1,9 +1,9 @@
 import { isBool, isInt32, isString } from "metano-runtime";
 
 export class Owner {
-  protected static readonly byOwnerId: unique symbol = Symbol("Owner(int id)");
-  protected static readonly byOwnerCode: unique symbol = Symbol("Owner(string code)");
-  protected static readonly byOwnerFlag: unique symbol = Symbol("Owner(bool flag)");
+  protected static readonly byOwnerId: unique symbol = (/* @__PURE__ */ Symbol("Owner(int id)"));
+  protected static readonly byOwnerCode: unique symbol = (/* @__PURE__ */ Symbol("Owner(string code)"));
+  protected static readonly byOwnerFlag: unique symbol = (/* @__PURE__ */ Symbol("Owner(bool flag)"));
   readonly how: string = "";
 
   constructor(overload: typeof Owner.byOwnerId, id: number);

@@ -3,7 +3,7 @@ import { Decimal } from "metano-runtime/system/decimal";
 export const max: number = 10;
 export const Min: number = 1;
 export let hits: number = 5;
-export let total: Decimal = new Decimal("0");
+export let total: Decimal = /* @__PURE__ */ new Decimal("0");
 export let label: string | null = null;
 export const step: number = 2;
 export let enabled: boolean = false;

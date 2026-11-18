@@ -2,10 +2,10 @@ import { isInt32, isInt64, isString } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Money {
-  protected static readonly byMoneyAmount: unique symbol = Symbol("Money(decimal amount)");
-  protected static readonly byMoneyCents: unique symbol = Symbol("Money(int cents)");
-  protected static readonly byMoneyCode: unique symbol = Symbol("Money(string code)");
-  protected static readonly byMoneyId: unique symbol = Symbol("Money(long id)");
+  protected static readonly byMoneyAmount: unique symbol = (/* @__PURE__ */ Symbol("Money(decimal amount)"));
+  protected static readonly byMoneyCents: unique symbol = (/* @__PURE__ */ Symbol("Money(int cents)"));
+  protected static readonly byMoneyCode: unique symbol = (/* @__PURE__ */ Symbol("Money(string code)"));
+  protected static readonly byMoneyId: unique symbol = (/* @__PURE__ */ Symbol("Money(long id)"));
   readonly how: string = "";
 
   constructor(overload: typeof Money.byMoneyAmount, amount: Decimal);
@@ -100,10 +100,10 @@ import { Decimal } from "metano-runtime/system/decimal";
 import { Money } from "./money";
 
 export class Receipt extends Money {
-  protected static readonly byReceiptAmount: unique symbol = Symbol("Receipt(decimal amount)");
-  protected static readonly byReceiptCents: unique symbol = Symbol("Receipt(int cents)");
-  protected static readonly byReceiptCode: unique symbol = Symbol("Receipt(string code)");
-  protected static readonly byReceiptId: unique symbol = Symbol("Receipt(long id)");
+  protected static readonly byReceiptAmount: unique symbol = (/* @__PURE__ */ Symbol("Receipt(decimal amount)"));
+  protected static readonly byReceiptCents: unique symbol = (/* @__PURE__ */ Symbol("Receipt(int cents)"));
+  protected static readonly byReceiptCode: unique symbol = (/* @__PURE__ */ Symbol("Receipt(string code)"));
+  protected static readonly byReceiptId: unique symbol = (/* @__PURE__ */ Symbol("Receipt(long id)"));
 
   constructor(overload: typeof Receipt.byReceiptAmount, amount: Decimal);
   constructor(overload: typeof Receipt.byReceiptCents, cents: number);
@@ -194,8 +194,8 @@ import { isInt32, isString } from "metano-runtime";
 import { Receipt } from "./receipt";
 
 export class GiftReceipt extends Receipt {
-  protected static readonly byGiftReceiptAmount: unique symbol = Symbol("GiftReceipt(string amount)");
-  protected static readonly byGiftReceiptCents: unique symbol = Symbol("GiftReceipt(int cents)");
+  protected static readonly byGiftReceiptAmount: unique symbol = (/* @__PURE__ */ Symbol("GiftReceipt(string amount)"));
+  protected static readonly byGiftReceiptCents: unique symbol = (/* @__PURE__ */ Symbol("GiftReceipt(int cents)"));
   readonly note: string = "";
 
   constructor(overload: typeof GiftReceipt.byGiftReceiptAmount, amount: string);

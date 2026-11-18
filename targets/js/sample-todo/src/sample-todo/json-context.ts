@@ -4,7 +4,7 @@ import { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = /* @__PURE__ */ new JsonContext();
   private _todoItem?: TypeSpec<TodoItem>;
 
   static get default(): JsonContext {

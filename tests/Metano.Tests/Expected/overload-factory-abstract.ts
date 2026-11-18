@@ -1,8 +1,8 @@
 import { isInt32, isString } from "metano-runtime";
 
 export abstract class Shape {
-  protected static readonly byShapeScale: unique symbol = Symbol("Shape(int scale)");
-  protected static readonly byShapeName: unique symbol = Symbol("Shape(string name)");
+  protected static readonly byShapeScale: unique symbol = (/* @__PURE__ */ Symbol("Shape(int scale)"));
+  protected static readonly byShapeName: unique symbol = (/* @__PURE__ */ Symbol("Shape(string name)"));
   readonly scale: number = 0;
 
   protected constructor(overload: typeof Shape.byShapeScale, scale: number);

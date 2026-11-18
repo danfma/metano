@@ -2,8 +2,8 @@ import { isInt32 } from "metano-runtime";
 import { Box } from "./box";
 
 export class IntBox extends Box<number> {
-  protected static readonly byIntBoxValue: unique symbol = Symbol("IntBox(int value)");
-  protected static readonly byIntBoxValueExtra: unique symbol = Symbol("IntBox(int value, int extra)");
+  protected static readonly byIntBoxValue: unique symbol = (/* @__PURE__ */ Symbol("IntBox(int value)"));
+  protected static readonly byIntBoxValueExtra: unique symbol = (/* @__PURE__ */ Symbol("IntBox(int value, int extra)"));
 
   constructor(overload: typeof IntBox.byIntBoxValue, value: number);
   constructor(overload: typeof IntBox.byIntBoxValueExtra, value: number, extra: number);

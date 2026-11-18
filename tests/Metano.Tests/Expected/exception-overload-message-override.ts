@@ -2,9 +2,9 @@ import { isString } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
 
 export class OverloadOverrideException extends Exception {
-  protected static readonly byOverloadOverrideExceptionDefault: unique symbol = Symbol("OverloadOverrideException()");
-  protected static readonly byOverloadOverrideExceptionMessage: unique symbol = Symbol("OverloadOverrideException(string message)");
-  protected static readonly byOverloadOverrideExceptionMessageInner: unique symbol = Symbol("OverloadOverrideException(string message, Exception inner)");
+  protected static readonly byOverloadOverrideExceptionDefault: unique symbol = (/* @__PURE__ */ Symbol("OverloadOverrideException()"));
+  protected static readonly byOverloadOverrideExceptionMessage: unique symbol = (/* @__PURE__ */ Symbol("OverloadOverrideException(string message)"));
+  protected static readonly byOverloadOverrideExceptionMessageInner: unique symbol = (/* @__PURE__ */ Symbol("OverloadOverrideException(string message, Exception inner)"));
   override readonly name: string = "OverloadOverrideException";
   readonly #baseMessage: string;
   readonly origin: Exception | null = null;

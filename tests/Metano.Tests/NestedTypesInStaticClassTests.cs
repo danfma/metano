@@ -596,7 +596,9 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(output)
-            .Contains("private static readonly _default: Api$Ctx = new Api$Ctx();");
+            .Contains(
+                "private static readonly _default: Api$Ctx = (/* @__PURE__ */ new Api$Ctx());"
+            );
 
         await Assert.That(output).Contains("get payload(): TypeSpec<Api$Payload>");
         await Assert.That(output).DoesNotContain("api$Payload");
@@ -631,7 +633,9 @@ public class NestedTypesInStaticClassTests
             .That(output.IndexOf("class Settings$Nested {"))
             .IsGreaterThan(output.IndexOf("export class Settings {"));
 
-        await Assert.That(output).Contains("static readonly instance: Settings = new Settings();");
+        await Assert
+            .That(output)
+            .Contains("static readonly instance: Settings = (/* @__PURE__ */ new Settings());");
     }
 
     [Test]
@@ -692,7 +696,9 @@ public class NestedTypesInStaticClassTests
             .That(output.IndexOf("class Shelf$Cache {"))
             .IsGreaterThan(output.IndexOf("export namespace Shelf {"));
 
-        await Assert.That(output).Contains("static readonly item: Shelf.Book = new Shelf.Book(9);");
+        await Assert
+            .That(output)
+            .Contains("static readonly item: Shelf.Book = (/* @__PURE__ */ new Shelf.Book(9));");
     }
 
     [Test]

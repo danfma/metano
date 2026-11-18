@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -114,8 +115,20 @@ public static class IrToTsModuleBridge
             Exported: member.Visibility is not IrVisibility.Private,
             Type: IrToTsTypeMapper.Map(type, typeOverrides),
             JSDoc: IrToTsVisibilityMapper.Map(member.Visibility).JSDoc
-        );
+        )
+        {
+            InitializesStaticState = HasUnobservableInitializer(initializer),
+        };
     }
+
+    /// <summary>
+    /// Whether a bundle may drop this module variable's initializer with the variable:
+    /// a C# default (no initializer) or a side-effect-free one. A module variable is
+    /// dropped on its own, while C# runs every static initializer of the type once any
+    /// member of it is touched, so an initializer with effects stays unannotated.
+    /// </summary>
+    private static bool HasUnobservableInitializer(IrExpression? initializer) =>
+        initializer is null || IrEvaluationTraits.IsSideEffectFree(initializer);
 
     /// <summary>
     /// A dispatched module-function group (spec 013 FR-032): one exported

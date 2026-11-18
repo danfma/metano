@@ -11,6 +11,9 @@ namespace Metano.Compiler.TypeScript;
 /// </summary>
 public sealed class Printer(string indent = "  ")
 {
+    /// <summary>The annotation bundlers read as "no side effects, drop when unused".</summary>
+    private const string PureAnnotation = "/* @__PURE__ */ ";
+
     private readonly IndentedStringBuilder _sb = new(indent);
 
     /// <summary>
@@ -184,6 +187,41 @@ public sealed class Printer(string indent = "  ")
     /// </summary>
     private static bool IsControlFlow(TsStatement stmt) =>
         stmt is TsIfStatement or TsSwitchStatement or TsBlockStatement;
+
+    /// <summary>
+    /// The initializer of a static field or of a module variable holding a C# static
+    /// field (<paramref name="isStaticState"/>). A call or <c>new</c> there is part of
+    /// C#'s type initialization, which never runs for a type no code touches, so it
+    /// prints <c>/* @__PURE__ */</c>: a bundle that drops the type drops the
+    /// initializer with it (spec 011 FR-043), and one that keeps the type runs it at
+    /// load, as before. The annotation is part of this node's print, never comment
+    /// trivia a formatter could move.
+    /// </summary>
+    private void PrintStaticStateInitializer(
+        TsExpression initializer,
+        bool isStaticState,
+        bool isPropertyInitializer
+    )
+    {
+        if (!isStaticState || initializer is not (TsCallExpression or TsNewExpression))
+        {
+            PrintExpression(initializer);
+
+            return;
+        }
+
+        // tsgo drops a comment between a class property's type annotation and its
+        // initializer (`static a: C = /* … */ new C()` emits `static a = new C()`)
+        // but keeps one inside parentheses; a variable declaration keeps it as is.
+        if (isPropertyInitializer)
+            _sb.Write("(");
+
+        _sb.Write(PureAnnotation);
+        PrintExpression(initializer);
+
+        if (isPropertyInitializer)
+            _sb.Write(")");
+    }
 
     private void PrintTry(TsTryStatement tryStmt)
     {
@@ -880,11 +918,18 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("!");
                 _sb.Write(": ");
                 PrintType(field.Type);
+
                 if (field.Initializer is not null)
                 {
                     _sb.Write(" = ");
-                    PrintExpression(field.Initializer);
+
+                    PrintStaticStateInitializer(
+                        field.Initializer,
+                        field.Static,
+                        isPropertyInitializer: true
+                    );
                 }
+
                 _sb.Write(";");
                 _sb.WriteLn();
                 break;
@@ -1251,7 +1296,12 @@ public sealed class Printer(string indent = "  ")
                 if (varDecl.Initializer is not null)
                 {
                     _sb.Write(" = ");
-                    PrintExpression(varDecl.Initializer);
+
+                    PrintStaticStateInitializer(
+                        varDecl.Initializer,
+                        varDecl.InitializesStaticState,
+                        isPropertyInitializer: false
+                    );
                 }
 
                 _sb.Write(";");

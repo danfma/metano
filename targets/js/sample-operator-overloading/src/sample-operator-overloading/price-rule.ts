@@ -4,8 +4,9 @@ import { Decimal } from "metano-runtime/system/decimal";
 import { Currency } from "./currency";
 
 export class PriceRule {
-  protected static readonly byPriceRulePercent: unique symbol = Symbol("PriceRule(int percent)");
-  protected static readonly byPriceRuleCodeTiers: unique symbol = Symbol(
+  protected static readonly byPriceRulePercent: unique symbol =
+    /* @__PURE__ */ Symbol("PriceRule(int percent)");
+  protected static readonly byPriceRuleCodeTiers: unique symbol = /* @__PURE__ */ Symbol(
     "PriceRule(string code, params int[] tiers)",
   );
   readonly description: string;

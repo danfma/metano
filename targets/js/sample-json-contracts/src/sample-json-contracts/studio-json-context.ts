@@ -63,7 +63,7 @@ import { UNearA } from "./u-near-a";
 import { UNearAbs } from "./u-near-abs";
 
 export class StudioJsonContext extends SerializerContext {
-  private static readonly _default: StudioJsonContext = new StudioJsonContext();
+  private static readonly _default: StudioJsonContext = /* @__PURE__ */ new StudioJsonContext();
   private _clip?: TypeSpec<Clip>;
   private _timeline?: TypeSpec<Timeline>;
   private _listClip?: ValueSpec<Clip[] | null>;

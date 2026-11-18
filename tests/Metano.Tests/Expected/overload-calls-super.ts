@@ -2,9 +2,9 @@ import { isInt32, isString } from "metano-runtime";
 import { Base } from "./base";
 
 export class Derived extends Base {
-  protected static readonly byDerivedC: unique symbol = Symbol("Derived(int c)");
-  protected static readonly byDerivedS: unique symbol = Symbol("Derived(string s)");
-  protected static readonly byDerivedDefault: unique symbol = Symbol("Derived()");
+  protected static readonly byDerivedC: unique symbol = (/* @__PURE__ */ Symbol("Derived(int c)"));
+  protected static readonly byDerivedS: unique symbol = (/* @__PURE__ */ Symbol("Derived(string s)"));
+  protected static readonly byDerivedDefault: unique symbol = (/* @__PURE__ */ Symbol("Derived()"));
 
   constructor(overload: typeof Derived.byDerivedC, c: number);
   constructor(overload: typeof Derived.byDerivedS, s: string);
@@ -89,8 +89,8 @@ import { isInt32 } from "metano-runtime";
 import { Base } from "./base";
 
 export class Chained extends Base {
-  protected static readonly byChainedDefault: unique symbol = Symbol("Chained()");
-  protected static readonly byChainedC: unique symbol = Symbol("Chained(int c)");
+  protected static readonly byChainedDefault: unique symbol = (/* @__PURE__ */ Symbol("Chained()"));
+  protected static readonly byChainedC: unique symbol = (/* @__PURE__ */ Symbol("Chained(int c)"));
 
   constructor(overload: typeof Chained.byChainedDefault);
   constructor(overload: typeof Chained.byChainedC, c: number);

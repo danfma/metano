@@ -17,7 +17,7 @@ import { SilenceClip } from "./silence-clip";
 import { Timeline } from "./timeline";
 
 export class JsonContext extends SerializerContext {
-  private static readonly _default: JsonContext = new JsonContext();
+  private static readonly _default: JsonContext = (/* @__PURE__ */ new JsonContext());
   private _timeline?: TypeSpec<Timeline>;
   private _listClip?: ValueSpec<Clip[] | null>;
   private _intBase?: TypeSpec<IntBase>;
