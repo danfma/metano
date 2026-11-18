@@ -143,6 +143,7 @@ public class MultiTargetBuildTests
             "-p:MetanoPostBuildCommand=echo POST-GLOBAL",
             "-p:MetanoFakeBPostBuildCommand=echo POST-B",
         ];
+
         await Transpile(settings);
 
         var upToDate = await Transpile(settings);

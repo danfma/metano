@@ -131,7 +131,7 @@ public partial class TypeScriptSettingsTests
     }
 
     [GeneratedRegex(
-        """<_MetanoTs(?<setting>\w+) Condition="'\$\(MetanoTs\k<setting>\)' != ''">\$\(MetanoTs\k<setting>\)</_MetanoTs\k<setting>>"""
+        """<_MetanoTs(?<setting>\w+) Condition="'\$\(MetanoTs\k<setting>\)' != ''"\s*>\$\(MetanoTs\k<setting>\)</_MetanoTs\k<setting>>"""
     )]
     private static partial Regex ResolutionLinePattern();
 
