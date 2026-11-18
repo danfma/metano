@@ -31,7 +31,8 @@
     {
       "name": "one primitive descriptor (Int32Type with isInt32)",
       "entry": "entries/int32-descriptor.js",
-      "maxGzip": 204
+      "maxGzip": 205,
+      "$comment": "0.2 KB rounded up to whole bytes (maintainer, stage 011b B1): measured esbuild 205 B / bun 203 B, the contract literal with isInt32 and nothing else."
     }
   ],
   "modules": [

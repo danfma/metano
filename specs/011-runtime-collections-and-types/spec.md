@@ -515,7 +515,7 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
   | `ConcurrentDictionary` alone (with the shared hash core, without `Dictionary`) | ≤ 3.5 KB (proposed) |
   | one exception class (`throw new InvalidOperationException()`, literal getter) | ≤ 0.65 KB (raised from 0.5 KB in stage 011a: the real class with its full contract literal measured 0.58–0.60 KB) |
   | `isType` + `getRuntimeType` + one class descriptor | ≤ 1.7 KB (raised from 1.2 KB in stage 011b: measured bun 1646 B / esbuild 1620 B, of which the entry class with its getter and `isType` ~241 B, the `NullReferenceException` chain that `getRuntimeType(null)` throws ~599 B, and `getRuntimeType` with every descriptor it answers plus `getNumberType` ~800 B) |
-  | one primitive descriptor (`Int32Type` with `isInt32`) | ≤ 0.2 KB |
+  | one primitive descriptor (`Int32Type` with `isInt32`) | ≤ 0.2 KB, rounded up to 205 B (stage 011b: measured esbuild 205 B / bun 203 B, the contract literal with `isInt32` only) |
   | LINQ `where` + `select` + `toArray` | ≤ 0.5 KB |
   | `box` + `Boxed` (a boxed enum) | ≤ 0.3 KB (proposed; FR-043 measures) |
   | `toException` (the typed-catch normalization, FR-015 / FR-052) | to be measured (the larger `toException` now sits in every typed catch; FR-043 re-measures the exception budget) |
