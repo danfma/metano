@@ -1236,6 +1236,20 @@ Product requirements added after the migration (normative; each one is traced by
   land. Whichever of G3 and #681 (G4) lands second adds a golden with a static constructor, an
   operator and a conversion.
 
+- **FR-084** (class field layout in generated TypeScript, #682): The TypeScript printer MUST
+  print consecutive class fields that each fit on one line (instance or `static`, `readonly`
+  or not, with or without a one-line initializer) one after another, with no blank line
+  between them. A field that prints on more than one line MUST get one blank line above and
+  below it inside the field block; this covers a multi-line initializer (an object literal or
+  array literal printed in block form, an arrow function with a block body) and, by decision,
+  a field with a doc comment, which prints on its own line above the declaration. A decorator
+  printed on its own line counts the same way (the TypeScript AST has no field decorators
+  today). The printer measures the rendered field, so the rule follows the actual layout. One
+  blank line still separates the field block from the constructor, the accessors and the
+  methods, and the members of those groups stay separated by one blank line. The change is
+  whitespace only: no token of the generated code changes. Dart output is unchanged (its
+  layout does not change before v3).
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
