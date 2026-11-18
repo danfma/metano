@@ -138,8 +138,6 @@ public sealed record IrNamedTypeRef(
 /// tell which of two types is the more derived (an overload dispatcher tries
 /// <c>F(ArgumentException)</c> before <c>F(Exception)</c>); <c>null</c> when the type has none
 /// or is not a class, record, struct, interface or exception.</param>
-/// <param name="IsFlagsEnum">Whether a numeric enum carries <c>[System.Flags]</c>, so its
-/// values are bit combinations of the members rather than one of them.</param>
 /// <param name="StructuralEqualityLeaves">Set for a transpiled struct, record
 /// struct or sealed record whose equality is the compiler-generated, field-wise
 /// one all the way down: every instance field, recursively through such types,
@@ -175,9 +173,15 @@ public sealed record IrNamedTypeSemantics(
     bool HasImplicitParameterlessOverload = false,
     string? ClrTypeName = null,
     IReadOnlySet<IrPrimitive>? StructuralEqualityLeaves = null,
-    IReadOnlyList<SupertypeKey>? Supertypes = null,
-    bool IsFlagsEnum = false
-);
+    IReadOnlyList<SupertypeKey>? Supertypes = null
+)
+{
+    /// <summary>
+    /// Whether a numeric enum carries <c>[System.Flags]</c>, so its values are
+    /// bit combinations of the members rather than one of them.
+    /// </summary>
+    public bool IsFlagsEnum { get; init; }
+}
 
 /// <summary>
 /// Identifies the zero member of an enum referenced from another type. Used

@@ -42,8 +42,10 @@ public static class IrEnumExtractor
             visibility,
             members,
             style,
-            Attributes: IrAttributeExtractor.Extract(type),
-            IsFlags: type.HasFlags()
-        );
+            Attributes: IrAttributeExtractor.Extract(type)
+        )
+        {
+            IsFlags = type.HasFlags(),
+        };
     }
 }

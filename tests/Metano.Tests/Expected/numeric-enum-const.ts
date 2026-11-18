@@ -7,6 +7,8 @@ export const Color = {
 export type Color = typeof Color[keyof typeof Color];
 
 export class Palette {
+  static initial: Color = 0 as Color;
+
   constructor() { }
 
   static fromNumber(n: number): Color {
@@ -53,6 +55,38 @@ export class Palette {
 
   static default(): Color {
     return Color.Red;
+  }
+
+  static zero(): Color {
+    return 0 as Color;
+  }
+
+  static passZero(): Color {
+    return Palette.identity(0 as Color);
+  }
+
+  static identity(c: Color): Color {
+    return c;
+  }
+
+  static nullableNext(n: Color | null): Color | null {
+    n = n == null ? null : n + 1 as Color;
+
+    return n;
+  }
+
+  static nullableOr(a: Color | null, b: Color): Color | null {
+    return a == null ? null : (a | b) as Color;
+  }
+
+  static nullableInverted(n: Color | null): Color | null {
+    return n == null ? null : ~n as Color;
+  }
+
+  static nullableCompound(n: Color | null): Color | null {
+    n = n == null ? null : n + 1 as Color;
+
+    return n;
   }
 
   static isBlue(c: Color): boolean {

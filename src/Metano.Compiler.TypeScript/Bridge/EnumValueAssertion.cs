@@ -8,7 +8,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>number</c>. A plain numeric enum's type is the closed union of its member
 /// values (spec 011 FR-044), which a <c>number</c> is not assignable to:
 /// <list type="bullet">
-///   <item>a cast to the enum (<c>(E)n</c>, <c>(E)3</c>) and the result of an
+///   <item>a cast to the enum (<c>(E)n</c>, <c>(E)3</c>), a constant <c>0</c>
+///   C# converts to the enum implicitly (<c>E e = 0;</c>), and the result of an
 ///   enum operator (<c>e + 1</c>, <c>a | b</c>, <c>~e</c>) are asserted,
 ///   <c>value as E</c>;</item>
 ///   <item>a compound assignment or an increment (<c>e += 1</c>, <c>e++</c>)
@@ -61,10 +62,8 @@ internal static class EnumValueAssertion
     /// </summary>
     public static bool IsClosedNumericEnum(IrTypeRef? type) =>
         (type is IrNullableTypeRef nullable ? nullable.Inner : type)
-            is IrNamedTypeRef
-            {
-                Semantics: { Kind: IrNamedTypeKind.NumericEnum, IsFlagsEnum: false },
-            };
+            is IrNamedTypeRef { Semantics: { Kind: IrNamedTypeKind.NumericEnum } semantics }
+        && !IrToTsEnumBridge.HasFlagsBrand(isNumeric: true, semantics.IsFlagsEnum);
 
     private static bool IsCompoundAssignment(string token) =>
         token.Length > 1

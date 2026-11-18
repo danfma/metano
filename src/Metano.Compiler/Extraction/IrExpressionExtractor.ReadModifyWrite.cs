@@ -114,7 +114,10 @@ public sealed partial class IrExpressionExtractor
         StoredUnderNullGuard(
             property,
             current,
-            CompoundValue(assign, GuardedRead(property, current), op, right)
+            WithEnumResultType(
+                assign,
+                CompoundValue(assign, GuardedRead(property, current), op, right)
+            )
         );
 
     /// <summary>
@@ -134,7 +137,10 @@ public sealed partial class IrExpressionExtractor
             current,
             ReduceOverflow(
                 _semantic.GetOperation(node),
-                new IrBinaryExpression(GuardedRead(property, current), stepOperator, one)
+                WithEnumResultType(
+                    node,
+                    new IrBinaryExpression(GuardedRead(property, current), stepOperator, one)
+                )
             )
         );
 

@@ -195,6 +195,9 @@ public class ExpectedOutputBundleTests
         );
 
         var script = Path.Combine(runtime, "test", "tree-shaking", "golden-bundle.ts");
+
+        RequireRuntimeDependencies(runtime);
+
         var reportFile = Path.GetTempFileName();
 
         try
@@ -208,8 +211,7 @@ public class ExpectedOutputBundleTests
                 RedirectStandardError = true,
             };
 
-            using var process = Process.Start(start)
-                ?? throw new InvalidOperationException("bun did not start");
+            using var process = StartBun(start);
 
             var error = process.StandardError.ReadToEndAsync();
 
@@ -227,6 +229,57 @@ public class ExpectedOutputBundleTests
         finally
         {
             File.Delete(reportFile);
+        }
+    }
+
+    /// <summary>
+    /// The runtime's dev dependencies the tooling loads; a checkout without
+    /// <c>bun install</c> fails here with the fix rather than deep in bun.
+    /// </summary>
+    private static void RequireRuntimeDependencies(string runtime)
+    {
+        string[] required =
+        [
+            "esbuild",
+            "rollup",
+            "@rollup/plugin-terser",
+            "@typescript/native-preview",
+        ];
+
+        // bun installs a workspace package's dependency beside it or hoists it to the root.
+        string[] nodeModules =
+        [
+            Path.Combine(runtime, "node_modules"),
+            Path.Combine(TranspileHelper.RepositoryRoot(), "node_modules"),
+        ];
+
+        var missing = required
+            .Where(package =>
+                !nodeModules.Any(directory => Directory.Exists(Path.Combine(directory, package)))
+            )
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "The golden bundle check needs metano-runtime's dev dependencies "
+                    + $"({string.Join(", ", missing)} missing): run 'bun install' at the repository root."
+            );
+        }
+    }
+
+    private static Process StartBun(ProcessStartInfo start)
+    {
+        try
+        {
+            return Process.Start(start) ?? throw new InvalidOperationException("bun did not start");
+        }
+        catch (System.ComponentModel.Win32Exception exception)
+        {
+            throw new InvalidOperationException(
+                "The golden bundle check runs bun, which is not on PATH: install it from https://bun.sh.",
+                exception
+            );
         }
     }
 

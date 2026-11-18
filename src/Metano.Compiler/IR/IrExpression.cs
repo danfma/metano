@@ -19,6 +19,14 @@ public sealed record IrLiteral(object? Value, IrLiteralKind Kind) : IrExpression
     /// prints that zero its own way.
     /// </summary>
     public const string BigIntegerZeroDigits = "0";
+
+    /// <summary>
+    /// The enum a constant <c>0</c> converts to implicitly (C#'s enumeration
+    /// conversion: <c>E e = 0;</c>, <c>return 0;</c>, <c>Take(0)</c>), for a
+    /// target whose enum type does not take the bare number; <c>null</c> for
+    /// every other literal.
+    /// </summary>
+    public IrTypeRef? EnumConversionType { get; init; }
 }
 
 /// <summary>
@@ -557,32 +565,41 @@ public sealed record IrMemberInit(
 /// target only. <c>null</c> for any other operator, including enum and
 /// user-defined ones, and for every other compound assignment.
 /// </param>
-/// <param name="EnumResultType">The enum type of the result of a built-in
-/// enum operator that computes a new value (<c>e + 1</c>, <c>a | b</c>,
-/// <c>e - 1</c>, and the compound <c>e += 1</c> / <c>e |= f</c>): C# computes
-/// it over the underlying integer and types it as the enum. <c>null</c> for
-/// every other operator, including comparisons and simple assignments.</param>
 public sealed record IrBinaryExpression(
     IrExpression Left,
     IrBinaryOp Operator,
     IrExpression Right,
-    IrNumericKind? NumericKind = null,
-    IrTypeRef? EnumResultType = null
-) : IrExpression;
+    IrNumericKind? NumericKind = null
+) : IrExpression
+{
+    /// <summary>
+    /// The enum type of the result of a built-in enum operator that computes a
+    /// new value (<c>e + 1</c>, <c>a | b</c>, <c>e - 1</c>, the compound
+    /// <c>e += 1</c> / <c>e |= f</c>, and the non-null case of their lifted
+    /// <c>E?</c> forms): C# computes it over the underlying integer and types
+    /// it as the enum. <c>null</c> for every other operator, including
+    /// comparisons and simple assignments.
+    /// </summary>
+    public IrTypeRef? EnumResultType { get; init; }
+}
 
 /// <summary>
 /// Unary expression: <c>op operand</c> or <c>operand op</c>.
 /// </summary>
-/// <param name="EnumResultType">The enum type of the result of <c>~e</c>,
-/// <c>e++</c> or <c>--e</c> on an enum (see
-/// <see cref="IrBinaryExpression.EnumResultType"/>); <c>null</c> for every
-/// other operator.</param>
 public sealed record IrUnaryExpression(
     IrUnaryOp Operator,
     IrExpression Operand,
-    bool IsPrefix = true,
-    IrTypeRef? EnumResultType = null
-) : IrExpression;
+    bool IsPrefix = true
+) : IrExpression
+{
+    /// <summary>
+    /// The enum type of the result of <c>~e</c>, <c>e++</c> or <c>--e</c> on an
+    /// enum, or of the non-null case of their lifted forms (see
+    /// <see cref="IrBinaryExpression.EnumResultType"/>); <c>null</c> for every
+    /// other operator.
+    /// </summary>
+    public IrTypeRef? EnumResultType { get; init; }
+}
 
 /// <summary>
 /// Semantic binary operators.

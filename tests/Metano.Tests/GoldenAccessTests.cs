@@ -12,6 +12,11 @@ public class GoldenAccessTests
     private const string HelperFile = "TranspileHelper.cs";
     private const string GuardFile = "GoldenAccessTests.cs";
 
+    private const string DirectoryReader = "SourceGoldenDirectory(";
+
+    private static readonly string TreeShakingDirectory =
+        "TreeShaking" + Path.DirectorySeparatorChar;
+
     private static readonly string[] ForbiddenFragments =
     [
         "\"Expected\"",
@@ -27,6 +32,27 @@ public class GoldenAccessTests
             .Where(file => Path.GetFileName(file) is not (HelperFile or GuardFile))
             .Where(file => ReferencesGoldens(File.ReadAllText(file)))
             .Select(file => Path.GetRelativePath(TestProjectDirectory(), file))
+            .Order()
+            .ToList();
+
+        await Assert.That(offenders).IsEmpty();
+    }
+
+    /// <summary>
+    /// The one sanctioned whole-directory reader, <see cref="TranspileHelper.SourceGoldenDirectory"/>,
+    /// serves the golden bundle check (spec 011 FR-043) only: it reads every golden as
+    /// a whole and compares none, so it may live under <c>TreeShaking/</c> alone.
+    /// </summary>
+    [Test]
+    public async Task OnlyTheTreeShakingChecksReadTheGoldenDirectory()
+    {
+        var offenders = TestSourceFiles()
+            .Where(file => Path.GetFileName(file) is not (HelperFile or GuardFile))
+            .Where(file =>
+                File.ReadAllText(file).Contains(DirectoryReader, StringComparison.Ordinal)
+            )
+            .Select(file => Path.GetRelativePath(TestProjectDirectory(), file))
+            .Where(file => !file.StartsWith(TreeShakingDirectory, StringComparison.Ordinal))
             .Order()
             .ToList();
 

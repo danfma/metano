@@ -1720,6 +1720,41 @@ public sealed partial class IrExpressionExtractor
 
     private IrLiteral ExtractLiteral(LiteralExpressionSyntax lit)
     {
+        var literal = ExtractLiteralValue(lit);
+
+        return ImplicitEnumTargetOf(lit) is { } enumType
+            ? literal with
+            {
+                EnumConversionType = IrTypeRefMapper.Map(enumType, _originResolver, _target),
+            }
+            : literal;
+    }
+
+    /// <summary>
+    /// The enum a literal converts to implicitly: only a constant <c>0</c>
+    /// does (C#'s implicit enumeration conversion).
+    /// </summary>
+    private ITypeSymbol? ImplicitEnumTargetOf(LiteralExpressionSyntax lit)
+    {
+        var conversion = _semantic.GetConversion(lit);
+
+        if (!conversion.IsEnumeration || !conversion.IsImplicit)
+            return null;
+
+        var converted = _semantic.GetTypeInfo(lit).ConvertedType;
+
+        return
+            converted
+                is INamedTypeSymbol
+                {
+                    OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+                } nullable
+            ? nullable.TypeArguments[0]
+            : converted;
+    }
+
+    private IrLiteral ExtractLiteralValue(LiteralExpressionSyntax lit)
+    {
         var value = _semantic.GetConstantValue(lit).Value;
         return lit.Kind() switch
         {
@@ -1825,17 +1860,40 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression WithEnumResultType(ExpressionSyntax node, IrExpression lowered)
     {
-        if (_semantic.GetTypeInfo(node).Type is not { TypeKind: TypeKind.Enum } enumType)
+        if (EnumResultTypeOf(node) is not { } enumType)
             return lowered;
 
         var enumTypeRef = IrTypeRefMapper.Map(enumType, _originResolver, _target);
 
         return lowered switch
         {
-            IrBinaryExpression binary => binary with { EnumResultType = enumTypeRef },
+            IrBinaryExpression { Operator: not IrBinaryOp.Assign } binary => binary with
+            {
+                EnumResultType = enumTypeRef,
+            },
             IrUnaryExpression unary => unary with { EnumResultType = enumTypeRef },
             _ => lowered,
         };
+    }
+
+    /// <summary>
+    /// The enum type of <paramref name="node"/>'s value: <c>E</c> for an
+    /// <c>E</c> or an <c>E?</c> (a lifted operator computes the non-null
+    /// case as an <c>E</c>); <c>null</c> for any other type.
+    /// </summary>
+    private ITypeSymbol? EnumResultTypeOf(ExpressionSyntax node)
+    {
+        var type = _semantic.GetTypeInfo(node).Type;
+
+        var underlying = type
+            is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+            } nullable
+            ? nullable.TypeArguments[0]
+            : type;
+
+        return underlying is { TypeKind: TypeKind.Enum } ? underlying : null;
     }
 
     /// <summary>

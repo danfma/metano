@@ -80,7 +80,10 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         return LiftUnary(OperandOf(operandSyntax), operand =>
-            ReduceOverflow(operation, BuildUnary(op, operand, operandSyntax))
+            ReduceOverflow(
+                operation,
+                WithEnumResultType(node, BuildUnary(op, operand, operandSyntax))
+            )
         );
     }
 
@@ -123,7 +126,13 @@ public sealed partial class IrExpressionExtractor
         var operation = _semantic.GetOperation(operatorSyntax);
 
         return new(op.IsRelational(), (left, right) =>
-            ReduceOverflow(operation, BuildBinary(operatorSyntax, op, left, right, isLifted: true))
+            ReduceOverflow(
+                operation,
+                WithEnumResultType(
+                    operatorSyntax,
+                    BuildBinary(operatorSyntax, op, left, right, isLifted: true)
+                )
+            )
         );
     }
 

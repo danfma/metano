@@ -24,7 +24,7 @@ internal static class Int64EnumPrecision
         if (!IsSixtyFourBit(enumType.EnumUnderlyingType))
             return;
 
-        var isFlags = IsFlags(enumType);
+        var isFlags = enumType.HasFlags();
 
         foreach (var member in enumType.GetMembers().OfType<IFieldSymbol>())
         {
@@ -84,13 +84,6 @@ internal static class Int64EnumPrecision
                 or SpecialType.System_UInt64
                 or SpecialType.System_IntPtr
                 or SpecialType.System_UIntPtr;
-
-    private static bool IsFlags(INamedTypeSymbol enumType) =>
-        enumType
-            .GetAttributes()
-            .Any(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == "System.FlagsAttribute"
-            );
 
     /// <summary>The exact value of a 64-bit enum constant (a <c>long</c> or a <c>ulong</c>).</summary>
     internal static BigInteger ToBigInteger(object constant) =>

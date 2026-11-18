@@ -48,8 +48,15 @@ public static class IrToTsEnumBridge
             )
             : new TsLiteral(NumericMemberValue(member.Value));
 
+    /// <summary>
+    /// The one rule for an enum's alias: a numeric <c>[Flags]</c> enum is the
+    /// brand, every other enum the closed union of its values (which
+    /// <see cref="EnumValueAssertion"/> asserts computed values into).
+    /// </summary>
+    internal static bool HasFlagsBrand(bool isNumeric, bool isFlags) => isNumeric && isFlags;
+
     private static TsType AliasType(IrEnumDeclaration ir, string tsName) =>
-        ir is { Style: IrEnumStyle.Numeric, IsFlags: true }
+        HasFlagsBrand(ir.Style == IrEnumStyle.Numeric, ir.IsFlags)
             ? new TsNamedType($"number & {{ readonly __enum?: \"{tsName}\" }}")
             : new TsNamedType($"typeof {tsName}[keyof typeof {tsName}]");
 

@@ -74,6 +74,8 @@ public class EnumTranspileTests
             [Transpile, EmitInFile("numeric-enum-const")]
             public static class Palette
             {
+                public static Color Initial = 0;
+
                 public static Color FromNumber(int n) => (Color)n;
 
                 public static Color Literal() => (Color)3;
@@ -105,6 +107,30 @@ public class EnumTranspileTests
                 }
 
                 public static Color Default() => default;
+
+                public static Color Zero() => 0;
+
+                public static Color PassZero() => Identity(0);
+
+                public static Color Identity(Color c) => c;
+
+                public static Color? NullableNext(Color? n)
+                {
+                    n++;
+
+                    return n;
+                }
+
+                public static Color? NullableOr(Color? a, Color b) => a | b;
+
+                public static Color? NullableInverted(Color? n) => ~n;
+
+                public static Color? NullableCompound(Color? n)
+                {
+                    n += 1;
+
+                    return n;
+                }
 
                 public static bool IsBlue(Color c) => c == Color.Blue;
 
@@ -174,6 +200,55 @@ public class EnumTranspileTests
         await TranspileHelper.AssertGolden(
             "numeric-enum-flags.ts",
             result["numeric-enum-flags.ts"]
+        );
+    }
+
+    /// <summary>
+    /// A compound assignment and an increment through an extension property of a
+    /// plain numeric enum type keep the enum result type: the value the setter
+    /// receives is asserted as the enum (spec 011 FR-044).
+    /// </summary>
+    [Test]
+    public async Task EnumExtensionPropertyWrite_AssertsTheStoredValue()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public enum Shade { Light, Dark }
+
+            public class Cell
+            {
+                public Shade Backing { get; set; }
+            }
+
+            [Transpile]
+            public static class CellExtensions
+            {
+                extension(Cell cell)
+                {
+                    public Shade Shade
+                    {
+                        get => cell.Backing;
+                        set => cell.Backing = value;
+                    }
+                }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public void Compound(Cell c) { c.Shade += 1; }
+
+                public void Increment(Cell c) { c.Shade++; }
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "enum-extension-property-write.ts",
+            result["app/caller.ts"]
         );
     }
 }

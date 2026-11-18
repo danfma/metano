@@ -73,7 +73,9 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// <see cref="TranspilationCache"/> handles structural breaks). The
     /// constant <c>int64=bigint</c> segment is no flag: it exists so a cache
     /// written before the flip of spec 012, when <c>long</c> could still map
-    /// to <c>number</c> (<c>int64=Number</c>), never matches.
+    /// to <c>number</c> (<c>int64=Number</c>), never matches. Likewise
+    /// <c>enums=const-v1</c>: a cache written before spec 011 FR-044, when a
+    /// numeric enum was a TS <c>enum</c>, never matches.
     /// </summary>
     public string ConfigurationFingerprint =>
         BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix, ImportAlias);
@@ -96,7 +98,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             $"stripInterfacePrefix={stripInterfacePrefix}",
             $"importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}",
             "int64=bigint",
-            "runtime-types-v1"
+            "enums=const-v1"
         );
 
     /// <summary>
