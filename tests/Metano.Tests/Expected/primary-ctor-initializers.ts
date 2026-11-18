@@ -1,12 +1,8 @@
 export class Account {
   readonly amount: number = 0;
-
   private readonly _bonus: number;
-
   private readonly _total: number = 0;
-
   readonly twice: number = 0;
-
   private readonly _owner: string;
 
   constructor(amount: number, owner: string, bonus: number) {

@@ -3,7 +3,6 @@ import type { IWidget } from "#/sample-counter-v2/mvu/i-widget";
 
 export class Button implements IWidget {
   private readonly _label: string;
-
   private readonly _onPressed: () => void;
 
   constructor(label: string, onPressed: () => void) {

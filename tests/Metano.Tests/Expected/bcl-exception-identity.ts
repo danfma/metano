@@ -28,9 +28,7 @@ export class InvalidAmountException extends ArgumentOutOfRangeException {
 
 export class LedgerException extends Exception {
   protected static readonly byLedgerExceptionDefault: unique symbol = Symbol("LedgerException()");
-
   protected static readonly byLedgerExceptionMessageInner: unique symbol = Symbol("LedgerException(string message, Exception inner)");
-
   override readonly name: string = "LedgerException";
 
   constructor(overload: typeof LedgerException.byLedgerExceptionDefault);

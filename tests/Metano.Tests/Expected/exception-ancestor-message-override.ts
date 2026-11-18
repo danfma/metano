@@ -2,7 +2,6 @@ import { InvalidSlotException } from "./invalid-slot-exception";
 
 export class LabelledSlotException extends InvalidSlotException {
   override readonly name: string = "LabelledSlotException";
-
   readonly #baseMessage: string;
 
   constructor() {

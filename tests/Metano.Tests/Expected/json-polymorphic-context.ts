@@ -18,39 +18,22 @@ import { Timeline } from "./timeline";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _timeline?: TypeSpec<Timeline>;
-
   private _listClip?: ValueSpec<Clip[] | null>;
-
   private _intBase?: TypeSpec<IntBase>;
-
   private _sBase?: TypeSpec<SBase>;
-
   private _gBaseInt32?: TypeSpec<GBase<number>>;
-
   private _aB?: TypeSpec<AB>;
-
   private _ignBase?: TypeSpec<IgnBase>;
-
   private _clip?: TypeSpec<Clip>;
-
   private _intA?: TypeSpec<IntA>;
-
   private _intS?: TypeSpec<IntS>;
-
   private _sDer?: TypeSpec<SDer>;
-
   private _gDer?: TypeSpec<GDer>;
-
   private _aMid?: TypeSpec<AMid>;
-
   private _aLeaf?: TypeSpec<ALeaf>;
-
   private _ignA?: TypeSpec<IgnA>;
-
   private _imageClip?: TypeSpec<ImageClip>;
-
   private _silenceClip?: TypeSpec<SilenceClip>;
 
   static get default(): JsonContext {

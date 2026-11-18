@@ -11,23 +11,14 @@ import { Stats } from "./stats";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _clip?: TypeSpec<Clip>;
-
   private _shape?: TypeSpec<Shape>;
-
   private _stats?: TypeSpec<Stats>;
-
   private _reading?: TypeSpec<Reading>;
-
   private _listUInt32?: ValueSpec<number[] | null>;
-
   private _nullableInt16?: ValueSpec<number | null>;
-
   private _imageClip?: TypeSpec<ImageClip>;
-
   private _silenceClip?: TypeSpec<SilenceClip>;
-
   private _square?: TypeSpec<Square>;
 
   static get default(): JsonContext {

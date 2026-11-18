@@ -4,7 +4,6 @@ import { createEffect, createSignal } from "solid-js";
 
 export class CounterStore {
   private readonly _get: () => Counter;
-
   private readonly _set: ((value: Counter) => void) &
     ((updater: (arg: Counter) => Counter) => void);
 

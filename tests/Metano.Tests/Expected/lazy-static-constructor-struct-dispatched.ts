@@ -5,11 +5,8 @@ export class Pair {
   });
 
   protected static readonly byPairV: unique symbol = Symbol("Pair(int v)");
-
   protected static readonly byPairText: unique symbol = Symbol("Pair(string text)");
-
   w: number = 0;
-
   v: number = 0;
 
   constructor(overload: typeof Pair.byPairV, v: number);

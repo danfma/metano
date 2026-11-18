@@ -64,189 +64,97 @@ import { UNearAbs } from "./u-near-abs";
 
 export class StudioJsonContext extends SerializerContext {
   private static readonly _default: StudioJsonContext = new StudioJsonContext();
-
   private _clip?: TypeSpec<Clip>;
-
   private _timeline?: TypeSpec<Timeline>;
-
   private _listClip?: ValueSpec<Clip[] | null>;
-
   private _dictionaryStringClip?: ValueSpec<Map<string, Clip> | null>;
-
   private _iEnumerableClip?: ValueSpec<Iterable<Clip> | null>;
-
   private _group?: TypeSpec<Group>;
-
   private _hBase?: TypeSpec<HBase>;
-
   private _iBase?: TypeSpec<IBase>;
-
   private _dBase?: TypeSpec<DBase>;
-
   private _sBase?: TypeSpec<SBase>;
-
   private _uFail?: TypeSpec<UFail>;
-
   private _uNear?: TypeSpec<UNear>;
-
   private _uBaseH?: TypeSpec<UBaseH>;
-
   private _nBase?: TypeSpec<NBase>;
-
   private _nMid?: TypeSpec<NMid>;
-
   private _oBase?: TypeSpec<OBase>;
-
   private _gBaseInt32?: TypeSpec<GBase<number>>;
-
   private _feed?: TypeSpec<Feed>;
-
   private _iShape?: TypeSpec<IShape>;
-
   private _iShapeB?: TypeSpec<IShapeB>;
-
   private _shape?: TypeSpec<Shape>;
-
   private _mixedBase?: TypeSpec<MixedBase>;
-
   private _episodeSummary?: TypeSpec<EpisodeSummary>;
-
   private _iReadOnlyListEpisodeSummary?: ValueSpec<EpisodeSummary[] | null>;
-
   private _episodeSummaryArray?: ValueSpec<EpisodeSummary[] | null>;
-
   private _dictionaryStringEpisodeSummary?: ValueSpec<Map<string, EpisodeSummary> | null>;
-
   private _hashSetString?: ValueSpec<HashSet<string> | null>;
-
   private _intMapHolder?: TypeSpec<IntMapHolder>;
-
   private _levelMapHolder?: TypeSpec<LevelMapHolder>;
-
   private _guidMapHolder?: TypeSpec<GuidMapHolder>;
-
   private _listListInt32?: ValueSpec<number[][] | null>;
-
   private _string?: ValueSpec<string | null>;
-
   private _int32?: ValueSpec<number>;
-
   private _nullableInt32?: ValueSpec<number | null>;
-
   private _double?: ValueSpec<number>;
-
   private _boolean?: ValueSpec<boolean>;
-
   private _guid?: ValueSpec<UUID>;
-
   private _decimal?: ValueSpec<Decimal>;
-
   private _dateTime?: ValueSpec<Temporal.PlainDateTime>;
-
   private _dateOnly?: ValueSpec<Temporal.PlainDate>;
-
   private _timeOnly?: ValueSpec<Temporal.PlainTime>;
-
   private _dateTimeOffset?: ValueSpec<Temporal.ZonedDateTime>;
-
   private _timeSpan?: ValueSpec<Temporal.Duration>;
-
   private _listTimeOnly?: ValueSpec<Temporal.PlainTime[] | null>;
-
   private _dictionaryStringTimeOnly?: ValueSpec<Map<string, Temporal.PlainTime> | null>;
-
   private _schedule?: TypeSpec<Schedule>;
-
   private _holderInt?: TypeSpec<HolderInt>;
-
   private _holderLevel?: TypeSpec<HolderLevel>;
-
   private _holderChar?: TypeSpec<HolderChar>;
-
   private _holderSPoint?: TypeSpec<HolderSPoint>;
-
   private _listInt32?: ValueSpec<number[] | null>;
-
   private _listNullableInt32?: ValueSpec<(number | null)[] | null>;
-
   private _listString?: ValueSpec<string[] | null>;
-
   private _listLevel?: ValueSpec<Level[] | null>;
-
   private _listGuid?: ValueSpec<UUID[] | null>;
-
   private _listDateTime?: ValueSpec<Temporal.PlainDateTime[] | null>;
-
   private _hashSetInt32?: ValueSpec<HashSet<number> | null>;
-
   private _dictionaryStringInt32?: ValueSpec<Map<string, number> | null>;
-
   private _dictionaryStringNullableInt32?: ValueSpec<Map<string, number | null> | null>;
-
   private _int32Array?: ValueSpec<number[] | null>;
-
   private _color?: ValueSpec<Color>;
-
   private _level?: ValueSpec<Level>;
-
   private _flavor?: ValueSpec<Flavor>;
-
   private _sPoint?: TypeSpec<SPoint>;
-
   private _title?: ValueSpec<Title>;
-
   private _episodeRec?: TypeSpec<EpisodeRec>;
-
   private _int64Box?: TypeSpec<Int64Box>;
-
   private _int64Containers?: TypeSpec<Int64Containers>;
-
   private _int64?: ValueSpec<bigint>;
-
   private _uInt64?: ValueSpec<bigint>;
-
   private _imageClip?: TypeSpec<ImageClip>;
-
   private _silenceClip?: TypeSpec<SilenceClip>;
-
   private _hMid?: TypeSpec<HMid>;
-
   private _hLeaf?: TypeSpec<HLeaf>;
-
   private _iA?: TypeSpec<IA>;
-
   private _iS?: TypeSpec<IS>;
-
   private _dBer?: TypeSpec<DBer>;
-
   private _uFailY?: TypeSpec<UFailY>;
-
   private _uNearA?: TypeSpec<UNearA>;
-
   private _uNearAbs?: TypeSpec<UNearAbs>;
-
   private _uBaseA?: TypeSpec<UBaseA>;
-
   private _nLeaf?: TypeSpec<NLeaf>;
-
   private _oDer?: TypeSpec<ODer>;
-
   private _gDer?: TypeSpec<GDer>;
-
   private _pageEpisodeSummary?: TypeSpec<Page<EpisodeSummary>>;
-
   private _sq?: TypeSpec<Sq>;
-
   private _sqB?: TypeSpec<SqB>;
-
   private _point?: TypeSpec<Point>;
-
   private _point3?: TypeSpec<Point3>;
-
   private _rect?: TypeSpec<Rect>;
-
   private _mixedClass?: TypeSpec<MixedClass>;
-
   private _mixedPoint?: TypeSpec<MixedPoint>;
 
   static get default(): StudioJsonContext {

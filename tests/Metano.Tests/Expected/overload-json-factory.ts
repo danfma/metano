@@ -5,9 +5,7 @@ import { Tag } from "./tag";
 
 export class ShopJsonContext extends SerializerContext {
   private static readonly _default: ShopJsonContext = new ShopJsonContext();
-
   private _money?: TypeSpec<Money>;
-
   private _tag?: TypeSpec<Tag>;
 
   static get default(): ShopJsonContext {
@@ -61,9 +59,7 @@ import { isInt32, isString } from "metano-runtime";
 
 export class Tag {
   protected static readonly byTagId: unique symbol = Symbol("Tag(int id)");
-
   protected static readonly byTagName: unique symbol = Symbol("Tag(string name)");
-
   readonly name: string;
 
   constructor(overload: typeof Tag.byTagId, id: number);

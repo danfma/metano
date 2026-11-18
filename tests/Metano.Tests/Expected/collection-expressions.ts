@@ -6,15 +6,10 @@ import type { Dog } from "./dog";
 
 export class Shelf {
   private readonly _primes: HashSet<number> = new HashSet<number>([2, 3, 5]);
-
   private readonly _colors: HashSet<Color> = new HashSet<Color>([Color.Red]);
-
   private readonly _defaults: Map<string, number> = new Map<string, number>([["a", 1] as [string, number], ["b", 2] as [string, number]]);
-
   private readonly _cache: Map<string, number> = new Map<string, number>();
-
   private readonly _none: HashSet<string> = new HashSet<string>();
-
   private _calls: number = 0;
 
   constructor() { }

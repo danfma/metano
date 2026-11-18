@@ -3,7 +3,6 @@ import type { ICounterView } from "#/sample-counter-v1/presenters/i-counter-view
 
 export class CounterView implements ICounterView {
   private _text: HTMLSpanElement | null = null;
-
   onButtonClick: (() => void) | null = null;
 
   constructor() {}

@@ -4,9 +4,7 @@ import { Color } from "./color";
 
 export class Painter {
   protected static readonly byPainterC: unique symbol = Symbol("Painter(Color c)");
-
   protected static readonly byPainterFlag: unique symbol = Symbol("Painter(bool flag)");
-
   readonly log: string = "";
 
   constructor(overload: typeof Painter.byPainterC, c?: Color);

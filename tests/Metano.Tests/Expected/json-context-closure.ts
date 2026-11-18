@@ -4,9 +4,7 @@ import { ScriptWord } from "./script-word";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _script?: TypeSpec<Script>;
-
   private _scriptWord?: TypeSpec<ScriptWord>;
 
   static get default(): JsonContext {

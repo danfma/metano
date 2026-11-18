@@ -4,7 +4,6 @@ import type { IRank } from "./i-rank";
 
 export class SortedBox<T extends IRank<T>> extends Box<T> {
   protected static readonly bySortedBoxValue: unique symbol = Symbol("SortedBox(T value)");
-
   protected static readonly bySortedBoxN: unique symbol = Symbol("SortedBox(int n)");
 
   constructor(overload: typeof SortedBox.bySortedBoxValue, value: T);
@@ -57,7 +56,6 @@ import { Box } from "./box";
 
 export class Pair<K, V> extends Box<K> {
   protected static readonly byPairValue: unique symbol = Symbol("Pair(K value)");
-
   protected static readonly byPairN: unique symbol = Symbol("Pair(int n)");
 
   constructor(overload: typeof Pair.byPairValue, value: K);

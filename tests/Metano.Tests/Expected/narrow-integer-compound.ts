@@ -2,11 +2,8 @@ import { checkedNarrowNumber, intDiv } from "metano-runtime";
 
 export class Small {
   field: number = 0;
-
   property: number = 0;
-
   cells: number[] = new Array<number>(4).fill(0);
-
   optional: number | null = null;
 
   constructor() { }

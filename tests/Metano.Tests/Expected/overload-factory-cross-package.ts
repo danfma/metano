@@ -4,7 +4,6 @@ import { Decimal } from "metano-runtime/system/decimal";
 
 export class Receipt extends Money {
   protected static readonly byReceiptAmount: unique symbol = Symbol("Receipt(decimal amount)");
-
   protected static readonly byReceiptCents: unique symbol = Symbol("Receipt(string cents)");
 
   constructor(overload: typeof Receipt.byReceiptAmount, amount: Decimal);

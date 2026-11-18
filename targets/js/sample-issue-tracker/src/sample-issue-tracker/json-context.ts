@@ -17,17 +17,11 @@ import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _issueSnapshot?: TypeSpec<IssueSnapshot>;
-
   private _comment?: TypeSpec<Comment>;
-
   private _iReadOnlyListComment?: ValueSpec<Comment[] | null>;
-
   private _issueActivity?: TypeSpec<IssueActivity>;
-
   private _issueActivityArray?: ValueSpec<IssueActivity[] | null>;
-
   private _activityFeed?: TypeSpec<ActivityFeed>;
 
   static get default(): JsonContext {

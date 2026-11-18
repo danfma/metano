@@ -3,11 +3,8 @@ import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-f
 
 export class Glossary {
   private readonly _words: Map<string, string> = new Map<string, string>();
-
   private readonly _counts: Map<string, number> = new Map<string, number>();
-
   private readonly _notes: Map<string, string | null> = new Map<string, string | null>();
-
   private _last: number = 0;
 
   constructor() { }

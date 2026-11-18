@@ -19,25 +19,15 @@ import { SoftNums } from "./soft-nums";
 
 export class WebJsonContext extends SerializerContext {
   private static readonly _default: WebJsonContext = new WebJsonContext();
-
   private _clip?: TypeSpec<Clip>;
-
   private _imageClip?: TypeSpec<ImageClip>;
-
   private _iBase?: TypeSpec<IBase>;
-
   private _nums?: TypeSpec<Nums>;
-
   private _softNums?: TypeSpec<SoftNums>;
-
   private _int32?: ValueSpec<number>;
-
   private _silenceClip?: TypeSpec<SilenceClip>;
-
   private _group?: TypeSpec<Group>;
-
   private _iA?: TypeSpec<IA>;
-
   private _iS?: TypeSpec<IS>;
 
   static get default(): WebJsonContext {

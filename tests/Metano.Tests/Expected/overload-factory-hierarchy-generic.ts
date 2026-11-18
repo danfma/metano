@@ -3,7 +3,6 @@ import { B } from "./b";
 
 export class C<P, Q> extends B<P, Q> {
   protected static readonly byCKV: unique symbol = Symbol("C(P k, Q v)");
-
   protected static readonly byCVKFlip: unique symbol = Symbol("C(Q v, P k, bool flip)");
 
   constructor(overload: typeof C.byCKV, k: P, v: Q);

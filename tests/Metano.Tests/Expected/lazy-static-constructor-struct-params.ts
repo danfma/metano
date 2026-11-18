@@ -5,7 +5,6 @@ export class Bag {
   });
 
   w: number = 0;
-
   count: number = 0;
 
   constructor(...values: number[]) {

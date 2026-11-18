@@ -1,6 +1,5 @@
 export class PrimaryCollisions {
   f: (arg: number) => number;
-
   readonly g: (arg: number) => number;
 
   constructor(total: number) {

@@ -11,43 +11,24 @@ import { ShotTiming } from "./shot-timing";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
-
   private _episodeSummary?: TypeSpec<EpisodeSummary>;
-
   private _iReadOnlyListEpisodeSummary?: ValueSpec<EpisodeSummary[] | null>;
-
   private _episodeSummaryArray?: ValueSpec<EpisodeSummary[] | null>;
-
   private _shotTimingArray?: ValueSpec<ShotTiming[] | null>;
-
   private _dictionaryStringEpisodeSummary?: ValueSpec<Map<string, EpisodeSummary> | null>;
-
   private _hashSetString?: ValueSpec<HashSet<string> | null>;
-
   private _iEnumerableLeaf?: ValueSpec<Iterable<Leaf> | null>;
-
   private _nullableInt32?: ValueSpec<number | null>;
-
   private _int32?: ValueSpec<number>;
-
   private _string?: ValueSpec<string | null>;
-
   private _guid?: ValueSpec<UUID>;
-
   private _dateTimeOffset?: ValueSpec<Temporal.ZonedDateTime>;
-
   private _decimal?: ValueSpec<Decimal>;
-
   private _mood?: ValueSpec<Mood>;
-
   private _level?: ValueSpec<Level>;
-
   private _episodeId?: ValueSpec<EpisodeId>;
-
   private _names?: ValueSpec<string[] | null>;
-
   private _shotTiming?: TypeSpec<ShotTiming>;
-
   private _leaf?: TypeSpec<Leaf>;
 
   static get default(): JsonContext {

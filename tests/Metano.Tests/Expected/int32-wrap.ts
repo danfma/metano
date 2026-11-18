@@ -2,11 +2,8 @@ import { intDiv } from "metano-runtime";
 
 export class Wraps {
   field: number = 0;
-
   unsigned: number = 0;
-
   prop: number = 0;
-
   cells: number[] = new Array<number>(4).fill(0);
 
   constructor() { }

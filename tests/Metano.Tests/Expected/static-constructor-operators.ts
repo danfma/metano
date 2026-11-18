@@ -6,7 +6,6 @@ export class Meter {
   });
 
   static #scale$: number = 0;
-
   v: number = (Meter.#$init(), 0);
 
   constructor(v: number) {
