@@ -207,7 +207,7 @@ flowchart LR
   collections --> json
 ```
 
-Before the literal fix there was a value-level cycle `reflection → exceptions` (`castTo` / `getRuntimeType` throw `InvalidCastException` / `NullReferenceException`) and `exceptions → reflection` (`classType` inside the getters). With FR-018's literal getters, `exceptions` imports only **types** from `reflection` (erased at build), so the value graph is acyclic: `reflection` imports the two exception modules it throws, and nothing imports `reflection` from `exceptions`. A program that throws but never tests pays for the one exception module alone (**budget** ≤ 0.5 KB gz, NFR-008; the critic's probe measured 0.35 KB for the literal shape, research R13).
+Before the literal fix there was a value-level cycle `reflection → exceptions` (`castTo` / `getRuntimeType` throw `InvalidCastException` / `NullReferenceException`) and `exceptions → reflection` (`classType` inside the getters). With FR-018's literal getters, `exceptions` imports only **types** from `reflection` (erased at build), so the value graph is acyclic: `reflection` imports the two exception modules it throws, and nothing imports `reflection` from `exceptions`. A program that throws but never tests pays for the one exception module alone (**budget** ≤ 0.65 KB gz, NFR-008; the critic's probe measured 0.35 KB for the literal shape, research R13).
 
 ## 5. Dart target
 
