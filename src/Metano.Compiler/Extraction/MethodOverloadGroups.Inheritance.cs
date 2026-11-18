@@ -25,7 +25,7 @@ internal static partial class MethodOverloadGroups
     {
         // Operators lower to static helpers of their own type, never to an
         // inherited dispatcher.
-        if (declared.OfType<DeclaredMember>().Any(member => IsOperator(member.Symbol)))
+        if (declared.Any(member => member.IsOperator))
             return null;
 
         if (DispatcherOverloadsAbove(type, name, policy) is not { } inherited)
@@ -40,13 +40,7 @@ internal static partial class MethodOverloadGroups
     /// member is overridden, never hidden.
     /// </summary>
     private static bool IsHiddenBy(IReadOnlyList<GroupMember> declared, GroupMember overload) =>
-        overload is DeclaredMember inherited
-        && declared
-            .OfType<DeclaredMember>()
-            .Any(member =>
-                !member.Symbol.IsOverride
-                && SymbolHelper.HasSameParameters(member.Symbol, inherited.Symbol)
-            );
+        declared.Any(member => member.Hides(overload));
 
     /// <summary>
     /// The dispatcher overloads the nearest emitted base declaring
@@ -77,14 +71,14 @@ internal static partial class MethodOverloadGroups
 
             var added = group
                 .Members.Where(member => member.Anchor?.Kind is not IrOverloadAnchorKind.Override)
-                .Select(member => ConstructedIn(ancestor!, member))
+                .Select(member => member.ConstructedIn(ancestor!))
                 .ToList();
 
             if (group.InheritedOverloads is null)
                 return group.Members.Count >= 2 ? added : null;
 
             var above = (DispatcherOverloadsAbove(ancestor!, name, policy) ?? []).Where(overload =>
-                !added.Any(own => HaveSameParameters(own, overload))
+                !added.Any(own => own.HasSameParametersAs(overload))
             );
 
             return [.. above, .. added];
@@ -92,16 +86,6 @@ internal static partial class MethodOverloadGroups
 
         return null;
     }
-
-    private static bool HaveSameParameters(GroupMember member, GroupMember other) =>
-        (member, other) switch
-        {
-            (DeclaredMember declared, DeclaredMember otherDeclared) =>
-                SymbolHelper.HasSameParameters(declared.Symbol, otherDeclared.Symbol),
-            (SynthesizedMember synthesized, SynthesizedMember otherSynthesized) => synthesized.Kind
-                == otherSynthesized.Kind,
-            _ => false,
-        };
 
     /// <summary>
     /// A class the target emits, whose dispatched groups a derived class and
@@ -112,27 +96,4 @@ internal static partial class MethodOverloadGroups
         type is { TypeKind: TypeKind.Class, SpecialType: SpecialType.None }
         && IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
         && !SymbolHelper.HasExternal(type.OriginalDefinition);
-
-    /// <summary>
-    /// <paramref name="member"/> as the constructed <paramref name="type"/>
-    /// declares it: a declared method with its type arguments substituted.
-    /// </summary>
-    private static GroupMember ConstructedIn(INamedTypeSymbol type, GroupMember member) =>
-        member is DeclaredMember declared
-            ? declared with
-            {
-                Symbol = ConstructedIn(type, declared.Symbol),
-            }
-            : member;
-
-    /// <summary>The member of a constructed type that <paramref name="definition"/> declares.</summary>
-    private static IMethodSymbol ConstructedIn(INamedTypeSymbol type, IMethodSymbol definition) =>
-        type.GetMembers(definition.Name)
-            .OfType<IMethodSymbol>()
-            .First(member =>
-                SymbolEqualityComparer.Default.Equals(
-                    member.OriginalDefinition,
-                    definition.OriginalDefinition
-                )
-            );
 }
