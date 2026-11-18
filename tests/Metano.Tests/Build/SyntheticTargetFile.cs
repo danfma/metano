@@ -15,8 +15,11 @@ public static class SyntheticTargetFile
     public static string FileNameOf(string prefix) => $"Metano.Build.Fake{prefix}.targets";
 
     /// <summary>The content of the synthetic target whose settings use <c>MetanoFake{prefix}</c>.</summary>
-    public static string ContentOf(string prefix) =>
-        $$"""
+    public static string ContentOf(string prefix)
+    {
+        var language = LanguageOf(prefix);
+
+        return $$"""
             <Project>
               <Import
                 Project="$(MSBuildThisFileDirectory)Metano.Build.Common.targets"
@@ -42,7 +45,7 @@ public static class SyntheticTargetFile
                 </PropertyGroup>
                 <ItemGroup Condition="'$(_Fake{{prefix}}Active)' == 'true'">
                   <_MetanoEnabledTarget
-                    Include="{{LanguageOf(prefix)}}"
+                    Include="{{language}}"
                     OutputDir="$(_Fake{{prefix}}OutputDir)"
                     OutputDirFull="$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_Fake{{prefix}}OutputDir)').TrimEnd('/\'))"
                     ToolchainKeyFile="$(_Fake{{prefix}}KeyFile)"
@@ -52,23 +55,28 @@ public static class SyntheticTargetFile
                   />
                 </ItemGroup>
               </Target>
+              <Target Name="MetanoTranspileFake{{prefix}}">
+                <CallTarget Targets="_MetanoPrepare;_MetanoTranspileFake{{prefix}}IfOutOfDate" />
+              </Target>
               <Target
-                Name="MetanoTranspileFake{{prefix}}"
-                DependsOnTargets="_MetanoPrepare"
+                Name="_MetanoTranspileFake{{prefix}}IfOutOfDate"
                 Condition="'$(_Fake{{prefix}}Active)' == 'true'"
                 Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_Fake{{prefix}}KeyFile)"
                 Outputs="$(_Fake{{prefix}}OutputDir)/.metano-stamp"
               >
+                <PropertyGroup>
+                  <_Fake{{prefix}}AssetArgs>@(_MetanoAssetArg->WithMetadataValue('Language', '{{language}}'), ' ')</_Fake{{prefix}}AssetArgs>
+                  <_Fake{{prefix}}Args>FAKE-{{prefix}} &quot;[$(_Fake{{prefix}}FilePrefix)]&quot; $(_Fake{{prefix}}AssetArgs)</_Fake{{prefix}}Args>
+                </PropertyGroup>
                 <MSBuild
                   Projects="$(MSBuildProjectFullPath)"
                   Targets="_MetanoTranspileWorker"
-                  Properties="_MetanoWorkerLanguage={{LanguageOf(
-                prefix
-            )}};_MetanoWorkerOutputDir=$([MSBuild]::Escape('$(_Fake{{prefix}}OutputDir)'));_MetanoWorkerCommand=echo;_MetanoWorkerArguments=$([MSBuild]::Escape('FAKE-{{prefix}} &quot;[$(_Fake{{prefix}}FilePrefix)]&quot;'));_MetanoWorkerProbeTool=false"
+                  Properties="_MetanoWorkerOutputDir=$([MSBuild]::Escape('$(_Fake{{prefix}}OutputDir)'));_MetanoWorkerCommand=echo;_MetanoWorkerArguments=$([MSBuild]::Escape('$(_Fake{{prefix}}Args)'));_MetanoWorkerProbeTool=false"
                 />
                 <MakeDir Directories="$(_Fake{{prefix}}OutputDir)" />
                 <Touch Files="$(_Fake{{prefix}}OutputDir)/.metano-stamp" AlwaysCreate="true" />
               </Target>
             </Project>
             """;
+    }
 }

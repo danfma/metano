@@ -130,6 +130,25 @@ public partial class TypeScriptSettingsTests
         await Assert.That(properties["_MetanoTsActive"]?.GetValue<string>()).IsEqualTo("true");
     }
 
+    /// <summary>
+    /// <c>MetanoTranspileTs</c> run on its own resolves its settings first, so it reaches the
+    /// tool probe instead of skipping silently. The tool is absent here, so the probe fails, or,
+    /// when a <c>dotnet-metano-typescript</c> is on PATH, the transpile starts.
+    /// </summary>
+    [Test]
+    public async Task MetanoTranspileTs_RunsOnItsOwn()
+    {
+        string[] arguments = [ProjectFileName, "-t:MetanoTranspileTs", "-p:MetanoOutputDir=out"];
+
+        var run = await MsBuildProcess.Run(ProjectDir, Path.Combine(_root, "home"), arguments);
+
+        var reachedTheTool =
+            run.Output.Contains("METANOBUILD001", StringComparison.Ordinal)
+            || run.Output.Contains("Metano: Transpiling", StringComparison.Ordinal);
+
+        await Assert.That(reachedTheTool).IsTrue();
+    }
+
     [GeneratedRegex(
         """<_MetanoTs(?<setting>\w+) Condition="'\$\(MetanoTs\k<setting>\)' != ''"\s*>\$\(MetanoTs\k<setting>\)</_MetanoTs\k<setting>>"""
     )]

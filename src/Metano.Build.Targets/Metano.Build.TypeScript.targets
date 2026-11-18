@@ -15,7 +15,8 @@
     targets, prefer the prefixed form for MetanoCompilerProject,
     MetanoExtraArgs and MetanoPostBuildCommand: the global value reaches every
     enabled target. Settings are resolved when the build runs, so values set
-    in Directory.Build.targets count.
+    in Directory.Build.targets or by a BeforeTargets="MetanoTranspile" hook
+    count.
 
     Configurable properties (set in the consuming .csproj; S = the name
     without the `Metano` prefix):
@@ -202,9 +203,14 @@
     </ItemGroup>
   </Target>
 
+  <!-- Public entry point, also runnable on its own (`-t:MetanoTranspileTs`): the body prepares
+       first, so the guard of the incremental target below sees resolved settings. -->
+  <Target Name="MetanoTranspileTs">
+    <CallTarget Targets="_MetanoPrepare;_MetanoTranspileTsIfOutOfDate" />
+  </Target>
+
   <Target
-    Name="MetanoTranspileTs"
-    DependsOnTargets="_MetanoPrepare"
+    Name="_MetanoTranspileTsIfOutOfDate"
     Condition="'$(_MetanoTsActive)' == 'true'"
     Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile)"
     Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
@@ -267,6 +273,7 @@
         Condition="'$(_MetanoTsFilePrefix)' != ''"
       />
       <_MetanoTsArg Include="$(_MetanoTsExtraArgs)" Condition="'$(_MetanoTsExtraArgs)' != ''" />
+      <_MetanoTsArg Include="@(_MetanoAssetArg->WithMetadataValue('Language', 'typescript'))" />
     </ItemGroup>
 
     <PropertyGroup>
@@ -277,7 +284,7 @@
     <MSBuild
       Projects="$(MSBuildProjectFullPath)"
       Targets="_MetanoTranspileWorker"
-      Properties="_MetanoWorkerLanguage=typescript;_MetanoWorkerOutputDir=$([MSBuild]::Escape('$(_MetanoTsOutputDir)'));_MetanoWorkerCommand=$([MSBuild]::Escape('$(_MetanoTsCommand)'));_MetanoWorkerArguments=$([MSBuild]::Escape('$(_MetanoTsArgs)'));_MetanoWorkerProbeTool=$(_MetanoTsProbeTool);_MetanoWorkerToolDescription=The Metano TypeScript compiler tool (metano-typescript);_MetanoWorkerToolInstallHint=$([MSBuild]::Escape('$(_MetanoTsToolInstallHint)'))"
+      Properties="_MetanoWorkerOutputDir=$([MSBuild]::Escape('$(_MetanoTsOutputDir)'));_MetanoWorkerCommand=$([MSBuild]::Escape('$(_MetanoTsCommand)'));_MetanoWorkerArguments=$([MSBuild]::Escape('$(_MetanoTsArgs)'));_MetanoWorkerProbeTool=$(_MetanoTsProbeTool);_MetanoWorkerToolDescription=The Metano TypeScript compiler tool (metano-typescript);_MetanoWorkerToolInstallHint=$([MSBuild]::Escape('$(_MetanoTsToolInstallHint)'))"
     />
   </Target>
 </Project>

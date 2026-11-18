@@ -22,15 +22,17 @@
     Where each part runs:
 
       Parent instance (every build): user inputs, setting resolution, METANOBUILD002, toolchain
-      keys, the incremental check of each per-target transpile target, the post-build commands.
-      Worker instance (only for an out-of-date target, through the MSBuild task with the resolved
-      values as global properties): the tool probe (METANOBUILD001), the asset projection and the
-      CLI Exec. The worker cannot see items the parent produced by running targets, such as
+      keys, the asset projection, the incremental check and argument line of each per-target
+      transpile target, the post-build commands. Worker instance (only for an out-of-date
+      target, through the MSBuild task with the resolved values as global properties): the tool
+      probe (METANOBUILD001) and the CLI Exec. The worker cannot see items the parent produced by running targets, such as
       @(ReferencePath), so nothing it runs depends on them.
 
-    Public targets: MetanoTranspile runs after Build; its dependencies prepare every target, user
-    BeforeTargets hooks run next, then its body runs each enabled per-target transpile target, and
-    AfterTargets hooks (MetanoPostBuild among them) run after all of them.
+    Public targets: MetanoTranspile runs after Build. User BeforeTargets hooks run first and may
+    still set Metano* properties or add MetanoAsset items; its body then prepares every target
+    (resolution, keys, assets) and runs each enabled per-target transpile target, and
+    AfterTargets hooks (MetanoPostBuild among them) run after all of them. A per-target target
+    (MetanoTranspileTs) can also be run on its own.
   -->
 
   <PropertyGroup>
@@ -138,44 +140,46 @@
     />
   </Target>
 
+  <!-- Asset projection (FR-048), once per enabled target, in the project instance so items a
+       target added, removed or changed before the transpile count: one _MetanoAssetArg item per
+       @(MetanoAsset) whose Language is the target's or `all`, tagged with the target's language.
+       Missing source files are not filtered: the host must see them to raise MS0025. -->
+  <Target
+    Name="_MetanoProjectAssets"
+    DependsOnTargets="_MetanoResolveTargets"
+    Outputs="%(_MetanoEnabledTarget.Identity)"
+  >
+    <PropertyGroup>
+      <_MetanoAssetLanguage>%(_MetanoEnabledTarget.Identity)</_MetanoAssetLanguage>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_MetanoAssetArg
+        Include="@(MetanoAsset -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;')"
+        Condition="
+        '%(MetanoAsset.Language)' == '$(_MetanoAssetLanguage)' or
+          '%(MetanoAsset.Language)' == 'all'"
+        Language="$(_MetanoAssetLanguage)"
+      />
+    </ItemGroup>
+  </Target>
+
   <Target
     Name="_MetanoPrepare"
-    DependsOnTargets="_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys"
+    DependsOnTargets="_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys;_MetanoProjectAssets"
   />
 
-  <!-- The body runs the per-target transpile targets with CallTarget, so a user hook declared
-       with BeforeTargets="MetanoTranspile" still runs before any tool, as in 2.x. Everything the
-       called targets read was produced by _MetanoPrepare, which has finished by then. -->
-  <Target Name="MetanoTranspile" AfterTargets="Build" DependsOnTargets="_MetanoPrepare">
-    <CallTarget
-      Condition="'$(_MetanoTranspileTargets.Trim(`;`))' != ''"
-      Targets="$(_MetanoTranspileTargets)"
-    />
+  <!-- No DependsOnTargets: the body prepares every target and then runs the per-target
+       transpile targets, so a user hook declared with BeforeTargets="MetanoTranspile" runs before
+       the settings and assets are read and can still change them, as in 2.x. -->
+  <Target Name="MetanoTranspile" AfterTargets="Build">
+    <CallTarget Targets="_MetanoPrepare;$(_MetanoTranspileTargets)" />
   </Target>
 
   <!-- Worker: runs in its own project instance, called by an out-of-date per-target transpile
-       target with the resolved values as global properties (_MetanoWorker*). -->
+       target with the resolved values as global properties (_MetanoWorker*). The arguments,
+       assets included, were composed in the project instance; the worker reads no item. -->
   <Target Name="_MetanoTranspileWorker">
-    <!-- Project @(MetanoAsset) items into asset CLI args, keeping the items whose Language is
-         this target's or `all`. Missing source files are not filtered: the host must see them
-         to raise MS0025. -->
-    <ItemGroup>
-      <_MetanoAssetSelected
-        Include="@(MetanoAsset)"
-        Condition="
-        '%(MetanoAsset.Language)' == '$(_MetanoWorkerLanguage)' or
-          '%(MetanoAsset.Language)' == 'all'"
-      />
-      <_MetanoAssetArg Include="@(_MetanoAssetSelected -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;')" />
-    </ItemGroup>
-
-    <PropertyGroup>
-      <_MetanoWorkerAssetArgs>@(_MetanoAssetArg, ' ')</_MetanoWorkerAssetArgs>
-      <_MetanoWorkerCommandLine>$(_MetanoWorkerCommand) $(_MetanoWorkerArguments)</_MetanoWorkerCommandLine>
-      <_MetanoWorkerCommandLine Condition="'$(_MetanoWorkerAssetArgs)' != ''"
-        >$(_MetanoWorkerCommandLine) $(_MetanoWorkerAssetArgs)</_MetanoWorkerCommandLine>
-    </PropertyGroup>
-
     <!-- Pre-flight: probe the installed tool before invoking it so a missing tool surfaces
          actionable install instructions instead of the dotnet host's generic "command not
          found" text. It only costs a process start when the transpile actually runs. -->
@@ -202,7 +206,7 @@
       Text="Metano: Transpiling $(MSBuildProjectName) → $(_MetanoWorkerOutputDir)"
     />
     <Exec
-      Command="$(_MetanoWorkerCommandLine)"
+      Command="$(_MetanoWorkerCommand) $(_MetanoWorkerArguments)"
       WorkingDirectory="$(MSBuildProjectDirectory)"
       ConsoleToMSBuild="true"
       StandardOutputImportance="High"

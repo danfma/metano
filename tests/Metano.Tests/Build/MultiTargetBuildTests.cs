@@ -176,6 +176,73 @@ public class MultiTargetBuildTests
     }
 
     /// <summary>
+    /// As in 2.x, an asset a target adds before <c>MetanoTranspile</c> reaches the tool: the
+    /// asset arguments are composed in the project instance, not in the worker.
+    /// </summary>
+    [Test]
+    public async Task AssetAddedByAHook_ReachesTheTool()
+    {
+        WriteProject(
+            $$"""
+            <Target Name="AddSeed" BeforeTargets="MetanoTranspile">
+              <ItemGroup>
+                <MetanoAsset Include="seed.sql" OutputPath="db/seed.sql" Language="{{SyntheticTargetFile.LanguageOf(
+                "A"
+            )}}" />
+              </ItemGroup>
+            </Target>
+            """
+        );
+
+        var run = await Transpile("-p:MetanoFakeAOutputDir=outA", "-p:MetanoFakeBOutputDir=outB");
+
+        await Assert.That(run.ExitCode).IsEqualTo(0);
+        await Assert.That(run.Output).Contains("seed.sql=db/seed.sql");
+        await Assert.That(run.Output).DoesNotContain("FAKE-B [] --asset");
+    }
+
+    /// <summary>
+    /// As in 2.x, a setting a <c>BeforeTargets="MetanoTranspile"</c> hook sets reaches the tool,
+    /// and the next build is still skipped.
+    /// </summary>
+    [Test]
+    public async Task SettingSetByAHook_ReachesTheTool()
+    {
+        WriteProject(
+            """
+            <Target Name="ComputePrefix" BeforeTargets="MetanoTranspile">
+              <PropertyGroup><MetanoFilePrefix>from-hook</MetanoFilePrefix></PropertyGroup>
+            </Target>
+            """
+        );
+
+        var first = await Transpile("-p:MetanoFakeAOutputDir=outA");
+        var second = await Transpile("-p:MetanoFakeAOutputDir=outA");
+
+        await Assert.That(first.Output).Contains("FAKE-A [from-hook]");
+        await Assert.That(second.Output).DoesNotContain("Metano: Transpiling");
+    }
+
+    [Test]
+    public async Task PerTargetTarget_RunsOnItsOwn()
+    {
+        var run = await MsBuildProcess.Run(
+            ProjectDir,
+            CliHome,
+            [
+                ProjectFileName,
+                "-t:MetanoTranspileFakeA",
+                "-p:MetanoFakeAOutputDir=outA",
+                "-p:MetanoFakeBOutputDir=outB",
+            ]
+        );
+
+        await Assert.That(run.ExitCode).IsEqualTo(0);
+        await Assert.That(run.Output).Contains("Metano: Transpiling App → outA");
+        await Assert.That(run.Output).DoesNotContain("Metano: Transpiling App → outB");
+    }
+
+    /// <summary>
     /// A multi-line <c>MetanoFilePrefix</c> with a <c>;</c> reaches the worker instance intact
     /// through <c>MSBuild::Escape</c> and the global properties of the <c>MSBuild</c> task.
     /// </summary>

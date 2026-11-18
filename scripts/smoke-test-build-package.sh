@@ -11,8 +11,8 @@ set -euo pipefail
 #   2. installs the metano-typescript tool from the feed into a local tool
 #      manifest and builds a throw-away consumer that references Metano and
 #      Metano.Build.TypeScript with PackageReference; asserts the generated .ts
-#      file, .metano-stamp and package.json, and that a second build skips the
-#      transpile;
+#      file, .metano-stamp and package.json, an asset a target adds before the
+#      transpile, and that a second build skips the transpile;
 #   3. builds a consumer without the tool and asserts METANOBUILD001 with the
 #      install instructions.
 #
@@ -112,8 +112,16 @@ EOF
     <PackageReference Include="Metano" Version="$SMOKE_VERSION" />
     <PackageReference Include="Metano.Build.TypeScript" Version="$SMOKE_VERSION" />
   </ItemGroup>
+  <!-- An asset a target adds before the transpile must reach the tool, as in 2.x. -->
+  <Target Name="AddSeed" BeforeTargets="MetanoTranspile">
+    <ItemGroup>
+      <MetanoAsset Include="seed.sql" OutputPath="db/seed.sql" />
+    </ItemGroup>
+  </Target>
 </Project>
 EOF
+
+  echo "create table todo (title text);" >"$dir/seed.sql"
 
   cat >"$dir/Todo.cs" <<'EOF'
 using Metano.Annotations;
@@ -152,6 +160,7 @@ check_consumer_build() {
   [ -f "$dir/generated/src/.metano-stamp" ] || fail ".metano-stamp was not written"
   [ -f "$dir/generated/package.json" ] || fail "package.json was not written"
   grep -rqs "class Todo" "$dir/generated/src" --include='*.ts' || fail "no generated .ts declares Todo"
+  [ -f "$dir/generated/src/db/seed.sql" ] || fail "the asset added by a target was not copied"
 
   local second
   second="$(cd "$dir" && dotnet build -nologo 2>&1)" || {
