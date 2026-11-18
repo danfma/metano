@@ -4,22 +4,20 @@ using Metano.Compiler.TypeScript.AST;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Produces the runtime <see cref="TsExpression"/> that narrows a value to a
-/// specific <see cref="IrTypeRef"/> in the overload dispatcher body.
+/// The overload dispatcher's runtime check that a value is a
+/// <see cref="IrTypeRef"/>: only the dispatcher's own policy lives here, and
+/// the concrete test of a type is <see cref="IrToTsRuntimeTestBridge"/>'s, the
+/// one a pattern or a cast renders for the same type (spec 011 NFR-004).
 /// <para>
-/// Emits <c>metano-runtime</c> type-check helpers (<c>isInt32</c>,
-/// <c>isFloat64</c>, <c>isBool</c>, …) so numeric overloads like
-/// <c>M(int)</c>/<c>M(double)</c> stay distinguishable at runtime. Shapes
-/// the IR models at a higher level than raw primitives (arrays, maps, sets,
-/// named types) use structural checks; anything unmappable collapses to
-/// <c>typeof value === "object"</c>.
-/// </para>
-/// <para>
-/// A type parameter has no runtime test of its own, so its check never
-/// rejects a value C# would accept: an unconstrained <c>T</c> (or a
-/// <c>struct</c> one, whose arguments include primitives) has no check, and
-/// a constrained one combines the checks of its constraints. A <c>null</c>
-/// result means "any value".
+/// The policy: <c>null</c> means "any value"; a nullable type also accepts
+/// <c>null</c>; a type parameter has no test of its own, so its check never
+/// rejects a value C# would accept (an unconstrained <c>T</c>, or a
+/// <c>struct</c> one, has none, and a constrained one combines the checks of
+/// its constraints); <c>object</c> accepts every value; the
+/// <c>[ExportFromBcl]</c> type overrides test their class; a delegate checks
+/// its arity, which tells delegate overloads apart; a type with no runtime
+/// test, or a BCL class this compilation cannot name, falls back to
+/// <c>typeof === "object"</c>.
 /// </para>
 /// </summary>
 internal static class IrTypeCheckBuilder
@@ -51,7 +49,9 @@ internal static class IrTypeCheckBuilder
                         ? new TsTypeReference(exported.Name, origin)
                         : new TsIdentifier(exported.Name)
                 ),
-            _ => ConcreteCheck(type, value),
+            IrFunctionTypeRef func => FunctionCheck(func, value),
+            IrNamedTypeRef named when HasNoNameableRuntimeClass(named) => TypeofObject(value),
+            _ => IrToTsRuntimeTestBridge.Render(value, type) ?? TypeofObject(value),
         };
 
     /// <summary>
@@ -61,35 +61,21 @@ internal static class IrTypeCheckBuilder
     public static bool HasCheck(IrTypeRef type, TypeCheckScope scope) =>
         Generate(type, new TsIdentifier("value"), scope) is not null;
 
-    private static TsExpression ConcreteCheck(IrTypeRef type, TsExpression value) =>
-        type switch
+    /// <summary>
+    /// A class of the BCL or of another non-transpiled assembly, and a BCL
+    /// exception without a runtime class: an <c>instanceof</c> would name an
+    /// identifier the output does not declare.
+    /// </summary>
+    private static bool HasNoNameableRuntimeClass(IrNamedTypeRef named) =>
+        named.Semantics switch
         {
-            IrPrimitiveTypeRef primitive => PrimitiveCheck(primitive.Primitive, value),
-            IrFunctionTypeRef func => FunctionCheck(func, value),
-            IrArrayTypeRef => new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                [value]
-            ),
-            IrMapTypeRef => new TsBinaryExpression(value, "instanceof", new TsIdentifier("Map")),
-            IrSetTypeRef => new TsBinaryExpression(
-                value,
-                "instanceof",
-                new TsRuntimeHelperReference("HashSet")
-            ),
-            // Iterable (IReadOnlyCollection<T>) lowers to structural "any object" — legacy
-            // emitted the same fallback because it couldn't produce a cheaper runtime test.
-            IrIterableTypeRef or IrIteratorTypeRef => TypeofObject(value),
-            IrPromiseTypeRef => new TsBinaryExpression(
-                value,
-                "instanceof",
-                new TsIdentifier("Promise")
-            ),
-            // Named types: branch on the semantic kind so enums and interfaces
-            // don't produce an impossible `instanceof` against something that
-            // isn't a runtime class. Classes/records fall through to the
-            // legacy shape.
-            IrNamedTypeRef named => NamedTypeCheck(named, value),
-            _ => TypeofObject(value),
+            { Kind: IrNamedTypeKind.Exception } => BclExceptionClasses.IsBclException(named)
+                && !IrToTsTypeMapper.ExceptionClasses.IsMapped(named),
+            {
+                IsTranspilable: false,
+                Kind: IrNamedTypeKind.Class or IrNamedTypeKind.Record or IrNamedTypeKind.Struct,
+            } => true,
+            _ => false,
         };
 
     /// <summary>
@@ -147,7 +133,11 @@ internal static class IrTypeCheckBuilder
         constraint switch
         {
             IrTypeParameterRef typeParameter => TypeParameterCheck(typeParameter, value, scope),
-            IrNamedTypeRef { Semantics.IsTranspilable: true } named => NamedTypeCheck(named, value),
+            IrNamedTypeRef { Semantics.IsTranspilable: true } named => Generate(
+                named,
+                value,
+                scope
+            ),
             _ => null,
         };
 
@@ -160,9 +150,13 @@ internal static class IrTypeCheckBuilder
     /// </summary>
     private static TsExpression ReferenceCheck(TsExpression value) =>
         new TsBinaryExpression(
-            new TsBinaryExpression(TypeofObject(value), "||", TypeofTest(value, "function")),
+            new TsBinaryExpression(
+                TypeofObject(value),
+                "||",
+                IrToTsRuntimeTestBridge.TypeofTest(value, "function")
+            ),
             "||",
-            TypeofTest(value, "string")
+            IrToTsRuntimeTestBridge.TypeofTest(value, "string")
         );
 
     /// <summary>
@@ -176,179 +170,25 @@ internal static class IrTypeCheckBuilder
                 all is null ? check : new TsBinaryExpression(all, "&&", check)
             );
 
-    private static TsExpression NamedTypeCheck(IrNamedTypeRef named, TsExpression value) =>
-        named.Semantics?.Kind switch
-        {
-            IrNamedTypeKind.StringEnum => StringEnumCheck(named, value),
-            IrNamedTypeKind.NumericEnum => RuntimeIs("isInt32", value),
-            IrNamedTypeKind.Interface => TypeofObject(value),
-            IrNamedTypeKind.Branded => BrandedCheck(named, value),
-            // A mapped BCL exception tests its runtime class (spec 011
-            // FR-014); an unmapped one has none and keeps the typeof check.
-            IrNamedTypeKind.Exception when IsMappedBclException(named) =>
-                IrToTsTypeMapper.ExceptionClasses.InstanceofTest(value, named),
-            // Classes / records / structs / exceptions — use instanceof when
-            // the type is in our compilation (and thus has a runtime class);
-            // otherwise fall back to typeof object so we don't reference an
-            // undefined identifier.
-            IrNamedTypeKind.Class
-            or IrNamedTypeKind.Record
-            or IrNamedTypeKind.Struct
-            or IrNamedTypeKind.Exception when named.Semantics is { IsTranspilable: true } =>
-                new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name)),
-            // No semantics attached (older call sites) keep the legacy
-            // `instanceof` shape so behavior doesn't regress.
-            null => new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name)),
-            _ => TypeofObject(value),
-        };
-
-    private static bool IsMappedBclException(IrNamedTypeRef named) =>
-        BclExceptionClasses.IsBclException(named)
-        && IrToTsTypeMapper.ExceptionClasses.IsMapped(named);
-
-    private static TsExpression StringEnumCheck(IrNamedTypeRef named, TsExpression value)
-    {
-        if (named.Semantics?.StringEnumValues is not { Count: > 0 } values)
-            return RuntimeIs("isString", value);
-        return values
-            .Select<string, TsExpression>(v => new TsBinaryExpression(
-                value,
-                "===",
-                new TsStringLiteral(v)
-            ))
-            .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
-    }
-
-    private static TsExpression BrandedCheck(IrNamedTypeRef named, TsExpression value) =>
-        IrRuntimeTypeTest.Of(named) is IrRuntimeTypeTest.Typeof { Primitive: var primitive }
-            ? TypeofTest(value, TypeofKind(primitive))
-            : TypeofObject(value);
-
     /// <summary>
-    /// The <c>typeof</c> result of the JS value a primitive that
-    /// <see cref="IrRuntimeTypeTest.Typeof"/> classifies lowers to. Numeric
-    /// kinds all share <c>"number"</c>, so a <c>typeof</c> test cannot tell
-    /// <c>int</c> from <c>double</c> — and it cannot range a <c>bigint</c>
-    /// either, which is why the type patterns (<c>o is long</c>,
-    /// <see cref="IrToTsExpressionBridge"/> pattern lowering) route the 64-bit
-    /// kinds to the runtime range checks instead of here; a <c>typeof</c>
-    /// answer survives only for the dispatcher's branded check
-    /// (<see cref="BrandedCheck"/>), where the guard builder's <c>typeof</c>
-    /// spelling of FR-049 is the shipped contract.
+    /// A delegate parameter: any function of the delegate's arity, which tells
+    /// delegate overloads of different arities apart.
     /// </summary>
-    internal static string TypeofKind(IrPrimitive primitive) =>
-        primitive switch
-        {
-            IrPrimitive.String or IrPrimitive.Char or IrPrimitive.Guid => "string",
-            IrPrimitive.Boolean => "boolean",
-            IrPrimitive.Int64 or IrPrimitive.UInt64 or IrPrimitive.BigInteger => "bigint",
-            IrPrimitive.Int32
-            or IrPrimitive.Int16
-            or IrPrimitive.Byte
-            or IrPrimitive.Float32
-            or IrPrimitive.Float64
-            or IrPrimitive.Decimal => "number",
-            _ => throw new InvalidOperationException(
-                $"Primitive '{primitive}' lowers to an object, not a typeof-testable value."
-            ),
-        };
-
-    internal static TsExpression TypeofTest(TsExpression value, string kind) =>
-        new TsBinaryExpression(
-            new TsUnaryExpression("typeof ", value),
-            "===",
-            new TsStringLiteral(kind)
-        );
-
-    /// <summary>
-    /// The runtime test for a <c>decimal</c> value: an <c>instanceof Decimal</c>
-    /// against the decimal.js class the type lowers to. Every other numeric
-    /// check (<c>typeof === "number"</c>) would match plain JS numbers no C#
-    /// decimal ever produces and reject every real decimal. The right-hand
-    /// side carries the export's origin (#477): the collector imports
-    /// decimal.js for exactly this node, and a project type named Decimal
-    /// cannot capture the test.
-    /// </summary>
-    internal static TsExpression DecimalInstanceof(TsExpression value) =>
-        new TsBinaryExpression(
-            value,
-            "instanceof",
-            IrToTsExpressionBridge.BclDecimalValueReference()
-        );
-
-    /// <summary>
-    /// Maps a semantic <see cref="IrPrimitive"/> to the same <c>metano-runtime</c>
-    /// helper the legacy dispatcher uses, so same-arity numeric overloads
-    /// (e.g. <c>M(int)</c> vs <c>M(double)</c>) remain distinguishable at
-    /// runtime. <c>decimal</c> piggy-backs on <c>isFloat64</c> because the type
-    /// mapper lowers it to <c>number</c> at the signature level. The 64-bit
-    /// kinds dispatch with the <c>bigint</c> range checks (FR-048).
-    /// </summary>
-    private static TsExpression PrimitiveCheck(IrPrimitive primitive, TsExpression value) =>
-        primitive switch
-        {
-            IrPrimitive.Char => RuntimeIs("isChar", value),
-            IrPrimitive.String => RuntimeIs("isString", value),
-            IrPrimitive.Byte => RuntimeIs("isByte", value),
-            IrPrimitive.Int16 => RuntimeIs("isInt16", value),
-            IrPrimitive.Int32 => RuntimeIs("isInt32", value),
-            IrPrimitive.Int64 => RuntimeIs("isInt64", value),
-            IrPrimitive.UInt64 => RuntimeIs("isUInt64", value),
-            IrPrimitive.Float32 => RuntimeIs("isFloat32", value),
-            IrPrimitive.Float64 => RuntimeIs("isFloat64", value),
-            IrPrimitive.Boolean => RuntimeIs("isBool", value),
-            // Decimal always lowers to a decimal.js `Decimal` instance (the
-            // shipped [ExportFromBcl] mapping in Metano.Runtime), so the
-            // runtime test is instanceof — the one check that distinguishes a
-            // decimal overload from a same-arity int one (a boxed decimal is
-            // not an int in C#). Generate resolves the [ExportFromBcl]
-            // override to the same test when the scope carries it; scopes
-            // without one (companion namespaces) reach this arm.
-            IrPrimitive.Decimal => DecimalInstanceof(value),
-            IrPrimitive.BigInteger => RuntimeIs("isBigInt", value),
-            IrPrimitive.Guid => RuntimeIs("isString", value),
-            // DateTime/DateTimeOffset/DateOnly/TimeOnly/TimeSpan surface in TS as
-            // concrete Temporal subclasses (PlainDate, ZonedDateTime, …), each
-            // with its own runtime constructor. Without a stable class name in
-            // IR we mirror the legacy fallback: typeof === "object". This keeps
-            // the dispatcher selecting the correct arity and lets TS's
-            // structural typing do the rest at the call site.
-            IrPrimitive.DateTime
-            or IrPrimitive.DateTimeOffset
-            or IrPrimitive.DateOnly
-            or IrPrimitive.TimeOnly
-            or IrPrimitive.TimeSpan => TypeofObject(value),
-            IrPrimitive.Object or IrPrimitive.Void => TypeofObject(value),
-            _ => TypeofObject(value),
-        };
-
     private static TsExpression FunctionCheck(IrFunctionTypeRef func, TsExpression value)
     {
-        var typeofCheck = new TsBinaryExpression(
-            new TsUnaryExpression("typeof ", value),
-            "===",
-            new TsStringLiteral("function")
-        );
-
-        var arity = func.Parameters.Count;
         var arityCheck = new TsBinaryExpression(
             new TsPropertyAccess(value, "length"),
             "===",
-            new TsLiteral(arity.ToString())
+            new TsLiteral(func.Parameters.Count.ToString())
         );
 
-        return new TsBinaryExpression(typeofCheck, "&&", arityCheck);
+        return new TsBinaryExpression(
+            IrToTsRuntimeTestBridge.TypeofTest(value, "function"),
+            "&&",
+            arityCheck
+        );
     }
 
-    /// <summary>
-    /// The call goes through <see cref="TsRuntimeHelperReference"/>, not a bare
-    /// identifier: when a user declaration in the module claims the helper's
-    /// name, the import collector aliases the runtime import and the printer
-    /// routes the call through the alias instead of silently calling the user's
-    /// function (issue #484).
-    /// </summary>
-    private static TsExpression RuntimeIs(string helper, TsExpression value) =>
-        new TsCallExpression(new TsRuntimeHelperReference(helper), [value]);
-
-    private static TsExpression TypeofObject(TsExpression value) => TypeofTest(value, "object");
+    private static TsExpression TypeofObject(TsExpression value) =>
+        IrToTsRuntimeTestBridge.TypeofTest(value, "object");
 }

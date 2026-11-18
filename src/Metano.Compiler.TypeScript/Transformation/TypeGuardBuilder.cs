@@ -860,11 +860,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         new(new TsLiteral("true"), GuardTestKind.Unchecked, AcceptsAbsent: true);
 
     private static TsExpression TypeofCheck(TsExpression expr, string typeName) =>
-        new TsBinaryExpression(
-            new TsUnaryExpression("typeof ", expr),
-            "===",
-            new TsStringLiteral(typeName)
-        );
+        IrToTsRuntimeTestBridge.TypeofTest(expr, typeName);
 
     private static TsExpression StringLiteralUnionCheck(
         TsExpression fieldAccess,
@@ -879,21 +875,13 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
     private static TsBinaryExpression TupleCheck(TsExpression fieldAccess, int length) =>
-        new(
-            ArrayCheck(fieldAccess),
-            "&&",
-            new TsBinaryExpression(
-                new TsPropertyAccess(fieldAccess, "length"),
-                "===",
-                new TsLiteral(length.ToString(CultureInfo.InvariantCulture))
-            )
-        );
+        IrToTsRuntimeTestBridge.FixedTupleTest(fieldAccess, length);
 
     private static TsCallExpression ArrayCheck(TsExpression fieldAccess) =>
-        new(new TsPropertyAccess(new TsIdentifier("Array"), "isArray"), [fieldAccess]);
+        IrToTsRuntimeTestBridge.ArrayTest(fieldAccess);
 
     private static TsBinaryExpression InstanceofCheck(TsExpression fieldAccess, string typeName) =>
-        new(fieldAccess, "instanceof", new TsIdentifier(typeName));
+        IrToTsRuntimeTestBridge.InstanceofTest(fieldAccess, new TsIdentifier(typeName));
 
     /// <summary>
     /// The constructor test against an origin-carrying class reference
@@ -905,9 +893,8 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         string typeName,
         TsTypeOrigin? origin
     ) =>
-        new(
+        IrToTsRuntimeTestBridge.InstanceofTest(
             fieldAccess,
-            "instanceof",
             origin is not null ? new TsTypeReference(typeName, origin) : new TsIdentifier(typeName)
         );
 

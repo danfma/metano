@@ -1,5 +1,5 @@
-import { isInt32 } from "metano-runtime";
-import type { IRank } from "./i-rank";
+import { isInt32, isType } from "metano-runtime";
+import { IRank$runtimeType, type IRank } from "./i-rank";
 
 export class Box<T extends IRank<T>> {
   protected static readonly byBoxValue = /* @__PURE__ */ Symbol("Box(T value)");
@@ -33,7 +33,7 @@ export class Box<T extends IRank<T>> {
       return;
     }
 
-    if (args.length === 1 && typeof args[0] === "object") {
+    if (args.length === 1 && isType(args[0], IRank$runtimeType)) {
       const value = args[0] as T;
       this.value = value;
 
@@ -52,9 +52,9 @@ export class Box<T extends IRank<T>> {
   }
 }
 
-import { isInt32 } from "metano-runtime";
+import { isInt32, isType } from "metano-runtime";
 import { Box } from "./box";
-import type { IRank } from "./i-rank";
+import { IRank$runtimeType, type IRank } from "./i-rank";
 
 export class RankedBox<T extends IRank<T>> extends Box<T> {
   protected static readonly byRankedBoxValue = /* @__PURE__ */ Symbol("RankedBox(T value)");
@@ -86,7 +86,7 @@ export class RankedBox<T extends IRank<T>> extends Box<T> {
       return;
     }
 
-    if (args.length === 1 && typeof args[0] === "object") {
+    if (args.length === 1 && isType(args[0], IRank$runtimeType)) {
       const value = args[0] as T;
       super(Box.byBoxValue, value);
 

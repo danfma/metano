@@ -18,8 +18,8 @@ public class ReferenceInputRelationalPatternTests
             """
         );
 
-        await Assert.That(output).Contains("return typeof o === \"number\" && o < 3;");
-        await Assert.That(output).Contains("return typeof o === \"number\" && o > 1 && o < 5;");
+        await Assert.That(output).Contains("return isInt32(o) && o < 3;");
+        await Assert.That(output).Contains("return isInt32(o) && o > 1 && o < 5;");
     }
 
     [Test]
@@ -40,7 +40,7 @@ public class ReferenceInputRelationalPatternTests
             """
         );
 
-        await Assert.That(output).Contains("typeof o === \"number\" && o < 3");
+        await Assert.That(output).Contains("isInt32(o) && o < 3");
     }
 
     [Test]

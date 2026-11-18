@@ -184,8 +184,10 @@ public class Int64DispatchGuardTests
 
         var longBranch = output.IndexOf("isInt64(args[0])", StringComparison.Ordinal);
 
+        // The branded wrapper tests its underlying long (spec 011 FR-022).
         var brandedBranch = output.IndexOf(
-            "typeof args[0] === \"bigint\"",
+            "isInt64(args[0])",
+            longBranch + 1,
             StringComparison.Ordinal
         );
 
@@ -248,13 +250,16 @@ public class Int64DispatchGuardTests
 
         var output = files["names.ts"];
 
-        await Assert.That(output).Contains("import { isInt64, isUInt64 } from \"metano-runtime\";");
+        await Assert
+            .That(output)
+            .Contains("import { isBigInt, isInt64, isUInt64 } from \"metano-runtime\";");
+
         await Assert.That(output).Contains("isInt64(");
         await Assert.That(output).Contains("isUInt64(");
 
         var longTest = output.IndexOf("isInt64(", StringComparison.Ordinal);
         var ulongTest = output.IndexOf("isUInt64(", StringComparison.Ordinal);
-        var bigIntegerTest = output.IndexOf("=== \"bigint\"", StringComparison.Ordinal);
+        var bigIntegerTest = output.IndexOf("isBigInt(", StringComparison.Ordinal);
 
         await Assert.That(longTest).IsGreaterThan(-1);
         await Assert.That(ulongTest).IsGreaterThan(longTest);

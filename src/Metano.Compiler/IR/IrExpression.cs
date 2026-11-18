@@ -714,8 +714,9 @@ public enum IrUnaryOp
 /// value its static type (the <c>0</c> of an enum that declares no zero
 /// member), so a target that erases casts still asserts it
 /// (<c>0 as Level</c>).</param>
-/// <param name="ReferenceConversion">The facts of an explicit reference
-/// conversion the source wrote (<c>(Derived)baseValue</c>, <c>(IShape)obj</c>):
+/// <param name="ReferenceConversion">The facts of an explicit reference or
+/// unboxing conversion the source wrote (<c>(Derived)baseValue</c>,
+/// <c>(IShape)obj</c>, <c>(int)obj</c>):
 /// C# checks the value at runtime and throws <c>InvalidCastException</c> for
 /// another type. <c>null</c> for every other cast. A target that erases static
 /// types decides from them whether to type the result, and whether to check
@@ -747,12 +748,36 @@ public sealed record IrReferenceConversion(
     bool TargetDerivesFromEnclosingType,
     bool InInlineExpansion,
     bool TargetMentionsTypeParameter
-);
+)
+{
+    /// <summary>
+    /// The conversion unboxes (<c>(int)obj</c>, <c>(Color)obj</c>,
+    /// <c>(Point)obj</c> for a struct) instead of converting a reference: .NET
+    /// checks it the same way, with the same <c>InvalidCastException</c>.
+    /// </summary>
+    public bool IsUnboxing { get; init; }
+}
 
 /// <summary>
 /// Type check: <c>expr is T</c>.
 /// </summary>
 public sealed record IrTypeCheck(IrExpression Expression, IrTypeRef Type) : IrExpression;
+
+/// <summary>
+/// C# <c>receiver.GetType()</c> (<c>object.GetType</c>): the runtime type of
+/// the value. <paramref name="ConstantType"/> is the type the receiver's static
+/// type decides without evaluating anything (a non-nullable primitive, enum or
+/// struct receiver that has no side effects); <c>null</c> when the answer is
+/// read from the value at runtime. A sealed class is not folded.
+/// </summary>
+/// <param name="Receiver">The value whose type is read.</param>
+/// <param name="ConstantType">The folded answer, or <c>null</c>.</param>
+public sealed record IrGetTypeExpression(IrExpression Receiver, IrTypeRef? ConstantType)
+    : IrExpression;
+
+/// <summary>C# <c>typeof(T)</c> for a closed, nameable <paramref name="Type"/>.</summary>
+/// <param name="Type">The type whose runtime type the expression denotes.</param>
+public sealed record IrTypeOfExpression(IrTypeRef Type) : IrExpression;
 
 // -- Conditional --
 
@@ -763,7 +788,16 @@ public sealed record IrConditionalExpression(
     IrExpression Condition,
     IrExpression WhenTrue,
     IrExpression WhenFalse
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The target type of the C# <c>x as T</c> this conditional defines
+    /// (<c>x is T ? (T)x : null</c>), so a target with a one-call form of
+    /// <c>as</c> can render it from the condition's operand; <c>null</c> for
+    /// every other conditional.
+    /// </summary>
+    public IrTypeRef? AsTarget { get; init; }
+}
 
 // -- Async --
 

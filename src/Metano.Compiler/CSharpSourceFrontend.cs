@@ -204,6 +204,16 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         ValidateSubpathRoot(packageInfo, target, diagnostics);
 
+        var runtimeQuestions = compilation is null
+            ? RuntimeQuestionSet.Empty
+            : RuntimeQuestionScanner.Scan(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                generatedSources,
+                diagnostics
+            );
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: packageInfo?.Name,
@@ -232,7 +242,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             TranspilableTypeEntries: transpilableTypeEntries,
             EntryPoint: entryPoint,
             PackageSubpathRoot: packageInfo?.SubpathRoot ?? PackageSubpathRoot.None
-        );
+        )
+        {
+            RuntimeQuestions = runtimeQuestions.Questions,
+            QuestionedCollectionTypes = runtimeQuestions.QuestionedCollectionTypes,
+        };
     }
 
     /// <summary>

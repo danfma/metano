@@ -66,4 +66,10 @@ public enum CachedExportKind
     Namespace,
     TypeAlias,
     Interface,
+
+    /// <summary>
+    /// An exported variable, such as a runtime type descriptor
+    /// (<c>export const IFoo$runtimeType</c>, spec 011 FR-046).
+    /// </summary>
+    Variable,
 }

@@ -70,11 +70,12 @@ public class ReferenceDowncastTests
     }
 
     /// <summary>
-    /// A target with no runtime class to test (an interface, a type parameter,
-    /// a <c>string</c>) is only asserted; so is a nullable cast's result type.
+    /// A target with no runtime class but a runtime type descriptor (an
+    /// interface, a <c>string</c>) is checked through the descriptor (spec 011
+    /// D29); a type parameter, which has none, is only asserted.
     /// </summary>
     [Test]
-    public async Task DowncastToATypeWithoutAClass_IsAnAssertion()
+    public async Task DowncastToAnInterfaceOrPrimitive_ChecksTheDescriptor()
     {
         var output = TranspileUse(
             """
@@ -86,10 +87,9 @@ public class ReferenceDowncastTests
             """
         );
 
-        await Assert.That(output).Contains("return o as IMarker;");
-        await Assert.That(output).Contains("return o as string;");
+        await Assert.That(output).Contains("return castTo<IMarker>(o, IMarker$runtimeType);");
+        await Assert.That(output).Contains("return castTo<string>(o, StringType);");
         await Assert.That(output).Contains("return o as T;");
-        await Assert.That(output).DoesNotContain("castTo");
     }
 
     /// <summary>

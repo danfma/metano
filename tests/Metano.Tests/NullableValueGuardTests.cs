@@ -244,13 +244,21 @@ public class NullableValueGuardTests
             .That(BodyOf("rewrappedNullable(n: number | null): number"))
             .IsEqualTo($"  return n{Guard};");
 
-        await Assert
-            .That(unboxing)
-            .Contains($"export function read(o: Object): number {{\n  return o{Guard};\n}}");
+        // The unboxing itself is checked (spec 011 D29): castTo lets null
+        // through, and the guard rejects it.
+        const string unboxed = "castTo<number | null>(o, Int32Type)";
 
         await Assert
             .That(unboxing)
-            .Contains($"export function cast(o: Object): number {{\n  return o{Guard};\n}}");
+            .Contains(
+                $"export function read(o: Object): number {{\n  return {unboxed}{Guard};\n}}"
+            );
+
+        await Assert
+            .That(unboxing)
+            .Contains(
+                $"export function cast(o: Object): number {{\n  return {unboxed}{Guard};\n}}"
+            );
     }
 
     /// <summary>

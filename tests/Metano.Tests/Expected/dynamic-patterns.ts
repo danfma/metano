@@ -1,3 +1,4 @@
+import { isInt32, isString } from "metano-runtime";
 import { Circle } from "./circle";
 
 export class Patterns {
@@ -17,13 +18,13 @@ export class Patterns {
     const circle = d instanceof Circle ? d : null;
 
     return (($s) => {
-      if (typeof $s === "number") {
+      if (isInt32($s)) {
         const n = $s;
 
         return n;
       }
 
-      if (typeof $s === "string") {
+      if (isString($s)) {
         const s = $s;
 
         return s.length;

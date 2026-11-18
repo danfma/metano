@@ -1,3 +1,4 @@
+import { isInt32 } from "metano-runtime";
 import { Circle } from "./circle";
 import { Node } from "./node";
 import type { Shape } from "./shape";
@@ -81,7 +82,7 @@ export class Geometry {
     {
       let n: number;
 
-      if (typeof a === "number" && (n = a, true)) {
+      if (isInt32(a) && (n = a, true)) {
         total = (total + n) | 0;
       }
     }
@@ -89,7 +90,7 @@ export class Geometry {
     {
       let n: number;
 
-      if (typeof b === "number" && (n = b, true)) {
+      if (isInt32(b) && (n = b, true)) {
         total = (total + Math.imul(n, 100)) | 0;
       }
     }

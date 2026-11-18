@@ -147,6 +147,8 @@ public static class IrBodyCoverageProbe
                 .All(IsCoveredExpression),
             IrUnsafeCastExpression unsafeCast => IsCoveredExpression(unsafeCast.Value),
             IrAsDynamicExpression asDynamic => IsCoveredExpression(asDynamic.Value),
+            IrGetTypeExpression getType => IsCoveredExpression(getType.Receiver),
+            IrTypeOfExpression => true,
             _ => false,
         };
 

@@ -393,9 +393,32 @@ public static class DiagnosticCodes
     /// pattern / <c>catch</c> clause against a non-transpilable exception type with no
     /// runtime class (a BCL exception outside the <c>[ExportFromBcl]</c> mapping of spec
     /// 011 FR-013): the test is not widened to <c>Exception</c>, which would take too
-    /// much (FR-014). An error, at the test or clause. The other reasons of the
-    /// contract still report MS0001 until spec 011's runtime descriptors land.</summary>
+    /// much (FR-014). An error, at the test or clause. Reason 1 (a test against a
+    /// delegate type) is reported by the TypeScript target, which has no runtime test
+    /// for a delegate (spec 011 stage 011b).</summary>
     public const string UnanswerableRuntimeTypeTest = "MS0045";
+
+    /// <summary>MS0048 — <c>GetType()</c> on a receiver whose static type is
+    /// <c>object</c>, <c>dynamic</c>, an interface a <c>[PlainObject]</c> implements or
+    /// an unconstrained type parameter, in a compilation with a <c>[PlainObject]</c>
+    /// type: a plain object has no runtime identity, so the answer for one is
+    /// <c>ObjectType</c>. A warning, at the call; the output is emitted (spec 011
+    /// FR-020, contracts/diagnostics.md).</summary>
+    public const string RuntimeTypeOfPlainObject = "MS0048";
+
+    /// <summary>MS0049 — reflection a runtime type descriptor cannot answer: a
+    /// <c>System.Type</c> member outside the supported surface (reason 1),
+    /// <c>Activator.CreateInstance</c>, <c>Type.GetType(string)</c>,
+    /// <c>typeof(void)</c>, an open generic definition or a pointer type (reason 2),
+    /// <c>GetType()</c> on a <c>null</c> literal (reason 3). An error, at the member
+    /// access or <c>typeof</c> (spec 011 FR-025).</summary>
+    public const string UnsupportedReflection = "MS0049";
+
+    /// <summary>MS0055 — an explicit cast the target emits unchecked: an array of a
+    /// non-<c>object</c> element (reason 1), a delegate (reason 2), an open type
+    /// parameter that is not reified (reason 3). A warning, at the cast; the cast is a
+    /// TypeScript assertion (spec 011 FR-026, FR-035).</summary>
+    public const string UncheckedCast = "MS0055";
 
     /// <summary>MS0051 — a reference to an interop API of another target language
     /// (<c>Metano.Interop.Js</c>, bound to TypeScript by its <c>[TargetSpecific]</c>

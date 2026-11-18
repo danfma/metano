@@ -29,7 +29,15 @@ public sealed record IrPatternDesignator(string Name, IrTypeRef Type);
 /// When <see cref="Designator"/> is non-null the match also binds the value
 /// to that local.</summary>
 public sealed record IrTypePattern(IrTypeRef Type, IrPatternDesignator? Designator = null)
-    : IrPattern;
+    : IrPattern
+{
+    /// <summary>
+    /// The static type of the value the pattern tests, when extraction knows
+    /// it, so a target can classify the test with it
+    /// (<see cref="IrRuntimeTypeTest.Of"/>); <c>null</c> otherwise.
+    /// </summary>
+    public IrTypeRef? InputType { get; init; }
+}
 
 /// <summary>
 /// Var pattern: <c>x is var y</c> — always matches, binds the value. As the

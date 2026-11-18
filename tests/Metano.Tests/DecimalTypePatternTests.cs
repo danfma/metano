@@ -102,8 +102,9 @@ public class DecimalTypePatternTests
 
         // A decimal and an int arm can no longer share one `typeof` test —
         // the decimal arm runs first, as a boxed decimal is not an int in C#.
+        // The int arm validates the value (spec 011 FR-022).
         await Assert.That(output).Contains("case o instanceof Decimal:");
-        await Assert.That(output.Split("typeof o === \"number\"").Length - 1).IsEqualTo(1);
+        await Assert.That(output).Contains("case isInt32(o):");
     }
 
     [Test]
@@ -128,9 +129,7 @@ public class DecimalTypePatternTests
 
         await Assert
             .That(output)
-            .Contains(
-                "o instanceof Decimal ? \"dec\" : typeof o === \"number\" ? \"dbl\" : \"other\""
-            );
+            .Contains("o instanceof Decimal ? \"dec\" : isFloat64(o) ? \"dbl\" : \"other\"");
     }
 
     [Test]

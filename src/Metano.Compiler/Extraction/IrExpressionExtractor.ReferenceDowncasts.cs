@@ -15,8 +15,9 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// The facts of the cast when it is an explicit reference conversion;
-    /// <c>null</c> for any other conversion.
+    /// The facts of the cast when it is an explicit reference conversion or an
+    /// unboxing conversion (both checked by .NET); <c>null</c> for any other
+    /// conversion.
     /// </summary>
     private IrReferenceConversion? ReferenceConversionOf(
         CastExpressionSyntax cast,
@@ -25,7 +26,7 @@ public sealed partial class IrExpressionExtractor
     {
         var conversion = ConversionOfCast(cast, targetType);
 
-        if (conversion is not { IsReference: true, IsExplicit: true })
+        if (!conversion.IsExplicit || !(conversion.IsReference || conversion.IsUnboxing))
             return null;
 
         return new IrReferenceConversion(
@@ -33,7 +34,10 @@ public sealed partial class IrExpressionExtractor
             TargetDerivesFromEnclosingType: DerivesFromEnclosingType(targetType, cast),
             InInlineExpansion: _inlineExpanding.Count > 0,
             TargetMentionsTypeParameter: MentionsTypeParameter(targetType)
-        );
+        )
+        {
+            IsUnboxing = conversion.IsUnboxing,
+        };
     }
 
     /// <summary>

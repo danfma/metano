@@ -26,6 +26,13 @@ internal sealed class ModuleLocalDeclarations(INamedTypeSymbol owner, Compilatio
         _placement.MustFollowOwner(privateType) ? _trailing : _hoisted;
 
     /// <summary>
+    /// Places <paramref name="statement"/> before the module-level owner's
+    /// declarations: a nested type's module-scope companion (the memo of its
+    /// runtime type descriptor, spec 011 FR-018).
+    /// </summary>
+    public void Hoist(TsTopLevel statement) => _hoisted.Add(statement);
+
+    /// <summary>
     /// Inserts the hoisted declarations before the owner's own, which start at
     /// <paramref name="ownerStart"/>, and appends the trailing ones after them.
     /// </summary>

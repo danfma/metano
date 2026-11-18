@@ -1,31 +1,53 @@
 namespace Metano.Compiler.IR;
 
 /// <summary>
-/// How a target that erases static types (TypeScript) recognizes a value of a
-/// type at runtime. The single decision behind every type test a backend lowers
-/// (<c>is T</c>, <c>as T</c>): extraction gates on it, so a type with
-/// <see cref="None"/> reports MS0001 instead of reaching a backend, and the
-/// backend renders the remaining cases without deciding again.
+/// How a value of a type is recognized at runtime, as neutral facts about the
+/// type (spec 011 FR-021, stage 011b): the single decision table behind every
+/// type test a backend lowers (<c>is T</c>, <c>as T</c>, patterns, casts,
+/// overload dispatch). The categories say what the type is, never how a
+/// target renders it: whether a test becomes <c>instanceof</c>, <c>typeof</c>,
+/// a validating helper, a guard call or a descriptor read is the target's
+/// decision.
 /// </summary>
 public abstract record IrRuntimeTypeTest
 {
     private IrRuntimeTypeTest() { }
 
-    /// <summary>The value is an instance of the type's runtime class.</summary>
-    public sealed record Instanceof : IrRuntimeTypeTest;
+    /// <summary>
+    /// The value is an instance of the type's runtime class: classes, records,
+    /// structs, exceptions, the temporal types, and the BCL types that lower
+    /// to a runtime class (<c>Task</c>, the 2.x maps and sets).
+    /// </summary>
+    public sealed record NominalClass : IrRuntimeTypeTest;
+
+    /// <summary>
+    /// A transpiled interface, tested nominally: a class instance implements it
+    /// when its class declares it (directly or through a base or a base
+    /// interface). <paramref name="Implementers"/> are the <c>[PlainObject]</c>
+    /// types that implement it, in a deterministic order, which test a value
+    /// that has no class; empty when the classification is made from the type
+    /// alone (a target that renders the fallback computes them over the whole
+    /// compilation).
+    /// </summary>
+    public sealed record NominalInterface(IReadOnlyList<IrTypeRef> Implementers)
+        : IrRuntimeTypeTest;
+
+    /// <summary>A <c>[PlainObject]</c>: the type has no runtime class, only a shape.</summary>
+    public sealed record ErasedShape : IrRuntimeTypeTest;
 
     /// <summary>
     /// The value lowers to a JS primitive with the runtime representation of
-    /// <paramref name="Primitive"/>: primitives themselves, enums (number or
-    /// string) and branded wrappers (their underlying primitive).
+    /// <paramref name="PrimitiveKind"/>: primitives themselves, enums (an
+    /// <see cref="IrPrimitive.Int32"/> or <see cref="IrPrimitive.String"/>
+    /// value of a declared set) and <c>[InlineWrapper]</c> / branded wrappers
+    /// (their underlying primitive). <paramref name="StaticPrimitive"/> is the
+    /// primitive of the tested expression's static type when it is the tested
+    /// one (an <c>int?</c> tested for <c>int</c>), so the test only has to tell
+    /// the value from <c>null</c>; <c>null</c> when the static type cannot
+    /// decide (<c>object</c>, an interface, a type parameter).
     /// </summary>
-    public sealed record Typeof(IrPrimitive Primitive) : IrRuntimeTypeTest;
-
-    /// <summary>
-    /// The type is erased (an interface or a <c>[PlainObject]</c>), and its
-    /// <c>[GenerateGuard]</c> guard tests the value's shape.
-    /// </summary>
-    public sealed record Guard : IrRuntimeTypeTest;
+    public sealed record Primitive(IrPrimitive PrimitiveKind, IrPrimitive? StaticPrimitive)
+        : IrRuntimeTypeTest;
 
     /// <summary>
     /// The type lowers to a fixed-length JS array (a <c>[JsTuple]</c>), so the
@@ -33,72 +55,200 @@ public abstract record IrRuntimeTypeTest
     /// The test is structural: any array of that length matches, and element
     /// types are not checked.
     /// </summary>
-    public sealed record ArrayTuple(int Arity) : IrRuntimeTypeTest;
+    public sealed record FixedTuple(int Arity) : IrRuntimeTypeTest;
+
+    /// <summary>A native array; the element type is erased.</summary>
+    public sealed record Array : IrRuntimeTypeTest;
+
+    /// <summary>An <c>IEnumerable&lt;T&gt;</c> or an enumerator.</summary>
+    public sealed record Iterable : IrRuntimeTypeTest;
+
+    /// <summary>The <c>null</c> type.</summary>
+    public sealed record Null : IrRuntimeTypeTest;
+
+    /// <summary><c>System.Object</c>: any value but <c>null</c>.</summary>
+    public sealed record Object : IrRuntimeTypeTest;
 
     /// <summary>
-    /// No runtime test exists: an erased type without a guard, a type
-    /// parameter, a collection or any other structural shape.
+    /// The static type of the tested expression decides the answer: a
+    /// non-nullable value type tested for itself (<paramref name="Result"/>
+    /// <c>true</c>) or for another value type (<c>false</c>). C# itself warns
+    /// (CS0183 / CS0184).
+    /// </summary>
+    public sealed record Constant(bool Result) : IrRuntimeTypeTest;
+
+    /// <summary>
+    /// No runtime test exists: a delegate, <c>void</c>, a type parameter, a
+    /// collection of the 2.x mapping, an interface or another named type with
+    /// no runtime identity.
     /// </summary>
     public sealed record None : IrRuntimeTypeTest;
 
-    /// <summary>Whether <paramref name="type"/> has any runtime test (not <see cref="None"/>).</summary>
-    public static bool ExistsFor(IrTypeRef type) => Of(type) is not None;
+    /// <summary>
+    /// Whether extraction lets a test against <paramref name="type"/> reach a
+    /// target that erases static types: a type with a runtime test, a
+    /// <c>[PlainObject]</c> only through its <c>[GenerateGuard]</c> guard, and
+    /// a delegate, whose test the target rejects with its own diagnostic.
+    /// Arrays, iterables, <c>object</c> and the remaining <see cref="None"/>
+    /// types keep the extraction's MS0001.
+    /// </summary>
+    public static bool ExistsFor(IrTypeRef type) =>
+        Of(type) switch
+        {
+            NominalClass or NominalInterface or Primitive or FixedTuple => true,
+            ErasedShape => type is IrNamedTypeRef { Semantics.HasGeneratedGuard: true },
+            _ => IsDelegate(type),
+        };
 
-    public static IrRuntimeTypeTest Of(IrTypeRef type) =>
+    /// <summary>
+    /// The category of a test against <paramref name="type"/> of a value whose
+    /// static type is <paramref name="staticType"/> (<c>null</c> when unknown,
+    /// as for an overload dispatcher's argument).
+    /// </summary>
+    public static IrRuntimeTypeTest Of(IrTypeRef type, IrTypeRef? staticType = null) =>
+        ConstantOf(type, staticType) ?? OfType(type, StaticPrimitiveOf(staticType));
+
+    /// <summary>Whether <paramref name="type"/> is a delegate type.</summary>
+    public static bool IsDelegate(IrTypeRef type) =>
+        type is IrFunctionTypeRef or IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Delegate };
+
+    private static IrRuntimeTypeTest OfType(IrTypeRef type, IrPrimitive? staticPrimitive) =>
         type switch
         {
-            IrPrimitiveTypeRef { Primitive: var primitive } => OfPrimitive(primitive),
-            IrNamedTypeRef { Semantics: var semantics } => OfNamed(semantics),
+            IrPrimitiveTypeRef { Primitive: var primitive } => OfPrimitive(
+                primitive,
+                staticPrimitive
+            ),
+            IrNamedTypeRef { Semantics: var semantics } => OfNamed(semantics, staticPrimitive),
+            IrArrayTypeRef => new Array(),
+            IrIterableTypeRef or IrIteratorTypeRef => new Iterable(),
+            IrMapTypeRef or IrSetTypeRef or IrPromiseTypeRef => new NominalClass(),
             _ => new None(),
         };
 
     /// <summary>
-    /// Temporal values are class instances; <c>object</c> and <c>void</c>
-    /// have no runtime representation to test.
+    /// Temporal values are class instances; <c>object</c> accepts any value but
+    /// <c>null</c>, and <c>void</c> has no value to test.
     /// </summary>
-    private static IrRuntimeTypeTest OfPrimitive(IrPrimitive primitive) =>
+    private static IrRuntimeTypeTest OfPrimitive(
+        IrPrimitive primitive,
+        IrPrimitive? staticPrimitive
+    ) =>
         primitive switch
         {
-            IrPrimitive.Object or IrPrimitive.Void => new None(),
+            IrPrimitive.Object => new Object(),
+            IrPrimitive.Void => new None(),
             IrPrimitive.DateTime
             or IrPrimitive.DateTimeOffset
             or IrPrimitive.DateOnly
             or IrPrimitive.TimeOnly
-            or IrPrimitive.TimeSpan => new Instanceof(),
-            _ => new Typeof(primitive),
+            or IrPrimitive.TimeSpan => new NominalClass(),
+            _ => new Primitive(primitive, staticPrimitive == primitive ? primitive : null),
+        };
+
+    /// <summary>A named type without semantics keeps the class test it always had.</summary>
+    private static IrRuntimeTypeTest OfNamed(
+        IrNamedTypeSemantics? semantics,
+        IrPrimitive? staticPrimitive
+    ) =>
+        semantics switch
+        {
+            null => new NominalClass(),
+            { Kind: IrNamedTypeKind.NumericEnum } => new Primitive(IrPrimitive.Int32, null),
+            { Kind: IrNamedTypeKind.StringEnum } => new Primitive(IrPrimitive.String, null),
+            { Kind: IrNamedTypeKind.Branded } => OfBranded(
+                semantics.BrandedUnderlyingPrimitive,
+                staticPrimitive
+            ),
+            { IsJsTuple: true } => OfJsTuple(semantics.JsTupleArity),
+            { IsPlainObject: true } => new ErasedShape(),
+            { Kind: IrNamedTypeKind.Interface } => OfInterface(semantics),
+            { Kind: IrNamedTypeKind.Delegate or IrNamedTypeKind.Unknown } => new None(),
+            _ => new NominalClass(),
         };
 
     /// <summary>
-    /// A named type without semantics keeps the <c>instanceof</c> test it
-    /// always had.
+    /// An interface has a runtime identity only where the compilation emits
+    /// it: a transpiled interface that is neither external nor ignored.
     /// </summary>
-    private static IrRuntimeTypeTest OfNamed(IrNamedTypeSemantics? semantics) =>
-        semantics switch
-        {
-            null => new Instanceof(),
-            { Kind: IrNamedTypeKind.NumericEnum } => new Typeof(IrPrimitive.Int32),
-            { Kind: IrNamedTypeKind.StringEnum } => new Typeof(IrPrimitive.String),
-            { Kind: IrNamedTypeKind.Branded } => OfBranded(semantics.BrandedUnderlyingPrimitive),
-            { IsJsTuple: true } => OfJsTuple(semantics.JsTupleArity),
-            { Kind: IrNamedTypeKind.Interface } or { IsPlainObject: true } =>
-                semantics.HasGeneratedGuard ? new Guard() : new None(),
-            { Kind: IrNamedTypeKind.Delegate or IrNamedTypeKind.Unknown } => new None(),
-            _ => new Instanceof(),
-        };
+    private static IrRuntimeTypeTest OfInterface(IrNamedTypeSemantics semantics) =>
+        semantics is { IsTranspilable: true, IsExternal: false, IsIgnored: false }
+            ? new NominalInterface([])
+            : new None();
 
     /// <summary>
     /// A <c>[JsTuple]</c> has no class at runtime, so only its array shape is
     /// testable — and only when its arity is known.
     /// </summary>
     private static IrRuntimeTypeTest OfJsTuple(int? arity) =>
-        arity is { } length ? new ArrayTuple(length) : new None();
+        arity is { } length ? new FixedTuple(length) : new None();
 
     /// <summary>
-    /// A branded wrapper has no class at runtime, so only a wrapper over a
-    /// <c>typeof</c>-testable primitive has a test.
+    /// A branded wrapper has no class at runtime: it is recognized as its
+    /// underlying primitive, when that one is a JS primitive.
     /// </summary>
-    private static IrRuntimeTypeTest OfBranded(IrPrimitive? underlying) =>
-        underlying is { } primitive && OfPrimitive(primitive) is Typeof primitiveTest
+    private static IrRuntimeTypeTest OfBranded(
+        IrPrimitive? underlying,
+        IrPrimitive? staticPrimitive
+    ) =>
+        underlying is { } primitive
+        && OfPrimitive(primitive, staticPrimitive) is Primitive primitiveTest
             ? primitiveTest
             : new None();
+
+    /// <summary>
+    /// The fold of a test whose static type decides it: a non-nullable value
+    /// type tested for a value type. <c>null</c> when the test has to run.
+    /// </summary>
+    private static Constant? ConstantOf(IrTypeRef type, IrTypeRef? staticType)
+    {
+        if (ValueTypeIdentityOf(staticType) is not { } staticIdentity)
+            return null;
+
+        return ValueTypeIdentityOf(type) is { } testedIdentity
+            ? new Constant(staticIdentity == testedIdentity)
+            : null;
+    }
+
+    /// <summary>
+    /// An identity for a non-nullable value type that is never anything else
+    /// at runtime: a numeric, <c>bool</c>, <c>char</c> or <c>Guid</c>
+    /// primitive, or a named value type (an enum, a struct, a branded
+    /// wrapper). <c>null</c> for every other type, including <c>string</c> (a
+    /// reference that may be <c>null</c>) and the temporal types.
+    /// </summary>
+    private static string? ValueTypeIdentityOf(IrTypeRef? type) =>
+        type switch
+        {
+            IrPrimitiveTypeRef { Primitive: var primitive } when IsValuePrimitive(primitive) =>
+                primitive.ToString(),
+            IrNamedTypeRef { Semantics.IsValueType: true } named =>
+                $"{named.Namespace}.{named.Name}",
+            _ => null,
+        };
+
+    private static bool IsValuePrimitive(IrPrimitive primitive) =>
+        primitive
+            is not (
+                IrPrimitive.String
+                or IrPrimitive.Object
+                or IrPrimitive.Void
+                or IrPrimitive.DateTime
+                or IrPrimitive.DateTimeOffset
+                or IrPrimitive.DateOnly
+                or IrPrimitive.TimeOnly
+                or IrPrimitive.TimeSpan
+            );
+
+    /// <summary>
+    /// The primitive the tested expression's static type is, through a
+    /// nullable; <c>null</c> for any other static type.
+    /// </summary>
+    private static IrPrimitive? StaticPrimitiveOf(IrTypeRef? staticType) =>
+        staticType switch
+        {
+            IrNullableTypeRef { Inner: var inner } => StaticPrimitiveOf(inner),
+            IrPrimitiveTypeRef { Primitive: var primitive } => primitive,
+            _ => null,
+        };
 }

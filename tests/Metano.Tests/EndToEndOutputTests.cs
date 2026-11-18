@@ -108,12 +108,31 @@ public class EndToEndOutputTests
         // Pin the FULL output of the merged producer-side file so any future
         // regression in the multi-type emission, decimal mapping, or self-import
         // elision shows up as a clear diff.
+        // An [EmitPackage] library emits the descriptor of every public type
+        // (spec 011 D29).
         var expected =
-            "import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\";\n"
+            "import { HashCode, copyRecordWith, valueEquals, type ClassType, type EnumType } from \"metano-runtime\";\n"
             + "import type { Decimal } from \"metano-runtime/system/decimal\";\n"
+            + "\n"
+            + "let Issue$rt: ClassType<Issue> | undefined;\n"
             + "\n"
             + "export class Issue {\n"
             + "  constructor(readonly title: string, readonly status: IssueStatus, readonly estimatedCost: Decimal) { }\n"
+            + "\n"
+            + "  static get $runtimeType(): ClassType<Issue> {\n"
+            + "    return (Issue$rt ??= {\n"
+            + "      kind: \"class\",\n"
+            + "      name: \"Issue\",\n"
+            + "      fullName: \"AcmeIssues.Issue\",\n"
+            + "      namespace: \"AcmeIssues\",\n"
+            + "      ctor: Issue,\n"
+            + "      interfaces: [],\n"
+            + "      typeParameters: [],\n"
+            + "      isAbstract: false,\n"
+            + "      isValueType: false,\n"
+            + "      test: (v: unknown): v is Issue => v instanceof Issue,\n"
+            + "    });\n"
+            + "  }\n"
             + "\n"
             + "  equals(other: any): boolean {\n"
             + "    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.title === other.title && this.status === other.status && valueEquals(this.estimatedCost, other.estimatedCost);\n"
@@ -138,7 +157,18 @@ public class EndToEndOutputTests
             + "  Closed: 1,\n"
             + "} as const;\n"
             + "\n"
-            + "export type IssueStatus = typeof IssueStatus[keyof typeof IssueStatus];\n";
+            + "export type IssueStatus = typeof IssueStatus[keyof typeof IssueStatus];\n"
+            + "\n"
+            + "export const IssueStatus$runtimeType: EnumType<IssueStatus> = {\n"
+            + "  kind: \"enum\",\n"
+            + "  name: \"IssueStatus\",\n"
+            + "  fullName: \"AcmeIssues.IssueStatus\",\n"
+            + "  namespace: \"AcmeIssues\",\n"
+            + "  values: [0, 1],\n"
+            + "  names: [\"Open\", \"Closed\"],\n"
+            + "  isFlags: false,\n"
+            + "  test: (v: unknown): v is IssueStatus => v === 0 || v === 1,\n"
+            + "};\n";
 
         await Assert.That(actual).IsEqualTo(expected);
     }

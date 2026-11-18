@@ -1,5 +1,6 @@
 using System.Globalization;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -50,7 +51,7 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// Whether the test a pattern lowers to reads the subject at most once:
     /// a constant or relational comparison, <c>_</c>, a type test other than
-    /// the two-read <see cref="IrRuntimeTypeTest.ArrayTuple"/> shape, or the
+    /// the two-read <see cref="IrRuntimeTypeTest.FixedTuple"/> shape, or the
     /// negation of one of these.
     /// Any other pattern reads the subject (or its members) repeatedly, so a
     /// side-effecting subject is bound once first:
@@ -64,7 +65,7 @@ public static partial class IrToTsExpressionBridge
                 notPattern.Left
             ),
             IrTypePattern { Designator: null } typePattern => IrRuntimeTypeTest.Of(typePattern.Type)
-                is not IrRuntimeTypeTest.ArrayTuple,
+                is not IrRuntimeTypeTest.FixedTuple,
             _ => false,
         };
 
@@ -84,7 +85,7 @@ public static partial class IrToTsExpressionBridge
                     context
                 );
             case IrTypePattern typePat:
-                return BuildTypeTest(lowered, typePat.Type);
+                return BuildTypeTest(lowered, typePat.Type, typePat.InputType);
             case IrDiscardPattern:
                 return new TsLiteral("true");
             case IrPropertyPattern prop:
@@ -169,7 +170,7 @@ public static partial class IrToTsExpressionBridge
                 constant.Value,
                 context
             ),
-            IrTypePattern typePat => BuildTypeTest(value, typePat.Type),
+            IrTypePattern typePat => BuildTypeTest(value, typePat.Type, typePat.InputType),
             IrDiscardPattern => new TsLiteral("true"),
             IrVarPattern => new TsLiteral("true"),
             IrPropertyPattern prop => BuildPropertyPatternTest(value, prop, context),
@@ -215,78 +216,26 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The runtime test a type pattern performs, as
-    /// <see cref="IrRuntimeTypeTest"/> classifies the type: <c>typeof</c> of the
-    /// JS primitive it lowers to (primitives, enums, branded wrappers), its
-    /// generated <c>[GenerateGuard]</c> guard (erased interfaces and
-    /// <c>[PlainObject]</c>s), the array shape and length of a
-    /// <c>[JsTuple]</c> (a type alias with no runtime value to reference), or
-    /// <c>instanceof</c> its class. Two kinds precede the classification, where
-    /// a bare <c>typeof</c> would over-accept: a <c>decimal</c> lowers to a
-    /// decimal.js <c>Decimal</c> instance, so its test is
-    /// <c>instanceof Decimal</c>, and a 64-bit integer (spec 012 FR-048)
-    /// lowers to a <c>bigint</c> that the <c>typeof</c> test alone cannot range — <c>o is long</c> and
-    /// <c>o is ulong</c> read the runtime range checks
-    /// (<see cref="IrTypeCheckBuilder"/> DECIDED-14), which also tells a
-    /// <c>switch</c> over <c>long</c> / <c>ulong</c> /
-    /// <c>BigInteger</c> arms apart. Extraction reports MS0001 for a type with
-    /// no test, so none reaches this point.
+    /// <see cref="IrToTsRuntimeTestBridge"/> renders the type's category, with
+    /// the static type of the tested value when extraction knew it
+    /// (<paramref name="staticType"/>). Extraction reports MS0001 for a type
+    /// with no test, so none reaches this point but a delegate, whose test the
+    /// reachability phase rejected (MS0045): it lowers to a placeholder that
+    /// throws.
     /// </summary>
-    internal static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
-        targetType switch
-        {
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } =>
-                IrTypeCheckBuilder.DecimalInstanceof(value),
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 } => SixtyFourBitRangeTest(
-                value,
-                "isInt64"
-            ),
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 } => SixtyFourBitRangeTest(
-                value,
-                "isUInt64"
-            ),
-            _ => IrRuntimeTypeTest.Of(targetType) switch
-            {
-                IrRuntimeTypeTest.Typeof { Primitive: var primitive } =>
-                    IrTypeCheckBuilder.TypeofTest(value, IrTypeCheckBuilder.TypeofKind(primitive)),
-                IrRuntimeTypeTest.Guard => new TsCallExpression(
-                    new TsIdentifier($"is{RuntimeNamedType(targetType).Name}"),
-                    [value]
-                ),
-                IrRuntimeTypeTest.ArrayTuple { Arity: var arity } => ArrayTupleTest(value, arity),
-                IrRuntimeTypeTest.Instanceof
-                    when targetType is IrNamedTypeRef named
-                        && BclExceptionClasses.IsBclException(named) =>
-                    IrToTsTypeMapper.ExceptionClasses.InstanceofTest(value, named),
-                IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
-                _ => throw NoRuntimeTypeTest(targetType),
-            },
-        };
+    internal static TsExpression BuildTypeTest(
+        TsExpression value,
+        IrTypeRef targetType,
+        IrTypeRef? staticType = null
+    )
+    {
+        if (IrToTsRuntimeTestBridge.Render(value, targetType, staticType) is { } test)
+            return test;
 
-    /// <summary>
-    /// A 64-bit range test over a pattern value. The call goes through
-    /// <see cref="TsRuntimeHelperReference"/>, so the import collector brings
-    /// the helper in wherever a type pattern is the only use.
-    /// </summary>
-    private static TsExpression SixtyFourBitRangeTest(TsExpression value, string helper) =>
-        new TsCallExpression(new TsRuntimeHelperReference(helper), [value]);
-
-    /// <summary>
-    /// The structural <see cref="IrRuntimeTypeTest.ArrayTuple"/> test: an
-    /// array of the tuple's length.
-    /// </summary>
-    private static TsExpression ArrayTupleTest(TsExpression value, int arity) =>
-        new TsBinaryExpression(
-            new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                [value]
-            ),
-            "&&",
-            new TsBinaryExpression(
-                new TsPropertyAccess(value, "length"),
-                "===",
-                new TsLiteral(arity.ToString(CultureInfo.InvariantCulture))
-            )
-        );
+        return IrRuntimeTypeTest.IsDelegate(targetType)
+            ? MapUnsupported(new IrUnsupportedExpression("DelegateTypeTest"))
+            : throw NoRuntimeTypeTest(targetType);
+    }
 
     /// <summary>
     /// Lowers a cast. JS has no runtime cast, so the value passes through —
@@ -306,7 +255,7 @@ public static partial class IrToTsExpressionBridge
             ? nullable.Inner
             : cast.TargetType;
 
-        if (cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple)
+        if (cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.FixedTuple)
             return new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType));
 
         return
@@ -317,15 +266,25 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// An explicit reference conversion: the result takes the target type
-    /// (TypeScript keeps the static type of the operand otherwise, so every
-    /// member access through it fails to type-check). A target with a runtime
-    /// class (a transpiled class or record, a mapped BCL exception) is
-    /// checked as .NET checks it, when <see cref="ReferenceCastLowering"/>
-    /// lets this module import the class: the <c>castTo</c> helper lets
-    /// <c>null</c> through and throws <c>InvalidCastException</c> for any
-    /// other type. Any other target (an interface, a type parameter, a
-    /// <c>string</c>, a class this module cannot import) is only asserted.
+    /// An explicit reference or unboxing conversion: the result takes the
+    /// target type (TypeScript keeps the static type of the operand otherwise,
+    /// so every member access through it fails to type-check), and is checked
+    /// as .NET checks it where the target has a runtime identity. The
+    /// <c>castTo</c> helper lets <c>null</c> through and throws
+    /// <c>InvalidCastException</c> for any other type:
+    /// <list type="bullet">
+    ///   <item>a class (a transpiled class or record, a mapped BCL exception)
+    ///   passes its constructor, <c>castTo(x, Ctor)</c>, which reads no
+    ///   descriptor (#669, D29), when <see cref="ReferenceCastLowering"/> lets
+    ///   this module import the class;</item>
+    ///   <item>an interface, an enum or a primitive passes its descriptor,
+    ///   <c>castTo(x, IFoo$runtimeType)</c> (D29); a <c>decimal</c> passes its
+    ///   decimal.js class, whose descriptor types its value as an
+    ///   <c>object</c>;</item>
+    ///   <item>any other target (a type parameter, an array, a delegate, a
+    ///   <c>[PlainObject]</c>, a class this module cannot import) is only
+    ///   asserted.</item>
+    /// </list>
     /// </summary>
     private static TsExpression MapReferenceDowncast(
         IrCastExpression cast,
@@ -337,29 +296,78 @@ public static partial class IrToTsExpressionBridge
     {
         var targetType = IrToTsTypeMapper.Map(cast.TargetType);
 
-        var runtimeClass = ReferenceCastLowering.MayImportTargetClass(conversion)
-            ? RuntimeClassOf(testedType)
-            : null;
-
-        return runtimeClass is not null && ReferenceCastLowering.Checks(runtimeClass, context.Casts)
+        return CheckedCastTarget(conversion, testedType, context) is { } target
             ? new TsCallExpression(
                 new TsRuntimeHelperReference(ReferenceCastLowering.CastHelper),
-                [value, runtimeClass],
-                TypeArguments: [targetType]
+                [value, target],
+                TypeArguments: [CheckedResultType(cast.TargetType, testedType, targetType)]
             )
             : new TsCastExpression(value, targetType);
     }
 
     /// <summary>
-    /// The class value an <see cref="IrRuntimeTypeTest.Instanceof"/> test of
+    /// The type a checked cast's result takes: the target's, except that a
+    /// <c>decimal</c> names its decimal.js class, the value <c>castTo</c>
+    /// checks against, whatever <c>[ExportFromBcl]</c> override the position
+    /// carries.
+    /// </summary>
+    private static TsType CheckedResultType(IrTypeRef target, IrTypeRef testedType, TsType mapped)
+    {
+        if (testedType is not IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal })
+            return mapped;
+
+        var decimalType = new TsNamedType("Decimal", Origin: DecimalOrigin());
+
+        return target is IrNullableTypeRef
+            ? new TsUnionType([decimalType, new TsNamedType("null")])
+            : decimalType;
+    }
+
+    private static TsTypeOrigin? DecimalOrigin() =>
+        BclDecimalValueReference() is TsTypeReference { Origin: var origin } ? origin : null;
+
+    /// <summary>
+    /// What <c>castTo</c> checks the value against: the class of a nominal
+    /// class, the descriptor of an interface, an enum or a primitive;
+    /// <c>null</c> when the cast is only asserted.
+    /// </summary>
+    private static TsExpression? CheckedCastTarget(
+        IrReferenceConversion conversion,
+        IrTypeRef testedType,
+        IrToTsBridgeContext context
+    ) =>
+        IrRuntimeTypeTest.Of(testedType) switch
+        {
+            IrRuntimeTypeTest.NominalClass => CheckedClassTarget(conversion, testedType, context),
+            IrRuntimeTypeTest.Primitive { PrimitiveKind: IrPrimitive.Decimal } =>
+                BclDecimalValueReference(),
+            IrRuntimeTypeTest.NominalInterface or IrRuntimeTypeTest.Primitive =>
+                IrToTsRuntimeTypeReferences.Of(testedType, "checked cast"),
+            _ => null,
+        };
+
+    private static TsExpression? CheckedClassTarget(
+        IrReferenceConversion conversion,
+        IrTypeRef testedType,
+        IrToTsBridgeContext context
+    )
+    {
+        var runtimeClass = ReferenceCastLowering.MayImportTargetClass(conversion)
+            ? RuntimeClassOf(testedType)
+            : null;
+
+        return runtimeClass is not null && ReferenceCastLowering.Checks(runtimeClass, context.Casts)
+            ? runtimeClass
+            : null;
+    }
+
+    /// <summary>
+    /// The class value a <see cref="IrRuntimeTypeTest.NominalClass"/> test of
     /// <paramref name="type"/> checks; <c>null</c> when the type has none to
-    /// pass (any other test, or a BCL exception without a mapped class).
+    /// pass (a temporal type, or a BCL exception without a mapped class).
     /// </summary>
     private static TsExpression? RuntimeClassOf(IrTypeRef type)
     {
-        if (IrRuntimeTypeTest.Of(type) is not IrRuntimeTypeTest.Instanceof)
-            return null;
-
         if (
             type is not IrNamedTypeRef named
             || IrToTsTypeMapper.Map(type) is not TsNamedType runtime
@@ -373,12 +381,6 @@ public static partial class IrToTsExpressionBridge
             ? IrToTsTypeMapper.ExceptionClasses.ClassOf(named).InstanceofTarget()
             : null;
     }
-
-    private static TsExpression InstanceofTest(TsExpression value, TsNamedType type) =>
-        new TsBinaryExpression(value, "instanceof", TypeValueReference(type.Name, type.Origin));
-
-    private static TsNamedType RuntimeNamedType(IrTypeRef type) =>
-        IrToTsTypeMapper.Map(type) as TsNamedType ?? throw NoRuntimeTypeTest(type);
 
     private static InvalidOperationException NoRuntimeTypeTest(IrTypeRef type) =>
         new(

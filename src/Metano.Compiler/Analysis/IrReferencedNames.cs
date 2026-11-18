@@ -89,6 +89,8 @@ public static class IrReferencedNames
             IrUnsafeCastExpression unsafeCast => IsTypeNamed(unsafeCast.Target, names),
             IrInlineCodeExpression { ResultType: { } resultType } => IsTypeNamed(resultType, names),
             IrTypeCheck check => IsTypeNamed(check.Type, names),
+            IrTypeOfExpression typeOf => IsTypeNamed(typeOf.Type, names),
+            IrGetTypeExpression { ConstantType: { } constant } => IsTypeNamed(constant, names),
             _ => false,
         };
 

@@ -121,11 +121,11 @@ public class SpanExtensionCallTests
     [Arguments("xs.Sort(Descending)", "xs.sort(Calls.descending)")]
     [Arguments(
         "object o = sp.ToString(); ((string)o).StartsWith(sp)",
-        "(o as string).startsWith(sp)"
+        "castTo<string>(o, StringType).startsWith(sp)"
     )]
     [Arguments(
         "object o = sp.ToString(); (o as string)!.IndexOf(sp)",
-        "(typeof o === \"string\" ? o : null)!.indexOf(sp)"
+        "asType(o, StringType)!.indexOf(sp)"
     )]
     public async Task SpanOverStringOrArray_LowersToTheJavaScriptMethod(
         string statement,

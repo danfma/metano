@@ -294,6 +294,7 @@ public sealed partial class IrExpressionExtractor
                 ExtractUnary(post, isPrefix: false)
             ),
             CastExpressionSyntax cast => ExtractCast(cast),
+            TypeOfExpressionSyntax typeOf => ExtractTypeOf(typeOf),
             AwaitExpressionSyntax aw => new IrAwaitExpression(Extract(aw.Expression)),
             ThrowExpressionSyntax throwExpr => new IrThrowExpression(Extract(throwExpr.Expression)),
             ElementAccessExpressionSyntax elem => ExtractElementAccess(elem),
@@ -882,7 +883,9 @@ public sealed partial class IrExpressionExtractor
         SyntaxNode pattern,
         IrTypeRef type,
         IrPatternDesignator? designator = null
-    ) => UntestablePattern(pattern, type) ?? new IrTypePattern(type, designator);
+    ) =>
+        UntestablePattern(pattern, type)
+        ?? new IrTypePattern(type, designator) { InputType = PatternInputType(pattern) };
 
     /// <summary>
     /// The placeholder a type test in <paramref name="pattern"/> lowers to when
@@ -1978,11 +1981,19 @@ public sealed partial class IrExpressionExtractor
         if (UntestableTypeTest(asCast, typeSyntax, testedType) is { } untestable)
             return untestable;
 
+        var inputType = StaticTypeOf(asCast.Left);
+
         return BindValueOnce(Extract(asCast.Left), value => new IrConditionalExpression(
-            new IrIsPatternExpression(value, new IrTypePattern(testedType)),
+            new IrIsPatternExpression(
+                value,
+                new IrTypePattern(testedType) { InputType = inputType }
+            ),
             new IrCastExpression(value, castType),
             new IrLiteral(null, IrLiteralKind.Null)
-        ));
+        )
+        {
+            AsTarget = castType,
+        });
     }
 
     /// <summary>
@@ -1996,7 +2007,10 @@ public sealed partial class IrExpressionExtractor
         if (UntestableTypeTest(isTest, typeSyntax, type) is { } untestable)
             return untestable;
 
-        return new IrIsPatternExpression(Extract(isTest.Left), new IrTypePattern(type));
+        return new IrIsPatternExpression(
+            Extract(isTest.Left),
+            new IrTypePattern(type) { InputType = StaticTypeOf(isTest.Left) }
+        );
     }
 
     /// <summary>
@@ -2842,6 +2856,9 @@ public sealed partial class IrExpressionExtractor
 
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
         ReportTupleValueLookup(inv, symbol);
+
+        if (TryExtractGetType(inv, symbol) is { } getType)
+            return getType;
 
         // `Nullable<T>.GetValueOrDefault` lives with the other `Nullable<T>`
         // members rather than in `IntrinsicBclLoweringTable`: a side-effecting

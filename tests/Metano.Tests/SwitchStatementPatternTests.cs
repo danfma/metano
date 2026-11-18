@@ -341,7 +341,7 @@ public class SwitchStatementPatternTests
         );
 
         await Assert.That(output).Contains("const $subject = current;");
-        await Assert.That(output).Contains("case typeof $subject === \"string\":");
+        await Assert.That(output).Contains("case isString($subject):");
     }
 
     [Test]

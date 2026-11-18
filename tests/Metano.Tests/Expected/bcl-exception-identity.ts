@@ -1,4 +1,4 @@
-import { isString, toException, tryFilter } from "metano-runtime";
+import { isString, toException, tryFilter, type ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 import { ArgumentNullException } from "metano-runtime/system/exceptions/argument-null-exception";
@@ -10,11 +10,29 @@ import { InvalidOperationException } from "metano-runtime/system/exceptions/inva
 import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-found-exception";
 import { ObjectDisposedException } from "metano-runtime/system/exceptions/object-disposed-exception";
 
+let InvalidAmountException$rt: ClassType<InvalidAmountException> | undefined;
+
 export class InvalidAmountException extends ArgumentOutOfRangeException {
   override readonly name: string = "InvalidAmountException";
 
   constructor(amount: Decimal) {
     super("amount", amount, "The amount must be positive.");
+  }
+
+  static override get $runtimeType(): ClassType<InvalidAmountException> {
+    return (InvalidAmountException$rt ??= {
+      kind: "class",
+      name: "InvalidAmountException",
+      fullName: "Billing.InvalidAmountException",
+      namespace: "Billing",
+      ctor: InvalidAmountException,
+      base: () => ArgumentOutOfRangeException.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is InvalidAmountException => v instanceof InvalidAmountException,
+    });
   }
 
   protected override get $typeName(): string {
@@ -25,6 +43,8 @@ export class InvalidAmountException extends ArgumentOutOfRangeException {
     return "Billing";
   }
 }
+
+let LedgerException$rt: ClassType<LedgerException> | undefined;
 
 export class LedgerException extends Exception {
   protected static readonly byLedgerExceptionDefault = /* @__PURE__ */ Symbol("LedgerException()");
@@ -67,6 +87,23 @@ export class LedgerException extends Exception {
     throw new Error("No matching constructor");
   }
 
+  static override get $runtimeType(): ClassType<LedgerException> {
+    return (LedgerException$rt ??= {
+      kind: "class",
+      name: "LedgerException",
+      fullName: "Billing.LedgerException",
+      namespace: "Billing",
+      ctor: LedgerException,
+      base: () => Exception.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new LedgerException(),
+      test: (v: unknown): v is LedgerException => v instanceof LedgerException,
+    });
+  }
+
   protected override get $typeName(): string {
     return "LedgerException";
   }
@@ -84,11 +121,30 @@ export class LedgerException extends Exception {
   }
 }
 
+let StaleLedgerException$rt: ClassType<StaleLedgerException> | undefined;
+
 export class StaleLedgerException extends InvalidOperationException {
   override readonly name: string = "StaleLedgerException";
 
   constructor() {
     super();
+  }
+
+  static override get $runtimeType(): ClassType<StaleLedgerException> {
+    return (StaleLedgerException$rt ??= {
+      kind: "class",
+      name: "StaleLedgerException",
+      fullName: "Billing.StaleLedgerException",
+      namespace: "Billing",
+      ctor: StaleLedgerException,
+      base: () => InvalidOperationException.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new StaleLedgerException(),
+      test: (v: unknown): v is StaleLedgerException => v instanceof StaleLedgerException,
+    });
   }
 
   protected override get $typeName(): string {

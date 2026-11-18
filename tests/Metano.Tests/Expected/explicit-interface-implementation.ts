@@ -1,8 +1,29 @@
+import type { ClassType } from "metano-runtime";
 import type { IBox } from "./i-box";
-import type { IPlain } from "./i-plain";
+import { IPlain$runtimeType, type IPlain } from "./i-plain";
+
+let Person$rt: ClassType<Person> | undefined;
 
 export class Person implements IPlain, IBox<string> {
   constructor() { }
+
+  static get $runtimeType(): ClassType<Person> {
+    return (Person$rt ??= {
+      kind: "class",
+      name: "Person",
+      fullName: "Person",
+      namespace: "",
+      ctor: Person,
+      interfaces: [
+        () => IPlain$runtimeType,
+      ],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new Person(),
+      test: (v: unknown): v is Person => v instanceof Person,
+    });
+  }
 
   get name(): string {
     return "x";

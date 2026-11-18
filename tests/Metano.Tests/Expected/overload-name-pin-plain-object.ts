@@ -1,5 +1,3 @@
-import { isInt32, isString } from "metano-runtime";
-
 export interface Reading {
   readonly value: number;
 }

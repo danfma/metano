@@ -1602,7 +1602,15 @@ public sealed class Printer(string indent = "  ")
                 // Without this split, block-body arrows printed as `) =>  {`
                 // with two spaces — cosmetic but visible in every route handler
                 // in sample-todo-service/src/program.ts.
-                _sb.Write(") =>");
+                _sb.Write(")");
+
+                if (arrow.ReturnType is not null)
+                {
+                    _sb.Write(": ");
+                    PrintType(arrow.ReturnType);
+                }
+
+                _sb.Write(" =>");
                 if (arrow.Body is [TsReturnStatement { Expression: { } returnExpr }])
                 {
                     _sb.Write(" ");

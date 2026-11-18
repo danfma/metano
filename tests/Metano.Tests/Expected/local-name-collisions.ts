@@ -1,4 +1,4 @@
-import { toException } from "metano-runtime";
+import { isInt32, toException } from "metano-runtime";
 
 export class Collisions {
   constructor() { }
@@ -50,7 +50,7 @@ export class Collisions {
     const total = 1;
     let total$1: number;
 
-    if (typeof o === "number" && (total$1 = o, true)) {
+    if (isInt32(o) && (total$1 = o, true)) {
       return (total + total$1) | 0;
     }
 

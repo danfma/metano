@@ -45,8 +45,8 @@ export class RefBox<T> {
   }
 }
 
-import { isInt32 } from "metano-runtime";
-import type { IShape } from "./i-shape";
+import { isInt32, isType } from "metano-runtime";
+import { IShape$runtimeType, type IShape } from "./i-shape";
 
 export class ShapeBox<T extends IShape> {
   protected static readonly byShapeBoxT = /* @__PURE__ */ Symbol("ShapeBox(T x)");
@@ -75,7 +75,7 @@ export class ShapeBox<T extends IShape> {
       return;
     }
 
-    if (args.length === 1 && typeof args[0] === "object") {
+    if (args.length === 1 && isType(args[0], IShape$runtimeType)) {
       const x = args[0] as T;
 
       return;

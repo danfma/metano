@@ -9,6 +9,7 @@ using Metano.Compiler.Extraction;
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Metano.Compiler.TypeScript.Caching;
@@ -285,11 +286,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // Assembly-wide opt-in already rejects implicit nested types; this guard
         // keeps the explicit-[Transpile] path equally strict.
         !type.IsImplicitlyDeclared
-        && SymbolHelper.IsTranspilable(
-            type,
-            Context.AssemblyWideTranspile,
-            Context.CurrentAssembly
-        );
+        && SymbolHelper.IsTranspilable(type, _assemblyWideTranspile, _currentAssembly);
 
     /// <summary>
     /// Discovers all types with [Transpile] and transforms each into a TsSourceFile.
@@ -414,6 +411,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _currentAssembly
         );
 
+        // The runtime type descriptors (spec 011 D29): one sequential phase over
+        // the frontend's questions, before any group lowers a body, so every
+        // group agrees and a warm group cache keeps the phase's diagnostics.
+        var runtimeTypes = RuntimeTypeReachability.Compute(
+            ir,
+            compilation,
+            transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList(),
+            ReportDiagnostic
+        );
+
         _context = new TypeScriptTransformContext(
             compilation,
             _currentAssembly,
@@ -434,6 +441,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
             StructuralGuardTypes = structuralGuards.Types,
             ModuleFunctionClaims = moduleFunctionClaims,
+            RuntimeTypes = runtimeTypes,
         };
 
         var facts = ValidateTypesAndCollectFacts(transpilableTypes, transpilableTypesDict);
@@ -540,6 +548,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousOverloadClaims = TsOverloadCallSites.Claims;
         var previousBclOverrides = IrToTsTypeMapper.BclOverrides;
         var previousExceptionClasses = IrToTsTypeMapper.ExceptionClassesScope;
+        var previousRuntimeTypes = RuntimeTypeScope.Current;
 
         try
         {
@@ -547,6 +556,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrToTsTypeMapper.BclOverrides = Context.BclOverrides;
             IrToTsTypeMapper.ExceptionClassesScope = Context.ExceptionClasses;
+            RuntimeTypeScope.Current = Context.RuntimeTypes;
 
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
@@ -590,7 +600,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
-                    : ComputePerGroupClosure(ir, groups, facts.AccessFacts);
+                    : ComputePerGroupClosure(
+                        ir,
+                        groups,
+                        facts.AccessFacts,
+                        Context.RuntimeTypes.Fingerprint()
+                    );
 
             var outcomes = new GroupOutcomes(groups.Count);
             var skippedGroupCount = 0;
@@ -631,6 +646,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsOverloadCallSites.Claims = previousOverloadClaims;
             IrToTsTypeMapper.BclOverrides = previousBclOverrides;
             IrToTsTypeMapper.ExceptionClassesScope = previousExceptionClasses;
+            RuntimeTypeScope.Current = previousRuntimeTypes;
         }
     }
 
@@ -788,6 +804,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (sink.Count == startCount)
             return false;
 
+        if (type.TypeKind is TypeKind.Class or TypeKind.Struct)
+            new RuntimeTypeEmitter(Context).DecorateClass(type, sink, startCount, moduleLocal);
+
         EmitGuards(type, sink);
 
         // Process nested types — the non-private ones go to a companion namespace
@@ -862,6 +881,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
         IrToTsEnumBridge.Convert(enumIr, sink);
 
+        if (
+            sink.LastOrDefault(statement => statement is TsConstObject) is TsConstObject constObject
+            && new RuntimeTypeEmitter(Context).EnumDescriptor(
+                type,
+                enumIr,
+                constObject.Entries,
+                constObject.Name
+            )
+                is { } descriptor
+        )
+            sink.Add(descriptor);
+
         Int64EnumPrecision.Check(type, ReportDiagnostic);
 
         return true;
@@ -881,6 +912,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         TsOverloadClaims.Report(fastPaths.Findings, type, ReportDiagnostic);
 
         IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type), fastPaths);
+
+        if (
+            new RuntimeTypeEmitter(Context).InterfaceDescriptor(
+                type,
+                Context.ResolveTsName(type)
+            ) is
+            { } descriptor
+        )
+            sink.Add(descriptor);
+
         return true;
     }
 
@@ -1543,12 +1584,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// hash index is amortised: a type appearing in N groups gets
     /// hashed once. A group whose constructors depend on another file
     /// (FR-049: a <c>SerializerContext</c> or a derived class elsewhere) also
-    /// keys on <paramref name="constructorAccessFacts"/> for its types.
+    /// keys on <paramref name="constructorAccessFacts"/> for its types. Every
+    /// group keys on the whole runtime type reachability
+    /// (<paramref name="runtimeTypesFingerprint"/>, spec 011 D29): a descriptor
+    /// read in any body depends on it.
     /// </summary>
     private static Dictionary<string, string> ComputePerGroupClosure(
         IrCompilation ir,
         IReadOnlyList<TypeFileGroup> groups,
-        ConstructorAccessFacts constructorAccessFacts
+        ConstructorAccessFacts constructorAccessFacts,
+        string runtimeTypesFingerprint
     )
     {
         var allTypes = groups
@@ -1558,20 +1603,27 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var sigIndex = GroupClosureHasher.BuildSignatureHashIndex(allTypes);
         var graph = IrTypeDependencyGraph.Build(ir);
         var dispatchedConstructions = DispatchedConstructionFingerprint.Of(allTypes);
+        var runtimeTypes = runtimeTypesFingerprint;
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var group in groups)
         {
             var fqns = group.Types.Select(IrTypeDependencyGraph.QualifiedName);
             var closure = GroupClosureHasher.HashGroupClosure(fqns, graph, sigIndex);
             var constructorFacts = constructorAccessFacts.FingerprintOf(group.Types);
 
-            var parts = new[] { closure, constructorFacts, dispatchedConstructions }.Where(part =>
-                part.Length > 0
-            );
+            var parts = new[]
+            {
+                closure,
+                constructorFacts,
+                dispatchedConstructions,
+                runtimeTypes,
+            }.Where(part => part.Length > 0);
 
             result[GroupKey(group)] = string.Join("|", parts);
         }
+
         return result;
     }
 
@@ -1621,6 +1673,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Order(StringComparer.Ordinal);
 
         return $"{CacheConfigurationFingerprint ?? string.Empty};"
+            + "runtime-types-v1;"
             + $"referencedPackages={string.Join(",", referencedPackages)};"
             + $"dependencyVersions={string.Join(",", DependencyVersionCandidates())}";
     }

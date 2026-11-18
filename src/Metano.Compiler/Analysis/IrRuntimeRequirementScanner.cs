@@ -91,8 +91,6 @@ public static class IrRuntimeRequirementScanner
             foreach (var m in c.Members)
                 ScanMember(m, acc);
 
-        ScanConstructedRootDispatchers(c, acc);
-
         if (c.Constructor is not null)
             ScanConstructor(c.Constructor, acc);
         if (c.NestedTypes is not null)
@@ -185,39 +183,11 @@ public static class IrRuntimeRequirementScanner
         foreach (var p in method.Parameters)
             ScanTypeRef(p.Type, acc);
 
-        // Overloaded methods drive an overload dispatcher whose body emits a
-        // primitive type check per parameter (`isInt32(args[0])`, etc.). The
-        // scanner records the requirement up front so the import walker can
-        // stop guessing at function names. A conversion group drives none: C#
-        // selects a conversion by its types, never by its arguments, so no
-        // target dispatches one (baseline FR-078).
-        if (method.Semantics.ConversionName is null)
-        {
-            foreach (var branch in IrMethodGroup.Of(method).Branches)
-                CollectDispatcherTypeChecks(branch.Parameters, acc);
-        }
-
+        // An overload dispatcher's argument checks are rendered by the target
+        // (spec 011 NFR-004: one classification), which references their
+        // helpers itself, so the scanner records none.
         foreach (var overload in method.Overloads ?? [])
             ScanMethod(overload, acc);
-    }
-
-    /// <summary>
-    /// A root name of an interface the class implements more than once is a
-    /// runtime dispatcher over the methods anchored on it (spec 013 FR-036),
-    /// whose branches check each implementation's arguments.
-    /// </summary>
-    private static void ScanConstructedRootDispatchers(
-        IrClassDeclaration c,
-        HashSet<IrRuntimeRequirement> acc
-    )
-    {
-        var implementations = (c.Members ?? [])
-            .OfType<IrMethodDeclaration>()
-            .SelectMany(method => IrMethodGroup.Of(method).Members)
-            .Where(method => c.ConstructedRootOf(method) is not null);
-
-        foreach (var implementation in implementations)
-            CollectDispatcherTypeChecks(implementation.Parameters, acc);
     }
 
     private static void ScanConstructor(
@@ -228,75 +198,9 @@ public static class IrRuntimeRequirementScanner
         foreach (var p in ctor.Parameters)
             ScanTypeRef(p.Parameter.Type, acc);
 
-        if (ctor.Overloads is { Count: > 0 } overloads)
-        {
-            CollectDispatcherTypeChecks(ctor.Parameters.Select(p => p.Parameter), acc);
-            foreach (var o in overloads)
-            {
-                CollectDispatcherTypeChecks(o.Parameters.Select(p => p.Parameter), acc);
-                ScanConstructor(o, acc);
-            }
-        }
+        foreach (var o in ctor.Overloads ?? [])
+            ScanConstructor(o, acc);
     }
-
-    private static void CollectDispatcherTypeChecks(
-        IEnumerable<IrParameter> parameters,
-        HashSet<IrRuntimeRequirement> acc
-    )
-    {
-        foreach (var p in parameters)
-        {
-            var helper = ResolveTypeCheckHelper(DispatchedTypeOf(p));
-            if (helper is not null)
-                acc.Add(new IrRuntimeRequirement(helper, IrRuntimeCategory.PrimitiveTypeCheck));
-        }
-    }
-
-    /// <summary>
-    /// The type a dispatcher checks each argument of the parameter against:
-    /// the element type of a <c>params T[]</c> parameter, whose arguments
-    /// arrive expanded, otherwise the parameter type.
-    /// </summary>
-    private static IrTypeRef DispatchedTypeOf(IrParameter parameter) =>
-        parameter.ParamsElementType ?? parameter.Type;
-
-    /// <summary>
-    /// Mirrors <c>IrTypeCheckBuilder.PrimitiveCheck</c> on the TS side. Returns
-    /// <c>null</c> when the parameter type maps to a structural check
-    /// (Array.isArray / instanceof Map / instanceof Set / instanceof Promise) —
-    /// those don't pull a runtime helper.
-    /// </summary>
-    private static string? ResolveTypeCheckHelper(IrTypeRef type) =>
-        type switch
-        {
-            IrNullableTypeRef n => ResolveTypeCheckHelper(n.Inner),
-            IrPrimitiveTypeRef p => PrimitiveTypeCheckHelper(p.Primitive),
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } => "isInt32",
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } => "isString",
-            IrNamedTypeRef
-            {
-                Semantics: { Kind: IrNamedTypeKind.Branded, BrandedUnderlyingPrimitive: var pr },
-            } => pr is null ? null : PrimitiveTypeCheckHelper(pr.Value),
-            _ => null,
-        };
-
-    private static string? PrimitiveTypeCheckHelper(IrPrimitive p) =>
-        p switch
-        {
-            IrPrimitive.Char => "isChar",
-            IrPrimitive.String => "isString",
-            IrPrimitive.Byte => "isByte",
-            IrPrimitive.Int16 => "isInt16",
-            IrPrimitive.Int32 => "isInt32",
-            IrPrimitive.Int64 => "isInt64",
-            IrPrimitive.UInt64 => "isUInt64",
-            IrPrimitive.Float32 => "isFloat32",
-            IrPrimitive.Float64 => "isFloat64",
-            IrPrimitive.Boolean => "isBool",
-            IrPrimitive.BigInteger => "isBigInt",
-            IrPrimitive.Guid => "isString",
-            _ => null,
-        };
 
     private static void ScanFunction(IrModuleFunction fn, HashSet<IrRuntimeRequirement> acc)
     {

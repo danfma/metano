@@ -42,6 +42,17 @@ public sealed class ImportCollector(
     /// </summary>
     private const string TemporalModuleName = "@js-temporal/polyfill";
 
+    /// <summary>The <c>metano-runtime</c> descriptor types a file imports as types only.</summary>
+    private static readonly IReadOnlySet<string> RuntimeDescriptorTypeNames = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "ClassType",
+        "InterfaceType",
+        "EnumType",
+        "RuntimeType",
+    };
+
     private static readonly StringComparer Ordinal = StringComparer.Ordinal;
 
     private readonly TypeScriptTransformContext _context = context;
@@ -227,6 +238,21 @@ public sealed class ImportCollector(
         {
             imports.Add(new TsImport(["Grouping"], RuntimeModuleName, TypeOnly: true));
             runtimeImported.Add("Grouping");
+        }
+
+        // The runtime type descriptor types (spec 011 FR-017) are types only:
+        // a descriptor's annotation (`ClassType<X>`) and `System.Type`
+        // (`RuntimeType`) import no code.
+        var descriptorTypes = sink
+            .RuntimeHelperTypeReferences.Where(RuntimeDescriptorTypeNames.Contains)
+            .Where(name => !runtimeImported.Contains(name))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (descriptorTypes.Length > 0)
+        {
+            imports.Add(new TsImport(descriptorTypes, RuntimeModuleName, TypeOnly: true));
+            runtimeImported.UnionWith(descriptorTypes);
         }
 
         var referencesUuid =

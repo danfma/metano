@@ -144,12 +144,20 @@ public static class IrToTsTypeMapper
             ? alias
             : canonicalName;
 
+    private static bool IsSystemType(IrNamedTypeRef named) =>
+        named is { Name: "Type", Namespace: "System", Origin: null }
+        && named.Semantics is null or { IsTranspilable: false };
+
     private static TsType MapNamed(IrNamedTypeRef named, IrToTsTypeOverrides? overrides)
     {
         // BCL exceptions (System.Exception and its non-transpilable
         // subclasses) have no TS declaration; they name their runtime class.
         if (BclExceptionClasses.IsBclException(named))
             return ExceptionClasses.ClassOf(named).TypeReference();
+
+        // `System.Type` is a runtime type descriptor (spec 011 FR-025).
+        if (IsSystemType(named))
+            return new TsNamedType("RuntimeType", RuntimeHelperBinding: "RuntimeType");
 
         var name = ModuleLocalNaming.Flatten(named.Name, named.PrivateNestedSegments);
 

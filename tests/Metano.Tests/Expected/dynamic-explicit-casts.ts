@@ -1,7 +1,8 @@
-import { bigintFromDynamic, castTo, charFromDynamic, decimalSourceFromDynamic, numberFromDynamic } from "metano-runtime";
+import { bigintFromDynamic, BooleanType, castTo, charFromDynamic, decimalSourceFromDynamic, numberFromDynamic, StringType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import type { Color } from "./color";
-import type { IHasArea } from "./i-has-area";
+import { Color$runtimeType, type Color } from "./color";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
+import { Point } from "./point";
 import { Shape } from "./shape";
 
 export class Casts {
@@ -20,11 +21,11 @@ export class Casts {
     const m = new Decimal(decimalSourceFromDynamic(d));
     const maybe = d == null ? null : numberFromDynamic(d, "Int32");
     const shape = castTo<Shape>(d, Shape);
-    const area = d as IHasArea;
-    const text = d as string;
+    const area = castTo<IHasArea>(d, IHasArea$runtimeType);
+    const text = castTo<string>(d, StringType);
     const o = d;
-    const color = d as Color;
-    const point = d;
-    const flag = d;
+    const color = castTo<Color>(d, Color$runtimeType) as Color;
+    const point = castTo<Point>(d, Point);
+    const flag = castTo<boolean>(d, BooleanType);
   }
 }

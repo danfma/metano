@@ -9,12 +9,7 @@ AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BC
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
 CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
-CastProbes.exceptionsFail             #651  BCL exception identity (the message lacks the System. namespace)
-CastProbes.downFail                   none  InvalidCastException message lacks the namespace of the type names
-CastProbes.recordsFail                none  InvalidCastException message lacks the namespace of the type names
 CastProbes.genericFail                none  a generic down cast is not checked (TypeError at the first member access)
-CastProbes.interfaceFail              none  a cast to an interface is not checked (TypeError at the first member access)
-CastProbes.objectToStringFail         none  (string)(object)5 is not checked
 CastProbes.enums                      none  a numeric enum prints its number, .NET prints the member name
 TextProbes.enumsText                  none  a numeric enum prints its number, .NET prints the member name
 CatchProbes.all                       none  an out-of-range index and a missing dictionary key do not throw

@@ -232,6 +232,9 @@ public sealed partial class IrExpressionExtractor
         if (!isObjectMember)
             return null;
 
+        if (member.MemberName == nameof(GetType))
+            return new IrGetTypeExpression(Extract(access.Expression), ConstantType: null);
+
         var method = _semantic
             .Compilation.GetSpecialType(SpecialType.System_Object)
             .GetMembers(member.MemberName)

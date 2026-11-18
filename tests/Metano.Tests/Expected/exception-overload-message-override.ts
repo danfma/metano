@@ -1,5 +1,7 @@
-import { isString } from "metano-runtime";
+import { isString, type ClassType } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
+
+let OverloadOverrideException$rt: ClassType<OverloadOverrideException> | undefined;
 
 export class OverloadOverrideException extends Exception {
   protected static readonly byOverloadOverrideExceptionDefault = /* @__PURE__ */ Symbol("OverloadOverrideException()");
@@ -85,6 +87,23 @@ export class OverloadOverrideException extends Exception {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static override get $runtimeType(): ClassType<OverloadOverrideException> {
+    return (OverloadOverrideException$rt ??= {
+      kind: "class",
+      name: "OverloadOverrideException",
+      fullName: "App.OverloadOverrideException",
+      namespace: "App",
+      ctor: OverloadOverrideException,
+      base: () => Exception.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new OverloadOverrideException(),
+      test: (v: unknown): v is OverloadOverrideException => v instanceof OverloadOverrideException,
+    });
   }
 
   protected override get $typeName(): string {

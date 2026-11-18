@@ -102,6 +102,8 @@ public static class FileMetadataExtractor
                 CachedExportKind.TypeAlias
             ),
             TsInterface i when i.Exported => new CachedExport(i.Name, CachedExportKind.Interface),
+            TsTopLevelStatement { Inner: TsVariableDeclaration { Exported: true } variable } =>
+                new CachedExport(variable.Name, CachedExportKind.Variable),
             _ => null,
         };
 
@@ -210,6 +212,9 @@ public static class FileMetadataExtractor
             CachedExportKind.Namespace => new TsNamespaceDeclaration(export.Name, Functions: []),
             CachedExportKind.TypeAlias => new TsTypeAlias(export.Name, Type: new TsAnyType()),
             CachedExportKind.Interface => new TsInterface(export.Name, Properties: []),
+            CachedExportKind.Variable => new TsTopLevelStatement(
+                new TsVariableDeclaration(export.Name, Initializer: null, Exported: true)
+            ),
             _ => throw new InvalidOperationException(
                 $"Unhandled CachedExportKind '{export.Kind}' in BuildExportStub. "
                     + "Add a switch arm matching the new enum value."

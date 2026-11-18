@@ -119,6 +119,9 @@ public static partial class IrToTsExpressionBridge
                 ),
                 un.EnumResultType
             ),
+            IrConditionalExpression { AsTarget: not null } asCast => MapAsCast(asCast, context),
+            IrGetTypeExpression getType => MapGetType(getType, context),
+            IrTypeOfExpression typeOf => MapTypeOf(typeOf),
             IrConditionalExpression cond => new TsConditionalExpression(
                 Map(cond.Condition, context),
                 Map(cond.WhenTrue, context),

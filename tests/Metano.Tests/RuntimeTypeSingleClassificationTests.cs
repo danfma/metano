@@ -1,0 +1,157 @@
+using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript;
+using Metano.Compiler.TypeScript.Analysis;
+using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
+
+namespace Metano.Tests;
+
+/// <summary>
+/// The reached-set assertion of spec 011 stage 011b (D29) and the single
+/// classification of NFR-004: the bridge fails loudly on a descriptor read the
+/// reachability phase did not reach, and the overload dispatcher, the type
+/// pattern and the guard builder render one test per type.
+/// </summary>
+public class RuntimeTypeSingleClassificationTests
+{
+    private const System.Reflection.BindingFlags BindingFlags =
+        System.Reflection.BindingFlags.NonPublic
+        | System.Reflection.BindingFlags.Public
+        | System.Reflection.BindingFlags.Static;
+
+    private static readonly IrTypeRef ObjectType = new IrPrimitiveTypeRef(IrPrimitive.Object);
+
+    private static readonly IrNamedTypeRef Interface = Named("IShape", IrNamedTypeKind.Interface);
+
+    private static readonly IrNamedTypeRef NumericEnum = Named(
+        "Color",
+        IrNamedTypeKind.NumericEnum
+    );
+
+    private static readonly IrNamedTypeRef Class = Named("Circle", IrNamedTypeKind.Class);
+
+    [Test]
+    [Arguments(nameof(RuntimeTypeDescriptorTests.FactorySource))]
+    [Arguments(nameof(RuntimeTypeDescriptorTests.InterfacesSource))]
+    [Arguments(nameof(RuntimeTypeDescriptorTests.ReceiversSource))]
+    [Arguments(nameof(RuntimeTypeDescriptorTests.FallbacksSource))]
+    [Arguments(nameof(RuntimeTypeDescriptorTests.CastsSource))]
+    public async Task EveryStageGoldenSource_PassesTheReachedSetAssertion(string sourceName)
+    {
+        var source = (string)
+            typeof(RuntimeTypeDescriptorTests).GetField(sourceName, BindingFlags)!.GetValue(null)!;
+
+        // TransformAll publishes the reachability, so every descriptor read the
+        // bridge renders runs the assertion; a drift throws.
+        var files = TranspileHelper.Transpile(source);
+
+        await Assert.That(files).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task DescriptorReadOutsideTheReachedSet_FailsLoudly()
+    {
+        var previous = RuntimeTypeScope.Current;
+
+        try
+        {
+            RuntimeTypeScope.Current = RuntimeTypeReachabilityResult.Empty;
+
+            await Assert
+                .That(() => IrToTsRuntimeTypeReferences.Of(Interface, "a test"))
+                .Throws<InvalidOperationException>()
+                .WithMessageContaining("Geo.IShape");
+        }
+        finally
+        {
+            RuntimeTypeScope.Current = previous;
+        }
+    }
+
+    [Test]
+    public async Task DescriptorReadInsideTheReachedSet_RendersTheExport()
+    {
+        var previous = RuntimeTypeScope.Current;
+
+        try
+        {
+            RuntimeTypeScope.Current = RuntimeTypeReachabilityResult.Empty with
+            {
+                Reached = new HashSet<SupertypeKey> { Interface.SupertypeKey },
+            };
+
+            var descriptor = IrToTsRuntimeTypeReferences.Of(Interface, "a test")!;
+
+            await Assert.That(Print(descriptor)).IsEqualTo("IShape$runtimeType");
+        }
+        finally
+        {
+            RuntimeTypeScope.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// NFR-004: for the same type, the dispatcher (no static type: the
+    /// argument may be anything) and the type pattern over an <c>object</c>
+    /// render the identical test.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(ClassifiedTypes))]
+    public async Task DispatcherAndPattern_RenderTheSameTest(string label, IrTypeRef type)
+    {
+        var value = new TsIdentifier("value");
+
+        var dispatcher = IrTypeCheckBuilder.Generate(type, value, TypeCheckScope.Empty);
+        var pattern = IrToTsExpressionBridge.BuildTypeTest(value, type, ObjectType);
+
+        await Assert.That(Print(dispatcher!)).IsEqualTo(Print(pattern));
+        await Assert.That(label).IsNotEmpty();
+    }
+
+    /// <summary>
+    /// The guard builder's structural checks are the runtime-test bridge's: a
+    /// fixed tuple and a <c>typeof</c> test print the same through both.
+    /// </summary>
+    [Test]
+    public async Task GuardAndPattern_ShareTheFixedTupleTest()
+    {
+        var value = new TsIdentifier("value");
+        var tuple = Named("Pair", IrNamedTypeKind.Record) with
+        {
+            Semantics = new IrNamedTypeSemantics(
+                IrNamedTypeKind.Record,
+                IsTranspilable: true,
+                IsJsTuple: true,
+                JsTupleArity: 2
+            ),
+        };
+
+        await Assert
+            .That(Print(IrToTsExpressionBridge.BuildTypeTest(value, tuple)))
+            .IsEqualTo(Print(IrToTsRuntimeTestBridge.FixedTupleTest(value, 2)));
+
+        await Assert
+            .That(Print(IrToTsRuntimeTestBridge.TypeofTest(value, "string")))
+            .IsEqualTo("typeof value === \"string\"");
+    }
+
+    public static IEnumerable<Func<(string, IrTypeRef)>> ClassifiedTypes()
+    {
+        yield return () => ("interface", Interface);
+        yield return () => ("enum", NumericEnum);
+        yield return () => ("class", Class);
+        yield return () => ("int", new IrPrimitiveTypeRef(IrPrimitive.Int32));
+        yield return () => ("long", new IrPrimitiveTypeRef(IrPrimitive.Int64));
+        yield return () => ("double", new IrPrimitiveTypeRef(IrPrimitive.Float64));
+        yield return () => ("string", new IrPrimitiveTypeRef(IrPrimitive.String));
+        yield return () => ("bool", new IrPrimitiveTypeRef(IrPrimitive.Boolean));
+        yield return () => ("char", new IrPrimitiveTypeRef(IrPrimitive.Char));
+        yield return () => ("decimal", new IrPrimitiveTypeRef(IrPrimitive.Decimal));
+    }
+
+    private static IrNamedTypeRef Named(string name, IrNamedTypeKind kind) =>
+        new(name, "Geo", Semantics: new IrNamedTypeSemantics(kind, IsTranspilable: true));
+
+    private static string Print(TsExpression expression) =>
+        new Printer().PrintExpressionFragment(expression);
+}

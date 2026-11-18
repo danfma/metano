@@ -162,4 +162,23 @@ public sealed record IrCompilation(
     IReadOnlyList<IrTranspilableTypeEntry>? TranspilableTypeEntries = null,
     IrEntryPointInfo? EntryPoint = null,
     PackageSubpathRoot PackageSubpathRoot = default
-);
+)
+{
+    /// <summary>
+    /// Every runtime question the transpilable types' code asks (spec 011
+    /// FR-027): type tests, <c>as</c>, explicit casts, <c>GetType()</c>,
+    /// <c>typeof</c> and the parameter types of overload groups, in source
+    /// order. A target computes from them which runtime type descriptors its
+    /// output needs.
+    /// </summary>
+    public IReadOnlyList<IrRuntimeQuestion> RuntimeQuestions { get; init; } = [];
+
+    /// <summary>
+    /// The collection types a runtime question names, by CLR definition name
+    /// (<c>System.Collections.Generic.List`1</c>), so a target can decide which
+    /// collection kinds carry their type arguments at runtime (spec 011
+    /// FR-008).
+    /// </summary>
+    public IReadOnlySet<string> QuestionedCollectionTypes { get; init; } =
+        new HashSet<string>(StringComparer.Ordinal);
+}

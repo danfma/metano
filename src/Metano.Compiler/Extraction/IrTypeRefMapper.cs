@@ -541,7 +541,12 @@ public static class IrTypeRefMapper
         return supertypes.Count == 0 ? null : supertypes;
     }
 
-    private static SupertypeKey SupertypeKeyOf(
+    /// <summary>
+    /// The key a reference to <paramref name="type"/> carries as
+    /// <see cref="IrNamedTypeRef.SupertypeKey"/>: its namespace and its
+    /// containing-type-qualified emitted name.
+    /// </summary>
+    public static SupertypeKey SupertypeKeyOf(
         INamedTypeSymbol type,
         Metano.Annotations.TargetLanguage? target
     ) => SupertypeKey.From(GetNamespace(type), BuildQualifiedName(type.OriginalDefinition, target));

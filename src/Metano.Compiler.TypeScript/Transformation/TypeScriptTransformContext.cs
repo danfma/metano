@@ -79,6 +79,14 @@ public sealed class TypeScriptTransformContext(
         transpilableTypes;
 
     /// <summary>
+    /// The runtime type descriptors this transform emits (spec 011 FR-027, D29),
+    /// computed once before the group transforms by
+    /// <see cref="Analysis.RuntimeTypeReachability"/>.
+    /// </summary>
+    internal Analysis.RuntimeTypeReachabilityResult RuntimeTypes { get; init; } =
+        Analysis.RuntimeTypeReachabilityResult.Empty;
+
+    /// <summary>
     /// Maps the camelCase emitted name of every transpilable extension
     /// helper (classic <c>(this T)</c> method, C# 14 <c>extension(T) { … }</c>
     /// member) to the <see cref="IrTranspilableTypeRef"/> of the static

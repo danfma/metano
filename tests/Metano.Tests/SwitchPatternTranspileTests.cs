@@ -1171,10 +1171,11 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task BareEnumTypeArm_TestsThePrimitiveKind()
+    public async Task BareEnumTypeArm_TestsMembershipThroughTheDescriptor()
     {
         // An enum lowers to a number / string union with no class value, so
-        // `instanceof Color` would throw at runtime; the arm tests typeof.
+        // `instanceof Color` would throw at runtime; the arm tests membership
+        // in the declared values through the enum's descriptor (spec 011 FR-049).
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations.TypeScript;
@@ -1199,8 +1200,8 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["kinds.ts"];
-        await Assert.That(output).Contains("typeof o === \"number\" ? \"color\"");
-        await Assert.That(output).Contains("typeof o === \"string\" ? \"size\"");
+        await Assert.That(output).Contains("isType(o, Color$runtimeType) ? \"color\"");
+        await Assert.That(output).Contains("isType(o, Size$runtimeType) ? \"size\"");
         await Assert.That(output).DoesNotContain("instanceof");
     }
 

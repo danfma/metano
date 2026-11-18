@@ -8,13 +8,8 @@ AliasProbes.genericAlias LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.isAlias LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.staticCall LOADFAIL node:internal/modules/esm/resolve:698
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
-CastProbes.downFail THROWS InvalidCastException: Unable to cast object of type 'Cat' to type 'Dog'.
 CastProbes.enums = 1|1|1
-CastProbes.exceptionsFail THROWS InvalidCastException: Unable to cast object of type 'ArgumentException' to type 'InvalidOperationException'.
 CastProbes.genericFail THROWS TypeError: CastProbes.g(...).bark is not a function
-CastProbes.interfaceFail THROWS TypeError: o.walk is not a function
-CastProbes.objectToStringFail MISSING
-CastProbes.recordsFail THROWS InvalidCastException: Unable to cast object of type 'Rec' to type 'SubRec'.
 CastProbes.thisCastFail THROWS TypeError: a.asDog(...).bark is not a function
 CatchProbes.all = ioe:ioe;arg:arg;app:app;sub:sub;nre;argnull:p;ex:plain;none;appinner:inner;knf;none;ns:ns;fmt:fmt;oc:oc;
 CatchProbes.dictMissing = none
@@ -68,7 +63,7 @@ InteropProbes.inlineCodeExpression = 42
 InteropProbes.inlineCodeHoles = 42
 InteropProbes.inlineCodeStatement = 5
 InteropProbes.unsafeCastWrong = cast
-LazyDirectProbes.baseModuleFirst LOADFAIL file://<conformance>/.work/probes/dist/conformance/lazy-barrel/lz-square.js:2
+LazyDirectProbes.baseModuleFirst LOADFAIL file://<conformance>/.work/probes/dist/conformance/lazy-barrel/lz-square.js:3
 LazyFieldProbes.structDefaultDoesNotTrigger = start,cctor,ctor,default,get=undefined,ctor,v=3
 LazyStructProbes.paramsConstructorWithoutArguments = start,cctor,W=7:n=0
 LazyStructProbes.paramsConstructorWithoutArgumentsNoStaticConstructor = W=7:n=0

@@ -1,0 +1,62 @@
+// The NFR-002 fixture of spec 011: records, methods and a string enum, with no
+// collections, exceptions, numeric enums or runtime type questions. Its
+// transpiled output is pinned from the build before stage 011b
+// (Pinned/ beside this file) and must never change.
+using Metano.Annotations;
+
+[assembly: TranspileAssembly]
+
+namespace Fixtures.NoRuntimeQuestions;
+
+[StringEnum]
+public enum Priority
+{
+    Low,
+    Medium,
+    High,
+}
+
+public record Point(int X, int Y)
+{
+    public Point Translate(int dx, int dy) => this with { X = X + dx, Y = Y + dy };
+
+    public int ManhattanLength() => System.Math.Abs(X) + System.Math.Abs(Y);
+}
+
+public record TodoItem(string Title, Priority Priority, Point Location)
+{
+    public TodoItem Escalate() =>
+        this with { Priority = Priority == Priority.Low ? Priority.Medium : Priority.High };
+
+    public string Describe() => $"{Title} ({Priority}) at {Location.X},{Location.Y}";
+
+    public bool IsUrgent => Priority == Priority.High;
+}
+
+public class Counter
+{
+    private int _count;
+
+    public int Count => _count;
+
+    public void Increment(int by = 1)
+    {
+        _count += by;
+    }
+
+    public static Counter StartingAt(int value)
+    {
+        var counter = new Counter();
+        counter.Increment(value);
+
+        return counter;
+    }
+}
+
+public static class Geometry
+{
+    public static int Distance(Point a, Point b) => System.Math.Abs(a.X - b.X) + System.Math.Abs(a.Y - b.Y);
+
+    public static TodoItem Plan(string title, int x, int y) =>
+        new(title, Priority.Low, new Point(x, y));
+}

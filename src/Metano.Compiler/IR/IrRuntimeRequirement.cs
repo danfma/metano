@@ -36,10 +36,6 @@ public enum IrRuntimeCategory
     /// <summary>Branded/opaque type utilities (UUID, etc.).</summary>
     BrandedType,
 
-    /// <summary>Primitive runtime type discriminators emitted by overload
-    /// dispatchers (<c>isInt32</c>, <c>isString</c>, <c>isBool</c>, …).</summary>
-    PrimitiveTypeCheck,
-
     /// <summary>Event subscription helpers (e.g., the <c>delegateAdd</c> /
     /// <c>delegateRemove</c> pair used for C# <c>event</c> accessors).</summary>
     EventHandling,

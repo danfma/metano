@@ -1,4 +1,4 @@
-import { formatDouble } from "metano-runtime";
+import { formatDouble, isInt32, isString } from "metano-runtime";
 import { Circle } from "./circle";
 import type { Shape } from "./shape";
 import { Square } from "./square";
@@ -23,9 +23,9 @@ export class Describer {
           return "circle " + formatDouble(c.r);
         }
       case o instanceof Square:
-      case typeof o === "number":
+      case isInt32(o):
         return "square or int";
-      case typeof o === "string" && o.length > 3:
+      case isString(o) && o.length > 3:
         {
           const text = o;
 

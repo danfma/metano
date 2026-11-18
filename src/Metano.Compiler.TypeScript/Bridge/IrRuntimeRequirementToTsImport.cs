@@ -87,20 +87,8 @@ public static class IrRuntimeRequirementToTsImport
             "UUID" => ("metano-runtime", "UUID", false),
             "Grouping" => ("metano-runtime", "Grouping", true),
             "Temporal" => ("@js-temporal/polyfill", "Temporal", false),
-            // Event accessor helpers and overload-dispatcher type checks all
-            // ship from metano-runtime under their own name.
+            // Event accessor helpers ship from metano-runtime under their own name.
             "delegateAdd" or "delegateRemove" => ("metano-runtime", req.HelperName, false),
-            "isChar"
-            or "isString"
-            or "isByte"
-            or "isInt16"
-            or "isInt32"
-            or "isInt64"
-            or "isUInt64"
-            or "isFloat32"
-            or "isFloat64"
-            or "isBool"
-            or "isBigInt" => ("metano-runtime", req.HelperName, false),
             _ => null,
         };
 }

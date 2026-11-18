@@ -1,6 +1,8 @@
-import { toException, tryFilter } from "metano-runtime";
+import { toException, tryFilter, type ClassType } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
+
+let AppException$rt: ClassType<AppException> | undefined;
 
 export class AppException extends Exception {
   override readonly name: string = "AppException";
@@ -8,6 +10,22 @@ export class AppException extends Exception {
   constructor(message: string, readonly code: number) {
     super(message ?? "Exception of type 'AppException' was thrown.");
     this.code = code;
+  }
+
+  static override get $runtimeType(): ClassType<AppException> {
+    return (AppException$rt ??= {
+      kind: "class",
+      name: "AppException",
+      fullName: "AppException",
+      namespace: "",
+      ctor: AppException,
+      base: () => Exception.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is AppException => v instanceof AppException,
+    });
   }
 
   protected override get $typeName(): string {
@@ -19,11 +37,29 @@ export class AppException extends Exception {
   }
 }
 
+let NotFoundException$rt: ClassType<NotFoundException> | undefined;
+
 export class NotFoundException extends AppException {
   override readonly name: string = "NotFoundException";
 
   constructor(message: string) {
     super(message, 404);
+  }
+
+  static override get $runtimeType(): ClassType<NotFoundException> {
+    return (NotFoundException$rt ??= {
+      kind: "class",
+      name: "NotFoundException",
+      fullName: "NotFoundException",
+      namespace: "",
+      ctor: NotFoundException,
+      base: () => AppException.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is NotFoundException => v instanceof NotFoundException,
+    });
   }
 
   protected override get $typeName(): string {
