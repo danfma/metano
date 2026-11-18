@@ -21,9 +21,16 @@ import { Decimal as DecimalJs } from "decimal.js";
 /** `System.Decimal`'s 29 significant digits, which keep `decimal.MaxValue` exact. */
 const DECIMAL_PRECISION = 29;
 
-export const Decimal = DecimalJs.clone({
+/**
+ * decimal.js's `ROUND_HALF_EVEN`, written as its value: reading `DecimalJs.ROUND_HALF_EVEN`
+ * here would be a property read at load, which keeps the clone in every bundle.
+ */
+const ROUND_HALF_EVEN = 6;
+
+// Pure (spec 011 FR-043): a side-effect-only import of this module bundles to nothing.
+export const Decimal = /* @__PURE__ */ DecimalJs.clone({
   precision: DECIMAL_PRECISION,
-  rounding: DecimalJs.ROUND_HALF_EVEN,
+  rounding: ROUND_HALF_EVEN,
 });
 
 export type Decimal = DecimalJs;

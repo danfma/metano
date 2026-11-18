@@ -33,7 +33,6 @@ import {
  */
 const MAXIMAL_ALLOWLIST: ReadonlySet<string> = new Set([
   "system/collections/immutable-collection",
-  "system/decimal",
   "system/uuid",
 ]);
 
