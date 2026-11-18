@@ -17,6 +17,7 @@ export type UUID = string & { readonly __brand: "UUID" };
 // The companion object below mirrors generated [InlineWrapper] output so
 // Metano can treat UUID exactly like a user-defined branded type — including
 // in the JSON serializer's `branded` descriptor.
+
 /**
  * Wraps an existing string as a `UUID` without validation. The caller is
  * responsible for ensuring the string actually looks like a UUID — this is
@@ -56,6 +57,7 @@ const UUID$empty: UUID = "00000000-0000-0000-0000-000000000000" as UUID;
  */
 function UUID$isUuid(value: unknown): value is UUID {
   if (typeof value !== "string") return false;
+
   // 8-4-4-4-12 hex groups (canonical form) OR 32 contiguous hex chars (N form)
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^[0-9a-fA-F]{32}$/.test(
     value,
@@ -76,7 +78,7 @@ function UUID$tryParse(text: string | null | undefined): readonly [found: boolea
 }
 
 /**
- * Parses a GUID string the way `Guid.Parse(string)` does: the formats {@link tryParse}
+ * Parses a GUID string the way `Guid.Parse(string)` does: the formats {@link UUID.tryParse}
  * accepts, normalized to the lowercase `D` form `Guid.ToString()` prints, so two spellings
  * of one GUID compare equal.
  *

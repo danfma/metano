@@ -9,6 +9,7 @@
  * debuggable (named functions in stack traces), while the underlying
  * representation stays a plain JS array — no wrapper, no serialization friction.
  */
+
 /** Returns a new array with `item` appended at the end. */
 function ImmutableCollection$add<T>(array: readonly T[], item: T): T[] {
   return [...array, item];
@@ -36,7 +37,9 @@ function ImmutableCollection$removeAt<T>(array: readonly T[], index: number): T[
  */
 function ImmutableCollection$remove<T>(array: readonly T[], item: T): readonly T[] {
   const i = array.indexOf(item);
+
   if (i < 0) return array;
+
   return [...array.slice(0, i), ...array.slice(i + 1)];
 }
 
