@@ -27,7 +27,10 @@ public static class TsGroupingPolicy
                 IrToTsRecordSynthesisBridge.WithMethodName,
                 FastPathSuffix
             )
-        );
+        )
+        {
+            GroupsSynthesizedEquals = true,
+        };
 
     /// <summary>
     /// The name <paramref name="kind"/> is emitted under: the one map from a

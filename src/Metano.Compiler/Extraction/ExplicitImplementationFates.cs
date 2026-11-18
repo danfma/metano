@@ -33,7 +33,7 @@ internal static class ExplicitImplementationFates
         ExplicitImplementation lowering,
         OverloadGroupingPolicy policy
     ) =>
-        policy.NamesSynthesizedEquals
+        policy.GroupsSynthesizedEquals
         && member is IMethodSymbol { ContainingType.TypeKind: TypeKind.Struct } method
         && lowering
             is {
