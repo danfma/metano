@@ -51,8 +51,11 @@ const TOO_DEEP =
 /** A number text with at most this many significant digits is exact as a double. */
 const DOUBLE_EXACT_DIGITS = 15;
 
-/** The shortest run of `[0-9.]` that can hold a mantissa of more than 15 digits: {@link DOUBLE_EXACT_DIGITS} + 1. */
-const INEXACT_RUN_LENGTH = 16; // keep in sync with DOUBLE_EXACT_DIGITS + 1
+/**
+ * The shortest run of `[0-9.]` that can hold a mantissa of more than 15 digits:
+ * {@link DOUBLE_EXACT_DIGITS} + 1, written as its value; keep the two in sync.
+ */
+const INEXACT_RUN_LENGTH = 16;
 
 const TAB = 0x09;
 const LINE_FEED = 0x0a;

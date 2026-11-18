@@ -173,9 +173,15 @@ describe("PropertyNamingPolicy matches System.Text.Json", () => {
 });
 
 describe("PropertyNamingPolicy statics", () => {
-  test("each policy is built once and kept", () => {
-    expect(PropertyNamingPolicy.camelCase).toBe(PropertyNamingPolicy.camelCase);
-    expect(PropertyNamingPolicy.snakeCaseLower).toBe(PropertyNamingPolicy.snakeCaseLower);
-    expect(PropertyNamingPolicy.kebabCaseUpper).toBe(PropertyNamingPolicy.kebabCaseUpper);
+  const policies = [
+    "camelCase",
+    "snakeCaseLower",
+    "snakeCaseUpper",
+    "kebabCaseLower",
+    "kebabCaseUpper",
+  ] as const;
+
+  test.each(policies)("%s is built once and kept", (name) => {
+    expect(PropertyNamingPolicy[name]).toBe(PropertyNamingPolicy[name]);
   });
 });

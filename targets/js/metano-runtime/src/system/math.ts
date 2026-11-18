@@ -59,8 +59,11 @@ const DECIMAL_JS_ROUNDING = [
   2, // ToPositiveInfinity → ROUND_CEIL
 ] as const;
 
-/** Number of {@link MidpointRounding} modes; the values run from 0 upward. */
-const MIDPOINT_ROUNDING_MODE_COUNT = 5; // keep in sync with MidpointRounding (pinned by a test)
+/**
+ * Number of {@link MidpointRounding} modes; the values run from 0 upward. Written as
+ * its value; keep it in sync with {@link MidpointRounding} (a test pins it).
+ */
+const MIDPOINT_ROUNDING_MODE_COUNT = 5;
 
 /** Structural view of a `decimal.js` `Decimal`, the only operation the helper uses. */
 export interface DecimalRoundable<D> {

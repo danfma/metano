@@ -177,6 +177,8 @@ describe("MidpointRounding modes", () => {
   test("every mode is accepted and the next value is not (the mode count in math.ts)", () => {
     const modes = Object.values(MidpointRounding);
 
+    expect([...modes].sort((a, b) => a - b)).toEqual(modes.map((_, index) => index));
+
     for (const mode of modes) {
       expect(() => roundNumber(1.5, 0, mode)).not.toThrow();
     }
