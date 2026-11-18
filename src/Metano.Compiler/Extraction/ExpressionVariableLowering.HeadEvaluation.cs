@@ -22,7 +22,13 @@ internal sealed partial class ExpressionVariableLowering
         private readonly ExpressionVariableLowering _lowering = lowering;
         private readonly List<IrStatement> _prelude = prelude;
         private readonly HashSet<string> _localsRead = new(StringComparer.Ordinal);
+
+        private readonly Dictionary<IrOutArgumentCall, IrExpression> _boundCalls = new(
+            ReferenceEqualityComparer.Instance
+        );
+
         private bool _stopped;
+        private bool _substitutesOnly;
 
         public IrExpression Bind(IrExpression expression)
         {
@@ -66,12 +72,10 @@ internal sealed partial class ExpressionVariableLowering
                     );
 
                 case IrUserConversion userConversion:
-                    return StopAfter(
-                        userConversion with
-                        {
-                            Operand = Bind(userConversion.Operand),
-                        }
-                    );
+                    return BindUserConversion(userConversion);
+
+                case IrUserOperatorStore store:
+                    return BindUserStore(store);
 
                 case IrIntegerOverflow overflow:
                     return overflow with { Value = Bind(overflow.Value) };
@@ -114,6 +118,67 @@ internal sealed partial class ExpressionVariableLowering
                     _stopped = true;
                     return expression;
             }
+        }
+
+        /// <summary>
+        /// A user conversion binds its operand, and its source form (the
+        /// form Dart prints) takes the same bindings without hoisting
+        /// anything of its own (<see cref="WithSameBindings"/>).
+        /// </summary>
+        private IrExpression BindUserConversion(IrUserConversion conversion)
+        {
+            var (operand, sourceForm) = WithSameBindings(
+                () => Bind(conversion.Operand),
+                () => Bind(conversion.SourceForm)
+            );
+
+            return StopAfter(conversion with { Operand = operand, SourceForm = sourceForm });
+        }
+
+        /// <summary>
+        /// A user compound assignment or increment binds its read-modify-write
+        /// as an assignment does, and its source form takes the same bindings.
+        /// </summary>
+        private IrExpression BindUserStore(IrUserOperatorStore store)
+        {
+            var (readModifyWrite, sourceForm) = WithSameBindings(
+                () => Bind(store.ReadModifyWrite),
+                () => Bind(store.SourceForm)
+            );
+
+            return StopAfter(
+                store with
+                {
+                    ReadModifyWrite = readModifyWrite,
+                    SourceForm = sourceForm,
+                }
+            );
+        }
+
+        /// <summary>
+        /// Binds <paramref name="bound"/>, then walks <paramref name="mirrored"/>
+        /// from the same state, replacing only the out-argument calls the
+        /// first walk bound: both forms of a node evaluate the same calls,
+        /// and each call is bound once.
+        /// </summary>
+        private (IrExpression Bound, IrExpression Mirrored) WithSameBindings(
+            Func<IrExpression> bound,
+            Func<IrExpression> mirrored
+        )
+        {
+            var stoppedBefore = _stopped;
+            var first = bound();
+            var stoppedAfter = _stopped;
+
+            _stopped = stoppedBefore;
+            _substitutesOnly = true;
+
+            var second = mirrored();
+
+            _substitutesOnly = false;
+            _stopped = stoppedAfter;
+
+            return (first, second);
         }
 
         private IrExpression StopAfter(IrExpression expression)
@@ -202,7 +267,10 @@ internal sealed partial class ExpressionVariableLowering
         /// </summary>
         private IrExpression BindCall(IrOutArgumentCall call)
         {
-            if (call.ResultType is null || AssignsLocalReadBefore(call))
+            if (_boundCalls.TryGetValue(call, out var already))
+                return already;
+
+            if (_substitutesOnly || call.ResultType is null || AssignsLocalReadBefore(call))
                 return StopAfter(call);
 
             var inner = BindCallParts(call.Call);
@@ -212,8 +280,11 @@ internal sealed partial class ExpressionVariableLowering
             _stopped = false;
 
             var bound = call with { Call = inner };
+            var result = _lowering.Bind(bound, ResultSlot.Temporary, _prelude)!;
 
-            return _lowering.Bind(bound, ResultSlot.Temporary, _prelude)!;
+            _boundCalls[call] = result;
+
+            return result;
         }
 
         private bool AssignsLocalReadBefore(IrOutArgumentCall call) =>
