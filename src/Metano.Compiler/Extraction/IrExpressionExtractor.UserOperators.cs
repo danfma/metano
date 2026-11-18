@@ -54,10 +54,15 @@ public sealed partial class IrExpressionExtractor
     /// targets cannot call (baseline FR-077): a C# 14 instance compound or
     /// increment operator (<c>void operator +=(int k)</c>), or an operator of
     /// a <c>[PlainObject]</c> type, which has no class to declare a helper
-    /// on; <c>null</c> for any other operator.
+    /// on; <c>null</c> for any other operator, and for a target that keeps
+    /// these shapes as the source wrote them
+    /// (<see cref="IrExtractionContext.KeepsUserOperatorSourceForms"/>).
     /// </summary>
     private IrExpression? UnsupportedUserOperator(IMethodSymbol? method, SyntaxNode node)
     {
+        if (_context.KeepsUserOperatorSourceForms)
+            return null;
+
         if (
             method
             is not {
@@ -92,11 +97,15 @@ public sealed partial class IrExpressionExtractor
     /// A condition (of <c>if</c>, <c>while</c>, <c>do</c>, <c>for</c> or
     /// <c>?:</c>) that C# tests through a user-defined <c>true</c> operator,
     /// which is not supported (<c>MS0001</c>, baseline FR-077); <c>null</c>
-    /// for any other expression. A condition over <c>implicit operator
-    /// bool</c> is a conversion (FR-079).
+    /// for any other expression, and for a target that keeps it as the
+    /// source wrote it (<see cref="IrExtractionContext.KeepsUserOperatorSourceForms"/>).
+    /// A condition over <c>implicit operator bool</c> is a conversion (FR-079).
     /// </summary>
     private IrExpression? UnsupportedUserTruthTest(ExpressionSyntax expression)
     {
+        if (_context.KeepsUserOperatorSourceForms)
+            return null;
+
         var isCondition = expression.Parent switch
         {
             IfStatementSyntax statement => statement.Condition == expression,
@@ -175,7 +184,8 @@ public sealed partial class IrExpressionExtractor
     /// other than <c>==</c> / <c>!=</c>, which the lifted lowering wraps
     /// around the application (<see cref="BuildBinary"/>). A conditional
     /// <c>&amp;&amp;</c> / <c>||</c> through user <c>true</c> / <c>false</c>
-    /// operators reports <c>MS0001</c>.
+    /// operators reports <c>MS0001</c> where the target reports the
+    /// unsupported shapes, and keeps its existing lowering elsewhere.
     /// </summary>
     private IrExpression? TryExtractUserBinary(BinaryExpressionSyntax bin, IrBinaryOp op)
     {
@@ -190,12 +200,14 @@ public sealed partial class IrExpressionExtractor
 
         if (bin.Kind() is SyntaxKind.LogicalAndExpression or SyntaxKind.LogicalOrExpression)
         {
-            return ReportUnsupported(
-                bin,
-                bin.Kind().ToString(),
-                $"'{bin}' uses the user-defined 'true' / 'false' operators, which are not "
-                    + "supported (baseline FR-077)."
-            );
+            return _context.KeepsUserOperatorSourceForms
+                ? null
+                : ReportUnsupported(
+                    bin,
+                    bin.Kind().ToString(),
+                    $"'{bin}' uses the user-defined 'true' / 'false' operators, which are not "
+                        + "supported (baseline FR-077)."
+                );
         }
 
         if (op.IsEquality() && (IsNullLiteral(bin.Left) || IsNullLiteral(bin.Right)))
@@ -323,7 +335,7 @@ public sealed partial class IrExpressionExtractor
             AppliedUserOperator(operation.OperatorMethod) is not { } method
             || TryMapCompoundAssignmentToBinary(assign.Kind()) is not { } op
         )
-            return null;
+            return UnappliedUserCompoundAssignment(assign, operation.OperatorMethod);
 
         var target = Extract(assign.Left);
 
@@ -358,6 +370,51 @@ public sealed partial class IrExpressionExtractor
 
         return new IrUserOperatorStore(sourceForm, readModifyWrite);
     }
+
+    /// <summary>
+    /// <c>x op= y</c> through a user-defined operator the extraction does not
+    /// apply (one of a BCL, <c>[External]</c> or <c>[PlainObject]</c> type, or
+    /// a C# 14 instance operator), on a target that keeps user operators as
+    /// the source wrote them
+    /// (<see cref="IrExtractionContext.KeepsUserOperatorSourceForms"/>): a
+    /// store whose only form is the source's, which that target prints as
+    /// the instance-helper call it printed before (<c>x = x.$add(y)</c>).
+    /// <c>null</c> on any other target, and for an operator other than
+    /// <c>+=</c>, <c>-=</c>, <c>*=</c>, <c>/=</c> and <c>%=</c>.
+    /// </summary>
+    private IrExpression? UnappliedUserCompoundAssignment(
+        AssignmentExpressionSyntax assign,
+        IMethodSymbol? method
+    )
+    {
+        if (
+            !_context.KeepsUserOperatorSourceForms
+            || method is not { MethodKind: MethodKind.UserDefinedOperator }
+            || !HasInstanceHelper(assign.Kind())
+        )
+            return null;
+
+        var target = Extract(assign.Left);
+
+        if (IsUnsupportedPlaceholder(target))
+            return target;
+
+        var sourceForm = new IrBinaryExpression(
+            target,
+            MapAssignmentOp(assign.Kind()),
+            Extract(assign.Right)
+        );
+
+        return new IrUserOperatorStore(sourceForm, sourceForm);
+    }
+
+    private static bool HasInstanceHelper(SyntaxKind compoundAssignment) =>
+        compoundAssignment
+            is SyntaxKind.AddAssignmentExpression
+                or SyntaxKind.SubtractAssignmentExpression
+                or SyntaxKind.MultiplyAssignmentExpression
+                or SyntaxKind.DivideAssignmentExpression
+                or SyntaxKind.ModuloAssignmentExpression;
 
     // ── Conversions ───────────────────────────────────────────────────────
 

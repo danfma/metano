@@ -37,6 +37,20 @@ public sealed record IrExtractionContext(
     internal NumericLoweringRules NumericLowering => NumericLoweringRules.For(Target);
 
     /// <summary>
+    /// Whether the target prints the user-defined operator shapes as the
+    /// source wrote them, as it did before baseline FR-077 / FR-079 gave
+    /// them nodes (Dart, transitionally; see <c>DartUserOperatorForms</c>).
+    /// Such a target gets no <c>MS0001</c> for the shapes no target calls
+    /// yet (a condition tested through a user <c>true</c> operator, a user
+    /// <c>&amp;&amp;</c> / <c>||</c>, an operator or conversion of a
+    /// <c>[PlainObject]</c> type, a C# 14 instance compound or increment
+    /// operator), and a compound assignment through an operator the
+    /// extraction does not apply keeps its instance-helper call
+    /// (<c>x = x.$add(y)</c>), so its output and diagnostics stay as they were.
+    /// </summary>
+    internal bool KeepsUserOperatorSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// The port through which a target says which types it emits with an
     /// addressable form per constructor overload — TypeScript a selector and,
     /// for a concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10),

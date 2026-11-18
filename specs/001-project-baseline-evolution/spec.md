@@ -1023,7 +1023,11 @@ Product requirements added after the migration (normative; each one is traced by
   a condition, `&&` or `||` (a condition over `implicit operator bool` is FR-079, not this
   case); a C# 14 instance compound-assignment or increment operator (`void operator +=(int k)`,
   `void operator ++()`); an operator of a `[PlainObject]` type, which has no class to declare a
-  helper on (also `MS0001` at its declaration). Out of scope and unchanged: an operator applied
+  helper on (also `MS0001` at its declaration). These placeholders are TypeScript's: Dart,
+  which prints the user-operator nodes as the source wrote them, keeps these shapes and their
+  diagnostics as they were, and keeps the `x = x.$add(y)` form of the removed rewrite for a
+  `+=` / `-=` / `*=` / `/=` / `%=` through an operator the core does not apply (a BCL,
+  `[External]` or `[PlainObject]` type, an instance operator). Out of scope and unchanged: an operator applied
   to a type parameter through a `static abstract` interface member (generic math,
   `T : INumber<T>`, `a + b`), which keeps today's raw `a + b` (it runs under Bun for numbers; a
   placeholder would regress it). Known limitation: a struct operator that mutates its
