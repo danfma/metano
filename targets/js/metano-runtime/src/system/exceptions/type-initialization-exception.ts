@@ -1,4 +1,7 @@
 import { SystemException } from "./system-exception.ts";
+import type { ClassType } from "../reflection/runtime-type.ts";
+
+let TypeInitializationException$rt: ClassType<TypeInitializationException> | undefined;
 
 /**
  * Mirrors `System.TypeInitializationException`: a type's static constructor (or one
@@ -14,5 +17,26 @@ export class TypeInitializationException extends SystemException {
   constructor(typeName: string, innerException?: Error | null) {
     super(`The type initializer for '${typeName}' threw an exception.`, innerException);
     this.typeName = typeName;
+  }
+
+  /**
+   * The runtime type descriptor of `System.TypeInitializationException`: a data literal built on first read,
+   * so an unused class costs nothing and a thrown one pulls in no reflection code.
+   */
+  static override get $runtimeType(): ClassType<TypeInitializationException> {
+    return (TypeInitializationException$rt ??= {
+      kind: "class",
+      name: "TypeInitializationException",
+      fullName: "System.TypeInitializationException",
+      namespace: "System",
+      ctor: TypeInitializationException,
+      base: () => SystemException.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (value: unknown): value is TypeInitializationException =>
+        value instanceof TypeInitializationException,
+    });
   }
 }

@@ -1,8 +1,11 @@
 import { InvalidOperationException } from "./invalid-operation-exception.ts";
+import type { ClassType } from "../reflection/runtime-type.ts";
 
 /** The message of `System.Runtime.CompilerServices.SwitchExpressionException` on .NET. */
 const SWITCH_EXPRESSION_EXCEPTION_MESSAGE =
   "Non-exhaustive switch expression failed to match its input.";
+
+let SwitchExpressionException$rt: ClassType<SwitchExpressionException> | undefined;
 
 /**
  * Mirrors `System.Runtime.CompilerServices.SwitchExpressionException`: a switch
@@ -26,6 +29,28 @@ export class SwitchExpressionException extends InvalidOperationException {
 
   protected override get $typeNamespace(): string {
     return "System.Runtime.CompilerServices";
+  }
+
+  /**
+   * The runtime type descriptor of `System.Runtime.CompilerServices.SwitchExpressionException`: a data literal built on first read,
+   * so an unused class costs nothing and a thrown one pulls in no reflection code.
+   */
+  static override get $runtimeType(): ClassType<SwitchExpressionException> {
+    return (SwitchExpressionException$rt ??= {
+      kind: "class",
+      name: "SwitchExpressionException",
+      fullName: "System.Runtime.CompilerServices.SwitchExpressionException",
+      namespace: "System.Runtime.CompilerServices",
+      ctor: SwitchExpressionException,
+      base: () => InvalidOperationException.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new SwitchExpressionException(),
+      test: (value: unknown): value is SwitchExpressionException =>
+        value instanceof SwitchExpressionException,
+    });
   }
 }
 

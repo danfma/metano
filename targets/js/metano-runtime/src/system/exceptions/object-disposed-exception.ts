@@ -1,7 +1,10 @@
 import { InvalidOperationException } from "./invalid-operation-exception.ts";
+import type { ClassType } from "../reflection/runtime-type.ts";
 
 /** The message `new System.ObjectDisposedException(objectName)` carries on .NET. */
 const OBJECT_DISPOSED_EXCEPTION_MESSAGE = "Cannot access a disposed object.";
+
+let ObjectDisposedException$rt: ClassType<ObjectDisposedException> | undefined;
 
 /**
  * Mirrors `System.ObjectDisposedException`: a call on an object that was
@@ -16,6 +19,27 @@ export class ObjectDisposedException extends InvalidOperationException {
   constructor(objectName?: string | null, message?: string | null, innerException?: Error | null) {
     super(withObjectName(message ?? OBJECT_DISPOSED_EXCEPTION_MESSAGE, objectName), innerException);
     this.objectName = objectName ?? "";
+  }
+
+  /**
+   * The runtime type descriptor of `System.ObjectDisposedException`: a data literal built on first read,
+   * so an unused class costs nothing and a thrown one pulls in no reflection code.
+   */
+  static override get $runtimeType(): ClassType<ObjectDisposedException> {
+    return (ObjectDisposedException$rt ??= {
+      kind: "class",
+      name: "ObjectDisposedException",
+      fullName: "System.ObjectDisposedException",
+      namespace: "System",
+      ctor: ObjectDisposedException,
+      base: () => InvalidOperationException.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (value: unknown): value is ObjectDisposedException =>
+        value instanceof ObjectDisposedException,
+    });
   }
 }
 

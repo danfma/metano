@@ -1,7 +1,10 @@
 import { Exception } from "./exception.ts";
+import type { ClassType } from "../reflection/runtime-type.ts";
 
 /** The message `new System.Text.Json.JsonException()` carries on .NET. */
 const JSON_EXCEPTION_MESSAGE = "Exception of type 'System.Text.Json.JsonException' was thrown.";
+
+let JsonException$rt: ClassType<JsonException> | undefined;
 
 /**
  * Mirrors `System.Text.Json.JsonException`: JSON that does not match its
@@ -18,5 +21,26 @@ export class JsonException extends Exception {
 
   protected override get $typeNamespace(): string {
     return "System.Text.Json";
+  }
+
+  /**
+   * The runtime type descriptor of `System.Text.Json.JsonException`: a data literal built on first read,
+   * so an unused class costs nothing and a thrown one pulls in no reflection code.
+   */
+  static override get $runtimeType(): ClassType<JsonException> {
+    return (JsonException$rt ??= {
+      kind: "class",
+      name: "JsonException",
+      fullName: "System.Text.Json.JsonException",
+      namespace: "System.Text.Json",
+      ctor: JsonException,
+      base: () => Exception.$runtimeType,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      create: () => new JsonException(),
+      test: (value: unknown): value is JsonException => value instanceof JsonException,
+    });
   }
 }
