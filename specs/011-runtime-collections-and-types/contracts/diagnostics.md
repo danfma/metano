@@ -72,10 +72,11 @@ The containing member or type carrying `[Ignore(<that target>)]` suppresses the 
 
 **MS0053 — UnsupportedDynamicOperation** (Error).
 
-1. A collection initializer or object initializer on a `dynamic` receiver.
-2. A `ref` / `out` / `in` argument on a dynamically bound call, or a named argument.
-3. A dynamically bound `await`, `foreach` over a `dynamic` that is not statically known to be iterable, `using` on `dynamic`, or a `dynamic` event accessor.
-4. A user-defined operator whose operand is `dynamic`, or an explicit cast `(T)d` where `T` declares a user-defined conversion (the DLR would bind it at runtime; TS cannot).
+1. A collection initializer or object initializer on a dynamically bound `new` (`new C(d) { P = 1 }`), or a collection initializer element whose `dynamic` value leaves several `Add` candidates. (An element with one `Add` candidate, `new List<int> { d }`, binds to it.)
+2. A `ref` / `out` / `in` argument or a named argument on a call (or indexer) whose receiver is `dynamic`, or on a call that reason 5 rejects. (A call with one candidate binds to it, named and `ref` arguments included.)
+3. ~~A dynamically bound `await`, `foreach` over a `dynamic` that is not statically known to be iterable, `using` on `dynamic`, or a `dynamic` event accessor.~~ Withdrawn by the 011e spec step (*proposed*): `await d` and `foreach (… in d)` pass through (US6-2), a `dynamic` event accessor is indistinguishable from `d.E += x`, and `using` keeps the statement-level `MS0001` until the `using` statement is lowered.
+4. A user-defined operator declared by the statically typed operand of an operator whose other operand is `dynamic` (`money + d`), or an explicit cast `(T)d` where `T` declares a user-defined conversion (the DLR would bind it at runtime; TS cannot).
+5. (*proposed* by the 011e spec step) A call or `new` on a statically typed receiver whose `dynamic` argument leaves several candidates that are not one transpiled overload group with a runtime dispatcher (`Console.WriteLine(d)`, `s.Contains(d)`); the message names the argument cast that binds the call statically (`Console.WriteLine((object)d)`).
 
 **MS0054 — UnreifiableTypeParameter** (Error).
 
