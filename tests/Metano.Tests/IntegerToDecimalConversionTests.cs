@@ -103,4 +103,20 @@ public class IntegerToDecimalConversionTests
         await Assert.That(output).Contains("return n == null ? null : new Decimal(n + 0);");
         await Assert.That(output).DoesNotContain("-3 + 0");
     }
+
+    [Test]
+    public async Task AWrappedIntegerSum_IsConvertedAfterItsWrap()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Sums
+            {
+                public static decimal Of(int i, int j) => i + j;
+            }
+            """
+        )["sums.ts"];
+
+        await Assert.That(output).Contains("return new Decimal(((i + j) | 0) + 0);");
+    }
 }

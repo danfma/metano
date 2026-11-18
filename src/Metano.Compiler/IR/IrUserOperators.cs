@@ -9,6 +9,9 @@ namespace Metano.Compiler.IR;
 /// reference (its import included).</param>
 /// <param name="MetadataName">The operator's C# metadata name
 /// (<c>op_Addition</c>, <c>op_UnaryNegation</c>, <c>op_Implicit</c>).</param>
+/// <param name="Kind">The operator kind, as
+/// <see cref="IrMethodSemantics.OperatorKind"/> spells it at the declaration
+/// (<c>Addition</c>, <c>CheckedAddition</c>, <c>Implicit</c>).</param>
 /// <param name="Overload">The overload of a dispatched operator group Roslyn
 /// resolved; <c>null</c> for a single operator and for a conversion.</param>
 /// <param name="Pin">The <c>[Name]</c> of a single operator for the emitting
@@ -18,23 +21,11 @@ namespace Metano.Compiler.IR;
 public sealed record IrUserOperator(
     IrTypeReference DeclaringType,
     string MetadataName,
+    string Kind,
     IrOverloadRef? Overload,
     string? Pin,
     IrConversionName? ConversionName
-)
-{
-    private const string MetadataPrefix = "op_";
-
-    /// <summary>
-    /// The operator kind the metadata name spells (<c>Addition</c>,
-    /// <c>CheckedAddition</c>), as <see cref="IrMethodSemantics.OperatorKind"/>
-    /// spells it at the declaration.
-    /// </summary>
-    public string Kind =>
-        MetadataName.StartsWith(MetadataPrefix, StringComparison.Ordinal)
-            ? MetadataName[MetadataPrefix.Length..]
-            : MetadataName;
-}
+);
 
 /// <summary>
 /// An application of a user-defined operator (baseline FR-077): a binary,
@@ -50,8 +41,12 @@ public sealed record IrUserOperator(
 /// <param name="UnaryOp">The source operator of a unary application.</param>
 /// <param name="IsLifted">An <c>==</c> / <c>!=</c> lifted over
 /// <c>Nullable&lt;T&gt;</c>: <c>true</c> when both operands are <c>null</c>,
-/// <c>false</c> when one is, the operator's result otherwise. The other lifted
-/// operators are lowered around the application by the core.</param>
+/// <c>false</c> when one is, the operator's result otherwise. Where lifting
+/// lives: the null propagation of a lifted arithmetic, bitwise, unary or
+/// relational operator is C# semantics the core lowers around the
+/// application (a conditional over the operands), while a lifted equality and
+/// a lifted conversion stay facts on their node, because the targets compare
+/// and map <c>null</c> differently.</param>
 public sealed record IrUserOperatorApplication(
     IrUserOperator Operator,
     IReadOnlyList<IrExpression> Operands,
@@ -67,7 +62,8 @@ public sealed record IrUserOperatorApplication(
 /// <param name="SourceForm">The store as the source writes it: the compound
 /// <see cref="IrBinaryExpression"/> (<c>x += y</c>) or the
 /// <see cref="IrUnaryExpression"/> increment, over the extracted target and
-/// operand.</param>
+/// operand. Transitional: Dart output parity until Dart lowers these nodes
+/// (after v3); not visited by <c>IrNodeChildren</c>.</param>
 /// <param name="ReadModifyWrite">The store that runs the operator:
 /// <c>x = T.op(x, y)</c> with the target's receiver and index evaluated once,
 /// and, for a used postfix increment, the value read before the store.</param>
@@ -89,7 +85,8 @@ public sealed record IrUserOperatorStore(IrExpression SourceForm, IrExpression R
 /// nullable value to a class); the operand is evaluated once.</param>
 /// <param name="SourceForm">The conversion as the source writes it, without
 /// the operator: the operand of an implicit conversion, the cast of an
-/// explicit one.</param>
+/// explicit one. Transitional: Dart output parity until Dart lowers these
+/// nodes (after v3); not visited by <c>IrNodeChildren</c>.</param>
 public sealed record IrUserConversion(
     IrUserOperator Operator,
     IrExpression Operand,

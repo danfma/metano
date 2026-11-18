@@ -124,6 +124,32 @@ public class UNamed
     public static UNamed operator +(UNamed a, UNamed b) => new(a.V * 100 + b.V);
 }
 
+public readonly struct UZPt
+{
+    public readonly int V;
+
+    public UZPt(int v)
+    {
+        V = v;
+    }
+
+    public static explicit operator int(UZPt p) => p.V;
+
+    public static explicit operator UZPt(int v) => new(v);
+}
+
+public readonly struct UZWide
+{
+    public readonly long V;
+
+    public UZWide(long v)
+    {
+        V = v;
+    }
+
+    public static implicit operator long(UZWide w) => w.V;
+}
+
 /// <summary>
 /// The use sites of user-defined operators and conversions (baseline FR-077,
 /// FR-079): every application runs the operator C# bound.
@@ -354,5 +380,28 @@ public static class OperatorUseProbes
         var c = -b;
 
         return n.V + "|" + a.V + "|" + b.V + "|" + c.V;
+    }
+
+    public static string CastsAroundAConversion()
+    {
+        var narrow = (byte)new UZPt(300);
+        var shortened = (short)new UZPt(70000);
+        var widened = (long)(UZPt)8;
+        var truncated = (int)new UZWide(5000000000L);
+        var fromLong = (UZPt)(long)42;
+
+        return narrow + "|" + shortened + "|" + widened + "|" + truncated + "|" + fromLong.V;
+    }
+
+    public static string CheckedCastAroundAConversion()
+    {
+        try
+        {
+            return checked((byte)new UZPt(300)).ToString();
+        }
+        catch (OverflowException)
+        {
+            return "OverflowException";
+        }
     }
 }

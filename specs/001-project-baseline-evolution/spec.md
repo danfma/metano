@@ -1183,7 +1183,11 @@ Product requirements added after the migration (normative; each one is traced by
   requirement scanner need no case. The `EmitsOperatorFastPaths` port and
   `TryExtractUserOperatorCall` are removed. A `[JsxComponentBuilder]` family's conversion to its
   element (the JSX rendering protocol) keeps its lowering. A condition tested through a user
-  `true` operator (`if (x)`, `x ? a : b`) reports `MS0001` like `&&` / `||`. Not covered
+  `true` operator (`if (x)`, `x ? a : b`) reports `MS0001` like `&&` / `||`. A cast whose user
+  conversion is followed by a numeric one (`(byte)zpt` over `explicit operator int(ZPt)`,
+  `(int)wide` over `implicit operator long(ZWide)`) runs the operator and then the explicit
+  numeric conversion (`ZPt.__toInt32(zpt) & 0xFF`, checked in a checked context); Roslyn reports
+  no operation for such a cast, so its conversions are read from the enclosing operation. Not covered
   (follow-ups): a user conversion of a tuple element, and the arguments of a collection
   initializer's `Add` (as FR-079 lists).
 
