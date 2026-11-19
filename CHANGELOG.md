@@ -27,6 +27,8 @@ the migration list.
 - `Enum.Parse`, `Enum.ToObject` and `Enum.IsDefined` follow .NET through `enumFromRaw` / `enumIsDefined`: flag lists, numeric strings (only as the whole text), `ignoreCase`, the underlying type's width and range (`OverflowException`), and `ArgumentException` for an unknown name. 2.x's `Enum.Parse<T>` indexed the enum object by name.
 - A test of a `T[]` whose element is not `object` warns MS0046 (the element is erased); MS0005 now reports only cycles of imports a module evaluates, never one through an `import type`.
 
+- Known issue: a 64-bit (`long` / `ulong`) enum value above 2^53, and any `|` combination of 64-bit enum values, is not exact, because 64-bit enums are still emitted as JS numbers (`|` truncates to 32 bits); a boxed 64-bit `[Flags]` value therefore prints the wrong member names. It is fixed when 64-bit enums are emitted as `bigint`.
+
 ### `dynamic` (spec 011 FR-030, #335)
 
 - Operations on a `dynamic` receiver keep their C# member names verbatim (`d.AppName`, `d.Run()`), where 2.x camelCased them (`d.appName`); `ToString` / `GetHashCode` / `Equals` / `GetType` keep the `object` lowering. Type arguments of a dynamic generic call are dropped.
