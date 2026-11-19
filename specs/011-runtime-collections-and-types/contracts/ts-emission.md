@@ -17,6 +17,7 @@ var copy = xs.ToJsArray(); var again = JsArray.From(xs); var shared = copy.AsLis
 ```ts
 import { Dictionary, List, Queue, Stack } from "metano-runtime/system/collections";
 
+let $t;
 const xs = List.of([1, 2]);
 xs.add(3);
 xs.set(0, 9);
@@ -28,7 +29,7 @@ const added = Dictionary.of([["x", 1]]);
 const p = byName.get("a");
 byName.containsKey("a");
 byName.set("a", p);
-added.update("x", (v) => v ?? 2);
+added.get("x") ?? (added.set("x", $t = 2), $t);   // ??= writes only on null (contracts/runtime-collections.md § Indexer compound assignments; was `update`, superseded in R0)
 const q = new Queue<number>();
 q.enqueue(1);
 const head = q.dequeue();
@@ -84,7 +85,7 @@ foreach (var x in xs) { xs = other; xs.Add(x); }                       // reassi
 let sum = 0;
 {
   const $l = xs;                        // always bound, even for a local
-  const $a = $l._items; const $v = $l._version; const $n = $a.length;
+  const $a = $l._items; const $n = $a.length; const $v = $l._version;
   for (let $i = 0; ; $i++) {
     if ($l._version !== $v || $a.length !== $n) throwModified();
     if ($i === $n) break;
@@ -94,7 +95,7 @@ let sum = 0;
 }
 {
   const $l = this.items;
-  const $a = $l._items; const $v = $l._version; const $n = $a.length;
+  const $a = $l._items; const $n = $a.length; const $v = $l._version;
   for (let $i = 0; ; $i++) {
     if ($l._version !== $v || $a.length !== $n) throwModified();
     if ($i === $n) break;
@@ -104,7 +105,7 @@ let sum = 0;
 }
 {
   const $l = xs;
-  const $a = $l._items; const $v = $l._version; const $n = $a.length;
+  const $a = $l._items; const $n = $a.length; const $v = $l._version;
   for (let $i = 0; ; $i++) {
     if ($l._version !== $v || $a.length !== $n) throwModified();
     if ($i === $n) break;
@@ -114,7 +115,7 @@ let sum = 0;
 }
 {
   const $l = xs;                        // the loop keeps checking the original list
-  const $a = $l._items; const $v = $l._version; const $n = $a.length;
+  const $a = $l._items; const $n = $a.length; const $v = $l._version;
   for (let $i = 0; ; $i++) {
     if ($l._version !== $v || $a.length !== $n) throwModified();
     if ($i === $n) break;
@@ -125,7 +126,7 @@ let sum = 0;
 }
 ```
 
-`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). Each check line carries FR-058's inline guard (`(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity. A `foreach` over any other `IEnumerable<T>` stays `for..of`. Further goldens pin the remaining exits and the null receiver: `list-foreach-throw.ts` (a `throw` from the body leaves with no further check) and `list-foreach-null-receiver.ts` (`$l._items` on `null` throws a `TypeError`, which a typed catch sees as `NullReferenceException` through FR-052's `toException`, as C# throws `NullReferenceException`).
+`throwModified` is imported from `metano-runtime/system/collections`. The temporaries follow the printer's naming rules (nested loops get distinct names). The `$v` capture and each check line carry FR-058's inline guard (`$v = (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) ? $l._version : 0` and `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && (…)`), omitted above for brevity; the normative text, order included, is contracts/runtime-collections.md § Lowered `foreach`. A `foreach` over any other `IEnumerable<T>` stays `for..of`. Further goldens pin the remaining exits and the null receiver: `list-foreach-throw.ts` (a `throw` from the body leaves with no further check) and `list-foreach-null-receiver.ts` (`$l._items` on `null` throws a `TypeError`, which a typed catch sees as `NullReferenceException` through FR-052's `toException`, as C# throws `NullReferenceException`).
 
 ## Runtime helpers instead of IIFEs (`runtime-helpers.ts`)
 
