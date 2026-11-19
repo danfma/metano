@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defaultEquals, hashCode } from "#/system/equality.ts";
+import { defaultEquals, equals, hashCode, objectEquals } from "#/system/equality.ts";
 import { InvalidCastException } from "#/system/exceptions/invalid-cast-exception.ts";
 import { box, Boxed, boxNullable } from "#/system/reflection/box.ts";
 import { castTo } from "#/system/reflection/cast-to.ts";
@@ -199,6 +199,16 @@ describe("equality and hashing", () => {
   test("a box never equals a raw value, in either order", () => {
     expect(defaultEquals(box(1, Color), 1)).toBe(false);
     expect(defaultEquals(1, box(1, Color))).toBe(false);
+  });
+
+  test("objectEquals and equals follow the same strict rule", () => {
+    for (const same of [objectEquals, equals]) {
+      expect(same(box(1, Color), box(1, { ...Color }))).toBe(true);
+      expect(same(box(1, Color), box(0, Color))).toBe(false);
+      expect(same(box(1, Color), box(1, Perms))).toBe(false);
+      expect(same(box(1, Color), 1)).toBe(false);
+      expect(same(1, box(1, Color))).toBe(false);
+    }
   });
 
   test("equal boxes hash alike and a different type hashes apart", () => {

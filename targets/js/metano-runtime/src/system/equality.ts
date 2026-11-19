@@ -216,7 +216,9 @@ export const valueEquals = equals;
  * 1. Reference identity (`a === b`) wins immediately; `null` / `undefined` equal only
  *    themselves.
  * 2. `NaN` equals `NaN`; other primitives use `===`.
- * 3. Objects with an `equals(other)` method delegate to it (records, user overrides,
+ * 3. A `Boxed` value equals only a box of the same type (by `fullName`) with an equal
+ *    value, never a raw value (spec 011 FR-051).
+ * 3b. Objects with an `equals(other)` method delegate to it (records, user overrides,
  *    `Decimal`, Temporal types).
  * 4. Plain object literals (`[PlainObject]` records, anonymous types) compare by shape
  *    through {@link equals}, as their C# types compare by value.
@@ -232,6 +234,8 @@ export function objectEquals(a: unknown, b: unknown): boolean {
   }
 
   if (typeof a !== "object") return false;
+
+  if (isBoxed(a) || isBoxed(b)) return boxesEqual(a, b);
 
   if (hasEqualsMethod(a)) return a.equals(b);
 
