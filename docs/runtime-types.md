@@ -199,7 +199,7 @@ Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runti
 | `Queue.enqueue + dequeue` | **2.06** (a third run, disturbed, 2.96) | 1.19–1.49 |
 | `Queue` BFS shape (reported) | 1.10 | 1.15–1.38 |
 
-Bold rows are still over budget: `HashSet.add` into a fresh set (a `Map` keyed store where the baseline is a native `Set`), `Dictionary.containsKey` with string keys on Node.js, and the `Queue` row on Node.js.
+Bold rows are still over budget: `HashSet.add` into a fresh set (a `Map` keyed store where the baseline is a native `Set`), `Dictionary.containsKey` with string keys on Node.js, and the `Queue` row on Node.js. They are **provisional misses** (maintainer decision W4-49): the budgets stay unchanged, and the final numbers come from a quiet-machine re-measure at stage 011g.
 
 Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collection rows raised to the measured size + 10% by W4-25 (d): FR-016's exception classes, about 0.97 KB, plus `elementEquals` / `defaultEquals`, about 0.5 KB, shared when several collections are used; slimming the exceptions is a follow-up):
 
