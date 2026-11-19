@@ -68,7 +68,8 @@
        mixed-version order can prove skew, so neither emits a speculative warning. -->
   <Target Name="_MetanoCheckCommonTargets">
     <Warning
-      Condition="'%(_MetanoBuildCommonCopy.Identity)' != '' and '%(_MetanoBuildCommonCopy.ContentHash)' != '$(_MetanoBuildCommonHash)'"
+      Condition="'%(_MetanoBuildCommonCopy.Identity)' != '' and '%(_MetanoBuildCommonCopy.ContentHash)' != '$(_MetanoBuildCommonHash)' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(NoWarn)', '(?i)(^|[;,\s])METANOBUILD003($|[;,\s])'))"
+      Code="METANOBUILD003"
       Text="Metano build packages contain different versions of Metano.Build.Common.targets (%(_MetanoBuildCommonCopy.Identity)). Align the Metano.Build package versions to avoid import-order-dependent behavior."
     />
   </Target>

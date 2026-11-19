@@ -24,12 +24,13 @@ set -euo pipefail
 # Exits non-zero on the first failing check. Used by CI
 # and by the release workflow (before anything is tagged or published).
 #
-# Requires: the .NET SDK of global.json and access to nuget.org (the packages'
+# Requires: python3, the .NET SDK of global.json and access to nuget.org (the packages'
 # own dependencies, such as Roslyn, come from there).
 #
 # Optional:
 #   RUNNER_TEMP — parent directory for the throwaway feed and consumers.
 #   METANO_SMOKE_NUGET_CACHE — reusable nuget.org HTTP cache (default: repo obj/).
+#   METANO_SMOKE_DOTNET_TIMEOUT_SECONDS — per-command deadline (default: 300 seconds).
 
 readonly SMOKE_VERSION="99.0.0-smoke"
 
@@ -67,14 +68,35 @@ fail() {
 # Python is available on the CI runners and avoids a GNU timeout dependency on macOS.
 run_dotnet() {
   python3 -c '
-import os, signal, subprocess, sys
+import math, os, signal, subprocess, sys
+deadline = float(os.environ.get("METANO_SMOKE_DOTNET_TIMEOUT_SECONDS", "300"))
+if not math.isfinite(deadline) or deadline <= 0:
+    sys.exit("METANO_SMOKE_DOTNET_TIMEOUT_SECONDS must be a positive finite number")
 process = subprocess.Popen(["dotnet", *sys.argv[1:]], start_new_session=True)
+
+def kill_group(signum):
+    try:
+        os.killpg(process.pid, signum)
+    except ProcessLookupError:
+        pass
+
+def forward_signal(signum, frame):
+    kill_group(signum)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        kill_group(signal.SIGKILL)
+        process.wait()
+    sys.exit(128 + signum)
+
+signal.signal(signal.SIGTERM, forward_signal)
+signal.signal(signal.SIGINT, forward_signal)
 try:
-    sys.exit(process.wait(timeout=300))
+    sys.exit(process.wait(timeout=deadline))
 except subprocess.TimeoutExpired:
-    os.killpg(process.pid, signal.SIGKILL)
+    kill_group(signal.SIGKILL)
     process.wait()
-    print("dotnet exceeded the 300-second smoke-test deadline", file=sys.stderr)
+    print(f"dotnet exceeded the {deadline:g}-second smoke-test deadline", file=sys.stderr)
     sys.exit(124)
 ' "$@"
 }
@@ -90,7 +112,7 @@ restore_with_retry() {
       status=$?
     fi
 
-    if [ "$attempt" = 3 ] || ! grep -Eq 'NU130[01]|429|50[234]|timed out|temporarily unavailable|SSL connection|unexpected EOF' "$WORK_DIR/restore.log"; then
+    if [ "$attempt" = 3 ] || ! grep -Eiq 'NU130[01]|(^|[^[:alnum:]_])(status code( does not indicate success)?|HTTP)[^0-9]{0,3}(429|50[234])([^0-9]|$)|timed out|temporarily unavailable|SSL connection|unexpected EOF' "$WORK_DIR/restore.log"; then
       cat "$WORK_DIR/restore.log" >&2
       return "$status"
     fi
@@ -182,10 +204,7 @@ public record Todo(string Title, bool Done);
 EOF
 
   # Global usings and a Directory.Build.* above the temp dir must not leak in.
-  # An explicit root also avoids /var -> /private/var symlink workspace inference on macOS.
-  cat >"$dir/Directory.Build.props" <<'EOF'
-<Project><PropertyGroup><MetanoPackageRoot>$(MSBuildProjectDirectory)/generated</MetanoPackageRoot></PropertyGroup></Project>
-EOF
+  echo '<Project />' >"$dir/Directory.Build.props"
   echo '<Project />' >"$dir/Directory.Build.targets"
 
   if [ "$2" = "with-tool" ]; then
@@ -235,7 +254,6 @@ check_consumer_build() {
 
   cat >"$dir/Directory.Build.props" <<'EOF'
 <Project><PropertyGroup>
-  <MetanoPackageRoot>$(MSBuildProjectDirectory)/generated</MetanoPackageRoot>
   <MetanoFilePrefix>// props;prefix</MetanoFilePrefix>
 </PropertyGroup></Project>
 EOF

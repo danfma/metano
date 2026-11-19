@@ -276,6 +276,80 @@ public class PackageRootResolverTests
         await AssertResolved(resolution, AboveWorkspace);
     }
 
+    [Test]
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(true, true)]
+    public async Task SymlinkedWorkspace_UsesTheSameBoundaryForEitherPathSpelling(
+        bool outputViaLink,
+        bool existingPackage
+    )
+    {
+        Directory.CreateDirectory(PathOf("workspace/app"));
+        Directory.CreateSymbolicLink(PathOf("alias"), PathOf("workspace"));
+        WritePackageJson(AboveWorkspace);
+
+        if (existingPackage)
+            WritePackageJson("workspace/app/generated");
+
+        var resolution = Resolve(
+            output: outputViaLink ? "alias/app/generated/src" : "workspace/app/generated/src",
+            project: outputViaLink ? "workspace/app/App.csproj" : "alias/app/App.csproj"
+        );
+
+        await AssertResolved(
+            resolution,
+            outputViaLink ? "alias/app/generated" : "workspace/app/generated"
+        );
+    }
+
+    [Test]
+    public async Task SymlinkToUnrelatedOutput_DoesNotWidenTheProjectBoundary()
+    {
+        Directory.CreateDirectory(PathOf("app"));
+        Directory.CreateDirectory(PathOf("outside"));
+        Directory.CreateSymbolicLink(PathOf("app/output-link"), PathOf("outside"));
+        WritePackageJson(AboveWorkspace);
+
+        var resolution = Resolve(output: "app/output-link", project: "app/App.csproj");
+
+        await AssertRefused(resolution, outputDir: "app/output-link");
+    }
+
+    [Test]
+    public async Task PackageAboveLinkedOutput_IsNotMappedToAnUnrelatedLexicalParent()
+    {
+        WritePackageJson("app");
+        WritePackageJson("outside");
+        Directory.CreateDirectory(PathOf("outside/out"));
+        Directory.CreateSymbolicLink(PathOf("app/output-link"), PathOf("outside/out"));
+        File.WriteAllText(PathOf("outside/package.json"), "{\"name\":\"outside\"}");
+
+        var resolution = Resolve(output: "app/output-link", project: "app/App.csproj");
+
+        await Assert.That(resolution.IsRefused).IsFalse();
+
+        await Assert
+            .That(File.ReadAllText(Path.Combine(resolution.Root!, "package.json")))
+            .IsEqualTo("{\"name\":\"outside\"}");
+    }
+
+    [Test]
+    public async Task ExplicitSymlinkedPackageRoot_IsStillUsedAsGiven()
+    {
+        Directory.CreateDirectory(PathOf("workspace"));
+        Directory.CreateSymbolicLink(PathOf("alias"), PathOf("workspace"));
+
+        var resolution = PackageRootResolver.Resolve(
+            PathOf("workspace/generated/src"),
+            PathOf("workspace/App.csproj"),
+            explicitPackageRoot: PathOf("alias")
+        );
+
+        await AssertResolved(resolution, "alias");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private PackageRootResolution Resolve(string output, string project) =>

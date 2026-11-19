@@ -1,5 +1,3 @@
-using System.Xml.Linq;
-
 namespace Metano.Tests.Build;
 
 /// <summary>Issue #706: the real TypeScript item composition and MSBuild worker boundary preserve argument values.</summary>
@@ -57,48 +55,10 @@ public class TypeScriptArgumentsTests
     {
         WriteProject("<MetanoFilePrefix>older;common</MetanoFilePrefix>");
 
-        var common = XDocument.Load(
-            Path.Combine(AppContext.BaseDirectory, "MetanoBuild", "Metano.Build.Common.targets")
+        var common = BuildCommonTargetsFixture.PreContractCopy(
+            Path.Combine(AppContext.BaseDirectory, "MetanoBuild"),
+            withoutCompositionHook: true
         );
-
-        common.Root!.Elements("PropertyGroup").Elements("_MetanoBuildCommonHash").Remove();
-
-        common
-            .Root.Elements("Target")
-            .Where(target =>
-                (string?)target.Attribute("Name")
-                    is "_MetanoComposeArguments"
-                        or "_MetanoCheckCommonTargets"
-            )
-            .Remove();
-
-        var prepare = common
-            .Root.Elements("Target")
-            .Single(target => (string?)target.Attribute("Name") == "_MetanoPrepare");
-
-        prepare.SetAttributeValue(
-            "DependsOnTargets",
-            ((string)prepare.Attribute("DependsOnTargets")!).Replace(
-                "_MetanoCheckCommonTargets;",
-                ""
-            )
-        );
-
-        var keys = common
-            .Root.Elements("Target")
-            .Single(target => (string?)target.Attribute("Name") == "_MetanoWriteToolchainKeys");
-
-        keys.SetAttributeValue("DependsOnTargets", "_MetanoResolveTargets");
-
-        keys.Elements("ItemGroup")
-            .Elements("_MetanoToolchainLine")
-            .Where(line =>
-                ((string?)line.Attribute("Include"))?.StartsWith(
-                    "arguments=",
-                    StringComparison.Ordinal
-                ) == true
-            )
-            .Remove();
 
         var commonPath = Path.Combine(_root, "older-common.targets");
         common.Save(commonPath);

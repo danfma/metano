@@ -35,10 +35,10 @@ namespace Metano;
 /// <para>
 /// Known trade-offs: a repository root takes precedence, so a home directory kept
 /// under git (dotfiles) widens the workspace to the home directory, and a monorepo's
-/// root <c>package.json</c> wins when the generated package has none of its own. Paths are compared
-/// as given after <see cref="Path.GetFullPath(string)"/>: symbolic links are not
-/// resolved, so the boundaries follow the paths as written, and the comparison ignores
-/// case on Windows and macOS.
+/// root <c>package.json</c> wins when the generated package has none of its own. Inferred
+/// paths resolve existing directory symbolic links, including ancestors of output directories
+/// that do not exist yet, so aliases such as macOS's /var and /private/var share a boundary.
+/// An explicit root is used as given. The comparison ignores case on Windows and macOS.
 /// </para>
 /// </summary>
 public static class PackageRootResolver
@@ -66,7 +66,8 @@ public static class PackageRootResolver
         if (explicitPackageRoot is not null)
             return PackageRootResolution.Resolved(Path.GetFullPath(explicitPackageRoot));
 
-        var outputDirectory = NormalizeDirectory(outputDir);
+        var writtenOutputDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDir));
+        var outputDirectory = NormalizeDirectory(writtenOutputDirectory);
         var projectDirectory = ProjectDirectoryOf(projectPath);
         var topmostDirectory = FindTopmostDirectory(outputDirectory, projectDirectory);
         var defaultPackageRoot = Path.GetDirectoryName(outputDirectory);
@@ -75,18 +76,48 @@ public static class PackageRootResolver
             .FirstOrDefault(HasPackageJson);
 
         if (nearestPackageJsonDirectory is not null)
-            return PackageRootResolution.Resolved(nearestPackageJsonDirectory);
+            return PackageRootResolution.Resolved(
+                RootAsWritten(nearestPackageJsonDirectory, writtenOutputDirectory)
+            );
 
         if (FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot))
             return PackageRootResolution.Refused(
-                CreateOutsideWorkspaceDiagnostic(outputDirectory, defaultPackageRoot)
+                CreateOutsideWorkspaceDiagnostic(
+                    writtenOutputDirectory,
+                    Path.GetDirectoryName(writtenOutputDirectory)
+                )
             );
 
-        return PackageRootResolution.Resolved(defaultPackageRoot);
+        return PackageRootResolution.Resolved(
+            RootAsWritten(defaultPackageRoot, writtenOutputDirectory)
+        );
     }
 
-    private static string NormalizeDirectory(string path) =>
-        Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+    // Keep the caller's spelling only for an ancestor identifying the same physical root.
+    // A lexical parent above a symlink can belong to a completely different package.
+    private static string RootAsWritten(string root, string writtenOutputDirectory) =>
+        SelfAndAncestors(writtenOutputDirectory)
+            .FirstOrDefault(directory => IsSamePath(NormalizeDirectory(directory), root))
+        ?? root;
+
+    private static string NormalizeDirectory(string path)
+    {
+        var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var parent = Path.GetDirectoryName(fullPath);
+
+        if (parent is null)
+            return fullPath;
+
+        var directory = new DirectoryInfo(
+            Path.Combine(NormalizeDirectory(parent), Path.GetFileName(fullPath))
+        );
+
+        // Resolve each existing ancestor: the leaf need not exist, and resolving only the
+        // leaf would miss /var -> /private/var and other links in the middle of the path.
+        return directory.Exists && directory.LinkTarget is not null
+            ? NormalizeDirectory(directory.ResolveLinkTarget(returnFinalTarget: true)!.FullName)
+            : directory.FullName;
+    }
 
     private static string ProjectDirectoryOf(string projectPath) =>
         NormalizeDirectory(Path.GetDirectoryName(Path.GetFullPath(projectPath))!);

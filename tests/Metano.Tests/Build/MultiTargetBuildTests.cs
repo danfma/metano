@@ -273,21 +273,29 @@ public class MultiTargetBuildTests
     }
 
     [Test]
-    [Arguments(false, true)]
-    [Arguments(true, true)]
-    [Arguments(false, false)]
-    [Arguments(true, false)]
-    public async Task CommonTargetCopies_WarnOnlyOnContentSkew(bool otherFirst, bool skew)
+    [Arguments(false, true, "", true)]
+    [Arguments(true, true, "", true)]
+    [Arguments(false, false, "", false)]
+    [Arguments(true, false, "", false)]
+    [Arguments(false, true, "METANOBUILD003", false)]
+    [Arguments(true, true, "METANOBUILD003", false)]
+    [Arguments(false, true, "OTHER%3Bmetanobuild003", false)]
+    [Arguments(false, true, "METANOBUILD0030", true)]
+    public async Task CommonTargetCopies_WarnOnlyOnUnsuppressedContentSkew(
+        bool otherFirst,
+        bool skew,
+        string noWarn,
+        bool expectedWarning
+    )
     {
         var otherPackage = Directory
             .CreateDirectory(Path.Combine(ProjectDir, "other-package"))
             .FullName;
 
-        var commonName = "Metano.Build.Common.targets";
-        var common = File.ReadAllText(Path.Combine(ProjectDir, commonName));
+        var common = File.ReadAllText(BuildCommonTargetsFixture.PathIn(ProjectDir));
 
         File.WriteAllText(
-            Path.Combine(otherPackage, commonName),
+            BuildCommonTargetsFixture.PathIn(otherPackage),
             skew ? common + "\n<!-- other release -->\n" : common
         );
 
@@ -314,18 +322,17 @@ public class MultiTargetBuildTests
                 )
         );
 
-        var run = await Transpile("-p:MetanoFakeAOutputDir=outA", "-p:MetanoFakeBOutputDir=outB");
+        var run = await Transpile(
+            "-p:MetanoFakeAOutputDir=outA",
+            "-p:MetanoFakeBOutputDir=outB",
+            $"-p:NoWarn={noWarn}"
+        );
 
         await Assert.That(run.ExitCode).IsEqualTo(0);
 
         await Assert
-            .That(
-                run.Output.Contains(
-                    "different versions of Metano.Build.Common.targets",
-                    StringComparison.Ordinal
-                )
-            )
-            .IsEqualTo(skew);
+            .That(run.Output.Contains("warning METANOBUILD003:", StringComparison.Ordinal))
+            .IsEqualTo(expectedWarning);
 
         await Assert.That(run.Output).Contains("FAKE-A");
         await Assert.That(run.Output).Contains("FAKE-B");
@@ -340,31 +347,12 @@ public class MultiTargetBuildTests
             .CreateDirectory(Path.Combine(ProjectDir, "older-package"))
             .FullName;
 
-        var commonName = "Metano.Build.Common.targets";
-        var common = XDocument.Load(Path.Combine(ProjectDir, commonName));
-
         // Model a package predating the registration/check contract. Its shared targets
         // deliberately differ, but no reliable comparison is available in either order.
-        common.Root!.Elements("PropertyGroup").Elements("_MetanoBuildCommonHash").Remove();
+        BuildCommonTargetsFixture
+            .PreContractCopy(ProjectDir)
+            .Save(BuildCommonTargetsFixture.PathIn(olderPackage));
 
-        common
-            .Root.Elements("Target")
-            .Where(target => (string?)target.Attribute("Name") == "_MetanoCheckCommonTargets")
-            .Remove();
-
-        var prepare = common
-            .Root.Elements("Target")
-            .Single(target => (string?)target.Attribute("Name") == "_MetanoPrepare");
-
-        prepare.SetAttributeValue(
-            "DependsOnTargets",
-            ((string)prepare.Attribute("DependsOnTargets")!).Replace(
-                "_MetanoCheckCommonTargets;",
-                ""
-            )
-        );
-
-        common.Save(Path.Combine(olderPackage, commonName));
         var olderTarget = XDocument.Parse(SyntheticTargetFile.ContentOf("B"));
         olderTarget.Root!.Elements("ItemGroup").Elements("_MetanoBuildCommonCopy").Remove();
         olderTarget.Save(Path.Combine(olderPackage, SyntheticTargetFile.FileNameOf("B")));
