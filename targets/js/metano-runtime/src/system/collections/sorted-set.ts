@@ -1,11 +1,17 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { defaultComparer, type IComparer } from "./default-comparer.ts";
+import { closeCollectionFor } from "./close-collection.ts";
+import { collectionTypeName } from "./collection-type-name.ts";
+import { copyIntoSorted } from "./copy-to.ts";
+import { comparisonOf, defaultComparer, type IComparer } from "./default-comparer.ts";
 import type { IReadOnlySet, ISet } from "./interfaces.ts";
 import { predecessor, RedBlackTree, type RedBlackNode, successor } from "./red-black-tree.ts";
 import * as setAlgebra from "./set-algebra.ts";
-import { compareFunctionOf, defineField } from "./sorted-support.ts";
-import { checkCopyTo, throwOutsideView, throwViewBoundsInverted } from "./sorted-throw-helpers.ts";
-import { throwArgumentNull, throwStackModified } from "./throw-helpers.ts";
+import {
+  throwArgumentNull,
+  throwEnumeratorModified,
+  throwOutsideView,
+  throwViewBoundsInverted,
+} from "./throw-helpers.ts";
 
 let SortedSet$rt: CollectionType<SortedSet<unknown>> | undefined;
 
@@ -39,19 +45,17 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   ) {
     const ownComparer = comparer ?? null;
 
-    defineField(
-      this,
-      "_tree",
-      new RedBlackTree<T, undefined>(compareFunctionOf(ownComparer)),
-      true,
-    );
-    defineField(this, "_owner", this, true);
-    defineField(this, "_version", 0, true);
-    defineField(this, "_comparer", ownComparer, false);
-    defineField(this, "_bounded", false, true);
-    defineField(this, "_lower", undefined, true);
-    defineField(this, "_upper", undefined, true);
-    defineField(this, "$typeArguments$SortedSet", typeArguments ?? undefined, false);
+    Object.defineProperty(this, "_tree", {
+      value: new RedBlackTree<T, undefined>(comparisonOf(ownComparer)),
+      writable: true,
+    });
+    Object.defineProperty(this, "_owner", { value: this, writable: true });
+    Object.defineProperty(this, "_version", { value: 0, writable: true });
+    Object.defineProperty(this, "_comparer", { value: ownComparer });
+    Object.defineProperty(this, "_bounded", { value: false, writable: true });
+    Object.defineProperty(this, "_lower", { value: undefined, writable: true });
+    Object.defineProperty(this, "_upper", { value: undefined, writable: true });
+    Object.defineProperty(this, "$typeArguments$SortedSet", { value: typeArguments ?? undefined });
 
     if (items !== null && items !== undefined) {
       for (const item of items) {
@@ -99,6 +103,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
         { collection: "IReadOnlyCollection", arguments: [0] },
       ],
       test: (value: unknown): value is SortedSet<unknown> => value instanceof SortedSet,
+      closeFor: (instance) => closeCollectionFor(SortedSet.$runtimeType, instance),
     });
   }
 
@@ -309,13 +314,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   }
 
   copyTo(array: T[], arrayIndex = 0): void {
-    const items = this.toArray();
-
-    checkCopyTo(array, arrayIndex, items.length);
-
-    for (const [offset, item] of items.entries()) {
-      array[arrayIndex + offset] = item;
-    }
+    copyIntoSorted(this.toArray(), array, arrayIndex);
   }
 
   /** A detached copy in ascending order. */
@@ -331,6 +330,15 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
 
   toJSON(): T[] {
     return this.toArray();
+  }
+
+  /** .NET's ``System.Collections.Generic.SortedSet`1[T]`` text. */
+  toString(): string {
+    return collectionTypeName(
+      "System.Collections.Generic.SortedSet`1",
+      ["T"],
+      this.$typeArguments$SortedSet,
+    );
   }
 
   [Symbol.iterator](): Iterator<T> {
@@ -418,7 +426,8 @@ class SortedSetIterator<T> implements Iterator<T> {
 
   constructor(set: SortedSet<T>, start: RedBlackNode<T, undefined> | null, forward: boolean) {
     this.set = set;
-    this.version = set._owner._version;
+    this.version =
+      typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__ ? set._owner._version : 0;
     this.forward = forward;
     this.node = start;
   }
@@ -428,7 +437,7 @@ class SortedSetIterator<T> implements Iterator<T> {
       (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
       this.set._owner._version !== this.version
     ) {
-      throwStackModified();
+      throwEnumeratorModified();
     }
 
     const current = this.node;

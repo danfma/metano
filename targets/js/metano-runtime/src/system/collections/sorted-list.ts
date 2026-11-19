@@ -1,22 +1,26 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { defaultComparer, elementEquals, type IComparer } from "./default-comparer.ts";
+import { closeCollectionFor } from "./close-collection.ts";
+import { collectionTypeName } from "./collection-type-name.ts";
+import { copyInto, copyIntoSorted } from "./copy-to.ts";
+import {
+  type Comparison,
+  comparisonOf,
+  defaultComparer,
+  elementEquals,
+  type IComparer,
+} from "./default-comparer.ts";
 import type { IDictionary, IList, IReadOnlyDictionary, IReadOnlyList } from "./interfaces.ts";
-import type { CompareFunction } from "./red-black-tree.ts";
 import { binarySearch } from "./sorted-array.ts";
-import { checkedKey, compareFunctionOf, defineField } from "./sorted-support.ts";
 import {
-  checkCopyTo,
-  throwIndexOutOfRange,
-  throwKeyListWrite,
-  throwNegativeArgument,
-  throwSortedListDuplicate,
-  throwSortedListNested,
-} from "./sorted-throw-helpers.ts";
-import {
+  requireKey,
   throwArgumentNull,
-  throwArrayTooSmall,
+  throwDuplicateKey,
+  throwEnumeratorModified,
+  throwKeyListWrite,
   throwKeyNotFound,
-  throwStackModified,
+  throwNegativeValue,
+  throwOOR,
+  throwSortedListNested,
 } from "./throw-helpers.ts";
 
 let SortedList$rt: CollectionType<SortedList<unknown, unknown>> | undefined;
@@ -36,7 +40,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   declare readonly _values: V[];
   declare _version: number;
   declare readonly _comparer: IComparer<K> | null;
-  declare readonly _compare: CompareFunction<K>;
+  declare readonly _compare: Comparison<K>;
   declare _keyList: SortedListView<K> | undefined;
   declare _valueList: SortedListView<V> | undefined;
   declare readonly $typeArguments$SortedList: readonly RuntimeType[] | undefined;
@@ -48,14 +52,14 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   ) {
     const ownComparer = comparer ?? null;
 
-    defineField(this, "_keys", [], false);
-    defineField(this, "_values", [], false);
-    defineField(this, "_version", 0, true);
-    defineField(this, "_comparer", ownComparer, false);
-    defineField(this, "_compare", compareFunctionOf(ownComparer), false);
-    defineField(this, "_keyList", undefined, true);
-    defineField(this, "_valueList", undefined, true);
-    defineField(this, "$typeArguments$SortedList", typeArguments ?? undefined, false);
+    Object.defineProperty(this, "_keys", { value: [] });
+    Object.defineProperty(this, "_values", { value: [] });
+    Object.defineProperty(this, "_version", { value: 0, writable: true });
+    Object.defineProperty(this, "_comparer", { value: ownComparer });
+    Object.defineProperty(this, "_compare", { value: comparisonOf(ownComparer) });
+    Object.defineProperty(this, "_keyList", { value: undefined, writable: true });
+    Object.defineProperty(this, "_valueList", { value: undefined, writable: true });
+    Object.defineProperty(this, "$typeArguments$SortedList", { value: typeArguments ?? undefined });
 
     if (source !== null && source !== undefined) {
       this.copyFrom(source);
@@ -82,7 +86,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
     typeArguments?: readonly RuntimeType[] | null,
   ): SortedList<K, V> {
     if (capacity < 0) {
-      throwNegativeArgument("capacity", capacity);
+      throwNegativeValue("capacity", capacity);
     }
 
     return new SortedList(null, comparer, typeArguments);
@@ -135,6 +139,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
         { collection: "IReadOnlyCollection", arguments: null },
       ],
       test: (value: unknown): value is SortedList<unknown, unknown> => value instanceof SortedList,
+      closeFor: (instance) => closeCollectionFor(SortedList.$runtimeType, instance),
     });
   }
 
@@ -172,7 +177,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   }
 
   set(key: K, value: V): void {
-    const index = this.search(checkedKey(key));
+    const index = this.search(requireKey(key));
 
     if (index >= 0) {
       this._values[index] = value;
@@ -203,10 +208,10 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   }
 
   add(key: K, value: V): void {
-    const index = this.search(checkedKey(key));
+    const index = this.search(requireKey(key));
 
     if (index >= 0) {
-      throwSortedListDuplicate(key, "key");
+      throwDuplicateKey(key, "key");
     }
 
     this.insertAt(~index, key, value);
@@ -247,7 +252,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
 
   /** The index of `key`, or `-1`; `ArgumentNullException` (`key`) for `null`. */
   indexOfKey(key: K): number {
-    const index = this.search(checkedKey(key));
+    const index = this.search(requireKey(key));
 
     return index >= 0 ? index : -1;
   }
@@ -293,11 +298,16 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   }
 
   copyTo(array: (readonly [K, V])[], arrayIndex = 0): void {
-    checkCopyTo(array, arrayIndex, this.count);
+    copyIntoSorted([...this], array, arrayIndex);
+  }
 
-    for (const [index, key] of this._keys.entries()) {
-      array[arrayIndex + index] = [key, this._values[index] as V];
-    }
+  /** .NET's ``System.Collections.Generic.SortedList`2[TKey,TValue]`` text. */
+  toString(): string {
+    return collectionTypeName(
+      "System.Collections.Generic.SortedList`2",
+      ["TKey", "TValue"],
+      this.$typeArguments$SortedList,
+    );
   }
 
   /** `String(key)` → value, in key order. */
@@ -321,7 +331,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   /** @internal Validates an index of the sorted arrays (`ArgumentOutOfRangeException` with the actual value). */
   checkIndex(index: number): void {
     if (index >>> 0 >= this._keys.length) {
-      throwIndexOutOfRange(index);
+      throwOOR(index);
     }
   }
 
@@ -348,7 +358,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
       const previous = entries[index - 1];
 
       if (previous !== undefined && this._compare(previous[0], key) === 0) {
-        throwSortedListDuplicate(key, null);
+        throwDuplicateKey(key);
       }
 
       this._keys.push(key);
@@ -374,8 +384,8 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
   declare readonly _isKeys: boolean;
 
   constructor(list: SortedList<any, any>, isKeys: boolean) {
-    defineField(this, "_list", list, false);
-    defineField(this, "_isKeys", isKeys, false);
+    Object.defineProperty(this, "_list", { value: list });
+    Object.defineProperty(this, "_isKeys", { value: isKeys });
   }
 
   get count(): number {
@@ -406,18 +416,9 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
     return this.indexOf(item) >= 0;
   }
 
+  /** `Array.Copy`'s checks, as .NET's `KeyList` / `ValueList.CopyTo`. */
   copyTo(array: T[], arrayIndex = 0): void {
-    if (array === null || array === undefined) {
-      throwArgumentNull("destinationArray");
-    }
-
-    if (array.length - arrayIndex < this.count) {
-      throwArrayTooSmall();
-    }
-
-    for (const [index, item] of this.items().entries()) {
-      array[arrayIndex + index] = item;
-    }
+    copyInto(this.items(), array, arrayIndex);
   }
 
   set(_index: number, _value: T): never {
@@ -466,7 +467,8 @@ class SortedListIterator<T> implements Iterator<T> {
 
   constructor(list: SortedList<any, any>, read: (index: number) => T) {
     this.list = list;
-    this.version = list._version;
+    this.version =
+      typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__ ? list._version : 0;
     this.read = read;
   }
 
@@ -475,7 +477,7 @@ class SortedListIterator<T> implements Iterator<T> {
       (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
       this.list._version !== this.version
     ) {
-      throwStackModified();
+      throwEnumeratorModified();
     }
 
     if (this.index >= this.list.count) {

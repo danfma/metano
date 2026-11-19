@@ -118,32 +118,32 @@
     {
       "name": "SortedSet alone",
       "entry": "entries/sorted-set-only.js",
-      "maxGzip": 2560,
+      "maxGzip": 4866,
       "mustNotContain": [
         "Mutating a key collection",
         "An item with the same key"
       ],
-      "$comment": "NFR-008 proposed 2.5 KB (stage 011h); measured once R1 integrates."
+      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4424 B / esbuild 4372 B (proposed 2560 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
     },
     {
       "name": "SortedDictionary alone",
       "entry": "entries/sorted-dictionary-only.js",
-      "maxGzip": 3072,
+      "maxGzip": 5035,
       "mustNotContain": [
         "Mutating a key collection",
         "upperValue"
       ],
-      "$comment": "NFR-008 proposed 3.0 KB (stage 011h); measured once R1 integrates."
+      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4578 B / esbuild 4529 B (proposed 3072 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
     },
     {
       "name": "SortedList alone",
       "entry": "entries/sorted-list-only.js",
-      "maxGzip": 2560,
+      "maxGzip": 4523,
       "mustNotContain": [
         "upperValue",
         "Must be less than or equal"
       ],
-      "$comment": "NFR-008 proposed 2.5 KB (stage 011h); measured once R1 integrates."
+      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4112 B / esbuild 4035 B (proposed 2560 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
     }
   ],
   "modules": [
@@ -177,8 +177,6 @@
     "system/collections/sorted-dictionary",
     "system/collections/sorted-list",
     "system/collections/sorted-set",
-    "system/collections/sorted-support",
-    "system/collections/sorted-throw-helpers",
     "system/collections/stack",
     "system/collections/throw-helpers",
     "system/date-time-offset",

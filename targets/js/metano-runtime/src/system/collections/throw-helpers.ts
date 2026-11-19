@@ -26,11 +26,14 @@ export function throwEnumeratorModified(): never {
   );
 }
 
-/** An index outside `0..count - 1` (`List` indexer, `fromEnd`, `removeAt`). */
-export function throwOOR(): never {
+/**
+ * An index outside `0..count - 1` (`List` indexer, `fromEnd`, `removeAt`). The
+ * `SortedList` members pass the index, which .NET appends (`Actual value was 5.`).
+ */
+export function throwOOR(actualValue?: number): never {
   throw new ArgumentOutOfRangeException(
     "index",
-    undefined,
+    actualValue,
     "Index was out of range. Must be non-negative and less than the size of the collection.",
   );
 }
@@ -77,10 +80,15 @@ export function throwKeyNotFound(key: unknown): never {
   );
 }
 
-/** `Dictionary.add` of a key it already holds. */
-export function throwDuplicateKey(key: unknown): never {
+/**
+ * `Dictionary.add` (and `SortedList`'s copy constructor) of a key it already
+ * holds; `SortedList.add` names the `key` parameter, and `SortedDictionary`
+ * passes the `[key, value]` pair text.
+ */
+export function throwDuplicateKey(key: unknown, paramName?: string): never {
   throw new ArgumentException(
     `An item with the same key has already been added. Key: ${messageValue(key)}`,
+    paramName,
   );
 }
 
@@ -134,4 +142,53 @@ export function throwNegativeDestinationIndex(index: number): never {
     index,
     `destinationIndex ('${messageValue(index)}') must be greater than or equal to '0'.`,
   );
+}
+
+/** A negative argument checked as .NET's `ThrowIfNegative` does (`<name> ('-1') must be a non-negative value.`). */
+export function throwNegativeValue(paramName: string, value: number): never {
+  throw new ArgumentOutOfRangeException(
+    paramName,
+    value,
+    `${paramName} ('${messageValue(value)}') must be a non-negative value.`,
+  );
+}
+
+/** A sorted class's `copyTo` into an array too short from the given index (.NET's collection-level text). */
+export function throwCollectionTooSmall(): never {
+  throw new ArgumentException(
+    "Destination array is not long enough to copy all the items in the collection. Check array index and length.",
+  );
+}
+
+/** `SortedSet.getViewBetween(lower, upper)` with `lower` above `upper`. */
+export function throwViewBoundsInverted(): never {
+  throw new ArgumentException("Must be less than or equal to upperValue.", "lowerValue");
+}
+
+/** A value outside a `SortedSet` view's range (`add`), or a nested view's bound outside its parent's. */
+export function throwOutsideView(paramName: string): never {
+  throw new ArgumentOutOfRangeException(paramName);
+}
+
+/** A mutator of `SortedList.Keys` / `.Values` other than the key indexer write. */
+export function throwSortedListNested(): never {
+  throw new NotSupportedException(
+    "This operation is not supported on SortedList nested types because they require modifying the original SortedList.",
+  );
+}
+
+/** `SortedList.Keys[i] = …`. */
+export function throwKeyListWrite(): never {
+  throw new NotSupportedException(
+    "Mutating a key collection derived from a dictionary is not allowed.",
+  );
+}
+
+/** `key`, or `ArgumentNullException` (`key`) for `null` / `undefined`, as every .NET dictionary does. */
+export function requireKey<K>(key: K): K {
+  if (key === null || key === undefined) {
+    throwArgumentNull("key");
+  }
+
+  return key;
 }

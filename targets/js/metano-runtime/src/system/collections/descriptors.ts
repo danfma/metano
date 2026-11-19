@@ -26,6 +26,9 @@ import type {
 } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { Queue } from "./queue.ts";
+import { SortedDictionary } from "./sorted-dictionary.ts";
+import { SortedList } from "./sorted-list.ts";
+import { SortedSet } from "./sorted-set.ts";
 import { Stack } from "./stack.ts";
 
 export function listType<T>(element: RuntimeType<T>): CollectionType<List<T>> {
@@ -51,6 +54,28 @@ export function queueType<T>(element: RuntimeType<T>): CollectionType<Queue<T>> 
 
 export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>> {
   return specializeCollection(Stack.$runtimeType, [element]) as CollectionType<Stack<T>>;
+}
+
+export function sortedSetType<T>(element: RuntimeType<T>): CollectionType<SortedSet<T>> {
+  return specializeCollection(SortedSet.$runtimeType, [element]) as CollectionType<SortedSet<T>>;
+}
+
+export function sortedDictionaryType<K, V>(
+  key: RuntimeType<K>,
+  value: RuntimeType<V>,
+): CollectionType<SortedDictionary<K, V>> {
+  return specializeCollection(SortedDictionary.$runtimeType, [key, value]) as CollectionType<
+    SortedDictionary<K, V>
+  >;
+}
+
+export function sortedListType<K, V>(
+  key: RuntimeType<K>,
+  value: RuntimeType<V>,
+): CollectionType<SortedList<K, V>> {
+  return specializeCollection(SortedList.$runtimeType, [key, value]) as CollectionType<
+    SortedList<K, V>
+  >;
 }
 
 export function iListType<T>(element: RuntimeType<T>): CollectionType<IList<T>> {

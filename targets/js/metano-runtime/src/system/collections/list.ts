@@ -15,6 +15,7 @@ import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import { type ComparisonArgument, comparisonOf, elementEquals } from "./default-comparer.ts";
 import type { IList, IReadOnlyList, Span } from "./interfaces.ts";
+import { binarySearch } from "./sorted-array.ts";
 import {
   throwArgumentNull,
   throwCompareFailed,
@@ -435,31 +436,13 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
 
   /** The index of `item` in the sorted list, or the bitwise complement of its insertion point. */
   binarySearch(item: T, comparison?: ComparisonArgument<T>): number {
-    const compare = comparisonOf(comparison);
     const items = this._items;
-    let low = 0;
-    let high = items.length - 1;
 
     try {
-      while (low <= high) {
-        const middle = low + ((high - low) >> 1);
-        const order = compare(items[middle] as T, item);
-
-        if (order === 0) {
-          return middle;
-        }
-
-        if (order < 0) {
-          low = middle + 1;
-        } else {
-          high = middle - 1;
-        }
-      }
+      return binarySearch(items, 0, items.length, item, comparisonOf(comparison));
     } catch (error) {
-      throwCompareFailed(error);
+      return throwCompareFailed(error);
     }
-
-    return ~low;
   }
 
   /** In place, stable; `Comparer<T>.Default` without an argument. */

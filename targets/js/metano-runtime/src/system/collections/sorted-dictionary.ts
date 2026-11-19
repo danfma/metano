@@ -1,11 +1,24 @@
+import { messageValue } from "../exceptions/message-value.ts";
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { defaultComparer, elementEquals, type IComparer } from "./default-comparer.ts";
+import { closeCollectionFor } from "./close-collection.ts";
+import { collectionTypeName } from "./collection-type-name.ts";
+import { copyIntoSorted } from "./copy-to.ts";
+import {
+  comparisonOf,
+  defaultComparer,
+  elementEquals,
+  type IComparer,
+} from "./default-comparer.ts";
 import { KeyCollection, ValueCollection } from "./dictionary-views.ts";
 import type { IDictionary, IReadOnlyDictionary } from "./interfaces.ts";
 import { RedBlackTree, type RedBlackNode, successor } from "./red-black-tree.ts";
-import { checkedKey, compareFunctionOf, defineField } from "./sorted-support.ts";
-import { checkCopyTo, throwDuplicatePair } from "./sorted-throw-helpers.ts";
-import { throwArgumentNull, throwKeyNotFound, throwStackModified } from "./throw-helpers.ts";
+import {
+  requireKey,
+  throwArgumentNull,
+  throwDuplicateKey,
+  throwEnumeratorModified,
+  throwKeyNotFound,
+} from "./throw-helpers.ts";
 
 let SortedDictionary$rt: CollectionType<SortedDictionary<unknown, unknown>> | undefined;
 
@@ -34,12 +47,16 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
   ) {
     const ownComparer = comparer ?? null;
 
-    defineField(this, "_tree", new RedBlackTree<K, V>(compareFunctionOf(ownComparer)), false);
-    defineField(this, "_version", 0, true);
-    defineField(this, "_comparer", ownComparer, false);
-    defineField(this, "_keys", undefined, true);
-    defineField(this, "_values", undefined, true);
-    defineField(this, "$typeArguments$SortedDictionary", typeArguments ?? undefined, false);
+    Object.defineProperty(this, "_tree", {
+      value: new RedBlackTree<K, V>(comparisonOf(ownComparer)),
+    });
+    Object.defineProperty(this, "_version", { value: 0, writable: true });
+    Object.defineProperty(this, "_comparer", { value: ownComparer });
+    Object.defineProperty(this, "_keys", { value: undefined, writable: true });
+    Object.defineProperty(this, "_values", { value: undefined, writable: true });
+    Object.defineProperty(this, "$typeArguments$SortedDictionary", {
+      value: typeArguments ?? undefined,
+    });
 
     if (entries !== null && entries !== undefined) {
       for (const [key, value] of entries) {
@@ -103,6 +120,7 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
       ],
       test: (value: unknown): value is SortedDictionary<unknown, unknown> =>
         value instanceof SortedDictionary,
+      closeFor: (instance) => closeCollectionFor(SortedDictionary.$runtimeType, instance),
     });
   }
 
@@ -130,7 +148,7 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
   }
 
   get(key: K): V {
-    const node = this._tree.find(checkedKey(key));
+    const node = this._tree.find(requireKey(key));
 
     if (node === null) {
       throwKeyNotFound(key);
@@ -140,7 +158,7 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
   }
 
   set(key: K, value: V): void {
-    const { node, inserted } = this._tree.insert(checkedKey(key), value);
+    const { node, inserted } = this._tree.insert(requireKey(key), value);
 
     if (!inserted) {
       node.value = value;
@@ -168,17 +186,17 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
   }
 
   add(key: K, value: V): void {
-    const checked = checkedKey(key);
+    const checked = requireKey(key);
 
     this.bumpVersion();
 
     if (!this._tree.insert(checked, value).inserted) {
-      throwDuplicatePair(key, value);
+      throwDuplicateKey(`[${messageValue(key)}, ${messageValue(value)}]`);
     }
   }
 
   remove(key: K): boolean {
-    const checked = checkedKey(key);
+    const checked = requireKey(key);
 
     this.bumpVersion();
 
@@ -191,7 +209,7 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
   }
 
   containsKey(key: K): boolean {
-    return this._tree.find(checkedKey(key)) !== null;
+    return this._tree.find(requireKey(key)) !== null;
   }
 
   containsValue(value: V): boolean {
@@ -209,26 +227,20 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
     key: K,
     missingValue: D,
   ): readonly [found: true, value: V] | readonly [found: false, value: D] {
-    const node = this._tree.find(checkedKey(key));
+    const node = this._tree.find(requireKey(key));
 
     return node === null ? [false, missingValue] : [true, node.value];
   }
 
   /** `GetValueOrDefault`: the value, or the caller's default on a miss (D30). */
   getValueOrDefault<D>(key: K, defaultValue: D): V | D {
-    const node = this._tree.find(checkedKey(key));
+    const node = this._tree.find(requireKey(key));
 
     return node === null ? defaultValue : node.value;
   }
 
   copyTo(array: (readonly [K, V])[], arrayIndex = 0): void {
-    checkCopyTo(array, arrayIndex, this.count);
-
-    let index = arrayIndex;
-
-    for (const entry of this) {
-      array[index++] = entry;
-    }
+    copyIntoSorted([...this], array, arrayIndex);
   }
 
   /** `String(key)` → value, in key order. */
@@ -240,6 +252,15 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
     }
 
     return json;
+  }
+
+  /** .NET's ``System.Collections.Generic.SortedDictionary`2[TKey,TValue]`` text. */
+  toString(): string {
+    return collectionTypeName(
+      "System.Collections.Generic.SortedDictionary`2",
+      ["TKey", "TValue"],
+      this.$typeArguments$SortedDictionary,
+    );
   }
 
   [Symbol.iterator](): Iterator<readonly [K, V]> {
@@ -261,7 +282,8 @@ class SortedDictionaryIterator<K, V> implements Iterator<readonly [K, V]> {
 
   constructor(dictionary: SortedDictionary<K, V>) {
     this.dictionary = dictionary;
-    this.version = dictionary._version;
+    this.version =
+      typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__ ? dictionary._version : 0;
     this.node = dictionary._tree.first();
   }
 
@@ -270,7 +292,7 @@ class SortedDictionaryIterator<K, V> implements Iterator<readonly [K, V]> {
       (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
       this.dictionary._version !== this.version
     ) {
-      throwStackModified();
+      throwEnumeratorModified();
     }
 
     const current = this.node;

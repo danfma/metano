@@ -19,6 +19,7 @@ import {
   throwKeyNotFound,
   throwModified,
   throwNegative,
+  requireKey,
 } from "./throw-helpers.ts";
 
 let Dictionary$rt: CollectionType<Dictionary<unknown, unknown>> | undefined;
@@ -312,13 +313,4 @@ class DictionaryIterator<K, V> implements IterableIterator<readonly [K, V]> {
   [Symbol.iterator](): IterableIterator<readonly [K, V]> {
     return this;
   }
-}
-
-/** A `null` / `undefined` key throws `ArgumentNullException`, as .NET does. */
-function requireKey<K>(key: K): K {
-  if (key === null || key === undefined) {
-    throwArgumentNull("key");
-  }
-
-  return key;
 }

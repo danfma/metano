@@ -11,5 +11,8 @@ export type * from "./interfaces.ts";
 export * from "./list.ts";
 export * from "./list-helpers.ts";
 export * from "./queue.ts";
+export * from "./sorted-dictionary.ts";
+export * from "./sorted-list.ts";
+export * from "./sorted-set.ts";
 export * from "./stack.ts";
 export { throwModified } from "./throw-helpers.ts";

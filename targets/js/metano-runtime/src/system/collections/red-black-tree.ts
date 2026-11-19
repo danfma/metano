@@ -1,3 +1,5 @@
+import type { Comparison } from "./default-comparer.ts";
+
 /**
  * The red-black tree that `SortedSet` and `SortedDictionary` share (spec 011
  * FR-054). Internal: a pure ordered map, not re-exported by the
@@ -21,15 +23,12 @@ export interface RedBlackNode<K, V> {
   red: boolean;
 }
 
-/** A three-way comparison: negative, zero (equal keys) or positive. */
-export type CompareFunction<K> = (x: K, y: K) => number;
-
 export class RedBlackTree<K, V> {
-  readonly compare: CompareFunction<K>;
+  readonly compare: Comparison<K>;
   root: RedBlackNode<K, V> | null;
   count: number;
 
-  constructor(compare: CompareFunction<K>) {
+  constructor(compare: Comparison<K>) {
     this.compare = compare;
     this.root = null;
     this.count = 0;

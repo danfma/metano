@@ -1,4 +1,4 @@
-import type { CompareFunction } from "./red-black-tree.ts";
+import type { Comparison } from "./default-comparer.ts";
 
 /**
  * The sorted-array search that `SortedList` uses (spec 011 FR-054). Internal:
@@ -18,7 +18,7 @@ export function binarySearch<T>(
   start: number,
   length: number,
   value: T,
-  compare: CompareFunction<T>,
+  compare: Comparison<T>,
 ): number {
   let low = start;
   let high = start + length - 1;
