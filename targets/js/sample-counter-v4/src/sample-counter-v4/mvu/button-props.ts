@@ -13,7 +13,7 @@ export function isButtonProps(value: unknown): value is ButtonProps {
 
   const v = value as any;
 
-  return (v.className == null || typeof v.className === "string") && true;
+  return v.className == null || typeof v.className === "string";
 }
 
 export const ButtonProps$runtimeType: PlainObjectType<ButtonProps> = {

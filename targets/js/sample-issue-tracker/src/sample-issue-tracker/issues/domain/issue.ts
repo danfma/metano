@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
-import { isString, type ClassType } from "metano-runtime";
+import { DateTimeOffsetType, isString, isType, type ClassType } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import { Comment } from "./comment";
@@ -115,7 +115,7 @@ export class Issue {
       args.length === 3 &&
       isString(args[0]) &&
       isString(args[1]) &&
-      args[2] instanceof Temporal.ZonedDateTime
+      isType(args[2], DateTimeOffsetType)
     ) {
       this.addCommentAuthorIdMessageCreatedAt(
         args[0] as UserId,
@@ -178,7 +178,7 @@ export class Issue {
         args[0] === "done" ||
         args[0] === "cancelled") &&
       isString(args[1]) &&
-      args[2] instanceof Temporal.ZonedDateTime
+      isType(args[2], DateTimeOffsetType)
     ) {
       this.transitionToNextStatusActorIdChangedAt(
         args[0] as IssueStatus,
