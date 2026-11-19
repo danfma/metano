@@ -805,6 +805,8 @@ The sections below are stage 011h's (group H), unchanged by R0; they build on th
 | `immutable-interfaces.ts` | `IImmutableList`, `IImmutableSet`, `IImmutableDictionary` (types only, 0 B) | interfaces |
 | `immutable-list.ts` | `ImmutableList` | `ownsTip` (`immutable-storage.ts`), `comparisonOf`, `elementEquals`, `binarySearch`, throw helpers |
 | `immutable-list-builder.ts` | `ImmutableListBuilder`, `toImmutableList` | `List`, `ImmutableList`, `builder-iterator.ts` |
+| `immutable-array.ts` | `ImmutableArray` (a subclass of `ImmutableList`, 011h compiler half) | `ImmutableList`, throw helpers |
+| `immutable-array-builder.ts` | `ImmutableArrayBuilder`, `toImmutableArray` (a subclass of `ImmutableListBuilder`) | `ImmutableListBuilder`, `ImmutableArray` |
 | `immutable-hash-set.ts` | `ImmutableHashSet` | `immutable-storage.ts`, `set-algebra.ts`, `defaultEqualityComparerFor` |
 | `immutable-hash-set-builder.ts` | `ImmutableHashSetBuilder`, `toImmutableHashSet` | `HashSet`, `ImmutableHashSet`, `builder-iterator.ts` |
 | `immutable-dictionary.ts` | `ImmutableDictionary` | `immutable-storage.ts`, `KeyCollection` / `ValueCollection`, `defaultEqualityComparerFor` |
@@ -886,6 +888,26 @@ export class ImmutableList<T> implements IImmutableList<T>, IReadOnlyList<T> {
 
 Storage: `_items`, `_count`, `$typeArguments$ImmutableList`. **Tip-append copy-on-write** (FR-054, research R18): the backing array may be shared by several versions and be longer than a version's `_count`; each version reads only its first `_count` elements. `add` / `addRange` on the newest version of an array (`_items.length === _count`) push in place and return a new instance over the same array (amortized O(1)); every other mutator, and `add` on an older version, copies its visible elements (O(n)). A version never sees an element added after it. Mutators return the receiver exactly where .NET does (probed on .NET 10): `remove` / `removeItems` / `removeAll` that remove nothing, `removeRange(i, 0)`, `reverse()` of at most one element; `addRange` / `insertRange` of an empty source, `setItem` of an equal value and `sort()` return a **new** list, as .NET's; `clear()` returns `empty()` (the same instance as `ImmutableList<T>.Empty`). `slice` / `getRange` / mutator results copy the `$typeArguments$ImmutableList` slot. `ToBuilder()` lowers to `new ImmutableListBuilder(list)`, so `ImmutableList` imports no builder.
 
+### `ImmutableArray<T>` (`immutable-array.ts`; amendment of OD-17, 011h compiler half)
+
+```ts
+export class ImmutableArray<T> extends ImmutableList<T> {   // ImmutableArray<T>; same storage, one more class
+  static empty<T>(): ImmutableArray<T>;  static of<T>(items: T[], typeArguments?): ImmutableArray<T>;  static from<T>(items: Iterable<T>, typeArguments?): ImmutableArray<T>;
+  // overrides, each probed on .NET 10 (2026-11-19):
+  get(index: number): T;  fromEnd(n: number): T;    // IndexOutOfRangeException (`Index was outside the bounds of the array.`), a negative index included
+  copyTo(array: T[], arrayIndex?: number): void;    // ArgumentNullException (destinationArray); negative index: ArgumentOutOfRangeException
+                                                    // `destinationIndex ('-1') must be greater than or equal to '0'. (Parameter 'destinationIndex')` + `Actual value was -1.`;
+                                                    // short array: ArgumentException `Destination array was not long enough. Check the destination index, length, and the array's lower bounds. (Parameter 'destinationArray')`
+  binarySearch(item: T, comparison?): number;       // a comparer failure wrapped: InvalidOperationException `Failed to compare two elements in the array.` (throwCompareFailed)
+  sort(comparison?): ImmutableArray<T>;             // the receiver when already sorted
+  indexOf(item: T, index?: number, count?: number, comparer?): number;  // parameter name `startIndex`
+  addRange(items: Iterable<T>): ImmutableArray<T>;  // the receiver for an empty source
+  toString(): string;                               // ``System.Collections.Immutable.ImmutableArray`1[T]``
+}
+```
+
+OD-17 stays one implementation (the copy-on-write storage, tip-append and every other member are `ImmutableList`'s); the probes showed the two types differ observably (exception types and texts above, `ToString()`, the builder below), so `ImmutableArray<T>` maps to this thin subclass. `ImmutableList` builds each mutator result through one protected factory that the subclass overrides, so every result of an `ImmutableArray` is an `ImmutableArray`. `x is ImmutableList<T>` on an `ImmutableArray` value is `true` in TS (`false` in .NET, a boxed struct; documented divergence). `IsDefault` / `IsDefaultOrEmpty` / `ItemRef` / `AsSpan` / `AsMemory` stay `MS0001`.
+
 ### `ImmutableHashSet<T>` (`immutable-hash-set.ts`)
 
 ```ts
@@ -962,7 +984,7 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
 export function toImmutableDictionary<K, V>(builder: ImmutableDictionaryBuilder<K, V>): ImmutableDictionary<K, V>;
 ```
 
-Each builder is composition (`builder instanceof List` is `false`, as `builder is List<T>` in .NET); `ImmutableArray<T>.Builder` is `ImmutableListBuilder<T>`. A builder does **not** inherit the rules of the class it holds (probed on .NET 10): it keeps its own `_version`, bumped by every mutation that changes it (a removal included, unlike `Dictionary` / `HashSet`), and its enumerator (one internal `BuilderIterator` shared by the three builders) throws `throwModified`'s `Collection was modified; enumeration operation may not execute.` on the next step; and it checks its own indexes, throwing `ArgumentOutOfRangeException` (`index`) with .NET's default text (`Specified argument was out of the range of valid values.`), not `List`'s. `toImmutableList` / `toImmutableHashSet` / `toImmutableDictionary` copy the builder's elements into a new immutable value (W4-11 condition 4: a later builder mutation never reaches it), and `ToBuilder()` copies the immutable value into the builder. Builder members not listed (`ItemRef`, `MoveToImmutable`, `Capacity`, …) report `MS0001`.
+Each builder is composition (`builder instanceof List` is `false`, as `builder is List<T>` in .NET); `ImmutableArray<T>.Builder` is `ImmutableListBuilder<T>`. A builder does **not** inherit the rules of the class it holds (probed on .NET 10): it keeps its own `_version`, bumped as .NET 10 bumps it (probed 2026-11-19, correcting the part-2 text): by every mutating call, a no-op included (dictionary builder `remove` of an absent key, `set` of the same value, `add(k, equalValue)`, `clear`; set builder `add` of a present element, `remove` of an absent one, `unionWith([])`, `exceptWith` of absent elements; list builder `removeAll` that removes nothing, `set` of the same value, `addRange([])`, `sort`, `reverse`, `clear` of an empty builder), except the list builder's `remove` of an absent element, which does not bump; and its enumerator (one internal `BuilderIterator` shared by the three builders) throws `throwModified`'s `Collection was modified; enumeration operation may not execute.` on the next step; and it checks its own indexes, throwing `ArgumentOutOfRangeException` (`index`) with .NET's default text (`Specified argument was out of the range of valid values.`), not `List`'s. `toImmutableList` / `toImmutableHashSet` / `toImmutableDictionary` copy the builder's elements into a new immutable value (W4-11 condition 4: a later builder mutation never reaches it), and `ToBuilder()` copies the immutable value into the builder. The dictionary builder's `add(k, v)` of a present key is a no-op when the held value equals `v` by the value comparer, and otherwise throws `ArgumentException` (`An element with the same key but a different value already exists. Key: '1'`), as `ImmutableDictionary.add`. **`ImmutableArrayBuilder<T>`** (`ImmutableArray<T>.Builder`, `immutable-array-builder.ts`) extends `ImmutableListBuilder<T>` with .NET's differences: no version check at all (its enumerator reads `get(i)` while `i < count`, so a `foreach` that writes or adds never throws, as .NET), an `IndexOutOfRangeException` indexer (`Index was outside the bounds of the array.`; `removeAt` / `insert` keep the `ArgumentOutOfRangeException`), the ``ImmutableArray`1+Builder[T]`` text, and `toImmutableArray(builder)` returning an `ImmutableArray`. Builder members not listed (`ItemRef`, `MoveToImmutable`, `Capacity`, …) report `MS0001`.
 
 ### `IImmutableList<T>`, `IImmutableSet<T>`, `IImmutableDictionary<K, V>` (`immutable-interfaces.ts`)
 
@@ -1110,11 +1132,11 @@ Storage, in order: `_store` (`HashCore<K, V>`), `$typeArguments$ConcurrentDictio
 
 ### JSON kinds (FR-028, runtime side)
 
-The eight 011h kinds widen the `kind` unions of R0's `SequenceCollectionDescriptor` / `KeyedCollectionDescriptor` (§ JSON collection kinds), so the converter keeps its two generic cases and imports no collection class:
+The nine 011h kinds widen the `kind` unions of R0's `SequenceCollectionDescriptor` / `KeyedCollectionDescriptor` (§ JSON collection kinds), so the converter keeps its two generic cases and imports no collection class:
 
 ```ts
 export type SequenceCollectionDescriptor = {      // JSON array
-  readonly kind: "list" | "queue" | "stack" | "hashSet" | "immutableList" | "readOnlyList" | "immutableHashSet" | "sortedSet";
+  readonly kind: "list" | "queue" | "stack" | "hashSet" | "immutableList" | "immutableArray" | "readOnlyList" | "immutableHashSet" | "sortedSet";
   readonly element: TypeDescriptor;
   readonly create: (items: unknown[]) => Iterable<unknown>;
 };
@@ -1126,7 +1148,7 @@ export type KeyedCollectionDescriptor = {         // JSON object; keys parsed by
 };
 ```
 
-Read: the element (or key and value) converters run first, then `create` receives the values in document order. Write: iteration (`for..of`), so the sorted kinds write in key order, as .NET does. The context writes `create` as a closure, with the FR-008 type arguments when the compilation asks: `immutableList` → `(items) => ImmutableList.from(items)`, `immutableHashSet` → `ImmutableHashSet.from(items)`, `sortedSet` → `new SortedSet(items)` (duplicates ignored), `immutableDictionary` → `ImmutableDictionary.empty().setItems(entries)`, `concurrentDictionary` / `sortedDictionary` / `sortedList` → `<Class>.assign(entries)`: a repeated key keeps its **last** value, which .NET 10's System.Text.Json does for every one of these kinds (read 2026-11-19). `readOnlyList` serializes, and its `create` throws `NotSupportedException`, because System.Text.Json does not deserialize `ReadOnlyCollection<T>` (no usable constructor; read from .NET 10).
+Read: the element (or key and value) converters run first, then `create` receives the values in document order. Write: iteration (`for..of`), so the sorted kinds write in key order, as .NET does. The context writes `create` as a closure, with the FR-008 type arguments when the compilation asks: `immutableList` → `(items) => ImmutableList.from(items)`, `immutableArray` → `ImmutableArray.from(items)`, `immutableHashSet` → `ImmutableHashSet.from(items)`, `sortedSet` → `new SortedSet(items)` (duplicates ignored), `immutableDictionary` → `ImmutableDictionary.empty().setItems(entries)`, `concurrentDictionary` / `sortedDictionary` / `sortedList` → `<Class>.assign(entries)`: a repeated key keeps its **last** value, which .NET 10's System.Text.Json does for every one of these kinds (read 2026-11-19). `readOnlyList` serializes, and its `create` throws `NotSupportedException`, because System.Text.Json does not deserialize `ReadOnlyCollection<T>` (no usable constructor; read from .NET 10).
 
 ### C# member → emitted TS (011h)
 
@@ -1137,14 +1159,16 @@ Instance members not listed map by name to the camelCase member above with no te
 | `list.AsReadOnly()` | `asReadOnly(list)` |
 | `new ReadOnlyCollection<T>(src)`, `Array.AsReadOnly(arr)` | `new ReadOnlyList(src)` / `ReadOnlyList.fromArray(arr)` |
 | `ReadOnlyCollection<T>.Empty` | `ReadOnlyList.empty()` |
-| `ImmutableList<T>.Empty`, `ImmutableArray<T>.Empty`, `ImmutableList.Create<T>()`, `ImmutableArray.Create<T>()` | `ImmutableList.empty()` |
-| `ImmutableList.Create(a, b)`, `ImmutableArray.Create(a, b)`, `ImmutableList<int> x = [a, b]`, `ImmutableArray<int> x = [a, b]` | `ImmutableList.of([a, b])` |
-| `ImmutableList.CreateRange(src)`, `src.ToImmutableList()`, `ImmutableArray.CreateRange(src)`, `src.ToImmutableArray()` | `ImmutableList.from(src)` |
+| `ImmutableList<T>.Empty`, `ImmutableList.Create<T>()` / `ImmutableArray<T>.Empty`, `ImmutableArray.Create<T>()` | `ImmutableList.empty()` / `ImmutableArray.empty()` |
+| `ImmutableList.Create(a, b)`, `ImmutableList<int> x = [a, b]` / the `ImmutableArray` forms | `ImmutableList.of([a, b])` / `ImmutableArray.of([a, b])` (a fresh literal only: an expanded `params` call or a collection expression) |
+| `ImmutableList.Create(arr)`, `ImmutableArray.Create(arr)` with an existing array (`params` in normal form), `ImmutableArray.Create(arr, start, length)` | `ImmutableList.from(arr)` / `ImmutableArray.from(arr)` / `ImmutableArray.from(arr.slice(start, start + length))`: never `of`, which takes ownership and would alias the caller's array |
+| `ImmutableList.CreateRange(src)`, `src.ToImmutableList()` / `ImmutableArray.CreateRange(src)`, `src.ToImmutableArray()` | `ImmutableList.from(src)` / `ImmutableArray.from(src)` |
 | `ImmutableArray<T>.Length` | `count` |
 | `im.RemoveRange(items)` / `im.RemoveRange(index, count)` | `im.removeItems(items)` / `im.removeRange(index, count)` |
 | `im.Sort()` / `im.Sort(comparison)` / `im.Sort(comparer)` | `im.sort()` / `im.sort(comparison)` / `im.sort(comparer)` |
-| `im.ToBuilder()`, `ImmutableList.CreateBuilder<T>()`, `ImmutableArray.CreateBuilder<T>()` | `new ImmutableListBuilder(im)` / `new ImmutableListBuilder()` |
-| `builder.ToImmutable()` (list / array builder) | `toImmutableList(builder)` |
+| `im.ToBuilder()`, `ImmutableList.CreateBuilder<T>()` | `new ImmutableListBuilder(im)` / `new ImmutableListBuilder()` |
+| `builder.ToImmutable()` (list builder / array builder) | `toImmutableList(builder)` / `toImmutableArray(builder)` |
+| `ImmutableArray.CreateBuilder<T>()`, `arr.ToBuilder()` | `new ImmutableArrayBuilder()` / `new ImmutableArrayBuilder(arr)` |
 | `ImmutableHashSet.Create(a, b)` / `Create(comparer, a, b)` | `ImmutableHashSet.of([a, b])` / `ImmutableHashSet.of([a, b], comparer)` |
 | `ImmutableHashSet.CreateRange([comparer, ]src)`, `src.ToImmutableHashSet([comparer])` | `ImmutableHashSet.from(src[, comparer])` (C#'s leading comparer moves after the source: the two arguments evaluate in the TS order, documented) |
 | `ImmutableHashSet<T>.Empty`, `ImmutableHashSet.Create<T>()` | `ImmutableHashSet.empty()` |
@@ -1168,6 +1192,22 @@ Instance members not listed map by name to the camelCase member above with no te
 | `ImmutableArray<T>.IsDefault` / `IsDefaultOrEmpty` / `ItemRef` / `AsSpan` / `AsMemory`, `ToImmutableSorted*`, `ImmutableSortedSet<T>`, `ImmutableQueue<T>`, `ImmutableStack<T>` | `MS0001` (not in FR-001) |
 
 An omitted source argument emits `null`; the copy constructors (a C# source argument) lower to `from`, which throws `ArgumentNullException` for a `null` source as .NET does.
+
+**Type tests and dispatchers (W4-18, extended by 011h).** `x is <interface>` and an overload dispatcher's interface-typed parameter render `instanceof` over every runtime class implementing that interface in .NET 10 (probed by reflection, 2026-11-19), one table (`RuntimeCollections`) shared by both; a 011h class kind renders `instanceof` its own class:
+
+| Interface | Runtime classes |
+|---|---|
+| `IList<T>` | `List`, `ReadOnlyList`, `SortedListView`, `ImmutableListBuilder` (`ImmutableArrayBuilder` through the subclass) |
+| `IReadOnlyList<T>` | `List`, `ReadOnlyList`, `ImmutableList` (`ImmutableArray`), `ImmutableListBuilder` |
+| `ICollection<T>` | `List`, `HashSet`, `ReadOnlyList`, `SortedSet`, `SortedListView`, `ImmutableListBuilder`, `ImmutableHashSetBuilder` |
+| `IReadOnlyCollection<T>` | the 011c rows, plus `ReadOnlyList`, `ImmutableList`, `ImmutableHashSet`, `ImmutableDictionary`, the three builders, `SortedSet`, `SortedDictionary`, `SortedList`, `ConcurrentDictionary` |
+| `IDictionary<K,V>` | `Dictionary`, `SortedDictionary`, `SortedList`, `ConcurrentDictionary`, `ImmutableDictionaryBuilder` |
+| `IReadOnlyDictionary<K,V>` | the `IDictionary` row plus `ImmutableDictionary` |
+| `ISet<T>` | `HashSet`, `SortedSet`, `ImmutableHashSetBuilder` |
+| `IReadOnlySet<T>` | `HashSet`, `SortedSet`, `ImmutableHashSet` |
+| `IImmutableList<T>` / `IImmutableSet<T>` / `IImmutableDictionary<K,V>` | `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary` |
+
+The immutable classes are absent from the mutable-interface rows (`IList`, `ICollection`, `ISet`, `IDictionary`) by § Mutable-interface conversions of immutables (`false` in TS, `true` in .NET; documented divergence). The list-shaped `is` tests keep their MS0001 (W4-17, unchanged by 011h).
 
 ### Budgets (NFR-001, NFR-008; measured by 011h)
 
