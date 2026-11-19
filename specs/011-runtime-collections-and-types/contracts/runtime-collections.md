@@ -106,9 +106,12 @@ Module-level functions returning `never`, each constructing the FR-013 class wit
 | `throwNegativeValue(paramName: string, value: number): never` (011h) | `ArgumentOutOfRangeException` (`paramName`, actual value) | `<name> ('<value>') must be a non-negative value.` | sorted classes' `copyTo` (`index`), `SortedList.withCapacity` (`capacity`) |
 | `throwCollectionTooSmall(): never` (011h) | `ArgumentException` | `Destination array is not long enough to copy all the items in the collection. Check array index and length.` | `SortedSet` / `SortedDictionary` / `SortedList.copyTo` |
 | `throwViewBoundsInverted(): never` (011h) | `ArgumentException` (`lowerValue`) | `Must be less than or equal to upperValue.` | `SortedSet.getViewBetween` |
-| `throwOutsideView(paramName: string): never` (011h) | `ArgumentOutOfRangeException` (`paramName`) | `Specified argument was out of the range of valid values.` | a `SortedSet` view's `add` (`item`), a nested view's bounds (`lowerValue` / `upperValue`) |
+| `throwArgumentOutOfRange(paramName: string): never` (011h) | `ArgumentOutOfRangeException` (`paramName`) | `Specified argument was out of the range of valid values.` | a `SortedSet` view's `add` (`item`), a nested view's bounds (`lowerValue` / `upperValue`) |
 | `throwSortedListNested(): never` (011h) | `NotSupportedException` | `This operation is not supported on SortedList nested types because they require modifying the original SortedList.` | `SortedList.Keys` / `.Values` mutators |
 | `throwKeyListWrite(): never` (011h) | `NotSupportedException` | `Mutating a key collection derived from a dictionary is not allowed.` | `SortedList.Keys[i] = …` |
+| `throwConcurrencyLevel(): never` (011h) | `ArgumentOutOfRangeException` (`concurrencyLevel`) | `The concurrencyLevel argument must be positive, or -1 to indicate a default level.` | `ConcurrentDictionary.withCapacity` |
+| `throwConcurrentDuplicateKey(): never` (011h) | `ArgumentException` | `The key already existed in the dictionary.` | `ConcurrentDictionary.add` (`IDictionary<K, V>.Add`) |
+| `throwConcurrentSourceDuplicate(): never` (011h) | `ArgumentException` | `The source argument contains duplicate keys.` | `ConcurrentDictionary`'s copy constructor |
 
 `requireKey(key)` (same module) returns `key`, or calls `throwArgumentNull("key")` for `null` / `undefined`: the one null-key check of every dictionary-shaped class (`Dictionary` and 011h's). The sorted classes' `copyTo` goes through `copy-to.ts`'s `copyIntoSorted` (`array`, `throwNegativeValue("index", …)`, `throwCollectionTooSmall`); `SortedListView.copyTo` through `copyInto` (.NET's `Array.Copy`).
 
@@ -812,21 +815,22 @@ The sections below are stage 011h's (group H), unchanged by R0; they build on th
 
 ```ts
 export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
-  constructor(source: IList<T> | readonly T[], typeArguments?: readonly RuntimeType[]); // ArgumentNullException (Parameter 'list') for null
-  static empty<T>(): ReadOnlyList<T>;                 // ReadOnlyCollection<T>.Empty; memoized lazily
+  constructor(source: IList<T> | readonly T[], typeArguments?: readonly RuntimeType[] | null); // new ReadOnlyCollection<T>(list): ArgumentNullException (list)
+  static fromArray<T>(array: readonly T[], typeArguments?): ReadOnlyList<T>;  // Array.AsReadOnly(array): ArgumentNullException (array)
+  static empty<T>(): ReadOnlyList<T>;                 // ReadOnlyCollection<T>.Empty; one instance, built on first read
+  static get $runtimeType(): CollectionType<ReadOnlyList<unknown>>;
   readonly count: number;                             // live: the source's count / length
-  readonly isReadOnly: true;
+  readonly isReadOnly: boolean;                       // true
   get(index: number): T;  fromEnd(n: number): T;      // ArgumentOutOfRangeException (Parameter 'index'), also over an array source (.NET's array IList<T>)
-  indexOf(item: T): number;  contains(item: T): boolean;  copyTo(array: T[], arrayIndex?: number): void;
-  set(index: number, value: T): never;  update(index: number, f: (current: T) => T): never;  updateReturningOld(index: number, f: (current: T) => T): never;
-  add(item: T): never;  insert(index: number, item: T): never;  remove(item: T): never;  removeAt(index: number): never;  clear(): never;
-  toJSON(): T[];
+  indexOf(item: T): number;  contains(item: T): boolean;  copyTo(array: T[], arrayIndex?: number): void;   // the source's (an array source: elementEquals, copyInto)
+  set / update / updateReturningOld / add / insert / remove / removeAt / clear: never   // NotSupportedException (`Collection is read-only.`, throwReadOnly)
+  toJSON(): T[];  toString(): string;
   [Symbol.iterator](): Iterator<T>;                   // the source's own enumerator
 }
-export function asReadOnly<T>(list: List<T>): ReadOnlyList<T>;  // list.AsReadOnly(); a null list throws as a member call does
+export function asReadOnly<T>(list: List<T>): ReadOnlyList<T>;  // list.AsReadOnly(); a null list throws NullReferenceException, as the .NET member call does
 ```
 
-Storage: `_source`, `$typeArguments$ReadOnlyList`. A live view: reads go to the source (an array source is read as `a[i]` after the unsigned bounds compare), so a later `list.Add` is visible. Every mutator throws `NotSupportedException` (`Collection is read-only.`). `list.AsReadOnly()` → `asReadOnly(list)`; `new ReadOnlyCollection<T>(source)` and `Array.AsReadOnly(arr)` → `new ReadOnlyList(source)`.
+Storage, in order: `_source`, `$typeArguments$ReadOnlyList`. A live view: reads go to the source (an array source is read as `a[i]` after the unsigned bounds compare), so a later `list.Add` is visible; enumeration is the source's (a `List` source throws on modification, an array does not, as .NET). No version of its own.
 
 ### `ImmutableList<T>` (`ImmutableList<T>`, `ImmutableArray<T>`, OD-17; `immutable-list.ts`)
 
@@ -1053,32 +1057,34 @@ Storage, in order: `_keys`, `_values` (parallel sorted arrays), `_version`, `_co
 ### `ConcurrentDictionary<K, V>` (`concurrent-dictionary.ts`)
 
 ```ts
-export class ConcurrentDictionary<K, V> implements IDictionary<K, V> {
-  constructor(entries?: Iterable<readonly [K, V]> | null, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[]);
-  static withCapacity<K, V>(concurrencyLevel: number, capacity: number, comparer?: IEqualityComparer<K> | null, typeArguments?): ConcurrentDictionary<K, V>; // validated (ArgumentOutOfRangeException), then dropped
-  static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?): ConcurrentDictionary<K, V>; // { [k] = v } (it has no public Add, so no { { k, v } } form)
-  readonly count: number;  readonly isEmpty: boolean;
+export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<K, V> {
+  constructor(entries?: Iterable<readonly [K, V]> | null, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null);
+  static from<K, V>(entries: Iterable<readonly [K, V]> | null | undefined, comparer?, typeArguments?): ConcurrentDictionary<K, V>; // ctor(collection[, comparer]): ArgumentNullException (collection); a repeated key: ArgumentException (`The source argument contains duplicate keys.`)
+  static withCapacity<K, V>(concurrencyLevel: number, capacity: number, comparer?, typeArguments?): ConcurrentDictionary<K, V>; // validated, then dropped
+  static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?, typeArguments?): ConcurrentDictionary<K, V>; // { [k] = v }, JSON (no public Add, so no { { k, v } } form)
+  static get $runtimeType(): CollectionType<ConcurrentDictionary<unknown, unknown>>;
+  readonly count: number;  readonly isEmpty: boolean;  readonly isReadOnly: boolean;
   readonly keys: ReadOnlyList<K>;  readonly values: ReadOnlyList<V>;  // snapshots, as .NET's ReadOnlyCollection<T>
   get(key: K): V;  set(key: K, value: V): void;  update(key: K, f: (current: V) => V): V;  updateReturningOld(key: K, f: (current: V) => V): V;
   add(key: K, value: V): void;                        // IDictionary.Add: ArgumentException `The key already existed in the dictionary.`
-  remove(key: K): boolean;  clear(): void;
-  containsKey(key: K): boolean;  tryGetValue(key: K, defaultValue: V): readonly [boolean, V];
-  getValueOrDefault(key: K, defaultValue: V): V;
+  remove(key: K): boolean;  clear(): void;  containsKey(key: K): boolean;
+  tryGetValue<D>(key: K, missingValue: D): readonly [found: true, value: V] | readonly [found: false, value: D];
+  getValueOrDefault<D>(key: K, defaultValue: D): V | D;
   tryAdd(key: K, value: V): boolean;
   tryUpdate(key: K, newValue: V, comparisonValue: V): boolean;         // comparisonValue by elementEquals
-  tryRemove(key: K, defaultValue: V): readonly [boolean, V];
+  tryRemove<D>(key: K, missingValue: D): readonly [found: true, value: V] | readonly [found: false, value: D];
   getOrAdd(key: K, value: V): V;
   getOrAddWith<A = undefined>(key: K, valueFactory: (key: K, factoryArgument: A) => V, factoryArgument?: A): V;
   addOrUpdate(key: K, addValue: V, updateValueFactory: (key: K, current: V) => V): V;
   addOrUpdateWith<A = undefined>(key: K, addValueFactory: (key: K, factoryArgument: A) => V,
     updateValueFactory: (key: K, current: V, factoryArgument: A) => V, factoryArgument?: A): V;
   toArray(): [K, V][];                                // snapshot
-  toJSON(): Record<string, V>;
-  [Symbol.iterator](): Iterator<readonly [K, V]>;     // never throws on modification
+  toJSON(): Record<string, V>;  toString(): string;
+  [Symbol.iterator](): Iterator<readonly [K, V]>;     // the live store; never throws on modification
 }
 ```
 
-Storage: `_core` (`HashCore<K, V>`), `$typeArguments$ConcurrentDictionary`; no `_version`. The value and factory forms of `GetOrAdd` / `AddOrUpdate` are distinct members (`getOrAdd` / `getOrAddWith`, `addOrUpdate` / `addOrUpdateWith`) chosen by the C# overload, never by `typeof` at run time, because `V` may itself be a function type. A factory runs outside any state and the call then re-reads the key, as .NET's retry loop does: if the factory inserted the key itself, `getOrAddWith` returns the stored value and `addOrUpdateWith` retries. The enumerator walks the live core and never throws: an entry removed before it is reached is not yielded, an added one may be (as .NET). Enumeration order is insertion order (.NET's is its bucket order; conformance rows compare sorted). `TryRemove(KeyValuePair<K,V>)` and `GetOrAdd` / `AddOrUpdate` overloads beyond these report `MS0001`.
+Storage, in order: `_store` (`HashCore<K, V>`), `$typeArguments$ConcurrentDictionary`; no `_version`. Keys through `hash-core` (`elementEquals` / `elementHashCode` or the comparer); a `null` key throws `ArgumentNullException` (`key`, `requireKey`) before any factory is checked; a `null` factory `ArgumentNullException` (`valueFactory` / `addValueFactory` / `updateValueFactory`). `withCapacity`: a `concurrencyLevel` below 1 other than -1 throws `ArgumentOutOfRangeException` (`The concurrencyLevel argument must be positive, or -1 to indicate a default level. (Parameter 'concurrencyLevel')`); a negative `capacity` `throwNegativeValue("capacity", …)`. The value and factory forms of `GetOrAdd` / `AddOrUpdate` are distinct members chosen by the C# overload, never by `typeof` at run time, because `V` may itself be a function type. As .NET: a factory runs only when needed; a value `getOrAddWith`'s factory stored under the same key wins; `addOrUpdate` / `addOrUpdateWith` store an update only if the current value is still the one read (else they run again) and an add only if the key is still absent. The enumerator walks the live store and never throws: an entry removed before it is reached is not yielded, an added one may be (as .NET). Enumeration order is insertion order (.NET's is its bucket order; conformance rows compare sorted). `TryRemove(KeyValuePair<K,V>)`, `GetOrAdd` / `AddOrUpdate` overloads beyond these and `ICollection<KeyValuePair<K,V>>.CopyTo` report `MS0001`.
 
 ### JSON kinds (FR-028, runtime side)
 
@@ -1107,7 +1113,7 @@ Instance members not listed map by name to the camelCase member above with no te
 | C# | Emitted TS |
 |---|---|
 | `list.AsReadOnly()` | `asReadOnly(list)` |
-| `new ReadOnlyCollection<T>(src)`, `Array.AsReadOnly(arr)` | `new ReadOnlyList(src)` / `new ReadOnlyList(arr)` |
+| `new ReadOnlyCollection<T>(src)`, `Array.AsReadOnly(arr)` | `new ReadOnlyList(src)` / `ReadOnlyList.fromArray(arr)` |
 | `ReadOnlyCollection<T>.Empty` | `ReadOnlyList.empty()` |
 | `ImmutableList<T>.Empty`, `ImmutableArray<T>.Empty`, `ImmutableList.Create<T>()`, `ImmutableArray.Create<T>()` | `ImmutableList.empty()` |
 | `ImmutableList.Create(a, b)`, `ImmutableArray.Create(a, b)`, `ImmutableList<int> x = [a, b]`, `ImmutableArray<int> x = [a, b]` | `ImmutableList.of([a, b])` |
@@ -1131,7 +1137,7 @@ Instance members not listed map by name to the camelCase member above with no te
 | `new SortedDictionary<K,V>([cmp])`, `new SortedDictionary<K,V>(dict[, cmp])`, `{ { k, v } }`, `{ [k] = v }` | `new SortedDictionary(null[, cmp])`, `SortedDictionary.from(dict[, cmp])`, `SortedDictionary.of([[k, v]][, cmp])`, `SortedDictionary.assign([[k, v]][, cmp])` |
 | `new SortedList<K,V>(capacity[, cmp])` / other constructors and initializers | `SortedList.withCapacity(capacity[, cmp])` / as `SortedDictionary` |
 | `sl.Keys[i]`, `sl.Values[i]`, `sl.GetKeyAtIndex(i)`, `sl.IndexOfKey(k)` | `sl.keys.get(i)`, `sl.values.get(i)`, `sl.getKeyAtIndex(i)`, `sl.indexOfKey(k)` |
-| `new ConcurrentDictionary<K,V>([src][, cmp])`, `(level, capacity[, cmp])`, `{ [k] = v }` | `new ConcurrentDictionary(src ?? null, cmp)`, `ConcurrentDictionary.withCapacity(level, capacity[, cmp])`, `ConcurrentDictionary.assign([[k, v]], cmp)` |
+| `new ConcurrentDictionary<K,V>([cmp])`, `new ConcurrentDictionary<K,V>(src[, cmp])`, `(level, capacity[, cmp])`, `{ [k] = v }` | `new ConcurrentDictionary(null[, cmp])`, `ConcurrentDictionary.from(src[, cmp])`, `ConcurrentDictionary.withCapacity(level, capacity[, cmp])`, `ConcurrentDictionary.assign([[k, v]][, cmp])` |
 | `cd.GetOrAdd(k, v)` / `GetOrAdd(k, f)` / `GetOrAdd(k, f, arg)` | `cd.getOrAdd(k, v)` / `cd.getOrAddWith(k, f)` / `cd.getOrAddWith(k, f, arg)` |
 | `cd.AddOrUpdate(k, v, u)` / `AddOrUpdate(k, f, u)` / `AddOrUpdate(k, f, u, arg)` | `cd.addOrUpdate(k, v, u)` / `cd.addOrUpdateWith(k, f, u)` / `cd.addOrUpdateWith(k, f, u, arg)` |
 | `cd.TryRemove(k, out var v)`, `cd.TryGetValue(k, out var v)`, every 011h `Try*` with an `out` | the `[found, value]` tuple lowering of 011c's `TryGetValue`, passing `default(T)` (D30) |
@@ -1139,7 +1145,7 @@ Instance members not listed map by name to the camelCase member above with no te
 | a conversion of an immutable type to `ICollection<T>` / `IList<T>` / `ISet<T>` / `IDictionary<K,V>` | `MS0001` |
 | `ImmutableArray<T>.IsDefault` / `IsDefaultOrEmpty` / `ItemRef` / `AsSpan` / `AsMemory`, `ToImmutableSorted*`, `ImmutableSortedSet<T>`, `ImmutableQueue<T>`, `ImmutableStack<T>` | `MS0001` (not in FR-001) |
 
-For the classes without a `from` (`ConcurrentDictionary`), `src ?? null` means an omitted source argument emits `null`; the compiler writes the literal, not a `??`.
+An omitted source argument emits `null`; the copy constructors (a C# source argument) lower to `from`, which throws `ArgumentNullException` for a `null` source as .NET does.
 
 ### Budgets (NFR-001, NFR-008; measured by 011h)
 
