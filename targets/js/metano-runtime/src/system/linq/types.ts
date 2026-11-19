@@ -1,4 +1,6 @@
+import type { Dictionary } from "../collections/dictionary.ts";
 import type { HashSet } from "../collections/hash-set.ts";
+import type { List } from "../collections/list.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 
 /**
@@ -50,6 +52,9 @@ export type TerminalKind =
   | "toArray"
   | "toMap"
   | "toSet"
+  | "toList"
+  | "toDictionary"
+  | "toHashSet"
   | "first"
   | "firstOrDefault"
   | "last"
@@ -270,6 +275,22 @@ export interface ToSetTerm<T> extends TerminalBase<T, HashSet<T>> {
   readonly kind: "toSet";
 }
 
+export interface ToListTerm<T> extends TerminalBase<T, List<T>> {
+  readonly kind: "toList";
+}
+
+export interface ToDictionaryTerm<T, K, V> extends TerminalBase<T, Dictionary<K, V>> {
+  readonly kind: "toDictionary";
+  readonly keySelector: (item: T) => K;
+  readonly valueSelector: (item: T) => V;
+  readonly keyQueryable?: QueryableMeta;
+  readonly valueQueryable?: QueryableMeta;
+}
+
+export interface ToHashSetTerm<T> extends TerminalBase<T, HashSet<T>> {
+  readonly kind: "toHashSet";
+}
+
 export interface FirstTerm<T> extends TerminalBase<T, T> {
   readonly kind: "first";
   readonly predicate?: (item: T) => boolean;
@@ -437,6 +458,9 @@ export type AnyTerminal =
   | ToArrayTerm<unknown>
   | ToMapTerm<unknown, unknown, unknown>
   | ToSetTerm<unknown>
+  | ToListTerm<unknown>
+  | ToDictionaryTerm<unknown, unknown, unknown>
+  | ToHashSetTerm<unknown>
   | FirstTerm<unknown>
   | FirstOrDefaultTerm<unknown>
   | LastTerm<unknown>

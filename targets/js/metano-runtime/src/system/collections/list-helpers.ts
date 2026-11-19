@@ -4,30 +4,10 @@
  * imports these via the [MapMethod(..., RuntimeImports = "...")] declarative mappings
  * under Metano/Runtime/Lists.cs and ImmutableCollections.cs.
  *
- * The two flavors are kept in the same file because they share an underlying
- * representation (plain JS arrays); only the contract differs:
- *
- * - The mutable helpers (`listRemove`, future siblings) operate in place and return a
- *   status value, mirroring the C# `bool` return of `List<T>.Remove`.
- * - The immutable helpers (`immutableInsert`, `immutableRemoveAt`, `immutableRemove`)
- *   never mutate the input — they return a fresh array, mirroring the
- *   `ImmutableList<T>` / `ImmutableArray<T>` contract.
+ * The immutable helpers (`immutableInsert`, `immutableRemoveAt`, `immutableRemove`)
+ * never mutate the input — they return a fresh array, mirroring the
+ * `ImmutableList<T>` / `ImmutableArray<T>` contract (stage 011h replaces them).
  */
-
-/**
- * Mutating remove for arrays used as `List<T>` / `IList<T>` / `ICollection<T>`. Finds
- * the first occurrence of `item` (via `Array.indexOf`, so reference equality for
- * objects), splices it out in place, and returns true if anything was removed.
- * Returns false when the item isn't present, leaving `arr` untouched.
- *
- * Mirrors `System.Collections.Generic.List<T>.Remove(T item)` semantics.
- */
-export function listRemove<T>(arr: T[], item: T): boolean {
-  const i = arr.indexOf(item);
-  if (i < 0) return false;
-  arr.splice(i, 1);
-  return true;
-}
 
 /**
  * Returns a new array with `item` inserted at `index`. The original array is left

@@ -9,7 +9,9 @@
  * Short-circuit terminals (`first`, `any`, `contains`) stop iterating
  * as soon as the answer is known.
  */
+import { Dictionary } from "../collections/dictionary.ts";
 import { HashSet } from "../collections/hash-set.ts";
+import { List } from "../collections/list.ts";
 import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";
 import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
@@ -32,6 +34,9 @@ import type {
   SingleTerm,
   SumTerm,
   ToArrayTerm,
+  ToDictionaryTerm,
+  ToHashSetTerm,
+  ToListTerm,
   ToMapTerm,
   ToSetTerm,
 } from "./types.ts";
@@ -67,6 +72,48 @@ export function toSet<T>(): ToSetTerm<T> {
   return {
     kind: "toSet",
     apply: (source) => new HashSet(source),
+  };
+}
+
+/** `ToList()`: a new runtime `List` holding the elements in order (spec 011 § LINQ terminals). */
+export function toList<T>(): ToListTerm<T> {
+  return {
+    kind: "toList",
+    apply: (source) => List.of([...source]),
+  };
+}
+
+/**
+ * `ToDictionary(keySelector[, elementSelector])`: a new runtime `Dictionary`;
+ * a repeated key throws `ArgumentException`, as .NET's `ToDictionary` does.
+ */
+export function toDictionary<T, K, V = T>(
+  keySelector: (item: T) => K,
+  valueSelector: (item: T) => V = ((item: T) => item) as unknown as (item: T) => V,
+  keyQueryable?: QueryableMeta,
+  valueQueryable?: QueryableMeta,
+): ToDictionaryTerm<T, K, V> {
+  return {
+    kind: "toDictionary",
+    keySelector,
+    valueSelector,
+    keyQueryable,
+    valueQueryable,
+    apply: (source) => {
+      const dictionary = new Dictionary<K, V>();
+
+      for (const item of source) dictionary.add(keySelector(item), valueSelector(item));
+
+      return dictionary;
+    },
+  };
+}
+
+/** `ToHashSet()`: a new runtime `HashSet`; duplicates collapse. */
+export function toHashSet<T>(): ToHashSetTerm<T> {
+  return {
+    kind: "toHashSet",
+    apply: (source) => HashSet.from(source),
   };
 }
 

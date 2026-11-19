@@ -4,37 +4,7 @@ import {
   immutableInsert,
   immutableRemove,
   immutableRemoveAt,
-  listRemove,
-} from "#/system/collections/list-helpers.ts";
-
-describe("listRemove (mutating)", () => {
-  test("returns true and removes the first occurrence", () => {
-    const arr = [1, 2, 3];
-    const removed = listRemove(arr, 2);
-    expect(removed).toBe(true);
-    expect(arr).toEqual([1, 3]);
-  });
-
-  test("returns false and leaves the array untouched when not found", () => {
-    const arr = [1, 2, 3];
-    const removed = listRemove(arr, 99);
-    expect(removed).toBe(false);
-    expect(arr).toEqual([1, 2, 3]);
-  });
-
-  test("removes only the first occurrence on duplicates", () => {
-    const arr = [1, 2, 2, 3];
-    const removed = listRemove(arr, 2);
-    expect(removed).toBe(true);
-    expect(arr).toEqual([1, 2, 3]);
-  });
-
-  test("works on an empty array", () => {
-    const arr: number[] = [];
-    expect(listRemove(arr, 1)).toBe(false);
-    expect(arr).toEqual([]);
-  });
-});
+  } from "#/system/collections/list-helpers.ts";
 
 describe("immutableInsert", () => {
   test("inserts at the start", () => {

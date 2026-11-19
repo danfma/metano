@@ -297,7 +297,7 @@ public sealed class ImportCollector(
         }
 
         // Runtime helper imports collected from TsTemplate.RuntimeImports declarations
-        // (e.g., dayNumber, listRemove, immutableInsert, immutableRemoveAt, immutableRemove).
+        // (e.g., dayNumber, immutableInsert, immutableRemoveAt, immutableRemove).
         // Bundled into a single import line from metano-runtime. A helper the
         // IR scanner already value-imported (`HashSet` used both in a signature
         // and by a constructor-mapping template) must not be bound twice; a
@@ -2045,7 +2045,7 @@ public sealed class ImportCollector(
                 }
 
                 // Runtime helper identifiers carried alongside the template (e.g.,
-                // "dayNumber", "listRemove", "immutableInsert") from
+                // "dayNumber", "immutableInsert") from
                 // [MapMethod(..., RuntimeImports = "...")] declarations. The walker can't
                 // see these inside the opaque template text, so the BclMapper threads
                 // them through here as a separate field. They go into the dedicated

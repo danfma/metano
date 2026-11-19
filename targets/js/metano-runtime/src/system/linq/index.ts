@@ -104,6 +104,9 @@ export type {
   ToArrayTerm,
   ToMapTerm,
   ToSetTerm,
+  ToListTerm,
+  ToDictionaryTerm,
+  ToHashSetTerm,
 } from "./types.ts";
 
 export {
@@ -135,6 +138,9 @@ export {
   toArray,
   toMap,
   toSet,
+  toList,
+  toDictionary,
+  toHashSet,
   first,
   firstOrDefault,
   last,
