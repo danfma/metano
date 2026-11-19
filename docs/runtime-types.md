@@ -111,60 +111,87 @@ Differences from .NET, documented and not diagnosed (OD-11, OD-12):
 
 A C# boxing conversion of an enum or `[InlineWrapper]` value (to `object`, `ValueType` or `Enum`) becomes a runtime `Boxed` value, so `GetType()`, `ToString()` and `Equals` answer as in .NET for `object`-typed values (spec 011 FR-050, FR-051). The runtime recognises a box by its string brand field `$boxed === true`, never by `instanceof`, so code that never boxes bundles no box code and a box made by a second copy of `metano-runtime` is still recognised. The limit: any object that carries an own `$boxed: true` field is taken for a box by `unbox`, `isType`, `asType`, `castTo`, `getRuntimeType` and the equality helpers. `Boxed.toString()` follows .NET's enum formatting: the member name, the number for an undeclared value (`"99"`), the comma-separated names for a `[Flags]` combination, and the whole number when a `[Flags]` value has an undeclared bit (`(Perms)9` prints `"9"`).
 
+## Production checks: turning them off (spec 011 FR-058)
+
+Metano's collections check every index and detect a collection modified during enumeration, as .NET does. A production app may turn both off. **Turning them off changes semantics**: an out-of-range read returns `undefined` instead of throwing `ArgumentOutOfRangeException`, a write past the end grows the array (with holes), and a modification during enumeration is not detected. It is opt-in per app.
+
+A fully unchecked app needs **two switches**:
+
+1. **The `metano-unchecked` condition**, for packages. `metano-runtime` ships `dist/` (checks on) and `dist-unchecked/` (checks off, no check code at all); the condition selects the second for the runtime and, through the runtime, for every Metano-built library the app depends on.
+2. **The `__METANO_CHECKS__: false` define**, for generated code. The `foreach` loops the compiler generates (in the app and in its libraries) read the flag once per loop; the define removes their checks.
+
+Vite (`vite.config.ts`):
+
+```ts
+import { defaultClientConditions, defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: { conditions: ["metano-unchecked", ...defaultClientConditions] },
+  define: { __METANO_CHECKS__: "false" },
+});
+```
+
+(`resolve.conditions` replaces Vite's defaults, hence the spread; set `ssr.resolve.conditions` the same way for SSR builds.)
+
+esbuild:
+
+```sh
+esbuild src/main.ts --bundle --conditions=metano-unchecked --define:__METANO_CHECKS__=false --outfile=dist/main.js
+```
+
+bun:
+
+```sh
+bun build src/main.ts --conditions metano-unchecked --define __METANO_CHECKS__=false --outdir dist
+```
+
+Without a bundler, `node --conditions=metano-unchecked app.js` and `bun --conditions=metano-unchecked app.ts` select the unchecked runtime; the generated loops keep their checks there (no define), which costs one global read per loop. Setting `globalThis.__METANO_CHECKS__` at run time is not a supported switch. The `source` condition resolves the runtime's `.ts` sources, where the define alone turns the checks off.
+
 ## Collection benchmark and size budgets (spec 011 stage 011c, NFR-001 / NFR-008)
 
-Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runtime` (FR-039) on 2026-11-19, on an **Apple M1 Pro** (darwin arm64, the reference machine of research R17) with **Node.js 24.11.0** and **Bun 1.4.2**. Shape: hot helper, one pass over 1e4 elements per kernel call, 500 calls per run, 10 warm-up runs, median of 21 timed runs, every (case, mode, role) in a fresh process. Normalized = raw × C_ref / C_measured, with C_ref = 0.59 ns (Node) / 0.47 ns (Bun) and C_measured ≈ 0.53 ns (Node) / 0.54 ns (Bun), the per-process calibration kernel `a[i] = a[i] + 1`. The gate is the default build on both engines (per-engine budget for the lowered `foreach`, W4-27; otherwise the larger normalized figure counts).
+Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runtime` (FR-039) on 2026-11-19, on an **Apple M1 Pro** (darwin arm64, the reference machine of research R17) with **Node.js 24.11.0** and **Bun 1.4.2**, after the W4-33 dual dist. Shape: hot helper, one pass over 1e4 elements per kernel call, 500 calls per run, 10 warm-up runs, median of 21 timed runs, every (case, dist, role) in a fresh process, bundled by esbuild. Normalized = raw × C_ref / C_measured, with C_ref = 0.59 ns (Node) / 0.47 ns (Bun) and C_measured ≈ 0.53 ns (Node) / 0.54 ns (Bun), the per-process calibration kernel `a[i] = a[i] + 1`. The gate is `dist/` (the default build) on both engines, with per-engine budgets where NFR-001 sets them (W4-27, W4-34). The `Dictionary` / `HashSet` rows are over budget in R1 and owned by hand-in R2 (W4-35).
 
-**Status.** The lowered `foreach` (final shape: the flag read once into the function-local `$c`, the block's first declaration) is within budget in every mode on both engines. The runtime members (`get`, `set`, the version stores, every class's guarded paths) still miss on the default build, **pending the checks-mechanism decision** (W4-27): their inline guard `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)` reads an undeclared global on every call, about 5–10 ns on Node and 50–160 ns on Bun. With the constant defined `false` every row passes. With it set on `globalThis` before the runtime loads, Bun passes and Node misses `set` and the read-modify-write rows (a global property load per call). A module-scope `const` read once was tried and rejected (R1 report): bun and esbuild do not substitute it into its uses in a module that imports anything, and Rollup keeps its global read under a side-effect-only import.
-
-**Setting the flag.** `__METANO_CHECKS__` is a bundle-time constant: a bundler `define` (`__METANO_CHECKS__: "false"`) is the supported way to drop the checks (FR-058). Setting `globalThis.__METANO_CHECKS__` at run time is read on every guarded call today; it is not a supported switch.
-
-| Case | Mode | Budget Node / Bun (ns) | Node raw / norm (ns) | Bun raw / norm (ns) | Verdict |
+| Case | Dist | Budget Node / Bun (ns) | Node raw / norm (ns) | Bun raw / norm (ns) | Verdict |
 |---|---|---|---|---|---|
-| List.get (sequential) | default (checks on) | 1 | 5.21 / 5.80 | 60.38 / 52.85 | **miss** (pending the checks-mechanism decision) |
-| List.get (sequential) | `define` false | 1 | 0.02 / 0.02 | 0.00 / 0.00 | ok |
-| List.get (sequential) | set on `globalThis` | 1 | 0.24 / 0.26 | 0.30 / 0.26 | ok |
-| List.get (data-driven index) | default (checks on) | 1 | 6.03 / 6.69 | 60.07 / 52.98 | **miss** (pending the checks-mechanism decision) |
-| List.get (data-driven index) | `define` false | 1 | -0.04 / -0.04 | -0.00 / -0.00 | ok |
-| List.get (data-driven index) | set on `globalThis` | 1 | 1.32 / 1.47 | 0.32 / 0.29 | **miss** |
-| List.set | default (checks on) | 1 | 9.07 / 10.05 | 120.80 / 108.60 | **miss** (pending the checks-mechanism decision) |
-| List.set | `define` false | 1 | 0.17 / 0.18 | -0.00 / -0.00 | ok |
-| List.set | set on `globalThis` | 1 | 1.52 / 1.67 | 0.50 / 0.44 | **miss** |
-| list[i] += 1 (direct form) | default (checks on) | 1.5 | 14.00 / 15.60 | 180.22 / 157.91 | **miss** (pending the checks-mechanism decision) |
-| list[i] += 1 (direct form) | `define` false | 1.5 | 0.17 / 0.19 | -0.01 / -0.01 | ok |
-| list[i] += 1 (direct form) | set on `globalThis` | 1.5 | 1.37 / 1.54 | 0.62 / 0.55 | **miss** |
-| list[i] += 1 (closure fallback, update) | default (checks on) | 3 | 15.28 / 17.44 | 178.87 / 163.50 | **miss** (pending the checks-mechanism decision) |
-| get at a polymorphic site (4 element types) | default (checks on) | 2 | 5.43 / 6.03 | 57.90 / 40.96 | **miss** (pending the checks-mechanism decision) |
-| get at a site seeing List and a fixed-size adopted list | default (checks on) | 2 | 5.23 / 5.79 | 60.00 / 54.58 | **miss** (pending the checks-mechanism decision) |
-| get at a site seeing List and a fixed-size adopted list | `define` false | 2 | -0.02 / -0.02 | 0.00 / 0.00 | ok |
-| get at a site seeing List and a fixed-size adopted list | set on `globalThis` | 2 | 0.19 / 0.22 | 0.43 / 0.40 | ok |
-| List.add | default (checks on) | 0.5 | 4.86 / 5.41 | 57.07 / 52.75 | **miss** (pending the checks-mechanism decision) |
-| lowered foreach over List (per element; final $c form) | default (checks on) | 1.25 / 0.5 | 0.31 / 0.34 | -0.46 / -0.43 | ok |
-| lowered foreach over List (per element; final $c form) | `define` false | 1.25 / 0.5 | -0.10 / -0.11 | -0.47 / -0.43 | ok |
-| lowered foreach over List (per element; final $c form) | set on `globalThis` | 1.25 / 0.5 | -0.09 / -0.10 | -0.47 / -0.43 | ok |
-| lowered foreach, guard read on every step (superseded R0 form) | default (checks on) | — | 5.42 / 6.09 | 50.54 / 46.81 | reported |
-| lowered foreach, guard read on every step (superseded R0 form) | `define` false | — | -0.11 / -0.12 | -0.49 / -0.43 | reported |
-| lowered foreach, guard read on every step (superseded R0 form) | set on `globalThis` | — | -0.08 / -0.09 | -0.49 / -0.43 | reported |
-| List [Symbol.iterator] (for..of, interop) | default (checks on) | — | 8.35 / 9.30 | 54.58 / 48.26 | reported |
-| Dictionary.get (number keys) | default (checks on) | 2 | 10.25 / 11.32 | 8.61 / 7.61 | **miss** (pending the checks-mechanism decision) |
-| Dictionary.set (number keys, overwrite) | default (checks on) | 2 | 4.44 / 4.97 | 5.02 / 4.35 | **miss** (pending the checks-mechanism decision) |
-| Dictionary.containsKey (string keys) | default (checks on) | 2 | 5.14 / 5.64 | 2.88 / 1.93 | **miss** (pending the checks-mechanism decision) |
-| Dictionary.add (string keys, fresh dictionary) | default (checks on) | 2 | 24.72 / 27.70 | 73.74 / 51.44 | **miss** (pending the checks-mechanism decision) |
-| HashSet.add (numbers, fresh set) | default (checks on) | 2 | 12.55 / 14.09 | 64.70 / 59.48 | **miss** (pending the checks-mechanism decision) |
-| HashSet.contains (numbers) | default (checks on) | 2 | 2.61 / 2.91 | 3.53 / 3.11 | **miss** (pending the checks-mechanism decision) |
-| HashSet.remove + add (numbers) | default (checks on) | 2 | 10.72 / 12.07 | 35.35 / 31.93 | **miss** (pending the checks-mechanism decision) |
-| Queue.enqueue + dequeue | default (checks on) | 1.5 | 10.58 / 11.81 | 63.59 / 58.25 | **miss** (pending the checks-mechanism decision) |
-| Stack.push + pop | default (checks on) | 1.5 | 4.86 / 5.39 | 56.92 / 51.90 | **miss** (pending the checks-mechanism decision) |
-| Dictionary.get (record keys, reported) | default (checks on) | — | 71.53 / 80.00 | 45.34 / 31.24 | reported |
+| List.get (sequential) | `dist/` (checked) | 1 | 0.25 / 0.27 | 0.28 / 0.26 | ok |
+| List.get (sequential) | `dist-unchecked/` + define | 1 | 0.00 / 0.01 | -0.00 / -0.00 | ok |
+| List.get (data-driven index) | `dist/` (checked) | 1.75 / 1 | 1.31 / 1.46 | 0.31 / 0.28 | ok |
+| List.get (data-driven index) | `dist-unchecked/` + define | 1.75 / 1 | -0.03 / -0.04 | -0.01 / -0.01 | ok |
+| List.set | `dist/` (checked) | 1.75 / 1 | 1.62 / 1.79 | 0.48 / 0.44 | **miss** |
+| List.set | `dist-unchecked/` + define | 1.75 / 1 | 0.17 / 0.18 | 0.00 / 0.00 | ok |
+| list[i] += 1 (direct form) | `dist/` (checked) | 1.5 | 1.45 / 1.56 | 0.64 / 0.58 | **miss** |
+| list[i] += 1 (direct form) | `dist-unchecked/` + define | 1.5 | 0.16 / 0.18 | 0.00 / 0.00 | ok |
+| list[i] += 1 (closure fallback, update) | `dist/` (checked) | 3 | 1.55 / 1.74 | 2.64 / 2.43 | ok |
+| get at a polymorphic site (4 element types) | `dist/` (checked) | 2 | 0.71 / 0.79 | 1.50 / 1.04 | ok |
+| get at a site seeing List and a fixed-size adopted list | `dist/` (checked) | 2 | 0.19 / 0.21 | 0.44 / 0.40 | ok |
+| get at a site seeing List and a fixed-size adopted list | `dist-unchecked/` + define | 2 | -0.01 / -0.01 | 0.12 / 0.11 | ok |
+| List.add | `dist/` (checked) | 0.5 | 0.38 / 0.42 | 0.12 / 0.10 | ok |
+| lowered foreach over List (per element; final $c form) | `dist/` (checked) | 1.25 / 0.5 | 0.34 / 0.37 | -0.48 / -0.42 | ok |
+| lowered foreach over List (per element; final $c form) | `dist-unchecked/` + define | 1.25 / 0.5 | -0.11 / -0.12 | -0.47 / -0.44 | ok |
+| lowered foreach, guard read on every step (superseded R0 form) | `dist/` (checked) | — | 5.39 / 6.13 | 48.79 / 45.28 | reported |
+| lowered foreach, guard read on every step (superseded R0 form) | `dist-unchecked/` + define | — | -0.11 / -0.13 | -0.47 / -0.43 | reported |
+| List [Symbol.iterator] (for..of, interop) | `dist/` (checked) | — | 1.55 / 1.77 | 2.40 / 2.21 | reported |
+| Dictionary.get (number keys) | `dist/` (checked) | 2 | 11.35 / 12.65 | 7.87 / 7.21 | **over budget, R2** |
+| Dictionary.set (number keys, overwrite) | `dist/` (checked) | 2 | 4.47 / 5.03 | 5.16 / 4.71 | **over budget, R2** |
+| Dictionary.containsKey (string keys) | `dist/` (checked) | 2 | 4.81 / 5.36 | 3.14 / 2.12 | **over budget, R2** |
+| Dictionary.add (string keys, fresh dictionary) | `dist/` (checked) | 2 | 20.66 / 23.35 | 21.81 / 15.16 | **over budget, R2** |
+| HashSet.add (numbers, fresh set) | `dist/` (checked) | 2 | 9.36 / 10.40 | 6.89 / 6.21 | **over budget, R2** |
+| HashSet.contains (numbers) | `dist/` (checked) | 2 | 2.67 / 3.02 | 3.22 / 2.92 | **over budget, R2** |
+| HashSet.remove + add (numbers) | `dist/` (checked) | 2 | 8.80 / 9.75 | 5.28 / 4.75 | **over budget, R2** |
+| Queue.enqueue + dequeue | `dist/` (checked) | 1.5 | 1.77 / 1.95 | 1.16 / 1.03 | **miss** |
+| Stack.push + pop | `dist/` (checked) | 1.5 | 0.71 / 0.77 | -0.05 / -0.05 | ok |
+| Dictionary.get (record keys, reported) | `dist/` (checked) | — | 70.75 / 79.05 | 47.25 / 32.14 | reported |
 
-Sizes (FR-043, minified + gzipped, bun / esbuild), against NFR-008 (the five collection rows and the combined row raised to the measured size + 10% by the maintainer, W4-25 (d): FR-016's exception classes, about 0.97 KB, plus `elementEquals` / `defaultEquals`, about 0.5 KB, shared when several collections are used; slimming the exceptions is a follow-up):
+Three rows miss on Node.js in this run, by little: `List.set` (1.79 against 1.75 ns), `list[i] += 1` (1.56 against 1.5 ns) and `Queue.enqueue + dequeue` (1.95 against 1.5 ns; Bun 1.03). Across the three clean runs of the day, `List.set` measured 1.74–1.79 ns and `list[i] += 1` 1.49–1.56 ns, so both sit on their budget. The remaining cost is the bounds compare and the `_version` store that FR-057 requires; it is not the checks mechanism (`dist-unchecked/` measures about 0.2 ns).
 
-| Entry | Budget | bun | esbuild | Verdict |
-|---|---|---|---|---|
-| `List` alone (full surface) | 4586 B | 4169 B | 4113 B | ok |
-| `Dictionary` alone (with the views) | 4506 B | 4096 B | 4030 B | ok |
-| `HashSet` alone | 4283 B | 3893 B | 3849 B | ok |
-| `Queue` alone | 3128 B | 2843 B | 2786 B | ok |
-| `Stack` alone | 2947 B | 2679 B | 2620 B | ok |
-| `List` + `Dictionary` + `HashSet` together | 7112 B | 6465 B | 6357 B | ok |
-| `isType + getRuntimeType + one class descriptor` (011b row) | 1792 B | 1792 B | 1761 B | ok (W4-24 (f): `getRuntimeType` closes a collection through the class literal's `closeFor`, so it carries no closing code when no collection is in the program) |
+Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collection rows raised to the measured size + 10% by W4-25 (d): FR-016's exception classes, about 0.97 KB, plus `elementEquals` / `defaultEquals`, about 0.5 KB, shared when several collections are used; slimming the exceptions is a follow-up):
+
+| Entry | Budget | bun | esbuild |
+|---|---|---|---|
+| `List` alone (full surface) | 4586 B | 4099 B | 4057 B |
+| `Dictionary` alone (with the views) | 4506 B | 4052 B | 3995 B |
+| `HashSet` alone | 4283 B | 3859 B | 3810 B |
+| `Queue` alone | 3128 B | 2794 B | 2745 B |
+| `Stack` alone | 2947 B | 2634 B | 2578 B |
+| `List` + `Dictionary` + `HashSet` together | 7112 B | 6401 B | 6302 B |
+| `isType` + `getRuntimeType` + one class descriptor (011b row) | 1792 B | 1792 B | 1761 B |
