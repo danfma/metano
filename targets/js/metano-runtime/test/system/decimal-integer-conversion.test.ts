@@ -4,6 +4,12 @@ import { OverflowException } from "#/system/exceptions";
 import { narrowFromDecimal } from "#/system/int64";
 
 describe("decimal to narrow integer", () => {
+  test.each([NaN, Infinity, -Infinity])("rejects non-finite decimal %s with the target message", (value) => {
+    expect(() => narrowFromDecimal(new Decimal(value), 8, false)).toThrow(
+      new OverflowException("Value was either too large or too small for an unsigned byte."),
+    );
+  });
+
   test.each([
     [8, false, "255.9", 255],
     [8, true, "-128.9", -128],

@@ -940,7 +940,8 @@ Product requirements added after the migration (normative; each one is traced by
     `ReadOnlyCollection<T>` and `ObservableCollection<T>` read it from a wrapped user `IList<T>`,
     and an interface may return anything). So `a.Length - 1` emits `a.length - 1`;
   - the step of a counting loop: `i++` / `++i` (`i--` / `--i`) as an incrementor of a `for`
-    whose variable `i` (`int` or `uint`) is declared in the `for` initializer and is not written
+    whose variable `i` (`int` or `uint`, or a numeric enum with either underlying endpoint,
+    #708) is declared in the `for` initializer and is not written
     in the condition, the body or the other incrementors (Roslyn data flow, `ref` / `out`
     arguments and lambdas included), when the condition is a comparison that bounds the step,
     or such a comparison is a top-level operand of a `&&` chain that is the condition (a

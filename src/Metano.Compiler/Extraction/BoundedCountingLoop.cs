@@ -1,3 +1,4 @@
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
@@ -8,7 +9,8 @@ namespace Metano.Compiler.Extraction;
 /// The step of a counting loop that C# shows cannot leave its type's range
 /// (spec 001 FR-075): <c>i++</c> / <c>++i</c> (<c>i--</c> / <c>--i</c>) as
 /// an incrementor of a <c>for</c> that declares the <c>int</c> or
-/// <c>uint</c> local <c>i</c> in its initializer and writes it nowhere else
+/// <c>uint</c> local (or an enum with that underlying endpoint) <c>i</c>
+/// in its initializer and writes it nowhere else
 /// (condition, body, other incrementors, other initializers; Roslyn data
 /// flow, so <c>ref</c> / <c>out</c> arguments and lambdas count), when a
 /// top-level operand of the condition's <c>&amp;&amp;</c> chain (or the
@@ -51,7 +53,9 @@ internal static class BoundedCountingLoop
             return false;
 
         var isCounter =
-            counter.Type.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32
+            rules.RepresentationOf(NumericEndpoints.Of(counter.Type))?.Kind
+                is IrNumericKind.Int32
+                    or IrNumericKind.UInt32
             && IsDeclaredBy(loop, counter, semantic);
 
         if (!isCounter || IsWrittenOutsideStep(loop, step, counter, semantic))

@@ -76,7 +76,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The value <c>target op= right</c> stores: the binary form over the
-    /// current value, reduced as the compound operation needs (FR-024), or
+    /// current value, carrying its enum result type before receiver binding
+    /// and reduced as the compound operation needs (FR-024), or
     /// the method call of a <c>decimal</c> compound operator.
     /// </summary>
     private IrExpression CompoundValue(
@@ -89,11 +90,14 @@ public sealed partial class IrExpressionExtractor
             ? BuildDecimalBinaryCall(current, right, MapDecimalBinaryMethod(op)!)
             : ReduceOverflow(
                 _semantic.GetOperation(assign),
-                BuildNumericBinary(
+                WithEnumResultType(
                     assign,
-                    op,
-                    current,
-                    new OperatorOperand(right, MayBeNull: false, assign.Right)
+                    BuildNumericBinary(
+                        assign,
+                        op,
+                        current,
+                        new OperatorOperand(right, MayBeNull: false, assign.Right)
+                    )
                 )
             );
 

@@ -19,6 +19,7 @@ const GOLDENS = [
   "numeric-enum-const.ts",
   "numeric-enum-flags.ts",
   "numeric-enum-int64.ts",
+  "numeric-enum-bound-store.ts",
 ];
 
 const CROSS_ENUM_FIXTURE = `import { Perms } from "./numeric-enum-flags.ts";

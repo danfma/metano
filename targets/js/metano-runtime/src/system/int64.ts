@@ -210,13 +210,15 @@ export function uint64FromDecimal(value: DecimalLike): bigint {
 
 /** Decimal to an integer of 32 bits or fewer: truncate exactly, then check even when unchecked. */
 export function narrowFromDecimal(value: DecimalLike, bits: 8 | 16 | 32, signed: boolean): number {
-  const type =
-    bits === 8
-      ? signed
-        ? "a signed byte"
-        : "an unsigned byte"
-      : `${signed ? "an Int" : "a UInt"}${bits}`;
-  const message = `Value was either too large or too small for ${type}.`;
+  const message = () => {
+    const type =
+      bits === 8
+        ? signed
+          ? "a signed byte"
+          : "an unsigned byte"
+        : `${signed ? "an Int" : "a UInt"}${bits}`;
+    return `Value was either too large or too small for ${type}.`;
+  };
   const integer = truncatedDecimal(value, message);
   const width = BigInt(bits);
   const min = signed ? -(1n << (width - 1n)) : 0n;
@@ -369,9 +371,9 @@ function requireNonZeroDivisor(divisor: bigint): void {
   }
 }
 
-function requireRange(value: bigint, min: bigint, max: bigint, message?: string): bigint {
+function requireRange(value: bigint, min: bigint, max: bigint, message?: string | (() => string)): bigint {
   if (value < min || value > max) {
-    throw new OverflowException(message);
+    throw new OverflowException(typeof message === "function" ? message() : message);
   }
 
   return value;
@@ -428,11 +430,11 @@ function roundToOddDouble(magnitude: bigint): number {
 }
 
 /** `value` truncated toward zero as a `bigint`; a NaN or infinite decimal.js value throws `message`. */
-function truncatedDecimal(value: DecimalLike, message: string): bigint {
+function truncatedDecimal(value: DecimalLike, message: string | (() => string)): bigint {
   const text = value.trunc().toFixed();
 
   if (!INTEGER_TEXT.test(text)) {
-    throw new OverflowException(message);
+    throw new OverflowException(typeof message === "function" ? message() : message);
   }
 
   return BigInt(text);
