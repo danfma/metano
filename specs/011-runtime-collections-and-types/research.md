@@ -268,3 +268,16 @@ A native write costs about 0.6 ns per element, so one extra field store reads as
 **Caveats** [I]: one machine and one version of each engine; micro-benchmarks with near-empty loop bodies; the native baseline has no bounds check at all, while a C# array has one.
 
 **Conclusion**: measure in the hot-helper shape and budget the absolute overhead (NFR-001); build the `List` as above (FR-002, FR-057); lower `foreach` over `List<T>` to the checked indexed loop. The ratio gate on a single-store loop measured the store, not the design.
+
+## R18 — Copy-on-write cost of the immutable classes (2026-11-19, stage 011h)
+
+FR-054 bounds building a 1e4-element immutable collection by repeated `Add` at 50 ms and names structural sharing as the lever if copy-on-write misses it. A probe on the reference machine of R17 (Apple M1 Pro, Node.js 24.11.0, Bun 1.4.2; three warm-up runs, then one timed run of `x = copy(x) + one element`, 1e4 times) measured the bare copies, without any class around them [V]:
+
+| Storage copied per `Add` | Node.js | Bun |
+|---|---|---|
+| array (`slice()` + `push`) | 42 ms | 49 ms |
+| `Map` of numbers (`new Map(m)` + `set`) | 2596 ms | 244 ms |
+| `Map` of short strings | 2879 ms | 255 ms |
+| `Map` of hash buckets (the object-key shape) | 2486 ms | 278 ms |
+
+Plain copy-on-write misses the budget by 5–58× for the hashed classes and leaves no margin for `ImmutableList`. **Decision** (011h): tip-append sharing. A version records how much of the shared storage it owns (`_count`, or a sequence bound per `hash-core` entry); `Add` of a new element on the newest version appends in place and returns a new instance over the same storage (amortized O(1)), and every other mutator, or an `Add` on an older version, copies the visible part (O(n), as FR-054 states). Each version reads only what it was built with, so the persistence .NET guarantees is kept. A full persistent structure (a hash array mapped trie, .NET's AVL tree) stays the revisit if a benchmark shows the O(n) mutators to be the bottleneck; it would also change the enumeration order, which tip-append keeps equal to `HashSet` / `Dictionary`'s insertion order.

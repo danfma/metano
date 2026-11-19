@@ -762,30 +762,432 @@ One 2.x behaviour changes in R1 although C has not flipped: **`HashSet.add` retu
 
 The sections below are stage 011h's (group H), unchanged by R0; they build on the 011c API above (`hash-core.ts`, `defaultCompare`, `elementEquals` / `elementHashCode`, the interfaces, the throw helpers).
 
-### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`; stage 011h)
+### Stage 011h classes (FR-054): shared rules
 
-Its own class (`instanceof List` is `false`): a live view over an `IList<T>` or a native array, `IReadOnlyList<T>` members, `count` live, `toJSON`; its `IList<T>` / `ICollection<T>` mutators throw `NotSupportedException` with .NET's message (`Collection is read-only.`, pinned by the 011h runtime tests). Built by `new ReadOnlyList(source)` (`Array.AsReadOnly(arr)`, `new ReadOnlyCollection<T>(source)`) and by the free helper `asReadOnly(list)` (`list.AsReadOnly()`), both in `read-only-list.ts`; `List` has no `asReadOnly` member, so a bundle using only `List` pulls no `ReadOnlyList`.
+`ReadOnlyList`, the immutable classes and their builders, the sorted classes and `ConcurrentDictionary` follow every rule of § Classes (no `#private`; non-enumerable string-keyed storage defined through `Object.defineProperty` in the constructor, always the same fields in the same order, the per-class slot `$typeArguments$<Class>` last and `undefined` without descriptors; `count`; `toJSON()`; `[Symbol.iterator]`; the lazy `$runtimeType` literal getter; `Array.isArray(x) === false`). Enumerators are iterator objects (no generators, no closures; research R17). The exceptions are the classes of `system/exceptions/*`; the throw helpers and messages below are pinned by the 011h runtime tests and by conformance rows against .NET 10 (the messages quoted here were read from .NET 10.0 on 2026-11-19).
 
-### `ImmutableList<T>` (`ImmutableList<T>`, `ImmutableArray<T>`, OD-17; stage 011h)
+**Modules** (each under `metano-runtime/system/collections/`, re-exported by the `system/collections` barrel unless marked internal; internal modules are reachable only through the `./system/collections/*` wildcard and are not public API):
 
-`IReadOnlyList<T>` and `IImmutableList<T>`: `add`, `addRange`, `insert`, `remove`, `removeAt`, `removeAll`, `setItem`, `clear`, `sort` return a **new** `ImmutableList<T>` (copy-on-write over one array, O(n) per mutator; .NET's tree gives O(log n), a documented divergence revisitable by benchmark); `static empty<T>()` (memoized, lazily) and `static of(...)` / `from(...)`; `toJSON`. Builders (`ToBuilder()`, `CreateBuilder()`) are `ImmutableListBuilder<T>` (likewise `ImmutableHashSetBuilder<T>`, `ImmutableDictionaryBuilder<K,V>`): small classes that hold a `List` / `HashSet` / `Dictionary` (composition; `instanceof List` is `false`), each in its own module; `ToImmutable()` lowers to the free helper `toImmutableList(builder)` (`toImmutableHashSet`, `toImmutableDictionary`), which copies. Repeated `Add` is O(n²); FR-054's 1e4-element budget bounds it.
+| Module | Exports | Imports from 011c (R0) |
+|---|---|---|
+| `read-only-list.ts` | `ReadOnlyList`, `asReadOnly` | interfaces, throw helpers |
+| `immutable-interfaces.ts` | `IImmutableList`, `IImmutableSet`, `IImmutableDictionary` (types only, 0 B) | interfaces |
+| `immutable-list.ts` | `ImmutableList` | `elementEquals`, `defaultCompare`, throw helpers |
+| `immutable-list-builder.ts` | `ImmutableListBuilder`, `toImmutableList` | `List` |
+| `immutable-hash-set.ts` | `ImmutableHashSet` | `defaultEqualityComparer` (storage through `immutable-hash-storage.ts`) |
+| `immutable-hash-set-builder.ts` | `ImmutableHashSetBuilder`, `toImmutableHashSet` | `HashSet` |
+| `immutable-dictionary.ts` | `ImmutableDictionary` | `immutable-hash-storage.ts`, `KeyCollection` / `ValueCollection`, `defaultEqualityComparer` |
+| `immutable-dictionary-builder.ts` | `ImmutableDictionaryBuilder`, `toImmutableDictionary` | `Dictionary` |
+| `immutable-hash-storage.ts` (internal) | `ImmutableHashStorage` (the tip-append storage of the two hashed immutables) | `hash-core` |
+| `sorted-set.ts` | `SortedSet` | `defaultComparer`, throw helpers |
+| `sorted-dictionary.ts` | `SortedDictionary` | `defaultComparer`, `KeyCollection` / `ValueCollection` |
+| `sorted-list.ts` | `SortedList`, `SortedListView` | `defaultComparer`, `elementEquals` |
+| `red-black-tree.ts` (internal) | `RedBlackTree` (shared by `SortedSet` and `SortedDictionary`; its API is internal and not frozen here) | — |
+| `set-algebra.ts` (internal) | the `ISet` / `IReadOnlySet` algorithms shared by every set (signature in § What 011h takes from 011c) | — |
+| `concurrent-dictionary.ts` | `ConcurrentDictionary` | `hash-core`, `ReadOnlyList` |
 
-### `ImmutableHashSet<T>`, `ImmutableDictionary<K, V>` (stage 011h)
+`ImmutableList` never imports its builder (the builder module imports `ImmutableList`), so the graph is acyclic and `ImmutableList` alone pulls no `List`.
 
-The `HashSet` / `Dictionary` surfaces of reads plus `IImmutableSet<T>` / `IImmutableDictionary<K,V>` mutators (`add`, `remove`, `setItem`, `union`, `except`, …) that return a **new** instance after an O(n) copy of the storage; same `elementEquals` / `elementHashCode` keying (D18, D30), same comparers; builders as for `ImmutableList`.
+**Equality and order.** Hashed classes key through `hash-core` with `elementEquals` / `elementHashCode` or the `IEqualityComparer<T>` argument (D18), never through `system/equality`; a value with `equals` but no `hashCode` (`Decimal`, the temporal types) gets a value hash or a constant bucket from `elementHashCode`, never an identity hash, so equal values meet. Sorted classes order and identify elements by the comparer alone (`compare(a, b) === 0` is "equal", as .NET), defaulting to `defaultCompare` (`Comparer<T>.Default`). **Misses (D30).** A `try*` / `find*` member and `getValueOrDefault` take the C# `default(T)` of the result from the caller (the compiler passes it: `0`, `false`, `null`, …) and return it on a miss, so the tuple form is `readonly [boolean, T]` and no `null` stands in for a value type. `SortedSet.Min` / `Max` follow the same rule through `minOr(defaultValue)` / `maxOr(defaultValue)`. `null` elements and keys follow .NET: allowed in `SortedSet` and the immutable sets, `ArgumentNullException` (`Value cannot be null. (Parameter 'key')`) for a `null` key of every dictionary-shaped class.
 
-### `SortedSet<T>`, `SortedDictionary<K, V>` (stage 011h)
+**Enumeration rules.** `SortedSet`, `SortedDictionary` and `SortedList` keep a version counter; **every** mutating call bumps it, a no-op included (`add` of a present element, `remove` of an absent one, `set` of an existing key), and the next step of a live enumerator throws `InvalidOperationException` with the sorted classes' own .NET message, `Collection was modified after the enumerator was instantiated.` (not `List`'s). `SortedDictionary.remove` / `clear` invalidate (unlike `Dictionary`). The immutable classes have nothing to invalidate. `ReadOnlyList` enumerates through its source (a `List` source throws on modification, an array does not, as .NET). `ConcurrentDictionary` never throws (below). Builders enumerate through their inner mutable class and inherit its rule.
 
-A red-black tree ordered by the comparer (the `Comparer<T>.Default` semantics of `List.sort()`, or an `IComparer<T>` / comparison argument): O(log n) `add` / `remove` / `contains` / `containsKey` / `get`, in-order enumeration with the `_version` rule, `min` / `max` / `reverse()` / `getViewBetween(lower, upper)` for the set, `keys` / `values` in key order for the dictionary. `SortedSet.add` returns `boolean`; `SortedDictionary.get` throws `KeyNotFoundException` like `Dictionary`.
+**Ownership rule (tip-append sharing, FR-054, research R18, decision W4-11).** One rule, in `immutable-hash-storage.ts` for the hashed classes and in `immutable-list.ts` for the list, each a single owner check: a version may append in place only when its length equals the shared storage's length (it is the newest version of that storage). Every other mutator (`remove`, `setItem`, `clear`, `insert`, `sort`, …), and an `add` on an older version, copies the version's visible part into new storage. Shared storage is append-only: nothing is removed from it or overwritten in place, so each version reads exactly what it was built with. An old version keeps the whole shared store alive (a memory cost, not a semantic one). Builders copy at `ToImmutable` and never share their storage with an immutable version, so mutating a builder after `ToImmutable` changes no immutable value. A seeded model-based test keeps many live versions, branches from old ones and compares every live version with a plain-copy reference after every step (`test/system/collections/model/`).
 
-### `SortedList<K, V>` (stage 011h)
+**Mutable-interface conversions of immutables.** In .NET, `ImmutableList<T>` also implements `IList<T>` (and the immutable sets / dictionary `ISet<T>` / `IDictionary<K,V>`) with mutators that throw `NotSupportedException` (`Specified method is not supported.`). The runtime classes cannot carry both meanings of `add`, so they implement only `IReadOnly*` and `IImmutable*`: the compiler reports `MS0001` at a conversion of an immutable type to `ICollection<T>`, `IList<T>`, `ISet<T>` or `IDictionary<K,V>`, and `o is IList<T>` on an immutable value is `false` in TS (`true` in .NET; documented divergence).
 
-Two parallel sorted arrays with binary search: O(log n) `get` / `containsKey` / `indexOfKey`, O(n) `add` / `remove`, O(1) `keys.get(i)` / `values.get(i)` / `getKeyAtIndex(i)` / `getValueAtIndex(i)`, `capacity` ignored. Enumeration in key order with the `_version` rule.
+### What 011h takes from 011c
 
-### `ConcurrentDictionary<K, V>` (stage 011h)
+One rule per concept: 011h defines no second comparer, hash table, throw helper or interface. It needs these from stage 011c's frozen API; where 011c's contract above does not yet state them, they are 011h's requests to it (the names are proposals until 011c freezes them, and 011h follows the frozen names).
 
-`class ConcurrentDictionary<K, V> implements IDictionary<K, V>`, a **sibling** of `Dictionary` (both compose the internal `hash-core.ts`; `instanceof Dictionary` is `false`, as `is Dictionary<K,V>` is in .NET), with the dictionary surface plus `getOrAdd(key, valueOrFactory)`, `addOrUpdate(key, addValueOrFactory, updateFactory)`, `tryAdd`, `tryUpdate(key, newValue, comparisonValue)`, `tryRemove(key): readonly [true, V] | readonly [false, null]`, `toArray()` (a `[K, V][]` snapshot), `isEmpty`. Each call runs to completion without yielding, so it is atomic (JavaScript shares no object between threads; FR-054). Its enumerator does **not** throw on modification: like .NET's, it is safe while the dictionary changes and is not a moment-in-time snapshot. `keys` / `values` return **snapshots** (new read-only collections), as .NET's `Keys` / `Values` do, not live views.
+1. **`default-comparer.ts`**, beyond `elementEquals` / `elementHashCode` / `IEqualityComparer<T>`:
 
+   ```ts
+   export interface IComparer<T> { compare(x: T, y: T): number; }            // a C# IComparer<T> implementer lowers to a class with `compare`
+   export function defaultCompare<T>(x: T, y: T): number;                    // Comparer<T>.Default
+   export const defaultComparer: IComparer<any>;                             // { compare: defaultCompare }: the `comparer` of a sorted class built without one
+   export const defaultEqualityComparer: IEqualityComparer<any>;             // { equals: elementEquals, getHashCode: elementHashCode }: EqualityComparer<T>.Default, the `keyComparer` of a hashed class built without one
+   export function createComparer<T>(comparison: (x: T, y: T) => number): IComparer<T>; // Comparer<T>.Create
+   ```
+
+   `defaultCompare` is the one `Comparer<T>.Default` that `List.sort()` uses: `0` when `x === y`, `null` before any value, then numbers, strings, booleans, bigints, temporal values (by tag) and `compareTo` implementers as 011c defines them; otherwise it throws `ArgumentException` (`At least one object must implement IComparable.`), which is what `SortedSet` / `SortedDictionary` / `SortedList` surface, while `List.sort()` wraps it in `InvalidOperationException` (`Failed to compare two elements in the array.`), as .NET's `Array.Sort` does (both read from .NET 10).
+
+2. **`hash-core.ts`** (internal), composed by `Dictionary`, `ConcurrentDictionary` and `immutable-hash-storage.ts` (and by `HashSet` if 011c chooses so):
+
+   ```ts
+   export class HashCore<K, V> {
+     constructor(comparer?: IEqualityComparer<K> | null);
+     readonly comparer: IEqualityComparer<K> | null;  // null = elementEquals / elementHashCode with the primitive Map fast path
+     readonly size: number;
+     has(key: K): boolean;
+     get(key: K): V | undefined;          // undefined only on a miss
+     findKey(key: K): K | undefined;      // the stored key equal to `key` (HashSet.TryGetValue, ImmutableDictionary.TryGetKey)
+     set(key: K, value: V): boolean;      // true when inserted; an overwrite keeps the entry's position
+     delete(key: K): boolean;
+     clear(): void;
+     clone(): HashCore<K, V>;             // O(n): same comparer, same enumeration order
+     [Symbol.iterator](): Iterator<[K, V]>; // insertion order; never throws while the core changes: an entry deleted before it is reached is skipped, an entry added is yielded once (Map semantics)
+   }
+   ```
+
+   No null-key validation and no version inside the core; the classes own both. The mutation-tolerant iterator is what `Dictionary`'s `remove` / `clear` exemption and `ConcurrentDictionary`'s non-throwing enumerator both rely on.
+
+3. **Throw helpers** (the cold module 011c names): `throwOOR()` (`ArgumentOutOfRangeException`, `Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')`), `throwModified()`, `throwKeyNotFound(key)`, `throwArgumentNull(paramName)`, and the key formatting `throwKeyNotFound` / `Dictionary.add` use for `<key>`. The 011h messages that differ from 011c's (the sorted classes' `Collection was modified after the enumerator was instantiated.`, `ImmutableList`'s `Specified argument was out of the range of valid values. (Parameter 'index')`, `Collection is read-only.`, and the per-class duplicate-key texts below) are added to the same module by 011h, each a cold exported function.
+
+4. **Interfaces** (amendments to § Interfaces that 011h needs):
+   - The interfaces declare only the members C# declares (W4-13): `IReadOnlyList<T>` is `count`, `get` and the iterator; `fromEnd`, `indexOf`, `contains`, `slice`, `getRange`, `update` are class members. The 011h classes implement the interfaces with their own return types (`ImmutableList.getRange(): ImmutableList<T>`) and `ReadOnlyList` pulls no `List`.
+   - `IReadOnlyDictionary<K, V>.keys: IReadOnlyCollection<K>` and `.values: IReadOnlyCollection<V>`; `Dictionary` narrows them to `KeyCollection<K>` / `ValueCollection<V>`. `SortedList` returns `SortedListView`s and `ConcurrentDictionary` snapshot `ReadOnlyList`s, as .NET does.
+   - `KeyCollection<K>` / `ValueCollection<V>` in a module that does not import `Dictionary` (proposed `dictionary-views.ts`), built over `interface KeyValueSource<K, V> extends Iterable<readonly [K, V]> { readonly count: number; containsKey(key: K): boolean; }` (`new KeyCollection(source)`, `new ValueCollection(source)`; `ValueCollection.contains` uses `elementEquals`), so `SortedDictionary` and `ImmutableDictionary` reuse them and their enumeration follows the source's rule.
+
+5. **Factory shape.** 011h follows 011c's trailing `typeArguments` rule and puts a comparer **before** it: `of(items, comparer?, typeArguments?)` / `assign(entries, comparer?, typeArguments?)`, so a collection initializer on a comparer constructor (`new SortedSet<T>(cmp) { … }`) lowers to one factory call without the `IrLetExpression` sequence. Proposed for 011c's `HashSet.of` / `Dictionary.of` / `Dictionary.assign` too.
+
+6. **Sort and search arguments.** A C# overload pair `Sort(Comparison<T>)` / `Sort(IComparer<T>)` lowers to one member taking `comparison?: ((x: T, y: T) => number) | IComparer<T> | null`, told apart by `typeof comparison === "function"` (a lowered `IComparer<T>` is always an object). 011h uses it for `ImmutableList.sort` / `binarySearch`; proposed for `List.sort` / `binarySearch`.
+
+7. **Runtime-type ABI.** The `$runtimeType` literal shape and `fullName` form of 011c's classes, `toString()` (`System.Collections.Generic.SortedSet`1[System.Int32]` in .NET; 011h follows 011c's rule for `List`), and interface tests that are **nominal through the class literal's `interfaces` list** (`implementsInterface`), not an `instanceof` list inside the interface descriptor, so a 011h class joins `is IReadOnlyList<T>` by listing it and an interface descriptor imports no class.
+
+8. **`set-algebra.ts`** (internal): if 011c writes `HashSet`'s `ISet` / `IReadOnlySet` members generically, they live here and the three sets share them; otherwise 011h writes it and `HashSet` may adopt it.
+
+   ```ts
+   export interface SetLike<T> extends Iterable<T> { readonly count: number; contains(item: T): boolean; }
+   // `distinct` builds a set with the receiver's comparer, so `other` is deduplicated by the receiver's rule
+   export function isSubsetOf<T>(set: SetLike<T>, other: Iterable<T>, distinct: (items: Iterable<T>) => SetLike<T>): boolean;
+   // likewise isSupersetOf, isProperSubsetOf, isProperSupersetOf, overlaps, setEquals
+   ```
+
+9. **JSON descriptors** (W4-5): 011c's collection kinds carry the class through a `create` closure written by the context (§ JSON kinds below), so `system/json` imports no collection class and a JSON context that uses only `List` bundles no `SortedSet`.
+
+### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`; `read-only-list.ts`)
+
+```ts
+export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
+  constructor(source: IList<T> | readonly T[], typeArguments?: readonly RuntimeType[]); // ArgumentNullException (Parameter 'list') for null
+  static empty<T>(): ReadOnlyList<T>;                 // ReadOnlyCollection<T>.Empty; memoized lazily
+  readonly count: number;                             // live: the source's count / length
+  readonly isReadOnly: true;
+  get(index: number): T;  fromEnd(n: number): T;      // ArgumentOutOfRangeException (Parameter 'index'), also over an array source (.NET's array IList<T>)
+  indexOf(item: T): number;  contains(item: T): boolean;  copyTo(array: T[], arrayIndex?: number): void;
+  set(index: number, value: T): never;  update(index: number, f: (current: T) => T): never;  updateReturningOld(index: number, f: (current: T) => T): never;
+  add(item: T): never;  insert(index: number, item: T): never;  remove(item: T): never;  removeAt(index: number): never;  clear(): never;
+  toJSON(): T[];
+  [Symbol.iterator](): Iterator<T>;                   // the source's own enumerator
+}
+export function asReadOnly<T>(list: List<T>): ReadOnlyList<T>;  // list.AsReadOnly(); a null list throws as a member call does
+```
+
+Storage: `_source`, `$typeArguments$ReadOnlyList`. A live view: reads go to the source (an array source is read as `a[i]` after the unsigned bounds compare), so a later `list.Add` is visible. Every mutator throws `NotSupportedException` (`Collection is read-only.`). `list.AsReadOnly()` → `asReadOnly(list)`; `new ReadOnlyCollection<T>(source)` and `Array.AsReadOnly(arr)` → `new ReadOnlyList(source)`.
+
+### `ImmutableList<T>` (`ImmutableList<T>`, `ImmutableArray<T>`, OD-17; `immutable-list.ts`)
+
+```ts
+export class ImmutableList<T> implements IImmutableList<T>, IReadOnlyList<T> {
+  private constructor();                              // built only by the factories and mutators
+  static empty<T>(): ImmutableList<T>;                // ImmutableList<T>.Empty / ImmutableArray<T>.Empty / Create(); one lazily memoized instance
+  static of<T>(items: readonly T[], typeArguments?: readonly RuntimeType[]): ImmutableList<T>;  // Create(params T[]), collection expressions; copies
+  static from<T>(items: Iterable<T>, typeArguments?: readonly RuntimeType[]): ImmutableList<T>; // CreateRange, ToImmutableList(), ToImmutableArray(); returns `items` itself when it is an ImmutableList (as .NET)
+  readonly count: number;  readonly isEmpty: boolean;
+  get(index: number): T;  fromEnd(n: number): T;      // ArgumentOutOfRangeException (`Specified argument was out of the range of valid values. (Parameter 'index')`)
+  slice(start: number, end?: number): ImmutableList<T>;  getRange(index: number, count: number): ImmutableList<T>;
+  indexOf(item: T, index?: number, count?: number, comparer?: IEqualityComparer<T> | null): number;
+  lastIndexOf(item: T, index?: number, count?: number, comparer?: IEqualityComparer<T> | null): number;  contains(item: T): boolean;
+  find(match: (item: T) => boolean, defaultValue: T): T;  findIndex(match): number;  findLast(match, defaultValue: T): T;  findLastIndex(match): number;
+  findAll(match): ImmutableList<T>;  exists(match): boolean;  trueForAll(match): boolean;  forEach(action: (item: T) => void): void;
+  convertAll<U>(converter: (item: T) => U): ImmutableList<U>;
+  binarySearch(item: T, comparison?: ((x: T, y: T) => number) | IComparer<T> | null): number;
+  add(item: T): ImmutableList<T>;  addRange(items: Iterable<T>): ImmutableList<T>;
+  insert(index: number, item: T): ImmutableList<T>;  insertRange(index: number, items: Iterable<T>): ImmutableList<T>;
+  remove(item: T, comparer?: IEqualityComparer<T> | null): ImmutableList<T>;  removeAll(match: (item: T) => boolean): ImmutableList<T>;
+  removeAt(index: number): ImmutableList<T>;  removeRange(index: number, count: number): ImmutableList<T>;
+  removeItems(items: Iterable<T>, comparer?: IEqualityComparer<T> | null): ImmutableList<T>;  // RemoveRange(IEnumerable<T>)
+  replace(oldValue: T, newValue: T, comparer?: IEqualityComparer<T> | null): ImmutableList<T>;  // ArgumentException when absent
+  setItem(index: number, value: T): ImmutableList<T>;  clear(): ImmutableList<T>;
+  sort(comparison?: ((x: T, y: T) => number) | IComparer<T> | null): ImmutableList<T>;  reverse(): ImmutableList<T>;
+  copyTo(array: T[], arrayIndex?: number): void;  toArray(): T[];  toJSON(): T[];
+  [Symbol.iterator](): Iterator<T>;
+}
+```
+
+Storage: `_items`, `_count`, `$typeArguments$ImmutableList`. **Tip-append copy-on-write** (FR-054, research R18): the backing array may be shared by several versions and be longer than a version's `_count`; each version reads only its first `_count` elements. `add` / `addRange` on the newest version of an array (`_items.length === _count`) push in place and return a new instance over the same array (amortized O(1)); every other mutator, and `add` on an older version, copies its visible elements (O(n)). A version never sees an element added after it. Mutators return the receiver when nothing changes, as .NET does: `remove` / `removeItems` / `removeAll` that remove nothing, `addRange` of an empty source; `clear()` returns `empty()`. `slice` / `getRange` / mutator results copy the `$typeArguments$ImmutableList` slot. `ToBuilder()` lowers to `new ImmutableListBuilder(list)`, so `ImmutableList` imports no builder.
+
+### `ImmutableHashSet<T>` (`immutable-hash-set.ts`)
+
+```ts
+export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
+  private constructor();
+  static empty<T>(): ImmutableHashSet<T>;
+  static of<T>(items: readonly T[], comparer?: IEqualityComparer<T> | null, typeArguments?): ImmutableHashSet<T>;  // Create(...)
+  static from<T>(items: Iterable<T>, comparer?: IEqualityComparer<T> | null, typeArguments?): ImmutableHashSet<T>; // CreateRange, ToImmutableHashSet(); `items` itself when it is an ImmutableHashSet with that comparer
+  readonly count: number;  readonly isEmpty: boolean;  readonly keyComparer: IEqualityComparer<T>;
+  contains(item: T): boolean;  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+  add(item: T): ImmutableHashSet<T>;  remove(item: T): ImmutableHashSet<T>;  clear(): ImmutableHashSet<T>;
+  union(other: Iterable<T>): ImmutableHashSet<T>;  intersect(other: Iterable<T>): ImmutableHashSet<T>;
+  except(other: Iterable<T>): ImmutableHashSet<T>;  symmetricExcept(other: Iterable<T>): ImmutableHashSet<T>;
+  withComparer(comparer: IEqualityComparer<T> | null): ImmutableHashSet<T>;
+  isSubsetOf(other: Iterable<T>): boolean;  isSupersetOf(other): boolean;  isProperSubsetOf(other): boolean;
+  isProperSupersetOf(other): boolean;  overlaps(other): boolean;  setEquals(other): boolean;
+  toArray(): T[];  toJSON(): T[];
+  [Symbol.iterator](): Iterator<T>;
+}
+```
+
+Storage: `_storage` (the shared `ImmutableHashStorage<T, true>`), `_count`, `$typeArguments$ImmutableHashSet`, under the **ownership rule** of § Stage 011h classes (W4-11): the storage keeps an insertion-ordered entry array that is never removed from or overwritten in place, plus a `HashCore` from each key to its entry's index; a version owns the first `_count` entries, and a lookup is a hit only when the index it finds is below `_count`. `add` of a new element appends in place only when the version's `_count` equals the entry array's length; every other change, and an `add` on an older version, copies the version's entries into new storage (O(n)). `add` of a present element, `remove` of an absent one and set operations that change nothing return the receiver (as .NET). Enumeration is the version's entries in insertion order (.NET's order is its hash order; both are unspecified, and conformance rows compare sorted).
+
+### `ImmutableDictionary<K, V>` (`immutable-dictionary.ts`)
+
+```ts
+export class ImmutableDictionary<K, V> implements IImmutableDictionary<K, V> {
+  private constructor();
+  static empty<K, V>(): ImmutableDictionary<K, V>;
+  static create<K, V>(keyComparer?: IEqualityComparer<K> | null, valueComparer?: IEqualityComparer<V> | null, typeArguments?): ImmutableDictionary<K, V>;
+  static from<K, V>(entries: Iterable<readonly [K, V]>, keyComparer?, valueComparer?, typeArguments?): ImmutableDictionary<K, V>;  // CreateRange, ToImmutableDictionary(); add semantics
+  static fromSelectors<S, K, V>(source: Iterable<S>, keySelector: (item: S) => K, valueSelector?: ((item: S) => V) | null,
+    keyComparer?: IEqualityComparer<K> | null, valueComparer?: IEqualityComparer<V> | null): ImmutableDictionary<K, V>;  // ToImmutableDictionary(source, keySelector[, elementSelector][, comparers])
+  readonly count: number;  readonly isEmpty: boolean;
+  readonly keyComparer: IEqualityComparer<K>;  readonly valueComparer: IEqualityComparer<V>;
+  readonly keys: KeyCollection<K>;  readonly values: ValueCollection<V>;
+  get(key: K): V;                                     // KeyNotFoundException
+  containsKey(key: K): boolean;  containsValue(value: V): boolean;  contains(pair: readonly [K, V]): boolean;
+  tryGetValue(key: K, defaultValue: V): readonly [boolean, V];  tryGetKey(equalKey: K, defaultValue: K): readonly [boolean, K];
+  getValueOrDefault(key: K, defaultValue: V): V;
+  add(key: K, value: V): ImmutableDictionary<K, V>;   // the receiver when the key holds an equal value
+  addRange(pairs: Iterable<readonly [K, V]>): ImmutableDictionary<K, V>;
+  setItem(key: K, value: V): ImmutableDictionary<K, V>;  setItems(pairs: Iterable<readonly [K, V]>): ImmutableDictionary<K, V>;  // last wins
+  remove(key: K): ImmutableDictionary<K, V>;  removeRange(keys: Iterable<K>): ImmutableDictionary<K, V>;  clear(): ImmutableDictionary<K, V>;
+  withComparers(keyComparer: IEqualityComparer<K> | null, valueComparer?: IEqualityComparer<V> | null): ImmutableDictionary<K, V>;
+  toJSON(): Record<string, V>;
+  [Symbol.iterator](): Iterator<readonly [K, V]>;
+}
+```
+
+Storage: `_storage` (the shared `ImmutableHashStorage<K, V>`), `_count`, `_valueComparer`, `$typeArguments$ImmutableDictionary`; the ownership rule of `ImmutableHashSet`. `setItem` / `setItems` on an existing key with a different value copy: a shared entry is never overwritten. `add` / `from` / `addRange` with a present key and a different value (by `valueComparer`) throw `ArgumentException` (`An element with the same key but a different value already exists. Key: '<key>'`); `setItem` with an equal value and `remove` of an absent key return the receiver. `null` keys throw `ArgumentNullException` (Parameter 'key').
+
+### Builders (`immutable-*-builder.ts`)
+
+```ts
+export class ImmutableListBuilder<T> implements IList<T> {
+  constructor(source?: Iterable<T> | null, typeArguments?: readonly RuntimeType[]); // ToBuilder() / CreateBuilder<T>(); copies; an ImmutableList source also lends its type arguments
+  // the List surface it delegates to its inner List (`_list`): count, get, set, update, updateReturningOld, fromEnd, add, addRange,
+  // insert, insertRange, remove, removeAt, removeAll, clear, contains, indexOf, lastIndexOf, sort, reverse, copyTo, toJSON, [Symbol.iterator]
+}
+export function toImmutableList<T>(builder: ImmutableListBuilder<T>): ImmutableList<T>;  // ToImmutable(); copies
+
+export class ImmutableHashSetBuilder<T> implements ISet<T> {
+  constructor(source?: Iterable<T> | null, comparer?: IEqualityComparer<T> | null, typeArguments?); // an ImmutableHashSet source lends its comparer and type arguments
+  // delegates to its inner HashSet (`_set`): count, keyComparer, add, remove, contains, tryGetValue, clear, the ISet / IReadOnlySet members, copyTo, toJSON, [Symbol.iterator]
+}
+export function toImmutableHashSet<T>(builder: ImmutableHashSetBuilder<T>): ImmutableHashSet<T>;
+
+export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
+  constructor(source?: Iterable<readonly [K, V]> | null, keyComparer?: IEqualityComparer<K> | null, valueComparer?: IEqualityComparer<V> | null, typeArguments?);
+  // delegates to its inner Dictionary (`_dictionary`): count, keyComparer, valueComparer, keys, values, get, set, update, updateReturningOld,
+  // add, remove, clear, containsKey, containsValue, tryGetValue, getValueOrDefault, toJSON, [Symbol.iterator]
+}
+export function toImmutableDictionary<K, V>(builder: ImmutableDictionaryBuilder<K, V>): ImmutableDictionary<K, V>;
+```
+
+Each builder is composition (`builder instanceof List` is `false`, as `builder is List<T>` in .NET); `ImmutableArray<T>.Builder` is `ImmutableListBuilder<T>`. Builder members not listed (`ItemRef`, `MoveToImmutable`, `Capacity`, …) report `MS0001`.
+
+### `IImmutableList<T>`, `IImmutableSet<T>`, `IImmutableDictionary<K, V>` (`immutable-interfaces.ts`)
+
+```ts
+// Only the members C# declares on each interface (W4-13); the extension-method forms fill the optional arguments.
+export interface IImmutableList<T> extends IReadOnlyList<T> {
+  add(value: T): IImmutableList<T>;  addRange(items: Iterable<T>): IImmutableList<T>;  clear(): IImmutableList<T>;
+  insert(index: number, element: T): IImmutableList<T>;  insertRange(index: number, items: Iterable<T>): IImmutableList<T>;
+  remove(value: T, comparer?: IEqualityComparer<T> | null): IImmutableList<T>;  removeAll(match: (item: T) => boolean): IImmutableList<T>;
+  removeAt(index: number): IImmutableList<T>;  removeRange(index: number, count: number): IImmutableList<T>;
+  removeItems(items: Iterable<T>, comparer?: IEqualityComparer<T> | null): IImmutableList<T>;
+  replace(oldValue: T, newValue: T, comparer?: IEqualityComparer<T> | null): IImmutableList<T>;  setItem(index: number, value: T): IImmutableList<T>;
+  indexOf(item: T, index?: number, count?: number, comparer?: IEqualityComparer<T> | null): number;
+  lastIndexOf(item: T, index?: number, count?: number, comparer?: IEqualityComparer<T> | null): number;
+}
+export interface IImmutableSet<T> extends IReadOnlyCollection<T> {   // C#: IReadOnlyCollection<T>, not IReadOnlySet<T>
+  contains(value: T): boolean;  isSubsetOf(other: Iterable<T>): boolean;  isSupersetOf(other: Iterable<T>): boolean;
+  isProperSubsetOf(other: Iterable<T>): boolean;  isProperSupersetOf(other: Iterable<T>): boolean;
+  overlaps(other: Iterable<T>): boolean;  setEquals(other: Iterable<T>): boolean;
+  add(value: T): IImmutableSet<T>;  remove(value: T): IImmutableSet<T>;  clear(): IImmutableSet<T>;
+  union(other: Iterable<T>): IImmutableSet<T>;  intersect(other: Iterable<T>): IImmutableSet<T>;
+  except(other: Iterable<T>): IImmutableSet<T>;  symmetricExcept(other: Iterable<T>): IImmutableSet<T>;
+  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+}
+export interface IImmutableDictionary<K, V> extends IReadOnlyDictionary<K, V> {
+  add(key: K, value: V): IImmutableDictionary<K, V>;  addRange(pairs: Iterable<readonly [K, V]>): IImmutableDictionary<K, V>;
+  setItem(key: K, value: V): IImmutableDictionary<K, V>;  setItems(pairs: Iterable<readonly [K, V]>): IImmutableDictionary<K, V>;
+  remove(key: K): IImmutableDictionary<K, V>;  removeRange(keys: Iterable<K>): IImmutableDictionary<K, V>;  clear(): IImmutableDictionary<K, V>;
+  contains(pair: readonly [K, V]): boolean;  tryGetKey(equalKey: K, defaultValue: K): readonly [boolean, K];
+}
+```
+
+`IImmutableList<T>.IndexOf` / `LastIndexOf` (C#: `(item, index, count, comparer)`) and their extension overloads lower to the one member with optional arguments; `ImmutableList` implements it.
+
+### `SortedSet<T>` (`sorted-set.ts`)
+
+```ts
+export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
+  constructor(items?: Iterable<T> | null, comparer?: IComparer<T> | null, typeArguments?: readonly RuntimeType[]);
+  static of<T>(items: readonly T[], comparer?: IComparer<T> | null, typeArguments?): SortedSet<T>;  // initializers / expressions; duplicates ignored
+  readonly count: number;  readonly isReadOnly: false;
+  readonly comparer: IComparer<T>;                    // the argument, or defaultComparer
+  minOr(defaultValue: T): T;  maxOr(defaultValue: T): T;  // Min / Max: default(T) when empty (D30)
+  add(item: T): boolean;  remove(item: T): boolean;  contains(item: T): boolean;  clear(): void;
+  removeWhere(match: (item: T) => boolean): number;
+  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+  reverse(): Iterable<T>;                             // descending; version-checked
+  getViewBetween(lowerValue: T, upperValue: T): SortedSet<T>;
+  unionWith(other: Iterable<T>): void;  intersectWith(other): void;  exceptWith(other): void;  symmetricExceptWith(other): void;
+  isSubsetOf(other: Iterable<T>): boolean;  isSupersetOf(other): boolean;  isProperSubsetOf(other): boolean;
+  isProperSupersetOf(other): boolean;  overlaps(other): boolean;  setEquals(other): boolean;
+  copyTo(array: T[], arrayIndex?: number): void;  toArray(): T[];  toJSON(): T[];
+  [Symbol.iterator](): Iterator<T>;                   // ascending
+}
+```
+
+Storage: `_tree` (a `RedBlackTree<T, undefined>`, which also holds the version, so a view and its set share both), `_lower`, `_upper`, `_bounded`, `$typeArguments$SortedSet`. `getViewBetween` returns a live `SortedSet` over the same tree, bounded (`instanceof SortedSet`, as .NET's view `is SortedSet<T>`); its `count` walks the range (O(k), as .NET); `lowerValue` above `upperValue` throws `ArgumentException` (`Must be less than or equal to upperValue. (Parameter 'lowerValue')`); adding outside the range throws `ArgumentOutOfRangeException` (`Specified argument was out of the range of valid values. (Parameter 'item')`). An element that the comparer cannot order surfaces `defaultCompare`'s `ArgumentException`. `Min` / `Max` of an empty set are `default(T)` in .NET (`0` for `SortedSet<int>`, read from .NET 10), which the compiler passes to `minOr` / `maxOr` (D30).
+
+### `SortedDictionary<K, V>` (`sorted-dictionary.ts`)
+
+```ts
+export class SortedDictionary<K, V> implements IDictionary<K, V> {
+  constructor(source?: Iterable<readonly [K, V]> | null, comparer?: IComparer<K> | null, typeArguments?: readonly RuntimeType[]); // ctor(IDictionary[, IComparer])
+  static of<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IComparer<K> | null, typeArguments?): SortedDictionary<K, V>;      // { { k, v } }: add semantics
+  static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IComparer<K> | null, typeArguments?): SortedDictionary<K, V>;  // { [k] = v }: last wins
+  readonly count: number;  readonly comparer: IComparer<K>;
+  readonly keys: KeyCollection<K>;  readonly values: ValueCollection<V>;   // live views, in key order
+  get(key: K): V;  set(key: K, value: V): void;  update(key: K, f: (current: V) => V): V;  updateReturningOld(key: K, f: (current: V) => V): V;
+  add(key: K, value: V): void;  remove(key: K): boolean;  clear(): void;
+  containsKey(key: K): boolean;  containsValue(value: V): boolean;
+  tryGetValue(key: K, defaultValue: V): readonly [boolean, V];
+  getValueOrDefault(key: K, defaultValue: V): V;
+  toJSON(): Record<string, V>;
+  [Symbol.iterator](): Iterator<readonly [K, V]>;     // key order
+}
+```
+
+Storage: `_tree` (`RedBlackTree<K, V>`), `$typeArguments$SortedDictionary`. `get` throws `KeyNotFoundException` as `Dictionary`; `add` of a present key throws `ArgumentException` with .NET's `SortedDictionary` text, which formats the pair: `An item with the same key has already been added. Key: [<key>, <value>]`.
+
+### `SortedList<K, V>` and `SortedListView<T>` (`sorted-list.ts`)
+
+```ts
+export class SortedList<K, V> implements IDictionary<K, V> {
+  constructor(source?: Iterable<readonly [K, V]> | null, comparer?: IComparer<K> | null, typeArguments?: readonly RuntimeType[]);
+  static withCapacity<K, V>(capacity: number, comparer?: IComparer<K> | null, typeArguments?): SortedList<K, V>;  // validated, then dropped
+  static of<K, V>(entries, comparer?, typeArguments?): SortedList<K, V>;  static assign<K, V>(entries, comparer?, typeArguments?): SortedList<K, V>;
+  readonly count: number;  readonly comparer: IComparer<K>;
+  readonly keys: SortedListView<K>;  readonly values: SortedListView<V>;
+  get, set, update, updateReturningOld, add, remove, clear, containsKey, tryGetValue, getValueOrDefault   // as SortedDictionary
+  containsValue(value: V): boolean;
+  indexOfKey(key: K): number;  indexOfValue(value: V): number;      // -1 when absent
+  getKeyAtIndex(index: number): K;  getValueAtIndex(index: number): V;  setValueAtIndex(index: number, value: V): void;
+  removeAt(index: number): void;
+  toJSON(): Record<string, V>;
+  [Symbol.iterator](): Iterator<readonly [K, V]>;
+}
+export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {  // SortedList.Keys / .Values
+  readonly count: number;  readonly isReadOnly: true;
+  get(index: number): T;  fromEnd(n: number): T;  indexOf(item: T): number;  contains(item: T): boolean;  copyTo(array: T[], arrayIndex?: number): void;
+  // set / update / updateReturningOld / add / insert / remove / removeAt / clear throw NotSupportedException
+  toJSON(): T[];  [Symbol.iterator](): Iterator<T>;  // version-checked against the list
+}
+```
+
+Storage: `_keys`, `_values` (parallel sorted arrays), `_version`, `_comparer`, `$typeArguments$SortedList`; binary search on `_keys`. Index members throw `throwOOR()`'s `ArgumentOutOfRangeException`; `add` of a present key throws `ArgumentException` (`An item with the same key has already been added. Key: <key> (Parameter 'key')`); a negative capacity throws `ArgumentOutOfRangeException` (`capacity ('<n>') must be a non-negative value. (Parameter 'capacity')` + `Actual value was <n>.`); the views' mutators throw `NotSupportedException` (`This operation is not supported on SortedList nested types because they require modifying the original SortedList.`). `Capacity` and `TrimExcess` report `MS0001` (as `List`'s).
+
+### `ConcurrentDictionary<K, V>` (`concurrent-dictionary.ts`)
+
+```ts
+export class ConcurrentDictionary<K, V> implements IDictionary<K, V> {
+  constructor(entries?: Iterable<readonly [K, V]> | null, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[]);
+  static withCapacity<K, V>(concurrencyLevel: number, capacity: number, comparer?: IEqualityComparer<K> | null, typeArguments?): ConcurrentDictionary<K, V>; // validated (ArgumentOutOfRangeException), then dropped
+  static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?): ConcurrentDictionary<K, V>; // { [k] = v } (it has no public Add, so no { { k, v } } form)
+  readonly count: number;  readonly isEmpty: boolean;
+  readonly keys: ReadOnlyList<K>;  readonly values: ReadOnlyList<V>;  // snapshots, as .NET's ReadOnlyCollection<T>
+  get(key: K): V;  set(key: K, value: V): void;  update(key: K, f: (current: V) => V): V;  updateReturningOld(key: K, f: (current: V) => V): V;
+  add(key: K, value: V): void;                        // IDictionary.Add: ArgumentException `The key already existed in the dictionary.`
+  remove(key: K): boolean;  clear(): void;
+  containsKey(key: K): boolean;  tryGetValue(key: K, defaultValue: V): readonly [boolean, V];
+  getValueOrDefault(key: K, defaultValue: V): V;
+  tryAdd(key: K, value: V): boolean;
+  tryUpdate(key: K, newValue: V, comparisonValue: V): boolean;         // comparisonValue by elementEquals
+  tryRemove(key: K, defaultValue: V): readonly [boolean, V];
+  getOrAdd(key: K, value: V): V;
+  getOrAddWith<A = undefined>(key: K, valueFactory: (key: K, factoryArgument: A) => V, factoryArgument?: A): V;
+  addOrUpdate(key: K, addValue: V, updateValueFactory: (key: K, current: V) => V): V;
+  addOrUpdateWith<A = undefined>(key: K, addValueFactory: (key: K, factoryArgument: A) => V,
+    updateValueFactory: (key: K, current: V, factoryArgument: A) => V, factoryArgument?: A): V;
+  toArray(): [K, V][];                                // snapshot
+  toJSON(): Record<string, V>;
+  [Symbol.iterator](): Iterator<readonly [K, V]>;     // never throws on modification
+}
+```
+
+Storage: `_core` (`HashCore<K, V>`), `$typeArguments$ConcurrentDictionary`; no `_version`. The value and factory forms of `GetOrAdd` / `AddOrUpdate` are distinct members (`getOrAdd` / `getOrAddWith`, `addOrUpdate` / `addOrUpdateWith`) chosen by the C# overload, never by `typeof` at run time, because `V` may itself be a function type. A factory runs outside any state and the call then re-reads the key, as .NET's retry loop does: if the factory inserted the key itself, `getOrAddWith` returns the stored value and `addOrUpdateWith` retries. The enumerator walks the live core and never throws: an entry removed before it is reached is not yielded, an added one may be (as .NET). Enumeration order is insertion order (.NET's is its bucket order; conformance rows compare sorted). `TryRemove(KeyValuePair<K,V>)` and `GetOrAdd` / `AddOrUpdate` overloads beyond these report `MS0001`.
+
+### JSON kinds (FR-028, runtime side)
+
+The eight 011h kinds use two wire forms and the `create` hook of § What 011h takes from 011c (item 9), so the converter is three generic cases (array form, object form, the existing ones) and imports no collection class:
+
+```ts
+export type SequenceCollectionDescriptor = {      // JSON array
+  readonly kind: "list" | "queue" | "stack" | "hashSet" | "immutableList" | "readOnlyList" | "immutableHashSet" | "sortedSet";
+  readonly element: TypeDescriptor;
+  readonly create: (items: unknown[]) => Iterable<unknown>;
+};
+export type KeyedCollectionDescriptor = {         // JSON object; keys parsed by dictionary-keys.ts
+  readonly kind: "dictionary" | "immutableDictionary" | "concurrentDictionary" | "sortedDictionary" | "sortedList";
+  readonly key: TypeDescriptor;
+  readonly value: TypeDescriptor;
+  readonly create: (entries: Array<readonly [unknown, unknown]>) => Iterable<readonly [unknown, unknown]>;
+};
+```
+
+Read: the element (or key and value) converters run first, then `create` receives the values in document order. Write: iteration (`for..of`), so the sorted kinds write in key order, as .NET does. The context writes `create` as a closure, with the FR-008 type arguments when the compilation asks: `immutableList` → `(items) => ImmutableList.from(items)`, `immutableHashSet` → `ImmutableHashSet.from(items)`, `sortedSet` → `new SortedSet(items)` (duplicates ignored), `immutableDictionary` → `ImmutableDictionary.empty().setItems(entries)`, `concurrentDictionary` / `sortedDictionary` / `sortedList` → `<Class>.assign(entries)`: a repeated key keeps its **last** value, which .NET 10's System.Text.Json does for every one of these kinds (read 2026-11-19). `readOnlyList` serializes, and its `create` throws `NotSupportedException`, because System.Text.Json does not deserialize `ReadOnlyCollection<T>` (no usable constructor; read from .NET 10). The shapes are 011h's proposal for 011c's kinds too; 011h follows whatever 011c freezes for them.
+
+### C# member → emitted TS (011h)
+
+Instance members not listed map by name to the camelCase member above with no template (FR-007: `Count` → `count`, `IsEmpty` → `isEmpty`, `Contains` → `contains`, `KeyComparer` → `keyComparer`, `IndexOfKey` → `indexOfKey`, …); indexers emit `get` / `set` and FR-010's update forms; `r[^n]` → `fromEnd(n)`; `ImmutableArray<T>` `a[a..b]` → `a.slice(a, b)`. Members without a runtime member report `MS0001` at the call site (FR-001).
+
+| C# | Emitted TS |
+|---|---|
+| `list.AsReadOnly()` | `asReadOnly(list)` |
+| `new ReadOnlyCollection<T>(src)`, `Array.AsReadOnly(arr)` | `new ReadOnlyList(src)` / `new ReadOnlyList(arr)` |
+| `ReadOnlyCollection<T>.Empty` | `ReadOnlyList.empty()` |
+| `ImmutableList<T>.Empty`, `ImmutableArray<T>.Empty`, `ImmutableList.Create<T>()`, `ImmutableArray.Create<T>()` | `ImmutableList.empty()` |
+| `ImmutableList.Create(a, b)`, `ImmutableArray.Create(a, b)`, `ImmutableList<int> x = [a, b]`, `ImmutableArray<int> x = [a, b]` | `ImmutableList.of([a, b])` |
+| `ImmutableList.CreateRange(src)`, `src.ToImmutableList()`, `ImmutableArray.CreateRange(src)`, `src.ToImmutableArray()` | `ImmutableList.from(src)` |
+| `ImmutableArray<T>.Length` | `count` |
+| `im.RemoveRange(items)` / `im.RemoveRange(index, count)` | `im.removeItems(items)` / `im.removeRange(index, count)` |
+| `im.Sort()` / `im.Sort(comparison)` / `im.Sort(comparer)` | `im.sort()` / `im.sort(comparison)` / `im.sort(comparer)` |
+| `im.ToBuilder()`, `ImmutableList.CreateBuilder<T>()`, `ImmutableArray.CreateBuilder<T>()` | `new ImmutableListBuilder(im)` / `new ImmutableListBuilder()` |
+| `builder.ToImmutable()` (list / array builder) | `toImmutableList(builder)` |
+| `ImmutableHashSet.Create(a, b)` / `Create(comparer, a, b)` | `ImmutableHashSet.of([a, b])` / `ImmutableHashSet.of([a, b], comparer)` |
+| `ImmutableHashSet.CreateRange([comparer, ]src)`, `src.ToImmutableHashSet([comparer])` | `ImmutableHashSet.from(src[, comparer])` (C#'s leading comparer moves after the source: the two arguments evaluate in the TS order, documented) |
+| `ImmutableHashSet<T>.Empty`, `ImmutableHashSet.Create<T>()` | `ImmutableHashSet.empty()` |
+| `set.ToBuilder()`, `ImmutableHashSet.CreateBuilder<T>([comparer])`; `builder.ToImmutable()` | `new ImmutableHashSetBuilder(set)`, `new ImmutableHashSetBuilder(null[, comparer])`; `toImmutableHashSet(builder)` |
+| `ImmutableDictionary<K,V>.Empty`; `ImmutableDictionary.Create<K,V>([kc[, vc]])` | `ImmutableDictionary.empty()`; `ImmutableDictionary.create([kc[, vc]])` |
+| `ImmutableDictionary.CreateRange([kc, [vc, ]]pairs)`, `pairs.ToImmutableDictionary([kc[, vc]])` | `ImmutableDictionary.from(pairs[, kc[, vc]])` (the comparers move after the pairs, as for `ImmutableHashSet`) |
+| `src.ToImmutableDictionary(keySel[, elemSel][, kc[, vc]])` | `ImmutableDictionary.fromSelectors(src, keySel, elemSel ?? null[, kc[, vc]])` |
+| `dict.ToBuilder()`, `ImmutableDictionary.CreateBuilder<K,V>([kc[, vc]])`; `builder.ToImmutable()` | `new ImmutableDictionaryBuilder(dict)`, `new ImmutableDictionaryBuilder(null[, kc[, vc]])`; `toImmutableDictionary(builder)` |
+| `new SortedSet<T>([src][, cmp])`, `new SortedSet<T>(cmp) { a, b }`, `SortedSet<T> s = [a, b]` | `new SortedSet(src ?? null, cmp)`, `SortedSet.of([a, b], cmp)`, `SortedSet.of([a, b])` |
+| `s.Min` / `s.Max` | `s.minOr(<default(T)>)` / `s.maxOr(<default(T)>)` |
+| `s.Reverse()`, `s.GetViewBetween(lo, hi)`, `s.RemoveWhere(f)` | `s.reverse()`, `s.getViewBetween(lo, hi)`, `s.removeWhere(f)` |
+| `new SortedDictionary<K,V>([src][, cmp])`, `{ { k, v } }`, `{ [k] = v }` | `new SortedDictionary(src ?? null, cmp)`, `SortedDictionary.of([[k, v]], cmp)`, `SortedDictionary.assign([[k, v]], cmp)` |
+| `new SortedList<K,V>(capacity[, cmp])` / other constructors and initializers | `SortedList.withCapacity(capacity[, cmp])` / as `SortedDictionary` |
+| `sl.Keys[i]`, `sl.Values[i]`, `sl.GetKeyAtIndex(i)`, `sl.IndexOfKey(k)` | `sl.keys.get(i)`, `sl.values.get(i)`, `sl.getKeyAtIndex(i)`, `sl.indexOfKey(k)` |
+| `new ConcurrentDictionary<K,V>([src][, cmp])`, `(level, capacity[, cmp])`, `{ [k] = v }` | `new ConcurrentDictionary(src ?? null, cmp)`, `ConcurrentDictionary.withCapacity(level, capacity[, cmp])`, `ConcurrentDictionary.assign([[k, v]], cmp)` |
+| `cd.GetOrAdd(k, v)` / `GetOrAdd(k, f)` / `GetOrAdd(k, f, arg)` | `cd.getOrAdd(k, v)` / `cd.getOrAddWith(k, f)` / `cd.getOrAddWith(k, f, arg)` |
+| `cd.AddOrUpdate(k, v, u)` / `AddOrUpdate(k, f, u)` / `AddOrUpdate(k, f, u, arg)` | `cd.addOrUpdate(k, v, u)` / `cd.addOrUpdateWith(k, f, u)` / `cd.addOrUpdateWith(k, f, u, arg)` |
+| `cd.TryRemove(k, out var v)`, `cd.TryGetValue(k, out var v)`, every 011h `Try*` with an `out` | the `[found, value]` tuple lowering of 011c's `TryGetValue`, passing `default(T)` (D30) |
+| `Comparer<T>.Default`, `Comparer<T>.Create(f)`, `EqualityComparer<T>.Default` | `defaultComparer`, `createComparer(f)`, `defaultEqualityComparer` |
+| a conversion of an immutable type to `ICollection<T>` / `IList<T>` / `ISet<T>` / `IDictionary<K,V>` | `MS0001` |
+| `ImmutableArray<T>.IsDefault` / `IsDefaultOrEmpty` / `ItemRef` / `AsSpan` / `AsMemory`, `ToImmutableSorted*`, `ImmutableSortedSet<T>`, `ImmutableQueue<T>`, `ImmutableStack<T>` | `MS0001` (not in FR-001) |
+
+`src ?? null` means an omitted source argument emits `null`; the compiler writes the literal, not a `??`.
+
+### Budgets (NFR-001, NFR-008; measured by 011h)
+
+- `SortedSet` / `SortedDictionary`: the time per `add` / `remove` / `contains` (`containsKey` / `get`) at 1e5 elements ≤ 2.5× the time at 1e3; `SortedList`: the same for `get` / `containsKey` / `indexOfKey`. Absolute times recorded per release in `docs/runtime-types.md`.
+- `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary`: building 1e4 elements by repeated `Add` (`x = x.Add(i)`) ≤ 50 ms, normalized as NFR-001, on Node.js and Bun (research R18). Absolute times of `get` / `contains`, `setItem` and `remove` recorded.
+- `ConcurrentDictionary` with string and number keys: the `Dictionary` row of NFR-001 (≤ 2.0 ns over `Map`), through the same `hash-core`.
+- Sizes: § Performance and size budgets (`ReadOnlyList` ≤ 0.8 KB is a proposal that the bundled exception classes may not fit: the `NotSupportedException` and `ArgumentOutOfRangeException` chains are about 0.6 KB together; 011h measures and reports before changing it). Each 011h module is side-effect free (0 B under a side-effect-only import, NFR-007), with a size row and a `mustNotContain` row (an entry using `List` alone contains none of the 011h messages).
 
 ## Performance and size budgets (NFR-001, NFR-008)
 
