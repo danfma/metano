@@ -9,6 +9,14 @@ Status legend: **Implemented** = part of the current product · **Partial** = su
 constraints · **Planned** = not a current guarantee. Unless a row names a backend, it describes the
 **TypeScript** backend (the normative reference surface). Paths are repo-relative.
 
+## Default-text correction (#694)
+
+This row extends the older #308 row below, superseding its exclusion of boxed Boolean/Double text. It corrects the existing default-text gaps rather than extending formatted or culture-specific text.
+
+| Area | Feature | Target | Status | Code area | Test | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Expressions | .NET default text for numeric enums, erased Boolean/Double values, null nullable values, TimeSpan, ValueTuple, constructed decimal scale and null string compound targets | TS | Implemented | `Extraction/DefaultTextConversion.cs`, `Extraction/IrExpressionExtractor.NullSafeConcatenation.cs`, `Frontend/Roslyn/RuntimeQuestionScanner.cs`, `src/Metano/Runtime/Objects.cs`, `Temporal.cs`, `TupleText.cs`, runtime `system/default-text.ts`, `time-span-format.ts`, `decimal.ts` | `tests/Metano.Tests/DefaultTextTranspileTests.cs`, runtime `test/system/default-text.test.ts`, `time-span-format.test.ts`, `decimal.test.ts`, `tests/Conformance/probes/DefaultValueTextProbes.cs` and existing text/compound conformance rows | FR-051 default-text correction, legacy FR-014, #694. Flags use comma-space lists; explicit enum D remains numeric. Object overrides and null-conditional access retain their semantics. Dart output is unchanged. Generic Single erasure and arithmetic decimal scale (#662) remain gaps; sharp-s casing and U+FEFF trimming are follow-ups. |
+
 ## Target Support
 
 | Stage | Component | Status | Where |

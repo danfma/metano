@@ -391,6 +391,18 @@ Product requirements added after the migration (normative; each one is traced by
      which prints the hyphenated text; restricting the fallback needs the mapping port to
      see literal filters (#657).
 
+  **Default-text correction (#694, TypeScript).** Rule 5 preserves the output of the
+  original formatting work, except for the explicitly tracked default-text gaps corrected
+  by #694: numeric enum names (including the .NET comma-space list for flags), boxed and
+  nullable Boolean/Double and generic Boolean/Double text, an empty string from a null
+  nullable's parameterless `ToString()`, TimeSpan constant (`c`) text, ValueTuple text
+  enclosed in parentheses, constructed decimal scale in concatenation, and null string
+  compound targets treated as empty while evaluating their receiver/index once. The
+  explicit enum `D` format remains numeric. These corrections use declarative mappings
+  and existing neutral IR; Dart output remains unchanged. Generic Single type erasure,
+  arithmetic decimal scale propagation (#662), invariant casing of sharp-s and trimming
+  U+FEFF remain separate follow-ups.
+
 - **FR-052** (caller argument expressions): A call to a method or constructor with a
   `[CallerArgumentExpression("p")]` parameter that the call leaves out MUST pass the source text
   of the call's argument for `p`, positional or named, in every target, as the C# compiler
