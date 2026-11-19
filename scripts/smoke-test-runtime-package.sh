@@ -16,7 +16,10 @@ set -euo pipefail
 #      native-preview compiler (tsgo) and stable TypeScript;
 #   4. bundles a consumer entry from the installed package with bun and
 #      esbuild (the latter also under the `source` condition, which resolves
-#      the shipped .ts files) and runs each bundle under Node (spec 011 FR-011).
+#      the shipped .ts files) and runs each bundle under Node (spec 011 FR-011);
+#   5. exercises both dists (spec 011 FR-058): a checked import, an unchecked
+#      import through the `metano-unchecked` condition, and the bundler step
+#      with the condition plus the `__METANO_CHECKS__` define.
 #
 # Exits non-zero on the first failing check. Used by CI and by the release
 # workflow (before anything is tagged or published).
@@ -41,6 +44,7 @@ ESBUILD="$RUNTIME_DIR/node_modules/.bin/esbuild"
 WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/metano-runtime-smoke.XXXXXX")"
 CONSUMER_DIR="$WORK_DIR/consumer"
 PACKED_DIST="$CONSUMER_DIR/node_modules/metano-runtime/dist"
+PACKED_UNCHECKED_DIST="$CONSUMER_DIR/node_modules/metano-runtime/dist-unchecked"
 TARBALL="" # assigned by pack_runtime
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -143,6 +147,7 @@ TS
 install_tarball_into_consumer() {
   (cd "$CONSUMER_DIR" && bun add "$TARBALL" >/dev/null && bun add -d "typescript@$STABLE_TYPESCRIPT_VERSION" >/dev/null)
   [ -d "$PACKED_DIST" ] || fail "installed package has no dist/ at $PACKED_DIST"
+  [ -d "$PACKED_UNCHECKED_DIST" ] || fail "installed package has no dist-unchecked/ at $PACKED_UNCHECKED_DIST"
 }
 
 create_consumer() {
@@ -248,7 +253,7 @@ find_relative_specifiers_without_extension() {
   local quote="[\"']"
   local relative_specifier="(from|import)[[:space:]]*\(?[[:space:]]*${quote}\.{1,2}/[^\"']*${quote}"
 
-  grep -rnoE "$relative_specifier" "$PACKED_DIST" --include="$file_glob" |
+  grep -rnoE "$relative_specifier" "$PACKED_DIST" "$PACKED_UNCHECKED_DIST" --include="$file_glob" |
     grep -vE "\.(${allowed_extensions})${quote}$" || true
 }
 
@@ -328,6 +333,71 @@ assert_bundlers() {
   assert_bundle_runs "esbuild (source condition)" "$out/esbuild-source.js"
 }
 
+write_checks_entry() {
+  cat >"$CONSUMER_DIR/checks-entry.js" <<'JS'
+import { List, throwModified } from "metano-runtime/system/collections";
+
+const xs = List.of([1, 2, 3]);
+let sum = 0;
+{
+  const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+  const $l = xs;
+  const $a = $l._items;
+  const $n = $a.length;
+  const $v = $c ? $l._version : 0;
+  for (let $i = 0; ; $i++) {
+    if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+    if ($i === $n) break;
+    sum += $a[$i];
+  }
+}
+let outOfRange;
+try {
+  outOfRange = xs.get(99);
+} catch (error) {
+  outOfRange = error.name;
+}
+console.log(`${sum} ${outOfRange}`);
+JS
+}
+
+# Runs `node` with the arguments after $2 and compares its output with $2; $1 names the case.
+assert_checks_output() {
+  local name="$1"
+  local expected="$2"
+  shift 2
+  local output
+  output="$(cd "$CONSUMER_DIR" && node "$@")" || fail "$name failed under Node"
+  [ "$output" = "$expected" ] || fail "$name printed: $output (expected: $expected)"
+  echo "ok   $name"
+}
+
+assert_both_dists() {
+  step "Exercising the checked and the unchecked dist (spec 011 FR-058)"
+
+  write_checks_entry
+
+  local out="$CONSUMER_DIR/bundles"
+  mkdir -p "$out"
+
+  assert_checks_output "checked import (dist/)" "6 ArgumentOutOfRangeException" checks-entry.js
+  assert_checks_output "unchecked import (--conditions=metano-unchecked)" "6 undefined" --conditions=metano-unchecked checks-entry.js
+
+  (cd "$CONSUMER_DIR" && "$ESBUILD" checks-entry.js --bundle --minify --format=esm --platform=node --outfile="$out/checks-esbuild.js" --log-level=warning) ||
+    fail "esbuild (checked) failed"
+  assert_checks_output "esbuild, checked" "6 ArgumentOutOfRangeException" "$out/checks-esbuild.js"
+
+  (cd "$CONSUMER_DIR" && "$ESBUILD" checks-entry.js --bundle --minify --format=esm --platform=node --conditions=metano-unchecked --define:__METANO_CHECKS__=false --outfile="$out/unchecked-esbuild.js" --log-level=warning) ||
+    fail "esbuild (unchecked) failed"
+  grep -q "\._version" "$out/unchecked-esbuild.js" && fail "the esbuild unchecked bundle still reads _version"
+  assert_checks_output "esbuild, metano-unchecked + define" "6 undefined" "$out/unchecked-esbuild.js"
+
+  (cd "$CONSUMER_DIR" && bun build checks-entry.js --target node --format esm --minify --conditions metano-unchecked --define __METANO_CHECKS__=false --outfile "$out/unchecked-bun.js" >/dev/null) ||
+    fail "bun build (unchecked) failed"
+  grep -q "\._version" "$out/unchecked-bun.js" && fail "the bun unchecked bundle still reads _version"
+  assert_checks_output "bun build, metano-unchecked + define" "6 undefined" "$out/unchecked-bun.js"
+}
+
 main() {
   assert_prerequisites
   pack_runtime
@@ -337,6 +407,7 @@ main() {
   assert_no_extensionless_specifiers
   assert_nodenext_types
   assert_bundlers
+  assert_both_dists
   step "metano-runtime packaging smoke test passed"
 }
 

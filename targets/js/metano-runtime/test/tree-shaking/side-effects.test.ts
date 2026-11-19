@@ -25,6 +25,7 @@ import {
   moduleName,
   RUNTIME_DIR,
   THIRD_PARTY,
+  UNCHECKED_DIST_DIR,
 } from "./harness.ts";
 
 /**
@@ -56,15 +57,18 @@ const checkedModules = modules.filter((module) => !allowed.has(moduleName(module
 
 let strict: BundleDirectory;
 let tracked: BundleDirectory;
+let unchecked: BundleDirectory;
 
 beforeAll(() => {
   strict = createBundleDirectory();
   tracked = createBundleDirectory(allowed);
+  unchecked = createBundleDirectory(allowed, UNCHECKED_DIST_DIR);
 });
 
 afterAll(() => {
   strict.dispose();
   tracked.dispose();
+  unchecked.dispose();
 });
 
 /** The module code a side-effect-only import of `module` keeps under `bundler`. */
@@ -128,6 +132,19 @@ describe("a side-effect-only import keeps no module code", () => {
   test("the root index keeps no code beyond the allowlisted modules'", async () => {
     for (const bundler of BUNDLERS) {
       expect(await loadCode(bundler, tracked, "index.js")).toBe("");
+    }
+  });
+
+  test("dist-unchecked lists the same modules as dist (FR-058)", () => {
+    expect(listModules(UNCHECKED_DIST_DIR)).toEqual(modules);
+  });
+
+  test.each(checkedModules)("%s from dist-unchecked", async (module) => {
+    for (const bundler of BUNDLERS) {
+      expect({ bundler, code: await loadCode(bundler, unchecked, module) }).toEqual({
+        bundler,
+        code: "",
+      });
     }
   });
 

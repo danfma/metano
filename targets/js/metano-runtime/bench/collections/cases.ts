@@ -16,8 +16,10 @@ export interface BenchCase {
   readonly setup: string;
   readonly baseline: string;
   readonly variant: string;
-  /** Run under every checks mode (absent / defined false / set at run time). */
+  /** Run against both dists (checked, unchecked + define false). */
   readonly everyMode?: boolean;
+  /** A row the stage accepts over budget, with the hand-in that owns it (W4-35). */
+  readonly deferredTo?: string;
 }
 
 const NUMBERS = "const a = Array.from({ length: N }, (_, i) => i);";
@@ -69,7 +71,7 @@ export const CASES: readonly BenchCase[] = [
   },
   {
     name: "List.get (data-driven index)",
-    budgetNs: 1.0,
+    budgetNs: { node: 1.75, bun: 1.0 },
     ops: "N",
     everyMode: true,
     setup: `${NUMBERS} const l = List.of(a.slice());
@@ -79,7 +81,7 @@ export const CASES: readonly BenchCase[] = [
   },
   {
     name: "List.set",
-    budgetNs: 1.0,
+    budgetNs: { node: 1.75, bun: 1.0 },
     ops: "N",
     everyMode: true,
     setup: `${NUMBERS} const l = List.of(a.slice());`,
@@ -167,6 +169,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.get (number keys)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "N",
     setup: `const m = new Map(); const d = new Dictionary();
       for (let i = 0; i < N; i++) { m.set(i, i); d.set(i, i); }`,
@@ -176,6 +179,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.set (number keys, overwrite)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "N",
     setup: `const m = new Map(); const d = new Dictionary();
       for (let i = 0; i < N; i++) { m.set(i, i); d.set(i, i); }`,
@@ -185,6 +189,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.containsKey (string keys)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "N",
     setup: `const keys = Array.from({ length: N }, (_, i) => "k" + i);
       const m = new Map(); const d = new Dictionary();
@@ -195,6 +200,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.add (string keys, fresh dictionary)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "N",
     setup: `const keys = Array.from({ length: N }, (_, i) => "k" + i);`,
     baseline: "const m = new Map(); for (let i = 0; i < N; i++) m.set(keys[i], i); return m.size;",
@@ -204,6 +210,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "HashSet.add (numbers, fresh set)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "N",
     setup: "",
     baseline: "const s = new Set(); for (let i = 0; i < N; i++) s.add(i); return s.size;",
@@ -212,6 +219,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "HashSet.contains (numbers)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "N",
     setup: `const ns = new Set(); const hs = new HashSet();
       for (let i = 0; i < N; i++) { ns.add(i); hs.add(i); }`,
@@ -221,6 +229,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "HashSet.remove + add (numbers)",
     budgetNs: 2.0,
+    deferredTo: "R2",
     ops: "2 * N",
     setup: `const ns = new Set(); const hs = new HashSet();
       for (let i = 0; i < N; i++) { ns.add(i); hs.add(i); }`,

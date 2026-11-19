@@ -3,7 +3,9 @@ node_modules
 
 # output
 out
+build
 dist
+dist-unchecked
 *.tgz
 
 # code coverage

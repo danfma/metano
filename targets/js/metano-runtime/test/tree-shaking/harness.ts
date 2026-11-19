@@ -47,6 +47,9 @@ export function packageBinary(name: string): string {
 /** The built modules every suite bundles from. */
 export const DIST_DIR = join(RUNTIME_DIR, "dist");
 
+/** The runtime's unchecked dist (spec 011 FR-058): the checks folded off, selected by `metano-unchecked`. */
+export const UNCHECKED_DIST_DIR = join(RUNTIME_DIR, "dist-unchecked");
+
 /** The runtime's dependencies: never bundled, always external. */
 export const THIRD_PARTY = ["@js-temporal/polyfill", "decimal.js"] as const;
 

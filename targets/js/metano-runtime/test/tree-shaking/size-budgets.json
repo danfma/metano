@@ -241,7 +241,6 @@
     "system/reflection/get-number-type",
     "system/reflection/get-runtime-type-from-type",
     "system/reflection/get-runtime-type",
-    "system/reflection/identity-memo",
     "system/reflection/implements-interface",
     "system/reflection/index",
     "system/reflection/is-assignable-from",

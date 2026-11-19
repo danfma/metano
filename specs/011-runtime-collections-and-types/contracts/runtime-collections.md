@@ -71,12 +71,14 @@ Only `List`'s `_items` / `_version` are ABI; the other fields are implementation
 
 `count` is a prototype getter on every class (`List`: `this._items.length`, so a length change through `asJsArray()` keeps it right, FR-057).
 
-## Production checks (FR-058, D26)
+## Production checks (FR-058, D26; mechanism amended by W4-33)
 
-- **Identifier: `__METANO_CHECKS__`** (confirmed; FR-058's "name to be confirmed in 011c"). Declared once, in `checks.ts`, as `declare global { const __METANO_CHECKS__: boolean | undefined; }`; `checks.ts` also exports `type MetanoChecks = boolean | undefined`, which `list.ts`, the collections barrel and the root barrel re-export as a type, so the declaration reaches every entry point's `.d.ts` and the generated code of every dependent package type-checks under `tsgo --strict` (R1 adds a consumer fixture that proves it). No module derives a module-scope constant from it.
-- **Guard text** (normative; the compiler emits it verbatim, the runtime uses the same text): `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)`. With `define: { __METANO_CHECKS__: "false" }` bun and esbuild fold it to `false` and drop the guarded code (FR-043 acceptance, R1).
-- **Guarded in the runtime**: the bounds checks of `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`; every `_version` store of every class; every enumeration check (`List`, `Dictionary`, `KeyCollection`, `ValueCollection`, `HashSet`, `Queue`, `Stack` iterators, `List.forEach`). Never guarded: `insert`, `insertRange`, `removeAt`, `removeRange`, `getRange`, `slice`, `copyTo`, `withCapacity`, every `KeyNotFoundException`, `ArgumentNullException`, `ArgumentException`, `NotSupportedException`, empty `Queue` / `Stack`, the free helper `fromEnd(array, n)`.
-- **Guarded in generated code**: the lowered `foreach`, through its function-local `$c` (§ Lowered `foreach`, final).
+- **Identifier: `__METANO_CHECKS__`**, declared once, in `checks.ts`, as `declare global { const __METANO_CHECKS__: boolean | undefined; }`; `checks.ts` also exports `type MetanoChecks = boolean | undefined`, which `list.ts`, the collections barrel and the root barrel re-export, so the declaration reaches every entry point's `.d.ts` and the generated code of every dependent package type-checks under `tsgo --strict`.
+- **Runtime: two dists.** The runtime's sources guard with the inline text `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)`. `bun run build` runs `tsgo -b .` into `build/`, then `scripts/build-dists.ts` writes `dist/` and `dist-unchecked/`: each module that reads the guard is transformed by esbuild with `__METANO_CHECKS__` defined `true` / `false` and `minifySyntax` (the checked dist reads no global; the unchecked dist has no check code); every other file is copied unchanged into both. `package.json#exports` maps the **`metano-unchecked`** condition of every entry to `dist-unchecked/` (after `source` and `types`, before `import` / `default`).
+- **Generated code: the define.** The lowered `foreach` reads the guard once into a function-local `const $c` (§ Lowered `foreach`, final); an app's bundler `define` (`__METANO_CHECKS__: false`) folds it. A fully unchecked app sets both the condition and the define (`docs/runtime-types.md`).
+- **Folded in the runtime**: the bounds checks of `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`; every `_version` store of every class; every enumeration check (`List`, `Dictionary`, `KeyCollection`, `ValueCollection`, `HashSet`, `Queue`, `Stack` iterators, `List.forEach`). Never guarded: `insert`, `insertRange`, `removeAt`, `removeRange`, `getRange`, `slice`, `copyTo`, `withCapacity`, every `KeyNotFoundException`, `ArgumentNullException`, `ArgumentException`, `NotSupportedException`, empty `Queue` / `Stack`, the free helper `fromEnd(array, n)`.
+- **Verified** (FR-043): the side-effect-only import of every module of both dists is 0 B under bun, esbuild and Rollup; the acceptance bundle of `test/tree-shaking/production-checks.test.ts` under bun, esbuild, Rollup (+ replace) and Vite; the packed-tarball smoke test imports both dists (`scripts/smoke-test-runtime-package.sh`).
+- Superseded: the R0 text that had the runtime read the guard on every call (measured at 5–160 ns per call on the default build, R1) and that allowed `globalThis.__METANO_CHECKS__` as a switch.
 
 ## Cold throw helpers (`throw-helpers.ts`, FR-016)
 
@@ -785,12 +787,12 @@ Two parallel sorted arrays with binary search: O(log n) `get` / `containsKey` / 
 
 | Operation / entry | Budget (NFR-001: normalized overhead per operation on the reference machine, hot-helper shape, default build, larger of Node.js and Bun) | Rationale |
 |---|---|---|
-| `List.get` / `set` | ≤ 1.0 ns each over `a[i]` / `a[i] = v` | bounds compare and, for `set`, the `_version` store; R17 measured 0.45 (sequential) / 0.74 (data-driven) / 0.82 ns for the `defineProperty` + unsigned-compare variant |
+| `List.get` / `set` | ≤ 1.0 ns each over `a[i]` / `a[i] = v`; data-driven `get` and `set` ≤ 1.75 ns on bundled Node.js (W4-34: about 1 ns absolute, the abstraction's cost the maintainer accepted on 2026-11-16) | bounds compare and, for `set`, the `_version` store; R17 measured 0.45 (sequential) / 0.74 (data-driven) / 0.82 ns for the `defineProperty` + unsigned-compare variant |
 | `list[i] op= v`, direct form / closure fallback | ≤ 1.5 ns / ≤ 3.0 ns | 0.86 ns measured / closure form estimated |
 | `get` at a polymorphic site | ≤ 2.0 ns | 1.08 ns measured (Node) |
 | `List.add` | ≤ 0.5 ns over `push` | delegates to `push`, bumps `_version`; 0.05 ns measured |
 | lowered `foreach` over `List` | ≤ 1.25 ns per element on Node.js, ≤ 0.5 ns on Bun, over `for..of` | maintainer decision W4-27: the measured 1.04 ns per element on Node (Bun 0.00 ns) with the guard read once per loop is the .NET-mandated version and length compare itself (FR-057), not guard overhead |
-| `Dictionary` / `ConcurrentDictionary` / `HashSet` primitive keys | ≤ 2.0 ns over the named `Map` / `Set` calls | estimated, confirmed in 011c |
+| `Dictionary` / `ConcurrentDictionary` / `HashSet` primitive keys | ≤ 2.0 ns over the named `Map` / `Set` calls | estimated, confirmed in 011c (over budget in R1, W4-35: the class implementation, two `Map` lookups and key validation per call, not the checks mechanism; met by hand-in R2's single-lookup hash core before 011g) |
 | `Queue` / `Stack` | ≤ 1.5 ns over `push` / `a[head++]` / `pop` / `at(-1)` | estimated, confirmed in 011c |
 | record keys, sorted and immutable classes | recorded per release; `SortedSet` / `SortedDictionary`: time per op at 1e5 ≤ 2.5× at 1e3; `SortedList`: reads only; immutable: 1e4 repeated `Add` ≤ 50 ms | no native equivalent |
 | `Queue.dequeue` | O(1) | ring buffer (today O(n)) |

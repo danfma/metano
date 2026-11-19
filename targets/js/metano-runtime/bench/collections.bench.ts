@@ -27,17 +27,20 @@ const TIMED_RUNS = 21;
 const C_REF_NS = { node: 0.59, bun: 0.47 } as const;
 
 type Engine = keyof typeof C_REF_NS;
-type Mode = "absent" | "false" | "runtime";
+type Mode = "checked" | "unchecked";
 type Role = "baseline" | "variant";
 
 const MODE_LABEL: Record<Mode, string> = {
-  absent: "default build (checks on)",
-  false: "define __METANO_CHECKS__=false",
-  runtime: "globalThis.__METANO_CHECKS__ = true",
+  checked: "dist/ (checked, no define)",
+  unchecked: "dist-unchecked/ + define false",
 };
 
 const RUNTIME_DIR = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const DIST = join(RUNTIME_DIR, "dist", "system", "collections");
+/** The collections of each published dist (spec 011 FR-058, W4-33). */
+const DIST: Record<Mode, string> = {
+  checked: join(RUNTIME_DIR, "dist", "system", "collections"),
+  unchecked: join(RUNTIME_DIR, "dist-unchecked", "system", "collections"),
+};
 
 const engine: Engine = typeof Bun === "undefined" ? "node" : "bun";
 const options = parseOptions(process.argv.slice(2));
@@ -51,6 +54,7 @@ interface Row {
   readonly name: string;
   readonly mode: Mode;
   readonly budgetNs: number | undefined;
+  readonly deferredTo: string | undefined;
   readonly baselineMs: number;
   readonly variantMs: number;
   readonly rawNs: number;
@@ -64,7 +68,7 @@ async function runAll(): Promise<Row[]> {
   const rows: Row[] = [];
 
   for (const benchCase of CASES.filter((item) => item.name.includes(options.filter))) {
-    const modes: Mode[] = benchCase.everyMode === true ? ["absent", "false", "runtime"] : ["absent"];
+    const modes: Mode[] = benchCase.everyMode === true ? ["checked", "unchecked"] : ["checked"];
 
     for (const mode of modes) {
       const file = await buildModule(benchCase, mode);
@@ -87,6 +91,7 @@ function rowOf(benchCase: BenchCase, mode: Mode, baseline: Measurement, variant:
     name: benchCase.name,
     mode,
     budgetNs: budgetFor(benchCase),
+    deferredTo: benchCase.deferredTo,
     baselineMs: baseline.medianMs,
     variantMs: variant.medianMs,
     rawNs,
@@ -108,7 +113,7 @@ function opsOf(benchCase: BenchCase): number {
 
 let moduleCounter = 0;
 
-/** One self-running ES module per case and mode, bundled against the runtime's `dist`. */
+/** One self-running ES module per case and mode, bundled against the mode's dist. */
 async function buildModule(benchCase: BenchCase, mode: Mode): Promise<string> {
   const entry = join(directory, `case-${moduleCounter}.mjs`);
   const output = join(directory, `case-${moduleCounter++}.bundle.mjs`);
@@ -123,21 +128,21 @@ async function buildModule(benchCase: BenchCase, mode: Mode): Promise<string> {
     platform: "neutral",
     logLevel: "silent",
     external: ["@js-temporal/polyfill", "decimal.js"],
-    define: mode === "false" ? { __METANO_CHECKS__: "false" } : {},
+    define: mode === "unchecked" ? { __METANO_CHECKS__: "false" } : {},
   });
 
   return output;
 }
 
 function moduleSource(benchCase: BenchCase, mode: Mode): string {
-  const prefix = mode === "runtime" ? "globalThis.__METANO_CHECKS__ = true;\n" : "";
+  const dist = DIST[mode];
 
-  return `${prefix}import { List } from "${DIST}/list.js";
-import { Dictionary } from "${DIST}/dictionary.js";
-import { HashSet } from "${DIST}/hash-set.js";
-import { Queue } from "${DIST}/queue.js";
-import { Stack } from "${DIST}/stack.js";
-import { throwModified } from "${DIST}/throw-helpers.js";
+  return `import { List } from "${dist}/list.js";
+import { Dictionary } from "${dist}/dictionary.js";
+import { HashSet } from "${dist}/hash-set.js";
+import { Queue } from "${dist}/queue.js";
+import { Stack } from "${dist}/stack.js";
+import { throwModified } from "${dist}/throw-helpers.js";
 
 const N = ${N};
 ${benchCase.setup}
@@ -190,7 +195,7 @@ function print(rows: readonly Row[]): void {
   console.log(`${"case".padEnd(width)}  ${"mode".padEnd(34)}  base ms  var ms  raw ns  C_meas  norm ns  budget`);
 
   for (const row of rows) {
-    const verdict = row.budgetNs === undefined ? "report" : row.normalizedNs <= row.budgetNs ? `<= ${row.budgetNs} ok` : `> ${row.budgetNs} MISS`;
+    const verdict = row.budgetNs === undefined ? "report" : row.normalizedNs <= row.budgetNs ? `<= ${row.budgetNs} ok` : `> ${row.budgetNs} MISS${row.deferredTo === undefined ? "" : ` (${row.deferredTo})`}`;
 
     console.log(
       `${row.name.padEnd(width)}  ${MODE_LABEL[row.mode].padEnd(34)}  ${fixed(row.baselineMs, 7)}  ${fixed(row.variantMs, 6)}  ${fixed(row.rawNs, 6)}  ${fixed(row.cMeasuredNs, 6)}  ${fixed(row.normalizedNs, 7)}  ${verdict}`,
@@ -237,7 +242,7 @@ async function main(): Promise<void> {
       writeFileSync(options.json, `${JSON.stringify({ engine: engineVersion(), machine: machine(), rows }, null, 2)}\n`);
     }
 
-    const misses = rows.filter((row) => row.mode === "absent" && row.budgetNs !== undefined && row.normalizedNs > row.budgetNs);
+    const misses = rows.filter((row) => row.mode === "checked" && row.deferredTo === undefined && row.budgetNs !== undefined && row.normalizedNs > row.budgetNs);
 
     if (options.check && misses.length > 0) {
       process.exitCode = 1;

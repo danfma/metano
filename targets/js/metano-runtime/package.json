@@ -14,6 +14,7 @@
   },
   "files": [
     "dist/**/*",
+    "dist-unchecked/**/*",
     "src/**/*.ts",
     "README.md"
   ],
@@ -21,56 +22,72 @@
     ".": {
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
+      "metano-unchecked": "./dist-unchecked/index.js",
       "import": "./dist/index.js"
     },
     "./system/json": {
       "source": "./src/system/json/index.ts",
       "types": "./dist/system/json/index.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/json/index.js",
       "import": "./dist/system/json/index.js"
     },
     "./system/linq": {
       "source": "./src/system/linq/index.ts",
       "types": "./dist/system/linq/index.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/linq/index.js",
       "import": "./dist/system/linq/index.js"
     },
     "./system/collections": {
       "source": "./src/system/collections/index.ts",
       "types": "./dist/system/collections/index.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/collections/index.js",
       "import": "./dist/system/collections/index.js"
     },
     "./system/exceptions": {
       "source": "./src/system/exceptions/index.ts",
       "types": "./dist/system/exceptions/index.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/exceptions/index.js",
       "import": "./dist/system/exceptions/index.js"
     },
     "./system/reflection": {
       "source": "./src/system/reflection/index.ts",
       "types": "./dist/system/reflection/index.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/reflection/index.js",
       "import": "./dist/system/reflection/index.js"
     },
     "./system/collections/*.js": {
       "source": "./src/system/collections/*.ts",
       "types": "./dist/system/collections/*.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/collections/*.js",
       "import": "./dist/system/collections/*.js"
     },
     "./system/collections/*": {
       "source": "./src/system/collections/*.ts",
       "types": "./dist/system/collections/*.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/collections/*.js",
       "import": "./dist/system/collections/*.js"
     },
     "./system/exceptions/*.js": {
       "source": "./src/system/exceptions/*.ts",
       "types": "./dist/system/exceptions/*.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/exceptions/*.js",
       "import": "./dist/system/exceptions/*.js"
     },
     "./system/exceptions/*": {
       "source": "./src/system/exceptions/*.ts",
       "types": "./dist/system/exceptions/*.d.ts",
+      "metano-unchecked": "./dist-unchecked/system/exceptions/*.js",
       "import": "./dist/system/exceptions/*.js"
     },
     "./package.json": "./package.json",
-    "./*.js": "./dist/*.js",
-    "./*": "./dist/*.js"
+    "./*.js": {
+      "metano-unchecked": "./dist-unchecked/*.js",
+      "default": "./dist/*.js"
+    },
+    "./*": {
+      "metano-unchecked": "./dist-unchecked/*.js",
+      "default": "./dist/*.js"
+    }
   },
   "imports": {
     "#/*": [
@@ -79,7 +96,7 @@
     ]
   },
   "scripts": {
-    "build": "tsgo -b .",
+    "build": "tsgo -b . && bun scripts/build-dists.ts",
     "test": "bun test",
     "bench": "bun bench/collections.bench.ts",
     "bench:node": "node --experimental-transform-types --no-warnings bench/collections.bench.ts",
@@ -88,12 +105,14 @@
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "16.0.3",
+    "@rollup/plugin-replace": "6.0.2",
     "@rollup/plugin-terser": "1.0.2",
     "@types/bun": "^1.3.11",
     "@typescript/native-preview": "^7.0.0-dev.20260225.1",
     "bun-types": "^1.3.11",
     "esbuild": "0.28.2",
-    "rollup": "4.68.7"
+    "rollup": "4.68.7",
+    "vite": "6.3.5"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
