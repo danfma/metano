@@ -227,6 +227,21 @@ internal static class BoxingSlots
         type is not null && (SymbolHelper.HasPlainObject(type) || SymbolHelper.HasJsTuple(type));
 
     /// <summary>
+    /// Whether <paramref name="method"/> called on a receiver of
+    /// <paramref name="receiverType"/> is an enum value's <c>Equals(object)</c>
+    /// (<c>color.Equals(other)</c>): C# boxes the receiver to call it, so a
+    /// target that boxes compares two boxes (FR-051).
+    /// </summary>
+    public static bool IsEnumEquals(IMethodSymbol method, ITypeSymbol? receiverType) =>
+        receiverType is { TypeKind: TypeKind.Enum }
+        && method
+            is {
+                Name: "Equals",
+                IsStatic: false,
+                Parameters: [{ Type.SpecialType: SpecialType.System_Object }],
+            };
+
+    /// <summary>
     /// Whether a value of <paramref name="type"/> may hold a box: <c>object</c>,
     /// <c>ValueType</c>, <c>Enum</c>, <c>dynamic</c> or a type parameter.
     /// </summary>

@@ -60,7 +60,6 @@ public static partial class IrToTsExpressionBridge
     private static bool ReadsSubjectOnce(IrPattern pattern) =>
         pattern switch
         {
-            IrConstantPattern { InputType: not null } => false,
             IrConstantPattern or IrRelationalPattern or IrDiscardPattern => true,
             IrLogicalPattern { Operator: IrLogicalOp.Not } notPattern => ReadsSubjectOnce(
                 notPattern.Left
@@ -155,12 +154,13 @@ public static partial class IrToTsExpressionBridge
         );
 
     /// <summary>
-    /// An enum constant compared with a value that may hold it only as a box
+    /// An enum constant compared with a value that may hold it as a box
     /// (spec 011 FR-050, <c>o is Color.Red</c> on an <c>object</c>):
-    /// <c>isBoxOf(o, Color$runtimeType) &amp;&amp; unbox(o) === Color.Red</c>; on an
-    /// interface value, which may hold a raw value too,
-    /// <c>unbox(o) === Color.Red</c>. <c>null</c> for any other constant, and with
-    /// boxing off.
+    /// <c>unboxFor(o, Color$runtimeType) === Color.Red</c>, which unwraps a box
+    /// of the enum, keeps a box of another type (never equal to the constant),
+    /// and compares a raw value as it is (the accepted divergence of
+    /// <see cref="IrToTsRuntimeTestBridge.MeetsBoxes"/>). <c>null</c> for any
+    /// other constant, and with boxing off.
     /// </summary>
     private static TsExpression? BuildBoxedConstantTest(
         TsExpression value,
@@ -172,36 +172,21 @@ public static partial class IrToTsExpressionBridge
     {
         if (
             constantType is null
-            || IrToTsRuntimeTestBridge.BoxedTestKindOf(
-                constantType,
-                inputType,
-                context.RuntimeTypes
-            )
-                is not { } kind
+            || !IrToTsRuntimeTestBridge.MeetsBoxes(constantType, inputType, context.RuntimeTypes)
         )
             return null;
 
         var raw = constant is IrBoxExpression box ? box.Value : constant;
 
-        var comparison = new TsBinaryExpression(
-            new TsCallExpression(new TsRuntimeHelperReference("unbox"), [value]),
-            "===",
-            Map(raw, context)
+        var descriptor = IrToTsRuntimeTestBridge.BoxedEnumDescriptor(
+            constantType,
+            context.RuntimeTypes
         );
 
-        if (kind is not BoxedTestKind.BoxOnly)
-            return comparison;
-
-        var descriptor = IrToTsRuntimeTypeReferences.Of(
-            constantType,
-            "boxed enum constant",
-            context.RuntimeTypes
-        )!;
-
         return new TsBinaryExpression(
-            new TsCallExpression(new TsRuntimeHelperReference("isBoxOf"), [value, descriptor]),
-            "&&",
-            comparison
+            new TsCallExpression(new TsRuntimeHelperReference("unboxFor"), [value, descriptor]),
+            "===",
+            Map(raw, context)
         );
     }
 
@@ -251,10 +236,19 @@ public static partial class IrToTsExpressionBridge
                 "!",
                 BuildPatternTest(value, notPat.Left, context)
             ),
-            IrLogicalPattern log => new TsBinaryExpression(
-                BuildPatternTest(value, log.Left, context),
-                log.Operator is IrLogicalOp.And ? "&&" : "||",
-                BuildPatternTest(value, log.Right!, context)
+            IrLogicalPattern { Operator: IrLogicalOp.And } and => new TsBinaryExpression(
+                BuildPatternTest(value, and.Left, context),
+                "&&",
+                BuildPatternTest(
+                    ConjunctionRightValue(value, and.Left, context),
+                    and.Right!,
+                    context
+                )
+            ),
+            IrLogicalPattern or => new TsBinaryExpression(
+                BuildPatternTest(value, or.Left, context),
+                "||",
+                BuildPatternTest(value, or.Right!, context)
             ),
             IrListPattern list => BuildListPatternTest(value, list, context),
             IrPositionalPattern pos => BuildPositionalPatternTest(value, pos, context),
@@ -281,6 +275,52 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression JoinWithGuard(TsExpression? test, TsExpression guard) =>
         test is null ? guard : new TsBinaryExpression(test, "&&", guard);
+
+    /// <summary>
+    /// The value the right operand of <c>left and right</c> reads: once
+    /// <paramref name="left"/> matched an enum on a value that may hold a box
+    /// of it (<c>o is Color and not Color.Red</c>, spec 011 FR-050), the raw
+    /// enum, <c>unbox(o) as Color</c>, so the nested constant and relational
+    /// patterns compare the value rather than the box;
+    /// <paramref name="value"/> otherwise.
+    /// </summary>
+    private static TsExpression ConjunctionRightValue(
+        TsExpression value,
+        IrPattern left,
+        IrToTsBridgeContext context
+    ) => UnboxedEnumAfter(left, context) is { } enumType ? UnboxedEnum(value, enumType) : value;
+
+    /// <summary>
+    /// The enum a matched <paramref name="pattern"/> proves a possibly boxed
+    /// value to hold (a type test of it, <c>Color { }</c>, or a conjunction
+    /// with either); <c>null</c> when it proves none.
+    /// </summary>
+    private static IrTypeRef? UnboxedEnumAfter(IrPattern pattern, IrToTsBridgeContext context) =>
+        pattern switch
+        {
+            IrTypePattern typePattern
+                when IrToTsRuntimeTestBridge.MeetsBoxes(
+                    typePattern.Type,
+                    typePattern.InputType,
+                    context.RuntimeTypes
+                ) => typePattern.Type,
+            IrPropertyPattern { Type: { } type } property
+                when IrToTsRuntimeTestBridge.MeetsBoxes(
+                    type,
+                    property.InputType,
+                    context.RuntimeTypes
+                ) => type,
+            IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
+                UnboxedEnumAfter(and.Left, context) ?? UnboxedEnumAfter(right, context),
+            _ => null,
+        };
+
+    /// <summary><c>unbox(value) as Color</c>: the raw enum of a value that may be its box.</summary>
+    private static TsExpression UnboxedEnum(TsExpression value, IrTypeRef enumType) =>
+        new TsCastExpression(
+            new TsCallExpression(new TsRuntimeHelperReference("unbox"), [value]),
+            IrToTsTypeMapper.Map(enumType)
+        );
 
     /// <summary>
     /// The runtime test a type pattern performs, as
@@ -331,12 +371,31 @@ public static partial class IrToTsExpressionBridge
         if (cast.IsAssertion || IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.FixedTuple)
             return new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType));
 
-        return
-            cast.ReferenceConversion is { } conversion
-            && ReferenceCastLowering.TypesResult(conversion)
-            ? MapReferenceDowncast(cast, conversion, value, testedType, context)
+        if (cast.ReferenceConversion is not { } conversion)
+            return EnumValueAssertion.Wrap(value, cast.TargetType);
+
+        if (ReferenceCastLowering.TypesResult(conversion))
+            return MapReferenceDowncast(cast, conversion, value, testedType, context);
+
+        return UnboxesNarrowedEnum(conversion, testedType, context)
+            ? UnboxedEnum(value, testedType)
             : EnumValueAssertion.Wrap(value, cast.TargetType);
     }
+
+    /// <summary>
+    /// Whether an unboxing cast to an enum that a type test already narrowed
+    /// (<c>o is Color &amp;&amp; (Color)o == Color.Red</c>) still unwraps the box
+    /// the test accepted (spec 011 FR-050): it is not checked again, but its
+    /// value is the raw enum.
+    /// </summary>
+    private static bool UnboxesNarrowedEnum(
+        IrReferenceConversion conversion,
+        IrTypeRef testedType,
+        IrToTsBridgeContext context
+    ) =>
+        conversion.IsUnboxing
+        && context.RuntimeTypes.BoxingEnabled
+        && IrToTsRuntimeTestBridge.IsEnum(testedType);
 
     /// <summary>
     /// An explicit reference or unboxing conversion: the result takes the
@@ -615,9 +674,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var typeTest = pattern.Type is null
-            ? NonNullTest(value)
-            : BuildTypeTest(value, pattern.Type, staticType: null, context);
+        var typeTest = PropertyPatternTypeTest(value, pattern, context);
 
         var memberTests = pattern.Subpatterns.Select(sub =>
             BuildPatternTestOrNull(PropertyPatternMemberAccess(value, sub), sub.Pattern, context)
@@ -625,6 +682,20 @@ public static partial class IrToTsExpressionBridge
 
         return JoinWithAnd([typeTest, .. memberTests.OfType<TsExpression>()]);
     }
+
+    /// <summary>
+    /// The test a property pattern starts with: its type filter, classified
+    /// with the static type of the tested value (<c>o is Color { }</c> on an
+    /// <c>object</c> tests a possibly boxed enum), or a non-null test.
+    /// </summary>
+    private static TsExpression PropertyPatternTypeTest(
+        TsExpression value,
+        IrPropertyPattern pattern,
+        IrToTsBridgeContext context
+    ) =>
+        pattern.Type is null
+            ? NonNullTest(value)
+            : BuildTypeTest(value, pattern.Type, pattern.InputType, context);
 
     private static TsExpression NonNullTest(TsExpression value) =>
         new TsBinaryExpression(value, "!=", new TsLiteral("null"));
@@ -712,7 +783,10 @@ public static partial class IrToTsExpressionBridge
                 ),
             ],
             IrVarPattern varPattern => [new PatternBinding(varPattern.Designator.Name, value)],
-            IrPropertyPattern property => DesignatorBinding(property.Designator, value)
+            IrPropertyPattern property => DesignatorBinding(
+                    property.Designator,
+                    UnboxedBindingValue(value, property.Type, property.InputType, unboxes)
+                )
                 .Concat(
                     property.Subpatterns.SelectMany(sub =>
                         EnumeratePatternBindings(
@@ -759,31 +833,21 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         IrTypePattern pattern,
         bool unboxes
-    )
-    {
-        var mayHoldBox =
-            unboxes
-            && pattern.InputType is { } input
-            && (
-                input.AcceptsBoxedValues
-                || input is IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface }
-            );
+    ) => UnboxedBindingValue(value, pattern.Type, pattern.InputType, unboxes);
 
-        if (
-            !mayHoldBox
-            || pattern.Type
-                is not IrNamedTypeRef
-                {
-                    Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
-                }
-        )
-            return value;
-
-        return new TsCastExpression(
-            new TsCallExpression(new TsRuntimeHelperReference("unbox"), [value]),
-            IrToTsTypeMapper.Map(pattern.Type)
-        );
-    }
+    private static TsExpression UnboxedBindingValue(
+        TsExpression value,
+        IrTypeRef? type,
+        IrTypeRef? inputType,
+        bool unboxes
+    ) =>
+        unboxes
+        && type is not null
+        && IrToTsRuntimeTestBridge.IsEnum(type)
+        && inputType is not null
+        && IrToTsRuntimeTestBridge.MayHoldBox(inputType)
+            ? UnboxedEnum(value, type)
+            : value;
 
     private static IEnumerable<PatternBinding> DesignatorBinding(
         IrPatternDesignator? designator,

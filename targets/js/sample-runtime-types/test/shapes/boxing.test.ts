@@ -22,9 +22,10 @@ describe("boxing of enums (US3-9)", () => {
     expect(Boxing.isRed(Color.Red)).toBe(false);
   });
 
-  test("a type test on an object requires a box", () => {
+  test("a type test on an object accepts a box or a raw value in range (FR-049, until 011c)", () => {
     expect(Boxing.isColor(Boxing.boxRed())).toBe(true);
-    expect(Boxing.isColor(1)).toBe(false);
+    expect(Boxing.isColor(1)).toBe(true);
+    expect(Boxing.isColor("Red")).toBe(false);
   });
 
   test("the elements of a List<Color> stay raw", () => {

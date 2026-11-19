@@ -1,4 +1,4 @@
-import { box, castTo, defaultEquals, formatBoolean, getRuntimeType, isBoxOf, unbox } from "metano-runtime";
+import { box, castTo, defaultEquals, formatBoolean, getRuntimeType, isType, unbox, unboxFor } from "metano-runtime";
 import { Color, Color$runtimeType } from "./color";
 
 export class Probe {
@@ -15,16 +15,16 @@ export class Probe {
     const c = castTo<Color>(o, Color$runtimeType) as Color;
     let k: Color;
 
-    if (isBoxOf(o, Color$runtimeType) && (k = unbox(o) as Color, true) && k === Color.Green) {
+    if (isType(o, Color$runtimeType) && (k = unbox(o) as Color, true) && k === Color.Green) {
       return "green";
     }
 
     return (($s) => {
-      if (isBoxOf($s, Color$runtimeType) && unbox($s) === Color.Red) {
+      if (unboxFor($s, Color$runtimeType) === Color.Red) {
         return "red";
       }
 
-      if (isBoxOf($s, Color$runtimeType)) {
+      if (isType($s, Color$runtimeType)) {
         const other = unbox($s) as Color;
 
         return other.toString();

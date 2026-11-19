@@ -10,6 +10,23 @@ AliasProbes.*                         #573  Node rejects the `#/` subpath specif
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
 CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
 CastProbes.genericFail                none  a generic down cast is not checked (TypeError at the first member access)
+BoxingProbes.isTests                  none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (object n = 7; n is Color)
+BoxingProbes.switchOnObject           none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 2 in an object[] matches BxColor c)
+RuntimeTypeProbes.enumMembership      none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (object stranger = 7; stranger is RtColor)
+RbAProbes.listForeach                 none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum: List<object> stores enums raw, so a raw 5 is both int and RbHue
+RbAProbes.listIndex                   none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum: List<object> stores enums raw, so xs[0] is int
+RbAProbes.listSwitch                  none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum: List<object> stores enums raw, so the int 5 matches case RbHue h
+RbBProbes.arrayElem                   none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 1 in an object[] is RbHue)
+RbBProbes.paramsArray                 none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 1 in params object[] counts as RbHue)
+RbBProbes.queueStack                  none  new Queue<object>() / new Stack<object>() lower to new Object() (q.push is not a function)
+RbBProbes.typedToObject               #619  Cast<T> emits an unlowered LINQ call
+BoxPAProbes.andNot                    none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (P1(5), P1(0)); AndNotBoxed matches
+BoxPAProbes.switchCombos              none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (P2(0), P2(5)); SwitchCombosBoxed matches
+BoxPAProbes.switchStmtCombos          none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (P3(7), P3(1)); SwitchStmtCombosBoxed matches
+BoxPBProbes.positional                none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 5 and 1 positional elements); PositionalBoxed matches
+BoxPBProbes.propertyPatterns          none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (new BpWrap(5)); PropertyPatternsBoxed matches
+BoxPCProbes.equalityForms             none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Eq(0)); EqualityFormsBoxed matches
+BoxPCProbes.genericPatterns           none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Gen(0)); and a raw enum under T = BpHue tests as int (Gen(BpHue.Red)); GenericPatternsBoxed matches
 BoxingProbes.objectHashSetMixedCount none  a HashSet<object> stores raw values until 011c (defaultEquals collections): a boxed enum and the int 0 collide
 BoxingProbes.wideFlags                none  a 64-bit enum is a JS number and `|` on it truncates to 32 bits (Low | High drops High)
 BoxingProbes.hugeFlags                none  a ulong enum value beyond 2^53 is an inexact JS number, and `|` truncates to 32 bits

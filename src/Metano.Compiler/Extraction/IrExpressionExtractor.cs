@@ -1087,7 +1087,10 @@ public sealed partial class IrExpressionExtractor
             type,
             extractedSubpatterns.OfType<IrPropertySubpattern>().ToList(),
             designator
-        );
+        )
+        {
+            InputType = type is null ? null : PatternInputType(recursive),
+        };
     }
 
     /// <summary>

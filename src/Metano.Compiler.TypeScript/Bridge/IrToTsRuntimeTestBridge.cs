@@ -273,61 +273,69 @@ internal static class IrToTsRuntimeTestBridge
     }
 
     /// <summary>
-    /// An enum tested on a value that may hold a box of it (spec 011 FR-050):
-    /// with boxing on, a value of static type <c>object</c>, <c>ValueType</c> or
-    /// <c>Enum</c> holds an enum only as a box, so the test requires one,
-    /// <c>isBoxOf(value, E$runtimeType)</c> (a raw number is a boxed <c>int</c> in
-    /// .NET); an interface value may hold a box or a raw value (a conversion to an
-    /// interface stays raw), so <c>isType(value, E$runtimeType)</c> accepts both.
-    /// <c>null</c> for every other test, which renders inline.
+    /// An enum tested on a value that may hold a box of it (spec 011 FR-049 /
+    /// FR-050): <c>isType(value, E$runtimeType)</c>, which accepts a box of the
+    /// enum or a raw value in the enum's range (a <c>[StringEnum]</c> one of its
+    /// members). The raw arm is the accepted divergence until stage 011c's
+    /// <c>defaultEquals</c> collections: an object-typed collection slot stores
+    /// the enum raw, so a read-back value is raw, and <c>object n = 7; n is
+    /// Color</c> is <c>true</c>. <c>null</c> for every other test, which renders
+    /// inline.
     /// </summary>
     private static TsExpression? BoxedEnumTest(
         TsExpression value,
         IrTypeRef type,
         IrTypeRef? staticType,
         RuntimeTypeReachabilityResult reachability
-    )
-    {
-        if (BoxedTestKindOf(type, staticType, reachability) is not { } kind)
-            return null;
-
-        var descriptor = IrToTsRuntimeTypeReferences.Of(type, "boxed enum test", reachability)!;
-
-        return kind is BoxedTestKind.BoxOnly
-            ? new TsCallExpression(new TsRuntimeHelperReference("isBoxOf"), [value, descriptor])
-            : IsTypeCall(value, descriptor);
-    }
+    ) =>
+        MeetsBoxes(type, staticType, reachability)
+            ? IsTypeCall(value, BoxedEnumDescriptor(type, reachability))
+            : null;
 
     /// <summary>
-    /// How a test of <paramref name="type"/> on a value of static type
-    /// <paramref name="staticType"/> meets boxes; <c>null</c> when it never does
-    /// (boxing off, a type without a descriptor, a static type that holds no box).
+    /// Whether a test of <paramref name="type"/> on a value of static type
+    /// <paramref name="staticType"/> may meet a box of it: boxing is on, the
+    /// type is an enum with a descriptor, and the static type may hold a box
+    /// (<see cref="MayHoldBox"/>).
     /// </summary>
-    public static BoxedTestKind? BoxedTestKindOf(
+    public static bool MeetsBoxes(
         IrTypeRef type,
         IrTypeRef? staticType,
         RuntimeTypeReachabilityResult reachability
-    )
-    {
-        if (
-            !reachability.BoxingEnabled
-            || staticType is null
-            || type
-                is not IrNamedTypeRef
-                {
-                    Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
-                } enumType
-            || !IrToTsRuntimeTypeReferences.IsDescribable(enumType, reachability)
-        )
-            return null;
+    ) =>
+        reachability.BoxingEnabled
+        && staticType is not null
+        && MayHoldBox(staticType)
+        && IsEnum(type)
+        && IrToTsRuntimeTypeReferences.IsDescribable((IrNamedTypeRef)type, reachability);
 
-        if (staticType.AcceptsBoxedValues)
-            return BoxedTestKind.BoxOnly;
+    /// <summary>
+    /// Whether a value of static type <paramref name="staticType"/> may hold a
+    /// boxed enum: <c>object</c>, <c>ValueType</c> or <c>Enum</c> (a boxing
+    /// conversion's target), an interface (a cast from one of those), or a type
+    /// parameter (instantiated with <c>object</c>); a nullable of one too.
+    /// </summary>
+    public static bool MayHoldBox(IrTypeRef staticType) =>
+        staticType is IrNullableTypeRef nullable
+            ? MayHoldBox(nullable.Inner)
+            : staticType.AcceptsBoxedValues
+                || staticType
+                    is IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface }
+                        or IrTypeParameterRef;
 
-        return staticType is IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface }
-            ? BoxedTestKind.BoxOrRaw
-            : null;
-    }
+    /// <summary>The descriptor a boxed enum test reads.</summary>
+    public static TsExpression BoxedEnumDescriptor(
+        IrTypeRef type,
+        RuntimeTypeReachabilityResult reachability
+    ) => IrToTsRuntimeTypeReferences.Of(type, "boxed enum test", reachability)!;
+
+    /// <summary>Whether <paramref name="type"/> is a numeric or string enum.</summary>
+    public static bool IsEnum(IrTypeRef type) =>
+        type
+            is IrNamedTypeRef
+            {
+                Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
+            };
 
     /// <summary>
     /// An enum tests its values inline (<see cref="IrToTsEnumValueTest"/>); any
@@ -339,13 +347,8 @@ internal static class IrToTsRuntimeTestBridge
         IrRuntimeTypeTest.Primitive primitive
     )
     {
-        if (
-            type is IrNamedTypeRef
-            {
-                Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
-            } enumType
-        )
-            return IrToTsEnumValueTest.Of(value, enumType);
+        if (IsEnum(type))
+            return IrToTsEnumValueTest.Of(value, (IrNamedTypeRef)type);
 
         var runtime = TsRuntimePrimitive.Of(primitive.PrimitiveKind, primitive.ExactKind);
 
@@ -417,14 +420,4 @@ internal static class IrToTsRuntimeTestBridge
                 new TsLiteral(arity.ToString(CultureInfo.InvariantCulture))
             )
         );
-}
-
-/// <summary>How a type test of an enum meets boxes (<see cref="IrToTsRuntimeTestBridge.BoxedTestKindOf"/>).</summary>
-internal enum BoxedTestKind
-{
-    /// <summary>The value holds the enum only as a box: <c>isBoxOf</c>.</summary>
-    BoxOnly,
-
-    /// <summary>The value holds a box or a raw value: <c>isType</c>.</summary>
-    BoxOrRaw,
 }

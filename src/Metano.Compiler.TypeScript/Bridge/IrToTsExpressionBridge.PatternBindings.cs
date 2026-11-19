@@ -69,7 +69,7 @@ public static partial class IrToTsExpressionBridge
     {
         var rightValue = left is IrVarPattern capture
             ? new TsIdentifier(IrToTsNamingPolicy.ToLocalName(capture.Designator.Name))
-            : value;
+            : ConjunctionRightValue(value, left, context);
 
         return new TsBinaryExpression(
             BuildBindingPatternTest(value, left, context),
@@ -84,9 +84,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var typeTest = pattern.Type is null
-            ? NonNullTest(value)
-            : BuildTypeTest(value, pattern.Type, staticType: null, context);
+        var typeTest = PropertyPatternTypeTest(value, pattern, context);
 
         var memberTests = pattern.Subpatterns.Select(sub =>
             BuildBindingPatternTestOrNull(
@@ -98,7 +96,15 @@ public static partial class IrToTsExpressionBridge
 
         return JoinWithAnd([
             typeTest,
-            .. OwnDesignatorAssignment(pattern.Designator, value),
+            .. OwnDesignatorAssignment(
+                pattern.Designator,
+                UnboxedBindingValue(
+                    value,
+                    pattern.Type,
+                    pattern.InputType,
+                    context.RuntimeTypes.BoxingEnabled
+                )
+            ),
             .. memberTests.OfType<TsExpression>(),
         ]);
     }

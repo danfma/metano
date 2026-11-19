@@ -7,9 +7,18 @@ AliasProbes.explicitTypeArgs LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.genericAlias LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.isAlias LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.staticCall LOADFAIL node:internal/modules/esm/resolve:698
+BoxPAProbes.andNot = FTFFFTTF|TTTTTFTF|TFTFTTTT|TTTTTFTF|FTFFFTTF|FFFFTFFT
+BoxPAProbes.switchCombos = red,nonred,rw,acc,?,red,nonred
+BoxPAProbes.switchStmtCombos = red,green,notgreen,rw,?,notgreen,notgreen,?
+BoxPBProbes.positional = rr,same,same,read,read,same
+BoxPBProbes.propertyPatterns = TTTTTFFT|FTFFFFFT|TTTTTTTT|FFFTFFFF
+BoxPCProbes.equalityForms = TTTTTT|FFFFFF|FFTTTT|FFFFFF
+BoxPCProbes.genericPatterns = TTTFh0|TFTTh5|TTFFh0|TTTFh0|FFFF-
 BoxingProbes.hugeFlags = Low|Low
 BoxingProbes.hugeFlagsFromValue = Top|Top
+BoxingProbes.isTests = True|False|True|True|True|False
 BoxingProbes.objectHashSetMixedCount = 1
+BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 BoxingProbes.wideFlags = Low|Low
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.enums = 1|1|1
@@ -85,6 +94,13 @@ ParseProbes.decimalTry = 1.5;F;F;2;F;F;F;F;15;7;5;0.5;F;F;F;F;
 ParseProbes.doubleOk = 1.5|1000|1000.5|-0.5|5|Infinity|-Infinity|NaN|1E-07|3|Infinity|Infinity
 ParseProbes.offsets THROWS TypeError: o.toUnixTimeSeconds is not a function
 ParseProbes.timeSpans THROWS ReferenceError: TimeSpan is not defined
+RbAProbes.listForeach = 3|3
+RbAProbes.listIndex = TTTTFT
+RbAProbes.listSwitch = hue5,hue5,other,
+RbBProbes.arrayElem = TTTT
+RbBProbes.paramsArray = 3
+RbBProbes.queueStack THROWS TypeError: q.push is not a function
+RbBProbes.typedToObject THROWS Error: Unsupported expression: UnloweredLinqCall
 Round2Probes.decToDoubleThird = 0.3333333333333333|T
 Round2Probes.exCtorArgs = noparam;p;mnoparam;in;Specified method is not supported.;The given key was not present in the dictionary.;One of the identified items was in an invalid format.;Exception of type 'System.Exception' was thrown.;has;i;
 Round2Probes.nullableText = true|1e-7|0.10000000149011612|True1E-070.1|True1E-070.1|True1E-07
@@ -94,6 +110,7 @@ Round3Probes.mathCalls = v1E+21|1E-07|2||1.7976931348623157E+308|1|2|-1
 Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operators with Temporal objects. When comparing, use Temporal.PlainDateTime.compare(obj1, obj2), not obj1 > obj2. When coercing to strings, use `${obj}` or String(obj), not '' + obj. When coercing to numbers, use properties or methods of the object, not `+obj`. When concatenating with strings, use `${str}${obj}` or str.concat(obj), not str + obj. In React, coerce to a string before rendering a Temporal object.
 Round4Probes.compoundIndexOnce = nullx,by,null|3|pq|1
 Round4Probes.compoundReceiverOnce = nullx|sy|nullz|4
+RuntimeTypeProbes.enumMembership = True|True
 RuntimeTypeShapeProbes.closedGenericName = RtBox`1<Int32>|Conformance
 RuntimeTypeShapeProbes.plainObjectIsStructural = True|True|False
 StringProbes.cases = ABC|abc|ABC|abc|SS|2

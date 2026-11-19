@@ -101,7 +101,7 @@ public sealed partial class IrExpressionExtractor
         label switch
         {
             CaseSwitchLabelSyntax constant when NamedPatternType(constant.Value) is { } type =>
-                new IrPatternCaseLabel(ExtractTypePattern(constant.Value, type)),
+                new IrPatternCaseLabel(ExtractCaseTypePattern(constant, type)),
             CaseSwitchLabelSyntax constant => WithBoxedConstantFacts(constant),
             CasePatternSwitchLabelSyntax pattern => new IrPatternCaseLabel(
                 ExtractPattern(pattern.Pattern),
@@ -109,6 +109,29 @@ public sealed partial class IrExpressionExtractor
             ),
             _ => new IrDefaultCaseLabel(),
         };
+
+    /// <summary>
+    /// <c>case Circle:</c> as a type pattern, classified with the static type
+    /// of the switch subject (the label's value is a type name, which has no
+    /// pattern operation of its own to report it).
+    /// </summary>
+    private IrPattern ExtractCaseTypePattern(CaseSwitchLabelSyntax label, IrTypeRef type)
+    {
+        var pattern = ExtractTypePattern(label.Value, type);
+
+        return pattern is IrTypePattern typePattern && SwitchSubjectType(label) is { } subjectType
+            ? typePattern with
+            {
+                InputType = IrTypeRefMapper.Map(subjectType, _originResolver, _target),
+            }
+            : pattern;
+    }
+
+    /// <summary>The static type of the subject of the switch statement a label belongs to.</summary>
+    private ITypeSymbol? SwitchSubjectType(CaseSwitchLabelSyntax label) =>
+        (label.Parent?.Parent as SwitchStatementSyntax)?.Expression is { } subject
+            ? _semantic.GetTypeInfo(subject).Type
+            : null;
 
     private static bool IsStableSymbol(ISymbol? symbol) =>
         symbol switch

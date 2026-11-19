@@ -247,7 +247,7 @@ public class BoxingTranspileTests
     }
 
     [Test]
-    public async Task TypeQuestionsOnAnObject_TestForABox()
+    public async Task TypeQuestionsOnAnObject_AcceptABoxOrARawValue()
     {
         var output = Transpile(
             """
@@ -259,11 +259,9 @@ public class BoxingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return isBoxOf(o, Color$runtimeType);");
+        await Assert.That(output).Contains("return isType(o, Color$runtimeType);");
 
-        await Assert
-            .That(output)
-            .Contains("return isBoxOf(o, Color$runtimeType) && unbox(o) === Color.Red;");
+        await Assert.That(output).Contains("return unboxFor(o, Color$runtimeType) === Color.Red;");
 
         await Assert.That(output).Contains("return castTo<Color>(o, Color$runtimeType);");
         await Assert.That(output).Contains("return isType(c, Color$runtimeType);");
@@ -290,11 +288,91 @@ public class BoxingTranspileTests
             """
         );
 
-        await Assert
-            .That(output)
-            .Contains("case isBoxOf(o, Color$runtimeType) && unbox(o) === Color.Red:");
+        await Assert.That(output).Contains("case unboxFor(o, Color$runtimeType) === Color.Red:");
 
         await Assert.That(output).Contains("const p = unbox(o) as Perms;");
+    }
+
+    [Test]
+    public async Task ConstantUnderATypeConjunct_ComparesTheUnboxedValue()
+    {
+        var output = Transpile(
+            """
+            public static bool NotRed(object o) => o is Color and not Color.Red;
+            public static bool Above(object o) => o is Color and > Color.Red;
+            public static string Arm(object o) => o switch { Color and Color.Green => "g", _ => "?" };
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("return isType(o, Color$runtimeType) && !(unbox(o) as Color === Color.Red);");
+
+        await Assert
+            .That(output)
+            .Contains("return isType(o, Color$runtimeType) && unbox(o) as Color > Color.Red;");
+
+        await Assert
+            .That(output)
+            .Contains("isType(o, Color$runtimeType) && unbox(o) as Color === Color.Green ? \"g\"");
+    }
+
+    [Test]
+    public async Task BareTypeLabelAndEmptyPropertyPattern_TestTheBoxOnAnObject()
+    {
+        var output = Transpile(
+            """
+            public static bool Empty(object o) => o is Color { };
+            public static string Label(object o)
+            {
+                switch (o)
+                {
+                    case Color:
+                        return "color";
+                    default:
+                        return "?";
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("return isType(o, Color$runtimeType);");
+        await Assert.That(output).Contains("case isType(o, Color$runtimeType):");
+        await Assert.That(output).DoesNotContain("isInt32(o)");
+    }
+
+    [Test]
+    public async Task TestsOnATypeParameter_AcceptABox()
+    {
+        var output = Transpile(
+            """
+            public static bool Is<T>(T v) => v is Color;
+            public static bool IsRed<T>(T v) => v is Color.Red;
+            public static int Bound<T>(T v) => v is Color c ? (int)c : -1;
+            """
+        );
+
+        await Assert.That(output).Contains("return isType(v, Color$runtimeType);");
+        await Assert.That(output).Contains("return unboxFor(v, Color$runtimeType) === Color.Red;");
+        await Assert.That(output).Contains("(c = unbox(v) as Color, true)");
+    }
+
+    [Test]
+    public async Task EqualsOnAnEnum_BoxesTheReceiver()
+    {
+        await Assert
+            .That(Transpile("public static bool Of(Color c, object o) => c.Equals(o);"))
+            .Contains("return defaultEquals(box(c, Color$runtimeType), o);");
+    }
+
+    [Test]
+    public async Task NarrowedUnboxingCast_UnwrapsTheBox()
+    {
+        await Assert
+            .That(
+                Transpile("public static bool Of(object o) => o is Color && (Color)o == Color.Red;")
+            )
+            .Contains("return isType(o, Color$runtimeType) && unbox(o) as Color === Color.Red;");
     }
 
     [Test]

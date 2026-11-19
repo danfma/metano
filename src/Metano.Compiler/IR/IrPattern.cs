@@ -76,7 +76,15 @@ public sealed record IrPropertyPattern(
     IrTypeRef? Type,
     IReadOnlyList<IrPropertySubpattern> Subpatterns,
     IrPatternDesignator? Designator = null
-) : IrPattern;
+) : IrPattern
+{
+    /// <summary>
+    /// The static type of the value the pattern tests, when extraction knows
+    /// it, so a target can classify the <see cref="Type"/> filter with it, as
+    /// for <see cref="IrTypePattern.InputType"/>; <c>null</c> otherwise.
+    /// </summary>
+    public IrTypeRef? InputType { get; init; }
+}
 
 /// <summary>
 /// A single <c>Name: pattern</c> entry inside an <see cref="IrPropertyPattern"/>.

@@ -1171,7 +1171,7 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task BareEnumTypeArm_OnObject_TestsForABox()
+    public async Task BareEnumTypeArm_OnObject_TestsForABoxOrARawValue()
     {
         // An enum lowers to a number / string union with no class value, so
         // `instanceof Color` would throw at runtime; on an `object` the value
@@ -1201,9 +1201,9 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["kinds.ts"];
-        // On an `object` an enum exists only as a box (spec 011 FR-050).
-        await Assert.That(output).Contains("isBoxOf(o, Color$runtimeType) ? \"color\"");
-        await Assert.That(output).Contains("isBoxOf(o, Size$runtimeType) ? \"size\"");
+        // On an `object` an enum is a box of it or a raw value of it (spec 011 FR-049).
+        await Assert.That(output).Contains("isType(o, Color$runtimeType) ? \"color\"");
+        await Assert.That(output).Contains("isType(o, Size$runtimeType) ? \"size\"");
         await Assert.That(output).DoesNotContain("instanceof");
     }
 

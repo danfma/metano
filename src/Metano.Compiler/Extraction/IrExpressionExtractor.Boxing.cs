@@ -211,10 +211,8 @@ public sealed partial class IrExpressionExtractor
     private IrConstantCaseLabel WithBoxedConstantFacts(CaseSwitchLabelSyntax label)
     {
         var lowered = new IrConstantCaseLabel(Extract(label.Value));
-        var subject = (label.Parent?.Parent as SwitchStatementSyntax)?.Expression;
-        var inputType = subject is null ? null : _semantic.GetTypeInfo(subject).Type;
 
-        return BoxedConstantFactsOf(label.Value, inputType) is var (input, type)
+        return BoxedConstantFactsOf(label.Value, SwitchSubjectType(label)) is var (input, type)
             ? lowered with
             {
                 InputType = input,
@@ -235,7 +233,7 @@ public sealed partial class IrExpressionExtractor
             || constantType is not { TypeKind: TypeKind.Enum }
             || inputType is null
             || !(BoxingSlots.CanHoldBox(inputType) || inputType.TypeKind is TypeKind.Interface)
-            || inputType is ITypeParameterSymbol or IDynamicTypeSymbol
+            || inputType is IDynamicTypeSymbol
         )
             return null;
 
@@ -247,9 +245,10 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>o.Equals(x)</c> bound to <c>object.Equals(object)</c> on a receiver
-    /// whose static type is <c>object</c>, <c>ValueType</c> or <c>Enum</c>
-    /// (FR-051): the runtime value's equality answers, a box comparing its type
-    /// and value, so the argument is boxed as C# boxes it. <c>null</c> for any
+    /// whose static type is <c>object</c>, <c>ValueType</c> or <c>Enum</c>, or
+    /// an enum value's <c>Equals(object)</c> (FR-051): the runtime value's
+    /// equality answers, a box comparing its type and value, so the argument is
+    /// boxed as C# boxes it, and so is an enum receiver. <c>null</c> for any
     /// other call.
     /// </summary>
     private IrExpression? TryExtractDefaultEquals(
@@ -260,21 +259,33 @@ public sealed partial class IrExpressionExtractor
         if (
             _context.KeepsReflectionSourceForms
             || method is not { Name: "Equals", IsStatic: false, Parameters.Length: 1 }
-            || method.ContainingType.SpecialType is not SpecialType.System_Object
             || QualifiedMemberSyntax.From(inv.Expression) is not { } access
             || access.Receiver is BaseExpressionSyntax
             || inv.ArgumentList.Arguments is not [{ Expression: var argument }]
-            || !BoxingSlots.CanHoldBox(_semantic.GetTypeInfo(access.Receiver).Type)
-            || _semantic.GetTypeInfo(access.Receiver).Type
-                is ITypeParameterSymbol
-                    or IDynamicTypeSymbol
+            || DefaultEqualsReceiver(access.Receiver, method) is not { } receiver
         )
             return null;
 
-        return new IrBinaryExpression(
-            Extract(access.Receiver),
-            IrBinaryOp.DefaultEqual,
-            Extract(argument)
-        );
+        return new IrBinaryExpression(receiver, IrBinaryOp.DefaultEqual, Extract(argument));
+    }
+
+    /// <summary>
+    /// The left operand of a default <c>Equals</c>: a receiver that may hold a
+    /// box as it is, an enum receiver boxed; <c>null</c> for any other receiver
+    /// (a type parameter or <c>dynamic</c> one included).
+    /// </summary>
+    private IrExpression? DefaultEqualsReceiver(ExpressionSyntax receiver, IMethodSymbol method)
+    {
+        var type = _semantic.GetTypeInfo(receiver).Type;
+
+        if (BoxingSlots.IsEnumEquals(method, type))
+            return BoxOf(Extract(receiver), type, _semantic.Compilation.ObjectType);
+
+        return
+            method.ContainingType.SpecialType is SpecialType.System_Object
+            && BoxingSlots.CanHoldBox(type)
+            && type is not (ITypeParameterSymbol or IDynamicTypeSymbol)
+            ? Extract(receiver)
+            : null;
     }
 }

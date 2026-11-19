@@ -30,3 +30,4 @@ export { enumIsDefined } from "./enum-is-defined.ts";
 export { Boxed, box, boxNullable } from "./box.ts";
 export { isBoxOf } from "./is-box-of.ts";
 export { unbox } from "./unbox.ts";
+export { unboxFor } from "./unbox-for.ts";

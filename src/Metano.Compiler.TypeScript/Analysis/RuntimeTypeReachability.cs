@@ -202,7 +202,8 @@ internal sealed class RuntimeTypeReachability
     /// <summary>
     /// Whether a tested value of static type <paramref name="input"/> may hold a
     /// box with boxing on (<c>object</c>, <c>ValueType</c>, <c>Enum</c>, an
-    /// interface): an enum test then reads the enum's descriptor (FR-050).
+    /// interface, a type parameter): an enum test then reads the enum's
+    /// descriptor (FR-050).
     /// </summary>
     private bool MayHoldBox(IrQuestionedType? input) =>
         _boxingEnabled
@@ -210,6 +211,7 @@ internal sealed class RuntimeTypeReachability
         && input.Shape is not IrQuestionedTypeShape.Dynamic
         && (
             input.AcceptsBoxedValues
+            || input.Shape is IrQuestionedTypeShape.TypeParameter
             || (
                 input is { Shape: IrQuestionedTypeShape.Named, Key: { } key }
                 && IrTypeKeys.Find(key, _compilation) is { TypeKind: TypeKind.Interface }

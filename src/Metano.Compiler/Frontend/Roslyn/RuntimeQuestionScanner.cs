@@ -377,7 +377,28 @@ internal sealed class RuntimeQuestionScanner
         if (RuntimeQuestionFacts.IsUnsupportedTypeMember(method))
             ReportUnsupportedTypeMember(method, invocation.Syntax);
 
+        InspectEnumEquals(invocation);
         RecordDescribedTypeArguments(invocation);
+    }
+
+    /// <summary>
+    /// An enum value's <c>Equals(object)</c> boxes its receiver (FR-051), as a
+    /// boxing conversion to <c>object</c> does.
+    /// </summary>
+    private void InspectEnumEquals(IInvocationOperation invocation)
+    {
+        var receiver = invocation.Instance?.Type;
+
+        if (!BoxingSlots.IsEnumEquals(invocation.TargetMethod, receiver))
+            return;
+
+        _questions.Add(
+            Question(IrRuntimeQuestionKind.Box, receiver, invocation.Syntax.GetLocation()) with
+            {
+                InputType = RuntimeQuestionFacts.QuestionedTypeOf(_compilation.ObjectType),
+                Text = invocation.Instance!.Syntax.ToString(),
+            }
+        );
     }
 
     /// <summary>
