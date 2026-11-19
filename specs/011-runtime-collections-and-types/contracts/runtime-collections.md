@@ -857,7 +857,8 @@ export class ImmutableList<T> implements IImmutableList<T>, IReadOnlyList<T> {
   replace(oldValue: T, newValue: T, comparer?: IEqualityComparer<T> | null): ImmutableList<T>;  // ArgumentException when absent
   setItem(index: number, value: T): ImmutableList<T>;  clear(): ImmutableList<T>;
   sort(comparison?: ((x: T, y: T) => number) | IComparer<T> | null): ImmutableList<T>;  reverse(): ImmutableList<T>;
-  copyTo(array: T[], arrayIndex?: number): void;  toArray(): T[];  toJSON(): T[];
+  copyTo(array: T[], arrayIndex?: number): void;  // ArgumentNullException (array); a negative index or a short array: ArgumentOutOfRangeException (arrayIndex), .NET's default text
+  toArray(): T[];  toJSON(): T[];
   [Symbol.iterator](): Iterator<T>;
 }
 ```
