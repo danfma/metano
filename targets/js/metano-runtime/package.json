@@ -96,7 +96,7 @@
     ]
   },
   "scripts": {
-    "build": "tsgo -b . && bun scripts/build-dists.ts",
+    "build": "bun scripts/build-dists.ts",
     "test": "bun test",
     "bench": "bun bench/collections.bench.ts",
     "bench:node": "node --experimental-transform-types --no-warnings bench/collections.bench.ts",
