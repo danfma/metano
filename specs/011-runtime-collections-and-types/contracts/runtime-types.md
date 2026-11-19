@@ -43,8 +43,7 @@ export type CollectionType<T> = RuntimeTypeBase<T> & {
   readonly ctor?: abstract new (...args: any[]) => T;                   // classes only
   readonly typeArguments: ReadonlyArray<RuntimeType>;                   // UnknownType = wildcard
   readonly variance: ReadonlyArray<"invariant" | "covariant">;          // identity vs assignability per argument (FR-008)
-  readonly interfaces?: ReadonlyArray<() => CollectionType<unknown>>;   // class kinds: the open interface descriptors it implements (D30; nominal interface tests)
-  readonly close?: (typeArguments: ReadonlyArray<RuntimeType>) => CollectionType<T>; // the kind's factory, so getRuntimeType specializes from the instance slot without importing collections (D30)
+  readonly interfaces?: ReadonlyArray<{ readonly collection: string; readonly arguments: ReadonlyArray<number> | null }>; // class kinds: implemented interfaces by kind, arguments as slot indices (null = wildcard); data (D30)
 };
 export type NullableType<T> = RuntimeTypeBase<T | null> & { readonly kind: "nullable"; readonly inner: () => RuntimeType<T>; };
 export type UnionType<T> = RuntimeTypeBase<T> & { readonly kind: "union"; readonly cases: ReadonlyArray<() => RuntimeType>; }; // spec 010

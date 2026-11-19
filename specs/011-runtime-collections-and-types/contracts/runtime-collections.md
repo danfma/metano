@@ -13,6 +13,9 @@
 | `tryGetValue(key): [true, V] \| [false, null]`; `tryDequeue` / `tryPeek` / `tryPop` likewise; `find` / `findLast` return `T \| null` | Each takes the value C# stores on a miss: `tryGetValue(key, missingValue)` returns `[false, missingValue]`; `find(match, defaultValue)` returns `defaultValue` | C# stores `default(T)` (`0` for `int`, `false`, …), not `null`; the compiler already passes it for `TryGetValue` / `GetValueOrDefault` (`Dictionaries.cs`, `IrOutArgumentCall`) and for `Find` (`Lists.cs`). |
 | `sort(comparison?)`, `binarySearch(item, comparison?)` | Both take `comparison?: Comparison<T> \| IComparer<T> \| null`, told apart by `typeof comparison === "function"` (a lowered `IComparer<T>` is always an object) | `Sort` has both C# overloads; `BinarySearch(T, IComparer<T>)` exists; one parameter shape shared with 011h's `ImmutableList` (group H's request). |
 | `IReadOnlyList<T>` declares `slice` / `getRange` | Removed from the interface (kept on `List<T>`) | C# cannot call them through `IReadOnlyList<T>` (no `Slice` / `GetRange` members), and they would force every 011h implementer to return and import a `List`. |
+| Interfaces carry the class conveniences (`fromEnd`, `update`, `updateReturningOld`, `getValueOrDefault`, read-only `indexOf` / `contains`) | Each TS interface declares only what its C# interface declares; those stay class members, and interface receivers lower through the interface members (§ Interface receivers) | A user C# class implementing `IList<T>` must type-check against the interface without synthesized members (supervisor decision W4-13, R0 review). |
+| Class `$runtimeType` = `listType(UnknownType)` with `interfaces` thunks and a `close` hook | A data literal importing nothing (`interfaces` as kind names with slot-index mappings); reflection's `specializeCollection` specializes and memoizes | FR-018 (descriptors are data) and research R13 row 18: a used class keeps its getter body, so a factory call there would pull `descriptors.ts` into every `List` bundle (R0 review). |
+| `elementHashCode` hashes any object without `hashCode` by identity | `Decimal` and Temporal values hash by their normalized text; any other value with `equals` but no `hashCode` hashes to a constant | decimal.js and Temporal values have `equals` but no `hashCode`; an identity hash would put equal keys in different buckets (`HashSet<decimal>.Contains`, `Dictionary<DateOnly, V>.get` silently missing; R0 review blocker B1). |
 | `IReadOnlyDictionary.keys: KeyCollection<K>` | `keys: IReadOnlyCollection<K>`, `values: IReadOnlyCollection<V>` (`Dictionary` narrows them to `KeyCollection` / `ValueCollection`) | `ConcurrentDictionary` (011h) returns snapshots, not `KeyCollection`. |
 | Fixed-size adopted list: `clear` throws `Collection was of a fixed size.`; `set` / `sort` / `reverse` bump nothing stated | `clear` throws `Collection is read-only.`; a fixed-size adopted list's writes never bump `_version` and `isReadOnly` is `true` | .NET (an array as `IList<T>`): `Clear` → `NotSupportedException: Collection is read-only.`; array enumerators never detect writes; `ICollection<T>.IsReadOnly` of an array is `true`. |
 | `remove` and `clear` are the only non-invalidating dictionary members; "`add` / `set` of a new key / `update` do" | `Dictionary`: only an insertion of a new key invalidates (`add`, `set` / `tryAdd` of a new key); overwriting an existing key (`set`, `update`) does not. `HashSet`: only an addition invalidates (`add` of a new item, `unionWith` / `symmetricExceptWith` when they add); `remove`, `clear`, `exceptWith`, `intersectWith`, `removeWhere` do not | Probed on .NET 10: `foreach (kv in d) d[kv.Key] = 5` and `d[kv.Key] += 1` do not throw; `HashSet.Remove` / `Clear` / `ExceptWith` / `IntersectWith` / `RemoveWhere` during enumeration do not throw. |
@@ -117,7 +120,7 @@ export function createComparer<T>(comparison: Comparison<T>): IComparer<T>; // C
 ```
 
 - **`elementEquals(a, b)`** = `Array.isArray(a) || Array.isArray(b) ? a === b : defaultEquals(a, b)`, where `defaultEquals` is the existing `system/equality.ts` function: the same reference or both nullish; numbers by `===` or both `NaN` (SameValueZero, so `0` equals `-0`, as `double.Equals` does); a `Boxed` equals only a box of the same type and value (FR-051); a value with an `equals` method (records, structs, `Decimal`, Temporal values, user overrides) through it; a `Temporal.Duration` by length; a `Date` by time; **reference identity otherwise** (a class without `Equals`, a `Map`, a `Set`, a runtime collection, an array). It is never `system/equality.equals` (structural; research R14).
-- **`elementHashCode(value)`**: `0` for `null` / `undefined`; primitives by value (`HashCode.combine`; a `bigint` by `hashInt64`); a `Boxed` by its raw value; a value with `hashCode()` through it; a `Duration` / `Date` by length / time; anything else (arrays included) by an identity hash: a sequential number per object kept in a `WeakMap` created lazily on first use (no module-scope `new`, NFR-006).
+- **`elementHashCode(value)`**: `0` for `null` / `undefined`; primitives by value (`HashCode.combine`; a `bigint` by `hashInt64`); a `Boxed` by its raw value; a value with `hashCode()` through it; a `Duration` / `Date` by length / time; a `Decimal` (decimal.js, which has `equals` but no `hashCode`) by the hash of its normalized text (`toString()`, decimal.js drops trailing zeros; `-0` hashes as `0`), so `1.0m` and `1m` collide as `equals` requires; a Temporal value (`PlainDate`, `PlainTime`, `PlainDateTime`, `ZonedDateTime`, `Instant`, …: `equals`, no `hashCode`) by the hash of `toString()`, which includes the time zone and calendar that its `equals` compares; **any other value with `equals` but no `hashCode`** by a constant (one bucket, compared with `equals`: O(n) but correct, as today's `hash-set.ts`); anything else (arrays and identity-equal objects) by an identity hash: a sequential number per object kept in a `WeakMap` created lazily on first use (no module-scope `new`, NFR-006). R1 tests `HashSet<decimal>.contains(1.0m)` after `add(1m)`, `Dictionary<DateOnly, V>.get` with a fresh equal `PlainDate`, and a user class with `equals` only.
 - The collections do not call `elementHashCode` for primitives or identity-keyed objects: `hash-core` keys those straight in a native `Map` / `Set` (O(1), SameValueZero = `elementEquals` for them) and indexes only the values whose equality is not identity (a value with `equals`, a box, a `Duration`, a `Date`) by `elementHashCode`. With a user `IEqualityComparer<T>` every key goes through the comparer. Enumeration order is insertion order in both paths.
 - **`defaultCompare(a, b)`** (`Comparer<T>.Default`, shared by `List.sort`, `List.binarySearch` and 011h's sorted classes): `0` when `a === b`; `null` / `undefined` sorts before every value and equals itself; numbers as `double.CompareTo` (`NaN` before every number, `-0` equals `0`); `bigint` and `boolean` (`false < true`) by value; strings **ordinally** (UTF-16 code units, as `<`; D30); a `Boxed` by its raw value; a value with `compareTo(other)` (a lowered `IComparable<T>` / `IComparable`) through it; `Decimal` through `cmp`; a Temporal value through its constructor's `compare`; otherwise `throwNotComparable()`. Documented divergence: .NET's `Comparer<string>.Default` is culture-sensitive (`["b", "a", "B", "A"]` sorts `a, A, b, B` on .NET under ICU and `A, B, a, b` here), the order LINQ's `orderBy` already uses (`compareKeys`). `compareKeys` (LINQ) is not changed by 011c; folding it into `defaultCompare` is a follow-up (one rule per concept). `defaultCompare` itself throws the `ArgumentException`; `List.sort` / `binarySearch` (and 011h's `ImmutableList`) wrap it in `throwCompareFailed`, while the sorted classes surface it unwrapped, as .NET does.
 
@@ -159,46 +162,49 @@ export function setEquals<T>(set: SetLike<T>, other: Iterable<T>, distinct: (ite
 ## Interfaces (`interfaces.ts`, FR-003)
 
 ```ts
+// W4-13: each interface declares only what its C# interface declares (inherited members included),
+// so a user C# class implementing IList<T> type-checks without synthesized members.
 export interface IReadOnlyCollection<T> extends Iterable<T> {
   readonly count: number;
 }
 export interface IReadOnlyList<T> extends IReadOnlyCollection<T> {
   get(index: number): T;                                       // ArgumentOutOfRangeException
-  fromEnd(n: number): T;                                       // list[^n]
-  indexOf(item: T): number;                                    // elementEquals
-  contains(item: T): boolean;
 }
-export interface ICollection<T> extends IReadOnlyCollection<T> {
+export interface ICollection<T> extends Iterable<T> {
+  readonly count: number;
   readonly isReadOnly: boolean;
   add(item: T): void;
-  remove(item: T): boolean;
   clear(): void;
   contains(item: T): boolean;
   copyTo(array: T[], arrayIndex?: number): void;
+  remove(item: T): boolean;
 }
-export interface IList<T> extends ICollection<T>, IReadOnlyList<T> {
+export interface IList<T> extends ICollection<T> {
+  get(index: number): T;
   set(index: number, value: T): void;
-  update(index: number, f: (current: T) => T): T;              // list[i] op= …; returns the new value
-  updateReturningOld(index: number, f: (current: T) => T): T;  // list[i]++ whose value is used; returns the old value
+  indexOf(item: T): number;
   insert(index: number, item: T): void;
   removeAt(index: number): void;
 }
-export interface IReadOnlyDictionary<K, V> extends Iterable<readonly [K, V]> {
-  readonly count: number;
-  readonly keys: IReadOnlyCollection<K>;
-  readonly values: IReadOnlyCollection<V>;
+export interface IReadOnlyDictionary<K, V> extends IReadOnlyCollection<readonly [K, V]> {
   get(key: K): V;                                              // KeyNotFoundException; ArgumentNullException for null
+  readonly keys: IReadOnlyCollection<K>;                       // C#: IEnumerable<K>
+  readonly values: IReadOnlyCollection<V>;                     // C#: IEnumerable<V>
   containsKey(key: K): boolean;
   tryGetValue<D>(key: K, missingValue: D): readonly [found: true, value: V] | readonly [found: false, value: D];
-  getValueOrDefault<D>(key: K, defaultValue: D): V | D;
 }
-export interface IDictionary<K, V> extends IReadOnlyDictionary<K, V> {
-  set(key: K, value: V): void;                                 // indexer write: insert or overwrite
-  update(key: K, f: (current: V) => V): V;                     // dict[k] op= …; KeyNotFoundException on a miss
-  updateReturningOld(key: K, f: (current: V) => V): V;
-  add(key: K, value: V): void;                                 // ArgumentException on a duplicate
-  remove(key: K): boolean;
+export interface IDictionary<K, V> extends Iterable<readonly [K, V]> {
+  readonly count: number;                                      // ICollection<KeyValuePair<K, V>>
+  readonly isReadOnly: boolean;
   clear(): void;
+  get(key: K): V;
+  set(key: K, value: V): void;                                 // indexer write: insert or overwrite
+  readonly keys: IReadOnlyCollection<K>;                       // C#: ICollection<K>; its mutators are not declared (they throw on .NET)
+  readonly values: IReadOnlyCollection<V>;
+  add(key: K, value: V): void;                                 // ArgumentException on a duplicate
+  containsKey(key: K): boolean;
+  remove(key: K): boolean;
+  tryGetValue<D>(key: K, missingValue: D): readonly [found: true, value: V] | readonly [found: false, value: D];
 }
 export interface IReadOnlySet<T> extends IReadOnlyCollection<T> {
   contains(item: T): boolean;
@@ -209,12 +215,18 @@ export interface IReadOnlySet<T> extends IReadOnlyCollection<T> {
   overlaps(other: Iterable<T>): boolean;
   setEquals(other: Iterable<T>): boolean;
 }
-export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
+export interface ISet<T> extends ICollection<T> {
   add(item: T): boolean;                                       // ISet<T>.Add returns bool; assignable to ICollection's void add
   unionWith(other: Iterable<T>): void;
   intersectWith(other: Iterable<T>): void;
   exceptWith(other: Iterable<T>): void;
   symmetricExceptWith(other: Iterable<T>): void;
+  isSubsetOf(other: Iterable<T>): boolean;
+  isSupersetOf(other: Iterable<T>): boolean;
+  isProperSubsetOf(other: Iterable<T>): boolean;
+  isProperSupersetOf(other: Iterable<T>): boolean;
+  overlaps(other: Iterable<T>): boolean;
+  setEquals(other: Iterable<T>): boolean;
 }
 // A view of a List's backing array (FR-056): index writes and the in-place members that keep the length;
 // push / pop / shift / unshift / splice and a length assignment do not type-check (tsgo --strict, research R16).
@@ -227,7 +239,7 @@ export interface Span<T> extends ReadonlyArray<T> {
 }
 ```
 
-Which runtime class implements which interface follows .NET: `List` → `IList`, `ICollection`, `IReadOnlyList`, `IReadOnlyCollection`; `Dictionary` → `IDictionary`, `IReadOnlyDictionary` (and `IReadOnlyCollection<[K, V]>` structurally); `HashSet` → `ISet`, `IReadOnlySet`, `ICollection`, `IReadOnlyCollection`; `Queue`, `Stack`, `KeyCollection`, `ValueCollection` → `IReadOnlyCollection` only (.NET's `Queue<T>` / `Stack<T>` do not implement `ICollection<T>`; .NET's key / value collections do, with throwing mutators, which the runtime does not mirror: a C# `ICollection<K> c = dict.Keys` reports nothing in C# and fails `tsgo`, a rare shape listed as a follow-up). Arguments of type `Iterable<T>` accept any runtime collection, a native array, a `Set`, a generator or a LINQ pipe.
+`fromEnd`, `update`, `updateReturningOld`, `getValueOrDefault`, and `indexOf` / `contains` on a read-only list are **class members only** (W4-13); an interface-typed receiver lowers through the interface members (§ Compiler contract, interface receivers). Which runtime class implements which interface follows .NET: `List` → `IList`, `ICollection`, `IReadOnlyList`, `IReadOnlyCollection`; `Dictionary` → `IDictionary`, `IReadOnlyDictionary` (and `IReadOnlyCollection<[K, V]>` structurally); `HashSet` → `ISet`, `IReadOnlySet`, `ICollection`, `IReadOnlyCollection`; `Queue`, `Stack`, `KeyCollection`, `ValueCollection` → `IReadOnlyCollection` only (.NET's `Queue<T>` / `Stack<T>` do not implement `ICollection<T>`; .NET's key / value collections do, with throwing mutators, which the runtime does not mirror: a C# `ICollection<K> c = dict.Keys` reports nothing in C# and fails `tsgo`, a rare shape listed as a follow-up). Arguments of type `Iterable<T>` accept any runtime collection, a native array, a `Set`, a generator or a LINQ pipe.
 
 ## Classes
 
@@ -240,7 +252,7 @@ Every factory and constructor takes one trailing optional `typeArguments?: reado
 ### `List<T>` (`list.ts`)
 
 ```ts
-export class List<T> implements IList<T> {
+export class List<T> implements IList<T>, IReadOnlyList<T> {
   declare readonly _items: T[];
   declare _version: number;
   declare readonly $typeArguments$List: readonly RuntimeType[] | undefined;
@@ -249,6 +261,7 @@ export class List<T> implements IList<T> {
   static of<T>(items: T[], typeArguments?: readonly RuntimeType[] | null): List<T>;        // takes ownership of items (no copy)
   static from<T>(items: Iterable<T>, typeArguments?: readonly RuntimeType[] | null): List<T>; // copy; null → ArgumentNullException('collection')
   static withCapacity<T>(capacity: number, typeArguments?: readonly RuntimeType[] | null): List<T>; // negative → ArgumentOutOfRangeException('capacity')
+  initAdd(items: readonly T[]): this;                         // initializer after a capacity / copy / comparer constructor: add semantics, chainable (no IrLet, FR-007)
   static adopt<T>(array: T[], options?: { readonly fixedSize?: boolean } | null, typeArguments?: readonly RuntimeType[] | null): List<T>; // the array becomes _items
 
   get count(): number;
@@ -310,7 +323,7 @@ export class List<T> implements IList<T> {
 ### `Dictionary<K, V>` (`dictionary.ts`), `KeyCollection<K>`, `ValueCollection<V>` (`dictionary-views.ts`)
 
 ```ts
-export class Dictionary<K, V> implements IDictionary<K, V> {
+export class Dictionary<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<K, V> {
   declare readonly $typeArguments$Dictionary: readonly RuntimeType[] | undefined;
 
   constructor(entries?: Iterable<readonly [K, V]> | null, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null); // add semantics
@@ -318,6 +331,8 @@ export class Dictionary<K, V> implements IDictionary<K, V> {
   static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>; // { [k] = v }: set, last wins
   static from<K, V>(source: Iterable<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>; // copy ctors; null → ArgumentNullException('collection'); duplicate → ArgumentException
   static withCapacity<K, V>(capacity: number, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>;
+  initAdd(entries: ReadonlyArray<readonly [K, V]>): this;       // { { k, v } } after a capacity / copy / comparer constructor: add semantics
+  initAssign(entries: ReadonlyArray<readonly [K, V]>): this;    // { [k] = v } after such a constructor: set semantics
 
   get count(): number;
   get keys(): KeyCollection<K>;                                // live view, cached (dict.keys === dict.keys, as .NET)
@@ -370,6 +385,7 @@ export class HashSet<T> implements ISet<T>, IReadOnlySet<T> {
   static of<T>(items: readonly T[], comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null): HashSet<T>;  // initializers / collection expressions; duplicates collapse
   static from<T>(items: Iterable<T>, comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null): HashSet<T>; // null → ArgumentNullException('collection')
   static withCapacity<T>(capacity: number, comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null): HashSet<T>;
+  initAdd(items: readonly T[]): this;                         // initializer after a capacity / copy / comparer constructor: add semantics, chainable (no IrLet, FR-007)
 
   get count(): number;
   get isReadOnly(): boolean;                                   // false
@@ -487,16 +503,15 @@ export function iSetType<T>(element: RuntimeType<T>): CollectionType<ISet<T>>;  
 export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IReadOnlySet<T>>; // invariant
 ```
 
-- Each is memoized on the identity of its arguments (`memoNodeFor` of `system/reflection/identity-memo.ts`), so `listType(StringType) === listType(StringType)` and `Type ==` is `===`. The memo root is a module-level `let` filled on first call (no module-scope `new`).
-- Shape (`CollectionType` of contracts/runtime-types.md): `kind: "collection"`, `collection: "List"` (…), `name: "List<String>"`, `fullName: "System.Collections.Generic.List<System.String>"` (the `specialize` convention), `namespace: "System.Collections.Generic"`, `ctor` (classes only), `typeArguments`, `variance`, and `close` (below). `test(v)`: for a class kind `v instanceof Ctor` and, per argument, identity (invariant) or `isAssignableFrom` (covariant) against `v.$typeArguments$<Class>`, an absent slot or `UnknownType` on either side matching anything; for an interface kind the test is **nominal through the class literal's `interfaces` list**, as `implementsInterface` walks it: from `v.constructor` up, the nearest constructor with an own `$runtimeType` whose `interfaces` (transitively) list the interface's open descriptor (`iListType(UnknownType)`, …, matched by `collection` kind), then each argument compared by variance against the instance's slot mapped to the interface's arguments (a `Dictionary` tested as `IReadOnlyCollection<T>` matches any `T`). An interface descriptor imports no class; a 011h class, or a user class whose literal lists the interface, joins the test by listing it.
-- **Class literal ABI.** Each class's static `$runtimeType` getter returns the wildcard specialization (`listType(UnknownType)`, `dictionaryType(UnknownType, UnknownType)`, …), whose `interfaces` lists the open interface descriptors of § Interfaces' implementation table as thunks (`[() => iListType(UnknownType), () => iCollectionType(UnknownType), () => iReadOnlyListType(UnknownType), () => iReadOnlyCollectionType(UnknownType)]` for `List`); `name` / `fullName` follow `specialize` (`List<String>`, `System.Collections.Generic.List<System.String>`); `toString()` of an instance uses .NET's backtick form instead (§ Classes). 011h's classes follow the same three rules.
-- `interfaces` (new optional member of `CollectionType`, a contracts/runtime-types.md amendment of D30): the thunk list above, present on class kinds.
-- `close(typeArguments)` (new optional member of `CollectionType`, a contracts/runtime-types.md amendment of D30): the factory itself bound to the kind, so `getRuntimeType` can specialize without importing `collections` (below).
-- Importing `List` alone does not pull `descriptors.ts`: the static `$runtimeType` getter that references it is dropped when nothing reads it (research R13; measured by an NFR-008 `mustNotContain` row).
+- **Open literals, data only (FR-018).** Each class's static `$runtimeType` getter returns a memoized **data literal** that imports nothing from `descriptors.ts` or from `system/reflection` (types only): `{ kind: "collection", collection: "List", name: "List", fullName: "System.Collections.Generic.List", namespace: "System.Collections.Generic", ctor: List, typeArguments: [], variance: ["invariant"], interfaces: [{ collection: "IList", arguments: [0] }, { collection: "ICollection", arguments: [0] }, { collection: "IReadOnlyList", arguments: [0] }, { collection: "IReadOnlyCollection", arguments: [0] }], test: (v) => v instanceof List }` (the open definition; `typeArguments: []`). `interfaces` is data: one entry per implemented interface of § Interfaces' table, naming it by `collection` kind and mapping its arguments to indices of the instance's slot (`null` = wildcard, e.g. `Dictionary` as `IReadOnlyCollection<KeyValuePair<K, V>>`). `descriptors.ts` holds the open interface literals (`IList`, …) as module constants of the same data shape (no `ctor`, no `interfaces`). So a bundle that uses `List` and reads its `$runtimeType` pulls neither `descriptors.ts` nor reflection code; R1 still measures it (the 2.5 KB budget, `mustNotContain: ["listType"]`).
+- **Specialization lives in reflection.** `system/reflection` gains `specializeCollection(open, typeArguments)` (`specialize-collection.ts`), memoized on the identity of the open literal and of each argument (`memoNodeFor`), returning `{ ...open, name: "List<String>", fullName: "System.Collections.Generic.List<System.String>", typeArguments, test }` (the `specialize` naming convention). Its `test`: for a class kind, `v instanceof open.ctor` and, per argument, identity (invariant) or `isAssignableFrom` (covariant) against `v.$typeArguments$<collection>`; for an interface kind, nominal through the class literal's `interfaces` (from `v.constructor` up, the nearest constructor with an own `$runtimeType` of kind `collection` whose `interfaces` name `open.collection`), then each argument through the entry's index mapping; an absent slot, a `null` mapping or `UnknownType` on either side matches anything. An interface descriptor imports no class; a 011h class, or a user class whose literal lists the interface, joins the test by listing it.
+- **Factories.** `listType(e) = specializeCollection(List.$runtimeType, [e])`, the interface factories `specializeCollection(<open interface literal>, args)`. Memoization is the reflection memo, so `listType(StringType) === listType(StringType)` and `Type ==` is `===`; the memo root is a module-level `let` filled on first call (no module-scope `new`).
+- `CollectionType` amendment (contracts/runtime-types.md, D30): optional `interfaces: ReadonlyArray<{ readonly collection: CollectionKindName; readonly arguments: ReadonlyArray<number> | null }>` on class kinds. 011h's classes follow the same rules.
+- 011h adds `immutableListType`, `readOnlyListType`, `immutableHashSetType`, `immutableDictionaryType`, `sortedSetType`, `sortedDictionaryType`, `sortedListType`, `concurrentDictionaryType` and `iImmutableListType`, `iImmutableSetType`, `iImmutableDictionaryType` to `descriptors.ts` in the same shape.
 
 ## Type-argument descriptors (FR-008) and `GetType()`
 
-The slot `$typeArguments$<Class>` (`List`, `Dictionary`, `HashSet`, `Queue`, `Stack`) is defined once by the class's constructor from the trailing `typeArguments` argument (or `undefined`); a C# subclass that closes the arguments (`class IntList : List<int>`) passes them to `super` and defines no slot. Runtime-built collections copy the source's slot (§ `List`). Each class's static getter `$runtimeType` returns `listType(UnknownType)` (…), a lazily read static getter that bundlers drop when unused (research R13). `getRuntimeType(v)` (stage 011b) gains one rule: when the constructor's own descriptor has `kind: "collection"` and a `close` member, and `v["$typeArguments$" + descriptor.collection]` is defined, it returns `descriptor.close(slot)`; otherwise the wildcard descriptor. So `new List<int>()` built with `[Int32Type]` answers `GetType() == typeof(List<int>)` as `true`.
+The slot `$typeArguments$<Class>` (`List`, `Dictionary`, `HashSet`, `Queue`, `Stack`) is defined once by the class's constructor from the trailing `typeArguments` argument (or `undefined`); a C# subclass that closes the arguments (`class IntList : List<int>`) passes them to `super` and defines no slot. Runtime-built collections copy the source's slot (§ `List`). Each class's static getter `$runtimeType` returns its open data literal (§ Descriptor factories). `getRuntimeType(v)` (stage 011b) gains one rule: when the constructor's own descriptor has `kind: "collection"` and `v["$typeArguments$" + descriptor.collection]` is defined, it returns `specializeCollection(descriptor, slot)` (a reflection function, so reflection still never imports `collections`); otherwise the open literal (whose `test` accepts every instance: the wildcard of FR-008). So `new List<int>()` built with `[Int32Type]` answers `GetType() == typeof(List<int>)` as `true`.
 
 ## JSON collection kinds (runtime half of FR-028, W4-5)
 
@@ -526,6 +541,8 @@ Read: the element (or key and value) converters run first, then `create` receive
 | `stack` | `(items) => Stack.from(items)` | written top first (`[3,2,1]` for pushes 1, 2, 3); read pushed in array order, so `[1,2,3]` reads with `peek() === 3` (a round trip reverses the stack on both sides) |
 | `dictionary` | `(entries) => Dictionary.assign(entries)` | a repeated key keeps the **last** value (`{"1":1,"01":2}` as `Dictionary<int,int>` reads one entry `1 → 2`) |
 
+**Kind per C# type** (System.Text.Json's rule, for C's context choice): `List<T>`, `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>` → `list` (an interface-typed member reads into a `List`, as STJ creates a `List<T>`); `Dictionary<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>` → `dictionary` (reads into a `Dictionary`); `HashSet<T>`, `ISet<T>`, `IReadOnlySet<T>` → `hashSet` (reads into a `HashSet`); `Queue<T>` → `queue`; `Stack<T>` → `stack`; `T[]`, `JsArray<T>` and `IEnumerable<T>` → `array` (STJ reads an `IEnumerable<T>` member into a `List<T>`; the TS value is the `Iterable<T>` the type maps to, so a native array satisfies it, unchanged from 2.x).
+
 Transition (W4-6): `hashSet` keeps accepting today's descriptor without `create` (read through `new HashSet(items)`, the import `converters.ts` has today) until C's flip makes the context write `create`; C then makes `create` required and drops that import. `array` stays for `T[]` / `JsArray<T>`; `map` (`MapDescriptor`) stays until C's flip, which removes it. Element / key / value conversion, the null-element rule (#471), the container-depth rule and custom converters are today's.
 
 ## Lowered `foreach` over `List<T>` (FR-057, normative emission)
@@ -553,13 +570,14 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 
 `r` is the receiver, `T` / `K` / `V` the C# type arguments rendered as TS types, `$targs` the trailing `typeArguments` argument (an array literal of descriptors, `[Int32Type]`), emitted **only** under FR-008, and `default(X)` the value C# would store (`0`, `false`, `null`, `0n`, …), which the compiler already computes for `out` / default slots. Every mapping is a plain member rename (FR-007: no template with two `$this`), a factory, or a free helper; a receiver with side effects is evaluated once because it is the single receiver of the call. A row marked *direct form* follows FR-010 (receiver and index reusable, or bound once to a temporary in statement position).
 
-### `List<T>`, `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`
+### `List<T>` receivers (and classes deriving from it)
 
 | C# | Emitted TS |
 |---|---|
 | `new List<T>()` | `new List<T>()` (`new List<T>(null, $targs)` under FR-008) |
 | `new List<T>(capacity)` | `List.withCapacity<T>(capacity)` / `(capacity, $targs)` |
 | `new List<T>(source)` | `List.from(source)` / `(source, $targs)` |
+| `new List<T>(capacity) { a, b }` / `new List<T>(source) { a, b }` | `List.withCapacity<T>(capacity).initAdd([a, b])` / `List.from(source).initAdd([a, b])` (`$targs` on the factory) |
 | `new List<T> { a, b }`, `List<T> xs = [a, b, ..c]` | `List.of([a, b])`, `List.of([a, b, ...c])` / `(…, $targs)` |
 | `r.Count` | `r.count` |
 | `r[i]` (read) | `r.get(i)` |
@@ -585,15 +603,17 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `JsArray.From(r)` | `Array.from(r)` |
 | `jsArray.AsList()` | `List.adopt(jsArray)` |
 | `r.GetEnumerator()` | `r[Symbol.iterator]()` |
+| `e.MoveNext()` / `e.Current` / `e.Reset()` on an enumerator | `MS0001`, as in 2.x (`Enumerators.cs`: only iterating the result is supported) |
 | `r.ToString()`, `$"{r}"` | `r.toString()` |
 | `foreach (var x in r)`, `r` statically `List<T>` | the lowered loop (§ Lowered `foreach`) + `throwModified` import |
+| `foreach (var (a, b) in r)` / a positional pattern, `r` statically `List<T>` | the lowered loop with the element binding `const [a, b] = $a[$i];` (a record deconstruction applies the existing `Deconstruct` lowering to `$a[$i]`) |
 | `foreach (var x in r)`, `r` an interface | `for (const x of r)` |
 | array → `IList<T>` / `ICollection<T>` / `IReadOnlyList<T>` / `IReadOnlyCollection<T>` (implicit or explicit) | `List.adopt(arr, { fixedSize: true })` / `(arr, { fixedSize: true }, $targs)` |
 | `(T[])r`, `r is T[]`, `r as T[]` | through `asArray(r)` (`asArray(r) !== null`, …; the `Array` category, FR-021) |
 | array / `List<T>` → `IEnumerable<T>` | nothing |
 | `Capacity`, `EnsureCapacity`, `TrimExcess`, the index / count overloads listed under `List<T>` | `MS0001` |
 
-### `Dictionary<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `KeyCollection`, `ValueCollection`
+### `Dictionary<K, V>` receivers, `KeyCollection`, `ValueCollection`
 
 | C# | Emitted TS |
 |---|---|
@@ -602,6 +622,7 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `new Dictionary<K, V>(source)` / `(source, comparer)` (`IDictionary` or `IEnumerable<KeyValuePair>`) | `Dictionary.from(source)` / `Dictionary.from(source, comparer)` |
 | `new Dictionary<K, V> { { k, v } }` / `{ [k] = v }` | `Dictionary.of([[k, v]])` / `Dictionary.assign([[k, v]])` |
 | `new Dictionary<K, V>(comparer) { { k, v } }` / `{ [k] = v }` | `Dictionary.of([[k, v]], comparer)` / `Dictionary.assign([[k, v]], comparer)` |
+| `new Dictionary<K, V>(capacity[, comparer]) { … }` / `new Dictionary<K, V>(source[, comparer]) { … }` | `Dictionary.withCapacity<K, V>(capacity[, comparer]).initAdd([[k, v]])` (`initAssign` for `{ [k] = v }`) / `Dictionary.from(source[, comparer]).initAdd(…)` |
 | `$targs` under FR-008 | appended as the last argument of each form above, with `null` for a skipped comparer (`new Dictionary<K, V>(null, null, $targs)`, `Dictionary.of([[k, v]], null, $targs)`) |
 | `r.Count` / `r.Keys` / `r.Values` | `r.count` / `r.keys` / `r.values` |
 | `r[k]` / `r[k] = v` | `r.get(k)` / `r.set(k, v)` |
@@ -618,12 +639,13 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `r.GetEnumerator()` / `r.ToString()` | `r[Symbol.iterator]()` / `r.toString()` |
 | `Comparer`, `EnsureCapacity`, `TrimExcess`, `Remove(k, out v)` | `MS0001` |
 
-### `HashSet<T>`, `ISet<T>`, `IReadOnlySet<T>`
+### `HashSet<T>` receivers
 
 | C# | Emitted TS |
 |---|---|
 | `new HashSet<T>()` / `(capacity)` / `(comparer)` / `(capacity, comparer)` | `new HashSet<T>()` / `HashSet.withCapacity<T>(capacity)` / `new HashSet<T>(null, comparer)` / `HashSet.withCapacity<T>(capacity, comparer)` |
 | `new HashSet<T>(source)` / `(source, comparer)` | `HashSet.from(source)` / `HashSet.from(source, comparer)` |
+| `new HashSet<T>(capacity[, comparer]) { a }` / `new HashSet<T>(source[, comparer]) { a }` | `HashSet.withCapacity<T>(capacity[, comparer]).initAdd([a])` / `HashSet.from(source[, comparer]).initAdd([a])` |
 | `new HashSet<T> { a, b }`, `HashSet<T> s = [a, b]` / `new HashSet<T>(comparer) { a, b }` | `HashSet.of([a, b])` / `HashSet.of([a, b], comparer)` |
 | `$targs` under FR-008 | the last argument (`new HashSet<T>(null, null, $targs)`) |
 | `r.Count` / `Add(x)` / `Remove(x)` / `Contains(x)` / `Clear()` | `r.count` / `r.add(x)` / `r.remove(x)` / `r.contains(x)` / `r.clear()` |
@@ -644,6 +666,32 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `s.TryPop(out var x)` / `TryPeek(out var x)` | `const [ok, x] = s.tryPop(default(T))` / `s.tryPeek(default(T))` |
 | `GetEnumerator()` / `ToString()` / `foreach` (both) | `[Symbol.iterator]()` / `toString()` / `for..of` (`Stack` top first, so `Stack.GetEnumerator` is now mapped, FR-007) |
 | `EnsureCapacity`, `TrimExcess` | `MS0001` |
+
+### Interface receivers (`IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `ISet<T>`, `IReadOnlySet<T>`; W4-13)
+
+Only the interface members of § Interfaces exist on the receiver, so the class-only conveniences lower through them; a non-reusable receiver or index is bound once to a temporary (in expression position the bridge hoists it to the enclosing statement; never an IIFE, FR-009).
+
+| C# | Emitted TS |
+|---|---|
+| `r.Count`, `r[i]`, `r[i] = v`, `r[k]`, `r[k] = v`, and every member of the C# interface | the camelCase member (`r.count`, `r.get(i)`, `r.set(i, v)`, …) |
+| `r[^n]` | `r.get(r.count - n)` (`r` bound once when not reusable) |
+| `r[^n] = v` | `r.set(r.count - n, v)` (likewise) |
+| `r[i] op= v`, `r[i]++`, `r[i] ??= v`, `r[k] op= v`, … | the direct form `r.set(i, r.get(i) op v)` over the bound temporaries, in statement and expression position (no `update` member on an interface) |
+| `r.TryGetValue(k, out var v)` | `const [found, v] = r.tryGetValue(k, default(V))` |
+| `r.GetValueOrDefault(k)` / `(k, d)` (`IReadOnlyDictionary` extension) | `r.tryGetValue(k, default(V))[1]` / `r.tryGetValue(k, d)[1]` |
+| `r.Contains(x)` / `IndexOf(x)` on `IReadOnlyList<T>` / `IReadOnlyCollection<T>` | the LINQ mappings (they are `Enumerable` extensions in C#) |
+| a C# class implementing one of these interfaces | `implements` the TS interface; it declares exactly the C# members, no synthesized ones |
+
+### `params` collections (C# 13)
+
+| C# | Emitted TS |
+|---|---|
+| declaration `void F(params List<T> xs)` / `params IEnumerable<T> xs` / `params HashSet<T> xs` | an ordinary parameter of the mapped type (`xs: List<T>` / `Iterable<T>` / `HashSet<T>`), not a rest parameter |
+| call `F(a, b)` with `params List<T>` / `IList<T>` / `ICollection<T>` | `F(List.of([a, b]))` (C# builds a `List<T>`) |
+| call with `params IEnumerable<T>` / `IReadOnlyList<T>` / `IReadOnlyCollection<T>` | `F([a, b])` for `IEnumerable<T>`; `F(List.adopt([a, b], { fixedSize: true }))` for the read-only interfaces (C# builds a read-only array-backed value) |
+| call with `params HashSet<T>` | `F(HashSet.of([a, b]))` |
+| call passing a collection explicitly (`F(xs)`) | `F(xs)` |
+| `params T[]` / `params ReadOnlySpan<T>` | unchanged |
 
 ### Comparers, helpers and type questions
 
@@ -677,13 +725,14 @@ One 2.x behaviour changes in R1 although C has not flipped: **`HashSet.add` retu
 
 `toList()` → a new `List<T>`; `toArray()` → `T[]`; `toDictionary(...)` → `Dictionary`; `toHashSet(...)` → `HashSet`, in the term shape of `system/linq/terminals.ts`. Every operator keeps accepting `Iterable<T>` and stays a standalone function (ADR-0012). Group C writes them over the classes above; R does not add them.
 
-## Open points (R0)
+## Documented divergences decided in R0 review (W4-13)
 
-- **`toString()` without a slot.** .NET's text needs the type arguments, which the instance carries only under FR-008. Proposed for C / J: count a collection receiver of `ToString()` (and of string interpolation / concatenation) as a runtime question of its kind; until then the parameter names print (``List`1[T]``).
-- **Culture-sensitive string order** of `Comparer<string>.Default` (§ Equality and comparison): ordinal here, as LINQ's `orderBy` today.
-- **Interface tests and user implementers.** `x is IList<int>` on a user class implementing `IList<T>` is `true` only when the class's emitted literal lists `iListType(…)` in `interfaces` (§ Descriptor factories); whether the compiler emits that is group C's call (with the 011b interface rules).
-- **`Dictionary.from(null)`** reports `collection` for both copy constructors; .NET names `dictionary` for the `IDictionary` overload.
-- **`ICollection<K> c = dict.Keys`** fails `tsgo` (the views implement `IReadOnlyCollection` only).
+- **`toString()` without a slot** prints the type-parameter names (``List`1[T]``); `ToString()` is not a reachability trigger.
+- **`Comparer<string>.Default`** is ordinal (as LINQ's `orderBy`); .NET's is culture-sensitive.
+- **`Dictionary.from(null)`** names `collection` for both copy constructors; .NET names `dictionary` for the `IDictionary` overload.
+- **User implementers of the collection interfaces**: `x is IList<int>` on a user class is `true` only when its literal lists the interface, which C emits only when the interface is reached.
+- **`ICollection<K> c = dict.Keys`** fails `tsgo` (the views implement `IReadOnlyCollection` only); follow-up.
+- **`default(T)` for a user struct** passed to `tryGetValue` / `tryDequeue` / `tryPeek` / `tryPop` / `find` / `findLast` / `getValueOrDefault` is evaluated at every call (a struct lowered to a class allocates a zeroed instance each time, hit or miss).
 
 ## 011h classes
 
