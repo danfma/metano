@@ -16,7 +16,7 @@ export class Shelf {
     const mapCopy = Dictionary.from(map);
     const set = HashSet.from(this._tags);
     const pair = ["k", 1] as [string, number];
-    const fromPairs = Dictionary.from(new List<[string, number]>());
+    const fromPairs = Dictionary.from(new List<readonly [string, number]>());
     const tuple = [1, "s"] as [number, string];
 
     return (empty.count + sized.count + copy.count + map.count + mapCopy.count + set.count + pair[1] + pair[0].length + fromPairs.count + tuple[0] + tuple[1].length + this._items.count + this._byName.count) | 0;

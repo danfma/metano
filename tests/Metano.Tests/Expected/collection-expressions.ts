@@ -69,11 +69,11 @@ export class Shelf {
     return values;
   }
 
-  merge(left: Dictionary<string, number>, right: Iterable<[string, number]>): Map<string, number> {
+  merge(left: Dictionary<string, number>, right: Iterable<readonly [string, number]>): Map<string, number> {
     return new Map<string, number>([...left, ["k", 0] as [string, number], ...right, ...this._defaults]);
   }
 
-  byIds(pairs: List<[bigint, string]>): Map<bigint, string> {
+  byIds(pairs: List<readonly [bigint, string]>): Map<bigint, string> {
     return new Map<bigint, string>([...pairs]);
   }
 }

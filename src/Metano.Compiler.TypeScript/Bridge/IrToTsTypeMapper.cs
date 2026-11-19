@@ -63,10 +63,12 @@ public static class IrToTsTypeMapper
             IrGeneratorTypeRef g => new TsNamedType("Generator", [Map(g.YieldType, overrides)]),
             IrIterableTypeRef i => new TsNamedType("Iterable", [Map(i.ElementType, overrides)]),
             IrIteratorTypeRef i => new TsNamedType("Iterator", [Map(i.ElementType, overrides)]),
-            IrKeyValuePairTypeRef kv => new TsTupleType([
-                Map(kv.KeyType, overrides),
-                Map(kv.ValueType, overrides),
-            ]),
+            // A KeyValuePair is immutable, and the runtime dictionaries yield
+            // `readonly [K, V]`: the read-only tuple accepts both shapes.
+            IrKeyValuePairTypeRef kv => new TsTupleType(
+                [Map(kv.KeyType, overrides), Map(kv.ValueType, overrides)],
+                IsReadonly: true
+            ),
             IrGroupingTypeRef gr => new TsNamedType(
                 "Grouping",
                 [Map(gr.KeyType, overrides), Map(gr.ElementType, overrides)],

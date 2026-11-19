@@ -159,9 +159,16 @@ public class EnumerableImplementationTests
         await Assert.That(result["pair.ts"]).Contains("[Symbol.iterator](): Iterator<number> {");
 
         var scores = result["scores.ts"];
-        await Assert.That(scores).Contains("getEnumerator(): Iterator<[string, number]> {");
+
+        await Assert
+            .That(scores)
+            .Contains("getEnumerator(): Iterator<readonly [string, number]> {");
+
         await Assert.That(scores).Contains("return this._map[Symbol.iterator]();");
-        await Assert.That(scores).Contains("[Symbol.iterator](): Iterator<[string, number]> {");
+
+        await Assert
+            .That(scores)
+            .Contains("[Symbol.iterator](): Iterator<readonly [string, number]> {");
     }
 
     [Test]
