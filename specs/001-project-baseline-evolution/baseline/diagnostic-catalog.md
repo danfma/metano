@@ -106,6 +106,7 @@ Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` 
 | --- | --- | --- |
 | `METANOBUILD001` | `Metano.Build.Common.targets` (text from `Metano.Build.TypeScript.targets`) | The `metano-typescript` .NET tool is not available; the message lists the local-manifest / global install commands and `dotnet tool restore`. Opt out with `MetanoSkipToolCheck=true` (FR-035). |
 | `METANOBUILD002` | `Metano.Build.Common.targets` | (3.0.0, FR-086, #328.) Two enabled targets of one project resolve to the same output directory (after `Metano<Prefix>OutputDir` / `MetanoOutputDir` resolution and full-path normalization). Error, raised before any tool runs; the message names both targets and the directory. |
+| `METANOBUILD003` | `Metano.Build.Common.targets` | Warning: a registered shared-targets copy differs from the loaded copy. Align the build-package versions; suppress with MSBuild `NoWarn=METANOBUILD003` (FR-085, #706). Pre-contract packages cannot be compared and produce no speculative warning. |
 
 From 3.0.0 (FR-085, #328) `METANOBUILD001` is raised by `Metano.Build.Common.targets` with a per-target text: each `Metano.Build.<Target>` package names its own tool and install commands.
 

@@ -1281,7 +1281,8 @@ Product requirements added after the migration (normative; each one is traced by
      it once. Different package releases can carry different shared-file contents: each
      per-target file registers its common-file path and content hash as a
      `_MetanoBuildCommonCopy` item. The build MUST warn when a registered copy differs from the
-     loaded shared file and ask the consumer to align package versions (#706).
+      loaded shared file and ask the consumer to align package versions (#706). This warning
+      uses `METANOBUILD003` and MUST be suppressible with MSBuild `NoWarn=METANOBUILD003`.
      A package predating that registration contract is not a known copy: when the newer
      common file loads first it cannot compare against the older copy; when the older
      guarded file loads first it has no check. The build MUST NOT emit a speculative skew
@@ -1376,7 +1377,13 @@ Product requirements added after the migration (normative; each one is traced by
      `-graphBuild -isolate`. Both cases MUST transpile successfully; the isolated graph's
      second build MUST skip transpilation. Changed effective arguments through `-p:` and
      `Directory.Build.*` MUST rerun the tool and preserve literal semicolons in generated
-     file prefixes. Deprecating `Metano.Build` on nuget.org remains outside #706.
+      file prefixes. Consumers MUST exercise default package-root inference without a
+      `MetanoPackageRoot` pin, including macOS's `/var` → `/private/var` alias (#706).
+      Inference (baseline FR-030) resolves existing directory symlinks before comparing
+      workspace boundaries, including existing ancestors of not-yet-created output paths;
+      aliases of one workspace MUST NOT cause `MS0044`. The boundary ranking and refusal
+      for genuinely unrelated output directories remain unchanged. An explicit package root
+      still wins as given. Deprecating `Metano.Build` on nuget.org remains outside #706.
   2. *Multi-target tests.* With a test-only `.targets` that declares a synthetic second prefix
      over the shared file, tests cover precedence (prefixed over global over default),
      independent stamps, `METANOBUILD002`, the inert unconfigured package and the up-to-date skip.
