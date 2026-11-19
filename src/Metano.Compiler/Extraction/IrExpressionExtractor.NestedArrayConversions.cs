@@ -99,6 +99,11 @@ public sealed partial class IrExpressionExtractor
                     depth + 1,
                     nested: true
                 ),
+            (IArrayTypeSymbol sourceArray, INamedTypeSymbol targetNamed) => ElementNestsArray(
+                sourceArray,
+                targetNamed,
+                depth
+            ),
             (INamedTypeSymbol sourceNamed, INamedTypeSymbol targetNamed) => ArgumentsNestArray(
                 sourceNamed,
                 targetNamed,
@@ -106,6 +111,35 @@ public sealed partial class IrExpressionExtractor
             ),
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// An array converted to a sequence type (<c>int[][]</c> to
+    /// <c>IReadOnlyList&lt;IReadOnlyList&lt;int&gt;&gt;</c> or
+    /// <c>IEnumerable&lt;IList&lt;int&gt;&gt;</c>): its element type against
+    /// the element type of the <c>IEnumerable&lt;T&gt;</c> the target is or
+    /// implements. Only the outer array is adopted, so an inner array that
+    /// reaches a list interface is a B3 shape.
+    /// </summary>
+    private static bool ElementNestsArray(
+        IArrayTypeSymbol source,
+        INamedTypeSymbol target,
+        int depth
+    ) =>
+        SequenceElementTypeOf(target) is { } targetElement
+        && NestsArrayAsListInterface(source.ElementType, targetElement, depth + 1, nested: true);
+
+    private static ITypeSymbol? SequenceElementTypeOf(INamedTypeSymbol type)
+    {
+        var sequence =
+            type.ConstructedFrom.SpecialType is SpecialType.System_Collections_Generic_IEnumerable_T
+                ? type
+                : type.AllInterfaces.FirstOrDefault(candidate =>
+                    candidate.ConstructedFrom.SpecialType
+                    is SpecialType.System_Collections_Generic_IEnumerable_T
+                );
+
+        return sequence?.TypeArguments[0];
     }
 
     private static bool ArgumentsNestArray(
