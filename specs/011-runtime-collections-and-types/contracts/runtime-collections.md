@@ -940,7 +940,7 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
 export function toImmutableDictionary<K, V>(builder: ImmutableDictionaryBuilder<K, V>): ImmutableDictionary<K, V>;
 ```
 
-Each builder is composition (`builder instanceof List` is `false`, as `builder is List<T>` in .NET); `ImmutableArray<T>.Builder` is `ImmutableListBuilder<T>`. Builder members not listed (`ItemRef`, `MoveToImmutable`, `Capacity`, …) report `MS0001`.
+Each builder is composition (`builder instanceof List` is `false`, as `builder is List<T>` in .NET); `ImmutableArray<T>.Builder` is `ImmutableListBuilder<T>`. A builder does **not** inherit the rules of the class it holds (probed on .NET 10): it keeps its own `_version`, bumped by every mutation that changes it (a removal included, unlike `Dictionary` / `HashSet`), and its enumerator (one internal `BuilderIterator` shared by the three builders) throws `throwModified`'s `Collection was modified; enumeration operation may not execute.` on the next step; and it checks its own indexes, throwing `ArgumentOutOfRangeException` (`index`) with .NET's default text (`Specified argument was out of the range of valid values.`), not `List`'s. `toImmutableList` / `toImmutableHashSet` / `toImmutableDictionary` copy the builder's elements into a new immutable value (W4-11 condition 4: a later builder mutation never reaches it), and `ToBuilder()` copies the immutable value into the builder. Builder members not listed (`ItemRef`, `MoveToImmutable`, `Capacity`, …) report `MS0001`.
 
 ### `IImmutableList<T>`, `IImmutableSet<T>`, `IImmutableDictionary<K, V>` (`immutable-interfaces.ts`)
 
