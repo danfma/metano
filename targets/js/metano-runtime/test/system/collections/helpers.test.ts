@@ -7,6 +7,7 @@ import {
 import {
   asArray,
   asJsArray,
+  asList,
   asReadOnlySpan,
   asSpan,
   fromEnd,
@@ -37,6 +38,31 @@ describe("helpers", () => {
     expect(asArray(List.adopt(array, { fixedSize: true }))).toBe(array);
     expect(asArray(List.of([1]))).toBeNull();
     expect(asArray("x")).toBeNull();
+  });
+
+  test("asList adopts a native array as a fixed-size list", () => {
+    const array = [1, 2];
+    const list = asList<number>(array);
+
+    expect(list).toBeInstanceOf(List);
+    expect(list?.count).toBe(2);
+    expect(list?.isReadOnly).toBe(true);
+    expect(asArray(list)).toBe(array);
+
+    list?.set(0, 9);
+
+    expect(array[0]).toBe(9);
+    expect(() => list?.add(3)).toThrow("Collection was of a fixed size.");
+  });
+
+  test("asList passes null, a List and any other value through", () => {
+    const list = List.of([1]);
+    const shaped = { count: 0 };
+
+    expect(asList(null)).toBeNull();
+    expect(asList(undefined)).toBeNull();
+    expect(asList<number>(list)).toBe(list);
+    expect(Object.is(asList(shaped), shaped)).toBe(true);
   });
 
   test("the views return the backing array; null handling", () => {
