@@ -1277,17 +1277,24 @@ Product requirements added after the migration (normative; each one is traced by
      command, its language tag, its `METANOBUILD001` text and its transpile target with the
      incremental check) and one copy of the shared `Metano.Build.Common.targets`. The shared
      file has a single source in the repository (`src/Metano.Build.Targets/`) and is linked into
-     every package, so two packages cannot drift; an import guard makes a project that
-     references two build packages load it once.
+     every package; an import guard makes a project that references two build packages load
+     it once. Different package releases can carry different shared-file contents: each
+     per-target file registers its common-file path and content hash as a
+     `_MetanoBuildCommonCopy` item. The build MUST warn when a registered copy differs from the
+     loaded shared file and ask the consumer to align package versions (#706).
   2. *Where each part runs.* The shared file cannot build a prefixed property name (`MSB4184`)
      and never reads one. Each per-target resolve target registers one `_MetanoEnabledTarget`
      item per enabled target, with the metadata `Include` (the language tag), `OutputDir`,
-     `OutputDirFull`, `ToolchainKeyFile`, `CompilerProject`, `ToolStoreName` and
+     `OutputDirFull`, `ToolchainKeyFile`, `CompilerProject`, `ToolStoreName`, `ArgumentsHash` and
      `PostBuildCommand`, and appends itself to `_MetanoResolveTargetsDependsOn` and its transpile
      target to `_MetanoTranspileTargets`; the shared file batches over those items. In the
      project's own instance, on every build: user-input collection, setting resolution,
-     `METANOBUILD002`, the toolchain keys, the asset projection, each target's incremental check
-     and argument line, and the post-build commands. In a worker instance (the `MSBuild` task on
+     `METANOBUILD002`, the asset projection and effective argument line, the toolchain keys,
+     each target's incremental check, and the post-build commands. The argument hash in the
+     key MUST track the exact line sent to the worker, including settings changed through `-p:`
+     or `Directory.Build.*`; unchanged effective arguments MUST preserve the key timestamp.
+     Free-form `FilePrefix` and `ExtraArgs` values MUST be MSBuild-escaped before item
+     composition so literal semicolons survive (#706). In a worker instance (the `MSBuild` task on
      the same project with the resolved, escaped values as global properties), only for an
      out-of-date target: the tool probe (`METANOBUILD001`) and the CLI `Exec`. The worker is a
      fresh evaluation: it sees neither items the parent produced by running targets
@@ -1357,6 +1364,14 @@ Product requirements added after the migration (normative; each one is traced by
      `.metano-stamp` and `package.json`, and that a second build skips the transpile. A negative
      case without the tool asserts `METANOBUILD001` and its install text. It uses an isolated
      NuGet package cache and `DOTNET_CLI_HOME`, so it neither reads nor pollutes the developer's.
+     For #706, nuget.org downloads MUST use a reusable HTTP cache and bounded retries for
+     transient restore failures, without retrying compilation or assertion failures. The
+     smoke test MUST also build a consumer that receives the targets only through a NuGet
+     dependency's `buildTransitive` assets, and a project-reference graph with
+     `-graphBuild -isolate`. Both cases MUST transpile successfully; the isolated graph's
+     second build MUST skip transpilation. Changed effective arguments through `-p:` and
+     `Directory.Build.*` MUST rerun the tool and preserve literal semicolons in generated
+     file prefixes. Deprecating `Metano.Build` on nuget.org remains outside #706.
   2. *Multi-target tests.* With a test-only `.targets` that declares a synthetic second prefix
      over the shared file, tests cover precedence (prefixed over global over default),
      independent stamps, `METANOBUILD002`, the inert unconfigured package and the up-to-date skip.
