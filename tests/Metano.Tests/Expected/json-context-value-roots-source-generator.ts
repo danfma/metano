@@ -1,5 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { HashSet, UUID } from "metano-runtime";
+import { UUID } from "metano-runtime";
+import { Dictionary, HashSet, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { EpisodeId } from "./episode-id";
@@ -12,10 +13,10 @@ import { ShotTiming } from "./shot-timing";
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _episodeSummary?: TypeSpec<EpisodeSummary>;
-  private _iReadOnlyListEpisodeSummary?: ValueSpec<EpisodeSummary[] | null>;
+  private _iReadOnlyListEpisodeSummary?: ValueSpec<IReadOnlyList<EpisodeSummary> | null>;
   private _episodeSummaryArray?: ValueSpec<EpisodeSummary[] | null>;
   private _shotTimingArray?: ValueSpec<ShotTiming[] | null>;
-  private _dictionaryStringEpisodeSummary?: ValueSpec<Map<string, EpisodeSummary> | null>;
+  private _dictionaryStringEpisodeSummary?: ValueSpec<Dictionary<string, EpisodeSummary> | null>;
   private _hashSetString?: ValueSpec<HashSet<string> | null>;
   private _iEnumerableLeaf?: ValueSpec<Iterable<Leaf> | null>;
   private _nullableInt32?: ValueSpec<number | null>;
@@ -27,7 +28,7 @@ export class JsonContext extends SerializerContext {
   private _mood?: ValueSpec<Mood>;
   private _level?: ValueSpec<Level>;
   private _episodeId?: ValueSpec<EpisodeId>;
-  private _names?: ValueSpec<string[] | null>;
+  private _names?: ValueSpec<List<string> | null>;
   private _shotTiming?: TypeSpec<ShotTiming>;
   private _leaf?: TypeSpec<Leaf>;
 
@@ -54,14 +55,15 @@ export class JsonContext extends SerializerContext {
     });
   }
 
-  get iReadOnlyListEpisodeSummary(): ValueSpec<EpisodeSummary[] | null> {
+  get iReadOnlyListEpisodeSummary(): ValueSpec<IReadOnlyList<EpisodeSummary> | null> {
     return this._iReadOnlyListEpisodeSummary ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "ref",
           spec: () => this.episodeSummary,
         },
+        create: (items) => List.of(items),
       },
     });
   }
@@ -90,15 +92,16 @@ export class JsonContext extends SerializerContext {
     });
   }
 
-  get dictionaryStringEpisodeSummary(): ValueSpec<Map<string, EpisodeSummary> | null> {
+  get dictionaryStringEpisodeSummary(): ValueSpec<Dictionary<string, EpisodeSummary> | null> {
     return this._dictionaryStringEpisodeSummary ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: {
           kind: "ref",
           spec: () => this.episodeSummary,
         },
+        create: (entries) => Dictionary.assign(entries),
       },
     });
   }
@@ -108,6 +111,7 @@ export class JsonContext extends SerializerContext {
       descriptor: {
         kind: "hashSet",
         element: { kind: "primitive" },
+        create: (items) => HashSet.from(items),
       },
     });
   }
@@ -195,11 +199,12 @@ export class JsonContext extends SerializerContext {
     });
   }
 
-  get names(): ValueSpec<string[] | null> {
+  get names(): ValueSpec<List<string> | null> {
     return this._names ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "primitive" },
+        create: (items) => List.of(items),
       },
     });
   }
