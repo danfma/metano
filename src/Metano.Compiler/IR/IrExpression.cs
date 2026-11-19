@@ -939,6 +939,23 @@ public sealed record IrArrayToCollectionConversion(IrExpression Value, IrCollect
     : IrExpression;
 
 /// <summary>
+/// An explicit cast <c>(IList&lt;T&gt;)v</c>, <c>(ICollection&lt;T&gt;)v</c>,
+/// <c>(IReadOnlyList&lt;T&gt;)v</c> or <c>(IReadOnlyCollection&lt;T&gt;)v</c>
+/// whose operand's static type is neither an array nor a stage 011c collection
+/// (<c>object</c>, <c>IEnumerable&lt;T&gt;</c>), so the value may be a native
+/// array at run time, which C# views as a fixed-size list (spec 011 FR-003,
+/// data-model § 2 B3). <see cref="Target"/> is the cast's list interface and
+/// <see cref="TargetType"/> the cast's full target type (nullable when the cast
+/// names <c>T?</c>). Only a target whose collections are runtime classes gets
+/// the node.
+/// </summary>
+public sealed record IrListInterfaceCast(
+    IrExpression Value,
+    IrCollectionTypeRef Target,
+    IrTypeRef TargetType
+) : IrExpression;
+
+/// <summary>
 /// The C# collection initializer forms of a stage 011c collection (spec 011
 /// FR-007): <c>{ a, b }</c> / <c>{ { k, v } }</c> call <c>Add</c>,
 /// <c>{ [k] = v }</c> writes through the indexer.

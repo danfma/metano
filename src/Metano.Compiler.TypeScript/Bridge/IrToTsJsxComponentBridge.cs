@@ -420,6 +420,10 @@ public static class IrToTsJsxComponentBridge
             {
                 Value = Rewrite(conversion.Value, propNames, referenced),
             },
+            IrListInterfaceCast cast => cast with
+            {
+                Value = Rewrite(cast.Value, propNames, referenced),
+            },
             IrSliceExpression slice => slice with
             {
                 Target = Rewrite(slice.Target, propNames, referenced),

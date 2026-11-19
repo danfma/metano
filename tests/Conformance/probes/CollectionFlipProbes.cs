@@ -260,4 +260,42 @@ public static class CollectionFlipProbes
         return $"{il is [1, _, 3]},{il is [1, _]},{ro is [.., 3]},{ro is [2, ..]}|"
             + $"{adopted is [7, 8]},{adopted is [_, .., 9]}|{inner}";
     }
+
+    public static string CastObjectToListInterface()
+    {
+        var list = new List<int> { 1, 2, 3 };
+        var view = (IList<int>)(object)list;
+
+        view[0] = 10;
+        view.Add(4);
+
+        var read = (IReadOnlyList<int>)(IEnumerable<int>)list;
+        object? none = null;
+
+        return $"{view.Count},{view[1]},{ReferenceEquals(view, list)}|{read[^1]},{read.Count}|"
+            + $"{(IList<int>?)none == null}|{string.Join(",", list)}";
+    }
+
+    public static string CastObjectArrayToListInterface()
+    {
+        var array = new[] { 1, 2, 3 };
+        var view = (IList<int>)(object)array;
+        string add;
+
+        view[0] = 10;
+
+        try
+        {
+            view.Add(4);
+            add = "added";
+        }
+        catch (NotSupportedException ex)
+        {
+            add = ex.Message;
+        }
+
+        var read = (IReadOnlyCollection<int>)(object)array;
+
+        return $"{view.Count},{view[2]},{view.IsReadOnly}|{array[0]}|{add}|{read.Count}";
+    }
 }

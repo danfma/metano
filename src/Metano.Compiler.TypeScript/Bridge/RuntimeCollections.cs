@@ -75,6 +75,7 @@ public static class RuntimeCollections
         "asJsArray",
         "asSpan",
         "asReadOnlySpan",
+        "asList",
         "elementEquals",
         "defaultCompare",
         "createComparer",

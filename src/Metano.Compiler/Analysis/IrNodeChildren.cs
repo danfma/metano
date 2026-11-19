@@ -24,6 +24,7 @@ public static class IrNodeChildren
             IrIndexerUpdateExpression update => [update.Receiver, update.Index, update.NewValue],
             IrFromEndElementAccess fromEnd => [fromEnd.Receiver, fromEnd.Offset],
             IrArrayToCollectionConversion conversion => [conversion.Value],
+            IrListInterfaceCast cast => [cast.Value],
             IrCollectionInitialization initialization =>
             [
                 initialization.Creation,

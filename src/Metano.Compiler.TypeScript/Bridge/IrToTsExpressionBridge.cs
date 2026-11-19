@@ -93,6 +93,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrFromEndElementAccess fromEnd => MapFromEndRead(fromEnd, context),
             IrArrayToCollectionConversion conversion => MapAdoptedArray(conversion, context),
+            IrListInterfaceCast cast => MapListInterfaceCast(cast, context),
             IrCollectionInitialization initialization => MapCollectionInitialization(
                 initialization,
                 context

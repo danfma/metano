@@ -291,8 +291,8 @@ public sealed partial class IrExpressionExtractor
     /// B3): from an array it views the array as a fixed-size list; from a type
     /// that is neither an array nor a stage 011c collection (<c>object</c>,
     /// <c>IEnumerable&lt;T&gt;</c>) the value may be a native array at run
-    /// time, which the cast cannot convert, so it is reported. <c>null</c> for
-    /// any other cast.
+    /// time, an <see cref="IrListInterfaceCast"/>. <c>null</c> for any other
+    /// cast.
     /// </summary>
     private IrExpression? TryExtractListInterfaceCast(
         CastExpressionSyntax cast,
@@ -314,13 +314,9 @@ public sealed partial class IrExpressionExtractor
         if (IsStageCollectionOrImplementer(sourceType))
             return null;
 
-        return ReportUnsupported(
-            cast,
-            "ListInterfaceCast",
-            $"'{cast}' is not supported: the value may be a native array at run time, which "
-                + $"'{targetType.ToDisplayString()}' cannot view. Convert it explicitly "
-                + "(new List<T>(value), ToList()) before the cast."
-        );
+        return MapNonNullType(named) is IrCollectionTypeRef collection
+            ? new IrListInterfaceCast(inner, collection, ExtractTargetType(cast))
+            : null;
     }
 
     /// <summary>

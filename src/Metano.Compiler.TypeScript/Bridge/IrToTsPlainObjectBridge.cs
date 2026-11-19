@@ -394,6 +394,10 @@ public static class IrToTsPlainObjectBridge
             {
                 Value = RewriteThis(conversion.Value, identifierName),
             },
+            IrListInterfaceCast cast => cast with
+            {
+                Value = RewriteThis(cast.Value, identifierName),
+            },
             IrSliceExpression slice => slice with
             {
                 Target = RewriteThis(slice.Target, identifierName),

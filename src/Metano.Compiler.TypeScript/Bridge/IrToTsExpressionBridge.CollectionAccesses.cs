@@ -109,6 +109,25 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     ) => AdoptedFixedSize(Map(conversion.Value, context));
 
+    /// <summary>
+    /// A cast to a list interface from a value that may be a native array
+    /// (contracts/runtime-collections.md § Helpers):
+    /// <c>asList&lt;T&gt;(v) as IList&lt;T&gt;</c>, typed as the cast's target.
+    /// </summary>
+    private static TsExpression MapListInterfaceCast(
+        IrListInterfaceCast cast,
+        IrToTsBridgeContext context
+    )
+    {
+        var call = new TsCallExpression(
+            new TsRuntimeHelperReference("asList", RuntimeCollections.Module),
+            [Map(cast.Value, context)],
+            TypeArguments: [IrToTsTypeMapper.Map(cast.Target.TypeArguments[0])]
+        );
+
+        return new TsCastExpression(call, IrToTsTypeMapper.Map(cast.TargetType));
+    }
+
     /// <summary><c>List.adopt(array, { fixedSize: true })</c>.</summary>
     internal static TsExpression AdoptedFixedSize(TsExpression array) =>
         new TsCallExpression(

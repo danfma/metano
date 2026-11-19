@@ -88,6 +88,7 @@ public static class IrBodyCoverageProbe
             IrFromEndElementAccess fromEnd => IsCoveredExpression(fromEnd.Receiver)
                 && IsCoveredExpression(fromEnd.Offset),
             IrArrayToCollectionConversion conversion => IsCoveredExpression(conversion.Value),
+            IrListInterfaceCast cast => IsCoveredExpression(cast.Value),
             IrCollectionInitialization initialization => IsCoveredExpression(
                 initialization.Creation
             ) && initialization.Elements.All(element => element.All(IsCoveredExpression)),
