@@ -165,8 +165,12 @@ export function throwViewBoundsInverted(): never {
   throw new ArgumentException("Must be less than or equal to upperValue.", "lowerValue");
 }
 
-/** A value outside a `SortedSet` view's range (`add`), or a nested view's bound outside its parent's. */
-export function throwOutsideView(paramName: string): never {
+/**
+ * `ArgumentOutOfRangeException` with .NET's default text (`Specified argument was
+ * out of the range of valid values.`): a `SortedSet` view's `add` (`item`) or a
+ * nested view's bound (`lowerValue` / `upperValue`).
+ */
+export function throwArgumentOutOfRange(paramName: string): never {
   throw new ArgumentOutOfRangeException(paramName);
 }
 
@@ -191,4 +195,23 @@ export function requireKey<K>(key: K): K {
   }
 
   return key;
+}
+
+/** `new ConcurrentDictionary(concurrencyLevel, …)` with a level below 1 other than -1. */
+export function throwConcurrencyLevel(): never {
+  throw new ArgumentOutOfRangeException(
+    "concurrencyLevel",
+    undefined,
+    "The concurrencyLevel argument must be positive, or -1 to indicate a default level.",
+  );
+}
+
+/** `ConcurrentDictionary`'s `IDictionary<K, V>.Add` of a present key. */
+export function throwConcurrentDuplicateKey(): never {
+  throw new ArgumentException("The key already existed in the dictionary.");
+}
+
+/** `new ConcurrentDictionary(collection)` whose source repeats a key. */
+export function throwConcurrentSourceDuplicate(): never {
+  throw new ArgumentException("The source argument contains duplicate keys.");
 }

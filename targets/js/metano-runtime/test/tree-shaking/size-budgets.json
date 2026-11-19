@@ -144,6 +144,26 @@
         "Must be less than or equal"
       ],
       "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4112 B / esbuild 4035 B (proposed 2560 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
+    },
+    {
+      "name": "ReadOnlyList alone",
+      "entry": "entries/read-only-list-only.js",
+      "maxGzip": 2803,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue"
+      ],
+      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 2549 B / esbuild 2462 B (proposed 819 B). FR-016's exception classes, elementEquals / defaultEquals and the type-name and close helpers are most of it, shared when several collections are used."
+    },
+    {
+      "name": "ConcurrentDictionary alone (with the shared hash core, without Dictionary)",
+      "entry": "entries/concurrent-dictionary-only.js",
+      "maxGzip": 4809,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue"
+      ],
+      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4372 B / esbuild 4299 B (proposed 3584 B). FR-016's exception classes, elementEquals / defaultEquals and the type-name and close helpers are most of it, shared when several collections are used."
     }
   ],
   "modules": [
@@ -156,6 +176,7 @@
     "system/collections/checks",
     "system/collections/close-collection",
     "system/collections/collection-type-name",
+    "system/collections/concurrent-dictionary",
     "system/collections/copy-to",
     "system/collections/default-comparer",
     "system/collections/descriptors",
@@ -171,6 +192,7 @@
     "system/collections/list-helpers",
     "system/collections/list",
     "system/collections/queue",
+    "system/collections/read-only-list",
     "system/collections/red-black-tree",
     "system/collections/set-algebra",
     "system/collections/sorted-array",

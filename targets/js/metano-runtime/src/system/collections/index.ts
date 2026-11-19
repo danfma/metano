@@ -1,6 +1,7 @@
 export type { MetanoChecks } from "./checks.ts";
 export * from "./default-comparer.ts";
 export * from "./descriptors.ts";
+export * from "./concurrent-dictionary.ts";
 export * from "./dictionary.ts";
 export * from "./dictionary-helpers.ts";
 export * from "./dictionary-views.ts";
@@ -11,6 +12,7 @@ export type * from "./interfaces.ts";
 export * from "./list.ts";
 export * from "./list-helpers.ts";
 export * from "./queue.ts";
+export * from "./read-only-list.ts";
 export * from "./sorted-dictionary.ts";
 export * from "./sorted-list.ts";
 export * from "./sorted-set.ts";

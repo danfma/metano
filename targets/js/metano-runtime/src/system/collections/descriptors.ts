@@ -12,6 +12,7 @@ import type {
   RuntimeType,
 } from "../reflection/runtime-type.ts";
 import { specializeCollection } from "../reflection/specialize-collection.ts";
+import { ConcurrentDictionary } from "./concurrent-dictionary.ts";
 import { Dictionary } from "./dictionary.ts";
 import { HashSet } from "./hash-set.ts";
 import type {
@@ -26,6 +27,7 @@ import type {
 } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { Queue } from "./queue.ts";
+import { ReadOnlyList } from "./read-only-list.ts";
 import { SortedDictionary } from "./sorted-dictionary.ts";
 import { SortedList } from "./sorted-list.ts";
 import { SortedSet } from "./sorted-set.ts";
@@ -54,6 +56,21 @@ export function queueType<T>(element: RuntimeType<T>): CollectionType<Queue<T>> 
 
 export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>> {
   return specializeCollection(Stack.$runtimeType, [element]) as CollectionType<Stack<T>>;
+}
+
+export function readOnlyListType<T>(element: RuntimeType<T>): CollectionType<ReadOnlyList<T>> {
+  return specializeCollection(ReadOnlyList.$runtimeType, [element]) as CollectionType<
+    ReadOnlyList<T>
+  >;
+}
+
+export function concurrentDictionaryType<K, V>(
+  key: RuntimeType<K>,
+  value: RuntimeType<V>,
+): CollectionType<ConcurrentDictionary<K, V>> {
+  return specializeCollection(ConcurrentDictionary.$runtimeType, [key, value]) as CollectionType<
+    ConcurrentDictionary<K, V>
+  >;
 }
 
 export function sortedSetType<T>(element: RuntimeType<T>): CollectionType<SortedSet<T>> {

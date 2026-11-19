@@ -9,7 +9,7 @@ import * as setAlgebra from "./set-algebra.ts";
 import {
   throwArgumentNull,
   throwEnumeratorModified,
-  throwOutsideView,
+  throwArgumentOutOfRange,
   throwViewBoundsInverted,
 } from "./throw-helpers.ts";
 
@@ -146,7 +146,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
 
   add(item: T): boolean {
     if (!this.inRange(item)) {
-      throwOutsideView("item");
+      throwArgumentOutOfRange("item");
     }
 
     this.bumpVersion();
@@ -212,11 +212,11 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   /** A live view of the elements in `[lowerValue, upperValue]`, sharing this set's tree and version. */
   getViewBetween(lowerValue: T, upperValue: T): SortedSet<T> {
     if (this._bounded && this.compareItems(this._lower as T, lowerValue) > 0) {
-      throwOutsideView("lowerValue");
+      throwArgumentOutOfRange("lowerValue");
     }
 
     if (this._bounded && this.compareItems(this._upper as T, upperValue) < 0) {
-      throwOutsideView("upperValue");
+      throwArgumentOutOfRange("upperValue");
     }
 
     if (this.compareItems(lowerValue, upperValue) > 0) {
