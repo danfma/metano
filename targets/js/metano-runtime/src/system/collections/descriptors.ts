@@ -15,6 +15,14 @@ import { specializeCollection } from "../reflection/specialize-collection.ts";
 import { ConcurrentDictionary } from "./concurrent-dictionary.ts";
 import { Dictionary } from "./dictionary.ts";
 import { HashSet } from "./hash-set.ts";
+import { ImmutableDictionary } from "./immutable-dictionary.ts";
+import { ImmutableHashSet } from "./immutable-hash-set.ts";
+import type {
+  IImmutableDictionary,
+  IImmutableList,
+  IImmutableSet,
+} from "./immutable-interfaces.ts";
+import { ImmutableList } from "./immutable-list.ts";
 import type {
   ICollection,
   IDictionary,
@@ -56,6 +64,29 @@ export function queueType<T>(element: RuntimeType<T>): CollectionType<Queue<T>> 
 
 export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>> {
   return specializeCollection(Stack.$runtimeType, [element]) as CollectionType<Stack<T>>;
+}
+
+export function immutableListType<T>(element: RuntimeType<T>): CollectionType<ImmutableList<T>> {
+  return specializeCollection(ImmutableList.$runtimeType, [element]) as CollectionType<
+    ImmutableList<T>
+  >;
+}
+
+export function immutableHashSetType<T>(
+  element: RuntimeType<T>,
+): CollectionType<ImmutableHashSet<T>> {
+  return specializeCollection(ImmutableHashSet.$runtimeType, [element]) as CollectionType<
+    ImmutableHashSet<T>
+  >;
+}
+
+export function immutableDictionaryType<K, V>(
+  key: RuntimeType<K>,
+  value: RuntimeType<V>,
+): CollectionType<ImmutableDictionary<K, V>> {
+  return specializeCollection(ImmutableDictionary.$runtimeType, [key, value]) as CollectionType<
+    ImmutableDictionary<K, V>
+  >;
 }
 
 export function readOnlyListType<T>(element: RuntimeType<T>): CollectionType<ReadOnlyList<T>> {
@@ -147,6 +178,28 @@ export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IRe
   >;
 }
 
+export function iImmutableListType<T>(element: RuntimeType<T>): CollectionType<IImmutableList<T>> {
+  return specializeCollection(openInterface("IImmutableList"), [element]) as CollectionType<
+    IImmutableList<T>
+  >;
+}
+
+export function iImmutableSetType<T>(element: RuntimeType<T>): CollectionType<IImmutableSet<T>> {
+  return specializeCollection(openInterface("IImmutableSet"), [element]) as CollectionType<
+    IImmutableSet<T>
+  >;
+}
+
+export function iImmutableDictionaryType<K, V>(
+  key: RuntimeType<K>,
+  value: RuntimeType<V>,
+): CollectionType<IImmutableDictionary<K, V>> {
+  return specializeCollection(openInterface("IImmutableDictionary"), [
+    key,
+    value,
+  ]) as CollectionType<IImmutableDictionary<K, V>>;
+}
+
 type InterfaceKind =
   | "IList"
   | "ICollection"
@@ -155,7 +208,10 @@ type InterfaceKind =
   | "IDictionary"
   | "IReadOnlyDictionary"
   | "ISet"
-  | "IReadOnlySet";
+  | "IReadOnlySet"
+  | "IImmutableList"
+  | "IImmutableSet"
+  | "IImmutableDictionary";
 
 /** Covariant (`out T`) parameters: the read-only list and collection interfaces. */
 const VARIANCE: Readonly<Record<InterfaceKind, ReadonlyArray<"invariant" | "covariant">>> = {
@@ -167,6 +223,9 @@ const VARIANCE: Readonly<Record<InterfaceKind, ReadonlyArray<"invariant" | "cova
   IReadOnlyDictionary: ["invariant", "invariant"],
   ISet: ["invariant"],
   IReadOnlySet: ["invariant"],
+  IImmutableList: ["invariant"],
+  IImmutableSet: ["invariant"],
+  IImmutableDictionary: ["invariant", "invariant"],
 };
 
 let openInterfaces: Partial<Record<InterfaceKind, CollectionType<unknown>>> | undefined;
@@ -181,12 +240,15 @@ function openInterface(kind: InterfaceKind): CollectionType<unknown> {
     return known;
   }
 
+  const namespace = kind.startsWith("IImmutable")
+    ? "System.Collections.Immutable"
+    : "System.Collections.Generic";
   const created: CollectionType<unknown> = {
     kind: "collection",
     collection: kind satisfies CollectionKindName,
     name: kind,
-    fullName: `System.Collections.Generic.${kind}`,
-    namespace: "System.Collections.Generic",
+    fullName: `${namespace}.${kind}`,
+    namespace,
     typeArguments: [],
     variance: VARIANCE[kind],
     test: (_value: unknown): _value is unknown => true,

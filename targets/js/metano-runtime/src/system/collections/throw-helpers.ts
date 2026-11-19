@@ -215,3 +215,15 @@ export function throwConcurrentDuplicateKey(): never {
 export function throwConcurrentSourceDuplicate(): never {
   throw new ArgumentException("The source argument contains duplicate keys.");
 }
+
+/** `ImmutableList.Replace` of a value it does not hold. */
+export function throwOldValueNotFound(): never {
+  throw new ArgumentException("Cannot find the old value", "oldValue");
+}
+
+/** `ImmutableDictionary.Add` of a present key holding a different value. */
+export function throwImmutableDuplicateKey(key: unknown): never {
+  throw new ArgumentException(
+    `An element with the same key but a different value already exists. Key: '${messageValue(key)}'`,
+  );
+}

@@ -171,6 +171,36 @@
       "baselineEntry": "entries/list-only.js",
       "maxGzip": 819,
       "$comment": "Maintainer decision W4-42: the marginal cost of ReadOnlyList where List is already used, NFR-008's proposed 0.8 KB. Measured bun 395 B (4527 - 4132) / esbuild 362 B (4440 - 4078)."
+    },
+    {
+      "name": "ImmutableList alone",
+      "entry": "entries/immutable-list-only.js",
+      "maxGzip": 3908,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue"
+      ],
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+    },
+    {
+      "name": "ImmutableHashSet alone",
+      "entry": "entries/immutable-hash-set-only.js",
+      "maxGzip": 4020,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue"
+      ],
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3655 B / esbuild 3640 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+    },
+    {
+      "name": "ImmutableDictionary alone",
+      "entry": "entries/immutable-dictionary-only.js",
+      "maxGzip": 4955,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue"
+      ],
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4505 B / esbuild 4459 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     }
   ],
   "modules": [
@@ -180,6 +210,7 @@
     "system/big-integer",
     "system/bind-receiver",
     "system/boolean-format",
+    "system/collections/builder-iterator",
     "system/collections/checks",
     "system/collections/close-collection",
     "system/collections/collection-type-name",
@@ -194,6 +225,14 @@
     "system/collections/hash-set",
     "system/collections/helpers",
     "system/collections/immutable-collection",
+    "system/collections/immutable-dictionary-builder",
+    "system/collections/immutable-dictionary",
+    "system/collections/immutable-hash-set-builder",
+    "system/collections/immutable-hash-set",
+    "system/collections/immutable-interfaces",
+    "system/collections/immutable-list-builder",
+    "system/collections/immutable-list",
+    "system/collections/immutable-storage",
     "system/collections/index",
     "system/collections/interfaces",
     "system/collections/list-helpers",
