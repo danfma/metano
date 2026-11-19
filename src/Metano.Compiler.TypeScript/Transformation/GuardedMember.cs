@@ -60,4 +60,11 @@ internal sealed record GuardFieldTest(
     AST.TsExpression Check,
     GuardTestKind Kind,
     bool AcceptsAbsent
-);
+)
+{
+    /// <summary>
+    /// Whether the check only tests that the member is there (<c>v.x != null</c>),
+    /// so a nullable of it accepts any value.
+    /// </summary>
+    public bool IsPresenceOnly { get; init; }
+}

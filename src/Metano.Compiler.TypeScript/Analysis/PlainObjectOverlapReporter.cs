@@ -21,8 +21,7 @@ internal sealed class PlainObjectOverlapReporter(
     IReadOnlyList<INamedTypeSymbol> emittedTypes
 )
 {
-    private readonly TypeGuardBuilder _guards = new(context);
-    private readonly HashSet<(SupertypeKey, SupertypeKey)> _reported = [];
+    private readonly HashSet<OverlapPair> _reported = [];
 
     private readonly IReadOnlyList<INamedTypeSymbol> _plainObjects =
     [
@@ -30,6 +29,8 @@ internal sealed class PlainObjectOverlapReporter(
             SymbolHelper.HasPlainObject(type) && TypeGuardBuilder.CanHaveGuard(type)
         ),
     ];
+
+    private readonly TypeGuardBuilder _guards = new(context);
 
     public void Report(IReadOnlyList<IrRuntimeQuestion> questions)
     {
@@ -65,7 +66,7 @@ internal sealed class PlainObjectOverlapReporter(
                 SymbolEqualityComparer.Default.Equals(other, tested)
                 || !IsHeldBy(other, question.InputType)
                 || !JsonStructuralVariants.Covers(testedMembers, _guards.GuardedMembersOf(other))
-                || !_reported.Add((KeyOf(tested), KeyOf(other)))
+                || !_reported.Add(new OverlapPair(KeyOf(tested), KeyOf(other)))
             )
                 continue;
 
@@ -84,16 +85,20 @@ internal sealed class PlainObjectOverlapReporter(
         {
             null or { Shape: IrQuestionedTypeShape.Object or IrQuestionedTypeShape.Dynamic } =>
                 true,
-            { Shape: IrQuestionedTypeShape.Named, Key: { } key } => IrTypeKeys.Find(
-                key,
-                context.Compilation
-            )
-                is { } holder
-                && context.Compilation.ClassifyCommonConversion(other, holder)
-                    is { IsImplicit: true, IsReference: true }
-                        or { IsIdentity: true },
+            { Shape: IrQuestionedTypeShape.Named, Key: { } key } => HoldsValueOf(key, other),
             _ => false,
         };
+
+    /// <summary>Whether a value of <paramref name="other"/> converts implicitly to the type <paramref name="holderKey"/> names.</summary>
+    private bool HoldsValueOf(IrTypeKey holderKey, INamedTypeSymbol other)
+    {
+        if (IrTypeKeys.Find(holderKey, context.Compilation) is not { } holder)
+            return false;
+
+        var conversion = context.Compilation.ClassifyCommonConversion(other, holder);
+
+        return conversion.IsIdentity || (conversion.IsImplicit && conversion.IsReference);
+    }
 
     private static MetanoDiagnostic Overlap(
         IrRuntimeQuestion question,
@@ -111,4 +116,7 @@ internal sealed class PlainObjectOverlapReporter(
         );
 
     private static SupertypeKey KeyOf(INamedTypeSymbol type) => RuntimeTypeReachability.KeyOf(type);
+
+    /// <summary>A tested type and a plain object that passes its test.</summary>
+    private readonly record struct OverlapPair(SupertypeKey Tested, SupertypeKey Other);
 }

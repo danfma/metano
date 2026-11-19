@@ -601,23 +601,21 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
         // Field checks — skip the discriminator (already narrowed above)
         // to avoid redundant recursion into isKind(v.kind).
-        var fields = GetAllFieldsForGuard(type)
+        // A field that accepts any value (a delegate, `any`) adds no `&& true`.
+        var checks = GetAllFieldsForGuard(type)
             .Where(f => !string.Equals(f.Name, discriminatorTsName, StringComparison.Ordinal))
+            .Select(f => FieldTestOf(new TsPropertyAccess(new TsIdentifier("v"), f.Name), f.Type))
+            .Where(test => test.Kind is not GuardTestKind.Unchecked)
+            .Select(test => test.Check)
             .ToList();
-        if (fields.Count > 0)
-        {
-            TsExpression fieldChecks = fields
-                .Select(f =>
-                    GenerateFieldCheck(new TsPropertyAccess(new TsIdentifier("v"), f.Name), f.Type)
-                )
-                .Aggregate((a, b) => new TsBinaryExpression(a, "&&", b));
 
-            body.Add(new TsReturnStatement(fieldChecks));
-        }
-        else
-        {
-            body.Add(new TsReturnStatement(new TsLiteral("true")));
-        }
+        body.Add(
+            new TsReturnStatement(
+                checks.Count > 0
+                    ? checks.Aggregate((a, b) => new TsBinaryExpression(a, "&&", b))
+                    : new TsLiteral("true")
+            )
+        );
 
         return new TsFunction(
             guardName,
@@ -761,12 +759,6 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 or Accessibility.ProtectedAndInternal;
 
     /// <summary>
-    /// Generates a runtime type check expression for a single field.
-    /// </summary>
-    private TsExpression GenerateFieldCheck(TsExpression fieldAccess, TsType fieldType) =>
-        FieldTestOf(fieldAccess, fieldType).Check;
-
-    /// <summary>
     /// The check a guard emits for one field and the coarse kind it amounts
     /// to (FR-019 rule 3). Both come from this one switch, so the specificity
     /// order the JSON context computes always follows the emitted guard.
@@ -786,9 +778,14 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 GuardTestKind.Object
             ),
 
-            // Temporal types
-            TsNamedType { Name: var n } when n.StartsWith("Temporal.") => Required(
-                InstanceofCheck(fieldAccess, n),
+            // A temporal type tests as everywhere else (spec 011 NFR-004, FR-017).
+            TsNamedType { Name: var n } when TemporalPrimitiveOf(n) is { } temporal => Required(
+                IrToTsRuntimeTestBridge.Render(
+                    fieldAccess,
+                    new IrPrimitiveTypeRef(temporal),
+                    staticType: null,
+                    _context.RuntimeTypes
+                )!,
                 GuardTestKind.Object
             ),
 
@@ -855,13 +852,28 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             TsNamedType => Required(
                 new TsBinaryExpression(fieldAccess, "!=", new TsLiteral("null")),
                 GuardTestKind.Present
-            ),
+            ) with
+            {
+                IsPresenceOnly = true,
+            },
 
             // Unknown shape the switch doesn't cover — accept anything.
             // Reaches this branch only for TsType variants the builder
             // does not know about (new AST kinds); safer to keep the
             // field permissive than to reject valid shapes.
             _ => Unchecked(),
+        };
+
+    /// <summary>The temporal primitive a <c>Temporal.*</c> type name stands for.</summary>
+    private static IrPrimitive? TemporalPrimitiveOf(string tsName) =>
+        tsName switch
+        {
+            "Temporal.PlainDateTime" => IrPrimitive.DateTime,
+            "Temporal.ZonedDateTime" => IrPrimitive.DateTimeOffset,
+            "Temporal.PlainDate" => IrPrimitive.DateOnly,
+            "Temporal.PlainTime" => IrPrimitive.TimeOnly,
+            "Temporal.Duration" => IrPrimitive.TimeSpan,
+            _ => null,
         };
 
     /// <summary>
@@ -952,7 +964,12 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             .Select(t => FieldTestOf(fieldAccess, t))
             .ToList();
 
-        if (innerTests.Count == 0)
+        // `v.x == null || v.x != null` (a nullable of a type checked by presence
+        // only) accepts anything: no check at all.
+        if (
+            innerTests.Count == 0
+            || innerTests.Any(test => test.IsPresenceOnly || test.Kind is GuardTestKind.Unchecked)
+        )
             return Unchecked();
 
         var innerCheck = innerTests

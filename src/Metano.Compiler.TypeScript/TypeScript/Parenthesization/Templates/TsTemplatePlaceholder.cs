@@ -1,3 +1,4 @@
+using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Parenthesization.Templates;
@@ -70,11 +71,11 @@ internal readonly record struct TsTemplatePlaceholder(
         if (rest is ['$', 'T', var digit, ..] && char.IsAsciiDigit(digit))
             return Numbered(TsTemplatePlaceholderKind.TypeArgument, rest, prefixLength: 2);
 
-        if (rest is ['$', 'R', var descriptorDigit, ..] && char.IsAsciiDigit(descriptorDigit))
+        if (IsTypeArgumentDescriptor(rest))
             return Numbered(
                 TsTemplatePlaceholderKind.TypeArgumentDescriptor,
                 rest,
-                prefixLength: 2
+                TypeArgumentDescriptorPlaceholder.Prefix.Length
             );
 
         if (rest is ['$', var first, ..] && char.IsAsciiDigit(first))
@@ -116,13 +117,16 @@ internal readonly record struct TsTemplatePlaceholder(
 
     /// <summary>
     /// Whether <paramref name="text"/> reads a type argument's runtime type
-    /// descriptor (<c>$R0</c>).
+    /// descriptor (<c>$R0</c>, <see cref="TypeArgumentDescriptorPlaceholder"/>).
     /// </summary>
     public static bool ReferencesTypeArgumentDescriptor(string text) =>
-        Occurrences(text)
-            .Any(placeholder =>
-                placeholder.Kind is TsTemplatePlaceholderKind.TypeArgumentDescriptor
-            );
+        TypeArgumentDescriptorPlaceholder.IndicesIn(text).Count > 0;
+
+    /// <summary><c>$R</c> followed by a digit.</summary>
+    private static bool IsTypeArgumentDescriptor(ReadOnlySpan<char> rest) =>
+        rest.StartsWith(TypeArgumentDescriptorPlaceholder.Prefix, StringComparison.Ordinal)
+        && rest.Length > TypeArgumentDescriptorPlaceholder.Prefix.Length
+        && char.IsAsciiDigit(rest[TypeArgumentDescriptorPlaceholder.Prefix.Length]);
 
     /// <summary>
     /// <c>$Type</c> not glued to a longer identifier (<c>$Types</c> is not it).

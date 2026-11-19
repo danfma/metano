@@ -102,6 +102,13 @@ internal static class IrToTsRuntimeTestBridge
             IrMapTypeRef => InstanceofTest(value, new TsIdentifier("Map")),
             IrSetTypeRef => InstanceofTest(value, new TsRuntimeHelperReference("HashSet")),
             IrPromiseTypeRef => InstanceofTest(value, new TsIdentifier("Promise")),
+            // A temporal value tests by its toStringTag through its descriptor,
+            // never by `instanceof Temporal.*`, which would pull the polyfill in
+            // (FR-017).
+            IrPrimitiveTypeRef { Primitive: var temporal } => IsTypeCall(
+                value,
+                new TsRuntimeHelperReference(TsRuntimePrimitive.Of(temporal)!.Descriptor)
+            ),
             IrNamedTypeRef named when BclExceptionClasses.IsBclException(named) =>
                 IrToTsTypeMapper.ExceptionClasses.InstanceofTest(value, named),
             _ => InstanceofTest(value, ClassValueOf(type)),
@@ -158,26 +165,26 @@ internal static class IrToTsRuntimeTestBridge
 
     /// <summary>
     /// The test of <paramref name="type"/> as a function value, for a site that
-    /// stores it (a polymorphic JSON case's <c>test</c>, NFR-004): the guard
-    /// itself when the test calls one on the value (<c>isPoint</c>), else
-    /// <c>(v: unknown): boolean =&gt; …</c> over the same rendering.
+    /// stores it (a polymorphic JSON case's <c>test</c>, NFR-004): a shape's
+    /// guard itself (<c>isPoint</c>), the very function its rendered test calls,
+    /// else <c>(v: unknown) =&gt; …</c> over the same rendering.
     /// </summary>
     public static TsExpression? TestFunction(
         IrTypeRef type,
         RuntimeTypeReachabilityResult reachability
     )
     {
+        if (IrRuntimeTypeTest.Of(type) is IrRuntimeTypeTest.ErasedShape)
+            return ShapeGuard(type, reachability);
+
         var parameter = new TsIdentifier("v");
 
-        return Render(parameter, type, staticType: null, reachability) switch
-        {
-            null => null,
-            TsCallExpression { Arguments: [TsIdentifier { Name: "v" }] } call => call.Callee,
-            var test => new TsArrowFunction(
+        return Render(parameter, type, staticType: null, reachability) is { } test
+            ? new TsArrowFunction(
                 [new TsParameter(parameter.Name, new TsNamedType("unknown"))],
                 [new TsReturnStatement(test)]
-            ),
-        };
+            )
+            : null;
     }
 
     /// <summary>
@@ -190,15 +197,24 @@ internal static class IrToTsRuntimeTestBridge
         TsExpression value,
         IrTypeRef type,
         RuntimeTypeReachabilityResult reachability
+    ) => ShapeGuard(type, reachability) is { } guard ? new TsCallExpression(guard, [value]) : null;
+
+    /// <summary>
+    /// The guard a shape test calls; <c>null</c> for a generic plain object,
+    /// which has no runtime test yet (<see cref="IrRuntimeTypeTest.ExistsFor"/>).
+    /// </summary>
+    private static TsExpression? ShapeGuard(
+        IrTypeRef type,
+        RuntimeTypeReachabilityResult reachability
     )
     {
-        if (type is not IrNamedTypeRef named)
+        if (type is not IrNamedTypeRef named || named.TypeArguments is { Count: > 0 })
             return null;
 
         if (named.Origin is null)
             IrToTsRuntimeTypeReferences.AssertGuarded(named, reachability);
 
-        return new TsCallExpression(GuardReference(named), [value]);
+        return GuardReference(named);
     }
 
     /// <summary>

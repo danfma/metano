@@ -1,6 +1,5 @@
 using Metano.Annotations;
 using Metano.Compiler.Extraction;
-using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
@@ -21,14 +20,13 @@ internal sealed class JsonGuardReferences(TypeScriptTransformContext context)
     private readonly TypeScriptTransformContext _context = context;
 
     /// <summary>
-    /// The JSON contract's structural guards are emitted by their own set
-    /// (<see cref="TypeScriptTransformContext.StructuralGuardTypes"/>), not
-    /// asked of the runtime type reachability, so the test reads them unchecked.
+    /// The JSON contract's structural guards are among the reachability's
+    /// guarded plain objects, so the test keeps the bridge's drift check.
     /// </summary>
     public TsExpression GuardReferenceOf(INamedTypeSymbol type) =>
         IrToTsRuntimeTestBridge.TestFunction(
             IrTypeRefMapper.Map(type, _context.OriginResolver, TargetLanguage.TypeScript),
-            RuntimeTypeReachabilityResult.Unchecked
+            _context.RuntimeTypes
         )
         ?? throw new InvalidOperationException(
             $"Internal error: the structural JSON case '{type.ToDisplayString()}' has no "

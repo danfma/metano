@@ -666,6 +666,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             )
         );
 
+        // Every synthesized guard counts as emitted for the bridge's drift check,
+        // the JSON ones included, so a JSON case test reads the real reachability.
+        runtimeTypes = runtimeTypes with
+        {
+            GuardedPlainObjects = structuralGuards
+                .Types.Select(RuntimeTypeReachability.KeyOf)
+                .ToHashSet(),
+        };
+
         _context = new TypeScriptTransformContext(
             compilation,
             _currentAssembly,

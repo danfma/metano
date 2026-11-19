@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ArgumentException, getRuntimeTypeFromType } from "metano-runtime";
+import { ArgumentException, getRuntimeTypeFromType, InvalidCastException } from "metano-runtime";
 
 import { Circle } from "#/sample-runtime-types/shapes/circle";
 import { Color, Color$runtimeType } from "#/sample-runtime-types/shapes/color";
@@ -37,7 +37,7 @@ describe("runtime type descriptors (US3)", () => {
     const dto = { area: 2, unit: "m2" };
 
     expect(ShapeQuestions.toAreaDto(dto)).toBe(dto);
-    expect(() => ShapeQuestions.toAreaDto({ area: 2 })).toThrow();
+    expect(() => ShapeQuestions.toAreaDto({ area: 2 })).toThrow(InvalidCastException);
   });
 
   test("[EmitRuntimeType] emits the descriptor of an interface nothing asks about", () => {

@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Text.RegularExpressions;
-
 namespace Metano.Compiler.Mappings;
 
 /// <summary>
@@ -32,7 +29,7 @@ namespace Metano.Compiler.Mappings;
 /// <see cref="WhenParameterTypes"/> holds the stable full names
 /// (<c>SymbolHelper.GetStableFullName</c>) of the overload's parameter types.
 /// </summary>
-public sealed partial record DeclarativeMappingEntry(
+public sealed record DeclarativeMappingEntry(
     string? JsName,
     string? JsTemplate,
     string? WhenArg0StringEquals = null,
@@ -53,10 +50,7 @@ public sealed partial record DeclarativeMappingEntry(
     public IReadOnlySet<int> DescribedTypeArguments =>
         JsTemplate is null
             ? new HashSet<int>()
-            : DescribedTypeArgumentPattern()
-                .Matches(JsTemplate)
-                .Select(match => int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture))
-                .ToHashSet();
+            : TypeArgumentDescriptorPlaceholder.IndicesIn(JsTemplate);
 
     /// <summary>
     /// True when the call site's overload shape satisfies the entry's
@@ -114,7 +108,4 @@ public sealed partial record DeclarativeMappingEntry(
             return [];
         return raw!.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
     }
-
-    [GeneratedRegex(@"\$R(\d+)")]
-    private static partial Regex DescribedTypeArgumentPattern();
 }

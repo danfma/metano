@@ -26,8 +26,10 @@ internal sealed record RuntimeTypeReachabilityResult
     public required IReadOnlySet<string> QuestionedCollectionTypes { get; init; }
 
     /// <summary>
-    /// The <c>[PlainObject]</c> types a runtime test recognizes by their
-    /// synthesized structural guard (FR-020), which the compilation emits.
+    /// The types whose synthesized structural guard the compilation emits: the
+    /// <c>[PlainObject]</c> types a runtime test recognizes by it (FR-020) and,
+    /// once the transform merges them, the structural JSON variants (spec 009
+    /// FR-019). The bridge renders no other synthesized guard.
     /// </summary>
     public required IReadOnlySet<SupertypeKey> GuardedPlainObjects { get; init; }
 
