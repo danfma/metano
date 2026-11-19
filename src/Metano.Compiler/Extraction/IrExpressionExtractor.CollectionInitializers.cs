@@ -27,8 +27,7 @@ public sealed partial class IrExpressionExtractor
     )
     {
         if (
-            _context.KeepsNativeCollections
-            || createdType is not INamedTypeSymbol named
+            createdType is not INamedTypeSymbol named
             || CollectionKindResolver.KindOf(named)
                 is not (
                     IrCollectionKind.List
@@ -188,9 +187,6 @@ public sealed partial class IrExpressionExtractor
     {
         var parameter = symbol.Parameters[^1];
 
-        if (_context.KeepsNativeCollections)
-            return false;
-
         if (MapNonNullType(parameter.Type) is not (IrCollectionTypeRef or IrIterableTypeRef))
             return false;
 
@@ -248,7 +244,7 @@ public sealed partial class IrExpressionExtractor
     /// <paramref name="value"/> viewed as the list interface C# converts the
     /// array <paramref name="expression"/> to implicitly (spec 011 FR-003):
     /// an <see cref="IrArrayToCollectionConversion"/>; unchanged for any other
-    /// expression, and for a target that keeps native collections.
+    /// expression.
     /// </summary>
     private IrExpression WithArrayToCollectionConversion(
         ExpressionSyntax expression,
@@ -266,12 +262,11 @@ public sealed partial class IrExpressionExtractor
     /// The list interface an array of <paramref name="source"/> converts to
     /// (<c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
     /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>);
-    /// <c>null</c> for any other pair, and for a target that keeps native
-    /// collections.
+    /// <c>null</c> for any other pair.
     /// </summary>
     private IrCollectionTypeRef? ArrayToCollectionTargetOf(ITypeSymbol? source, ITypeSymbol? target)
     {
-        if (_context.KeepsNativeCollections || source is not IArrayTypeSymbol)
+        if (source is not IArrayTypeSymbol)
             return null;
 
         return target is INamedTypeSymbol named && IsListInterface(named)
@@ -301,11 +296,7 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol targetType
     )
     {
-        if (
-            _context.KeepsNativeCollections
-            || targetType is not INamedTypeSymbol named
-            || !IsListInterface(named)
-        )
+        if (targetType is not INamedTypeSymbol named || !IsListInterface(named))
             return null;
 
         if (ArrayToCollectionTargetOf(sourceType, targetType) is { } target)
@@ -349,8 +340,7 @@ public sealed partial class IrExpressionExtractor
     )
     {
         var omitted =
-            !_context.KeepsNativeCollections
-            && invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+            invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
             && _semantic.GetOperation(invocation) is IInvocationOperation operation
                 ? operation.Arguments.FirstOrDefault(argument =>
                     argument.ArgumentKind is ArgumentKind.ParamCollection

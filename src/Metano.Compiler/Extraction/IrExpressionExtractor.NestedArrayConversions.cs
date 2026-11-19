@@ -14,8 +14,8 @@ namespace Metano.Compiler.Extraction;
 /// type instantiated with an array for a type parameter constrained to a list
 /// interface (reason 2). Each reports MS0001 for a target whose collections are
 /// runtime classes: the value would run <c>count</c> / <c>get</c> on an array,
-/// a silent <c>undefined</c>. A target that keeps native collections is never
-/// reported.
+/// a silent <c>undefined</c>. A target that keeps native collections never
+/// runs the check.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
@@ -25,9 +25,6 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private void ReportNestedArrayAsListInterface(ExpressionSyntax expression)
     {
-        if (_context.KeepsNativeCollections)
-            return;
-
         var info = _semantic.GetTypeInfo(expression);
 
         if (

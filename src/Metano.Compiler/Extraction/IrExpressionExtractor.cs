@@ -237,7 +237,8 @@ public sealed partial class IrExpressionExtractor
         if (ProbedElementOf(expression) is { } probedElement)
             return probedElement;
 
-        ReportNestedArrayAsListInterface(expression);
+        if (!_context.KeepsNativeCollections)
+            ReportNestedArrayAsListInterface(expression);
 
         // A 64-bit constant folds to one literal, and a constant inside
         // checked / unchecked takes Roslyn's wrapped value; see
@@ -251,13 +252,14 @@ public sealed partial class IrExpressionExtractor
             ?? FoldedNumberStylesConstant(expression)
             ?? ExtractUnbound(expression);
 
+        var collectionValue = _context.KeepsNativeCollections
+            ? value
+            : WithArrayToCollectionConversion(expression, value);
+
         return WithImplicitUserConversion(expression, value)
             ?? WithBoxingConversion(
                 expression,
-                WithImplicitNumericConversion(
-                    expression,
-                    WithArrayToCollectionConversion(expression, value)
-                )
+                WithImplicitNumericConversion(expression, collectionValue)
             );
     }
 
@@ -559,7 +561,11 @@ public sealed partial class IrExpressionExtractor
         // assignment also benefits from the `$set` lowering; the
         // surrounding null check stays exactly as the legacy form.
         var memberWrite = TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
-            ?? TryExtractConditionalElementUpdate(rebound, assign, CompoundStoreOf(assign))
+            ?? (
+                _context.KeepsNativeCollections
+                    ? null
+                    : TryExtractConditionalElementUpdate(rebound, assign, CompoundStoreOf(assign))
+            )
             ?? CompoundStoreOf(assign)(rebound);
 
         return new IrBinaryExpression(
@@ -722,7 +728,9 @@ public sealed partial class IrExpressionExtractor
                 new IrElementAccess(
                     inner,
                     Extract(ea.ArgumentList.Arguments[0].Expression),
-                    ElementReceiverTypeOf(ea.Expression),
+                    _context.KeepsNativeCollections
+                        ? MapExpressionType(ea.Expression)
+                        : ElementReceiverTypeOf(ea.Expression),
                     ArrayIndexKind(ea.Expression, ea.ArgumentList)
                 ),
             _ => null,
@@ -996,18 +1004,16 @@ public sealed partial class IrExpressionExtractor
             sliceIndex,
             slicePattern,
             ListSubjectMayBeNull(list, operation?.InputType),
-            ListPatternCollectionOf(operation?.InputType)
+            _context.KeepsNativeCollections ? null : ListPatternCollectionOf(operation?.InputType)
         );
     }
 
     /// <summary>
-    /// The stage 011c collection a list pattern matches, for a target whose
-    /// collections are runtime classes; <c>null</c> otherwise.
+    /// The stage 011c collection a list pattern matches; <c>null</c> for any
+    /// other input.
     /// </summary>
     private IrCollectionTypeRef? ListPatternCollectionOf(ITypeSymbol? inputType) =>
-        _context.KeepsNativeCollections || inputType is null
-            ? null
-            : MapNonNullType(inputType) as IrCollectionTypeRef;
+        inputType is null ? null : MapNonNullType(inputType) as IrCollectionTypeRef;
 
     /// <summary>
     /// <c>&lt;</c> / <c>&lt;=</c> / <c>&gt;</c> / <c>&gt;=</c> against a
@@ -2123,7 +2129,10 @@ public sealed partial class IrExpressionExtractor
         if (TryReportTupleElementWrite(assign, assign.Left) is { } unsupportedWrite)
             return unsupportedWrite;
 
-        if (TryExtractCollectionElementUpdate(assign) is { } elementUpdate)
+        if (
+            !_context.KeepsNativeCollections
+            && TryExtractCollectionElementUpdate(assign) is { } elementUpdate
+        )
             return elementUpdate;
 
         // Extension property assignment (`receiver.Prop = value` or any
@@ -2253,7 +2262,10 @@ public sealed partial class IrExpressionExtractor
                     BuildUnary(op, Extract(operand), operand)
                 );
 
-        if (TryExtractCollectionElementIncrement(node, operand, isPrefix) is { } elementUpdate)
+        if (
+            !_context.KeepsNativeCollections
+            && TryExtractCollectionElementIncrement(node, operand, isPrefix) is { } elementUpdate
+        )
             return elementUpdate;
 
         // `receiver.Prop++` against an extension property rewrites to a
@@ -3038,7 +3050,8 @@ public sealed partial class IrExpressionExtractor
 
         var evaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), args);
 
-        (args, evaluationOrder) = WithOmittedParamsCollection(inv, args, evaluationOrder);
+        if (!_context.KeepsNativeCollections)
+            (args, evaluationOrder) = WithOmittedParamsCollection(inv, args, evaluationOrder);
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
         {
@@ -3747,7 +3760,9 @@ public sealed partial class IrExpressionExtractor
         return new IrElementAccess(
             target,
             index,
-            ElementReceiverTypeOf(receiverSyntax),
+            _context.KeepsNativeCollections
+                ? MapExpressionType(receiverSyntax)
+                : ElementReceiverTypeOf(receiverSyntax),
             ArrayIndexKind(receiverSyntax, arguments)
         );
     }
@@ -4940,7 +4955,10 @@ public sealed partial class IrExpressionExtractor
         if (!lastParam.IsParams)
             return;
 
-        if (TryConstructParamsCollection(args, symbol, syntaxArgs))
+        if (
+            !_context.KeepsNativeCollections
+            && TryConstructParamsCollection(args, symbol, syntaxArgs)
+        )
             return;
 
         if (syntaxArgs.Count != symbol.Parameters.Length)
@@ -5544,7 +5562,10 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractUserCast(cast, inner, sourceType, targetType) is { } user)
             return user;
 
-        if (TryExtractListInterfaceCast(cast, inner, sourceType, targetType) is { } listInterface)
+        if (
+            !_context.KeepsNativeCollections
+            && TryExtractListInterfaceCast(cast, inner, sourceType, targetType) is { } listInterface
+        )
             return listInterface;
 
         var unwrapsNullable = IsNullableUnwrapCast(cast, sourceType, targetType);

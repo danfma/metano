@@ -92,8 +92,7 @@ public sealed partial class IrExpressionExtractor
     )
     {
         if (
-            _context.KeepsNativeCollections
-            || assign.IsKind(SyntaxKind.SimpleAssignmentExpression)
+            assign.IsKind(SyntaxKind.SimpleAssignmentExpression)
             || rebound is not IrElementAccess { TargetType: IrCollectionTypeRef type } element
         )
             return null;
@@ -114,7 +113,7 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression> storeOfProbe
     )
     {
-        if (_context.KeepsNativeCollections || _indexerUpdateProbe?.Node == node)
+        if (_indexerUpdateProbe?.Node == node)
             return null;
 
         if (CollectionElementPlaceOf(placeSyntax) is not { } place)
@@ -304,13 +303,11 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The receiver type an element access records (B2): for a target whose
-    /// collections are runtime classes, the collection a user class derives
+    /// The receiver type an element access records (B2) for a target whose
+    /// collections are runtime classes: the collection a user class derives
     /// from takes the place of the class, so its elements go through
     /// <c>get</c> / <c>set</c>; otherwise the receiver's own type.
     /// </summary>
     private IrTypeRef? ElementReceiverTypeOf(ExpressionSyntax receiverSyntax) =>
-        _context.KeepsNativeCollections
-            ? MapExpressionType(receiverSyntax)
-            : CollectionReceiverTypeOf(receiverSyntax) ?? MapExpressionType(receiverSyntax);
+        CollectionReceiverTypeOf(receiverSyntax) ?? MapExpressionType(receiverSyntax);
 }

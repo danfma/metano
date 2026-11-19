@@ -134,7 +134,10 @@ public sealed partial class IrExpressionExtractor
         var receiver = Extract(receiverSyntax);
         var isWriteTarget = IsWriteTarget(elem);
 
-        if (FromEndReceiverTypeOf(receiverSyntax, isWriteTarget) is { } receiverType)
+        if (
+            !_context.KeepsNativeCollections
+            && FromEndReceiverTypeOf(receiverSyntax, isWriteTarget) is { } receiverType
+        )
             return new IrFromEndElementAccess(
                 receiver,
                 Extract(indexFromEnd.Operand),
@@ -167,14 +170,11 @@ public sealed partial class IrExpressionExtractor
     /// <c>x[^n]</c>, for a target whose collections are runtime classes (spec
     /// 011 data-model § 2, B4): a stage 011c collection, read or written, or
     /// an array (or <c>JsArray&lt;T&gt;</c>) read; <c>null</c> keeps the
-    /// <c>x[length - n]</c> lowering (strings, array writes, and every
-    /// receiver of a target that keeps native collections).
+    /// <c>x[length - n]</c> lowering (strings and array writes). A target that
+    /// keeps native collections never asks.
     /// </summary>
     private IrTypeRef? FromEndReceiverTypeOf(ExpressionSyntax receiverSyntax, bool isWriteTarget)
     {
-        if (_context.KeepsNativeCollections)
-            return null;
-
         if (CollectionReceiverTypeOf(receiverSyntax) is { } collection)
             return collection;
 
@@ -203,7 +203,10 @@ public sealed partial class IrExpressionExtractor
         if (start is not { FromEnd: true } && end is not { FromEnd: true })
             return new IrSliceExpression(receiver, start?.Value, end?.Value, targetType);
 
-        if (FromEndReceiverTypeOf(receiverSyntax, isWriteTarget: false) is not null)
+        if (
+            !_context.KeepsNativeCollections
+            && FromEndReceiverTypeOf(receiverSyntax, isWriteTarget: false) is not null
+        )
             return new IrSliceExpression(receiver, start?.Value, end?.Value, targetType)
             {
                 StartFromEnd = start is { FromEnd: true },
