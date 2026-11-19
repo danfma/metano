@@ -22,6 +22,12 @@ import {
   requireKey,
 } from "./throw-helpers.ts";
 
+/*
+ * Value reads cast `store.get(key) as V`: they follow a successful `has` (or a `get` whose
+ * miss was ruled out), so the value is the one stored, `undefined` only if `undefined`
+ * was stored.
+ */
+
 let Dictionary$rt: CollectionType<Dictionary<unknown, unknown>> | undefined;
 
 export class Dictionary<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<K, V> {

@@ -16,6 +16,11 @@ import {
   throwEnumeratorModified,
 } from "./throw-helpers.ts";
 
+/*
+ * Element reads cast `as T`: every read is guarded by the `length === 0` check or by the
+ * enumerator's position, which stays within `0..length - 1`.
+ */
+
 let Stack$rt: CollectionType<Stack<unknown>> | undefined;
 
 export class Stack<T> implements IReadOnlyCollection<T> {

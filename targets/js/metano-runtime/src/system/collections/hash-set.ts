@@ -18,6 +18,8 @@ import type { IReadOnlySet, ISet } from "./interfaces.ts";
 import * as algebra from "./set-algebra.ts";
 import { throwArgumentNull, throwModified, throwNegative } from "./throw-helpers.ts";
 
+/* `findKey(item) as T` follows `has(item)`, so a stored element exists. */
+
 let HashSet$rt: CollectionType<HashSet<unknown>> | undefined;
 
 export class HashSet<T> implements ISet<T>, IReadOnlySet<T> {

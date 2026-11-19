@@ -295,7 +295,7 @@ describe("List order", () => {
 
     expect(error).toBeInstanceOf(InvalidOperationException);
     expect(error.message).toBe("Failed to compare two elements in the array.");
-    expect((error as InvalidOperationException).innerException?.message).toBe(
+    expect(error instanceof InvalidOperationException && error.innerException?.message).toBe(
       "At least one object must implement IComparable.",
     );
     expect(() => List.of([{}]).sort()).not.toThrow();

@@ -41,29 +41,40 @@ import { SortedList } from "./sorted-list.ts";
 import { SortedSet } from "./sorted-set.ts";
 import { Stack } from "./stack.ts";
 
+/**
+ * `open` closed over `typeArguments`, typed as the descriptor of `C`. The one cast of the
+ * factories: type arguments are erased at run time, so one open descriptor (typed for
+ * `unknown` arguments) describes `C` for every argument; the closed descriptor's `test`
+ * is what tells two specializations apart.
+ */
+function closed<C>(
+  open: CollectionType<unknown>,
+  typeArguments: ReadonlyArray<RuntimeType>,
+): CollectionType<C> {
+  return specializeCollection(open, typeArguments) as CollectionType<C>;
+}
+
 export function listType<T>(element: RuntimeType<T>): CollectionType<List<T>> {
-  return specializeCollection(List.$runtimeType, [element]) as CollectionType<List<T>>;
+  return closed<List<T>>(List.$runtimeType, [element]);
 }
 
 export function dictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<Dictionary<K, V>> {
-  return specializeCollection(Dictionary.$runtimeType, [key, value]) as CollectionType<
-    Dictionary<K, V>
-  >;
+  return closed<Dictionary<K, V>>(Dictionary.$runtimeType, [key, value]);
 }
 
 export function hashSetType<T>(element: RuntimeType<T>): CollectionType<HashSet<T>> {
-  return specializeCollection(HashSet.$runtimeType, [element]) as CollectionType<HashSet<T>>;
+  return closed<HashSet<T>>(HashSet.$runtimeType, [element]);
 }
 
 export function queueType<T>(element: RuntimeType<T>): CollectionType<Queue<T>> {
-  return specializeCollection(Queue.$runtimeType, [element]) as CollectionType<Queue<T>>;
+  return closed<Queue<T>>(Queue.$runtimeType, [element]);
 }
 
 export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>> {
-  return specializeCollection(Stack.$runtimeType, [element]) as CollectionType<Stack<T>>;
+  return closed<Stack<T>>(Stack.$runtimeType, [element]);
 }
 
 export function immutableListType<T>(element: RuntimeType<T>): CollectionType<ImmutableList<T>> {
@@ -127,55 +138,43 @@ export function sortedListType<K, V>(
 }
 
 export function iListType<T>(element: RuntimeType<T>): CollectionType<IList<T>> {
-  return specializeCollection(openInterface("IList"), [element]) as CollectionType<IList<T>>;
+  return closed<IList<T>>(openInterface("IList"), [element]);
 }
 
 export function iCollectionType<T>(element: RuntimeType<T>): CollectionType<ICollection<T>> {
-  return specializeCollection(openInterface("ICollection"), [element]) as CollectionType<
-    ICollection<T>
-  >;
+  return closed<ICollection<T>>(openInterface("ICollection"), [element]);
 }
 
 export function iReadOnlyListType<T>(element: RuntimeType<T>): CollectionType<IReadOnlyList<T>> {
-  return specializeCollection(openInterface("IReadOnlyList"), [element]) as CollectionType<
-    IReadOnlyList<T>
-  >;
+  return closed<IReadOnlyList<T>>(openInterface("IReadOnlyList"), [element]);
 }
 
 export function iReadOnlyCollectionType<T>(
   element: RuntimeType<T>,
 ): CollectionType<IReadOnlyCollection<T>> {
-  return specializeCollection(openInterface("IReadOnlyCollection"), [element]) as CollectionType<
-    IReadOnlyCollection<T>
-  >;
+  return closed<IReadOnlyCollection<T>>(openInterface("IReadOnlyCollection"), [element]);
 }
 
 export function iDictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<IDictionary<K, V>> {
-  return specializeCollection(openInterface("IDictionary"), [key, value]) as CollectionType<
-    IDictionary<K, V>
-  >;
+  return closed<IDictionary<K, V>>(openInterface("IDictionary"), [key, value]);
 }
 
 export function iReadOnlyDictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<IReadOnlyDictionary<K, V>> {
-  return specializeCollection(openInterface("IReadOnlyDictionary"), [key, value]) as CollectionType<
-    IReadOnlyDictionary<K, V>
-  >;
+  return closed<IReadOnlyDictionary<K, V>>(openInterface("IReadOnlyDictionary"), [key, value]);
 }
 
 export function iSetType<T>(element: RuntimeType<T>): CollectionType<ISet<T>> {
-  return specializeCollection(openInterface("ISet"), [element]) as CollectionType<ISet<T>>;
+  return closed<ISet<T>>(openInterface("ISet"), [element]);
 }
 
 export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IReadOnlySet<T>> {
-  return specializeCollection(openInterface("IReadOnlySet"), [element]) as CollectionType<
-    IReadOnlySet<T>
-  >;
+  return closed<IReadOnlySet<T>>(openInterface("IReadOnlySet"), [element]);
 }
 
 export function iImmutableListType<T>(element: RuntimeType<T>): CollectionType<IImmutableList<T>> {

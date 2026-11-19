@@ -8,6 +8,8 @@ import type { Span } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { throwArgumentNull } from "./throw-helpers.ts";
 
+/* `array[index] as T` in `fromEnd`: the unsigned compare above keeps `index` in range. */
+
 /** `arr[^n]` on a native array (`T[]`, `JsArray<T>`): always checked. */
 export function fromEnd<T>(array: readonly T[], n: number): T {
   const index = array.length - n;

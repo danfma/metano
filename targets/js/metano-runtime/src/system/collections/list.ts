@@ -31,6 +31,13 @@ import {
 
 export type { MetanoChecks } from "./checks.ts";
 
+/*
+ * Element reads cast `items[i] as T`: `noUncheckedIndexedAccess` types every array read
+ * `T | undefined`, but each read here is in range by construction (a bounds check, a loop
+ * bound, or an index `findIndex` / `indexOf` just returned), and a `List<T>` never holds a
+ * hole it did not receive from hand-written JS (FR-057's documented divergence).
+ */
+
 /**
  * The array the next construction adopts instead of copying (`of`, `adopt`). Read and
  * cleared first thing in the constructor, so every path goes through it (one hidden

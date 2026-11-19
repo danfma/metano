@@ -7,6 +7,8 @@ import {
   throwNegativeValue,
 } from "./throw-helpers.ts";
 
+/* `items[index] as T`: the loop stays within `items.length`. */
+
 /** Copies `items` (in the collection's enumeration order) into `array` from `arrayIndex`. */
 export function copyInto<T>(items: readonly T[], array: T[], arrayIndex: number): void {
   if (array === null || array === undefined) {

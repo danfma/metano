@@ -1,20 +1,58 @@
-import { describe, expect, test } from "bun:test";
 import {
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import {
+  dictionaryType,
+  hashSetType,
   iCollectionType,
   iDictionaryType,
+  iListType,
+  iReadOnlyCollectionType,
   iReadOnlyDictionaryType,
   iReadOnlyListType,
   iReadOnlySetType,
   iSetType,
+  listType,
+  queueType,
   sortedDictionaryType,
   sortedListType,
   sortedSetType,
+  stackType,
 } from "#/system/collections/descriptors.ts";
-import { SortedDictionary } from "#/system/collections/sorted-dictionary.ts";
-import { SortedList } from "#/system/collections/sorted-list.ts";
-import { SortedSet } from "#/system/collections/sorted-set.ts";
-import { getRuntimeType } from "#/system/reflection/get-runtime-type.ts";
-import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
+import {
+  SortedDictionary,
+} from "#/system/collections/sorted-dictionary.ts";
+import {
+  SortedList,
+} from "#/system/collections/sorted-list.ts";
+import {
+  SortedSet,
+} from "#/system/collections/sorted-set.ts";
+import {
+  getRuntimeType,
+} from "#/system/reflection/get-runtime-type.ts";
+import {
+  Int32Type,
+  StringType,
+} from "#/system/reflection/primitive-types.ts";
+import {
+  Dictionary,
+} from "#/system/collections/dictionary.ts";
+import {
+  HashSet,
+} from "#/system/collections/hash-set.ts";
+import {
+  List,
+} from "#/system/collections/list.ts";
+import {
+  Queue,
+} from "#/system/collections/queue.ts";
+import {
+  ObjectType,
+  UnknownType,
+} from "#/system/reflection/well-known-types.ts";
 
 describe("sorted-class descriptors", () => {
   test("factories are memoized", () => {
@@ -64,5 +102,45 @@ describe("sorted-class descriptors", () => {
       "System.Collections.Generic.SortedDictionary`2[System.Int32,System.Int32]",
     );
     expect(String(new SortedList())).toBe("System.Collections.Generic.SortedList`2[TKey,TValue]");
+  });
+});
+
+describe("descriptor factories and GetType()", () => {
+  test("memoized on argument identity", () => {
+    expect(listType(StringType)).toBe(listType(StringType));
+    expect(listType(StringType)).not.toBe(listType(Int32Type));
+    expect(listType(StringType).name).toBe("List<String>");
+    expect(listType(StringType).fullName).toBe("System.Collections.Generic.List<System.String>");
+    expect(dictionaryType(StringType, Int32Type).typeArguments).toEqual([StringType, Int32Type]);
+  });
+
+  test("class tests: instanceof plus the slot by identity, absent slot a wildcard", () => {
+    expect(listType(StringType).test(List.of(["a"], [StringType]))).toBe(true);
+    expect(listType(StringType).test(List.of([1], [Int32Type]))).toBe(false);
+    expect(listType(StringType).test(List.of([1]))).toBe(true);
+    expect(listType(StringType).test(["a"])).toBe(false);
+    expect(hashSetType(Int32Type).test(HashSet.of([1], null, [Int32Type]))).toBe(true);
+    expect(queueType(Int32Type).test(new Queue<number>())).toBe(true);
+    expect(stackType(Int32Type).test(new Queue<number>())).toBe(false);
+  });
+
+  test("interface tests are nominal; read-only interfaces are covariant", () => {
+    const strings = List.of(["a"], [StringType]);
+
+    expect(iListType(StringType).test(strings)).toBe(true);
+    expect(iListType(ObjectType).test(strings)).toBe(false);
+    expect(iReadOnlyListType(ObjectType).test(strings)).toBe(true);
+    expect(iListType(StringType).test(List.adopt(["a"], { fixedSize: true }))).toBe(true);
+    expect(iListType(StringType).test(HashSet.of(["a"]))).toBe(false);
+    expect(iReadOnlyCollectionType(UnknownType).test(Dictionary.of([["a", 1]]))).toBe(true);
+    expect(iReadOnlyCollectionType(Int32Type).test(new Queue<number>())).toBe(true);
+  });
+
+  test("getRuntimeType closes over the slot: GetType() == typeof(List<int>)", () => {
+    expect(getRuntimeType(List.of([1], [Int32Type]))).toBe(listType(Int32Type));
+    expect(getRuntimeType(List.of([1]))).toBe(List.$runtimeType);
+    expect(getRuntimeType(List.adopt([1], { fixedSize: true }, [Int32Type]))).toBe(
+      listType(Int32Type),
+    );
   });
 });

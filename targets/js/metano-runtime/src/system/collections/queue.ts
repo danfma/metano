@@ -16,6 +16,11 @@ import {
   throwNegative,
 } from "./throw-helpers.ts";
 
+/*
+ * Ring reads cast `items[i] as T`: every read is of one of the `_size` occupied slots from
+ * `_head` (the free slots hold `undefined` and are never read as elements).
+ */
+
 /** The smallest ring a full wrapped queue grows into. */
 const MINIMUM_CAPACITY = 4;
 
