@@ -4,7 +4,7 @@ import {
   immutableInsert,
   immutableRemove,
   immutableRemoveAt,
-  } from "#/system/collections/list-helpers.ts";
+} from "#/system/collections/list-helpers.ts";
 
 describe("immutableInsert", () => {
   test("inserts at the start", () => {

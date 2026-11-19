@@ -87,22 +87,37 @@ export function toList<T>(): ToListTerm<T> {
  * `ToDictionary(keySelector[, elementSelector])`: a new runtime `Dictionary`;
  * a repeated key throws `ArgumentException`, as .NET's `ToDictionary` does.
  */
-export function toDictionary<T, K, V = T>(
+export function toDictionary<T, K>(
   keySelector: (item: T) => K,
-  valueSelector: (item: T) => V = ((item: T) => item) as unknown as (item: T) => V,
+  valueSelector?: undefined,
+  keyQueryable?: QueryableMeta,
+): ToDictionaryTerm<T, K, T>;
+export function toDictionary<T, K, V>(
+  keySelector: (item: T) => K,
+  valueSelector: (item: T) => V,
   keyQueryable?: QueryableMeta,
   valueQueryable?: QueryableMeta,
-): ToDictionaryTerm<T, K, V> {
+): ToDictionaryTerm<T, K, V>;
+export function toDictionary<T, K, V>(
+  keySelector: (item: T) => K,
+  valueSelector?: (item: T) => V,
+  keyQueryable?: QueryableMeta,
+  valueQueryable?: QueryableMeta,
+): ToDictionaryTerm<T, K, V | T> {
+  const selectValue: (item: T) => V | T = valueSelector ?? ((item) => item);
+
   return {
     kind: "toDictionary",
     keySelector,
-    valueSelector,
+    valueSelector: selectValue,
     keyQueryable,
     valueQueryable,
     apply: (source) => {
-      const dictionary = new Dictionary<K, V>();
+      const dictionary = new Dictionary<K, V | T>();
 
-      for (const item of source) dictionary.add(keySelector(item), valueSelector(item));
+      for (const item of source) {
+        dictionary.add(keySelector(item), selectValue(item));
+      }
 
       return dictionary;
     },

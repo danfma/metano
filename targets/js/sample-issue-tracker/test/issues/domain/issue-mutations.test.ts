@@ -91,7 +91,7 @@ describe("Issue mutations", () => {
   test("transitionTo records a system comment describing the change", () => {
     const issue = makeIssue();
     issue.transitionTo(IssueStatus.Ready, UserId.create("alice"));
-    const note = issue.comments.get(0).message ?? "";
+    const note = issue.comments.get(0).message;
     // C# enum values render through string interpolation via their
     // ToString(); the transpiled StringEnum emits lowercase literals
     // (`"backlog"`, `"ready"`) because IssueStatus has `[Name("...")]`

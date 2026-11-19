@@ -6,7 +6,7 @@
  *
  * The immutable helpers (`immutableInsert`, `immutableRemoveAt`, `immutableRemove`)
  * never mutate the input — they return a fresh array, mirroring the
- * `ImmutableList<T>` / `ImmutableArray<T>` contract (stage 011h replaces them).
+ * `ImmutableList<T>` / `ImmutableArray<T>` contract.
  */
 
 /**
