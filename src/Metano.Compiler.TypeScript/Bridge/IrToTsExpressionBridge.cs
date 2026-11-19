@@ -74,7 +74,10 @@ public static partial class IrToTsExpressionBridge
 
         return IrToTsIntegerOverflowBridge.WithOperandsItReduces(expression) switch
         {
-            IrLiteral lit => EnumValueAssertion.Wrap(MapLiteral(lit), lit.EnumConversionType),
+            IrLiteral lit => EnumValueAssertion.Wrap(
+                MapLiteral(EnumValueAssertion.InEnumRepresentation(lit)),
+                lit.EnumConversionType
+            ),
             IrIdentifier id => new TsIdentifier(IrToTsNamingPolicy.ToLocalName(id.Name)),
             IrTypeReference tr => MapTypeReference(tr),
             IrThisExpression => new TsIdentifier("this"),
@@ -137,8 +140,8 @@ public static partial class IrToTsExpressionBridge
                 IrToTsNumericConversionBridge.Map(conversion, Map(conversion.Operand, context)),
                 conversion.To.IsEnum ? conversion.CastType : null
             ),
-            IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(overflow, value =>
-                Map(value, context)
+            IrIntegerOverflow overflow => EnumValueAssertion.OfReduced(overflow, reduced =>
+                IrToTsIntegerOverflowBridge.Map(reduced, value => Map(value, context))
             ),
             IrUserOperatorApplication application => IrToTsUserOperatorBridge.MapApplication(
                 application,

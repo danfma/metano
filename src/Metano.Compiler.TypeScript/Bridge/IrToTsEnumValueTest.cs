@@ -37,15 +37,13 @@ internal static class IrToTsEnumValueTest
             : new TsCallExpression(new TsRuntimeHelperReference("isString"), [value]);
 
     /// <summary>
-    /// An integral number in the underlying type's range: its validating
-    /// check, or a safe integer for a 64-bit underlying type, whose values
-    /// stay JS numbers.
+    /// An integral value in the underlying type's range, through its
+    /// validating check: a <c>number</c> for 32 bits or fewer, a
+    /// <c>bigint</c> for a 64-bit underlying type (#701).
     /// </summary>
     private static TsExpression IntegralTest(TsExpression value, IrNumericKind underlying) =>
-        TsRuntimePrimitive.OfIntegral(underlying)?.Validator is { } validator
-            ? new TsCallExpression(new TsRuntimeHelperReference(validator), [value])
-            : new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Number"), "isSafeInteger"),
-                [value]
-            );
+        new TsCallExpression(
+            new TsRuntimeHelperReference(TsRuntimePrimitive.OfIntegral(underlying)!.Validator!),
+            [value]
+        );
 }

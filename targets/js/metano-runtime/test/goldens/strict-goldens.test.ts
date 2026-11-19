@@ -14,7 +14,12 @@ import { packageBinary } from "../tree-shaking/harness.ts";
 const RUNTIME_DIR = resolve(import.meta.dir, "../..");
 const EXPECTED_DIR = resolve(RUNTIME_DIR, "../../../tests/Metano.Tests/Expected");
 
-const GOLDENS = ["numeric-enum.ts", "numeric-enum-const.ts", "numeric-enum-flags.ts"];
+const GOLDENS = [
+  "numeric-enum.ts",
+  "numeric-enum-const.ts",
+  "numeric-enum-flags.ts",
+  "numeric-enum-int64.ts",
+];
 
 const CROSS_ENUM_FIXTURE = `import { Perms } from "./numeric-enum-flags.ts";
 import { Color } from "./numeric-enum-const.ts";
@@ -32,6 +37,20 @@ export const fromNumber: Color = 5 as number;
 
 export const combined: Perms = Perms.Read | Perms.Write;
 export const fromCast: Perms = 3 as Perms;
+
+// A 64-bit [Flags] enum's brand is bigint-based (#701).
+import { Wide, Huge } from "./numeric-enum-int64.ts";
+
+declare const perms: Perms;
+
+// @ts-expect-error a 64-bit [Flags] enum rejects a number-based enum's value
+export const wideFromPerms: Wide = perms;
+
+// @ts-expect-error a 64-bit plain enum rejects an arbitrary bigint
+export const hugeFromBigInt: Huge = 5n as bigint;
+
+export const wideCombined: Wide = Wide.Low | Wide.High;
+export const wideFromBigInt: Wide = 3n;
 `;
 
 test("the enum goldens type-check under tsgo --strict", () => {

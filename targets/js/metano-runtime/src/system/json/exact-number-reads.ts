@@ -1,4 +1,5 @@
 import type { NumberTextLeaves } from "./exact-json-number.ts";
+import { holdsBigInts } from "./numeric-enum-members.ts";
 import type { JsonTypeInfo, TypeDescriptor, TypeSpec } from "./types.ts";
 
 /**
@@ -15,7 +16,9 @@ import type { JsonTypeInfo, TypeDescriptor, TypeSpec } from "./types.ts";
  * shape (`1.0` is not `1`).
  */
 function readsIntegerToken(descriptor: TypeDescriptor): boolean {
-  return descriptor.kind === "int64";
+  return (
+    descriptor.kind === "int64" || (descriptor.kind === "numericEnum" && holdsBigInts(descriptor))
+  );
 }
 
 /** Whether the built-in converter of `descriptor` reads a JSON number from its exact text. */

@@ -174,3 +174,42 @@ describe("enumIsDefined", () => {
     expect(enumIsDefined(Color$rt, undefined)).toBe(false);
   });
 });
+
+/** A `ulong` enum with no member (#701): its values are `bigint`s all the same. */
+const Empty64$rt: EnumType<bigint> = {
+  kind: "enum",
+  name: "Empty64",
+  fullName: "Geo.Empty64",
+  namespace: "Geo",
+  values: [],
+  names: [],
+  isFlags: false,
+  underlying: "UInt64",
+  test: (v: unknown): v is bigint => typeof v === "bigint",
+};
+
+const Wide$rt: EnumType<bigint> = {
+  kind: "enum",
+  name: "Wide",
+  fullName: "Geo.Wide",
+  namespace: "Geo",
+  values: [1n, 1099511627776n],
+  names: ["Low", "High"],
+  isFlags: true,
+  underlying: "Int64",
+  test: (v: unknown): v is bigint => typeof v === "bigint",
+};
+
+describe("enumFromRaw over a 64-bit underlying type (#701)", () => {
+  test("returns the exact bigint, decided by the underlying type", () => {
+    expect(enumFromRaw(Empty64$rt, 5)).toBe(5n);
+    expect(enumFromRaw(Empty64$rt, -1n)).toBe(18446744073709551615n);
+    expect(enumFromRaw(Empty64$rt, "9223372036854775809")).toBe(9223372036854775809n);
+    expect(enumFromRaw(Wide$rt, "Low, High")).toBe(1099511627777n);
+  });
+
+  test("IsDefined compares bigint members", () => {
+    expect(enumIsDefined(Wide$rt, 1099511627776n)).toBe(true);
+    expect(enumIsDefined(Wide$rt, 1099511627777n)).toBe(false);
+  });
+});

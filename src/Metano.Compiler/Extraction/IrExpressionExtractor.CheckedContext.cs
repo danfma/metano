@@ -37,9 +37,7 @@ public sealed partial class IrExpressionExtractor
 
         var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
 
-        return typeInfo.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
-            ? new IrCastExpression(folded, IrTypeRefMapper.Map(enumType, _originResolver, _target))
-            : folded;
+        return AsEnumConstant(folded, typeInfo.Type);
     }
 
     /// <summary>

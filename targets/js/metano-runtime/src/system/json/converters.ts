@@ -6,6 +6,7 @@ import type {
   BrandedDescriptor,
   EnumDescriptor,
   HashSetDescriptor,
+  Int64Descriptor,
   MapDescriptor,
   NullableDescriptor,
   NumericEnumDescriptor,
@@ -36,6 +37,7 @@ import { type ConverterSetCache, createConverterSetCache } from "./converter-set
 import { JsonException } from "./errors.ts";
 import { exactBigIntLeafOf, numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
 import { forwardsNumberTexts } from "./exact-number-reads.ts";
+import { holdsBigInts, numericEnumMembers } from "./numeric-enum-members.ts";
 import {
   decimalConverterOf,
   type ErrorTypeName,
@@ -388,27 +390,46 @@ function enumConverter(descriptor: EnumDescriptor) {
 // ─── Enum (Numeric) ──────────────────────────────────────────────────────────
 
 function numericEnumConverter(descriptor: NumericEnumDescriptor) {
-  const validValues = new Set(
-    Object.values(descriptor.values).filter((value) => typeof value === "number"),
-  );
+  const validValues = new Set(numericEnumMembers(descriptor).map(([, value]) => value));
+  const reader = holdsBigInts(descriptor) ? int64EnumReader(descriptor) : undefined;
+
+  const invalidValue = (value: unknown) =>
+    new JsonException(
+      `Invalid numeric enum value: ${typeof value === "bigint" ? value : JSON.stringify(value)}. ` +
+        `Expected one of: ${[...validValues].join(", ")}`,
+    );
 
   return {
-    serialize: (value: unknown) => value, // already a number
+    // A 32-bit enum value is already a number.
+    serialize: (value: unknown) => (reader ? reader.serialize(value) : value),
     deserialize: (value: unknown) => {
       // A value type: JSON `null` throws its conversion error (#471).
       if (value === null) {
         throw cannotConvertToTypeName(descriptor.typeName);
       }
 
-      if (typeof value !== "number" || !validValues.has(value)) {
-        throw new JsonException(
-          `Invalid numeric enum value: ${JSON.stringify(value)}. ` +
-            `Expected one of: ${[...validValues].join(", ")}`,
-        );
+      const read = reader ? reader.deserialize(value) : value;
+
+      if (!validValues.has(read as number | bigint)) {
+        throw invalidValue(read);
       }
-      return value;
+
+      return read;
     },
   };
+}
+
+/**
+ * A 64-bit enum's values are `bigint`s (#701): they are written as their
+ * exact digits and read from the exact token, in the underlying type's
+ * range, through the `long` / `ulong` converter, whose errors name the enum.
+ */
+function int64EnumReader(descriptor: NumericEnumDescriptor): ValueConverter {
+  return int64ConverterOf(
+    { kind: "int64", numberType: descriptor.numberType as Int64Descriptor["numberType"] },
+    undefined,
+    () => descriptor.typeName ?? descriptor.numberType!,
+  );
 }
 
 // ─── Nullable ────────────────────────────────────────────────────────────────

@@ -126,11 +126,17 @@ internal static class DefaultValuePolicy
         var typeRef = mapType(enumType);
 
         return IrDefaultValues.KindOf(typeRef) is IrDefaultValueKind.EnumZeroAssertion
-            ? new IrCastExpression(
-                new IrLiteral(0, IrLiteralKind.Int32),
-                typeRef,
-                IsAssertion: true
-            )
+            ? new IrCastExpression(ZeroOfUnderlying(typeRef), typeRef, IsAssertion: true)
             : null;
     }
+
+    /// <summary>
+    /// The zero of an enum's underlying integer: a 64-bit literal for an enum
+    /// over <c>long</c> / <c>ulong</c> (#701), an <c>int</c> one otherwise.
+    /// </summary>
+    private static IrLiteral ZeroOfUnderlying(IrTypeRef enumType) =>
+        enumType is IrNamedTypeRef { Semantics.EnumUnderlyingKind: { } kind }
+        && kind.IsSixtyFourBit()
+            ? new IrLiteral(0L, IrLiteralKind.Int64)
+            : new IrLiteral(0, IrLiteralKind.Int32);
 }

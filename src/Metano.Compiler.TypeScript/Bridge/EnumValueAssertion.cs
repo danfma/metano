@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 
@@ -14,8 +15,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   <c>value as E</c>;</item>
 ///   <item>a compound assignment or an increment (<c>e += 1</c>, <c>e++</c>)
 ///   writes through its target asserted as a number,
-///   <c>(e as number) += 1</c>, since TypeScript would otherwise narrow the
-///   variable to <c>number</c> or reject the store.</item>
+///   <c>(e as number) += 1</c> (<c>(e as bigint) |= E.B</c> for a 64-bit enum,
+///   whose reduced stores are asserted whole, <see cref="OfReduced"/>), since
+///   TypeScript would otherwise narrow the variable or reject the store.</item>
 /// </list>
 /// A local of such an enum asserts its initializer (<c>let s = E.A as E;</c>):
 /// TypeScript would otherwise infer or narrow the local to the member's literal
@@ -35,19 +37,63 @@ internal static class EnumValueAssertion
         {
             TsBinaryExpression binary when IsCompoundAssignment(binary.Operator) => binary with
             {
-                Left = AsNumber(binary.Left),
+                Left = AsUnderlying(binary.Left, type!),
             },
             TsUnaryExpression { Operator: "++" or "--" } increment => increment with
             {
-                Operand = AsNumber(increment.Operand),
+                Operand = AsUnderlying(increment.Operand, type!),
             },
             TsPostfixUnaryExpression increment => increment with
             {
-                Operand = AsNumber(increment.Operand),
+                Operand = AsUnderlying(increment.Operand, type!),
             },
             _ => new TsCastExpression(value, IrToTsTypeMapper.Map(type!)),
         };
     }
+
+    /// <summary>
+    /// A constant <c>0</c> C# converts to an enum, in the enum's representation:
+    /// a 64-bit literal (<c>0n</c>) for a 64-bit enum (#701), unchanged otherwise.
+    /// </summary>
+    public static IrLiteral InEnumRepresentation(IrLiteral literal) =>
+        literal.EnumConversionType is { } type && IrToTsEnumBridge.HoldsBigInts(type)
+            ? literal with
+            {
+                Value = Convert.ToInt64(literal.Value, CultureInfo.InvariantCulture),
+                Kind = IrLiteralKind.Int64,
+            }
+            : literal;
+
+    /// <summary>
+    /// The reduction of a 64-bit enum's operator (<c>BigInt.asIntN(64, e + 1n)</c>,
+    /// #701) asserted as a whole: the reduction is a <c>bigint</c>, so the enum
+    /// type its operator carries moves from the operator to the reduction.
+    /// </summary>
+    public static TsExpression OfReduced(
+        IrIntegerOverflow overflow,
+        Func<IrIntegerOverflow, TsExpression> map
+    ) =>
+        EnumResultTypeOf(overflow.Value) is { } type
+            ? Wrap(map(overflow with { Value = Untyped(overflow.Value) }), type)
+            : map(overflow);
+
+    private static IrTypeRef? EnumResultTypeOf(IrExpression value) =>
+        value switch
+        {
+            IrBinaryExpression binary => binary.EnumResultType,
+            IrUnaryExpression unary => unary.EnumResultType,
+            IrIntegerOverflow overflow => EnumResultTypeOf(overflow.Value),
+            _ => null,
+        };
+
+    private static IrExpression Untyped(IrExpression value) =>
+        value switch
+        {
+            IrBinaryExpression binary => binary with { EnumResultType = null },
+            IrUnaryExpression unary => unary with { EnumResultType = null },
+            IrIntegerOverflow overflow => overflow with { Value = Untyped(overflow.Value) },
+            _ => value,
+        };
 
     /// <summary>
     /// <paramref name="value"/> asserted as the enum <paramref name="type"/>, unless it
@@ -70,6 +116,10 @@ internal static class EnumValueAssertion
         && token[^1] == '='
         && token is not ("==" or "===" or "!=" or "!==" or "<=" or ">=");
 
-    private static TsExpression AsNumber(TsExpression target) =>
-        new TsCastExpression(target, new TsNumberType());
+    /// <summary><paramref name="target"/> asserted as the enum's underlying TS type: <c>number</c>, or <c>bigint</c> for a 64-bit enum.</summary>
+    private static TsExpression AsUnderlying(TsExpression target, IrTypeRef type) =>
+        new TsCastExpression(
+            target,
+            IrToTsEnumBridge.HoldsBigInts(type) ? new TsBigIntType() : new TsNumberType()
+        );
 }

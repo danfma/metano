@@ -29,12 +29,17 @@ public sealed partial class IrExpressionExtractor
     private IntegerOverflowReduction? ReductionOf(IOperation? operation) =>
         IntegerOverflowLowering.ReductionOf(operation, _context.NumericLowering);
 
-    /// <summary>The literal of a built-in operator Roslyn folded to a numeric constant, or <c>null</c>.</summary>
+    /// <summary>
+    /// The literal of a built-in operator Roslyn folded to a numeric constant,
+    /// or <c>null</c>; an enum-typed operator keeps its member operands, as
+    /// an enum constant does (<see cref="FoldedInt64Constant"/>).
+    /// </summary>
     private static IrExpression? FoldedOperatorConstant(IOperation? operation) =>
         operation
             is (IBinaryOperation or IUnaryOperation)
                 and { ConstantValue: { HasValue: true, Value: { } value } }
         && IsNumericConstant(value)
+        && !IsEnumTyped(operation.Type)
             ? ConstantLiteralOfKind(value, NumericEndpoints.Of(operation.Type))
             : null;
 
@@ -64,7 +69,9 @@ public sealed partial class IrExpressionExtractor
         var one = OneOf(operandSyntax);
 
         IrExpression Increment(IrExpression current) =>
-            reduction.Reduce(new IrBinaryExpression(current, stepOperator, one));
+            reduction.Reduce(
+                WithEnumResultType(node, new IrBinaryExpression(current, stepOperator, one))
+            );
 
         if (isPrefix || IsValueUnused(node))
             return BindTargetOnce(target, node, readTarget => WriteInPlace(readTarget, Increment));
@@ -74,7 +81,14 @@ public sealed partial class IrExpressionExtractor
         return BindTargetOnce(target, node, readTarget =>
             PreviousValue(
                 reduction,
-                new IrBinaryExpression(WriteInPlace(readTarget, Increment), inverseOperator, one)
+                WithEnumResultType(
+                    node,
+                    new IrBinaryExpression(
+                        WriteInPlace(readTarget, Increment),
+                        inverseOperator,
+                        one
+                    )
+                )
             )
         );
     }

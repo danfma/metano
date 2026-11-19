@@ -41,7 +41,8 @@ public class SizedArrayCreationTests
     {
         var arrays = TranspileHelper.Transpile(Source)["arrays.ts"];
 
-        await Assert.That(arrays).Contains("return new Array<Rank>(2).fill(0 as Rank);");
+        // `Rank : long` holds `bigint`s, so its zero is `0n` (#701).
+        await Assert.That(arrays).Contains("return new Array<Rank>(2).fill(0n as Rank);");
         await Assert.That(arrays).Contains("return new Array<Level>(2).fill(Level.Low);");
     }
 

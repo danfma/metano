@@ -166,13 +166,22 @@ public class Int64ConversionTests
         await TranspileHelper.AssertGolden("int64-conversions.ts", files["conv.ts"]);
     }
 
+    /// <summary>
+    /// A 64-bit enum holds exact <c>bigint</c> members (spec 011 FR-044 as
+    /// amended by #701), so a member beyond 2^53 keeps its digits.
+    /// </summary>
     [Test]
-    public async Task LongBackedEnums_KeepNumberValues()
+    public async Task LongBackedEnums_EmitExactBigIntMembers()
     {
         var (files, _) = ConversionOutput.Value;
 
-        await Assert.That(files["big.ts"]).Contains("B: 1099511627776,");
-        await Assert.That(files["big.ts"]).Contains("C: 9007199254740992,");
+        await Assert.That(files["big.ts"]).Contains("B: 1099511627776n,");
+        await Assert.That(files["big.ts"]).Contains("C: 9007199254740993n,");
+        await Assert.That(files["mask.ts"]).Contains("High: 1099511627776n,");
+
+        await Assert
+            .That(files["mask.ts"])
+            .Contains("export type Mask = bigint & { readonly __enum?: \"Mask\" };");
     }
 
     [Test]
@@ -203,64 +212,14 @@ public class Int64ConversionTests
         await Assert.That(files["conv.ts"]).Contains("const x = -1n;");
     }
 
+    /// <summary>
+    /// <c>MS0064</c> is withdrawn (#701): an exact <c>bigint</c> member is
+    /// never reported, whatever its value or <c>[Flags]</c>.
+    /// </summary>
     [Test]
-    public async Task Int64EnumValuePrecision_ReportsTheInexactMember()
+    public async Task Int64EnumValuePrecision_IsNoLongerReported()
     {
         var (_, diagnostics) = ConversionOutput.Value;
-
-        var reports = diagnostics
-            .Where(d => d.Code == DiagnosticCodes.Int64EnumValuePrecision)
-            .ToList();
-
-        await Assert.That(reports).Count().IsEqualTo(2);
-
-        await Assert
-            .That(reports.All(d => d.Severity == MetanoDiagnosticSeverity.Warning))
-            .IsTrue();
-
-        var precision = reports.Single(d => d.Message.Contains("'Big.C'"));
-
-        await Assert
-            .That(precision.Message)
-            .IsEqualTo(
-                "Enum member 'Big.C' has the value 9007199254740993, which TypeScript enum "
-                    + "members cannot hold exactly; it is emitted as 9007199254740992 (spec 012 "
-                    + "FR-058)."
-            );
-
-        await Assert.That(LocatedSource.TextOf(precision)).IsEqualTo("C");
-    }
-
-    [Test]
-    public async Task Int64EnumValuePrecision_ReportsALargeFlagsMember()
-    {
-        var (_, diagnostics) = ConversionOutput.Value;
-
-        var flags = diagnostics.Single(d =>
-            d.Code == DiagnosticCodes.Int64EnumValuePrecision && d.Message.Contains("'Mask.High'")
-        );
-
-        await Assert
-            .That(flags.Message)
-            .IsEqualTo(
-                "Flags enum member 'Mask.High' has the value 1099511627776, beyond the 32 bits "
-                    + "JavaScript bit operators keep on a number; '|', '&' and HasFlag lose it in "
-                    + "TypeScript (spec 012 FR-058)."
-            );
-
-        await Assert.That(LocatedSource.TextOf(flags)).IsEqualTo("High");
-    }
-
-    [Test]
-    public async Task Int64EnumValuePrecision_IgnoresExactAndInt32Members()
-    {
-        const string source = """
-            [Transpile] public enum Exact : long { A = 1L << 53, B = -(1L << 60) }
-            [Transpile, System.Flags] public enum Small : long { A = 1, B = 1L << 30 }
-            [Transpile, System.Flags] public enum Narrow { A = 1, B = 1 << 30 }
-            """;
-
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
 
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.Int64EnumValuePrecision))

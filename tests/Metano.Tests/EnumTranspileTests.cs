@@ -204,6 +204,102 @@ public class EnumTranspileTests
     }
 
     /// <summary>
+    /// An enum over <c>long</c> / <c>ulong</c> holds exact <c>bigint</c>s (spec 011
+    /// FR-044 as amended by #701): its members are <c>bigint</c> literals, its brand
+    /// is <c>bigint &amp; { … }</c>, and every operator and conversion lowers as on the
+    /// underlying integer, asserted to a plain enum's closed union. The golden is
+    /// type-checked under <c>tsgo --strict</c> by the runtime's golden typecheck.
+    /// </summary>
+    [Test]
+    public async Task SixtyFourBitEnums_HoldBigInts()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, EmitInFile("numeric-enum-int64"), System.Flags]
+            public enum Wide : long { None = 0, Low = 1, High = 1L << 40, Top = 1L << 62 }
+
+            [Transpile, EmitInFile("numeric-enum-int64")]
+            public enum Huge : ulong { Zero = 0, Top = 1UL << 63, Max = ulong.MaxValue }
+
+            [Transpile, EmitInFile("numeric-enum-int64")]
+            public enum Rank : long { First = 1, Second = 2 }
+
+            [Transpile, EmitInFile("numeric-enum-int64")]
+            public enum Small { A = 1, B = 2 }
+
+            [Transpile, EmitInFile("numeric-enum-int64")]
+            public static class Ops
+            {
+                public static Wide Combine() => Wide.Low | Wide.High;
+
+                public static Wide Mask(Wide w) => (w & ~Wide.Low) ^ Wide.Top;
+
+                public static bool HasHigh(Wide w) => (w & Wide.High) != 0;
+
+                public static bool HasTop(Wide w) => w.HasFlag(Wide.Top);
+
+                public static Huge Invert(Huge h) => ~h;
+
+                public static Huge Next(Huge h) => h + 1;
+
+                public static Rank Step(Rank r)
+                {
+                    r++;
+                    r += 2;
+
+                    return r;
+                }
+
+                public static long Distance(Rank a, Rank b) => a - b;
+
+                public static Wide Shifted(Wide w) => (Wide)((long)w << 2);
+
+                public static long ToLong(Wide w) => (long)w;
+
+                public static int ToInt(Wide w) => (int)w;
+
+                public static ulong ToULong(Wide w) => (ulong)w;
+
+                public static long FromHuge(Huge h) => (long)h;
+
+                public static double ToDouble(Huge h) => (double)h;
+
+                public static Wide FromLong(long l) => (Wide)l;
+
+                public static Huge FromInt(int i) => (Huge)i;
+
+                public static Small ToSmall(Rank r) => (Small)r;
+
+                public static Rank FromSmall(Small s) => (Rank)s;
+
+                public static Wide Zero() => 0;
+
+                public static Rank NoZero() => default;
+
+                public static Rank[] Ranks() => new Rank[2];
+
+                public static Wide? Lifted(Wide? w) => w | Wide.Low;
+
+                public static bool Before(Huge a) => a < Huge.Max && a != Huge.Top;
+
+                public static string Label(Huge h) =>
+                    h switch
+                    {
+                        Huge.Zero => "zero",
+                        Huge.Max => "max",
+                        _ => "other",
+                    };
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "numeric-enum-int64.ts",
+            result["numeric-enum-int64.ts"]
+        );
+    }
+
+    /// <summary>
     /// A compound assignment and an increment through an extension property of a
     /// plain numeric enum type keep the enum result type: the value the setter
     /// receives is asserted as the enum (spec 011 FR-044).

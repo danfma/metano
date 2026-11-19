@@ -8,12 +8,9 @@ BoxPBProbes.positional = rr,same,same,read,read,same
 BoxPBProbes.propertyPatterns = TTTTTFFT|FTFFFFFT|TTTTTTTT|FFFTFFFF
 BoxPCProbes.equalityForms = TTTTTT|FFFFFF|FFTTTT|FFFFFF
 BoxPCProbes.genericPatterns = TTTFh0|TFTTh5|TTFFh0|TTTFh0|FFFF-
-BoxingProbes.hugeFlags = Low|Low
-BoxingProbes.hugeFlagsFromValue = Top|Top
 BoxingProbes.isTests = True|False|True|True|True|False
 BoxingProbes.objectHashSetMixedCount = 1
 BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
-BoxingProbes.wideFlags = Low|Low
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.enums = 1|1|1
 CastProbes.genericFail THROWS TypeError: CastProbes.g(new Cat).bark is not a function. (In 'CastProbes.g(new Cat).bark()', 'CastProbes.g(new Cat).bark' is undefined)

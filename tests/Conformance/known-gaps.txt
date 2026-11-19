@@ -28,9 +28,6 @@ BoxPBProbes.propertyPatterns          none  accepted FR-049 divergence until 011
 BoxPCProbes.equalityForms             none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Eq(0)); EqualityFormsBoxed matches
 BoxPCProbes.genericPatterns           none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Gen(0)); and a raw enum under T = BpHue tests as int (Gen(BpHue.Red)); GenericPatternsBoxed matches
 BoxingProbes.objectHashSetMixedCount none  a HashSet<object> stores raw values until 011c (defaultEquals collections): a boxed enum and the int 0 collide
-BoxingProbes.wideFlags                none  a 64-bit enum is a JS number and `|` on it truncates to 32 bits (Low | High drops High)
-BoxingProbes.hugeFlags                none  a ulong enum value beyond 2^53 is an inexact JS number, and `|` truncates to 32 bits
-BoxingProbes.hugeFlagsFromValue       none  a ulong enum value beyond 2^53 is an inexact JS number (1UL << 63 | 1 loses the low bit)
 CastProbes.enums                      none  a numeric enum prints its number, .NET prints the member name
 TextProbes.enumsText                  none  a numeric enum prints its number, .NET prints the member name
 CatchProbes.all                       none  an out-of-range index and a missing dictionary key do not throw

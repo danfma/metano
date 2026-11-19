@@ -527,11 +527,9 @@ public static class DiagnosticCodes
     /// dispatcher (#541).</summary>
     public const string AmbiguousRuntimeDispatch = "MS0063";
 
-    /// <summary>MS0064 — a member of an enum whose underlying type is <c>long</c>,
-    /// <c>ulong</c>, <c>nint</c> or <c>nuint</c> has a value a TypeScript enum member
-    /// (a <c>number</c>) cannot hold exactly, or is a <c>[Flags]</c> member of
-    /// 2^31 or more, which JS bit operators on <c>number</c> truncate. A warning at
-    /// the member (spec 012 FR-058).</summary>
+    /// <summary>MS0064 — withdrawn in 3.0 (#701) and no longer reported: it warned
+    /// that a 64-bit enum member was inexact as a JS <c>number</c>, and 64-bit enum
+    /// members are now exact <c>bigint</c>s. The code stays reserved.</summary>
     public const string Int64EnumValuePrecision = "MS0064";
 
     /// <summary>MS0065 — a 64-bit integer (<c>long</c>, <c>ulong</c>, <c>nint</c>,

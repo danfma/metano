@@ -46,6 +46,7 @@ public static class IrEnumExtractor
         )
         {
             IsFlags = type.HasFlags(),
+            UnderlyingKind = NumericEndpoints.Of(type)?.Kind ?? IrNumericKind.Int32,
         };
     }
 }

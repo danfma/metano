@@ -244,11 +244,11 @@ export class Conv {
   }
 
   toBigEnum(l: bigint): Big {
-    return Number(l) as Big;
+    return l as Big;
   }
 
   fromBigEnum(e: Big): bigint {
-    return BigInt(e);
+    return e;
   }
 
   liftId(ni: number | null): bigint | null {

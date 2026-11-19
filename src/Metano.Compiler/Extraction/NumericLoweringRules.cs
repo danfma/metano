@@ -33,11 +33,19 @@ namespace Metano.Compiler.Extraction;
 /// (<c>a + b</c> → <c>a.plus(b)</c>) and <c>BuildDecimalEquality</c> do not
 /// read it yet and run for every target, Dart included (a latent Dart gap,
 /// deferred).</param>
+/// <param name="HoldsSixtyFourBitEnumsAsIntegers">Whether the target holds the
+/// value of a 64-bit enum (<c>enum E : long</c> / <c>ulong</c>) as its
+/// underlying integer (spec 011 FR-044 as amended by #701), so the core reads
+/// such an enum as that integer (<see cref="RepresentationOf"/>): its
+/// operators wrap or check as the integer's, and its folded constants are
+/// 64-bit literals. Dart keeps its enum output as it was (deferred after
+/// v3).</param>
 internal sealed record NumericLoweringRules(
     bool LowersCharCodes,
     bool WrapsInt32Arithmetic,
     bool ReadsCollectionAndLoopRanges,
-    bool ComputesDecimalByMethods
+    bool ComputesDecimalByMethods,
+    bool HoldsSixtyFourBitEnumsAsIntegers
 )
 {
     public static NumericLoweringRules For(TargetLanguage? target) =>
@@ -45,8 +53,24 @@ internal sealed record NumericLoweringRules(
             LowersCharCodes: target != TargetLanguage.Dart,
             WrapsInt32Arithmetic: target != TargetLanguage.Dart,
             ReadsCollectionAndLoopRanges: target != TargetLanguage.Dart,
-            ComputesDecimalByMethods: target != TargetLanguage.Dart
+            ComputesDecimalByMethods: target != TargetLanguage.Dart,
+            HoldsSixtyFourBitEnumsAsIntegers: target != TargetLanguage.Dart
         );
+
+    /// <summary>
+    /// The endpoint the target computes <paramref name="endpoint"/> as: a
+    /// 64-bit enum's underlying integer when the target holds it as that
+    /// integer (<see cref="HoldsSixtyFourBitEnumsAsIntegers"/>), otherwise
+    /// the endpoint itself.
+    /// </summary>
+    public IrNumericEndpoint? RepresentationOf(IrNumericEndpoint? endpoint) =>
+        HoldsAsInteger(endpoint) ? new IrNumericEndpoint(endpoint!.Kind) : endpoint;
+
+    /// <summary>Whether <paramref name="endpoint"/> is a 64-bit enum the target holds as its integer.</summary>
+    public bool HoldsAsInteger(IrNumericEndpoint? endpoint) =>
+        HoldsSixtyFourBitEnumsAsIntegers
+        && endpoint is { IsEnum: true }
+        && endpoint.Kind.IsSixtyFourBit();
 
     /// <summary>
     /// Whether an implicit conversion from <paramref name="from"/> to
@@ -58,7 +82,7 @@ internal sealed record NumericLoweringRules(
     /// values (FR-080).
     /// </summary>
     public bool NeedsImplicitNode(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        NumericEndpoints.CrossesSixtyFourBits(from, to)
+        CrossesSixtyFourBits(from, to)
         || IsLoweredCharRead(from, to)
         || IsLoweredIntegerToDecimal(from, to);
 
@@ -80,7 +104,15 @@ internal sealed record NumericLoweringRules(
         || IrNumericConversion.IsIntegerNarrowing(from, to)
         || IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to)
         || IsLoweredIntegerToDecimal(from, to)
-        || NumericEndpoints.CrossesSixtyFourBits(from, to);
+        || CrossesSixtyFourBits(from, to);
+
+    /// <summary>
+    /// <see cref="NumericEndpoints.CrossesSixtyFourBits"/> between the
+    /// endpoints as the target computes them (<see cref="RepresentationOf"/>):
+    /// a 64-bit enum held as its integer is that integer.
+    /// </summary>
+    private bool CrossesSixtyFourBits(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        NumericEndpoints.CrossesSixtyFourBits(RepresentationOf(from)!, RepresentationOf(to)!);
 
     private bool IsLoweredIntegerToDecimal(IrNumericEndpoint from, IrNumericEndpoint to) =>
         ComputesDecimalByMethods && IrNumericConversion.IsIntegerToDecimal(from, to);

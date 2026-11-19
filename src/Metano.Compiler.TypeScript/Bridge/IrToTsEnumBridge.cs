@@ -1,7 +1,5 @@
-using System.Globalization;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
-using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -17,6 +15,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   <c>number &amp; { readonly __enum?: "E" }</c>, so bit combinations, <c>0</c> and
 ///   casts type-check while another enum's values do not.</item>
 /// </list>
+/// An enum over <c>long</c> / <c>ulong</c> holds <c>bigint</c> values
+/// (<c>High: 1099511627776n</c>) and its brand is <c>bigint &amp; { … }</c>
+/// (spec 011 FR-044 as amended by #701).
 /// </summary>
 public static class IrToTsEnumBridge
 {
@@ -49,7 +50,7 @@ public static class IrToTsEnumBridge
             ? new TsStringLiteral(
                 IrToTsNamingPolicy.ToEnumMemberName(member.Name, member.Attributes)
             )
-            : new TsLiteral(NumericMemberValue(member.Value));
+            : new TsLiteral(NumericMemberValue(ir, member.Value));
 
     /// <summary>
     /// The one rule for an enum's alias: a numeric <c>[Flags]</c> enum is the
@@ -60,21 +61,26 @@ public static class IrToTsEnumBridge
 
     private static TsType AliasType(IrEnumDeclaration ir, string tsName) =>
         HasFlagsBrand(ir.Style == IrEnumStyle.Numeric, ir.IsFlags)
-            ? new TsNamedType($"number & {{ readonly __enum?: \"{tsName}\" }}")
+            ? new TsNamedType($"{BaseType(ir)} & {{ readonly __enum?: \"{tsName}\" }}")
             : new TsNamedType($"typeof {tsName}[keyof typeof {tsName}]");
 
-    /// <summary>
-    /// The value a numeric member prints. A 64-bit value prints as the double
-    /// the member actually holds, the one <c>MS0064</c> names (spec 012
-    /// FR-058).
-    /// </summary>
-    private static string NumericMemberValue(object? value)
+    /// <summary>Whether the enum's values are <c>bigint</c>s: its underlying type is 64-bit.</summary>
+    internal static bool HoldsBigInts(IrNumericKind underlying) => underlying.IsSixtyFourBit();
+
+    /// <summary>Whether the enum <paramref name="type"/> (or its nullable form) holds <c>bigint</c>s.</summary>
+    internal static bool HoldsBigInts(IrTypeRef type) =>
+        (type is IrNullableTypeRef nullable ? nullable.Inner : type)
+            is IrNamedTypeRef { Semantics.EnumUnderlyingKind: { } underlying }
+        && HoldsBigInts(underlying);
+
+    private static string BaseType(IrEnumDeclaration ir) =>
+        HoldsBigInts(ir.UnderlyingKind) ? "bigint" : "number";
+
+    /// <summary>The value a numeric member prints: its exact digits, a <c>bigint</c> literal for a 64-bit enum.</summary>
+    private static string NumericMemberValue(IrEnumDeclaration ir, object? value)
     {
-        if (value is not (long or ulong))
-            return value?.ToString() ?? "";
+        var digits = value?.ToString() ?? "";
 
-        var nearest = Int64EnumPrecision.NearestDouble(Int64EnumPrecision.ToBigInteger(value));
-
-        return nearest.ToString(CultureInfo.InvariantCulture);
+        return HoldsBigInts(ir.UnderlyingKind) ? $"{digits}n" : digits;
     }
 }

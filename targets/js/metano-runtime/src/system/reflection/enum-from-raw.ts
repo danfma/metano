@@ -85,7 +85,7 @@ function memberRaw<E>(type: EnumType<E>, name: string, ignoreCase: boolean, inpu
     : BigInt(type.values[index] as number | bigint);
 }
 
-/** The enum value of the C# integer `raw`. */
+/** The enum value of the C# integer `raw`: a `bigint` for a 64-bit underlying type (#701), else a `number`. */
 function fromInteger<E>(type: EnumType<E>, raw: bigint): E {
   if (type.kind === "stringEnum") {
     const index = type.values.findIndex((_, at) => BigInt(ordinalAt(type, at)) === raw);
@@ -93,7 +93,7 @@ function fromInteger<E>(type: EnumType<E>, raw: bigint): E {
     return (index < 0 ? String(raw) : type.values[index]) as E;
   }
 
-  return (typeof type.values[0] === "bigint" ? raw : Number(raw)) as E;
+  return (underlyingOf(type).bits === 64 ? raw : Number(raw)) as E;
 }
 
 function ordinalAt<E>(type: EnumType<E>, index: number): number {

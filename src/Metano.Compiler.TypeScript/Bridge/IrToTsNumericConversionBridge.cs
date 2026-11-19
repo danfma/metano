@@ -36,12 +36,15 @@ internal static class IrToTsNumericConversionBridge
         );
 
     private static TsExpression RenderConversion(
-        IrNumericEndpoint from,
-        IrNumericEndpoint to,
+        IrNumericEndpoint declaredFrom,
+        IrNumericEndpoint declaredTo,
         bool isChecked,
         TsExpression value
     )
     {
+        var from = Represented(declaredFrom);
+        var to = Represented(declaredTo);
+
         if (IrNumericConversion.IsFloatingPointTruncation(from, to))
             return FloatingPointToNarrowInteger(to, isChecked, value);
 
@@ -93,29 +96,26 @@ internal static class IrToTsNumericConversionBridge
     }
 
     /// <summary>
-    /// An enum value is a <c>number</c>, whatever its underlying kind
-    /// (DECIDED-15): a conversion to an enum converts to that kind and, for a
-    /// 64-bit kind, reads the result back as a <c>number</c>; an integer
-    /// <c>number</c> needs nothing (FR-018).
+    /// The endpoint as TypeScript holds it: a 64-bit enum is its underlying
+    /// <c>bigint</c> (spec 011 FR-044 as amended by #701), so it converts as
+    /// that integer; every other endpoint as it is.
+    /// </summary>
+    private static IrNumericEndpoint Represented(IrNumericEndpoint endpoint) =>
+        endpoint is { IsEnum: true } && IrToTsEnumBridge.HoldsBigInts(endpoint.Kind)
+            ? new IrNumericEndpoint(endpoint.Kind)
+            : endpoint;
+
+    /// <summary>
+    /// An enum of 32 bits or fewer is a <c>number</c>: a conversion to it
+    /// converts to its underlying kind; an integer <c>number</c> needs nothing
+    /// (FR-018).
     /// </summary>
     private static TsExpression ToEnum(
         IrNumericEndpoint from,
         IrNumericEndpoint to,
         bool isChecked,
         TsExpression value
-    )
-    {
-        var underlying = new IrNumericEndpoint(to.Kind);
-
-        if (!underlying.IsWideIntegerValue())
-            return RenderConversion(from, underlying, isChecked, value);
-
-        var isIntegerNumber = !from.IsWideIntegerValue() && from.Kind.IsInteger();
-
-        return isIntegerNumber
-            ? value
-            : Number(RenderConversion(from, underlying, isChecked, value));
-    }
+    ) => RenderConversion(from, new IrNumericEndpoint(to.Kind), isChecked, value);
 
     /// <summary>
     /// Out of a <c>BigInteger</c> (FR-003): every explicit conversion checks

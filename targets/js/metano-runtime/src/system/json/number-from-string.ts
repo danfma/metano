@@ -242,13 +242,14 @@ const STRICT_INTEGER_READERS = /* @__PURE__ */ lazyValue(() =>
   ),
 );
 
-/** Every integer type with an optional sign, as `Enum.TryParse` reads one (`readEnumIntegerText`). */
+/**
+ * Every integer type with an optional sign, as `Enum.TryParse` reads one
+ * (`readEnumIntegerText`): a `number`, or the exact `bigint` of a 64-bit
+ * underlying type, whose enum values are `bigint`s (#701).
+ */
 const ENUM_INTEGER_READERS = /* @__PURE__ */ lazyValue(
-  (): Readonly<Record<IntegerTypeName, TextReader<number>>> =>
-    integerReadersOf(
-      () => SIGNED_INTEGER_PATTERN,
-      () => (value) => Number(value),
-    ),
+  (): Readonly<Record<IntegerTypeName, TextReader<number | bigint>>> =>
+    integerReadersOf(() => SIGNED_INTEGER_PATTERN, integerValueOf),
 );
 
 /** Every integer type's number-leaf tokens, answered as the exact `bigint` in range. */
@@ -312,7 +313,10 @@ export function readIntegerToken(text: string, numberType: IntegerTypeName): big
  * `numberType`, with an optional sign whatever the type, as `Enum.TryParse`
  * reads it (`"+5"` and `"-0"` read for a `byte` enum); `undefined` otherwise.
  */
-export function readEnumIntegerText(text: string, numberType: IntegerTypeName): number | undefined {
+export function readEnumIntegerText(
+  text: string,
+  numberType: IntegerTypeName,
+): number | bigint | undefined {
   return ENUM_INTEGER_READERS()[numberType](text);
 }
 

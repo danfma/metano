@@ -16,6 +16,7 @@ import {
   readExactNumberText,
   readNumberTextAsNumber,
 } from "./number-from-string.ts";
+import { holdsBigInts, type NumericEnumValue, numericEnumMembers } from "./numeric-enum-members.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 import { readTemporalText } from "./temporal-reads.ts";
@@ -144,19 +145,22 @@ function int64KeyConverter(descriptor: Int64Descriptor): ValueConverter {
 }
 
 function numericEnumKeyConverter(descriptor: NumericEnumDescriptor): ValueConverter {
-  const members = Object.entries(descriptor.values).filter(
-    (member): member is [string, number] => typeof member[1] === "number",
-  );
+  const members = numericEnumMembers(descriptor);
 
   // An aliased value is written under its first member, as .NET names it.
   const nameOfValue = new Map(members.toReversed().map(([name, value]) => [value, name]));
   const valueOfName = memberLookupOf(members);
   const integerType = descriptor.numberType ?? DEFAULT_ENUM_INTEGER_TYPE;
+  const asEnumValue = holdsBigInts(descriptor) ? BigInt : Number;
 
   return keyConverter(
     // A numeric enum value is a number: a member's, or one no member declares.
-    (value) => nameOfValue.get(value as number) ?? String(value),
-    (name) => readNumericEnumKey(name.trim(), integerType, valueOfName),
+    (value) => nameOfValue.get(value as NumericEnumValue) ?? String(value),
+    (name) => {
+      const read = readNumericEnumKey(name.trim(), integerType, valueOfName);
+
+      return read === undefined ? undefined : asEnumValue(read);
+    },
     descriptor.typeName,
   );
 }
@@ -169,8 +173,8 @@ function numericEnumKeyConverter(descriptor: NumericEnumDescriptor): ValueConver
 function readNumericEnumKey(
   text: string,
   integerType: IntegerTypeName,
-  valueOfName: (name: string) => number | undefined,
-): number | undefined {
+  valueOfName: (name: string) => NumericEnumValue | undefined,
+): NumericEnumValue | undefined {
   // No member name spells an integer, so the name list never reads one.
   return readEnumIntegerText(text, integerType) ?? readEnumNameList(text, valueOfName);
 }
@@ -181,17 +185,17 @@ function readNumericEnumKey(
  */
 function readEnumNameList(
   text: string,
-  valueOfName: (name: string) => number | undefined,
-): number | undefined {
+  valueOfName: (name: string) => NumericEnumValue | undefined,
+): NumericEnumValue | undefined {
   const values = text.split(ENUM_NAME_SEPARATOR).map((name) => valueOfName(name.trim()));
 
-  if (!values.every((value): value is number => value !== undefined)) {
+  if (!values.every((value): value is NumericEnumValue => value !== undefined)) {
     return undefined;
   }
 
   return values.length === 1
     ? values[0]
-    : Number(values.reduce((combined, value) => combined | BigInt(value), 0n));
+    : values.reduce((combined: bigint, value) => combined | BigInt(value), 0n);
 }
 
 function stringEnumKeyConverter(descriptor: EnumDescriptor): ValueConverter {

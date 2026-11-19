@@ -278,9 +278,10 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Whether the explicit conversion of <paramref name="cast"/> is checked.
     /// Roslyn reports <c>IsChecked</c> for a numeric conversion only, so a
-    /// conversion of a nullable value (<c>(byte?)ni</c>, <c>(int)nl</c>),
-    /// which C# checks through its underlying numeric conversion, reads the
-    /// context of its syntax.
+    /// conversion of a nullable value (<c>(byte?)ni</c>, <c>(int)nl</c>) and an
+    /// enumeration conversion (<c>(int)e</c>, <c>(E)l</c>), which C# checks
+    /// through the conversion of the underlying integers (#701), read the
+    /// context of their syntax.
     /// </summary>
     private bool IsCheckedCast(CastExpressionSyntax cast) =>
         _semantic.GetOperation(cast) switch
@@ -290,6 +291,8 @@ public sealed partial class IrExpressionExtractor
                 cast,
                 _semantic.Compilation
             ),
+            IConversionOperation conversion when IsEnumerationConversion(conversion) =>
+                CheckedContexts.IsChecked(cast, _semantic.Compilation),
             _ => false,
         };
 
@@ -314,9 +317,11 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A constant cast that lowers to a conversion (<c>(int)3.7</c>) folds to
     /// the value Roslyn computed, as every target's conversion of the literal
-    /// would (FR-070).
+    /// would (FR-070); a constant cast to a 64-bit enum the target holds as its
+    /// integer (<c>(LongEnum)5</c>, #701) keeps the cast around its folded
+    /// underlying constant.
     /// </summary>
-    private IrLiteral? FoldedConstantCast(CastExpressionSyntax cast)
+    private IrExpression? FoldedConstantCast(CastExpressionSyntax cast)
     {
         var constant = _semantic.GetConstantValue(cast);
 
@@ -324,9 +329,21 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var typeInfo = _semantic.GetTypeInfo(cast);
+        var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
 
-        return ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
+        return _context.NumericLowering.HoldsAsInteger(NumericEndpoints.Of(typeInfo.Type))
+            ? AsEnumConstant(folded, typeInfo.Type)
+            : folded;
     }
+
+    /// <summary>
+    /// A folded constant of an enum type, cast to the enum around its
+    /// underlying constant (<c>(Color)1</c>); any other constant as it is.
+    /// </summary>
+    private IrExpression AsEnumConstant(IrLiteral folded, ITypeSymbol? type) =>
+        type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+            ? new IrCastExpression(folded, IrTypeRefMapper.Map(enumType, _originResolver, _target))
+            : folded;
 
     /// <summary>
     /// The literal of a folded constant <paramref name="value"/>, in the kind
@@ -336,14 +353,27 @@ public sealed partial class IrExpressionExtractor
     /// and <c>BigInteger</c> carry their digits, as their literals do; an enum
     /// value and the types narrower than <c>int</c> carry a plain integer.
     /// </summary>
-    private static IrLiteral ConstantLiteral(
+    private static bool IsEnumerationConversion(IConversionOperation conversion) =>
+        IsEnumTyped(conversion.Type) || IsEnumTyped(conversion.Operand.Type);
+
+    private static bool IsEnumTyped(ITypeSymbol? type) =>
+        NumericEndpoints.Of(type) is { IsEnum: true };
+
+    /// <summary>
+    /// The literal of a folded constant in the target's representation of
+    /// its converted (else own) type: a 64-bit enum's constant is a 64-bit
+    /// literal where the target holds such an enum as its integer (#701).
+    /// </summary>
+    private IrLiteral ConstantLiteral(
         object value,
         ITypeSymbol? type,
         ITypeSymbol? convertedType
     ) =>
         ConstantLiteralOfKind(
             value,
-            NumericEndpoints.Of(convertedType) ?? NumericEndpoints.Of(type)
+            _context.NumericLowering.RepresentationOf(
+                NumericEndpoints.Of(convertedType) ?? NumericEndpoints.Of(type)
+            )
         );
 
     /// <summary>The literal of a constant <paramref name="value"/> in the kind of <paramref name="target"/>.</summary>
@@ -352,8 +382,8 @@ public sealed partial class IrExpressionExtractor
         // TODO(#602): merge ClassifyNumericForConvertedType into this.
         var number = value is char character ? (int)character : value;
 
-        // An enum value is a plain number in every target, whatever its
-        // underlying kind (DECIDED-15).
+        // An enum value is a plain number, unless the target holds it as its
+        // underlying integer (ConstantLiteral reads that representation).
         if (target is { IsEnum: true })
             return new IrLiteral(WidenedToInt32(number), IrLiteralKind.Int32);
 

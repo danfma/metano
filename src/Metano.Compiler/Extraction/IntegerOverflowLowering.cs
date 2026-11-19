@@ -51,7 +51,7 @@ internal static class IntegerOverflowLowering
         IBinaryOperation binary,
         NumericLoweringRules rules
     ) =>
-        IntegerKindOf(binary.Type) switch
+        IntegerKindOf(binary.Type, rules) switch
         {
             null => null,
             { } kind when kind.IsSixtyFourBit() => SixtyFourBitBinaryReduction(
@@ -79,7 +79,7 @@ internal static class IntegerOverflowLowering
         ICompoundAssignmentOperation compound,
         NumericLoweringRules rules
     ) =>
-        IntegerKindOf(compound.Type) switch
+        IntegerKindOf(compound.Type, rules) switch
         {
             null => null,
             { } kind when kind.IsSixtyFourBit() => compound.OutConversion.IsIdentity
@@ -114,7 +114,7 @@ internal static class IntegerOverflowLowering
         IIncrementOrDecrementOperation increment,
         NumericLoweringRules rules
     ) =>
-        IntegerKindOf(increment.Type) switch
+        IntegerKindOf(increment.Type, rules) switch
         {
             null => null,
             { } kind when kind.IsSixtyFourBit() => IntegerOverflowReduction.Of(
@@ -133,7 +133,7 @@ internal static class IntegerOverflowLowering
         IUnaryOperation unary,
         NumericLoweringRules rules
     ) =>
-        IntegerKindOf(unary.Type) switch
+        IntegerKindOf(unary.Type, rules) switch
         {
             null => null,
             { } kind when kind.IsSixtyFourBit() => SixtyFourBitUnaryReduction(unary, kind),
@@ -181,9 +181,16 @@ internal static class IntegerOverflowLowering
             _ => null,
         };
 
-    /// <summary>The integer kind of <paramref name="type"/>, through <c>Nullable&lt;T&gt;</c>; <c>null</c> for an enum or a non-integer type.</summary>
-    private static IrNumericKind? IntegerKindOf(ITypeSymbol? type) =>
-        NumericEndpoints.Of(type) is { IsEnum: false, Kind: var kind } && kind.IsInteger()
+    /// <summary>
+    /// The integer kind of <paramref name="type"/>, through
+    /// <c>Nullable&lt;T&gt;</c>, as the target computes it: an integer's kind,
+    /// or a 64-bit enum's underlying kind when the target holds it as that
+    /// integer (#701, <see cref="NumericLoweringRules.RepresentationOf"/>);
+    /// <c>null</c> for any other enum or a non-integer type.
+    /// </summary>
+    private static IrNumericKind? IntegerKindOf(ITypeSymbol? type, NumericLoweringRules rules) =>
+        rules.RepresentationOf(NumericEndpoints.Of(type)) is { IsEnum: false, Kind: var kind }
+        && kind.IsInteger()
             ? kind
             : null;
 }

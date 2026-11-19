@@ -1890,18 +1890,37 @@ public sealed partial class IrExpressionExtractor
         if (EnumResultTypeOf(node) is not { } enumType)
             return lowered;
 
-        var enumTypeRef = IrTypeRefMapper.Map(enumType, _originResolver, _target);
+        return TypedAsEnum(lowered, IrTypeRefMapper.Map(enumType, _originResolver, _target));
+    }
 
-        return lowered switch
+    /// <summary>
+    /// <paramref name="lowered"/> with the enum result type on its operator,
+    /// looking through the overflow reduction of a 64-bit enum's operator
+    /// (#701), whose value the operator still is, and through the
+    /// read-modify-write store of such a reduced compound assignment.
+    /// </summary>
+    private static IrExpression TypedAsEnum(IrExpression lowered, IrTypeRef enumType) =>
+        lowered switch
         {
+            IrBinaryExpression
+            {
+                Operator: IrBinaryOp.Assign,
+                Right: IrIntegerOverflow stored,
+            } store => store with
+            {
+                Right = TypedAsEnum(stored, enumType),
+            },
             IrBinaryExpression { Operator: not IrBinaryOp.Assign } binary => binary with
             {
-                EnumResultType = enumTypeRef,
+                EnumResultType = enumType,
             },
-            IrUnaryExpression unary => unary with { EnumResultType = enumTypeRef },
+            IrUnaryExpression unary => unary with { EnumResultType = enumType },
+            IrIntegerOverflow overflow => overflow with
+            {
+                Value = TypedAsEnum(overflow.Value, enumType),
+            },
             _ => lowered,
         };
-    }
 
     /// <summary>
     /// The enum type of <paramref name="node"/>'s value: <c>E</c> for an

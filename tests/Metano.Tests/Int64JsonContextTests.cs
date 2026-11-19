@@ -94,4 +94,63 @@ public class Int64JsonContextTests
 
         await Assert.That(diagnostics).IsEmpty();
     }
+
+    /// <summary>
+    /// A 64-bit enum's numeric enum descriptor names its underlying type in
+    /// every slot, so the runtime reads and writes its <c>bigint</c> values
+    /// through the int64 path (spec 011 FR-051 as amended by #701); a 32-bit
+    /// enum names it on a dictionary key only, as before.
+    /// </summary>
+    [Test]
+    public async Task SixtyFourBitEnums_NameTheirUnderlyingType()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            using System.Collections.Generic;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public enum Wide : long { Low = 1, High = 1L << 40 }
+
+            [Transpile]
+            public enum Huge : ulong { Max = ulong.MaxValue }
+
+            [Transpile]
+            public enum Level { Low, High }
+
+            [Transpile]
+            public sealed record Flags(Wide W, Huge? H, Level L, Dictionary<Wide, int> ByWide);
+
+            [Transpile]
+            [JsonSerializable(typeof(Flags))]
+            {{ContextBoilerplate}}
+            """
+        );
+
+        var context = files[ContextPath];
+
+        await Assert
+            .That(context)
+            .Contains(
+                """
+                type: {
+                            kind: "numericEnum",
+                            values: Wide,
+                            typeName: "TestApp.Wide",
+                            numberType: "System.Int64",
+                          },
+                """
+            );
+
+        await Assert.That(context).Contains("numberType: \"System.UInt64\"");
+
+        await Assert
+            .That(context)
+            .Contains(
+                "type: { kind: \"numericEnum\", values: Level, typeName: \"TestApp.Level\" },"
+            );
+    }
 }

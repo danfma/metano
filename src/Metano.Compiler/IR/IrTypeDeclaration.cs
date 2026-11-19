@@ -121,6 +121,12 @@ public sealed record IrEnumDeclaration(
     /// combinations of the members.
     /// </summary>
     public bool IsFlags { get; init; }
+
+    /// <summary>
+    /// The exact kind of the enum's underlying integer type (<c>int</c> by
+    /// default, <c>long</c> for <c>enum E : long</c>).
+    /// </summary>
+    public IrNumericKind UnderlyingKind { get; init; } = IrNumericKind.Int32;
 }
 
 /// <summary>

@@ -17,8 +17,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// inserted, so the JavaScript side exchanges a <c>bigint</c> too; the warning
 /// names each declaration once so the author can adapt the JS side or change
 /// the C# type. Read from the Roslyn symbols, not the IR: Metano emits no
-/// declaration for these members, so the boundary lives on the declaration
-/// (the same read <see cref="Int64EnumPrecision"/> makes for enums).
+/// declaration for these members, so the boundary lives on the declaration.
 /// </summary>
 internal sealed class Int64InteropBoundaries(
     Compilation compilation,

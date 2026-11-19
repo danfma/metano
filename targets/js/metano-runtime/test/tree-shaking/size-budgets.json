@@ -118,6 +118,7 @@
     "system/json/null-reads",
     "system/json/number-from-string",
     "system/json/numeric-converters",
+    "system/json/numeric-enum-members",
     "system/json/ordinal-ignore-case",
     "system/json/polymorphism",
     "system/json/property-lookup",

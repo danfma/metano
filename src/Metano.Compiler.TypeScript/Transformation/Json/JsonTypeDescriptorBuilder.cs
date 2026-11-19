@@ -290,12 +290,25 @@ internal sealed class JsonTypeDescriptorBuilder(
     {
         var values = QualifiedReference(TypeReferenceName((INamedTypeSymbol)type));
 
-        return new TsObjectLiteral([
+        var descriptor = new TsObjectLiteral([
             KindProperty(kind),
             new TsObjectProperty("values", values),
             new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
+
+        return HoldsBigInts(type)
+            ? WithStringProperty(descriptor, "numberType", EnumUnderlyingNumberTypeOf(type)!)
+            : descriptor;
     }
+
+    /// <summary>
+    /// A 64-bit enum, whose values are <c>bigint</c>s: its descriptor names
+    /// its underlying type in every slot, so the runtime reads and writes it
+    /// through the int64 path (#701).
+    /// </summary>
+    private static bool HoldsBigInts(ITypeSymbol type) =>
+        type is INamedTypeSymbol { EnumUnderlyingType.SpecialType: var special }
+        && special is SpecialType.System_Int64 or SpecialType.System_UInt64;
 
     private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type) =>
         new([
@@ -370,6 +383,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         JsonPropertyKind kind
     ) =>
         kind == JsonPropertyKind.NumericEnum
+        && !HoldsBigInts(keyType)
         && EnumUnderlyingNumberTypeOf(keyType) is { } numberType
             ? WithStringProperty(descriptor, "numberType", numberType)
             : descriptor;

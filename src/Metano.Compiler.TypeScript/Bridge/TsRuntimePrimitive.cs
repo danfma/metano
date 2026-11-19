@@ -51,6 +51,8 @@ internal sealed record TsRuntimePrimitive(
             IrNumericKind.UInt16 => UInt16,
             IrNumericKind.Int32 => OfPrimitive(IrPrimitive.Int32),
             IrNumericKind.UInt32 => UInt32,
+            IrNumericKind.Int64 => OfPrimitive(IrPrimitive.Int64),
+            IrNumericKind.UInt64 => OfPrimitive(IrPrimitive.UInt64),
             _ => null,
         };
 

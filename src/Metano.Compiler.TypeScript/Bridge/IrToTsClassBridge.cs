@@ -106,7 +106,7 @@ internal static partial class IrToTsClassBridge
             IrDefaultValueKind.Zero => PrimitiveZero(((IrPrimitiveTypeRef)type).Primitive),
             IrDefaultValueKind.EnumZeroMember => EnumZeroMember((IrNamedTypeRef)type),
             IrDefaultValueKind.EnumZeroAssertion => new TsCastExpression(
-                new TsLiteral("0"),
+                new TsLiteral(IrToTsEnumBridge.HoldsBigInts(type) ? "0n" : "0"),
                 IrToTsTypeMapper.Map(type)
             ),
             IrDefaultValueKind.StructConstruction => IrToTsExpressionBridge.Map(

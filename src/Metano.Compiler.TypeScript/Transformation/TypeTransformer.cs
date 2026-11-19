@@ -1169,8 +1169,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         )
             sink.Add(descriptor);
 
-        Int64EnumPrecision.Check(type, ReportDiagnostic);
-
         return true;
     }
 
