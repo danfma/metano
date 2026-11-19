@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { List } from "metano-runtime/system/collections";
 import {
   BufferedEstimate,
   Estimate,
@@ -58,7 +59,7 @@ describe("Estimate fast paths", () => {
   test("generated calls bind the overload C# selected, virtually", () => {
     const estimates = [Estimate.fromPoints(2), new BufferedEstimate(3, 1), Estimate.fromPoints(5)];
 
-    expect(total(estimates).toString()).toBe("10 pt (combined)");
+    expect(total(List.of(estimates)).toString()).toBe("10 pt (combined)");
   });
 });
 

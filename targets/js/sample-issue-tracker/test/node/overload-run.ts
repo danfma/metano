@@ -11,11 +11,12 @@
 // Relative imports of the estimate modules alone: Node 24 rejects `#/`
 // subpath specifiers, which the rest of the planning barrel uses.
 import assert from "node:assert/strict";
+import { List } from "metano-runtime/system/collections";
 import { BufferedEstimate } from "../../src/sample-issue-tracker/planning/domain/buffered-estimate.ts";
 import { Estimate } from "../../src/sample-issue-tracker/planning/domain/estimate.ts";
 import { plan, scale, total } from "../../src/sample-issue-tracker/planning/domain/estimate-math.ts";
 
-const estimates = [Estimate.fromPoints(2), new BufferedEstimate(3, 1), Estimate.fromPoints(5)];
+const estimates = List.of([Estimate.fromPoints(2), new BufferedEstimate(3, 1), Estimate.fromPoints(5)]);
 
 const checks: ReadonlyArray<readonly [string, string, string]> = [
   ["static field through a factory", Estimate.none.toString(), "0 pt"],

@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { List } from "metano-runtime/system/collections";
 import {
   box,
   defaultEquals,
@@ -32,7 +33,7 @@ export class Boxing {
     return isType(value, Color$runtimeType);
   }
 
-  static colors(): Color[] {
-    return [Color.Red, Color.Green];
+  static colors(): List<Color> {
+    return List.of([Color.Red, Color.Green]);
   }
 }

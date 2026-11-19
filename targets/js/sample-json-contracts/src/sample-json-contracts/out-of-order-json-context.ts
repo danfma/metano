@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type JsonReadOptions, type TypeSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
@@ -105,7 +106,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
       type: Group,
       base: this.clip,
       factory: (p: Record<string, unknown>) =>
-        Object.assign(new Group(p.name as string, p.members as Clip[]), {
+        Object.assign(new Group(p.name as string, p.members as IReadOnlyList<Clip>), {
           seconds: p.seconds as number,
         }),
       properties: [
@@ -118,11 +119,12 @@ export class OutOfOrderJsonContext extends SerializerContext {
           ts: "members",
           json: "Members",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.clip,
             },
+            create: (items) => List.of(items),
           },
         },
       ],

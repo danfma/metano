@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { isString, type ClassType } from "metano-runtime";
 import { any, count, firstOrDefault, linq } from "metano-runtime/system/linq";
 import type { Priority } from "./priority";
@@ -7,7 +8,7 @@ import { TodoItem } from "./todo-item";
 let TodoList$rt: ClassType<TodoList> | undefined;
 
 export class TodoList {
-  private readonly _items: TodoItem[] = [];
+  private readonly _items: List<TodoItem> = List.of([]);
 
   constructor(readonly name: string) {}
 
@@ -26,12 +27,12 @@ export class TodoList {
     });
   }
 
-  get items(): TodoItem[] {
+  get items(): IReadOnlyList<TodoItem> {
     return this._items;
   }
 
   get count(): number {
-    return this._items.length;
+    return this._items.count;
   }
 
   get pendingCount(): number {
@@ -42,15 +43,15 @@ export class TodoList {
   }
 
   addTitlePriority(title: string, priority: Priority): void {
-    this._items.push(new TodoItem(title, false, priority));
+    this._items.add(new TodoItem(title, false, priority));
   }
 
   addItem(item: TodoItem): void {
-    this._items.push(item);
+    this._items.add(item);
   }
 
   addTitle(title: string): void {
-    this._items.push(new TodoItem(title));
+    this._items.add(new TodoItem(title));
   }
 
   add(title: string, priority: Priority): void;

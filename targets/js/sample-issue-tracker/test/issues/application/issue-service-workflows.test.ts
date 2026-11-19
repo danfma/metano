@@ -88,7 +88,7 @@ describe("IssueService workflows", () => {
     );
     expect(withComment.success).toBe(true);
     expect(withComment.value?.commentCount).toBe(1);
-    expect(withComment.value?.comments[0]?.message).toBe("Looks good");
+    expect(withComment.value?.comments.get(0).message).toBe("Looks good");
   });
 
   test("addCommentAsync propagates not_found when issue missing", async () => {
@@ -124,9 +124,9 @@ describe("IssueService workflows", () => {
       null,
       new PageRequest(0, 10),
     );
-    expect(readyHigh.items.length).toBe(1);
-    expect(readyHigh.items[0]?.priority).toBe(IssuePriority.High);
-    expect(readyHigh.items[0]?.status).toBe(IssueStatus.Ready);
+    expect(readyHigh.items.count).toBe(1);
+    expect(readyHigh.items.get(0).priority).toBe(IssuePriority.High);
+    expect(readyHigh.items.get(0).status).toBe(IssueStatus.Ready);
   });
 
   test("invalid status transition surfaces as a thrown Error", async () => {

@@ -62,22 +62,22 @@ describe("TodoList", () => {
     const list = new TodoList("Today");
     expect(list.name).toBe("Today");
     expect(list.count).toBe(0);
-    expect(list.items).toEqual([]);
+    expect([...list.items]).toEqual([]);
   });
 
   test("Add(title) overload defaults completed to false and priority to medium", () => {
     const list = new TodoList("Today");
     list.add("Buy milk");
     expect(list.count).toBe(1);
-    expect(list.items[0]?.title).toBe("Buy milk");
-    expect(list.items[0]?.completed).toBe(false);
-    expect(list.items[0]?.priority).toBe(Priority.Medium);
+    expect(list.items.get(0).title).toBe("Buy milk");
+    expect(list.items.get(0).completed).toBe(false);
+    expect(list.items.get(0).priority).toBe(Priority.Medium);
   });
 
   test("Add(title, priority) overload sets the priority", () => {
     const list = new TodoList("Today");
     list.add("Ship feature", Priority.High);
-    expect(list.items[0]?.priority).toBe(Priority.High);
+    expect(list.items.get(0).priority).toBe(Priority.High);
   });
 
   test("Add(item) overload accepts a pre-built TodoItem", () => {
@@ -85,7 +85,7 @@ describe("TodoList", () => {
     const item = new TodoItem("Buy milk", true, Priority.Low);
     list.add(item);
     expect(list.count).toBe(1);
-    expect(list.items[0]).toBe(item);
+    expect(list.items.get(0)).toBe(item);
   });
 
   test("findByTitle returns the matching item", () => {

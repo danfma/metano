@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import {
   firstOrDefault,
@@ -9,7 +10,7 @@ import {
   skip,
   take,
   thenBy,
-  toArray,
+  toList,
   where,
 } from "metano-runtime/system/linq";
 import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
@@ -24,7 +25,7 @@ import { IIssueRepository$runtimeType, type IIssueRepository } from "./i-issue-r
 let InMemoryIssueRepository$rt: ClassType<InMemoryIssueRepository> | undefined;
 
 export class InMemoryIssueRepository implements IIssueRepository {
-  private readonly _issues: Issue[] = [];
+  private readonly _issues: List<Issue> = List.of([]);
 
   constructor() {}
 
@@ -53,12 +54,12 @@ export class InMemoryIssueRepository implements IIssueRepository {
     );
   }
 
-  listAsync(): Promise<Issue[]> {
+  listAsync(): Promise<IReadOnlyList<Issue>> {
     return Promise.resolve(
       linq(
         this._issues,
         orderBy((issue: Issue) => issue.createdAt),
-        toArray(),
+        toList(),
       ),
     );
   }
@@ -67,9 +68,9 @@ export class InMemoryIssueRepository implements IIssueRepository {
     const existingIndex = this._issues.findIndex((issue: Issue) => issue.id === entity.id);
 
     if (existingIndex >= 0) {
-      this._issues[existingIndex] = entity;
+      this._issues.set(existingIndex, entity);
     } else {
-      this._issues.push(entity);
+      this._issues.add(entity);
     }
 
     return Promise.resolve();
@@ -79,14 +80,14 @@ export class InMemoryIssueRepository implements IIssueRepository {
     return !((await this.getByIdAsync(id)) == null);
   }
 
-  listBySprintAsync(sprintKey: string): Promise<Issue[]> {
+  listBySprintAsync(sprintKey: string): Promise<IReadOnlyList<Issue>> {
     return Promise.resolve(
       linq(
         this._issues,
         where((issue: Issue) => issue.sprintKey === sprintKey),
         orderByDescending((issue: Issue) => issue.priority),
         thenBy((issue: Issue) => issue.title),
-        toArray(),
+        toList(),
       ),
     );
   }
@@ -112,10 +113,10 @@ export class InMemoryIssueRepository implements IIssueRepository {
       ),
       orderByDescending((issue: Issue) => issue.priority),
       thenBy((issue: Issue) => issue.title),
-      toArray(),
+      toList(),
     );
-    const items = linq(filtered, skip(page.skip), take(page.safeSize), toArray());
+    const items = linq(filtered, skip(page.skip), take(page.safeSize), toList());
 
-    return Promise.resolve(new PageResult(items, filtered.length, page));
+    return Promise.resolve(new PageResult(items, filtered.count, page));
   }
 }

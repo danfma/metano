@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { List } from "metano-runtime/system/collections";
 
 let Blob$rt: ClassType<Blob> | undefined;
 
@@ -7,7 +8,7 @@ export class Blob {
   constructor(
     readonly data: number[],
     readonly maybe: number[] | null,
-    readonly numbers: number[],
+    readonly numbers: List<number>,
   ) {}
 
   static get $runtimeType(): ClassType<Blob> {

@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { Dictionary, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import {
@@ -143,8 +144,8 @@ export class WebJsonContext extends SerializerContext {
           p.m as number | null,
           p.d as Decimal,
           p.x as number,
-          p.l as number[],
-          p.map as Map<string, number>,
+          p.l as List<number>,
+          p.map as Dictionary<string, number>,
           p.c as Color,
         ),
       properties: [
@@ -176,17 +177,19 @@ export class WebJsonContext extends SerializerContext {
           ts: "l",
           json: "l",
           type: {
-            kind: "array",
+            kind: "list",
             element: { kind: "primitive", numberType: "System.Int32" },
+            create: (items) => List.of(items),
           },
         },
         {
           ts: "map",
           json: "map",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "primitive" },
             value: { kind: "primitive", numberType: "System.Int32" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
@@ -271,7 +274,7 @@ export class WebJsonContext extends SerializerContext {
       type: Group,
       base: this.clip,
       factory: (p: Record<string, unknown>) =>
-        Object.assign(new Group(p.name as string, p.members as Clip[]), {
+        Object.assign(new Group(p.name as string, p.members as IReadOnlyList<Clip>), {
           seconds: p.seconds as number,
         }),
       properties: [
@@ -284,11 +287,12 @@ export class WebJsonContext extends SerializerContext {
           ts: "members",
           json: "members",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.clip,
             },
+            create: (items) => List.of(items),
           },
         },
       ],

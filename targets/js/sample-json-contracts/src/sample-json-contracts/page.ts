@@ -1,10 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { IReadOnlyList } from "metano-runtime/system/collections";
 
 let Page$rt: ClassType<Page<unknown>> | undefined;
 
 export class Page<T> {
-  constructor(readonly items: T[]) {}
+  constructor(readonly items: IReadOnlyList<T>) {}
 
   static get $runtimeType(): ClassType<Page<unknown>> {
     return (Page$rt ??= {

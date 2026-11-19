@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "metano-runtime/system/collections";
 import { JsonSerializer } from "metano-runtime/system/json";
 
 import { ActivityFeed, IssueActivity, IssueActivityKind } from "#/sample-issue-tracker/issues/domain";
@@ -101,7 +102,7 @@ describe("int64 JSON — the issue activity scenario", () => {
 
 describe("int64 JSON — the snowflake-keyed activity feed", () => {
   const feed = new ActivityFeed(
-    new Map<bigint, IssueActivity>([
+    Dictionary.assign<bigint, IssueActivity>([
       [1152921504606846977n, activity],
       [
         1152921504606846978n,
@@ -127,9 +128,9 @@ describe("int64 JSON — the snowflake-keyed activity feed", () => {
     const json = JsonSerializer.serialize(feed, ctx.activityFeed);
     const read = JsonSerializer.deserialize(json, ctx.activityFeed)!;
 
-    expect(read.entries).toBeInstanceOf(Map);
+    expect(read.entries).toBeInstanceOf(Dictionary);
 
-    for (const key of read.entries.keys()) {
+    for (const key of read.entries.keys) {
       expect(typeof key).toBe("bigint");
     }
 

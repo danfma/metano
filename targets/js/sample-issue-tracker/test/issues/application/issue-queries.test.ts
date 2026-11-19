@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { List } from "metano-runtime/system/collections";
 import {
   openIssues,
   statusCounts,
@@ -19,9 +20,9 @@ describe("IssueQueries", () => {
     ];
     issues[2]!.status = IssueStatus.Done;
 
-    const result = openIssues(issues);
-    expect(result.length).toBe(2);
-    expect(result.find(i => i.title === "Closed")).toBeUndefined();
+    const result = openIssues(List.of(issues));
+    expect(result.count).toBe(2);
+    expect([...result].find(i => i.title === "Closed")).toBeUndefined();
   });
 
   test("openIssues orderByDescending then thenBy is applied", () => {
@@ -30,13 +31,13 @@ describe("IssueQueries", () => {
       makeIssue({ title: "A", priority: IssuePriority.Urgent }),
       makeIssue({ title: "C", priority: IssuePriority.Urgent }),
     ];
-    const result = openIssues(issues);
-    expect(result.length).toBe(3);
-    expect(result[0]?.priority).toBe(IssuePriority.Urgent);
-    expect(result[1]?.priority).toBe(IssuePriority.Urgent);
-    expect(result[0]?.title).toBe("A");
-    expect(result[1]?.title).toBe("C");
-    expect(result[2]?.priority).toBe(IssuePriority.Low);
+    const result = openIssues(List.of(issues));
+    expect(result.count).toBe(3);
+    expect(result.get(0).priority).toBe(IssuePriority.Urgent);
+    expect(result.get(1).priority).toBe(IssuePriority.Urgent);
+    expect(result.get(0).title).toBe("A");
+    expect(result.get(1).title).toBe("C");
+    expect(result.get(2).priority).toBe(IssuePriority.Low);
   });
 
   test("statusCounts groups issues by status", () => {
@@ -45,7 +46,7 @@ describe("IssueQueries", () => {
       makeIssue({ status: IssueStatus.Backlog }),
       makeIssue({ status: IssueStatus.Ready }),
     ];
-    const counts = statusCounts(issues);
+    const counts = statusCounts(List.of(issues));
     expect(counts.get(IssueStatus.Backlog)).toBe(2);
     expect(counts.get(IssueStatus.Ready)).toBe(1);
   });
@@ -58,8 +59,8 @@ describe("IssueQueries", () => {
       makeIssue({ assigneeId: bob }),
       makeIssue({ assigneeId: alice }),
     ];
-    expect(issuesForAssignee(issues, alice).length).toBe(2);
-    expect(issuesForAssignee(issues, bob).length).toBe(1);
+    expect(issuesForAssignee(List.of(issues), alice).count).toBe(2);
+    expect(issuesForAssignee(List.of(issues), bob).count).toBe(1);
   });
 
   test("readyForReview returns high/urgent in-progress or in-review", () => {
@@ -69,8 +70,8 @@ describe("IssueQueries", () => {
       makeIssue({ status: IssueStatus.InProgress, priority: IssuePriority.Low }),
       makeIssue({ status: IssueStatus.Backlog, priority: IssuePriority.Urgent }),
     ];
-    const result = readyForReview(issues, 10);
-    expect(result.length).toBe(2);
+    const result = readyForReview(List.of(issues), 10);
+    expect(result.count).toBe(2);
   });
 
   test("readyForReview respects limit", () => {
@@ -79,6 +80,6 @@ describe("IssueQueries", () => {
       makeIssue({ status: IssueStatus.InProgress, priority: IssuePriority.High }),
       makeIssue({ status: IssueStatus.InProgress, priority: IssuePriority.High }),
     ];
-    expect(readyForReview(issues, 2).length).toBe(2);
+    expect(readyForReview(List.of(issues), 2).count).toBe(2);
   });
 });

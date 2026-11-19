@@ -4,6 +4,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
 
 import { UUID } from "metano-runtime";
+import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
 
 import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
@@ -109,22 +110,24 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   W4: {
-    build: () => new Timeline("t", new ImageClip("a.png", 1.5), [new SilenceClip(2)]),
+    build: () =>
+      new Timeline("t", new ImageClip("a.png", 1.5), List.of<Clip>([new SilenceClip(2)])),
     assertRead: (value) => {
       const timeline = expectClass(value, Timeline);
 
       expect(timeline.name).toBe("t");
       expect(timeline.main).toBeInstanceOf(ImageClip);
       expect((timeline.main as ImageClip).path).toBe("a.png");
-      expect(timeline.clips).toHaveLength(1);
-      expect(timeline.clips[0]).toBeInstanceOf(SilenceClip);
-      expect((timeline.clips[0] as SilenceClip).seconds).toBe(2);
+      expect(timeline.clips).toBeInstanceOf(List);
+      expect(timeline.clips.count).toBe(1);
+      expect(timeline.clips.get(0)).toBeInstanceOf(SilenceClip);
+      expect((timeline.clips.get(0) as SilenceClip).seconds).toBe(2);
     },
   },
   W5: {
-    build: () => [new ImageClip("a", 1.5), new SilenceClip(2)],
+    build: () => List.of<Clip>([new ImageClip("a", 1.5), new SilenceClip(2)]),
     assertRead: (value) => {
-      const clips = value as Clip[];
+      const clips = expectList(value) as Clip[];
 
       expect(clips).toHaveLength(2);
       expect(clips[0]).toBeInstanceOf(ImageClip);
@@ -134,9 +137,9 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   W6: {
-    build: () => new Map([["x", new SilenceClip(2)]]),
+    build: () => Dictionary.assign<string, Clip>([["x", new SilenceClip(2)]]),
     assertRead: (value) => {
-      const clips = value as Map<string, Clip>;
+      const clips = expectClass(value, Dictionary) as Dictionary<string, Clip>;
 
       expect(clips.get("x")).toBeInstanceOf(SilenceClip);
       expect((clips.get("x") as SilenceClip).seconds).toBe(2);
@@ -241,13 +244,14 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   W21: {
-    build: () => new Feed(new Page([new EpisodeSummary("a", "b")])),
+    build: () => new Feed(new Page(List.of([new EpisodeSummary("a", "b")]))),
     assertRead: (value) => {
       const feed = expectClass(value, Feed);
 
-      expect(feed.latest.items).toHaveLength(1);
-      expect(feed.latest.items[0]).toBeInstanceOf(EpisodeSummary);
-      expect(feed.latest.items[0]?.id).toBe("a");
+      expect(feed.latest.items).toBeInstanceOf(List);
+      expect(feed.latest.items.count).toBe(1);
+      expect(feed.latest.items.get(0)).toBeInstanceOf(EpisodeSummary);
+      expect(feed.latest.items.get(0).id).toBe("a");
     },
   },
   W22: { build: () => null },
@@ -428,17 +432,17 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   V13: { build: () => 1, assertRead: (value) => expect(value).toBe(1) },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
   V15: {
-    build: () => new Set(["a", "b"]),
+    build: () => HashSet.of(["a", "b"]),
     assertRead: (value) => {
-      const values = value as Set<string>;
+      const values = expectClass(value, HashSet) as HashSet<string>;
 
       expect([...values]).toEqual(["a", "b"]);
     },
   },
   V16: {
-    build: () => new Map([["x", new EpisodeSummary("a", "b")]]),
+    build: () => Dictionary.assign([["x", new EpisodeSummary("a", "b")]]),
     assertRead: (value) => {
-      const summaries = value as Map<string, EpisodeSummary>;
+      const summaries = expectClass(value, Dictionary) as Dictionary<string, EpisodeSummary>;
 
       expect(summaries.get("x")).toBeInstanceOf(EpisodeSummary);
       expect((summaries.get("x") as EpisodeSummary).id).toBe("a");
@@ -447,7 +451,7 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   V17: {
     build: () =>
       new IntMapHolder(
-        new Map([
+        Dictionary.assign([
           [5, "e"],
           [1, "a"],
         ]),
@@ -468,11 +472,14 @@ export const caseBuilders: Record<string, CaseBuilder> = {
       expect(point.y).toBe(2);
     },
   },
-  V19: { build: () => [[0]], assertRead: (value) => expect(value).toEqual([[0]]) },
+  V19: {
+    build: () => List.of([List.of([0])]),
+    assertRead: (value) => expect(expectList(value).map(expectList)).toEqual([[0]]),
+  },
   V20: {
     build: () =>
       new LevelMapHolder(
-        new Map([
+        Dictionary.assign<Level, string>([
           [Level.High, "h"],
           [Level.Low, "l"],
         ]),
@@ -485,7 +492,7 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   V21: {
-    build: () => new GuidMapHolder(new Map([[UUID.create(V21_GUID), "a"]])),
+    build: () => new GuidMapHolder(Dictionary.assign([[UUID.create(V21_GUID), "a"]])),
     assertRead: (value) => {
       const holder = expectClass(value, GuidMapHolder);
 
@@ -499,10 +506,10 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   E9: { build: () => new NLeaf(1, 2, 3) },
   E12: {
     build: () => {
-      const members: Clip[] = [];
+      const members = List.of<Clip>([]);
       const group = new Group("g", members);
 
-      members.push(group);
+      members.add(group);
 
       return group;
     },
@@ -552,7 +559,7 @@ export const caseBuilders: Record<string, CaseBuilder> = {
       expect(nums.n).toBe(5);
       expect(nums.m).toBe(7);
       expectDecimal(nums.d, "1.1");
-      expect(nums.l).toEqual([1, 2]);
+      expect(expectList(nums.l)).toEqual([1, 2]);
       expect(nums.map?.get("k")).toBe(3);
     },
     viaText: true,
@@ -613,13 +620,13 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   M1: {
-    build: () => new Blob([1, 2, 3], [255, 254], [1, 2]),
+    build: () => new Blob([1, 2, 3], [255, 254], List.of([1, 2])),
     assertRead: (value) => {
       const blob = expectClass(value, Blob);
 
       expect(blob.data).toEqual([1, 2, 3]);
       expect(blob.maybe).toEqual([255, 254]);
-      expect(blob.numbers).toEqual([1, 2]);
+      expect(expectList(blob.numbers)).toEqual([1, 2]);
     },
   },
   M2: {
@@ -746,13 +753,13 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   OK1: {
-    assertRead: (value) => expect(value).toEqual([1, null]),
+    assertRead: (value) => expect(expectList(value)).toEqual([1, null]),
   },
   OK2: {
-    assertRead: (value) => expect((value as Map<string, number | null>).get("a")).toBeNull(),
+    assertRead: (value) => expect(expectClass(value, Dictionary).get("a")).toBeNull(),
   },
   OK3: {
-    assertRead: (value) => expect(value).toEqual(["a", null]),
+    assertRead: (value) => expect(expectList(value)).toEqual(["a", null]),
   },
   OK4: {
     assertRead: (value) => expect((value as { c: string }).c).toBe("a"),
@@ -785,6 +792,13 @@ function expectClass<T extends object>(value: unknown, ctor: new (...args: never
   return value as T;
 }
 
+/** Asserts a read collection is a runtime `List` and returns a detached copy of its items. */
+function expectList(value: unknown): unknown[] {
+  expect(value).toBeInstanceOf(List);
+
+  return (value as List<unknown>).toArray();
+}
+
 function expectPlainObject(value: unknown): void {
   expect(Object.getPrototypeOf(value)).toBe(Object.prototype);
 }
@@ -797,5 +811,5 @@ function expectDecimal(value: unknown, text: string): void {
 
 /** The number of nested groups of a read `Group` chain (manifest row R9). */
 function groupDepth(value: unknown): number {
-  return value instanceof Group ? 1 + groupDepth(value.members[0]) : 0;
+  return value instanceof Group ? 1 + groupDepth([...value.members][0]) : 0;
 }

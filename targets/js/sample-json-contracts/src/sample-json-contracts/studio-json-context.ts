@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
-import { type HashSet, UUID, type ClassType } from "metano-runtime";
+import { UUID, type ClassType } from "metano-runtime";
+import { Dictionary, HashSet, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
@@ -68,8 +69,8 @@ export class StudioJsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new StudioJsonContext() as StudioJsonContext;
   private _clip?: TypeSpec<Clip>;
   private _timeline?: TypeSpec<Timeline>;
-  private _listClip?: ValueSpec<Clip[] | null>;
-  private _dictionaryStringClip?: ValueSpec<Map<string, Clip> | null>;
+  private _listClip?: ValueSpec<List<Clip> | null>;
+  private _dictionaryStringClip?: ValueSpec<Dictionary<string, Clip> | null>;
   private _iEnumerableClip?: ValueSpec<Iterable<Clip> | null>;
   private _group?: TypeSpec<Group>;
   private _hBase?: TypeSpec<HBase>;
@@ -89,14 +90,14 @@ export class StudioJsonContext extends SerializerContext {
   private _shape?: TypeSpec<Shape>;
   private _mixedBase?: TypeSpec<MixedBase>;
   private _episodeSummary?: TypeSpec<EpisodeSummary>;
-  private _iReadOnlyListEpisodeSummary?: ValueSpec<EpisodeSummary[] | null>;
+  private _iReadOnlyListEpisodeSummary?: ValueSpec<IReadOnlyList<EpisodeSummary> | null>;
   private _episodeSummaryArray?: ValueSpec<EpisodeSummary[] | null>;
-  private _dictionaryStringEpisodeSummary?: ValueSpec<Map<string, EpisodeSummary> | null>;
+  private _dictionaryStringEpisodeSummary?: ValueSpec<Dictionary<string, EpisodeSummary> | null>;
   private _hashSetString?: ValueSpec<HashSet<string> | null>;
   private _intMapHolder?: TypeSpec<IntMapHolder>;
   private _levelMapHolder?: TypeSpec<LevelMapHolder>;
   private _guidMapHolder?: TypeSpec<GuidMapHolder>;
-  private _listListInt32?: ValueSpec<number[][] | null>;
+  private _listListInt32?: ValueSpec<List<List<number>> | null>;
   private _string?: ValueSpec<string | null>;
   private _int32?: ValueSpec<number>;
   private _nullableInt32?: ValueSpec<number | null>;
@@ -109,22 +110,22 @@ export class StudioJsonContext extends SerializerContext {
   private _timeOnly?: ValueSpec<Temporal.PlainTime>;
   private _dateTimeOffset?: ValueSpec<Temporal.ZonedDateTime>;
   private _timeSpan?: ValueSpec<Temporal.Duration>;
-  private _listTimeOnly?: ValueSpec<Temporal.PlainTime[] | null>;
-  private _dictionaryStringTimeOnly?: ValueSpec<Map<string, Temporal.PlainTime> | null>;
+  private _listTimeOnly?: ValueSpec<List<Temporal.PlainTime> | null>;
+  private _dictionaryStringTimeOnly?: ValueSpec<Dictionary<string, Temporal.PlainTime> | null>;
   private _schedule?: TypeSpec<Schedule>;
   private _holderInt?: TypeSpec<HolderInt>;
   private _holderLevel?: TypeSpec<HolderLevel>;
   private _holderChar?: TypeSpec<HolderChar>;
   private _holderSPoint?: TypeSpec<HolderSPoint>;
-  private _listInt32?: ValueSpec<number[] | null>;
-  private _listNullableInt32?: ValueSpec<(number | null)[] | null>;
-  private _listString?: ValueSpec<string[] | null>;
-  private _listLevel?: ValueSpec<Level[] | null>;
-  private _listGuid?: ValueSpec<UUID[] | null>;
-  private _listDateTime?: ValueSpec<Temporal.PlainDateTime[] | null>;
+  private _listInt32?: ValueSpec<List<number> | null>;
+  private _listNullableInt32?: ValueSpec<List<number | null> | null>;
+  private _listString?: ValueSpec<List<string> | null>;
+  private _listLevel?: ValueSpec<List<Level> | null>;
+  private _listGuid?: ValueSpec<List<UUID> | null>;
+  private _listDateTime?: ValueSpec<List<Temporal.PlainDateTime> | null>;
   private _hashSetInt32?: ValueSpec<HashSet<number> | null>;
-  private _dictionaryStringInt32?: ValueSpec<Map<string, number> | null>;
-  private _dictionaryStringNullableInt32?: ValueSpec<Map<string, number | null> | null>;
+  private _dictionaryStringInt32?: ValueSpec<Dictionary<string, number> | null>;
+  private _dictionaryStringNullableInt32?: ValueSpec<Dictionary<string, number | null> | null>;
   private _int32Array?: ValueSpec<number[] | null>;
   private _color?: ValueSpec<Color>;
   private _level?: ValueSpec<Level>;
@@ -219,7 +220,7 @@ export class StudioJsonContext extends SerializerContext {
     return (this._timeline ??= this.createSpec({
       type: Timeline,
       factory: (p: Record<string, unknown>) =>
-        new Timeline(p.name as string, p.main as Clip, p.clips as Clip[]),
+        new Timeline(p.name as string, p.main as Clip, p.clips as IReadOnlyList<Clip>),
       properties: [
         {
           ts: "name",
@@ -238,38 +239,41 @@ export class StudioJsonContext extends SerializerContext {
           ts: "clips",
           json: "Clips",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.clip,
             },
+            create: (items) => List.of(items),
           },
         },
       ],
     }));
   }
 
-  get listClip(): ValueSpec<Clip[] | null> {
+  get listClip(): ValueSpec<List<Clip> | null> {
     return (this._listClip ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "ref",
           spec: () => this.clip,
         },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get dictionaryStringClip(): ValueSpec<Map<string, Clip> | null> {
+  get dictionaryStringClip(): ValueSpec<Dictionary<string, Clip> | null> {
     return (this._dictionaryStringClip ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: {
           kind: "ref",
           spec: () => this.clip,
         },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }
@@ -291,7 +295,7 @@ export class StudioJsonContext extends SerializerContext {
       type: Group,
       base: this.clip,
       factory: (p: Record<string, unknown>) =>
-        Object.assign(new Group(p.name as string, p.members as Clip[]), {
+        Object.assign(new Group(p.name as string, p.members as IReadOnlyList<Clip>), {
           seconds: p.seconds as number,
         }),
       properties: [
@@ -304,11 +308,12 @@ export class StudioJsonContext extends SerializerContext {
           ts: "members",
           json: "Members",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.clip,
             },
+            create: (items) => List.of(items),
           },
         },
       ],
@@ -755,14 +760,15 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
-  get iReadOnlyListEpisodeSummary(): ValueSpec<EpisodeSummary[] | null> {
+  get iReadOnlyListEpisodeSummary(): ValueSpec<IReadOnlyList<EpisodeSummary> | null> {
     return (this._iReadOnlyListEpisodeSummary ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "ref",
           spec: () => this.episodeSummary,
         },
+        create: (items) => List.of(items),
       },
     }));
   }
@@ -779,15 +785,16 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
-  get dictionaryStringEpisodeSummary(): ValueSpec<Map<string, EpisodeSummary> | null> {
+  get dictionaryStringEpisodeSummary(): ValueSpec<Dictionary<string, EpisodeSummary> | null> {
     return (this._dictionaryStringEpisodeSummary ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: {
           kind: "ref",
           spec: () => this.episodeSummary,
         },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }
@@ -797,6 +804,7 @@ export class StudioJsonContext extends SerializerContext {
       descriptor: {
         kind: "hashSet",
         element: { kind: "primitive" },
+        create: (items) => HashSet.from(items),
       },
     }));
   }
@@ -804,15 +812,17 @@ export class StudioJsonContext extends SerializerContext {
   get intMapHolder(): TypeSpec<IntMapHolder> {
     return (this._intMapHolder ??= this.createSpec({
       type: IntMapHolder,
-      factory: (p: Record<string, unknown>) => new IntMapHolder(p.byKey as Map<number, string>),
+      factory: (p: Record<string, unknown>) =>
+        new IntMapHolder(p.byKey as Dictionary<number, string>),
       properties: [
         {
           ts: "byKey",
           json: "ByKey",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "primitive", numberType: "System.Int32" },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
       ],
@@ -822,13 +832,14 @@ export class StudioJsonContext extends SerializerContext {
   get levelMapHolder(): TypeSpec<LevelMapHolder> {
     return (this._levelMapHolder ??= this.createSpec({
       type: LevelMapHolder,
-      factory: (p: Record<string, unknown>) => new LevelMapHolder(p.byLevel as Map<Level, string>),
+      factory: (p: Record<string, unknown>) =>
+        new LevelMapHolder(p.byLevel as Dictionary<Level, string>),
       properties: [
         {
           ts: "byLevel",
           json: "ByLevel",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: {
               kind: "numericEnum",
               values: Level,
@@ -836,6 +847,7 @@ export class StudioJsonContext extends SerializerContext {
               numberType: "System.Int32",
             },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
       ],
@@ -845,29 +857,33 @@ export class StudioJsonContext extends SerializerContext {
   get guidMapHolder(): TypeSpec<GuidMapHolder> {
     return (this._guidMapHolder ??= this.createSpec({
       type: GuidMapHolder,
-      factory: (p: Record<string, unknown>) => new GuidMapHolder(p.byId as Map<UUID, string>),
+      factory: (p: Record<string, unknown>) =>
+        new GuidMapHolder(p.byId as Dictionary<UUID, string>),
       properties: [
         {
           ts: "byId",
           json: "ById",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "branded", create: UUID.create, typeName: "System.Guid" },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
       ],
     }));
   }
 
-  get listListInt32(): ValueSpec<number[][] | null> {
+  get listListInt32(): ValueSpec<List<List<number>> | null> {
     return (this._listListInt32 ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
-          kind: "array",
+          kind: "list",
           element: { kind: "primitive", numberType: "System.Int32" },
+          create: (items) => List.of(items),
         },
+        create: (items) => List.of(items),
       },
     }));
   }
@@ -975,21 +991,23 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
-  get listTimeOnly(): ValueSpec<Temporal.PlainTime[] | null> {
+  get listTimeOnly(): ValueSpec<List<Temporal.PlainTime> | null> {
     return (this._listTimeOnly ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "temporal", parse: Temporal.PlainTime.from, typeName: "System.TimeOnly" },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get dictionaryStringTimeOnly(): ValueSpec<Map<string, Temporal.PlainTime> | null> {
+  get dictionaryStringTimeOnly(): ValueSpec<Dictionary<string, Temporal.PlainTime> | null> {
     return (this._dictionaryStringTimeOnly ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: { kind: "temporal", parse: Temporal.PlainTime.from, typeName: "System.TimeOnly" },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }
@@ -1102,63 +1120,69 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
-  get listInt32(): ValueSpec<number[] | null> {
+  get listInt32(): ValueSpec<List<number> | null> {
     return (this._listInt32 ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "primitive", numberType: "System.Int32" },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get listNullableInt32(): ValueSpec<(number | null)[] | null> {
+  get listNullableInt32(): ValueSpec<List<number | null> | null> {
     return (this._listNullableInt32 ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "nullable",
           inner: { kind: "primitive", numberType: "System.Int32" },
         },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get listString(): ValueSpec<string[] | null> {
+  get listString(): ValueSpec<List<string> | null> {
     return (this._listString ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "primitive" },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get listLevel(): ValueSpec<Level[] | null> {
+  get listLevel(): ValueSpec<List<Level> | null> {
     return (this._listLevel ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "numericEnum", values: Level, typeName: "SampleJsonContracts.Level" },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get listGuid(): ValueSpec<UUID[] | null> {
+  get listGuid(): ValueSpec<List<UUID> | null> {
     return (this._listGuid ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "branded", create: UUID.create, typeName: "System.Guid" },
+        create: (items) => List.of(items),
       },
     }));
   }
 
-  get listDateTime(): ValueSpec<Temporal.PlainDateTime[] | null> {
+  get listDateTime(): ValueSpec<List<Temporal.PlainDateTime> | null> {
     return (this._listDateTime ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "temporal",
           parse: Temporal.PlainDateTime.from,
           typeName: "System.DateTime",
         },
+        create: (items) => List.of(items),
       },
     }));
   }
@@ -1168,29 +1192,32 @@ export class StudioJsonContext extends SerializerContext {
       descriptor: {
         kind: "hashSet",
         element: { kind: "primitive", numberType: "System.Int32" },
+        create: (items) => HashSet.from(items),
       },
     }));
   }
 
-  get dictionaryStringInt32(): ValueSpec<Map<string, number> | null> {
+  get dictionaryStringInt32(): ValueSpec<Dictionary<string, number> | null> {
     return (this._dictionaryStringInt32 ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: { kind: "primitive", numberType: "System.Int32" },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }
 
-  get dictionaryStringNullableInt32(): ValueSpec<Map<string, number | null> | null> {
+  get dictionaryStringNullableInt32(): ValueSpec<Dictionary<string, number | null> | null> {
     return (this._dictionaryStringNullableInt32 ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: {
           kind: "nullable",
           inner: { kind: "primitive", numberType: "System.Int32" },
         },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }
@@ -1311,8 +1338,8 @@ export class StudioJsonContext extends SerializerContext {
       factory: (p: Record<string, unknown>) =>
         new Int64Containers(
           p.values as bigint[],
-          p.byName as Map<bigint, string>,
-          p.byMask as Map<bigint, string>,
+          p.byName as Dictionary<bigint, string>,
+          p.byMask as Dictionary<bigint, string>,
         ),
       properties: [
         {
@@ -1327,18 +1354,20 @@ export class StudioJsonContext extends SerializerContext {
           ts: "byName",
           json: "ByName",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "int64", numberType: "System.Int64" },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
           ts: "byMask",
           json: "ByMask",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "int64", numberType: "System.UInt64" },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
       ],
@@ -1565,17 +1594,18 @@ export class StudioJsonContext extends SerializerContext {
   get pageEpisodeSummary(): TypeSpec<Page<EpisodeSummary>> {
     return (this._pageEpisodeSummary ??= this.createSpec<Page<EpisodeSummary>>({
       type: Page,
-      factory: (p: Record<string, unknown>) => new Page(p.items as EpisodeSummary[]),
+      factory: (p: Record<string, unknown>) => new Page(p.items as IReadOnlyList<EpisodeSummary>),
       properties: [
         {
           ts: "items",
           json: "Items",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.episodeSummary,
             },
+            create: (items) => List.of(items),
           },
         },
       ],

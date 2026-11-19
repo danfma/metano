@@ -44,7 +44,7 @@ describe("Issue", () => {
     const issue = makeIssue();
     issue.addComment(UserId.create("bob"), "Looks good");
     expect(issue.commentCount).toBe(1);
-    expect(issue.comments[0]?.message).toBe("Looks good");
+    expect(issue.comments.get(0).message).toBe("Looks good");
   });
 
   test("transitionTo() valid transition", () => {

@@ -1,10 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, type UUID, copyRecordWith, type ClassType } from "metano-runtime";
+import type { Dictionary } from "metano-runtime/system/collections";
 
 let GuidMapHolder$rt: ClassType<GuidMapHolder> | undefined;
 
 export class GuidMapHolder {
-  constructor(readonly byId: Map<UUID, string>) {}
+  constructor(readonly byId: Dictionary<UUID, string>) {}
 
   static get $runtimeType(): ClassType<GuidMapHolder> {
     return (GuidMapHolder$rt ??= {

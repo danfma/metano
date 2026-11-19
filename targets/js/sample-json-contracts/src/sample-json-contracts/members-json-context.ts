@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { List } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Account } from "./account";
@@ -41,7 +42,7 @@ export class MembersJsonContext extends SerializerContext {
     return (this._blob ??= this.createSpec({
       type: Blob,
       factory: (p: Record<string, unknown>) =>
-        new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as number[]),
+        new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as List<number>),
       properties: [
         {
           ts: "data",
@@ -61,8 +62,9 @@ export class MembersJsonContext extends SerializerContext {
           ts: "numbers",
           json: "Numbers",
           type: {
-            kind: "array",
+            kind: "list",
             element: { kind: "primitive", numberType: "System.Byte" },
+            create: (items) => List.of(items),
           },
         },
       ],

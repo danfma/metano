@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { isString, type ClassType } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
@@ -19,7 +20,7 @@ export class Issue {
   sprintKey: string | null = null;
   readonly createdAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
   updatedAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
-  private readonly _comments: Comment[] = [];
+  private readonly _comments: List<Comment> = List.of([]);
 
   constructor(
     readonly id: IssueId,
@@ -44,7 +45,7 @@ export class Issue {
     });
   }
 
-  get comments(): Comment[] {
+  get comments(): IReadOnlyList<Comment> {
     return this._comments;
   }
 
@@ -53,7 +54,7 @@ export class Issue {
   }
 
   get commentCount(): number {
-    return this._comments.length;
+    return this._comments.count;
   }
 
   get lane(): string {
@@ -100,7 +101,7 @@ export class Issue {
     message: string,
     createdAt: Temporal.ZonedDateTime,
   ): void {
-    this._comments.push(new Comment(authorId, message, createdAt));
+    this._comments.add(new Comment(authorId, message, createdAt));
     this.touch(createdAt);
   }
 
@@ -149,7 +150,7 @@ export class Issue {
     }
 
     this.status = nextStatus;
-    this._comments.push(
+    this._comments.add(
       Comment.system(
         `Status changed from ${previousStatus} to ${nextStatus} by ${actorId}.`,
         changedAt,

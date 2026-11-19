@@ -71,8 +71,8 @@ describe("IssueWorkflow transition matrix", () => {
   }
 
   test("terminal states (Done, Cancelled) have no outgoing transitions", () => {
-    expect(IssueWorkflow.getAllowedTransitions(IssueStatus.Done)).toEqual([]);
-    expect(IssueWorkflow.getAllowedTransitions(IssueStatus.Cancelled)).toEqual(
+    expect([...IssueWorkflow.getAllowedTransitions(IssueStatus.Done)]).toEqual([]);
+    expect([...IssueWorkflow.getAllowedTransitions(IssueStatus.Cancelled)]).toEqual(
       [],
     );
   });

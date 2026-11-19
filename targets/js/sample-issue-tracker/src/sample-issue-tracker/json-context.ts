@@ -1,6 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
+import {
+  Dictionary,
+  List,
+  type IReadOnlyDictionary,
+  type IReadOnlyList,
+} from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
@@ -22,7 +28,7 @@ export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _issueSnapshot?: TypeSpec<IssueSnapshot>;
   private _comment?: TypeSpec<Comment>;
-  private _iReadOnlyListComment?: ValueSpec<Comment[] | null>;
+  private _iReadOnlyListComment?: ValueSpec<IReadOnlyList<Comment> | null>;
   private _issueActivity?: TypeSpec<IssueActivity>;
   private _issueActivityArray?: ValueSpec<IssueActivity[] | null>;
   private _activityFeed?: TypeSpec<ActivityFeed>;
@@ -215,14 +221,15 @@ export class JsonContext extends SerializerContext {
     }));
   }
 
-  get iReadOnlyListComment(): ValueSpec<Comment[] | null> {
+  get iReadOnlyListComment(): ValueSpec<IReadOnlyList<Comment> | null> {
     return (this._iReadOnlyListComment ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "ref",
           spec: () => this.comment,
         },
+        create: (items) => List.of(items),
       },
     }));
   }
@@ -297,18 +304,19 @@ export class JsonContext extends SerializerContext {
     return (this._activityFeed ??= this.createSpec({
       type: ActivityFeed,
       factory: (p: Record<string, unknown>) =>
-        new ActivityFeed(p.entries as Map<bigint, IssueActivity>),
+        new ActivityFeed(p.entries as IReadOnlyDictionary<bigint, IssueActivity>),
       properties: [
         {
           ts: "entries",
           json: "entries",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "int64", numberType: "System.Int64" },
             value: {
               kind: "ref",
               spec: () => this.issueActivity,
             },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
       ],

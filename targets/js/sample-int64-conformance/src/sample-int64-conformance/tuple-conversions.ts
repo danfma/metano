@@ -1,4 +1,5 @@
-import { HashSet, checkedNarrow, toException, tupleEquals } from "metano-runtime";
+import { checkedNarrow, toException, tupleEquals } from "metano-runtime";
+import { HashSet, List, throwModified } from "metano-runtime/system/collections";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export function equalsOperator(a: number, b: number): boolean {
@@ -108,38 +109,47 @@ export function explicitNarrowed(a: bigint): number {
 }
 
 export function iteratedSum(a: number, b: number): bigint {
-  const pairs = ((receiver$temp$0) => {
-    receiver$temp$0.push([a, b] as [number, number]);
-    receiver$temp$0.push([b, a] as [number, number]);
-
-    return receiver$temp$0;
-  })([] as Array<[number, number]>);
+  const pairs = List.of([[a, b] as [number, number], [b, a] as [number, number]] as [number, number][]);
   let total = 0n;
-  for (const pair$element of pairs) {
-    const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
-    total = BigInt.asIntN(64, total + BigInt.asIntN(64, BigInt.asIntN(64, pair[0] - pair[1]) + pair[0]));
+  {
+    const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+    const $l = pairs;
+    const $a = $l._items;
+    const $n = $a.length;
+    const $v = $c ? $l._version : 0;
+    for (let $i = 0; ; $i++) {
+      if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+      if ($i === $n) break;
+      const pair$element = $a[$i];
+      const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
+      total = BigInt.asIntN(64, total + BigInt.asIntN(64, BigInt.asIntN(64, pair[0] - pair[1]) + pair[0]));
+    }
   }
 
   return total;
 }
 
 export function nullableIteratedStop(a: number, b: number): bigint {
-  const pairs = ((receiver$temp$0) => {
-    receiver$temp$0.push([a, b] as [number, number]);
-    receiver$temp$0.push(null);
-    receiver$temp$0.push([b, a] as [number, number]);
-
-    return receiver$temp$0;
-  })([] as Array<[number, number] | null>);
+  const pairs = List.of([[a, b] as [number, number], null, [b, a] as [number, number]] as ([number, number] | null)[]);
   let count = 0;
   let total = 0n;
   try {
-    for (const pair$element of pairs) {
-      const pair = ((receiver$temp$1) => [BigInt(receiver$temp$1[0]), BigInt(receiver$temp$1[1])] as [bigint, bigint])(pair$element ?? (() => {
-        throw new InvalidOperationException("Nullable object must have a value.");
-      })());
-      count = (count + 1) | 0;
-      total = BigInt.asIntN(64, total + pair[0]);
+    {
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = pairs;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const pair$element = $a[$i];
+        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
+          throw new InvalidOperationException("Nullable object must have a value.");
+        })());
+        count = (count + 1) | 0;
+        total = BigInt.asIntN(64, total + pair[0]);
+      }
     }
   } catch (e$) {
     const e0 = toException(e$);
@@ -154,15 +164,21 @@ export function nullableIteratedStop(a: number, b: number): bigint {
 }
 
 export function iteratedNarrowedSum(a: bigint): number {
-  const pairs = ((receiver$temp$0) => {
-    receiver$temp$0.push([a, a] as [bigint, bigint]);
-
-    return receiver$temp$0;
-  })([] as Array<[bigint, bigint]>);
+  const pairs = List.of([[a, a] as [bigint, bigint]]);
   let total = 0;
-  for (const pair$element of pairs) {
-    const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
-    total ^= pair[0] ^ pair[1] >> 1;
+  {
+    const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+    const $l = pairs;
+    const $a = $l._items;
+    const $n = $a.length;
+    const $v = $c ? $l._version : 0;
+    for (let $i = 0; ; $i++) {
+      if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+      if ($i === $n) break;
+      const pair$element = $a[$i];
+      const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
+      total ^= pair[0] ^ pair[1] >> 1;
+    }
   }
 
   return total;
@@ -170,15 +186,21 @@ export function iteratedNarrowedSum(a: bigint): number {
 
 export function iteratedNarrowedCheckedSum(a: bigint): number {
   {
-    const pairs = ((receiver$temp$0) => {
-      receiver$temp$0.push([a, a] as [bigint, bigint]);
-
-      return receiver$temp$0;
-    })([] as Array<[bigint, bigint]>);
+    const pairs = List.of([[a, a] as [bigint, bigint]]);
     let total = 0;
-    for (const pair$element of pairs) {
-      const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
-      total ^= pair[0] ^ pair[1] >> 1;
+    {
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = pairs;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const pair$element = $a[$i];
+        const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
+        total ^= pair[0] ^ pair[1] >> 1;
+      }
     }
 
     return total;
@@ -301,9 +323,9 @@ export function castLiteralNullableSum(a: bigint): bigint {
 }
 
 export function castLiteralElementSum(a: bigint): bigint {
-  const pairs: [bigint, bigint][] = [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number])];
+  const pairs = List.of([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number])] as [bigint, bigint][]);
 
-  return BigInt.asIntN(64, pairs[0]![0] + pairs[0]![1]);
+  return BigInt.asIntN(64, pairs.get(0)[0] + pairs.get(0)[1]);
 }
 
 export function castLiteralConditionalSum(a: bigint): bigint {
@@ -327,34 +349,24 @@ export function nullableLiteralSum(a: number, b: number): bigint {
 }
 
 export function spreadListSum(a: number, b: number): bigint {
-  const ints = ((receiver$temp$0) => {
-    receiver$temp$0.push(a);
-    receiver$temp$0.push(b);
+  const ints = List.of([a, b]);
+  const longs = List.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
-    return receiver$temp$0;
-  })([] as Array<number>);
-  const longs = [...Array.from(ints, (element$temp$1) => BigInt(element$temp$1))];
-
-  return BigInt.asIntN(64, longs[0]! + longs[1]!);
+  return BigInt.asIntN(64, longs.get(0) + longs.get(1));
 }
 
 export function spreadListContains(a: number, b: number): boolean {
-  const ints = ((receiver$temp$0) => {
-    receiver$temp$0.push(a);
-    receiver$temp$0.push(b);
+  const ints = List.of([a, b]);
+  const longs = List.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
-    return receiver$temp$0;
-  })([] as Array<number>);
-  const longs = [...Array.from(ints, (element$temp$1) => BigInt(element$temp$1))];
-
-  return longs.includes(BigInt(a));
+  return longs.contains(BigInt(a));
 }
 
 export function spreadSetContains(a: number, b: number): boolean {
   const ints = [a, b];
-  const longs = new HashSet<bigint>([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
+  const longs = HashSet.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
-  return longs.has(BigInt(b));
+  return longs.contains(BigInt(b));
 }
 
 export function spreadArraySum(a: number, b: number): bigint {
@@ -365,12 +377,8 @@ export function spreadArraySum(a: number, b: number): bigint {
 }
 
 export function spreadTupleSum(a: number, b: number): bigint {
-  const pairs = ((receiver$temp$0) => {
-    receiver$temp$0.push([a, b] as [number, number]);
+  const pairs = List.of([[a, b] as [number, number]] as [number, number][]);
+  const wide = List.of([...Array.from(pairs, (element$temp$0) => [BigInt(element$temp$0[0]), BigInt(element$temp$0[1])] as [bigint, bigint])]);
 
-    return receiver$temp$0;
-  })([] as Array<[number, number]>);
-  const wide = [...Array.from(pairs, (element$temp$1) => [BigInt(element$temp$1[0]), BigInt(element$temp$1[1])] as [bigint, bigint])];
-
-  return BigInt.asIntN(64, wide[0]![0] + wide[0]![1]);
+  return BigInt.asIntN(64, wide.get(0)[0] + wide.get(0)[1]);
 }

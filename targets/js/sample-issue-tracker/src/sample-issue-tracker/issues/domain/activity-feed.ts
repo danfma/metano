@@ -1,12 +1,13 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { IReadOnlyDictionary } from "metano-runtime/system/collections";
 import type { IssueActivity } from "./issue-activity";
 
 let ActivityFeed$rt: ClassType<ActivityFeed> | undefined;
 
 export class ActivityFeed {
-  constructor(readonly entries: Map<bigint, IssueActivity>) {}
+  constructor(readonly entries: IReadOnlyDictionary<bigint, IssueActivity>) {}
 
   static get $runtimeType(): ClassType<ActivityFeed> {
     return (ActivityFeed$rt ??= {

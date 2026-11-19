@@ -7,13 +7,14 @@ import {
   valueEquals,
   type ClassType,
 } from "metano-runtime";
+import type { IReadOnlyList } from "metano-runtime/system/collections";
 import type { PageRequest } from "./page-request";
 
 let PageResult$rt: ClassType<PageResult<unknown>> | undefined;
 
 export class PageResult<T> {
   constructor(
-    readonly items: T[],
+    readonly items: IReadOnlyList<T>,
     readonly totalCount: number,
     readonly page: PageRequest,
   ) {}

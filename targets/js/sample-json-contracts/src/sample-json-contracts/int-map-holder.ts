@@ -1,10 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { Dictionary } from "metano-runtime/system/collections";
 
 let IntMapHolder$rt: ClassType<IntMapHolder> | undefined;
 
 export class IntMapHolder {
-  constructor(readonly byKey: Map<number, string>) {}
+  constructor(readonly byKey: Dictionary<number, string>) {}
 
   static get $runtimeType(): ClassType<IntMapHolder> {
     return (IntMapHolder$rt ??= {

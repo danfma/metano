@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import type { IReadOnlyList } from "metano-runtime/system/collections";
 import { implementsInterface, type InterfaceType } from "metano-runtime";
 import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
 import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
@@ -11,10 +12,10 @@ import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 export interface IIssueRepository {
   getByIdAsync(id: IssueId): Promise<Issue | null>;
-  listAsync(): Promise<Issue[]>;
+  listAsync(): Promise<IReadOnlyList<Issue>>;
   saveAsync(issue: Issue): Promise<void>;
   existsAsync(id: IssueId): Promise<boolean>;
-  listBySprintAsync(sprintKey: string): Promise<Issue[]>;
+  listBySprintAsync(sprintKey: string): Promise<IReadOnlyList<Issue>>;
   searchAsync(
     status: IssueStatus | null,
     priority: IssuePriority | null,

@@ -25,7 +25,7 @@ describe("InMemoryIssueRepository", () => {
     await repo.saveAsync(a);
     await repo.saveAsync(b);
     const list = await repo.listAsync();
-    expect(list.length).toBe(2);
+    expect(list.count).toBe(2);
   });
 
   test("existsAsync", async () => {
@@ -45,7 +45,7 @@ describe("InMemoryIssueRepository", () => {
     await repo.saveAsync(a);
     await repo.saveAsync(b);
     const result = await repo.listBySprintAsync("SPRINT-1");
-    expect(result.length).toBe(1);
-    expect(result[0]?.id).toBe(a.id);
+    expect(result.count).toBe(1);
+    expect(result.get(0).id).toBe(a.id);
   });
 });

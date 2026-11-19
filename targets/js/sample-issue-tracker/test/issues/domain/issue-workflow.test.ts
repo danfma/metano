@@ -18,7 +18,7 @@ describe("IssueWorkflow", () => {
   });
 
   test("getAllowedTransitions from Done is empty", () => {
-    expect(IssueWorkflow.getAllowedTransitions(IssueStatus.Done)).toEqual([]);
+    expect([...IssueWorkflow.getAllowedTransitions(IssueStatus.Done)]).toEqual([]);
   });
 
   test("canTransition validates allowed transitions", () => {

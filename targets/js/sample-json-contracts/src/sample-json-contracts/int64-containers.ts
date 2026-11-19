@@ -1,13 +1,14 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { Dictionary } from "metano-runtime/system/collections";
 
 let Int64Containers$rt: ClassType<Int64Containers> | undefined;
 
 export class Int64Containers {
   constructor(
     readonly values: bigint[],
-    readonly byName: Map<bigint, string>,
-    readonly byMask: Map<bigint, string>,
+    readonly byName: Dictionary<bigint, string>,
+    readonly byMask: Dictionary<bigint, string>,
   ) {}
 
   static get $runtimeType(): ClassType<Int64Containers> {

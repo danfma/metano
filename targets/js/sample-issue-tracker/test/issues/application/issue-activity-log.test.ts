@@ -46,11 +46,11 @@ describe("IssueActivityLog — 64-bit ids as dictionary keys", () => {
   });
 
   test("keeps bigint dictionary keys, never numbers", () => {
-    for (const key of log.activities.keys()) {
+    for (const key of log.activities.keys) {
       expect(typeof key).toBe("bigint");
     }
 
-    expect([...log.activities.keys()]).toEqual([
+    expect([...log.activities.keys]).toEqual([
       1152921504606846977n,
       1152921504606846978n,
     ]);
@@ -120,7 +120,7 @@ describe("IssueActivityLog — tick math on timestamps", () => {
 
     const within = log.within(0n, 100n);
 
-    expect(within.map((activity) => activity.occurredAtTicks)).toEqual([10n, 20n]);
+    expect([...within].map((activity) => activity.occurredAtTicks)).toEqual([10n, 20n]);
   });
 });
 

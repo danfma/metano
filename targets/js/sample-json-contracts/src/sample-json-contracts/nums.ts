@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import type { Dictionary, List } from "metano-runtime/system/collections";
 import type { Decimal } from "metano-runtime/system/decimal";
 import type { Color } from "./color";
 
@@ -11,8 +12,8 @@ export class Nums {
     readonly m: number | null,
     readonly d: Decimal,
     readonly x: number,
-    readonly l: number[],
-    readonly map: Map<string, number>,
+    readonly l: List<number>,
+    readonly map: Dictionary<string, number>,
     readonly c: Color,
   ) {}
 

@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import type { IReadOnlyList } from "metano-runtime/system/collections";
 import type { Clip } from "./clip";
 
 let Timeline$rt: ClassType<Timeline> | undefined;
@@ -8,7 +9,7 @@ export class Timeline {
   constructor(
     readonly name: string,
     readonly main: Clip,
-    readonly clips: Clip[],
+    readonly clips: IReadOnlyList<Clip>,
   ) {}
 
   static get $runtimeType(): ClassType<Timeline> {

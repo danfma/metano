@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
+import { List } from "metano-runtime/system/collections";
 import { type JsonConverter, JsonSerializer } from "metano-runtime/system/json";
 import {
   Comment,
@@ -321,7 +322,7 @@ describe("JsonContext — IReadOnlyList<Comment> value root", () => {
   ];
 
   test("serializes the list element by element through the comment spec", () => {
-    const json = JsonSerializer.serialize(comments, ctx.iReadOnlyListComment);
+    const json = JsonSerializer.serialize(List.of([...comments]), ctx.iReadOnlyListComment);
 
     expect(json).toEqual([
       {
@@ -340,13 +341,14 @@ describe("JsonContext — IReadOnlyList<Comment> value root", () => {
   });
 
   test("round-trips through JSON text into Comment instances", () => {
-    const text = JSON.stringify(JsonSerializer.serialize(comments, ctx.iReadOnlyListComment));
+    const text = JSON.stringify(JsonSerializer.serialize(List.of([...comments]), ctx.iReadOnlyListComment));
     const restored = JsonSerializer.deserialize(JSON.parse(text), ctx.iReadOnlyListComment);
 
-    expect(restored).toHaveLength(2);
-    expect(restored?.[0]).toBeInstanceOf(Comment);
-    expect(restored?.[1]?.message).toBe("Second comment");
-    expect(restored?.[1]?.createdAt.epochMilliseconds).toBe(
+    expect(restored).toBeInstanceOf(List);
+    expect(restored?.count).toBe(2);
+    expect(restored?.get(0)).toBeInstanceOf(Comment);
+    expect(restored?.get(1).message).toBe("Second comment");
+    expect(restored?.get(1).createdAt.epochMilliseconds).toBe(
       comments[1]?.createdAt.epochMilliseconds,
     );
   });

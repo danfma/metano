@@ -29,6 +29,6 @@ describe("boxing of enums (US3-9)", () => {
   });
 
   test("the elements of a List<Color> stay raw", () => {
-    expect(Boxing.colors()).toEqual([Color.Red, Color.Green]);
+    expect(Boxing.colors().toArray()).toEqual([Color.Red, Color.Green]);
   });
 });

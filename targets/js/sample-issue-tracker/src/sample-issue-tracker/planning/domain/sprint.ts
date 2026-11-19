@@ -1,7 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { Temporal } from "@js-temporal/polyfill";
-import { HashSet, dayNumber, type ClassType } from "metano-runtime";
+import { HashSet, type IReadOnlyCollection } from "metano-runtime/system/collections";
+import { dayNumber, type ClassType } from "metano-runtime";
 import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 
 let Sprint$rt: ClassType<Sprint> | undefined;
@@ -31,12 +32,12 @@ export class Sprint {
     });
   }
 
-  get plannedIssues(): Iterable<IssueId> {
+  get plannedIssues(): IReadOnlyCollection<IssueId> {
     return this._plannedIssues;
   }
 
   get plannedCount(): number {
-    return this._plannedIssues.size;
+    return this._plannedIssues.count;
   }
 
   get durationDays(): number {
@@ -64,6 +65,6 @@ export class Sprint {
   }
 
   unplan(issueId: IssueId): void {
-    this._plannedIssues.delete(issueId);
+    this._plannedIssues.remove(issueId);
   }
 }

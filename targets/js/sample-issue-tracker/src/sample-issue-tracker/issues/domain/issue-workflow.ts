@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { contains, linq } from "metano-runtime/system/linq";
 import type { Issue } from "./issue";
 import { IssuePriority } from "./issue-priority";
@@ -8,16 +9,20 @@ import { IssueStatus } from "./issue-status";
 export class IssueWorkflow {
   constructor() {}
 
-  static getAllowedTransitions(currentStatus: IssueStatus): IssueStatus[] {
+  static getAllowedTransitions(currentStatus: IssueStatus): IReadOnlyList<IssueStatus> {
     return currentStatus === IssueStatus.Backlog
-      ? [IssueStatus.Ready, IssueStatus.Cancelled]
+      ? List.adopt([IssueStatus.Ready, IssueStatus.Cancelled], { fixedSize: true })
       : currentStatus === IssueStatus.Ready
-        ? [IssueStatus.InProgress, IssueStatus.Cancelled]
+        ? List.adopt([IssueStatus.InProgress, IssueStatus.Cancelled], { fixedSize: true })
         : currentStatus === IssueStatus.InProgress
-          ? [IssueStatus.InReview, IssueStatus.Backlog, IssueStatus.Cancelled]
+          ? List.adopt([IssueStatus.InReview, IssueStatus.Backlog, IssueStatus.Cancelled], {
+              fixedSize: true,
+            })
           : currentStatus === IssueStatus.InReview
-            ? [IssueStatus.Done, IssueStatus.InProgress, IssueStatus.Cancelled]
-            : [];
+            ? List.adopt([IssueStatus.Done, IssueStatus.InProgress, IssueStatus.Cancelled], {
+                fixedSize: true,
+              })
+            : List.adopt([], { fixedSize: true });
   }
 
   static canTransition(currentStatus: IssueStatus, nextStatus: IssueStatus): boolean {

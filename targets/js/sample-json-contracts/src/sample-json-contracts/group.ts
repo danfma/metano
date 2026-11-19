@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { IReadOnlyList } from "metano-runtime/system/collections";
 import { Clip } from "./clip";
 
 let Group$rt: ClassType<Group> | undefined;
@@ -7,7 +8,7 @@ let Group$rt: ClassType<Group> | undefined;
 export class Group extends Clip {
   constructor(
     readonly name: string,
-    readonly members: Clip[],
+    readonly members: IReadOnlyList<Clip>,
   ) {
     super(0);
   }

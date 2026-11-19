@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { List } from "metano-runtime/system/collections";
 import {
   openIssues,
   statusCounts,
@@ -20,7 +21,7 @@ import { makeIssue } from "../../helpers";
 
 describe("IssueQueries edges", () => {
   test("openIssues on empty list returns empty list", () => {
-    expect(openIssues([])).toEqual([]);
+    expect([...openIssues(List.of([]))]).toEqual([]);
   });
 
   test("openIssues excludes Cancelled as well as Done", () => {
@@ -31,9 +32,9 @@ describe("IssueQueries edges", () => {
     ];
     issues[1]!.status = IssueStatus.Done;
     issues[2]!.status = IssueStatus.Cancelled;
-    const result = openIssues(issues);
-    expect(result.length).toBe(1);
-    expect(result[0]?.title).toBe("Open");
+    const result = openIssues(List.of(issues));
+    expect(result.count).toBe(1);
+    expect(result.get(0).title).toBe("Open");
   });
 
   test("issuesForAssignee orders by status ASC then priority DESC", () => {
@@ -55,14 +56,14 @@ describe("IssueQueries edges", () => {
     issues[2]!.status = IssueStatus.Backlog;
     issues[2]!.changePriority(IssuePriority.Low);
 
-    const result = issuesForAssignee(issues, alice);
+    const result = issuesForAssignee(List.of(issues), alice);
     // Backlog sorts before InReview (string literal comparison on the
     // generated StringEnum values). Within Backlog, Urgent precedes
     // Low. The final element is the InReview issue.
-    expect(result.length).toBe(3);
-    expect(result[0]?.title).toBe("Backlog-Urgent");
-    expect(result[1]?.title).toBe("Backlog-Low");
-    expect(result[2]?.title).toBe("InReview-Low");
+    expect(result.count).toBe(3);
+    expect(result.get(0).title).toBe("Backlog-Urgent");
+    expect(result.get(1).title).toBe("Backlog-Low");
+    expect(result.get(2).title).toBe("InReview-Low");
   });
 
   test("readyForReview rejects InProgress with Low priority", () => {
@@ -70,8 +71,8 @@ describe("IssueQueries edges", () => {
       makeIssue({ status: IssueStatus.InProgress, priority: IssuePriority.Low }),
       makeIssue({ status: IssueStatus.InProgress, priority: IssuePriority.Medium }),
     ];
-    const result = readyForReview(issues, 10);
-    expect(result).toEqual([]);
+    const result = readyForReview(List.of(issues), 10);
+    expect([...result]).toEqual([]);
   });
 
   test("readyForReview rejects InProgress+High but different status", () => {
@@ -80,8 +81,8 @@ describe("IssueQueries edges", () => {
       makeIssue({ status: IssueStatus.Done, priority: IssuePriority.Urgent }),
       makeIssue({ status: IssueStatus.Ready, priority: IssuePriority.High }),
     ];
-    const result = readyForReview(issues, 10);
-    expect(result).toEqual([]);
+    const result = readyForReview(List.of(issues), 10);
+    expect([...result]).toEqual([]);
   });
 
   test("statusCounts omits unobserved statuses", () => {
@@ -89,10 +90,10 @@ describe("IssueQueries edges", () => {
       makeIssue({ status: IssueStatus.Backlog }),
       makeIssue({ status: IssueStatus.Ready }),
     ];
-    const counts = statusCounts(issues);
-    expect(counts.has(IssueStatus.Backlog)).toBe(true);
-    expect(counts.has(IssueStatus.Ready)).toBe(true);
-    expect(counts.has(IssueStatus.Done)).toBe(false);
-    expect(counts.has(IssueStatus.Cancelled)).toBe(false);
+    const counts = statusCounts(List.of(issues));
+    expect(counts.containsKey(IssueStatus.Backlog)).toBe(true);
+    expect(counts.containsKey(IssueStatus.Ready)).toBe(true);
+    expect(counts.containsKey(IssueStatus.Done)).toBe(false);
+    expect(counts.containsKey(IssueStatus.Cancelled)).toBe(false);
   });
 });

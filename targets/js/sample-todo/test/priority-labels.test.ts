@@ -7,6 +7,6 @@ describe("PriorityLabels", () => {
   test("the static constructor fills the static readonly table", () => {
     expect(PriorityLabels.labels.get(Priority.Low)).toBe("Low");
     expect(PriorityLabels.labels.get(Priority.High)).toBe("High");
-    expect(PriorityLabels.labels.size).toBe(3);
+    expect(PriorityLabels.labels.count).toBe(3);
   });
 });

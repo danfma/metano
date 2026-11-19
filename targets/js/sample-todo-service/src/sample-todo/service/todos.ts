@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { UUID, listRemove } from "metano-runtime";
-import { firstOrDefault, linq, orderBy, toArray } from "metano-runtime/system/linq";
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
+import { UUID } from "metano-runtime";
+import { firstOrDefault, linq, orderBy, toList } from "metano-runtime/system/linq";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import { TodoItem, type Priority } from "sample-todo/sample-todo";
 
@@ -40,15 +41,15 @@ export interface UpdateTodoDto {
 }
 
 export class TodoStore {
-  private readonly _items: StoredTodo[] = [];
+  private readonly _items: List<StoredTodo> = List.of([]);
 
   constructor() {}
 
-  all(): StoredTodo[] {
+  all(): IReadOnlyList<StoredTodo> {
     return linq(
       this._items,
       orderBy((t: StoredTodo) => t.id),
-      toArray(),
+      toList(),
     );
   }
 
@@ -62,13 +63,13 @@ export class TodoStore {
   add(dto: CreateTodoDto): StoredTodo {
     const id = UUID.newUuid();
     const stored = { id: id, item: new TodoItem(dto.title, false, dto.priority) };
-    this._items.push(stored);
+    this._items.add(stored);
 
     return stored;
   }
 
   update(id: string, patch: UpdateTodoDto): StoredTodo | null {
-    const existing = this._items.find((t: StoredTodo) => t.id === id) ?? null;
+    const existing = this._items.find((t: StoredTodo) => t.id === id, null);
 
     if (existing == null) {
       return null;
@@ -105,19 +106,19 @@ export class TodoStore {
       item: item,
     };
 
-    this._items[this._items.indexOf(existing)] = updated;
+    this._items.set(this._items.indexOf(existing), updated);
 
     return updated;
   }
 
   remove(id: string): boolean {
-    const existing = this._items.find((t: StoredTodo) => t.id === id) ?? null;
+    const existing = this._items.find((t: StoredTodo) => t.id === id, null);
 
     if (existing == null) {
       return false;
     }
 
-    listRemove(this._items, existing);
+    this._items.remove(existing);
 
     return true;
   }

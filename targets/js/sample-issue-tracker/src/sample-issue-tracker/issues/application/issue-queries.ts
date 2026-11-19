@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
+import type { Dictionary, IReadOnlyList } from "metano-runtime/system/collections";
 import type { Grouping } from "metano-runtime";
 import {
   count,
@@ -10,8 +11,8 @@ import {
   take,
   thenBy,
   thenByDescending,
-  toArray,
-  toMap,
+  toDictionary,
+  toList,
   where,
 } from "metano-runtime/system/linq";
 import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
@@ -19,38 +20,41 @@ import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priori
 import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
-export function openIssues(issues: Issue[]): Issue[] {
+export function openIssues(issues: IReadOnlyList<Issue>): IReadOnlyList<Issue> {
   return linq(
     issues,
     where((issue: Issue) => !issue.isClosed),
     orderByDescending((issue: Issue) => issue.priority),
     thenBy((issue: Issue) => issue.title),
-    toArray(),
+    toList(),
   );
 }
 
-export function statusCounts(issues: Issue[]): Map<IssueStatus, number> {
+export function statusCounts(issues: IReadOnlyList<Issue>): Dictionary<IssueStatus, number> {
   return linq(
     issues,
     groupBy((issue: Issue) => issue.status),
-    toMap(
+    toDictionary(
       (group: Grouping<IssueStatus, Issue>) => group.key,
       (group: Grouping<IssueStatus, Issue>) => linq(group, count()),
     ),
   );
 }
 
-export function issuesForAssignee(issues: Issue[], assigneeId: UserId): Issue[] {
+export function issuesForAssignee(
+  issues: IReadOnlyList<Issue>,
+  assigneeId: UserId,
+): IReadOnlyList<Issue> {
   return linq(
     issues,
     where((issue: Issue) => issue.assigneeId === assigneeId),
     orderBy((issue: Issue) => issue.status),
     thenByDescending((issue: Issue) => issue.priority),
-    toArray(),
+    toList(),
   );
 }
 
-export function readyForReview(issues: Issue[], limit: number): Issue[] {
+export function readyForReview(issues: IReadOnlyList<Issue>, limit: number): IReadOnlyList<Issue> {
   return linq(
     issues,
     where(
@@ -63,6 +67,6 @@ export function readyForReview(issues: Issue[], limit: number): Issue[] {
           issue.priority === IssuePriority.High || issue.priority === IssuePriority.Urgent)(issue),
     ),
     take(limit),
-    toArray(),
+    toList(),
   );
 }
