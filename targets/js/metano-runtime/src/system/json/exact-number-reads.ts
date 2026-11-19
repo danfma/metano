@@ -108,8 +108,12 @@ function closureReaches(
     switch (descriptor.kind) {
       case "array":
       case "hashSet":
+      case "list":
+      case "queue":
+      case "stack":
         return descriptorReaches(descriptor.element);
       case "map":
+      case "dictionary":
         return descriptorReaches(descriptor.value);
       case "nullable":
         return descriptorReaches(descriptor.inner);

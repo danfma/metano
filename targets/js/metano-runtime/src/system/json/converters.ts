@@ -6,7 +6,9 @@ import type {
   BrandedDescriptor,
   EnumDescriptor,
   HashSetDescriptor,
+  KeyedCollectionDescriptor,
   MapDescriptor,
+  SequenceCollectionDescriptor,
   NullableDescriptor,
   NumericEnumDescriptor,
   RefDescriptor,
@@ -117,7 +119,11 @@ function handsChildrenToConverters(descriptor: TypeDescriptor): boolean {
   switch (descriptor.kind) {
     case "array":
     case "hashSet":
+    case "list":
+    case "queue":
+    case "stack":
     case "map":
+    case "dictionary":
     case "ref":
       return true;
     default:
@@ -180,6 +186,12 @@ function getBuiltinConverter(
       return arrayConverter(descriptor, plans, readOptions);
     case "hashSet":
       return hashSetConverter(descriptor, plans, readOptions);
+    case "list":
+    case "queue":
+    case "stack":
+      return sequenceConverter(descriptor, descriptor.create, plans, readOptions);
+    case "dictionary":
+      return keyedConverter(descriptor, plans, readOptions);
     case "branded":
       return brandedConverter(descriptor);
     case "enum":
@@ -332,8 +344,32 @@ function arrayConverter(
 
 // ─── HashSet ─────────────────────────────────────────────────────────────────
 
+/**
+ * `hashSet`: the context's `create` when it writes one; 2.x contexts write none and
+ * read through `new HashSet(items)` until the compiler's 011c flip (W4-6).
+ */
 function hashSetConverter(
-  descriptor: HashSetDescriptor,
+  descriptor: HashSetDescriptor | SequenceCollectionDescriptor,
+  plans: SpecPlans,
+  readOptions: JsonReadOptions | undefined,
+) {
+  return sequenceConverter(
+    descriptor,
+    descriptor.create ?? ((items) => new HashSet(items)),
+    plans,
+    readOptions,
+  );
+}
+
+// ─── Runtime collections (spec 011 FR-028) ───────────────────────────────────
+
+/**
+ * A collection written as a JSON array: written by iteration (a `Queue` front to
+ * back, a `Stack` top first), read element by element and built by `create`.
+ */
+function sequenceConverter(
+  descriptor: { readonly element: TypeDescriptor },
+  create: (items: unknown[]) => Iterable<unknown>,
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
@@ -344,7 +380,60 @@ function hashSetConverter(
     deserialize: (value: unknown) => {
       const items = deserializeArray(value, elemConv, descriptor.element);
 
-      return items === null ? null : new HashSet(items);
+      return items === null ? null : create(items);
+    },
+  };
+}
+
+/**
+ * A dictionary written as a JSON object with the key rule of `map` (#479): written
+ * by iterating its `[key, value]` entries, read into entries in document order and
+ * built by `create`.
+ */
+function keyedConverter(
+  descriptor: KeyedCollectionDescriptor,
+  plans: SpecPlans,
+  readOptions: JsonReadOptions | undefined,
+) {
+  const keyConv = keyConverterOf(descriptor.key, plans);
+  const valueConv = resolveConverter(descriptor.value, plans, readOptions);
+
+  return {
+    serialize: (value: unknown) => {
+      if (value == null) return null;
+
+      return writeContainer(() => {
+        const result: Record<string, unknown> = {};
+
+        for (const [k, v] of value as Iterable<readonly [unknown, unknown]>) {
+          result[String(keyConv.serialize(k))] = valueConv.serialize(v);
+        }
+
+        return result;
+      });
+    },
+    deserialize: (value: unknown) => {
+      if (value == null) return null;
+
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw unexpectedJsonKind("object", value);
+      }
+
+      const nullValueName = valueTypeNameOf(descriptor.value);
+
+      return readContainer("object", () => {
+        const entries: Array<readonly [unknown, unknown]> = [];
+
+        for (const [k, v] of Object.entries(value)) {
+          if (v === null && nullValueName !== undefined) {
+            throw cannotConvertToTypeName(nullValueName);
+          }
+
+          entries.push([keyConv.deserialize(k), valueConv.deserialize(v)]);
+        }
+
+        return descriptor.create(entries);
+      });
     },
   };
 }

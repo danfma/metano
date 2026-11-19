@@ -210,7 +210,7 @@ export function distinct<T>(): DistinctOp<T> {
       *[Symbol.iterator]() {
         const seen = new HashSet<T>();
         for (const item of source)
-          if (!seen.has(item)) {
+          if (!seen.contains(item)) {
             seen.add(item);
             yield item;
           }
@@ -232,7 +232,7 @@ export function distinctBy<T, K>(
         const seen = new HashSet<K>();
         for (const item of source) {
           const key = keySelector(item);
-          if (!seen.has(key)) {
+          if (!seen.contains(key)) {
             seen.add(key);
             yield item;
           }
@@ -265,14 +265,14 @@ export function union<T>(other: Iterable<T>): UnionOp<T> {
         const seen = new HashSet<T>();
 
         for (const item of source) {
-          if (!seen.has(item)) {
+          if (!seen.contains(item)) {
             seen.add(item);
             yield item;
           }
         }
 
         for (const item of other) {
-          if (!seen.has(item)) {
+          if (!seen.contains(item)) {
             seen.add(item);
             yield item;
           }
@@ -292,7 +292,7 @@ export function intersect<T>(other: Iterable<T>): IntersectOp<T> {
         const remaining = new HashSet<T>(other);
 
         for (const item of source) {
-          if (remaining.delete(item)) yield item;
+          if (remaining.remove(item)) yield item;
         }
       },
     }),
@@ -309,7 +309,7 @@ export function except<T>(other: Iterable<T>): ExceptOp<T> {
         const excluded = new HashSet<T>(other);
 
         for (const item of source) {
-          if (!excluded.has(item)) {
+          if (!excluded.contains(item)) {
             excluded.add(item);
             yield item;
           }

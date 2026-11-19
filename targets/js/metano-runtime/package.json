@@ -81,6 +81,8 @@
   "scripts": {
     "build": "tsgo -b .",
     "test": "bun test",
+    "bench": "bun bench/collections.bench.ts",
+    "bench:node": "node --experimental-transform-types --no-warnings bench/collections.bench.ts",
     "bench:json": "bun bench/json/run.ts",
     "bench:int64": "bun bench/int64/run.ts"
   },

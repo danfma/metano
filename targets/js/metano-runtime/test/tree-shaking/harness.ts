@@ -154,13 +154,14 @@ export async function bundle(
   bundler: Bundler,
   directory: BundleDirectory,
   source: string,
+  define?: Readonly<Record<string, string>>,
 ): Promise<string> {
   const entry = join(directory.root, `__entry_${entryCounter++}.js`);
 
   writeFileSync(entry, source);
 
   try {
-    return await BUNDLE[bundler](entry, isPureIn(directory));
+    return await BUNDLE[bundler](entry, isPureIn(directory), define);
   } finally {
     rmSync(entry, { force: true });
   }
@@ -212,16 +213,27 @@ function isThirdParty(specifier: string): boolean {
   return THIRD_PARTY.some((name) => specifier === name || specifier.startsWith(`${name}/`));
 }
 
-const BUNDLE: Record<Bundler, (entry: string, isPure: IsPure) => Promise<string>> = {
+type BundleFunction = (
+  entry: string,
+  isPure: IsPure,
+  define?: Readonly<Record<string, string>>,
+) => Promise<string>;
+
+const BUNDLE: Record<Bundler, BundleFunction> = {
   bun: bundleWithBun,
   esbuild: bundleWithEsbuild,
   rollup: bundleWithRollup,
 };
 
-async function bundleWithBun(entry: string): Promise<string> {
+async function bundleWithBun(
+  entry: string,
+  _isPure: IsPure,
+  define?: Readonly<Record<string, string>>,
+): Promise<string> {
   const result = await Bun.build({
     entrypoints: [entry],
     minify: true,
+    define: { ...define },
     target: "browser",
     format: "esm",
     external: [...THIRD_PARTY],
@@ -234,11 +246,16 @@ async function bundleWithBun(entry: string): Promise<string> {
   return (await result.outputs[0]?.text()) ?? "";
 }
 
-async function bundleWithEsbuild(entry: string): Promise<string> {
+async function bundleWithEsbuild(
+  entry: string,
+  _isPure: IsPure,
+  define?: Readonly<Record<string, string>>,
+): Promise<string> {
   const result = await esbuild.build({
     entryPoints: [entry],
     bundle: true,
     minify: true,
+    define: { ...define },
     format: "esm",
     write: false,
     logLevel: "silent",

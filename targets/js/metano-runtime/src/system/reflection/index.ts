@@ -1,5 +1,7 @@
 export type {
   ClassType,
+  CollectionInterfaceEntry,
+  CollectionKindName,
   CollectionType,
   EnumType,
   InterfaceType,
@@ -24,6 +26,7 @@ export { implementsInterface } from "./implements-interface.ts";
 export * from "./is-assignable-from.ts";
 export * from "./nullable-type.ts";
 export * from "./specialize.ts";
+export * from "./specialize-collection.ts";
 export * from "./with-implementers.ts";
 export { enumFromRaw } from "./enum-from-raw.ts";
 export { enumIsDefined } from "./enum-is-defined.ts";

@@ -43,6 +43,66 @@
       "entry": "entries/box-enum.js",
       "maxGzip": 490,
       "$comment": "Raised by the maintainer (stage 011b B3 fix round 1) to 490 B: measured bun 485 B / esbuild 486 B. The Boxed class with its $boxed brand, valueOf / toJSON, the .NET enum text whose flags decomposition runs on BigInt bit tests in value order (exact at every width, one code path; +55 B over the 32-bit form) and the entry's descriptor literal."
+    },
+    {
+      "name": "List alone (full surface)",
+      "entry": "entries/list-only.js",
+      "maxGzip": 2560,
+      "mustNotContain": [
+        "Queue empty.",
+        "Stack empty.",
+        "same key has already",
+        "IReadOnlyDictionary",
+        "@js-temporal"
+      ],
+      "$comment": "Spec 011 NFR-008 (2.5 KB). The markers keep the other classes, the descriptor factories (their interface literals) and the Temporal polyfill out of a List bundle."
+    },
+    {
+      "name": "Dictionary alone (with KeyCollection / ValueCollection)",
+      "entry": "entries/dictionary-only.js",
+      "maxGzip": 3072,
+      "mustNotContain": [
+        "Queue empty.",
+        "Stack empty.",
+        "Index must be within the bounds of the List.",
+        "@js-temporal"
+      ],
+      "$comment": "Spec 011 NFR-008 (3.0 KB)."
+    },
+    {
+      "name": "HashSet alone",
+      "entry": "entries/hash-set-only.js",
+      "maxGzip": 1638,
+      "mustNotContain": [
+        "Queue empty.",
+        "Stack empty.",
+        "same key has already",
+        "Index must be within the bounds of the List.",
+        "@js-temporal"
+      ],
+      "$comment": "Spec 011 NFR-008 (1.6 KB)."
+    },
+    {
+      "name": "Queue alone",
+      "entry": "entries/queue-only.js",
+      "maxGzip": 1228,
+      "mustNotContain": [
+        "Stack empty.",
+        "same key has already",
+        "Index must be within the bounds of the List."
+      ],
+      "$comment": "Spec 011 NFR-008 (1.2 KB)."
+    },
+    {
+      "name": "Stack alone",
+      "entry": "entries/stack-only.js",
+      "maxGzip": 1228,
+      "mustNotContain": [
+        "Queue empty.",
+        "same key has already",
+        "Index must be within the bounds of the List."
+      ],
+      "$comment": "Spec 011 NFR-008 (1.2 KB)."
     }
   ],
   "modules": [
@@ -52,11 +112,26 @@
     "system/big-integer",
     "system/bind-receiver",
     "system/boolean-format",
+    "system/collections/checks",
+    "system/collections/collection-type-name",
+    "system/collections/copy-to",
+    "system/collections/default-comparer",
+    "system/collections/descriptors",
     "system/collections/dictionary-helpers",
+    "system/collections/dictionary-views",
+    "system/collections/dictionary",
+    "system/collections/hash-core",
     "system/collections/hash-set",
+    "system/collections/helpers",
     "system/collections/immutable-collection",
     "system/collections/index",
+    "system/collections/interfaces",
     "system/collections/list-helpers",
+    "system/collections/list",
+    "system/collections/queue",
+    "system/collections/set-algebra",
+    "system/collections/stack",
+    "system/collections/throw-helpers",
     "system/date-time-offset",
     "system/decimal-parsing",
     "system/decimal",
@@ -163,6 +238,7 @@
     "system/reflection/nullable-type",
     "system/reflection/primitive-types",
     "system/reflection/runtime-type",
+    "system/reflection/specialize-collection",
     "system/reflection/specialize",
     "system/reflection/temporal-types",
     "system/reflection/to-string-tag",

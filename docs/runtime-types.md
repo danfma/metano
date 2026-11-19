@@ -110,3 +110,60 @@ Differences from .NET, documented and not diagnosed (OD-11, OD-12):
 ## Boxed values
 
 A C# boxing conversion of an enum or `[InlineWrapper]` value (to `object`, `ValueType` or `Enum`) becomes a runtime `Boxed` value, so `GetType()`, `ToString()` and `Equals` answer as in .NET for `object`-typed values (spec 011 FR-050, FR-051). The runtime recognises a box by its string brand field `$boxed === true`, never by `instanceof`, so code that never boxes bundles no box code and a box made by a second copy of `metano-runtime` is still recognised. The limit: any object that carries an own `$boxed: true` field is taken for a box by `unbox`, `isType`, `asType`, `castTo`, `getRuntimeType` and the equality helpers. `Boxed.toString()` follows .NET's enum formatting: the member name, the number for an undeclared value (`"99"`), the comma-separated names for a `[Flags]` combination, and the whole number when a `[Flags]` value has an undeclared bit (`(Perms)9` prints `"9"`).
+
+## Collection benchmark and size budgets (spec 011 stage 011c, NFR-001 / NFR-008)
+
+Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runtime` (FR-039) on 2026-11-19, on an **Apple M1 Pro** (darwin arm64, the reference machine of research R17) with **Node.js 24.11.0** and **Bun 1.4.2**. Shape: hot helper, one pass over 1e4 elements per kernel call, 500 calls per run, 10 warm-up runs, median of 21 timed runs, every (case, mode, role) in a fresh process. Normalized = raw × C_ref / C_measured, with C_ref = 0.59 ns (Node) / 0.47 ns (Bun) and C_measured ≈ 0.57 ns (Node) / 0.56 ns (Bun), the per-process calibration kernel `a[i] = a[i] + 1`. The gate is the default build on both engines; the larger normalized figure counts.
+
+**Status: NFR-001 is not met on the default build.** The FR-058 guard `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)` reads an undeclared global on every guarded call; with the constant absent this lookup costs about 70–150 ns per call on Bun and about 5–10 ns on Node, far above every budget. With the constant defined `false` (the guarded code removed by the bundler) every row passes; with it set on `globalThis` at run time Bun passes and Node misses `set` / read-modify-write by a small margin (a global property load per call). The lowered `foreach` with the guard hoisted to a function-local `const $c` costs 0.00 ns (Bun) / 1.04 ns (Node) per element on the default build. Stage 011c is blocked on this row set until the design is revisited or the maintainer records a decision (NFR-001's rule).
+
+| Case | Mode | Budget (ns) | Node raw / norm (ns) | Bun raw / norm (ns) | Verdict (larger) |
+|---|---|---|---|---|---|
+| List.get (sequential) | default (checks on) | 1 | 5.38 / 5.76 | 81.08 / 67.78 | **miss** |
+| List.get (sequential) | `define` false | 1 | 0.01 / 0.01 | -0.01 / -0.01 | ok |
+| List.get (sequential) | set on `globalThis` | 1 | 0.25 / 0.27 | 0.30 / 0.25 | ok |
+| List.get (data-driven index) | default (checks on) | 1 | 6.25 / 6.64 | 73.49 / 58.99 | **miss** |
+| List.get (data-driven index) | `define` false | 1 | -0.08 / -0.08 | 0.00 / 0.00 | ok |
+| List.get (data-driven index) | set on `globalThis` | 1 | 1.34 / 1.42 | 0.34 / 0.29 | **miss** |
+| List.set | default (checks on) | 1 | 9.40 / 9.96 | 150.78 / 123.53 | **miss** |
+| List.set | `define` false | 1 | 0.13 / 0.14 | 0.01 / 0.00 | ok |
+| List.set | set on `globalThis` | 1 | 1.74 / 1.82 | 0.52 / 0.44 | **miss** |
+| list[i] += 1 (direct form) | default (checks on) | 1.5 | 14.50 / 15.39 | 270.28 / 235.70 | **miss** |
+| list[i] += 1 (direct form) | `define` false | 1.5 | 0.17 / 0.18 | -0.00 / -0.00 | ok |
+| list[i] += 1 (direct form) | set on `globalThis` | 1.5 | 1.47 / 1.58 | 0.66 / 0.58 | **miss** |
+| list[i] += 1 (closure fallback, update) | default (checks on) | 3 | 15.81 / 16.76 | 361.97 / 316.62 | **miss** |
+| get at a polymorphic site (4 element types) | default (checks on) | 2 | 5.66 / 6.01 | 87.43 / 58.53 | **miss** |
+| get at a site seeing List and a fixed-size adopted list | default (checks on) | 2 | 5.41 / 5.84 | 99.37 / 83.64 | **miss** |
+| get at a site seeing List and a fixed-size adopted list | `define` false | 2 | -0.01 / -0.01 | -0.00 / -0.00 | ok |
+| get at a site seeing List and a fixed-size adopted list | set on `globalThis` | 2 | 0.20 / 0.21 | 0.46 / 0.39 | ok |
+| List.add | default (checks on) | 0.5 | 5.06 / 5.35 | 60.86 / 53.31 | **miss** |
+| lowered foreach over List (per element) | default (checks on) | 0.5 | 5.65 / 6.04 | 51.93 / 45.49 | **miss** |
+| lowered foreach over List (per element) | `define` false | 0.5 | -0.12 / -0.13 | -0.50 / -0.43 | ok |
+| lowered foreach over List (per element) | set on `globalThis` | 0.5 | -0.08 / -0.09 | -0.50 / -0.43 | ok |
+| lowered foreach, guard hoisted to a local const $c | default (checks on) | — | 0.96 / 1.04 | 0.00 / 0.00 | reported |
+| lowered foreach, guard hoisted to a local const $c | `define` false | — | -0.10 / -0.11 | -0.49 / -0.43 | reported |
+| lowered foreach, guard hoisted to a local const $c | set on `globalThis` | — | -0.09 / -0.09 | -0.50 / -0.43 | reported |
+| List [Symbol.iterator] (for..of, interop) | default (checks on) | — | 8.61 / 9.31 | 57.60 / 49.36 | reported |
+| Dictionary.get (number keys) | default (checks on) | 2 | 10.56 / 11.30 | 8.89 / 7.74 | **miss** |
+| Dictionary.set (number keys, overwrite) | default (checks on) | 2 | 4.40 / 4.72 | 5.98 / 5.20 | **miss** |
+| Dictionary.containsKey (string keys) | default (checks on) | 2 | 4.73 / 5.09 | 3.31 / 2.25 | **miss** |
+| Dictionary.add (string keys, fresh dictionary) | default (checks on) | 2 | 26.15 / 27.61 | 78.41 / 52.46 | **miss** |
+| HashSet.add (numbers, fresh set) | default (checks on) | 2 | 14.40 / 15.29 | 65.21 / 60.05 | **miss** |
+| HashSet.contains (numbers) | default (checks on) | 2 | 1.05 / 0.64 | 3.08 / 2.84 | **miss** |
+| HashSet.remove + add (numbers) | default (checks on) | 2 | 13.94 / 11.92 | 39.52 / 36.62 | **miss** |
+| Queue.enqueue + dequeue | default (checks on) | 1.5 | 15.36 / 16.32 | 67.49 / 58.86 | **miss** |
+| Stack.push + pop | default (checks on) | 1.5 | 7.14 / 7.66 | 118.91 / 103.42 | **miss** |
+| Dictionary.get (record keys, reported) | default (checks on) | — | 106.43 / 112.24 | 138.47 / 92.65 | reported |
+
+Sizes (FR-043, minified + gzipped, bun / esbuild), against NFR-008:
+
+| Entry | Budget | bun | esbuild | Verdict |
+|---|---|---|---|---|
+| `List` alone (full surface) | 2560 B | 3940 B | 3884 B | **miss** |
+| `Dictionary` alone (with the views) | 3072 B | 3868 B | 3805 B | **miss** |
+| `HashSet` alone | 1638 B | 3659 B | 3618 B | **miss** |
+| `Queue` alone | 1228 B | 2608 B | 2553 B | **miss** |
+| `Stack` alone | 1228 B | 2441 B | 2382 B | **miss** |
+| `isType + getRuntimeType + one class descriptor` (011b row) | 1792 B | 2445 B | 2419 B | **miss** (was 1758 / 1727 B: `getRuntimeType` now closes collection descriptors through `specializeCollection`, which brings `isAssignableFrom`) |
+
+The FR-013 exception classes each collection throws are most of the gap: the four or five exception classes a collection needs gzip to about 0.97 KB together, `defaultEquals` to about 0.5 KB.

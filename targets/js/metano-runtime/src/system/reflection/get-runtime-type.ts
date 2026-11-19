@@ -2,6 +2,7 @@ import { NullReferenceException } from "../exceptions/null-reference-exception.t
 import { hasPlainPrototype, ownRuntimeTypeOf } from "./constructor-descriptor.ts";
 import { isBoxed } from "./is-boxed.ts";
 import { getNumberType } from "./get-number-type.ts";
+import { specializeCollection } from "./specialize-collection.ts";
 import {
   BigIntegerType,
   BooleanType,
@@ -65,9 +66,29 @@ function getObjectType(value: object): RuntimeType {
     getDecimalType(value) ??
     getTaggedType(toStringTag(value)) ??
     (Array.isArray(value) ? ArrayType : undefined) ??
-    ownRuntimeTypeOf(value) ??
+    closedCollectionType(value, ownRuntimeTypeOf(value)) ??
     (hasPlainPrototype(value) ? ObjectType : getAnonymousType(value))
   );
+}
+
+/**
+ * A runtime collection's own descriptor, closed over the instance's
+ * `$typeArguments$<Class>` slot when it carries one (FR-008), so
+ * `GetType() == typeof(List<int>)` holds; the open literal (a wildcard) otherwise.
+ */
+function closedCollectionType(
+  value: object,
+  own: RuntimeType | undefined,
+): RuntimeType | undefined {
+  if (own?.kind !== "collection") {
+    return own;
+  }
+
+  const slot = (value as Record<string, ReadonlyArray<RuntimeType> | undefined>)[
+    `$typeArguments$${own.collection}`
+  ];
+
+  return slot === undefined ? own : specializeCollection(own, slot);
 }
 
 function getDecimalType(value: object): RuntimeType | undefined {

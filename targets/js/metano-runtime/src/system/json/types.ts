@@ -121,10 +121,42 @@ export type ArrayDescriptor = {
   readonly element: TypeDescriptor;
 };
 
-/** HashSet<T> — spread to array on serialize, reconstruct on deserialize */
+/**
+ * A runtime collection written as a JSON array (spec 011 FR-028, W4-5): `List<T>`
+ * and the list interfaces, `Queue<T>` (front to back), `Stack<T>` (top first),
+ * `HashSet<T>` and the set interfaces. The context writes `create`, which builds
+ * the class from the read elements in document order, so this module imports no
+ * collection class (contracts/runtime-collections.md § JSON collection kinds).
+ */
+export type SequenceCollectionDescriptor = {
+  readonly kind: "list" | "queue" | "stack" | "hashSet";
+  readonly element: TypeDescriptor;
+  readonly create: (items: unknown[]) => Iterable<unknown>;
+};
+
+/**
+ * A runtime dictionary written as a JSON object (`Dictionary<K, V>` and the
+ * dictionary interfaces): each property name is parsed into the `key` type as
+ * System.Text.Json parses it (#479); `create` receives the entries in document
+ * order (`Dictionary.assign`: the last value of a repeated key wins).
+ */
+export type KeyedCollectionDescriptor = {
+  readonly kind: "dictionary";
+  readonly key: TypeDescriptor;
+  readonly value: TypeDescriptor;
+  readonly create: (
+    entries: Array<readonly [unknown, unknown]>,
+  ) => Iterable<readonly [unknown, unknown]>;
+};
+
+/**
+ * HashSet<T> as the 2.x compiler writes it, without `create`: read through
+ * `new HashSet(items)` until the compiler's 011c flip writes `create` (W4-6).
+ */
 export type HashSetDescriptor = {
   readonly kind: "hashSet";
   readonly element: TypeDescriptor;
+  readonly create?: (items: unknown[]) => Iterable<unknown>;
 };
 
 /**
@@ -187,6 +219,8 @@ export type TypeDescriptor =
   | MapDescriptor
   | ArrayDescriptor
   | HashSetDescriptor
+  | SequenceCollectionDescriptor
+  | KeyedCollectionDescriptor
   | BrandedDescriptor
   | EnumDescriptor
   | NumericEnumDescriptor

@@ -9,6 +9,8 @@ export type {
   MapDescriptor,
   ArrayDescriptor,
   HashSetDescriptor,
+  KeyedCollectionDescriptor,
+  SequenceCollectionDescriptor,
   BrandedDescriptor,
   EnumDescriptor,
   NumericEnumDescriptor,

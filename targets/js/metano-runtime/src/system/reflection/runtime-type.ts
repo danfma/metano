@@ -100,9 +100,33 @@ export interface ArrayType extends RuntimeTypeBase<unknown[]> {
   readonly kind: "array";
 }
 
+/**
+ * An interface a collection class implements, by kind, with its type arguments as
+ * indices into the instance's `$typeArguments$<Class>` slot (`null`: a wildcard, as
+ * `Dictionary` tested as `IReadOnlyCollection<KeyValuePair<K, V>>`). Data, so a class's
+ * descriptor literal imports nothing (spec 011 D30).
+ */
+export interface CollectionInterfaceEntry {
+  readonly collection: CollectionKindName;
+  readonly arguments: ReadonlyArray<number> | null;
+}
+
 export interface CollectionType<T> extends RuntimeTypeBase<T> {
   readonly kind: "collection";
-  readonly collection:
+  readonly collection: CollectionKindName;
+  /** Class kinds: the collection interfaces the class implements (nominal interface tests). */
+  readonly interfaces?: ReadonlyArray<CollectionInterfaceEntry>;
+  /** Classes only. */
+  readonly ctor?: abstract new (
+    ...args: never[]
+  ) => T;
+  /** `UnknownType` is the wildcard. */
+  readonly typeArguments: ReadonlyArray<RuntimeType>;
+  readonly variance: ReadonlyArray<"invariant" | "covariant">;
+}
+
+/** The collection a {@link CollectionType} describes. */
+export type CollectionKindName =
     | "List"
     | "Dictionary"
     | "HashSet"
@@ -127,14 +151,6 @@ export interface CollectionType<T> extends RuntimeTypeBase<T> {
     | "IReadOnlyDictionary"
     | "ISet"
     | "IReadOnlySet";
-  /** Classes only. */
-  readonly ctor?: abstract new (
-    ...args: never[]
-  ) => T;
-  /** `UnknownType` is the wildcard. */
-  readonly typeArguments: ReadonlyArray<RuntimeType>;
-  readonly variance: ReadonlyArray<"invariant" | "covariant">;
-}
 
 export interface NullableType<T> extends RuntimeTypeBase<T | null> {
   readonly kind: "nullable";

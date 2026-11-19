@@ -85,7 +85,7 @@ Module-level functions returning `never`, each constructing the FR-013 class wit
 | Function | Throws | Message (`(Parameter …)` is appended by the exception class) | Used by |
 |---|---|---|---|
 | `throwModified(): never` | `InvalidOperationException` | `Collection was modified; enumeration operation may not execute.` | lowered `foreach` (generated), every iterator except `Stack`'s, `List.forEach` |
-| `throwStackModified(): never` | `InvalidOperationException` | `Collection was modified after the enumerator was instantiated.` | `Stack` iterator |
+| `throwEnumeratorModified(): never` | `InvalidOperationException` | `Collection was modified after the enumerator was instantiated.` | `Stack` iterator; 011h's sorted classes (same .NET text). Renamed from `throwStackModified` in R1 (W4-20); not emitted by the compiler |
 | `throwOOR(): never` | `ArgumentOutOfRangeException` (param `index`) | `Index was out of range. Must be non-negative and less than the size of the collection.` | `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`, `removeAt` |
 | `throwInsertOOR(): never` | `ArgumentOutOfRangeException` (`index`) | `Index must be within the bounds of the List.` | `List.insert` |
 | `throwIndexAtMostCount(): never` | `ArgumentOutOfRangeException` (`index`) | `Index was out of range. Must be non-negative and less than or equal to the size of the collection.` | `List.insertRange`, `indexOf(item, index)` |
@@ -452,7 +452,7 @@ export class Stack<T> implements IReadOnlyCollection<T> {
   toArray(): T[];                                              // detached copy, top first
   toJSON(): T[];                                               // top first
   toString(): string;
-  [Symbol.iterator](): Iterator<T>;                            // top first (C# semantics); throwStackModified
+  [Symbol.iterator](): Iterator<T>;                            // top first (C# semantics); throwEnumeratorModified
 }
 ```
 
