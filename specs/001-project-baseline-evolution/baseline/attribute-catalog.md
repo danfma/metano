@@ -74,14 +74,13 @@ project. Migrated from `old-spec/09-attribute-catalog.md` and **corrected agains
 | Attribute | Purpose | Code |
 | --- | --- | --- |
 | `[EmitRuntimeType]` | On a type, forces its runtime type descriptor (a class's lazy `$runtimeType` getter, an interface's or enum's exported `X$runtimeType` literal) as if a runtime question reached it; `[assembly: EmitRuntimeType]` does so for every public transpiled type. The descriptors it names (bases, interfaces) are emitted too, and an unused one is still shaken from a bundle. An `[EmitPackage]` library already emits every public type's descriptor (spec 011 D29), so the attribute matters for other projects and non-public types (spec 011 FR-053, stage 011b). | `Annotations/EmitRuntimeTypeAttribute.cs` |
+| `[assembly: DisableBoxing]` | Turns off the boxing of enum / `[InlineWrapper]` values at C# boxing conversions for the whole assembly: values stay raw where C# boxes them (no `box(...)`, no interop `unbox(...)`, type questions on an `object` test the raw value), and a type question on an `object` / `ValueType` / `Enum` / interface value that may hold such a value reports `MS0058` (spec 011 FR-050, OD-23, stage 011b). | `Annotations/DisableBoxingAttribute.cs` |
 
 ### Planned attributes (specified, not yet implemented)
 
 Nothing in `Metano.Annotations` defines these yet; they are specified by [spec 011](../../011-runtime-collections-and-types/spec.md).
 
-| Attribute | Target | Purpose | Spec |
-| --- | --- | --- | --- |
-| `[assembly: DisableBoxing]` | Assembly | Disables boxing of enum / `[InlineWrapper]` values at C# boxing conversions (011 FR-050); with it, type questions on such values in `object` report `MS0058`. | 011 FR-050, OD-23 |
+None at present: `[assembly: DisableBoxing]` is implemented (above).
 
 ### Support enums (not attributes)
 
