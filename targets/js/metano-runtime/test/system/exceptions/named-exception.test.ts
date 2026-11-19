@@ -10,6 +10,7 @@ describe("namedException", () => {
     expect(exception.message).toBe("late");
     expect(exception.name).toBe("IOException");
     expect(exception.innerException).toBe(inner);
+
     expect(exception.toString()).toBe(
       "System.IO.IOException: late\n ---> System.FormatException: i\n   --- End of inner exception stack trace ---",
     );

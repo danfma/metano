@@ -31,6 +31,7 @@ describe("castTo", () => {
     const shape: Shape = new Square();
 
     expect(() => castTo<Circle>(shape, Circle)).toThrow(InvalidCastException);
+
     expect(() => castTo<Circle>(shape, Circle)).toThrow(
       "Unable to cast object of type 'Square' to type 'Circle'.",
     );
@@ -62,6 +63,7 @@ describe("castTo with a runtime type descriptor", () => {
 
   test("names a primitive by its descriptor and the target by its full name", () => {
     expect(() => castTo<number>("x", Int32Type)).toThrow(InvalidCastException);
+
     expect(() => castTo<number>("x", Int32Type)).toThrow(
       "Unable to cast object of type 'System.String' to type 'System.Int32'.",
     );

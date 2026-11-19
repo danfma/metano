@@ -180,6 +180,7 @@ describe("equals", () => {
           public amount: number,
           public currency: string,
         ) {}
+
         equals(other: unknown): boolean {
           return (
             other instanceof Money &&
@@ -243,6 +244,7 @@ describe("hashCode", () => {
   test("delegates to custom hashCode method", () => {
     class Tagged {
       constructor(public tag: string) {}
+
       hashCode(): number {
         return 12345;
       }

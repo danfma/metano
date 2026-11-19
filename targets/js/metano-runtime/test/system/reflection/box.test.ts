@@ -35,6 +35,7 @@ const Color = enumType("Color", [0, 1], ["Red", "Green"], false);
 const Perms = enumType("Perms", [1, 2, 4], ["Read", "Write", "Execute"], true);
 const PermsWithNone = enumType("Perms", [0, 1, 2], ["None", "Read", "Write"], true);
 const Wide = enumType("Wide", [1, 2, 3, 4], ["A", "B", "AB", "C"], true);
+
 const UserId: PrimitiveType<string> = {
   kind: "primitive",
   name: "UserId",
@@ -83,7 +84,7 @@ describe("Boxed.toString", () => {
     } as unknown as EnumType<bigint>;
 
     expect(String(box((1n << 40n) | 1n, Big))).toBe("Low, High");
-    expect(String(box((1n << 41n) | 1n, Big))).toBe((( 1n << 41n) | 1n).toString());
+    expect(String(box((1n << 41n) | 1n, Big))).toBe(((1n << 41n) | 1n).toString());
   });
 
   test("zero prints the zero member, or 0 when there is none", () => {
@@ -127,6 +128,7 @@ describe("Boxed value access", () => {
 
   test("boxNullable keeps null and boxes the rest, evaluating the operand once", () => {
     let reads = 0;
+
     const read = (): number | null => {
       reads++;
 
@@ -164,15 +166,18 @@ describe("type tests over a box", () => {
     expect(isType(1.5, Color)).toBe(false);
   });
 
-  test("asType answers the raw value for the boxed type, the box for object, null otherwise", () => {
-    const boxed = box(1, Color);
+  test(
+    "asType answers the raw value for the boxed type, the box for object, null otherwise",
+    () => {
+      const boxed = box(1, Color);
 
-    expect(asType(boxed, Color)).toBe(1);
-    expect(asType(boxed, ObjectType)).toBe(boxed);
-    expect(asType(boxed, Perms)).toBeNull();
-    expect(asType(1, Color)).toBe(1);
-    expect(asType(null, Color)).toBeNull();
-  });
+      expect(asType(boxed, Color)).toBe(1);
+      expect(asType(boxed, ObjectType)).toBe(boxed);
+      expect(asType(boxed, Perms)).toBeNull();
+      expect(asType(1, Color)).toBe(1);
+      expect(asType(null, Color)).toBeNull();
+    },
+  );
 
   test("castTo unwraps for the boxed type", () => {
     const boxed = box(1, Color);
@@ -192,9 +197,11 @@ describe("type tests over a box", () => {
 
     expect(() => castTo(box(1, Color), Int64Type)).toThrow(InvalidCastException);
     expect(() => castTo(box(1, Color), UInt32Type)).toThrow(InvalidCastException);
+
     expect(() => castTo(box(1, Color), ByteFlag)).toThrow(
       "Unable to cast object of type 'Geo.Color' to type 'Geo.ByteFlag'.",
     );
+
     expect(() => castTo(box(1, Color), nullableType(Int32Type))).toThrow(InvalidCastException);
     expect(() => castTo(box("u-1", UserId), Int32Type)).toThrow(InvalidCastException);
   });

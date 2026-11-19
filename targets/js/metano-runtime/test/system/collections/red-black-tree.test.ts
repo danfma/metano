@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   predecessor,
   RedBlackTree,
   type RedBlackNode,
   successor,
 } from "#/system/collections/red-black-tree.ts";
+
 import { createSeededRandom, modelSeeds } from "./model/seeded-random.ts";
 
 const byNumber = (x: number, y: number): number => x - y;

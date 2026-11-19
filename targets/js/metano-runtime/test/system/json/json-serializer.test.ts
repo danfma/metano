@@ -482,9 +482,11 @@ describe("JsonSerializer — temporal", () => {
   // Simulate Temporal.PlainDate-like object (no real dependency needed)
   class FakeDate {
     constructor(readonly isoString: string) {}
+
     toString() {
       return this.isoString;
     }
+
     static from(iso: string) {
       return new FakeDate(iso);
     }
@@ -525,6 +527,7 @@ describe("JsonSerializer — decimal", () => {
   // Simulate Decimal-like object (no hard dependency on decimal.js)
   class FakeDecimal {
     constructor(readonly value: number) {}
+
     toNumber() {
       return this.value;
     }
@@ -622,9 +625,11 @@ describe("JsonSerializer — inheritance", () => {
 describe("JsonSerializer — custom converters", () => {
   class FakeDecimal {
     constructor(readonly value: string) {}
+
     toNumber() {
       return parseFloat(this.value);
     }
+
     toString() {
       return this.value;
     }
@@ -677,11 +682,13 @@ describe("JsonSerializer — custom converters", () => {
 describe("SerializerContext", () => {
   class TestContext extends SerializerContext {
     private _point?: TypeSpec<Point>;
+
     get point(): TypeSpec<Point> {
       return (this._point ??= this.createSpec(pointSpec));
     }
 
     private _person?: TypeSpec<Person>;
+
     get person(): TypeSpec<Person> {
       return (this._person ??= this.createSpec(personSpec));
     }

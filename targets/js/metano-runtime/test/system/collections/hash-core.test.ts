@@ -32,10 +32,12 @@ describe("HashCore contract (the API 011h builds on)", () => {
     expect(core.set(new Key(1), "2")).toBe(true);
     expect(core.set("a", "3")).toBe(false);
     expect(core.set(new Key(1), "4")).toBe(false);
+
     expect([...core]).toEqual([
       ["a", "3"],
       [expect.any(Key), "4"],
     ]);
+
     expect(core.size).toBe(2);
   });
 
@@ -138,6 +140,7 @@ describe("HashCore contract (the API 011h builds on)", () => {
       equals: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
       getHashCode: (value: string) => value.toLowerCase().length,
     };
+
     const core = new HashCore<string, number>(ignoreCase);
 
     expect(core.set("A", 1)).toBe(true);

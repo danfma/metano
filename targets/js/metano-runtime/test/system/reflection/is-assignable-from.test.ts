@@ -38,7 +38,12 @@ describe("isAssignableFrom", () => {
   test("compares specializations by their type arguments", () => {
     const open = Shape.$runtimeType;
 
-    expect(isAssignableFrom(specialize(open, [Int32Type]), specialize(open, [Int32Type]))).toBe(true);
-    expect(isAssignableFrom(specialize(open, [Int32Type]), specialize(open, [DoubleType]))).toBe(false);
+    expect(isAssignableFrom(specialize(open, [Int32Type]), specialize(open, [Int32Type]))).toBe(
+      true,
+    );
+
+    expect(isAssignableFrom(specialize(open, [Int32Type]), specialize(open, [DoubleType]))).toBe(
+      false,
+    );
   });
 });

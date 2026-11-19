@@ -3,6 +3,7 @@ import {
   expect,
   test,
 } from "bun:test";
+
 import { Stack } from "#/system/collections/stack.ts";
 import { InvalidOperationException } from "#/system/exceptions/invalid-operation-exception.ts";
 import { Int32Type } from "#/system/reflection/primitive-types.ts";
@@ -42,6 +43,7 @@ describe("Stack", () => {
 
   test("its enumerator uses .NET's Stack message", () => {
     const stack = Stack.from([1, 2]);
+
     const error = thrown(() => {
       for (const _ of stack) stack.push(3);
     });

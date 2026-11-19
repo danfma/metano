@@ -114,7 +114,11 @@ test(
 test(
   "List alone pulls no system/reflection module, getRuntimeType no collections module (D30)",
   async () => {
-    const list = await bundledModules(directory, readFileSync(join(import.meta.dir, "entries/list-only.js"), "utf8"));
+    const list = await bundledModules(
+      directory,
+      readFileSync(join(import.meta.dir, "entries/list-only.js"), "utf8"),
+    );
+
     const reflection = await bundledModules(
       directory,
       readFileSync(join(import.meta.dir, "entries/runtime-type-of-class.js"), "utf8"),

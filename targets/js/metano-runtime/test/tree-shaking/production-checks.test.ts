@@ -10,13 +10,15 @@
  * - from `dist/` with nothing defined, keeps both checks.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import replace from "@rollup/plugin-replace";
 import terser from "@rollup/plugin-terser";
 import { rollup } from "rollup";
 import { build as viteBuild } from "vite";
+
 import {
   type BundleDirectory,
   bundle,
@@ -54,8 +56,6 @@ async function runBundle(code: string): Promise<unknown> {
 
 type Bundler = "bun" | "esbuild" | "rollup" | "vite";
 
-let entryCounter = 0;
-
 /** The entry bundled from `directory` by `bundler`, minified, with `define` applied. */
 async function bundleEntry(
   bundler: Bundler,
@@ -66,11 +66,17 @@ async function bundleEntry(
     return bundle(bundler, directory, ENTRY, define);
   }
 
-  const entry = join(directory.root, `__checks_entry_${entryCounter++}.js`);
+  const entry = join(directory.root, `__checks_entry_${randomUUID()}.js`);
 
   writeFileSync(entry, ENTRY);
 
-  return bundler === "rollup" ? bundleWithRollup(entry, define) : bundleWithVite(directory, entry, define);
+  try {
+    return await (bundler === "rollup"
+      ? bundleWithRollup(entry, define)
+      : bundleWithVite(directory, entry, define));
+  } finally {
+    rmSync(entry, { force: true });
+  }
 }
 
 async function bundleWithRollup(
@@ -110,12 +116,18 @@ async function bundleWithVite(
       rollupOptions: { external: [...THIRD_PARTY] },
     },
   });
+
   const output = Array.isArray(result) ? result[0] : result;
 
   return (output as { output: { code?: string }[] }).output[0]?.code ?? "";
 }
 
-describe.each(["bun", "esbuild", "rollup", "vite"] as const)("FR-058 production checks (%s)", (bundler) => {
+describe.each([
+  "bun",
+  "esbuild",
+  "rollup",
+  "vite",
+] as const)("FR-058 production checks (%s)", (bundler) => {
   test(
     "dist-unchecked with the define: no _version read or store, get does not check its bounds",
     async () => {

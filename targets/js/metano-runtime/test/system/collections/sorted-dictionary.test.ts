@@ -30,6 +30,7 @@ describe("SortedDictionary", () => {
       [2, "b"],
       [3, "c"],
     ]);
+
     expect([...dictionary.keys]).toEqual([1, 2, 3]);
     expect([...dictionary.values]).toEqual(["a", "b", "c"]);
     expect(dictionary.keys.count).toBe(3);
@@ -57,7 +58,11 @@ describe("SortedDictionary", () => {
     expect(dictionary.update(1, (v) => v + 1)).toBe(12);
     expect(dictionary.updateReturningOld(1, (v) => v + 1)).toBe(12);
     expect(dictionary.get(1)).toBe(13);
-    expect(() => dictionary.update(9, (v) => v)).toThrow("The given key '9' was not present in the dictionary.");
+
+    expect(() => dictionary.update(9, (v) => v)).toThrow(
+      "The given key '9' was not present in the dictionary.",
+    );
+
     expect(dictionary.tryGetValue(2, 0)).toEqual([true, 20]);
     expect(dictionary.tryGetValue(9, 0)).toEqual([false, 0]);
     expect(dictionary.getValueOrDefault(9, -1)).toBe(-1);
@@ -69,7 +74,10 @@ describe("SortedDictionary", () => {
   test("add of a present key throws with the pair, as .NET", () => {
     const dictionary = SortedDictionary.of([["a", "x"]]);
 
-    expect(() => dictionary.add("a", "y")).toThrow("An item with the same key has already been added. Key: [a, y]");
+    expect(() => dictionary.add("a", "y")).toThrow(
+      "An item with the same key has already been added. Key: [a, y]",
+    );
+
     expect(() =>
       SortedDictionary.of([
         [1, 1],
@@ -135,6 +143,7 @@ describe("SortedDictionary", () => {
     expect(String(dictionary.keys)).toBe(
       "System.Collections.Generic.SortedDictionary`2+KeyCollection[System.Int32,System.String]",
     );
+
     expect(String(dictionary.values)).toBe(
       "System.Collections.Generic.SortedDictionary`2+ValueCollection[System.Int32,System.String]",
     );
@@ -151,7 +160,10 @@ describe("SortedDictionary", () => {
   });
 
   test("the comparer orders and identifies keys", () => {
-    const ignoreCase = { compare: (x: string, y: string): number => x.toLowerCase().localeCompare(y.toLowerCase()) };
+    const ignoreCase = {
+      compare: (x: string, y: string): number => x.toLowerCase().localeCompare(y.toLowerCase()),
+    };
+
     const dictionary = SortedDictionary.of([["B", 1]], ignoreCase);
 
     dictionary.set("a", 2);
@@ -161,11 +173,13 @@ describe("SortedDictionary", () => {
       ["a", 2],
       ["B", 3],
     ]);
+
     expect(dictionary.comparer).toBe(ignoreCase);
   });
 
   test("copyTo, toJSON and invisible storage", () => {
     const dictionary = sample();
+
     const target: (readonly [number, number])[] = [
       [0, 0],
       [0, 0],
@@ -177,6 +191,7 @@ describe("SortedDictionary", () => {
       [1, 10],
       [2, 20],
     ]);
+
     expect(() => dictionary.copyTo([[0, 0]])).toThrow("Destination array is not long enough");
     expect(JSON.stringify(dictionary)).toBe('{"1":10,"2":20}');
     expect(Object.keys(dictionary)).toEqual([]);

@@ -105,19 +105,22 @@ describe("SortedSet", () => {
     }
   });
 
-  test("remove on an empty set, intersectWith(itself) and an empty view's clear change nothing (part-1 review F1)", () => {
-    const empty = new SortedSet<number>();
+  test(
+    "remove on an empty set, intersectWith(itself) and an empty view's clear change nothing (part-1 review F1)",
+    () => {
+      const empty = new SortedSet<number>();
 
-    expect(() => enumerateWhile(empty, () => empty.remove(1))).not.toThrow();
+      expect(() => enumerateWhile(empty, () => empty.remove(1))).not.toThrow();
 
-    const set = new SortedSet([1, 2]);
+      const set = new SortedSet([1, 2]);
 
-    expect(() => enumerateWhile(set, () => set.intersectWith(set))).not.toThrow();
+      expect(() => enumerateWhile(set, () => set.intersectWith(set))).not.toThrow();
 
-    const view = set.getViewBetween(5, 9);
+      const view = set.getViewBetween(5, 9);
 
-    expect(() => enumerateWhile(set, () => view.clear())).not.toThrow();
-  });
+      expect(() => enumerateWhile(set, () => view.clear())).not.toThrow();
+    },
+  );
 
   test("intersectWith on an empty set changes nothing", () => {
     const set = new SortedSet<number>();
@@ -176,6 +179,7 @@ describe("SortedSet", () => {
     const set = new SortedSet([1, 2, 3]);
 
     expect([...set.reverse()]).toEqual([3, 2, 1]);
+
     expect(() => {
       for (const _ of set.reverse()) {
         set.add(5);
@@ -190,10 +194,14 @@ describe("SortedSet", () => {
     set.copyTo(target, 1);
 
     expect(target).toEqual([0, 1, 2, 3]);
+
     expect(() => set.copyTo([0, 0])).toThrow(
       "Destination array is not long enough to copy all the items in the collection. Check array index and length.",
     );
-    expect(() => set.copyTo([0, 0, 0, 0, 0], -1)).toThrow("index ('-1') must be a non-negative value. (Parameter 'index')");
+
+    expect(() => set.copyTo([0, 0, 0, 0, 0], -1)).toThrow(
+      "index ('-1') must be a non-negative value. (Parameter 'index')",
+    );
   });
 
   test("storage is invisible to keys, spread and JSON", () => {
@@ -255,6 +263,7 @@ describe("SortedSet views", () => {
     expect(view.contains(5)).toBe(false);
     expect(view.remove(5)).toBe(false);
     expect(set.count).toBe(6);
+
     expect(() => view.add(9)).toThrow(
       "Specified argument was out of the range of valid values. (Parameter 'item')",
     );
@@ -274,7 +283,10 @@ describe("SortedSet views", () => {
     const set = new SortedSet([1, 2, 3, 4, 5, 6]);
     const view = set.getViewBetween(2, 5);
 
-    expect(() => set.getViewBetween(3, 1)).toThrow("Must be less than or equal to upperValue. (Parameter 'lowerValue')");
+    expect(() => set.getViewBetween(3, 1)).toThrow(
+      "Must be less than or equal to upperValue. (Parameter 'lowerValue')",
+    );
+
     expect(() => view.getViewBetween(3, 9)).toThrow("(Parameter 'upperValue')");
     expect(() => view.getViewBetween(1, 4)).toThrow("(Parameter 'lowerValue')");
     expect([...view.getViewBetween(3, 4)]).toEqual([3, 4]);
@@ -312,7 +324,10 @@ for (const seed of modelSeeds()) {
 
         expect([...set]).toEqual(sorted);
         expect(set.count).toBe(sorted.length);
-        expect([...set.getViewBetween(low, high)]).toEqual(sorted.filter((v) => v >= low && v <= high));
+
+        expect([...set.getViewBetween(low, high)]).toEqual(
+          sorted.filter((v) => v >= low && v <= high),
+        );
       }
     }
   });

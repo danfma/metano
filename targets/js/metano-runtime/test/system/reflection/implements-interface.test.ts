@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { implementsInterface } from "#/system/reflection/implements-interface.ts";
-import { Circle, FlatDto$rt, IDrawable$rt, IFlat$rt, IShape$rt, Stranger, Undescribed } from "./fixtures.ts";
+
+import {
+  Circle,
+  FlatDto$rt,
+  IDrawable$rt,
+  IFlat$rt,
+  IShape$rt,
+  Stranger,
+  Undescribed,
+} from "./fixtures.ts";
 
 describe("implementsInterface", () => {
   test("matches an interface listed by the class descriptor", () => {
@@ -23,7 +32,10 @@ describe("implementsInterface", () => {
   test("matches a plain object through plainImplementers", () => {
     expect(implementsInterface({ flat: true }, IFlat$rt)).toBe(true);
     expect(implementsInterface({ other: 1 }, IFlat$rt)).toBe(false);
-    expect(implementsInterface(Object.create(null, { flat: { value: true } }), IFlat$rt)).toBe(true);
+
+    expect(implementsInterface(Object.create(null, { flat: { value: true } }), IFlat$rt)).toBe(
+      true,
+    );
   });
 
   test("never matches a primitive or null", () => {

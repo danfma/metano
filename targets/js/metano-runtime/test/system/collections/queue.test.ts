@@ -3,6 +3,7 @@ import {
   expect,
   test,
 } from "bun:test";
+
 import { Queue } from "#/system/collections/queue.ts";
 import { InvalidOperationException } from "#/system/exceptions/invalid-operation-exception.ts";
 import { Int32Type } from "#/system/reflection/primitive-types.ts";
@@ -78,6 +79,7 @@ describe("Queue", () => {
     expect(queue.toString()).toBe("System.Collections.Generic.Queue`1[System.Int32]");
     queue.clear();
     expect(queue.count).toBe(0);
+
     expect(thrown(() => Queue.from(null as never)).message).toBe(
       "Value cannot be null. (Parameter 'collection')",
     );

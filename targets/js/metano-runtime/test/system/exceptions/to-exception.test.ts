@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   Exception,
   InvalidOperationException,
@@ -15,17 +16,20 @@ describe("toException", () => {
     expect(toException(exception)).toBe(exception);
   });
 
-  test("converts a TypeError to a NullReferenceException that keeps message, stack and cause", () => {
-    const original = new TypeError("Cannot read properties of null");
+  test(
+    "converts a TypeError to a NullReferenceException that keeps message, stack and cause",
+    () => {
+      const original = new TypeError("Cannot read properties of null");
 
-    const converted = toException(original);
+      const converted = toException(original);
 
-    expect(converted).toBeInstanceOf(NullReferenceException);
-    expect(converted.message).toBe(original.message);
-    expect(converted.stack).toBe(original.stack);
-    expect(converted.innerException).toBe(original);
-    expect(converted.cause).toBe(original);
-  });
+      expect(converted).toBeInstanceOf(NullReferenceException);
+      expect(converted.message).toBe(original.message);
+      expect(converted.stack).toBe(original.stack);
+      expect(converted.innerException).toBe(original);
+      expect(converted.cause).toBe(original);
+    },
+  );
 
   test("converts a real null dereference", () => {
     const value = null as unknown as { name: string };

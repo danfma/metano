@@ -1,9 +1,6 @@
-import {
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
+
 import {
   createComparer,
   defaultCompare,
@@ -12,11 +9,16 @@ import {
   elementEquals,
   elementHashCode,
 } from "#/system/collections/default-comparer.ts";
+
 import { ArgumentException } from "#/system/exceptions/argument-exception.ts";
 
 describe("elementEquals / elementHashCode", () => {
   test("records by value, objects and arrays by reference, NaN equals NaN", () => {
-    const record = (x: number) => ({ x, equals: (o: { x: number }) => o.x === x, hashCode: () => x });
+    const record = (x: number) => ({
+      x,
+      equals: (o: { x: number }) => o.x === x,
+      hashCode: () => x,
+    });
 
     expect(elementEquals(record(1), record(1))).toBe(true);
     expect(elementEquals({}, {})).toBe(false);

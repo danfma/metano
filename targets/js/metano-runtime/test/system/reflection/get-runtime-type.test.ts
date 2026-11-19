@@ -3,6 +3,7 @@ import { namedException } from "#/system/exceptions/named-exception.ts";
 import { Exception } from "#/system/exceptions/exception.ts";
 import { NullReferenceException } from "#/system/exceptions/null-reference-exception.ts";
 import { getRuntimeType } from "#/system/reflection/get-runtime-type.ts";
+
 import {
   BigIntegerType,
   BooleanType,
@@ -13,6 +14,7 @@ import {
   StringType,
   UInt64Type,
 } from "#/system/reflection/primitive-types.ts";
+
 import {
   DateOnlyType,
   DateTimeOffsetType,
@@ -20,6 +22,7 @@ import {
   TimeOnlyType,
   TimeSpanType,
 } from "#/system/reflection/temporal-types.ts";
+
 import { ArrayType, DelegateType, ObjectType } from "#/system/reflection/well-known-types.ts";
 import { Temporal } from "@js-temporal/polyfill";
 import Decimal from "decimal.js";
@@ -28,6 +31,7 @@ import { Circle, Stranger, Undescribed } from "./fixtures.ts";
 describe("getRuntimeType", () => {
   test("throws NullReferenceException for null and undefined", () => {
     expect(() => getRuntimeType(null)).toThrow(NullReferenceException);
+
     expect(() => getRuntimeType(undefined)).toThrow(
       "Object reference not set to an instance of an object.",
     );
@@ -50,9 +54,11 @@ describe("getRuntimeType", () => {
   test("maps decimal.js and Temporal values by tag", () => {
     expect(getRuntimeType(new Decimal(1))).toBe(DecimalType);
     expect(getRuntimeType(Temporal.PlainDateTime.from("2020-01-01T00:00:00"))).toBe(DateTimeType);
+
     expect(getRuntimeType(Temporal.ZonedDateTime.from("2020-01-01T00:00:00+00:00[UTC]"))).toBe(
       DateTimeOffsetType,
     );
+
     expect(getRuntimeType(Temporal.PlainDate.from("2020-01-01"))).toBe(DateOnlyType);
     expect(getRuntimeType(Temporal.PlainTime.from("10:00:00"))).toBe(TimeOnlyType);
     expect(getRuntimeType(Temporal.Duration.from({ hours: 1 }))).toBe(TimeSpanType);
@@ -81,7 +87,14 @@ describe("getRuntimeType", () => {
     const second = getRuntimeType(new Stranger());
 
     expect(first).toBe(second);
-    expect(first).toMatchObject({ kind: "class", name: "Stranger", fullName: "Stranger", namespace: "" });
+
+    expect(first).toMatchObject({
+      kind: "class",
+      name: "Stranger",
+      fullName: "Stranger",
+      namespace: "",
+    });
+
     expect(first.test(new Stranger())).toBe(true);
     expect(first.test({})).toBe(false);
   });

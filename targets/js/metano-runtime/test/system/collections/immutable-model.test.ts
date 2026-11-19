@@ -110,7 +110,13 @@ describe("immutable classes against the plain-copy model (W4-11)", () => {
     const s2 = s1.add(2);
     const s3 = s1.add(3);
 
-    expect([s1.contains(2), s1.contains(3), s2.contains(3), s3.contains(2)]).toEqual([false, false, false, false]);
+    expect([s1.contains(2), s1.contains(3), s2.contains(3), s3.contains(2)]).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+
     expect([...s3]).toEqual([1, 3]);
   });
 });

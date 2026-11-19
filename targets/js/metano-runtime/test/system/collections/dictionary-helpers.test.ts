@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { ArgumentException, ArgumentNullException } from "#/system/exceptions/index.ts";
-import { addEntry, getValueOrDefault, tryGetValue } from "#/system/collections/dictionary-helpers.ts";
+
+import {
+  addEntry,
+  getValueOrDefault,
+  tryGetValue,
+} from "#/system/collections/dictionary-helpers.ts";
 
 describe("getValueOrDefault", () => {
   test("returns the stored value when the key is present", () => {
@@ -60,9 +65,11 @@ describe("addEntry", () => {
     const map = new Map([[1, "a"]]);
 
     expect(() => addEntry(map, 1, "b")).toThrow(ArgumentException);
+
     expect(() => addEntry(map, 1, "b")).toThrow(
       "An item with the same key has already been added. Key: 1",
     );
+
     expect(map.get(1)).toBe("a");
   });
 

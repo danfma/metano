@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   ArgumentNullException,
   Exception,
@@ -12,6 +13,7 @@ import {
   TaskCanceledException,
   TypeInitializationException,
 } from "#/system/exceptions";
+
 import type { ClassType } from "#/system/reflection";
 
 /** The chain of `fullName`s from a descriptor up through its `base` thunks. */
@@ -58,12 +60,14 @@ describe("$runtimeType of the runtime exceptions", () => {
       "System.SystemException",
       "System.Exception",
     ]);
+
     expect(ancestry(TaskCanceledException.$runtimeType)).toEqual([
       "System.Threading.Tasks.TaskCanceledException",
       "System.OperationCanceledException",
       "System.SystemException",
       "System.Exception",
     ]);
+
     expect(ancestry(JsonException.$runtimeType)).toEqual([
       "System.Text.Json.JsonException",
       "System.Exception",
@@ -72,6 +76,7 @@ describe("$runtimeType of the runtime exceptions", () => {
 
   test("names each class in its .NET namespace", () => {
     expect(KeyNotFoundException.$runtimeType.namespace).toBe("System.Collections.Generic");
+
     expect(SwitchExpressionException.$runtimeType.fullName).toBe(
       "System.Runtime.CompilerServices.SwitchExpressionException",
     );
@@ -89,9 +94,11 @@ describe("$runtimeType of the runtime exceptions", () => {
     const created = InvalidOperationException.$runtimeType.create?.();
 
     expect(created).toBeInstanceOf(InvalidOperationException);
+
     expect(created?.message).toBe(
       "Operation is not valid due to the current state of the object.",
     );
+
     expect(ObjectDisposedException.$runtimeType.create).toBeUndefined();
     expect(TypeInitializationException.$runtimeType.create).toBeUndefined();
   });

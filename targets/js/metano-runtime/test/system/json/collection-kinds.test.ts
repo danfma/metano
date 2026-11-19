@@ -12,18 +12,23 @@ const int32 = { kind: "primitive", numberType: "System.Int32" } as const;
 const listSpec: ValueSpec<List<number>> = {
   descriptor: { kind: "list", element: int32, create: (items) => List.of(items) },
 };
+
 const queueSpec: ValueSpec<Queue<number>> = {
   descriptor: { kind: "queue", element: int32, create: (items) => Queue.from(items) },
 };
+
 const stackSpec: ValueSpec<Stack<number>> = {
   descriptor: { kind: "stack", element: int32, create: (items) => Stack.from(items) },
 };
+
 const setSpec: ValueSpec<HashSet<number>> = {
   descriptor: { kind: "hashSet", element: int32, create: (items) => HashSet.from(items) },
 };
+
 const legacySetSpec: ValueSpec<HashSet<number>> = {
   descriptor: { kind: "hashSet", element: int32 },
 };
+
 const dictionarySpec: ValueSpec<Dictionary<number, string>> = {
   descriptor: {
     kind: "dictionary",
@@ -69,6 +74,7 @@ describe("JSON collection kinds", () => {
     expect(read).toBeInstanceOf(Dictionary);
     expect(read?.count).toBe(1);
     expect(read?.get(1)).toBe("b");
+
     expect(JsonSerializer.serialize(Dictionary.of([[2, "x"]]), dictionarySpec)).toEqual({
       "2": "x",
     });
@@ -76,9 +82,11 @@ describe("JSON collection kinds", () => {
 
   test("null reads as null; a wrong JSON kind throws", () => {
     expect(JsonSerializer.deserialize(null, listSpec)).toBeNull();
+
     expect(() => JsonSerializer.deserialize({}, listSpec)).toThrow(
       "Expected array for deserialization, got object",
     );
+
     expect(() => JsonSerializer.deserialize([], dictionarySpec)).toThrow(
       "Expected object for deserialization, got array",
     );

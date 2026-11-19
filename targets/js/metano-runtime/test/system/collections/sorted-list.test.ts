@@ -4,7 +4,10 @@ import { createSeededRandom, modelSeeds } from "./model/seeded-random.ts";
 
 // Messages and behaviours read from .NET 10 (2026-11-19).
 const MODIFIED = "Collection was modified after the enumerator was instantiated.";
-const INDEX = "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')";
+
+const INDEX =
+  "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')";
+
 const NESTED =
   "This operation is not supported on SortedList nested types because they require modifying the original SortedList.";
 
@@ -33,6 +36,7 @@ describe("SortedList", () => {
       [2, "b"],
       [3, "c"],
     ]);
+
     expect(list.getKeyAtIndex(0)).toBe(1);
     expect(list.getValueAtIndex(2)).toBe("c");
     expect(list.keys.get(1)).toBe(2);
@@ -71,7 +75,11 @@ describe("SortedList", () => {
 
     expect([...list.keys]).toEqual([0, 1, 2]);
     expect(list.update(1, (v) => v + 1)).toBe(12);
-    expect(() => list.add(1, 5)).toThrow("An item with the same key has already been added. Key: 1 (Parameter 'key')");
+
+    expect(() => list.add(1, 5)).toThrow(
+      "An item with the same key has already been added. Key: 1 (Parameter 'key')",
+    );
+
     expect(list.remove(0)).toBe(true);
     expect(list.remove(9)).toBe(false);
     expect(list.tryGetValue(2, 0)).toEqual([true, 20]);
@@ -80,7 +88,9 @@ describe("SortedList", () => {
   });
 
   test("the copy constructor rejects keys equal by the comparer", () => {
-    const ignoreCase = { compare: (x: string, y: string): number => x.toLowerCase().localeCompare(y.toLowerCase()) };
+    const ignoreCase = {
+      compare: (x: string, y: string): number => x.toLowerCase().localeCompare(y.toLowerCase()),
+    };
 
     expect(() =>
       SortedList.from(
@@ -91,18 +101,27 @@ describe("SortedList", () => {
         ignoreCase,
       ),
     ).toThrow(/^An item with the same key has already been added\. Key: A$/);
+
     expect(() => SortedList.from(null)).toThrow("(Parameter 'dictionary')");
   });
 
   test("withCapacity validates the capacity, as .NET", () => {
     expect(SortedList.withCapacity<number, number>(5).count).toBe(0);
-    expect(() => SortedList.withCapacity(-1)).toThrow("capacity ('-1') must be a non-negative value. (Parameter 'capacity')");
+
+    expect(() => SortedList.withCapacity(-1)).toThrow(
+      "capacity ('-1') must be a non-negative value. (Parameter 'capacity')",
+    );
   });
 
   test("null keys throw ArgumentNullException (key)", () => {
     const list = new SortedList<string | null, number>();
 
-    for (const action of [() => list.add(null, 1), () => list.indexOfKey(null), () => list.get(null), () => list.set(null, 1)]) {
+    for (const action of [
+      () => list.add(null, 1),
+      () => list.indexOfKey(null),
+      () => list.get(null),
+      () => list.set(null, 1),
+    ]) {
       expect(action).toThrow("Value cannot be null. (Parameter 'key')");
     }
   });
@@ -144,7 +163,11 @@ describe("SortedList", () => {
     expect(keys.indexOf(2)).toBe(2);
     expect(list.values.contains(20)).toBe(true);
     expect(keys.fromEnd(1)).toBe(2);
-    expect(() => keys.set(0, 3)).toThrow("Mutating a key collection derived from a dictionary is not allowed.");
+
+    expect(() => keys.set(0, 3)).toThrow(
+      "Mutating a key collection derived from a dictionary is not allowed.",
+    );
+
     expect(() => list.values.set(0, 3)).toThrow(NESTED);
 
     for (const view of [list.keys, list.values]) {
@@ -153,6 +176,7 @@ describe("SortedList", () => {
       expect(() => view.remove(1)).toThrow(NESTED);
       expect(() => view.removeAt(0)).toThrow(NESTED);
       expect(() => view.clear()).toThrow(NESTED);
+
       expect(() => view.copyTo([0])).toThrow(
         "Destination array was not long enough. Check the destination index, length, and the array's lower bounds.",
       );
@@ -161,11 +185,13 @@ describe("SortedList", () => {
 
   test("a comparer failure is wrapped as Array.BinarySearch wraps it (part-1 review F2)", () => {
     const failure = new Error("cannot compare");
+
     const throwing = {
       compare: (): number => {
         throw failure;
       },
     };
+
     const list = SortedList.of([[1, 1]], throwing);
 
     expect(() => list.add(2, 2)).toThrow("Failed to compare two elements in the array.");
@@ -181,9 +207,13 @@ describe("SortedList", () => {
     expect((caught as Error).name).toBe("InvalidOperationException");
     expect((caught as { innerException: unknown }).innerException).toBe(failure);
 
-    expect(() => new SortedList<object, number>([[{}, 1], [{}, 2]])).toThrow(
-      "Failed to compare two elements in the array.",
-    );
+    expect(
+      () =>
+        new SortedList<object, number>([
+          [{}, 1],
+          [{}, 2],
+        ]),
+    ).toThrow("Failed to compare two elements in the array.");
   });
 
   test("toJSON and invisible storage", () => {

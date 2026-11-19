@@ -37,9 +37,20 @@ function thrown(action: () => unknown): Error {
 describe("Dictionary construction", () => {
   test("of adds (a duplicate throws); assign sets (last wins)", () => {
     expect(Dictionary.of([["a", 1]]).get("a")).toBe(1);
-    expect(Dictionary.assign([["a", 1], ["a", 2]]).get("a")).toBe(2);
 
-    const error = thrown(() => Dictionary.of([[1, 1], [1, 2]]));
+    expect(
+      Dictionary.assign([
+        ["a", 1],
+        ["a", 2],
+      ]).get("a"),
+    ).toBe(2);
+
+    const error = thrown(() =>
+      Dictionary.of([
+        [1, 1],
+        [1, 2],
+      ]),
+    );
 
     expect(error).toBeInstanceOf(ArgumentException);
     expect(error.message).toBe("An item with the same key has already been added. Key: 1");
@@ -50,6 +61,7 @@ describe("Dictionary construction", () => {
 
     expect([...Dictionary.from(source)]).toEqual([["a", 1]]);
     expect(Dictionary.from(new Map([["b", 2]])).get("b")).toBe(2);
+
     expect(thrown(() => Dictionary.from(null as never)).message).toBe(
       "Value cannot be null. (Parameter 'collection')",
     );
@@ -59,8 +71,17 @@ describe("Dictionary construction", () => {
     expect(thrown(() => Dictionary.withCapacity(-1)).message).toBe(
       "Non-negative number required. (Parameter 'capacity')",
     );
+
     expect(Dictionary.withCapacity<string, number>(4).initAdd([["a", 1]]).count).toBe(1);
-    expect(Dictionary.withCapacity<string, number>(4).initAssign([["a", 1], ["a", 3]]).get("a")).toBe(3);
+
+    expect(
+      Dictionary.withCapacity<string, number>(4)
+        .initAssign([
+          ["a", 1],
+          ["a", 3],
+        ])
+        .get("a"),
+    ).toBe(3);
   });
 
   test("a comparer keys every entry", () => {
@@ -68,10 +89,12 @@ describe("Dictionary construction", () => {
       equals: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
       getHashCode: (value: string) => value.toLowerCase().length,
     };
+
     const dictionary = Dictionary.of([["A", 1]], ignoreCase);
 
     expect(dictionary.get("a")).toBe(1);
     expect(dictionary.containsKey("a")).toBe(true);
+
     expect(thrown(() => dictionary.add("a", 2)).message).toBe(
       "An item with the same key has already been added. Key: a",
     );
@@ -100,6 +123,7 @@ describe("Dictionary members", () => {
 
     expect(error).toBeInstanceOf(KeyNotFoundException);
     expect(error.message).toBe("The given key 'zz' was not present in the dictionary.");
+
     expect(thrown(() => new Dictionary<Key, number>().get(new Key(1))).message).toBe(
       "The given key 'Key { Id = 1 }' was not present in the dictionary.",
     );
@@ -168,9 +192,11 @@ describe("Dictionary members", () => {
     expect(dictionary.containsValue("a")).toBe(true);
     expect(JSON.stringify(dictionary)).toBe('{"1":"a"}');
     expect(dictionary.toMap()).toEqual(new Map([[1, "a"]]));
+
     expect(dictionary.toString()).toBe(
       "System.Collections.Generic.Dictionary`2[System.Int32,System.String]",
     );
+
     expect(dictionary.keys.toString()).toBe(
       "System.Collections.Generic.Dictionary`2+KeyCollection[System.Int32,System.String]",
     );
@@ -179,7 +205,11 @@ describe("Dictionary members", () => {
 
 describe("Dictionary enumeration", () => {
   test("insertion order, also after a removal", () => {
-    const dictionary = Dictionary.of([[1, 1], [2, 2], [3, 3]]);
+    const dictionary = Dictionary.of([
+      [1, 1],
+      [2, 2],
+      [3, 3],
+    ]);
 
     dictionary.remove(2);
     dictionary.set(4, 4);
@@ -188,11 +218,16 @@ describe("Dictionary enumeration", () => {
   });
 
   test("an insertion invalidates; remove, clear and overwrites do not", () => {
-    const inserting = Dictionary.of([["a", 1], ["b", 2]]);
+    const inserting = Dictionary.of([
+      ["a", 1],
+      ["b", 2],
+    ]);
 
-    expect(thrown(() => {
-      for (const [key] of inserting) inserting.set(`x${key}`, 0);
-    }).message).toBe(MODIFIED_MESSAGE);
+    expect(
+      thrown(() => {
+        for (const [key] of inserting) inserting.set(`x${key}`, 0);
+      }).message,
+    ).toBe(MODIFIED_MESSAGE);
 
     for (const mutate of [
       (d: Dictionary<string, number>, key: string) => d.remove(key),
@@ -201,7 +236,10 @@ describe("Dictionary enumeration", () => {
       (d: Dictionary<string, number>, key: string) => d.update(key, (v) => v + 1),
       (d: Dictionary<string, number>, key: string) => d.tryAdd(key, 9),
     ]) {
-      const dictionary = Dictionary.of([["a", 1], ["b", 2]]);
+      const dictionary = Dictionary.of([
+        ["a", 1],
+        ["b", 2],
+      ]);
 
       expect(() => {
         for (const [key] of dictionary) mutate(dictionary, key);
@@ -210,7 +248,12 @@ describe("Dictionary enumeration", () => {
   });
 
   test("a removed entry not yet visited is skipped", () => {
-    const dictionary = Dictionary.of([[1, 1], [2, 2], [3, 3]]);
+    const dictionary = Dictionary.of([
+      [1, 1],
+      [2, 2],
+      [3, 3],
+    ]);
+
     const seen: number[] = [];
 
     for (const [key] of dictionary) {
@@ -250,7 +293,10 @@ describe("KeyCollection / ValueCollection", () => {
   test("copyTo", () => {
     const destination = ["", ""];
 
-    Dictionary.of([["a", 1], ["b", 2]]).keys.copyTo(destination);
+    Dictionary.of([
+      ["a", 1],
+      ["b", 2],
+    ]).keys.copyTo(destination);
 
     expect(destination).toEqual(["a", "b"]);
   });

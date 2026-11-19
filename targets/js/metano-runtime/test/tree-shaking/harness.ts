@@ -11,6 +11,8 @@
  * a module that merely imports one is judged on its own code. Every other
  * module, and the canary, is listed as having side effects.
  */
+import { randomUUID } from "node:crypto";
+
 import {
   cpSync,
   existsSync,
@@ -22,7 +24,6 @@ import {
   writeFileSync,
 } from "node:fs";
 
-import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
@@ -49,7 +50,10 @@ export function packageBinary(name: string): string {
 /** The built modules every suite bundles from. */
 export const DIST_DIR = join(RUNTIME_DIR, "dist");
 
-/** The runtime's unchecked dist (spec 011 FR-058): the checks folded off, selected by `metano-unchecked`. */
+/**
+ * The runtime's unchecked dist (spec 011 FR-058): the checks folded off,
+ * selected by `metano-unchecked`.
+ */
 export const UNCHECKED_DIST_DIR = join(RUNTIME_DIR, "dist-unchecked");
 
 /** The runtime's dependencies: never bundled, always external. */

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   ArgumentException,
   ArgumentNullException,
@@ -24,6 +25,7 @@ import {
   TaskCanceledException,
   TimeoutException,
 } from "#/system/exceptions/index.ts";
+
 import { JsonException as JsonErrorsJsonException } from "#/system/json/errors.ts";
 
 type ExceptionClass = abstract new (...args: never[]) => Exception;
@@ -99,27 +101,33 @@ describe("exceptions", () => {
     expect(new OverflowException("").toString()).toBe("System.OverflowException");
   });
 
-  test("OverflowException derives from ArithmeticException, SystemException, Exception and Error", () => {
-    const exception = new OverflowException("boom");
+  test(
+    "OverflowException derives from ArithmeticException, SystemException, Exception and Error",
+    () => {
+      const exception = new OverflowException("boom");
 
-    expect(exception).toBeInstanceOf(ArithmeticException);
-    expect(exception).toBeInstanceOf(SystemException);
-    expect(exception).toBeInstanceOf(Exception);
-    expect(exception).toBeInstanceOf(Error);
-    expect(exception.toString()).toBe("System.OverflowException: boom");
-  });
+      expect(exception).toBeInstanceOf(ArithmeticException);
+      expect(exception).toBeInstanceOf(SystemException);
+      expect(exception).toBeInstanceOf(Exception);
+      expect(exception).toBeInstanceOf(Error);
+      expect(exception.toString()).toBe("System.OverflowException: boom");
+    },
+  );
 
-  test("the inner exception is also the standard cause and appears in toString as .NET writes it", () => {
-    const inner = new ArithmeticException("inner");
-    const outer = new OverflowException("outer", inner);
+  test(
+    "the inner exception is also the standard cause and appears in toString as .NET writes it",
+    () => {
+      const inner = new ArithmeticException("inner");
+      const outer = new OverflowException("outer", inner);
 
-    expect(outer.innerException).toBe(inner);
-    expect(outer.cause).toBe(inner);
+      expect(outer.innerException).toBe(inner);
+      expect(outer.cause).toBe(inner);
 
-    expect(outer.toString()).toBe(
-      "System.OverflowException: outer\n ---> System.ArithmeticException: inner\n   --- End of inner exception stack trace ---",
-    );
-  });
+      expect(outer.toString()).toBe(
+        "System.OverflowException: outer\n ---> System.ArithmeticException: inner\n   --- End of inner exception stack trace ---",
+      );
+    },
+  );
 
   test("a plain Error can be the inner exception", () => {
     const inner = new TypeError("bad");

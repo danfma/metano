@@ -1,10 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { ImmutableDictionary } from "#/system/collections/immutable-dictionary.ts";
-import { ImmutableDictionaryBuilder, toImmutableDictionary } from "#/system/collections/immutable-dictionary-builder.ts";
+
+import {
+  ImmutableDictionaryBuilder,
+  toImmutableDictionary,
+} from "#/system/collections/immutable-dictionary-builder.ts";
+
 import { ImmutableHashSet } from "#/system/collections/immutable-hash-set.ts";
-import { ImmutableHashSetBuilder, toImmutableHashSet } from "#/system/collections/immutable-hash-set-builder.ts";
+
+import {
+  ImmutableHashSetBuilder,
+  toImmutableHashSet,
+} from "#/system/collections/immutable-hash-set-builder.ts";
+
 import { ImmutableList } from "#/system/collections/immutable-list.ts";
-import { ImmutableListBuilder, toImmutableList } from "#/system/collections/immutable-list-builder.ts";
+
+import {
+  ImmutableListBuilder,
+  toImmutableList,
+} from "#/system/collections/immutable-list-builder.ts";
+
 import { List } from "#/system/collections/list.ts";
 import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
 
@@ -86,14 +101,24 @@ describe("ImmutableList", () => {
     expect(() => original.removeRange(2, 5)).toThrow(`${OUT_OF_RANGE} (Parameter 'count')`);
     expect(() => original.getRange(-1, 1)).toThrow("(Parameter 'index')");
     expect(() => original.indexOf(3, 2, 5)).toThrow("(Parameter 'count')");
-    expect(() => original.replace(9, 1)).toThrow("Cannot find the old value (Parameter 'oldValue')");
+
+    expect(() => original.replace(9, 1)).toThrow(
+      "Cannot find the old value (Parameter 'oldValue')",
+    );
+
     expect(() => original.addRange(null as never)).toThrow("(Parameter 'items')");
     expect(() => ImmutableList.from(null)).toThrow("(Parameter 'items')");
     expect(() => original.removeAll(null as never)).toThrow("(Parameter 'match')");
     expect(() => original.copyTo([0])).toThrow(`${OUT_OF_RANGE} (Parameter 'arrayIndex')`);
     expect(() => original.copyTo([0, 0, 0, 0], -1)).toThrow("(Parameter 'arrayIndex')");
-    expect(() => ImmutableList.of([{}, {}]).sort()).toThrow("Failed to compare two elements in the array.");
-    expect(() => ImmutableList.of([{}, {}]).binarySearch({})).toThrow("At least one object must implement IComparable.");
+
+    expect(() => ImmutableList.of([{}, {}]).sort()).toThrow(
+      "Failed to compare two elements in the array.",
+    );
+
+    expect(() => ImmutableList.of([{}, {}]).binarySearch({})).toThrow(
+      "At least one object must implement IComparable.",
+    );
   });
 
   test("copyTo, toJSON, toString and invisible storage", () => {
@@ -106,7 +131,11 @@ describe("ImmutableList", () => {
     expect(JSON.stringify(original.add(3))).toBe("[1,2,3]");
     expect(JSON.stringify(original)).toBe("[1,2]");
     expect(String(original)).toBe("System.Collections.Immutable.ImmutableList`1[System.Int32]");
-    expect(String(original.add(3))).toBe("System.Collections.Immutable.ImmutableList`1[System.Int32]");
+
+    expect(String(original.add(3))).toBe(
+      "System.Collections.Immutable.ImmutableList`1[System.Int32]",
+    );
+
     expect(Object.keys(original)).toEqual([]);
     expect(ImmutableList.$runtimeType.test(original)).toBe(true);
   });
@@ -157,13 +186,18 @@ describe("ImmutableHashSet", () => {
 });
 
 describe("ImmutableDictionary", () => {
-  const dictionary = (): ImmutableDictionary<string, number> => ImmutableDictionary.empty<string, number>().add("a", 1);
+  const dictionary = (): ImmutableDictionary<string, number> =>
+    ImmutableDictionary.empty<string, number>().add("a", 1);
 
   test("add, setItem and remove with .NET's same-instance results", () => {
     const d = dictionary();
 
     expect(d.add("a", 1)).toBe(d);
-    expect(() => d.add("a", 2)).toThrow("An element with the same key but a different value already exists. Key: 'a'");
+
+    expect(() => d.add("a", 2)).toThrow(
+      "An element with the same key but a different value already exists. Key: 'a'",
+    );
+
     expect(d.setItem("a", 1)).toBe(d);
     expect(d.setItems([["a", 1]])).toBe(d);
     expect(d.addRange([["a", 1]])).toBe(d);
@@ -192,7 +226,12 @@ describe("ImmutableDictionary", () => {
   test("null keys throw as .NET", () => {
     const d = ImmutableDictionary.empty<string | null, number>();
 
-    for (const action of [() => d.add(null, 1), () => d.get(null), () => d.containsKey(null), () => d.remove(null)]) {
+    for (const action of [
+      () => d.add(null, 1),
+      () => d.get(null),
+      () => d.containsKey(null),
+      () => d.remove(null),
+    ]) {
       expect(action).toThrow("Value cannot be null. (Parameter 'key')");
     }
 
@@ -205,6 +244,7 @@ describe("ImmutableDictionary", () => {
     expect(d.containsKey("ABC")).toBe(true);
     expect(d.tryGetKey("ABC", "")).toEqual([true, "Abc"]);
     expect(d.withComparers(null).containsKey("ABC")).toBe(false);
+
     expect(() =>
       ImmutableDictionary.from(
         [
@@ -214,14 +254,27 @@ describe("ImmutableDictionary", () => {
         ignoreCase,
       ),
     ).toThrow("Key: 'A'");
-    expect(ImmutableDictionary.fromSelectors([1, 2], (v) => `${v}`, (v) => v * 10).get("2")).toBe(20);
+
+    expect(
+      ImmutableDictionary.fromSelectors(
+        [1, 2],
+        (v) => `${v}`,
+        (v) => v * 10,
+      ).get("2"),
+    ).toBe(20);
   });
 
   test("toJSON and toString", () => {
-    const d = ImmutableDictionary.create<string, number>(null, null, [StringType, Int32Type]).add("a", 1);
+    const d = ImmutableDictionary.create<string, number>(null, null, [StringType, Int32Type]).add(
+      "a",
+      1,
+    );
 
     expect(JSON.stringify(d)).toBe('{"a":1}');
-    expect(String(d)).toBe("System.Collections.Immutable.ImmutableDictionary`2[System.String,System.Int32]");
+
+    expect(String(d)).toBe(
+      "System.Collections.Immutable.ImmutableDictionary`2[System.String,System.Int32]",
+    );
   });
 });
 
@@ -279,6 +332,7 @@ describe("builders (W4-11 condition 4: never alias)", () => {
   test("a builder invalidates its enumeration on every mutation, a removal included", () => {
     const listBuilder = new ImmutableListBuilder([1, 2]);
     const setBuilder = new ImmutableHashSetBuilder([1, 2]);
+
     const dictionaryBuilder = new ImmutableDictionaryBuilder<number, number>([
       [1, 1],
       [2, 2],
@@ -289,11 +343,13 @@ describe("builders (W4-11 condition 4: never alias)", () => {
         listBuilder.add(3);
       }
     }).toThrow(MODIFIED);
+
     expect(() => {
       for (const _ of setBuilder) {
         setBuilder.remove(2);
       }
     }).toThrow(MODIFIED);
+
     expect(() => {
       for (const _ of dictionaryBuilder) {
         dictionaryBuilder.remove(2);

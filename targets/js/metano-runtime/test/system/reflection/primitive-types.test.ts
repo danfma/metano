@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   BigIntegerType,
   BooleanType,
@@ -17,6 +18,7 @@ import {
   UInt32Type,
   UInt64Type,
 } from "#/system/reflection/primitive-types.ts";
+
 import {
   DateOnlyType,
   DateTimeOffsetType,
@@ -24,6 +26,7 @@ import {
   TimeOnlyType,
   TimeSpanType,
 } from "#/system/reflection/temporal-types.ts";
+
 import { Temporal } from "@js-temporal/polyfill";
 import Decimal from "decimal.js";
 
@@ -81,7 +84,11 @@ describe("primitive descriptors", () => {
     expect(DecimalType.test(new Decimal("1.5"))).toBe(true);
     expect(DecimalType.test(1.5)).toBe(false);
     expect(DateTimeType.test(Temporal.PlainDateTime.from("2020-01-01T00:00:00"))).toBe(true);
-    expect(DateTimeOffsetType.test(Temporal.ZonedDateTime.from("2020-01-01T00:00:00+00:00[UTC]"))).toBe(true);
+
+    expect(
+      DateTimeOffsetType.test(Temporal.ZonedDateTime.from("2020-01-01T00:00:00+00:00[UTC]")),
+    ).toBe(true);
+
     expect(DateOnlyType.test(Temporal.PlainDate.from("2020-01-01"))).toBe(true);
     expect(TimeOnlyType.test(Temporal.PlainTime.from("10:00:00"))).toBe(true);
     expect(TimeSpanType.test(Temporal.Duration.from({ hours: 1 }))).toBe(true);

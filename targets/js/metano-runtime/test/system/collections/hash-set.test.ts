@@ -3,6 +3,7 @@ import {
   expect,
   test,
 } from "bun:test";
+
 import { HashCode } from "#/system/hash-code.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 import { Decimal } from "decimal.js";
@@ -13,9 +14,11 @@ import { Int32Type } from "#/system/reflection/primitive-types.ts";
 // Mock value object with equals/hashCode
 class UserId {
   constructor(readonly value: string) {}
+
   equals(other: any): boolean {
     return other instanceof UserId && this.value === other.value;
   }
+
   hashCode(): number {
     const hc = new HashCode();
     hc.add(this.value);
@@ -228,6 +231,7 @@ describe("HashSet (spec 011)", () => {
     mutable.symmetricExceptWith([4, 6]);
 
     expect([...mutable]).toEqual([2, 3, 6]);
+
     expect(thrown(() => set.overlaps(null as never)).message).toBe(
       "Value cannot be null. (Parameter 'other')",
     );
@@ -243,6 +247,7 @@ describe("HashSet (spec 011)", () => {
     expect(JSON.stringify(set)).toBe("[1,3]");
     expect(set.toString()).toBe("System.Collections.Generic.HashSet`1[System.Int32]");
     expect(HashSet.withCapacity<number>(3).initAdd([1, 1]).count).toBe(1);
+
     expect(thrown(() => HashSet.from(null as never)).message).toBe(
       "Value cannot be null. (Parameter 'collection')",
     );

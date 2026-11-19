@@ -84,7 +84,9 @@ const copySetSubject: ModelSubject<readonly number[]> = {
       case "addRange":
         return [...new Set([...version, ...step.items])];
       case "remove":
-        return version.includes(step.value) ? version.filter((value) => value !== step.value) : version;
+        return version.includes(step.value)
+          ? version.filter((value) => value !== step.value)
+          : version;
       case "clear":
         return [];
     }
@@ -92,7 +94,8 @@ const copySetSubject: ModelSubject<readonly number[]> = {
   count: (version) => version.length,
   contents: (version) => [...version],
   contains: (version, value) => version.includes(value),
-  tryGetValue: (version, value, missing) => (version.includes(value) ? [true, value] : [false, missing]),
+  tryGetValue: (version, value, missing) =>
+    version.includes(value) ? [true, value] : [false, missing],
 };
 
 /** A plain-copy dictionary over insertion-ordered Maps. */
@@ -117,7 +120,9 @@ const copyDictionarySubject: ModelSubject<ReadonlyMap<number, number>> = {
       case "addRange":
         return new Map([...version, ...step.items.map((key) => [key, 0] as const)]);
       case "setItem":
-        return version.get(step.value) === step.item ? version : new Map(version).set(step.value, step.item);
+        return version.get(step.value) === step.item
+          ? version
+          : new Map(version).set(step.value, step.item);
       case "remove": {
         if (!version.has(step.value)) {
           return version;
@@ -137,7 +142,8 @@ const copyDictionarySubject: ModelSubject<ReadonlyMap<number, number>> = {
   count: (version) => version.size,
   contents: (version) => [...version].map(([key, value]) => [key, value]),
   contains: (version, value) => version.has(value),
-  tryGetValue: (version, value, missing) => (version.has(value) ? [true, version.get(value)] : [false, missing]),
+  tryGetValue: (version, value, missing) =>
+    version.has(value) ? [true, version.get(value)] : [false, missing],
 };
 
 const options = { steps: 3000, maxVersions: 24 };
@@ -152,6 +158,8 @@ describe("the persistent-collection model", () => {
   }
 
   test("rejects a subject whose versions alias the shared storage", () => {
-    expect(() => runPersistentModel(tipListSubject(false), createSeededRandom(1), options)).toThrow();
+    expect(() =>
+      runPersistentModel(tipListSubject(false), createSeededRandom(1), options),
+    ).toThrow();
   });
 });

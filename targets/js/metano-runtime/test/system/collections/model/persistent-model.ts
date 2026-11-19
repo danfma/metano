@@ -17,7 +17,10 @@ import type { SeededRandom } from "./seeded-random.ts";
 /** The values the steps draw from: small, so duplicates and absent values are common. */
 export const MODEL_DOMAIN = 12;
 
-/** The `default(T)` the driver passes to `tryGetValue`: outside the domain, so a miss is visible. */
+/**
+ * The `default(T)` the driver passes to `tryGetValue`: outside the domain,
+ * so a miss is visible.
+ */
 const MISSING = -1;
 
 export type ModelShape = "list" | "set" | "dictionary";
@@ -50,7 +53,10 @@ export interface ModelSubject<V> {
 }
 
 /** The plain-copy reference state of one version. */
-type Reference = { readonly items: readonly number[]; readonly pairs: readonly (readonly [number, number])[] };
+type Reference = {
+  readonly items: readonly number[];
+  readonly pairs: readonly (readonly [number, number])[];
+};
 
 /**
  * `unchanged` marks the results .NET returns as the receiver itself (read from
@@ -58,7 +64,9 @@ type Reference = { readonly items: readonly number[]; readonly pairs: readonly (
  * SetItem of an equal dictionary value); Clear and the range operations make
  * no identity promise here.
  */
-type Outcome = { readonly next: Reference; readonly unchanged: boolean } | { readonly error: string };
+type Outcome =
+  | { readonly next: Reference; readonly unchanged: boolean }
+  | { readonly error: string };
 
 const EMPTY: Reference = { items: [], pairs: [] };
 
@@ -77,13 +85,19 @@ export function runPersistentModel<V>(
   random: SeededRandom,
   options: ModelRunOptions,
 ): void {
-  const versions: { subject: V; reference: Reference }[] = [{ subject: subject.empty(), reference: EMPTY }];
+  const versions: { subject: V; reference: Reference }[] = [
+    { subject: subject.empty(), reference: EMPTY },
+  ];
 
   for (let step = 0; step < options.steps; step++) {
     const index = random.next() < 0.6 ? versions.length - 1 : random.below(versions.length);
     const source = versions[index] as { subject: V; reference: Reference };
     const drawn = drawStep(subject.shape, random, source.reference);
-    const where = `${subject.name}, seed ${random.seed}, step ${step}: ${JSON.stringify(drawn)} on version ${index}`;
+
+    const where = `${subject.name}, seed ${random.seed}, step ${step}: ${JSON.stringify(
+      drawn,
+    )} on version ${index}`;
+
     const outcome = applyReference(subject.shape, source.reference, drawn);
 
     if ("error" in outcome) {
@@ -92,7 +106,9 @@ export function runPersistentModel<V>(
       const result = subject.apply(source.subject, drawn);
 
       if (outcome.unchanged) {
-        expect(result === source.subject, `${where}: an unchanged result is the receiver`).toBe(true);
+        expect(result === source.subject, `${where}: an unchanged result is the receiver`).toBe(
+          true,
+        );
       }
 
       versions.push({ subject: result, reference: outcome.next });
@@ -120,11 +136,21 @@ function expectThrows(action: () => unknown, errorName: string, where: string): 
   expect(thrown instanceof Error ? thrown.name : thrown, `${where}: throws`).toBe(errorName);
 }
 
-function compareVersion<V>(subject: ModelSubject<V>, version: V, reference: Reference, where: string): void {
+function compareVersion<V>(
+  subject: ModelSubject<V>,
+  version: V,
+  reference: Reference,
+  where: string,
+): void {
   const dictionary = subject.shape === "dictionary";
 
-  expect(subject.count(version), `${where}: count`).toBe(dictionary ? reference.pairs.length : reference.items.length);
-  expect(subject.contents(version), `${where}: contents`).toEqual(dictionary ? reference.pairs.map((pair) => [...pair]) : [...reference.items]);
+  expect(subject.count(version), `${where}: count`).toBe(
+    dictionary ? reference.pairs.length : reference.items.length,
+  );
+
+  expect(subject.contents(version), `${where}: contents`).toEqual(
+    dictionary ? reference.pairs.map((pair) => [...pair]) : [...reference.items],
+  );
 
   for (let value = 0; value < MODEL_DOMAIN; value++) {
     const pair = reference.pairs.find(([key]) => key === value);
@@ -138,7 +164,10 @@ function compareVersion<V>(subject: ModelSubject<V>, version: V, reference: Refe
 
     const expected = present ? [true, dictionary ? pair?.[1] : value] : [false, MISSING];
 
-    expect([...subject.tryGetValue(version, value, MISSING)], `${where}: tryGetValue(${value})`).toEqual(expected);
+    expect(
+      [...subject.tryGetValue(version, value, MISSING)],
+      `${where}: tryGetValue(${value})`,
+    ).toEqual(expected);
   }
 }
 
@@ -164,7 +193,11 @@ function drawStep(shape: ModelShape, random: SeededRandom, reference: Reference)
   if (roll < 0.95) {
     const size = shape === "list" ? reference.items.length : MODEL_DOMAIN;
 
-    return { op: "setItem", value: size === 0 ? 0 : random.below(size), item: shape === "list" ? random.below(MODEL_DOMAIN) : item };
+    return {
+      op: "setItem",
+      value: size === 0 ? 0 : random.below(size),
+      item: shape === "list" ? random.below(MODEL_DOMAIN) : item,
+    };
   }
 
   return { op: "clear" };
@@ -199,7 +232,12 @@ function applyList(current: readonly number[], step: ModelStep): Outcome {
     case "remove": {
       const index = current.indexOf(step.value);
 
-      return index === -1 ? items(current, true) : items(current.filter((_, i) => i !== index), false);
+      return index === -1
+        ? items(current, true)
+        : items(
+            current.filter((_, i) => i !== index),
+            false,
+          );
     }
 
     case "setItem":
@@ -207,7 +245,10 @@ function applyList(current: readonly number[], step: ModelStep): Outcome {
         return { error: "ArgumentOutOfRangeException" };
       }
 
-      return items(current.map((existing, i) => (i === step.value ? step.item : existing)), false);
+      return items(
+        current.map((existing, i) => (i === step.value ? step.item : existing)),
+        false,
+      );
     case "clear":
       return items([], false);
   }
@@ -218,7 +259,9 @@ function applySet(current: readonly number[], step: ModelStep): Outcome {
     case "add":
     case "setItem":
       // A set has no SetItem: the step adds its element.
-      return current.includes(step.value) ? items(current, true) : items([...current, step.value], false);
+      return current.includes(step.value)
+        ? items(current, true)
+        : items([...current, step.value], false);
     case "addRange": {
       const next = [...current];
 
@@ -232,13 +275,21 @@ function applySet(current: readonly number[], step: ModelStep): Outcome {
     }
 
     case "remove":
-      return current.includes(step.value) ? items(current.filter((value) => value !== step.value), false) : items(current, true);
+      return current.includes(step.value)
+        ? items(
+            current.filter((value) => value !== step.value),
+            false,
+          )
+        : items(current, true);
     case "clear":
       return items([], false);
   }
 }
 
-function applyDictionary(current: readonly (readonly [number, number])[], step: ModelStep): Outcome {
+function applyDictionary(
+  current: readonly (readonly [number, number])[],
+  step: ModelStep,
+): Outcome {
   const index = "value" in step ? current.findIndex(([key]) => key === step.value) : -1;
 
   switch (step.op) {
@@ -248,7 +299,9 @@ function applyDictionary(current: readonly (readonly [number, number])[], step: 
       }
 
       // .NET: an equal value returns the receiver, a different one throws.
-      return current[index]?.[1] === step.item ? pairs(current, true) : { error: "ArgumentException" };
+      return current[index]?.[1] === step.item
+        ? pairs(current, true)
+        : { error: "ArgumentException" };
     }
 
     case "addRange": {
@@ -277,9 +330,17 @@ function applyDictionary(current: readonly (readonly [number, number])[], step: 
         return pairs(current, true);
       }
 
-      return pairs(current.map((pair, i) => (i === index ? [step.value, step.item] : pair)), false);
+      return pairs(
+        current.map((pair, i) => (i === index ? [step.value, step.item] : pair)),
+        false,
+      );
     case "remove":
-      return index === -1 ? pairs(current, true) : pairs(current.filter((_, i) => i !== index), false);
+      return index === -1
+        ? pairs(current, true)
+        : pairs(
+            current.filter((_, i) => i !== index),
+            false,
+          );
     case "clear":
       return pairs([], false);
   }

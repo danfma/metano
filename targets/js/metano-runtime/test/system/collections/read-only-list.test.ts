@@ -5,7 +5,9 @@ import { Int32Type } from "#/system/reflection/primitive-types.ts";
 
 // Messages and behaviours read from .NET 10 (2026-11-19).
 const READ_ONLY = "Collection is read-only.";
-const INDEX = "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')";
+
+const INDEX =
+  "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')";
 
 describe("ReadOnlyList", () => {
   test("is a live view of a List", () => {
@@ -80,9 +82,17 @@ describe("ReadOnlyList", () => {
   });
 
   test("null sources throw as .NET", () => {
-    expect(() => new ReadOnlyList(null as never)).toThrow("Value cannot be null. (Parameter 'list')");
-    expect(() => ReadOnlyList.fromArray(null as never)).toThrow("Value cannot be null. (Parameter 'array')");
-    expect(() => asReadOnly(null as never)).toThrow("Object reference not set to an instance of an object.");
+    expect(() => new ReadOnlyList(null as never)).toThrow(
+      "Value cannot be null. (Parameter 'list')",
+    );
+
+    expect(() => ReadOnlyList.fromArray(null as never)).toThrow(
+      "Value cannot be null. (Parameter 'array')",
+    );
+
+    expect(() => asReadOnly(null as never)).toThrow(
+      "Object reference not set to an instance of an object.",
+    );
   });
 
   test("copyTo is the source's", () => {
@@ -91,8 +101,15 @@ describe("ReadOnlyList", () => {
     new ReadOnlyList([4, 5]).copyTo(target, 1);
 
     expect(target).toEqual([0, 4, 5]);
-    expect(() => new ReadOnlyList([4, 5]).copyTo([0], 0)).toThrow("Destination array was not long enough");
-    expect(() => asReadOnly(List.of([4, 5])).copyTo([0], 0)).toThrow("Destination array was not long enough");
+
+    expect(() => new ReadOnlyList([4, 5]).copyTo([0], 0)).toThrow(
+      "Destination array was not long enough",
+    );
+
+    expect(() => asReadOnly(List.of([4, 5])).copyTo([0], 0)).toThrow(
+      "Destination array was not long enough",
+    );
+
     expect(() => new ReadOnlyList([4, 5]).copyTo([0, 0, 0, 0, 0], -1)).toThrow(
       "destinationIndex ('-1') must be greater than or equal to '0'.",
     );

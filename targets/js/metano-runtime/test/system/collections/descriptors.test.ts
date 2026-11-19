@@ -1,8 +1,5 @@
-import {
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { describe, expect, test } from "bun:test";
+
 import {
   dictionaryType,
   hashSetType,
@@ -21,55 +18,41 @@ import {
   sortedSetType,
   stackType,
 } from "#/system/collections/descriptors.ts";
-import {
-  SortedDictionary,
-} from "#/system/collections/sorted-dictionary.ts";
-import {
-  SortedList,
-} from "#/system/collections/sorted-list.ts";
-import {
-  SortedSet,
-} from "#/system/collections/sorted-set.ts";
-import {
-  getRuntimeType,
-} from "#/system/reflection/get-runtime-type.ts";
-import {
-  Int32Type,
-  StringType,
-} from "#/system/reflection/primitive-types.ts";
-import {
-  Dictionary,
-} from "#/system/collections/dictionary.ts";
-import {
-  HashSet,
-} from "#/system/collections/hash-set.ts";
-import {
-  List,
-} from "#/system/collections/list.ts";
-import {
-  Queue,
-} from "#/system/collections/queue.ts";
-import {
-  ObjectType,
-  UnknownType,
-} from "#/system/reflection/well-known-types.ts";
+
+import { SortedDictionary } from "#/system/collections/sorted-dictionary.ts";
+import { SortedList } from "#/system/collections/sorted-list.ts";
+import { SortedSet } from "#/system/collections/sorted-set.ts";
+import { getRuntimeType } from "#/system/reflection/get-runtime-type.ts";
+import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
+import { Dictionary } from "#/system/collections/dictionary.ts";
+import { HashSet } from "#/system/collections/hash-set.ts";
+import { List } from "#/system/collections/list.ts";
+import { Queue } from "#/system/collections/queue.ts";
+import { ObjectType, UnknownType } from "#/system/reflection/well-known-types.ts";
 
 describe("sorted-class descriptors", () => {
   test("factories are memoized", () => {
     expect(sortedSetType(Int32Type)).toBe(sortedSetType(Int32Type));
-    expect(sortedDictionaryType(StringType, Int32Type)).toBe(sortedDictionaryType(StringType, Int32Type));
+
+    expect(sortedDictionaryType(StringType, Int32Type)).toBe(
+      sortedDictionaryType(StringType, Int32Type),
+    );
+
     expect(sortedListType(StringType, Int32Type)).toBe(sortedListType(StringType, Int32Type));
     expect(sortedSetType(Int32Type).name).toBe("SortedSet<Int32>");
   });
 
   test("GetType() closes over the slot: GetType() == typeof(SortedSet<int>)", () => {
     expect(getRuntimeType(SortedSet.of([1], null, [Int32Type]))).toBe(sortedSetType(Int32Type));
+
     expect(getRuntimeType(new SortedDictionary(null, null, [StringType, Int32Type]))).toBe(
       sortedDictionaryType(StringType, Int32Type),
     );
+
     expect(getRuntimeType(new SortedList(null, null, [StringType, Int32Type]))).toBe(
       sortedListType(StringType, Int32Type),
     );
+
     expect(getRuntimeType(new SortedSet())).toBe(SortedSet.$runtimeType);
   });
 
@@ -96,11 +79,16 @@ describe("sorted-class descriptors", () => {
   });
 
   test("toString prints .NET's type text", () => {
-    expect(String(SortedSet.of([1], null, [Int32Type]))).toBe("System.Collections.Generic.SortedSet`1[System.Int32]");
+    expect(String(SortedSet.of([1], null, [Int32Type]))).toBe(
+      "System.Collections.Generic.SortedSet`1[System.Int32]",
+    );
+
     expect(String(new SortedSet())).toBe("System.Collections.Generic.SortedSet`1[T]");
+
     expect(String(new SortedDictionary(null, null, [Int32Type, Int32Type]))).toBe(
       "System.Collections.Generic.SortedDictionary`2[System.Int32,System.Int32]",
     );
+
     expect(String(new SortedList())).toBe("System.Collections.Generic.SortedList`2[TKey,TValue]");
   });
 });
@@ -139,6 +127,7 @@ describe("descriptor factories and GetType()", () => {
   test("getRuntimeType closes over the slot: GetType() == typeof(List<int>)", () => {
     expect(getRuntimeType(List.of([1], [Int32Type]))).toBe(listType(Int32Type));
     expect(getRuntimeType(List.of([1]))).toBe(List.$runtimeType);
+
     expect(getRuntimeType(List.adopt([1], { fixedSize: true }, [Int32Type]))).toBe(
       listType(Int32Type),
     );

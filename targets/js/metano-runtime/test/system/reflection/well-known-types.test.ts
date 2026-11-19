@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { ArrayType, DelegateType, ObjectType, UnknownType } from "#/system/reflection/well-known-types.ts";
+
+import {
+  ArrayType,
+  DelegateType,
+  ObjectType,
+  UnknownType,
+} from "#/system/reflection/well-known-types.ts";
 
 describe("well-known descriptors", () => {
   test("UnknownType accepts everything", () => {

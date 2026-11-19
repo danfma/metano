@@ -36,6 +36,7 @@ describe("default value text", () => {
     expect([0, 1, 3, 8].map((value) => enumText(value, access))).toEqual([
       "None", "Read", "Read, Write", "8",
     ]);
+
     expect(enumText(box(3, access), access)).toBe("Read, Write");
     expect(enumText(null, access)).toBe("");
   });

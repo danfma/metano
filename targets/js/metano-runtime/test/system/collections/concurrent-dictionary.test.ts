@@ -30,10 +30,12 @@ describe("ConcurrentDictionary", () => {
     ]);
 
     expect(dictionary).not.toBeInstanceOf(Dictionary);
+
     expect([...dictionary]).toEqual([
       ["a", 2],
       ["b", 3],
     ]);
+
     expect(dictionary.get("a")).toBe(2);
     expect(dictionary.count).toBe(2);
     expect(dictionary.isEmpty).toBe(false);
@@ -41,7 +43,10 @@ describe("ConcurrentDictionary", () => {
     expect(dictionary.tryGetValue("z", 0)).toEqual([false, 0]);
     expect(dictionary.getValueOrDefault("z", -1)).toBe(-1);
     expect(dictionary.update("a", (v) => v + 1)).toBe(3);
-    expect(() => dictionary.get("z")).toThrow("The given key 'z' was not present in the dictionary.");
+
+    expect(() => dictionary.get("z")).toThrow(
+      "The given key 'z' was not present in the dictionary.",
+    );
   });
 
   test("keys by elementEquals / elementHashCode", () => {
@@ -72,6 +77,7 @@ describe("ConcurrentDictionary", () => {
 
     expect(dictionary.getOrAdd("a", 1)).toBe(1);
     expect(dictionary.getOrAdd("a", 2)).toBe(1);
+
     expect(
       dictionary.getOrAddWith("a", () => {
         calls++;
@@ -79,7 +85,9 @@ describe("ConcurrentDictionary", () => {
         return 3;
       }),
     ).toBe(1);
+
     expect(calls).toBe(0);
+
     expect(
       dictionary.getOrAddWith("b", (key) => {
         dictionary.set(key, 7);
@@ -87,6 +95,7 @@ describe("ConcurrentDictionary", () => {
         return 9;
       }),
     ).toBe(7);
+
     expect(dictionary.getOrAddWith("c", (_key, argument: number) => argument * 2, 21)).toBe(42);
   });
 
@@ -102,8 +111,24 @@ describe("ConcurrentDictionary", () => {
 
     expect(dictionary.addOrUpdate(1, 1, (_k, v) => v + 10)).toBe(1);
     expect(dictionary.addOrUpdate(1, 1, (_k, v) => v + 10)).toBe(11);
-    expect(dictionary.addOrUpdateWith(2, (_k, a: number) => a, (_k, v, a) => v + a, 5)).toBe(5);
-    expect(dictionary.addOrUpdateWith(2, (_k, a: number) => a, (_k, v, a) => v + a, 5)).toBe(10);
+
+    expect(
+      dictionary.addOrUpdateWith(
+        2,
+        (_k, a: number) => a,
+        (_k, v, a) => v + a,
+        5,
+      ),
+    ).toBe(5);
+
+    expect(
+      dictionary.addOrUpdateWith(
+        2,
+        (_k, a: number) => a,
+        (_k, v, a) => v + a,
+        5,
+      ),
+    ).toBe(10);
   });
 
   test("addOrUpdate retries when its factory changes the key, as .NET's loop", () => {
@@ -130,6 +155,7 @@ describe("ConcurrentDictionary", () => {
       [1, 1],
       [2, 2],
     ]);
+
     const seen: number[] = [];
 
     for (const [key] of dictionary) {
@@ -152,6 +178,7 @@ describe("ConcurrentDictionary", () => {
     expect(keys.count).toBe(1);
     expect([...dictionary.values]).toEqual([10, 20]);
     expect(() => keys.add(3)).toThrow("Collection is read-only.");
+
     expect(dictionary.toArray()).toEqual([
       [1, 10],
       [2, 20],
@@ -171,35 +198,52 @@ describe("ConcurrentDictionary", () => {
     }
 
     expect(() => dictionary.getOrAddWith("a", null as never)).toThrow("(Parameter 'valueFactory')");
+
     expect(() => dictionary.addOrUpdateWith("a", null as never, (_k, v) => v)).toThrow(
       "(Parameter 'addValueFactory')",
     );
-    expect(() => dictionary.addOrUpdate("a", 1, null as never)).toThrow("(Parameter 'updateValueFactory')");
+
+    expect(() => dictionary.addOrUpdate("a", 1, null as never)).toThrow(
+      "(Parameter 'updateValueFactory')",
+    );
+
     expect(() => dictionary.add("x", 1)).not.toThrow();
     expect(() => dictionary.add("x", 2)).toThrow("The key already existed in the dictionary.");
+
     expect(() =>
       ConcurrentDictionary.from([
         [1, 1],
         [1, 2],
       ]),
     ).toThrow("The source argument contains duplicate keys.");
+
     expect(() => ConcurrentDictionary.from(null)).toThrow("(Parameter 'collection')");
+
     expect(() => ConcurrentDictionary.withCapacity(0, 4)).toThrow(
       "The concurrencyLevel argument must be positive, or -1 to indicate a default level. (Parameter 'concurrencyLevel')",
     );
+
     expect(ConcurrentDictionary.withCapacity(-1, 4).count).toBe(0);
+
     expect(() => ConcurrentDictionary.withCapacity(2, -1)).toThrow(
       "capacity ('-1') must be a non-negative value. (Parameter 'capacity')",
     );
   });
 
   test("toJSON, toString and invisible storage", () => {
-    const dictionary = new ConcurrentDictionary<number, string>(null, null, [Int32Type, StringType]);
+    const dictionary = new ConcurrentDictionary<number, string>(null, null, [
+      Int32Type,
+      StringType,
+    ]);
 
     dictionary.set(1, "a");
 
     expect(JSON.stringify(dictionary)).toBe('{"1":"a"}');
-    expect(String(dictionary)).toBe("System.Collections.Concurrent.ConcurrentDictionary`2[System.Int32,System.String]");
+
+    expect(String(dictionary)).toBe(
+      "System.Collections.Concurrent.ConcurrentDictionary`2[System.Int32,System.String]",
+    );
+
     expect(Object.keys(dictionary)).toEqual([]);
     expect(ConcurrentDictionary.$runtimeType.test(dictionary)).toBe(true);
   });

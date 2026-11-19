@@ -3,7 +3,11 @@ import { createComparer } from "#/system/collections/default-comparer.ts";
 import { List } from "#/system/collections/list.ts";
 import { ArgumentException } from "#/system/exceptions/argument-exception.ts";
 import { ArgumentNullException } from "#/system/exceptions/argument-null-exception.ts";
-import { ArgumentOutOfRangeException } from "#/system/exceptions/argument-out-of-range-exception.ts";
+
+import {
+  ArgumentOutOfRangeException,
+} from "#/system/exceptions/argument-out-of-range-exception.ts";
+
 import { InvalidOperationException } from "#/system/exceptions/invalid-operation-exception.ts";
 import { NotSupportedException } from "#/system/exceptions/not-supported-exception.ts";
 import { Int32Type } from "#/system/reflection/primitive-types.ts";
@@ -23,6 +27,7 @@ class Point {
 
 const INDEX_MESSAGE =
   "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')";
+
 const MODIFIED_MESSAGE = "Collection was modified; enumeration operation may not execute.";
 
 function thrown(action: () => unknown): Error {
@@ -148,9 +153,11 @@ describe("List mutators", () => {
     expect(thrown(() => list.insert(2, 0)).message).toBe(
       "Index must be within the bounds of the List. (Parameter 'index')",
     );
+
     expect(thrown(() => list.insertRange(2, [0])).message).toBe(
       "Index was out of range. Must be non-negative and less than or equal to the size of the collection. (Parameter 'index')",
     );
+
     expect(thrown(() => list.addRange(null as unknown as number[])).message).toBe(
       "Value cannot be null. (Parameter 'collection')",
     );
@@ -173,9 +180,11 @@ describe("List mutators", () => {
     const list = List.of([1, 2, 3]);
 
     expect(thrown(() => list.removeAt(3)).message).toBe(INDEX_MESSAGE);
+
     expect(thrown(() => list.getRange(-1, 1)).message).toBe(
       "Non-negative number required. (Parameter 'index')",
     );
+
     expect(thrown(() => list.getRange(0, -1)).message).toBe(
       "Non-negative number required. (Parameter 'count')",
     );
@@ -183,9 +192,11 @@ describe("List mutators", () => {
     const range = thrown(() => list.removeRange(2, 5));
 
     expect(range).toBeInstanceOf(ArgumentException);
+
     expect(range.message).toBe(
       "Offset and length were out of bounds for the array or count is greater than the number of elements from index to the end of the source collection.",
     );
+
     expect(thrown(() => list.slice(2, 1)).message).toBe(
       "Non-negative number required. (Parameter 'count')",
     );
@@ -242,6 +253,7 @@ describe("List searches", () => {
     expect(list.exists((x) => x === 3)).toBe(true);
     expect(list.trueForAll((x) => x > 0)).toBe(true);
     expect(list.convertAll((x) => `${x}`).toArray()).toEqual(["1", "2", "3"]);
+
     expect(thrown(() => list.exists(null as unknown as () => boolean)).message).toBe(
       "Value cannot be null. (Parameter 'match')",
     );
@@ -253,7 +265,13 @@ describe("List searches", () => {
     expect(list.binarySearch(3)).toBe(1);
     expect(list.binarySearch(4)).toBe(-3);
     expect(List.of<number>([]).binarySearch(5)).toBe(-1);
-    expect(list.binarySearch(9, createComparer((a: number, b: number) => a - b))).toBe(-4);
+
+    expect(
+      list.binarySearch(
+        9,
+        createComparer((a: number, b: number) => a - b),
+      ),
+    ).toBe(-4);
   });
 });
 
@@ -275,19 +293,22 @@ describe("List order", () => {
     expect(strings.toArray()).toEqual(["A", "B", "a", "b"]);
   });
 
-  test("sort() without a comparison orders by value, not as strings (2.x sorted [10, 9, 100] as text)", () => {
-    const numbers = List.of([10, 9, 100, -5, -50, 0.5]);
-    const bigints = List.of([10n, 9n, 100n, -5n]);
-    const strings = List.of(["b", "10", "9", "a"]);
+  test(
+    "sort() without a comparison orders by value, not as strings (2.x sorted [10, 9, 100] as text)",
+    () => {
+      const numbers = List.of([10, 9, 100, -5, -50, 0.5]);
+      const bigints = List.of([10n, 9n, 100n, -5n]);
+      const strings = List.of(["b", "10", "9", "a"]);
 
-    numbers.sort();
-    bigints.sort();
-    strings.sort();
+      numbers.sort();
+      bigints.sort();
+      strings.sort();
 
-    expect(numbers.toArray()).toEqual([-50, -5, 0.5, 9, 10, 100]);
-    expect(bigints.toArray()).toEqual([-5n, 9n, 10n, 100n]);
-    expect(strings.toArray()).toEqual(["10", "9", "a", "b"]);
-  });
+      expect(numbers.toArray()).toEqual([-50, -5, 0.5, 9, 10, 100]);
+      expect(bigints.toArray()).toEqual([-5n, 9n, 10n, 100n]);
+      expect(strings.toArray()).toEqual(["10", "9", "a", "b"]);
+    },
+  );
 
   test("a comparison failure is wrapped as .NET's Array.Sort wraps it", () => {
     const objects = List.of([{}, {}]);
@@ -295,9 +316,11 @@ describe("List order", () => {
 
     expect(error).toBeInstanceOf(InvalidOperationException);
     expect(error.message).toBe("Failed to compare two elements in the array.");
+
     expect(error instanceof InvalidOperationException && error.innerException?.message).toBe(
       "At least one object must implement IComparable.",
     );
+
     expect(() => List.of([{}]).sort()).not.toThrow();
   });
 
@@ -334,9 +357,11 @@ describe("List views and copies", () => {
     list.copyTo(destination, 1);
 
     expect(destination).toEqual([0, 1, 2]);
+
     expect(thrown(() => list.copyTo([0], 0)).message).toBe(
       "Destination array was not long enough. Check the destination index, length, and the array's lower bounds. (Parameter 'destinationArray')",
     );
+
     expect(thrown(() => list.copyTo([0, 0, 0], -1)).message).toBe(
       "destinationIndex ('-1') must be greater than or equal to '0'. (Parameter 'destinationIndex')\nActual value was -1.",
     );
@@ -346,6 +371,7 @@ describe("List views and copies", () => {
     expect(List.of([1], [Int32Type]).toString()).toBe(
       "System.Collections.Generic.List`1[System.Int32]",
     );
+
     expect(List.of([1]).toString()).toBe("System.Collections.Generic.List`1[T]");
   });
 });

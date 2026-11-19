@@ -50,6 +50,7 @@ describe("enumFromRaw with an integral number", () => {
     expect(() => enumFromRaw(Color$rt, 1.5)).toThrow(
       "The value passed in must be an enum base or an underlying type for an enum, such as an Int32. (Parameter 'value')",
     );
+
     expect(() => enumFromRaw(Color$rt, null)).toThrow(ArgumentException);
     expect(() => enumFromRaw(Color$rt, true)).toThrow(ArgumentException);
   });
@@ -79,13 +80,21 @@ describe("enumFromRaw with a string", () => {
 
   test("accepts a number only as the whole text, not inside a list", () => {
     expect(enumFromRaw(Perms$rt, "+5")).toBe(5);
-    expect(() => enumFromRaw(Perms$rt, "Read, 8")).toThrow("Requested value 'Read, 8' was not found.");
+
+    expect(() => enumFromRaw(Perms$rt, "Read, 8")).toThrow(
+      "Requested value 'Read, 8' was not found.",
+    );
+
     expect(() => enumFromRaw(Perms$rt, "1, 2")).toThrow("Requested value '1, 2' was not found.");
   });
 
   test("throws ArgumentException for an unknown name", () => {
     expect(() => enumFromRaw(Perms$rt, "Read, Nope")).toThrow(ArgumentException);
-    expect(() => enumFromRaw(Perms$rt, "Read, Nope")).toThrow("Requested value 'Read, Nope' was not found.");
+
+    expect(() => enumFromRaw(Perms$rt, "Read, Nope")).toThrow(
+      "Requested value 'Read, Nope' was not found.",
+    );
+
     expect(() => enumFromRaw(Color$rt, "   ")).toThrow(
       "Must specify valid information for parsing in the string. (Parameter 'value')",
     );
@@ -130,9 +139,11 @@ describe("enumFromRaw in the underlying type's width", () => {
 
   test("Parse rejects a number outside the range", () => {
     expect(() => enumFromRaw(Tiny$rt, "300")).toThrow(OverflowException);
+
     expect(() => enumFromRaw(Tiny$rt, "300")).toThrow(
       "Value was either too large or too small for an unsigned byte.",
     );
+
     expect(() => enumFromRaw(Perms$rt, "99999999999")).toThrow(
       "Value was either too large or too small for an Int32.",
     );
