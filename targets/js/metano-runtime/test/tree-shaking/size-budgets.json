@@ -114,6 +114,36 @@
         "@js-temporal"
       ],
       "$comment": "W4-25 (d): the shared cost (exception classes, elementEquals, hash core) counted once; measured bun 6465 B / esbuild 6357 B, budget + 10%."
+    },
+    {
+      "name": "SortedSet alone",
+      "entry": "entries/sorted-set-only.js",
+      "maxGzip": 2560,
+      "mustNotContain": [
+        "Mutating a key collection",
+        "An item with the same key"
+      ],
+      "$comment": "NFR-008 proposed 2.5 KB (stage 011h); measured once R1 integrates."
+    },
+    {
+      "name": "SortedDictionary alone",
+      "entry": "entries/sorted-dictionary-only.js",
+      "maxGzip": 3072,
+      "mustNotContain": [
+        "Mutating a key collection",
+        "upperValue"
+      ],
+      "$comment": "NFR-008 proposed 3.0 KB (stage 011h); measured once R1 integrates."
+    },
+    {
+      "name": "SortedList alone",
+      "entry": "entries/sorted-list-only.js",
+      "maxGzip": 2560,
+      "mustNotContain": [
+        "upperValue",
+        "Must be less than or equal"
+      ],
+      "$comment": "NFR-008 proposed 2.5 KB (stage 011h); measured once R1 integrates."
     }
   ],
   "modules": [
@@ -144,6 +174,11 @@
     "system/collections/red-black-tree",
     "system/collections/set-algebra",
     "system/collections/sorted-array",
+    "system/collections/sorted-dictionary",
+    "system/collections/sorted-list",
+    "system/collections/sorted-set",
+    "system/collections/sorted-support",
+    "system/collections/sorted-throw-helpers",
     "system/collections/stack",
     "system/collections/throw-helpers",
     "system/date-time-offset",

@@ -1,0 +1,487 @@
+import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
+import { defaultComparer, elementEquals, type IComparer } from "./default-comparer.ts";
+import type { IDictionary, IList, IReadOnlyDictionary, IReadOnlyList } from "./interfaces.ts";
+import type { CompareFunction } from "./red-black-tree.ts";
+import { binarySearch } from "./sorted-array.ts";
+import { checkedKey, compareFunctionOf, defineField } from "./sorted-support.ts";
+import {
+  checkCopyTo,
+  throwIndexOutOfRange,
+  throwKeyListWrite,
+  throwNegativeArgument,
+  throwSortedListDuplicate,
+  throwSortedListNested,
+} from "./sorted-throw-helpers.ts";
+import {
+  throwArgumentNull,
+  throwArrayTooSmall,
+  throwKeyNotFound,
+  throwStackModified,
+} from "./throw-helpers.ts";
+
+let SortedList$rt: CollectionType<SortedList<unknown, unknown>> | undefined;
+
+/**
+ * Mirrors `System.Collections.Generic.SortedList<TKey, TValue>` (spec 011
+ * FR-054): two parallel arrays sorted by the key comparer, searched with
+ * .NET's binary search. O(log n) lookups, O(n) inserts and removals, O(1)
+ * index access, as .NET's own complexity.
+ *
+ * `add`, `set` (a new or an existing key), `removeAt`, `setValueAtIndex` and
+ * `clear` bump the version; `remove` bumps only when it finds the key, as
+ * .NET does.
+ */
+export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<K, V> {
+  declare readonly _keys: K[];
+  declare readonly _values: V[];
+  declare _version: number;
+  declare readonly _comparer: IComparer<K> | null;
+  declare readonly _compare: CompareFunction<K>;
+  declare _keyList: SortedListView<K> | undefined;
+  declare _valueList: SortedListView<V> | undefined;
+  declare readonly $typeArguments$SortedList: readonly RuntimeType[] | undefined;
+
+  constructor(
+    source?: Iterable<readonly [K, V]> | null,
+    comparer?: IComparer<K> | null,
+    typeArguments?: readonly RuntimeType[] | null,
+  ) {
+    const ownComparer = comparer ?? null;
+
+    defineField(this, "_keys", [], false);
+    defineField(this, "_values", [], false);
+    defineField(this, "_version", 0, true);
+    defineField(this, "_comparer", ownComparer, false);
+    defineField(this, "_compare", compareFunctionOf(ownComparer), false);
+    defineField(this, "_keyList", undefined, true);
+    defineField(this, "_valueList", undefined, true);
+    defineField(this, "$typeArguments$SortedList", typeArguments ?? undefined, false);
+
+    if (source !== null && source !== undefined) {
+      this.copyFrom(source);
+    }
+  }
+
+  /** `new SortedList<K, V>(dictionary[, comparer])`: a copy; `ArgumentNullException` (`dictionary`) for `null`. */
+  static from<K, V>(
+    source: Iterable<readonly [K, V]> | null | undefined,
+    comparer?: IComparer<K> | null,
+    typeArguments?: readonly RuntimeType[] | null,
+  ): SortedList<K, V> {
+    if (source === null || source === undefined) {
+      throwArgumentNull("dictionary");
+    }
+
+    return new SortedList(source, comparer, typeArguments);
+  }
+
+  /** `new SortedList<K, V>(capacity[, comparer])`: the capacity is validated, then dropped. */
+  static withCapacity<K, V>(
+    capacity: number,
+    comparer?: IComparer<K> | null,
+    typeArguments?: readonly RuntimeType[] | null,
+  ): SortedList<K, V> {
+    if (capacity < 0) {
+      throwNegativeArgument("capacity", capacity);
+    }
+
+    return new SortedList(null, comparer, typeArguments);
+  }
+
+  /** The `{ { k, v } }` initializer: `add` semantics, a duplicate key throws. */
+  static of<K, V>(
+    entries: ReadonlyArray<readonly [K, V]>,
+    comparer?: IComparer<K> | null,
+    typeArguments?: readonly RuntimeType[] | null,
+  ): SortedList<K, V> {
+    const list = new SortedList<K, V>(null, comparer, typeArguments);
+
+    for (const [key, value] of entries) {
+      list.add(key, value);
+    }
+
+    return list;
+  }
+
+  /** The `{ [k] = v }` initializer (and JSON): indexer semantics, the last value wins. */
+  static assign<K, V>(
+    entries: ReadonlyArray<readonly [K, V]>,
+    comparer?: IComparer<K> | null,
+    typeArguments?: readonly RuntimeType[] | null,
+  ): SortedList<K, V> {
+    const list = new SortedList<K, V>(null, comparer, typeArguments);
+
+    for (const [key, value] of entries) {
+      list.set(key, value);
+    }
+
+    return list;
+  }
+
+  static get $runtimeType(): CollectionType<SortedList<unknown, unknown>> {
+    return (SortedList$rt ??= {
+      kind: "collection",
+      collection: "SortedList",
+      name: "SortedList",
+      fullName: "System.Collections.Generic.SortedList",
+      namespace: "System.Collections.Generic",
+      ctor: SortedList,
+      typeArguments: [],
+      variance: ["invariant", "invariant"],
+      interfaces: [
+        { collection: "IDictionary", arguments: [0, 1] },
+        { collection: "IReadOnlyDictionary", arguments: [0, 1] },
+        { collection: "ICollection", arguments: null },
+        { collection: "IReadOnlyCollection", arguments: null },
+      ],
+      test: (value: unknown): value is SortedList<unknown, unknown> => value instanceof SortedList,
+    });
+  }
+
+  get count(): number {
+    return this._keys.length;
+  }
+
+  get isReadOnly(): false {
+    return false;
+  }
+
+  /** The argument comparer, or `defaultComparer` (`Comparer<K>.Default`). */
+  get comparer(): IComparer<K> {
+    return this._comparer ?? (defaultComparer as IComparer<K>);
+  }
+
+  /** `Keys`: a live read-only list of the keys, in order. */
+  get keys(): SortedListView<K> {
+    return (this._keyList ??= new SortedListView<K>(this, true));
+  }
+
+  /** `Values`: a live read-only list of the values, in key order. */
+  get values(): SortedListView<V> {
+    return (this._valueList ??= new SortedListView<V>(this, false));
+  }
+
+  get(key: K): V {
+    const index = this.indexOfKey(key);
+
+    if (index < 0) {
+      throwKeyNotFound(key);
+    }
+
+    return this._values[index] as V;
+  }
+
+  set(key: K, value: V): void {
+    const index = this.search(checkedKey(key));
+
+    if (index >= 0) {
+      this._values[index] = value;
+      this.bumpVersion();
+
+      return;
+    }
+
+    this.insertAt(~index, key, value);
+  }
+
+  /** `list[k] op= …`: read (`KeyNotFoundException` on a miss), apply, write; returns the new value. */
+  update(key: K, f: (current: V) => V): V {
+    const value = f(this.get(key));
+
+    this.set(key, value);
+
+    return value;
+  }
+
+  /** `list[k]++` in expression position: as `update`, returning the old value. */
+  updateReturningOld(key: K, f: (current: V) => V): V {
+    const current = this.get(key);
+
+    this.set(key, f(current));
+
+    return current;
+  }
+
+  add(key: K, value: V): void {
+    const index = this.search(checkedKey(key));
+
+    if (index >= 0) {
+      throwSortedListDuplicate(key, "key");
+    }
+
+    this.insertAt(~index, key, value);
+  }
+
+  remove(key: K): boolean {
+    const index = this.indexOfKey(key);
+
+    if (index < 0) {
+      return false;
+    }
+
+    this.removeAt(index);
+
+    return true;
+  }
+
+  removeAt(index: number): void {
+    this.checkIndex(index);
+    this._keys.splice(index, 1);
+    this._values.splice(index, 1);
+    this.bumpVersion();
+  }
+
+  clear(): void {
+    this._keys.length = 0;
+    this._values.length = 0;
+    this.bumpVersion();
+  }
+
+  containsKey(key: K): boolean {
+    return this.indexOfKey(key) >= 0;
+  }
+
+  containsValue(value: V): boolean {
+    return this.indexOfValue(value) >= 0;
+  }
+
+  /** The index of `key`, or `-1`; `ArgumentNullException` (`key`) for `null`. */
+  indexOfKey(key: K): number {
+    const index = this.search(checkedKey(key));
+
+    return index >= 0 ? index : -1;
+  }
+
+  /** The first index holding `value` (by `EqualityComparer<V>.Default`), or `-1`. */
+  indexOfValue(value: V): number {
+    return this._values.findIndex((candidate) => elementEquals(candidate, value));
+  }
+
+  getKeyAtIndex(index: number): K {
+    this.checkIndex(index);
+
+    return this._keys[index] as K;
+  }
+
+  getValueAtIndex(index: number): V {
+    this.checkIndex(index);
+
+    return this._values[index] as V;
+  }
+
+  setValueAtIndex(index: number, value: V): void {
+    this.checkIndex(index);
+    this._values[index] = value;
+    this.bumpVersion();
+  }
+
+  /** `TryGetValue`: the value, or the caller's `default(V)` on a miss (D30). */
+  tryGetValue<D>(
+    key: K,
+    missingValue: D,
+  ): readonly [found: true, value: V] | readonly [found: false, value: D] {
+    const index = this.indexOfKey(key);
+
+    return index < 0 ? [false, missingValue] : [true, this._values[index] as V];
+  }
+
+  /** `GetValueOrDefault`: the value, or the caller's default on a miss (D30). */
+  getValueOrDefault<D>(key: K, defaultValue: D): V | D {
+    const index = this.indexOfKey(key);
+
+    return index < 0 ? defaultValue : (this._values[index] as V);
+  }
+
+  copyTo(array: (readonly [K, V])[], arrayIndex = 0): void {
+    checkCopyTo(array, arrayIndex, this.count);
+
+    for (const [index, key] of this._keys.entries()) {
+      array[arrayIndex + index] = [key, this._values[index] as V];
+    }
+  }
+
+  /** `String(key)` → value, in key order. */
+  toJSON(): Record<string, V> {
+    const json: Record<string, V> = {};
+
+    for (const [index, key] of this._keys.entries()) {
+      json[String(key)] = this._values[index] as V;
+    }
+
+    return json;
+  }
+
+  [Symbol.iterator](): Iterator<readonly [K, V]> {
+    return new SortedListIterator(this, (index) => [
+      this._keys[index] as K,
+      this._values[index] as V,
+    ]);
+  }
+
+  /** @internal Validates an index of the sorted arrays (`ArgumentOutOfRangeException` with the actual value). */
+  checkIndex(index: number): void {
+    if (index >>> 0 >= this._keys.length) {
+      throwIndexOutOfRange(index);
+    }
+  }
+
+  /** .NET's binary search of `key` over the sorted keys. */
+  private search(key: K): number {
+    return binarySearch(this._keys, 0, this._keys.length, key, this._compare);
+  }
+
+  private insertAt(index: number, key: K, value: V): void {
+    this._keys.splice(index, 0, key);
+    this._values.splice(index, 0, value);
+    this.bumpVersion();
+  }
+
+  /** The copy constructor: sort the source by key, then reject a duplicate (by the comparer), as .NET does. */
+  private copyFrom(source: Iterable<readonly [K, V]>): void {
+    const entries = [...source].sort(([x], [y]) => this._compare(x, y));
+
+    for (const [index, [key, value]] of entries.entries()) {
+      if (key === null || key === undefined) {
+        throwArgumentNull("key");
+      }
+
+      const previous = entries[index - 1];
+
+      if (previous !== undefined && this._compare(previous[0], key) === 0) {
+        throwSortedListDuplicate(key, null);
+      }
+
+      this._keys.push(key);
+      this._values.push(value);
+    }
+  }
+
+  private bumpVersion(): void {
+    if (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) {
+      this._version++;
+    }
+  }
+}
+
+/**
+ * `SortedList.Keys` / `.Values` (.NET's `KeyList` / `ValueList`): a live
+ * read-only list over one of the list's arrays; its enumeration is checked
+ * against the list's version.
+ */
+export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
+  // `any` arguments: the view reads one array of a list whose other type argument it does not know.
+  declare readonly _list: SortedList<any, any>;
+  declare readonly _isKeys: boolean;
+
+  constructor(list: SortedList<any, any>, isKeys: boolean) {
+    defineField(this, "_list", list, false);
+    defineField(this, "_isKeys", isKeys, false);
+  }
+
+  get count(): number {
+    return this._list.count;
+  }
+
+  get isReadOnly(): true {
+    return true;
+  }
+
+  get(index: number): T {
+    this._list.checkIndex(index);
+
+    return this.items()[index] as T;
+  }
+
+  /** `view[^n]`. */
+  fromEnd(n: number): T {
+    return this.get(this.count - n);
+  }
+
+  /** Keys: the binary search (`ArgumentNullException` for `null`); values: `EqualityComparer<V>.Default`. */
+  indexOf(item: T): number {
+    return this._isKeys ? this._list.indexOfKey(item) : this._list.indexOfValue(item);
+  }
+
+  contains(item: T): boolean {
+    return this.indexOf(item) >= 0;
+  }
+
+  copyTo(array: T[], arrayIndex = 0): void {
+    if (array === null || array === undefined) {
+      throwArgumentNull("destinationArray");
+    }
+
+    if (array.length - arrayIndex < this.count) {
+      throwArrayTooSmall();
+    }
+
+    for (const [index, item] of this.items().entries()) {
+      array[arrayIndex + index] = item;
+    }
+  }
+
+  set(_index: number, _value: T): never {
+    return this._isKeys ? throwKeyListWrite() : throwSortedListNested();
+  }
+
+  add(_item: T): never {
+    return throwSortedListNested();
+  }
+
+  insert(_index: number, _item: T): never {
+    return throwSortedListNested();
+  }
+
+  remove(_item: T): never {
+    return throwSortedListNested();
+  }
+
+  removeAt(_index: number): never {
+    return throwSortedListNested();
+  }
+
+  clear(): never {
+    return throwSortedListNested();
+  }
+
+  toJSON(): T[] {
+    return [...this.items()];
+  }
+
+  [Symbol.iterator](): Iterator<T> {
+    return new SortedListIterator(this._list, (index) => this.items()[index] as T);
+  }
+
+  private items(): readonly T[] {
+    return (this._isKeys ? this._list._keys : this._list._values) as readonly T[];
+  }
+}
+
+/** An index walk over a `SortedList`'s arrays, checked against its version on every step. */
+class SortedListIterator<T> implements Iterator<T> {
+  private readonly list: SortedList<any, any>;
+  private readonly version: number;
+  private readonly read: (index: number) => T;
+  private index = 0;
+
+  constructor(list: SortedList<any, any>, read: (index: number) => T) {
+    this.list = list;
+    this.version = list._version;
+    this.read = read;
+  }
+
+  next(): IteratorResult<T> {
+    if (
+      (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
+      this.list._version !== this.version
+    ) {
+      throwStackModified();
+    }
+
+    if (this.index >= this.list.count) {
+      return { done: true, value: undefined };
+    }
+
+    return { done: false, value: this.read(this.index++) };
+  }
+}

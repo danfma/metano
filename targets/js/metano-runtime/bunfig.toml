@@ -1,0 +1,2 @@
+[test]
+preload = ["./test/system/collections/r1-shim/preload.ts"]
