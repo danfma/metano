@@ -128,7 +128,7 @@ public static class PackageRootResolver
 
         var sharedAncestor = candidates.FirstOrDefault(dir =>
             IsSharedWithProject(dir, projectDirectory)
-        );
+        ) ?? candidates.FirstOrDefault(dir => IsPhysicallySharedWithProject(dir, projectDirectory));
 
         // Unrelated to the project: only a package.json in the output directory itself.
         if (sharedAncestor is null)
@@ -181,6 +181,15 @@ public static class PackageRootResolver
     private static bool IsSharedWithProject(string dir, string projectDirectory) =>
         !IsFilesystemRoot(dir) && IsSameOrUnder(projectDirectory, dir);
 
+    private static bool IsPhysicallySharedWithProject(string dir, string projectDirectory)
+    {
+        // Only fall back to aliases when the written ancestor search finds no boundary.
+        var physicalProjectDirectory = PhysicalDirectory(projectDirectory);
+        var physicalAncestor = PhysicalDirectory(dir);
+
+        return !IsFilesystemRoot(dir) && IsSameOrUnder(physicalProjectDirectory, physicalAncestor);
+    }
+
     private static bool HasPackageJson(string dir) =>
         File.Exists(Path.Combine(dir, PackageJsonFileName));
 
@@ -191,11 +200,6 @@ public static class PackageRootResolver
 
     private static bool IsSameOrUnder(string path, string ancestor)
     {
-        // Only containment uses physical identities. Search roots and writer-relative
-        // paths must stay on the written output tree, even when it links outside the repo.
-        path = PhysicalDirectory(path);
-        ancestor = PhysicalDirectory(ancestor);
-
         var ancestorPrefix = Path.EndsInDirectorySeparator(ancestor)
             ? ancestor
             : ancestor + Path.DirectorySeparatorChar;

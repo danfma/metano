@@ -312,6 +312,17 @@ public class PackageRootResolverTests
     }
 
     [Test]
+    public async Task OutputLinkedToProjectAncestor_KeepsTheWrittenFallbackParent()
+    {
+        Directory.CreateDirectory(PathOf("proj/src/App"));
+        CreateDirectoryLink(PathOf("proj/linksrc"), PathOf("proj/src"));
+
+        var resolution = Resolve(output: "proj/linksrc/gen", project: "proj/src/App/App.csproj");
+
+        await AssertResolved(resolution, "proj/linksrc", "proj/linksrc/gen", "gen");
+    }
+
+    [Test]
     public async Task SymlinkToUnrelatedOutput_KeepsTheWrittenFallbackParent()
     {
         Directory.CreateDirectory(PathOf("app"));

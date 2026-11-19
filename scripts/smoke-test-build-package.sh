@@ -67,13 +67,21 @@ fail() {
 # Bound every dotnet invocation, including the compiler processes MSBuild starts.
 # Python is available on the CI runners and avoids a GNU timeout dependency on macOS.
 smoke_wrapper_pid=""
+smoke_job_pid=""
+export METANO_SMOKE_WRAPPER_PID_FILE="$WORK_DIR/wrapper.pid"
+export METANO_SMOKE_CANCEL_FILE="$WORK_DIR/cancel.signal"
 terminate_smoke() {
   local signum="$1"
   trap '' TERM INT
+  echo "$signum" >"$METANO_SMOKE_CANCEL_FILE.tmp"
+  mv "$METANO_SMOKE_CANCEL_FILE.tmp" "$METANO_SMOKE_CANCEL_FILE"
+  if [ -f "$METANO_SMOKE_WRAPPER_PID_FILE" ]; then
+    smoke_wrapper_pid="$(cat "$METANO_SMOKE_WRAPPER_PID_FILE")"
+  fi
   if [ -n "$smoke_wrapper_pid" ]; then
     kill -"$signum" "$smoke_wrapper_pid" 2>/dev/null || true
-    wait "$smoke_wrapper_pid" 2>/dev/null || true
   fi
+  wait "${smoke_job_pid:-$smoke_wrapper_pid}" 2>/dev/null || true
   exit "$((128 + signum))"
 }
 trap 'terminate_smoke 15' TERM
@@ -82,17 +90,33 @@ trap 'terminate_smoke 2' INT
 run_dotnet() {
   local status=0
   python3 -c '
-import math, os, signal, subprocess, sys
+import math, os, pathlib, signal, subprocess, sys
 deadline = float(os.environ.get("METANO_SMOKE_DOTNET_TIMEOUT_SECONDS", "300"))
 if not math.isfinite(deadline) or deadline <= 0:
     sys.exit("METANO_SMOKE_DOTNET_TIMEOUT_SECONDS must be a positive finite number")
-process = subprocess.Popen(["dotnet", *sys.argv[1:]], start_new_session=True)
+process = None
 
 def kill_group(signum):
+    if process is None:
+        return
     try:
         os.killpg(process.pid, signum)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        # Darwin can report EPERM, rather than ESRCH, while the last group
+        # members are being reaped. Never suppress it for a still-live group.
+        if sys.platform != "darwin":
+            raise
+        rows = subprocess.run(
+            ["ps", "-A", "-o", "pgid=,stat="], capture_output=True,
+            text=True, check=True, timeout=2
+        ).stdout.splitlines()
+        if any(
+            group == str(process.pid) and not state.startswith("Z")
+            for group, state in (row.split() for row in rows)
+        ):
+            raise
 
 class SmokeSignal(BaseException):
     def __init__(self, signum):
@@ -102,13 +126,36 @@ def forward_signal(signum, frame):
     # Unwind the active wait before reaping: wait() is not signal-reentrant.
     raise SmokeSignal(signum)
 
+# Block across publication/spawn so a handler cannot unwind Popen before the
+# child is assigned. The child restores the dispositions inherited from bash &.
+termination_signals = {signal.SIGTERM, signal.SIGINT}
+previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, termination_signals)
 signal.signal(signal.SIGTERM, forward_signal)
 signal.signal(signal.SIGINT, forward_signal)
+
+def prepare_child():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
 try:
+    pid_file = pathlib.Path(os.environ["METANO_SMOKE_WRAPPER_PID_FILE"])
+    temporary_pid_file = pid_file.with_suffix(".tmp")
+    temporary_pid_file.write_text(str(os.getpid()))
+    temporary_pid_file.replace(pid_file)
+    cancellation = pathlib.Path(os.environ["METANO_SMOKE_CANCEL_FILE"])
+    if cancellation.exists():
+        raise SmokeSignal(int(cancellation.read_text()))
+    process = subprocess.Popen(
+        ["dotnet", *sys.argv[1:]], start_new_session=True, preexec_fn=prepare_child
+    )
+    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
     sys.exit(process.wait(timeout=deadline))
 except SmokeSignal as termination:
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    if process is None:
+        sys.exit(128 + termination.signum)
     kill_group(termination.signum)
     try:
         process.wait(timeout=5)
@@ -127,6 +174,28 @@ except subprocess.TimeoutExpired:
   smoke_wrapper_pid=$!
   wait "$smoke_wrapper_pid" || status=$?
   smoke_wrapper_pid=""
+  rm -f "$METANO_SMOKE_WRAPPER_PID_FILE"
+  return "$status"
+}
+
+# A foreground subshell/command substitution defers bash traps until it exits.
+# Background it and use the interruptible wait builtin in the top-level shell;
+# the shared pid file lets that shell signal the wrapper started in the subshell.
+run_in_directory() {
+  local directory="$1" status=0
+  shift
+  (cd "$directory" && "$@") &
+  smoke_job_pid=$!
+  wait "$smoke_job_pid" || status=$?
+  smoke_job_pid=""
+  return "$status"
+}
+
+capture_dotnet() {
+  local result_variable="$1" directory="$2" status=0
+  shift 2
+  run_in_directory "$directory" run_dotnet "$@" >"$WORK_DIR/capture.log" 2>&1 || status=$?
+  printf -v "$result_variable" '%s' "$(cat "$WORK_DIR/capture.log")"
   return "$status"
 }
 
@@ -237,8 +306,8 @@ EOF
   echo '<Project />' >"$dir/Directory.Build.targets"
 
   if [ "$2" = "with-tool" ]; then
-    (cd "$dir" && run_dotnet new tool-manifest >/dev/null &&
-      restore_with_retry tool install Metano.Compiler.TypeScript --version "$SMOKE_VERSION")
+    run_in_directory "$dir" run_dotnet new tool-manifest >/dev/null
+    run_in_directory "$dir" restore_with_retry tool install Metano.Compiler.TypeScript --version "$SMOKE_VERSION"
   fi
 }
 
@@ -249,8 +318,8 @@ check_consumer_build() {
   write_consumer "$dir" with-tool
 
   local first
-  (cd "$dir" && restore_with_retry restore Consumer.csproj)
-  first="$(cd "$dir" && run_dotnet build --no-restore -nologo 2>&1)" || {
+  run_in_directory "$dir" restore_with_retry restore Consumer.csproj
+  capture_dotnet first "$dir" build --no-restore -nologo || {
     echo "$first"
     fail "the consumer build failed"
   }
@@ -262,7 +331,7 @@ check_consumer_build() {
   [ -f "$dir/generated/src/db/seed.sql" ] || fail "the asset added by a target was not copied"
 
   local second
-  second="$(cd "$dir" && run_dotnet build --no-restore -nologo 2>&1)" || {
+  capture_dotnet second "$dir" build --no-restore -nologo || {
     echo "$second"
     fail "the second consumer build failed"
   }
@@ -272,7 +341,7 @@ check_consumer_build() {
   fi
 
   local changed
-  changed="$(cd "$dir" && run_dotnet build --no-restore -nologo '-p:MetanoFilePrefix=// first%3Bsecond' 2>&1)" || {
+  capture_dotnet changed "$dir" build --no-restore -nologo '-p:MetanoFilePrefix=// first%3Bsecond' || {
     echo "$changed"
     fail "the changed-argument consumer build failed"
   }
@@ -286,7 +355,7 @@ check_consumer_build() {
   <MetanoFilePrefix>// props;prefix</MetanoFilePrefix>
 </PropertyGroup></Project>
 EOF
-  changed="$(cd "$dir" && run_dotnet build --no-restore -nologo 2>&1)" || {
+  capture_dotnet changed "$dir" build --no-restore -nologo || {
     echo "$changed"
     fail "the Directory.Build.props consumer build failed"
   }
@@ -298,7 +367,7 @@ EOF
   cat >"$dir/Directory.Build.targets" <<'EOF'
 <Project><PropertyGroup><MetanoExtraArgs>--file-prefix &quot;// extra;args&quot;</MetanoExtraArgs></PropertyGroup></Project>
 EOF
-  changed="$(cd "$dir" && run_dotnet build --no-restore -nologo 2>&1)" || {
+  capture_dotnet changed "$dir" build --no-restore -nologo || {
     echo "$changed"
     fail "the Directory.Build.targets consumer build failed"
   }
@@ -312,7 +381,7 @@ check_up_to_date() {
   local dir="$1"
   shift
   local output
-  output="$(cd "$dir" && run_dotnet build --no-restore -nologo "$@" 2>&1)" || {
+  capture_dotnet output "$dir" build --no-restore -nologo "$@" || {
     echo "$output"
     fail "the up-to-date consumer build failed"
   }
@@ -335,7 +404,8 @@ check_transitive_consumer() {
   </ItemGroup>
 </Project>
 EOF
-  (cd "$bridge" && restore_with_retry restore Consumer.csproj && run_dotnet pack --no-restore -c Debug -o "$FEED_DIR" -v:quiet)
+  run_in_directory "$bridge" restore_with_retry restore Consumer.csproj
+  run_in_directory "$bridge" run_dotnet pack --no-restore -c Debug -o "$FEED_DIR" -v:quiet
 
   local dir="$WORK_DIR/transitive-consumer"
   write_consumer "$dir" with-tool
@@ -345,10 +415,10 @@ EOF
   <ItemGroup><PackageReference Include="Smoke.Bridge" Version="$SMOKE_VERSION" /></ItemGroup>
 </Project>
 EOF
-  (cd "$dir" && restore_with_retry restore Consumer.csproj)
+  run_in_directory "$dir" restore_with_retry restore Consumer.csproj
   grep -q 'buildTransitive/Metano.Build.TypeScript.targets' "$dir/obj/Consumer.csproj.nuget.g.targets" || fail "the consumer does not import buildTransitive targets"
   local output
-  output="$(cd "$dir" && run_dotnet build --no-restore -nologo 2>&1)" || {
+  capture_dotnet output "$dir" build --no-restore -nologo || {
     echo "$output"
     fail "the transitive consumer build failed"
   }
@@ -379,9 +449,9 @@ EOF
   </ItemGroup>
 </Project>
 EOF
-  (cd "$dir" && restore_with_retry restore Consumer.csproj)
+  run_in_directory "$dir" restore_with_retry restore Consumer.csproj
   local first second
-  first="$(cd "$dir" && run_dotnet msbuild Consumer.csproj -graphBuild -isolate -nodeReuse:false -nologo 2>&1)" || {
+  capture_dotnet first "$dir" msbuild Consumer.csproj -graphBuild -isolate -nodeReuse:false -nologo || {
     echo "$first"
     fail "the isolated static-graph build failed"
   }
@@ -389,7 +459,7 @@ EOF
   [ -f "$dir/generated/src/.metano-stamp" ] || fail "the graph consumer did not write its stamp"
   grep -rqs 'class Todo' "$dir/generated/src" --include='*.ts' || fail "the graph consumer did not emit Todo"
   [ -f "$dir/generated/package.json" ] || fail "the graph consumer did not emit package.json"
-  second="$(cd "$dir" && run_dotnet msbuild Consumer.csproj -graphBuild -isolate -nodeReuse:false -nologo 2>&1)" || {
+  capture_dotnet second "$dir" msbuild Consumer.csproj -graphBuild -isolate -nodeReuse:false -nologo || {
     echo "$second"
     fail "the second isolated static-graph build failed"
   }
@@ -403,10 +473,10 @@ check_missing_tool() {
 
   local dir="$WORK_DIR/consumer-without-tool"
   write_consumer "$dir" without-tool
-  (cd "$dir" && restore_with_retry restore Consumer.csproj)
+  run_in_directory "$dir" restore_with_retry restore Consumer.csproj
 
   local output
-  if output="$(cd "$dir" && run_dotnet build --no-restore -nologo 2>&1)"; then
+  if capture_dotnet output "$dir" build --no-restore -nologo; then
     fail "the build without the tool succeeded"
   fi
 
