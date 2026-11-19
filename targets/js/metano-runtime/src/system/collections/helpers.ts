@@ -4,6 +4,7 @@
  * bundle pulls only the ones it calls.
  */
 import { IndexOutOfRangeException } from "../exceptions/index-out-of-range-exception.ts";
+import { invalidCast } from "../reflection/invalid-cast.ts";
 import type { IList, Span } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { throwArgumentNull } from "./throw-helpers.ts";
@@ -66,14 +67,26 @@ export function asReadOnlySpan<T>(list: List<T> | null | undefined): ReadonlyArr
  * `(IList<T>)value` (and `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`)
  * from a static type that may hold a native array (`object`, `IEnumerable<T>`): a native
  * array becomes a fixed-size list over the same storage, as C# views it; `null` /
- * `undefined` give `null`; any other value passes through untested (a user class
- * implementing `IList<T>` has no collection descriptor), so a value that is not a list
- * fails at its first use instead of at the cast.
+ * `undefined` give `null`; a primitive, never a list, throws .NET's `InvalidCastException`
+ * naming `targetType` (the cast target's `Type.ToString()`, which the compiler writes); any
+ * other value passes through untested (a user class implementing `IList<T>` has no
+ * collection descriptor), so an object that is not a list fails at its first use instead
+ * of at the cast.
  */
-export function asList<T>(value: unknown): IList<T> | null {
+export function asList<T>(value: unknown, targetType: string): IList<T> | null {
   if (value === null || value === undefined) {
     return null;
   }
 
+  if (isPrimitive(value)) {
+    throw invalidCast(value, targetType);
+  }
+
   return Array.isArray(value) ? List.adopt(value as T[], { fixedSize: true }) : (value as IList<T>);
+}
+
+function isPrimitive(value: unknown): value is string | number | boolean | bigint {
+  const type = typeof value;
+
+  return type === "string" || type === "number" || type === "boolean" || type === "bigint";
 }

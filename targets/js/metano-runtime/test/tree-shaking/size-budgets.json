@@ -357,6 +357,7 @@
     "system/reflection/get-runtime-type",
     "system/reflection/implements-interface",
     "system/reflection/index",
+    "system/reflection/invalid-cast",
     "system/reflection/is-assignable-from",
     "system/reflection/is-box-of",
     "system/reflection/is-boxed",

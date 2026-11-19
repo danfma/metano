@@ -12,21 +12,25 @@ namespace Metano.Tests;
 public class ListInterfaceCastTests
 {
     [Test]
-    [Arguments("object value", "(IList<int>)value", "asList<number>(value) as IList<number>")]
+    [Arguments(
+        "object value",
+        "(IList<int>)value",
+        "asList<number>(value, \"System.Collections.Generic.IList`1[System.Int32]\") as IList<number>"
+    )]
     [Arguments(
         "IEnumerable<int> value",
         "(IReadOnlyList<int>)value",
-        "asList<number>(value) as IReadOnlyList<number>"
+        "asList<number>(value, \"System.Collections.Generic.IReadOnlyList`1[System.Int32]\") as IReadOnlyList<number>"
     )]
     [Arguments(
         "List<int> value",
         "(ICollection<int>)(object)value",
-        "asList<number>(value) as ICollection<number>"
+        "asList<number>(value, \"System.Collections.Generic.ICollection`1[System.Int32]\") as ICollection<number>"
     )]
     [Arguments(
         "int[] value",
         "(IReadOnlyCollection<int>)(object)value",
-        "asList<number>(value) as IReadOnlyCollection<number>"
+        "asList<number>(value, \"System.Collections.Generic.IReadOnlyCollection`1[System.Int32]\") as IReadOnlyCollection<number>"
     )]
     public async Task CastFromAPossibleArray_LowersToAsList(
         string parameter,

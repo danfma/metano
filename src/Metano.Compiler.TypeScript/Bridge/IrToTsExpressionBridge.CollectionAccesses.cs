@@ -128,7 +128,9 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// A cast to a list interface from a value that may be a native array
     /// (contracts/runtime-collections.md § Helpers):
-    /// <c>asList&lt;T&gt;(v) as IList&lt;T&gt;</c>, typed as the cast's target.
+    /// <c>asList&lt;T&gt;(v, "System.Collections.Generic.IList`1[…]") as IList&lt;T&gt;</c>,
+    /// typed as the cast's target; the name is the one .NET's
+    /// <c>InvalidCastException</c> gives the target when the value is a primitive.
     /// </summary>
     private static TsExpression MapListInterfaceCast(
         IrListInterfaceCast cast,
@@ -137,7 +139,7 @@ public static partial class IrToTsExpressionBridge
     {
         var call = new TsCallExpression(
             RuntimeCollections.HelperReference("asList"),
-            [Map(cast.Value, context)],
+            [Map(cast.Value, context), new TsStringLiteral(cast.TargetClrTypeName)],
             TypeArguments: [IrToTsTypeMapper.Map(cast.Target.TypeArguments[0])]
         );
 

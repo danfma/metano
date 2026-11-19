@@ -1,7 +1,5 @@
-import { InvalidCastException } from "../exceptions/invalid-cast-exception.ts";
-import { ownRuntimeType, ownRuntimeTypeOf } from "./constructor-descriptor.ts";
-import { getRuntimeType } from "./get-runtime-type.ts";
-import { isBoxed } from "./is-boxed.ts";
+import { ownRuntimeType } from "./constructor-descriptor.ts";
+import { invalidCast } from "./invalid-cast.ts";
 import type { RuntimeType } from "./runtime-type.ts";
 import { unboxForCast } from "./unbox-for-cast.ts";
 
@@ -33,7 +31,7 @@ export function castTo<T>(value: unknown, type: RuntimeType<T> | RuntimeClass): 
     return candidate as T;
   }
 
-  throw invalidCast(describeValue(value, true), type.fullName);
+  throw invalidCast(value, type.fullName);
 }
 
 function castToClass<T>(value: unknown, type: RuntimeClass): T {
@@ -41,35 +39,5 @@ function castToClass<T>(value: unknown, type: RuntimeClass): T {
     return value as T;
   }
 
-  throw invalidCast(describeValue(value, false), ownRuntimeType(type)?.fullName ?? type.name);
-}
-
-function invalidCast(source: string, target: string): InvalidCastException {
-  return new InvalidCastException(`Unable to cast object of type '${source}' to type '${target}'.`);
-}
-
-/**
- * The name .NET's cast message gives the value's type: the full name of a described class,
- * else the constructor's name, else `typeof`. A descriptor target also names a primitive by
- * its descriptor (`System.Int32`).
- */
-function describeValue(value: unknown, describePrimitives: boolean): string {
-  if (isBoxed(value)) {
-    return value.type.fullName;
-  }
-
-  const described = ownRuntimeTypeOf(value);
-
-  if (described !== undefined) {
-    return described.fullName;
-  }
-
-  if (describePrimitives && (typeof value !== "object" || value === null)) {
-    return getRuntimeType(value).fullName;
-  }
-
-  const constructorName = (value as { readonly constructor?: { readonly name?: string } })
-    .constructor?.name;
-
-  return typeof value === "object" && constructorName ? constructorName : typeof value;
+  throw invalidCast(value, ownRuntimeType(type)?.fullName ?? type.name, false);
 }

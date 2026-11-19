@@ -16,6 +16,9 @@ import {
 
 import { List } from "#/system/collections/list.ts";
 import { IndexOutOfRangeException } from "#/system/exceptions/index-out-of-range-exception.ts";
+import { InvalidCastException } from "#/system/exceptions/invalid-cast-exception.ts";
+
+const LIST_OF_INT32 = "System.Collections.Generic.IList`1[System.Int32]";
 
 describe("helpers", () => {
   test("fromEnd on a native array is checked", () => {
@@ -42,7 +45,7 @@ describe("helpers", () => {
 
   test("asList adopts a native array as a fixed-size list", () => {
     const array = [1, 2];
-    const list = asList<number>(array);
+    const list = asList<number>(array, LIST_OF_INT32);
 
     expect(list).toBeInstanceOf(List);
     expect(list?.count).toBe(2);
@@ -55,14 +58,31 @@ describe("helpers", () => {
     expect(() => list?.add(3)).toThrow("Collection was of a fixed size.");
   });
 
-  test("asList passes null, a List and any other value through", () => {
+  test("asList passes null, a List and any other object through", () => {
     const list = List.of([1]);
     const shaped = { count: 0 };
 
-    expect(asList(null)).toBeNull();
-    expect(asList(undefined)).toBeNull();
-    expect(asList<number>(list)).toBe(list);
-    expect(Object.is(asList(shaped), shaped)).toBe(true);
+    expect(asList(null, LIST_OF_INT32)).toBeNull();
+    expect(asList(undefined, LIST_OF_INT32)).toBeNull();
+    expect(asList<number>(list, LIST_OF_INT32)).toBe(list);
+    expect(Object.is(asList(shaped, LIST_OF_INT32), shaped)).toBe(true);
+  });
+
+  test("asList rejects a primitive with .NET's InvalidCastException", () => {
+    expect(() => asList("ab", "System.Collections.Generic.IList`1[System.Char]")).toThrow(
+      new InvalidCastException(
+        "Unable to cast object of type 'System.String' to type " +
+          "'System.Collections.Generic.IList`1[System.Char]'.",
+      ),
+    );
+
+    expect(() => asList(5, LIST_OF_INT32)).toThrow(
+      "Unable to cast object of type 'System.Int32' to type " +
+        "'System.Collections.Generic.IList`1[System.Int32]'.",
+    );
+
+    expect(() => asList(true, LIST_OF_INT32)).toThrow(InvalidCastException);
+    expect(() => asList(1n, LIST_OF_INT32)).toThrow(InvalidCastException);
   });
 
   test("the views return the backing array; null handling", () => {

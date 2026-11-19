@@ -300,4 +300,22 @@ public static class CollectionFlipProbes
 
         return $"{view.Count},{view[2]},{view.IsReadOnly}|{array[0]}|{add}|{read.Count}";
     }
+
+    public static string CastStringToListInterface() =>
+        CastFailure(() => (IList<char>)(object)"ab");
+
+    public static string CastNumberToListInterface() =>
+        CastFailure(() => (IReadOnlyList<int>)(object)5);
+
+    static string CastFailure(Func<object> cast)
+    {
+        try
+        {
+            return $"cast {cast()}";
+        }
+        catch (InvalidCastException ex)
+        {
+            return $"InvalidCastException: {ex.Message}";
+        }
+    }
 }

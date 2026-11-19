@@ -992,7 +992,15 @@ public sealed record IrListInterfaceCast(
     IrExpression Value,
     IrCollectionTypeRef Target,
     IrTypeRef TargetType
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The name .NET gives <see cref="Target"/> (<c>Type.ToString()</c>,
+    /// <see cref="Analysis.ClrTypeName"/>), for the <c>InvalidCastException</c>
+    /// a target throws when the value is never a list (a string, a number).
+    /// </summary>
+    public required string TargetClrTypeName { get; init; }
+}
 
 /// <summary>
 /// The C# collection initializer forms of a stage 011c collection (spec 011

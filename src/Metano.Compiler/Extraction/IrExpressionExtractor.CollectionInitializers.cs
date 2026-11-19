@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -306,6 +307,9 @@ public sealed partial class IrExpressionExtractor
 
         return MapNonNullType(named) is IrCollectionTypeRef collection
             ? new IrListInterfaceCast(inner, collection, ExtractTargetType(cast))
+            {
+                TargetClrTypeName = ClrTypeName.Of(named),
+            }
             : null;
     }
 
