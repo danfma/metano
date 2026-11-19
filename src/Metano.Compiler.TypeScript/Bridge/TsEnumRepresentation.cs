@@ -28,8 +28,8 @@ internal static class TsEnumRepresentation
         && special is SpecialType.System_Int64 or SpecialType.System_UInt64;
 
     /// <summary>
-    /// The endpoint as TypeScript holds it: a 64-bit enum is its underlying
-    /// <c>bigint</c>, so it converts as that integer.
+    /// The conversion endpoint as TypeScript holds it: every numeric enum
+    /// converts as its underlying integer (#701, #708).
     /// </summary>
     public static IrNumericEndpoint Of(IrNumericEndpoint endpoint) =>
         endpoint.AsUnderlyingInteger();

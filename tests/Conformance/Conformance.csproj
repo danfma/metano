@@ -20,5 +20,6 @@
     <Compile Remove="xpkg/**" />
     <ProjectReference Include="../../src/Metano/Metano.csproj" />
     <ProjectReference Include="xpkg/Lib/ConformanceLib.csproj" />
+    <ProjectReference Include="xpkg/CheckedEnums/CheckedEnums.csproj" />
   </ItemGroup>
 </Project>

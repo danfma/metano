@@ -282,9 +282,7 @@ public sealed partial class IrExpressionExtractor
     /// enumeration conversion (<c>(int)e</c>, <c>(E)l</c>), which C# checks
     /// through the conversion of the underlying integers (#701), read the
     /// context of their syntax. Only a cast that lowers to a conversion node
-    /// carries it (one that crosses 64 bits or truncates a floating-point
-    /// value); a narrowing between an enum and an integer of 32 bits or fewer
-    /// still ignores the context.
+    /// carries it, including enum narrowing of 32 bits or fewer (#708).
     /// </summary>
     private bool IsCheckedCast(CastExpressionSyntax cast) =>
         _semantic.GetOperation(cast) switch
@@ -309,7 +307,10 @@ public sealed partial class IrExpressionExtractor
         IrNumericEndpoint from,
         IrNumericEndpoint to
     ) =>
-        IrNumericConversion.IsIntegerNarrowing(from, to)
+        IrNumericConversion.IsIntegerNarrowing(
+            _context.NumericLowering.ConversionOf(from),
+            _context.NumericLowering.ConversionOf(to)
+        )
         && IntegerValueRanges.Of(
             _semantic.GetOperation(Unparenthesized(cast.Expression)),
             _context.NumericLowering
@@ -334,7 +335,9 @@ public sealed partial class IrExpressionExtractor
         var typeInfo = _semantic.GetTypeInfo(cast);
         var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
 
-        return _context.NumericLowering.HoldsAsInteger(NumericEndpoints.Of(typeInfo.Type))
+        return
+            _context.NumericLowering.ConversionOf(NumericEndpoints.Of(typeInfo.Type))
+                is { IsEnum: false }
             ? AsEnumConstant(folded, typeInfo.Type)
             : folded;
     }

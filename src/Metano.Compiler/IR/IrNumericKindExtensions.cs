@@ -99,12 +99,11 @@ public static class IrNumericKindExtensions
         endpoint.IsEnum && endpoint.Kind.IsSixtyFourBit();
 
     /// <summary>
-    /// A 64-bit enum endpoint read as its underlying integer (#701), for a
-    /// target that holds such an enum as that integer; any other endpoint as
-    /// it is.
+    /// A numeric enum endpoint read as its underlying integer (#701, #708)
+    /// for a conversion; any other endpoint as it is.
     /// </summary>
     public static IrNumericEndpoint AsUnderlyingInteger(this IrNumericEndpoint endpoint) =>
-        endpoint.IsSixtyFourBitEnum() ? new IrNumericEndpoint(endpoint.Kind) : endpoint;
+        endpoint.IsEnum ? new IrNumericEndpoint(endpoint.Kind) : endpoint;
 
     /// <summary>A 64-bit integer value, not an enum over one.</summary>
     public static bool IsSixtyFourBitValue(this IrNumericEndpoint endpoint) =>

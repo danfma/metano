@@ -1,0 +1,18 @@
+{
+  "name": "conformance-checked-enums",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./checked-enums": {
+      "types": "./dist/checked-enums/index.d.ts",
+      "default": "./dist/checked-enums/index.js"
+    }
+  },
+  "imports": {
+    "#/*": {
+      "bun": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  }
+}

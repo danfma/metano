@@ -60,9 +60,6 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsIntegerToDecimal(from, to))
             return DecimalOfInteger(value);
 
-        if (to.IsEnum)
-            return ToEnum(from, to, isChecked, value);
-
         if (from is { Kind: IrNumericKind.BigInteger, IsEnum: false })
             return FromBigInteger(to, value);
 
@@ -94,18 +91,6 @@ internal static class IrToTsNumericConversionBridge
 
         return to.Kind is IrNumericKind.Single ? Global("Math.fround", asDouble) : asDouble;
     }
-
-    /// <summary>
-    /// An enum of 32 bits or fewer is a <c>number</c>: a conversion to it
-    /// converts to its underlying kind; an integer <c>number</c> needs nothing
-    /// (FR-018).
-    /// </summary>
-    private static TsExpression ToEnum(
-        IrNumericEndpoint from,
-        IrNumericEndpoint to,
-        bool isChecked,
-        TsExpression value
-    ) => RenderConversion(from, new IrNumericEndpoint(to.Kind), isChecked, value);
 
     /// <summary>
     /// Out of a <c>BigInteger</c> (FR-003): every explicit conversion checks
