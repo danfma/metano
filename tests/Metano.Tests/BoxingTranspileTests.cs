@@ -415,6 +415,19 @@ public class BoxingTranspileTests
     }
 
     [Test]
+    public async Task AsDynamicOnAnObject_UnboxesTheOperand()
+    {
+        var output = Transpile(
+            """
+            public static dynamic Dynamic(object o) => o.AsDynamic();
+            public static object Boxed() => Color.Red;
+            """
+        );
+
+        await Assert.That(output).Contains("return (unbox(o) as Object as any);");
+    }
+
+    [Test]
     public async Task DisableBoxing_KeepsValuesRaw()
     {
         var output = Transpile(
