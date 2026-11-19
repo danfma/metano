@@ -50,8 +50,17 @@ jobs:
       # Packs Metano-packages.slnx and builds a throw-away consumer through
       # PackageReference Metano.Build.TypeScript, plus the missing-tool case
       # (baseline FR-087, #328).
+      - name: Cache build-package smoke NuGet downloads
+        uses: actions/cache@v4
+        with:
+          path: obj/build-package-smoke-cache/http
+          key: build-smoke-nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', 'global.json') }}
+          restore-keys: build-smoke-nuget-${{ runner.os }}-
+
       - name: Metano.Build.TypeScript packaging smoke test
-        run: bash scripts/smoke-test-build-package.sh
+        run: |
+          bash scripts/test-build-package-smoke.sh
+          bash scripts/smoke-test-build-package.sh
 
       - name: Format check
         run: dotnet csharpier check .

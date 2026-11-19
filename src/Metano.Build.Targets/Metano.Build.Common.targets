@@ -17,12 +17,13 @@
       ToolchainKeyFile   The target's toolchain key file under obj/.
       CompilerProject    The resolved MetanoCompilerProject (dev mode), or empty.
       ToolStoreName      The tool's folder in the global tool store (lower-case package id).
+      ArgumentsHash      Hash of the effective CLI argument line, composed before the key write.
       PostBuildCommand   The resolved post-build command, escaped, or empty.
 
     Where each part runs:
 
-      Parent instance (every build): user inputs, setting resolution, METANOBUILD002, toolchain
-      keys, the asset projection, the incremental check and argument line of each per-target
+      Parent instance (every build): user inputs, setting resolution, METANOBUILD002, asset
+      projection and argument composition, toolchain keys, the incremental check of each per-target
       transpile target, the post-build commands. Worker instance (only for an out-of-date
       target, through the MSBuild task with the resolved values as global properties): the tool
       probe (METANOBUILD001) and the CLI Exec. The worker cannot see items the parent produced by running targets, such as
@@ -37,6 +38,7 @@
 
   <PropertyGroup>
     <_MetanoBuildCommonImported>true</_MetanoBuildCommonImported>
+    <_MetanoBuildCommonHash>$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(MSBuildThisFileFullPath)'))))</_MetanoBuildCommonHash>
   </PropertyGroup>
 
   <ItemDefinitionGroup>
@@ -59,6 +61,20 @@
 
   <Target Name="_MetanoResolveTargets" DependsOnTargets="$(_MetanoResolveTargetsDependsOn)" />
 
+  <!-- Different package versions may carry different shared targets. Keep the first import,
+       but expose registered content mismatches instead of depending silently on import order.
+       Pre-contract packages neither register their copy nor check it: when the new file loads
+       first its only known copy matches; when the old file loads first no check runs. Neither
+       mixed-version order can prove skew, so neither emits a speculative warning. -->
+  <Target Name="_MetanoCheckCommonTargets">
+    <Warning
+      Condition="'%(_MetanoBuildCommonCopy.Identity)' != '' and '%(_MetanoBuildCommonCopy.ContentHash)' != '$(_MetanoBuildCommonHash)'"
+      Text="Metano build packages contain different versions of Metano.Build.Common.targets (%(_MetanoBuildCommonCopy.Identity)). Align the Metano.Build package versions to avoid import-order-dependent behavior."
+    />
+  </Target>
+
+  <Target Name="_MetanoComposeArguments" DependsOnTargets="$(_MetanoComposeArgumentsDependsOn)" />
+
   <!-- METANOBUILD002: batching on OutputDirFull restricts @(_MetanoEnabledTarget) to the targets
        sharing one directory; batch buckets compare metadata case-insensitively. -->
   <Target Name="_MetanoCheckOutputCollisions" DependsOnTargets="_MetanoResolveTargets">
@@ -76,7 +92,7 @@
        keeps the items of earlier batches. -->
   <Target
     Name="_MetanoWriteToolchainKeys"
-    DependsOnTargets="_MetanoResolveTargets"
+    DependsOnTargets="_MetanoResolveTargets;_MetanoComposeArguments"
     Outputs="%(_MetanoEnabledTarget.Identity)"
   >
     <PropertyGroup>
@@ -107,6 +123,7 @@
         Condition="'%(ReferencePath.Filename)' == 'Metano'"
       />
       <_MetanoToolchainLine Include="build=$(MSBuildThisFileFullPath)" />
+      <_MetanoToolchainLine Include="arguments=%(_MetanoEnabledTarget.ArgumentsHash)" />
       <_MetanoToolchainLine Include="@(_MetanoAnnotationsReference->'annotations=%(FullPath)')" />
       <_MetanoToolchainLine
         Include="compilerProject=$(_MetanoKeyCompilerProject)"
@@ -166,7 +183,7 @@
 
   <Target
     Name="_MetanoPrepare"
-    DependsOnTargets="_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys;_MetanoProjectAssets"
+    DependsOnTargets="_MetanoCheckCommonTargets;_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys;_MetanoProjectAssets"
   />
 
   <!-- No DependsOnTargets: the body prepares every target and then runs the per-target

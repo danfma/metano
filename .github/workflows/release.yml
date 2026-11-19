@@ -51,8 +51,17 @@ jobs:
       # Same gate for the NuGet build package: packs Metano-packages.slnx into a
       # throw-away local feed (nothing is pushed) and builds a consumer through
       # PackageReference Metano.Build.TypeScript (baseline FR-087, #328).
+      - name: Cache build-package smoke NuGet downloads
+        uses: actions/cache@v4
+        with:
+          path: obj/build-package-smoke-cache/http
+          key: build-smoke-nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', 'global.json') }}
+          restore-keys: build-smoke-nuget-${{ runner.os }}-
+
       - name: Smoke-test packed Metano.Build.TypeScript
-        run: bash scripts/smoke-test-build-package.sh
+        run: |
+          bash scripts/test-build-package-smoke.sh
+          bash scripts/smoke-test-build-package.sh
 
       # The tree-shaking gates of spec 011 FR-043, before anything is tagged:
       # the runtime's side-effect and size-budget suites, and the golden bundle

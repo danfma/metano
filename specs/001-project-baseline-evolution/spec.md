@@ -1282,6 +1282,11 @@ Product requirements added after the migration (normative; each one is traced by
      per-target file registers its common-file path and content hash as a
      `_MetanoBuildCommonCopy` item. The build MUST warn when a registered copy differs from the
      loaded shared file and ask the consumer to align package versions (#706).
+     A package predating that registration contract is not a known copy: when the newer
+     common file loads first it cannot compare against the older copy; when the older
+     guarded file loads first it has no check. The build MUST NOT emit a speculative skew
+     warning. This mixed-version combination (including legacy `Metano.Build` 2.x, which
+     has no common-file registration) is undetectable and MUST be documented as such.
   2. *Where each part runs.* The shared file cannot build a prefixed property name (`MSB4184`)
      and never reads one. Each per-target resolve target registers one `_MetanoEnabledTarget`
      item per enabled target, with the metadata `Include` (the language tag), `OutputDir`,

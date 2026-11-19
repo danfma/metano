@@ -25,6 +25,12 @@ public static class SyntheticTargetFile
                 Project="$(MSBuildThisFileDirectory)Metano.Build.Common.targets"
                 Condition="'$(_MetanoBuildCommonImported)' != 'true'"
               />
+              <ItemGroup>
+                <_MetanoBuildCommonCopy
+                  Include="$(MSBuildThisFileDirectory)Metano.Build.Common.targets"
+                  ContentHash="$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)Metano.Build.Common.targets'))))"
+                />
+              </ItemGroup>
               <PropertyGroup>
                 <_MetanoResolveTargetsDependsOn>$(_MetanoResolveTargetsDependsOn);_MetanoResolveFake{{prefix}}</_MetanoResolveTargetsDependsOn>
                 <_MetanoTranspileTargets>$(_MetanoTranspileTargets);MetanoTranspileFake{{prefix}}</_MetanoTranspileTargets>

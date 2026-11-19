@@ -73,7 +73,10 @@
       MetanoCompilerProject (dev mode) or a hash of the nearest .NET tool
       manifest of each file name (.config/dotnet-tools.json and
       dotnet-tools.json) plus one line per installed global tool version
-      folder. Bumping any of them rewrites the key, so the next build reruns
+      folder, plus a stable hash of the effective CLI argument line (including
+      projected assets). Changing a resolved setting through a command-line
+      property or Directory.Build.props/targets therefore reruns the tool (#706).
+      Bumping any of them rewrites the key, so the next build reruns
       the target, and the compiler
       treats a different compiler release as an incremental cache miss
       (.metano-cache.json), so the output is regenerated. The key is a content
@@ -128,8 +131,16 @@
 
   <PropertyGroup>
     <_MetanoResolveTargetsDependsOn>$(_MetanoResolveTargetsDependsOn);_MetanoResolveTs</_MetanoResolveTargetsDependsOn>
+    <_MetanoComposeArgumentsDependsOn>$(_MetanoComposeArgumentsDependsOn);_MetanoComposeTsArguments</_MetanoComposeArgumentsDependsOn>
     <_MetanoTranspileTargets>$(_MetanoTranspileTargets);MetanoTranspileTs</_MetanoTranspileTargets>
   </PropertyGroup>
+
+  <ItemGroup>
+    <_MetanoBuildCommonCopy
+      Include="$(MSBuildThisFileDirectory)Metano.Build.Common.targets"
+      ContentHash="$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)Metano.Build.Common.targets'))))"
+    />
+  </ItemGroup>
 
   <!-- FR-086: one line per setting, $(MetanoTs<S>) ?? $(Metano<S>) ?? default. The list is the
        contract; BuildSettingsContractTests keeps it in sync with the spec. Conditional
@@ -210,10 +221,9 @@
   </Target>
 
   <Target
-    Name="_MetanoTranspileTsIfOutOfDate"
+    Name="_MetanoComposeTsArguments"
+    DependsOnTargets="_MetanoResolveTargets;_MetanoProjectAssets"
     Condition="'$(_MetanoTsActive)' == 'true'"
-    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile)"
-    Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
   >
     <PropertyGroup>
       <!-- Two modes:
@@ -228,7 +238,10 @@
         >true</_MetanoTsProbeTool>
     </PropertyGroup>
 
-    <!-- One MSBuild item per CLI flag. Each entry's Condition gates the flag on the resolved
+    <!-- Compose once before the key write and incremental check, then pass this exact line to
+         the worker. Escape free-form values before item creation: quotes do not protect a
+         semicolon from MSBuild's item-list splitting (#706).
+         One MSBuild item per CLI flag. Each entry's Condition gates the flag on the resolved
          setting so empty values never reach the command line. Value-bearing flags carry the
          value inline (quoted) and bare flags render as just the switch token. -->
     <ItemGroup>
@@ -269,10 +282,13 @@
         Condition="'$(_MetanoTsStripInterfacePrefix)' == 'true'"
       />
       <_MetanoTsArg
-        Include="--file-prefix &quot;$(_MetanoTsFilePrefix)&quot;"
+        Include="--file-prefix &quot;$([MSBuild]::Escape('$(_MetanoTsFilePrefix)'))&quot;"
         Condition="'$(_MetanoTsFilePrefix)' != ''"
       />
-      <_MetanoTsArg Include="$(_MetanoTsExtraArgs)" Condition="'$(_MetanoTsExtraArgs)' != ''" />
+      <_MetanoTsArg
+        Include="$([MSBuild]::Escape('$(_MetanoTsExtraArgs)'))"
+        Condition="'$(_MetanoTsExtraArgs)' != ''"
+      />
       <_MetanoTsArg Include="@(_MetanoAssetArg->WithMetadataValue('Language', 'typescript'))" />
     </ItemGroup>
 
@@ -281,6 +297,21 @@
       <_MetanoTsToolInstallHint>Metano.Build.TypeScript does not bundle the compiler; install it as a local .NET tool from the repository root with `dotnet new tool-manifest` (once) and `dotnet tool install Metano.Compiler.TypeScript`, or globally with `dotnet tool install --global Metano.Compiler.TypeScript`. If the tool is already listed in .config/dotnet-tools.json, run `dotnet tool restore`. Set MetanoSkipToolCheck=true (or MetanoTsSkipToolCheck=true) to bypass this check.</_MetanoTsToolInstallHint>
     </PropertyGroup>
 
+    <ItemGroup>
+      <_MetanoEnabledTarget
+        Update="typescript"
+        ArgumentsHash="$([MSBuild]::StableStringHash('$(_MetanoTsArgs)'))"
+      />
+    </ItemGroup>
+  </Target>
+
+  <Target
+    Name="_MetanoTranspileTsIfOutOfDate"
+    DependsOnTargets="_MetanoComposeTsArguments"
+    Condition="'$(_MetanoTsActive)' == 'true'"
+    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile)"
+    Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
+  >
     <MSBuild
       Projects="$(MSBuildProjectFullPath)"
       Targets="_MetanoTranspileWorker"

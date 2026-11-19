@@ -96,6 +96,42 @@ targets are imported before `Directory.Build.targets`, so 2.x's evaluation-time
 - (−) A disabled target no longer runs its post-build command (2.x ran it even with
   `MetanoEnabled=false`); listed in the 3.0 migration notes.
 
+## Hardening follow-up (#706)
+
+The effective CLI argument line is composed before the incremental check and hashed into
+each target's toolchain key. Settings changed through `-p:` or `Directory.Build.*` therefore
+rerun transpilation; an unchanged effective line leaves the key timestamp alone. `FilePrefix`
+and `ExtraArgs` are MSBuild-escaped before argument-item creation: command-line quotes alone
+do not prevent MSBuild from splitting literal semicolons.
+
+Packages implementing the #706 common-file registration contract register their copy's path
+and stable content hash. The first imported common file compares registered hashes against
+its own and warns only on a demonstrated content mismatch; identical contents in different
+package paths do not warn. A version-number difference by itself is not a warning.
+
+**Mixed old/new limitation:** if a 3.0 package is next to a package predating this contract,
+the old package does not register its common-file copy. With the new common file imported
+first, only the new copy is known and matches, so there is no warning. With an old guarded
+common file imported first, the old file has no check target and the new common file is
+skipped, so there is again no warning. Skew in that two-package combination is undetectable;
+absence of a warning does not prove compatibility. The 2.x `Metano.Build` package uses its
+own legacy targets, not this shared-file contract, and is also not detected by this check.
+Consumers should replace it with `Metano.Build.TypeScript` and align all per-target build
+package versions. This change does not scan arbitrary imports, alter legacy targets, or
+deprecate any package on nuget.org.
+
+Argument composition is also a dependency of the TypeScript incremental target, so an
+older shared file lacking the new pre-key composition hook cannot leave the worker's
+arguments empty. If that older shared file wins the import guard, its old toolchain-key
+implementation still does not hash the effective arguments; the new invalidation guarantee
+requires the new common file. Mixed versions should therefore not be used even without a warning.
+
+The packed-package smoke test now uses bounded transient-download retries, a reusable
+nuget.org HTTP cache (separate from isolated package/tool caches), a transitive-only NuGet
+consumer and a strict `-graphBuild -isolate` project-reference graph. Direct consumers also
+check that changing `-p:`, `Directory.Build.props` or `Directory.Build.targets` reruns the
+tool, preserves semicolons, and skips again with unchanged effective arguments.
+
 ## Alternatives considered
 
 - **A third `Metano.Build.Common` NuGet package**: one more id to publish and version for a file
