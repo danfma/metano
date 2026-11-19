@@ -42,7 +42,7 @@ Every module is under `targets/js/metano-runtime/src/system/collections/`, is si
 | `stack.ts` | `Stack` | yes |
 | `interfaces.ts` | types only: `IReadOnlyCollection`, `IReadOnlyList`, `ICollection`, `IList`, `IReadOnlyDictionary`, `IDictionary`, `IReadOnlySet`, `ISet`, `Span` | yes (`export type`) |
 | `default-comparer.ts` | `elementEquals`, `elementHashCode`, `defaultCompare`, `createComparer`, `defaultEqualityComparer`, `defaultComparer`, (011h) `defaultComparerFor`, `defaultEqualityComparerFor`; types `IEqualityComparer`, `IComparer`, `Comparison` | yes |
-| `helpers.ts` | `fromEnd`, `isIterable`, `asArray`, `asJsArray`, `asSpan`, `asReadOnlySpan` | yes |
+| `helpers.ts` | `fromEnd`, `isIterable`, `asArray`, `asJsArray`, `asSpan`, `asReadOnlySpan`, `asList` | yes |
 | `descriptors.ts` | `listType`, `dictionaryType`, `hashSetType`, `queueType`, `stackType`, `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType` | yes |
 | `throw-helpers.ts` | the cold throw functions (§ Cold throw helpers) | `throwModified` only |
 | `checks.ts` | the ambient `__METANO_CHECKS__` declaration (§ Production checks) and a type `MetanoChecks` that carries it into every entry's declarations | type only |
@@ -494,9 +494,18 @@ export function asArray(value: unknown): unknown[] | null;                 // a 
 export function asJsArray<T>(list: List<T> | null | undefined): T[];       // AsJsArray(); list._items; ArgumentNullException('list') for null (FR-056)
 export function asSpan<T>(list: List<T> | null | undefined): Span<T>;      // AsSpan() / CollectionsMarshal.AsSpan(list); list._items; a fresh [] for null
 export function asReadOnlySpan<T>(list: List<T> | null | undefined): ReadonlyArray<T>; // AsReadOnlySpan(); list._items; a fresh [] for null
+export function asList<T>(value: unknown): IList<T> | null;                // (IList<T>)v from a type that may hold a native array; see below
 ```
 
 The C# calls lower to these free helpers (each tree-shakes on its own); the `List` members of the same names are the same views for hand-written TS.
+
+**`asList`** (amended in C2 review round 1, supervisor decision). An explicit cast `(IList<T>)v`, `(ICollection<T>)v`, `(IReadOnlyList<T>)v` or `(IReadOnlyCollection<T>)v` whose static source type is neither an array nor a stage 011c collection (or a type implementing a list interface itself), such as `object` or `IEnumerable<T>`, lowers to `asList(v)`, typed as the cast's target (`asList<T>(v) as IReadOnlyList<T>` where TypeScript needs it). The source may hold a native array at run time, which C# would view as a fixed-size list:
+
+- `null` / `undefined` → `null`;
+- a native array → `List.adopt(v, { fixedSize: true })` (shares the array's storage, as the implicit conversion of FR-003);
+- any other value → returned as-is, without a test: a user class implementing `IList<T>` has no collection descriptor in 3.0 (W4-17), so the helper cannot tell a valid list from an invalid one.
+
+Documented divergence: a value that is not a list is not rejected at the cast (.NET throws `InvalidCastException` there); it fails later, at its first use as a list (the same as before 3.0). The `as` form (`v as IList<T>`) keeps `MS0001` (W4-17). `asList` is exported from the collections barrel, and from the root barrel through it.
 
 ## Descriptor factories (`descriptors.ts`, FR-017)
 
