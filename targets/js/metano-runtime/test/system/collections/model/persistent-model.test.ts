@@ -92,7 +92,7 @@ const copySetSubject: ModelSubject<readonly number[]> = {
   count: (version) => version.length,
   contents: (version) => [...version],
   contains: (version, value) => version.includes(value),
-  tryGetValue: (version, value) => (version.includes(value) ? [true, value] : [false, null]),
+  tryGetValue: (version, value, missing) => (version.includes(value) ? [true, value] : [false, missing]),
 };
 
 /** A plain-copy dictionary over insertion-ordered Maps. */
@@ -137,7 +137,7 @@ const copyDictionarySubject: ModelSubject<ReadonlyMap<number, number>> = {
   count: (version) => version.size,
   contents: (version) => [...version].map(([key, value]) => [key, value]),
   contains: (version, value) => version.has(value),
-  tryGetValue: (version, value) => (version.has(value) ? [true, version.get(value)] : [false, null]),
+  tryGetValue: (version, value, missing) => (version.has(value) ? [true, version.get(value)] : [false, missing]),
 };
 
 const options = { steps: 3000, maxVersions: 24 };

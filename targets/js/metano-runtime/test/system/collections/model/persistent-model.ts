@@ -17,6 +17,9 @@ import type { SeededRandom } from "./seeded-random.ts";
 /** The values the steps draw from: small, so duplicates and absent values are common. */
 export const MODEL_DOMAIN = 12;
 
+/** The `default(T)` the driver passes to `tryGetValue`: outside the domain, so a miss is visible. */
+const MISSING = -1;
+
 export type ModelShape = "list" | "set" | "dictionary";
 
 /** One step, drawn by the driver and applied to both subject and reference. */
@@ -38,8 +41,12 @@ export interface ModelSubject<V> {
   contents(version: V): unknown[];
   /** Element membership (list, set) or key membership (dictionary). */
   contains(version: V, value: number): boolean;
-  /** `TryGetValue` (set: the stored element; dictionary: the value); absent from lists. */
-  tryGetValue?(version: V, value: number): readonly [boolean, unknown];
+  /**
+   * `TryGetValue` (set: the stored element; dictionary: the value); absent
+   * from lists. On a miss it returns `missing`, the `default(T)` the caller
+   * passes (D30).
+   */
+  tryGetValue?(version: V, value: number, missing: number): readonly [boolean, unknown];
 }
 
 /** The plain-copy reference state of one version. */
@@ -129,9 +136,9 @@ function compareVersion<V>(subject: ModelSubject<V>, version: V, reference: Refe
       continue;
     }
 
-    const expected = present ? [true, dictionary ? pair?.[1] : value] : [false, null];
+    const expected = present ? [true, dictionary ? pair?.[1] : value] : [false, MISSING];
 
-    expect([...subject.tryGetValue(version, value)], `${where}: tryGetValue(${value})`).toEqual(expected);
+    expect([...subject.tryGetValue(version, value, MISSING)], `${where}: tryGetValue(${value})`).toEqual(expected);
   }
 }
 
