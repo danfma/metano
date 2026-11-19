@@ -377,7 +377,7 @@ The golden also contains `p &= ~Perms.Read`, `p ^ Perms.Write`, a `switch` over 
 
 `[StringEnum]` output is unchanged (`Expected/string-enum.ts`: an `as const` object plus `type Color = typeof Color[keyof typeof Color]`).
 
-## `package.json` (`package-json-side-effects.json`, FR-045)
+## `package.json` (FR-045; pinned by `tests/Metano.Tests/SideEffectsManifestTests.cs`, no golden file)
 
 A package with `[ModuleEntryPoint]` `Program.Main` in `app/program.ts` and no other entry point:
 
