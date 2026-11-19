@@ -17,7 +17,7 @@ differs from C# or from 2.x interop expectations.
 
 ## Reasons
 
-**MS0064 — Int64EnumValuePrecision** (Warning). FR-058.
+**MS0064 — Int64EnumValuePrecision** (Warning). FR-058. **Withdrawn in wave 4 (#701):** 64-bit enum members are exact `bigint`s, so neither reason applies and the code is no longer reported; the number stays reserved.
 
 1. A member of an enum whose underlying type is `long`, `ulong`, `nint` or `nuint` has a constant value that
    `Number(value)` does not represent exactly.

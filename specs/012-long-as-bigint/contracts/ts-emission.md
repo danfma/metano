@@ -19,7 +19,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `[PlainObject] record Dto(long Id, long? Ref)` | `interface Dto { id?: bigint; ref?: bigint \| null }` |
 | `[Branded] struct UserId(long Value)` | `type UserId = bigint & { readonly __brand: "UserId" }` |
 | `System.Numerics.BigInteger` | `bigint` (unchanged) |
-| `enum Big : long { A = 1 }` | `export enum Big { A = 1 }` (values stay `number`, DECIDED-15) |
+| `enum Big : long { A = 1 }` | `export const Big = { A: 1n } as const;` + alias (spec 011 FR-044 as amended by #701; DECIDED-15 superseded) |
 
 ## Literals, constants and zero values
 
@@ -66,9 +66,10 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `(int)b`, `(uint)b`, `(short)b`, `(char)b` | `int32FromBigInteger(b)`, `uint32FromBigInteger(b)`, `narrowFromBigInteger(b, 16, true)`, `String.fromCharCode(narrowFromBigInteger(b, 16, false))` | same (always checked, slice 012g) |
 | `(double)b`, `(float)b`, `(decimal)b` | `doubleFromBigInteger(b)`, `Math.fround(doubleFromBigInteger(b))`, `new Decimal(decimalTextFromBigInteger(b))` | same |
 | `(BigInteger)d`, `(BigInteger)dm` | `bigIntegerFromDouble(d)`, `bigIntegerFromDecimal(dm)` | same |
-| `(long)e` (enum) | `BigInt(e)` | same |
+| `(long)e` (enum of 32 bits or fewer) | `BigInt(e)` | same |
+| `(long)e`, `(ulong)e` (`long` enum) | `e`, `BigInt.asUintN(64, e)` | `e`, `checkedUInt64(e)` |
 | `(IntEnum)l` | `Number(BigInt.asIntN(32, l))` | `Number(checkedNarrow(l, 32, true))` |
-| `(LongEnum)l` | `Number(l)` | same |
+| `(LongEnum)l`, `(LongEnum)i` | `l` (`l as E` for a closed-union alias), `BigInt(i)` | same (#701) |
 | `long? x = ni;` (`int? ni`, identifier) | `ni == null ? null : BigInt(ni)` (also catches `undefined`) | same |
 | `long? x = F();` (`int? F()`) | `mapNullable(f(), BigInt)` | same |
 
@@ -218,6 +219,6 @@ are fixed in contracts/runtime-int64.md).
 
 | C# | TypeScript | Diagnostic |
 |---|---|---|
-| `enum Big : long { A = (1L << 53) + 1 }` | `A = 9007199254740992` | `MS0064` |
+| `enum Big : long { A = (1L << 53) + 1 }` | `A: 9007199254740993n` | — (`MS0064` withdrawn, #701) |
 | `[Import("lib")] static extern long Count();` | `count(): bigint` declared by import | `MS0065` |
 | `[PlainObject] record Dto(long Id); new Dto(i)` | `{ id: BigInt(i) }` | — |
