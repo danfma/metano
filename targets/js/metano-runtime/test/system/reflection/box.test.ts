@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { defaultEquals, equals, hashCode, objectEquals } from "#/system/equality.ts";
 import { InvalidCastException } from "#/system/exceptions/invalid-cast-exception.ts";
 import { box, Boxed, boxNullable } from "#/system/reflection/box.ts";
+import { isBoxed } from "#/system/reflection/is-boxed.ts";
 import { castTo } from "#/system/reflection/cast-to.ts";
 import { getRuntimeType } from "#/system/reflection/get-runtime-type.ts";
 import { isBoxOf } from "#/system/reflection/is-box-of.ts";
 import { asType, isType } from "#/system/reflection/is-type.ts";
 import { nullableType } from "#/system/reflection/nullable-type.ts";
-import { Int32Type } from "#/system/reflection/primitive-types.ts";
+import { Int32Type, Int64Type, UInt32Type } from "#/system/reflection/primitive-types.ts";
 import type { EnumType, PrimitiveType } from "#/system/reflection/runtime-type.ts";
 import { unbox } from "#/system/reflection/unbox.ts";
 import { ObjectType } from "#/system/reflection/well-known-types.ts";
@@ -72,6 +73,17 @@ describe("Boxed.toString", () => {
     expect(String(box(7, Unsorted))).toBe("AB, C");
     expect(String(box(6, Unsorted))).toBe("B, C");
     expect(String(box(3, Unsorted))).toBe("AB");
+  });
+
+  test("a 64-bit flags enum decomposes over the full width", () => {
+    const Big = {
+      ...enumType("Big", [], ["Low", "High"], true),
+      values: [1n, 1n << 40n],
+      underlying: "Int64" as const,
+    } as unknown as EnumType<bigint>;
+
+    expect(String(box((1n << 40n) | 1n, Big))).toBe("Low, High");
+    expect(String(box((1n << 41n) | 1n, Big))).toBe((( 1n << 41n) | 1n).toString());
   });
 
   test("zero prints the zero member, or 0 when there is none", () => {
@@ -162,16 +174,43 @@ describe("type tests over a box", () => {
     expect(asType(null, Color)).toBeNull();
   });
 
-  test("castTo unwraps for the boxed type and throws for another", () => {
+  test("castTo unwraps for the boxed type", () => {
     const boxed = box(1, Color);
 
     expect(castTo(boxed, Color)).toBe(1);
     expect(castTo(1, Color)).toBe(1);
     expect(castTo(null, Color)).toBeNull();
-    expect(() => castTo(boxed, Perms)).toThrow(InvalidCastException);
-    expect(() => castTo(boxed, Perms)).toThrow(
-      "Unable to cast object of type 'Geo.Color' to type 'Geo.Perms'.",
+  });
+
+  test("castTo unboxes an enum box to its underlying type and to another enum of that type", () => {
+    expect(castTo(box(1, Color), Int32Type)).toBe(1);
+    expect(castTo(box(1, Color), Perms)).toBe(1);
+  });
+
+  test("castTo throws when the underlying type or the kind differs", () => {
+    const ByteFlag = { ...enumType("ByteFlag", [1], ["On"], false), underlying: "Byte" as const };
+
+    expect(() => castTo(box(1, Color), Int64Type)).toThrow(InvalidCastException);
+    expect(() => castTo(box(1, Color), UInt32Type)).toThrow(InvalidCastException);
+    expect(() => castTo(box(1, Color), ByteFlag)).toThrow(
+      "Unable to cast object of type 'Geo.Color' to type 'Geo.ByteFlag'.",
     );
+    expect(() => castTo(box(1, Color), nullableType(Int32Type))).toThrow(InvalidCastException);
+    expect(() => castTo(box("u-1", UserId), Int32Type)).toThrow(InvalidCastException);
+  });
+
+  test("is and as stay strict on an enum box", () => {
+    expect(isType(box(1, Color), Int32Type)).toBe(false);
+    expect(asType(box(1, Color), Int32Type)).toBeNull();
+    expect(asType(box(1, Color), nullableType(Int32Type))).toBeNull();
+    expect(asType(box(1, Color), nullableType(Perms))).toBeNull();
+  });
+
+  test("a JSON object carrying $boxed is not a box", () => {
+    expect(isBoxed({ $boxed: true })).toBe(false);
+    expect(isBoxed({ $boxed: true, type: null })).toBe(false);
+    expect(isBoxed(box(1, Color))).toBe(true);
+    expect(defaultEquals({ $boxed: true }, { $boxed: true })).toBe(false);
   });
 
   test("isBoxOf is true only for a box of that type", () => {

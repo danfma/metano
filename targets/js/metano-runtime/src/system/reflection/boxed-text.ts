@@ -7,30 +7,36 @@ import type { EnumType, RuntimeType } from "./runtime-type.ts";
  * boxed type (an `[InlineWrapper]`) prints `String(value)`.
  */
 export function boxedText(value: unknown, type: RuntimeType): string {
-  const { values, names, isFlags } = type as EnumType<unknown>;
-  const index = values?.indexOf(value) ?? -1;
+  if (type.kind !== "enum" && type.kind !== "stringEnum") {
+    return String(value);
+  }
+
+  const index = type.values.indexOf(value);
 
   return index >= 0
-    ? (names[index] as string)
-    : (isFlags && flagNames(type as EnumType<unknown>, value as number)) || String(value);
+    ? (type.names[index] as string)
+    : (type.isFlags && flagNames(type, value as number | bigint)) || String(value);
 }
 
-/** The names of the members whose bits make up `value`, ascending by value (declaration order does not matter, as in .NET); `""` when a bit is left over. */
-function flagNames({ values, names }: EnumType<unknown>, value: number): string {
-  const found: string[] = [];
-  let rest = value | 0;
-  const descending = [...values.keys()].sort(
-    (left, right) => (values[right] as number) - (values[left] as number),
+/**
+ * The names of the members whose bits make up `value`, ascending by value (declaration order
+ * does not matter, as in .NET); `""` when a bit is left over. The bits are `bigint`s, so a
+ * 64-bit `[Flags]` enum decomposes as exactly as a 32-bit one.
+ */
+function flagNames({ values, names }: EnumType<unknown>, value: number | bigint): string {
+  const bits = values.map((member) => BigInt(member as number | bigint));
+  const descending = [...bits.keys()].sort((left, right) => Number(bits[right]! - bits[left]!));
+
+  const { rest, found } = descending.reduce(
+    (state, index) => {
+      const member = bits[index]!;
+
+      return member && (state.rest & member) === member
+        ? { rest: state.rest & ~member, found: [names[index] as string, ...state.found] }
+        : state;
+    },
+    { rest: BigInt(value), found: [] as string[] },
   );
-
-  for (const index of descending) {
-    const member = (values[index] as number) | 0;
-
-    if (member && (rest & member) === member) {
-      found.unshift(names[index] as string);
-      rest &= ~member;
-    }
-  }
 
   return rest ? "" : found.join(", ");
 }

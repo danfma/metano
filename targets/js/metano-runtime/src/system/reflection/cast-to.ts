@@ -3,7 +3,7 @@ import { ownRuntimeType, ownRuntimeTypeOf } from "./constructor-descriptor.ts";
 import { getRuntimeType } from "./get-runtime-type.ts";
 import { isBoxed } from "./is-boxed.ts";
 import type { RuntimeType } from "./runtime-type.ts";
-import { unboxFor } from "./unbox-for.ts";
+import { unboxForCast } from "./unbox-for-cast.ts";
 
 /** A class value, abstract or not, that `instanceof` can test. */
 type RuntimeClass = abstract new (...args: never[]) => unknown;
@@ -11,10 +11,12 @@ type RuntimeClass = abstract new (...args: never[]) => unknown;
 /**
  * Mirrors a C# explicit reference conversion `(T)value`: `null` passes, as C# lets a null
  * reference through, and a value that is not a `T` throws the `InvalidCastException` .NET
- * throws. The target is a runtime type descriptor (tested by {@link isType}) or a class
- * (tested by `instanceof`). A box of the target type is unwrapped once, so `(Color)o` yields the raw enum; the compiler passes the target type as the type argument, so the
- * result is typed. A cast to a type with neither (a type parameter) is only a TypeScript
- * assertion and does not come here.
+ * throws. The target is a runtime type descriptor (tested by `isType`) or a class (tested by
+ * `instanceof`); the compiler passes the target type as the type argument, so the result is
+ * typed. A box of the target type is unwrapped once, so `(Color)o` yields the raw enum; an
+ * enum box also unboxes to its underlying integral type and to another enum with the same
+ * underlying type, as the CLR does (see {@link unboxForCast}). A cast to a type with neither
+ * (a type parameter) is only a TypeScript assertion and does not come here.
  */
 export function castTo<T>(value: unknown, type: RuntimeType<T> | RuntimeClass): T {
   if (value == null) {
@@ -25,7 +27,7 @@ export function castTo<T>(value: unknown, type: RuntimeType<T> | RuntimeClass): 
     return castToClass(value, type);
   }
 
-  const candidate = unboxFor(value, type);
+  const candidate = unboxForCast(value, type);
 
   if (type.test(candidate)) {
     return candidate as T;
