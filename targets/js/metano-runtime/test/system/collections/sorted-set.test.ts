@@ -105,6 +105,20 @@ describe("SortedSet", () => {
     }
   });
 
+  test("remove on an empty set, intersectWith(itself) and an empty view's clear change nothing (part-1 review F1)", () => {
+    const empty = new SortedSet<number>();
+
+    expect(() => enumerateWhile(empty, () => empty.remove(1))).not.toThrow();
+
+    const set = new SortedSet([1, 2]);
+
+    expect(() => enumerateWhile(set, () => set.intersectWith(set))).not.toThrow();
+
+    const view = set.getViewBetween(5, 9);
+
+    expect(() => enumerateWhile(set, () => view.clear())).not.toThrow();
+  });
+
   test("intersectWith on an empty set changes nothing", () => {
     const set = new SortedSet<number>();
 

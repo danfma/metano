@@ -16,6 +16,12 @@ export interface KeyValueSource<K, V> extends Iterable<readonly [K, V]> {
   containsKey(key: K): boolean;
   /** The source's type arguments (`[K, V]`), for `toString()`. */
   readonly $typeArguments$Dictionary?: readonly RuntimeType[] | undefined;
+  /**
+   * A source other than `Dictionary` names its own nested view type
+   * (``SortedDictionary`2+KeyCollection[…]``); absent, the view prints
+   * `Dictionary`'s.
+   */
+  viewTypeName?(view: "KeyCollection" | "ValueCollection"): string;
 }
 
 export class KeyCollection<K> implements IReadOnlyCollection<K> {
@@ -50,10 +56,13 @@ export class KeyCollection<K> implements IReadOnlyCollection<K> {
   }
 
   toString(): string {
-    return collectionTypeName(
-      "System.Collections.Generic.Dictionary`2+KeyCollection",
-      ["TKey", "TValue"],
-      this._source.$typeArguments$Dictionary,
+    return (
+      this._source.viewTypeName?.("KeyCollection") ??
+      collectionTypeName(
+        "System.Collections.Generic.Dictionary`2+KeyCollection",
+        ["TKey", "TValue"],
+        this._source.$typeArguments$Dictionary,
+      )
     );
   }
 
@@ -100,10 +109,13 @@ export class ValueCollection<V> implements IReadOnlyCollection<V> {
   }
 
   toString(): string {
-    return collectionTypeName(
-      "System.Collections.Generic.Dictionary`2+ValueCollection",
-      ["TKey", "TValue"],
-      this._source.$typeArguments$Dictionary,
+    return (
+      this._source.viewTypeName?.("ValueCollection") ??
+      collectionTypeName(
+        "System.Collections.Generic.Dictionary`2+ValueCollection",
+        ["TKey", "TValue"],
+        this._source.$typeArguments$Dictionary,
+      )
     );
   }
 

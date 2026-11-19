@@ -304,6 +304,22 @@ export const defaultEqualityComparer: IEqualityComparer<unknown> = {
 /** `Comparer<T>.Default` as a value. */
 export const defaultComparer: IComparer<unknown> = { compare: defaultCompare };
 
+/**
+ * `Comparer<T>.Default` typed for `T`: one comparer serves every `T` because
+ * `defaultCompare` accepts any value (the one place that widens it).
+ */
+export function defaultComparerFor<T>(): IComparer<T> {
+  return defaultComparer as IComparer<T>;
+}
+
+/**
+ * `EqualityComparer<T>.Default` typed for `T`: one comparer serves every `T`
+ * because `elementEquals` / `elementHashCode` accept any value.
+ */
+export function defaultEqualityComparerFor<T>(): IEqualityComparer<T> {
+  return defaultEqualityComparer as IEqualityComparer<T>;
+}
+
 /** The comparison function a {@link ComparisonArgument} stands for. */
 export function comparisonOf<T>(argument: ComparisonArgument<T>): Comparison<T> {
   if (argument === null || argument === undefined) {

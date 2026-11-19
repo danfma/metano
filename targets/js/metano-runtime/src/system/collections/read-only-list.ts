@@ -51,6 +51,7 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   static empty<T>(): ReadOnlyList<T> {
     empty ??= new ReadOnlyList<unknown>([]);
 
+    // The one empty instance serves every `T`: it holds no element.
     return empty as ReadOnlyList<T>;
   }
 
@@ -80,7 +81,7 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   get count(): number {
     const source = this._source;
 
-    return Array.isArray(source) ? source.length : (source as IList<T>).count;
+    return isArraySource(source) ? source.length : source.count;
   }
 
   get isReadOnly(): boolean {
@@ -91,14 +92,15 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   get(index: number): T {
     const source = this._source;
 
-    if (!Array.isArray(source)) {
-      return (source as IList<T>).get(index);
+    if (!isArraySource(source)) {
+      return source.get(index);
     }
 
     if (index >>> 0 >= source.length) {
       throwOOR();
     }
 
+    // Checked just above: `noUncheckedIndexedAccess` cannot see it.
     return source[index] as T;
   }
 
@@ -110,8 +112,8 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   indexOf(item: T): number {
     const source = this._source;
 
-    if (!Array.isArray(source)) {
-      return (source as IList<T>).indexOf(item);
+    if (!isArraySource(source)) {
+      return source.indexOf(item);
     }
 
     return source.findIndex((candidate) => elementEquals(candidate, item));
@@ -120,16 +122,16 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   contains(item: T): boolean {
     const source = this._source;
 
-    return Array.isArray(source) ? this.indexOf(item) >= 0 : (source as IList<T>).contains(item);
+    return isArraySource(source) ? this.indexOf(item) >= 0 : source.contains(item);
   }
 
   copyTo(array: T[], arrayIndex = 0): void {
     const source = this._source;
 
-    if (Array.isArray(source)) {
+    if (isArraySource(source)) {
       copyInto(source, array, arrayIndex);
     } else {
-      (source as IList<T>).copyTo(array, arrayIndex);
+      source.copyTo(array, arrayIndex);
     }
   }
 
@@ -190,4 +192,8 @@ export function asReadOnly<T>(list: List<T>): ReadOnlyList<T> {
   }
 
   return new ReadOnlyList(list);
+}
+
+function isArraySource<T>(source: IList<T> | readonly T[]): source is readonly T[] {
+  return Array.isArray(source);
 }

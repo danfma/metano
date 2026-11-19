@@ -2,7 +2,7 @@ import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts"
 import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyIntoSorted } from "./copy-to.ts";
-import { comparisonOf, defaultComparer, type IComparer } from "./default-comparer.ts";
+import { comparisonOf, defaultComparerFor, type IComparer } from "./default-comparer.ts";
 import type { IReadOnlySet, ISet } from "./interfaces.ts";
 import { predecessor, RedBlackTree, type RedBlackNode, successor } from "./red-black-tree.ts";
 import * as setAlgebra from "./set-algebra.ts";
@@ -12,6 +12,14 @@ import {
   throwArgumentOutOfRange,
   throwViewBoundsInverted,
 } from "./throw-helpers.ts";
+
+/** A `SortedSet`'s range: the whole tree, or a view's inclusive `[lower, upper]`. */
+type ViewBounds<T> =
+  | { readonly bounded: false }
+  | { readonly bounded: true; readonly lower: T; readonly upper: T };
+
+/** The bounds of every set that is not a view (an object literal: no module-load call). */
+const UNBOUNDED: ViewBounds<never> = { bounded: false };
 
 let SortedSet$rt: CollectionType<SortedSet<unknown>> | undefined;
 
@@ -33,9 +41,8 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   declare readonly _owner: SortedSet<T>;
   declare _version: number;
   declare readonly _comparer: IComparer<T> | null;
-  declare readonly _bounded: boolean;
-  declare readonly _lower: T | undefined;
-  declare readonly _upper: T | undefined;
+  /** A view's inclusive range; the whole tree for a set. */
+  declare readonly _bounds: ViewBounds<T>;
   declare readonly $typeArguments$SortedSet: readonly RuntimeType[] | undefined;
 
   constructor(
@@ -52,9 +59,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
     Object.defineProperty(this, "_owner", { value: this, writable: true });
     Object.defineProperty(this, "_version", { value: 0, writable: true });
     Object.defineProperty(this, "_comparer", { value: ownComparer });
-    Object.defineProperty(this, "_bounded", { value: false, writable: true });
-    Object.defineProperty(this, "_lower", { value: undefined, writable: true });
-    Object.defineProperty(this, "_upper", { value: undefined, writable: true });
+    Object.defineProperty(this, "_bounds", { value: UNBOUNDED, writable: true });
     Object.defineProperty(this, "$typeArguments$SortedSet", { value: typeArguments ?? undefined });
 
     if (items !== null && items !== undefined) {
@@ -108,7 +113,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   }
 
   get count(): number {
-    if (!this._bounded) {
+    if (!this._bounds.bounded) {
       return this._tree.count;
     }
 
@@ -127,7 +132,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
 
   /** The argument comparer, or `defaultComparer` (`Comparer<T>.Default`). */
   get comparer(): IComparer<T> {
-    return this._comparer ?? (defaultComparer as IComparer<T>);
+    return this._comparer ?? defaultComparerFor<T>();
   }
 
   /** `Min`: the smallest element, or the caller's `default(T)` when empty (D30). */
@@ -154,8 +159,9 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
     return this._tree.insert(item, undefined).inserted;
   }
 
+  /** An empty tree returns before the version bump, as .NET's `DoRemove` does. */
   remove(item: T): boolean {
-    if (!this.inRange(item)) {
+    if (!this.inRange(item) || this._tree.count === 0) {
       return false;
     }
 
@@ -168,16 +174,24 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
     return this.inRange(item) && this._tree.find(item) !== null;
   }
 
+  /** A set always bumps the version; a view over an empty range changes nothing, as .NET's `TreeSubSet`. */
   clear(): void {
-    this.bumpVersion();
-
-    if (!this._bounded) {
+    if (!this._bounds.bounded) {
+      this.bumpVersion();
       this._tree.clear();
 
       return;
     }
 
-    for (const item of this.toArray()) {
+    const items = this.toArray();
+
+    if (items.length === 0) {
+      return;
+    }
+
+    this.bumpVersion();
+
+    for (const item of items) {
       this._tree.delete(item);
     }
   }
@@ -211,11 +225,13 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
 
   /** A live view of the elements in `[lowerValue, upperValue]`, sharing this set's tree and version. */
   getViewBetween(lowerValue: T, upperValue: T): SortedSet<T> {
-    if (this._bounded && this.compareItems(this._lower as T, lowerValue) > 0) {
+    const bounds = this._bounds;
+
+    if (bounds.bounded && this.compareItems(bounds.lower, lowerValue) > 0) {
       throwArgumentOutOfRange("lowerValue");
     }
 
-    if (this._bounded && this.compareItems(this._upper as T, upperValue) < 0) {
+    if (bounds.bounded && this.compareItems(bounds.upper, upperValue) < 0) {
       throwArgumentOutOfRange("upperValue");
     }
 
@@ -238,10 +254,11 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
     }
   }
 
+  /** Bumps whenever a non-empty set intersects another sequence (.NET rebuilds it); with itself it changes nothing. */
   intersectWith(other: Iterable<T>): void {
     const items = argumentOther(other);
 
-    if (this.count === 0) {
+    if (items === this || this.count === 0) {
       return;
     }
 
@@ -347,14 +364,16 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
 
   /** @internal The first node in this set's range. */
   firstNode(): RedBlackNode<T, undefined> | null {
-    const node = this._bounded ? this._tree.ceiling(this._lower as T) : this._tree.first();
+    const bounds = this._bounds;
+    const node = bounds.bounded ? this._tree.ceiling(bounds.lower) : this._tree.first();
 
     return node !== null && this.belowUpper(node.key) ? node : null;
   }
 
   /** @internal The last node in this set's range. */
   lastNode(): RedBlackNode<T, undefined> | null {
-    const node = this._bounded ? this._tree.floor(this._upper as T) : this._tree.last();
+    const bounds = this._bounds;
+    const node = bounds.bounded ? this._tree.floor(bounds.upper) : this._tree.last();
 
     return node !== null && this.aboveLower(node.key) ? node : null;
   }
@@ -382,9 +401,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   ): void {
     Object.defineProperty(this, "_tree", { value: tree });
     Object.defineProperty(this, "_owner", { value: owner });
-    Object.defineProperty(this, "_bounded", { value: true });
-    Object.defineProperty(this, "_lower", { value: lower });
-    Object.defineProperty(this, "_upper", { value: upper });
+    Object.defineProperty(this, "_bounds", { value: { bounded: true, lower, upper } });
   }
 
   private bumpVersion(): void {
@@ -398,19 +415,24 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   }
 
   private inRange(item: T): boolean {
-    return !this._bounded || (this.aboveLower(item) && this.belowUpper(item));
+    return this.aboveLower(item) && this.belowUpper(item);
   }
 
   private aboveLower(item: T): boolean {
-    return !this._bounded || this.compareItems(item, this._lower as T) >= 0;
+    const bounds = this._bounds;
+
+    return !bounds.bounded || this.compareItems(item, bounds.lower) >= 0;
   }
 
   private belowUpper(item: T): boolean {
-    return !this._bounded || this.compareItems(item, this._upper as T) <= 0;
+    const bounds = this._bounds;
+
+    return !bounds.bounded || this.compareItems(item, bounds.upper) <= 0;
   }
 
   /** `other` as a set with this set's comparer, so it is deduplicated by this set's rule. */
   private distinct(items: Iterable<T>): SortedSet<T> {
+    // `instanceof` cannot narrow the element type: a `SortedSet` passed as `Iterable<T>` holds `T`s.
     return items instanceof SortedSet && items._comparer === this._comparer
       ? (items as SortedSet<T>)
       : new SortedSet(items, this._comparer);
@@ -419,34 +441,34 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
 
 /** The in-order (or reverse) walk of a set's range, checked against the owner's version on every step. */
 class SortedSetIterator<T> implements Iterator<T> {
-  private readonly set: SortedSet<T>;
-  private readonly version: number;
-  private readonly forward: boolean;
-  private node: RedBlackNode<T, undefined> | null;
+  private readonly _set: SortedSet<T>;
+  private readonly _expectedVersion: number;
+  private readonly _forward: boolean;
+  private _node: RedBlackNode<T, undefined> | null;
 
   constructor(set: SortedSet<T>, start: RedBlackNode<T, undefined> | null, forward: boolean) {
-    this.set = set;
-    this.version =
+    this._set = set;
+    this._expectedVersion =
       typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__ ? set._owner._version : 0;
-    this.forward = forward;
-    this.node = start;
+    this._forward = forward;
+    this._node = start;
   }
 
   next(): IteratorResult<T> {
     if (
       (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
-      this.set._owner._version !== this.version
+      this._set._owner._version !== this._expectedVersion
     ) {
       throwEnumeratorModified();
     }
 
-    const current = this.node;
+    const current = this._node;
 
     if (current === null) {
       return { done: true, value: undefined };
     }
 
-    this.node = this.forward ? this.set.nextNode(current) : this.set.previousNode(current);
+    this._node = this._forward ? this._set.nextNode(current) : this._set.previousNode(current);
 
     return { done: false, value: current.key };
   }

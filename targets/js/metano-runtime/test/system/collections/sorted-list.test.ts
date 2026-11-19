@@ -159,6 +159,33 @@ describe("SortedList", () => {
     }
   });
 
+  test("a comparer failure is wrapped as Array.BinarySearch wraps it (part-1 review F2)", () => {
+    const failure = new Error("cannot compare");
+    const throwing = {
+      compare: (): number => {
+        throw failure;
+      },
+    };
+    const list = SortedList.of([[1, 1]], throwing);
+
+    expect(() => list.add(2, 2)).toThrow("Failed to compare two elements in the array.");
+
+    let caught: unknown = null;
+
+    try {
+      list.containsKey(2);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect((caught as Error).name).toBe("InvalidOperationException");
+    expect((caught as { innerException: unknown }).innerException).toBe(failure);
+
+    expect(() => new SortedList<object, number>([[{}, 1], [{}, 2]])).toThrow(
+      "Failed to compare two elements in the array.",
+    );
+  });
+
   test("toJSON and invisible storage", () => {
     const list = sample();
 

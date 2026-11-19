@@ -25,6 +25,7 @@ export function binarySearch<T>(
 
   while (low <= high) {
     const middle = low + ((high - low) >> 1);
+    // `middle` lies inside the searched range: `noUncheckedIndexedAccess` cannot see it.
     const order = compare(array[middle] as T, value);
 
     if (order === 0) {

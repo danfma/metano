@@ -5,7 +5,7 @@ import { collectionTypeName } from "./collection-type-name.ts";
 import { copyIntoSorted } from "./copy-to.ts";
 import {
   comparisonOf,
-  defaultComparer,
+  defaultComparerFor,
   elementEquals,
   type IComparer,
 } from "./default-comparer.ts";
@@ -134,7 +134,7 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
 
   /** The argument comparer, or `defaultComparer` (`Comparer<K>.Default`). */
   get comparer(): IComparer<K> {
-    return this._comparer ?? (defaultComparer as IComparer<K>);
+    return this._comparer ?? defaultComparerFor<K>();
   }
 
   /** A live view of the keys, in key order. */
@@ -195,8 +195,13 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
     }
   }
 
+  /** An empty dictionary returns before the version bump, as .NET's does. */
   remove(key: K): boolean {
     const checked = requireKey(key);
+
+    if (this._tree.count === 0) {
+      return false;
+    }
 
     this.bumpVersion();
 
@@ -263,6 +268,15 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
     );
   }
 
+  /** The `keys` / `values` views' .NET type text (``SortedDictionary`2+KeyCollection[TKey,TValue]``). */
+  viewTypeName(view: "KeyCollection" | "ValueCollection"): string {
+    return collectionTypeName(
+      `System.Collections.Generic.SortedDictionary\`2+${view}`,
+      ["TKey", "TValue"],
+      this.$typeArguments$SortedDictionary,
+    );
+  }
+
   [Symbol.iterator](): Iterator<readonly [K, V]> {
     return new SortedDictionaryIterator(this);
   }
@@ -276,32 +290,32 @@ export class SortedDictionary<K, V> implements IDictionary<K, V>, IReadOnlyDicti
 
 /** The in-order walk of the entries, checked against the version on every step. */
 class SortedDictionaryIterator<K, V> implements Iterator<readonly [K, V]> {
-  private readonly dictionary: SortedDictionary<K, V>;
-  private readonly version: number;
-  private node: RedBlackNode<K, V> | null;
+  private readonly _dictionary: SortedDictionary<K, V>;
+  private readonly _expectedVersion: number;
+  private _node: RedBlackNode<K, V> | null;
 
   constructor(dictionary: SortedDictionary<K, V>) {
-    this.dictionary = dictionary;
-    this.version =
+    this._dictionary = dictionary;
+    this._expectedVersion =
       typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__ ? dictionary._version : 0;
-    this.node = dictionary._tree.first();
+    this._node = dictionary._tree.first();
   }
 
   next(): IteratorResult<readonly [K, V]> {
     if (
       (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
-      this.dictionary._version !== this.version
+      this._dictionary._version !== this._expectedVersion
     ) {
       throwEnumeratorModified();
     }
 
-    const current = this.node;
+    const current = this._node;
 
     if (current === null) {
       return { done: true, value: undefined };
     }
 
-    this.node = successor(current);
+    this._node = successor(current);
 
     return { done: false, value: [current.key, current.value] };
   }

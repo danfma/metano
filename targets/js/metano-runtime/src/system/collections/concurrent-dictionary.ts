@@ -149,7 +149,7 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
       throwKeyNotFound(key);
     }
 
-    return store.get(key) as V;
+    return storedValue(store, key);
   }
 
   set(key: K, value: V): void {
@@ -200,7 +200,7 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
   ): readonly [found: true, value: V] | readonly [found: false, value: D] {
     const store = this._store;
 
-    return store.has(requireKey(key)) ? [true, store.get(key) as V] : [false, missingValue];
+    return store.has(requireKey(key)) ? [true, storedValue(store, key)] : [false, missingValue];
   }
 
   /** `GetValueOrDefault`: the value, or the caller's default on a miss (D30). */
@@ -245,7 +245,7 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
       return [false, missingValue];
     }
 
-    const value = store.get(key) as V;
+    const value = storedValue(store, key);
 
     store.delete(key);
 
@@ -257,7 +257,7 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
     const store = this._store;
 
     if (store.has(requireKey(key))) {
-      return store.get(key) as V;
+      return storedValue(store, key);
     }
 
     store.set(key, value);
@@ -283,9 +283,11 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
     }
 
     if (store.has(key)) {
-      return store.get(key) as V;
+      return storedValue(store, key);
     }
 
+    // An omitted factory argument reaches the factory as `undefined`, which only the
+    // one-argument C# overload produces; its factory never reads it.
     return this.getOrAdd(key, valueFactory(key, factoryArgument as A));
   }
 
@@ -321,6 +323,7 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
       throwArgumentNull("updateValueFactory");
     }
 
+    // As in getOrAddWith: an omitted factory argument is the one-argument overload's.
     return this.addOrUpdateLoop(
       key,
       () => addValueFactory(key, factoryArgument as A),
@@ -368,7 +371,7 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
 
     for (;;) {
       if (store.has(key)) {
-        const current = store.get(key) as V;
+        const current = storedValue(store, key);
         const next = update(current);
 
         if (this.tryUpdate(key, next, current)) {
@@ -385,4 +388,9 @@ export class ConcurrentDictionary<K, V> implements IDictionary<K, V>, IReadOnlyD
       }
     }
   }
+}
+
+/** The value under `key`, read after `store.has(key)`: a hit, so never the miss `undefined`. */
+function storedValue<K, V>(store: HashCore<K, V>, key: K): V {
+  return store.get(key) as V;
 }

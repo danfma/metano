@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SortedDictionary } from "#/system/collections/sorted-dictionary.ts";
+import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
 
 // Messages and behaviours read from .NET 10 (2026-11-19).
 const MODIFIED = "Collection was modified after the enumerator was instantiated.";
@@ -120,6 +121,23 @@ describe("SortedDictionary", () => {
     const dictionary = sample();
 
     expect(() => enumerateWhile(dictionary, () => dictionary.tryGetValue(1, 0))).not.toThrow();
+  });
+
+  test("remove on an empty dictionary does not invalidate (part-1 review F1)", () => {
+    const dictionary = new SortedDictionary<number, number>();
+
+    expect(() => enumerateWhile(dictionary, () => dictionary.remove(1))).not.toThrow();
+  });
+
+  test("the views print SortedDictionary's nested type text (part-1 review F3)", () => {
+    const dictionary = new SortedDictionary<number, string>(null, null, [Int32Type, StringType]);
+
+    expect(String(dictionary.keys)).toBe(
+      "System.Collections.Generic.SortedDictionary`2+KeyCollection[System.Int32,System.String]",
+    );
+    expect(String(dictionary.values)).toBe(
+      "System.Collections.Generic.SortedDictionary`2+ValueCollection[System.Int32,System.String]",
+    );
   });
 
   test("the key and value views follow the dictionary's rule", () => {

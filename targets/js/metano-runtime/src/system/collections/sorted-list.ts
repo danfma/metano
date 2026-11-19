@@ -5,7 +5,7 @@ import { copyInto, copyIntoSorted } from "./copy-to.ts";
 import {
   type Comparison,
   comparisonOf,
-  defaultComparer,
+  defaultComparerFor,
   elementEquals,
   type IComparer,
 } from "./default-comparer.ts";
@@ -14,6 +14,7 @@ import { binarySearch } from "./sorted-array.ts";
 import {
   requireKey,
   throwArgumentNull,
+  throwCompareFailed,
   throwDuplicateKey,
   throwEnumeratorModified,
   throwKeyListWrite,
@@ -22,6 +23,20 @@ import {
   throwOOR,
   throwSortedListNested,
 } from "./throw-helpers.ts";
+
+/**
+ * What a `SortedListView` and the iterator read from their list. Method syntax
+ * keeps every `SortedList<K, V>` assignable to it whatever its type arguments.
+ */
+interface SortedListSource {
+  readonly _keys: readonly unknown[];
+  readonly _values: readonly unknown[];
+  readonly _version: number;
+  readonly count: number;
+  checkIndex(index: number): void;
+  indexOfKey(key: unknown): number;
+  indexOfValue(value: unknown): number;
+}
 
 let SortedList$rt: CollectionType<SortedList<unknown, unknown>> | undefined;
 
@@ -153,7 +168,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
 
   /** The argument comparer, or `defaultComparer` (`Comparer<K>.Default`). */
   get comparer(): IComparer<K> {
-    return this._comparer ?? (defaultComparer as IComparer<K>);
+    return this._comparer ?? defaultComparerFor<K>();
   }
 
   /** `Keys`: a live read-only list of the keys, in order. */
@@ -173,7 +188,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
       throwKeyNotFound(key);
     }
 
-    return this._values[index] as V;
+    return at(this._values, index);
   }
 
   set(key: K, value: V): void {
@@ -265,13 +280,13 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   getKeyAtIndex(index: number): K {
     this.checkIndex(index);
 
-    return this._keys[index] as K;
+    return at(this._keys, index);
   }
 
   getValueAtIndex(index: number): V {
     this.checkIndex(index);
 
-    return this._values[index] as V;
+    return at(this._values, index);
   }
 
   setValueAtIndex(index: number, value: V): void {
@@ -287,14 +302,14 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
   ): readonly [found: true, value: V] | readonly [found: false, value: D] {
     const index = this.indexOfKey(key);
 
-    return index < 0 ? [false, missingValue] : [true, this._values[index] as V];
+    return index < 0 ? [false, missingValue] : [true, at(this._values, index)];
   }
 
   /** `GetValueOrDefault`: the value, or the caller's default on a miss (D30). */
   getValueOrDefault<D>(key: K, defaultValue: D): V | D {
     const index = this.indexOfKey(key);
 
-    return index < 0 ? defaultValue : (this._values[index] as V);
+    return index < 0 ? defaultValue : at(this._values, index);
   }
 
   copyTo(array: (readonly [K, V])[], arrayIndex = 0): void {
@@ -315,7 +330,7 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
     const json: Record<string, V> = {};
 
     for (const [index, key] of this._keys.entries()) {
-      json[String(key)] = this._values[index] as V;
+      json[String(key)] = at(this._values, index);
     }
 
     return json;
@@ -323,8 +338,8 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
 
   [Symbol.iterator](): Iterator<readonly [K, V]> {
     return new SortedListIterator(this, (index) => [
-      this._keys[index] as K,
-      this._values[index] as V,
+      at(this._keys, index),
+      at(this._values, index),
     ]);
   }
 
@@ -335,9 +350,17 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
     }
   }
 
-  /** .NET's binary search of `key` over the sorted keys. */
+  /**
+   * .NET's binary search of `key` over the sorted keys; a comparer failure is
+   * wrapped as `Array.BinarySearch` wraps it (`InvalidOperationException`,
+   * `Failed to compare two elements in the array.`, the original as inner).
+   */
   private search(key: K): number {
-    return binarySearch(this._keys, 0, this._keys.length, key, this._compare);
+    try {
+      return binarySearch(this._keys, 0, this._keys.length, key, this._compare);
+    } catch (error) {
+      return throwCompareFailed(error);
+    }
   }
 
   private insertAt(index: number, key: K, value: V): void {
@@ -348,7 +371,14 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
 
   /** The copy constructor: sort the source by key, then reject a duplicate (by the comparer), as .NET does. */
   private copyFrom(source: Iterable<readonly [K, V]>): void {
-    const entries = [...source].sort(([x], [y]) => this._compare(x, y));
+    const entries = [...source];
+
+    // .NET sorts the copy with `Array.Sort`, which wraps a comparer failure.
+    try {
+      entries.sort(([x], [y]) => this._compare(x, y));
+    } catch (error) {
+      throwCompareFailed(error);
+    }
 
     for (const [index, [key, value]] of entries.entries()) {
       if (key === null || key === undefined) {
@@ -379,11 +409,10 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
  * against the list's version.
  */
 export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
-  // `any` arguments: the view reads one array of a list whose other type argument it does not know.
-  declare readonly _list: SortedList<any, any>;
+  declare readonly _list: SortedListSource;
   declare readonly _isKeys: boolean;
 
-  constructor(list: SortedList<any, any>, isKeys: boolean) {
+  constructor(list: SortedListSource, isKeys: boolean) {
     Object.defineProperty(this, "_list", { value: list });
     Object.defineProperty(this, "_isKeys", { value: isKeys });
   }
@@ -399,7 +428,7 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
   get(index: number): T {
     this._list.checkIndex(index);
 
-    return this.items()[index] as T;
+    return at(this.items(), index);
   }
 
   /** `view[^n]`. */
@@ -450,40 +479,50 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
   }
 
   [Symbol.iterator](): Iterator<T> {
-    return new SortedListIterator(this._list, (index) => this.items()[index] as T);
+    return new SortedListIterator(this._list, (index) => at(this.items(), index));
   }
 
   private items(): readonly T[] {
+    // A keys view's `T` is the list's `K`, a values view's its `V`: the one cast of the view.
     return (this._isKeys ? this._list._keys : this._list._values) as readonly T[];
   }
 }
 
 /** An index walk over a `SortedList`'s arrays, checked against its version on every step. */
 class SortedListIterator<T> implements Iterator<T> {
-  private readonly list: SortedList<any, any>;
-  private readonly version: number;
-  private readonly read: (index: number) => T;
-  private index = 0;
+  private readonly _list: SortedListSource;
+  private readonly _expectedVersion: number;
+  private readonly _read: (index: number) => T;
+  private _index: number;
 
-  constructor(list: SortedList<any, any>, read: (index: number) => T) {
-    this.list = list;
-    this.version =
+  constructor(list: SortedListSource, read: (index: number) => T) {
+    this._list = list;
+    this._expectedVersion =
       typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__ ? list._version : 0;
-    this.read = read;
+    this._read = read;
+    this._index = 0;
   }
 
   next(): IteratorResult<T> {
     if (
       (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) &&
-      this.list._version !== this.version
+      this._list._version !== this._expectedVersion
     ) {
       throwEnumeratorModified();
     }
 
-    if (this.index >= this.list.count) {
+    if (this._index >= this._list.count) {
       return { done: true, value: undefined };
     }
 
-    return { done: false, value: this.read(this.index++) };
+    return { done: false, value: this._read(this._index++) };
   }
+}
+
+/**
+ * `items[index]` for an index the caller has already checked (or that a walk
+ * below `count` produced): `noUncheckedIndexedAccess` cannot see the check.
+ */
+function at<T>(items: readonly T[], index: number): T {
+  return items[index] as T;
 }
