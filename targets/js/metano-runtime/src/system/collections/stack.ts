@@ -4,6 +4,7 @@
  * enumerated, copied and serialized top first, as C# does.
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
+import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import { elementEquals } from "./default-comparer.ts";
@@ -65,6 +66,7 @@ export class Stack<T> implements IReadOnlyCollection<T> {
       variance: ["invariant"],
       interfaces: [{ collection: "IReadOnlyCollection", arguments: [0] }],
       test: (value: unknown): value is Stack<unknown> => value instanceof Stack,
+      closeFor: (instance) => closeCollectionFor(Stack.$runtimeType, instance),
     };
 
     return Stack$rt;

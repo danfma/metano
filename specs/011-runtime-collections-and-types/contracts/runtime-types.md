@@ -44,6 +44,7 @@ export type CollectionType<T> = RuntimeTypeBase<T> & {
   readonly typeArguments: ReadonlyArray<RuntimeType>;                   // UnknownType = wildcard
   readonly variance: ReadonlyArray<"invariant" | "covariant">;          // identity vs assignability per argument (FR-008)
   readonly interfaces?: ReadonlyArray<{ readonly collection: string; readonly arguments: ReadonlyArray<number> | null }>; // class kinds: implemented interfaces by kind, arguments as slot indices (null = wildcard); data (D30)
+  readonly closeFor?: (instance: object) => CollectionType<T>;          // class kinds: closed over an instance's $typeArguments$<Class> slot, memoized; what getRuntimeType calls (D30, W4-24 (f))
 };
 export type NullableType<T> = RuntimeTypeBase<T | null> & { readonly kind: "nullable"; readonly inner: () => RuntimeType<T>; };
 export type UnionType<T> = RuntimeTypeBase<T> & { readonly kind: "union"; readonly cases: ReadonlyArray<() => RuntimeType>; }; // spec 010

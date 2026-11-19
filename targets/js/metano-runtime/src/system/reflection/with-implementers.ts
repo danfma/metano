@@ -1,5 +1,5 @@
 import { hasPlainPrototype } from "./constructor-descriptor.ts";
-import { type MemoNode, memoNodeFor } from "./identity-memo.ts";
+import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 import type { InterfaceType, PlainObjectType } from "./runtime-type.ts";
 
 let memo: MemoNode<InterfaceType<unknown>> | undefined;

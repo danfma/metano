@@ -116,6 +116,13 @@ export interface CollectionType<T> extends RuntimeTypeBase<T> {
   readonly collection: CollectionKindName;
   /** Class kinds: the collection interfaces the class implements (nominal interface tests). */
   readonly interfaces?: ReadonlyArray<CollectionInterfaceEntry>;
+  /**
+   * Class kinds: this descriptor closed over the type arguments an instance (or any object
+   * with the class's `$typeArguments$<Class>` slot) carries, memoized; the open descriptor
+   * when the slot is absent. `getRuntimeType` closes an instance's descriptor through it
+   * without importing `system/collections` (D30).
+   */
+  readonly closeFor?: (instance: object) => CollectionType<T>;
   /** Classes only. */
   readonly ctor?: abstract new (
     ...args: never[]

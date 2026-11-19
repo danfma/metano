@@ -1,4 +1,4 @@
-import { type MemoNode, memoNodeFor } from "./identity-memo.ts";
+import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 import type { ClassType, RuntimeType } from "./runtime-type.ts";
 
 let memo: MemoNode<ClassType<unknown>> | undefined;

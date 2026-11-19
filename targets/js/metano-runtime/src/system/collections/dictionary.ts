@@ -7,6 +7,7 @@
  * enumeration (.NET Core 3.0+: `remove`, `clear` and overwrites do not).
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
+import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { elementEquals, type IEqualityComparer } from "./default-comparer.ts";
 import { KeyCollection, ValueCollection } from "./dictionary-views.ts";
@@ -110,6 +111,7 @@ export class Dictionary<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
         { collection: "IReadOnlyCollection", arguments: null },
       ],
       test: (value: unknown): value is Dictionary<unknown, unknown> => value instanceof Dictionary,
+      closeFor: (instance) => closeCollectionFor(Dictionary.$runtimeType, instance),
     };
 
     return Dictionary$rt;

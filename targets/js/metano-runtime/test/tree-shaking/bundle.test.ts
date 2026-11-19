@@ -90,6 +90,21 @@ test(
   BUNDLE_TIMEOUT_MS,
 );
 
+test(
+  "List alone pulls no system/reflection module, getRuntimeType no collections module (D30)",
+  async () => {
+    const list = await bundledModules(directory, readFileSync(join(import.meta.dir, "entries/list-only.js"), "utf8"));
+    const reflection = await bundledModules(
+      directory,
+      readFileSync(join(import.meta.dir, "entries/runtime-type-of-class.js"), "utf8"),
+    );
+
+    expect(list.filter((module) => module.startsWith("system/reflection/"))).toEqual([]);
+    expect(reflection.filter((module) => module.startsWith("system/collections/"))).toEqual([]);
+  },
+  BUNDLE_TIMEOUT_MS,
+);
+
 test("size-budgets.json lists every runtime module", () => {
   expect(sizeBudgets.modules).toEqual(listModules(DIST_DIR).map(moduleName));
 });

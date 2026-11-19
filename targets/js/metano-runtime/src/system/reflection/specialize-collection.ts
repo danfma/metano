@@ -1,4 +1,4 @@
-import { type MemoNode, memoNodeFor } from "./identity-memo.ts";
+import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 import { isAssignableFrom } from "./is-assignable-from.ts";
 import type {
   CollectionInterfaceEntry,
@@ -13,14 +13,21 @@ let memo: MemoNode<CollectionType<unknown>> | undefined;
  * A closed collection descriptor (`List<String>`) from an open one (a class's
  * `$runtimeType` literal or an interface literal), memoized on the identity of the
  * open descriptor and of each argument, so `listType(StringType) === listType(StringType)`
- * and `getRuntimeType` answers the same object (spec 011 FR-008, D30). Living in
- * reflection, it lets `getRuntimeType` specialize from an instance's
- * `$typeArguments$<Class>` slot without importing `system/collections`.
+ * and `getRuntimeType` answers the same object (spec 011 FR-008, D30). A class kind
+ * closes through its own `closeFor` (the memo `getRuntimeType` shares); an
+ * interface kind tests nominally through the class literals' `interfaces`, with
+ * assignability for a covariant parameter.
  */
 export function specializeCollection<T>(
   open: CollectionType<T>,
   typeArguments: ReadonlyArray<RuntimeType>,
 ): CollectionType<T> {
+  if (open.closeFor !== undefined) {
+    // A class kind closes through its own memo (the one getRuntimeType reaches), given a
+    // carrier object holding the slot its instances carry.
+    return open.closeFor({ [`$typeArguments$${open.collection}`]: typeArguments });
+  }
+
   memo ??= {};
 
   const node = memoNodeFor(memo, [open, ...typeArguments]);
@@ -38,7 +45,6 @@ export function specializeCollection<T>(
 }
 
 /**
- * A class kind: `instanceof` the class, then the instance's slot against the arguments.
  * An interface kind: nominal through the nearest own collection descriptor's
  * `interfaces` entries, then the slot mapped to the interface's arguments.
  */
@@ -47,18 +53,6 @@ function matchesCollection(
   open: CollectionType<unknown>,
   typeArguments: ReadonlyArray<RuntimeType>,
 ): boolean {
-  if (open.ctor !== undefined) {
-    return (
-      value instanceof open.ctor &&
-      argumentsMatch(
-        slotOf(value, open.collection),
-        typeArguments.map((_argument, position) => position),
-        open,
-        typeArguments,
-      )
-    );
-  }
-
   const found = implementedEntry(value, open.collection);
 
   return (

@@ -10,6 +10,7 @@
  * see nothing and every construction path shares one hidden class.
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
+import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import { type ComparisonArgument, comparisonOf, elementEquals } from "./default-comparer.ts";
@@ -114,6 +115,7 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
         { collection: "IReadOnlyCollection", arguments: [0] },
       ],
       test: (value: unknown): value is List<unknown> => value instanceof List,
+      closeFor: (instance) => closeCollectionFor(List.$runtimeType, instance),
     };
 
     return List$rt;

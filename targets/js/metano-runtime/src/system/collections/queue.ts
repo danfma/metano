@@ -4,6 +4,7 @@
  * O(1) (2.x lowered it to `shift`, O(n)).
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
+import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import { elementEquals } from "./default-comparer.ts";
@@ -70,6 +71,7 @@ export class Queue<T> implements IReadOnlyCollection<T> {
       variance: ["invariant"],
       interfaces: [{ collection: "IReadOnlyCollection", arguments: [0] }],
       test: (value: unknown): value is Queue<unknown> => value instanceof Queue,
+      closeFor: (instance) => closeCollectionFor(Queue.$runtimeType, instance),
     };
 
     return Queue$rt;

@@ -9,6 +9,7 @@
  * the compiler stops emitting them (W4-6).
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
+import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import type { IEqualityComparer } from "./default-comparer.ts";
@@ -93,6 +94,7 @@ export class HashSet<T> implements ISet<T>, IReadOnlySet<T> {
         { collection: "IReadOnlyCollection", arguments: [0] },
       ],
       test: (value: unknown): value is HashSet<unknown> => value instanceof HashSet,
+      closeFor: (instance) => closeCollectionFor(HashSet.$runtimeType, instance),
     };
 
     return HashSet$rt;
