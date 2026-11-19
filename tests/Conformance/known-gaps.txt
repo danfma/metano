@@ -18,7 +18,6 @@ RbAProbes.listIndex                   none  accepted FR-049 divergence until 011
 RbAProbes.listSwitch                  none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum: List<object> stores enums raw, so the int 5 matches case RbHue h
 RbBProbes.arrayElem                   none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 1 in an object[] is RbHue)
 RbBProbes.paramsArray                 none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 1 in params object[] counts as RbHue)
-RbBProbes.queueStack                  none  new Queue<object>() / new Stack<object>() lower to new Object() (q.push is not a function)
 RbBProbes.typedToObject               #619  Cast<T> emits an unlowered LINQ call
 BoxPAProbes.andNot                    none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (P1(5), P1(0)); AndNotBoxed matches
 BoxPAProbes.switchCombos              none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (P2(0), P2(5)); SwitchCombosBoxed matches
@@ -28,10 +27,6 @@ BoxPBProbes.propertyPatterns          none  accepted FR-049 divergence until 011
 BoxPCProbes.equalityForms             none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Eq(0)); EqualityFormsBoxed matches
 BoxPCProbes.genericPatterns           none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Gen(0)); and a raw enum under T = BpHue tests as int (Gen(BpHue.Red)); GenericPatternsBoxed matches
 BoxingProbes.objectHashSetMixedCount none  a HashSet<object> stores raw values until 011c (defaultEquals collections): a boxed enum and the int 0 collide
-CatchProbes.all                       none  an out-of-range index and a missing dictionary key do not throw
-CatchProbes.dictMissing               none  a missing dictionary key does not throw KeyNotFoundException
-CatchProbes.indexOut                  none  an out-of-range list index does not throw
-IndexProbes.listOutOfRange            none  an out-of-range list index does not throw
 IndexProbes.outOfRange                none  an out-of-range array index does not throw
 IndexProbes.outOfRangeNullable        none  an out-of-range array index does not throw
 StringProbes.lengthAndIndex           none  an out-of-range string index does not throw
@@ -39,7 +34,7 @@ DecimalProbes.precision               #465  decimal.js precision and rounding ar
 DecimalProbes.thirds                  #465  decimal.js precision and rounding are not System.Decimal's
 DecimalProbes.overflow                #465  Decimal.maxValue and the overflow check are not mapped
 Round2Probes.decToDoubleThird         #465  decimal.js precision and rounding are not System.Decimal's
-DecimalProbes.collections             #687  IndexOf / Contains over decimals use reference identity
+DecimalProbes.collections             #662  a decimal sum prints without its trailing zeros (14 vs 14.0)
 DecimalProbes.arithmetic              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.negatives               #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.rounding                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
@@ -50,14 +45,11 @@ LinqProbes.decimalLambda              #662  decimal.js drops the decimal scale (
 LinqProbes.minMaxDecimal              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.compound                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
-DecimalProbes.dictKey                 none  a decimal dictionary key is compared by reference
 DecimalProbes.typeTests               none  `is int` on a number that holds a whole value
 DefaultProbes.arrays                  #688  array-creation expression unsupported
 DefaultProbes.isDefault               #686  EqualityComparer<T>.Default is unmapped
 DefaultProbes.*                       #291  default(T) of a struct, enum, tuple, BCL value or type parameter
-DispatchProbes.equalsPair             #684  record equality edge case through a base-typed receiver or object.Equals
 EqualityProbes.genericArray           #688  a tuple is a plain array, so arrays behind object/T compare element by element
-EqualityProbes.genericList            #688  a tuple is a plain array, so arrays behind object/T compare element by element
 EqualityProbes.objectArrays           #688  a tuple is a plain array, so arrays behind object/T compare element by element
 EqualityProbes.objectBoxed            #684  a boxed int and a boxed double are the same JavaScript number
 IndexProbes.nested                    #688  array-creation expression unsupported
