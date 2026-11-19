@@ -75,7 +75,11 @@ public static partial class IrToTsExpressionBridge
         return IrToTsIntegerOverflowBridge.WithOperandsItReduces(expression) switch
         {
             IrLiteral lit => EnumValueAssertion.Wrap(
-                MapLiteral(EnumValueAssertion.InEnumRepresentation(lit)),
+                MapLiteral(
+                    lit.EnumConversionType is { } enumType
+                        ? TsEnumRepresentation.Constant(lit, enumType)
+                        : lit
+                ),
                 lit.EnumConversionType
             ),
             IrIdentifier id => new TsIdentifier(IrToTsNamingPolicy.ToLocalName(id.Name)),

@@ -42,8 +42,8 @@ internal static class IrToTsNumericConversionBridge
         TsExpression value
     )
     {
-        var from = Represented(declaredFrom);
-        var to = Represented(declaredTo);
+        var from = TsEnumRepresentation.Of(declaredFrom);
+        var to = TsEnumRepresentation.Of(declaredTo);
 
         if (IrNumericConversion.IsFloatingPointTruncation(from, to))
             return FloatingPointToNarrowInteger(to, isChecked, value);
@@ -94,16 +94,6 @@ internal static class IrToTsNumericConversionBridge
 
         return to.Kind is IrNumericKind.Single ? Global("Math.fround", asDouble) : asDouble;
     }
-
-    /// <summary>
-    /// The endpoint as TypeScript holds it: a 64-bit enum is its underlying
-    /// <c>bigint</c> (spec 011 FR-044 as amended by #701), so it converts as
-    /// that integer; every other endpoint as it is.
-    /// </summary>
-    private static IrNumericEndpoint Represented(IrNumericEndpoint endpoint) =>
-        endpoint is { IsEnum: true } && IrToTsEnumBridge.HoldsBigInts(endpoint.Kind)
-            ? new IrNumericEndpoint(endpoint.Kind)
-            : endpoint;
 
     /// <summary>
     /// An enum of 32 bits or fewer is a <c>number</c>: a conversion to it

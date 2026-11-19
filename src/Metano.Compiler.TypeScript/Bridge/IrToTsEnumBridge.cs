@@ -64,23 +64,14 @@ public static class IrToTsEnumBridge
             ? new TsNamedType($"{BaseType(ir)} & {{ readonly __enum?: \"{tsName}\" }}")
             : new TsNamedType($"typeof {tsName}[keyof typeof {tsName}]");
 
-    /// <summary>Whether the enum's values are <c>bigint</c>s: its underlying type is 64-bit.</summary>
-    internal static bool HoldsBigInts(IrNumericKind underlying) => underlying.IsSixtyFourBit();
-
-    /// <summary>Whether the enum <paramref name="type"/> (or its nullable form) holds <c>bigint</c>s.</summary>
-    internal static bool HoldsBigInts(IrTypeRef type) =>
-        (type is IrNullableTypeRef nullable ? nullable.Inner : type)
-            is IrNamedTypeRef { Semantics.EnumUnderlyingKind: { } underlying }
-        && HoldsBigInts(underlying);
-
     private static string BaseType(IrEnumDeclaration ir) =>
-        HoldsBigInts(ir.UnderlyingKind) ? "bigint" : "number";
+        TsEnumRepresentation.IsBigInt(ir) ? "bigint" : "number";
 
     /// <summary>The value a numeric member prints: its exact digits, a <c>bigint</c> literal for a 64-bit enum.</summary>
     private static string NumericMemberValue(IrEnumDeclaration ir, object? value)
     {
         var digits = value?.ToString() ?? "";
 
-        return HoldsBigInts(ir.UnderlyingKind) ? $"{digits}n" : digits;
+        return TsEnumRepresentation.IsBigInt(ir) ? $"{digits}n" : digits;
     }
 }

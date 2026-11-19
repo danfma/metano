@@ -1,11 +1,21 @@
-import type { NumericEnumDescriptor } from "./types.ts";
+import type { Int64Descriptor, NumericEnumDescriptor } from "./types.ts";
 
 /** A numeric enum member's value: a `number`, or a `bigint` for a 64-bit enum (#701). */
 export type NumericEnumValue = number | bigint;
 
+/** A numeric enum descriptor of a 64-bit enum, which names its underlying type (#701). */
+export type Int64EnumDescriptor = NumericEnumDescriptor & {
+  readonly numberType: Int64Descriptor["numberType"];
+};
+
 /** Whether a numeric enum's values are `bigint`s: its underlying type is 64-bit (#701). */
-export function holdsBigInts(descriptor: NumericEnumDescriptor): boolean {
+export function holdsBigInts(descriptor: NumericEnumDescriptor): descriptor is Int64EnumDescriptor {
   return descriptor.numberType === "System.Int64" || descriptor.numberType === "System.UInt64";
+}
+
+/** Whether `value` is of a numeric enum's representation, a `number` or a `bigint`. */
+export function isNumericEnumValue(value: unknown): value is NumericEnumValue {
+  return typeof value === "number" || typeof value === "bigint";
 }
 
 /**

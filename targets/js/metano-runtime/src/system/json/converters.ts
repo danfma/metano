@@ -6,7 +6,6 @@ import type {
   BrandedDescriptor,
   EnumDescriptor,
   HashSetDescriptor,
-  Int64Descriptor,
   MapDescriptor,
   NullableDescriptor,
   NumericEnumDescriptor,
@@ -37,7 +36,12 @@ import { type ConverterSetCache, createConverterSetCache } from "./converter-set
 import { JsonException } from "./errors.ts";
 import { exactBigIntLeafOf, numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
 import { forwardsNumberTexts } from "./exact-number-reads.ts";
-import { holdsBigInts, numericEnumMembers } from "./numeric-enum-members.ts";
+import {
+  holdsBigInts,
+  type Int64EnumDescriptor,
+  isNumericEnumValue,
+  numericEnumMembers,
+} from "./numeric-enum-members.ts";
 import {
   decimalConverterOf,
   type ErrorTypeName,
@@ -410,7 +414,7 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
 
       const read = reader ? reader.deserialize(value) : value;
 
-      if (!validValues.has(read as number | bigint)) {
+      if (!isNumericEnumValue(read) || !validValues.has(read)) {
         throw invalidValue(read);
       }
 
@@ -424,12 +428,10 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
  * exact digits and read from the exact token, in the underlying type's
  * range, through the `long` / `ulong` converter, whose errors name the enum.
  */
-function int64EnumReader(descriptor: NumericEnumDescriptor): ValueConverter {
-  return int64ConverterOf(
-    { kind: "int64", numberType: descriptor.numberType as Int64Descriptor["numberType"] },
-    undefined,
-    () => descriptor.typeName ?? descriptor.numberType!,
-  );
+function int64EnumReader(descriptor: Int64EnumDescriptor): ValueConverter {
+  const { numberType, typeName = numberType } = descriptor;
+
+  return int64ConverterOf({ kind: "int64", numberType }, undefined, () => typeName);
 }
 
 // ─── Nullable ────────────────────────────────────────────────────────────────

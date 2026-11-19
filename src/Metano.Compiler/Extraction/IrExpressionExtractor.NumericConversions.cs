@@ -281,7 +281,10 @@ public sealed partial class IrExpressionExtractor
     /// conversion of a nullable value (<c>(byte?)ni</c>, <c>(int)nl</c>) and an
     /// enumeration conversion (<c>(int)e</c>, <c>(E)l</c>), which C# checks
     /// through the conversion of the underlying integers (#701), read the
-    /// context of their syntax.
+    /// context of their syntax. Only a cast that lowers to a conversion node
+    /// carries it (one that crosses 64 bits or truncates a floating-point
+    /// value); a narrowing between an enum and an integer of 32 bits or fewer
+    /// still ignores the context.
     /// </summary>
     private bool IsCheckedCast(CastExpressionSyntax cast) =>
         _semantic.GetOperation(cast) switch
@@ -345,14 +348,7 @@ public sealed partial class IrExpressionExtractor
             ? new IrCastExpression(folded, IrTypeRefMapper.Map(enumType, _originResolver, _target))
             : folded;
 
-    /// <summary>
-    /// The literal of a folded constant <paramref name="value"/>, in the kind
-    /// of the type it is converted to (its own type when the conversion
-    /// leaves the numeric types, as boxing to <c>object</c> does): a
-    /// <c>char</c> read as a <c>char</c> is a character literal; <c>decimal</c>
-    /// and <c>BigInteger</c> carry their digits, as their literals do; an enum
-    /// value and the types narrower than <c>int</c> carry a plain integer.
-    /// </summary>
+    /// <summary>Whether <paramref name="conversion"/> converts to or from an enum.</summary>
     private static bool IsEnumerationConversion(IConversionOperation conversion) =>
         IsEnumTyped(conversion.Type) || IsEnumTyped(conversion.Operand.Type);
 
@@ -360,9 +356,14 @@ public sealed partial class IrExpressionExtractor
         NumericEndpoints.Of(type) is { IsEnum: true };
 
     /// <summary>
-    /// The literal of a folded constant in the target's representation of
-    /// its converted (else own) type: a 64-bit enum's constant is a 64-bit
-    /// literal where the target holds such an enum as its integer (#701).
+    /// The literal of a folded constant <paramref name="value"/>, in the kind
+    /// of the type it is converted to (its own type when the conversion
+    /// leaves the numeric types, as boxing to <c>object</c> does): a
+    /// <c>char</c> read as a <c>char</c> is a character literal; <c>decimal</c>
+    /// and <c>BigInteger</c> carry their digits, as their literals do; an enum
+    /// value and the types narrower than <c>int</c> carry a plain integer,
+    /// except a 64-bit enum the target holds as its integer, whose constant is
+    /// a 64-bit literal (#701).
     /// </summary>
     private IrLiteral ConstantLiteral(
         object value,

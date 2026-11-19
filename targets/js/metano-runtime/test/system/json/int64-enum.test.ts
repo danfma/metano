@@ -36,6 +36,7 @@ describe("64-bit numeric enums", () => {
     expect(JSON.stringify(JsonSerializer.serialize(Wide.Both, root(WIDE)))).toBe(
       "1099511627777",
     );
+
     expect(JSON.stringify(JsonSerializer.serialize(Big.Max, root(BIG)))).toBe(
       "18446744073709551615",
     );
@@ -60,6 +61,7 @@ describe("64-bit numeric enums", () => {
     expect(() => JsonSerializer.deserializeText("18446744073709551616", root(BIG))).toThrow(
       JsonException,
     );
+
     expect(() => JsonSerializer.deserializeText("-1", root(BIG))).toThrow(JsonException);
   });
 

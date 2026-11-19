@@ -94,6 +94,18 @@ public static class IrNumericKindExtensions
     public static bool IsNarrowIntegerValue(this IrNumericEndpoint endpoint) =>
         !endpoint.IsEnum && endpoint.Kind.IsThirtyTwoBitOrNarrower();
 
+    /// <summary>An enum over a 64-bit integer (<c>enum E : long</c> / <c>ulong</c>).</summary>
+    public static bool IsSixtyFourBitEnum(this IrNumericEndpoint endpoint) =>
+        endpoint.IsEnum && endpoint.Kind.IsSixtyFourBit();
+
+    /// <summary>
+    /// A 64-bit enum endpoint read as its underlying integer (#701), for a
+    /// target that holds such an enum as that integer; any other endpoint as
+    /// it is.
+    /// </summary>
+    public static IrNumericEndpoint AsUnderlyingInteger(this IrNumericEndpoint endpoint) =>
+        endpoint.IsSixtyFourBitEnum() ? new IrNumericEndpoint(endpoint.Kind) : endpoint;
+
     /// <summary>A 64-bit integer value, not an enum over one.</summary>
     public static bool IsSixtyFourBitValue(this IrNumericEndpoint endpoint) =>
         !endpoint.IsEnum && endpoint.Kind.IsSixtyFourBit();

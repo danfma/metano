@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler.IR;
 
@@ -63,14 +64,13 @@ internal sealed record NumericLoweringRules(
     /// integer (<see cref="HoldsSixtyFourBitEnumsAsIntegers"/>), otherwise
     /// the endpoint itself.
     /// </summary>
+    [return: NotNullIfNotNull(nameof(endpoint))]
     public IrNumericEndpoint? RepresentationOf(IrNumericEndpoint? endpoint) =>
-        HoldsAsInteger(endpoint) ? new IrNumericEndpoint(endpoint!.Kind) : endpoint;
+        HoldsSixtyFourBitEnumsAsIntegers ? endpoint?.AsUnderlyingInteger() : endpoint;
 
     /// <summary>Whether <paramref name="endpoint"/> is a 64-bit enum the target holds as its integer.</summary>
     public bool HoldsAsInteger(IrNumericEndpoint? endpoint) =>
-        HoldsSixtyFourBitEnumsAsIntegers
-        && endpoint is { IsEnum: true }
-        && endpoint.Kind.IsSixtyFourBit();
+        HoldsSixtyFourBitEnumsAsIntegers && endpoint?.IsSixtyFourBitEnum() == true;
 
     /// <summary>
     /// Whether an implicit conversion from <paramref name="from"/> to
@@ -112,7 +112,7 @@ internal sealed record NumericLoweringRules(
     /// a 64-bit enum held as its integer is that integer.
     /// </summary>
     private bool CrossesSixtyFourBits(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        NumericEndpoints.CrossesSixtyFourBits(RepresentationOf(from)!, RepresentationOf(to)!);
+        NumericEndpoints.CrossesSixtyFourBits(RepresentationOf(from), RepresentationOf(to));
 
     private bool IsLoweredIntegerToDecimal(IrNumericEndpoint from, IrNumericEndpoint to) =>
         ComputesDecimalByMethods && IrNumericConversion.IsIntegerToDecimal(from, to);

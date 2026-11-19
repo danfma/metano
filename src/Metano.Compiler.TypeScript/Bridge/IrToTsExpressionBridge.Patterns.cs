@@ -378,7 +378,7 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapCast(IrCastExpression cast, IrToTsBridgeContext context)
     {
-        var value = Map(cast.Expression, context);
+        var value = Map(EnumConstantOperand(cast), context);
         var testedType = cast.TargetType is IrNullableTypeRef nullable
             ? nullable.Inner
             : cast.TargetType;
@@ -396,6 +396,16 @@ public static partial class IrToTsExpressionBridge
             ? UnboxedEnum(value, testedType)
             : EnumValueAssertion.Wrap(value, cast.TargetType);
     }
+
+    /// <summary>
+    /// The cast's operand, an integer constant cast to an enum (the zero a
+    /// member-less <c>default(E)</c> asserts) in the enum's representation
+    /// (<see cref="TsEnumRepresentation.Constant"/>).
+    /// </summary>
+    private static IrExpression EnumConstantOperand(IrCastExpression cast) =>
+        cast.Expression is IrLiteral literal
+            ? TsEnumRepresentation.Constant(literal, cast.TargetType)
+            : cast.Expression;
 
     /// <summary>
     /// Whether an unboxing cast to an enum that a type test already narrowed

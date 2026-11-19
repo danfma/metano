@@ -1,4 +1,3 @@
-using System.Globalization;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 
@@ -52,19 +51,6 @@ internal static class EnumValueAssertion
     }
 
     /// <summary>
-    /// A constant <c>0</c> C# converts to an enum, in the enum's representation:
-    /// a 64-bit literal (<c>0n</c>) for a 64-bit enum (#701), unchanged otherwise.
-    /// </summary>
-    public static IrLiteral InEnumRepresentation(IrLiteral literal) =>
-        literal.EnumConversionType is { } type && IrToTsEnumBridge.HoldsBigInts(type)
-            ? literal with
-            {
-                Value = Convert.ToInt64(literal.Value, CultureInfo.InvariantCulture),
-                Kind = IrLiteralKind.Int64,
-            }
-            : literal;
-
-    /// <summary>
     /// The reduction of a 64-bit enum's operator (<c>BigInt.asIntN(64, e + 1n)</c>,
     /// #701) asserted as a whole: the reduction is a <c>bigint</c>, so the enum
     /// type its operator carries moves from the operator to the reduction.
@@ -73,27 +59,9 @@ internal static class EnumValueAssertion
         IrIntegerOverflow overflow,
         Func<IrIntegerOverflow, TsExpression> map
     ) =>
-        EnumResultTypeOf(overflow.Value) is { } type
-            ? Wrap(map(overflow with { Value = Untyped(overflow.Value) }), type)
+        IrEnumResultTypes.Of(overflow.Value) is { } type
+            ? Wrap(map((IrIntegerOverflow)IrEnumResultTypes.With(overflow, null)), type)
             : map(overflow);
-
-    private static IrTypeRef? EnumResultTypeOf(IrExpression value) =>
-        value switch
-        {
-            IrBinaryExpression binary => binary.EnumResultType,
-            IrUnaryExpression unary => unary.EnumResultType,
-            IrIntegerOverflow overflow => EnumResultTypeOf(overflow.Value),
-            _ => null,
-        };
-
-    private static IrExpression Untyped(IrExpression value) =>
-        value switch
-        {
-            IrBinaryExpression binary => binary with { EnumResultType = null },
-            IrUnaryExpression unary => unary with { EnumResultType = null },
-            IrIntegerOverflow overflow => overflow with { Value = Untyped(overflow.Value) },
-            _ => value,
-        };
 
     /// <summary>
     /// <paramref name="value"/> asserted as the enum <paramref name="type"/>, unless it
@@ -120,6 +88,6 @@ internal static class EnumValueAssertion
     private static TsExpression AsUnderlying(TsExpression target, IrTypeRef type) =>
         new TsCastExpression(
             target,
-            IrToTsEnumBridge.HoldsBigInts(type) ? new TsBigIntType() : new TsNumberType()
+            TsEnumRepresentation.IsBigInt(type) ? new TsBigIntType() : new TsNumberType()
         );
 }
