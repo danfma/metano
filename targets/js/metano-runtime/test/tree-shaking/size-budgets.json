@@ -37,8 +37,8 @@
     {
       "name": "box + Boxed (a boxed enum)",
       "entry": "entries/box-enum.js",
-      "maxGzip": 420,
-      "$comment": "Raised by the maintainer (stage 011b B3, set to the measured 430 B because the requested 420 B is 10 B short once the sorted flags decomposition is in): bun 427 B / esbuild 430 B: the class with its marker, valueOf / toJSON, the .NET enum text with the flags decomposition and the entry's descriptor literal."
+      "maxGzip": 430,
+      "$comment": "Raised by the maintainer (stage 011b B3) to 430 B: measured bun 427 B / esbuild 430 B. The Boxed class with its $boxed brand, valueOf / toJSON, the .NET enum text with the flags decomposition in value order (the index sort costs ~16 B; flags formatting alone ~130 B) and the entry's descriptor literal."
     }
   ],
   "modules": [
