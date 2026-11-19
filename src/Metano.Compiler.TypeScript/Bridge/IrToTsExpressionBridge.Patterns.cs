@@ -240,7 +240,7 @@ public static partial class IrToTsExpressionBridge
                 BuildPatternTest(value, and.Left, context),
                 "&&",
                 BuildPatternTest(
-                    ConjunctionRightValue(value, and.Left, context),
+                    ConjunctionRightValue(value, and.Left, context.RuntimeTypes.BoxingEnabled),
                     and.Right!,
                     context
                 )
@@ -278,42 +278,57 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The value the right operand of <c>left and right</c> reads: once
-    /// <paramref name="left"/> matched an enum on a value that may hold a box
-    /// of it (<c>o is Color and not Color.Red</c>, spec 011 FR-050), the raw
-    /// enum, <c>unbox(o) as Color</c>, so the nested constant and relational
-    /// patterns compare the value rather than the box;
-    /// <paramref name="value"/> otherwise.
+    /// <paramref name="left"/> proved a value that may hold a box to be an enum
+    /// (<c>o is Color and not Color.Red</c>, <c>o is Color.Red and Color c</c>,
+    /// spec 011 FR-050), the raw enum, <c>unbox(o) as Color</c>, so the nested
+    /// constant and relational patterns compare the value and a designator binds
+    /// it, rather than the box; <paramref name="value"/> otherwise.
     /// </summary>
     private static TsExpression ConjunctionRightValue(
         TsExpression value,
         IrPattern left,
-        IrToTsBridgeContext context
-    ) => UnboxedEnumAfter(left, context) is { } enumType ? UnboxedEnum(value, enumType) : value;
+        bool unboxes
+    ) => unboxes && ProvedEnumOf(left) is { } enumType ? UnboxedEnum(value, enumType) : value;
 
     /// <summary>
-    /// The enum a matched <paramref name="pattern"/> proves a possibly boxed
-    /// value to hold (a type test of it, <c>Color { }</c>, or a conjunction
-    /// with either); <c>null</c> when it proves none.
+    /// The enum a matched <paramref name="pattern"/> proves a value that may
+    /// hold a box of it to hold: a type test of it, <c>Color { }</c>, a constant
+    /// of it, an <c>or</c> whose sides prove the same enum, or a conjunction
+    /// with any of these; <c>null</c> when it proves none. Unboxing a raw value
+    /// is the identity, so the proof needs no descriptor.
     /// </summary>
-    private static IrTypeRef? UnboxedEnumAfter(IrPattern pattern, IrToTsBridgeContext context) =>
+    private static IrTypeRef? ProvedEnumOf(IrPattern pattern) =>
         pattern switch
         {
-            IrTypePattern typePattern
-                when IrToTsRuntimeTestBridge.MeetsBoxes(
-                    typePattern.Type,
-                    typePattern.InputType,
-                    context.RuntimeTypes
-                ) => typePattern.Type,
-            IrPropertyPattern { Type: { } type } property
-                when IrToTsRuntimeTestBridge.MeetsBoxes(
-                    type,
-                    property.InputType,
-                    context.RuntimeTypes
-                ) => type,
-            IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
-                UnboxedEnumAfter(and.Left, context) ?? UnboxedEnumAfter(right, context),
+            IrTypePattern typePattern => EnumOnBoxCapableInput(
+                typePattern.Type,
+                typePattern.InputType
+            ),
+            IrPropertyPattern property => EnumOnBoxCapableInput(property.Type, property.InputType),
+            IrConstantPattern constant => EnumOnBoxCapableInput(
+                constant.ConstantType,
+                constant.InputType
+            ),
+            IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and => ProvedEnumOf(
+                and.Left
+            ) ?? ProvedEnumOf(right),
+            IrLogicalPattern { Operator: IrLogicalOp.Or, Right: { } right } or => SameEnum(
+                ProvedEnumOf(or.Left),
+                ProvedEnumOf(right)
+            ),
             _ => null,
         };
+
+    private static IrTypeRef? EnumOnBoxCapableInput(IrTypeRef? type, IrTypeRef? inputType) =>
+        type is not null
+        && IrToTsRuntimeTestBridge.IsEnum(type)
+        && inputType is not null
+        && IrToTsRuntimeTestBridge.MayHoldBox(inputType)
+            ? type
+            : null;
+
+    private static IrTypeRef? SameEnum(IrTypeRef? left, IrTypeRef? right) =>
+        left is not null && IrTypeRefEquivalence.AreEquivalent(left, right) ? left : null;
 
     /// <summary><c>unbox(value) as Color</c>: the raw enum of a value that may be its box.</summary>
     private static TsExpression UnboxedEnum(TsExpression value, IrTypeRef enumType) =>
@@ -819,7 +834,13 @@ public static partial class IrToTsExpressionBridge
                 .Concat(SliceBinding(value, list)),
             IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
                 EnumeratePatternBindings(value, and.Left, unboxes)
-                    .Concat(EnumeratePatternBindings(value, right, unboxes)),
+                    .Concat(
+                        EnumeratePatternBindings(
+                            ConjunctionRightValue(value, and.Left, unboxes),
+                            right,
+                            unboxes
+                        )
+                    ),
             _ => [],
         };
 
@@ -841,12 +862,8 @@ public static partial class IrToTsExpressionBridge
         IrTypeRef? inputType,
         bool unboxes
     ) =>
-        unboxes
-        && type is not null
-        && IrToTsRuntimeTestBridge.IsEnum(type)
-        && inputType is not null
-        && IrToTsRuntimeTestBridge.MayHoldBox(inputType)
-            ? UnboxedEnum(value, type)
+        unboxes && EnumOnBoxCapableInput(type, inputType) is { } enumType
+            ? UnboxedEnum(value, enumType)
             : value;
 
     private static IEnumerable<PatternBinding> DesignatorBinding(

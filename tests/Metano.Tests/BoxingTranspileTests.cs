@@ -318,6 +318,37 @@ public class BoxingTranspileTests
     }
 
     [Test]
+    public async Task LessOrEqualAfterAnEnumCast_ParenthesizesTheCast()
+    {
+        var output = Transpile(
+            """
+            public static bool Pattern(object o) => o is Color and <= Color.Green;
+            public static bool Cast(int n) => (Color)n <= Color.Green;
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("return isType(o, Color$runtimeType) && (unbox(o) as Color) <= Color.Green;");
+
+        await Assert.That(output).Contains("return (n as Color) <= Color.Green;");
+    }
+
+    [Test]
+    public async Task DesignatorAfterAConstant_BindsTheUnboxedEnum()
+    {
+        var output = Transpile(
+            """
+            public static int Const(object o) => o is Color.Green and Color c ? (int)c : -1;
+            public static int Either(object o) => o switch { (Color.Red or Color.Green) and Color c => (int)c, _ => -1 };
+            """
+        );
+
+        await Assert.That(output).Contains("(c = unbox(o) as Color, true)");
+        await Assert.That(output).Contains("const c = unbox($s) as Color;");
+    }
+
+    [Test]
     public async Task BareTypeLabelAndEmptyPropertyPattern_TestTheBoxOnAnObject()
     {
         var output = Transpile(

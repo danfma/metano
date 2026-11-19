@@ -69,7 +69,7 @@ public static partial class IrToTsExpressionBridge
     {
         var rightValue = left is IrVarPattern capture
             ? new TsIdentifier(IrToTsNamingPolicy.ToLocalName(capture.Designator.Name))
-            : ConjunctionRightValue(value, left, context);
+            : ConjunctionRightValue(value, left, context.RuntimeTypes.BoxingEnabled);
 
         return new TsBinaryExpression(
             BuildBindingPatternTest(value, left, context),
