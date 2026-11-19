@@ -641,10 +641,10 @@ Product requirements added after the migration (normative; each one is traced by
     FR-027), after which the prologue follows. A struct with a static constructor declares its
     instance fields and auto-properties without initializers (defaults only) and assigns their
     initializers in that prologue, after the guard, in textual order, so they never run before it.
-    Each of its instance methods and instance property and indexer accessors with a body starts
-    with the guard (ECMA-335 I.8.9.5). An instance auto-property is a TypeScript field, so reading
-    or writing it does not run the guard, as a field access does not in .NET; .NET calls its
-    accessor, which does (listed below).
+    Each of its instance methods and instance property and indexer accessors starts with the
+    guard (ECMA-335 I.8.9.5), including auto-property accessors and a record struct's synthesized
+    equals. Instance auto-properties use backing storage with guarded accessors; instance fields
+    remain unguarded reads and writes (#696).
   - A static member whose TypeScript name is also the name of a slot's accessors (a private field
     `count` beside a property `Count`, both `count`; two slotted members; a slotted member and a
     `const`) is an `MS0001` error at that member, asking for a `[Name]` on one of them. Neither
@@ -654,7 +654,9 @@ Product requirements added after the migration (normative; each one is traced by
 
   A type without an explicit static constructor keeps its static field initializers at class
   definition: .NET's `beforefieldinit` leaves their timing to the runtime (.NET 10 runs them at
-  the first static field access).
+  the first static field access). Exception (#696): a derived type whose eager static initializer
+  constructs itself and thereby triggers a lazy base must defer its static storage initialization
+  until first use, so the base can read that derived singleton after the derived class exists.
 
   `TypeInitializationException` is a `metano-runtime` class extending the runtime
   `SystemException`, bound with `[ExportFromBcl(typeof(TypeInitializationException))]` like its
@@ -667,7 +669,8 @@ Product requirements added after the migration (normative; each one is traced by
   same barrel that `extends` the type, directly or transitively (`new RoDerived()`,
   `RoDerived.Create()`, `RoDerived.Instance`), the modules form an import cycle that loads only when
   the derived module is evaluated first. The generated `index.ts` barrel then hoists the export
-  lines of those derived modules to its top, ordered by base, then by derived, each in the barrel's
+   lines of those derived modules to its top, most-derived first along each inheritance chain
+   (#696), with unrelated modules in the barrel's
   existing order; every other line keeps its relative order. Hoisting to the top, not just before
   the base, is needed because any earlier line whose module imports the base evaluates the base
   first. A barrel without such a cycle does not change, and the order is deterministic (NFR-005).
@@ -686,7 +689,10 @@ Product requirements added after the migration (normative; each one is traced by
   overload, constructor and factory dispatcher bridges and the struct default-constructor bridge
   are not edited; constructor factories are covered by the constructor guard. The helper is
   imported as a TypeScript runtime-helper reference, not a core runtime requirement. Core adds no
-  new fact.
+  new fact. Calls bypassing emitted members (`[Inline]`, `[Emit]`, BCL-mapped static methods,
+  and synthesized record `==` / `!=`) still trigger the declaring type's initializer before the
+  lowered call or comparison (#696); synthesized metadata and selectors remain non-triggers.
+  MS0005 includes value imports referenced only by a static constructor in cycle detection (#696).
 
   Differs from .NET or not covered (follow-ups):
   - A generic type runs one initializer for all its constructions, since its static members are
@@ -694,14 +700,11 @@ Product requirements added after the migration (normative; each one is traced by
   - A static `async` method runs the guard synchronously, but a failure becomes a rejected promise
     where .NET throws at the call; a static iterator (`static *m()`) runs the guard at the first
     `next()`, not at the call.
-  - Calls that do not reach an emitted member do not trigger it: `[Inline]`, `[Emit]` and
-    BCL-mapped static methods, and a record's synthesized `==`.
   - Where Metano spells a struct's default value as a call of a constructor the struct declares
     (`new S()` for a struct that declares a parameterless constructor, or whose only declared
     constructor TypeScript can call with no arguments, such as `S(params int[] values)`, #291), that
     call runs the guard and the instance initializers, as it runs the initializers of a struct
     without a static constructor.
-  - Reading or writing a struct's instance auto-property does not run the guard (it is a field).
   - Importing the base module directly (not through the barrel) while its static constructor
     constructs a derived class from another file still evaluates the derived class's `extends`
     clause before the base class exists (`ReferenceError`). Workaround: `[EmitInFile]` or the
@@ -715,8 +718,8 @@ Product requirements added after the migration (normative; each one is traced by
   - `[PlainObject]` emits no class; its static members, the static constructor included, are
     dropped (existing).
   - Dart reports `MS0001` (the body is dropped).
-  - Existing defects found here, not fixed by this FR: `MS0005` misses an import used only in a
-    static constructor; writing a base static through a derived name (`Derived.F = 5`) on a type
+  - Existing defects found here, not fixed by this FR: writing a base static through a derived
+    name (`Derived.F = 5`) on a type
     without a static constructor creates a shadow property on the derived class; static events
     are emitted as instance members (and so do not trigger it); on a type without a static
     constructor, a private static field `count` and a static property `Count` still clash on the TS
