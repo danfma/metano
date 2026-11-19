@@ -123,7 +123,7 @@
         "Mutating a key collection",
         "An item with the same key"
       ],
-      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4424 B / esbuild 4372 B (proposed 2560 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4424 B / esbuild 4372 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     },
     {
       "name": "SortedDictionary alone",
@@ -133,7 +133,7 @@
         "Mutating a key collection",
         "upperValue"
       ],
-      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4578 B / esbuild 4529 B (proposed 3072 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4578 B / esbuild 4529 B (proposed 3072 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     },
     {
       "name": "SortedList alone",
@@ -143,7 +143,7 @@
         "upperValue",
         "Must be less than or equal"
       ],
-      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4112 B / esbuild 4035 B (proposed 2560 B). As for 011c's classes, FR-016's exception classes and defaultCompare / the type-name and close helpers are most of it and are shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4112 B / esbuild 4035 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     },
     {
       "name": "ReadOnlyList alone",
@@ -153,7 +153,7 @@
         "Queue empty.",
         "upperValue"
       ],
-      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 2549 B / esbuild 2462 B (proposed 819 B). FR-016's exception classes, elementEquals / defaultEquals and the type-name and close helpers are most of it, shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 2549 B / esbuild 2462 B (proposed 819 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     },
     {
       "name": "ConcurrentDictionary alone (with the shared hash core, without Dictionary)",
@@ -163,7 +163,14 @@
         "Queue empty.",
         "upperValue"
       ],
-      "$comment": "Stage 011h, W4-25 (d)'s rule (measured size + 10%; pending the supervisor's confirmation for 011h): bun 4372 B / esbuild 4299 B (proposed 3584 B). FR-016's exception classes, elementEquals / defaultEquals and the type-name and close helpers are most of it, shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4372 B / esbuild 4299 B (proposed 3584 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+    },
+    {
+      "name": "ReadOnlyList over List (List + ReadOnlyList minus List alone)",
+      "entry": "entries/list-read-only-list.js",
+      "baselineEntry": "entries/list-only.js",
+      "maxGzip": 819,
+      "$comment": "Maintainer decision W4-42: the marginal cost of ReadOnlyList where List is already used, NFR-008's proposed 0.8 KB. Measured bun 395 B (4527 - 4132) / esbuild 362 B (4440 - 4078)."
     }
   ],
   "modules": [

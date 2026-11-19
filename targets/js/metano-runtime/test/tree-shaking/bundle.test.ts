@@ -22,6 +22,11 @@ interface Budget {
   readonly name: string;
   readonly entry: string;
   readonly maxGzip?: number;
+  /**
+   * A marginal row: `maxGzip` bounds this entry's size minus `baselineEntry`'s,
+   * both bundled by the same bundler (the cost a class adds to another).
+   */
+  readonly baselineEntry?: string;
   readonly mustContain?: readonly string[];
   readonly mustNotContain?: readonly string[];
 }
@@ -55,15 +60,30 @@ afterAll(() => {
   directory.dispose();
 });
 
+/** The gzipped size of a marginal row's baseline entry; `0` for an ordinary row. */
+async function baselineSize(
+  bundler: (typeof SIZE_BUNDLERS)[number],
+  entry: string | undefined,
+): Promise<number> {
+  if (entry === undefined) {
+    return 0;
+  }
+
+  const source = readFileSync(join(import.meta.dir, entry), "utf8");
+
+  return gzipSize(await bundle(bundler, directory, source));
+}
+
 describe("size budgets", () => {
   test.each(cases)(
     "$name ($bundler)",
     async (budget) => {
       const source = readFileSync(join(import.meta.dir, budget.entry), "utf8");
       const code = await bundle(budget.bundler, directory, source);
+      const baseline = await baselineSize(budget.bundler, budget.baselineEntry);
 
       if (budget.maxGzip !== undefined) {
-        expect(gzipSize(code)).toBeLessThanOrEqual(budget.maxGzip);
+        expect(gzipSize(code) - baseline).toBeLessThanOrEqual(budget.maxGzip);
       }
 
       for (const text of budget.mustContain ?? []) {
