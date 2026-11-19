@@ -27,3 +27,6 @@ export * from "./specialize.ts";
 export * from "./with-implementers.ts";
 export { enumFromRaw } from "./enum-from-raw.ts";
 export { enumIsDefined } from "./enum-is-defined.ts";
+export { Boxed, box, boxNullable } from "./box.ts";
+export { isBoxOf } from "./is-box-of.ts";
+export { unbox } from "./unbox.ts";

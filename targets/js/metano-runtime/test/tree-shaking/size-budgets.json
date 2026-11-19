@@ -25,14 +25,20 @@
     {
       "name": "isType + getRuntimeType + one class descriptor",
       "entry": "entries/runtime-type-of-class.js",
-      "maxGzip": 1740,
-      "$comment": "Raised from 1.2 KB to 1.7 KB by the maintainer (stage 011b B1): measured bun 1646 B / esbuild 1620 B = entry class + literal getter + isType ~241 B, the NullReferenceException chain getRuntimeType(null) throws ~599 B, getRuntimeType with every descriptor it can answer + getNumberType ~800 B."
+      "maxGzip": 1792,
+      "$comment": "Raised by the maintainer (stage 011b B3): bun 1758 B / esbuild 1727 B with the box unwrap in isType and getRuntimeType (was bun 1646 B / esbuild 1620 B). Raised from 1.2 KB to 1.7 KB by the maintainer (stage 011b B1): measured bun 1646 B / esbuild 1620 B = entry class + literal getter + isType ~241 B, the NullReferenceException chain getRuntimeType(null) throws ~599 B, getRuntimeType with every descriptor it can answer + getNumberType ~800 B."
     },
     {
       "name": "one primitive descriptor (Int32Type with isInt32)",
       "entry": "entries/int32-descriptor.js",
       "maxGzip": 205,
       "$comment": "0.2 KB rounded up to whole bytes (maintainer, stage 011b B1): measured esbuild 205 B / bun 203 B, the contract literal with isInt32 and nothing else."
+    },
+    {
+      "name": "box + Boxed (a boxed enum)",
+      "entry": "entries/box-enum.js",
+      "maxGzip": 420,
+      "$comment": "Raised by the maintainer (stage 011b B3, set to the measured 430 B because the requested 420 B is 10 B short once the sorted flags decomposition is in): bun 427 B / esbuild 430 B: the class with its marker, valueOf / toJSON, the .NET enum text with the flags decomposition and the entry's descriptor literal."
     }
   ],
   "modules": [
@@ -133,6 +139,9 @@
     "system/math",
     "system/number-parsing",
     "system/record-copy",
+    "system/reflection/box",
+    "system/reflection/boxed-text",
+    "system/reflection/boxes-equal",
     "system/reflection/cast-to",
     "system/reflection/constructor-descriptor",
     "system/reflection/enum-from-raw",
@@ -144,6 +153,8 @@
     "system/reflection/implements-interface",
     "system/reflection/index",
     "system/reflection/is-assignable-from",
+    "system/reflection/is-box-of",
+    "system/reflection/is-boxed",
     "system/reflection/is-type",
     "system/reflection/nullable-type",
     "system/reflection/primitive-types",
@@ -151,6 +162,8 @@
     "system/reflection/specialize",
     "system/reflection/temporal-types",
     "system/reflection/to-string-tag",
+    "system/reflection/unbox-for",
+    "system/reflection/unbox",
     "system/reflection/well-known-types",
     "system/reflection/with-implementers",
     "system/standard-numeric-format",

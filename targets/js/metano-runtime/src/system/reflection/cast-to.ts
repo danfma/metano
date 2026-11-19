@@ -1,8 +1,9 @@
 import { InvalidCastException } from "../exceptions/invalid-cast-exception.ts";
 import { ownRuntimeType, ownRuntimeTypeOf } from "./constructor-descriptor.ts";
 import { getRuntimeType } from "./get-runtime-type.ts";
-import { isType } from "./is-type.ts";
+import { isBoxed } from "./is-boxed.ts";
 import type { RuntimeType } from "./runtime-type.ts";
+import { unboxFor } from "./unbox-for.ts";
 
 /** A class value, abstract or not, that `instanceof` can test. */
 type RuntimeClass = abstract new (...args: never[]) => unknown;
@@ -11,7 +12,7 @@ type RuntimeClass = abstract new (...args: never[]) => unknown;
  * Mirrors a C# explicit reference conversion `(T)value`: `null` passes, as C# lets a null
  * reference through, and a value that is not a `T` throws the `InvalidCastException` .NET
  * throws. The target is a runtime type descriptor (tested by {@link isType}) or a class
- * (tested by `instanceof`); the compiler passes the target type as the type argument, so the
+ * (tested by `instanceof`). A box of the target type is unwrapped once, so `(Color)o` yields the raw enum; the compiler passes the target type as the type argument, so the
  * result is typed. A cast to a type with neither (a type parameter) is only a TypeScript
  * assertion and does not come here.
  */
@@ -24,8 +25,10 @@ export function castTo<T>(value: unknown, type: RuntimeType<T> | RuntimeClass): 
     return castToClass(value, type);
   }
 
-  if (isType(value, type)) {
-    return value;
+  const candidate = unboxFor(value, type);
+
+  if (type.test(candidate)) {
+    return candidate as T;
   }
 
   throw invalidCast(describeValue(value, true), type.fullName);
@@ -49,6 +52,10 @@ function invalidCast(source: string, target: string): InvalidCastException {
  * its descriptor (`System.Int32`).
  */
 function describeValue(value: unknown, describePrimitives: boolean): string {
+  if (isBoxed(value)) {
+    return value.type.fullName;
+  }
+
   const described = ownRuntimeTypeOf(value);
 
   if (described !== undefined) {

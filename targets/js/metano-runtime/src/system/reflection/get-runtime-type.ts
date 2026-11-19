@@ -1,5 +1,6 @@
 import { NullReferenceException } from "../exceptions/null-reference-exception.ts";
 import { hasPlainPrototype, ownRuntimeTypeOf } from "./constructor-descriptor.ts";
+import { isBoxed } from "./is-boxed.ts";
 import { getNumberType } from "./get-number-type.ts";
 import {
   BigIntegerType,
@@ -29,6 +30,10 @@ let anonymousTypes: WeakMap<Constructor, ClassType<unknown>> | undefined;
 export function getRuntimeType(value: unknown): RuntimeType {
   if (value === null || value === undefined) {
     throw new NullReferenceException();
+  }
+
+  if (isBoxed(value)) {
+    return value.type;
   }
 
   switch (typeof value) {

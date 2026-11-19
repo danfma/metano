@@ -13,6 +13,8 @@
  */
 import { HashCode } from "./hash-code.ts";
 import { hashInt64 } from "./int64.ts";
+import { boxesEqual } from "./reflection/boxes-equal.ts";
+import { isBoxed } from "./reflection/is-boxed.ts";
 
 /**
  * Returns true when `a` and `b` are deeply equal. Comparison rules, in order:
@@ -48,6 +50,8 @@ export function equals(a: unknown, b: unknown): boolean {
 
   // Other primitives are settled by the `===` check above; we only get here for objects.
   if (typeof a !== "object") return false;
+
+  if (isBoxed(a) || isBoxed(b)) return boxesEqual(a, b);
 
   // Custom equals contract from record/value classes.
   if ("equals" in a && typeof (a as { equals?: unknown }).equals === "function") {
@@ -133,6 +137,10 @@ export function hashCode(value: unknown): number {
   if (value == null) return 0;
 
   if (typeof value === "object") {
+    if (isBoxed(value)) {
+      return HashCode.combine2(value.type.fullName, hashCode(value.value));
+    }
+
     if (isDuration(value)) {
       return durationHashCode(value);
     }
@@ -374,6 +382,8 @@ export function defaultEquals(a: unknown, b: unknown): boolean {
 
   if (typeof a === "number") return typeof b === "number" && Number.isNaN(a) && Number.isNaN(b);
   if (typeof a !== "object" || typeof b !== "object") return false;
+
+  if (isBoxed(a) || isBoxed(b)) return boxesEqual(a, b);
 
   if ("equals" in a && typeof (a as { equals?: unknown }).equals === "function") {
     return (a as { equals(other: unknown): boolean }).equals(b);
