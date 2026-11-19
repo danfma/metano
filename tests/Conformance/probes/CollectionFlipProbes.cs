@@ -63,6 +63,7 @@ public static class CollectionFlipProbes
         var s = new HashSet<string> { "a", "b", "a" };
         var d = new Dictionary<string, int> { ["x"] = 1, ["x"] = 2 };
         var dup = "none";
+
         try
         {
             var built = new Dictionary<string, int> { { "k", 1 }, { "k", 2 } };
@@ -90,6 +91,7 @@ public static class CollectionFlipProbes
         IList<int> list = arr;
         list[0] = 9;
         var thrown = "none";
+
         try
         {
             list.Add(4);
@@ -105,11 +107,13 @@ public static class CollectionFlipProbes
     {
         var l = new List<int> { 1, 2, 3 };
         var seen = 0;
+
         try
         {
             foreach (var x in l)
             {
                 seen += x;
+
                 if (x == 2)
                     l.Add(4);
             }
@@ -125,15 +129,18 @@ public static class CollectionFlipProbes
     {
         var l = new List<int> { 1, 2, 3 };
         var seen = 0;
+
         foreach (var x in l)
         {
             seen += x;
+
             if (x == 2)
             {
                 l.Add(9);
                 break;
             }
         }
+
         return $"{seen}|{l.Count}";
     }
 
@@ -159,6 +166,7 @@ public static class CollectionFlipProbes
         var set = xs.ToHashSet();
         var dict = xs.Distinct().ToDictionary(x => x, x => x * 10);
         var dup = "none";
+
         try
         {
             var built = xs.ToDictionary(x => x);
@@ -174,6 +182,7 @@ public static class CollectionFlipProbes
     public static string OutOfRange()
     {
         var l = new List<int> { 1 };
+
         try
         {
             return l[5].ToString();
