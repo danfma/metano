@@ -371,7 +371,12 @@ function requireNonZeroDivisor(divisor: bigint): void {
   }
 }
 
-function requireRange(value: bigint, min: bigint, max: bigint, message?: string | (() => string)): bigint {
+function requireRange(
+  value: bigint,
+  min: bigint,
+  max: bigint,
+  message?: string | (() => string),
+): bigint {
   if (value < min || value > max) {
     throw new OverflowException(typeof message === "function" ? message() : message);
   }
