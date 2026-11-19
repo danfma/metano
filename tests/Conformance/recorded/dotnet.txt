@@ -336,6 +336,53 @@ EnumConstProbes.increments = 1,2,1,True
 EnumConstProbes.memberValues = 0,1,2,1099511627776
 EnumConstProbes.nullableCast = True,True
 EnumConstProbes.operators = 1,2,-2,2
+EnumFollowupProbes.arithmeticByteOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticByteWrap = 0,255
+EnumFollowupProbes.arithmeticInRange = 255
+EnumFollowupProbes.arithmeticIntOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticIntWrap = -2147483648
+EnumFollowupProbes.arithmeticSByteOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticSByteWrap = -128
+EnumFollowupProbes.arithmeticShortOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticShortWrap = -32768
+EnumFollowupProbes.arithmeticSubtractOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticUIntOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticUIntWrap = 0
+EnumFollowupProbes.arithmeticUShortOverflow THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.arithmeticUShortWrap = 0
+EnumFollowupProbes.charToEnum = 65
+EnumFollowupProbes.checkedCharToEnum THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.checkedCompoundPreservesStore = 255
+EnumFollowupProbes.compoundChecked THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.compoundWrap = 255
+EnumFollowupProbes.decimalByteOverflow THROWS OverflowException: Value was either too large or too small for an unsigned byte.
+EnumFollowupProbes.decimalCheckedOverflow THROWS OverflowException: Value was either too large or too small for an unsigned byte.
+EnumFollowupProbes.decimalEvaluatedOnce = 42,1
+EnumFollowupProbes.decimalIntOverflow THROWS OverflowException: Value was either too large or too small for an Int32.
+EnumFollowupProbes.decimalNegativeFraction = 0
+EnumFollowupProbes.decimalNullEvaluatedOnce = null,1
+EnumFollowupProbes.decimalNullableNull = True
+EnumFollowupProbes.decimalNullableOverflow THROWS OverflowException: Value was either too large or too small for an unsigned byte.
+EnumFollowupProbes.decimalNullableTruncation = 42
+EnumFollowupProbes.decimalSByteOverflow THROWS OverflowException: Value was either too large or too small for a signed byte.
+EnumFollowupProbes.decimalShortOverflow THROWS OverflowException: Value was either too large or too small for an Int16.
+EnumFollowupProbes.decimalTruncation = 255,-128,-32768,65535,2147483647,4294967295
+EnumFollowupProbes.decimalUIntOverflow THROWS OverflowException: Value was either too large or too small for a UInt32.
+EnumFollowupProbes.decimalUShortOverflow THROWS OverflowException: Value was either too large or too small for a UInt16.
+EnumFollowupProbes.enumToChar = A
+EnumFollowupProbes.enumToDecimal = 4294967295
+EnumFollowupProbes.incrementChecked THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.liftedArithmetic = 255,1,True
+EnumFollowupProbes.nullableForeachWrap = 255,null,0,
+EnumFollowupProbes.postfixIndexEvaluatedOnce = 255,0,1
+EnumFollowupProbes.postfixWrap = 255,0
+EnumFollowupProbes.prefixWrap = 255,255
+EnumFollowupProbes.projectCheckedAdd THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.projectCheckedCompound THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.projectCheckedIncrement THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.projectUncheckedAdd = 0
+EnumFollowupProbes.tupleEnumChecked THROWS OverflowException: Arithmetic operation resulted in an overflow.
+EnumFollowupProbes.tupleEnumWrap = 255,-128
 EqualityProbes.arrays = FT
 EqualityProbes.classEq = TFF
 EqualityProbes.classRef = FTTF

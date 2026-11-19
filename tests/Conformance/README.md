@@ -104,6 +104,9 @@ exceptions (`CatchProbes`, `Round2Probes`), static constructors and read-only st
 `EnumCastProbes` covers spec 011 FR-044's #708 amendment. Its project-checked rows
 call `xpkg/CheckedEnums`, compiled with `CheckForOverflowUnderflow=true` and transpiled
 as a separate package, so the remaining probes retain their original checked context.
+`EnumFollowupProbes` covers #708's review follow-ups: decimal casts in every checked
+context, narrow enum arithmetic and stores, and the char, decimal, tuple and nullable
+foreach conversion paths. Non-nullable foreach element conversion is outside this group.
 
 The set is tooling, not a feature: it has no FR of its own. It checks, row by row, the
 requirement that generated code keeps the C# semantics, and it is the executable companion of:

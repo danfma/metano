@@ -5,10 +5,10 @@ export class Caller {
   constructor() { }
 
   compound(c: Cell): void {
-    shade$set(c, shade$get(c) + 1 as Shade);
+    shade$set(c, ((shade$get(c) + 1) | 0) as Shade);
   }
 
   increment(c: Cell): void {
-    shade$set(c, shade$get(c) + 1 as Shade);
+    shade$set(c, ((shade$get(c) + 1) | 0) as Shade);
   }
 }

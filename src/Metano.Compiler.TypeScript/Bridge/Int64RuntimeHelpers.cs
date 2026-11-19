@@ -25,6 +25,7 @@ internal static class Int64RuntimeHelpers
     public const string Int64ToSingle = "int64ToSingle";
     public const string Int64FromDecimal = "int64FromDecimal";
     public const string UInt64FromDecimal = "uint64FromDecimal";
+    public const string NarrowFromDecimal = "narrowFromDecimal";
     public const string Int64FromBigInteger = "int64FromBigInteger";
     public const string UInt64FromBigInteger = "uint64FromBigInteger";
     public const string DivInt64 = "divInt64";

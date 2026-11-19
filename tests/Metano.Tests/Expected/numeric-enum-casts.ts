@@ -1,4 +1,5 @@
-import { checkedInt32, checkedNarrow, checkedNarrowNumber, checkedUInt32, int32FromDouble, int32FromDoubleChecked, mapNullable } from "metano-runtime";
+import { checkedInt32, checkedNarrow, checkedNarrowNumber, checkedUInt32, int32FromDouble, int32FromDoubleChecked, mapNullable, narrowFromDecimal } from "metano-runtime";
+import { Decimal } from "metano-runtime/system/decimal";
 
 export const ByteEnum = {
   One: 1,
@@ -173,5 +174,65 @@ export class EnumCasts {
 
   static checkedOutOfEnum(x: ShortEnum): number {
     return checkedNarrowNumber(x, 8, false);
+  }
+
+  static decimal(x: Decimal): ByteEnum {
+    return narrowFromDecimal(x, 8, false) as ByteEnum;
+  }
+
+  static decimalSByte(x: Decimal): SByteEnum {
+    return narrowFromDecimal(x, 8, true) as SByteEnum;
+  }
+
+  static decimalShort(x: Decimal): ShortEnum {
+    return narrowFromDecimal(x, 16, true) as ShortEnum;
+  }
+
+  static decimalUShort(x: Decimal): UShortEnum {
+    return narrowFromDecimal(x, 16, false) as UShortEnum;
+  }
+
+  static decimalInt(x: Decimal): IntEnum {
+    return narrowFromDecimal(x, 32, true) as IntEnum;
+  }
+
+  static decimalUInt(x: Decimal): UIntEnum {
+    return narrowFromDecimal(x, 32, false) as UIntEnum;
+  }
+
+  static checkedDecimal(x: Decimal): ByteEnum {
+    return narrowFromDecimal(x, 8, false) as ByteEnum;
+  }
+
+  static nullableDecimal(x: Decimal | null): ByteEnum | null {
+    return (x == null ? null : narrowFromDecimal(x, 8, false)) as ByteEnum | null;
+  }
+
+  static decimalOnce(x: Decimal | null): ByteEnum | null {
+    return mapNullable(EnumCasts.nextDecimal(x), (value) => narrowFromDecimal(value, 8, false)) as ByteEnum | null;
+  }
+
+  static nextDecimal(x: Decimal | null): Decimal | null {
+    return x;
+  }
+
+  static decimalInteger(x: Decimal): number {
+    return narrowFromDecimal(x, 8, false);
+  }
+
+  static char(x: IntEnum): string {
+    return String.fromCharCode(x & 0xFFFF);
+  }
+
+  static fromChar(x: string): ByteEnum {
+    return (x.charCodeAt(0) & 0xFF) as ByteEnum;
+  }
+
+  static toDecimal(x: UIntEnum): Decimal {
+    return new Decimal(x + 0);
+  }
+
+  static tuple(x: [number, number]): [ByteEnum, SByteEnum] {
+    return [x[0] & 0xFF, (x[1] << 24) >> 24] as [ByteEnum, SByteEnum];
   }
 }

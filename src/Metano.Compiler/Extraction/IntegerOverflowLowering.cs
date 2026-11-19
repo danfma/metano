@@ -184,9 +184,9 @@ internal static class IntegerOverflowLowering
     /// <summary>
     /// The integer kind of <paramref name="type"/>, through
     /// <c>Nullable&lt;T&gt;</c>, as the target computes it: an integer's kind,
-    /// or a 64-bit enum's underlying kind when the target holds it as that
-    /// integer (#701, <see cref="NumericLoweringRules.RepresentationOf"/>);
-    /// <c>null</c> for any other enum or a non-integer type.
+    /// or a numeric enum's underlying kind when the target represents it as
+    /// that integer (#701, #708, <see cref="NumericLoweringRules.RepresentationOf"/>);
+    /// <c>null</c> for an enum the target does not lower or a non-integer type.
     /// </summary>
     private static IrNumericKind? IntegerKindOf(ITypeSymbol? type, NumericLoweringRules rules) =>
         rules.RepresentationOf(NumericEndpoints.Of(type)) is { IsEnum: false, Kind: var kind }

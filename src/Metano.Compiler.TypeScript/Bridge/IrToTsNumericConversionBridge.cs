@@ -51,6 +51,14 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsDecimalToBinaryFloatingPoint(from, to))
             return DecimalToBinaryFloatingPoint(to, value);
 
+        if (IrNumericConversion.IsDecimalToNarrowInteger(from, to))
+            return RuntimeCall(
+                Int64RuntimeHelpers.NarrowFromDecimal,
+                value,
+                new TsLiteral(to.Kind.BitWidth().ToString(CultureInfo.InvariantCulture)),
+                new TsLiteral(to.Kind.IsSigned() ? "true" : "false")
+            );
+
         if (IrNumericConversion.IsCharRead(from, to))
             return CharCodeAs(to, isChecked, CharCode(value));
 

@@ -208,6 +208,23 @@ export function uint64FromDecimal(value: DecimalLike): bigint {
   return requireRange(integer, 0n, UINT64_MAX, UINT64_RANGE_MESSAGE);
 }
 
+/** Decimal to an integer of 32 bits or fewer: truncate exactly, then check even when unchecked. */
+export function narrowFromDecimal(value: DecimalLike, bits: 8 | 16 | 32, signed: boolean): number {
+  const type =
+    bits === 8
+      ? signed
+        ? "a signed byte"
+        : "an unsigned byte"
+      : `${signed ? "an Int" : "a UInt"}${bits}`;
+  const message = `Value was either too large or too small for ${type}.`;
+  const integer = truncatedDecimal(value, message);
+  const width = BigInt(bits);
+  const min = signed ? -(1n << (width - 1n)) : 0n;
+  const max = signed ? (1n << (width - 1n)) - 1n : (1n << width) - 1n;
+
+  return Number(requireRange(integer, min, max, message));
+}
+
 /** `(long)b`: throws OverflowException outside the range, in every context. */
 export function int64FromBigInteger(value: bigint): bigint {
   return requireRange(value, INT64_MIN, INT64_MAX, INT64_RANGE_MESSAGE);

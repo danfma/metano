@@ -51,4 +51,16 @@ public static class EnumCasts
     public static UIntEnum UInt(int value) => (UIntEnum)value;
 
     public static ByteEnum InnerUnchecked(int value) => unchecked((ByteEnum)value);
+
+    public static ByteEnum Add(ByteEnum value, byte step) => value + step;
+
+    public static ByteEnum AddUnchecked(ByteEnum value, byte step) => unchecked(value + step);
+
+    public static ByteEnum Increment(ByteEnum value) => ++value;
+
+    public static ByteEnum Compound(ByteEnum value, byte step)
+    {
+        value += step;
+        return value;
+    }
 }

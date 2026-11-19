@@ -86,6 +86,10 @@ public sealed record IrNumericConversion(
     public static bool IsIntegerToDecimal(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from.IsNarrowIntegerValue() && to is { Kind: IrNumericKind.Decimal, IsEnum: false };
 
+    /// <summary>A decimal read as an integer of 32 bits or fewer: truncate, then range-check in every context.</summary>
+    public static bool IsDecimalToNarrowInteger(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from is { Kind: IrNumericKind.Decimal, IsEnum: false } && to.IsNarrowIntegerValue();
+
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
     public static bool IsDecimalToBinaryFloatingPoint(
         IrNumericEndpoint from,

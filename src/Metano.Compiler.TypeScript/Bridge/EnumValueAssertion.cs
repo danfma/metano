@@ -51,8 +51,8 @@ internal static class EnumValueAssertion
     }
 
     /// <summary>
-    /// The reduction of a 64-bit enum's operator (<c>BigInt.asIntN(64, e + 1n)</c>,
-    /// #701) asserted as a whole: the reduction is a <c>bigint</c>, so the enum
+    /// The reduction of a numeric enum's operator (<c>BigInt.asIntN(64, e + 1n)</c>,
+    /// #701; <c>(e + 1) &amp; 0xFF</c>, #708) asserted as a whole, so the enum
     /// type its operator carries moves from the operator to the reduction.
     /// </summary>
     public static TsExpression OfReduced(

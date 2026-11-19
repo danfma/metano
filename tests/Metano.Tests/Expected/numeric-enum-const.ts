@@ -24,7 +24,7 @@ export class Palette {
   }
 
   static next(c: Color): Color {
-    return c + 1 as Color;
+    return ((c + 1) | 0) as Color;
   }
 
   static combined(c: Color): Color {
@@ -40,15 +40,15 @@ export class Palette {
   }
 
   static stepped(c: Color): Color {
-    (c as number)++;
-    (c as number) += 1;
+    c = ((c + 1) | 0) as Color;
+    c = ((c + 1) | 0) as Color;
 
     return c;
   }
 
   static localStep(): boolean {
     let s = Color.Red as Color;
-    (s as number)++;
+    s = ((s + 1) | 0) as Color;
 
     return s === Color.Green;
   }
@@ -70,7 +70,7 @@ export class Palette {
   }
 
   static nullableNext(n: Color | null): Color | null {
-    n = n == null ? null : n + 1 as Color;
+    n = n == null ? null : ((n + 1) | 0) as Color;
 
     return n;
   }
@@ -84,7 +84,7 @@ export class Palette {
   }
 
   static nullableCompound(n: Color | null): Color | null {
-    n = n == null ? null : n + 1 as Color;
+    n = n == null ? null : ((n + 1) | 0) as Color;
 
     return n;
   }

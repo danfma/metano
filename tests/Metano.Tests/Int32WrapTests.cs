@@ -274,11 +274,11 @@ public class Int32WrapTests
 
     /// <summary>
     /// The difference of two enum values is an <c>int</c> and wraps; an enum
-    /// plus an <c>int</c> is an enum and does not (FR-074): it is asserted as
-    /// the enum's closed union instead (spec 011 FR-044).
+    /// plus an <c>int</c> wraps in that same underlying width before the
+    /// closed-union assertion (spec 011 FR-044, #708).
     /// </summary>
     [Test]
-    public async Task EnumArithmetic_WrapsOnlyAnIntResult()
+    public async Task EnumArithmetic_WrapsTheUnderlyingIntegerBeforeAssertion()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -296,7 +296,10 @@ public class Int32WrapTests
         var levels = files["levels.ts"];
 
         await Assert.That(BodyOf(levels, "distance")).IsEqualTo("return (a - b) | 0;");
-        await Assert.That(BodyOf(levels, "step")).IsEqualTo("return a + 1 as Levels.Level;");
+
+        await Assert
+            .That(BodyOf(levels, "step"))
+            .IsEqualTo("return ((a + 1) | 0) as Levels.Level;");
     }
 
     [Test]

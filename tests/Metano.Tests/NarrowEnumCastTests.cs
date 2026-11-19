@@ -56,6 +56,21 @@ public class NarrowEnumCastTests
             public static IntEnum Widened(byte x) => checked((IntEnum)x);
             public static byte OutOfEnum(ShortEnum x) => unchecked((byte)x);
             public static byte CheckedOutOfEnum(ShortEnum x) => checked((byte)x);
+            public static ByteEnum Decimal(decimal x) => unchecked((ByteEnum)x);
+            public static SByteEnum DecimalSByte(decimal x) => (SByteEnum)x;
+            public static ShortEnum DecimalShort(decimal x) => (ShortEnum)x;
+            public static UShortEnum DecimalUShort(decimal x) => (UShortEnum)x;
+            public static IntEnum DecimalInt(decimal x) => (IntEnum)x;
+            public static UIntEnum DecimalUInt(decimal x) => (UIntEnum)x;
+            public static ByteEnum CheckedDecimal(decimal x) => checked((ByteEnum)x);
+            public static ByteEnum? NullableDecimal(decimal? x) => (ByteEnum?)x;
+            public static ByteEnum? DecimalOnce(decimal? x) => (ByteEnum?)NextDecimal(x);
+            public static decimal? NextDecimal(decimal? x) => x;
+            public static byte DecimalInteger(decimal x) => unchecked((byte)x);
+            public static char Char(IntEnum x) => unchecked((char)x);
+            public static ByteEnum FromChar(char x) => unchecked((ByteEnum)x);
+            public static decimal ToDecimal(UIntEnum x) => (decimal)x;
+            public static (ByteEnum, SByteEnum) Tuple((int, int) x) => unchecked(((ByteEnum, SByteEnum))x);
         }
         """;
 
@@ -136,5 +151,22 @@ public class NarrowEnumCastTests
         await Assert.That(output).Contains("return 4294967295 as UIntEnum;");
         await Assert.That(output).Contains("return (x & 255) as ByteEnum;");
         await Assert.That(output).Contains("return x as IntEnum;");
+    }
+
+    [Test]
+    public async Task DecimalCasts_ShareTheAlwaysCheckedIntegerConversion()
+    {
+        var output = TranspileHelper.Transpile(Source)["numeric-enum-casts.ts"];
+
+        await Assert.That(output).Contains("return narrowFromDecimal(x, 8, false) as ByteEnum;");
+        await Assert.That(output).Contains("return narrowFromDecimal(x, 8, false);");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return (x == null ? null : narrowFromDecimal(x, 8, false)) as ByteEnum | null;"
+            );
+
+        await Assert.That(output).DoesNotContain("return x as ByteEnum;");
     }
 }

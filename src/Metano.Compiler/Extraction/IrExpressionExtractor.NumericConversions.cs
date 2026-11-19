@@ -308,8 +308,8 @@ public sealed partial class IrExpressionExtractor
         IrNumericEndpoint to
     ) =>
         IrNumericConversion.IsIntegerNarrowing(
-            _context.NumericLowering.ConversionOf(from),
-            _context.NumericLowering.ConversionOf(to)
+            _context.NumericLowering.RepresentationOf(from),
+            _context.NumericLowering.RepresentationOf(to)
         )
         && IntegerValueRanges.Of(
             _semantic.GetOperation(Unparenthesized(cast.Expression)),
@@ -321,9 +321,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A constant cast that lowers to a conversion (<c>(int)3.7</c>) folds to
     /// the value Roslyn computed, as every target's conversion of the literal
-    /// would (FR-070); a constant cast to a 64-bit enum the target holds as its
-    /// integer (<c>(LongEnum)5</c>, #701) keeps the cast around its folded
-    /// underlying constant.
+    /// would (FR-070); a constant cast to any numeric enum the target represents
+    /// as its underlying integer (<c>(ByteEnum)(-1)</c> unchecked, #708;
+    /// <c>(LongEnum)5</c>, #701) keeps the enum assertion around that folded value.
     /// </summary>
     private IrExpression? FoldedConstantCast(CastExpressionSyntax cast)
     {
@@ -336,7 +336,7 @@ public sealed partial class IrExpressionExtractor
         var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
 
         return
-            _context.NumericLowering.ConversionOf(NumericEndpoints.Of(typeInfo.Type))
+            _context.NumericLowering.RepresentationOf(NumericEndpoints.Of(typeInfo.Type))
                 is { IsEnum: false }
             ? AsEnumConstant(folded, typeInfo.Type)
             : folded;
