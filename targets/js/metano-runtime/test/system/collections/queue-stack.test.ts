@@ -28,6 +28,25 @@ describe("Queue", () => {
     expect(queue.toArray()).toEqual([...queue]);
   });
 
+  test("interleaved enqueue / dequeue (a breadth-first walk) stays amortized O(1)", () => {
+    const queue = Queue.from([0]);
+    const started = performance.now();
+    let expected = 0;
+    let operations = 0;
+
+    while (operations < 200_000) {
+      const item = queue.dequeue();
+
+      expect(item).toBe(expected++);
+      queue.enqueue(2 * item + 1);
+      queue.enqueue(2 * item + 2);
+      operations += 3;
+    }
+
+    expect(queue.count).toBe(operations / 3 + 1);
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
   test("empty dequeue / peek throw; try members return the default", () => {
     const queue = new Queue<number>();
     const error = thrown(() => queue.dequeue());

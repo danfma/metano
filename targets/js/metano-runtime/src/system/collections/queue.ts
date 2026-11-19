@@ -16,6 +16,9 @@ import {
   throwNegative,
 } from "./throw-helpers.ts";
 
+/** The smallest ring a full wrapped queue grows into. */
+const MINIMUM_CAPACITY = 4;
+
 let Queue$rt: CollectionType<Queue<unknown>> | undefined;
 
 export class Queue<T> implements IReadOnlyCollection<T> {
@@ -80,13 +83,13 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   }
 
   enqueue(item: T): void {
-    if (this._size === this._items.length) {
-      if (this._head !== 0) {
-        this._unwrap();
-      }
-
+    if (this._size === this._items.length && this._head === 0) {
       this._items.push(item);
     } else {
+      if (this._size === this._items.length) {
+        this._grow();
+      }
+
       const items = this._items;
 
       items[wrap(this._head + this._size, items.length)] = item;
@@ -194,11 +197,20 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   }
 
   /**
-   * A full ring whose head is not at 0: copies it front to back (head at 0) and lets the
-   * next `push` grow the array natively, as a full ring with its head at 0 does.
+   * Grows a full ring whose head is not at 0: copies it front to back into an array of
+   * twice its length (head at 0, the free slots `undefined`, never holes), so interleaved
+   * enqueues and dequeues stay amortized O(1). A full ring with its head at 0 grows
+   * through the array's own `push` instead.
    */
-  private _unwrap(): void {
-    this._items = this.toArray() as (T | undefined)[];
+  private _grow(): void {
+    const grown = this.toArray() as (T | undefined)[];
+    const capacity = Math.max(MINIMUM_CAPACITY, this._items.length * 2);
+
+    while (grown.length < capacity) {
+      grown.push(undefined);
+    }
+
+    this._items = grown;
     this._head = 0;
   }
 

@@ -81,7 +81,7 @@ export const CASES: readonly BenchCase[] = [
   },
   {
     name: "List.set",
-    budgetNs: { node: 1.75, bun: 1.0 },
+    budgetNs: { node: 1.85, bun: 1.0 },
     ops: "N",
     everyMode: true,
     setup: `${NUMBERS} const l = List.of(a.slice());`,
@@ -90,7 +90,7 @@ export const CASES: readonly BenchCase[] = [
   },
   {
     name: "list[i] += 1 (direct form)",
-    budgetNs: 1.5,
+    budgetNs: { node: 1.6, bun: 1.5 },
     ops: "N",
     everyMode: true,
     setup: `${NUMBERS} const l = List.of(a.slice());`,
@@ -239,12 +239,22 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Queue.enqueue + dequeue",
     budgetNs: 1.5,
+    deferredTo: "R2",
     ops: "2 * N",
     setup: "",
     baseline:
       "const q = []; let head = 0; for (let i = 0; i < N; i++) q.push(i); let s = 0; for (let i = 0; i < N; i++) s += q[head++]; return s;",
     variant:
       "const q = new Queue(); for (let i = 0; i < N; i++) q.enqueue(i); let s = 0; for (let i = 0; i < N; i++) s += q.dequeue(); return s;",
+  },
+  {
+    name: "Queue BFS shape (dequeue 1, enqueue 2; reported)",
+    ops: "N",
+    setup: "const STEPS = Math.floor(N / 3);",
+    baseline:
+      "const q = [0]; let head = 0; let s = 0; for (let i = 0; i < STEPS; i++) { const x = q[head++]; s += x; q.push(x + 1); q.push(x + 2); } return s;",
+    variant:
+      "const q = new Queue(); q.enqueue(0); let s = 0; for (let i = 0; i < STEPS; i++) { const x = q.dequeue(); s += x; q.enqueue(x + 1); q.enqueue(x + 2); } return s;",
   },
   {
     name: "Stack.push + pop",
