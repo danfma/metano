@@ -32,7 +32,7 @@ export type InterfaceType<T> = RuntimeTypeBase<T> & {
 };
 export type PlainObjectType<T> = RuntimeTypeBase<T> & { readonly kind: "plainObject"; readonly guard: (v: unknown) => v is T; };
 export type PrimitiveType<T> = RuntimeTypeBase<T> & { readonly kind: "primitive"; readonly primitive: PrimitiveName; };
-export type EnumType<T> = RuntimeTypeBase<T> & { readonly kind: "enum" | "stringEnum"; readonly values: ReadonlyArray<T>; readonly names: ReadonlyArray<string>; /* parallel to values; boxed toString (FR-051) */ readonly isFlags: boolean; };
+export type EnumType<T> = RuntimeTypeBase<T> & { readonly kind: "enum" | "stringEnum"; readonly values: ReadonlyArray<T>; readonly names: ReadonlyArray<string>; /* parallel to values; boxed toString (FR-051) */ readonly isFlags: boolean; readonly underlying?: PrimitiveName; /* the C# underlying type, omitted for Int32: Enum.Parse / ToObject work in its width */ readonly ordinals?: ReadonlyArray<number>; /* a [StringEnum]'s members' C# values, parallel to values; omitted when they are the positions 0, 1, … */ };
 export type ArrayType = RuntimeTypeBase<unknown[]> & { readonly kind: "array"; };              // erased element
 export type CollectionType<T> = RuntimeTypeBase<T> & {
   readonly kind: "collection";
@@ -81,7 +81,7 @@ export function castTo<T>(value: unknown, type: RuntimeType<T>): T;          // 
 export function getRuntimeType(value: unknown): RuntimeType;                       // FR-018; the lowering of GetType()
 export function getRuntimeTypeFromType(ctorOrDescriptor: unknown): RuntimeType;    // FR-047; hand-written counterpart of typeof(Foo); ArgumentException otherwise
 export function getNumberType(n: number): PrimitiveType<number>;                   // FR-048: Int32Type | DoubleType (a bigint answers Int64Type / UInt64Type / BigIntegerType by range)
-export function enumFromRaw<E>(type: EnumType<E>, raw: unknown): E;                // FR-049: .NET-faithful Enum.ToObject (any integral kept) / Enum.Parse (name or numeric string; ArgumentException only for an unknown name)
+export function enumFromRaw<E>(type: EnumType<E>, raw: unknown, ignoreCase?: boolean): E;   // FR-049: .NET-faithful Enum.ToObject (an integral number or bigint, wrapped to the underlying width) / Enum.Parse (the whole text as an in-range integer, else comma-separated names OR-ed in the underlying width; ArgumentException for an unknown name, OverflowException out of range); a [StringEnum] maps numbers through its ordinals, and an undeclared one returns String(raw)
 export function box<T>(value: T, type: RuntimeType<T>): Boxed<T>;                   // FR-050: system/reflection/box.ts
 export function unbox(value: unknown): unknown;                                    // FR-050 / FR-051: `value instanceof Boxed` -> raw, anything else unchanged (no duck typing)
 export function boxNullable<T>(value: T | null, type: RuntimeType<T>): Boxed<T> | null; // FR-050: evaluate-once form of `c === null ? null : box(c, type)`
