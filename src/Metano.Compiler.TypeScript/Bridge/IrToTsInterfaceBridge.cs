@@ -101,14 +101,16 @@ public static class IrToTsInterfaceBridge
     {
         var name = TsClassMemberTable.MethodNameOf(method);
         var returnType = IrToTsTypeMapper.Map(method.ReturnType);
+
         var parameters = method
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
+
         var typeParams = ConvertTypeParameters(method.TypeParameters);
         return new TsInterfaceMethod(name, parameters, returnType, typeParams);
     }

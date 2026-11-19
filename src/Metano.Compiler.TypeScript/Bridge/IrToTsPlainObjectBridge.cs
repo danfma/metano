@@ -163,12 +163,13 @@ public static class IrToTsPlainObjectBridge
 
         // First parameter is always `self: T`; the rest are the C# parameters.
         var parameters = new List<TsParameter> { new("self", new TsNamedType(ownerTsName)) };
+
         parameters.AddRange(
             method.Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
         );
 
@@ -364,6 +365,34 @@ public static class IrToTsPlainObjectBridge
             {
                 Left = RewriteThis(tupleEquality.Left, identifierName),
                 Right = RewriteThis(tupleEquality.Right, identifierName),
+            },
+            IrIndexerUpdateExpression update => update with
+            {
+                Receiver = RewriteThis(update.Receiver, identifierName),
+                Index = RewriteThis(update.Index, identifierName),
+                NewValue = RewriteThis(update.NewValue, identifierName),
+            },
+            IrFromEndElementAccess fromEnd => fromEnd with
+            {
+                Receiver = RewriteThis(fromEnd.Receiver, identifierName),
+                Offset = RewriteThis(fromEnd.Offset, identifierName),
+            },
+            IrCollectionInitialization initialization => initialization with
+            {
+                Creation = RewriteThis(initialization.Creation, identifierName),
+                Comparer = initialization.Comparer is null
+                    ? null
+                    : RewriteThis(initialization.Comparer, identifierName),
+                Elements = initialization
+                    .Elements.Select(element =>
+                        (IReadOnlyList<IrExpression>)
+                            element.Select(value => RewriteThis(value, identifierName)).ToList()
+                    )
+                    .ToList(),
+            },
+            IrArrayToCollectionConversion conversion => conversion with
+            {
+                Value = RewriteThis(conversion.Value, identifierName),
             },
             IrSliceExpression slice => slice with
             {

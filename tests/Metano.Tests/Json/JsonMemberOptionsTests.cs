@@ -174,7 +174,7 @@ public class JsonMemberOptionsTests
         await Assert
             .That(PropertyTypeOf(ts, "b"))
             .IsEqualTo(
-                """{ kind: "array", element: { kind: "primitive", numberType: "System.Byte" } }"""
+                """{ kind: "list", element: { kind: "primitive", numberType: "System.Byte" }, create: (items) => List.of(items) }"""
             );
 
         await Assert
@@ -183,10 +183,12 @@ public class JsonMemberOptionsTests
 
         await Assert
             .That(PropertyTypeOf(ts, "d"))
-            .IsEqualTo("""{ kind: "map", key: { kind: "primitive" }, value: { kind: "bytes" } }""");
+            .IsEqualTo(
+                """{ kind: "dictionary", key: { kind: "primitive" }, value: { kind: "bytes" }, create: (entries) => Dictionary.assign(entries) }"""
+            );
 
         await Assert.That(ts).Contains("get byteArray(): ValueSpec<number[] | null> {");
-        await Assert.That(ts).Contains("get listByteArray(): ValueSpec<number[][] | null> {");
+        await Assert.That(ts).Contains("get listByteArray(): ValueSpec<List<number[]> | null> {");
     }
 
     [Test]

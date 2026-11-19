@@ -95,7 +95,7 @@ public class DefaultTextTranspileTests
 
         await Assert
             .That(output)
-            .Contains("ds.map((item: number) => formatDouble(item)).join(\"-\")");
+            .Contains("[...ds].map((item: number) => formatDouble(item)).join(\"-\")");
 
         await Assert
             .That(output)

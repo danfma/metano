@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Account } from "./account";
 import { Blob } from "./blob";
@@ -27,7 +28,7 @@ export class JsonContext extends SerializerContext {
   get blob(): TypeSpec<Blob> {
     return this._blob ??= this.createSpec({
       type: Blob,
-      factory: (p: Record<string, unknown>) => new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as number[]),
+      factory: (p: Record<string, unknown>) => new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as List<number>),
       properties: [
         {
           ts: "data",
@@ -47,8 +48,9 @@ export class JsonContext extends SerializerContext {
           ts: "numbers",
           json: "Numbers",
           type: {
-            kind: "array",
+            kind: "list",
             element: { kind: "primitive", numberType: "System.Byte" },
+            create: (items) => List.of(items),
           },
         },
       ],
@@ -143,8 +145,9 @@ export class JsonContext extends SerializerContext {
           type: {
             kind: "nullable",
             inner: {
-              kind: "array",
+              kind: "list",
               element: { kind: "primitive", numberType: "System.Int32" },
+              create: (items) => List.of(items),
             },
           },
           optional: true,

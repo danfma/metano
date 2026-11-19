@@ -380,7 +380,7 @@ public class OutArgumentTranspileTests
             .Contains(
                 """
                     if (check) {
-                      const [$found0, w] = tryGetValue(this._words, key, null);
+                      const [$found0, w] = this._words.tryGetValue(key, null);
 
                       if ($found0 && w.length > 3) {
                         return w.toUpperCase();
@@ -423,11 +423,11 @@ public class OutArgumentTranspileTests
 
         await Assert
             .That(output)
-            .Contains("if (check && ([, a] = tryGetValue(counts, \"a\", 0))[0]) {");
+            .Contains("if (check && ([, a] = counts.tryGetValue(\"a\", 0))[0]) {");
 
         await Assert
             .That(output)
-            .Contains("if (check && ([, b] = tryGetValue(counts, \"b\", 0))[0]) {");
+            .Contains("if (check && ([, b] = counts.tryGetValue(\"b\", 0))[0]) {");
     }
 
     [Test]
@@ -452,7 +452,7 @@ public class OutArgumentTranspileTests
             .Contains("tryTags(key: string): readonly [found: boolean, tags: HashSet<string>];");
 
         await Assert.That(output).Contains("HashSet");
-        await Assert.That(output).Contains("from \"metano-runtime\"");
+        await Assert.That(output).Contains("from \"metano-runtime/system/collections\"");
     }
 
     [Test]
@@ -487,7 +487,7 @@ public class OutArgumentTranspileTests
                 """
                     let w: string | null;
 
-                    return check && ([, w] = tryGetValue(words, key, null))[0] && w.length > 3;
+                    return check && ([, w] = words.tryGetValue(key, null))[0] && w.length > 3;
                 """
             );
 
@@ -497,7 +497,7 @@ public class OutArgumentTranspileTests
                 """
                     let c: number;
 
-                    if (check && ([, c] = tryGetValue(counts, "k", 0))[0]) {
+                    if (check && ([, c] = counts.tryGetValue("k", 0))[0]) {
                 """
             );
     }
@@ -533,13 +533,13 @@ public class OutArgumentTranspileTests
             .Contains(
                 """
                     while (true) {
-                      const [$found0, v] = tryGetValue(values, i, 0);
+                      const [$found0, v] = values.tryGetValue(i, 0);
 
                       if (!$found0) {
                         break;
                       }
 
-                      readers.push(() => v);
+                      readers.add(() => v);
                       i = (i + 1) | 0;
                     }
                 """
@@ -572,7 +572,7 @@ public class OutArgumentTranspileTests
             .Contains(
                 """
                     for (let k = 0; ; k = (k + 1) | 0) {
-                      const [$found0, w] = tryGetValue(values, k, 0);
+                      const [$found0, w] = values.tryGetValue(k, 0);
 
                       if (!$found0) {
                         break;
@@ -623,7 +623,7 @@ public class OutArgumentTranspileTests
                 """
                     while (true) {
                       n = (n + 1) | 0;
-                      const [$found0, v] = tryGetValue(values, n, 0);
+                      const [$found0, v] = values.tryGetValue(n, 0);
 
                       if (!($found0 && v > 0)) {
                         break;
@@ -644,7 +644,7 @@ public class OutArgumentTranspileTests
 
         await Assert
             .That(output)
-            .Contains("} while (([, v] = tryGetValue(values, n, 0))[0] && v > 0);");
+            .Contains("} while (([, v] = values.tryGetValue(n, 0))[0] && v > 0);");
     }
 
     [Test]
@@ -679,7 +679,7 @@ public class OutArgumentTranspileTests
                     while (true) {
                       let v: number;
 
-                      if (!(!skip && ([, v] = tryGetValue(values, n, 0))[0])) {
+                      if (!(!skip && ([, v] = values.tryGetValue(n, 0))[0])) {
                         break;
                       }
                 """
@@ -708,7 +708,7 @@ public class OutArgumentTranspileTests
             .Contains(
                 """
                   get apples(): number {
-                    const [$found0, n] = tryGetValue(this.counts, "apple", 0);
+                    const [$found0, n] = this.counts.tryGetValue("apple", 0);
 
                     return $found0 ? n : 0;
                   }
@@ -832,10 +832,10 @@ public class OutArgumentTranspileTests
 
         var output = result["defaults.ts"];
 
-        await Assert.That(output).Contains("tryGetValue(d, \"k\", false)");
-        await Assert.That(output).Contains("tryGetValue(d, \"k\", \"\\u0000\")");
-        await Assert.That(output).Contains("tryGetValue(d, \"k\", Level.Low)");
-        await Assert.That(output).Contains("tryGetValue(d, \"k\", 0n)");
+        await Assert.That(output).Contains("d.tryGetValue(\"k\", false)");
+        await Assert.That(output).Contains("d.tryGetValue(\"k\", \"\\u0000\")");
+        await Assert.That(output).Contains("d.tryGetValue(\"k\", Level.Low)");
+        await Assert.That(output).Contains("d.tryGetValue(\"k\", 0n)");
     }
 
     [Test]

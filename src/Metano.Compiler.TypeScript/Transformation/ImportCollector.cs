@@ -738,14 +738,78 @@ public sealed class ImportCollector(
             }
         }
 
+        imports.AddRange(CollectionTypeImports(imports, sink));
+
         var (stampedImports, helperAliases) = AliasCollidingRuntimeHelpers(
-            imports,
+            RoutedToCollectionsBarrel(imports),
             statements,
             sink
         );
 
         return new CollectedImports(MergeImportsByPath(stampedImports), helperAliases);
     }
+
+    /// <summary>
+    /// The type-only import of each collection class or interface the file
+    /// names in type position only through a bridge-built type (one the IR
+    /// scanner did not see), so no collection type is left unbound.
+    /// </summary>
+    private static IEnumerable<TsImport> CollectionTypeImports(
+        IReadOnlyList<TsImport> imports,
+        ImportCollectionSink sink
+    )
+    {
+        var imported = imports.SelectMany(import => import.Names).ToHashSet(Ordinal);
+
+        var missing = sink
+            .RuntimeHelperTypeReferences.Where(RuntimeCollections.IsCollectionsName)
+            .Where(name => !imported.Contains(name))
+            .Order(Ordinal)
+            .ToArray();
+
+        return missing.Length > 0
+            ? [new TsImport(missing, RuntimeCollections.Module, TypeOnly: true)]
+            : [];
+    }
+
+    /// <summary>
+    /// Moves every collection name a root <c>metano-runtime</c> line carries
+    /// (a mapping template's runtime import, a walker helper reference) to the
+    /// collections barrel, where generated code imports every collection name
+    /// from (spec 011 contracts/runtime-collections.md § Modules); the
+    /// per-path merge then folds them into one line.
+    /// </summary>
+    private static List<TsImport> RoutedToCollectionsBarrel(List<TsImport> imports) =>
+        imports.SelectMany(RoutedToCollectionsBarrel).ToList();
+
+    private static IEnumerable<TsImport> RoutedToCollectionsBarrel(TsImport import)
+    {
+        if (import.From != RuntimeModuleName || import.IsDefault || import.IsNamespace)
+            return [import];
+
+        var routed = import.Names.Where(RuntimeCollections.IsCollectionsName).ToArray();
+
+        if (routed.Length == 0)
+            return [import];
+
+        var kept = import.Names.Except(routed, Ordinal).ToArray();
+        var collections = PartOf(import, routed) with { From = RuntimeCollections.Module };
+
+        return kept.Length == 0 ? [collections] : [PartOf(import, kept), collections];
+    }
+
+    private static TsImport PartOf(TsImport import, string[] names) =>
+        import with
+        {
+            Names = names,
+            TypeOnlyNames = import.TypeOnlyNames?.Where(names.Contains).ToHashSet(Ordinal),
+            Aliases = import
+                .Aliases?.Where(alias => names.Contains(alias.Key))
+                .ToDictionary(alias => alias.Key, alias => alias.Value, Ordinal),
+            ExtraAliases = import
+                .ExtraAliases?.Where(alias => names.Contains(alias.Original))
+                .ToList(),
+        };
 
     /// <summary>
     /// A <c>metano-runtime</c> helper whose plain import name is already taken
@@ -803,9 +867,7 @@ public sealed class ImportCollector(
             foreach (var requirement in requirements)
             {
                 if (IrRuntimeRequirementToTsImport.HasMappedImport(requirement))
-                    claimed.Add(
-                        IrRuntimeRequirementToTsImport.ImportedNameOf(requirement.HelperName)
-                    );
+                    claimed.Add(IrRuntimeRequirementToTsImport.ImportedNameOf(requirement));
             }
         }
 

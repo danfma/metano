@@ -156,11 +156,11 @@ public class MethodOverloadFastPathTests
 
         var output = result["finder.ts"];
 
-        await Assert.That(output).Contains("find(...args: unknown[]): number[] {");
+        await Assert.That(output).Contains("find(...args: unknown[]): List<number> {");
 
         await Assert
             .That(output)
-            .Contains("async findAsync(...args: unknown[]): Promise<number[]> {");
+            .Contains("async findAsync(...args: unknown[]): Promise<List<number>> {");
 
         await Assert.That(output).Contains("mixed(...args: unknown[]): any {");
     }

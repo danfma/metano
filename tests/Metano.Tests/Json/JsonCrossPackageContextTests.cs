@@ -96,7 +96,7 @@ public class JsonCrossPackageContextTests
     {
         var ts = TranspileContext("[JsonSerializable(typeof(List<Tag>))]");
 
-        await Assert.That(ts).Contains("get listTag(): ValueSpec<Tag[] | null>");
+        await Assert.That(ts).Contains("get listTag(): ValueSpec<List<Tag> | null>");
         await Assert.That(ts).Contains("get tag(): TypeSpec<Tag>");
         await Assert.That(ts).Contains("import { Tag } from \"shared/shared\";");
     }

@@ -270,7 +270,7 @@ public class Int64TupleSpreadConversionTests
         await Assert
             .That(files["codes.ts"])
             .Contains(
-                "const longs = [...Array.from(ints, (element$temp$1) => BigInt(element$temp$1))];"
+                "const longs = List.of([...Array.from(ints, (element$temp$1) => BigInt(element$temp$1))]);"
             );
     }
 

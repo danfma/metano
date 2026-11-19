@@ -223,7 +223,7 @@ public class PrecedenceTranspileTests
     [Arguments(
         "C46",
         "int M(List<int> list) => list.Count > 0 ? list[0] : -1;",
-        "return list.length > 0 ? list[0]! : -1;"
+        "return list.count > 0 ? list.get(0) : -1;"
     )]
     [Arguments(
         "C62",
@@ -286,7 +286,7 @@ public class PrecedenceTranspileTests
     [Arguments(
         "C43",
         "int M(Stack<int>? s1, Stack<int> s2) => (s1 ?? s2).Peek();",
-        "return (s1 ?? s2)[(s1 ?? s2).length - 1];"
+        "return (s1 ?? s2).peek();"
     )]
     [Arguments(
         "C44",
@@ -301,7 +301,7 @@ public class PrecedenceTranspileTests
     [Arguments(
         "E4",
         "void M(bool f, List<int> l1, List<int> l2) => (f ? l1 : l2).Clear();",
-        "(f ? l1 : l2).length = 0"
+        "(f ? l1 : l2).clear();"
     )]
     [Arguments(
         "E5",

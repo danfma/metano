@@ -377,7 +377,9 @@ public class RuntimeHelperAliasTests
 
         await Assert
             .That(output)
-            .Contains(@"import { HashSet as HashSet$rt } from ""metano-runtime"";");
+            .Contains(
+                @"import { HashSet as HashSet$rt } from ""metano-runtime/system/collections"";"
+            );
 
         await Assert.That(output).Contains("items: HashSet$rt<number>");
         await Assert.That(output).Contains("new HashSet$rt<number>()");

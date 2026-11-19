@@ -382,42 +382,79 @@ public class NarrowIntegerLoweringTests
 
     /// <summary>
     /// A compound assignment or an increment that needs a reduction stores
-    /// through the read-modify-write lowering, which a dictionary entry does
-    /// not support (the read of a missing key would not throw): it reports
-    /// MS0001 at the expression, as the 64-bit forms do.
+    /// through the read-modify-write lowering, which a runtime dictionary
+    /// entry supports (<c>get</c> throws on a missing key, as C#'s read does,
+    /// spec 011 FR-010): the reduction wraps the read value before the
+    /// <c>set</c>, and nothing is reported.
     /// </summary>
     [Test]
-    [Arguments("counts[key]++", "Dictionary<string, int>")]
-    [Arguments("counts[key] += 2", "Dictionary<string, int>")]
-    public async Task DictionaryEntryInACheckedProject_ReportsUnsupported(
+    [Arguments(
+        "counts[key]++",
+        "Dictionary<string, int>",
+        "counts.set(key, checkedInt32(counts.get(key) + 1));"
+    )]
+    [Arguments(
+        "counts[key] += 2",
+        "Dictionary<string, int>",
+        "counts.set(key, checkedInt32(counts.get(key) + 2));"
+    )]
+    public async Task DictionaryEntryInACheckedProject_ChecksTheStore(
         string expression,
-        string dictionary
+        string dictionary,
+        string expected
     )
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithOverflowChecks(
+        var (files, diagnostics) = TranspileHelper.TranspileWithOverflowChecks(
             DictionaryEntrySource(expression, dictionary)
         );
 
-        await AssertReportsTheDictionaryEntry(diagnostics, expression);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["tally.ts"]).Contains(expected);
     }
 
     [Test]
-    [Arguments("counts[key]++", "Dictionary<string, byte>")]
-    [Arguments("counts[key] += 1", "Dictionary<string, byte>")]
-    [Arguments("counts[key] |= 1u << 31", "Dictionary<string, uint>")]
-    [Arguments("counts[key] <<= 1", "Dictionary<string, int>")]
-    [Arguments("counts[key] >>>= 1", "Dictionary<string, int>")]
-    [Arguments("counts[key] >>= 1", "Dictionary<string, uint>")]
-    public async Task DictionaryEntryOfAReducedStore_ReportsUnsupported(
+    [Arguments(
+        "counts[key]++",
+        "Dictionary<string, byte>",
+        "counts.set(key, (counts.get(key) + 1) & 0xFF);"
+    )]
+    [Arguments(
+        "counts[key] += 1",
+        "Dictionary<string, byte>",
+        "counts.set(key, (counts.get(key) + 1) & 0xFF);"
+    )]
+    [Arguments(
+        "counts[key] |= 1u << 31",
+        "Dictionary<string, uint>",
+        "counts.set(key, (counts.get(key) | 2147483648) >>> 0);"
+    )]
+    [Arguments(
+        "counts[key] <<= 1",
+        "Dictionary<string, int>",
+        "counts.set(key, counts.get(key) << 1);"
+    )]
+    [Arguments(
+        "counts[key] >>>= 1",
+        "Dictionary<string, int>",
+        "counts.set(key, (counts.get(key) >>> 1) | 0);"
+    )]
+    [Arguments(
+        "counts[key] >>= 1",
+        "Dictionary<string, uint>",
+        "counts.set(key, counts.get(key) >>> 1);"
+    )]
+    public async Task DictionaryEntryOfAReducedStore_ReducesTheStoredValue(
         string expression,
-        string dictionary
+        string dictionary,
+        string expected
     )
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             DictionaryEntrySource(expression, dictionary)
         );
 
-        await AssertReportsTheDictionaryEntry(diagnostics, expression);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["tally.ts"]).Contains(expected);
     }
 
     /// <summary>A bitwise store on an <c>int</c> entry needs no reduction and reports nothing.</summary>
@@ -569,29 +606,6 @@ public class NarrowIntegerLoweringTests
                 }
             }
             """;
-
-    private static async Task AssertReportsTheDictionaryEntry(
-        IReadOnlyList<MetanoDiagnostic> diagnostics,
-        string expression
-    )
-    {
-        var unsupported = UnsupportedFeatures(diagnostics).ToList();
-
-        await Assert.That(unsupported.Count).IsEqualTo(1);
-
-        var diagnostic = unsupported[0];
-        var location = diagnostic.Location!;
-
-        await Assert
-            .That(diagnostic.Message)
-            .IsEqualTo($"'{expression}' on a dictionary entry is not supported.");
-
-        await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
-
-        await Assert
-            .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
-            .IsEqualTo(expression);
-    }
 
     /// <summary>The single statement of the method <paramref name="name"/> in <paramref name="source"/>.</summary>
     private static string BodyOf(string source, string name)

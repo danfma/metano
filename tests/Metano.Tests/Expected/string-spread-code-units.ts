@@ -1,10 +1,10 @@
-import { HashSet } from "metano-runtime";
+import { HashSet, List } from "metano-runtime/system/collections";
 
 export class Letters {
   constructor() { }
 
-  of(text: string): string[] {
-    return [...text.split("")];
+  of(text: string): List<string> {
+    return List.of([...text.split("")]);
   }
 
   framed(text: string, suffix: string | null): string[] {
@@ -12,11 +12,11 @@ export class Letters {
   }
 
   distinct(text: string): HashSet<string> {
-    return new HashSet<string>([...text.split("")]);
+    return HashSet.of([...text.split("")]);
   }
 
-  words(words: string[]): string[] {
-    return [...words];
+  words(words: string[]): List<string> {
+    return List.of([...words]);
   }
 
   dashed(words: string[]): string {

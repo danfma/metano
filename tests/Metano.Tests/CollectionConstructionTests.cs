@@ -72,7 +72,7 @@ public class CollectionConstructionTests
         var output = result["shelf.ts"];
 
         await Assert.That(output).DoesNotContain("new Object(");
-        await Assert.That(output).Contains("return [] as Array<number>;");
+        await Assert.That(output).Contains("return new List<number>();");
         await Assert.That(output).Contains("return [1, 2] as [number, number];");
         await Assert.That(output).Contains("return [1] as [number];");
     }
@@ -192,9 +192,9 @@ public class CollectionConstructionTests
 
         await Assert
             .That(output)
-            .Contains("return (($arg0) => [] as Array<number>)(this.nextCapacity());");
+            .Contains("return List.withCapacity<number>(this.nextCapacity());");
 
-        await Assert.That(output).Contains("return [] as Array<number>;");
+        await Assert.That(output).Contains("return List.withCapacity<number>(capacity);");
     }
 
     [Test]
@@ -218,8 +218,11 @@ public class CollectionConstructionTests
 
         var output = result["shelf.ts"];
 
-        await Assert.That(output).Contains("import { HashSet } from \"metano-runtime\";");
-        await Assert.That(output).Contains("const seen = new HashSet<number>(values);");
+        await Assert
+            .That(output)
+            .Contains("import { HashSet, List } from \"metano-runtime/system/collections\";");
+
+        await Assert.That(output).Contains("const seen = HashSet.from(values);");
     }
 
     [Test]
@@ -319,7 +322,7 @@ public class CollectionConstructionTests
     /// (spec 012 FR-068).
     /// </summary>
     [Test]
-    public async Task DictionaryCollectionExpression_IsANewEmptyMap()
+    public async Task DictionaryCollectionExpression_IsANewEmptyDictionary()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -335,12 +338,14 @@ public class CollectionConstructionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains("private readonly _byName: Map<string, number> = new Map<string, number>();");
+            .Contains(
+                "private readonly _byName: Dictionary<string, number> = new Dictionary<string, number>();"
+            );
     }
 
     /// <summary>The same construction over 64-bit keys.</summary>
     [Test]
-    public async Task DictionaryCollectionExpression_WithLongKeys_IsANewEmptyMap()
+    public async Task DictionaryCollectionExpression_WithLongKeys_IsANewEmptyDictionary()
     {
         var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -362,6 +367,8 @@ public class CollectionConstructionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains("private readonly _byId: Map<bigint, number> = new Map<bigint, number>();");
+            .Contains(
+                "private readonly _byId: Dictionary<bigint, number> = new Dictionary<bigint, number>();"
+            );
     }
 }

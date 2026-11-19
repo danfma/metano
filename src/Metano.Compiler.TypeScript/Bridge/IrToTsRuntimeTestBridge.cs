@@ -61,6 +61,7 @@ internal static class IrToTsRuntimeTestBridge
             IrRuntimeTypeTest.Constant { Result: var result } => new TsLiteral(
                 result ? "true" : "false"
             ),
+            _ when type is IrCollectionTypeRef collection => CollectionTest(value, collection),
             IrRuntimeTypeTest.NominalClass => ClassTest(value, type),
             IrRuntimeTypeTest.NominalInterface => DescriptorTest(value, type, reachability),
             IrRuntimeTypeTest.ErasedShape => ShapeTest(value, type, reachability),
@@ -121,9 +122,31 @@ internal static class IrToTsRuntimeTestBridge
             new TsStringLiteral(tag)
         );
 
+    /// <summary>
+    /// A collection type as the runtime classes its values can be (W4-18):
+    /// <c>instanceof</c> the class, or any 011c class implementing the
+    /// interface, the type arguments erased as for an array. The extraction
+    /// reports the list-shaped <c>is</c> / <c>as</c> / pattern tests (MS0001,
+    /// W4-17), so this renders the dictionary and set tests and the overload
+    /// dispatchers' collection parameters.
+    /// </summary>
+    private static TsExpression CollectionTest(TsExpression value, IrCollectionTypeRef type) =>
+        RuntimeCollections
+            .ClassesOf(type.Kind)
+            .Select(kind =>
+                (TsExpression)InstanceofTest(
+                    value,
+                    new TsRuntimeHelperReference(
+                        RuntimeCollections.NameOf(kind),
+                        RuntimeCollections.Module
+                    )
+                )
+            )
+            .Aggregate((left, right) => new TsBinaryExpression(left, "||", right));
+
     /// <summary><c>value instanceof C</c> against the class the type lowers to.</summary>
     private static TsExpression ClassTest(TsExpression value, IrTypeRef type) =>
-        type.WithLegacyCollection() switch
+        type switch
         {
             IrMapTypeRef => InstanceofTest(value, new TsIdentifier("Map")),
             IrSetTypeRef => InstanceofTest(value, new TsRuntimeHelperReference("HashSet")),

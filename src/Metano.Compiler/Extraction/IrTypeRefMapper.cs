@@ -166,8 +166,15 @@ public static class IrTypeRefMapper
             // (spec 011 FR-001), by symbol identity. Checked before the
             // dictionary-like case, whose display-name prefix also matches
             // Dictionary<K,V>.KeyCollection / ValueCollection.
-            if (CollectionKindResolver.KindOf(named) is { } kind)
+            if (CollectionKindOf(named, target) is { } kind)
                 return MapCollection(named, kind, originResolver, target);
+
+            // Metano.Interop.JsArray<T> is the native array itself (spec 011 FR-004).
+            if (IsJsArray(named))
+                return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target))
+                {
+                    IsNative = true,
+                };
 
             // Dictionary-like → Map
             if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
@@ -334,6 +341,27 @@ public static class IrTypeRefMapper
 
         return new IrUnknownTypeRef();
     }
+
+    /// <summary>
+    /// The collection kind <paramref name="type"/> maps to for
+    /// <paramref name="target"/>: <c>IReadOnlySet&lt;T&gt;</c> joins the kinds
+    /// only for a target whose collections are runtime classes (a target that
+    /// keeps native collections renders it as its 2.x named reference).
+    /// </summary>
+    private static IrCollectionKind? CollectionKindOf(
+        INamedTypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        CollectionKindResolver.KindOf(type) switch
+        {
+            IrCollectionKind.IReadOnlySet
+                when IrExtractionContext.KeepsNativeCollectionsFor(target) => null,
+            var kind => kind,
+        };
+
+    private static bool IsJsArray(INamedTypeSymbol type) =>
+        type is { Name: "JsArray", Arity: 1 }
+        && type.ContainingNamespace?.ToDisplayString() == "Metano.Interop";
 
     private static IrCollectionTypeRef MapCollection(
         INamedTypeSymbol type,

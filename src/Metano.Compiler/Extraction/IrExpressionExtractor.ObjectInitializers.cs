@@ -38,6 +38,9 @@ public sealed partial class IrExpressionExtractor
         if (initializer.Expressions.Count == 0)
             return creation;
 
+        if (TryExtractCollectionInitialization(creation, createdType, initializer) is { } factory)
+            return factory;
+
         // The shared temp counter gives every bound instance a fresh name, so a
         // nested creation's binding never shadows the enclosing one.
         var instanceName = NextReceiverTempName();

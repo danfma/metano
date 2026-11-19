@@ -12,14 +12,16 @@ public static class IrToTsDelegateBridge
     )
     {
         var name = nameOverride ?? IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
+
         var parameters = ir
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
+
         var returnType = IrToTsTypeMapper.Map(ir.ReturnType);
         var thisType = ir.ThisType is null ? null : IrToTsTypeMapper.Map(ir.ThisType);
         var typeParameters = IrToTsTypeParameterMapper.Convert(ir.TypeParameters);

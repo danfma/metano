@@ -55,7 +55,7 @@ internal static class IrToTsRuntimeTypeReferences
                 is { } runtime
                 ? new TsRuntimeHelperReference(runtime.Descriptor)
                 : null,
-            _ when type.AsLegacyArray() is not null => new TsRuntimeHelperReference("ArrayType"),
+            IrArrayTypeRef => new TsRuntimeHelperReference("ArrayType"),
             IrFunctionTypeRef => new TsRuntimeHelperReference("DelegateType"),
             IrNamedTypeRef named => NamedDescriptor(named, site, reachability),
             _ => null,

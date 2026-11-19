@@ -179,14 +179,14 @@ public class BoxingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("receiver$temp$0.push(Color.Red);");
-        await Assert.That(output).Contains("list.push(Color.Green);");
-        await Assert.That(output).Contains("const literal: Object[] = [Color.Green];");
-        await Assert.That(output).Contains(".set(Color.Red, \"r\");");
+        await Assert.That(output).Contains("const list = List.of([Color.Red] as Object[]);");
+        await Assert.That(output).Contains("list.add(Color.Green);");
+        await Assert.That(output).Contains("const literal = List.of([Color.Green] as Object[]);");
+        await Assert.That(output).Contains("[Color.Red, \"r\"],");
         await Assert.That(output).Contains("names.set(Color.Green, \"g\");");
-        await Assert.That(output).Contains("list.includes(Color.Green)");
+        await Assert.That(output).Contains("list.contains(Color.Green)");
         await Assert.That(output).Contains("list.indexOf(unbox(o) as Object)");
-        await Assert.That(output).Contains("names.has(Color.Red)");
+        await Assert.That(output).Contains("names.containsKey(Color.Red)");
     }
 
     [Test]

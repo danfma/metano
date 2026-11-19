@@ -29,11 +29,13 @@ public class NullableResultTranspileTests
         );
 
         await Assert.That(output).Contains("return s?.length ?? null;");
-        await Assert.That(output).Contains("target.size = source?.items.length ?? null;");
-        await Assert.That(output).Contains("return echo(b?.items.length ?? null);");
+        await Assert.That(output).Contains("target.size = source?.items.count ?? null;");
+        await Assert.That(output).Contains("return echo(b?.items.count ?? null);");
+
         await Assert
             .That(output)
-            .Contains("return { note: b?.name ?? null, count: b?.items.length ?? null };");
+            .Contains("return { note: b?.name ?? null, count: b?.items.count ?? null };");
+
         await Assert.That(output).Contains("return f ? b?.size ?? null : null;");
         await Assert.That(output).Contains("select((b: Box | null) => b?.size ?? null)");
         await Assert.That(output).Contains("return f?.() ?? null;");
@@ -188,6 +190,7 @@ public class NullableResultTranspileTests
         await Assert
             .That(output)
             .Contains("import { getTitle, type Item } from \"@acme/domain/acme/domain/items\";");
+
         await Assert.That(output).Contains("return getTitle(item);");
     }
 

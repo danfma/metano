@@ -1,17 +1,18 @@
+import { List } from "metano-runtime/system/collections";
 import { typeInitializer } from "metano-runtime";
 
 export class Registry {
   static readonly #$init = /* @__PURE__ */ typeInitializer("Registry", () => {
-    Registry.#log$ = [] as Array<string>;
+    Registry.#log$ = new List<string>();
     Registry.#a$ = Registry.init("A");
     Registry.#b$ = Registry.init("B");
-    Registry.log.push("cctor");
+    Registry.log.add("cctor");
     Registry.instance = new Registry();
     const n = 1;
-    Registry.log.push("n" + n);
+    Registry.log.add("n" + n);
   }) as () => void;
 
-  static #log$: string[] | null = null;
+  static #log$: List<string> | null = null;
   static #a$: number = 0;
   static #instance$: Registry | null = null;
   static #b$: number = 0;
@@ -21,10 +22,10 @@ export class Registry {
     Registry.#$init();
   }
 
-  static get log(): string[] {
+  static get log(): List<string> {
     Registry.#$init();
 
-    return Registry.#log$ as string[];
+    return Registry.#log$ as List<string>;
   }
 
   static get a(): number {
@@ -73,7 +74,7 @@ export class Registry {
 
   private static init(text: string): number {
     Registry.#$init();
-    Registry.log.push(text);
+    Registry.log.add(text);
 
     return 1;
   }

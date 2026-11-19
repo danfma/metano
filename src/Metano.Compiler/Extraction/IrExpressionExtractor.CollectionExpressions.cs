@@ -116,7 +116,12 @@ public sealed partial class IrExpressionExtractor
         if (coll.Elements.Count == 0)
             return new IrNewExpression(type, []);
 
-        var elements = new IrArrayLiteral(ExtractCollectionElements(coll));
+        var operation = _semantic.GetOperation(coll) as ICollectionExpressionOperation;
+
+        var elements = new IrArrayLiteral(
+            ExtractCollectionElements(coll),
+            operation is null ? null : DeclaredElementType(coll, operation.Type, operation.Elements)
+        );
 
         return new IrNewExpression(type, [new IrArgument(elements)]);
     }

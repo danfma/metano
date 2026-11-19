@@ -1,24 +1,24 @@
-import { HashSet } from "metano-runtime";
+import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
 import type { Tag } from "./tag";
 
 export class Shelf {
-  private readonly _items: number[] = [] as Array<number>;
-  private readonly _tags: HashSet<Tag> = new HashSet<Tag>();
-  private readonly _byName: Map<string, Tag | null> = new Map<string, Tag | null>();
+  private readonly _items: List<number> = new List<number>();
+  private readonly _tags: HashSet<Tag> = HashSet.withCapacity<Tag>(4);
+  private readonly _byName: Dictionary<string, Tag | null> = new Dictionary<string, Tag | null>();
 
   constructor() { }
 
-  size(source: number[], capacity: number): number {
-    const empty = [] as Array<string | null>;
-    const sized = [] as Array<number>;
-    const copy = [...source];
-    const map = new Map<string, number>();
-    const mapCopy = new Map<string, number>(map);
-    const set = new HashSet<Tag>(this._tags);
+  size(source: List<number>, capacity: number): number {
+    const empty = new List<string | null>();
+    const sized = List.withCapacity<number>(capacity);
+    const copy = List.from(source);
+    const map = Dictionary.withCapacity<string, number>(capacity);
+    const mapCopy = Dictionary.from(map);
+    const set = HashSet.from(this._tags);
     const pair = ["k", 1] as [string, number];
-    const fromPairs = new Map<string, number>([] as Array<[string, number]>);
+    const fromPairs = Dictionary.from(new List<[string, number]>());
     const tuple = [1, "s"] as [number, string];
 
-    return (empty.length + sized.length + copy.length + map.size + mapCopy.size + set.size + pair[1] + pair[0].length + fromPairs.size + tuple[0] + tuple[1].length + this._items.length + this._byName.size) | 0;
+    return (empty.count + sized.count + copy.count + map.count + mapCopy.count + set.count + pair[1] + pair[0].length + fromPairs.count + tuple[0] + tuple[1].length + this._items.count + this._byName.count) | 0;
   }
 }

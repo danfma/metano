@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -17,18 +18,30 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public static class IrToTsStatementBridge
 {
     /// <summary>
+    /// The FR-058 guard text the generated code reads the production-checks
+    /// flag with (contracts/runtime-collections.md § Production checks).
+    /// </summary>
+    internal const string ProductionChecksGuard =
+        "typeof __METANO_CHECKS__ === \"undefined\" || __METANO_CHECKS__";
+
+    /// <summary>
     /// Maps a list of IR statements to TS statements. A nested
     /// <see cref="IrBlockStatement"/> stays a <c>{ … }</c> block so the
     /// <c>let</c>/<c>const</c> bindings it declares keep their C# scope (a bare
-    /// C# block, or a loop wrapped with its hoisted <c>out var</c> locals).
+    /// C# block, or a loop wrapped with its hoisted <c>out var</c> locals). The
+    /// temporaries its expressions assign inline are declared at its head
+    /// (<see cref="TsTemporaries"/>).
     /// </summary>
     internal static IReadOnlyList<TsStatement> MapBody(
         IReadOnlyList<IrStatement> body,
         IrToTsBridgeContext context
-    ) => body.Select(stmt => Map(stmt, context)).ToList();
+    ) => TsTemporaries.Around(context, scoped => body.Select(stmt => Map(stmt, scoped)).ToList());
 
     private static TsStatement MapForEach(IrForEachStatement fe, IrToTsBridgeContext context)
     {
+        if (fe.CollectionType is IrCollectionTypeRef { Kind: IrCollectionKind.List })
+            return MapListForEach(fe, context);
+
         // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
@@ -38,6 +51,72 @@ public static class IrToTsStatementBridge
         return new TsRawStatement(WrapLoop(header, body))
         {
             EmbeddedExpressions = [collection],
+            EmbeddedScopes = [new TsEmbeddedScope([loopVariable], body)],
+        };
+    }
+
+    /// <summary>
+    /// <c>foreach</c> over a <c>List&lt;T&gt;</c> (spec 011 FR-057,
+    /// contracts/runtime-collections.md § Lowered <c>foreach</c>, final): the
+    /// indexed loop over the backing array, with the receiver bound once and
+    /// the version and length checked at the start of every step (the final
+    /// one included, never after a <c>break</c> / <c>return</c>), each check
+    /// under the function-local FR-058 flag <c>$c</c>, read first so a bundler
+    /// folds it. A loop nested in the body takes the next names
+    /// (<c>$c1</c>, <c>$l1</c>, …).
+    /// </summary>
+    private static TsStatement MapListForEach(IrForEachStatement fe, IrToTsBridgeContext context)
+    {
+        var depth = context.LoweredLoopDepth;
+        var suffix = depth == 0 ? "" : depth.ToString(CultureInfo.InvariantCulture);
+
+        string Name(string stem) => stem + suffix;
+
+        var (checks, list, items, length, version, index) = (
+            Name("$c"),
+            Name("$l"),
+            Name("$a"),
+            Name("$n"),
+            Name("$v"),
+            Name("$i")
+        );
+
+        var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
+        var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
+
+        var body = MapBody(fe.Body, context with { LoweredLoopDepth = depth + 1 });
+
+        var throwModified = new TsCallExpression(
+            new TsRuntimeHelperReference("throwModified", RuntimeCollections.Module),
+            []
+        );
+
+        var header = string.Join(
+            "\n",
+            "{",
+            $"  const {checks} = {ProductionChecksGuard};",
+            $"  const {list} = {PrintExpression(collection)};",
+            $"  const {items} = {list}._items;",
+            $"  const {length} = {items}.length;",
+            $"  const {version} = {checks} ? {list}._version : 0;",
+            $"  for (let {index} = 0; ; {index}++) {{",
+            $"    if ({checks} && ({list}._version !== {version} || {items}.length !== {length})) {PrintExpression(throwModified)};",
+            $"    if ({index} === {length}) break;",
+            $"    const {loopVariable} = {items}[{index}];"
+        );
+
+        var printedBody = RenderIndentedBody(body).TrimEnd('\n');
+
+        var indentedBody = string.Join(
+            "\n",
+            printedBody.Split('\n').Select(line => line.Length == 0 ? line : "  " + line)
+        );
+
+        return new TsRawStatement(
+            (indentedBody.Length == 0 ? header : header + "\n" + indentedBody) + "\n  }\n}"
+        )
+        {
+            EmbeddedExpressions = [collection, throwModified],
             EmbeddedScopes = [new TsEmbeddedScope([loopVariable], body)],
         };
     }
@@ -270,6 +349,10 @@ public static class IrToTsStatementBridge
             ),
             IrExpressionStatement { Expression: IrNullConditionalAccess access } =>
                 IrToTsExpressionBridge.MapNullConditionalStatement(access, context),
+            IrExpressionStatement { Expression: IrIndexerUpdateExpression update } =>
+                new TsExpressionStatement(
+                    IrToTsExpressionBridge.MapIndexerUpdate(update, context, isStatement: true)
+                ),
             IrExpressionStatement es => new TsExpressionStatement(
                 IrToTsExpressionBridge.MapNullTolerant(es.Expression, context)
             ),

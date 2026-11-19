@@ -1,15 +1,16 @@
-import { intDiv, tryGetValue } from "metano-runtime";
+import { Dictionary } from "metano-runtime/system/collections";
+import { intDiv } from "metano-runtime";
 import type { ILookup } from "./i-lookup";
 import type { Item } from "./item";
 
 export class Catalog implements ILookup {
-  private readonly _items: Map<string, Item> = new Map<string, Item>();
+  private readonly _items: Dictionary<string, Item> = new Dictionary<string, Item>();
 
   constructor() { }
 
   tryFind(key: string): readonly [found: true, item: Item] | readonly [found: false, item: Item | null] {
     let item: Item | null;
-    const [$found0, found] = tryGetValue(this._items, key, null);
+    const [$found0, found] = this._items.tryGetValue(key, null);
 
     if ($found0) {
       item = found;

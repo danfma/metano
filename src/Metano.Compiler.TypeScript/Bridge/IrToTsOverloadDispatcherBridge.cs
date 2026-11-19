@@ -638,7 +638,7 @@ public static class IrToTsOverloadDispatcherBridge
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 ParameterTypeOf(method, p, typeOverrides),
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
 
@@ -806,7 +806,7 @@ public static class IrToTsOverloadDispatcherBridge
     private static TsType ForwardedArgumentsType(IReadOnlyList<IrMethodDeclaration> inherited)
     {
         var fixedArity = inherited.FirstOrDefault(overload =>
-            !overload.Parameters.Any(parameter => parameter.IsParams)
+            !overload.Parameters.Any(parameter => parameter.IsRestParams)
         );
 
         if (fixedArity is null)
@@ -852,7 +852,9 @@ public static class IrToTsOverloadDispatcherBridge
                         DispatchArgumentType(typeParameters, parameter, typeOverrides)
                     );
 
-                    return parameter.IsParams ? new TsSpreadExpression(value) : (TsExpression)value;
+                    return parameter.IsRestParams
+                        ? new TsSpreadExpression(value)
+                        : (TsExpression)value;
                 }
             )
             .ToList();

@@ -61,7 +61,7 @@ public class StaticConstructorTests
         var log = output.IndexOf("Registry.#log$ = ", StringComparison.Ordinal);
         var a = output.IndexOf("Registry.#a$ = Registry.init(\"A\");", StringComparison.Ordinal);
         var b = output.IndexOf("Registry.#b$ = Registry.init(\"B\");", StringComparison.Ordinal);
-        var body = output.IndexOf("Registry.log.push(\"cctor\");", StringComparison.Ordinal);
+        var body = output.IndexOf("Registry.log.add(\"cctor\");", StringComparison.Ordinal);
 
         await Assert.That(log).IsGreaterThan(0);
         await Assert.That(a).IsGreaterThan(log);

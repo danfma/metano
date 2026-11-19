@@ -55,7 +55,7 @@ public class IndexAndRangeTests
     }
 
     [Test]
-    public async Task IndexFromEnd_WithAwaitedOffsetOnCallReceiver_MakesTheBindingAsync()
+    public async Task IndexFromEnd_WithAwaitedOffsetOnCallReceiver_PassesTheOffsetAfterTheReceiver()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -73,9 +73,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(result["sequences.ts"])
-            .Contains(
-                "return await (async (receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0[receiver$temp$0.length - receiver$temp$1]!)(await offset))(Sequences.make());"
-            );
+            .Contains("return fromEnd(Sequences.make(), await offset);");
     }
 
     [Test]
@@ -93,12 +91,7 @@ public class IndexAndRangeTests
             """
         );
 
-        await Assert
-            .That(result["feed.ts"])
-            .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)"
-                    + "(this.load());"
-            );
+        await Assert.That(result["feed.ts"]).Contains("return fromEnd(this.load(), 1);");
     }
 
     [Test]
@@ -118,10 +111,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(result["feed.ts"])
-            .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0.slice(1, receiver$temp$0.length - 1))"
-                    + "(this.load());"
-            );
+            .Contains("return ($r = this.load(), $r.slice(1, $r.length - 1));");
     }
 
     [Test]
@@ -155,19 +145,11 @@ public class IndexAndRangeTests
 
         var output = result["shrinking.ts"];
 
-        await Assert
-            .That(output)
-            .Contains(
-                "return ((receiver$temp$0) => this.items[this.items.length - receiver$temp$0]!)"
-                    + "(this.popL());"
-            );
+        await Assert.That(output).Contains("return this.items.fromEnd(this.popL());");
 
         await Assert
             .That(output)
-            .Contains(
-                "return ((receiver$temp$0) => this.items.slice(1, this.items.length - receiver$temp$0))"
-                    + "(this.popL());"
-            );
+            .Contains("return ($e = this.popL(), this.items.slice(1, this.items.count - $e));");
     }
 
     [Test]
@@ -390,7 +372,7 @@ public class IndexAndRangeTests
     [Test]
     public async Task IndexFromEnd_InModuleFunction_StaysOnIrPath()
     {
-        // The let-binding IIFE must count as covered, or the whole
+        // The fromEnd helper call must count as covered, or the whole
         // [ExportedAsModule] type would be skipped as unsupported.
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -404,12 +386,7 @@ public class IndexAndRangeTests
 
         await Assert.That(diagnostics).IsEmpty();
 
-        await Assert
-            .That(files["feeds.ts"])
-            .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)"
-                    + "(groups[0]!);"
-            );
+        await Assert.That(files["feeds.ts"]).Contains("return fromEnd(groups[0]!, 1);");
     }
 
     [Test]

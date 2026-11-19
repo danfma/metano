@@ -65,11 +65,30 @@ public sealed record IrParameter(
     public bool CanBeOmitted => HasDefaultValue || IsOptional;
 
     /// <summary>
-    /// The element type of a <c>params T[]</c> parameter (nullable or not),
-    /// whose arguments a call passes one by one; <c>null</c> for any other
-    /// parameter, including a <c>params</c> collection the IR models otherwise.
+    /// The element type of a <c>params T[]</c> (or span) parameter, nullable or
+    /// not, whose arguments a call passes one by one; <c>null</c> for any other
+    /// parameter, including a C# 13 <c>params</c> collection
+    /// (<c>params List&lt;T&gt; xs</c>), which a call site constructs (spec 011
+    /// contracts/runtime-collections.md § params collections).
     /// </summary>
-    public IrTypeRef? ParamsElementType => IsParams ? Type.AsLegacyArray()?.ElementType : null;
+    public IrTypeRef? ParamsElementType =>
+        IsParams
+            ? ((Type as IrNullableTypeRef)?.Inner ?? Type) switch
+            {
+                IrArrayTypeRef array => array.ElementType,
+                _ => null,
+            }
+            : null;
+
+    /// <summary>
+    /// Whether a call passes this parameter's values one by one, so a target
+    /// with rest parameters declares it as one: a <c>params</c> array or span,
+    /// not a C# 13 <c>params</c> collection, which the call site constructs.
+    /// </summary>
+    public bool IsRestParams =>
+        IsParams
+        && ((Type as IrNullableTypeRef)?.Inner ?? Type)
+            is not (IrCollectionTypeRef or IrIterableTypeRef);
 }
 
 /// <summary>

@@ -216,7 +216,7 @@ public static class IrToTsModuleBridge
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
 
@@ -318,7 +318,7 @@ public static class IrToTsModuleBridge
                 DefaultValue: p.HasDefaultValue && p.DefaultValue is not null
                     ? IrToTsExpressionBridge.Map(p.DefaultValue, context)
                     : null,
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
 

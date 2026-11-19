@@ -165,7 +165,7 @@ public class TypeMappingTranspileTests
     // ─── Dictionary → Map ───────────────────────────────────
 
     [Test]
-    public async Task Dictionary_MapsToMap()
+    public async Task Dictionary_MapsToTheRuntimeDictionary()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -175,11 +175,11 @@ public class TypeMappingTranspileTests
         );
 
         var output = result["config.ts"];
-        await Assert.That(output).Contains("settings: Map<string, number>");
+        await Assert.That(output).Contains("settings: Dictionary<string, number>");
     }
 
     [Test]
-    public async Task IReadOnlyDictionary_MapsToMap()
+    public async Task IReadOnlyDictionary_MapsToTheRuntimeInterface()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -189,7 +189,7 @@ public class TypeMappingTranspileTests
         );
 
         var output = result["index.ts"];
-        await Assert.That(output).Contains("data: Map<string, string>");
+        await Assert.That(output).Contains("data: IReadOnlyDictionary<string, string>");
     }
 
     // ─── HashSet → Set ──────────────────────────────────────

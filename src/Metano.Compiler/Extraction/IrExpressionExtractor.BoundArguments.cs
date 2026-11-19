@@ -345,7 +345,7 @@ public sealed partial class IrExpressionExtractor
             _ => false,
         };
 
-    private static bool IsBindable(IArgumentOperation argument) =>
+    private bool IsBindable(IArgumentOperation argument) =>
         argument.Parameter is not null
         && argument.ArgumentKind switch
         {
@@ -353,6 +353,8 @@ public sealed partial class IrExpressionExtractor
             ArgumentKind.Explicit => argument.Syntax is ArgumentSyntax
                 || IsReducedExtensionReceiver(argument),
             ArgumentKind.ParamArray => argument.Value is IArrayCreationOperation,
+            ArgumentKind.ParamCollection => !_context.KeepsNativeCollections
+                && ParamsCollectionElementsOf(argument) is not null,
             ArgumentKind.DefaultValue => true,
             _ => false,
         };
@@ -471,6 +473,7 @@ public sealed partial class IrExpressionExtractor
         argument.ArgumentKind switch
         {
             ArgumentKind.ParamArray => ExpandedParamsElementsOf(argument),
+            ArgumentKind.ParamCollection => [ExpandedParamsCollectionOf(argument)],
             ArgumentKind.DefaultValue => [new IrArgument(BoundDefaultOf(argument))],
             _ => [ExplicitBoundArgumentOf(argument)],
         };
@@ -523,6 +526,36 @@ public sealed partial class IrExpressionExtractor
 
         return elements.Select(element => new IrArgument(Extract(ElementSyntaxOf(element))));
     }
+
+    /// <summary>
+    /// The collection C# builds for a <c>params</c> collection argument in
+    /// its expanded form (spec 011 contracts/runtime-collections.md § params
+    /// collections), from the elements the call passes (none when omitted).
+    /// </summary>
+    private IrArgument ExpandedParamsCollectionOf(IArgumentOperation argument)
+    {
+        var elements = ParamsCollectionElementsOf(argument)!
+            .Value.Select(element => Extract(ElementSyntaxOf(element)))
+            .ToList();
+
+        return new IrArgument(ParamsCollectionOf(argument.Parameter!, elements));
+    }
+
+    /// <summary>
+    /// The elements Roslyn binds to a <c>params</c> collection argument (a
+    /// collection expression, possibly under a conversion); <c>null</c> for any
+    /// other bound value.
+    /// </summary>
+    private static ImmutableArray<IOperation>? ParamsCollectionElementsOf(
+        IArgumentOperation argument
+    ) =>
+        argument.Value switch
+        {
+            ICollectionExpressionOperation collection => collection.Elements,
+            IConversionOperation { Operand: ICollectionExpressionOperation collection } =>
+                collection.Elements,
+            _ => null,
+        };
 
     private static ExpressionSyntax ElementSyntaxOf(IOperation element) =>
         element.Syntax switch

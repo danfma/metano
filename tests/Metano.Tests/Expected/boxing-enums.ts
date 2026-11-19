@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { box, castTo, defaultEquals, enumText, formatBoolean, getRuntimeType, isType, objectText, unbox, unboxFor } from "metano-runtime";
 import { Color, Color$runtimeType } from "./color";
 
@@ -34,8 +35,8 @@ export class Probe {
     })(o);
   }
 
-  static raw(): Color[] {
-    return [Color.Red];
+  static raw(): List<Color> {
+    return List.of([Color.Red]);
   }
 
   static interface(): IComparable {

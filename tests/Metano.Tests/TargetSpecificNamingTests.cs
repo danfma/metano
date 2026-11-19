@@ -116,6 +116,7 @@ public class TargetSpecificNamingTests
             }
             """
         );
+
         var enumOutput = output["status.ts"];
         var consumerOutput = output["ticket.ts"];
 
@@ -150,6 +151,7 @@ public class TargetSpecificNamingTests
             }
             """
         );
+
         var enumOutput = output["status.ts"];
         var consumerOutput = output["ticket.ts"];
 
@@ -180,6 +182,7 @@ public class TargetSpecificNamingTests
             public class Holder { public MyEnum Value { get; set; } }
             """
         );
+
         var holder = output["holder.ts"];
         await Assert.That(holder).Contains("Renamed.Zero");
         await Assert.That(holder).DoesNotContain("MyEnum.Zero");
@@ -249,7 +252,7 @@ public class TargetSpecificNamingTests
         );
 
         var caller = result["app/caller.ts"];
-        await Assert.That(caller).Contains("Map<string, MyColumn>");
+        await Assert.That(caller).Contains("Dictionary<string, MyColumn>");
         await Assert.That(caller).DoesNotContain("Map<string, Column>");
     }
 

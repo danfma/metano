@@ -56,12 +56,11 @@ public class IrBodyPipelineTests
     [Test]
     public async Task BclMappingStillApplies_WhenRoutedThroughIr()
     {
-        // [MapMethod] for List<T>.Add → push is declared in Metano.Runtime/Lists.cs
+        // [MapMethod] for List<T>.Add → add is declared in Metano.Runtime/Lists.cs
         // and picked up by DeclarativeMappingRegistry. The IR body pipeline must
         // plug that registry through IrToTsExpressionBridge so the lowered call
-        // goes through the mapping rather than emitting a raw `items.add(value)`.
-        // The implicit-`this` on `Items.Add(value)` is expanded to
-        // `this.items.push(value)` by the IR extractor's this-synthesis.
+        // goes through the mapping. The implicit-`this` on `Items.Add(value)` is
+        // expanded to `this.items.add(value)` by the IR extractor's this-synthesis.
         var result = TranspileHelper.TranspileWithIrBodies(
             """
             using System.Collections.Generic;
@@ -76,6 +75,6 @@ public class IrBodyPipelineTests
         );
 
         var output = result["todo-list.ts"];
-        await Assert.That(output).Contains("this.items.push(value)");
+        await Assert.That(output).Contains("this.items.add(value)");
     }
 }

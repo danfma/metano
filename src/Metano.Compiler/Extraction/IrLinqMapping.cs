@@ -57,9 +57,9 @@ public static class IrLinqMapping
 
             // Terminals
             ["ToArray"] = IrLinqOperator.ToArray,
-            // C# `ToList<T>()` returns `List<T>` but TS uses arrays for
-            // both — collapse to `toArray` so the runtime stays minimal.
-            ["ToList"] = IrLinqOperator.ToArray,
+            // `ToList<T>()` builds the runtime `List` (spec 011 contracts
+            // § LINQ terminals); `ToArray<T>()` a native array.
+            ["ToList"] = IrLinqOperator.ToList,
             ["ToDictionary"] = IrLinqOperator.ToMap,
             ["ToHashSet"] = IrLinqOperator.ToSet,
             ["First"] = IrLinqOperator.First,
@@ -111,8 +111,9 @@ public static class IrLinqMapping
             [IrLinqOperator.Reverse] = "reverse",
             [IrLinqOperator.Zip] = "zip",
             [IrLinqOperator.ToArray] = "toArray",
-            [IrLinqOperator.ToMap] = "toMap",
-            [IrLinqOperator.ToSet] = "toSet",
+            [IrLinqOperator.ToList] = "toList",
+            [IrLinqOperator.ToMap] = "toDictionary",
+            [IrLinqOperator.ToSet] = "toHashSet",
             [IrLinqOperator.First] = "first",
             [IrLinqOperator.FirstOrDefault] = "firstOrDefault",
             [IrLinqOperator.Last] = "last",
@@ -186,6 +187,7 @@ public static class IrLinqMapping
             Named("source2", "resultSelector")
         ),
         [IrLinqOperator.ToArray] = IrLinqRuntimeSignature.Of(null, Named()),
+        [IrLinqOperator.ToList] = IrLinqRuntimeSignature.Of(null, Named()),
         [IrLinqOperator.ToMap] = IrLinqRuntimeSignature.Of(
             2,
             Named("keySelector"),
@@ -245,6 +247,7 @@ public static class IrLinqMapping
     public static bool IsTerminal(IrLinqOperator op) =>
         op
             is IrLinqOperator.ToArray
+                or IrLinqOperator.ToList
                 or IrLinqOperator.ToMap
                 or IrLinqOperator.ToSet
                 or IrLinqOperator.First

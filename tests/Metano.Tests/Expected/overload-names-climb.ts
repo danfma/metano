@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { isInt32 } from "metano-runtime";
 import { Decimal } from "#/other/decimal";
 import type { A } from "./a";
@@ -50,23 +51,23 @@ export class Climbs {
     throw new Error("No matching overload for j");
   }
 
-  mListOfAId(ids: A.Id[]): number {
+  mListOfAId(ids: List<A.Id>): number {
     return 1;
   }
 
-  mListOfBId(ids: B.Id[]): number {
+  mListOfBId(ids: List<B.Id>): number {
     return 2;
   }
 
-  m(ids: A.Id[]): number;
-  m(ids: B.Id[]): number;
+  m(ids: List<A.Id>): number;
+  m(ids: List<B.Id>): number;
   m(...args: unknown[]): number {
-    if (args.length === 1 && Array.isArray(args[0])) {
-      return this.mListOfAId(args[0] as A.Id[]);
+    if (args.length === 1 && args[0] instanceof List) {
+      return this.mListOfAId(args[0] as List<A.Id>);
     }
 
-    if (args.length === 1 && Array.isArray(args[0])) {
-      return this.mListOfBId(args[0] as B.Id[]);
+    if (args.length === 1 && args[0] instanceof List) {
+      return this.mListOfBId(args[0] as List<B.Id>);
     }
 
     throw new Error("No matching overload for m");

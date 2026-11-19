@@ -170,7 +170,7 @@ internal static class IrToTsConstructorFactoryBridge
         new(
             IrToTsTypeMapper.MapParameterType(parameter.Parameter, typeOverrides),
             parameter.Parameter.CanBeOmitted,
-            parameter.Parameter.IsParams
+            parameter.Parameter.IsRestParams
         );
 
     private static TsExpression ForwardedArgument(TsParameter parameter)

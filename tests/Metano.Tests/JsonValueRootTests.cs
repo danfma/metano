@@ -130,7 +130,9 @@ public class JsonValueRootTests
 
         await Assert
             .That(ts)
-            .Contains("get iReadOnlyListEpisodeSummary(): ValueSpec<EpisodeSummary[] | null>");
+            .Contains(
+                "get iReadOnlyListEpisodeSummary(): ValueSpec<IReadOnlyList<EpisodeSummary> | null>"
+            );
 
         await Assert.That(ts).Contains("spec: () => this.episodeSummary");
         await Assert.That(ts).Contains("get episodeSummary(): TypeSpec<EpisodeSummary>");
@@ -178,7 +180,7 @@ public class JsonValueRootTests
             """
         );
 
-        await Assert.That(ts).Contains("get names(): ValueSpec<string[] | null>");
+        await Assert.That(ts).Contains("get names(): ValueSpec<List<string> | null>");
         await Assert.That(ts).DoesNotContain("listString");
     }
 
@@ -203,7 +205,7 @@ public class JsonValueRootTests
         await Assert.That(ts).Contains("get leafNode(): TypeSpec<Leaf>");
         await Assert.That(ts).DoesNotContain("get leaf()");
         await Assert.That(ts).Contains("spec: () => this.leafNode");
-        await Assert.That(ts).Contains("get listLeafNode(): ValueSpec<Leaf[] | null>");
+        await Assert.That(ts).Contains("get listLeafNode(): ValueSpec<List<Leaf> | null>");
     }
 
     [Test]
@@ -217,8 +219,8 @@ public class JsonValueRootTests
             """
         );
 
-        await Assert.That(ts).Contains("get listString(): ValueSpec<string[] | null>");
-        await Assert.That(ts).Contains("get listListInt32(): ValueSpec<number[][] | null>");
+        await Assert.That(ts).Contains("get listString(): ValueSpec<List<string> | null>");
+        await Assert.That(ts).Contains("get listListInt32(): ValueSpec<List<List<number>> | null>");
     }
 
     [Test]
@@ -234,7 +236,7 @@ public class JsonValueRootTests
             """
         );
 
-        await Assert.That(ts).Contains("get listUser(): ValueSpec<User[] | null>");
+        await Assert.That(ts).Contains("get listUser(): ValueSpec<List<User> | null>");
         await Assert.That(ts).Contains("spec: () => this.user");
         await Assert.That(ts).Contains("get user(): TypeSpec<User>");
     }
@@ -281,7 +283,9 @@ public class JsonValueRootTests
 
         await Assert
             .That(ts)
-            .Contains("get dictionaryStringListLeaf(): ValueSpec<Map<string, Leaf[]> | null>");
+            .Contains(
+                "get dictionaryStringListLeaf(): ValueSpec<Dictionary<string, List<Leaf>> | null>"
+            );
 
         await Assert.That(ts).Contains("get leaf(): TypeSpec<Leaf>");
     }
@@ -462,7 +466,7 @@ public class JsonValueRootTests
         var ts = files["app/json-context.ts"];
 
         await Assert.That(diagnostics.Where(IsJsonDiagnostic)).IsEmpty();
-        await Assert.That(ts).Contains("get listTag(): ValueSpec<Tag[] | null>");
+        await Assert.That(ts).Contains("get listTag(): ValueSpec<List<Tag> | null>");
         await Assert.That(ts).Contains("spec: () => this.tag");
         await Assert.That(ts).Contains("import { Tag } from \"shared/shared\"");
     }

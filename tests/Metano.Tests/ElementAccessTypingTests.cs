@@ -2,8 +2,8 @@ namespace Metano.Tests;
 
 /// <summary>
 /// Element reads under <c>noUncheckedIndexedAccess</c> (baseline FR-069,
-/// #670): an array, <c>List&lt;T&gt;</c> or <c>string</c> read is typed as C#
-/// types it. <c>a[i]!</c> for a <c>T</c> element, <c>(a[i] ?? null)</c> for a
+/// #670): an array or <c>string</c> read is typed as C# types it (a runtime
+/// list read is a typed <c>get</c> / <c>fromEnd</c> call). <c>a[i]!</c> for a <c>T</c> element, <c>(a[i] ?? null)</c> for a
 /// nullable one (a <c>!</c> would strip its own <c>null</c>); a write target
 /// stays assignable; the final step of a native optional chain stays
 /// unchecked. The emitted files were type-checked with <c>tsgo --strict
@@ -15,10 +15,10 @@ namespace Metano.Tests;
 public class ElementAccessTypingTests
 {
     [Test]
-    [Arguments("int First(IReadOnlyList<int> values) => values[0];", "return values[0]!;")]
+    [Arguments("int First(IReadOnlyList<int> values) => values[0];", "return values.get(0);")]
     [Arguments("int FromArray(int[] values, int i) => values[i];", "return values[i]!;")]
     [Arguments("char Ch(string text, int i) => text[i];", "return text[i]!;")]
-    [Arguments("int Last(List<int> values) => values[^1];", "return values[values.length - 1]!;")]
+    [Arguments("int Last(List<int> values) => values[^1];", "return values.fromEnd(1);")]
     [Arguments("string[] Row(string[][] grid) => grid[0];", "return grid[0]!;")]
     [Arguments("int Nested(int[][] grid) => grid[0][1];", "return grid[0]![1]!;")]
     public async Task ElementRead_IsAsserted(string method, string expected)

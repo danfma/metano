@@ -645,7 +645,7 @@ internal sealed class IrToTsClassEmitter(
     }
 
     private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
-        p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
+        p.Parameter.IsRestParams && p.Promotion is not IrParameterPromotion.None;
 
     private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p)
     {
@@ -877,7 +877,7 @@ internal sealed class IrToTsClassEmitter(
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p, BclOverrides),
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
 
@@ -913,15 +913,17 @@ internal sealed class IrToTsClassEmitter(
         // For abstract methods drop the default expression but keep
         // the parameter optional so callers may still omit it.
         var emitDefaults = !irMethod.Semantics.IsAbstract;
+
         var parameters = irMethod
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p, BclOverrides),
                 Optional: p.IsOptional || (!emitDefaults && p.HasDefaultValue),
                 DefaultValue: emitDefaults ? LowerDefaultValue(p, lowering) : null,
-                Rest: p.IsParams
+                Rest: p.IsRestParams
             ))
             .ToList();
+
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
 
         var sourceTypeParams = irMethod.TypeParameters is { Count: > 0 }

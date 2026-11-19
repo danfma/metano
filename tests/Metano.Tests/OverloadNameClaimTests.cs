@@ -819,12 +819,12 @@ public class OverloadNameClaimTests
     }
 
     /// <summary>
-    /// <c>MS0069</c>'s note: two constructions that lower to one runtime shape
-    /// (<c>List&lt;int&gt;</c> and <c>int[]</c>, both arrays) cannot be told
-    /// apart, so the first branch wins.
+    /// <c>MS0069</c> without its note: <c>List&lt;int&gt;</c> (the runtime
+    /// <c>List</c>) and <c>int[]</c> (a native array) lower to two runtime
+    /// shapes the dispatcher tells apart, so no first-branch-wins note is added.
     /// </summary>
     [Test]
-    public async Task IndistinguishableConstructions_AddTheFirstBranchWinsNote()
+    public async Task ListAndArrayConstructions_AreToldApart_AddNoNote()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -856,8 +856,7 @@ public class OverloadNameClaimTests
             .That(report!.Message)
             .IsEqualTo(
                 "'Sink' implements 'ISink<T>' more than once; calls to 'Put' keep runtime "
-                    + "dispatch (spec 013 FR-036). The constructions 'ISink<List<int>>' and "
-                    + "'ISink<int[]>' cannot be told apart at run time; the first branch wins."
+                    + "dispatch (spec 013 FR-036)."
             );
     }
 

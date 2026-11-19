@@ -134,6 +134,13 @@ public sealed partial class IrExpressionExtractor
         var receiver = Extract(receiverSyntax);
         var isWriteTarget = IsWriteTarget(elem);
 
+        if (FromEndReceiverTypeOf(receiverSyntax, isWriteTarget) is { } receiverType)
+            return new IrFromEndElementAccess(
+                receiver,
+                Extract(indexFromEnd.Operand),
+                receiverType
+            );
+
         if (!IrEvaluationTraits.IsReusableReceiver(receiver) && isWriteTarget)
             return ReportUnsupported(
                 elem,
@@ -156,6 +163,27 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// The receiver type of an <see cref="IrFromEndElementAccess"/> for
+    /// <c>x[^n]</c>, for a target whose collections are runtime classes (spec
+    /// 011 data-model § 2, B4): a stage 011c collection, read or written, or
+    /// an array (or <c>JsArray&lt;T&gt;</c>) read; <c>null</c> keeps the
+    /// <c>x[length - n]</c> lowering (strings, array writes, and every
+    /// receiver of a target that keeps native collections).
+    /// </summary>
+    private IrTypeRef? FromEndReceiverTypeOf(ExpressionSyntax receiverSyntax, bool isWriteTarget)
+    {
+        if (_context.KeepsNativeCollections)
+            return null;
+
+        if (CollectionReceiverTypeOf(receiverSyntax) is { } collection)
+            return collection;
+
+        return !isWriteTarget && MapExpressionType(receiverSyntax) is IrArrayTypeRef array
+            ? array
+            : null;
+    }
+
+    /// <summary>
     /// <c>x[a..b]</c> → <c>x.slice(a, b)</c>, with a from-end bound resolved to
     /// <c>length - n</c>. When the length is read, the receiver and any bound
     /// with side effects are let-bound in source order first, so the length is
@@ -174,6 +202,13 @@ public sealed partial class IrExpressionExtractor
 
         if (start is not { FromEnd: true } && end is not { FromEnd: true })
             return new IrSliceExpression(receiver, start?.Value, end?.Value, targetType);
+
+        if (FromEndReceiverTypeOf(receiverSyntax, isWriteTarget: false) is not null)
+            return new IrSliceExpression(receiver, start?.Value, end?.Value, targetType)
+            {
+                StartFromEnd = start is { FromEnd: true },
+                EndFromEnd = end is { FromEnd: true },
+            };
 
         return BindReceiverOnce(receiver, target =>
             BindBoundOnce(start, boundStart =>

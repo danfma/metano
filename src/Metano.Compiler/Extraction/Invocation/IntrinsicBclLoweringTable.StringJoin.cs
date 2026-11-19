@@ -141,6 +141,18 @@ public sealed partial class IntrinsicBclLoweringTable
                 : null,
         };
 
-    private bool LowersToArray(ITypeSymbol type) =>
-        _helpers.MapTypeRef(type).AsLegacyArray() is not null;
+    /// <summary>
+    /// Whether a value of <paramref name="type"/> is a native array: for a
+    /// target that keeps native collections the list-shaped collections are
+    /// too; for the others they are runtime classes, which spread into one.
+    /// </summary>
+    private bool LowersToArray(ITypeSymbol type)
+    {
+        var mapped = _helpers.MapTypeRef(type);
+
+        if (IrExtractionContext.KeepsNativeCollectionsFor(_helpers.Target))
+            return mapped.AsLegacyArray() is not null;
+
+        return (mapped is IrNullableTypeRef nullable ? nullable.Inner : mapped) is IrArrayTypeRef;
+    }
 }

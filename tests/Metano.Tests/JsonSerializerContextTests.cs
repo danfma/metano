@@ -289,7 +289,7 @@ public class JsonSerializerContextTests
     }
 
     [Test]
-    public async Task ArrayProperty_ClassifiedAsArray()
+    public async Task ListProperty_ClassifiedAsList()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -315,7 +315,8 @@ public class JsonSerializerContextTests
 
         var ts = result["test-app/json-context.ts"];
 
-        await Assert.That(ts).Contains("kind: \"array\"");
+        await Assert.That(ts).Contains("kind: \"list\"");
+        await Assert.That(ts).Contains("create: (items) => List.of(items),");
         await Assert.That(ts).Contains("kind: \"primitive\"");
     }
 

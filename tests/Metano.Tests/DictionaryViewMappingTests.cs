@@ -2,15 +2,15 @@ namespace Metano.Tests;
 
 /// <summary>
 /// Lowering of the dictionary <c>Keys</c> / <c>Values</c> views and of dictionary
-/// counts (<c>src/Metano/Runtime/Dictionaries.cs</c>). JS <c>Map.keys()</c> /
-/// <c>Map.values()</c> are one-shot iterators, so a view lowers to an array copy, while
+/// counts (<c>src/Metano/Runtime/Dictionaries.cs</c>). A view is the runtime
+/// dictionary's live <c>keys</c> / <c>values</c> collection, while
 /// <c>dict.Keys.Count</c>, <c>dict.Values.Count</c> and <c>dict.Keys.Contains(k)</c>
-/// fold into <c>dict.size</c> and <c>dict.has(k)</c> without building the copy.
+/// fold into <c>dict.count</c> and <c>dict.containsKey(k)</c>.
 /// </summary>
 public class DictionaryViewMappingTests
 {
     [Test]
-    public async Task ViewCounts_FoldIntoMapSize()
+    public async Task ViewCounts_FoldIntoTheDictionaryCount()
     {
         var output = TranspileViews(
             """
@@ -23,20 +23,24 @@ public class DictionaryViewMappingTests
 
         await Assert
             .That(output)
-            .Contains("static keys(d: Map<string, number>): number {\n    return d.size;");
-
-        await Assert
-            .That(output)
-            .Contains("static values(d: Map<string, number>): number {\n    return d.size;");
-
-        await Assert
-            .That(output)
-            .Contains("static interfaceKeys(d: Map<string, number>): number {\n    return d.size;");
+            .Contains("static keys(d: Dictionary<string, number>): number {\n    return d.count;");
 
         await Assert
             .That(output)
             .Contains(
-                "static interfaceValues(d: Map<string, number>): number {\n    return d.size;"
+                "static values(d: Dictionary<string, number>): number {\n    return d.count;"
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "static interfaceKeys(d: IDictionary<string, number>): number {\n    return d.count;"
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "static interfaceValues(d: IDictionary<string, number>): number {\n    return d.count;"
             );
 
         await Assert.That(output).DoesNotContain("d.keys");
@@ -44,10 +48,10 @@ public class DictionaryViewMappingTests
     }
 
     [Test]
-    public async Task InterfaceDictionaryCount_MapsToMapSize()
+    public async Task InterfaceDictionaryCount_MapsToTheCount()
     {
         // Roslyn binds these to the inherited ICollection<KeyValuePair<K,V>>.Count /
-        // IReadOnlyCollection<…>.Count, whose own mapping is the array `length`.
+        // IReadOnlyCollection<…>.Count, which is the runtime interfaces' `count` too.
         var output = TranspileViews(
             """
             public static int Mutable(IDictionary<string, int> d) => d.Count;
@@ -58,21 +62,27 @@ public class DictionaryViewMappingTests
 
         await Assert
             .That(output)
-            .Contains("static mutable(d: Map<string, number>): number {\n    return d.size;");
+            .Contains(
+                "static mutable(d: IDictionary<string, number>): number {\n    return d.count;"
+            );
 
         await Assert
             .That(output)
-            .Contains("static readOnly(d: Map<string, number>): number {\n    return d.size;");
+            .Contains(
+                "static readOnly(d: IReadOnlyDictionary<string, number>): number {\n    return d.count;"
+            );
 
         await Assert
             .That(output)
-            .Contains("static concrete(d: Map<string, number>): number {\n    return d.size;");
+            .Contains(
+                "static concrete(d: Dictionary<string, number>): number {\n    return d.count;"
+            );
 
         await Assert.That(output).DoesNotContain("d.length");
     }
 
     [Test]
-    public async Task NullConditionalInterfaceDictionaryCount_MapsToMapSize()
+    public async Task NullConditionalInterfaceDictionaryCount_MapsToTheCount()
     {
         // The leading `?.Count` step goes through the regular member pipeline
         // (#248), so the interface-count rebinding (#295) applies to it as well.
@@ -83,12 +93,12 @@ public class DictionaryViewMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return d?.size ?? null;");
+        await Assert.That(output).Contains("return d?.count ?? null;");
         await Assert.That(output).DoesNotContain("d?.length");
     }
 
     [Test]
-    public async Task KeysContains_FoldsIntoMapHas()
+    public async Task KeysContains_FoldsIntoContainsKey()
     {
         var output = TranspileViews(
             """
@@ -100,32 +110,32 @@ public class DictionaryViewMappingTests
         await Assert
             .That(output)
             .Contains(
-                "static concrete(d: Map<string, number>, key: string): boolean {\n    return d.has(key);"
+                "static concrete(d: Dictionary<string, number>, key: string): boolean {\n    return d.containsKey(key);"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static mutable(d: Map<string, number>, key: string): boolean {\n    return d.has(key);"
+                "static mutable(d: IDictionary<string, number>, key: string): boolean {\n    return d.containsKey(key);"
             );
     }
 
     [Test]
-    public async Task ReadOnlyKeysContains_ScansTheArrayCopyThroughLinq()
+    public async Task ReadOnlyKeysContains_ScansTheKeysThroughLinq()
     {
         // IReadOnlyDictionary<K,V>.Keys is an IEnumerable<K>, so Contains is the LINQ
-        // extension: it scans the array copy, which gives the same answer.
+        // extension: it scans the keys view, which gives the same answer.
         var output = TranspileViews(
             """
             public static bool ReadOnly(IReadOnlyDictionary<string, int> d, string key) => d.Keys.Contains(key);
             """
         );
 
-        await Assert.That(output).Contains("return linq([...d.keys()], contains(key));");
+        await Assert.That(output).Contains("return linq(d.keys, contains(key));");
     }
 
     [Test]
-    public async Task Views_LowerToArrayCopies()
+    public async Task Views_LowerToTheLiveViews()
     {
         var output = TranspileViews(
             """
@@ -140,41 +150,43 @@ public class DictionaryViewMappingTests
 
         await Assert
             .That(output)
-            .Contains("static keys(d: Map<string, number>): string[] {\n    return [...d.keys()];");
-
-        await Assert
-            .That(output)
             .Contains(
-                "static values(d: Map<string, number>): number[] {\n    return [...d.values()];"
+                "static keys(d: Dictionary<string, number>): KeyCollection<string> {\n    return d.keys;"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static mutableKeys(d: Map<string, number>): string[] {\n    return [...d.keys()];"
+                "static values(d: Dictionary<string, number>): ValueCollection<number> {\n    return d.values;"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static mutableValues(d: Map<string, number>): number[] {\n    return [...d.values()];"
+                "static mutableKeys(d: IDictionary<string, number>): ICollection<string> {\n    return d.keys;"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static readOnlyKeys(d: Map<string, number>): Iterable<string> {\n    return [...d.keys()];"
+                "static mutableValues(d: IDictionary<string, number>): ICollection<number> {\n    return d.values;"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static readOnlyValues(d: Map<string, number>): Iterable<number> {\n    return [...d.values()];"
+                "static readOnlyKeys(d: IReadOnlyDictionary<string, number>): Iterable<string> {\n    return d.keys;"
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "static readOnlyValues(d: IReadOnlyDictionary<string, number>): Iterable<number> {\n    return d.values;"
             );
     }
 
     [Test]
-    public async Task HeldViews_UseArrayMembers()
+    public async Task HeldViews_UseTheViewMembers()
     {
         var output = TranspileViews(
             """
@@ -187,12 +199,12 @@ public class DictionaryViewMappingTests
             """
         );
 
-        await Assert.That(output).Contains("const keys = [...d.keys()];");
-        await Assert.That(output).Contains("const values = [...d.values()];");
+        await Assert.That(output).Contains("const keys = d.keys;");
+        await Assert.That(output).Contains("const values = d.values;");
 
         await Assert
             .That(output)
-            .Contains("return (keys.length + values.length + (keys.includes(\"a\") ? 1 : 0)) | 0;");
+            .Contains("return (keys.count + values.count + (keys.contains(\"a\") ? 1 : 0)) | 0;");
     }
 
     [Test]
@@ -213,11 +225,11 @@ public class DictionaryViewMappingTests
             """
         );
 
-        await Assert.That(output).Contains("for (const value of [...d.values()]) {");
-        await Assert.That(output).Contains("return (total + linq([...d.values()], sum())) | 0;");
-        await Assert.That(output).Contains("return linq([...d.keys()], toArray());");
-        await Assert.That(output).Contains("return linq([...d.values()], contains(2));");
-        await Assert.That(output).Contains("return [...d.keys()].join(\",\");");
+        await Assert.That(output).Contains("for (const value of d.values) {");
+        await Assert.That(output).Contains("return (total + linq(d.values, sum())) | 0;");
+        await Assert.That(output).Contains("return linq(d.keys, toList());");
+        await Assert.That(output).Contains("return linq(d.values, contains(2));");
+        await Assert.That(output).Contains("return [...d.keys].join(\",\");");
     }
 
     [Test]
@@ -232,11 +244,9 @@ public class DictionaryViewMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return (primary ?? backup).size;");
+        await Assert.That(output).Contains("return (primary ?? backup).count;");
 
-        await Assert
-            .That(output)
-            .Contains("return linq([...(primary ?? backup).keys()], toArray());");
+        await Assert.That(output).Contains("return linq((primary ?? backup).keys, toArray());");
     }
 
     [Test]
@@ -249,8 +259,8 @@ public class DictionaryViewMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return bag.size;");
-        await Assert.That(output).Contains("return bag.has(\"a\");");
+        await Assert.That(output).Contains("return bag.count;");
+        await Assert.That(output).Contains("return bag.containsKey(\"a\");");
     }
 
     [Test]
@@ -276,10 +286,10 @@ public class DictionaryViewMappingTests
 
         var output = result["index.ts"];
 
-        await Assert.That(output).Contains("return other.keys.length;");
-        await Assert.That(output).Contains("return other.keys.includes(key);");
-        await Assert.That(output).DoesNotContain("other.size");
-        await Assert.That(output).DoesNotContain("other.has(");
+        await Assert.That(output).Contains("return other.keys.count;");
+        await Assert.That(output).Contains("return other.keys.contains(key);");
+        await Assert.That(output).DoesNotContain("other.count");
+        await Assert.That(output).DoesNotContain("other.containsKey(");
     }
 
     private static string TranspileViews(string members)

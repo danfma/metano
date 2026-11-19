@@ -1,16 +1,17 @@
-import { tryGetValue, tryParseInt32 } from "metano-runtime";
+import { Dictionary, type IReadOnlyDictionary } from "metano-runtime/system/collections";
+import { tryParseInt32 } from "metano-runtime";
 import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-found-exception";
 
 export class Glossary {
-  private readonly _words: Map<string, string> = new Map<string, string>();
-  private readonly _counts: Map<string, number> = new Map<string, number>();
-  private readonly _notes: Map<string, string | null> = new Map<string, string | null>();
+  private readonly _words: Dictionary<string, string> = new Dictionary<string, string>();
+  private readonly _counts: Dictionary<string, number> = new Dictionary<string, number>();
+  private readonly _notes: IReadOnlyDictionary<string, string | null> = new Dictionary<string, string | null>();
   private _last: number = 0;
 
   constructor() { }
 
   translate(key: string): string {
-    const [$found0, text] = tryGetValue(this._words, key, null);
+    const [$found0, text] = this._words.tryGetValue(key, null);
 
     return $found0 ? text : (() => {
       throw new KeyNotFoundException(key);
@@ -18,13 +19,13 @@ export class Glossary {
   }
 
   countOrZero(key: string): number {
-    const [, count] = tryGetValue(this._counts, key, 0);
+    const [, count] = this._counts.tryGetValue(key, 0);
 
     return count;
   }
 
   increment(key: string): number {
-    const [$found0, count] = tryGetValue(this._counts, key, 0);
+    const [$found0, count] = this._counts.tryGetValue(key, 0);
 
     if (!$found0) {
       return -1;
@@ -34,33 +35,33 @@ export class Glossary {
   }
 
   describe(key: string): string {
-    const [found, text] = tryGetValue(this._words, key, null);
+    const [found, text] = this._words.tryGetValue(key, null);
 
     return found ? text : "?";
   }
 
   hasNote(key: string): boolean {
-    const [$found0] = tryGetValue(this._notes, key, null);
+    const [$found0] = this._notes.tryGetValue(key, null);
 
     return $found0;
   }
 
   note(key: string): string | null {
     let note: string | null;
-    const [$found0, $out1] = tryGetValue(this._notes, key, null);
+    const [$found0, $out1] = this._notes.tryGetValue(key, null);
     note = $out1;
 
     return $found0 ? note : null;
   }
 
   remember(key: string): void {
-    const [, $out0] = tryGetValue(this._counts, key, 0);
+    const [, $out0] = this._counts.tryGetValue(key, 0);
     this._last = $out0;
   }
 
   counter(): (arg: string) => number {
     return (key: string) => {
-      const [$found0, c] = tryGetValue(this._counts, key, 0);
+      const [$found0, c] = this._counts.tryGetValue(key, 0);
 
       return $found0 ? c : 0;
     };
@@ -68,7 +69,7 @@ export class Glossary {
 
   shout(check: boolean, key: string): string {
     if (check) {
-      const [$found0, w] = tryGetValue(this._words, key, null);
+      const [$found0, w] = this._words.tryGetValue(key, null);
 
       if ($found0 && w.length > 3) {
         return w.toUpperCase();

@@ -1,3 +1,4 @@
+using Metano.Interop;
 using Metano.TypeScript.SolidJs;
 using Metano.TypeScript.SolidJs.Web;
 
@@ -17,7 +18,7 @@ namespace SampleSolidUi.Ui;
 /// </summary>
 public sealed record CounterList : JsxComponent
 {
-    public IReadOnlyList<int> Seeds { get; init; } = [];
+    public JsArray<int> Seeds { get; init; } = [];
 
     public override JsxElement Render() =>
         new Html.Div

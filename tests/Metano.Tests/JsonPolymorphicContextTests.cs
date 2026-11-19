@@ -144,12 +144,12 @@ public class JsonPolymorphicContextTests
             """
         );
 
-        await Assert.That(ts).Contains("get listClip(): ValueSpec<Clip[] | null>");
+        await Assert.That(ts).Contains("get listClip(): ValueSpec<List<Clip> | null>");
         await Assert.That(ts).Contains("get clipArray(): ValueSpec<Clip[] | null>");
 
         await Assert
             .That(ts)
-            .Contains("get dictionaryStringClip(): ValueSpec<Map<string, Clip> | null>");
+            .Contains("get dictionaryStringClip(): ValueSpec<Dictionary<string, Clip> | null>");
 
         await Assert.That(ts.Split("spec: () => this.clip,").Length - 1).IsEqualTo(3);
         await Assert.That(ts).Contains("spec: () => this.imageClip,");

@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { arrayLength } from "metano-runtime";
 import { averageInt64, averageNullableInt64, count, linq, maxInt64Of, maxNullableInt64Of, minInt64Of, minUInt64Of, sum, sumInt64 } from "metano-runtime/system/linq";
 import type { Item } from "./item";
@@ -47,27 +48,27 @@ export class Collections {
     return new Array(arrayLength(n)).fill(null);
   }
 
-  count(xs: number[]): bigint {
+  count(xs: List<number>): bigint {
     return BigInt.asIntN(64, BigInt(linq(xs, count())) + BigInt(linq(xs, count((x: number) => x > 1))));
   }
 
-  intCount(xs: number[]): number {
+  intCount(xs: List<number>): number {
     return linq(xs, count());
   }
 
-  sum(ids: bigint[], items: Item[]): bigint {
+  sum(ids: bigint[], items: List<Item>): bigint {
     return BigInt.asIntN(64, linq(ids, sumInt64()) + linq(items, sumInt64((x: Item) => x.size)));
   }
 
-  nullableSum(items: Item[]): bigint | null {
+  nullableSum(items: List<Item>): bigint | null {
     return linq(items, sumInt64((x: Item) => x.optional));
   }
 
-  average(ids: bigint[], optional: (bigint | null)[], items: Item[]): number {
+  average(ids: bigint[], optional: List<bigint | null>, items: List<Item>): number {
     return linq(ids, averageInt64()) + (linq(optional, averageNullableInt64()) ?? 0) + linq(items, averageInt64((x: Item) => x.size));
   }
 
-  extremes(ids: bigint[], items: Item[], flags: bigint[]): bigint {
+  extremes(ids: bigint[], items: List<Item>, flags: bigint[]): bigint {
     return BigInt.asIntN(64, BigInt.asIntN(64, BigInt.asIntN(64, linq(ids, maxInt64Of()) + linq(items, minInt64Of((x: Item) => x.size))) + (linq(items, maxNullableInt64Of((x: Item) => x.optional)) ?? 0n)) + BigInt.asIntN(64, linq(flags, minUInt64Of())));
   }
 

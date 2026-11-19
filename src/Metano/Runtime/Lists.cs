@@ -1,196 +1,138 @@
-// Declarative BCL → JavaScript mappings for the System.Collections.Generic List family.
-// Read at compile time by the Metano transpiler via DeclarativeMappingRegistry.
+// Declarative BCL → JavaScript mappings for the System.Collections.Generic List family
+// (spec 011 FR-007, stage 011c). Read at compile time by the Metano transpiler via
+// DeclarativeMappingRegistry.
+//
+// A `List<T>` is the `metano-runtime` `List` class (contracts/runtime-collections.md), so
+// every instance member is a plain rename to the camelCase member of the same name: no
+// template names `$this` twice (FR-009). Constructors map to the class's factories with
+// full arity, so no argument is dropped. The interfaces map to the members of the runtime
+// interfaces of the same name; `IReadOnlyList<T>` / `IReadOnlyCollection<T>` declare only
+// `Count` (and the indexer), their `Contains` is the LINQ extension.
 //
 // Each interface variant is declared explicitly because Roslyn resolves a method call
 // against the symbol's most-specific containing type, and the registry compares against
-// that type's OriginalDefinition. So `someList.Add(x)` where someList: List<int> binds
-// to `List<T>.Add`, while `someCollection.Add(x)` where someCollection: ICollection<int>
-// binds to `ICollection<T>.Add` — both must be declared if both call shapes need to lower.
+// that type's OriginalDefinition. The C# member name is captured via `nameof` so a typo
+// surfaces at compile time.
 //
-// The C# member name is captured via `nameof(Type.Member)` rather than a string literal
-// so typos surface at compile time. For generic types we need a closed instantiation
-// (e.g., `nameof(List<int>.Add)`); the int is arbitrary because nameof only captures the
-// simple name.
-//
-// ImmutableList<T> / ImmutableArray<T> are intentionally NOT mapped here. The previous
-// hardcoded BclMapper mapped Immutable.Add → push, which is silently broken because
-// immutable Add returns a new collection instead of mutating in place. Adding declarative
-// support for the immutable family requires a different lowering strategy and is tracked
-// as a follow-up.
+// ImmutableList<T> / ImmutableArray<T> are stage 011h's.
 
 using Metano.Annotations;
 
-// ─── Count ──────────────────────────────────────────────────
-// All five collection interfaces expose Count. JS uses .length on arrays, which is what
-// the runtime representation of every transpiled collection ultimately is; Dart's List
-// exposes .length as well.
-
+// ─── Count ───────────────────────────────────────────────────────
 [assembly: MapProperty(
     typeof(List<>),
     nameof(List<int>.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IList<>),
     nameof(IList<int>.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(ICollection<>),
     nameof(ICollection<int>.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyList<>),
     nameof(IReadOnlyList<int>.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyCollection<>),
     nameof(IReadOnlyCollection<int>.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 
-// ─── Add ────────────────────────────────────────────────────
-// Add exists on the mutable interfaces. IReadOnlyList<T> and IReadOnlyCollection<T> do
-// not declare Add, so we don't map them — calls through those types fall through to
-// LINQ extensions or simply fail to bind in C# in the first place.
+// ─── ICollection<T>.IsReadOnly ───────────────────────────────────
+[assembly: MapProperty(
+    typeof(ICollection<>),
+    nameof(ICollection<int>.IsReadOnly),
+    JsProperty = "isReadOnly"
+)]
 
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Add), JsMethod = "push")]
-[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Add), JsMethod = "push")]
-[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.Add), JsMethod = "push")]
+// ─── Add / AddRange / Insert / InsertRange ───────────────────────
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Add), JsMethod = "add")]
+[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Add), JsMethod = "add")]
+[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.Add), JsMethod = "add")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.AddRange), JsMethod = "addRange")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Insert), JsMethod = "insert")]
+[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Insert), JsMethod = "insert")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.InsertRange), JsMethod = "insertRange")]
 
-// list.AddRange(other) → list.push(...other)
-// JS has no addRange; we splat the source via the spread operator. Demonstrates the
-// JsTemplate form (no hardcoded equivalent existed in BclMapper before declarative
-// mappings landed).
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.AddRange), JsTemplate = "$this.push(...$0)")]
+// ─── Remove / RemoveAt / RemoveRange / RemoveAll / Clear ─────────
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Remove), JsMethod = "remove")]
+[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.Remove), JsMethod = "remove")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.RemoveAt), JsMethod = "removeAt")]
+[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.RemoveAt), JsMethod = "removeAt")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.RemoveRange), JsMethod = "removeRange")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.RemoveAll), JsMethod = "removeAll")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Clear), JsMethod = "clear")]
+[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Clear), JsMethod = "clear")]
+[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.Clear), JsMethod = "clear")]
 
-// ─── Contains / IndexOf ─────────────────────────────────────
-// Contains is on ICollection<T> (and inherited by IList<T>, List<T>). The read-only
-// interfaces inherit Contains via the System.Linq Enumerable extension instead, which
-// the LINQ branch of BclMapper handles separately.
-
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Contains), JsMethod = "includes")]
-[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Contains), JsMethod = "includes")]
+// ─── Searches (elementEquals in the runtime) ─────────────────────
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Contains), JsMethod = "contains")]
+[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Contains), JsMethod = "contains")]
 [assembly: MapMethod(
     typeof(ICollection<>),
     nameof(ICollection<int>.Contains),
-    JsMethod = "includes"
+    JsMethod = "contains"
 )]
-
-// IndexOf is on IList<T> (and inherited by List<T>). IReadOnlyList<T> does NOT declare
-// IndexOf — calls through that type go through the LINQ Enumerable.IndexOf extension
-// instead, which the LINQ branch of BclMapper handles separately. (The previous
-// hardcoded mapping had a dead `typeof(IReadOnlyList<>), "IndexOf"` entry caught by
-// the nameof() validation.)
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.IndexOf), JsMethod = "indexOf")]
 [assembly: MapMethod(typeof(IList<>), nameof(IList<int>.IndexOf), JsMethod = "indexOf")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.LastIndexOf), JsMethod = "lastIndexOf")]
 
-// ─── Insert ─────────────────────────────────────────────────
-// list.Insert(index, item) → list.splice(index, 0, item)
-// Note: the previous hardcoded mapping was `"Insert" => "splice"` which dropped the
-// deleteCount argument and produced a buggy `list.splice(index, item)` call. The
-// template form here is correct.
-
-[assembly: MapMethod(
-    typeof(List<>),
-    nameof(List<int>.Insert),
-    JsTemplate = "$this.splice($0, 0, $1)"
-)]
-[assembly: MapMethod(
-    typeof(IList<>),
-    nameof(IList<int>.Insert),
-    JsTemplate = "$this.splice($0, 0, $1)"
-)]
-
-// ─── Clear ──────────────────────────────────────────────────
-// list.Clear() → list.length = 0
-// JS has no Array.clear(); the idiomatic in-place clear is the length-assignment trick.
-
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Clear), JsTemplate = "$this.length = 0")]
-[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Clear), JsTemplate = "$this.length = 0")]
-[assembly: MapMethod(
-    typeof(ICollection<>),
-    nameof(ICollection<int>.Clear),
-    JsTemplate = "$this.length = 0"
-)]
-
-// ─── List<T>-only methods ───────────────────────────────────
-// Reverse, Sort, ToArray are concrete methods on List<T>; the interfaces don't declare
-// them. JS sort/reverse mutate in place and return the same array (matching List<T>
-// semantics), and slice() with no args returns a shallow copy (matching ToArray()).
-
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Reverse), JsMethod = "reverse")]
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Sort), JsMethod = "sort")]
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.ToArray), JsMethod = "slice")]
-
-// ─── Remove ─────────────────────────────────────────────────
-// list.Remove(item) → listRemove(list, item) — runtime helper from
-// metano-runtime that mirrors the C# bool return contract. The helper lives in
-// JS code rather than as an inline IIFE template because the body is a multi-step
-// algorithm (indexOf + branch + splice) and reads better with a name attached.
-
-[assembly: MapMethod(
-    typeof(List<>),
-    nameof(List<int>.Remove),
-    JsTemplate = "listRemove($this, $0)",
-    RuntimeImports = "listRemove"
-)]
-
-// list.RemoveAt(index) → list.splice(index, 1)
-// JS array splice with deleteCount=1 removes one element at the position. The return
-// value is dropped (C# RemoveAt returns void).
-
-[assembly: MapMethod(
-    typeof(List<>),
-    nameof(List<int>.RemoveAt),
-    JsTemplate = "$this.splice($0, 1)"
-)]
-[assembly: MapMethod(
-    typeof(IList<>),
-    nameof(IList<int>.RemoveAt),
-    JsTemplate = "$this.splice($0, 1)"
-)]
-
-// ─── FindIndex / Find ───────────────────────────────────────
-// list.FindIndex(predicate) → array.findIndex(predicate)
-// list.Find(predicate) → array.find(predicate) ?? default(T)  (C# returns default(T)
-// on a miss; JS Array.find returns undefined, which is coalesced to the default the
-// compiler passes as `$1`: null for reference and nullable elements, the type's zero
-// for the other value types.)
-
+// Find / FindLast take the value C# returns on a miss, default(T), which the
+// extractor appends (IntrinsicBclLoweringTable.ListFind).
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Find), JsMethod = "find")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.FindLast), JsMethod = "findLast")]
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.FindIndex), JsMethod = "findIndex")]
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Find), JsTemplate = "($this.find($0) ?? $1)")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.FindLastIndex), JsMethod = "findLastIndex")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.FindAll), JsMethod = "findAll")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Exists), JsMethod = "exists")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.TrueForAll), JsMethod = "trueForAll")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.ForEach), JsMethod = "forEach")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.ConvertAll), JsMethod = "convertAll")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.BinarySearch), JsMethod = "binarySearch")]
 
-// ─── Constructors ───────────────────────────────────────────
-// new List<T>() / new List<T>(capacity) → [] as Array<T>: the capacity is a
-// preallocation hint with no observable effect, so it is dropped (a side-effecting
-// capacity argument is still evaluated); `new Array(n)` would create n holes. The
-// assertion keeps the element type on an unannotated local (`var xs = new List<T>()`),
-// where a bare `[]` would be an evolving `any[]`.
-// new List<T>(collection) → [...collection]: a shallow copy, like the C# overload.
+// ─── In-place reordering, copies and ranges ──────────────────────
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Sort), JsMethod = "sort")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Reverse), JsMethod = "reverse")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.GetRange), JsMethod = "getRange")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.ToArray), JsMethod = "toArray")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.CopyTo), JsMethod = "copyTo")]
+[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.CopyTo), JsMethod = "copyTo")]
+
+// ─── Constructors ────────────────────────────────────────────────
+// new List<T>() → new List<T>(); new List<T>(capacity) → List.withCapacity<T>(capacity)
+// (the capacity is evaluated once and validated, FR-001); new List<T>(source) →
+// List.from(source), a copy that throws ArgumentNullException for null, as .NET.
 
 [assembly: MapMethod(
     typeof(List<>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "[] as Array<$T0>",
+    JsTemplate = "new List<$T0>()",
+    RuntimeImports = "List",
     WhenParameterTypes = new Type[0]
 )]
 [assembly: MapMethod(
     typeof(List<>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "[] as Array<$T0>",
+    JsTemplate = "List.withCapacity<$T0>($0)",
+    RuntimeImports = "List",
     WhenParameterTypes = new[] { typeof(int) }
 )]
 [assembly: MapMethod(
     typeof(List<>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "[...$0]",
+    JsTemplate = "List.from($0)",
+    RuntimeImports = "List",
     WhenParameterTypes = new[] { typeof(IEnumerable<>) }
 )]

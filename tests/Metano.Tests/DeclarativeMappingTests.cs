@@ -9,17 +9,16 @@ namespace Metano.Tests;
 ///
 /// The mappings under test:
 /// <list type="bullet">
-///   <item><c>List&lt;T&gt;.Count → length</c> — also covered by the legacy hardcoded path</item>
-///   <item><c>List&lt;T&gt;.Add(x) → list.push(x)</c> — also covered by the legacy hardcoded path</item>
-///   <item><c>List&lt;T&gt;.AddRange(other) → list.push(...other)</c> — uses the JsTemplate
-///   form and has no hardcoded equivalent, so a passing test here proves the declarative
-///   path is actually being executed end-to-end</item>
+///   <item><c>List&lt;T&gt;.Count → count</c></item>
+///   <item><c>List&lt;T&gt;.Add(x) → list.add(x)</c></item>
+///   <item><c>List&lt;T&gt;.AddRange(other) → list.addRange(other)</c></item>
+///   <item><c>List&lt;T&gt;.Remove(x) → list.remove(x)</c></item>
 /// </list>
 /// </summary>
 public class DeclarativeMappingTests
 {
     [Test]
-    public async Task DeclarativeAddRange_LowersToSpreadPush()
+    public async Task DeclarativeAddRange_LowersToAddRange()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -35,13 +34,11 @@ public class DeclarativeMappingTests
         );
 
         var output = result["todo-list.ts"];
-        // The JsTemplate is "$this.push(...$0)" — $this resolves to the receiver
-        // (this.items) and $0 resolves to the argument identifier (other).
-        await Assert.That(output).Contains("this.items.push(...other)");
+        await Assert.That(output).Contains("this.items.addRange(other)");
     }
 
     [Test]
-    public async Task DeclarativeListCount_LowersToLength()
+    public async Task DeclarativeListCount_LowersToCount()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -57,11 +54,11 @@ public class DeclarativeMappingTests
         );
 
         var output = result["todo-list.ts"];
-        await Assert.That(output).Contains("this.items.length");
+        await Assert.That(output).Contains("this.items.count");
     }
 
     [Test]
-    public async Task DeclarativeListAdd_LowersToPush()
+    public async Task DeclarativeListAdd_LowersToAdd()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -77,7 +74,7 @@ public class DeclarativeMappingTests
         );
 
         var output = result["todo-list.ts"];
-        await Assert.That(output).Contains("this.items.push(value)");
+        await Assert.That(output).Contains("this.items.add(value)");
     }
 
     [Test]
@@ -125,12 +122,10 @@ public class DeclarativeMappingTests
     }
 
     [Test]
-    public async Task DeclarativeListRemove_LowersToRuntimeHelper()
+    public async Task DeclarativeListRemove_LowersToTheRuntimeListMember()
     {
-        // List<T>.Remove returns a bool. The declarative template lowers to a call to
-        // the `listRemove` runtime helper from metano-runtime, which mirrors the
-        // bool-returning C# contract. The helper identifier is declared via
-        // RuntimeImports so the import collector emits the import.
+        // List<T>.Remove returns a bool, which the runtime List's `remove` member
+        // mirrors, so the call is a plain member rename.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
@@ -145,9 +140,8 @@ public class DeclarativeMappingTests
         );
 
         var output = result["todo-list.ts"];
-        await Assert.That(output).Contains("listRemove(this.items, value)");
-        await Assert.That(output).Contains("metano-runtime");
-        await Assert.That(output).Contains("listRemove");
+        await Assert.That(output).Contains("return this.items.remove(value);");
+        await Assert.That(output).DoesNotContain("listRemove");
     }
 
     [Test]

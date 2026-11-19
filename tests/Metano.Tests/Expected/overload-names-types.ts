@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { isInt32, isInt64, isString, isUInt32, isUInt64 } from "metano-runtime";
 import { Point } from "./point";
 
@@ -114,7 +115,7 @@ export class Names {
     throw new Error("No matching overload for w");
   }
 
-  lListOfInt32(xs: number[]): number {
+  lListOfInt32(xs: List<number>): number {
     return 1;
   }
 
@@ -122,11 +123,11 @@ export class Names {
     return 2;
   }
 
-  l(xs: number[]): number;
+  l(xs: List<number>): number;
   l(xs: number[]): number;
   l(...args: unknown[]): number {
-    if (args.length === 1 && Array.isArray(args[0])) {
-      return this.lListOfInt32(args[0] as number[]);
+    if (args.length === 1 && args[0] instanceof List) {
+      return this.lListOfInt32(args[0] as List<number>);
     }
 
     if (args.length === 1 && Array.isArray(args[0])) {

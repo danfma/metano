@@ -222,7 +222,16 @@ public static class IrRuntimeRequirementScanner
                 ScanTypeRef(n.Inner, acc);
                 break;
             case IrCollectionTypeRef collection:
-                ScanTypeRef(collection.LegacyForm, acc);
+                acc.Add(
+                    new IrRuntimeRequirement(
+                        collection.Kind.ToString(),
+                        IrRuntimeCategory.Collection
+                    )
+                );
+
+                foreach (var argument in collection.TypeArguments)
+                    ScanTypeRef(argument, acc);
+
                 break;
             case IrArrayTypeRef a:
                 ScanTypeRef(a.ElementType, acc);

@@ -1,4 +1,4 @@
-import { HashSet } from "metano-runtime";
+import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Boxes } from "./boxes";
 import { EntityId } from "./entity-id";
@@ -65,7 +65,7 @@ export class JsonContext extends SerializerContext {
   get boxes(): TypeSpec<Boxes> {
     return this._boxes ??= this.createSpec({
       type: Boxes,
-      factory: (p: Record<string, unknown>) => new Boxes(p.values as bigint[], p.more as bigint[], p.byName as Map<bigint, string>, p.counts as Map<string, bigint>, p.set as HashSet<bigint>, p.id as EntityId, p.byToken as Map<EntityId, string>, p.token as TokenId),
+      factory: (p: Record<string, unknown>) => new Boxes(p.values as bigint[], p.more as List<bigint>, p.byName as Dictionary<bigint, string>, p.counts as Dictionary<string, bigint>, p.set as HashSet<bigint>, p.id as EntityId, p.byToken as Dictionary<EntityId, string>, p.token as TokenId),
       properties: [
         {
           ts: "values",
@@ -79,26 +79,29 @@ export class JsonContext extends SerializerContext {
           ts: "more",
           json: "More",
           type: {
-            kind: "array",
+            kind: "list",
             element: { kind: "int64", numberType: "System.UInt64" },
+            create: (items) => List.of(items),
           },
         },
         {
           ts: "byName",
           json: "ByName",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "int64", numberType: "System.Int64" },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
           ts: "counts",
           json: "Counts",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "primitive" },
             value: { kind: "int64", numberType: "System.UInt64" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
@@ -107,6 +110,7 @@ export class JsonContext extends SerializerContext {
           type: {
             kind: "hashSet",
             element: { kind: "int64", numberType: "System.Int64" },
+            create: (items) => HashSet.from(items),
           },
         },
         {
@@ -123,7 +127,7 @@ export class JsonContext extends SerializerContext {
           ts: "byToken",
           json: "ByToken",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: {
               kind: "int64",
               numberType: "System.Int64",
@@ -131,6 +135,7 @@ export class JsonContext extends SerializerContext {
               create: EntityId.create,
             },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {

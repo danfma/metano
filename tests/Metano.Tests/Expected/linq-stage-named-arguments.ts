@@ -1,4 +1,5 @@
-import { aggregate, firstOrDefault, lastOrDefault, linq, select, singleOrDefault, toArray, toMap, where, zip } from "metano-runtime/system/linq";
+import { Dictionary, List } from "metano-runtime/system/collections";
+import { aggregate, firstOrDefault, lastOrDefault, linq, select, singleOrDefault, toDictionary, toList, where, zip } from "metano-runtime/system/linq";
 
 export class Stages {
   private _count: number = 0;
@@ -31,80 +32,75 @@ export class Stages {
     return (x: number) => Math.imul(x, 10);
   }
 
-  others(): number[] {
-    return ((receiver$temp$0) => {
-      receiver$temp$0.push(10);
-      receiver$temp$0.push(20);
-
-      return receiver$temp$0;
-    })([] as Array<number>);
+  others(): List<number> {
+    return List.of([10, 20]);
   }
 
   nextAsync(): Promise<number> {
     return Promise.resolve(this.next());
   }
 
-  load(): Promise<number[]> {
+  load(): Promise<List<number>> {
     return Promise.resolve(this.others());
   }
 
-  aggregate(xs: number[]): number {
+  aggregate(xs: List<number>): number {
     return linq(xs, aggregate(0, (a: number, x: number) => (a + x) | 0));
   }
 
-  toDictionary(xs: number[]): Map<number, number> {
-    return linq(xs, toMap((x: number) => x, (x: number) => Math.imul(x, 10)));
+  toDictionary(xs: List<number>): Dictionary<number, number> {
+    return linq(xs, toDictionary((x: number) => x, (x: number) => Math.imul(x, 10)));
   }
 
-  zip(xs: number[], ys: number[]): number[] {
-    return linq(xs, zip(ys, (a: number, b: number) => (a + b) | 0), toArray());
+  zip(xs: List<number>, ys: List<number>): List<number> {
+    return linq(xs, zip(ys, (a: number, b: number) => (a + b) | 0), toList());
   }
 
-  firstOrDefault(xs: number[]): number {
+  firstOrDefault(xs: List<number>): number {
     return linq(xs, firstOrDefault((x: number) => x > 1, 42));
   }
 
-  oneEffect(xs: number[]): number {
+  oneEffect(xs: List<number>): number {
     return linq(xs, aggregate(this.next(), (a: number, x: number) => (a + x) | 0));
   }
 
-  inOrder(xs: number[]): number {
+  inOrder(xs: List<number>): number {
     return linq(xs, aggregate(this.next(), this.adder()));
   }
 
-  positionalThenNamed(xs: number[]): Map<number, number> {
-    return linq(xs, toMap((x: number) => x, this.picker()));
+  positionalThenNamed(xs: List<number>): Dictionary<number, number> {
+    return linq(xs, toDictionary((x: number) => x, this.picker()));
   }
 
-  twoEffects(xs: number[]): number {
+  twoEffects(xs: List<number>): number {
     return linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(this.adder(), this.next()));
   }
 
-  computedReads(xs: number[]): number {
+  computedReads(xs: List<number>): number {
     return linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(this.fn, this.seed));
   }
 
-  midPipe(xs: number[]): number[] {
-    return linq(xs, where((x: number) => x > 0), (($arg1, $arg0) => zip($arg0, $arg1))(this.adder(), this.others()), select((x: number) => (x + 1) | 0), toArray());
+  midPipe(xs: List<number>): List<number> {
+    return linq(xs, where((x: number) => x > 0), (($arg1, $arg0) => zip($arg0, $arg1))(this.adder(), this.others()), select((x: number) => (x + 1) | 0), toList());
   }
 
-  first(xs: number[]): number {
+  first(xs: List<number>): number {
     return linq(xs, (($arg1, $arg0) => firstOrDefault($arg0, $arg1))(this.next(), this.matcher()));
   }
 
-  last(xs: number[]): number {
+  last(xs: List<number>): number {
     return linq(xs, (($arg1, $arg0) => lastOrDefault($arg0, $arg1))(this.next(), this.matcher()));
   }
 
-  single(xs: number[]): number {
+  single(xs: List<number>): number {
     return linq(xs, (($arg1, $arg0) => singleOrDefault($arg0, $arg1))(this.next(), this.matcher()));
   }
 
-  defaultOnly(xs: number[]): number {
+  defaultOnly(xs: List<number>): number {
     return linq(xs, firstOrDefault(undefined, this.next()));
   }
 
-  nullConditional(xs: number[] | null): number | null {
+  nullConditional(xs: List<number> | null): number | null {
     return xs == null ? null : linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(this.adder(), this.next()));
   }
 
@@ -112,7 +108,7 @@ export class Stages {
     return linq(await this.load(), (($arg1, $arg0) => aggregate($arg0, $arg1))(this.adder(), await this.nextAsync()));
   }
 
-  queryableZip(q: Iterable<number>): number[] {
+  queryableZip(q: Iterable<number>): List<number> {
     return linq(q, zip(this.others(), (a: number, b: number) => (a + b) | 0, {
       tree: {
         kind: "binary",
@@ -128,7 +124,7 @@ export class Stages {
           type: { name: "number" },
         },
       },
-    }), toArray());
+    }), toList());
   }
 
   queryableFirst(q: Iterable<number>): number {
@@ -150,8 +146,8 @@ export class Stages {
     }));
   }
 
-  queryableToDictionary(q: Iterable<number>): Map<number, number> {
-    return linq(q, toMap((x: number) => x, (x: number) => Math.imul(x, 10), {
+  queryableToDictionary(q: Iterable<number>): Dictionary<number, number> {
+    return linq(q, toDictionary((x: number) => x, (x: number) => Math.imul(x, 10), {
       tree: {
         kind: "param",
         name: "x",

@@ -234,6 +234,11 @@ public sealed partial class IrExpressionExtractor
         if (_conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax)
             return new IrConditionalReceiver();
 
+        if (ProbedElementOf(expression) is { } probedElement)
+            return probedElement;
+
+        ReportNestedArrayAsListInterface(expression);
+
         // A 64-bit constant folds to one literal, and a constant inside
         // checked / unchecked takes Roslyn's wrapped value; see
         // IrExpressionExtractor.NumericConversions.cs and .CheckedContext.cs.
@@ -247,7 +252,13 @@ public sealed partial class IrExpressionExtractor
             ?? ExtractUnbound(expression);
 
         return WithImplicitUserConversion(expression, value)
-            ?? WithBoxingConversion(expression, WithImplicitNumericConversion(expression, value));
+            ?? WithBoxingConversion(
+                expression,
+                WithImplicitNumericConversion(
+                    expression,
+                    WithArrayToCollectionConversion(expression, value)
+                )
+            );
     }
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
@@ -548,9 +559,9 @@ public sealed partial class IrExpressionExtractor
         // assignment also benefits from the `$set` lowering; the
         // surrounding null check stays exactly as the legacy form.
         var memberWrite = TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
-            ?? TryExtractNullableBooleanCompoundAssignment(assign, rebound)
-            ?? TryExtractLiftedCompoundAssignment(assign, rebound)
-            ?? BuildCompoundAssignment(rebound, assign);
+            ?? TryExtractConditionalElementUpdate(rebound, assign, CompoundStoreOf(assign))
+            ?? CompoundStoreOf(assign)(rebound);
+
         return new IrBinaryExpression(
             new IrBinaryExpression(
                 receiver,
@@ -561,6 +572,16 @@ public sealed partial class IrExpressionExtractor
             memberWrite
         );
     }
+
+    /// <summary>
+    /// The inner write of a null-conditional compound assignment over its
+    /// rebound target.
+    /// </summary>
+    private Func<IrExpression, IrExpression> CompoundStoreOf(AssignmentExpressionSyntax assign) =>
+        target =>
+            TryExtractNullableBooleanCompoundAssignment(assign, target)
+            ?? TryExtractLiftedCompoundAssignment(assign, target)
+            ?? BuildCompoundAssignment(target, assign);
 
     /// <summary>
     /// Mirror of <see cref="BuildExtensionPropertyAssignment"/> for the
@@ -701,7 +722,7 @@ public sealed partial class IrExpressionExtractor
                 new IrElementAccess(
                     inner,
                     Extract(ea.ArgumentList.Arguments[0].Expression),
-                    MapExpressionType(ea.Expression),
+                    ElementReceiverTypeOf(ea.Expression),
                     ArrayIndexKind(ea.Expression, ea.ArgumentList)
                 ),
             _ => null,
@@ -2092,6 +2113,9 @@ public sealed partial class IrExpressionExtractor
         if (TryReportTupleElementWrite(assign, assign.Left) is { } unsupportedWrite)
             return unsupportedWrite;
 
+        if (TryExtractCollectionElementUpdate(assign) is { } elementUpdate)
+            return elementUpdate;
+
         // Extension property assignment (`receiver.Prop = value` or any
         // compound form) — rewrite to a helper call against the property's
         // `$set` companion. Compound operators (`+=`, `++` via this path is
@@ -2218,6 +2242,9 @@ public sealed partial class IrExpressionExtractor
                     _semantic.GetOperation(node),
                     BuildUnary(op, Extract(operand), operand)
                 );
+
+        if (TryExtractCollectionElementIncrement(node, operand, isPrefix) is { } elementUpdate)
+            return elementUpdate;
 
         // `receiver.Prop++` against an extension property rewrites to a
         // let-bound setter call so the receiver evaluates exactly once.
@@ -2999,9 +3026,13 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        var evaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), args);
+
+        (args, evaluationOrder) = WithOmittedParamsCollection(inv, args, evaluationOrder);
+
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
         {
-            EvaluationOrder = ReportedSourceOrderOf(_semantic.GetOperation(inv), args),
+            EvaluationOrder = evaluationOrder,
             InvokesDelegate = symbol is { MethodKind: MethodKind.DelegateInvoke },
             HasExplicitTypeArguments = WritesTypeArguments(inv),
         };
@@ -3706,7 +3737,7 @@ public sealed partial class IrExpressionExtractor
         return new IrElementAccess(
             target,
             index,
-            MapExpressionType(receiverSyntax),
+            ElementReceiverTypeOf(receiverSyntax),
             ArrayIndexKind(receiverSyntax, arguments)
         );
     }
@@ -4898,6 +4929,10 @@ public sealed partial class IrExpressionExtractor
         var lastParam = symbol.Parameters[^1];
         if (!lastParam.IsParams)
             return;
+
+        if (TryConstructParamsCollection(args, symbol, syntaxArgs))
+            return;
+
         if (syntaxArgs.Count != symbol.Parameters.Length)
             return;
         var lastSyntax = syntaxArgs[^1];
@@ -5498,6 +5533,9 @@ public sealed partial class IrExpressionExtractor
 
         if (TryExtractUserCast(cast, inner, sourceType, targetType) is { } user)
             return user;
+
+        if (TryExtractListInterfaceCast(cast, inner, sourceType, targetType) is { } listInterface)
+            return listInterface;
 
         var unwrapsNullable = IsNullableUnwrapCast(cast, sourceType, targetType);
 

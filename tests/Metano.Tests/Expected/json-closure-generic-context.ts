@@ -1,3 +1,4 @@
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { EpisodeSummary } from "./episode-summary";
 import { Feed } from "./feed";
@@ -33,17 +34,18 @@ export class JsonContext extends SerializerContext {
   get pageEpisodeSummary(): TypeSpec<Page<EpisodeSummary>> {
     return this._pageEpisodeSummary ??= this.createSpec<Page<EpisodeSummary>>({
       type: Page,
-      factory: (p: Record<string, unknown>) => new Page(p.items as EpisodeSummary[], p.total as number),
+      factory: (p: Record<string, unknown>) => new Page(p.items as IReadOnlyList<EpisodeSummary>, p.total as number),
       properties: [
         {
           ts: "items",
           json: "Items",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.episodeSummary,
             },
+            create: (items) => List.of(items),
           },
         },
         {

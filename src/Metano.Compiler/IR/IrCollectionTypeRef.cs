@@ -40,10 +40,10 @@ public enum IrVariance
 /// (the element, or the key and value; a dictionary view carries its own
 /// element) and the variance of each argument, read from the BCL definition
 /// (carried for the covariant type tests of FR-008, which a later stage
-/// renders). Until the 011c flip, equality follows <see cref="LegacyForm"/>
-/// (spec 011 data-model § 2, W4-23): two refs are equal when their pre-011c
-/// forms are, so <c>List&lt;int&gt;</c> equals <c>IList&lt;int&gt;</c> as on
-/// main.
+/// renders). Two refs are equal when their kinds are and their type arguments
+/// are element by element (spec 011 data-model § 2, the final rule of the
+/// flip): <c>List&lt;int&gt;</c> is neither <c>int[]</c> nor
+/// <c>IList&lt;int&gt;</c>, since each renders a different TypeScript type.
 /// </summary>
 public sealed record IrCollectionTypeRef(
     IrCollectionKind Kind,
@@ -57,11 +57,9 @@ public sealed record IrCollectionTypeRef(
     /// queue, the stack and the dictionary views,
     /// <see cref="IrIterableTypeRef"/> for <c>IReadOnlyCollection&lt;T&gt;</c>,
     /// <see cref="IrMapTypeRef"/> for the dictionaries and
-    /// <see cref="IrSetTypeRef"/> for <c>HashSet&lt;T&gt;</c> and
-    /// <c>ISet&lt;T&gt;</c>. Transitional (spec 011 data-model § 2, D28): the
-    /// targets whose collections are still native render it; FR-038 removes it.
-    /// <c>IReadOnlySet&lt;T&gt;</c> is never resolved before the flip
-    /// (<c>CollectionKindResolver</c>), so its arm is unreachable.
+    /// <see cref="IrSetTypeRef"/> for the sets. Transitional (spec 011
+    /// data-model § 2, D28): read by the targets that keep native collections
+    /// (the Dart type mapper); FR-038 removes it.
     /// </summary>
     public IrTypeRef LegacyForm =>
         Kind switch
@@ -73,22 +71,31 @@ public sealed record IrCollectionTypeRef(
                 TypeArguments[0],
                 TypeArguments[1]
             ),
-            IrCollectionKind.HashSet or IrCollectionKind.ISet => new IrSetTypeRef(TypeArguments[0]),
-            IrCollectionKind.IReadOnlySet => throw new InvalidOperationException(
-                "IReadOnlySet<T> has no pre-011c collection form: it joins the resolver in the flip."
-            ),
+            IrCollectionKind.HashSet or IrCollectionKind.ISet or IrCollectionKind.IReadOnlySet =>
+                new IrSetTypeRef(TypeArguments[0]),
             _ => new IrArrayTypeRef(TypeArguments[0]),
         };
 
     public bool Equals(IrCollectionTypeRef? other) =>
-        other is not null && LegacyForm.Equals(other.LegacyForm);
+        other is not null && Kind == other.Kind && TypeArguments.SequenceEqual(other.TypeArguments);
 
-    public override int GetHashCode() => LegacyForm.GetHashCode();
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+
+        hash.Add(Kind);
+
+        foreach (var argument in TypeArguments)
+            hash.Add(argument);
+
+        return hash.ToHashCode();
+    }
 }
 
 /// <summary>
 /// Unwraps the transitional <see cref="IrCollectionTypeRef.LegacyForm"/> for
-/// the code paths that still render 2.x collections.
+/// the code paths of a target that keeps native collections (spec 011
+/// data-model § 2).
 /// </summary>
 public static class IrCollectionTypeRefLegacy
 {

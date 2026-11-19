@@ -347,7 +347,7 @@ public class Int32WrapTests
 
         await TranspileHelper.AssertGolden("int32-wrap-elisions.ts", elisions);
         await Assert.That(BodyOf(elisions, "lastIndex")).IsEqualTo("return a.length - 1;");
-        await Assert.That(BodyOf(elisions, "listNext")).IsEqualTo("return (l.length + 1) | 0;");
+        await Assert.That(BodyOf(elisions, "listNext")).IsEqualTo("return (l.count + 1) | 0;");
         await Assert.That(BodyOf(elisions, "userCount")).Contains("| 0;");
         await Assert.That(BodyOf(elisions, "interface")).Contains("| 0;");
         await Assert.That(elisions).Contains("for (let i = 0; i < a.length; i++) {");
@@ -393,29 +393,34 @@ public class Int32WrapTests
     }
 
     /// <summary>
-    /// A dictionary entry has no read-modify-write (the read of a missing
-    /// key would not throw). The store FR-074 adds, an unchecked
-    /// <c>int</c> / <c>uint</c> arithmetic store that now wraps, reports
-    /// MS0001 as an error: the build fails, as it did when <c>tsc</c>
-    /// rejected the <c>counts.get(key)++</c> it emitted before. The stores
-    /// reported before FR-074 (checked, narrower than <c>int</c>) keep their
-    /// warning.
+    /// A store on a runtime dictionary entry is a read-modify-write through
+    /// <c>get</c> / <c>set</c> (spec 011 FR-010; the read of a missing key
+    /// throws, as C#'s does), with the element type's wrap or check, so the
+    /// stores MS0001 reported before the runtime collections now lower.
     /// </summary>
     [Test]
-    [Arguments("counts[key]++;", "int", MetanoDiagnosticSeverity.Error)]
-    [Arguments("counts[key]--;", "uint", MetanoDiagnosticSeverity.Error)]
-    [Arguments("counts[key] += 2;", "int", MetanoDiagnosticSeverity.Error)]
-    [Arguments("counts[key] *= 3;", "uint", MetanoDiagnosticSeverity.Error)]
-    [Arguments("checked { counts[key]++; }", "int", MetanoDiagnosticSeverity.Warning)]
-    [Arguments("counts[key]++;", "byte", MetanoDiagnosticSeverity.Warning)]
-    [Arguments("counts[key] <<= 1;", "int", MetanoDiagnosticSeverity.Warning)]
-    public async Task StoreOnADictionaryEntry_ReportsUnsupported(
+    [Arguments("counts[key]++;", "int", "counts.set(key, (counts.get(key) + 1) | 0);")]
+    [Arguments("counts[key]--;", "uint", "counts.set(key, (counts.get(key) - 1) >>> 0);")]
+    [Arguments("counts[key] += 2;", "int", "counts.set(key, (counts.get(key) + 2) | 0);")]
+    [Arguments(
+        "counts[key] *= 3;",
+        "uint",
+        "counts.set(key, Math.imul(counts.get(key), 3) >>> 0);"
+    )]
+    [Arguments(
+        "checked { counts[key]++; }",
+        "int",
+        "counts.set(key, checkedInt32(counts.get(key) + 1));"
+    )]
+    [Arguments("counts[key]++;", "byte", "counts.set(key, (counts.get(key) + 1) & 0xFF);")]
+    [Arguments("counts[key] <<= 1;", "int", "counts.set(key, counts.get(key) << 1);")]
+    public async Task StoreOnADictionaryEntry_LowersToGetAndSet(
         string store,
         string valueType,
-        MetanoDiagnosticSeverity severity
+        string expected
     )
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             $$"""
             using System.Collections.Generic;
 
@@ -427,23 +432,33 @@ public class Int32WrapTests
             """
         );
 
-        var unsupported = UnsupportedFeatures(diagnostics);
-
-        await Assert.That(unsupported.Count).IsEqualTo(1);
-        await Assert.That(unsupported[0].Severity).IsEqualTo(severity);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["tally.ts"]).Contains(expected);
     }
 
     /// <summary>
-    /// A lifted store on a dictionary entry (<c>int?</c>, <c>uint?</c>) was
-    /// reported as a warning before FR-074, with a throwing placeholder that
-    /// compiles, and still is: only the non-lifted wrapped store is an error.
+    /// A lifted store on a dictionary entry (<c>int?</c>, <c>uint?</c>), which
+    /// MS0001 reported before the runtime collections, reads the entry once
+    /// into a temporary and writes the lifted result back.
     /// </summary>
     [Test]
-    [Arguments("counts[key]++;", "int?")]
-    [Arguments("counts[key] += 1u;", "uint?")]
-    public async Task LiftedStoreOnADictionaryEntry_StaysAWarning(string store, string valueType)
+    [Arguments(
+        "counts[key]++;",
+        "int?",
+        "$o = counts.get(key), counts.set(key, $o == null ? null : ($o + 1) | 0);"
+    )]
+    [Arguments(
+        "counts[key] += 1u;",
+        "uint?",
+        "$o = counts.get(key), counts.set(key, $o == null ? null : ($o + 1) >>> 0);"
+    )]
+    public async Task LiftedStoreOnADictionaryEntry_ReadsTheEntryOnce(
+        string store,
+        string valueType,
+        string expected
+    )
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             $$"""
             using System.Collections.Generic;
 
@@ -455,10 +470,8 @@ public class Int32WrapTests
             """
         );
 
-        var unsupported = UnsupportedFeatures(diagnostics);
-
-        await Assert.That(unsupported.Count).IsEqualTo(1);
-        await Assert.That(unsupported[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["tally.ts"]).Contains(expected);
     }
 
     /// <summary>

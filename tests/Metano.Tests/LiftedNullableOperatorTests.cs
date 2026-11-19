@@ -93,9 +93,9 @@ public class LiftedNullableOperatorTests
 
         await Assert
             .That(output)
-            .Contains("return (o == null ? null : (o.items.length + 1) | 0) ?? 0;");
+            .Contains("return (o == null ? null : (o.items.count + 1) | 0) ?? 0;");
 
-        await Assert.That(output).Contains("return o == null ? null : (1 + o.items.length) | 0;");
+        await Assert.That(output).Contains("return o == null ? null : (1 + o.items.count) | 0;");
 
         await Assert
             .That(output)
@@ -103,7 +103,7 @@ public class LiftedNullableOperatorTests
 
         await Assert
             .That(output)
-            .Contains("return (o == null ? null : o.items.length > 1) ?? false;");
+            .Contains("return (o == null ? null : o.items.count > 1) ?? false;");
 
         await Assert
             .That(output)
@@ -111,11 +111,11 @@ public class LiftedNullableOperatorTests
 
         await Assert
             .That(output)
-            .Contains("return o == null ? null : k == null ? null : (k + o.items.length) | 0;");
+            .Contains("return o == null ? null : k == null ? null : (k + o.items.count) | 0;");
 
         await Assert
             .That(output)
-            .Contains("return ((o == null ? null : o.items.length > 1) ?? false) || flag;");
+            .Contains("return ((o == null ? null : o.items.count > 1) ?? false) || flag;");
     }
 
     [Test]
@@ -259,7 +259,7 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return \"n\" + (o?.items.length ?? \"\");");
+        await Assert.That(output).Contains("return \"n\" + (o?.items.count ?? \"\");");
         await Assert.That(output).Contains("return (o.qty ?? \"\") + \"!\";");
         await Assert.That(output).Contains("return \"s=\" + (s ?? \"\");");
         await Assert.That(output).Contains("return s + k;");
@@ -473,11 +473,11 @@ public class LiftedNullableOperatorTests
     }
 
     [Test]
-    public async Task NullableArrayElement_IsParenthesized()
+    public async Task NullableListElement_IsTheTypeArgument()
     {
         var output = TranspileInHelperClass("public static List<Order?> Orders() => [null];");
 
-        await Assert.That(output).Contains("export function orders(): (Order | null)[] {");
+        await Assert.That(output).Contains("export function orders(): List<Order | null> {");
     }
 
     [Test]

@@ -13,17 +13,22 @@ public class IrRuntimeRequirementToTsImportTests
     }
 
     [Test]
-    public async Task HashCodeAndHashSet_AreMergedIntoSingleMetanoRuntimeImport()
+    public async Task HashCodeAndHashSet_ImportFromTheirOwnModules()
     {
         var set = new HashSet<IrRuntimeRequirement>
         {
             new("HashCode", IrRuntimeCategory.Hashing),
             new("HashSet", IrRuntimeCategory.Collection),
         };
+
         var imports = IrRuntimeRequirementToTsImport.Convert(set);
-        await Assert.That(imports).Count().IsEqualTo(1);
-        await Assert.That(imports[0].Names).Contains("HashCode").And.Contains("HashSet");
-        await Assert.That(imports[0].From).IsEqualTo("metano-runtime");
+        await Assert.That(imports).Count().IsEqualTo(2);
+
+        var root = imports.Single(i => i.From == "metano-runtime");
+        var collections = imports.Single(i => i.From == "metano-runtime/system/collections");
+
+        await Assert.That(root.Names).Contains("HashCode");
+        await Assert.That(collections.Names).Contains("HashSet");
     }
 
     [Test]
@@ -42,6 +47,7 @@ public class IrRuntimeRequirementToTsImportTests
         {
             new("Grouping", IrRuntimeCategory.Collection),
         };
+
         var imports = IrRuntimeRequirementToTsImport.Convert(set);
         await Assert.That(imports[0].TypeOnly).IsTrue();
     }
@@ -53,6 +59,7 @@ public class IrRuntimeRequirementToTsImportTests
         {
             new("SomethingWeird", IrRuntimeCategory.Equality),
         };
+
         var imports = IrRuntimeRequirementToTsImport.Convert(set);
         await Assert.That(imports).IsEmpty();
     }
@@ -65,8 +72,10 @@ public class IrRuntimeRequirementToTsImportTests
             new("HashCode", IrRuntimeCategory.Hashing),
             new("Temporal", IrRuntimeCategory.Temporal),
         };
+
         var imports = IrRuntimeRequirementToTsImport.Convert(set);
         await Assert.That(imports).Count().IsEqualTo(2);
+
         await Assert
             .That(imports.Select(i => i.From))
             .Contains("metano-runtime")

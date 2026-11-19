@@ -1,4 +1,4 @@
-import { HashSet as HashSet$rt } from "metano-runtime";
+import { HashSet as HashSet$rt } from "metano-runtime/system/collections";
 
 export class HashSet {
   constructor() { }

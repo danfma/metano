@@ -40,8 +40,7 @@ public static class IrToTsTypeMapper
         {
             IrPrimitiveTypeRef p => MapPrimitive(p.Primitive),
             IrNullableTypeRef n => MakeNullable(Map(n.Inner, overrides)),
-            // Until the 011c flip a collection renders its 2.x type.
-            IrCollectionTypeRef c => Map(c.LegacyForm, overrides),
+            IrCollectionTypeRef c => MapCollection(c, overrides),
             IrArrayTypeRef a => new TsArrayType(Map(a.ElementType, overrides)),
             IrMapTypeRef m => new TsNamedType(
                 "Map",
@@ -80,6 +79,22 @@ public static class IrToTsTypeMapper
             OutResultTypeRef outResult => MapOutResult(outResult, overrides),
             _ => new TsAnyType(),
         };
+
+    /// <summary>
+    /// A BCL collection as its <c>metano-runtime</c> class or interface
+    /// (spec 011 FR-001), bound like every class-shaped runtime helper so a
+    /// colliding user name aliases it (#484).
+    /// </summary>
+    private static TsNamedType MapCollection(IrCollectionTypeRef c, IrToTsTypeOverrides? overrides)
+    {
+        var name = RuntimeCollections.NameOf(c.Kind);
+
+        return new TsNamedType(
+            name,
+            c.TypeArguments.Select(argument => Map(argument, overrides)).ToList(),
+            RuntimeHelperBinding: name
+        );
+    }
 
     /// <summary>
     /// Optional name rewriter consulted by <see cref="MapNamed"/>.
@@ -303,7 +318,7 @@ public static class IrToTsTypeMapper
         new(
             IrToTsNamingPolicy.ToParameterName(param.Name),
             MapParameterType(param, overrides),
-            Rest: param.IsParams
+            Rest: param.IsRestParams
         );
 
     /// <summary>
@@ -320,7 +335,7 @@ public static class IrToTsTypeMapper
     ) => Map(RestSafeTypeOf(parameter), overrides);
 
     private static IrTypeRef RestSafeTypeOf(IrParameter parameter) =>
-        parameter is { IsParams: true, Type: IrNullableTypeRef nullable }
+        parameter is { IsRestParams: true, Type: IrNullableTypeRef nullable }
             ? nullable.Inner
             : parameter.Type;
 

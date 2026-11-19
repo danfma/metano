@@ -211,7 +211,7 @@ public class TupleLiteralTests
             .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsEqualTo(4);
 
-        await Assert.That(result["lookups.ts"]).Contains("list.includes([1, \"a\"]");
+        await Assert.That(result["lookups.ts"]).Contains("list.contains([1, \"a\"]");
     }
 
     [Test]

@@ -143,7 +143,7 @@ public static class IrToTsConstructorDispatcherBridge
                 IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
                 IrToTsTypeMapper.MapParameterType(p.Parameter, context.TypeOverrides),
                 Accessibility: TsAccessibility.None,
-                Rest: p.Parameter.IsParams,
+                Rest: p.Parameter.IsRestParams,
                 Optional: p.Parameter.CanBeOmitted
             ))
             .ToList();

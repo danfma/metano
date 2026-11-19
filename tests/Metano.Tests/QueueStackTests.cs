@@ -3,7 +3,7 @@ namespace Metano.Tests;
 public class QueueStackTests
 {
     [Test]
-    public async Task QueueType_MapsToArray()
+    public async Task QueueType_MapsToTheRuntimeQueue()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -19,7 +19,7 @@ public class QueueStackTests
         );
 
         var output = result["buffer.ts"];
-        await Assert.That(output).Contains("_items: string[]");
+        await Assert.That(output).Contains("_items: Queue<string> = new Queue<string>()");
     }
 
     [Test]
@@ -45,14 +45,14 @@ public class QueueStackTests
         );
 
         var output = result["message-queue.ts"];
-        await Assert.That(output).Contains(".push(msg)");
-        await Assert.That(output).Contains(".shift()");
-        await Assert.That(output).Contains("[0]");
-        await Assert.That(output).Contains(".includes(msg)");
+        await Assert.That(output).Contains("this._queue.enqueue(msg);");
+        await Assert.That(output).Contains("return this._queue.dequeue();");
+        await Assert.That(output).Contains("return this._queue.peek();");
+        await Assert.That(output).Contains("return this._queue.contains(msg);");
     }
 
     [Test]
-    public async Task StackType_MapsToArray()
+    public async Task StackType_MapsToTheRuntimeStack()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -68,7 +68,7 @@ public class QueueStackTests
         );
 
         var output = result["history.ts"];
-        await Assert.That(output).Contains("_items: string[]");
+        await Assert.That(output).Contains("_items: Stack<string> = new Stack<string>()");
     }
 
     [Test]
@@ -93,9 +93,8 @@ public class QueueStackTests
         );
 
         var output = result["undo-stack.ts"];
-        await Assert.That(output).Contains(".push(action)");
-        await Assert.That(output).Contains(".pop()");
-        // Stack.Peek → arr[arr.length - 1]
-        await Assert.That(output).Contains(".length - 1]");
+        await Assert.That(output).Contains("this._stack.push(action);");
+        await Assert.That(output).Contains("return this._stack.pop();");
+        await Assert.That(output).Contains("return this._stack.peek();");
     }
 }

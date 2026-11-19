@@ -1,3 +1,4 @@
+using Metano.Interop;
 using Metano.TypeScript.SolidJs;
 using Metano.TypeScript.SolidJs.Web;
 
@@ -21,7 +22,7 @@ public sealed record CounterGroup : JsxComponent
                     ClassName = "counters",
                     Children =
                     [
-                        Solid.For(Enumerable.Range(0, countersCount()).ToList(), (_, _) =>
+                        Solid.For(JsArray.From(Enumerable.Range(0, countersCount())), (_, _) =>
                             new Counter()
                         ),
                     ],

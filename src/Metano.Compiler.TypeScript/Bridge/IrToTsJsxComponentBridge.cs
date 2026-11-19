@@ -392,6 +392,34 @@ public static class IrToTsJsxComponentBridge
                 Target = Rewrite(ea.Target, propNames, referenced),
                 Index = Rewrite(ea.Index, propNames, referenced),
             },
+            IrIndexerUpdateExpression update => update with
+            {
+                Receiver = Rewrite(update.Receiver, propNames, referenced),
+                Index = Rewrite(update.Index, propNames, referenced),
+                NewValue = Rewrite(update.NewValue, propNames, referenced),
+            },
+            IrFromEndElementAccess fromEnd => fromEnd with
+            {
+                Receiver = Rewrite(fromEnd.Receiver, propNames, referenced),
+                Offset = Rewrite(fromEnd.Offset, propNames, referenced),
+            },
+            IrCollectionInitialization initialization => initialization with
+            {
+                Creation = Rewrite(initialization.Creation, propNames, referenced),
+                Comparer = initialization.Comparer is null
+                    ? null
+                    : Rewrite(initialization.Comparer, propNames, referenced),
+                Elements = initialization
+                    .Elements.Select(element =>
+                        (IReadOnlyList<IrExpression>)
+                            element.Select(value => Rewrite(value, propNames, referenced)).ToList()
+                    )
+                    .ToList(),
+            },
+            IrArrayToCollectionConversion conversion => conversion with
+            {
+                Value = Rewrite(conversion.Value, propNames, referenced),
+            },
             IrSliceExpression slice => slice with
             {
                 Target = Rewrite(slice.Target, propNames, referenced),

@@ -21,13 +21,13 @@ public class NullConditionalMappingTranspileTests
     }
 
     [Test]
-    public async Task ListCountThroughNullConditional_MapsToOptionalLength()
+    public async Task ListCountThroughNullConditional_MapsToOptionalCount()
     {
         var output = TranspileInHelperClass(
             "public static int? Size(List<int>? items) => items?.Count;"
         );
 
-        await Assert.That(output).Contains("return items?.length ?? null;");
+        await Assert.That(output).Contains("return items?.count ?? null;");
     }
 
     [Test]
@@ -37,19 +37,17 @@ public class NullConditionalMappingTranspileTests
             "public static bool Remove(Order order, int item) => order.Items.Remove(item);"
         );
 
-        await Assert.That(output).Contains("return listRemove(order.items, item);");
+        await Assert.That(output).Contains("return order.items.remove(item);");
     }
 
     [Test]
-    public async Task HelperMappedContinuation_GuardsTheReceiverAndArguments()
+    public async Task MemberMappedContinuation_StaysInsideTheOptionalChain()
     {
         var output = TranspileInHelperClass(
             "public static bool? Remove(Order? order, int item) => order?.Items.Remove(item);"
         );
 
-        await Assert
-            .That(output)
-            .Contains("return order == null ? null : listRemove(order.items, item);");
+        await Assert.That(output).Contains("return order?.items.remove(item) ?? null;");
     }
 
     [Test]
@@ -165,8 +163,8 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return items?.[0] ?? null;");
-        await Assert.That(output).Contains("return names == null ? null : names[0]!.length;");
+        await Assert.That(output).Contains("return items?.get(0) ?? null;");
+        await Assert.That(output).Contains("return names?.get(0).length ?? null;");
         await Assert.That(output).Contains("return scores?.get(\"k\") ?? null;");
     }
 
@@ -183,9 +181,9 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return items?.[items.length - 1] ?? null;");
+        await Assert.That(output).Contains("return items == null ? null : fromEnd(items, 1);");
         await Assert.That(output).Contains("return items?.slice(1) ?? null;");
-        await Assert.That(output).Contains("return order?.items[order.items.length - 1] ?? null;");
+        await Assert.That(output).Contains("return order?.items.fromEnd(1) ?? null;");
 
         await Assert
             .That(output)
@@ -216,7 +214,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : $receiver[$receiver.length - 1]!)(find(items));"
+                "return (($receiver) => $receiver == null ? null : fromEnd($receiver, 1))(find(items));"
             );
 
         await Assert
@@ -225,11 +223,7 @@ public class NullConditionalMappingTranspileTests
                 "return (($receiver) => $receiver == null ? null : $receiver.slice(0, $receiver.length - 1))(find(items));"
             );
 
-        await Assert
-            .That(output)
-            .Contains(
-                "return (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1]!)(order.getNext());"
-            );
+        await Assert.That(output).Contains("return order.getNext()?.items.fromEnd(1) ?? null;");
 
         await Assert.That(output).DoesNotContain("?.[$receiver");
         await Assert.That(output).DoesNotContain("?.items[$receiver");
@@ -246,7 +240,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1]!)($receiver.next))(order.getNext());"
+                "return (($receiver) => $receiver == null ? null : $receiver.next?.items.fromEnd(1) ?? null)(order.getNext());"
             );
     }
 
@@ -261,8 +255,8 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return order?.self.self.items.length ?? null;");
-        await Assert.That(output).Contains("return order?.items[0] ?? null;");
+        await Assert.That(output).Contains("return order?.self.self.items.count ?? null;");
+        await Assert.That(output).Contains("return order?.items.get(0) ?? null;");
 
         await Assert
             .That(output)
@@ -270,35 +264,31 @@ public class NullConditionalMappingTranspileTests
     }
 
     [Test]
-    public async Task ImpureReceiver_IsEvaluatedOnceThroughAnUntypedBinding()
+    public async Task ImpureReceiver_IsEvaluatedOnceThroughTheOptionalChain()
     {
         var output = TranspileInHelperClass(
             "public static bool? RemoveNext(Order order, int item) => order.GetNext()?.Items.Remove(item);"
         );
 
-        await Assert
-            .That(output)
-            .Contains(
-                "return (($receiver) => $receiver == null ? null : listRemove($receiver.items, item))(order.getNext());"
-            );
+        await Assert.That(output).Contains("return order.getNext()?.items.remove(item) ?? null;");
     }
 
     [Test]
-    public async Task AwaitInsideGuardedBinding_MakesTheBindingAsync()
+    public async Task AwaitInsideGuardedCall_StaysAnArgumentOfTheOptionalChain()
     {
+        // The optional chain skips its arguments, the await included, when the
+        // receiver is null, as C#'s ?. does.
         var output = TranspileInHelperClass(
             "public static async Task<bool?> RemoveLater(Order order, Task<int> item) => order.GetNext()?.Items.Remove(await item);"
         );
 
         await Assert
             .That(output)
-            .Contains(
-                "return await (async ($receiver) => $receiver == null ? null : listRemove($receiver.items, await item))(order.getNext());"
-            );
+            .Contains("return order.getNext()?.items.remove(await item) ?? null;");
     }
 
     [Test]
-    public async Task GuardInStatementPosition_LowersToIf()
+    public async Task GuardInStatementPosition_StaysAnOptionalChain()
     {
         var output = TranspileInHelperClass(
             """
@@ -310,20 +300,13 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert
-            .That(output)
-            .Contains("if (order != null) {\n    order.items.length = 0;\n  }");
-
-        await Assert
-            .That(output)
-            .Contains(
-                "const $receiver = order.getNext();\n\n    if ($receiver != null) {\n      listRemove($receiver.items, await item);\n    }"
-            );
+        await Assert.That(output).Contains("  order?.items.clear();\n");
+        await Assert.That(output).Contains("  order.getNext()?.items.remove(await item);\n");
 
         await Assert.That(output).DoesNotContain("? null :");
     }
 
-    // Native optional chains (`order?.self.self.items.length`) yield
+    // Native optional chains (`order?.self.self.items.count`) yield
     // `undefined` for a null receiver, while the guarded forms yield `null`, so
     // a chain read as a value is normalized with `?? null` (#256); the left
     // operand of `??` (`value?.trim() ?? ""`) keeps the bare chain.

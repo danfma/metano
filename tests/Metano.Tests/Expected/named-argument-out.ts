@@ -1,4 +1,5 @@
-import { tryGetValue, tryParseInt32 } from "metano-runtime";
+import { Dictionary } from "metano-runtime/system/collections";
+import { tryParseInt32 } from "metano-runtime";
 import { MoreTags } from "./more-tags";
 import type { OutHost } from "./out-host";
 import { Trace } from "./trace";
@@ -107,14 +108,14 @@ export class OutCalls {
     return (Math.imul(r, 100) + x) | 0;
   }
 
-  static tryGetValue(d: Map<string, number>, key: string): number {
-    const [ok, v] = tryGetValue(d, key, 0);
+  static tryGetValue(d: Dictionary<string, number>, key: string): number {
+    const [ok, v] = d.tryGetValue(key, 0);
 
     return ok ? v : -1;
   }
 
-  static tryGetValueCall(d: Map<string, number>): number {
-    const [$found0, v] = tryGetValue(d, MoreTags.tag("k"), 0);
+  static tryGetValueCall(d: Dictionary<string, number>): number {
+    const [$found0, v] = d.tryGetValue(MoreTags.tag("k"), 0);
 
     if ($found0) {
       return v;

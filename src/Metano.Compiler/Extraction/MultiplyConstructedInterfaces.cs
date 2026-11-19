@@ -78,9 +78,13 @@ public static class MultiplyConstructedInterfaces
 
     /// <summary>
     /// The first pair of constructions whose type arguments lower to the same
-    /// shape (<c>IConv&lt;List&lt;int&gt;&gt;</c> and <c>IConv&lt;int[]&gt;</c>,
-    /// both arrays): a runtime check cannot tell them apart, so the first
-    /// branch wins, as in the dispatcher.
+    /// shape: a runtime check cannot tell them apart, so the first branch
+    /// wins, as in the dispatcher. For a target that keeps native collections
+    /// a collection lowers to its 2.x shape (<c>IConv&lt;List&lt;int&gt;&gt;</c>
+    /// and <c>IConv&lt;int[]&gt;</c> are both arrays in Dart); for the others
+    /// it is its own runtime class, told apart from an array but not by its
+    /// erased type arguments (<c>List&lt;int&gt;</c> and <c>List&lt;string&gt;</c>
+    /// both test <c>instanceof List</c>; spec 011 data-model § 2).
     /// </summary>
     private static string IndistinguishableNote(
         IReadOnlyList<INamedTypeSymbol> constructions,
@@ -91,9 +95,7 @@ public static class MultiplyConstructedInterfaces
             .Select(construction =>
                 construction
                     .TypeArguments.Select(argument =>
-                        IrTypeRefMapper
-                            .Map(argument, originResolver: null, target)
-                            .ToLegacyTypeRef()
+                        ShapeOf(IrTypeRefMapper.Map(argument, originResolver: null, target), target)
                     )
                     .ToList()
             )
@@ -114,6 +116,16 @@ public static class MultiplyConstructedInterfaces
 
         return "";
     }
+
+    private static IrTypeRef ShapeOf(IrTypeRef type, TargetLanguage? target) =>
+        IrExtractionContext.KeepsNativeCollectionsFor(target) ? type.ToLegacyTypeRef()
+        : type is IrCollectionTypeRef collection
+            ? collection with
+            {
+                TypeArguments = [],
+                Variance = [],
+            }
+        : type;
 
     private static string DisplayOf(INamedTypeSymbol type) =>
         type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);

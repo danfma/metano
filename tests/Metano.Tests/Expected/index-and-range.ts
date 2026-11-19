@@ -1,22 +1,24 @@
+import { List, fromEnd, type IList, type IReadOnlyList } from "metano-runtime/system/collections";
+
 export class Sequences {
-  private readonly _items: number[] = [7, 8, 9];
+  private readonly _items: List<number> = List.of([7, 8, 9]);
 
   constructor() { }
 
   lastOfArray(values: number[]): number {
-    return values[values.length - 1]!;
+    return fromEnd(values, 1);
   }
 
-  fromEndOfList(values: number[], offset: number): number {
-    return values[values.length - offset]!;
+  fromEndOfList(values: List<number>, offset: number): number {
+    return values.fromEnd(offset);
   }
 
-  fromEndOfReadOnlyList(values: number[]): number {
-    return values[values.length - (1 + 1)]!;
+  fromEndOfReadOnlyList(values: IReadOnlyList<number>): number {
+    return values.get(values.count - (1 + 1));
   }
 
-  fromEndOfIList(values: number[]): number {
-    return values[values.length - 1]!;
+  fromEndOfIList(values: IList<number>): number {
+    return values.get(values.count - 1);
   }
 
   lastChar(text: string): string {
@@ -24,7 +26,7 @@ export class Sequences {
   }
 
   lastItem(): number {
-    return this._items[this._items.length - 1]!;
+    return this._items.fromEnd(1);
   }
 
   middle(values: number[]): number[] {
@@ -35,7 +37,7 @@ export class Sequences {
     return text.slice(0, text.length - 1);
   }
 
-  tail(values: number[]): number[] {
+  tail(values: List<number>): List<number> {
     return values.slice(1);
   }
 

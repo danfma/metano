@@ -21,6 +21,28 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapArrayLiteral(IrArrayLiteral literal, IrToTsBridgeContext context)
     {
+        var array = MapTypedArrayLiteral(literal, context);
+
+        return literal.TargetCollection switch
+        {
+            null => array,
+            { Kind: IrCollectionKind.List } => new TsCallExpression(
+                new TsPropertyAccess(ListClass, "of"),
+                [array]
+            ),
+            _ => AdoptedFixedSize(array),
+        };
+    }
+
+    /// <summary>
+    /// The literal as a native array, asserted to the element type C# gives it
+    /// when the elements alone would make TypeScript infer a narrower one.
+    /// </summary>
+    private static TsExpression MapTypedArrayLiteral(
+        IrArrayLiteral literal,
+        IrToTsBridgeContext context
+    )
+    {
         var elements = MapBareArrayLiteral(literal, context);
 
         if (literal.ElementType is not { } elementType)

@@ -276,6 +276,7 @@ public class SolidJsJsxTranspileTests
             $$"""
             {{Usings}}
             using System.Collections.Generic;
+            using Metano.Interop;
 
             [Transpile]
             public sealed record Counter : JsxComponent
@@ -287,7 +288,7 @@ public class SolidJsJsxTranspileTests
             [Transpile]
             public sealed record CounterList : JsxComponent
             {
-                public IReadOnlyList<int> Items { get; init; }
+                public JsArray<int> Items { get; init; } = [];
                 public override JsxElement Render() =>
                     new Html.Div
                     {
@@ -389,7 +390,7 @@ public class SolidJsJsxTranspileTests
             [Transpile]
             public sealed record CounterList : JsxComponent
             {
-                public IReadOnlyList<int> Items { get; init; }
+                public Metano.Interop.JsArray<int> Items { get; init; } = [];
                 public override JsxElement Render() =>
                     Solid.For(Items, (item, index) => new Counter { Count = item });
             }
@@ -580,7 +581,7 @@ public class SolidJsJsxTranspileTests
                     {
                         Children =
                         [
-                            Solid.For(
+                            Solid.For<int>(
                                 Values.Select(v => v).ToArray(),
                                 (item, index) => new Counter { Count = item }
                             ),

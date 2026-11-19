@@ -1,4 +1,5 @@
 import { UUID } from "metano-runtime";
+import { List } from "metano-runtime/system/collections";
 import { firstOrDefault, last, lastOrDefault, linq, select, singleOrDefault, where } from "metano-runtime/system/linq";
 import { Decimal } from "metano-runtime/system/decimal";
 import { Color } from "./color";
@@ -10,31 +11,31 @@ import type { Profile } from "./profile";
 export class Lookups {
   constructor() { }
 
-  first(xs: number[]): number {
+  first(xs: List<number>): number {
     return linq(xs, firstOrDefault(undefined, 0));
   }
 
-  firstMatch(xs: number[]): number {
+  firstMatch(xs: List<number>): number {
     return linq(xs, firstOrDefault((x: number) => x > 100, 0));
   }
 
-  firstOr(xs: number[]): number {
+  firstOr(xs: List<number>): number {
     return linq(xs, firstOrDefault(undefined, 42));
   }
 
-  firstMatchOr(xs: number[]): number {
+  firstMatchOr(xs: List<number>): number {
     return linq(xs, firstOrDefault((x: number) => x > 100, 42));
   }
 
-  firstMatchOrDefault(xs: number[]): number {
+  firstMatchOrDefault(xs: List<number>): number {
     return linq(xs, firstOrDefault((x: number) => x > 100, 0));
   }
 
-  firstOrNamedDefault(xs: boolean[]): boolean {
+  firstOrNamedDefault(xs: List<boolean>): boolean {
     return linq(xs, firstOrDefault(undefined, false));
   }
 
-  falsyMatch(xs: number[]): number {
+  falsyMatch(xs: List<number>): number {
     return linq(xs, firstOrDefault((x: number) => x === 0, 42));
   }
 
@@ -46,115 +47,115 @@ export class Lookups {
     return linq(xs, lastOrDefault((x: number) => x > 100, 42));
   }
 
-  lastNamed(xs: number[]): number {
+  lastNamed(xs: List<number>): number {
     return linq(xs, lastOrDefault((x: number) => x > 100, 42));
   }
 
-  single(xs: number[]): number {
+  single(xs: List<number>): number {
     return linq(xs, singleOrDefault((x: number) => x > 100, 0));
   }
 
-  singleOr(xs: number[]): number {
+  singleOr(xs: List<number>): number {
     return linq(xs, singleOrDefault(undefined, 42));
   }
 
-  chained(xs: number[]): number {
+  chained(xs: List<number>): number {
     return linq(xs, where((x: number) => x > 1), select((x: number) => Math.imul(x, 2)), firstOrDefault(undefined, 0));
   }
 
-  wide(xs: bigint[]): bigint {
+  wide(xs: List<bigint>): bigint {
     return BigInt.asIntN(64, linq(xs, firstOrDefault((x: bigint) => x > 100n, 0n)) + linq(xs, last()));
   }
 
-  unsigned(xs: bigint[]): bigint {
+  unsigned(xs: List<bigint>): bigint {
     return BigInt.asUintN(64, linq(xs, firstOrDefault(undefined, 0n)) + 3n);
   }
 
-  native(xs: bigint[]): bigint {
+  native(xs: List<bigint>): bigint {
     return linq(xs, firstOrDefault(undefined, 0n));
   }
 
-  nativeUnsigned(xs: bigint[]): bigint {
+  nativeUnsigned(xs: List<bigint>): bigint {
     return linq(xs, lastOrDefault(undefined, 0n));
   }
 
-  big(xs: bigint[]): bigint {
+  big(xs: List<bigint>): bigint {
     return linq(xs, singleOrDefault(undefined, 0n));
   }
 
-  flag(xs: boolean[]): boolean {
+  flag(xs: List<boolean>): boolean {
     return linq(xs, firstOrDefault(undefined, false));
   }
 
-  ratio(xs: number[]): number {
+  ratio(xs: List<number>): number {
     return linq(xs, firstOrDefault(undefined, 0));
   }
 
-  price(xs: Decimal[]): Decimal {
+  price(xs: List<Decimal>): Decimal {
     return linq(xs, firstOrDefault(undefined, new Decimal("0")));
   }
 
-  letter(xs: string[]): string {
+  letter(xs: List<string>): string {
     return linq(xs, firstOrDefault(undefined, "\u0000"));
   }
 
-  id(xs: UUID[]): UUID {
+  id(xs: List<UUID>): UUID {
     return linq(xs, firstOrDefault(undefined, UUID.empty));
   }
 
-  zero(xs: Color[]): Color {
+  zero(xs: List<Color>): Color {
     return linq(xs, firstOrDefault(undefined, Color.None));
   }
 
-  noZero(xs: Level[]): Level {
+  noZero(xs: List<Level>): Level {
     return linq(xs, firstOrDefault(undefined, 0 as Level));
   }
 
-  pointOr(xs: Point[]): Point {
+  pointOr(xs: List<Point>): Point {
     return linq(xs, firstOrDefault(undefined, new Point(1, 2)));
   }
 
-  maybe(xs: (number | null)[]): number | null {
+  maybe(xs: List<number | null>): number | null {
     return linq(xs, firstOrDefault());
   }
 
-  maybeOr(xs: (number | null)[]): number | null {
+  maybeOr(xs: List<number | null>): number | null {
     return linq(xs, firstOrDefault(undefined, 42));
   }
 
-  name(xs: string[]): string | null {
+  name(xs: List<string>): string | null {
     return linq(xs, firstOrDefault());
   }
 
-  nameOr(xs: string[]): string {
+  nameOr(xs: List<string>): string {
     return linq(xs, firstOrDefault(undefined, "none"));
   }
 
-  nameOrFallback(xs: string[], fallback: string | null): string | null {
+  nameOrFallback(xs: List<string>, fallback: string | null): string | null {
     return linq(xs, firstOrDefault(undefined, fallback));
   }
 
-  lastOrFallback(xs: string[], fallback: string | null): string | null {
+  lastOrFallback(xs: List<string>, fallback: string | null): string | null {
     return linq(xs, lastOrDefault((x: string) => x !== "a", fallback));
   }
 
-  nickOr(xs: string[], profile: Profile): string | null {
+  nickOr(xs: List<string>, profile: Profile): string | null {
     return linq(xs, lastOrDefault((x: string) => x !== "a", profile.nick));
   }
 
-  parenthesizedDefault(xs: number[]): number {
+  parenthesizedDefault(xs: List<number>): number {
     return linq(xs, firstOrDefault(undefined, 0));
   }
 
-  forgivenDefault(xs: number[]): number {
+  forgivenDefault(xs: List<number>): number {
     return linq(xs, lastOrDefault((x: number) => x > 1, 0));
   }
 
-  who(xs: Person[]): Person | null {
+  who(xs: List<Person>): Person | null {
     return linq(xs, lastOrDefault((p: Person) => p.name === "ana"));
   }
 
-  any<T>(xs: T[]): T | null {
+  any<T>(xs: List<T>): T | null {
     return linq(xs, firstOrDefault());
   }
 }

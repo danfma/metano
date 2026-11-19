@@ -80,16 +80,42 @@ public static class IrEvaluationTraits
     /// How many times <paramref name="whenNotNull"/> reads its own
     /// <see cref="IrConditionalReceiver"/>: placeholders inside a nested
     /// access's <see cref="IrNullConditionalAccess.WhenNotNull"/> belong to
-    /// that access and are not counted.
+    /// that access and are not counted. The receiver of a stage 011c element
+    /// update, index-from-end read or from-end range counts twice: a target may
+    /// repeat a reusable receiver to read the element (or the length) and to
+    /// write it back.
     /// </summary>
     public static int CountConditionalReceiverReads(IrExpression whenNotNull) =>
         whenNotNull switch
         {
             IrConditionalReceiver => 1,
             IrNullConditionalAccess nested => CountConditionalReceiverReads(nested.Receiver),
+            IrIndexerUpdateExpression update => 2 * CountConditionalReceiverReads(update.Receiver)
+                + CountConditionalReceiverReads(update.Index)
+                + CountConditionalReceiverReads(update.NewValue),
+            IrFromEndElementAccess fromEnd => ReceiverReadsOf(fromEnd)
+                * CountConditionalReceiverReads(fromEnd.Receiver)
+                + CountConditionalReceiverReads(fromEnd.Offset),
+            IrSliceExpression { StartFromEnd: true } or IrSliceExpression { EndFromEnd: true } =>
+                CountFromEndSliceReads((IrSliceExpression)whenNotNull),
             _ => IrNodeChildren.ExpressionsOf(whenNotNull).Sum(CountConditionalReceiverReads)
                 + IrNodeChildren.StatementsOf(whenNotNull).Sum(CountConditionalReceiverReads),
         };
+
+    /// <summary>
+    /// How a null-conditional access must treat the receiver of an
+    /// index-from-end read: as one member-chain read on a collection class
+    /// (<c>r.fromEnd(n)</c>), and as two otherwise, so it is bound: a list
+    /// interface reads <c>get(count - n)</c>, and an array is an argument of
+    /// the <c>fromEnd(array, n)</c> helper, not the head of a member chain.
+    /// </summary>
+    private static int ReceiverReadsOf(IrFromEndElementAccess fromEnd) =>
+        fromEnd.ReceiverType is IrCollectionTypeRef { Kind: IrCollectionKind.List } ? 1 : 2;
+
+    private static int CountFromEndSliceReads(IrSliceExpression slice) =>
+        2 * CountConditionalReceiverReads(slice.Target)
+        + (slice.Start is null ? 0 : CountConditionalReceiverReads(slice.Start))
+        + (slice.End is null ? 0 : CountConditionalReceiverReads(slice.End));
 
     private static int CountConditionalReceiverReads(IrStatement statement) =>
         IrNodeChildren.ExpressionsOf(statement).Sum(CountConditionalReceiverReads)

@@ -24,4 +24,23 @@ public static class InteropExtensions
     /// and reports <c>MS0001</c> for a member access on the result until after 3.0.
     /// </summary>
     public static dynamic AsDynamic(this object? value) => value!;
+
+    /// <summary>
+    /// The list's backing array itself, as the native JavaScript array (spec 011
+    /// FR-056): no copy, so a write through either side is seen by the other.
+    /// TypeScript emits <c>asJsArray(list)</c>, which throws
+    /// <c>ArgumentNullException</c> for <c>null</c>. On .NET it is a copy, so a
+    /// write through it is not seen by the list, a documented divergence;
+    /// TypeScript only (<c>MS0051</c> elsewhere).
+    /// </summary>
+    [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
+    public static JsArray<T> AsJsArray<T>(this List<T> list) =>
+        new(list ?? throw new ArgumentNullException(nameof(list)));
+
+    /// <summary>
+    /// A new native array copied from the list (spec 011 FR-055): TypeScript
+    /// emits <c>list.toArray()</c>, as for <c>ToArray()</c>.
+    /// </summary>
+    [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
+    public static JsArray<T> ToJsArray<T>(this List<T> list) => new(list);
 }

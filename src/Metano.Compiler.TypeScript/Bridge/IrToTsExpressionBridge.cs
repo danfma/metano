@@ -82,8 +82,21 @@ public static partial class IrToTsExpressionBridge
                 ),
                 lit.EnumConversionType
             ),
+            IrIdentifier id when context.BoundElements.TryGetValue(id.Name, out var element) =>
+                element,
             IrIdentifier id => new TsIdentifier(IrToTsNamingPolicy.ToLocalName(id.Name)),
             IrTypeReference tr => MapTypeReference(tr),
+            IrIndexerUpdateExpression update => MapIndexerUpdate(
+                update,
+                context,
+                isStatement: false
+            ),
+            IrFromEndElementAccess fromEnd => MapFromEndRead(fromEnd, context),
+            IrArrayToCollectionConversion conversion => MapAdoptedArray(conversion, context),
+            IrCollectionInitialization initialization => MapCollectionInitialization(
+                initialization,
+                context
+            ),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, context),
@@ -220,14 +233,17 @@ public static partial class IrToTsExpressionBridge
         if (
             bin.Operator is IrBinaryOp.Assign
             && bin.Left is IrElementAccess ea
-            && ea.TargetType.WithLegacyCollection() is IrMapTypeRef
+            && StoresThroughIndexer(ea.TargetType)
         )
         {
             var target = Map(ea.Target, context);
-            var key = Map(ea.Index, context);
+            var key = AsArrayIndex(Map(ea.Index, context), ea.IndexKind);
             var value = Map(bin.Right, context);
             return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
         }
+
+        if (bin is { Operator: IrBinaryOp.Assign, Left: IrFromEndElementAccess fromEnd })
+            return MapFromEndWrite(fromEnd, bin.Right, context);
 
         if (
             IrToTsInt64OperatorBridge.TryMap(bin, operand => Map(operand, context)) is
@@ -540,12 +556,10 @@ public static partial class IrToTsExpressionBridge
         var target = MapNullTolerant(ea.Target, context);
         var index = AsArrayIndex(Map(ea.Index, context), ea.IndexKind);
 
-        var targetType = ea.TargetType.WithLegacyCollection();
-
-        if (targetType is IrMapTypeRef)
+        if (StoresThroughIndexer(ea.TargetType))
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
 
-        return CheckedElementRead(new TsElementAccess(target, index), targetType);
+        return CheckedElementRead(new TsElementAccess(target, index), ea.TargetType);
     }
 
     /// <summary>
@@ -565,17 +579,23 @@ public static partial class IrToTsExpressionBridge
         if (place is not IrElementAccess ea)
             return Map(place, context);
 
-        var targetType = ea.TargetType.WithLegacyCollection();
-
-        if (targetType is IrMapTypeRef)
+        if (StoresThroughIndexer(ea.TargetType))
             return Map(place, context);
 
         var element = MapUncheckedElementAccess(ea, context);
 
-        return readsElement && !IsNullableElement(targetType)
-            ? CheckedElementRead(element, targetType)
+        return readsElement && !IsNullableElement(ea.TargetType)
+            ? CheckedElementRead(element, ea.TargetType)
             : element;
     }
+
+    /// <summary>
+    /// Whether an element of a receiver of <paramref name="targetType"/> is
+    /// read and written through <c>get</c> / <c>set</c>: a runtime collection
+    /// (spec 011 FR-010) or a 2.x native <c>Map</c> (an 011h dictionary).
+    /// </summary>
+    private static bool StoresThroughIndexer(IrTypeRef? targetType) =>
+        targetType is IrCollectionTypeRef or IrMapTypeRef;
 
     private static bool ReadsTarget(IrBinaryOp op) =>
         op is not (IrBinaryOp.Assign or IrBinaryOp.NullCoalescingAssign);
@@ -701,10 +721,12 @@ public static partial class IrToTsExpressionBridge
     /// absent end is omitted so the slice runs to the end.
     /// </summary>
     private static TsExpression MapSlice(IrSliceExpression slice, IrToTsBridgeContext context) =>
-        new TsCallExpression(
-            new TsPropertyAccess(MapNullTolerant(slice.Target, context), "slice"),
-            MapSliceBounds(slice, context)
-        );
+        slice.StartFromEnd || slice.EndFromEnd
+            ? MapFromEndSlice(slice, context)
+            : new TsCallExpression(
+                new TsPropertyAccess(MapNullTolerant(slice.Target, context), "slice"),
+                MapSliceBounds(slice, context)
+            );
 
     private static IReadOnlyList<TsExpression> MapSliceBounds(
         IrSliceExpression slice,
@@ -788,6 +810,8 @@ public static partial class IrToTsExpressionBridge
 
             if (IsForeignStaticData(ma.Origin))
                 ReportUnmappedForeignStaticRead(ma.Origin);
+
+            ReportUnmappedCollectionMember(ma.Origin, "read");
         }
 
         // `[External]` and `[NoContainer]` declaring types: the class
@@ -1161,6 +1185,8 @@ public static partial class IrToTsExpressionBridge
 
             if (IsForeignStatic(call.Origin))
                 ReportUnmappedForeignStaticCall(call.Origin);
+
+            ReportUnmappedCollectionMember(call.Origin, "call");
         }
 
         return new TsCallExpression(
@@ -1223,6 +1249,32 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static bool IsForeignStaticData([NotNullWhen(true)] IrMemberOrigin? origin) =>
         IsForeignStatic(origin) && origin is { IsEnumMember: false, ParameterTypes: null };
+
+    /// <summary>
+    /// Reports MS0001 for an instance member of a stage 011c collection that
+    /// the runtime class does not implement (spec 011 FR-001: <c>Capacity</c>,
+    /// <c>EnsureCapacity</c>, <c>TrimExcess</c>, the index / count overloads,
+    /// …): no declarative mapping covers it, so the access is emitted by name
+    /// and reads a member the runtime class does not have.
+    /// </summary>
+    private static void ReportUnmappedCollectionMember(IrMemberOrigin? member, string useNoun)
+    {
+        if (
+            member is null or { IsStatic: true }
+            || !RuntimeCollections.IsCollectionTypeName(member.DeclaringTypeFullName)
+        )
+            return;
+
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{member.DeclaringTypeFullName}.{member.MemberName}' is not supported by the "
+                    + $"metano-runtime collection: the {useNoun} is emitted by name and has no "
+                    + "JavaScript counterpart."
+            )
+        );
+    }
 
     private static void ReportUnmappedForeignStaticCall(IrMemberOrigin method) =>
         ReportUnmappedForeignStatic(method, "call");
@@ -1803,7 +1855,9 @@ public static partial class IrToTsExpressionBridge
                 ReturnType: IrPrimitiveTypeRef { Primitive: IrPrimitive.Void },
                 Body: [IrReturnStatement { Value: { } discarded }],
             }
-            ? [new TsReturnStatement(MapNullTolerant(discarded, context))]
+            ? TsTemporaries.Around(context, scoped =>
+                [new TsReturnStatement(MapNullTolerant(discarded, scoped))]
+            )
             : IrToTsStatementBridge.MapBody(lambda.Body, context);
 
     /// <summary>
@@ -2087,7 +2141,10 @@ public static partial class IrToTsExpressionBridge
             // to their JS runtime equivalents; the type mapper collapses them
             // into IrMap/IrSet/IrArray refs, so we reconstruct the JS class
             // names here for `new` targets.
-            IrCollectionTypeRef collection => MapNewTarget(collection.LegacyForm),
+            IrCollectionTypeRef collection => new TsRuntimeHelperReference(
+                RuntimeCollections.NameOf(collection.Kind),
+                RuntimeCollections.Module
+            ),
             IrMapTypeRef => new TsIdentifier("Map"),
             IrSetTypeRef => new TsRuntimeHelperReference("HashSet"),
             _ => IrToTsTypeMapper.Map(type) switch
@@ -2125,6 +2182,9 @@ public static partial class IrToTsExpressionBridge
         // before the plain-object / branded / exception branches below.
         if (ne.Type is IrNamedTypeRef { Semantics.RendersAsJsxElement: true })
             return IrToTsJsxBridge.Convert(ne, context);
+
+        if (SetLiteralOf(ne) is { } setLiteral)
+            return SetFactory(setLiteral, context);
 
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
 
@@ -2468,7 +2528,7 @@ public static partial class IrToTsExpressionBridge
     }
 
     private static bool KeepsTypeArguments(IrNewExpression ne) =>
-        ne.Type.WithLegacyCollection() is IrSetTypeRef or IrMapTypeRef
+        ne.Type is IrSetTypeRef or IrMapTypeRef or IrCollectionTypeRef
         || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } };
 
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
@@ -2476,8 +2536,9 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        IReadOnlyList<IrTypeRef>? typeArguments = type.WithLegacyCollection() switch
+        IReadOnlyList<IrTypeRef>? typeArguments = type switch
         {
+            IrCollectionTypeRef collection => collection.TypeArguments,
             IrNamedTypeRef { TypeArguments: { Count: > 0 } named } => named,
             IrSetTypeRef set => [set.ElementType],
             IrMapTypeRef map => [map.KeyType, map.ValueType],

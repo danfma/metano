@@ -193,9 +193,9 @@ public class NullableTranspileTests
             .That(output)
             .Contains("value == null ? null : stringSubstring(value, 1).trim()");
 
-        await Assert.That(output).Contains("value?.size");
-        await Assert.That(output).Contains("value?.has(key)");
-        await Assert.That(output).Contains("if (value != null) {\n    value.length = 0;\n  }");
+        await Assert.That(output).Contains("value?.count");
+        await Assert.That(output).Contains("value?.containsKey(key)");
+        await Assert.That(output).Contains("value?.clear();");
     }
 
     [Test]

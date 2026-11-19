@@ -1,3 +1,5 @@
+import { List } from "metano-runtime/system/collections";
+
 export class Conversions {
   constructor() { }
 
@@ -20,11 +22,7 @@ export class Conversions {
 
     for (const x of d) {
     }
-    const list = ((receiver$temp$0) => {
-      receiver$temp$0.push(d);
-
-      return receiver$temp$0;
-    })([] as Array<number>);
+    const list = List.of([d] as number[]);
 
     return d;
   }

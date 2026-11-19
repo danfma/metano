@@ -10,7 +10,7 @@ namespace Metano.Tests;
 public class StringJoinMappingTests
 {
     [Test]
-    public async Task ArrayShapedValues_JoinDirectly()
+    public async Task ArraysJoinDirectly_ListsSpreadFirst()
     {
         var output = TranspileText(
             """
@@ -21,8 +21,8 @@ public class StringJoinMappingTests
         );
 
         await Assert.That(output).Contains("return names.join(\", \");");
-        await Assert.That(output).Contains("return ids.join(\",\");");
-        await Assert.That(output).Contains("return items.join(\"; \");");
+        await Assert.That(output).Contains("return [...ids].join(\",\");");
+        await Assert.That(output).Contains("return [...items].join(\"; \");");
         await Assert.That(output).DoesNotContain("String.join");
     }
 

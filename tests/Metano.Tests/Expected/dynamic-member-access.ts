@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { isInt32, isString, objectText, valueHashCode } from "metano-runtime";
 
 export class Probe {
@@ -5,7 +6,7 @@ export class Probe {
   protected static readonly byProbeX = /* @__PURE__ */ Symbol("Probe(int x)");
   protected static readonly byProbeS = /* @__PURE__ */ Symbol("Probe(string s)");
   value: any = null;
-  items: any[] = [] as Array<any>;
+  items: List<any> = new List<any>();
 
   constructor(overload: typeof Probe.byProbeDefault);
   constructor(overload: typeof Probe.byProbeX, x: number);

@@ -11,9 +11,8 @@ namespace Metano.Compiler.Extraction;
 /// <see cref="RoslynTypeQueries.IsSetLike"/> and
 /// <see cref="RoslynTypeQueries.IsCollectionLike"/>, so an immutable or
 /// concurrent collection never becomes a mutable kind. Types outside stage
-/// 011c (the read-only, immutable, sorted and concurrent collections) and
-/// <c>IReadOnlySet&lt;T&gt;</c>, which joins in the 011c flip, resolve to
-/// <c>null</c> and keep their 2.x IR.
+/// 011c (the read-only, immutable, sorted and concurrent collections) resolve
+/// to <c>null</c> and keep their 2.x IR.
 /// </summary>
 public static class CollectionKindResolver
 {
@@ -32,6 +31,7 @@ public static class CollectionKindResolver
             ["IReadOnlyDictionary`2"] = IrCollectionKind.IReadOnlyDictionary,
             ["HashSet`1"] = IrCollectionKind.HashSet,
             ["ISet`1"] = IrCollectionKind.ISet,
+            ["IReadOnlySet`1"] = IrCollectionKind.IReadOnlySet,
             ["Queue`1"] = IrCollectionKind.Queue,
             ["Stack`1"] = IrCollectionKind.Stack,
         };

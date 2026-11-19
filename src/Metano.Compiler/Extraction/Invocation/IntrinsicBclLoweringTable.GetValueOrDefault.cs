@@ -1,5 +1,6 @@
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction.Invocation;
 
@@ -51,7 +52,42 @@ public sealed partial class IntrinsicBclLoweringTable
         return new IrCallExpression(
             new IrMemberAccess(arguments[0], ctx.Symbol!.Name),
             [new IrArgument(arguments[1]), new IrArgument(defaultValue)],
-            Origin: _helpers.BuildOrigin(ctx.Symbol)
+            Origin: ReceiverDictionaryOrigin(operation, ctx.Symbol.Name)
+                ?? _helpers.BuildOrigin(ctx.Symbol)
         );
     }
+
+    /// <summary>
+    /// The member as the receiver's own dictionary type declares it, for a
+    /// stage 011c dictionary receiver (spec 011 FR-007): its class has
+    /// <c>getValueOrDefault</c>, its interfaces read it through
+    /// <c>TryGetValue</c>, so the mapping depends on the receiver's kind, which
+    /// the extension's declaring type (<c>CollectionExtensions</c>) does not
+    /// say. <c>null</c> for any other receiver, and for a target that keeps
+    /// native collections, whose mapping keeps the source shape.
+    /// </summary>
+    private IrMemberOrigin? ReceiverDictionaryOrigin(IInvocationOperation operation, string name)
+    {
+        if (
+            IrExtractionContext.KeepsNativeCollectionsFor(_helpers.Target)
+            || operation.Arguments.Length == 0
+        )
+            return null;
+
+        var receiver = operation.Arguments[0].Value;
+
+        var receiverType = receiver is IConversionOperation conversion
+            ? conversion.Operand.Type
+            : receiver.Type;
+
+        return receiverType is INamedTypeSymbol named && IsDictionaryKind(named)
+            ? new IrMemberOrigin(named.OriginalDefinition.GetStableFullName(), name)
+            : null;
+    }
+
+    private static bool IsDictionaryKind(INamedTypeSymbol type) =>
+        CollectionKindResolver.KindOf(type)
+            is IrCollectionKind.Dictionary
+                or IrCollectionKind.IDictionary
+                or IrCollectionKind.IReadOnlyDictionary;
 }

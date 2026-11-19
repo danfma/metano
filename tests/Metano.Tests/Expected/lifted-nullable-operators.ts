@@ -1,11 +1,12 @@
+import { List } from "metano-runtime/system/collections";
 import type { Order } from "./order";
 
 export function concatCount(o: Order | null): string {
-  return "n" + (o?.items.length ?? "");
+  return "n" + (o?.items.count ?? "");
 }
 
 export function coalesceSum(o: Order | null): number {
-  return (o == null ? null : (o.items.length + 1) | 0) ?? 0;
+  return (o == null ? null : (o.items.count + 1) | 0) ?? 0;
 }
 
 export function addQty(o: Order, k: number): number | null {
@@ -36,6 +37,6 @@ export function show(o: Order): string {
   return `q=${o.qty ?? ""}`;
 }
 
-export function orders(): (Order | null)[] {
-  return [null];
+export function orders(): List<Order | null> {
+  return List.of([null]);
 }

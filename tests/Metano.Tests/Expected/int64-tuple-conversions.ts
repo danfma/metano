@@ -1,3 +1,4 @@
+import { List, throwModified } from "metano-runtime/system/collections";
 import { checkedInt32, checkedNarrow, tupleEquals } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
@@ -66,56 +67,106 @@ export class Pairs {
     return a[0] === b[0] && a[1] === b[1];
   }
 
-  iterated(pairs: [number, number][]): bigint {
+  iterated(pairs: List<[number, number]>): bigint {
     let total = 0n;
-    for (const pair$element of pairs) {
-      const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
-      total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
-    }
-
-    return total;
-  }
-
-  iteratedNarrowed(pairs: [bigint, bigint][]): number {
-    let total = 0;
-    for (const pair$element of pairs) {
-      const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
-      total = (total + (pair[0] + pair[1])) | 0;
-    }
-
-    return total;
-  }
-
-  iteratedNarrowedChecked(pairs: [bigint, bigint][]): number {
-    let total = 0;
-
     {
-      for (const pair$element of pairs) {
-        const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
-        total = checkedInt32(total + checkedInt32(pair[0] + pair[1]));
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = pairs;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const pair$element = $a[$i];
+        const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
+        total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
       }
     }
 
     return total;
   }
 
-  iteratedNullable(pairs: ([number, number] | null)[]): bigint {
-    let total = 0n;
-    for (const pair$element of pairs) {
-      const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
-        throw new InvalidOperationException("Nullable object must have a value.");
-      })());
-      total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
+  iteratedNarrowed(pairs: List<[bigint, bigint]>): number {
+    let total = 0;
+    {
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = pairs;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const pair$element = $a[$i];
+        const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
+        total = (total + (pair[0] + pair[1])) | 0;
+      }
     }
 
     return total;
   }
 
-  iteratedLifted(pairs: ([number, number] | null)[]): number {
+  iteratedNarrowedChecked(pairs: List<[bigint, bigint]>): number {
+    let total = 0;
+
+    {
+      {
+        const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+        const $l = pairs;
+        const $a = $l._items;
+        const $n = $a.length;
+        const $v = $c ? $l._version : 0;
+        for (let $i = 0; ; $i++) {
+          if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+          if ($i === $n) break;
+          const pair$element = $a[$i];
+          const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
+          total = checkedInt32(total + checkedInt32(pair[0] + pair[1]));
+        }
+      }
+    }
+
+    return total;
+  }
+
+  iteratedNullable(pairs: List<[number, number] | null>): bigint {
+    let total = 0n;
+    {
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = pairs;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const pair$element = $a[$i];
+        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
+          throw new InvalidOperationException("Nullable object must have a value.");
+        })());
+        total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
+      }
+    }
+
+    return total;
+  }
+
+  iteratedLifted(pairs: List<[number, number] | null>): number {
     let missing = 0;
-    for (const pair$element of pairs) {
-      const pair = pair$element == null ? null : [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
-      missing = (missing + (pair == null ? 1 : 0)) | 0;
+    {
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = pairs;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const pair$element = $a[$i];
+        const pair = pair$element == null ? null : [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
+        missing = (missing + (pair == null ? 1 : 0)) | 0;
+      }
     }
 
     return missing;
@@ -183,8 +234,8 @@ export class Pairs {
     return this.sum(((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number]));
   }
 
-  castLiteralElement(a: bigint, b: bigint): [bigint, bigint][] {
-    return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number])];
+  castLiteralElement(a: bigint, b: bigint): List<[bigint, bigint]> {
+    return List.of([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number])]);
   }
 
   castLiteralArm(narrow: boolean, a: bigint, b: bigint): [bigint, bigint] {

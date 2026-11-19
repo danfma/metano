@@ -194,7 +194,7 @@ public class SpanExtensionCallTests
     }
 
     [Test]
-    [Arguments("List<int> xs, int x", "xs.Contains(x)", "xs.includes(x)")]
+    [Arguments("List<int> xs, int x", "xs.Contains(x)", "xs.contains(x)")]
     [Arguments("List<int> xs, int x", "xs.IndexOf(x)", "xs.indexOf(x)")]
     [Arguments("IEnumerable<int> xs, int x", "xs.Contains(x)", "linq(xs, contains(x))")]
     [Arguments("IReadOnlyList<int> xs, int x", "xs.Contains(x)", "linq(xs, contains(x))")]

@@ -232,7 +232,19 @@ public sealed record IrSliceExpression(
     IrExpression? Start,
     IrExpression? End,
     IrTypeRef? TargetType = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// Whether <see cref="Start"/> is the <c>n</c> of a from-end bound
+    /// (<c>^n..</c>) the target resolves against the receiver's length, for a
+    /// target whose collections are runtime classes (spec 011 data-model § 2,
+    /// B4); <c>false</c> once the extractor resolved it.
+    /// </summary>
+    public bool StartFromEnd { get; init; }
+
+    /// <summary>Whether <see cref="End"/> is the <c>n</c> of a from-end bound (<c>..^n</c>).</summary>
+    public bool EndFromEnd { get; init; }
+}
 
 /// <summary>
 /// A null-conditional access (<c>receiver?.A</c>, <c>receiver?.A.B(x)</c>,
@@ -859,6 +871,125 @@ public sealed record IrLambdaExpression(
     IrTypeRef? ThisType = null,
     string? Name = null
 ) : IrExpression;
+
+// -- Stage 011c collection accesses (spec 011 data-model § 2) --
+
+/// <summary>What an <see cref="IrIndexerUpdateExpression"/> yields.</summary>
+public enum IrIndexerUpdateResult
+{
+    /// <summary>The value written: <c>r[i] op= v</c>, <c>++r[i]</c>, <c>--r[i]</c>.</summary>
+    NewValue,
+
+    /// <summary>The element before the write: <c>r[i]++</c>, <c>r[i]--</c>.</summary>
+    OldValue,
+
+    /// <summary>
+    /// <c>r[i] ??= v</c>: <see cref="IrIndexerUpdateExpression.NewValue"/> is
+    /// the right-hand side, evaluated and written only when the current
+    /// element is <c>null</c>; the expression yields the element after it.
+    /// </summary>
+    Coalesce,
+}
+
+/// <summary>
+/// The evaluate-once update of one element through the indexer of a stage
+/// 011c collection (spec 011 FR-010): <c>r[i] op= v</c>, <c>r[i]++</c> /
+/// <c>--</c> (prefix or postfix) and <c>r[i] ??= v</c>, list or dictionary,
+/// class or interface. <see cref="NewValue"/> is the value written, an
+/// expression over <c>IrIdentifier(CurrentName)</c> (the current element)
+/// built with the element type's operator, increment and overflow rules;
+/// <see cref="CurrentName"/> is unique per site and contains a <c>$</c>. With
+/// <see cref="FromEnd"/> the index is <c>^Index</c> (<c>r[^n] op= v</c>). Only a
+/// target whose collections are runtime classes gets the node
+/// (<c>IrExtractionContext.KeepsNativeCollections</c>); the target chooses
+/// the shape that renders it.
+/// </summary>
+public sealed record IrIndexerUpdateExpression(
+    IrExpression Receiver,
+    IrExpression Index,
+    bool FromEnd,
+    IrCollectionTypeRef ReceiverType,
+    string CurrentName,
+    IrExpression NewValue,
+    IrIndexerUpdateResult Result
+) : IrExpression;
+
+/// <summary>
+/// <c>r[^n]</c> on a stage 011c collection, an array or a <c>JsArray&lt;T&gt;</c>
+/// (spec 011 data-model § 2, B4): a read, or the target of <c>r[^n] = v</c>.
+/// <see cref="Offset"/> is <c>n</c>; <see cref="ReceiverType"/> is the
+/// receiver's static type (an <see cref="IrCollectionTypeRef"/> or an
+/// <see cref="IrArrayTypeRef"/>, never nullable). Only a target whose
+/// collections are runtime classes gets the node.
+/// </summary>
+public sealed record IrFromEndElementAccess(
+    IrExpression Receiver,
+    IrExpression Offset,
+    IrTypeRef ReceiverType
+) : IrExpression;
+
+/// <summary>
+/// A C# conversion, implicit or explicit, from <c>T[]</c> / <c>JsArray&lt;T&gt;</c>
+/// to <c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>, <c>IReadOnlyList&lt;T&gt;</c>
+/// or <c>IReadOnlyCollection&lt;T&gt;</c> (spec 011 FR-003): the array viewed
+/// as a fixed-size list. Only a target whose collections are runtime classes
+/// gets the node.
+/// </summary>
+public sealed record IrArrayToCollectionConversion(IrExpression Value, IrCollectionTypeRef Target)
+    : IrExpression;
+
+/// <summary>
+/// The C# collection initializer forms of a stage 011c collection (spec 011
+/// FR-007): <c>{ a, b }</c> / <c>{ { k, v } }</c> call <c>Add</c>,
+/// <c>{ [k] = v }</c> writes through the indexer.
+/// </summary>
+public enum IrCollectionInitializerForm
+{
+    Add,
+    Assign,
+}
+
+/// <summary>
+/// The constructor a collection initializer follows, as far as the factories
+/// of the targets tell them apart: the parameterless one, the one taking only
+/// an equality comparer, or any other (capacity, copy, capacity + comparer).
+/// </summary>
+public enum IrCollectionConstruction
+{
+    Parameterless,
+    ComparerOnly,
+    Other,
+}
+
+/// <summary>
+/// <c>new List&lt;T&gt; { a, b }</c>, <c>new Dictionary&lt;K, V&gt;(cmp) { [k] = v }</c>,
+/// <c>new HashSet&lt;T&gt;(capacity) { a }</c>: the construction of a stage 011c
+/// <c>List</c>, <c>HashSet</c> or <c>Dictionary</c> followed by its
+/// initializer (spec 011 FR-007). <see cref="Creation"/> is the lowered
+/// construction; <see cref="Elements"/> holds per initializer element its
+/// values in source order (one for a list or set, the key and the value for a
+/// dictionary); <see cref="Comparer"/> is the comparer argument of a
+/// <see cref="IrCollectionConstruction.ComparerOnly"/> construction. Only a
+/// target whose collections are runtime classes gets the node; the target
+/// chooses the factory.
+/// </summary>
+public sealed record IrCollectionInitialization(
+    IrExpression Creation,
+    IrCollectionTypeRef Type,
+    IrCollectionInitializerForm Form,
+    IrCollectionConstruction Construction,
+    IrExpression? Comparer,
+    IReadOnlyList<IReadOnlyList<IrExpression>> Elements
+) : IrExpression
+{
+    /// <summary>
+    /// The element type C# gives a list or set initializer, set only where a
+    /// target that infers it from the elements would get a narrower one
+    /// (<c>new List&lt;object&gt; { Color.Red }</c>), as
+    /// <see cref="IrArrayLiteral.ElementType"/>.
+    /// </summary>
+    public IrTypeRef? ElementType { get; init; }
+}
 
 // -- Collection literals --
 

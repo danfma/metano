@@ -1,3 +1,4 @@
+import { Dictionary } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Handles } from "./handles";
 import { NativeId } from "./native-id";
@@ -18,7 +19,7 @@ export class JsonContext extends SerializerContext {
   get handles(): TypeSpec<Handles> {
     return this._handles ??= this.createSpec({
       type: Handles,
-      factory: (p: Record<string, unknown>) => new Handles(p.signed as bigint, p.unsigned as bigint, p.parent as bigint | null, p.values as bigint[], p.byHandle as Map<bigint, string>, p.counts as Map<string, bigint>, p.id as NativeId, p.byToken as Map<NativeId, string>, p.quota as NativeQuota),
+      factory: (p: Record<string, unknown>) => new Handles(p.signed as bigint, p.unsigned as bigint, p.parent as bigint | null, p.values as bigint[], p.byHandle as Dictionary<bigint, string>, p.counts as Dictionary<string, bigint>, p.id as NativeId, p.byToken as Dictionary<NativeId, string>, p.quota as NativeQuota),
       properties: [
         {
           ts: "signed",
@@ -51,18 +52,20 @@ export class JsonContext extends SerializerContext {
           ts: "byHandle",
           json: "ByHandle",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "int64", numberType: "System.Int64" },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
           ts: "counts",
           json: "Counts",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "primitive" },
             value: { kind: "int64", numberType: "System.UInt64" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
@@ -79,7 +82,7 @@ export class JsonContext extends SerializerContext {
           ts: "byToken",
           json: "ByToken",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: {
               kind: "int64",
               numberType: "System.Int64",
@@ -87,6 +90,7 @@ export class JsonContext extends SerializerContext {
               create: NativeId.create,
             },
             value: { kind: "primitive" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {

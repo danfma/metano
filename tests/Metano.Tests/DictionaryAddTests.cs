@@ -2,14 +2,14 @@ namespace Metano.Tests;
 
 /// <summary>
 /// <c>Dictionary&lt;K, V&gt;.Add(key, value)</c> throws on a duplicate key, where
-/// <c>Map.set</c> overwrites, so it lowers to the <c>addEntry</c> runtime helper. The
-/// indexer setter and the <c>[key] = value</c> index initializer keep overwriting through
-/// <c>set</c>.
+/// <c>set</c> overwrites, so it lowers to the runtime dictionary's throwing <c>add</c>
+/// member (<c>Dictionary.of</c> in an <c>{ k, v }</c> initializer). The indexer setter and
+/// the <c>[key] = value</c> index initializer (<c>Dictionary.assign</c>) keep overwriting.
 /// </summary>
 public class DictionaryAddTests
 {
     [Test]
-    public async Task Add_OnDictionaryAndInterface_LowersToAddEntry()
+    public async Task Add_OnDictionaryAndInterface_LowersToTheThrowingAdd()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -28,9 +28,16 @@ public class DictionaryAddTests
         );
 
         var output = result["registry.ts"];
-        await Assert.That(output).Contains("import { addEntry } from \"metano-runtime\";");
-        await Assert.That(output).Contains("addEntry(this._byName, name, id);");
-        await Assert.That(output).Contains("addEntry(target, \"x\", 1);");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "import { Dictionary, type IDictionary } from \"metano-runtime/system/collections\";"
+            );
+
+        await Assert.That(output).Contains("this._byName.add(name, id);");
+        await Assert.That(output).Contains("target.add(\"x\", 1);");
+        await Assert.That(output).DoesNotContain("addEntry");
         await Assert.That(output).DoesNotContain(".set(");
     }
 
@@ -54,8 +61,12 @@ public class DictionaryAddTests
         );
 
         var output = result["registry.ts"];
-        await Assert.That(output).Contains("addEntry(receiver$temp$0, \"a\", 1);");
-        await Assert.That(output).Contains(".set(\"a\", 1);");
+        await Assert.That(output).Contains("return Dictionary.of([\n      [\"a\", 1],\n    ]);");
+
+        await Assert
+            .That(output)
+            .Contains("return Dictionary.assign([\n      [\"a\", 1],\n    ]);");
+
         await Assert.That(output).Contains("map.set(\"a\", 2)");
     }
 }

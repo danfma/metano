@@ -1,9 +1,10 @@
+import { List } from "metano-runtime/system/collections";
 import { toException, tryFilter } from "metano-runtime";
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Runner {
-  private readonly _log: string[] = [] as Array<string>;
+  private readonly _log: List<string> = new List<string>();
 
   constructor() { }
 
@@ -11,11 +12,11 @@ export class Runner {
     try {
       const text = await this.loadAsync(name);
       try {
-        this._log.push(text);
+        this._log.add(text);
       } catch (e$) {
         const e0 = toException(e$);
         if (e0 instanceof InvalidOperationException) {
-          this._log.push("inner");
+          this._log.add("inner");
           throw e$;
         } else {
           throw e$;
@@ -33,7 +34,7 @@ export class Runner {
         throw e$;
       }
     } finally {
-      this._log.push("done");
+      this._log.add("done");
     }
   }
 
@@ -42,7 +43,7 @@ export class Runner {
     try {
       step = 1;
     } finally {
-      this._log.push("step " + step);
+      this._log.add("step " + step);
     }
   }
 

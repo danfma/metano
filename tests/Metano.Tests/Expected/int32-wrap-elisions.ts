@@ -1,4 +1,4 @@
-import { HashSet } from "metano-runtime";
+import { Dictionary, HashSet, type ICollection, List } from "metano-runtime/system/collections";
 import type { Bag } from "./bag";
 
 export class Elisions {
@@ -12,28 +12,28 @@ export class Elisions {
     return s.length - 1;
   }
 
-  listLast(l: number[]): number {
-    return l.length - 1;
+  listLast(l: List<number>): number {
+    return l.count - 1;
   }
 
-  dictionaryLast(d: Map<string, number>): number {
-    return d.size - 1;
+  dictionaryLast(d: Dictionary<string, number>): number {
+    return d.count - 1;
   }
 
   setDouble(s: HashSet<number>): number {
-    return Math.imul(s.size, 2);
+    return Math.imul(s.count, 2);
   }
 
-  listNext(l: number[]): number {
-    return (l.length + 1) | 0;
+  listNext(l: List<number>): number {
+    return (l.count + 1) | 0;
   }
 
   userCount(b: Bag): number {
     return (b.count - 1) | 0;
   }
 
-  interface(c: number[]): number {
-    return (c.length - 1) | 0;
+  interface(c: ICollection<number>): number {
+    return (c.count - 1) | 0;
   }
 
   masked(x: number): number {

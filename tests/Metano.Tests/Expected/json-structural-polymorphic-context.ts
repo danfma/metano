@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { isAnimal, type Animal } from "./animal";
 import { Circle } from "./circle";
@@ -40,7 +41,7 @@ export class JsonContext extends SerializerContext {
   get holder(): TypeSpec<Holder> {
     return this._holder ??= this.createSpec({
       type: Holder,
-      factory: (p: Record<string, unknown>) => new Holder(p.main as IShape, p.all as IShape[]),
+      factory: (p: Record<string, unknown>) => new Holder(p.main as IShape, p.all as List<IShape>),
       properties: [
         {
           ts: "main",
@@ -54,11 +55,12 @@ export class JsonContext extends SerializerContext {
           ts: "all",
           json: "All",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.iShape,
             },
+            create: (items) => List.of(items),
           },
         },
       ],

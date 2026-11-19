@@ -1,4 +1,6 @@
 using Metano.Compiler;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
@@ -49,9 +51,16 @@ internal static class JsonTypeClassifier
         kind switch
         {
             JsonPropertyKind.Nullable => [UnwrapNullable(type)],
-            JsonPropertyKind.Array => [ElementTypeOf(type)],
+            JsonPropertyKind.Array
+            or JsonPropertyKind.List
+            or JsonPropertyKind.Queue
+            or JsonPropertyKind.Stack => [ElementTypeOf(type)],
             JsonPropertyKind.HashSet => [SetElementTypeOf(type)],
-            JsonPropertyKind.Map => [KeyTypeOf(type), ValueTypeOf(type)],
+            JsonPropertyKind.Map or JsonPropertyKind.Dictionary =>
+            [
+                KeyTypeOf(type),
+                ValueTypeOf(type),
+            ],
             _ => [],
         };
 
@@ -212,13 +221,16 @@ internal static class JsonTypeClassifier
         if (IsTemporal(fullName))
             return JsonPropertyKind.Temporal;
 
+        if (RuntimeCollectionKindOf(named) is { } collectionKind)
+            return collectionKind;
+
         if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
             return JsonPropertyKind.Map;
 
         if (named.IsSetLike() && named.TypeArguments.Length > 0)
             return JsonPropertyKind.HashSet;
 
-        if (IsSequence(named, fullName))
+        if (IsSequence(named, fullName) || fullName.StartsWith("Metano.Interop.JsArray<"))
             return JsonPropertyKind.Array;
 
         if (named.TypeKind == TypeKind.Enum)
@@ -236,6 +248,33 @@ internal static class JsonTypeClassifier
 
         return JsonPropertyKind.Ref;
     }
+
+    /// <summary>
+    /// The runtime collection kind System.Text.Json reads a stage 011c
+    /// collection type into (spec 011 contracts/runtime-collections.md § Kind
+    /// per C# type): the list interfaces read into a <c>List</c>, the
+    /// dictionary interfaces into a <c>Dictionary</c>, the set interfaces into
+    /// a <c>HashSet</c>; <c>null</c> for any other type (arrays and
+    /// <c>IEnumerable&lt;T&gt;</c> stay <c>array</c>; the 011h collections keep
+    /// their 2.x kinds until stage 011h).
+    /// </summary>
+    private static JsonPropertyKind? RuntimeCollectionKindOf(INamedTypeSymbol named) =>
+        CollectionKindResolver.KindOf(named) switch
+        {
+            IrCollectionKind.List
+            or IrCollectionKind.IList
+            or IrCollectionKind.ICollection
+            or IrCollectionKind.IReadOnlyList
+            or IrCollectionKind.IReadOnlyCollection => JsonPropertyKind.List,
+            IrCollectionKind.Dictionary
+            or IrCollectionKind.IDictionary
+            or IrCollectionKind.IReadOnlyDictionary => JsonPropertyKind.Dictionary,
+            IrCollectionKind.HashSet or IrCollectionKind.ISet or IrCollectionKind.IReadOnlySet =>
+                JsonPropertyKind.HashSet,
+            IrCollectionKind.Queue => JsonPropertyKind.Queue,
+            IrCollectionKind.Stack => JsonPropertyKind.Stack,
+            _ => null,
+        };
 
     private static bool IsTemporal(string fullName) =>
         fullName

@@ -1,55 +1,56 @@
+import { List } from "metano-runtime/system/collections";
 import type { Animal } from "./animal";
 import type { Cat } from "./cat";
 import type { Dog } from "./dog";
 import { Holder } from "./holder";
 
 export class Lists {
-  private readonly _field: (number | null)[] = [1];
-  private _pets: Animal[] = [];
+  private readonly _field: List<number | null> = List.of([1]);
+  private _pets: List<Animal> = List.of([]);
 
   constructor() { }
 
   nullableLocal(): number {
-    const l: (number | null)[] = [1];
-    l.push(null);
+    const l = List.of([1] as (number | null)[]);
+    l.add(null);
 
-    return l.length;
+    return l.count;
   }
 
   polymorphicLocal(dog: Dog, cat: Cat): number {
-    const l: Animal[] = [dog];
-    l.push(cat);
+    const l = List.of([dog] as Animal[]);
+    l.add(cat);
 
-    return l.length;
+    return l.count;
   }
 
   emptyLocal(): number {
-    const l: number[] = [];
-    l.push(1);
+    const l = List.of([] as number[]);
+    l.add(1);
 
-    return l.length;
+    return l.count;
   }
 
   nullableReference(maybe: string | null): number {
-    const named: (string | null)[] = ["a"];
-    const same = [maybe];
-    named.push(null);
+    const named = List.of(["a"] as (string | null)[]);
+    const same = List.of([maybe]);
+    named.add(null);
 
-    return (named.length + same.length) | 0;
+    return (named.count + same.count) | 0;
   }
 
   spreadLocal(xs: number[]): number {
-    const l: (number | null)[] = [...xs];
-    l.push(null);
+    const l = List.of([...xs] as (number | null)[]);
+    l.add(null);
 
-    return l.length;
+    return l.count;
   }
 
   reassigned(): number {
     let l = [1] as (number | null)[];
     l = [null];
 
-    return [...l].length;
+    return List.from(l).count;
   }
 
   nullableArray(): number {
@@ -69,76 +70,76 @@ export class Lists {
   }
 
   nested(): number {
-    const l = [[1] as (number | null)[]];
-    l[0]!.push(null);
+    const l = List.of([List.of([1] as (number | null)[])]);
+    l.get(0).add(null);
 
-    return l[0]!.length;
+    return l.get(0).count;
   }
 
   cast(): number {
-    const l = [1] as (number | null)[];
-    l.push(null);
+    const l = List.of([1] as (number | null)[]);
+    l.add(null);
 
-    return l.length;
+    return l.count;
   }
 
   conditional(flag: boolean): number {
-    const l = flag ? [1] as (number | null)[] : [2, 3] as (number | null)[];
-    l.push(null);
+    const l = flag ? List.of([1] as (number | null)[]) : List.of([2, 3] as (number | null)[]);
+    l.add(null);
 
-    return l.length;
+    return l.count;
   }
 
   lambda(): number {
-    const make = () => [1] as (number | null)[];
+    const make = () => List.of([1] as (number | null)[]);
     const l = make();
-    l.push(null);
+    l.add(null);
 
-    return l.length;
+    return l.count;
   }
 
   exact(): number {
-    const ints = [1, 2];
-    const doubles = [1, 2.5];
-    const names = ["a"];
+    const ints = List.of([1, 2]);
+    const doubles = List.of([1, 2.5]);
+    const names = List.of(["a"]);
 
-    return (ints.length + doubles.length + names.length) | 0;
+    return (ints.count + doubles.count + names.count) | 0;
   }
 
   readOnlyViews(dog: Dog): number {
-    const counted = [] as number[];
+    const counted = List.adopt([] as number[], { fixedSize: true });
     const sequence = [dog] as Animal[];
-    const collection: (number | null)[] = [1];
-    const read: Animal[] = [dog];
-    const list: (number | null)[] = [1];
-    collection.push(null);
-    list[0] = null;
-    const first = read[0]!.name.length;
+    const collection = List.of([1] as (number | null)[]);
+    const read = List.adopt([dog] as Animal[], { fixedSize: true });
+    const list = List.of([1] as (number | null)[]);
+    collection.add(null);
+    list.set(0, null);
+    const first = read.get(0).name.length;
 
-    return (counted.length + collection.length + read.length + list.length + first) | 0;
+    return (counted.count + collection.count + read.count + list.count + first) | 0;
   }
 
   erasedCasts(): number {
-    const cast: (number | null)[] = [1];
-    const defaulted: (number | null)[] = [null];
-    cast.push(null);
-    defaulted.push(1);
+    const cast = List.of([1] as (number | null)[]);
+    const defaulted = List.of([null] as (number | null)[]);
+    cast.add(null);
+    defaulted.add(1);
 
-    return (cast.length + defaulted.length) | 0;
+    return (cast.count + defaulted.count) | 0;
   }
 
   nestedNullability(): number {
-    const pairs: [number, string | null][] = [[1, "a"] as [number, string]];
-    const exact = [[1, "a"] as [number, string]];
-    pairs.push([2, null] as [number, string | null]);
+    const pairs = List.of([[1, "a"] as [number, string]] as [number, string | null][]);
+    const exact = List.of([[1, "a"] as [number, string]]);
+    pairs.add([2, null] as [number, string | null]);
 
-    return (pairs.length + exact.length) | 0;
+    return (pairs.count + exact.count) | 0;
   }
 
   forHeader(): number {
     let total = 0;
-    for (let l: (number | null)[] = [1]; l.length < 3; l.push(null)) {
-      total = (total + l.length) | 0;
+    for (let l = List.of([1] as (number | null)[]); l.count < 3; l.add(null)) {
+      total = (total + l.count) | 0;
     }
 
     return total;
@@ -146,59 +147,55 @@ export class Lists {
 
   numeric(ints: number[]): number {
     const bytes = [1, 2];
-    const longs = [1n, 2n];
-    const widened = [...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))];
+    const longs = List.of([1n, 2n]);
+    const widened = List.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
-    return (bytes.length + longs.length + widened.length) | 0;
+    return (bytes.length + longs.count + widened.count) | 0;
   }
 
-  walk(given: (number | null)[] | null, kind: number): number {
-    const parenthesized: (number | null)[] = [1];
-    const coalesced = given ?? [1] as (number | null)[];
-    const switched = kind === 0 ? [1] as (number | null)[] : [2, 3] as (number | null)[];
-    const block = () => [1] as (number | null)[];
+  walk(given: List<number | null> | null, kind: number): number {
+    const parenthesized = List.of([1] as (number | null)[]);
+    const coalesced = given ?? List.of([1] as (number | null)[]);
+    const switched = kind === 0 ? List.of([1] as (number | null)[]) : List.of([2, 3] as (number | null)[]);
+    const block = () => List.of([1] as (number | null)[]);
     const holder = ((receiver$temp$0) => {
-      receiver$temp$0.items = [1];
+      receiver$temp$0.items = List.of([1]);
 
       return receiver$temp$0;
     })(new Holder());
-    const lists = ((receiver$temp$1) => {
-      receiver$temp$1.push([1]);
+    const lists = List.of([List.of([1])]);
+    parenthesized.add(null);
+    coalesced.add(null);
+    switched.add(null);
+    block().add(null);
+    holder.items.add(null);
+    holder.initial.add(null);
+    lists.get(0).add(null);
 
-      return receiver$temp$1;
-    })([] as Array<(number | null)[]>);
-    parenthesized.push(null);
-    coalesced.push(null);
-    switched.push(null);
-    block().push(null);
-    holder.items.push(null);
-    holder.initial.push(null);
-    lists[0]!.push(null);
-
-    return (parenthesized.length + coalesced.length + switched.length + lists.length) | 0;
+    return (parenthesized.count + coalesced.count + switched.count + lists.count) | 0;
   }
 
-  returned(): (number | null)[] {
-    return [1];
+  returned(): List<number | null> {
+    return List.of([1]);
   }
 
-  returnedFromABlock(): (number | null)[] {
-    return [];
+  returnedFromABlock(): List<number | null> {
+    return List.of([]);
   }
 
-  take(l: (number | null)[]): number {
-    return l.length;
+  take(l: List<number | null>): number {
+    return l.count;
   }
 
   argument(): number {
-    return this.take([1]);
+    return this.take(List.of([1]));
   }
 
   assigned(dog: Dog, cat: Cat): number {
-    this._pets = [dog];
-    this._pets.push(cat);
-    this._field.push(null);
+    this._pets = List.of([dog]);
+    this._pets.add(cat);
+    this._field.add(null);
 
-    return (this._pets.length + this._field.length) | 0;
+    return (this._pets.count + this._field.count) | 0;
   }
 }

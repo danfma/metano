@@ -62,8 +62,8 @@ public class JsonClosureGenericTests
         await Assert.That(ts).Contains("get pageLeaf(): TypeSpec<Page<Leaf>>");
         await Assert.That(ts).Contains("get pageString(): TypeSpec<Page<string>>");
         await Assert.That(ts).Contains("spec: () => this.leaf");
-        await Assert.That(ts).Contains("new Page(p.items as Leaf[])");
-        await Assert.That(ts).Contains("new Page(p.items as string[])");
+        await Assert.That(ts).Contains("new Page(p.items as List<Leaf>)");
+        await Assert.That(ts).Contains("new Page(p.items as List<string>)");
     }
 
     [Test]
@@ -82,7 +82,7 @@ public class JsonClosureGenericTests
             """
         );
 
-        await Assert.That(ts).Contains("get listPageLeaf(): ValueSpec<Page<Leaf>[] | null>");
+        await Assert.That(ts).Contains("get listPageLeaf(): ValueSpec<List<Page<Leaf>> | null>");
         await Assert.That(ts).Contains("spec: () => this.pageLeaf");
         await Assert.That(ts).Contains("get pageLeaf(): TypeSpec<Page<Leaf>>");
         await Assert.That(ts).Contains("get leaf(): TypeSpec<Leaf>");

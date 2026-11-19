@@ -86,9 +86,9 @@ public class InterfaceInheritanceTests
     [Test]
     public async Task BclGenericBase_MapsThroughBclLayer()
     {
-        // `IReadOnlyCollection<T>` is a BCL type that maps to TS
-        // `Iterable<T>` via the existing IrToTsTypeMapper rules. The
-        // extends clause must use the mapped name, not the C# original.
+        // `IReadOnlyCollection<T>` is a BCL type that maps to the runtime
+        // `IReadOnlyCollection<T>` interface (a type-only import) via the
+        // IrToTsTypeMapper rules; the extends clause uses the mapped name.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
@@ -102,18 +102,21 @@ public class InterfaceInheritanceTests
         );
 
         var output = result["i-typed.ts"];
-        await Assert.That(output).Contains("interface ITyped<T> extends Iterable<T>");
-        await Assert.That(output).DoesNotContain("IReadOnlyCollection");
+        await Assert.That(output).Contains("interface ITyped<T> extends IReadOnlyCollection<T>");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "import type { IReadOnlyCollection } from \"metano-runtime/system/collections\";"
+            );
     }
 
     [Test]
-    public async Task CollectionLikeBase_NormalizesArrayShorthandToNamedArray()
+    public async Task CollectionLikeBase_ExtendsTheRuntimeInterface()
     {
-        // `IList<T>` / `ICollection<T>` map to `IrArrayTypeRef`
-        // (T[]) via the existing collection-like rule. The TS
-        // printer's array shorthand is illegal in a heritage clause
-        // (`extends T[]` doesn't parse); the bridge rewrites it to
-        // the named `Array<T>` form, which TS accepts.
+        // `IList<T>` / `ICollection<T>` map to the runtime collection
+        // interfaces, so the heritage clause names `IList<T>` (never the
+        // array shorthand `extends T[]`, which doesn't parse).
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
@@ -127,7 +130,7 @@ public class InterfaceInheritanceTests
         );
 
         var output = result["i-rows.ts"];
-        await Assert.That(output).Contains("interface IRows<T> extends Array<T>");
+        await Assert.That(output).Contains("interface IRows<T> extends IList<T>");
         await Assert.That(output).DoesNotContain("extends T[]");
     }
 

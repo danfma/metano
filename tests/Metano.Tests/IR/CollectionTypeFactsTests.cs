@@ -29,6 +29,7 @@ public class CollectionTypeFactsTests
     [Arguments("IReadOnlyDictionary<string, int>", IrCollectionKind.IReadOnlyDictionary)]
     [Arguments("HashSet<int>", IrCollectionKind.HashSet)]
     [Arguments("ISet<int>", IrCollectionKind.ISet)]
+    [Arguments("IReadOnlySet<int>", IrCollectionKind.IReadOnlySet)]
     [Arguments("Queue<int>", IrCollectionKind.Queue)]
     [Arguments("Stack<int>", IrCollectionKind.Stack)]
     [Arguments("Dictionary<string, int>.KeyCollection", IrCollectionKind.KeyCollection)]
@@ -42,7 +43,6 @@ public class CollectionTypeFactsTests
     }
 
     [Test]
-    [Arguments("IReadOnlySet<int>")]
     [Arguments("SortedSet<int>")]
     [Arguments("SortedDictionary<string, int>")]
     [Arguments("System.Collections.Concurrent.ConcurrentDictionary<string, int>")]
@@ -144,15 +144,20 @@ public class CollectionTypeFactsTests
         await Assert.That(first.GetHashCode()).IsEqualTo(second.GetHashCode());
     }
 
+    /// <summary>
+    /// Since the flip a collection ref is equal to another only for the same
+    /// kind over equal arguments, as each kind renders its own TypeScript
+    /// type: a shared pre-011c legacy form no longer makes two refs equal.
+    /// </summary>
     [Test]
     [Arguments("IList<List<int>>")]
     [Arguments("IReadOnlyList<IList<int>>")]
-    public async Task Equality_FollowsTheLegacyForm(string sameLegacyShape)
+    public async Task Equality_TellsCollectionKindsApart(string sameLegacyShape)
     {
         var list = MapFieldType("List<List<int>>");
         var other = MapFieldType(sameLegacyShape);
 
-        await Assert.That(list).IsEqualTo(other);
+        await Assert.That(list).IsNotEqualTo(other);
     }
 
     [Test]
@@ -164,17 +169,24 @@ public class CollectionTypeFactsTests
         await Assert.That(list).IsNotEqualTo(set);
     }
 
+    /// <summary>
+    /// Equivalence follows the same rule: <c>List&lt;int&gt;</c>,
+    /// <c>IList&lt;int&gt;</c> and <c>int[]</c> render different types.
+    /// </summary>
     [Test]
     [Arguments("List<int>", "int[]")]
     [Arguments("Dictionary<string, int>", "IDictionary<string, int>")]
     [Arguments("List<List<int>>", "int[][]")]
-    public async Task Equivalence_FollowsTheLegacyForm(string collection, string sameLegacyShape)
+    public async Task Equivalence_TellsCollectionKindsApart(
+        string collection,
+        string sameLegacyShape
+    )
     {
         var left = MapFieldType(collection);
         var right = MapFieldType(sameLegacyShape);
 
-        await Assert.That(IrTypeRefEquivalence.AreEquivalent(left, right)).IsTrue();
-        await Assert.That(IrTypeRefEquivalence.AreEquivalent(right, left)).IsTrue();
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(left, right)).IsFalse();
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(right, left)).IsFalse();
     }
 
     [Test]
@@ -206,11 +218,11 @@ public class CollectionTypeFactsTests
     [Test]
     [Arguments("IReadOnlySet<int>")]
     [Arguments("Dictionary<string, IReadOnlySet<int>>")]
-    public async Task ReadOnlySet_IsNeverResolvedBeforeTheFlip(string type)
+    public async Task ReadOnlySet_HasATotalLegacyForm(string type)
     {
-        // The deep legacy form reads LegacyForm on every collection ref, and
-        // LegacyForm throws for the IReadOnlySet kind: no throw means the
-        // resolver produced none at any nesting level.
+        // IReadOnlySet<T> joins the collection kinds in the flip; its legacy
+        // form (read only by a target that keeps native collections) is a set,
+        // so the deep legacy form never throws at any nesting level.
         var mapped = MapFieldType(type);
 
         await Assert.That(() => mapped.ToLegacyTypeRef()).ThrowsNothing();
@@ -230,13 +242,22 @@ public class CollectionTypeFactsTests
     [Arguments("var d = new Dictionary<string, int> { [\"a\"] = 1 };")]
     public async Task CollectionElementAccess_CarriesItsReceiverType(string statement)
     {
-        var body = ExtractBody(statement);
-        var accesses = Descendants(body).OfType<IrElementAccess>().ToList();
+        // A read-modify-write of an element is one IrIndexerUpdateExpression
+        // and an index initializer one IrCollectionInitialization (spec 011
+        // FR-007, FR-010); each carries the collection type as well.
+        var expressions = Descendants(ExtractBody(statement)).ToList();
 
-        await Assert.That(accesses).IsNotEmpty();
+        var receiverTypes = expressions
+            .OfType<IrElementAccess>()
+            .Select(access => access.TargetType)
+            .Concat(expressions.OfType<IrIndexerUpdateExpression>().Select(u => u.ReceiverType))
+            .Concat(expressions.OfType<IrCollectionInitialization>().Select(i => i.Type))
+            .ToList();
 
-        foreach (var access in accesses)
-            await Assert.That(access.TargetType).IsTypeOf<IrCollectionTypeRef>();
+        await Assert.That(receiverTypes).IsNotEmpty();
+
+        foreach (var receiverType in receiverTypes)
+            await Assert.That(receiverType).IsTypeOf<IrCollectionTypeRef>();
     }
 
     [Test]

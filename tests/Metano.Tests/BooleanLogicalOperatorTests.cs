@@ -98,9 +98,11 @@ public class BooleanLogicalOperatorTests
         await Assert
             .That(output)
             .Contains("return !a || b === false ? false : b == null ? null : true;");
+
         await Assert
             .That(output)
             .Contains("return a === true || b ? true : a == null ? null : false;");
+
         await Assert.That(output).Contains("return b == null ? null : a !== b;");
     }
 
@@ -203,7 +205,8 @@ public class BooleanLogicalOperatorTests
 
         await Assert
             .That(output)
-            .Contains("this.flags[receiver$temp$0] = !!(+this.flags[receiver$temp$0]! & +b)");
+            .Contains("$i = this.next(), this.flags.set($i, !!(+this.flags.get($i) & +b));");
+
         await Assert.That(output.Split("this.next()").Length).IsEqualTo(2);
     }
 

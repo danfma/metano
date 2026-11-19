@@ -150,7 +150,7 @@ public class ForLoopTranspileTests
                 """
                     {
                       let i = 0;
-                      const [$found0, first] = tryGetValue(values, 0, 0);
+                      const [$found0, first] = values.tryGetValue(0, 0);
                       const found = $found0 ? first : 0;
                       for (; ; i++) {
                 """

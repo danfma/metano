@@ -12,20 +12,22 @@ namespace Metano.Compiler.Extraction.Invocation;
 public sealed partial class IntrinsicBclLoweringTable
 {
     /// <summary>
-    /// <c>list.Find(match)</c> → <c>list.Find(match, default(T))</c>. A
+    /// <c>list.Find(match)</c> → <c>list.Find(match, default(T))</c>, and
+    /// <c>FindLast</c> likewise (spec 011 contracts/runtime-collections.md). A
     /// struct without a target-agnostic default keeps <c>null</c> and is
     /// reported.
     /// </summary>
     private void SeedListFind(Compilation compilation)
     {
-        var find = compilation
-            .GetTypeByMetadataName("System.Collections.Generic.List`1")
-            ?.GetMembers(nameof(List<>.Find))
-            .OfType<IMethodSymbol>()
-            .SingleOrDefault();
+        var list = compilation.GetTypeByMetadataName("System.Collections.Generic.List`1");
 
-        if (find is not null)
-            _entries[find] = BuildListFindCall;
+        foreach (var name in (string[])[nameof(List<>.Find), nameof(List<>.FindLast)])
+        {
+            var find = list?.GetMembers(name).OfType<IMethodSymbol>().SingleOrDefault();
+
+            if (find is not null)
+                _entries[find] = BuildListFindCall;
+        }
     }
 
     private IrExpression? BuildListFindCall(InvocationRewriteContext ctx)

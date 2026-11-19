@@ -1,162 +1,135 @@
 // Declarative BCL → JavaScript mappings for the System.Collections.Generic dictionary
-// family.
-//
-// Dictionary<K,V> lowers to JS Map<K,V> at the type level (handled by TypeMapper).
-// At the call site, the C# member names map to the equivalent Map methods. Note that
-// JS Map exposes .size (a property) while .delete, .has, .clear, .set, .get are methods —
-// Count → size needs MapProperty, the rest use MapMethod.
-//
-// The indexer (`dict[key]` GET / `dict[key] = value` SET) is NOT a declarative mapping
-// — it's special-cased in ExpressionTransformer.TransformElementAccess and
-// OperatorHandler.TransformAssignment because the rewrite shape (`map.get(key)` /
-// `map.set(key, value)`) doesn't fit the [MapMethod] template form (the C# operation
-// is a syntactic indexer, not a named method symbol).
+// family (spec 011 FR-007, FR-012, stage 011c): the `metano-runtime` `Dictionary` class,
+// keyed by elementEquals / elementHashCode or the comparer, with the live `KeyCollection`
+// / `ValueCollection` views (contracts/runtime-collections.md). Every member is a plain
+// rename; the indexer (`dict[key]` → `get`, `dict[key] = value` → `set`) is lowered by the
+// target's element-access bridge, not here.
 
 using Metano.Annotations;
 
-// ─── Count → size ───────────────────────────────────────────
+// ─── Count / Keys / Values ──────────────────────────────────
 // Roslyn binds `IDictionary<K,V>.Count` and `IReadOnlyDictionary<K,V>.Count` to the
-// inherited `ICollection<KeyValuePair<K,V>>.Count` / `IReadOnlyCollection<…>.Count`,
-// which lower to the array `length`. The extractor rebinds a `Count` read on one of the
-// three dictionary types to that dictionary type, and folds `dict.Keys.Count` /
-// `dict.Values.Count` into `dict.Count`, so these entries cover every count of a
-// dictionary.
+// inherited collection `Count`; the extractor rebinds a `Count` read on one of the three
+// dictionary types to that type, and folds `dict.Keys.Count` / `dict.Values.Count` into
+// `dict.Count` and `dict.Keys.Contains(k)` into `dict.ContainsKey(k)` (FR-012).
 
 [assembly: MapProperty(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.Count),
-    JsProperty = "size",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IDictionary<,>),
     nameof(IDictionary<int, int>.Count),
-    JsProperty = "size",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyDictionary<,>),
     nameof(IReadOnlyDictionary<int, int>.Count),
-    JsProperty = "size",
+    JsProperty = "count",
     DartProperty = "length"
 )]
-
-// ─── Keys / Values → array copies ───────────────────────────
-// JS `Map.keys()` / `Map.values()` return one-shot iterators, while the C# views can be
-// enumerated many times and `IDictionary<K,V>.Keys` is an `ICollection<K>` (a TS array).
-// Both views therefore lower to an array copy, matching the array type IrTypeRefMapper
-// gives `KeyCollection` / `ValueCollection`. The Dart backend does not render
-// `DartTemplate` yet, so in Dart a view stays the `Iterable` `map.keys` / `map.values`
-// while a view-typed position is a `List`. Unlike the C# views, the copy does not
-// follow later changes to the dictionary. `dict.Keys.Count` and `dict.Keys.Contains(k)`
-// never build the copy: the extractor folds them into `dict.Count` and
-// `dict.ContainsKey(k)`.
-
 [assembly: MapProperty(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.Keys),
-    JsTemplate = "[...$this.keys()]"
-)]
-[assembly: MapProperty(
-    typeof(IDictionary<,>),
-    nameof(IDictionary<int, int>.Keys),
-    JsTemplate = "[...$this.keys()]"
-)]
-[assembly: MapProperty(
-    typeof(IReadOnlyDictionary<,>),
-    nameof(IReadOnlyDictionary<int, int>.Keys),
-    JsTemplate = "[...$this.keys()]"
+    JsProperty = "keys"
 )]
 [assembly: MapProperty(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.Values),
-    JsTemplate = "[...$this.values()]"
+    JsProperty = "values"
+)]
+[assembly: MapProperty(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Keys),
+    JsProperty = "keys"
 )]
 [assembly: MapProperty(
     typeof(IDictionary<,>),
     nameof(IDictionary<int, int>.Values),
-    JsTemplate = "[...$this.values()]"
+    JsProperty = "values"
+)]
+[assembly: MapProperty(
+    typeof(IReadOnlyDictionary<,>),
+    nameof(IReadOnlyDictionary<int, int>.Keys),
+    JsProperty = "keys"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyDictionary<,>),
     nameof(IReadOnlyDictionary<int, int>.Values),
-    JsTemplate = "[...$this.values()]"
+    JsProperty = "values"
 )]
 
-// ─── KeyCollection / ValueCollection → array members ────────
-// A view held in a variable (`var keys = dict.Keys;`) is the array copy.
-
+// ─── KeyCollection / ValueCollection (live views) ───────────
 [assembly: MapProperty(
     typeof(Dictionary<,>.KeyCollection),
     nameof(Dictionary<int, int>.KeyCollection.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(Dictionary<,>.ValueCollection),
     nameof(Dictionary<int, int>.ValueCollection.Count),
-    JsProperty = "length",
+    JsProperty = "count",
     DartProperty = "length"
 )]
 [assembly: MapMethod(
     typeof(Dictionary<,>.KeyCollection),
     nameof(Dictionary<int, int>.KeyCollection.Contains),
-    JsMethod = "includes",
+    JsMethod = "contains",
     DartMethod = "contains"
 )]
+[assembly: MapMethod(
+    typeof(Dictionary<,>.KeyCollection),
+    nameof(Dictionary<int, int>.KeyCollection.CopyTo),
+    JsMethod = "copyTo"
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>.ValueCollection),
+    nameof(Dictionary<int, int>.ValueCollection.CopyTo),
+    JsMethod = "copyTo"
+)]
 
-// ─── ContainsKey → has ──────────────────────────────────────
-
+// ─── Lookups and updates ────────────────────────────────────
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.ContainsKey),
-    JsMethod = "has"
+    JsMethod = "containsKey"
 )]
 [assembly: MapMethod(
     typeof(IDictionary<,>),
     nameof(IDictionary<int, int>.ContainsKey),
-    JsMethod = "has"
+    JsMethod = "containsKey"
 )]
 [assembly: MapMethod(
     typeof(IReadOnlyDictionary<,>),
     nameof(IReadOnlyDictionary<int, int>.ContainsKey),
-    JsMethod = "has"
+    JsMethod = "containsKey"
 )]
-
-// ─── Add(key, value) → addEntry(map, key, value) ────────────
-// `Map.set` overwrites an existing key, where `Add` throws ArgumentException, so Add
-// lowers to a runtime helper that throws .NET's message on a duplicate (or null) key.
-// A `{ key, value }` collection-initializer element binds to this Add as well; the
-// `[key] = value` index initializer and the indexer setter keep overwriting via `set`.
-
 [assembly: MapMethod(
     typeof(Dictionary<,>),
-    nameof(Dictionary<int, int>.Add),
-    JsTemplate = "addEntry($this, $0, $1)",
-    RuntimeImports = "addEntry"
+    nameof(Dictionary<int, int>.ContainsValue),
+    JsMethod = "containsValue"
 )]
+[assembly: MapMethod(typeof(Dictionary<,>), nameof(Dictionary<int, int>.Add), JsMethod = "add")]
+[assembly: MapMethod(typeof(IDictionary<,>), nameof(IDictionary<int, int>.Add), JsMethod = "add")]
 [assembly: MapMethod(
-    typeof(IDictionary<,>),
-    nameof(IDictionary<int, int>.Add),
-    JsTemplate = "addEntry($this, $0, $1)",
-    RuntimeImports = "addEntry"
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.TryAdd),
+    JsMethod = "tryAdd"
 )]
-
-// ─── Remove → delete ────────────────────────────────────────
-
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.Remove),
-    JsMethod = "delete"
+    JsMethod = "remove"
 )]
 [assembly: MapMethod(
     typeof(IDictionary<,>),
     nameof(IDictionary<int, int>.Remove),
-    JsMethod = "delete"
+    JsMethod = "remove"
 )]
-
-// ─── Clear → clear ──────────────────────────────────────────
-
 [assembly: MapMethod(typeof(Dictionary<,>), nameof(Dictionary<int, int>.Clear), JsMethod = "clear")]
 [assembly: MapMethod(
     typeof(IDictionary<,>),
@@ -164,31 +137,26 @@ using Metano.Annotations;
     JsMethod = "clear"
 )]
 
-// ─── TryGetValue → tryGetValue(map, key, default) ──────────
+// ─── TryGetValue → tryGetValue(key, default) ────────────────
 // The compiler lowers a call with `out` arguments to a call returning `[result, out…]`
-// (see IrOutArgumentCall) and, for a declaratively mapped method, keeps one argument slot
-// per `out` parameter filled with C#'s `default(T)` for it — here `$1`, the value C#
-// stores in `value` on a miss (`0`, `false`, `null`, …). `const [found, value] = …`
-// then narrows `value` on `found`, mirroring `[MaybeNullWhen(false)]`.
-
+// (IrOutArgumentCall) and keeps one argument slot per `out` parameter filled with C#'s
+// `default(T)` for it, the value C# stores in `value` on a miss.
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.TryGetValue),
-    JsTemplate = "tryGetValue($this, $0, $1)",
-    RuntimeImports = "tryGetValue"
+    JsMethod = "tryGetValue"
 )]
 [assembly: MapMethod(
     typeof(IDictionary<,>),
     nameof(IDictionary<int, int>.TryGetValue),
-    JsTemplate = "tryGetValue($this, $0, $1)",
-    RuntimeImports = "tryGetValue"
+    JsMethod = "tryGetValue"
 )]
 [assembly: MapMethod(
     typeof(IReadOnlyDictionary<,>),
     nameof(IReadOnlyDictionary<int, int>.TryGetValue),
-    JsTemplate = "tryGetValue($this, $0, $1)",
-    RuntimeImports = "tryGetValue"
+    JsMethod = "tryGetValue"
 )]
+// ConcurrentDictionary<K,V> is stage 011h's: until then a native Map and its helper.
 [assembly: MapMethod(
     typeof(System.Collections.Concurrent.ConcurrentDictionary<,>),
     nameof(System.Collections.Concurrent.ConcurrentDictionary<int, int>.TryGetValue),
@@ -196,14 +164,33 @@ using Metano.Annotations;
     RuntimeImports = "tryGetValue"
 )]
 
-// ─── GetValueOrDefault → getValueOrDefault(map, key, default) ─
-// `GetValueOrDefault` is an extension on IReadOnlyDictionary<K,V> (CollectionExtensions),
-// and JS Map has no counterpart. The extractor normalizes the single-argument overload to
-// the `(key, defaultValue)` one, passing `default(TValue)` (`0`, `false`, `null`, …), so
-// only the two-argument shape reaches this entry. The runtime helper tests membership
-// with `has`, so a stored `null` is returned as is instead of being replaced by the
-// default.
+// ─── GetValueOrDefault ──────────────────────────────────────
+// `GetValueOrDefault` is an extension on IReadOnlyDictionary<K,V> (CollectionExtensions).
+// The extractor normalizes it to `(key, defaultValue)` and, for a stage 011c receiver,
+// names the receiver's own type as the member's declaring type
+// (IntrinsicBclLoweringTable.GetValueOrDefault): the `Dictionary` class has the member,
+// the interfaces read it through `tryGetValue` (contracts/runtime-collections.md,
+// interface receivers). Any other receiver (an 011h dictionary, still a native Map) keeps
+// the runtime helper, which tests membership with `has`.
 
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    "GetValueOrDefault",
+    JsMethod = "getValueOrDefault",
+    WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(IDictionary<,>),
+    "GetValueOrDefault",
+    JsTemplate = "$this.tryGetValue($0, $1)[1]",
+    WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(IReadOnlyDictionary<,>),
+    "GetValueOrDefault",
+    JsTemplate = "$this.tryGetValue($0, $1)[1]",
+    WhenArgCount = 2
+)]
 [assembly: MapMethod(
     typeof(CollectionExtensions),
     nameof(CollectionExtensions.GetValueOrDefault),
@@ -213,39 +200,70 @@ using Metano.Annotations;
 )]
 
 // ─── Constructors ───────────────────────────────────────────
-// new Dictionary<K,V>() / new Dictionary<K,V>(capacity) → new Map<K, V>() (the capacity
-// is a preallocation hint, dropped). The copy overloads — from an IDictionary<K,V>
-// (a Map at runtime) or an IEnumerable<KeyValuePair<K,V>> (an iterable of [key, value]
-// pairs) — both feed the Map constructor. The comparer overloads stay unmapped.
+// Full arity (contracts/runtime-collections.md): a comparer is the second parameter of
+// every factory; the copy constructors from an IDictionary<K,V> or an
+// IEnumerable<KeyValuePair<K,V>> are `from`, which throws on null and on a duplicate key.
 
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "new Map<$T0, $T1>()",
+    JsTemplate = "new Dictionary<$T0, $T1>()",
+    RuntimeImports = "Dictionary",
     WhenParameterTypes = new Type[0]
 )]
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "new Map<$T0, $T1>()",
+    JsTemplate = "Dictionary.withCapacity<$T0, $T1>($0)",
+    RuntimeImports = "Dictionary",
     WhenParameterTypes = new[] { typeof(int) }
 )]
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "new Map<$T0, $T1>($0)",
+    JsTemplate = "new Dictionary<$T0, $T1>(null, $0)",
+    RuntimeImports = "Dictionary",
+    WhenParameterTypes = new[] { typeof(IEqualityComparer<>) }
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "Dictionary.withCapacity<$T0, $T1>($0, $1)",
+    RuntimeImports = "Dictionary",
+    WhenParameterTypes = new[] { typeof(int), typeof(IEqualityComparer<>) }
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "Dictionary.from($0)",
+    RuntimeImports = "Dictionary",
     WhenParameterTypes = new[] { typeof(IDictionary<,>) }
 )]
 [assembly: MapMethod(
     typeof(Dictionary<,>),
     MapMethodAttribute.ConstructorName,
-    JsTemplate = "new Map<$T0, $T1>($0)",
+    JsTemplate = "Dictionary.from($0)",
+    RuntimeImports = "Dictionary",
     WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "Dictionary.from($0, $1)",
+    RuntimeImports = "Dictionary",
+    WhenParameterTypes = new[] { typeof(IDictionary<,>), typeof(IEqualityComparer<>) }
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "Dictionary.from($0, $1)",
+    RuntimeImports = "Dictionary",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>), typeof(IEqualityComparer<>) }
 )]
 
 // ─── KeyValuePair<K,V> ──────────────────────────────────────
-// A KeyValuePair is a `[key, value]` tuple at runtime (the shape a Map iterates), so
-// construction builds the tuple and Key / Value read its positions. The struct's
+// A KeyValuePair is a `[key, value]` tuple at runtime (the shape a Dictionary iterates),
+// so construction builds the tuple and Key / Value read its positions. The struct's
 // implicit parameterless constructor (`default` key and value) stays unmapped.
 
 [assembly: MapMethod(

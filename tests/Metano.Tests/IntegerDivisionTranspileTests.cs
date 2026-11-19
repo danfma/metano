@@ -112,9 +112,9 @@ public class IntegerDivisionTranspileTests
     }
 
     [Test]
-    public async Task CompoundDivision_OnADictionaryEntry_ReportsMs0001()
+    public async Task CompoundDivision_OnADictionaryEntry_StoresTheIntegerQuotient()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using System.Collections.Generic;
 
@@ -128,7 +128,11 @@ public class IntegerDivisionTranspileTests
 
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
-            .IsTrue();
+            .IsFalse();
+
+        await Assert
+            .That(files["tally.ts"])
+            .Contains("counts.set(\"a\", intDiv(counts.get(\"a\"), 2));");
     }
 
     [Test]

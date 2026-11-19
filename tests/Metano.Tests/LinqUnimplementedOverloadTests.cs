@@ -53,6 +53,8 @@ public class LinqUnimplementedOverloadTests
 
             public int[] ToArray(List<int> xs) => xs.ToArray();
 
+            public int[] ToArrayOfSequence(IEnumerable<int> xs) => xs.ToArray();
+
             public List<int> ToList(List<int> xs) => xs.ToList();
 
             public Dictionary<int, int> ToDictionary(List<int> xs) => xs.ToDictionary(x => x);
@@ -337,7 +339,7 @@ public class LinqUnimplementedOverloadTests
 
     /// <summary>
     /// A queryable <c>ToDictionary</c> with one selector would hand its tree
-    /// to the value-selector slot of <c>toMap</c>.
+    /// to the value-selector slot of <c>toDictionary</c>.
     /// </summary>
     [Test]
     public async Task MisplacedQueryableTree_ReportsAtTheMethodName()
@@ -352,7 +354,7 @@ public class LinqUnimplementedOverloadTests
             .That(report.Message)
             .IsEqualTo(
                 "The expression tree of the queryable 'ToDictionary(keySelector)' has no slot in "
-                    + "the runtime operator 'toMap'. The call throws at run time."
+                    + "the runtime operator 'toDictionary'. The call throws at run time."
             );
 
         await Assert.That(LocatedSource.TextOf(report)).IsEqualTo("ToDictionary");
@@ -423,7 +425,7 @@ public class LinqUnimplementedOverloadTests
         await Assert
             .That(files["calls.ts"])
             .Contains(
-                "return linq(q, toMap((x: number) => (x + 1) | 0, (x: number) => Math.imul(x, 2), {\n      tree: {\n        kind: \"binary\",\n        op: \"+\","
+                "return linq(q, toDictionary((x: number) => (x + 1) | 0, (x: number) => Math.imul(x, 2), {\n      tree: {\n        kind: \"binary\",\n        op: \"+\","
             );
     }
 
@@ -505,9 +507,9 @@ public class LinqUnimplementedOverloadTests
     /// LINQ calls nothing lowers.
     /// </summary>
     [Test]
-    [Arguments("xs.Contains(3)", "xs.includes(3)")]
-    [Arguments("string.Join(\",\", xs)", "xs.join(\",\")")]
-    [Arguments("xs.Find(x => x > 1)", "xs.find((x: number) => x > 1)")]
+    [Arguments("xs.Contains(3)", "xs.contains(3)")]
+    [Arguments("string.Join(\",\", xs)", "[...xs].join(\",\")")]
+    [Arguments("xs.Find(x => x > 1)", "xs.find((x: number) => x > 1, 0)")]
     public async Task OtherMappings_DoNotReport(string call, string emitted)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
@@ -526,7 +528,7 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.Except(ys)", "linq(xs, except(ys))")]
     [Arguments(
         "Enumerable.Where(xs, x => x > 1).ToList()",
-        "linq(xs, where((x: number) => x > 1), toArray())"
+        "linq(xs, where((x: number) => x > 1), toList())"
     )]
     [Arguments("Enumerable.Count(xs)", "linq(xs, count())")]
     [Arguments(

@@ -1,4 +1,5 @@
 using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -52,6 +53,31 @@ internal sealed record IrToTsBridgeContext(
     /// (<see cref="IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead"/>).
     /// </summary>
     public bool KeepsBaseMessage { get; init; }
+
+    /// <summary>
+    /// How many lowered <c>foreach</c> loops over a <c>List&lt;T&gt;</c> enclose
+    /// the position, so a nested loop names its temporaries apart.
+    /// </summary>
+    public int LoweredLoopDepth { get; init; }
+
+    /// <summary>
+    /// The statement list being lowered, whose head declares the temporaries
+    /// an expression in it needs (spec 011 contracts/runtime-collections.md §
+    /// Indexer compound assignments); <c>null</c> outside a statement list (a
+    /// field or static initializer, a constructor-initializer argument).
+    /// </summary>
+    public TsTemporaries? Temporaries { get; init; }
+
+    /// <summary>
+    /// What each bound current-element name of an enclosing
+    /// <c>IrIndexerUpdateExpression</c> renders as (the element read, or the
+    /// temporary that holds it).
+    /// </summary>
+    public System.Collections.Immutable.ImmutableDictionary<
+        string,
+        TsExpression
+    > BoundElements { get; init; } =
+        System.Collections.Immutable.ImmutableDictionary<string, TsExpression>.Empty;
 
     /// <summary>
     /// The parameter of the JS <c>catch</c> the position is lowered into, which

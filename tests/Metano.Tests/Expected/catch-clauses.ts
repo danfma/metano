@@ -1,3 +1,4 @@
+import { List, throwModified } from "metano-runtime/system/collections";
 import { toException, tryFilter, type ClassType } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
@@ -72,7 +73,7 @@ export class NotFoundException extends AppException {
 }
 
 export class Handlers {
-  private readonly _log: string[] = [] as Array<string>;
+  private readonly _log: List<string> = new List<string>();
   verbose: boolean = false;
 
   constructor() { }
@@ -190,18 +191,18 @@ export class Handlers {
     } catch (e$) {
       const e0 = toException(e$);
       if (e0 instanceof NotFoundException) {
-        this._log.push("missing");
+        this._log.add("missing");
         throw e$;
       } else if (e0 instanceof AppException) {
         let e = e0;
         e = new AppException("replaced", e.code);
-        this._log.push(e.message);
+        this._log.add(e.message);
         throw e$;
       } else {
         throw e$;
       }
     } finally {
-      this._log.push("done");
+      this._log.add("done");
     }
   }
 
@@ -222,7 +223,7 @@ export class Handlers {
           const e0 = toException(e$);
           if (e0 instanceof NotFoundException) {
             const inner = e0;
-            this._log.push("inner:" + inner.code);
+            this._log.add("inner:" + inner.code);
           } else {
             throw e$;
           }
@@ -233,22 +234,32 @@ export class Handlers {
     }
   }
 
-  deferred(kinds: string[]): (() => number)[] {
-    const codes = [] as Array<() => number>;
-    for (const kind of kinds) {
-      try {
-        this.work(kind);
-      } catch (e$) {
-        const e0 = toException(e$);
-        if (e0 instanceof NotFoundException) {
-          continue;
-        } else if (e0 instanceof AppException && tryFilter((e) => e.code < 0, e0)) {
-          break;
-        } else if (e0 instanceof AppException) {
-          const e = e0;
-          codes.push(() => e.code);
-        } else {
-          throw e$;
+  deferred(kinds: List<string>): List<() => number> {
+    const codes = new List<() => number>();
+    {
+      const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
+      const $l = kinds;
+      const $a = $l._items;
+      const $n = $a.length;
+      const $v = $c ? $l._version : 0;
+      for (let $i = 0; ; $i++) {
+        if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
+        if ($i === $n) break;
+        const kind = $a[$i];
+        try {
+          this.work(kind);
+        } catch (e$) {
+          const e0 = toException(e$);
+          if (e0 instanceof NotFoundException) {
+            continue;
+          } else if (e0 instanceof AppException && tryFilter((e) => e.code < 0, e0)) {
+            break;
+          } else if (e0 instanceof AppException) {
+            const e = e0;
+            codes.add(() => e.code);
+          } else {
+            throw e$;
+          }
         }
       }
     }
@@ -326,7 +337,7 @@ export class Handlers {
     try {
       this.work(kind);
     } catch (_err) {
-      this._log.push("failed");
+      this._log.add("failed");
       throw _err;
     }
   }
@@ -337,7 +348,7 @@ export class Handlers {
     } catch (e$) {
       const e0 = toException(e$);
       const e = e0;
-      this._log.push(e instanceof AppException ? "app" : "other");
+      this._log.add(e instanceof AppException ? "app" : "other");
       throw e$;
     }
   }

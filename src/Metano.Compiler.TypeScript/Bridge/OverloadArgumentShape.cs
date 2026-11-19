@@ -35,7 +35,7 @@ internal sealed class OverloadArgumentShape
     {
         _parameters = parameters;
         _firstArgumentIndex = firstArgumentIndex;
-        Rest = parameters is [.., { IsParams: true } rest] ? rest : null;
+        Rest = parameters is [.., { IsRestParams: true } rest] ? rest : null;
         FixedCount = Rest is null ? parameters.Count : parameters.Count - 1;
         RequiredCount = parameters.Take(FixedCount).TakeWhile(p => !p.CanBeOmitted).Count();
     }

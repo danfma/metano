@@ -1,3 +1,4 @@
+import { Dictionary, List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Episode } from "./episode";
 import { Plain } from "./plain";
@@ -9,7 +10,7 @@ export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _video?: TypeSpec<Video>;
   private _title?: ValueSpec<Title>;
-  private _listSlug?: ValueSpec<Slug[] | null>;
+  private _listSlug?: ValueSpec<List<Slug> | null>;
   private _code?: ValueSpec<Episode.Code>;
 
   static get default(): JsonContext {
@@ -19,7 +20,7 @@ export class JsonContext extends SerializerContext {
   get video(): TypeSpec<Video> {
     return this._video ??= this.createSpec({
       type: Video,
-      factory: (p: Record<string, unknown>) => new Video(p.title as Title, p.slug as Slug, p.note as Plain, p.subtitle as Title | null, p.aliases as Title[], p.codes as Map<Title, Episode.Code>),
+      factory: (p: Record<string, unknown>) => new Video(p.title as Title, p.slug as Slug, p.note as Plain, p.subtitle as Title | null, p.aliases as Title[], p.codes as Dictionary<Title, Episode.Code>),
       properties: [
         {
           ts: "title",
@@ -57,9 +58,10 @@ export class JsonContext extends SerializerContext {
           ts: "codes",
           json: "codes",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "branded", create: Title.from, typeName: "TestApp.Title" },
             value: { kind: "branded", create: Episode.Code.from, typeName: "TestApp.Episode+Code" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
       ],
@@ -74,11 +76,12 @@ export class JsonContext extends SerializerContext {
     });
   }
 
-  get listSlug(): ValueSpec<Slug[] | null> {
+  get listSlug(): ValueSpec<List<Slug> | null> {
     return this._listSlug ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "branded", create: Slug.parse, typeName: "TestApp.Slug" },
+        create: (items) => List.of(items),
       },
     });
   }

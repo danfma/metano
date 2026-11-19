@@ -1,3 +1,4 @@
+import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { ALeaf } from "./a-leaf";
 import { AMid } from "./a-mid";
@@ -19,7 +20,7 @@ import { Timeline } from "./timeline";
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;
   private _timeline?: TypeSpec<Timeline>;
-  private _listClip?: ValueSpec<Clip[] | null>;
+  private _listClip?: ValueSpec<List<Clip> | null>;
   private _intBase?: TypeSpec<IntBase>;
   private _sBase?: TypeSpec<SBase>;
   private _gBaseInt32?: TypeSpec<GBase<number>>;
@@ -43,7 +44,7 @@ export class JsonContext extends SerializerContext {
   get timeline(): TypeSpec<Timeline> {
     return this._timeline ??= this.createSpec({
       type: Timeline,
-      factory: (p: Record<string, unknown>) => new Timeline(p.name as string, p.main as Clip, p.clips as Clip[]),
+      factory: (p: Record<string, unknown>) => new Timeline(p.name as string, p.main as Clip, p.clips as IReadOnlyList<Clip>),
       properties: [
         {
           ts: "name",
@@ -62,25 +63,27 @@ export class JsonContext extends SerializerContext {
           ts: "clips",
           json: "Clips",
           type: {
-            kind: "array",
+            kind: "list",
             element: {
               kind: "ref",
               spec: () => this.clip,
             },
+            create: (items) => List.of(items),
           },
         },
       ],
     });
   }
 
-  get listClip(): ValueSpec<Clip[] | null> {
+  get listClip(): ValueSpec<List<Clip> | null> {
     return this._listClip ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: {
           kind: "ref",
           spec: () => this.clip,
         },
+        create: (items) => List.of(items),
       },
     });
   }

@@ -1,9 +1,9 @@
 namespace Metano.Tests;
 
 /// <summary>
-/// Tests for the Dictionary indexer lowering. Dictionary&lt;K,V&gt; lowers to JS Map
-/// at the type level, but bracket access (<c>dict[key]</c>) doesn't work on Map —
-/// it needs <c>map.get(key)</c> for read and <c>map.set(key, value)</c> for write.
+/// Tests for the Dictionary indexer lowering. Dictionary&lt;K,V&gt; lowers to the
+/// runtime <c>Dictionary</c>, whose indexer is <c>get(key)</c> for a read and
+/// <c>set(key, value)</c> for a write.
 /// </summary>
 public class DictionaryIndexerTests
 {
@@ -50,10 +50,9 @@ public class DictionaryIndexerTests
     }
 
     [Test]
-    public async Task ArrayIndexer_StillBracket()
+    public async Task ListIndexer_LowersToGet()
     {
-        // Sanity check: arrays / lists keep the bracket form because JS arrays
-        // support it natively. Only dictionaries need the method-call rewrite.
+        // A List<T> is the runtime List, whose indexer is get(i) as well.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
@@ -68,8 +67,8 @@ public class DictionaryIndexerTests
         );
 
         var output = result["bag.ts"];
-        await Assert.That(output).Contains("this._items[idx]");
-        await Assert.That(output).DoesNotContain("this._items.get");
+        await Assert.That(output).Contains("this._items.get(idx)");
+        await Assert.That(output).DoesNotContain("this._items[idx]");
     }
 
     [Test]
@@ -118,9 +117,11 @@ public class DictionaryIndexerTests
         );
 
         var output = result["cache.ts"];
+
         await Assert
             .That(output)
-            .Contains("const [$found0, value] = tryGetValue(this._items, key, 0);");
+            .Contains("const [$found0, value] = this._items.tryGetValue(key, 0);");
+
         await Assert.That(output).Contains("if ($found0) {");
         await Assert.That(output).Contains("return value;");
     }
@@ -148,9 +149,11 @@ public class DictionaryIndexerTests
         );
 
         var output = result["cache.ts"];
+
         await Assert
             .That(output)
-            .Contains("const [$found0, found] = tryGetValue(this._items, key, null);");
+            .Contains("const [$found0, found] = this._items.tryGetValue(key, null);");
+
         await Assert.That(output).Contains("if ($found0) {");
         await Assert.That(output).Contains("return found;");
         await Assert.That(output).Contains("return \"default\";");
@@ -175,8 +178,8 @@ public class DictionaryIndexerTests
             """
         );
 
-        // Sanity check: ContainsKey → has
-        await Assert.That(result["cache.ts"]).Contains("!this._items.has(key)");
+        // Sanity check: ContainsKey → containsKey
+        await Assert.That(result["cache.ts"]).Contains("!this._items.containsKey(key)");
     }
 
     [Test]

@@ -315,6 +315,7 @@ export class Chained {
   }
 }
 
+import { List } from "metano-runtime/system/collections";
 import type { Collector } from "./collector";
 import { Trace } from "./trace";
 
@@ -334,27 +335,27 @@ export class ParamsCalls {
   }
 
   static listOmitted(e: Collector): number {
-    return (($arg0, $arg2, $arg1) => e.restL($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([]));
   }
 
   static listPositionalFirst(e: Collector): number {
-    return (($arg0, $arg2, $arg1) => e.restL($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([]));
   }
 
   static listGiven(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, ...$arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), [Trace.next("r")]);
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([Trace.next("r")]));
   }
 
   static listPositional(e: Collector): number {
-    return e.restL(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+    return e.restL(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([]));
   }
 
   static enumerableOmitted(e: Collector): number {
-    return (($arg0, $arg2, $arg1) => e.restE($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+    return (($arg0, $arg2, $arg1, $arg3) => e.restE($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), []);
   }
 
   static enumerableOmittedLastFirst(e: Collector): number {
-    return (($arg2, $arg0, $arg1) => e.restE($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("x"), Trace.next("q"));
+    return (($arg2, $arg0, $arg1, $arg3) => e.restE($arg0, $arg1, $arg2, $arg3))(Trace.next("p"), Trace.next("x"), Trace.next("q"), []);
   }
 }
 

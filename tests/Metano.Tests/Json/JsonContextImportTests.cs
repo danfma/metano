@@ -107,11 +107,14 @@ public class JsonContextImportTests
 
         // The factory cast spells the runtime type: `p.tags as HashSet<number>`.
         await Assert.That(ts).Contains("p.tags as HashSet<number>");
-        await Assert.That(ts).Contains("""import { HashSet } from "metano-runtime";""");
+
+        await Assert
+            .That(ts)
+            .Contains("""import { HashSet } from "metano-runtime/system/collections";""");
     }
 
     [Test]
-    public async Task AbstractClassEntry_FactoryThrowsWithoutCastingImports()
+    public async Task AbstractClassEntry_FactoryThrows_TheCreateClosureImportsHashSet()
     {
         var ts = TranspileHelper.Transpile(
             Context(
@@ -128,17 +131,23 @@ public class JsonContextImportTests
             )
         )[ContextPath];
 
-        // Base's factory only throws; nothing casts the set, so the import
-        // would dangle unused (#496).
-        await Assert.That(ts).DoesNotContain("import { HashSet");
+        // Base's factory only throws and casts nothing, but the set descriptor's
+        // `create` closure builds the runtime set, so the value import is used.
+        await Assert
+            .That(ts)
+            .Contains("""import { HashSet } from "metano-runtime/system/collections";""");
+
+        await Assert.That(ts).Contains("create: (items) => HashSet.from(items),");
+        await Assert.That(ts).DoesNotContain("as HashSet<number>");
         await Assert.That(ts).Contains("factory: () => {");
+
         await Assert
             .That(ts)
             .Contains("""throw new Error("Cannot construct abstract type 'Base'.");""");
     }
 
     [Test]
-    public async Task AbstractRecordWithSetMember_FactoryThrowsWithoutCastingImports()
+    public async Task AbstractRecordWithSetMember_FactoryThrows_TheCreateClosureImportsHashSet()
     {
         var ts = TranspileHelper.Transpile(
             Context(
@@ -152,8 +161,14 @@ public class JsonContextImportTests
             )
         )[ContextPath];
 
-        await Assert.That(ts).DoesNotContain("import { HashSet");
+        await Assert
+            .That(ts)
+            .Contains("""import { HashSet } from "metano-runtime/system/collections";""");
+
+        await Assert.That(ts).Contains("create: (items) => HashSet.from(items),");
+        await Assert.That(ts).DoesNotContain("as HashSet<number>");
         await Assert.That(ts).Contains("factory: () => {");
+
         await Assert
             .That(ts)
             .Contains("""throw new Error("Cannot construct abstract type 'Base'.");""");
@@ -178,7 +193,10 @@ public class JsonContextImportTests
             )
         )[ContextPath];
 
-        await Assert.That(ts).Contains("""import { HashSet } from "metano-runtime";""");
+        await Assert
+            .That(ts)
+            .Contains("""import { HashSet } from "metano-runtime/system/collections";""");
+
         await Assert.That(ts).Contains("p.tags as HashSet<number>");
     }
 }

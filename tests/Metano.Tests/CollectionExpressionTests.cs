@@ -158,9 +158,9 @@ public class CollectionExpressionTests
                     + "Build the dictionary with explicit Add calls instead.",
             ]);
 
-        await Assert.That(output).Contains("return new HashSet<number>([1, 2]);");
+        await Assert.That(output).Contains("return HashSet.of([1, 2]);");
 
-        await Assert.That(output).Contains("return new HashSet<number>([1, 1]).size;");
+        await Assert.That(output).Contains("return HashSet.of([1, 1]).count;");
 
         await Assert
             .That(output)
@@ -216,7 +216,9 @@ public class CollectionExpressionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains("private readonly _empty: Map<string, number> = new Map<string, number>();");
+            .Contains(
+                "private readonly _empty: Dictionary<string, number> = new Dictionary<string, number>();"
+            );
 
         await Assert.That(result["holder.ts"]).DoesNotContain("new Map(...");
     }
@@ -247,13 +249,13 @@ public class CollectionExpressionTests
             .That(result["holder.ts"])
             .IsEqualTo(
                 """
-                import { HashSet } from "metano-runtime";
+                import { HashSet } from "metano-runtime/system/collections";
 
                 export class Holder {
                   constructor() { }
 
                   ids(more: bigint[]): HashSet<bigint> {
-                    return new HashSet<bigint>([1n, 2n, ...more]);
+                    return HashSet.of([1n, 2n, ...more]);
                   }
                 }
 

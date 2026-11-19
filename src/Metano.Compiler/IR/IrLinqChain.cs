@@ -39,6 +39,7 @@ public enum IrLinqOperator
 
     // ── Terminals (eager) ──
     ToArray,
+    ToList,
     ToMap,
     ToSet,
     First,

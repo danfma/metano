@@ -97,7 +97,7 @@ public class DefaultLiteralTests
         await Assert.That(holder).Contains("firstOrDefault(undefined, null ?? 0)");
         await Assert.That(holder).Contains("const d = 0;");
         await Assert.That(holder).Contains("return n ?? 0;");
-        await Assert.That(holder).Contains("return [0, 1];");
+        await Assert.That(holder).Contains("return List.of([0, 1]);");
         await Assert.That(holder).Contains("return cond ? Mode.On : Mode.Off;");
         await Assert.That(holder).DoesNotContain("undefined, undefined");
         await Assert.That(Warnings(diagnostics)).IsEmpty();
@@ -163,9 +163,9 @@ public class DefaultLiteralTests
         var holder = files["holder.ts"];
 
         await Assert.That(holder).Contains("linq(xs, firstOrDefault(undefined, new Point())).x");
-        await Assert.That(holder).Contains("(xs.find((p: Point) => p.x > 0) ?? new Point()).x");
+        await Assert.That(holder).Contains("xs.find((p: Point) => p.x > 0, new Point()).x");
         await Assert.That(holder).Contains("(p ?? new Point()).x");
-        await Assert.That(holder).Contains("getValueOrDefault(d, \"k\", new Point()).x");
+        await Assert.That(holder).Contains("d.getValueOrDefault(\"k\", new Point()).x");
         await Assert.That(Warnings(diagnostics)).IsEmpty();
     }
 

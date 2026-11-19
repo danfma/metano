@@ -19,34 +19,47 @@ public static class IrRuntimeRequirementToTsImport
 
         // Group helpers that share the same target module so each import line keeps
         // the legacy single-line-per-module convention (e.g., one
-        // `import { HashCode, Enumerable } from "metano-runtime"`).
-        var byModuleName = new Dictionary<string, (List<string> Names, bool TypeOnly)>(
+        // `import { HashCode, Enumerable } from "metano-runtime"`); a type-only
+        // name (a collection interface) keeps its own `type` qualifier.
+        var byModuleName = new Dictionary<string, SortedDictionary<string, bool>>(
             StringComparer.Ordinal
         );
 
         foreach (var req in requirements)
         {
-            var mapping = Map(req);
-            if (mapping is null)
+            if (Map(req) is not { } mapping)
                 continue;
 
-            if (!byModuleName.TryGetValue(mapping.Value.ModuleName, out var bucket))
+            if (!byModuleName.TryGetValue(mapping.ModuleName, out var bucket))
             {
-                bucket = (new List<string>(), mapping.Value.TypeOnly);
-                byModuleName[mapping.Value.ModuleName] = bucket;
+                bucket = new SortedDictionary<string, bool>(StringComparer.Ordinal);
+                byModuleName[mapping.ModuleName] = bucket;
             }
-            if (!bucket.Names.Contains(mapping.Value.Name))
-                bucket.Names.Add(mapping.Value.Name);
+
+            bucket[mapping.Name] = bucket.GetValueOrDefault(mapping.Name, true) && mapping.TypeOnly;
         }
 
         return byModuleName
             .OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
-            .Select(kvp => new TsImport(
-                kvp.Value.Names.OrderBy(n => n, StringComparer.Ordinal).ToArray(),
-                kvp.Key,
-                TypeOnly: kvp.Value.TypeOnly
-            ))
+            .Select(kvp => ImportOf(kvp.Key, kvp.Value))
             .ToList();
+    }
+
+    private static TsImport ImportOf(string module, SortedDictionary<string, bool> typeOnlyByName)
+    {
+        var typeOnly = typeOnlyByName
+            .Where(entry => entry.Value)
+            .Select(entry => entry.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var allTypeOnly = typeOnly.Count == typeOnlyByName.Count;
+
+        return new TsImport(
+            typeOnlyByName.Keys.ToArray(),
+            module,
+            TypeOnly: allTypeOnly,
+            TypeOnlyNames: !allTypeOnly && typeOnly.Count > 0 ? typeOnly : null
+        );
     }
 
     /// <summary>
@@ -60,6 +73,18 @@ public static class IrRuntimeRequirementToTsImport
     /// The name a runtime helper is imported under in the TS target (e.g.
     /// <c>"RecordCopy"</c> → <c>copyRecordWith</c>), for the import walker's
     /// bypass lists to stay in sync with this table.
+    /// </summary>
+    internal static string ImportedNameOf(IrRuntimeRequirement requirement) =>
+        Map(requirement)?.Name
+        ?? throw new ArgumentOutOfRangeException(
+            nameof(requirement),
+            requirement.HelperName,
+            "Unmapped helper."
+        );
+
+    /// <summary>
+    /// <see cref="ImportedNameOf(IrRuntimeRequirement)"/> of a helper the
+    /// target names directly (no collection kind).
     /// </summary>
     internal static string ImportedNameOf(string helperName) =>
         Map(new IrRuntimeRequirement(helperName, default))?.Name
@@ -83,12 +108,28 @@ public static class IrRuntimeRequirementToTsImport
             "TupleEquals" => ("metano-runtime", "tupleEquals", false),
             "RecordCopy" => ("metano-runtime", "copyRecordWith", false),
             "IntegerDivision" => ("metano-runtime", "intDiv", false),
-            "HashSet" => ("metano-runtime", "HashSet", false),
+            "HashSet" => (RuntimeCollections.Module, "HashSet", false),
             "UUID" => ("metano-runtime", "UUID", false),
             "Grouping" => ("metano-runtime", "Grouping", true),
             "Temporal" => ("@js-temporal/polyfill", "Temporal", false),
             // Event accessor helpers ship from metano-runtime under their own name.
             "delegateAdd" or "delegateRemove" => ("metano-runtime", req.HelperName, false),
-            _ => null,
+            _ => CollectionImportOf(req),
         };
+
+    /// <summary>
+    /// A collection kind the scanner met in a type (spec 011 FR-001): its class
+    /// or interface from the collections barrel, type-only for an interface.
+    /// </summary>
+    private static (string ModuleName, string Name, bool TypeOnly)? CollectionImportOf(
+        IrRuntimeRequirement req
+    ) =>
+        req.Category == IrRuntimeCategory.Collection
+        && Enum.TryParse<IrCollectionKind>(req.HelperName, out var kind)
+            ? (
+                RuntimeCollections.Module,
+                RuntimeCollections.NameOf(kind),
+                RuntimeCollections.IsInterface(kind)
+            )
+            : null;
 }

@@ -1,3 +1,4 @@
+import { Dictionary, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type JsonReadOptions, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Clip } from "./clip";
@@ -15,7 +16,7 @@ export class JsonContext extends SerializerContext {
   private _shape?: TypeSpec<Shape>;
   private _stats?: TypeSpec<Stats>;
   private _reading?: TypeSpec<Reading>;
-  private _listUInt32?: ValueSpec<number[] | null>;
+  private _listUInt32?: ValueSpec<List<number> | null>;
   private _nullableInt16?: ValueSpec<number | null>;
   private _imageClip?: TypeSpec<ImageClip>;
   private _silenceClip?: TypeSpec<SilenceClip>;
@@ -112,7 +113,7 @@ export class JsonContext extends SerializerContext {
   get reading(): TypeSpec<Reading> {
     return this._reading ??= this.createSpec({
       type: Reading,
-      factory: (p: Record<string, unknown>) => new Reading(p.amount as Decimal, p.total as bigint | null, p.weight as number, p.samples as number[], p.offsets as Map<number, number>, p.level as Level, p.valid as boolean),
+      factory: (p: Record<string, unknown>) => new Reading(p.amount as Decimal, p.total as bigint | null, p.weight as number, p.samples as IReadOnlyList<number>, p.offsets as Dictionary<number, number>, p.level as Level, p.valid as boolean),
       properties: [
         {
           ts: "amount",
@@ -137,17 +138,19 @@ export class JsonContext extends SerializerContext {
           ts: "samples",
           json: "samples",
           type: {
-            kind: "array",
+            kind: "list",
             element: { kind: "primitive", numberType: "System.Byte" },
+            create: (items) => List.of(items),
           },
         },
         {
           ts: "offsets",
           json: "offsets",
           type: {
-            kind: "map",
+            kind: "dictionary",
             key: { kind: "primitive", numberType: "System.UInt16" },
             value: { kind: "primitive", numberType: "System.SByte" },
+            create: (entries) => Dictionary.assign(entries),
           },
         },
         {
@@ -164,11 +167,12 @@ export class JsonContext extends SerializerContext {
     });
   }
 
-  get listUInt32(): ValueSpec<number[] | null> {
+  get listUInt32(): ValueSpec<List<number> | null> {
     return this._listUInt32 ??= this.createValueSpec({
       descriptor: {
-        kind: "array",
+        kind: "list",
         element: { kind: "primitive", numberType: "System.UInt32" },
+        create: (items) => List.of(items),
       },
     });
   }

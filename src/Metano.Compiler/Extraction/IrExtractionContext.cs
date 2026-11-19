@@ -70,6 +70,24 @@ public sealed record IrExtractionContext(
     internal bool KeepsReflectionSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target's BCL collections are its native ones (Dart until
+    /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
+    /// collection construct (the 2.x element-access reads, writes and
+    /// compound updates, <c>r[length - n]</c>, no array-to-interface
+    /// conversion, the 2.x diagnostics), so its output and diagnostics stay as
+    /// they were; every other target gets the structured nodes of stage 011c
+    /// (spec 011 data-model § 2, W4-31).
+    /// </summary>
+    internal bool KeepsNativeCollections => KeepsNativeCollectionsFor(Target);
+
+    /// <summary>
+    /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
+    /// target language (the type mapper, the overload-group reporters).
+    /// </summary>
+    internal static bool KeepsNativeCollectionsFor(Metano.Annotations.TargetLanguage? target) =>
+        target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// The port through which a target says which types it emits with an
     /// addressable form per constructor overload — TypeScript a selector and,
     /// for a concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10),

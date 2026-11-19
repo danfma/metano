@@ -2,10 +2,10 @@ namespace Metano.Tests;
 
 /// <summary>
 /// Lowering of <c>CollectionExtensions.GetValueOrDefault</c>
-/// (<c>src/Metano/Runtime/Dictionaries.cs</c>). JS <c>Map</c> has no
-/// <c>getValueOrDefault</c>, so every overload reaches the runtime
-/// <c>getValueOrDefault(map, key, defaultValue)</c> helper, with
-/// <c>default(TValue)</c> synthesized for the single-argument overload.
+/// (<c>src/Metano/Runtime/Dictionaries.cs</c>). Every overload reaches the runtime
+/// dictionary's <c>getValueOrDefault(key, defaultValue)</c> member (an
+/// <c>IReadOnlyDictionary</c> receiver reads <c>tryGetValue(key, defaultValue)[1]</c>),
+/// with <c>default(TValue)</c> synthesized for the single-argument overload.
 /// </summary>
 public class GetValueOrDefaultMappingTests
 {
@@ -26,29 +26,29 @@ public class GetValueOrDefaultMappingTests
         await Assert
             .That(output)
             .Contains(
-                "static count(d: Map<string, number>): number {\n    return getValueOrDefault(d, \"a\", 0);"
+                "static count(d: Dictionary<string, number>): number {\n    return d.getValueOrDefault(\"a\", 0);"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static ratio(d: Map<string, number>): number {\n    return getValueOrDefault(d, \"a\", 0);"
+                "static ratio(d: Dictionary<string, number>): number {\n    return d.getValueOrDefault(\"a\", 0);"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "static total(d: Map<string, bigint>): bigint {\n    return getValueOrDefault(d, \"a\", 0n);"
+                "static total(d: Dictionary<string, bigint>): bigint {\n    return d.getValueOrDefault(\"a\", 0n);"
             );
 
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", false);");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", false);");
 
         await Assert
             .That(output)
-            .Contains("return getValueOrDefault(d, \"a\", new Decimal(\"0\"));");
+            .Contains("return d.getValueOrDefault(\"a\", new Decimal(\"0\"));");
 
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", Level.Low);");
-        await Assert.That(output).DoesNotContain(".getValueOrDefault(");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", Level.Low);");
+        await Assert.That(output).DoesNotContain("getValueOrDefault(d,");
     }
 
     [Test]
@@ -64,12 +64,13 @@ public class GetValueOrDefaultMappingTests
         await Assert
             .That(output)
             .Contains(
-                "static name(d: Map<number, string>): string | null {\n    return getValueOrDefault(d, 1, null);"
+                "static name(d: IReadOnlyDictionary<number, string>): string | null {\n    return d.tryGetValue(1, null)[1];"
             );
+
         await Assert
             .That(output)
             .Contains(
-                "static maybe(d: Map<number, number | null>): number | null {\n    return getValueOrDefault(d, 1, null);"
+                "static maybe(d: Dictionary<number, number | null>): number | null {\n    return d.getValueOrDefault(1, null);"
             );
     }
 
@@ -83,8 +84,8 @@ public class GetValueOrDefaultMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", \"\\u0000\");");
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", UUID.empty);");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", \"\\u0000\");");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", UUID.empty);");
         await Assert.That(output).DoesNotContain("undefined");
     }
 
@@ -97,7 +98,7 @@ public class GetValueOrDefaultMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", Wide.None);");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", Wide.None);");
     }
 
     [Test]
@@ -111,10 +112,13 @@ public class GetValueOrDefaultMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", 5);");
-        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", 7);");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", 5);");
+        await Assert.That(output).Contains("return d.getValueOrDefault(\"a\", 7);");
         await Assert.That(output).DoesNotContain("CollectionExtensions");
-        await Assert.That(output).Contains("import { getValueOrDefault } from \"metano-runtime\";");
+
+        await Assert
+            .That(output)
+            .Contains("import { Dictionary } from \"metano-runtime/system/collections\";");
     }
 
     private static string TranspileLookups(string members)

@@ -1,3 +1,4 @@
+import { List } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { lastOrDefault, linq } from "metano-runtime/system/linq";
 import { Stage } from "@acme/domain/acme/domain";
@@ -23,7 +24,7 @@ export class Pipeline {
     });
   }
 
-  current(xs: Stage[]): Stage {
+  current(xs: List<Stage>): Stage {
     return linq(xs, lastOrDefault(undefined, Stage.Draft));
   }
 }

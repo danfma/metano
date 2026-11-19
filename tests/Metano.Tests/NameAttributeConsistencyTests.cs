@@ -155,7 +155,7 @@ public class NameAttributeConsistencyTests
 
         var ts = result["user-list.ts"];
         // The type reference in the property should use the overridden name
-        await Assert.That(ts).Contains("ApiUser[]");
+        await Assert.That(ts).Contains("List<ApiUser>");
     }
 
     [Test]

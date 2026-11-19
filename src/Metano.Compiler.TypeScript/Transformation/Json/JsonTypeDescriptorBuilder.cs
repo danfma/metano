@@ -1,4 +1,5 @@
 using Metano.Compiler.Analysis;
+using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
@@ -41,11 +42,13 @@ internal sealed class JsonTypeDescriptorBuilder(
                 kind,
                 JsonTypeClassifier.ElementTypeOf(type)
             ),
-            JsonPropertyKind.HashSet => BuildElementDescriptor(
+            JsonPropertyKind.HashSet => BuildCollectionDescriptor(
                 kind,
                 JsonTypeClassifier.SetElementTypeOf(type)
             ),
-            JsonPropertyKind.Map => BuildMapDescriptor(type),
+            JsonPropertyKind.List or JsonPropertyKind.Queue or JsonPropertyKind.Stack =>
+                BuildCollectionDescriptor(kind, JsonTypeClassifier.ElementTypeOf(type)),
+            JsonPropertyKind.Map or JsonPropertyKind.Dictionary => BuildMapDescriptor(type, kind),
             JsonPropertyKind.Temporal => BuildTemporalDescriptor(type),
             JsonPropertyKind.Branded => BuildBrandedDescriptor(type),
             JsonPropertyKind.Enum or JsonPropertyKind.NumericEnum => BuildEnumValuesDescriptor(
@@ -91,7 +94,11 @@ internal sealed class JsonTypeDescriptorBuilder(
             JsonPropertyKind.Bytes => "bytes",
             JsonPropertyKind.Temporal => "temporal",
             JsonPropertyKind.Map => "map",
+            JsonPropertyKind.Dictionary => "dictionary",
             JsonPropertyKind.HashSet => "hashSet",
+            JsonPropertyKind.List => "list",
+            JsonPropertyKind.Queue => "queue",
+            JsonPropertyKind.Stack => "stack",
             JsonPropertyKind.Array => "array",
             JsonPropertyKind.Enum => "enum",
             JsonPropertyKind.NumericEnum => "numericEnum",
@@ -114,12 +121,75 @@ internal sealed class JsonTypeDescriptorBuilder(
         ITypeSymbol elementType
     ) => new([KindProperty(kind), new TsObjectProperty("element", Build(elementType))]);
 
-    private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type) =>
+    /// <summary>
+    /// A <c>list</c> / <c>hashSet</c> / <c>queue</c> / <c>stack</c> descriptor
+    /// over its element, with the <c>create</c> closure that builds the
+    /// runtime class from the read elements (spec 011 contracts/runtime-
+    /// collections.md § JSON collection kinds), so <c>system/json</c> imports
+    /// no collection class.
+    /// </summary>
+    private TsObjectLiteral BuildCollectionDescriptor(
+        JsonPropertyKind kind,
+        ITypeSymbol elementType
+    ) =>
         new([
-            KindProperty(JsonPropertyKind.Map),
+            KindProperty(kind),
+            new TsObjectProperty("element", Build(elementType)),
+            new TsObjectProperty("create", CreateClosure(kind)),
+        ]);
+
+    private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type, JsonPropertyKind kind) =>
+        new([
+            KindProperty(kind),
             new TsObjectProperty("key", BuildKeyDescriptor(JsonTypeClassifier.KeyTypeOf(type))),
             new TsObjectProperty("value", Build(JsonTypeClassifier.ValueTypeOf(type))),
+            .. kind is JsonPropertyKind.Dictionary
+                ? [new TsObjectProperty("create", CreateClosure(kind))]
+                : Array.Empty<TsObjectProperty>(),
         ]);
+
+    /// <summary>
+    /// <c>(items) =&gt; List.of(items)</c> and the other kinds' factories: a
+    /// list takes ownership of the read array, a set and a queue add in
+    /// document order, a stack pushes in array order, a dictionary assigns
+    /// (the last of a repeated key wins), as System.Text.Json reads them.
+    /// </summary>
+    private static TsArrowFunction CreateClosure(JsonPropertyKind kind)
+    {
+        var (collection, factory) = kind switch
+        {
+            JsonPropertyKind.List => (IrCollectionKind.List, "of"),
+            JsonPropertyKind.HashSet => (IrCollectionKind.HashSet, "from"),
+            JsonPropertyKind.Queue => (IrCollectionKind.Queue, "from"),
+            JsonPropertyKind.Stack => (IrCollectionKind.Stack, "from"),
+            JsonPropertyKind.Dictionary => (IrCollectionKind.Dictionary, "assign"),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(kind),
+                kind,
+                "Not a collection kind."
+            ),
+        };
+
+        var parameter = kind is JsonPropertyKind.Dictionary ? "entries" : "items";
+
+        return new TsArrowFunction(
+            [new TsParameter(parameter, Type: null)],
+            [
+                new TsReturnStatement(
+                    new TsCallExpression(
+                        new TsPropertyAccess(
+                            new TsRuntimeHelperReference(
+                                RuntimeCollections.NameOf(collection),
+                                RuntimeCollections.Module
+                            ),
+                            factory
+                        ),
+                        [new TsIdentifier(parameter)]
+                    )
+                ),
+            ]
+        );
+    }
 
     /// <summary>
     /// A dictionary key's descriptor: the value descriptor of its type, plus

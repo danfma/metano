@@ -10,8 +10,8 @@
 //   IReadOnlyList<T>, … inherit it) and transpiled IEnumerable<T> implementations, which
 //   declare `[Symbol.iterator]()`.
 // - Dictionary<K,V> iterates `[key, value]` pairs, the KeyValuePair<K,V> shape.
-// - Queue<T> is an array iterated front to back, as C# does. Stack<T> stays unmapped:
-//   C# enumerates it top first, the reverse of its backing array.
+// - Queue<T> iterates front to back and Stack<T> top first, as C# does (the runtime
+//   classes' iterators).
 //
 // Only iterating the result is supported: IEnumerator<T>.MoveNext / Current / Reset are
 // not mapped.
@@ -41,5 +41,10 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(Queue<>),
     nameof(Queue<int>.GetEnumerator),
+    JsTemplate = "$this[Symbol.iterator]()"
+)]
+[assembly: MapMethod(
+    typeof(Stack<>),
+    nameof(Stack<int>.GetEnumerator),
     JsTemplate = "$this[Symbol.iterator]()"
 )]

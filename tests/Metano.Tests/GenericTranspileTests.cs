@@ -141,8 +141,8 @@ public class GenericTranspileTests
         );
 
         var output = result["wrapper.ts"];
-        // List<int> → number[] (already handled by TypeMapper)
-        await Assert.That(output).Contains("numbers: number[]");
+        // List<int> → the runtime List<number>
+        await Assert.That(output).Contains("numbers: List<number>");
     }
 
     [Test]
