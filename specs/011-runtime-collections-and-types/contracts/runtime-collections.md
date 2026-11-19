@@ -794,6 +794,7 @@ Two parallel sorted arrays with binary search: O(log n) `get` / `containsKey` / 
 | record keys, sorted and immutable classes | recorded per release; `SortedSet` / `SortedDictionary`: time per op at 1e5 ≤ 2.5× at 1e3; `SortedList`: reads only; immutable: 1e4 repeated `Add` ≤ 50 ms | no native equivalent |
 | `Queue.dequeue` | O(1) | ring buffer (today O(n)) |
 | Checks off (FR-058) | in the bun / esbuild bundle, no store to or read of `_version` outside the constructor, and `get` / `set` do not call the out-of-range throw function | inline `typeof __METANO_CHECKS__` guard, default on |
-| `List` alone, minified + gz | ≤ 2.5 KB | measured 1.67 KB with the full surface (research R13) |
-| `Dictionary` / `HashSet` / `Queue` / `Stack` alone | ≤ 3.0 / 1.6 / 1.2 / 1.2 KB | NFR-008 |
+| `List` alone, minified + gz | ≤ 4586 B | NFR-008, raised by W4-25 (d) to the measured size + 10% (bun 4169 B / esbuild 4113 B; research R13's 1.67 KB had no FR-013 exceptions): FR-016's exception classes (about 0.97 KB) plus `elementEquals` / `defaultEquals` (about 0.5 KB), shared when several collections are used; slimming the exceptions is a follow-up |
+| `Dictionary` / `HashSet` / `Queue` / `Stack` alone | ≤ 4506 / 4283 / 3128 / 2947 B | NFR-008, W4-25 (d): measured + 10%, same reason |
+| `List` + `Dictionary` + `HashSet` together | ≤ 7112 B | NFR-008, W4-25 (d): measured bun 6465 B / esbuild 6357 B + 10%; the shared cost counted once |
 | `ReadOnlyList` / `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary` / `SortedSet` / `SortedDictionary` / `SortedList` / `ConcurrentDictionary` alone | ≤ 0.8 / 2.0 / 2.0 / 2.5 / 2.5 / 3.0 / 2.5 / 3.5 KB | NFR-008, proposed |

@@ -47,7 +47,7 @@
     {
       "name": "List alone (full surface)",
       "entry": "entries/list-only.js",
-      "maxGzip": 2560,
+      "maxGzip": 4586,
       "mustNotContain": [
         "Queue empty.",
         "Stack empty.",
@@ -55,24 +55,24 @@
         "IReadOnlyDictionary",
         "@js-temporal"
       ],
-      "$comment": "Spec 011 NFR-008 (2.5 KB). The markers keep the other classes, the descriptor factories (their interface literals) and the Temporal polyfill out of a List bundle."
+      "$comment": "Raised by the maintainer (W4-25 (d), 2026-11-19) to the measured size + 10% (bun 4169 B / esbuild 4113 B; was 2560 B): FR-016's exception classes (about 0.97 KB) plus elementEquals / defaultEquals (about 0.5 KB), shared when several collections are used (see the combined row); slimming the exceptions is a follow-up."
     },
     {
       "name": "Dictionary alone (with KeyCollection / ValueCollection)",
       "entry": "entries/dictionary-only.js",
-      "maxGzip": 3072,
+      "maxGzip": 4506,
       "mustNotContain": [
         "Queue empty.",
         "Stack empty.",
         "Index must be within the bounds of the List.",
         "@js-temporal"
       ],
-      "$comment": "Spec 011 NFR-008 (3.0 KB)."
+      "$comment": "Raised by the maintainer (W4-25 (d), 2026-11-19) to the measured size + 10% (bun 4096 B / esbuild 4030 B; was 3072 B): FR-016's exception classes (about 0.97 KB) plus elementEquals / defaultEquals (about 0.5 KB), shared when several collections are used (see the combined row); slimming the exceptions is a follow-up."
     },
     {
       "name": "HashSet alone",
       "entry": "entries/hash-set-only.js",
-      "maxGzip": 1638,
+      "maxGzip": 4283,
       "mustNotContain": [
         "Queue empty.",
         "Stack empty.",
@@ -80,29 +80,40 @@
         "Index must be within the bounds of the List.",
         "@js-temporal"
       ],
-      "$comment": "Spec 011 NFR-008 (1.6 KB)."
+      "$comment": "Raised by the maintainer (W4-25 (d), 2026-11-19) to the measured size + 10% (bun 3893 B / esbuild 3849 B; was 1638 B): FR-016's exception classes (about 0.97 KB) plus elementEquals / defaultEquals (about 0.5 KB), shared when several collections are used (see the combined row); slimming the exceptions is a follow-up."
     },
     {
       "name": "Queue alone",
       "entry": "entries/queue-only.js",
-      "maxGzip": 1228,
+      "maxGzip": 3128,
       "mustNotContain": [
         "Stack empty.",
         "same key has already",
         "Index must be within the bounds of the List."
       ],
-      "$comment": "Spec 011 NFR-008 (1.2 KB)."
+      "$comment": "Raised by the maintainer (W4-25 (d), 2026-11-19) to the measured size + 10% (bun 2843 B / esbuild 2786 B; was 1228 B): FR-016's exception classes (about 0.97 KB) plus elementEquals / defaultEquals (about 0.5 KB), shared when several collections are used (see the combined row); slimming the exceptions is a follow-up."
     },
     {
       "name": "Stack alone",
       "entry": "entries/stack-only.js",
-      "maxGzip": 1228,
+      "maxGzip": 2947,
       "mustNotContain": [
         "Queue empty.",
         "same key has already",
         "Index must be within the bounds of the List."
       ],
-      "$comment": "Spec 011 NFR-008 (1.2 KB)."
+      "$comment": "Raised by the maintainer (W4-25 (d), 2026-11-19) to the measured size + 10% (bun 2679 B / esbuild 2620 B; was 1228 B): FR-016's exception classes (about 0.97 KB) plus elementEquals / defaultEquals (about 0.5 KB), shared when several collections are used (see the combined row); slimming the exceptions is a follow-up."
+    },
+    {
+      "name": "List + Dictionary + HashSet together",
+      "entry": "entries/list-dictionary-hash-set.js",
+      "maxGzip": 7112,
+      "mustNotContain": [
+        "Queue empty.",
+        "Stack empty.",
+        "@js-temporal"
+      ],
+      "$comment": "W4-25 (d): the shared cost (exception classes, elementEquals, hash core) counted once; measured bun 6465 B / esbuild 6357 B, budget + 10%."
     }
   ],
   "modules": [

@@ -516,10 +516,11 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
   | Entry | Budget |
   |---|---|
   | `import "metano-runtime"` (root, nothing used) | ≤ 0.1 KB |
-  | `List` alone (full surface) | ≤ 2.5 KB |
-  | `Dictionary` alone | ≤ 3.0 KB |
-  | `HashSet` alone | ≤ 1.6 KB |
-  | `Queue` alone / `Stack` alone | ≤ 1.2 KB each |
+  | `List` alone (full surface) | ≤ 4586 B (raised from 2.5 KB by the maintainer, W4-25 (d): measured bun 4169 B / esbuild 4113 B + 10%; FR-016's exception classes (about 0.97 KB) plus `elementEquals` / `defaultEquals` (about 0.5 KB), shared when several collections are used; slimming the exceptions is a follow-up) |
+  | `Dictionary` alone (with its key / value views) | ≤ 4506 B (raised from 3.0 KB, W4-25 (d): measured bun 4096 B / esbuild 4030 B + 10%; same reason) |
+  | `HashSet` alone | ≤ 4283 B (raised from 1.6 KB, W4-25 (d): measured bun 3893 B / esbuild 3849 B + 10%; same reason) |
+  | `Queue` alone / `Stack` alone | ≤ 3128 B / 2947 B (raised from 1.2 KB each, W4-25 (d): measured bun 2843 / 2679 B, esbuild 2786 / 2620 B + 10%; same reason) |
+  | `List` + `Dictionary` + `HashSet` together | ≤ 7112 B (W4-25 (d): measured bun 6465 B / esbuild 6357 B + 10%; the shared cost counted once) |
   | `ReadOnlyList` alone | ≤ 0.8 KB (proposed; FR-043 measures) |
   | `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary` alone | ≤ 2.0 / 2.0 / 2.5 KB (proposed) |
   | `SortedSet` / `SortedDictionary` / `SortedList` alone | ≤ 2.5 / 3.0 / 2.5 KB (proposed) |
