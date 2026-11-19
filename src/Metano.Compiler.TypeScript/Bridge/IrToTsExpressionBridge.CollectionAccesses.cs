@@ -24,7 +24,7 @@ public static partial class IrToTsExpressionBridge
         + "argument).";
 
     private static TsRuntimeHelperReference ListClass =>
-        new(RuntimeCollections.NameOf(IrCollectionKind.List), RuntimeCollections.Module);
+        RuntimeCollections.ReferenceTo(IrCollectionKind.List);
 
     /// <summary>
     /// The receiver and index of one collection access as the rendered shape
@@ -84,7 +84,7 @@ public static partial class IrToTsExpressionBridge
 
         if (access.ReceiverType is IrArrayTypeRef)
             return new TsCallExpression(
-                new TsRuntimeHelperReference("fromEnd", RuntimeCollections.Module),
+                RuntimeCollections.HelperReference("fromEnd"),
                 [Map(access.Receiver, context), offset]
             );
 
@@ -120,7 +120,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var call = new TsCallExpression(
-            new TsRuntimeHelperReference("asList", RuntimeCollections.Module),
+            RuntimeCollections.HelperReference("asList"),
             [Map(cast.Value, context)],
             TypeArguments: [IrToTsTypeMapper.Map(cast.Target.TypeArguments[0])]
         );
@@ -463,10 +463,7 @@ public static partial class IrToTsExpressionBridge
             );
 
         var factory = new TsPropertyAccess(
-            new TsRuntimeHelperReference(
-                RuntimeCollections.NameOf(initialization.Type.Kind),
-                RuntimeCollections.Module
-            ),
+            RuntimeCollections.ReferenceTo(initialization.Type.Kind),
             isAssign ? "assign" : "of"
         );
 
@@ -497,13 +494,7 @@ public static partial class IrToTsExpressionBridge
     /// <summary><c>HashSet.of([a, b])</c>: duplicates collapse, as C# adds each element.</summary>
     private static TsExpression SetFactory(IrArrayLiteral literal, IrToTsBridgeContext context) =>
         new TsCallExpression(
-            new TsPropertyAccess(
-                new TsRuntimeHelperReference(
-                    RuntimeCollections.NameOf(IrCollectionKind.HashSet),
-                    RuntimeCollections.Module
-                ),
-                "of"
-            ),
+            new TsPropertyAccess(RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet), "of"),
             [MapTypedArrayLiteral(literal, context)]
         );
 

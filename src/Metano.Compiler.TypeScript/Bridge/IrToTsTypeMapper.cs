@@ -46,10 +46,9 @@ public static class IrToTsTypeMapper
                 "Map",
                 [Map(m.KeyType, overrides), Map(m.ValueType, overrides)]
             ),
-            IrSetTypeRef s => new TsNamedType(
-                "HashSet",
-                [Map(s.ElementType, overrides)],
-                RuntimeHelperBinding: "HashSet"
+            IrSetTypeRef s => RuntimeClassType(
+                RuntimeCollections.NameOf(IrCollectionKind.HashSet),
+                [Map(s.ElementType, overrides)]
             ),
             IrTupleTypeRef t => new TsTupleType(t.Elements.Select(e => Map(e, overrides)).ToList()),
             IrFunctionTypeRef f => MapFunctionType(f, overrides),
@@ -87,14 +86,15 @@ public static class IrToTsTypeMapper
     /// </summary>
     private static TsNamedType MapCollection(IrCollectionTypeRef c, IrToTsTypeOverrides? overrides)
     {
-        var name = RuntimeCollections.NameOf(c.Kind);
-
-        return new TsNamedType(
-            name,
-            c.TypeArguments.Select(argument => Map(argument, overrides)).ToList(),
-            RuntimeHelperBinding: name
+        return RuntimeClassType(
+            RuntimeCollections.NameOf(c.Kind),
+            c.TypeArguments.Select(argument => Map(argument, overrides)).ToList()
         );
     }
+
+    /// <summary>A collections runtime class or interface, bound as a runtime helper (#484).</summary>
+    private static TsNamedType RuntimeClassType(string name, IReadOnlyList<TsType> typeArguments) =>
+        new(name, typeArguments, RuntimeHelperBinding: name);
 
     /// <summary>
     /// Optional name rewriter consulted by <see cref="MapNamed"/>.

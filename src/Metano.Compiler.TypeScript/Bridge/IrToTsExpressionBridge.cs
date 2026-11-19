@@ -2130,12 +2130,9 @@ public static partial class IrToTsExpressionBridge
             // to their JS runtime equivalents; the type mapper collapses them
             // into IrMap/IrSet/IrArray refs, so we reconstruct the JS class
             // names here for `new` targets.
-            IrCollectionTypeRef collection => new TsRuntimeHelperReference(
-                RuntimeCollections.NameOf(collection.Kind),
-                RuntimeCollections.Module
-            ),
+            IrCollectionTypeRef collection => RuntimeCollections.ReferenceTo(collection.Kind),
             IrMapTypeRef => new TsIdentifier("Map"),
-            IrSetTypeRef => new TsRuntimeHelperReference("HashSet"),
+            IrSetTypeRef => RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet),
             _ => IrToTsTypeMapper.Map(type) switch
             {
                 TsNamedType n => TypeValueReference(n.Name, n.Origin),

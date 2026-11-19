@@ -177,13 +177,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             [
                 new TsReturnStatement(
                     new TsCallExpression(
-                        new TsPropertyAccess(
-                            new TsRuntimeHelperReference(
-                                RuntimeCollections.NameOf(collection),
-                                RuntimeCollections.Module
-                            ),
-                            factory
-                        ),
+                        new TsPropertyAccess(RuntimeCollections.ReferenceTo(collection), factory),
                         [new TsIdentifier(parameter)]
                     )
                 ),

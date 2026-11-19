@@ -108,7 +108,11 @@ public static class IrRuntimeRequirementToTsImport
             "TupleEquals" => ("metano-runtime", "tupleEquals", false),
             "RecordCopy" => ("metano-runtime", "copyRecordWith", false),
             "IntegerDivision" => ("metano-runtime", "intDiv", false),
-            "HashSet" => (RuntimeCollections.Module, "HashSet", false),
+            "HashSet" => (
+                RuntimeCollections.Module,
+                RuntimeCollections.NameOf(IrCollectionKind.HashSet),
+                false
+            ),
             "UUID" => ("metano-runtime", "UUID", false),
             "Grouping" => ("metano-runtime", "Grouping", true),
             "Temporal" => ("@js-temporal/polyfill", "Temporal", false),

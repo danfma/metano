@@ -1,4 +1,5 @@
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -84,24 +85,15 @@ public static class RuntimeCollections
         "Span",
     };
 
+    /// <summary>
+    /// The simple names <see cref="IsCollectionTypeName"/> matches. The
+    /// dictionary views are nested types, so their full names reach the check
+    /// through their declaring <c>Dictionary</c>.
+    /// </summary>
     private static readonly IReadOnlySet<string> CollectionTypeNames = new HashSet<string>(
+        NamesByKind.Values,
         StringComparer.Ordinal
-    )
-    {
-        "List",
-        "IList",
-        "ICollection",
-        "IReadOnlyList",
-        "IReadOnlyCollection",
-        "Dictionary",
-        "IDictionary",
-        "IReadOnlyDictionary",
-        "HashSet",
-        "ISet",
-        "IReadOnlySet",
-        "Queue",
-        "Stack",
-    };
+    );
 
     private static readonly IReadOnlySet<string> AllNames = new HashSet<string>(
         NamesByKind.Values.Concat(HelperNames),
@@ -110,6 +102,19 @@ public static class RuntimeCollections
 
     /// <summary>The runtime class or interface name of <paramref name="kind"/>.</summary>
     public static string NameOf(IrCollectionKind kind) => NamesByKind[kind];
+
+    /// <summary>The value reference to the runtime class of <paramref name="kind"/>.</summary>
+    public static TsRuntimeHelperReference ReferenceTo(IrCollectionKind kind) =>
+        new(NameOf(kind), Module);
+
+    /// <summary>
+    /// The value reference to <paramref name="name"/>, one of the collections
+    /// barrel's helpers (<c>fromEnd</c>, <c>throwModified</c>, <c>asList</c>, ...).
+    /// </summary>
+    public static TsRuntimeHelperReference HelperReference(string name) =>
+        HelperNames.Contains(name)
+            ? new TsRuntimeHelperReference(name, Module)
+            : throw new ArgumentException($"'{name}' is not a collections helper.", nameof(name));
 
     /// <summary>Whether <paramref name="kind"/> is a collection interface (no runtime value).</summary>
     public static bool IsInterface(IrCollectionKind kind) =>

@@ -91,7 +91,7 @@ public static class IrToTsStatementBridge
         var body = MapBody(fe.Body, bodyContext);
 
         var throwModified = new TsCallExpression(
-            new TsRuntimeHelperReference("throwModified", RuntimeCollections.Module),
+            RuntimeCollections.HelperReference("throwModified"),
             []
         );
 

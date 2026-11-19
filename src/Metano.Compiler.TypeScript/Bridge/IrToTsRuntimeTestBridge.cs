@@ -134,13 +134,7 @@ internal static class IrToTsRuntimeTestBridge
         RuntimeCollections
             .ClassesOf(type.Kind)
             .Select(kind =>
-                (TsExpression)InstanceofTest(
-                    value,
-                    new TsRuntimeHelperReference(
-                        RuntimeCollections.NameOf(kind),
-                        RuntimeCollections.Module
-                    )
-                )
+                (TsExpression)InstanceofTest(value, RuntimeCollections.ReferenceTo(kind))
             )
             .Aggregate((left, right) => new TsBinaryExpression(left, "||", right));
 
@@ -149,7 +143,10 @@ internal static class IrToTsRuntimeTestBridge
         type switch
         {
             IrMapTypeRef => InstanceofTest(value, new TsIdentifier("Map")),
-            IrSetTypeRef => InstanceofTest(value, new TsRuntimeHelperReference("HashSet")),
+            IrSetTypeRef => InstanceofTest(
+                value,
+                RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet)
+            ),
             IrPromiseTypeRef => InstanceofTest(value, new TsIdentifier("Promise")),
             // A temporal value tests by its toStringTag, inline: never by
             // `instanceof Temporal.*`, which would pull the polyfill in (FR-017),
