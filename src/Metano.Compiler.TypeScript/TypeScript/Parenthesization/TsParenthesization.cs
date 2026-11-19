@@ -138,9 +138,14 @@ internal static class TsParenthesization
     /// <summary>
     /// After a cast's type, <c>|</c> and <c>&amp;</c> continue the type
     /// (<c>x as A | b</c> is <c>x as (A | b)</c>) and <c>&lt;</c> opens type
-    /// arguments.
+    /// arguments, so do the operators that start with them: <c>x as E &lt;= y</c>
+    /// reads <c>E&lt;</c> and fails at <c>=</c>, and the compound assignments
+    /// <c>|=</c>, <c>&amp;=</c> and <c>&lt;&lt;=</c> fail the same way. <c>||</c>,
+    /// <c>&amp;&amp;</c>, <c>&gt;</c> and <c>&gt;=</c> end the type, and <c>&lt;&lt;</c>
+    /// binds tighter than <c>as</c>, so its cast operand is parenthesized by precedence.
     /// </summary>
-    private static bool IsTypeContinuation(string op) => op is "|" or "&" or "<";
+    private static bool IsTypeContinuation(string op) =>
+        op is "|" or "&" or "<" or "<=" or "|=" or "&=" or "<<=";
 
     /// <summary>
     /// Whether the operand's text ends with a cast's type: a rightmost walk,
