@@ -117,7 +117,8 @@ export function equals(a: unknown, b: unknown): boolean {
  *
  * Rules:
  * 1. `null` / `undefined` → 0.
- * 2. Objects with a custom `hashCode()` method delegate to it.
+ * 2. Objects with a custom `hashCode()` method delegate to it; a `Boxed` value hashes its
+ *    raw value (spec 011 FR-051).
  * 3. A `bigint` answers `hashInt64`, the fold of its two 32-bit words that .NET's
  *    `long` / `ulong` `GetHashCode` computes (FR-046). A `BigInteger` is a `bigint` too
  *    and hashes the same way, which is not .NET's `BigInteger` hash. Every other
@@ -135,8 +136,11 @@ export function hashCode(value: unknown): number {
   if (value == null) return 0;
 
   if (typeof value === "object") {
+    // A box hashes as its raw value, as .NET's boxed enum does
+    // (`Color.Green.GetHashCode() == ((object)Color.Green).GetHashCode()`); equality
+    // still requires the same type, so boxes of two enums with one value only collide.
     if (hasBoxBrand(value)) {
-      return HashCode.combine2(value.type.fullName, hashCode(value.value));
+      return hashCode(value.value);
     }
 
     if (isDuration(value)) {

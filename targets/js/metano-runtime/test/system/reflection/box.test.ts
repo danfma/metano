@@ -250,9 +250,10 @@ describe("equality and hashing", () => {
     }
   });
 
-  test("equal boxes hash alike and a different type hashes apart", () => {
+  test("a box hashes as its raw value, as a boxed .NET enum does", () => {
     expect(hashCode(box(1, Color))).toBe(hashCode(box(1, { ...Color })));
-    expect(hashCode(box(1, Color))).not.toBe(hashCode(box(1, Perms)));
+    expect(hashCode(box(1, Color))).toBe(hashCode(1));
+    expect(hashCode(box(1, Color))).toBe(hashCode(box(1, Perms)));
     expect(hashCode(box(1, Color))).not.toBe(hashCode(box(0, Color)));
   });
 });
