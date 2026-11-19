@@ -323,11 +323,13 @@ public class InheritanceTranspileTests
         );
 
         var tagged = result["app/tagged.ts"];
+
         await Assert
             .That(tagged)
             .Contains(
                 "other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.id === other.id && this.tag === other.tag"
             );
+
         await Assert.That(tagged).DoesNotContain("this.twice === other.twice");
         await Assert.That(tagged).Contains("return copyRecordWith<Tagged>(this, overrides);");
     }
@@ -358,9 +360,11 @@ public class InheritanceTranspileTests
         var account = result["app/account.ts"];
         var savings = result["app/savings.ts"];
         await Assert.That(account).Contains("this._pin === other._pin");
+
         await Assert
             .That(savings)
             .Contains("return super.equals(other) && valueEquals(this.rate, other.rate);");
+
         await Assert.That(savings).Contains("hc.add(super.hashCode());");
         await Assert.That(savings).DoesNotContain("_pin");
     }

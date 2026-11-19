@@ -23,14 +23,18 @@ public class RoundingMappingTests
 
         await Assert.That(output).Contains("return roundNumber(x);");
         await Assert.That(output).Contains("return roundNumber(x, 2);");
+
         await Assert
             .That(output)
             .Contains("return roundNumber(x, 0, MidpointRounding.AwayFromZero);");
+
         await Assert.That(output).Contains("static mode(x: number, mode: MidpointRounding)");
         await Assert.That(output).Contains("return roundNumber(x, 3, mode);");
+
         await Assert
             .That(output)
             .Contains("import { MidpointRounding, roundNumber } from \"metano-runtime\";");
+
         await Assert.That(output).DoesNotContain("Math.round");
     }
 
@@ -61,9 +65,11 @@ public class RoundingMappingTests
 
         await Assert.That(output).Contains("return roundDecimal(x);");
         await Assert.That(output).Contains("return roundDecimal(x, 2);");
+
         await Assert
             .That(output)
             .Contains("return roundDecimal(x, 0, MidpointRounding.AwayFromZero);");
+
         await Assert.That(output).Contains("return roundDecimal(x, 0, MidpointRounding.ToZero);");
         await Assert.That(output).Contains("return roundDecimal(x, 1, MidpointRounding.ToEven);");
         await Assert.That(output).DoesNotContain(".round()");

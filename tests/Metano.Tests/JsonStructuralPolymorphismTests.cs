@@ -333,6 +333,7 @@ public class JsonStructuralPolymorphismTests
             $"get {char.ToLowerInvariant(entry[0])}{entry[1..]}()",
             StringComparison.Ordinal
         );
+
         var getter = ts[
             getterStart..ts.IndexOf("polymorphism: {", getterStart, StringComparison.Ordinal)
         ];
@@ -458,9 +459,11 @@ public class JsonStructuralPolymorphismTests
         var ts = files["app/json-context.ts"];
 
         await Assert.That(ts).Contains("test: isPoint,");
+
         await Assert
             .That(ts)
             .Contains("import { isPoint, type Point, type Shape } from \"shared/shared\";");
+
         await Assert.That(libraryFiles["shared/point.ts"]).Contains("export function isPoint(");
     }
 
@@ -526,6 +529,7 @@ public class JsonStructuralPolymorphismTests
         foreach (var file in transformer.TransformAll())
         {
             var path = Path.Combine(cacheDir, file.FileName);
+
             var content = transformer.CachedFileContents.TryGetValue(file.FileName, out var cached)
                 ? cached
                 : printer.Print(file);

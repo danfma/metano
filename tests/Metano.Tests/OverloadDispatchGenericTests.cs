@@ -181,9 +181,11 @@ public class OverloadDispatchGenericTests
         );
 
         var output = result["box.ts"];
+
         var concrete = output.IndexOf(
             "args.length === 2 && args[0] instanceof Box && isInt32(args[1])"
         );
+
         var generic = output.IndexOf("args.length === 2 && args[0] instanceof Box)");
 
         await Assert.That(concrete).IsGreaterThanOrEqualTo(0);
@@ -221,6 +223,7 @@ public class OverloadDispatchGenericTests
             .ToList();
 
         await Assert.That(warnings.Count).IsEqualTo(2);
+
         await Assert
             .That(warnings.All(w => w.Severity == MetanoDiagnosticSeverity.Warning))
             .IsTrue();

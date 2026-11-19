@@ -148,6 +148,7 @@ public class JsonFactoryTests
             .Contains(
                 "type: { kind: \"branded\", create: Title.from, typeName: \"TestApp.Title\" }"
             );
+
         await Assert.That(ts).DoesNotContain("Title.create");
     }
 
@@ -164,6 +165,7 @@ public class JsonFactoryTests
         );
 
         await Assert.That(ts).Contains("get title(): ValueSpec<Title>");
+
         await Assert
             .That(ts)
             .Contains(
@@ -230,6 +232,7 @@ public class JsonFactoryTests
             .Contains(
                 "inner: { kind: \"branded\", create: Title.from, typeName: \"TestApp.Title\" }"
             );
+
         await Assert
             .That(ts)
             .Contains(

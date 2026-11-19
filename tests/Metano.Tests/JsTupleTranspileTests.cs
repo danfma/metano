@@ -200,9 +200,11 @@ public class JsTupleTranspileTests
         );
 
         var output = result["matcher.ts"];
+
         await Assert
             .That(output)
             .Contains("return Array.isArray(o) && o.length === 2 && o[0] === 1;");
+
         await Assert.That(output).Contains("return !(Array.isArray(o) && o.length === 2);");
         // Nothing references the alias as a value, so no value import exists.
         await Assert.That(output).DoesNotContain("import { JPair }");
@@ -262,6 +264,7 @@ public class JsTupleTranspileTests
         await Assert
             .That(result["matcher.ts"])
             .Contains("return Array.isArray(o) && o.length === 3;");
+
         await Assert.That(result["matcher.ts"]).DoesNotContain("instanceof Triple");
     }
 
