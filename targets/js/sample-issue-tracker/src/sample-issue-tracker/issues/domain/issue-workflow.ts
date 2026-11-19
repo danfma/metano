@@ -11,18 +11,22 @@ export class IssueWorkflow {
 
   static getAllowedTransitions(currentStatus: IssueStatus): IReadOnlyList<IssueStatus> {
     return currentStatus === IssueStatus.Backlog
-      ? List.adopt([IssueStatus.Ready, IssueStatus.Cancelled], { fixedSize: true })
+      ? List.adopt<IssueStatus>([IssueStatus.Ready, IssueStatus.Cancelled], { fixedSize: true })
       : currentStatus === IssueStatus.Ready
-        ? List.adopt([IssueStatus.InProgress, IssueStatus.Cancelled], { fixedSize: true })
+        ? List.adopt<IssueStatus>([IssueStatus.InProgress, IssueStatus.Cancelled], {
+            fixedSize: true,
+          })
         : currentStatus === IssueStatus.InProgress
-          ? List.adopt([IssueStatus.InReview, IssueStatus.Backlog, IssueStatus.Cancelled], {
-              fixedSize: true,
-            })
+          ? List.adopt<IssueStatus>(
+              [IssueStatus.InReview, IssueStatus.Backlog, IssueStatus.Cancelled],
+              { fixedSize: true },
+            )
           : currentStatus === IssueStatus.InReview
-            ? List.adopt([IssueStatus.Done, IssueStatus.InProgress, IssueStatus.Cancelled], {
-                fixedSize: true,
-              })
-            : List.adopt([], { fixedSize: true });
+            ? List.adopt<IssueStatus>(
+                [IssueStatus.Done, IssueStatus.InProgress, IssueStatus.Cancelled],
+                { fixedSize: true },
+              )
+            : List.adopt<IssueStatus>([], { fixedSize: true });
   }
 
   static canTransition(currentStatus: IssueStatus, nextStatus: IssueStatus): boolean {

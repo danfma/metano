@@ -2170,7 +2170,7 @@ public static partial class IrToTsExpressionBridge
             return IrToTsJsxBridge.Convert(ne, context);
 
         if (SetLiteralOf(ne) is { } setLiteral)
-            return SetFactory(setLiteral, context);
+            return SetFactory(setLiteral, (IrCollectionTypeRef)ne.Type, context);
 
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
 

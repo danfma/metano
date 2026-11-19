@@ -2,7 +2,7 @@ import { List } from "metano-runtime/system/collections";
 import type { IBag } from "./i-bag";
 
 export class Bag<T> implements IBag<T> {
-  private readonly _items: List<T> = List.of([]);
+  private readonly _items: List<T> = List.of<T>([]);
 
   constructor() { }
 

@@ -158,9 +158,9 @@ public class CollectionExpressionTests
                     + "Build the dictionary with explicit Add calls instead.",
             ]);
 
-        await Assert.That(output).Contains("return HashSet.of([1, 2]);");
+        await Assert.That(output).Contains("return HashSet.of<number>([1, 2]);");
 
-        await Assert.That(output).Contains("return HashSet.of([1, 1]).count;");
+        await Assert.That(output).Contains("return HashSet.of<number>([1, 1]).count;");
 
         await Assert
             .That(output)
@@ -255,7 +255,7 @@ public class CollectionExpressionTests
                   constructor() { }
 
                   ids(more: bigint[]): HashSet<bigint> {
-                    return HashSet.of([1n, 2n, ...more]);
+                    return HashSet.of<bigint>([1n, 2n, ...more]);
                   }
                 }
 

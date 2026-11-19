@@ -36,7 +36,7 @@ export class Probe {
   }
 
   static raw(): List<Color> {
-    return List.of([Color.Red]);
+    return List.of<Color>([Color.Red]);
   }
 
   static interface(): IComparable {

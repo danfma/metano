@@ -335,19 +335,19 @@ export class ParamsCalls {
   }
 
   static listOmitted(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([]));
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([]));
   }
 
   static listPositionalFirst(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([]));
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([]));
   }
 
   static listGiven(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([Trace.next("r")]));
+    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([Trace.next("r")]));
   }
 
   static listPositional(e: Collector): number {
-    return e.restL(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of([]));
+    return e.restL(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([]));
   }
 
   static enumerableOmitted(e: Collector): number {

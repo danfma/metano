@@ -33,7 +33,7 @@ export class Stages {
   }
 
   others(): List<number> {
-    return List.of([10, 20]);
+    return List.of<number>([10, 20]);
   }
 
   nextAsync(): Promise<number> {

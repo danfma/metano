@@ -1,7 +1,7 @@
 import { List, fromEnd, type IList, type IReadOnlyList } from "metano-runtime/system/collections";
 
 export class Sequences {
-  private readonly _items: List<number> = List.of([7, 8, 9]);
+  private readonly _items: List<number> = List.of<number>([7, 8, 9]);
 
   constructor() { }
 

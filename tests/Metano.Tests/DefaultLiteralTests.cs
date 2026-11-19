@@ -97,7 +97,7 @@ public class DefaultLiteralTests
         await Assert.That(holder).Contains("firstOrDefault(undefined, null ?? 0)");
         await Assert.That(holder).Contains("const d = 0;");
         await Assert.That(holder).Contains("return n ?? 0;");
-        await Assert.That(holder).Contains("return List.of([0, 1]);");
+        await Assert.That(holder).Contains("return List.of<number>([0, 1]);");
         await Assert.That(holder).Contains("return cond ? Mode.On : Mode.Off;");
         await Assert.That(holder).DoesNotContain("undefined, undefined");
         await Assert.That(Warnings(diagnostics)).IsEmpty();

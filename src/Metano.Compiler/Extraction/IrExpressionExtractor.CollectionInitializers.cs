@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -56,17 +55,7 @@ public sealed partial class IrExpressionExtractor
                 ? (creation as IrNewExpression)?.Arguments[0].Value
                 : null,
             elements
-        )
-        {
-            ElementType =
-                type.Kind is IrCollectionKind.Dictionary
-                    ? null
-                    : DeclaredElementType(
-                        (ExpressionSyntax)initializer.Parent!,
-                        named,
-                        AddedValuesOf(operation)
-                    ),
-        };
+        );
     }
 
     /// <summary>
@@ -168,14 +157,6 @@ public sealed partial class IrExpressionExtractor
                 ),
         ];
     }
-
-    /// <summary>The value each <c>Add</c> of a collection initializer passes.</summary>
-    private static ImmutableArray<IOperation> AddedValuesOf(IObjectCreationOperation operation) =>
-        [
-            .. (operation.Initializer?.Initializers ?? [])
-                .OfType<IInvocationOperation>()
-                .Select(add => add.Arguments[0].Value),
-        ];
 
     private static IrCollectionConstruction ConstructionOf(IMethodSymbol? constructor) =>
         constructor?.Parameters switch

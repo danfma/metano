@@ -109,7 +109,7 @@ export function explicitNarrowed(a: bigint): number {
 }
 
 export function iteratedSum(a: number, b: number): bigint {
-  const pairs = List.of([[a, b] as [number, number], [b, a] as [number, number]] as [number, number][]);
+  const pairs = List.of<[number, number]>([[a, b] as [number, number], [b, a] as [number, number]]);
   let total = 0n;
   {
     const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
@@ -130,7 +130,7 @@ export function iteratedSum(a: number, b: number): bigint {
 }
 
 export function nullableIteratedStop(a: number, b: number): bigint {
-  const pairs = List.of([[a, b] as [number, number], null, [b, a] as [number, number]] as ([number, number] | null)[]);
+  const pairs = List.of<[number, number] | null>([[a, b] as [number, number], null, [b, a] as [number, number]]);
   let count = 0;
   let total = 0n;
   try {
@@ -164,7 +164,7 @@ export function nullableIteratedStop(a: number, b: number): bigint {
 }
 
 export function iteratedNarrowedSum(a: bigint): number {
-  const pairs = List.of([[a, a] as [bigint, bigint]]);
+  const pairs = List.of<[bigint, bigint]>([[a, a] as [bigint, bigint]]);
   let total = 0;
   {
     const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
@@ -186,7 +186,7 @@ export function iteratedNarrowedSum(a: bigint): number {
 
 export function iteratedNarrowedCheckedSum(a: bigint): number {
   {
-    const pairs = List.of([[a, a] as [bigint, bigint]]);
+    const pairs = List.of<[bigint, bigint]>([[a, a] as [bigint, bigint]]);
     let total = 0;
     {
       const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
@@ -323,7 +323,7 @@ export function castLiteralNullableSum(a: bigint): bigint {
 }
 
 export function castLiteralElementSum(a: bigint): bigint {
-  const pairs = List.of([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number])] as [bigint, bigint][]);
+  const pairs = List.of<[bigint, bigint]>([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number])]);
 
   return BigInt.asIntN(64, pairs.get(0)[0] + pairs.get(0)[1]);
 }
@@ -349,22 +349,22 @@ export function nullableLiteralSum(a: number, b: number): bigint {
 }
 
 export function spreadListSum(a: number, b: number): bigint {
-  const ints = List.of([a, b]);
-  const longs = List.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
+  const ints = List.of<number>([a, b]);
+  const longs = List.of<bigint>([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
   return BigInt.asIntN(64, longs.get(0) + longs.get(1));
 }
 
 export function spreadListContains(a: number, b: number): boolean {
-  const ints = List.of([a, b]);
-  const longs = List.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
+  const ints = List.of<number>([a, b]);
+  const longs = List.of<bigint>([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
   return longs.contains(BigInt(a));
 }
 
 export function spreadSetContains(a: number, b: number): boolean {
   const ints = [a, b];
-  const longs = HashSet.of([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
+  const longs = HashSet.of<bigint>([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
 
   return longs.contains(BigInt(b));
 }
@@ -377,8 +377,8 @@ export function spreadArraySum(a: number, b: number): bigint {
 }
 
 export function spreadTupleSum(a: number, b: number): bigint {
-  const pairs = List.of([[a, b] as [number, number]] as [number, number][]);
-  const wide = List.of([...Array.from(pairs, (element$temp$0) => [BigInt(element$temp$0[0]), BigInt(element$temp$0[1])] as [bigint, bigint])]);
+  const pairs = List.of<[number, number]>([[a, b] as [number, number]]);
+  const wide = List.of<[bigint, bigint]>([...Array.from(pairs, (element$temp$0) => [BigInt(element$temp$0[0]), BigInt(element$temp$0[1])] as [bigint, bigint])]);
 
   return BigInt.asIntN(64, wide.get(0)[0] + wide.get(0)[1]);
 }

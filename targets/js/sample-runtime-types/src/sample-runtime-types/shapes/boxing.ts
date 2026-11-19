@@ -34,6 +34,6 @@ export class Boxing {
   }
 
   static colors(): List<Color> {
-    return List.of([Color.Red, Color.Green]);
+    return List.of<Color>([Color.Red, Color.Green]);
   }
 }

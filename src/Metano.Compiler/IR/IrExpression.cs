@@ -1008,16 +1008,7 @@ public sealed record IrCollectionInitialization(
     IrCollectionConstruction Construction,
     IrExpression? Comparer,
     IReadOnlyList<IReadOnlyList<IrExpression>> Elements
-) : IrExpression
-{
-    /// <summary>
-    /// The element type C# gives a list or set initializer, set only where a
-    /// target that infers it from the elements would get a narrower one
-    /// (<c>new List&lt;object&gt; { Color.Red }</c>), as
-    /// <see cref="IrArrayLiteral.ElementType"/>.
-    /// </summary>
-    public IrTypeRef? ElementType { get; init; }
-}
+) : IrExpression;
 
 // -- Collection literals --
 

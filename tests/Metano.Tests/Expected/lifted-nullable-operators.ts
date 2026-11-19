@@ -38,5 +38,5 @@ export function show(o: Order): string {
 }
 
 export function orders(): List<Order | null> {
-  return List.of([null]);
+  return List.of<Order | null>([null]);
 }

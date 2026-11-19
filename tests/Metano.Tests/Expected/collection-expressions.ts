@@ -5,8 +5,8 @@ import { Color } from "./color";
 import type { Dog } from "./dog";
 
 export class Shelf {
-  private readonly _primes: HashSet<number> = HashSet.of([2, 3, 5]);
-  private readonly _colors: HashSet<Color> = HashSet.of([Color.Red]);
+  private readonly _primes: HashSet<number> = HashSet.of<number>([2, 3, 5]);
+  private readonly _colors: HashSet<Color> = HashSet.of<Color>([Color.Red]);
   private readonly _defaults: Map<string, number> = new Map<string, number>([["a", 1] as [string, number], ["b", 2] as [string, number]]);
   private readonly _cache: Map<string, number> = new Map<string, number>();
   private readonly _none: HashSet<string> = new HashSet<string>();
@@ -19,11 +19,11 @@ export class Shelf {
   }
 
   union(xs: number[], ys: List<number>): HashSet<number> {
-    return HashSet.of([...xs, ...ys]);
+    return HashSet.of<number>([...xs, ...ys]);
   }
 
   mixed(xs: number[]): HashSet<number> {
-    return HashSet.of([this.next(), ...xs, this.next()]);
+    return HashSet.of<number>([this.next(), ...xs, this.next()]);
   }
 
   sorted(source: HashSet<number>): HashSet<number> {
@@ -39,24 +39,24 @@ export class Shelf {
   }
 
   pass(extra: string[]): number {
-    return this.count(HashSet.of(["a", ...extra]));
+    return this.count(HashSet.of<string>(["a", ...extra]));
   }
 
   palette(extra: HashSet<Color>): HashSet<Color> {
-    const palette = HashSet.of([Color.Green, ...extra, ...this._colors]);
+    const palette = HashSet.of<Color>([Color.Green, ...extra, ...this._colors]);
 
     return palette;
   }
 
   optional(): HashSet<number | null> {
-    const values = HashSet.of([1] as (number | null)[]);
+    const values = HashSet.of<number | null>([1]);
     values.add(null);
 
     return values;
   }
 
   pets(dog: Dog, cat: Cat): HashSet<Animal> {
-    const pets = HashSet.of([dog] as Animal[]);
+    const pets = HashSet.of<Animal>([dog]);
     pets.add(cat);
 
     return pets;

@@ -20,7 +20,7 @@ export class Issue {
   sprintKey: string | null = null;
   readonly createdAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
   updatedAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
-  private readonly _comments: List<Comment> = List.of([]);
+  private readonly _comments: List<Comment> = List.of<Comment>([]);
 
   constructor(
     readonly id: IssueId,

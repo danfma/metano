@@ -4,7 +4,7 @@ import { Point } from "./point";
 import { Tag } from "./tag";
 
 export class Factory {
-  private readonly _defaults: List<number> = List.of([7, 8]);
+  private readonly _defaults: List<number> = List.of<number>([7, 8]);
   seed: number = 0;
 
   constructor() { }
@@ -25,18 +25,18 @@ export class Factory {
 
       return receiver$temp$1;
     })(new Tag("t"));
-    const list = List.of([1, 2]);
+    const list = List.of<number>([1, 2]);
     const sized = (List.withCapacity<number>(capacity)).initAdd([3]);
-    const typed = List.of(["a"]);
-    const byIndex = Dictionary.assign([
+    const typed = List.of<string>(["a"]);
+    const byIndex = Dictionary.assign<string, number>([
       ["a", 1],
       ["b", 2],
     ]);
-    const byAdd = Dictionary.of([
+    const byAdd = Dictionary.of<string, number>([
       ["c", 3],
     ]);
-    const set = HashSet.of(["x", "y"]);
-    const nested = List.of([List.of([1]), List.of([2])]);
+    const set = HashSet.of<string>(["x", "y"]);
+    const nested = List.of<List<number>>([List.of<number>([1]), List.of<number>([2])]);
     const bag = ((receiver$temp$2) => {
       receiver$temp$2.add("a");
       receiver$temp$2.add("b", 2);

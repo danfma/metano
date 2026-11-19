@@ -235,7 +235,7 @@ export class Pairs {
   }
 
   castLiteralElement(a: bigint, b: bigint): List<[bigint, bigint]> {
-    return List.of([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number])]);
+    return List.of<[bigint, bigint]>([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, b))] as [number, number])]);
   }
 
   castLiteralArm(narrow: boolean, a: bigint, b: bigint): [bigint, bigint] {

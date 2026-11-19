@@ -22,7 +22,7 @@ export class Conversions {
 
     for (const x of d) {
     }
-    const list = List.of([d] as number[]);
+    const list = List.of<number>([d]);
 
     return d;
   }

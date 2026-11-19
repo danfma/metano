@@ -53,7 +53,7 @@ public class ListInterfaceCastTests
 
         await Assert
             .That(files["casts.ts"])
-            .Contains("return List.adopt(value, { fixedSize: true });");
+            .Contains("return List.adopt<number>(value, { fixedSize: true });");
     }
 
     [Test]

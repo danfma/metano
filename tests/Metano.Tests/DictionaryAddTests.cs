@@ -61,11 +61,14 @@ public class DictionaryAddTests
         );
 
         var output = result["registry.ts"];
-        await Assert.That(output).Contains("return Dictionary.of([\n      [\"a\", 1],\n    ]);");
 
         await Assert
             .That(output)
-            .Contains("return Dictionary.assign([\n      [\"a\", 1],\n    ]);");
+            .Contains("return Dictionary.of<string, number>([\n      [\"a\", 1],\n    ]);");
+
+        await Assert
+            .That(output)
+            .Contains("return Dictionary.assign<string, number>([\n      [\"a\", 1],\n    ]);");
 
         await Assert.That(output).Contains("map.set(\"a\", 2)");
     }

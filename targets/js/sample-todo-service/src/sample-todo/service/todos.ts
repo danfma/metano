@@ -41,7 +41,7 @@ export interface UpdateTodoDto {
 }
 
 export class TodoStore {
-  private readonly _items: List<StoredTodo> = List.of([]);
+  private readonly _items: List<StoredTodo> = List.of<StoredTodo>([]);
 
   constructor() {}
 

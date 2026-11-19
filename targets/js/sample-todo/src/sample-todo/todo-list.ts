@@ -8,7 +8,7 @@ import { TodoItem } from "./todo-item";
 let TodoList$rt: ClassType<TodoList> | undefined;
 
 export class TodoList {
-  private readonly _items: List<TodoItem> = List.of([]);
+  private readonly _items: List<TodoItem> = List.of<TodoItem>([]);
 
   constructor(readonly name: string) {}
 

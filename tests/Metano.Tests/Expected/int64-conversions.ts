@@ -49,7 +49,7 @@ export class Conv {
   }
 
   listInit(i: number): List<bigint> {
-    return List.of([1n, BigInt(i)]);
+    return List.of<bigint>([1n, BigInt(i)]);
   }
 
   arrInit(i: number): bigint[] {

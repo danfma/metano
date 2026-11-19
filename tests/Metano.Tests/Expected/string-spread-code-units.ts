@@ -4,7 +4,7 @@ export class Letters {
   constructor() { }
 
   of(text: string): List<string> {
-    return List.of([...text.split("")]);
+    return List.of<string>([...text.split("")]);
   }
 
   framed(text: string, suffix: string | null): string[] {
@@ -12,11 +12,11 @@ export class Letters {
   }
 
   distinct(text: string): HashSet<string> {
-    return HashSet.of([...text.split("")]);
+    return HashSet.of<string>([...text.split("")]);
   }
 
   words(words: string[]): List<string> {
-    return List.of([...words]);
+    return List.of<string>([...words]);
   }
 
   dashed(words: string[]): string {

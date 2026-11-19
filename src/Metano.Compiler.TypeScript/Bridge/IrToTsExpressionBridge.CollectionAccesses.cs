@@ -123,7 +123,7 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapAdoptedArray(
         IrArrayToCollectionConversion conversion,
         IrToTsBridgeContext context
-    ) => AdoptedFixedSize(Map(conversion.Value, context));
+    ) => AdoptedFixedSize(Map(conversion.Value, context), conversion.Target, context);
 
     /// <summary>
     /// A cast to a list interface from a value that may be a native array
@@ -144,12 +144,35 @@ public static partial class IrToTsExpressionBridge
         return new TsCastExpression(call, IrToTsTypeMapper.Map(cast.TargetType));
     }
 
-    /// <summary><c>List.adopt(array, { fixedSize: true })</c>.</summary>
-    internal static TsExpression AdoptedFixedSize(TsExpression array) =>
+    /// <summary><c>List.adopt&lt;T&gt;(array, { fixedSize: true })</c>.</summary>
+    internal static TsExpression AdoptedFixedSize(
+        TsExpression array,
+        IrCollectionTypeRef target,
+        IrToTsBridgeContext context
+    ) =>
         new TsCallExpression(
             new TsPropertyAccess(ListClass, "adopt"),
-            [array, new TsObjectLiteral([new TsObjectProperty("fixedSize", new TsLiteral("true"))])]
+            [
+                array,
+                new TsObjectLiteral([new TsObjectProperty("fixedSize", new TsLiteral("true"))]),
+            ],
+            TypeArguments: CollectionTypeArguments(target, context)
         );
+
+    /// <summary>
+    /// The type arguments of a collection factory call, written from the C#
+    /// collection type so TypeScript does not infer them from the elements
+    /// (<c>List.of&lt;Color&gt;([Color.Red])</c>, not <c>List&lt;Color.Red&gt;</c>).
+    /// </summary>
+    private static IReadOnlyList<TsType> CollectionTypeArguments(
+        IrCollectionTypeRef type,
+        IrToTsBridgeContext context
+    ) =>
+        [
+            .. type.TypeArguments.Select(argument =>
+                IrToTsTypeMapper.Map(argument, context.TypeOverrides)
+            ),
+        ];
 
     private static TsExpression WithBoundFromEnd(
         IrFromEndElementAccess access,
@@ -462,13 +485,6 @@ public static partial class IrToTsExpressionBridge
                 .ToList()
         );
 
-        var typedItems = initialization.ElementType is { } elementType
-            ? new TsCastExpression(
-                items,
-                new TsArrayType(IrToTsTypeMapper.Map(elementType, context.TypeOverrides))
-            )
-            : (TsExpression)items;
-
         var isAssign = initialization.Form is IrCollectionInitializerForm.Assign;
 
         if (initialization.Construction is IrCollectionConstruction.Other)
@@ -477,7 +493,7 @@ public static partial class IrToTsExpressionBridge
                     Map(initialization.Creation, context),
                     isAssign ? "initAssign" : "initAdd"
                 ),
-                [typedItems]
+                [items]
             );
 
         var factory = new TsPropertyAccess(
@@ -487,9 +503,8 @@ public static partial class IrToTsExpressionBridge
 
         return new TsCallExpression(
             factory,
-            initialization.Comparer is { } comparer
-                ? [typedItems, Map(comparer, context)]
-                : [typedItems]
+            initialization.Comparer is { } comparer ? [items, Map(comparer, context)] : [items],
+            TypeArguments: CollectionTypeArguments(initialization.Type, context)
         );
     }
 
@@ -509,11 +524,16 @@ public static partial class IrToTsExpressionBridge
             ? literal
             : null;
 
-    /// <summary><c>HashSet.of([a, b])</c>: duplicates collapse, as C# adds each element.</summary>
-    private static TsExpression SetFactory(IrArrayLiteral literal, IrToTsBridgeContext context) =>
+    /// <summary><c>HashSet.of&lt;T&gt;([a, b])</c>: duplicates collapse, as C# adds each element.</summary>
+    private static TsExpression SetFactory(
+        IrArrayLiteral literal,
+        IrCollectionTypeRef set,
+        IrToTsBridgeContext context
+    ) =>
         new TsCallExpression(
             new TsPropertyAccess(RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet), "of"),
-            [MapTypedArrayLiteral(literal, context)]
+            [MapBareArrayLiteral(literal, context)],
+            TypeArguments: CollectionTypeArguments(set, context)
         );
 
     /// <summary>

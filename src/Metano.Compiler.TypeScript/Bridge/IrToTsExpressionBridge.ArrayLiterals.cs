@@ -7,7 +7,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Array literals. TypeScript infers a literal's element type from its
 /// elements, so a literal C# types wider
 /// (<see cref="IrArrayLiteral.ElementType"/>) is asserted to that type:
-/// <c>[1] as (number | null)[]</c>, <c>[] as number[]</c>. A local declared
+/// <c>[1] as (number | null)[]</c>, <c>[] as number[]</c>; a literal a
+/// collection factory wraps is typed by the factory's type arguments instead
+/// (<c>List.of&lt;number | null&gt;([1])</c>). A local declared
 /// with an array type annotates the local instead and keeps the literal bare
 /// (see <see cref="IrToTsStatementBridge"/>).
 /// </summary>
@@ -21,17 +23,18 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapArrayLiteral(IrArrayLiteral literal, IrToTsBridgeContext context)
     {
-        var array = MapTypedArrayLiteral(literal, context);
+        if (literal.TargetCollection is not { } collection)
+            return MapTypedArrayLiteral(literal, context);
 
-        return literal.TargetCollection switch
-        {
-            null => array,
-            { Kind: IrCollectionKind.List } => new TsCallExpression(
+        var elements = MapBareArrayLiteral(literal, context);
+
+        return collection.Kind is IrCollectionKind.List
+            ? new TsCallExpression(
                 new TsPropertyAccess(ListClass, "of"),
-                [array]
-            ),
-            _ => AdoptedFixedSize(array),
-        };
+                [elements],
+                TypeArguments: CollectionTypeArguments(collection, context)
+            )
+            : AdoptedFixedSize(elements, collection, context);
     }
 
     /// <summary>
