@@ -8,6 +8,19 @@ import { toStringTag } from "./reflection/to-string-tag.ts";
 import { formatTimeSpan } from "./time-span-format.ts";
 import type { Temporal } from "@js-temporal/polyfill";
 
+const decimalScales = /* @__PURE__ */ new WeakMap<object, number>();
+
+/** Literal/parse presentation metadata; never changes native numeric coercion or hashing. */
+export function withDecimalScale<T extends object>(value: T, scale: number): T {
+  decimalScales.set(value, scale);
+  return value;
+}
+
+interface DecimalTextValue {
+  decimalPlaces(): number;
+  toFixed(scale: number): string;
+}
+
 /** Default text at an erased object/type-parameter site; null concatenates as empty text. */
 export function formatText(value: unknown): string {
   if (value == null) {
@@ -22,7 +35,14 @@ export function formatText(value: unknown): string {
     return formatDouble(value);
   }
 
-  if (toStringTag(value) === "[object Temporal.Duration]") {
+  const tag = toStringTag(value);
+
+  if (tag === "[object Decimal]") {
+    const decimal = value as DecimalTextValue;
+    return decimal.toFixed(Math.max(decimalScales.get(decimal) ?? 0, decimal.decimalPlaces() || 0));
+  }
+
+  if (tag === "[object Temporal.Duration]") {
     return formatTimeSpan(value as Temporal.Duration);
   }
 

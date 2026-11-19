@@ -194,6 +194,7 @@ DefaultProbes.structParam = 0,0,null|2,0,null|0:0
 DefaultProbes.structs = 0,0,null|0,0,null|0,0
 DefaultProbes.ternary = 0|null|0,0,null
 DefaultProbes.tuples = 0|null|0|F
+DefaultValueTextProbes.decimalScaleKeys = 1|1|1.0|1.00
 DefaultValueTextProbes.decimalScaleText = v=2.50|2.50|2.50|2.50/2.50/2.50|2.50|0.00
 DefaultValueTextProbes.durationText = -1.00:00:00.0000001|-1.00:00:00.0000001|-1.00:00:00.0000001||-1.00:00:00.0000001|-1.00:00:00.0000001/-1.00:00:00.0000001/-1.00:00:00.0000001|00:00:00
 DefaultValueTextProbes.enumJoin = Read;Write|Read;Write|1

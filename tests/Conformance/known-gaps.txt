@@ -35,7 +35,6 @@ IndexProbes.listOutOfRange            none  an out-of-range list index does not 
 IndexProbes.outOfRange                none  an out-of-range array index does not throw
 IndexProbes.outOfRangeNullable        none  an out-of-range array index does not throw
 StringProbes.lengthAndIndex           none  an out-of-range string index does not throw
-DecimalProbes.big                     #465  decimal.js precision and rounding are not System.Decimal's
 DecimalProbes.precision               #465  decimal.js precision and rounding are not System.Decimal's
 DecimalProbes.thirds                  #465  decimal.js precision and rounding are not System.Decimal's
 DecimalProbes.overflow                #465  Decimal.maxValue and the overflow check are not mapped

@@ -398,7 +398,11 @@ Product requirements added after the migration (normative; each one is traced by
   nullable's parameterless `ToString()`, TimeSpan constant (`c`) text, ValueTuple text
   enclosed in parentheses, constructed decimal scale in concatenation, and null string
   compound targets treated as empty while evaluating their receiver/index once. The
-  explicit enum `D` format remains numeric. These corrections use declarative mappings
+  explicit enum `D` format remains numeric. Decimal literal/parse scale is presentation
+  metadata read only by default-text helpers; native decimal.js construction, coercion
+  and value hashing remain normalized and unchanged. Enums without emitted descriptors
+  keep their previous text lowering without synthetic reflection diagnostics.
+  These corrections use declarative mappings
   and existing neutral IR; Dart output remains unchanged. Generic Single type erasure,
   arithmetic decimal scale propagation (#662), invariant casing of sharp-s and trimming
   U+FEFF remain separate follow-ups.

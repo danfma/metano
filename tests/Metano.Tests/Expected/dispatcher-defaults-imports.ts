@@ -1,4 +1,4 @@
-import { isBool, isDecimal, isInt32, isString } from "metano-runtime";
+import { formatText, isBool, isDecimal, isInt32, isString } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { Color } from "./color";
 
@@ -78,7 +78,7 @@ export class Painter {
   }
 
   static fAD(a: number, d: Decimal = new Decimal("1.5")): string {
-    return "dec:" + d;
+    return "dec:" + formatText(d);
   }
 
   static f(s: string): string;

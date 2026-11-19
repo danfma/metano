@@ -5,6 +5,7 @@ import {
   copyRecordWith,
   decimalTextFromBigInteger,
   enumText,
+  formatText,
   isBigInt,
   roundDecimal,
 } from "metano-runtime";
@@ -119,7 +120,7 @@ export class Money {
   }
 
   toString(): string {
-    return `${this.toDecimal()} ${enumText(this.currency, Currency$runtimeType).toUpperCase()}`;
+    return `${formatText(this.toDecimal())} ${enumText(this.currency, Currency$runtimeType).toUpperCase()}`;
   }
 
   static fromCents(cents: bigint, currency: Currency): Money {

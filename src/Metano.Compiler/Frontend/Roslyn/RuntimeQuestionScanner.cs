@@ -436,7 +436,11 @@ internal sealed class RuntimeQuestionScanner
     /// </summary>
     private void InspectEnumText(IOperation operation)
     {
-        if (operation.Type?.UnwrapNullableValueType() is not { TypeKind: TypeKind.Enum } type)
+        if (
+            operation.Type?.UnwrapNullableValueType()
+                is not INamedTypeSymbol { TypeKind: TypeKind.Enum } type
+            || !IrTypeRefMapper.IsTranspilableType(type, _target)
+        )
             return;
 
         var parent = operation.Parent;
@@ -494,7 +498,11 @@ internal sealed class RuntimeQuestionScanner
 
         var type = method.TypeArguments[0].UnwrapNullableValueType();
 
-        if (type.TypeKind != TypeKind.Enum || type.HasStringEnum())
+        if (
+            type is not INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+            || !IrTypeRefMapper.IsTranspilableType(enumType, _target)
+            || type.HasStringEnum()
+        )
             return;
 
         if (

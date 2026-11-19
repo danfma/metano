@@ -2,14 +2,15 @@
  * `decimal.Parse(text)` in the invariant culture with .NET's default
  * `NumberStyles.Number`: white space around the number, a leading or trailing
  * sign, group separators and a decimal point. The compiler lowers it to
- * `new Decimal(parseDecimalText(text))`: this function checks .NET's grammar and
+ * `parseDecimal(text, Decimal)`: this module checks .NET's grammar and
  * range, so a malformed text throws `FormatException` (not decimal.js's
- * `DecimalError`), and returns the text decimal.js reads.
+ * `DecimalError`), and keeps presentation scale outside the decimal.js value.
  */
 import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
 import { FormatException } from "./exceptions/format-exception.ts";
 import { OverflowException } from "./exceptions/overflow-exception.ts";
 import { lazyValue } from "./lazy-value.ts";
+import { withDecimalScale } from "./default-text.ts";
 
 /** .NET's white space around a number: U+0009–U+000D and U+0020. */
 const WHITE_SPACE = "[\\t\\n\\v\\f\\r ]*";
@@ -66,6 +67,18 @@ function formatException(text: string): FormatException {
   return new FormatException(`The input string '${text}' was not in a correct format.`);
 }
 
+/** Parses once and records scale without decorating the constructed numeric value. */
+export function parseDecimal<TDecimal extends object>(
+  text: string | null | undefined,
+  create: new (value: string) => TDecimal,
+): TDecimal {
+  const normalized = parseDecimalText(text);
+  const point = normalized.indexOf(".");
+  const value = new create(normalized);
+
+  return point < 0 ? value : withDecimalScale(value, normalized.length - point - 1);
+}
+
 /**
  * `decimal.TryParse(text, out value)` (the `(string, out decimal)` and `(string,
  * IFormatProvider, out decimal)` overloads): `[true, value]` for text {@link parseDecimalText}
@@ -73,12 +86,12 @@ function formatException(text: string): FormatException {
  * the generated code imports from `metano-runtime/system/decimal`, so this barrel module does
  * not import decimal.js (a project that never uses `decimal` does not load it).
  */
-export function tryParseDecimal<TDecimal>(
+export function tryParseDecimal<TDecimal extends object>(
   text: string | null | undefined,
   create: new (value: string) => TDecimal,
 ): readonly [found: boolean, value: TDecimal] {
   try {
-    return [true, new create(parseDecimalText(text))];
+    return [true, parseDecimal(text, create)];
   } catch (error) {
     if (error instanceof FormatException || error instanceof OverflowException || text == null) {
       return [false, new create("0")];

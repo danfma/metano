@@ -11,7 +11,7 @@
  * from its left operand's class. Division keeps 29 significant digits where `System.Decimal`
  * keeps 28 decimal places (`1m / 3m` has one digit more here), a result below `1e-28` is kept
  * where `System.Decimal` rounds it to zero. Arithmetic still drops scale (#662);
- * constructed values retain their input scale for default text.
+ * emitted literals and parses retain their input scale out of band for default text.
  *
  * Not part of the barrel: only a program that uses `decimal` loads decimal.js.
  */
@@ -28,54 +28,9 @@ const DECIMAL_PRECISION = 29;
 const ROUND_HALF_EVEN = 6;
 
 // Pure (spec 011 FR-043): a side-effect-only import of this module bundles to nothing.
-const DecimalNumber = /* @__PURE__ */ DecimalJs.clone({
+export const Decimal = /* @__PURE__ */ DecimalJs.clone({
   precision: DECIMAL_PRECISION,
   rounding: ROUND_HALF_EVEN,
 });
 
-const textScales = /* @__PURE__ */ new WeakMap<DecimalJs, number>();
-
-/** Retains constructor scale without changing decimal.js's prototype or static configuration. */
-export const Decimal = /* @__PURE__ */ withDefaultTextScale(DecimalNumber);
 export type Decimal = DecimalJs;
-
-function withDefaultTextScale(decimalConstructor: typeof DecimalJs): typeof DecimalJs {
-  return new Proxy(decimalConstructor, {
-    construct(target, argumentsList: readonly unknown[]) {
-      return decimalWithScale(target, argumentsList[0] as DecimalJs.Value);
-    },
-    apply(target, _receiver: unknown, argumentsList: readonly unknown[]) {
-      return decimalWithScale(target, argumentsList[0] as DecimalJs.Value);
-    },
-  });
-}
-
-function decimalWithScale(
-  decimalConstructor: typeof DecimalJs,
-  source: DecimalJs.Value,
-): DecimalJs {
-  const value = new decimalConstructor(source);
-  textScales.set(value, scaleOf(source, value.decimalPlaces()));
-
-  Object.defineProperties(value, {
-    toString: { value: decimalText, writable: true, configurable: true },
-    valueOf: { value: decimalText, writable: true, configurable: true },
-  });
-
-  return value;
-}
-
-function decimalText(this: DecimalJs): string {
-  return this.toFixed(Math.max(textScales.get(this) ?? 0, this.decimalPlaces()));
-}
-
-function scaleOf(value: DecimalJs.Value, fallback: number): number {
-  if (typeof value !== "string") {
-    return typeof value === "object" ? (textScales.get(value) ?? fallback) : fallback;
-  }
-
-  const [mantissa = "", exponent = "0"] = value.toLowerCase().split("e");
-  const fraction = mantissa.includes(".") ? mantissa.length - mantissa.indexOf(".") - 1 : 0;
-
-  return Math.max(0, fraction - Number(exponent));
-}

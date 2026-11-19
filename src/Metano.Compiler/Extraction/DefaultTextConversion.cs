@@ -76,12 +76,15 @@ internal static class DefaultTextConversion
     }
 
     private static bool HasInvariantText(ITypeSymbol type) =>
-        type.TypeKind is TypeKind.Enum or TypeKind.TypeParameter
+        type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+            && IrTypeRefMapper.IsTranspilableType(enumType, target: null)
+        || type.TypeKind == TypeKind.TypeParameter
         || type is INamedTypeSymbol { IsTupleType: true }
         || type.ToDisplayString() == "System.TimeSpan"
         || type.SpecialType
             is SpecialType.System_Boolean
                 or SpecialType.System_Double
                 or SpecialType.System_Single
+                or SpecialType.System_Decimal
                 or SpecialType.System_Object;
 }

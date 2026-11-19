@@ -34,8 +34,9 @@ using Metano.Annotations;
 [assembly: MapProperty(typeof(decimal), nameof(decimal.MinusOne), JsTemplate = "new $Type(-1)")]
 
 // ─── Parsing ────────────────────────────────────────────────
-// decimal.Parse(s) → new $Type(parseDecimalText(s)), also for decimal.Parse(s, provider), which
-// the extractor binds to this overload. The NumberStyles / span overloads keep new Decimal(s).
+// decimal.Parse(s) → parseDecimal(s, $Type), also for decimal.Parse(s, provider), which
+// the extractor binds to this overload. The helper keeps presentation scale out of band.
+// The NumberStyles / span overloads keep new Decimal(s).
 // The runtime helper checks .NET's
 // `NumberStyles.Number` grammar and range and throws FormatException / OverflowException /
 // ArgumentNullException as .NET does; decimal.js's own `DecimalError` would escape a
@@ -45,8 +46,16 @@ using Metano.Annotations;
     typeof(decimal),
     nameof(decimal.Parse),
     WhenParameterTypes = [typeof(string)],
-    JsTemplate = "new $Type(parseDecimalText($0))",
-    RuntimeImports = "parseDecimalText"
+    JsTemplate = "parseDecimal($0, $Type)",
+    RuntimeImports = "parseDecimal"
+)]
+
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.ToString),
+    JsTemplate = "formatText($this)",
+    RuntimeImports = "formatText",
+    WhenArgCount = 0
 )]
 
 // decimal.TryParse(s, out d) → tryParseDecimal(s, Decimal), which returns `[found, value]` (the

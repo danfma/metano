@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { isBool, isDecimal, isInt32, isString } from "metano-runtime";
+import { formatText, isBool, isDecimal, isInt32, isString } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { Currency } from "./currency";
 
@@ -85,7 +85,7 @@ export class PriceRule {
   }
 
   static thresholdUnitsMinimum(units: number, minimum: Decimal = new Decimal("1.5")): string {
-    return `${units} units over ${minimum}`;
+    return `${units} units over ${formatText(minimum)}`;
   }
 
   static threshold(code: string): string;

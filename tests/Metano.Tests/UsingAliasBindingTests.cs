@@ -265,7 +265,7 @@ public class UsingAliasBindingTests
             .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
 
         await Assert.That(output).Contains("new Decimal(0)");
-        await Assert.That(output).Contains("new Decimal(parseDecimalText(\"1.5\"))");
+        await Assert.That(output).Contains("parseDecimal(\"1.5\", Decimal)");
     }
 
     [Test]

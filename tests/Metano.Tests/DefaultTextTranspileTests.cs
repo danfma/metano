@@ -249,6 +249,41 @@ public class DefaultTextTranspileTests
         await Assert.That(files["color.ts"]).Contains("Color$runtimeType");
     }
 
+    [Test]
+    public async Task BclEnumDefaultText_DoesNotRequestUnavailableDescriptors()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            [Transpile] public static class Text
+            {
+                public static string A(DayOfWeek day, StringComparison comparison) =>
+                    $"{day}|{comparison}" + day.ToString() + comparison.ToString();
+                public static string B(DayOfWeek[] days) => string.Join(";", days);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(files["text.ts"]).DoesNotContain("$runtimeType");
+        await Assert.That(files["text.ts"]).DoesNotContain("enumText");
+    }
+
+    [Test]
+    public async Task DecimalScale_UsesMetadataOnlyAtTrailingZeroLiteralAndParseSites()
+    {
+        var output = TranspileText(
+            """
+            public static string A() => 2.50m + "|" + 1.25m + "|" + decimal.Parse("2.500").ToString();
+            """
+        );
+
+        await Assert.That(output).Contains("withDecimalScale(new Decimal(\"2.50\"), 2)");
+        await Assert.That(output).DoesNotContain("withDecimalScale(new Decimal(\"1.25\")");
+        await Assert.That(output).Contains("parseDecimal(\"2.500\", Decimal)");
+        await Assert.That(output).Contains("formatText");
+    }
+
     private static string TranspileText(string members) =>
         TranspileHelper.Transpile(
             $$"""

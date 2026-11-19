@@ -424,7 +424,7 @@ public class UsingAliasImportTests
             .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
 
         await Assert.That(output).Contains("half(price: Decimal): Decimal");
-        await Assert.That(output).Contains("return new Decimal(parseDecimalText(text));");
+        await Assert.That(output).Contains("return parseDecimal(text, Decimal);");
         await Assert.That(output).DoesNotContain("Money");
     }
 

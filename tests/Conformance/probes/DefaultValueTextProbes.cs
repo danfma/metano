@@ -17,6 +17,7 @@ public static class DefaultValueTextProbes
         TextAccess? absent = null;
         TextAccess? present = flags;
         object boxed = flags;
+
         return flags.ToString()
             + "|"
             + $"{flags}"
@@ -47,6 +48,7 @@ public static class DefaultValueTextProbes
     {
         object on = true;
         object ratio = 1e-7;
+
         return on.ToString()
             + "|"
             + ratio.ToString()
@@ -73,6 +75,7 @@ public static class DefaultValueTextProbes
         var ticks = TimeSpan.FromTicks(-864000000001L);
         TimeSpan? absent = null;
         object boxed = ticks;
+
         return ticks.ToString()
             + "|"
             + $"{ticks}"
@@ -103,6 +106,7 @@ public static class DefaultValueTextProbes
         object boxed = amount;
         string? text = null;
         text += amount;
+
         return "v="
             + amount
             + "|"
@@ -115,6 +119,15 @@ public static class DefaultValueTextProbes
             + text
             + "|"
             + 0.00m;
+    }
+
+    public static string DecimalScaleKeys()
+    {
+        var values = new[] { 1.0m, 1.00m, 0.5m + 0.5m };
+        var keys = new HashSet<decimal>(values);
+        var records = new[] { new Price(1.0m, "USD"), new Price(1.00m, "USD") };
+
+        return keys.Count + "|" + records.Distinct().Count() + "|" + 1.0m + "|" + 1.00m;
     }
 
     private static string Generic<T>(T value) => value + "/" + $"{value}" + "/" + value?.ToString();

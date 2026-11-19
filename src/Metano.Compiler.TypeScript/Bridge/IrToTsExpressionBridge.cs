@@ -1145,15 +1145,16 @@ public static partial class IrToTsExpressionBridge
                 .Cast<string>()
                 .ToList();
 
-            var mapped = IrToTsArgumentGuards.Admits(call)
-                ? IrToTsBclMapper.TryMapCall(
-                    call,
-                    loweredReceiver,
-                    loweredArgs,
-                    typeArgNames ?? [],
-                    context.Bcl
-                )
-                : null;
+            var mapped =
+                IrToTsArgumentGuards.Admits(call) && HasEnumDefaultTextDescriptor(call)
+                    ? IrToTsBclMapper.TryMapCall(
+                        call,
+                        loweredReceiver,
+                        loweredArgs,
+                        typeArgNames ?? [],
+                        context.Bcl
+                    )
+                    : null;
 
             if (mapped is not null)
                 return WithTypeArgumentDescriptors(mapped, call, context);
@@ -1193,6 +1194,12 @@ public static partial class IrToTsExpressionBridge
                 .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
                 .ToList()
             : null;
+
+    /// <summary>Foreign enums keep native text when no descriptor exists for the mapped default text.</summary>
+    private static bool HasEnumDefaultTextDescriptor(IrCallExpression call) =>
+        call.Origin is not { DeclaringTypeFullName: "System.Enum", MemberName: "ToString" }
+        || call.Arguments.Count != 0
+        || call.TypeArguments is { Count: > 0 };
 
     private static bool PassesNullToANonNullableTypeArgument(
         IReadOnlyList<IrArgument> arguments,
@@ -2601,10 +2608,7 @@ public static partial class IrToTsExpressionBridge
             // receiver type. The extractor passes through the raw source
             // token text so precision is preserved. The origin carries the
             // decimal.js import to the collector (issue #477).
-            IrLiteralKind.Decimal => new TsNewExpression(
-                BclDecimalValueReference(),
-                [new TsStringLiteral(FormatNumericValue(lit.Value))]
-            ),
+            IrLiteralKind.Decimal => MapDecimalLiteral(lit),
             // BigInteger literals use the native bigint suffix `n`, and so do
             // 64-bit ones (spec 012 FR-007).
             IrLiteralKind.BigInteger or IrLiteralKind.Int64 or IrLiteralKind.UInt64 =>
@@ -2613,6 +2617,30 @@ public static partial class IrToTsExpressionBridge
         };
 
     private static TsLiteral BigIntLiteral(object? value) => new(FormatNumericValue(value) + "n");
+
+    private static TsExpression MapDecimalLiteral(IrLiteral literal)
+    {
+        var text = FormatNumericValue(literal.Value);
+        var value = new TsNewExpression(BclDecimalValueReference(), [new TsStringLiteral(text)]);
+        var point = text.IndexOf('.');
+
+        if (
+            point < 0
+            || !text.EndsWith('0')
+            || IrToTsTypeMapper.BclOverrides?.OriginOf(IrPrimitive.Decimal)?.PackageName
+                != "metano-runtime/system/decimal"
+        )
+            return value;
+
+        return new TsTemplate(
+            "withDecimalScale($0, $1)",
+            Receiver: null,
+            [value, new TsLiteral((text.Length - point - 1).ToString(CultureInfo.InvariantCulture))]
+        )
+        {
+            RuntimeImports = ["withDecimalScale"],
+        };
+    }
 
     private static string FormatNumericValue(object? value) =>
         value is IFormattable f

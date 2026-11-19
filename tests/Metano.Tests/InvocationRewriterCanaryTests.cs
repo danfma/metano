@@ -88,7 +88,7 @@ public class InvocationRewriterCanaryTests
 
         // The TypeScript mapping of decimal.Parse wins over the intrinsic
         // lowering (#651): the runtime checks .NET's grammar.
-        await Assert.That(output).Contains("new Decimal(parseDecimalText(s))");
+        await Assert.That(output).Contains("parseDecimal(s, Decimal)");
     }
 
     [Test]

@@ -174,7 +174,7 @@ public class DecimalIntegrationTests
         );
 
         var output = result["calc.ts"];
-        await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
+        await Assert.That(output).Contains("return parseDecimal(s, Decimal);");
     }
 
     /// <summary>
@@ -203,7 +203,7 @@ public class DecimalIntegrationTests
 
         var output = result["calc.ts"];
 
-        await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
+        await Assert.That(output).Contains("return parseDecimal(s, Decimal);");
         await Assert.That(output).Contains("return new Decimal(s);");
 
         await Assert
@@ -239,7 +239,7 @@ public class DecimalIntegrationTests
             .That(output)
             .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
 
-        await Assert.That(output).Contains("return new Decimal(parseDecimalText(s));");
+        await Assert.That(output).Contains("return parseDecimal(s, Decimal);");
         await Assert.That(output).DoesNotContain($"{alias},");
     }
 
