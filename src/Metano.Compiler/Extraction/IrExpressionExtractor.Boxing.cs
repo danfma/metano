@@ -282,20 +282,16 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private bool IsRawMappedArgument(ExpressionSyntax expression, IMethodSymbol method)
     {
+        var parameterType = ExplicitParameterTypeOf(expression);
+
         if (
             method.ContainingType.SpecialType is SpecialType.System_Object
             || SymbolEqualityComparer.Default.Equals(
                 method.ContainingAssembly,
                 _semantic.Compilation.Assembly
             )
-            || _semantic.GetOperation(expression.Parent!)
-                is not IArgumentOperation
-                {
-                    ArgumentKind: ArgumentKind.Explicit,
-                    Parameter: { } parameter,
-                }
-            || !CanHoldBox(parameter.OriginalDefinition.Type)
-            || parameter.OriginalDefinition.Type is ITypeParameterSymbol
+            || parameterType is null or ITypeParameterSymbol
+            || !CanHoldBox(parameterType)
         )
             return false;
 
@@ -303,6 +299,16 @@ public sealed partial class IrExpressionExtractor
 
         return LowersByDeclarativeMapping(method, argumentCount);
     }
+
+    /// <summary>
+    /// The declared type of the parameter an explicit argument
+    /// <paramref name="expression"/> fills, or <c>null</c> when it fills none.
+    /// </summary>
+    private ITypeSymbol? ExplicitParameterTypeOf(ExpressionSyntax expression) =>
+        _semantic.GetOperation(expression.Parent!) is IArgumentOperation argument
+        && argument.ArgumentKind is ArgumentKind.Explicit
+            ? argument.Parameter?.OriginalDefinition.Type
+            : null;
 
     private static bool IsInteropMember(IMethodSymbol method) =>
         SymbolHelper.HasEmit(method)
