@@ -83,6 +83,25 @@ public static class RuntimeCollections
         "Span",
     };
 
+    private static readonly IReadOnlySet<string> CollectionTypeNames = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "List",
+        "IList",
+        "ICollection",
+        "IReadOnlyList",
+        "IReadOnlyCollection",
+        "Dictionary",
+        "IDictionary",
+        "IReadOnlyDictionary",
+        "HashSet",
+        "ISet",
+        "IReadOnlySet",
+        "Queue",
+        "Stack",
+    };
+
     private static readonly IReadOnlySet<string> AllNames = new HashSet<string>(
         NamesByKind.Values.Concat(HelperNames),
         StringComparer.Ordinal
@@ -108,25 +127,6 @@ public static class RuntimeCollections
     /// </summary>
     public static IReadOnlyList<IrCollectionKind> ClassesOf(IrCollectionKind kind) =>
         ImplementersByInterface.TryGetValue(kind, out var implementers) ? implementers : [kind];
-
-    private static readonly IReadOnlySet<string> CollectionTypeNames = new HashSet<string>(
-        StringComparer.Ordinal
-    )
-    {
-        "List",
-        "IList",
-        "ICollection",
-        "IReadOnlyList",
-        "IReadOnlyCollection",
-        "Dictionary",
-        "IDictionary",
-        "IReadOnlyDictionary",
-        "HashSet",
-        "ISet",
-        "IReadOnlySet",
-        "Queue",
-        "Stack",
-    };
 
     /// <summary>
     /// Whether <paramref name="fullName"/> (a member origin's declaring type)

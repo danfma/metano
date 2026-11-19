@@ -23,6 +23,9 @@ public static partial class IrToTsExpressionBridge
         + "list to declare them in (a field or static initializer, a constructor-initializer "
         + "argument).";
 
+    private static TsRuntimeHelperReference ListClass =>
+        new(RuntimeCollections.NameOf(IrCollectionKind.List), RuntimeCollections.Module);
+
     /// <summary>
     /// The receiver and index of one collection access as the rendered shape
     /// reads them: each one either the original (reusable) expression or the
@@ -123,9 +126,6 @@ public static partial class IrToTsExpressionBridge
             [array, new TsObjectLiteral([new TsObjectProperty("fixedSize", new TsLiteral("true"))])]
         );
 
-    private static TsRuntimeHelperReference ListClass =>
-        new(RuntimeCollections.NameOf(IrCollectionKind.List), RuntimeCollections.Module);
-
     private static TsExpression WithBoundFromEnd(
         IrFromEndElementAccess access,
         IrToTsBridgeContext context,
@@ -180,8 +180,10 @@ public static partial class IrToTsExpressionBridge
     {
         var receiver = Map(update.Receiver, context);
         var index = UpdateIndexOf(update, receiver, Map(update.Index, context));
+
         var member =
             update.Result is IrIndexerUpdateResult.OldValue ? "updateReturningOld" : "update";
+
         var current = IrToTsNamingPolicy.ToLocalName(update.CurrentName);
 
         var step = new TsArrowFunction(
@@ -214,6 +216,7 @@ public static partial class IrToTsExpressionBridge
         if (update.Result is IrIndexerUpdateResult.Coalesce)
         {
             var written = temporaries.Declare("$t");
+
             var store = Comma([
                 Set(bound.Receiver, bound.Index, Assign(written, Map(update.NewValue, context))),
                 written,
@@ -261,6 +264,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var effects = new List<TsExpression>();
+
         var receiver = Bound(
             update.Receiver,
             IrEvaluationTraits.IsReusableReceiver(update.Receiver),
@@ -269,7 +273,9 @@ public static partial class IrToTsExpressionBridge
             effects,
             context
         );
+
         var key = RuntimeCollections.IsKeyed(update.ReceiverType.Kind) ? "$k" : "$i";
+
         var index = Bound(
             update.Index,
             IrEvaluationTraits.IsSideEffectFree(update.Index),
@@ -296,6 +302,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var effects = new List<TsExpression>();
+
         var receiver = Bound(
             receiverExpression,
             IrEvaluationTraits.IsReusableReceiver(receiverExpression),
@@ -523,6 +530,7 @@ public static partial class IrToTsExpressionBridge
             IrEvaluationTraits.IsReusableReceiver(slice.Target),
             "$r"
         );
+
         var length = slice.TargetType is IrArrayTypeRef ? "length" : "count";
 
         TsExpression? ResolvedBound(IrExpression? bound, bool fromEnd, string stem)
