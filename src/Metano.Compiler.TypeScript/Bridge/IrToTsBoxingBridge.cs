@@ -59,20 +59,24 @@ internal static class IrToTsBoxingBridge
     {
         var value = IrToTsExpressionBridge.Map(unbox.Value, context);
 
-        return context.RuntimeTypes.UnboxesAtInterop ? Helper("unbox", value) : value;
+        // `unbox` answers `unknown`: the value keeps its static type.
+        return context.RuntimeTypes.UnboxesAtInterop
+            ? new TsCastExpression(
+                Helper("unbox", value),
+                IrToTsTypeMapper.Map(unbox.Target, context.TypeOverrides)
+            )
+            : value;
     }
 
     /// <summary>
-    /// A concatenation operand that may hold a box: <c>String(value)</c> when the
-    /// compilation boxes, so a box appends its .NET text (JS <c>+</c> would read
-    /// its <c>valueOf()</c>, the raw value); the value itself otherwise.
+    /// A formatted value that may hold a box: <c>String(value)</c> when the
+    /// compilation boxes, so a box renders its .NET text (JS <c>+</c> would read
+    /// its <c>valueOf()</c>, and <c>console.log</c> its fields); the value itself
+    /// otherwise.
     /// </summary>
-    public static TsExpression MapConcatenatedValue(
-        IrConcatenatedValue concatenated,
-        IrToTsBridgeContext context
-    )
+    public static TsExpression MapTextValue(IrTextValue text, IrToTsBridgeContext context)
     {
-        var value = IrToTsExpressionBridge.Map(concatenated.Value, context);
+        var value = IrToTsExpressionBridge.Map(text.Value, context);
 
         return context.RuntimeTypes.UnboxesAtInterop
             ? new TsCallExpression(new TsIdentifier("String"), [value])

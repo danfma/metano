@@ -587,17 +587,7 @@ public sealed class TypeScriptTransformContext(
             EmittedMemberName = IrToTsNamingPolicy.DeclaredNameOf,
             KeepsArgumentEvaluationOrder = true,
             FormatStrings = TsFormatStrings.Instance,
-            LowersByDeclarativeMapping = (method, argumentCount) =>
-                DeclarativeMappings.HasJsMappingFor(
-                    method.ContainingType.GetStableFullName(),
-                    method.Name,
-                    argumentCount,
-                    [
-                        .. method.OriginalDefinition.Parameters.Select(parameter =>
-                            parameter.Type.GetStableFullName()
-                        ),
-                    ]
-                ),
+            LowersByDeclarativeMapping = DeclarativeMappings.HasJsMappingFor,
         };
 
     /// <summary>

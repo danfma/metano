@@ -27,10 +27,7 @@ internal sealed class RuntimeQuestionScanner
     private readonly TargetLanguage _target;
     private readonly GeneratedSourceTrees _generatedSources;
 
-    private readonly IReadOnlyDictionary<
-        (string DeclaringTypeFullName, string MemberName),
-        IReadOnlyList<DeclarativeMappingEntry>
-    > _methodMappings;
+    private readonly DeclarativeMappingRegistry _mappings;
 
     private readonly List<MetanoDiagnostic> _diagnostics;
     private readonly List<IrRuntimeQuestion> _questions = [];
@@ -49,7 +46,7 @@ internal sealed class RuntimeQuestionScanner
         _compilation = compilation;
         _target = target;
         _generatedSources = generatedSources;
-        _methodMappings = methodMappings;
+        _mappings = DeclarativeMappingRegistry.FromMethods(methodMappings);
         _diagnostics = diagnostics;
     }
 
@@ -258,8 +255,8 @@ internal sealed class RuntimeQuestionScanner
         if (
             !conversion.GetConversion().IsBoxing
             || conversion.Operand.Type is not { } source
-            || BoxingFacts.IsInteropBoundSlot(conversion)
-            || IsMappedRawArgument(conversion)
+            || BoxingSlots.SlotOf(conversion, _compilation.Assembly, _mappings.HasJsMappingFor)
+                is not (BoxingSlot.Boxed or BoxingSlot.Text)
         )
             return;
 
@@ -277,26 +274,6 @@ internal sealed class RuntimeQuestionScanner
             }
         );
     }
-
-    /// <summary>
-    /// Whether <paramref name="conversion"/> fills an <c>object</c>,
-    /// <c>ValueType</c> or <c>Enum</c> parameter of a BCL member with a
-    /// declarative mapping, whose JS reads the raw value (FR-050); the members of
-    /// <c>System.Object</c> keep the box.
-    /// </summary>
-    private bool IsMappedRawArgument(IConversionOperation conversion) =>
-        conversion.Parent
-            is IArgumentOperation
-            {
-                Parameter: { ContainingSymbol: IMethodSymbol method } parameter,
-            }
-        && method.ContainingType.SpecialType is not SpecialType.System_Object
-        && !SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, _compilation.Assembly)
-        && parameter.OriginalDefinition.Type.SpecialType
-            is SpecialType.System_Object
-                or SpecialType.System_ValueType
-                or SpecialType.System_Enum
-        && _methodMappings.ContainsKey((method.ContainingType.GetStableFullName(), method.Name));
 
     /// <summary>The type of <paramref name="operation"/> before its implicit conversions.</summary>
     private static ITypeSymbol? UnconvertedType(IOperation? operation) =>
@@ -415,8 +392,9 @@ internal sealed class RuntimeQuestionScanner
 
         if (
             !method.IsGenericMethod
-            || !_methodMappings.TryGetValue(
-                (method.ContainingType.GetStableFullName(), method.Name),
+            || !_mappings.TryGetMethodsByFullName(
+                method.ContainingType.GetStableFullName(),
+                method.Name,
                 out var mappings
             )
         )

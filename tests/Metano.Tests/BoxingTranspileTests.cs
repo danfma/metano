@@ -136,18 +136,106 @@ public class BoxingTranspileTests
     }
 
     [Test]
-    public async Task MappedBclCall_UnboxesAnObjectArgumentWhenTheCompilationBoxes()
+    public async Task TextTakingBclCall_FormatsTheBoxThroughItsText()
     {
         var output = Transpile(
             """
             public static void Log(object o) => Console.WriteLine(o);
             public static void LogColor() => Console.WriteLine(Color.Red);
+            public static void LogNumber(int n) => Console.WriteLine(n);
+            """
+        );
+
+        await Assert.That(output).Contains("console.log(String(o));");
+        await Assert.That(output).Contains($"console.log(String({Box}));");
+        await Assert.That(output).Contains("console.log(n);");
+    }
+
+    [Test]
+    public async Task TextTakingBclCall_KeepsItsArgumentWhenTheCompilationDoesNotBox()
+    {
+        await Assert
+            .That(Transpile("public static void Log(object o) => Console.WriteLine(o);"))
+            .Contains("console.log(o);");
+    }
+
+    [Test]
+    public async Task ObjectCollectionStorage_ReadsRawValues()
+    {
+        var output = Transpile(
+            """
+            public static bool Use(object o)
+            {
+                var list = new List<object> { Color.Red };
+                list.Add(Color.Green);
+                List<object> literal = [Color.Green];
+                var names = new Dictionary<object, string> { [Color.Red] = "r" };
+                names[Color.Green] = "g";
+
+                return list.Contains(Color.Green) && list.IndexOf(o) == 0 && names.ContainsKey(Color.Red);
+            }
+
             public static object Boxed() => Color.Red;
             """
         );
 
-        await Assert.That(output).Contains("console.log(unbox(o));");
-        await Assert.That(output).Contains("console.log(Color.Red);");
+        await Assert.That(output).Contains("receiver$temp$0.push(Color.Red);");
+        await Assert.That(output).Contains("list.push(Color.Green);");
+        await Assert.That(output).Contains("const literal: Object[] = [Color.Green];");
+        await Assert.That(output).Contains(".set(Color.Red, \"r\");");
+        await Assert.That(output).Contains("names.set(Color.Green, \"g\");");
+        await Assert.That(output).Contains("list.includes(Color.Green)");
+        await Assert.That(output).Contains("list.indexOf(unbox(o) as Object)");
+        await Assert.That(output).Contains("names.has(Color.Red)");
+    }
+
+    [Test]
+    public async Task UnboxedSlotOnly_ReachesNothingAndBoxesNothing()
+    {
+        // The scan and the extraction share BoxingSlots: a boxing conversion into
+        // an unboxed slot is neither recorded (no descriptor, no interop unbox)
+        // nor lowered to a box, so the drift assertion holds.
+        var output = Transpile(
+            """
+            public static bool Use(object o)
+            {
+                var list = new List<object> { Color.Red };
+                list.Add((Color.Green));
+
+                return list.IndexOf(o) == 0;
+            }
+            """
+        );
+
+        await Assert.That(output).DoesNotContain("box(");
+        await Assert.That(output).DoesNotContain("Color$runtimeType");
+        await Assert.That(output).Contains("list.indexOf(o)");
+    }
+
+    [Test]
+    public async Task TextSlotOnly_ReachesTheDescriptor()
+    {
+        var output = Transpile("public static void Log() => Console.WriteLine(Color.Red);");
+
+        await Assert.That(output).Contains($"console.log(String({Box}));");
+    }
+
+    [Test]
+    public async Task UnboxingCasts_GoThroughCastTo()
+    {
+        var output = Transpile(
+            """
+            public static int ToInt(object o) => (int)o;
+            public static Perms ToPerms(object o) => (Perms)o;
+            public static long ToLong(object o) => (long)o;
+            public static bool IsInt(object o) => o is int;
+            """
+        );
+
+        await Assert.That(output).Contains("castTo<number>(o, Int32Type)");
+        await Assert.That(output).Contains("castTo<Perms>(o, Perms$runtimeType)");
+        await Assert.That(output).Contains("castTo<bigint>(o, Int64Type)");
+        await Assert.That(output).Contains("return isInt32(o);");
     }
 
     [Test]
@@ -218,7 +306,7 @@ public class BoxingTranspileTests
 
         await Assert
             .That(Transpile(hole + " public static object Boxed() => Color.Red;"))
-            .Contains("console.log(unbox(o));");
+            .Contains("console.log((unbox(o) as Object));");
     }
 
     [Test]

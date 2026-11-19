@@ -193,10 +193,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrBoxExpression box => IrToTsBoxingBridge.MapBox(box, context),
             IrUnboxExpression unbox => IrToTsBoxingBridge.MapUnbox(unbox, context),
-            IrConcatenatedValue concatenated => IrToTsBoxingBridge.MapConcatenatedValue(
-                concatenated,
-                context
-            ),
+            IrTextValue text => IrToTsBoxingBridge.MapTextValue(text, context),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };
     }

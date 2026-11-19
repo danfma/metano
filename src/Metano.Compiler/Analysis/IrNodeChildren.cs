@@ -104,7 +104,7 @@ public static class IrNodeChildren
             IrAsDynamicExpression asDynamic => [asDynamic.Value],
             IrBoxExpression box => [box.Value],
             IrUnboxExpression unbox => [unbox.Value],
-            IrConcatenatedValue concatenated => [concatenated.Value],
+            IrTextValue text => [text.Value],
             IrGetTypeExpression getType => [getType.Receiver],
             _ => [],
         };

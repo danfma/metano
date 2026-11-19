@@ -1,4 +1,5 @@
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Mappings;
 
@@ -74,6 +75,20 @@ public sealed class DeclarativeMappingRegistry
             ir.DeclarativePropertyMappings
                 ?? new Dictionary<(string, string), DeclarativeMappingEntry>(),
             ir.ChainMethodsByWrapper ?? new Dictionary<string, IReadOnlySet<string>>()
+        );
+
+    /// <summary>
+    /// A registry over the method mappings alone, for a frontend phase that asks
+    /// only whether a method lowers through one
+    /// (<see cref="HasJsMappingFor(IMethodSymbol, int)"/>).
+    /// </summary>
+    public static DeclarativeMappingRegistry FromMethods(
+        IReadOnlyDictionary<(string, string), IReadOnlyList<DeclarativeMappingEntry>> methods
+    ) =>
+        new(
+            methods,
+            new Dictionary<(string, string), DeclarativeMappingEntry>(),
+            new Dictionary<string, IReadOnlySet<string>>()
         );
 
     /// <summary>
@@ -172,6 +187,24 @@ public sealed class DeclarativeMappingRegistry
         TryGetMethodsByFullName(declaringTypeFullName, methodName, out var entries)
         && entries.Any(entry =>
             entry.HasJsMapping && entry.MatchesOverload(argumentCount, parameterTypes)
+        );
+
+    /// <summary>
+    /// Whether <paramref name="method"/>, called with
+    /// <paramref name="argumentCount"/> arguments, lowers through a JavaScript
+    /// mapping: the overload is matched by its original definition's parameter
+    /// types, as the TypeScript BCL mapper matches it.
+    /// </summary>
+    public bool HasJsMappingFor(IMethodSymbol method, int argumentCount) =>
+        HasJsMappingFor(
+            method.ContainingType.GetStableFullName(),
+            method.Name,
+            argumentCount,
+            [
+                .. method.OriginalDefinition.Parameters.Select(parameter =>
+                    parameter.Type.GetStableFullName()
+                ),
+            ]
         );
 
     /// <summary>

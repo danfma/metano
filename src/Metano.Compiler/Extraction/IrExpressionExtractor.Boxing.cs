@@ -36,21 +36,55 @@ public sealed partial class IrExpressionExtractor
             return value;
 
         var typeInfo = _semantic.GetTypeInfo(expression);
-
-        if (IsInteropArgument(expression))
-            return InteropUnboxed(typeInfo.Type, value);
-
         var conversion = _semantic.GetConversion(expression);
 
-        if (
-            !conversion.IsBoxing
-            || !conversion.IsImplicit
-            || IsInteropBoundSlot(expression)
-            || BoxOf(value, typeInfo.Type, typeInfo.ConvertedType) is not { } box
-        )
-            return value;
+        var boxed =
+            conversion is { IsBoxing: true, IsImplicit: true }
+            && BoxOf(value, typeInfo.Type, typeInfo.ConvertedType) is { } box
+                ? box
+                : value;
 
-        return box;
+        return BoxingSlotOf(expression) switch
+        {
+            BoxingSlot.Unboxed => InteropUnboxed(typeInfo.Type, value),
+            BoxingSlot.Raw => WithoutBox(value),
+            BoxingSlot.Text when BoxingSlots.CanHoldBox(typeInfo.ConvertedType) => new IrTextValue(
+                boxed
+            ),
+            _ => boxed,
+        };
+    }
+
+    /// <summary>
+    /// The slot <paramref name="expression"/> fills (<see cref="BoxingSlots"/>,
+    /// the one classification the runtime-question scan shares); only an
+    /// argument, an initializer element, a collection-expression element or an
+    /// assigned value can fill anything but an ordinary slot.
+    /// </summary>
+    private BoxingSlot BoxingSlotOf(ExpressionSyntax expression)
+    {
+        SyntaxNode filled = expression;
+
+        while (
+            filled.Parent is ParenthesizedExpressionSyntax or CheckedExpressionSyntax
+            || filled.Parent?.IsKind(SyntaxKind.SuppressNullableWarningExpression) is true
+        )
+            filled = filled.Parent;
+
+        var mayFillASlot = filled.Parent switch
+        {
+            ArgumentSyntax or InitializerExpressionSyntax or ExpressionElementSyntax => true,
+            AssignmentExpressionSyntax assignment => assignment.Right == filled,
+            _ => false,
+        };
+
+        return mayFillASlot && _semantic.GetOperation(expression) is { } operation
+            ? BoxingSlots.SlotOf(
+                operation,
+                _semantic.Compilation.Assembly,
+                LowersByDeclarativeMapping
+            )
+            : BoxingSlot.Boxed;
     }
 
     /// <summary>
@@ -95,8 +129,7 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol targetType
     ) =>
         !_context.KeepsReflectionSourceForms
-        && !IsInteropArgument(cast)
-        && !IsInteropBoundSlot(cast)
+        && BoxingSlotOf(cast) is BoxingSlot.Boxed or BoxingSlot.Text
         && ConversionOfCast(cast, targetType).IsBoxing
             ? BoxOf(inner, sourceType, targetType)
             : null;
@@ -114,7 +147,7 @@ public sealed partial class IrExpressionExtractor
 
         var raw = WithoutBox(value);
 
-        return CanHoldBox(staticType)
+        return BoxingSlots.CanHoldBox(staticType)
             ? new IrUnboxExpression(
                 raw,
                 IrTypeRefMapper.Map(staticType!, _originResolver, _target),
@@ -133,21 +166,14 @@ public sealed partial class IrExpressionExtractor
 
         return
             !_context.KeepsReflectionSourceForms
-            && (CanHoldBox(type) || type?.TypeKind is TypeKind.Interface)
-            ? new IrConcatenatedValue(value)
+            && (BoxingSlots.CanHoldBox(type) || type?.TypeKind is TypeKind.Interface)
+            ? new IrTextValue(value)
             : value;
     }
 
     /// <summary><paramref name="value"/> without the box its own conversion created.</summary>
     private static IrExpression WithoutBox(IrExpression value) =>
         value is IrBoxExpression box ? box.Value : value;
-
-    private static bool CanHoldBox(ITypeSymbol? type) =>
-        type is ITypeParameterSymbol or IDynamicTypeSymbol
-        || type?.SpecialType
-            is SpecialType.System_Object
-                or SpecialType.System_ValueType
-                or SpecialType.System_Enum;
 
     /// <summary>
     /// <paramref name="pattern"/> with the types a target needs to compare a
@@ -208,7 +234,7 @@ public sealed partial class IrExpressionExtractor
             _context.KeepsReflectionSourceForms
             || constantType is not { TypeKind: TypeKind.Enum }
             || inputType is null
-            || !(CanHoldBox(inputType) || inputType.TypeKind is TypeKind.Interface)
+            || !(BoxingSlots.CanHoldBox(inputType) || inputType.TypeKind is TypeKind.Interface)
             || inputType is ITypeParameterSymbol or IDynamicTypeSymbol
         )
             return null;
@@ -238,7 +264,7 @@ public sealed partial class IrExpressionExtractor
             || QualifiedMemberSyntax.From(inv.Expression) is not { } access
             || access.Receiver is BaseExpressionSyntax
             || inv.ArgumentList.Arguments is not [{ Expression: var argument }]
-            || !CanHoldBox(_semantic.GetTypeInfo(access.Receiver).Type)
+            || !BoxingSlots.CanHoldBox(_semantic.GetTypeInfo(access.Receiver).Type)
             || _semantic.GetTypeInfo(access.Receiver).Type
                 is ITypeParameterSymbol
                     or IDynamicTypeSymbol
@@ -250,90 +276,5 @@ public sealed partial class IrExpressionExtractor
             IrBinaryOp.DefaultEqual,
             Extract(argument)
         );
-    }
-
-    /// <summary>
-    /// Whether <paramref name="expression"/> is an argument of a member JS
-    /// implements: an <c>[Emit]</c> or <c>[Import]</c> method, a member or
-    /// constructor of an <c>[Import]</c> type, or an operation bound at run time
-    /// on a <c>dynamic</c> value.
-    /// </summary>
-    private bool IsInteropArgument(ExpressionSyntax expression)
-    {
-        if (expression.Parent is not ArgumentSyntax { Parent.Parent: ExpressionSyntax call })
-            return false;
-
-        if (_semantic.GetSymbolInfo(call).Symbol is IMethodSymbol method)
-            return IsInteropMember(method) || IsRawMappedArgument(expression, method);
-
-        return _semantic.GetOperation(call)
-            is IDynamicInvocationOperation
-                or IDynamicObjectCreationOperation
-                or IDynamicIndexerAccessOperation;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="expression"/> fills an <c>object</c>,
-    /// <c>ValueType</c> or <c>Enum</c> parameter of a BCL member the target
-    /// lowers through a declarative mapping (<c>Console.WriteLine(object)</c>,
-    /// <c>Enum.HasFlag</c>, <c>Convert.ToInt32(object)</c>): the mapped JS reads
-    /// a raw value (FR-050). The members of <c>System.Object</c> keep the box,
-    /// which their identity and equality read.
-    /// </summary>
-    private bool IsRawMappedArgument(ExpressionSyntax expression, IMethodSymbol method)
-    {
-        var parameterType = ExplicitParameterTypeOf(expression);
-
-        if (
-            method.ContainingType.SpecialType is SpecialType.System_Object
-            || SymbolEqualityComparer.Default.Equals(
-                method.ContainingAssembly,
-                _semantic.Compilation.Assembly
-            )
-            || parameterType is null or ITypeParameterSymbol
-            || !CanHoldBox(parameterType)
-        )
-            return false;
-
-        var argumentCount = ((BaseArgumentListSyntax)expression.Parent!.Parent!).Arguments.Count;
-
-        return LowersByDeclarativeMapping(method, argumentCount);
-    }
-
-    /// <summary>
-    /// The declared type of the parameter an explicit argument
-    /// <paramref name="expression"/> fills, or <c>null</c> when it fills none.
-    /// </summary>
-    private ITypeSymbol? ExplicitParameterTypeOf(ExpressionSyntax expression) =>
-        _semantic.GetOperation(expression.Parent!) is IArgumentOperation argument
-        && argument.ArgumentKind is ArgumentKind.Explicit
-            ? argument.Parameter?.OriginalDefinition.Type
-            : null;
-
-    private static bool IsInteropMember(IMethodSymbol method) =>
-        SymbolHelper.HasEmit(method)
-        || SymbolHelper.HasImport(method)
-        || SymbolHelper.HasImport(method.ContainingType);
-
-    /// <summary>
-    /// Whether <paramref name="expression"/> fills a slot JS reads directly
-    /// (FR-050): an argument of a <c>[PlainObject]</c> or <c>[JsTuple]</c>
-    /// constructor, or a value assigned to a member of one.
-    /// </summary>
-    private bool IsInteropBoundSlot(ExpressionSyntax expression)
-    {
-        var owner = expression.Parent switch
-        {
-            ArgumentSyntax { Parent.Parent: ExpressionSyntax call } => (
-                _semantic.GetSymbolInfo(call).Symbol as IMethodSymbol
-            )?.ContainingType,
-            AssignmentExpressionSyntax assignment when assignment.Right == expression => _semantic
-                .GetSymbolInfo(assignment.Left)
-                .Symbol?.ContainingType,
-            _ => null,
-        };
-
-        return owner is not null
-            && (SymbolHelper.HasPlainObject(owner) || SymbolHelper.HasJsTuple(owner));
     }
 }

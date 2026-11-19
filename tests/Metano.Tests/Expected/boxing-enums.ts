@@ -47,6 +47,6 @@ export class Probe {
   }
 
   static hole(o: Object): void {
-    console.log(unbox(o));
+    console.log((unbox(o) as Object));
   }
 }

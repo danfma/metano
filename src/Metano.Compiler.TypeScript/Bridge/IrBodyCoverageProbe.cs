@@ -149,7 +149,7 @@ public static class IrBodyCoverageProbe
             IrAsDynamicExpression asDynamic => IsCoveredExpression(asDynamic.Value),
             IrBoxExpression box => IsCoveredExpression(box.Value),
             IrUnboxExpression unbox => IsCoveredExpression(unbox.Value),
-            IrConcatenatedValue concatenated => IsCoveredExpression(concatenated.Value),
+            IrTextValue text => IsCoveredExpression(text.Value),
             IrGetTypeExpression getType => IsCoveredExpression(getType.Receiver),
             IrTypeOfExpression => true,
             _ => false,

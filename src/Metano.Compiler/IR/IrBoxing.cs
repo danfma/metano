@@ -30,11 +30,12 @@ public sealed record IrUnboxExpression(IrExpression Value, IrTypeRef Target, boo
     : IrExpression;
 
 /// <summary>
-/// An operand of a C# string concatenation (<c>"a" + o</c>) whose static type can
-/// hold a box (<c>object</c>, <c>ValueType</c>, <c>Enum</c>, <c>dynamic</c>, a
-/// type parameter, an interface): C# appends its <c>ToString()</c>, so a target
-/// whose boxes carry their text renders that text (spec 011 FR-051); any other
-/// target reads <see cref="Value"/>.
+/// A value C# formats through its <c>ToString()</c> whose static type can hold a
+/// box (<c>object</c>, <c>ValueType</c>, <c>Enum</c>, <c>dynamic</c>, a type
+/// parameter, an interface): an operand of a string concatenation
+/// (<c>"a" + o</c>) or an argument a BCL member formats
+/// (<c>Console.WriteLine(o)</c>). A target whose boxes carry their text renders
+/// that text (spec 011 FR-051); any other target reads <see cref="Value"/>.
 /// </summary>
-/// <param name="Value">The operand.</param>
-public sealed record IrConcatenatedValue(IrExpression Value) : IrExpression;
+/// <param name="Value">The formatted value.</param>
+public sealed record IrTextValue(IrExpression Value) : IrExpression;

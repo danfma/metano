@@ -7,6 +7,10 @@ AliasProbes.explicitTypeArgs LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.genericAlias LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.isAlias LOADFAIL node:internal/modules/esm/resolve:698
 AliasProbes.staticCall LOADFAIL node:internal/modules/esm/resolve:698
+BoxingProbes.hugeFlags = Low|Low
+BoxingProbes.hugeFlagsFromValue = Top|Top
+BoxingProbes.objectHashSetMixedCount = 1
+BoxingProbes.wideFlags = Low|Low
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.enums = 1|1|1
 CastProbes.genericFail THROWS TypeError: CastProbes.g(...).bark is not a function
