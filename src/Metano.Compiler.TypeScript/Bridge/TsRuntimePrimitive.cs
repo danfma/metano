@@ -15,7 +15,15 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// for a type that tests by its class (the temporal types, <c>object</c>).</param>
 /// <param name="TypeofKind">The <c>typeof</c> of the JS value; <c>null</c> when
 /// it is an object.</param>
-internal sealed record TsRuntimePrimitive(string Descriptor, string? Validator, string? TypeofKind)
+/// <param name="ToStringTag">The <c>Object.prototype.toString</c> tag a value of
+/// an object kind answers (<c>[object Temporal.PlainDate]</c>), the predicate its
+/// descriptor's <c>test</c> uses too (FR-017); <c>null</c> for the others.</param>
+internal sealed record TsRuntimePrimitive(
+    string Descriptor,
+    string? Validator,
+    string? TypeofKind,
+    string? ToStringTag = null
+)
 {
     private static readonly TsRuntimePrimitive SByte = new("SByteType", "isSByte", "number");
 
@@ -46,6 +54,9 @@ internal sealed record TsRuntimePrimitive(string Descriptor, string? Validator, 
             _ => null,
         };
 
+    private static TsRuntimePrimitive Temporal(string descriptor, string temporalClass) =>
+        new(descriptor, null, null, $"[object Temporal.{temporalClass}]");
+
     private static TsRuntimePrimitive? OfPrimitive(IrPrimitive primitive) =>
         primitive switch
         {
@@ -62,11 +73,11 @@ internal sealed record TsRuntimePrimitive(string Descriptor, string? Validator, 
             IrPrimitive.String => new("StringType", "isString", "string"),
             IrPrimitive.Char => new("CharType", "isChar", "string"),
             IrPrimitive.Guid => new("GuidType", "isGuid", "string"),
-            IrPrimitive.DateTime => new("DateTimeType", null, null),
-            IrPrimitive.DateTimeOffset => new("DateTimeOffsetType", null, null),
-            IrPrimitive.DateOnly => new("DateOnlyType", null, null),
-            IrPrimitive.TimeOnly => new("TimeOnlyType", null, null),
-            IrPrimitive.TimeSpan => new("TimeSpanType", null, null),
+            IrPrimitive.DateTime => Temporal("DateTimeType", "PlainDateTime"),
+            IrPrimitive.DateTimeOffset => Temporal("DateTimeOffsetType", "ZonedDateTime"),
+            IrPrimitive.DateOnly => Temporal("DateOnlyType", "PlainDate"),
+            IrPrimitive.TimeOnly => Temporal("TimeOnlyType", "PlainTime"),
+            IrPrimitive.TimeSpan => Temporal("TimeSpanType", "Duration"),
             IrPrimitive.Object => new("ObjectType", null, null),
             _ => null,
         };

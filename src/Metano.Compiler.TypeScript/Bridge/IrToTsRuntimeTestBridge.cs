@@ -95,6 +95,26 @@ internal static class IrToTsRuntimeTestBridge
             _ => false,
         };
 
+    /// <summary>
+    /// <c>Object.prototype.toString.call(value) === "[object Temporal.PlainDate]"</c>:
+    /// the import-free form of the descriptor's <c>test</c>.
+    /// </summary>
+    public static TsExpression ToStringTagTest(TsExpression value, string tag) =>
+        new TsBinaryExpression(
+            new TsCallExpression(
+                new TsPropertyAccess(
+                    new TsPropertyAccess(
+                        new TsPropertyAccess(new TsIdentifier("Object"), "prototype"),
+                        "toString"
+                    ),
+                    "call"
+                ),
+                [value]
+            ),
+            "===",
+            new TsStringLiteral(tag)
+        );
+
     /// <summary><c>value instanceof C</c> against the class the type lowers to.</summary>
     private static TsExpression ClassTest(TsExpression value, IrTypeRef type) =>
         type switch
@@ -102,12 +122,13 @@ internal static class IrToTsRuntimeTestBridge
             IrMapTypeRef => InstanceofTest(value, new TsIdentifier("Map")),
             IrSetTypeRef => InstanceofTest(value, new TsRuntimeHelperReference("HashSet")),
             IrPromiseTypeRef => InstanceofTest(value, new TsIdentifier("Promise")),
-            // A temporal value tests by its toStringTag through its descriptor,
-            // never by `instanceof Temporal.*`, which would pull the polyfill in
-            // (FR-017).
-            IrPrimitiveTypeRef { Primitive: var temporal } => IsTypeCall(
+            // A temporal value tests by its toStringTag, inline: never by
+            // `instanceof Temporal.*`, which would pull the polyfill in (FR-017),
+            // nor through its descriptor, which would pull reflection into a
+            // dispatcher or guard (NFR-010).
+            IrPrimitiveTypeRef { Primitive: var temporal } => ToStringTagTest(
                 value,
-                new TsRuntimeHelperReference(TsRuntimePrimitive.Of(temporal)!.Descriptor)
+                TsRuntimePrimitive.Of(temporal)!.ToStringTag!
             ),
             IrNamedTypeRef named when BclExceptionClasses.IsBclException(named) =>
                 IrToTsTypeMapper.ExceptionClasses.InstanceofTest(value, named),
