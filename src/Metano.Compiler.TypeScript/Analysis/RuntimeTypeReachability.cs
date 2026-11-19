@@ -729,6 +729,10 @@ internal sealed class RuntimeTypeReachability
             || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
             || SymbolHelper.HasAttribute(type, "NoEmit");
 
+        /// <summary>
+        /// A generic plain object has no runtime test yet (its TS interface and
+        /// guard are not emitted generically), so it gets no descriptor.
+        /// </summary>
         private static bool IsPlainObjectShape(INamedTypeSymbol type) =>
             !type.IsStatic
             && SymbolHelper.HasPlainObject(type)

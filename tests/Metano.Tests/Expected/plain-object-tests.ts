@@ -112,6 +112,14 @@ export class Probe {
     return Point$runtimeType.name;
   }
 
+  static newWithEffectTypeName(): string {
+    return (getRuntimeType({ x: Probe.compute(), y: 2 }), Point$runtimeType).name;
+  }
+
+  private static compute(): number {
+    return 1;
+  }
+
   static overP(p: Point): string {
     return "point";
   }

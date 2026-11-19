@@ -131,9 +131,10 @@ public static partial class IrToTsExpressionBridge
             : null;
 
     /// <summary>
-    /// <c>Dto$runtimeType</c> for a receiver that cannot be <c>null</c> (a
-    /// <c>new</c> or <c>this</c>); any other receiver still runs and still
-    /// throws <c>NullReferenceException</c> on <c>null</c>, as .NET does:
+    /// <c>Dto$runtimeType</c> for a receiver that is neither <c>null</c> nor
+    /// has an effect to keep (<c>this</c>, a <c>new</c> of side-effect-free
+    /// arguments). Any other receiver still runs, and still throws
+    /// <c>NullReferenceException</c> on <c>null</c> as .NET does:
     /// <c>(getRuntimeType(dto), Dto$runtimeType)</c>.
     /// </summary>
     private static TsExpression FoldedPlainObjectRead(
@@ -144,7 +145,7 @@ public static partial class IrToTsExpressionBridge
     {
         var descriptor = IrToTsRuntimeTypeReferences.Of(plain, "GetType()", context.RuntimeTypes)!;
 
-        if (receiver is IrNewExpression or IrThisExpression)
+        if (IsPureNonNull(receiver))
             return descriptor;
 
         var nullChecked = new TsCallExpression(
@@ -154,6 +155,19 @@ public static partial class IrToTsExpressionBridge
 
         return new TsParenthesized(new TsBinaryExpression(nullChecked, ",", descriptor));
     }
+
+    private static bool IsPureNonNull(IrExpression receiver) =>
+        receiver switch
+        {
+            IrThisExpression => true,
+            IrNewExpression construction => construction.Arguments.All(argument =>
+                IrEvaluationTraits.IsSideEffectFree(argument.Value)
+            )
+                && (construction.Initializers ?? []).All(init =>
+                    IrEvaluationTraits.IsSideEffectFree(init.Value)
+                ),
+            _ => false,
+        };
 
     /// <summary>
     /// <c>typeof(T)</c>: the type's descriptor, or the throwing placeholder for

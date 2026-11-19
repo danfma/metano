@@ -57,6 +57,10 @@ public class RuntimeTypePlainObjectTests
 
             public static string NewTypeName() => new Point(0, 0).GetType().Name;
 
+            public static string NewWithEffectTypeName() => new Point(Compute(), 2).GetType().Name;
+
+            private static double Compute() => 1;
+
             public static string Over(Point p) => "point";
 
             public static string Over(string s) => s;
@@ -145,6 +149,13 @@ public class RuntimeTypePlainObjectTests
             .Contains("return (getRuntimeType(Probe.make()), Point$runtimeType).name;");
 
         await Assert.That(probe).Contains("return Point$runtimeType.name;");
+
+        // A construction whose arguments have effects still runs them.
+        await Assert
+            .That(probe)
+            .Contains(
+                "return (getRuntimeType({ x: Probe.compute(), y: 2 }), Point$runtimeType).name;"
+            );
     }
 
     /// <summary>

@@ -104,8 +104,9 @@ public abstract record IrRuntimeTypeTest
             NominalClass or NominalInterface or Primitive or FixedTuple => true,
             Array => type is IrArrayTypeRef { IsNative: true },
             // A target recognizes a plain object by a guard it synthesizes, or
-            // reports that it cannot (spec 011 FR-020).
-            ErasedShape => true,
+            // reports that it cannot (spec 011 FR-020); a generic one has no
+            // test yet.
+            ErasedShape => !IsGeneric(type),
             _ => IsDelegate(type),
         };
 
@@ -116,6 +117,9 @@ public abstract record IrRuntimeTypeTest
     /// </summary>
     public static IrRuntimeTypeTest Of(IrTypeRef type, IrTypeRef? staticType = null) =>
         ConstantOf(type, staticType) ?? OfType(type, StaticPrimitiveOf(staticType));
+
+    private static bool IsGeneric(IrTypeRef type) =>
+        type is IrNamedTypeRef { TypeArguments.Count: > 0 };
 
     /// <summary>Whether <paramref name="type"/> is a delegate type.</summary>
     public static bool IsDelegate(IrTypeRef type) =>

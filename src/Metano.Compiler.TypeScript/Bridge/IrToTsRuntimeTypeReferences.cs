@@ -138,6 +138,10 @@ internal static class IrToTsRuntimeTypeReferences
         )
             return false;
 
+        // A generic plain object has no descriptor yet (IrRuntimeTypeTest.ExistsFor).
+        if (named is { Semantics.IsPlainObject: true, TypeArguments.Count: > 0 })
+            return false;
+
         return !reachability.Undescribable.Contains(named.SupertypeKey);
     }
 
