@@ -2,6 +2,7 @@
 export { AreaDto$runtimeType, isAreaDto } from "./area-dto";
 export type { AreaDto } from "./area-dto";
 export { Blob } from "./blob";
+export { Boxing } from "./boxing";
 export { Circle } from "./circle";
 export { Color, Color$runtimeType } from "./color";
 export { IHasArea$runtimeType } from "./i-has-area";
