@@ -8,8 +8,8 @@
 /** A budget of NFR-001: normalized overhead per operation, in nanoseconds. */
 export interface BenchCase {
   readonly name: string;
-  /** NFR-001's row, or `undefined` for a reported-only case. */
-  readonly budgetNs?: number;
+  /** NFR-001's row (one figure, or one per engine), or `undefined` for a reported-only case. */
+  readonly budgetNs?: number | { readonly node: number; readonly bun: number };
   /** Operations per kernel call. */
   readonly ops: string;
   /** Module-level code shared by both kernels (data, collections). */
@@ -41,10 +41,10 @@ const LOWERED_FOREACH = `
 const HOISTED_FOREACH = `
   let s = 0;
   {
+    const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
     const $l = l;
     const $a = $l._items;
     const $n = $a.length;
-    const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
     const $v = $c ? $l._version : 0;
     for (let $i = 0; ; $i++) {
       if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
@@ -141,21 +141,21 @@ export const CASES: readonly BenchCase[] = [
     variant: "const xs = new List(); for (let i = 0; i < N; i++) xs.add(i); return xs.count;",
   },
   {
-    name: "lowered foreach over List (per element)",
-    budgetNs: 0.5,
-    ops: "N",
-    everyMode: true,
-    setup: `${NUMBERS} const l = List.of(a.slice());`,
-    baseline: FOR_OF_ARRAY,
-    variant: LOWERED_FOREACH,
-  },
-  {
-    name: "lowered foreach, guard hoisted to a local const $c",
+    name: "lowered foreach over List (per element; final $c form)",
+    budgetNs: { node: 1.25, bun: 0.5 },
     ops: "N",
     everyMode: true,
     setup: `${NUMBERS} const l = List.of(a.slice());`,
     baseline: FOR_OF_ARRAY,
     variant: HOISTED_FOREACH,
+  },
+  {
+    name: "lowered foreach, guard read on every step (superseded R0 form)",
+    ops: "N",
+    everyMode: true,
+    setup: `${NUMBERS} const l = List.of(a.slice());`,
+    baseline: FOR_OF_ARRAY,
+    variant: LOWERED_FOREACH,
   },
   {
     name: "List [Symbol.iterator] (for..of, interop)",

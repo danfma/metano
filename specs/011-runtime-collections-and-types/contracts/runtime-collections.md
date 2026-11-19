@@ -76,7 +76,7 @@ Only `List`'s `_items` / `_version` are ABI; the other fields are implementation
 - **Identifier: `__METANO_CHECKS__`** (confirmed; FR-058's "name to be confirmed in 011c"). Declared once, in `checks.ts`, as `declare global { const __METANO_CHECKS__: boolean | undefined; }`; `checks.ts` also exports `type MetanoChecks = boolean | undefined`, which `list.ts`, the collections barrel and the root barrel re-export as a type, so the declaration reaches every entry point's `.d.ts` and the generated code of every dependent package type-checks under `tsgo --strict` (R1 adds a consumer fixture that proves it). No module derives a module-scope constant from it.
 - **Guard text** (normative; the compiler emits it verbatim, the runtime uses the same text): `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)`. With `define: { __METANO_CHECKS__: "false" }` bun and esbuild fold it to `false` and drop the guarded code (FR-043 acceptance, R1).
 - **Guarded in the runtime**: the bounds checks of `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`; every `_version` store of every class; every enumeration check (`List`, `Dictionary`, `KeyCollection`, `ValueCollection`, `HashSet`, `Queue`, `Stack` iterators, `List.forEach`). Never guarded: `insert`, `insertRange`, `removeAt`, `removeRange`, `getRange`, `slice`, `copyTo`, `withCapacity`, every `KeyNotFoundException`, `ArgumentNullException`, `ArgumentException`, `NotSupportedException`, empty `Queue` / `Stack`, the free helper `fromEnd(array, n)`.
-- **Guarded in generated code**: the two check sites of the lowered `foreach` (§ Lowered `foreach`).
+- **Guarded in generated code**: the lowered `foreach`, through its function-local `$c` (§ Lowered `foreach`, final).
 
 ## Cold throw helpers (`throw-helpers.ts`, FR-016)
 
@@ -545,18 +545,19 @@ Read: the element (or key and value) converters run first, then `create` receive
 
 Transition (W4-6): `hashSet` keeps accepting today's descriptor without `create` (read through `new HashSet(items)`, the import `converters.ts` has today) until C's flip makes the context write `create`; C then makes `create` required and drops that import. `array` stays for `T[]` / `JsArray<T>`; `map` (`MapDescriptor`) stays until C's flip, which removes it. Element / key / value conversion, the null-element rule (#471), the container-depth rule and custom converters are today's.
 
-## Lowered `foreach` over `List<T>` (FR-057, normative emission)
+## Lowered `foreach` over `List<T>` (FR-057, normative emission; final)
 
-`foreach (var x in <receiver>)` whose receiver's static type is `List<T>` (or a class deriving from it) lowers to exactly this shape (`$l` … `$i` follow the printer's temporary naming rules; nested loops get distinct names):
+`foreach (var x in <receiver>)` whose receiver's static type is `List<T>` (or a class deriving from it) lowers to exactly this shape (`$l` … `$i` follow the printer's temporary naming rules; nested loops get distinct names). **This block is final** (W4-27, maintainer decision): the guard is read once into the function-local `$c`, which bun and esbuild fold under `define: { __METANO_CHECKS__: "false" }` (measured in R1) and which costs one global read per loop, not per element. The guard of the runtime members (`get`, `set`, the version stores) is still pending the checks-mechanism decision; it does not change this emission.
 
 ```ts
 {
+  const $c = typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__;
   const $l = <receiver>;
   const $a = $l._items;
   const $n = $a.length;
-  const $v = (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) ? $l._version : 0;
+  const $v = $c ? $l._version : 0;
   for (let $i = 0; ; $i++) {
-    if ((typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && ($l._version !== $v || $a.length !== $n)) throwModified();
+    if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
     if ($i === $n) break;
     const x = $a[$i];
     /* body */
@@ -564,7 +565,7 @@ Transition (W4-6): `hashSet` keeps accepting today's descriptor without `create`
 }
 ```
 
-The `$v` capture is guarded too, so that with the checks defined `false` no `_version` read survives (FR-058's acceptance: a property read is not removable dead code). A `null` receiver throws at `$l._items` (a `TypeError`, `NullReferenceException` through `toException`). `break`, `return` and `throw` leave with no further check; `continue` reaches the next step's check.
+`$c` is a `const` local to the enclosing function (never module scope, FR-058) and MUST be the block's first declaration: esbuild substitutes a folded `const` only while no statement with a possible side effect precedes it in its scope (measured in R1: with `$c` after `$l._items`, esbuild keeps `c=!1` and the guarded `_version` reads; bun folds both orders). Reading the flag before the receiver changes no observable order (`typeof` and a read of the flag have no effect). The `$v` capture is guarded too, so that with the checks defined `false` no `_version` read survives (FR-058's acceptance: a property read is not removable dead code). A `null` receiver throws at `$l._items` (a `TypeError`, `NullReferenceException` through `toException`). `break`, `return` and `throw` leave with no further check; `continue` reaches the next step's check.
 
 ## Compiler contract (C → R): C# member → emitted TypeScript
 
@@ -788,7 +789,7 @@ Two parallel sorted arrays with binary search: O(log n) `get` / `containsKey` / 
 | `list[i] op= v`, direct form / closure fallback | ≤ 1.5 ns / ≤ 3.0 ns | 0.86 ns measured / closure form estimated |
 | `get` at a polymorphic site | ≤ 2.0 ns | 1.08 ns measured (Node) |
 | `List.add` | ≤ 0.5 ns over `push` | delegates to `push`, bumps `_version`; 0.05 ns measured |
-| lowered `foreach` over `List` | ≤ 0.5 ns per element over `for..of` | 0.23 ns measured on the plain-field class with the version compare only |
+| lowered `foreach` over `List` | ≤ 1.25 ns per element on Node.js, ≤ 0.5 ns on Bun, over `for..of` | maintainer decision W4-27: the measured 1.04 ns per element on Node (Bun 0.00 ns) with the guard read once per loop is the .NET-mandated version and length compare itself (FR-057), not guard overhead |
 | `Dictionary` / `ConcurrentDictionary` / `HashSet` primitive keys | ≤ 2.0 ns over the named `Map` / `Set` calls | estimated, confirmed in 011c |
 | `Queue` / `Stack` | ≤ 1.5 ns over `push` / `a[head++]` / `pop` / `at(-1)` | estimated, confirmed in 011c |
 | record keys, sorted and immutable classes | recorded per release; `SortedSet` / `SortedDictionary`: time per op at 1e5 ≤ 2.5× at 1e3; `SortedList`: reads only; immutable: 1e4 repeated `Add` ≤ 50 ms | no native equivalent |

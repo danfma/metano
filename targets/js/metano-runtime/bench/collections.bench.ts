@@ -86,13 +86,20 @@ function rowOf(benchCase: BenchCase, mode: Mode, baseline: Measurement, variant:
   return {
     name: benchCase.name,
     mode,
-    budgetNs: benchCase.budgetNs,
+    budgetNs: budgetFor(benchCase),
     baselineMs: baseline.medianMs,
     variantMs: variant.medianMs,
     rawNs,
     cMeasuredNs,
     normalizedNs: (rawNs * C_REF_NS[engine]) / cMeasuredNs,
   };
+}
+
+/** The case's NFR-001 budget on this engine. */
+function budgetFor(benchCase: BenchCase): number | undefined {
+  const budget = benchCase.budgetNs;
+
+  return typeof budget === "object" ? budget[engine] : budget;
 }
 
 function opsOf(benchCase: BenchCase): number {

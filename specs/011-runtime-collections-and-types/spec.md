@@ -104,7 +104,7 @@ Taken after a throwaway spike implemented a runtime `List<T>` end to end (resear
   - `HashSet` is rebuilt over the internal `hash-core.ts` shared with `Dictionary` (and 011h's classes), for insertion-order enumeration and O(1) reference keys; its 2.x members stay until the compiler stops emitting them.
   - `tryGetValue` / `tryDequeue` / `tryPeek` / `tryPop` / `find` / `findLast` take the value C# stores on a miss (`default(T)`), not `null`.
   - Enumeration invalidation follows .NET 10 as probed: overwriting an existing `Dictionary` key does not invalidate; `HashSet.remove` / `clear` / `exceptWith` / `intersectWith` / `removeWhere` do not; `Stack`'s enumerator uses its own message.
-  - FR-058's constant is named `__METANO_CHECKS__` (confirmed); the lowered `foreach` guards its `_version` capture too.
+  - FR-058's constant is named `__METANO_CHECKS__` (confirmed); the lowered `foreach` reads it once into a function-local `$c` (final, W4-27) that also guards its `_version` capture. The runtime members' guard is pending the checks-mechanism decision.
   - Comparer factories put the comparer before `typeArguments`; the dictionary views live in `dictionary-views.ts`; interface descriptor tests are nominal through each class literal's data `interfaces` list (`CollectionType` gains `interfaces` and `closeFor`, contracts/runtime-types.md); the collection classes' `$runtimeType` literals import nothing from reflection and close themselves over an instance's slot through `closeFor`, so `getRuntimeType` reaches the closing code only when a collection is in the program (W4-24 (f)); the TS interfaces declare only what their C# interfaces declare (W4-13); the JSON collection kinds carry a context-written `create` closure.
   - `Comparer<T>.Default` orders strings ordinally (as LINQ's `orderBy` does today); .NET's culture-sensitive order is a documented divergence.
 
@@ -497,7 +497,7 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
     | `list[i] op= v`, closure fallback `update(i, f)` (FR-010) | `a[i] = a[i] op v` | ≤ 3.0 ns [estimated, not measured] |
     | `List.get(i)` at a polymorphic site: one generic kernel called on four lists of int, double, string and object elements, the double and object lists built with `List.adopt` (a second construction path), body `if (x !== last) s++; last = x;` | the same kernel over four native arrays | ≤ 2.0 ns [1.08] |
     | `List.add` | `a.push(v)` | ≤ 0.5 ns [0.05] |
-    | `foreach` over a `List<T>`, per element (FR-057's lowered loop) | native `for (const x of a)` | ≤ 0.5 ns [estimated until 011c measures the real variant; R17's related measurement: 0.23 on the plain-field class with a version check per step and none at the end] |
+    | `foreach` over a `List<T>`, per element (FR-057's lowered loop) | native `for (const x of a)` | ≤ 1.25 ns on Node.js, ≤ 0.5 ns on Bun (maintainer decision W4-27, 2026-11-19: the measured 1.04 ns per element on Node (Bun 0.00 ns) with the guard read once per loop is the .NET-mandated version and length compare itself (FR-057), not guard overhead; the budget is per engine, not the larger of the two) |
     | `Dictionary` / `ConcurrentDictionary` `get` / `set` / `containsKey` with string or number keys | `Map.get` / `Map.set` / `Map.has` | ≤ 2.0 ns [estimated] |
     | `Dictionary` / `ConcurrentDictionary` `add` | `Map.has` + `Map.set` | ≤ 2.0 ns [estimated] |
     | `HashSet` `add` / `contains` / `remove` with primitive elements | `Set.has` + `Set.add` / `Set.has` / `Set.delete` | ≤ 2.0 ns [estimated] |
