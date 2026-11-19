@@ -46,7 +46,7 @@ Every module is under `targets/js/metano-runtime/src/system/collections/`, is si
 | `descriptors.ts` | `listType`, `dictionaryType`, `hashSetType`, `queueType`, `stackType`, `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType` | yes |
 | `throw-helpers.ts` | the cold throw functions (§ Cold throw helpers) | `throwModified` only |
 | `checks.ts` | the ambient `__METANO_CHECKS__` declaration (§ Production checks) and a type `MetanoChecks` that carries it into every entry's declarations | type only |
-| `hash-core.ts` | `HashCore` (internal): the keyed store shared by `Dictionary`, `HashSet`, (011h) `ConcurrentDictionary` and `immutable-hash-storage.ts` (§ Equality and comparison) | no (internal; reached by 011h through the `./system/collections/*` wildcard) |
+| `hash-core.ts` | `HashCore` (internal): the keyed store shared by `Dictionary`, `HashSet`, (011h) `ConcurrentDictionary` and `immutable-storage.ts` (§ Equality and comparison) | no (internal; reached by 011h through the `./system/collections/*` wildcard) |
 | `set-algebra.ts` | the `ISet` / `IReadOnlySet` algorithms over `SetLike<T>` (internal), written by R for `HashSet` and shared by 011h's sets | no (internal) |
 | `list-helpers.ts`, `dictionary-helpers.ts`, `immutable-collection.ts` | legacy, unchanged (§ Legacy symbols) | yes, until removed |
 
@@ -783,13 +783,14 @@ The sections below are stage 011h's (group H), unchanged by R0; they build on th
 |---|---|---|
 | `read-only-list.ts` | `ReadOnlyList`, `asReadOnly` | interfaces, throw helpers |
 | `immutable-interfaces.ts` | `IImmutableList`, `IImmutableSet`, `IImmutableDictionary` (types only, 0 B) | interfaces |
-| `immutable-list.ts` | `ImmutableList` | `elementEquals`, `defaultCompare`, throw helpers |
-| `immutable-list-builder.ts` | `ImmutableListBuilder`, `toImmutableList` | `List` |
-| `immutable-hash-set.ts` | `ImmutableHashSet` | `defaultEqualityComparer` (storage through `immutable-hash-storage.ts`) |
-| `immutable-hash-set-builder.ts` | `ImmutableHashSetBuilder`, `toImmutableHashSet` | `HashSet` |
-| `immutable-dictionary.ts` | `ImmutableDictionary` | `immutable-hash-storage.ts`, `KeyCollection` / `ValueCollection`, `defaultEqualityComparer` |
-| `immutable-dictionary-builder.ts` | `ImmutableDictionaryBuilder`, `toImmutableDictionary` | `Dictionary` |
-| `immutable-hash-storage.ts` (internal) | `ImmutableHashStorage` (the tip-append storage of the two hashed immutables) | `hash-core` |
+| `immutable-list.ts` | `ImmutableList` | `ownsTip` (`immutable-storage.ts`), `comparisonOf`, `elementEquals`, `binarySearch`, throw helpers |
+| `immutable-list-builder.ts` | `ImmutableListBuilder`, `toImmutableList` | `List`, `ImmutableList`, `builder-iterator.ts` |
+| `immutable-hash-set.ts` | `ImmutableHashSet` | `immutable-storage.ts`, `set-algebra.ts`, `defaultEqualityComparerFor` |
+| `immutable-hash-set-builder.ts` | `ImmutableHashSetBuilder`, `toImmutableHashSet` | `HashSet`, `ImmutableHashSet`, `builder-iterator.ts` |
+| `immutable-dictionary.ts` | `ImmutableDictionary` | `immutable-storage.ts`, `KeyCollection` / `ValueCollection`, `defaultEqualityComparerFor` |
+| `immutable-dictionary-builder.ts` | `ImmutableDictionaryBuilder`, `toImmutableDictionary` | `Dictionary`, `ImmutableDictionary`, `builder-iterator.ts` |
+| `immutable-storage.ts` (internal) | `ownsTip` (W4-11's one ownership rule), `ImmutableHashStorage` (the append-only keyed store of the two hashed immutables: an entry array plus a `HashCore` from key to position), `normalizedComparer` | `hash-core` |
+| `builder-iterator.ts` (internal) | `BuilderIterator` (the three builders' enumerator, checked against the builder's own version) | `throwModified` |
 | `sorted-set.ts` | `SortedSet` | `comparisonOf`, `defaultComparer`, `set-algebra.ts`, `copyIntoSorted`, `closeCollectionFor`, `collectionTypeName`, throw helpers |
 | `sorted-dictionary.ts` | `SortedDictionary` | `comparisonOf`, `defaultComparer`, `elementEquals`, `KeyCollection` / `ValueCollection`, `copyIntoSorted`, `closeCollectionFor`, `collectionTypeName`, throw helpers (`requireKey`) |
 | `sorted-list.ts` | `SortedList`, `SortedListView` | `comparisonOf`, `defaultComparer`, `elementEquals`, `binarySearch`, `copyInto` / `copyIntoSorted`, `closeCollectionFor`, `collectionTypeName`, throw helpers (`requireKey`) |
@@ -803,7 +804,7 @@ The sections below are stage 011h's (group H), unchanged by R0; they build on th
 
 **Enumeration rules.** `SortedSet`, `SortedDictionary` and `SortedList` keep a version counter (every store under FR-058's guard); which members bump it is per class and probed (each class's section: most single-element writes bump even as a no-op; `remove` on an empty `SortedSet` / `SortedDictionary` and `SortedList.remove` of an absent key do not), and the next step of a live enumerator throws `InvalidOperationException` with the sorted classes' own .NET message, `Collection was modified after the enumerator was instantiated.` (`throwEnumeratorModified`, the text .NET's `Stack<T>` shares; not `List`'s). `SortedDictionary.remove` / `clear` invalidate (unlike `Dictionary`). The immutable classes have nothing to invalidate. `ReadOnlyList` enumerates through its source (a `List` source throws on modification, an array does not, as .NET). `ConcurrentDictionary` never throws (below). Builders enumerate through their inner mutable class and inherit its rule.
 
-**Ownership rule (tip-append sharing, FR-054, research R18, decision W4-11).** One rule, in `immutable-hash-storage.ts` for the hashed classes and in `immutable-list.ts` for the list, each a single owner check: a version may append in place only when its length equals the shared storage's length (it is the newest version of that storage). Every other mutator (`remove`, `setItem`, `clear`, `insert`, `sort`, …), and an `add` on an older version, copies the version's visible part into new storage. Shared storage is append-only: nothing is removed from it or overwritten in place, so each version reads exactly what it was built with. An old version keeps the whole shared store alive (a memory cost, not a semantic one). Builders copy at `ToImmutable` and never share their storage with an immutable version, so mutating a builder after `ToImmutable` changes no immutable value. A seeded model-based test keeps many live versions, branches from old ones and compares every live version with a plain-copy reference after every step (`test/system/collections/model/`).
+**Ownership rule (tip-append sharing, FR-054, research R18, decision W4-11).** One rule, `ownsTip(store, count)` in `immutable-storage.ts`, used by `ImmutableList` and by `ImmutableHashStorage.append` (the hashed classes): a version may append in place only when its length equals the shared storage's length (it is the newest version of that storage). Every other mutator (`remove`, `setItem`, `clear`, `insert`, `sort`, …), and an `add` on an older version, copies the version's visible part into new storage. Shared storage is append-only: nothing is removed from it or overwritten in place, so each version reads exactly what it was built with. An old version keeps the whole shared store alive (a memory cost, not a semantic one). Builders copy at `ToImmutable` and never share their storage with an immutable version, so mutating a builder after `ToImmutable` changes no immutable value. A seeded model-based test keeps many live versions, branches from old ones and compares every live version with a plain-copy reference after every step (`test/system/collections/model/`).
 
 **Mutable-interface conversions of immutables.** In .NET, `ImmutableList<T>` also implements `IList<T>` (and the immutable sets / dictionary `ISet<T>` / `IDictionary<K,V>`) with mutators that throw `NotSupportedException` (`Specified method is not supported.`). The runtime classes cannot carry both meanings of `add`, so they implement only `IReadOnly*` and `IImmutable*`: the compiler reports `MS0001` at a conversion of an immutable type to `ICollection<T>`, `IList<T>`, `ISet<T>` or `IDictionary<K,V>`, and `o is IList<T>` on an immutable value is `false` in TS (`true` in .NET; documented divergence).
 
@@ -836,9 +837,9 @@ Storage, in order: `_source`, `$typeArguments$ReadOnlyList`. A live view: reads 
 
 ```ts
 export class ImmutableList<T> implements IImmutableList<T>, IReadOnlyList<T> {
-  private constructor();                              // built only by the factories and mutators
+  constructor(items: T[], count: number, typeArguments: readonly RuntimeType[] | undefined); // internal: built only by the factories and mutators (public only so the class can be the literal's `ctor`)
   static empty<T>(): ImmutableList<T>;                // ImmutableList<T>.Empty / ImmutableArray<T>.Empty / Create(); one lazily memoized instance
-  static of<T>(items: readonly T[], typeArguments?: readonly RuntimeType[]): ImmutableList<T>;  // Create(params T[]), collection expressions; copies
+  static of<T>(items: T[], typeArguments?: readonly RuntimeType[] | null): ImmutableList<T>;  // Create(params T[]), collection expressions; takes ownership of the array (the compiler passes a fresh literal), as List.of
   static from<T>(items: Iterable<T>, typeArguments?: readonly RuntimeType[]): ImmutableList<T>; // CreateRange, ToImmutableList(), ToImmutableArray(); returns `items` itself when it is an ImmutableList (as .NET)
   readonly count: number;  readonly isEmpty: boolean;
   get(index: number): T;  fromEnd(n: number): T;      // ArgumentOutOfRangeException (`Specified argument was out of the range of valid values. (Parameter 'index')`)
@@ -869,7 +870,7 @@ Storage: `_items`, `_count`, `$typeArguments$ImmutableList`. **Tip-append copy-o
 
 ```ts
 export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
-  private constructor();
+  constructor(…);  // internal, as ImmutableList's
   static empty<T>(): ImmutableHashSet<T>;
   static of<T>(items: readonly T[], comparer?: IEqualityComparer<T> | null, typeArguments?): ImmutableHashSet<T>;  // Create(...)
   static from<T>(items: Iterable<T>, comparer?: IEqualityComparer<T> | null, typeArguments?): ImmutableHashSet<T>; // CreateRange, ToImmutableHashSet(); `items` itself when it is an ImmutableHashSet with that comparer
@@ -892,7 +893,7 @@ Storage: `_storage` (the shared `ImmutableHashStorage<T, true>`), `_count`, `$ty
 
 ```ts
 export class ImmutableDictionary<K, V> implements IImmutableDictionary<K, V> {
-  private constructor();
+  constructor(…);  // internal, as ImmutableList's
   static empty<K, V>(): ImmutableDictionary<K, V>;
   static create<K, V>(keyComparer?: IEqualityComparer<K> | null, valueComparer?: IEqualityComparer<V> | null, typeArguments?): ImmutableDictionary<K, V>;
   static from<K, V>(entries: Iterable<readonly [K, V]>, keyComparer?, valueComparer?, typeArguments?): ImmutableDictionary<K, V>;  // CreateRange, ToImmutableDictionary(); add semantics

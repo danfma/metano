@@ -196,3 +196,17 @@ Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collectio
 | `Stack` alone | 2947 B | 2634 B | 2578 B |
 | `List` + `Dictionary` + `HashSet` together | 7112 B | 6401 B | 6302 B |
 | `isType` + `getRuntimeType` + one class descriptor (011b row) | 1792 B | 1792 B | 1761 B |
+
+## Immutable collections: repeated `Add` and shared storage (spec 011 stage 011h, FR-054)
+
+`ImmutableList`, `ImmutableHashSet` and `ImmutableDictionary` are copy-on-write with tip-append sharing (research R18, decision W4-11): several versions share one append-only store, each version sees only the entries it was built with, and an `Add` of a new element on the newest version appends in place (amortized O(1)); every other change, and an `Add` on an older version, copies (O(n)). **Memory:** an old version keeps the whole shared store alive, including what newer versions appended after it; this is a memory cost, not a semantic one (no version ever sees another's elements). Bulk construction should still go through a builder or `CreateRange`.
+
+FR-054's budget, building 1e4 elements by repeated `Add` (`x = x.Add(i)`), ≤ 50 ms normalized as NFR-001 does (`bun run bench:immutable`, `bun run bench:immutable:node`; checked `dist/`, median of 11 runs after 5 warm-ups). Measured 2026-11-19 on Apple M1 Pro:
+
+| Class | Node.js 24.11.0 raw / normalized (ms) | Bun 1.4.2 raw / normalized (ms) | Verdict |
+|---|---|---|---|
+| `ImmutableList` | 3.01 / 3.19 | 0.85 / 0.73 | ok |
+| `ImmutableHashSet` | 3.84 / 4.06 | 1.20 / 1.03 | ok |
+| `ImmutableDictionary` | 6.52 / 6.91 | 1.75 / 1.50 | ok |
+
+C_measured 0.557 ns (Node.js, C_ref 0.59 ns) and 0.548 ns (Bun, C_ref 0.47 ns). Plain copy-on-write measured 2.6 s (Node.js) / 0.25 s (Bun) for the hashed classes (research R18).
