@@ -16,11 +16,12 @@ public static class InteropExtensions
 
     /// <summary>
     /// Turns <paramref name="value"/> into <c>dynamic</c>: TypeScript emits
-    /// <c>(value as any)</c>, and .NET returns the argument. Member names after it are
-    /// verbatim: a Metano member <c>Total</c> is emitted as <c>total</c>, so
-    /// <c>x.AsDynamic().Total</c> reads a member the emitted object does not have.
-    /// Until dynamic member access is supported, a member access on the result
-    /// reports <c>MS0001</c>.
+    /// <c>(value as any)</c> (<c>(unbox(value) as any)</c> when the value may hold a
+    /// box), and .NET returns the argument. A member access on the result is emitted
+    /// verbatim in TypeScript, <c>(x as any).Total</c>: a Metano member <c>Total</c>
+    /// is emitted as <c>total</c>, so that access reads a member the emitted object
+    /// does not have, and <c>MS0057</c> warns. Dart emits <c>(value as dynamic)</c>
+    /// and reports <c>MS0001</c> for a member access on the result until after 3.0.
     /// </summary>
     public static dynamic AsDynamic(this object? value) => value!;
 }
