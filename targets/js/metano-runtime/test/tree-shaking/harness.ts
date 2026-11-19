@@ -166,6 +166,36 @@ export async function bundle(
   }
 }
 
+/**
+ * The runtime modules esbuild resolves for `source` (an entry module written into the
+ * directory), as `/`-separated paths relative to the directory, sorted: what a bundle
+ * pulls in, whatever its minified text looks like.
+ */
+export async function bundledModules(directory: BundleDirectory, source: string): Promise<string[]> {
+  const entry = join(directory.root, `__entry_${entryCounter++}.js`);
+
+  writeFileSync(entry, source);
+
+  try {
+    const result = await esbuild.build({
+      entryPoints: [entry],
+      bundle: true,
+      format: "esm",
+      write: false,
+      metafile: true,
+      logLevel: "silent",
+      external: [...THIRD_PARTY],
+    });
+
+    return Object.keys(result.metafile.inputs)
+      .map((input) => relative(directory.root, resolve(input)).split("\\").join("/"))
+      .filter((module) => module !== relative(directory.root, entry))
+      .sort();
+  } finally {
+    rmSync(entry, { force: true });
+  }
+}
+
 /** Gzipped size of `code` in bytes. */
 export function gzipSize(code: string): number {
   return Bun.gzipSync(code).byteLength;

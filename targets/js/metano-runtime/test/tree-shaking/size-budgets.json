@@ -141,7 +141,6 @@
     "system/record-copy",
     "system/reflection/box",
     "system/reflection/boxed-text",
-    "system/reflection/boxes-equal",
     "system/reflection/cast-to",
     "system/reflection/constructor-descriptor",
     "system/reflection/enum-from-raw",

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import {
   type BundleDirectory,
   bundle,
+  bundledModules,
   createBundleDirectory,
   DIST_DIR,
   gzipSize,
@@ -76,6 +77,18 @@ describe("size budgets", () => {
     BUNDLE_TIMEOUT_MS,
   );
 });
+
+test(
+  "value equality without a boxing conversion bundles no box module (FR-051)",
+  async () => {
+    const source = readFileSync(join(import.meta.dir, "entries/value-equality.js"), "utf8");
+    const modules = await bundledModules(directory, source);
+
+    expect(modules).toContain("system/equality.js");
+    expect(modules.filter((module) => module.startsWith("system/reflection/"))).toEqual([]);
+  },
+  BUNDLE_TIMEOUT_MS,
+);
 
 test("size-budgets.json lists every runtime module", () => {
   expect(sizeBudgets.modules).toEqual(listModules(DIST_DIR).map(moduleName));

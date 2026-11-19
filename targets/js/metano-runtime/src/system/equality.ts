@@ -13,8 +13,6 @@
  */
 import { HashCode } from "./hash-code.ts";
 import { hashInt64 } from "./int64.ts";
-import { boxesEqual } from "./reflection/boxes-equal.ts";
-import { isBoxed } from "./reflection/is-boxed.ts";
 
 /**
  * Returns true when `a` and `b` are deeply equal. Comparison rules, in order:
@@ -51,7 +49,7 @@ export function equals(a: unknown, b: unknown): boolean {
   // Other primitives are settled by the `===` check above; we only get here for objects.
   if (typeof a !== "object") return false;
 
-  if (isBoxed(a) || isBoxed(b)) return boxesEqual(a, b);
+  if (hasBoxBrand(a) || hasBoxBrand(b)) return boxesEqual(a, b);
 
   // Custom equals contract from record/value classes.
   if ("equals" in a && typeof (a as { equals?: unknown }).equals === "function") {
@@ -137,7 +135,7 @@ export function hashCode(value: unknown): number {
   if (value == null) return 0;
 
   if (typeof value === "object") {
-    if (isBoxed(value)) {
+    if (hasBoxBrand(value)) {
       return HashCode.combine2(value.type.fullName, hashCode(value.value));
     }
 
@@ -235,7 +233,7 @@ export function objectEquals(a: unknown, b: unknown): boolean {
 
   if (typeof a !== "object") return false;
 
-  if (isBoxed(a) || isBoxed(b)) return boxesEqual(a, b);
+  if (hasBoxBrand(a) || hasBoxBrand(b)) return boxesEqual(a, b);
 
   if (hasEqualsMethod(a)) return a.equals(b);
 
@@ -350,6 +348,36 @@ function durationHashCode(duration: Duration): number {
   return HashCode.combine(duration.total("nanoseconds"));
 }
 
+/** The part of a `Boxed` (spec 011 FR-050) the equality helpers read. */
+interface BoxBrand {
+  readonly value: unknown;
+  readonly type: { readonly fullName: string };
+}
+
+/**
+ * Whether `value` is a box, by the brand `isBoxed` reads (`$boxed === true` and an object
+ * `type`). The check is inline so that value equality imports no `system/reflection` module:
+ * a program without a boxing conversion bundles no box code (FR-051).
+ */
+function hasBoxBrand(value: unknown): value is BoxBrand {
+  const candidate = value as { readonly $boxed?: unknown; readonly type?: unknown } | null;
+
+  return (
+    candidate?.$boxed === true && typeof candidate.type === "object" && candidate.type !== null
+  );
+}
+
+/**
+ * .NET's `Equals` on two boxes (spec 011 FR-051): both are boxes of the same type, compared by
+ * `fullName` rather than descriptor identity, and their raw values are equal. A box never equals
+ * a raw value, and the rule is symmetric and transitive.
+ */
+function boxesEqual(a: unknown, b: unknown): boolean {
+  return (
+    hasBoxBrand(a) && hasBoxBrand(b) && a.type.fullName === b.type.fullName && a.value === b.value
+  );
+}
+
 function hasEqualsMethod(value: object): value is { equals(other: unknown): boolean } {
   return "equals" in value && typeof (value as { equals?: unknown }).equals === "function";
 }
@@ -387,7 +415,7 @@ export function defaultEquals(a: unknown, b: unknown): boolean {
   if (typeof a === "number") return typeof b === "number" && Number.isNaN(a) && Number.isNaN(b);
   if (typeof a !== "object" || typeof b !== "object") return false;
 
-  if (isBoxed(a) || isBoxed(b)) return boxesEqual(a, b);
+  if (hasBoxBrand(a) || hasBoxBrand(b)) return boxesEqual(a, b);
 
   if ("equals" in a && typeof (a as { equals?: unknown }).equals === "function") {
     return (a as { equals(other: unknown): boolean }).equals(b);
