@@ -192,14 +192,14 @@ Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runti
 | `Dictionary.get` (number keys) | 0.80–1.95 | −0.16–0.19 |
 | `Dictionary.set` (number keys, overwrite) | 0.54–0.87 | 0.92–1.04 |
 | `Dictionary.containsKey` (string keys) | **2.92–3.31** | 0.32–0.34 |
-| `Dictionary.add` (string keys, fresh) | 0.71–3.56 | 1.08–1.70 |
+| `Dictionary.add` (string keys, fresh) | **0.71–3.56** | 1.08–1.70 |
 | `HashSet.add` (numbers, fresh set) | **6.25–9.39** | **2.18–3.17** |
 | `HashSet.contains` (numbers) | −2.45–−0.45 | −0.11–0.17 |
-| `HashSet.remove + add` (numbers) | 1.96–2.84 | 0.74–1.52 |
+| `HashSet.remove + add` (numbers) | **1.96–2.84** | 0.74–1.52 |
 | `Queue.enqueue + dequeue` | **2.06** (a third run, disturbed, 2.96) | 1.19–1.49 |
 | `Queue` BFS shape (reported) | 1.10 | 1.15–1.38 |
 
-Bold rows are still over budget: `HashSet.add` into a fresh set (a `Map` keyed store where the baseline is a native `Set`), `Dictionary.containsKey` with string keys on Node.js, and the `Queue` row on Node.js. They are **provisional misses** (maintainer decision W4-49): the budgets stay unchanged, and the final numbers come from a quiet-machine re-measure at stage 011g.
+Bold rows are still over budget: `HashSet.add` into a fresh set (a `Map` keyed store where the baseline is a native `Set`), `Dictionary.containsKey` with string keys on Node.js, the `Queue` row on Node.js, and, at the top of their noisy ranges, `Dictionary.add` and `HashSet.remove + add` on Node.js. They are **provisional misses** (maintainer decision W4-49): the budgets stay unchanged, and the final numbers come from a quiet-machine re-measure at stage 011g.
 
 Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collection rows raised to the measured size + 10% by W4-25 (d): FR-016's exception classes, about 0.97 KB, plus `elementEquals` / `defaultEquals`, about 0.5 KB, shared when several collections are used; slimming the exceptions is a follow-up):
 
