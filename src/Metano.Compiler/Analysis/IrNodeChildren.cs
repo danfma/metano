@@ -21,7 +21,12 @@ public static class IrNodeChildren
             IrDynamicInvocation invocation => [invocation.Target, .. invocation.Arguments],
             IrDynamicIndexerAccess indexer => [indexer.Receiver, indexer.Index],
             IrDynamicNumericConversion conversion => [conversion.Operand],
-            IrIndexerUpdateExpression update => [update.Receiver, update.Index, update.NewValue],
+            IrIndexerUpdateExpression update =>
+            [
+                update.Element.Receiver,
+                update.Element.Index,
+                update.NewValue,
+            ],
             IrFromEndElementAccess fromEnd => [fromEnd.Receiver, fromEnd.Offset],
             IrArrayToCollectionConversion conversion => [conversion.Value],
             IrListInterfaceCast cast => [cast.Value],

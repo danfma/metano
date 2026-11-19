@@ -394,8 +394,11 @@ public static class IrToTsJsxComponentBridge
             },
             IrIndexerUpdateExpression update => update with
             {
-                Receiver = Rewrite(update.Receiver, propNames, referenced),
-                Index = Rewrite(update.Index, propNames, referenced),
+                Element = update.Element with
+                {
+                    Receiver = Rewrite(update.Element.Receiver, propNames, referenced),
+                    Index = Rewrite(update.Element.Index, propNames, referenced),
+                },
                 NewValue = Rewrite(update.NewValue, propNames, referenced),
             },
             IrFromEndElementAccess fromEnd => fromEnd with

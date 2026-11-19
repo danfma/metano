@@ -82,8 +82,8 @@ public static class IrBodyCoverageProbe
             IrDynamicIndexerAccess indexer => IsCoveredExpression(indexer.Receiver)
                 && IsCoveredExpression(indexer.Index),
             IrDynamicNumericConversion conversion => IsCoveredExpression(conversion.Operand),
-            IrIndexerUpdateExpression update => IsCoveredExpression(update.Receiver)
-                && IsCoveredExpression(update.Index)
+            IrIndexerUpdateExpression update => IsCoveredExpression(update.Element.Receiver)
+                && IsCoveredExpression(update.Element.Index)
                 && IsCoveredExpression(update.NewValue),
             IrFromEndElementAccess fromEnd => IsCoveredExpression(fromEnd.Receiver)
                 && IsCoveredExpression(fromEnd.Offset),

@@ -90,8 +90,9 @@ public static class IrEvaluationTraits
         {
             IrConditionalReceiver => 1,
             IrNullConditionalAccess nested => CountConditionalReceiverReads(nested.Receiver),
-            IrIndexerUpdateExpression update => 2 * CountConditionalReceiverReads(update.Receiver)
-                + CountConditionalReceiverReads(update.Index)
+            IrIndexerUpdateExpression update => 2
+                * CountConditionalReceiverReads(update.Element.Receiver)
+                + CountConditionalReceiverReads(update.Element.Index)
                 + CountConditionalReceiverReads(update.NewValue),
             IrFromEndElementAccess fromEnd => ReceiverReadsOf(fromEnd)
                 * CountConditionalReceiverReads(fromEnd.Receiver)

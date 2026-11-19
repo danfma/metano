@@ -892,23 +892,34 @@ public enum IrIndexerUpdateResult
 }
 
 /// <summary>
+/// One element of a stage 011c collection addressed through the collection's
+/// own indexer: <see cref="Receiver"/> and <see cref="Index"/> in source
+/// order, the index counted from the end (<c>r[^Index]</c>) when
+/// <see cref="FromEnd"/> is set, and <see cref="ReceiverType"/> the collection
+/// type the element is read and written as.
+/// </summary>
+public sealed record IrCollectionElement(
+    IrExpression Receiver,
+    IrExpression Index,
+    bool FromEnd,
+    IrCollectionTypeRef ReceiverType
+);
+
+/// <summary>
 /// The evaluate-once update of one element through the indexer of a stage
 /// 011c collection (spec 011 FR-010): <c>r[i] op= v</c>, <c>r[i]++</c> /
 /// <c>--</c> (prefix or postfix) and <c>r[i] ??= v</c>, list or dictionary,
-/// class or interface. <see cref="NewValue"/> is the value written, an
-/// expression over <c>IrIdentifier(CurrentName)</c> (the current element)
-/// built with the element type's operator, increment and overflow rules;
-/// <see cref="CurrentName"/> is unique per site and contains a <c>$</c>. With
-/// <see cref="FromEnd"/> the index is <c>^Index</c> (<c>r[^n] op= v</c>). Only a
-/// target whose collections are runtime classes gets the node
+/// class or interface, on <see cref="Element"/> (<c>r[^n] op= v</c> with its
+/// <see cref="IrCollectionElement.FromEnd"/>). <see cref="NewValue"/> is the
+/// value written, an expression over <c>IrIdentifier(CurrentName)</c> (the
+/// current element) built with the element type's operator, increment and
+/// overflow rules; <see cref="CurrentName"/> is unique per site and contains a
+/// <c>$</c>. Only a target whose collections are runtime classes gets the node
 /// (<c>IrExtractionContext.KeepsNativeCollections</c>); the target chooses
 /// the shape that renders it.
 /// </summary>
 public sealed record IrIndexerUpdateExpression(
-    IrExpression Receiver,
-    IrExpression Index,
-    bool FromEnd,
-    IrCollectionTypeRef ReceiverType,
+    IrCollectionElement Element,
     string CurrentName,
     IrExpression NewValue,
     IrIndexerUpdateResult Result

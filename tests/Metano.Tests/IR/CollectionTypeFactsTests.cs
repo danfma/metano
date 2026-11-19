@@ -250,7 +250,9 @@ public class CollectionTypeFactsTests
         var receiverTypes = expressions
             .OfType<IrElementAccess>()
             .Select(access => access.TargetType)
-            .Concat(expressions.OfType<IrIndexerUpdateExpression>().Select(u => u.ReceiverType))
+            .Concat(
+                expressions.OfType<IrIndexerUpdateExpression>().Select(u => u.Element.ReceiverType)
+            )
             .Concat(expressions.OfType<IrCollectionInitialization>().Select(i => i.Type))
             .ToList();
 

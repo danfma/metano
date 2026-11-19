@@ -368,8 +368,11 @@ public static class IrToTsPlainObjectBridge
             },
             IrIndexerUpdateExpression update => update with
             {
-                Receiver = RewriteThis(update.Receiver, identifierName),
-                Index = RewriteThis(update.Index, identifierName),
+                Element = update.Element with
+                {
+                    Receiver = RewriteThis(update.Element.Receiver, identifierName),
+                    Index = RewriteThis(update.Element.Index, identifierName),
+                },
                 NewValue = RewriteThis(update.NewValue, identifierName),
             },
             IrFromEndElementAccess fromEnd => fromEnd with

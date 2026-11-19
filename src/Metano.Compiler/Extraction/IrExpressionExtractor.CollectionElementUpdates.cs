@@ -30,17 +30,6 @@ public sealed partial class IrExpressionExtractor
         IrIdentifier Current
     );
 
-    /// <summary>
-    /// The receiver, index and type of an element of a stage 011c collection
-    /// written through its indexer.
-    /// </summary>
-    private sealed record CollectionElementPlace(
-        IrExpression Receiver,
-        IrExpression Index,
-        bool FromEnd,
-        IrCollectionTypeRef Type
-    );
-
     private IndexerUpdateProbe? _indexerUpdateProbe;
 
     private int _nextIndexerUpdate;
@@ -97,7 +86,7 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var place = new CollectionElementPlace(element.Target, element.Index, FromEnd: false, type);
+        var place = new IrCollectionElement(element.Target, element.Index, FromEnd: false, type);
 
         var result = assign.IsKind(SyntaxKind.CoalesceAssignmentExpression)
             ? IrIndexerUpdateResult.Coalesce
@@ -116,7 +105,7 @@ public sealed partial class IrExpressionExtractor
         if (_indexerUpdateProbe?.Node == node)
             return null;
 
-        if (CollectionElementPlaceOf(placeSyntax) is not { } place)
+        if (CollectionElementOf(placeSyntax) is not { } place)
             return null;
 
         return UpdateOf(node, place, result, current =>
@@ -133,7 +122,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression UpdateOf(
         ExpressionSyntax node,
-        CollectionElementPlace place,
+        IrCollectionElement place,
         IrIndexerUpdateResult result,
         Func<IrExpression, IrExpression> store
     )
@@ -151,15 +140,7 @@ public sealed partial class IrExpressionExtractor
                 $"'{node}' is not supported: the element update has no single value to write."
             );
 
-        return new IrIndexerUpdateExpression(
-            place.Receiver,
-            place.Index,
-            place.FromEnd,
-            place.Type,
-            current.Name,
-            newValue,
-            result
-        );
+        return new IrIndexerUpdateExpression(place, current.Name, newValue, result);
     }
 
     private IrExpression Probing(
@@ -240,7 +221,7 @@ public sealed partial class IrExpressionExtractor
     /// any other place. A 64-bit index is reported: the update node has no
     /// index conversion.
     /// </summary>
-    private CollectionElementPlace? CollectionElementPlaceOf(ExpressionSyntax syntax)
+    private IrCollectionElement? CollectionElementOf(ExpressionSyntax syntax)
     {
         if (
             Unparenthesize(syntax)
@@ -257,12 +238,12 @@ public sealed partial class IrExpressionExtractor
         var receiver = Extract(element.Expression);
 
         if (AsIndexFromEnd(operand) is { } fromEnd)
-            return new CollectionElementPlace(receiver, Extract(fromEnd.Operand), true, type);
+            return new IrCollectionElement(receiver, Extract(fromEnd.Operand), true, type);
 
         if (ArrayIndexKind(element.Expression, element.ArgumentList) is not null)
             return null;
 
-        return new CollectionElementPlace(receiver, Extract(operand), false, type);
+        return new IrCollectionElement(receiver, Extract(operand), false, type);
     }
 
     /// <summary>

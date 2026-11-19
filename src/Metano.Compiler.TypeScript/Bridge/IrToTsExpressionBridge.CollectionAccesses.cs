@@ -53,8 +53,8 @@ public static partial class IrToTsExpressionBridge
     {
         if (isStatement && IsDirectUpdate(update))
         {
-            var receiver = Map(update.Receiver, context);
-            var index = UpdateIndexOf(update, receiver, Map(update.Index, context));
+            var receiver = Map(update.Element.Receiver, context);
+            var index = UpdateIndexOf(update, receiver, Map(update.Element.Index, context));
 
             return Set(receiver, index, NewValueOver(update, Get(receiver, index), context));
         }
@@ -167,18 +167,18 @@ public static partial class IrToTsExpressionBridge
 
     private static bool IsDirectUpdate(IrIndexerUpdateExpression update) =>
         update.Result is not IrIndexerUpdateResult.Coalesce
-        && IrEvaluationTraits.IsReusableReceiver(update.Receiver)
-        && IrEvaluationTraits.IsSideEffectFree(update.Index)
+        && IrEvaluationTraits.IsReusableReceiver(update.Element.Receiver)
+        && IrEvaluationTraits.IsSideEffectFree(update.Element.Index)
         && ReadsOfCurrent(update) <= 1;
 
     private static bool UpdatesThroughClosure(IrIndexerUpdateExpression update) =>
         update.Result is not IrIndexerUpdateResult.Coalesce
-        && !RuntimeCollections.IsInterface(update.ReceiverType.Kind)
+        && !RuntimeCollections.IsInterface(update.Element.ReceiverType.Kind)
         && !SuspendsInPlace(update.NewValue)
         && (
-            !update.FromEnd
-            || IrEvaluationTraits.IsReusableReceiver(update.Receiver)
-                && IrEvaluationTraits.IsSideEffectFree(update.Index)
+            !update.Element.FromEnd
+            || IrEvaluationTraits.IsReusableReceiver(update.Element.Receiver)
+                && IrEvaluationTraits.IsSideEffectFree(update.Element.Index)
         );
 
     /// <summary><c>r.update(i, (v$) =&gt; v$ op v)</c> / <c>r.updateReturningOld(…)</c>.</summary>
@@ -187,8 +187,8 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var receiver = Map(update.Receiver, context);
-        var index = UpdateIndexOf(update, receiver, Map(update.Index, context));
+        var receiver = Map(update.Element.Receiver, context);
+        var index = UpdateIndexOf(update, receiver, Map(update.Element.Index, context));
 
         var member =
             update.Result is IrIndexerUpdateResult.OldValue ? "updateReturningOld" : "update";
@@ -215,8 +215,8 @@ public static partial class IrToTsExpressionBridge
         bool isStatement
     )
     {
-        var bound = update.FromEnd
-            ? BindFromEnd(update.Receiver, update.Index, temporaries, context)
+        var bound = update.Element.FromEnd
+            ? BindFromEnd(update.Element.Receiver, update.Element.Index, temporaries, context)
             : BindElement(update, temporaries, context);
 
         var effects = bound.Effects.ToList();
@@ -275,19 +275,19 @@ public static partial class IrToTsExpressionBridge
         var effects = new List<TsExpression>();
 
         var receiver = Bound(
-            update.Receiver,
-            IrEvaluationTraits.IsReusableReceiver(update.Receiver),
+            update.Element.Receiver,
+            IrEvaluationTraits.IsReusableReceiver(update.Element.Receiver),
             "$r",
             temporaries,
             effects,
             context
         );
 
-        var key = RuntimeCollections.IsKeyed(update.ReceiverType.Kind) ? "$k" : "$i";
+        var key = RuntimeCollections.IsKeyed(update.Element.ReceiverType.Kind) ? "$k" : "$i";
 
         var index = Bound(
-            update.Index,
-            IrEvaluationTraits.IsSideEffectFree(update.Index),
+            update.Element.Index,
+            IrEvaluationTraits.IsSideEffectFree(update.Element.Index),
             key,
             temporaries,
             effects,
@@ -361,7 +361,7 @@ public static partial class IrToTsExpressionBridge
         IrIndexerUpdateExpression update,
         TsExpression receiver,
         TsExpression index
-    ) => update.FromEnd ? CountMinus(receiver, index) : index;
+    ) => update.Element.FromEnd ? CountMinus(receiver, index) : index;
 
     private static TsExpression NewValueOver(
         IrIndexerUpdateExpression update,
