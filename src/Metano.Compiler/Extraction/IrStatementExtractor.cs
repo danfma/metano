@@ -387,6 +387,7 @@ public sealed class IrStatementExtractor(
                 ? IrTypeRefMapper.Map(typeSymbol, _originResolver)
                 : null;
         var collection = _expressions.Extract(fe.Expression);
+        var collectionType = CollectionTypeOf(fe.Expression);
         var body = ExtractEmbedded(fe.Statement);
 
         // `$` is not legal in a C# identifier, so the raw element's name
@@ -394,15 +395,35 @@ public sealed class IrStatementExtractor(
         var element = variable + "$element";
 
         if (LoopVariableInitializer(fe, new IrIdentifier(element)) is not { } initializer)
-            return new IrForEachStatement(variable, variableType, collection, body);
+            return new IrForEachStatement(variable, variableType, collection, body)
+            {
+                CollectionType = collectionType,
+            };
 
         // `foreach (long x in ints)`, `foreach (int x in doubles)`: iterate the
         // raw element and declare the C# variable as its conversion (spec 012
         // FR-010, FR-070).
         var declaration = new IrVariableDeclaration(variable, variableType, initializer);
 
-        return new IrForEachStatement(element, null, collection, [declaration, .. body]);
+        return new IrForEachStatement(element, null, collection, [declaration, .. body])
+        {
+            CollectionType = collectionType,
+        };
     }
+
+    /// <summary>
+    /// The static type of a loop's enumerated expression, its nullable
+    /// annotation dropped (a <c>null</c> receiver fails at the enumeration,
+    /// as in C#); <c>null</c> when Roslyn reports none.
+    /// </summary>
+    private IrTypeRef? CollectionTypeOf(ExpressionSyntax collection) =>
+        _semantic.GetTypeInfo(collection).Type is { } type
+            ? IrTypeRefMapper.Map(
+                type.WithNullableAnnotation(NullableAnnotation.NotAnnotated),
+                _originResolver,
+                _context.Target
+            )
+            : null;
 
     /// <summary>
     /// The value the loop variable is declared from: the numeric conversion

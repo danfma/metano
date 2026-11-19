@@ -91,7 +91,9 @@ public static class MultiplyConstructedInterfaces
             .Select(construction =>
                 construction
                     .TypeArguments.Select(argument =>
-                        IrTypeRefMapper.Map(argument, originResolver: null, target)
+                        IrTypeRefMapper
+                            .Map(argument, originResolver: null, target)
+                            .WithLegacyCollection()
                     )
                     .ToList()
             )

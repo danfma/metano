@@ -975,6 +975,9 @@ internal sealed class IrToTsClassEmitter(
                 foreach (var a in args)
                     CollectTypeParamRefs(a, acc);
                 break;
+            case IrCollectionTypeRef collection:
+                CollectTypeParamRefs(collection.LegacyForm, acc);
+                break;
             case IrArrayTypeRef arr:
                 CollectTypeParamRefs(arr.ElementType, acc);
                 break;

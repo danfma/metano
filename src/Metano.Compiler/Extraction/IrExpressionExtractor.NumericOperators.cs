@@ -139,7 +139,7 @@ public sealed partial class IrExpressionExtractor
     {
         var hasNativeOperator =
             _target is null or Metano.Annotations.TargetLanguage.TypeScript
-            && target is not IrElementAccess { TargetType: IrMapTypeRef };
+            && !IsDictionaryEntry(target);
 
         if (!hasNativeOperator)
             return null;

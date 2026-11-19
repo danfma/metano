@@ -23,6 +23,8 @@ public static class IrToDartTypeMapper
         {
             IrPrimitiveTypeRef p => MapPrimitive(p.Primitive),
             IrNullableTypeRef n => new DartNullableType(Map(n.Inner)),
+            // Until FR-038 (D28) a collection maps to its 2.x Dart type.
+            IrCollectionTypeRef c => Map(c.LegacyForm),
             IrArrayTypeRef a => new DartNamedType("List", [Map(a.ElementType)]),
             IrMapTypeRef m => new DartNamedType("Map", [Map(m.KeyType), Map(m.ValueType)]),
             IrSetTypeRef s => new DartNamedType("Set", [Map(s.ElementType)]),

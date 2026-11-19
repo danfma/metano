@@ -219,7 +219,8 @@ public static partial class IrToTsExpressionBridge
 
         if (
             bin.Operator is IrBinaryOp.Assign
-            && bin.Left is IrElementAccess { TargetType: IrMapTypeRef } ea
+            && bin.Left is IrElementAccess ea
+            && ea.TargetType.WithLegacyCollection() is IrMapTypeRef
         )
         {
             var target = Map(ea.Target, context);
@@ -539,10 +540,12 @@ public static partial class IrToTsExpressionBridge
         var target = MapNullTolerant(ea.Target, context);
         var index = AsArrayIndex(Map(ea.Index, context), ea.IndexKind);
 
-        if (ea.TargetType is IrMapTypeRef)
+        var targetType = ea.TargetType.WithLegacyCollection();
+
+        if (targetType is IrMapTypeRef)
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
 
-        return CheckedElementRead(new TsElementAccess(target, index), ea.TargetType);
+        return CheckedElementRead(new TsElementAccess(target, index), targetType);
     }
 
     /// <summary>
@@ -559,13 +562,14 @@ public static partial class IrToTsExpressionBridge
         bool readsElement = false
     )
     {
-        if (place is not IrElementAccess { TargetType: not IrMapTypeRef } ea)
+        if (place is not IrElementAccess ea || ea.TargetType.WithLegacyCollection() is IrMapTypeRef)
             return Map(place, context);
 
         var element = MapUncheckedElementAccess(ea, context);
+        var targetType = ea.TargetType.WithLegacyCollection();
 
-        return readsElement && !IsNullableElement(ea.TargetType)
-            ? CheckedElementRead(element, ea.TargetType)
+        return readsElement && !IsNullableElement(targetType)
+            ? CheckedElementRead(element, targetType)
             : element;
     }
 
@@ -2072,6 +2076,7 @@ public static partial class IrToTsExpressionBridge
             // to their JS runtime equivalents; the type mapper collapses them
             // into IrMap/IrSet/IrArray refs, so we reconstruct the JS class
             // names here for `new` targets.
+            IrCollectionTypeRef collection => MapNewTarget(collection.LegacyForm),
             IrMapTypeRef => new TsIdentifier("Map"),
             IrSetTypeRef => new TsRuntimeHelperReference("HashSet"),
             _ => IrToTsTypeMapper.Map(type) switch
@@ -2452,7 +2457,7 @@ public static partial class IrToTsExpressionBridge
     }
 
     private static bool KeepsTypeArguments(IrNewExpression ne) =>
-        ne.Type is IrSetTypeRef or IrMapTypeRef
+        ne.Type.WithLegacyCollection() is IrSetTypeRef or IrMapTypeRef
         || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } };
 
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
@@ -2460,7 +2465,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        IReadOnlyList<IrTypeRef>? typeArguments = type switch
+        IReadOnlyList<IrTypeRef>? typeArguments = type.WithLegacyCollection() switch
         {
             IrNamedTypeRef { TypeArguments: { Count: > 0 } named } => named,
             IrSetTypeRef set => [set.ElementType],

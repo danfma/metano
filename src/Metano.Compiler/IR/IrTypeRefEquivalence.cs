@@ -24,6 +24,8 @@ public static class IrTypeRefEquivalence
                 && l.PrivateNestedSegments == r.PrivateNestedSegments
                 && AreEquivalent(l.TypeArguments ?? [], r.TypeArguments ?? []),
             (IrNullableTypeRef l, IrNullableTypeRef r) => AreEquivalent(l.Inner, r.Inner),
+            (IrCollectionTypeRef l, IrCollectionTypeRef r) => l.Kind == r.Kind
+                && AreEquivalent(l.TypeArguments, r.TypeArguments),
             (IrArrayTypeRef l, IrArrayTypeRef r) => AreEquivalent(l.ElementType, r.ElementType),
             (IrSetTypeRef l, IrSetTypeRef r) => AreEquivalent(l.ElementType, r.ElementType),
             (IrIterableTypeRef l, IrIterableTypeRef r) => AreEquivalent(

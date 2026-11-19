@@ -57,36 +57,43 @@ public class IrTypeRefMapperTests
     }
 
     [Test]
-    public async Task ListOfString_MapsToArray()
+    public async Task ListOfString_MapsToListCollection()
     {
         var compilation = IrTestHelper.Compile(
             """
             public class X { List<string> Items { get; } = new(); }
             """
         );
+
         var xType = compilation.GetTypeByMetadataName("X")!;
         var prop = xType.GetMembers("Items").OfType<IPropertySymbol>().First();
         var result = IrTypeRefMapper.Map(prop.Type);
 
-        await Assert.That(result).IsTypeOf<IrArrayTypeRef>();
-        var element = ((IrArrayTypeRef)result).ElementType;
+        await Assert.That(result).IsTypeOf<IrCollectionTypeRef>();
+        await Assert.That(((IrCollectionTypeRef)result).Kind).IsEqualTo(IrCollectionKind.List);
+        var element = ((IrCollectionTypeRef)result).TypeArguments.Single();
         await Assert.That(element).IsTypeOf<IrPrimitiveTypeRef>();
         await Assert.That(((IrPrimitiveTypeRef)element).Primitive).IsEqualTo(IrPrimitive.String);
     }
 
     [Test]
-    public async Task Dictionary_MapsToMap()
+    public async Task Dictionary_MapsToDictionaryCollection()
     {
         var compilation = IrTestHelper.Compile(
             """
             public class X { Dictionary<string, int> Map { get; } = new(); }
             """
         );
+
         var xType = compilation.GetTypeByMetadataName("X")!;
         var prop = xType.GetMembers("Map").OfType<IPropertySymbol>().First();
         var result = IrTypeRefMapper.Map(prop.Type);
 
-        await Assert.That(result).IsTypeOf<IrMapTypeRef>();
+        await Assert.That(result).IsTypeOf<IrCollectionTypeRef>();
+
+        await Assert
+            .That(((IrCollectionTypeRef)result).Kind)
+            .IsEqualTo(IrCollectionKind.Dictionary);
     }
 
     [Test]
@@ -97,6 +104,7 @@ public class IrTypeRefMapperTests
             public class X { Task<bool> DoAsync() => Task.FromResult(true); }
             """
         );
+
         var xType = compilation.GetTypeByMetadataName("X")!;
         var method = xType.GetMembers("DoAsync").OfType<IMethodSymbol>().First();
         var result = IrTypeRefMapper.Map(method.ReturnType);
@@ -115,6 +123,7 @@ public class IrTypeRefMapperTests
             public class X { Guid Id { get; } }
             """
         );
+
         var xType = compilation.GetTypeByMetadataName("X")!;
         var prop = xType.GetMembers("Id").OfType<IPropertySymbol>().First();
         var result = IrTypeRefMapper.Map(prop.Type);
@@ -131,6 +140,7 @@ public class IrTypeRefMapperTests
             public class X { DateTime Created { get; } }
             """
         );
+
         var xType = compilation.GetTypeByMetadataName("X")!;
         var prop = xType.GetMembers("Created").OfType<IPropertySymbol>().First();
         var result = IrTypeRefMapper.Map(prop.Type);
@@ -147,6 +157,7 @@ public class IrTypeRefMapperTests
             public class Box<T> { T Value { get; set; } = default!; }
             """
         );
+
         var boxType = compilation.GetTypeByMetadataName("Box`1")!;
         var prop = boxType.GetMembers("Value").OfType<IPropertySymbol>().First();
         var result = IrTypeRefMapper.Map(prop.Type);

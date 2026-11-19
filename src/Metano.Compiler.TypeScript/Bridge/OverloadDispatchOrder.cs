@@ -159,6 +159,7 @@ internal static class OverloadDispatchOrder
                 IrTypeParameterRef => true,
                 IrNullableTypeRef nullable => IsTypeParameter(nullable.Inner),
                 IrArrayTypeRef array => IsTypeParameter(array.ElementType),
+                IrCollectionTypeRef collection => IsTypeParameter(collection.LegacyForm),
                 _ => false,
             };
     }

@@ -162,6 +162,11 @@ public static class IrTypeRefMapper
             if (fullName is "System.Object")
                 return new IrPrimitiveTypeRef(IrPrimitive.Object);
 
+            // A stage 011c collection, its interfaces and the dictionary views
+            // (spec 011 FR-001), by symbol identity.
+            if (CollectionKindResolver.KindOf(named) is { } kind)
+                return MapCollection(named, kind, originResolver, target);
+
             // Dictionary<K,V>.KeyCollection / ValueCollection → Array: a sized
             // collection of the keys or values, like the ICollection<K> that
             // IDictionary<K,V>.Keys returns. Checked before the dictionary
@@ -334,6 +339,21 @@ public static class IrTypeRefMapper
 
         return new IrUnknownTypeRef();
     }
+
+    private static IrCollectionTypeRef MapCollection(
+        INamedTypeSymbol type,
+        IrCollectionKind kind,
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        new(
+            kind,
+            CollectionKindResolver
+                .TypeArgumentsOf(type, kind)
+                .Select(argument => Map(argument, originResolver, target))
+                .ToList(),
+            CollectionKindResolver.VarianceOf(type, kind)
+        );
 
     /// <summary>
     /// Maps a return type for iterator methods (yield). IEnumerable/IEnumerator → Generator;

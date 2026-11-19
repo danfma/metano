@@ -302,15 +302,15 @@ public static class IrBodyPrinter
                 PrintArgs(sb, call.Arguments);
                 sb.Append(')');
                 break;
-            case IrNewExpression
-            {
-                Type: IrSetTypeRef or IrMapTypeRef,
-                Arguments: [{ Value: IrArrayLiteral elements }],
-            } collection:
+            case IrNewExpression { Arguments: [{ Value: IrArrayLiteral elements }] } collection
+                when collection.Type.WithLegacyCollection() is IrSetTypeRef or IrMapTypeRef:
                 // A set or dictionary collection expression: Dart's `Set` and
                 // `Map` constructors take no elements, their `.of` /
                 // `.fromEntries` factories take the iterable.
-                var factory = collection.Type is IrSetTypeRef ? ".of(" : ".fromEntries(";
+                var factory =
+                    collection.Type.WithLegacyCollection() is IrSetTypeRef
+                        ? ".of("
+                        : ".fromEntries(";
 
                 sb.Append(FormatType(collection.Type)).Append(factory);
                 PrintExpression(sb, elements);

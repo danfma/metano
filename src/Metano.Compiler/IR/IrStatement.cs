@@ -107,7 +107,15 @@ public sealed record IrForEachStatement(
     IrTypeRef? VariableType,
     IrExpression Collection,
     IReadOnlyList<IrStatement> Body
-) : IrStatement;
+) : IrStatement
+{
+    /// <summary>
+    /// The static type of the enumerated expression, <c>null</c> when
+    /// unknown: a target lowers a loop over a <c>List&lt;T&gt;</c> to its own
+    /// indexed form (spec 011 FR-057).
+    /// </summary>
+    public IrTypeRef? CollectionType { get; init; }
+}
 
 /// <summary>
 /// A <c>for</c> loop.

@@ -15,6 +15,7 @@ internal static class IrTypeRefSignatures
         {
             IrPrimitiveTypeRef p => $"prim:{p.Primitive}",
             IrNullableTypeRef n => $"null<{Describe(n.Inner)}>",
+            IrCollectionTypeRef c => Describe(c.LegacyForm),
             IrArrayTypeRef a => $"arr<{Describe(a.ElementType)}>",
             IrMapTypeRef m => $"map<{Describe(m.KeyType)},{Describe(m.ValueType)}>",
             IrSetTypeRef s => $"set<{Describe(s.ElementType)}>",

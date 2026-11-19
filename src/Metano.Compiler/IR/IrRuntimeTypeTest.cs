@@ -133,6 +133,9 @@ public abstract record IrRuntimeTypeTest
                 primitiveType.ExactKind
             ),
             IrNamedTypeRef { Semantics: var semantics } => OfNamed(semantics, staticPrimitive),
+            // Until the 011c flip a collection tests as its 2.x form (the list
+            // shapes as a non-native array, so they keep MS0001; W4-17).
+            IrCollectionTypeRef collection => OfType(collection.LegacyForm, staticPrimitive),
             IrArrayTypeRef => new Array(),
             IrIterableTypeRef or IrIteratorTypeRef => new Iterable(),
             IrMapTypeRef or IrSetTypeRef or IrPromiseTypeRef => new NominalClass(),

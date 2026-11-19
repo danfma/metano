@@ -40,6 +40,8 @@ public static class IrToTsTypeMapper
         {
             IrPrimitiveTypeRef p => MapPrimitive(p.Primitive),
             IrNullableTypeRef n => MakeNullable(Map(n.Inner, overrides)),
+            // Until the 011c flip a collection renders its 2.x type.
+            IrCollectionTypeRef c => Map(c.LegacyForm, overrides),
             IrArrayTypeRef a => new TsArrayType(Map(a.ElementType, overrides)),
             IrMapTypeRef m => new TsNamedType(
                 "Map",

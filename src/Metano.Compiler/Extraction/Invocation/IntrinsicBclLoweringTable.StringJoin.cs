@@ -125,7 +125,9 @@ public sealed partial class IntrinsicBclLoweringTable
         _helpers.MapTypeRef(type) switch
         {
             IrArrayTypeRef => true,
+            IrCollectionTypeRef { LegacyForm: IrArrayTypeRef } => true,
             IrNullableTypeRef { Inner: IrArrayTypeRef } => true,
+            IrNullableTypeRef { Inner: IrCollectionTypeRef { LegacyForm: IrArrayTypeRef } } => true,
             _ => false,
         };
 }

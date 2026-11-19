@@ -872,7 +872,19 @@ public sealed record IrLambdaExpression(
 public sealed record IrArrayLiteral(
     IReadOnlyList<IrExpression> Elements,
     IrTypeRef? ElementType = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The collection a C# collection expression constructs from the literal
+    /// (spec 011 data-model § 2, B1): <c>List</c> for a <c>List&lt;T&gt;</c>,
+    /// <c>IList&lt;T&gt;</c> or <c>ICollection&lt;T&gt;</c> target, the
+    /// read-only interface for an <c>IReadOnlyList&lt;T&gt;</c> /
+    /// <c>IReadOnlyCollection&lt;T&gt;</c> target; <c>null</c> for an array,
+    /// a span, <c>IEnumerable&lt;T&gt;</c> and every literal that is not a
+    /// collection expression. A target whose lists are native arrays ignores it.
+    /// </summary>
+    public IrCollectionTypeRef? TargetCollection { get; init; }
+}
 
 /// <summary>
 /// <c>new T[length]</c> without an initializer: <see cref="Length"/>

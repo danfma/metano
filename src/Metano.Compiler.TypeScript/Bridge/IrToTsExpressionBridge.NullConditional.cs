@@ -345,7 +345,8 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     ) =>
         new(
-            coalesce.Left is IrElementAccess { TargetType: IrArrayTypeRef } ea
+            coalesce.Left is IrElementAccess ea
+            && ea.TargetType.WithLegacyCollection() is IrArrayTypeRef
                 ? MapUncheckedElementAccess(ea, context)
                 : MapNullTolerant(coalesce.Left, context),
             "??",

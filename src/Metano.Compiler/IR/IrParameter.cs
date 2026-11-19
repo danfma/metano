@@ -73,6 +73,11 @@ public sealed record IrParameter(
         this switch
         {
             { IsParams: true, Type: IrArrayTypeRef array } => array.ElementType,
+            { IsParams: true, Type: IrCollectionTypeRef collection } => (
+                collection.LegacyForm as IrArrayTypeRef
+            )?.ElementType,
+            { IsParams: true, Type: IrNullableTypeRef { Inner: IrCollectionTypeRef collection } } =>
+                (collection.LegacyForm as IrArrayTypeRef)?.ElementType,
             { IsParams: true, Type: IrNullableTypeRef { Inner: IrArrayTypeRef array } } =>
                 array.ElementType,
             _ => null,

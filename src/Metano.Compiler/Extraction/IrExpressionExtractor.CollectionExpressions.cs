@@ -28,7 +28,7 @@ public sealed partial class IrExpressionExtractor
             return ListLiteralOf(coll, operation);
 
         if (IsSetTarget(target))
-            return NewCollectionOf(new IrSetTypeRef(ToIrTypeArgument(target, 0)), coll);
+            return NewCollectionOf(SetTypeOf(target), coll);
 
         if (!IsMapTarget(target))
             return ListLiteralOf(coll, operation);
@@ -42,14 +42,32 @@ public sealed partial class IrExpressionExtractor
                     + "does not reproduce. Build the dictionary with explicit Add calls instead."
             );
 
-        var mapType = new IrMapTypeRef(ToIrTypeArgument(target, 0), ToIrTypeArgument(target, 1));
-
-        return NewCollectionOf(mapType, coll);
+        return NewCollectionOf(MapTypeOf(target), coll);
     }
 
     /// <summary>
+    /// The set a collection expression constructs: the collection ref of a
+    /// stage 011c set, the 2.x set ref of any other.
+    /// </summary>
+    private IrTypeRef SetTypeOf(INamedTypeSymbol target) =>
+        CollectionKindResolver.KindOf(target) is not null
+            ? IrTypeRefMapper.Map(target, _originResolver, _target)
+            : new IrSetTypeRef(ToIrTypeArgument(target, 0));
+
+    /// <summary>
+    /// The dictionary a collection expression constructs: the collection ref
+    /// of a stage 011c dictionary, a map of the key and value otherwise.
+    /// </summary>
+    private IrTypeRef MapTypeOf(INamedTypeSymbol target) =>
+        CollectionKindResolver.KindOf(target) is not null
+            ? IrTypeRefMapper.Map(target, _originResolver, _target)
+            : new IrMapTypeRef(ToIrTypeArgument(target, 0), ToIrTypeArgument(target, 1));
+
+    /// <summary>
     /// The array literal of a list or array target, with the element type the
-    /// target declares where the elements alone do not say it.
+    /// target declares where the elements alone do not say it, and the
+    /// collection C# builds for a list-shaped target (spec 011 data-model § 2,
+    /// B1).
     /// </summary>
     private IrArrayLiteral ListLiteralOf(
         CollectionExpressionSyntax coll,
@@ -58,7 +76,34 @@ public sealed partial class IrExpressionExtractor
         new(
             ExtractCollectionElements(coll),
             operation is null ? null : DeclaredElementType(coll, operation.Type, operation.Elements)
-        );
+        )
+        {
+            TargetCollection = TargetCollectionOf(operation?.Type),
+        };
+
+    /// <summary>
+    /// The collection a list-shaped collection expression constructs: a
+    /// <c>List&lt;T&gt;</c> for <c>List&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and
+    /// <c>ICollection&lt;T&gt;</c>, the read-only interface itself for
+    /// <c>IReadOnlyList&lt;T&gt;</c> / <c>IReadOnlyCollection&lt;T&gt;</c>
+    /// (C# builds a read-only array), <c>null</c> for an array, a span or
+    /// <c>IEnumerable&lt;T&gt;</c>.
+    /// </summary>
+    private IrCollectionTypeRef? TargetCollectionOf(ITypeSymbol? target) =>
+        target is INamedTypeSymbol named
+        && IrTypeRefMapper.Map(named, _originResolver, _target) is IrCollectionTypeRef collection
+            ? collection.Kind switch
+            {
+                IrCollectionKind.List or IrCollectionKind.IList or IrCollectionKind.ICollection =>
+                    collection with
+                    {
+                        Kind = IrCollectionKind.List,
+                    },
+                IrCollectionKind.IReadOnlyList or IrCollectionKind.IReadOnlyCollection =>
+                    collection,
+                _ => null,
+            }
+            : null;
 
     /// <summary>
     /// <c>new T()</c> for an empty collection expression; otherwise

@@ -221,6 +221,9 @@ public static class IrRuntimeRequirementScanner
             case IrNullableTypeRef n:
                 ScanTypeRef(n.Inner, acc);
                 break;
+            case IrCollectionTypeRef collection:
+                ScanTypeRef(collection.LegacyForm, acc);
+                break;
             case IrArrayTypeRef a:
                 ScanTypeRef(a.ElementType, acc);
                 break;

@@ -201,7 +201,7 @@ public sealed partial class IrExpressionExtractor
     ) =>
         target switch
         {
-            IrElementAccess { TargetType: IrMapTypeRef } => ReportDictionaryEntryStore(operation),
+            _ when IsDictionaryEntry(target) => ReportDictionaryEntryStore(operation),
             _ when IrEvaluationTraits.IsReusableReceiver(target) => build(target),
             IrMemberAccess member => BindReceiverOnce(member.Target, receiver =>
                 build(member with { Target = receiver })
@@ -214,6 +214,14 @@ public sealed partial class IrExpressionExtractor
                     + "without evaluating it twice."
             ),
         };
+
+    /// <summary>
+    /// Whether <paramref name="target"/> is a dictionary entry
+    /// (<c>dict[key]</c>), which the 2.x lowering reads as a map entry.
+    /// </summary>
+    private static bool IsDictionaryEntry(IrExpression target) =>
+        target is IrElementAccess element
+        && element.TargetType.WithLegacyCollection() is IrMapTypeRef;
 
     private IrExpression BindElementOnce(
         IrElementAccess element,

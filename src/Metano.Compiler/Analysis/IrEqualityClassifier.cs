@@ -82,6 +82,7 @@ public static class IrEqualityClassifier
             // the same semantics here so a record carrying an
             // <c>int[]</c> / <c>List&lt;T&gt;</c> / <c>Func&lt;…&gt;</c>
             // does not silently start comparing structurally.
+            IrCollectionTypeRef => true,
             IrArrayTypeRef => true,
             IrMapTypeRef => true,
             IrSetTypeRef => true,

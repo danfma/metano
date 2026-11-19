@@ -123,7 +123,7 @@ internal static class IrToTsRuntimeTestBridge
 
     /// <summary><c>value instanceof C</c> against the class the type lowers to.</summary>
     private static TsExpression ClassTest(TsExpression value, IrTypeRef type) =>
-        type switch
+        type.WithLegacyCollection() switch
         {
             IrMapTypeRef => InstanceofTest(value, new TsIdentifier("Map")),
             IrSetTypeRef => InstanceofTest(value, new TsRuntimeHelperReference("HashSet")),

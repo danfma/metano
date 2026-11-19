@@ -701,7 +701,8 @@ public sealed partial class IrExpressionExtractor
                 new IrElementAccess(
                     inner,
                     Extract(ea.ArgumentList.Arguments[0].Expression),
-                    IndexKind: ArrayIndexKind(ea.Expression, ea.ArgumentList)
+                    MapExpressionType(ea.Expression),
+                    ArrayIndexKind(ea.Expression, ea.ArgumentList)
                 ),
             _ => null,
         };
