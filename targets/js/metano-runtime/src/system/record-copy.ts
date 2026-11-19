@@ -27,12 +27,24 @@ export function copyRecordWith<T extends object>(source: T, overrides?: Partial<
   const copy: T = Object.create(Object.getPrototypeOf(source));
 
   Object.assign(copy, source);
+  copyTypeArgumentSlots(source, copy);
 
   if (overrides !== undefined) {
     assignOverrides(copy, overrides);
   }
 
   return copy;
+}
+
+/** The non-enumerable `$typeArguments$<Class>` slots (spec 011 FR-008, FR-024) `Object.assign` skips. */
+function copyTypeArgumentSlots(source: object, copy: object): void {
+  for (const key of Object.getOwnPropertyNames(source)) {
+    if (key.startsWith("$typeArguments$")) {
+      Object.defineProperty(copy, key, {
+        value: (source as Record<string, unknown>)[key],
+      });
+    }
+  }
 }
 
 function assignOverrides<T extends object>(target: T, overrides: Partial<T>): void {

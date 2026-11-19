@@ -13,6 +13,7 @@ import { Dictionary } from "../collections/dictionary.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { List } from "../collections/list.ts";
 import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";
+import type { RuntimeType } from "../reflection/runtime-type.ts";
 import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type {
@@ -76,10 +77,10 @@ export function toSet<T>(): ToSetTerm<T> {
 }
 
 /** `ToList()`: a new runtime `List` holding the elements in order (spec 011 § LINQ terminals). */
-export function toList<T>(): ToListTerm<T> {
+export function toList<T>(typeArguments?: readonly RuntimeType[] | null): ToListTerm<T> {
   return {
     kind: "toList",
-    apply: (source) => List.of([...source]),
+    apply: (source) => List.of([...source], typeArguments),
   };
 }
 
@@ -91,18 +92,22 @@ export function toDictionary<T, K>(
   keySelector: (item: T) => K,
   valueSelector?: undefined,
   keyQueryable?: QueryableMeta,
+  valueQueryable?: undefined,
+  typeArguments?: readonly RuntimeType[] | null,
 ): ToDictionaryTerm<T, K, T>;
 export function toDictionary<T, K, V>(
   keySelector: (item: T) => K,
   valueSelector: (item: T) => V,
   keyQueryable?: QueryableMeta,
   valueQueryable?: QueryableMeta,
+  typeArguments?: readonly RuntimeType[] | null,
 ): ToDictionaryTerm<T, K, V>;
 export function toDictionary<T, K, V>(
   keySelector: (item: T) => K,
   valueSelector?: (item: T) => V,
   keyQueryable?: QueryableMeta,
   valueQueryable?: QueryableMeta,
+  typeArguments?: readonly RuntimeType[] | null,
 ): ToDictionaryTerm<T, K, V | T> {
   const selectValue: (item: T) => V | T = valueSelector ?? ((item) => item);
 
@@ -113,7 +118,7 @@ export function toDictionary<T, K, V>(
     keyQueryable,
     valueQueryable,
     apply: (source) => {
-      const dictionary = new Dictionary<K, V | T>();
+      const dictionary = new Dictionary<K, V | T>(null, null, typeArguments);
 
       for (const item of source) {
         dictionary.add(keySelector(item), selectValue(item));
@@ -125,10 +130,10 @@ export function toDictionary<T, K, V>(
 }
 
 /** `ToHashSet()`: a new runtime `HashSet`; duplicates collapse. */
-export function toHashSet<T>(): ToHashSetTerm<T> {
+export function toHashSet<T>(typeArguments?: readonly RuntimeType[] | null): ToHashSetTerm<T> {
   return {
     kind: "toHashSet",
-    apply: (source) => HashSet.from(source),
+    apply: (source) => HashSet.from(source, null, typeArguments),
   };
 }
 

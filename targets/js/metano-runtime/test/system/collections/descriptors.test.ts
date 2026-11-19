@@ -23,7 +23,9 @@ import { SortedDictionary } from "#/system/collections/sorted-dictionary.ts";
 import { SortedList } from "#/system/collections/sorted-list.ts";
 import { SortedSet } from "#/system/collections/sorted-set.ts";
 import { getRuntimeType } from "#/system/reflection/get-runtime-type.ts";
+import { nullableType } from "#/system/reflection/nullable-type.ts";
 import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
+import { ObjectType } from "#/system/reflection/well-known-types.ts";
 import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 import { List } from "#/system/collections/list.ts";
@@ -131,5 +133,33 @@ describe("descriptor factories and GetType()", () => {
     expect(getRuntimeType(List.adopt([1], { fixedSize: true }, [Int32Type]))).toBe(
       listType(Int32Type),
     );
+  });
+});
+
+describe("covariant interface tests need a reference conversion (spec 011 D31)", () => {
+  const readOnlyObjects = iReadOnlyListType(ObjectType);
+
+  test("a List<int> is not an IReadOnlyList<object>", () => {
+    expect(readOnlyObjects.test(new List<number>(null, [Int32Type]))).toBe(false);
+  });
+
+  test("a List<string> is an IReadOnlyList<object>", () => {
+    expect(readOnlyObjects.test(new List<string>(null, [StringType]))).toBe(true);
+  });
+
+  test("a List<int> is not an IReadOnlyCollection<int?>", () => {
+    const nullableInts = iReadOnlyCollectionType(nullableType(Int32Type));
+
+    expect(nullableInts.test(new List<number>(null, [Int32Type]))).toBe(false);
+  });
+
+  test("a List<int> is an IReadOnlyList<int>, and a slotless list matches any argument", () => {
+    expect(iReadOnlyListType(Int32Type).test(new List<number>(null, [Int32Type]))).toBe(true);
+    expect(readOnlyObjects.test(new List<number>())).toBe(true);
+  });
+
+  test("a closed class kind compares by identity", () => {
+    expect(listType(StringType).test(new List<number>(null, [Int32Type]))).toBe(false);
+    expect(listType(StringType).test(new List<string>(null, [StringType]))).toBe(true);
   });
 });

@@ -1,3 +1,5 @@
+import type { RuntimeType } from "../reflection/runtime-type.ts";
+
 // ─── Type Descriptors ────────────────────────────────────────────────────────
 
 /**
@@ -263,6 +265,11 @@ export interface TypeSpec<T = unknown> {
   readonly type?: abstract new (
     ...args: any[]
   ) => T;
+  /**
+   * The runtime type descriptor of the class (spec 011 FR-028), a thunk so the cycle
+   * with the class module resolves lazily. Emitted for a reached class contract.
+   */
+  readonly runtimeType?: () => RuntimeType<T>;
   /** Parent type's spec — properties are inherited */
   readonly base?: TypeSpec;
   /** Constructs T from a Record<ts-field-name, deserialized-value> */

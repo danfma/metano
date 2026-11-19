@@ -95,4 +95,15 @@ describe("copyRecordWith", () => {
 
     expect(copy.name).toBeNull();
   });
+
+  test("keeps the non-enumerable $typeArguments$ slots", () => {
+    const source = new Shape("box");
+
+    Object.defineProperty(source, "$typeArguments$Shape", { value: ["int"] });
+
+    const copy = copyRecordWith<Shape>(source, { name: "other" });
+
+    expect((copy as unknown as Record<string, unknown>).$typeArguments$Shape).toEqual(["int"]);
+    expect(Object.keys(copy)).not.toContain("$typeArguments$Shape");
+  });
 });

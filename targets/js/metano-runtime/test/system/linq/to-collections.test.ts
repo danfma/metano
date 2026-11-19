@@ -3,6 +3,8 @@ import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 import { List } from "#/system/collections/list.ts";
 import { ArgumentException } from "#/system/exceptions/argument-exception.ts";
+import { dictionaryType, hashSetType, listType } from "#/system/collections/descriptors.ts";
+import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
 import { linq, toDictionary, toHashSet, toList } from "#/system/linq/index.ts";
 
 const SOURCE = [3, 1, 2, 1, 3];
@@ -93,5 +95,19 @@ describe("ToDictionary", () => {
     expect(withValue.message).toBe(
       "An item with the same key has already been added. Key: long",
     );
+  });
+});
+
+describe("terminals carry the type-argument slot when given one", () => {
+  test("toList, toHashSet and toDictionary pass typeArguments", () => {
+    const list = linq(SOURCE, toList<number>([Int32Type]));
+    const set = linq(SOURCE, toHashSet<number>([Int32Type]));
+    const dictionary = linq(WORDS, toDictionary((w: string) => w, undefined, undefined, undefined, [StringType, StringType]));
+
+    expect(listType(Int32Type).test(list)).toBe(true);
+    expect(listType(StringType).test(list)).toBe(false);
+    expect(hashSetType(Int32Type).test(set)).toBe(true);
+    expect(dictionaryType(StringType, StringType).test(dictionary)).toBe(true);
+    expect(dictionaryType(StringType, Int32Type).test(dictionary)).toBe(false);
   });
 });

@@ -93,9 +93,31 @@ function argumentsMatch(
     }
 
     return open.variance[position] === "covariant"
-      ? isAssignableFrom(expected, actual)
+      ? actual === expected || (isReferenceType(actual) && isAssignableFrom(expected, actual))
       : actual === expected;
   });
+}
+
+/**
+ * Whether a value of `type` is a C# reference type: variance needs a reference conversion,
+ * so `List<int>` is not an `IReadOnlyList<object>` and `List<string>` is.
+ */
+function isReferenceType(type: RuntimeType): boolean {
+  switch (type.kind) {
+    case "primitive":
+      return type.primitive === "String";
+    case "class":
+      return !type.isValueType;
+    case "interface":
+    case "plainObject":
+    case "collection":
+    case "array":
+    case "delegate":
+    case "object":
+      return true;
+    default:
+      return false;
+  }
 }
 
 interface ImplementedEntry {
