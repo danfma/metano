@@ -504,7 +504,7 @@ export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IRe
 ```
 
 - **Open literals, data only (FR-018).** Each class's static `$runtimeType` getter returns a memoized **data literal** that imports nothing from `descriptors.ts` or from `system/reflection` (types only): `{ kind: "collection", collection: "List", name: "List", fullName: "System.Collections.Generic.List", namespace: "System.Collections.Generic", ctor: List, typeArguments: [], variance: ["invariant"], interfaces: [{ collection: "IList", arguments: [0] }, { collection: "ICollection", arguments: [0] }, { collection: "IReadOnlyList", arguments: [0] }, { collection: "IReadOnlyCollection", arguments: [0] }], test: (v) => v instanceof List }` (the open definition; `typeArguments: []`). `interfaces` is data: one entry per implemented interface of § Interfaces' table, naming it by `collection` kind and mapping its arguments to indices of the instance's slot (`null` = wildcard, e.g. `Dictionary` as `IReadOnlyCollection<KeyValuePair<K, V>>`). `descriptors.ts` holds the open interface literals (`IList`, …) as module constants of the same data shape (no `ctor`, no `interfaces`). So a bundle that uses `List` and reads its `$runtimeType` pulls neither `descriptors.ts` nor reflection code; R1 still measures it (the 2.5 KB budget, `mustNotContain: ["listType"]`).
-- **Specialization lives in reflection.** `system/reflection` gains `specializeCollection(open, typeArguments)` (`specialize-collection.ts`), memoized on the identity of the open literal and of each argument (`memoNodeFor`), returning `{ ...open, name: "List<String>", fullName: "System.Collections.Generic.List<System.String>", typeArguments, test }` (the `specialize` naming convention). Its `test`: for a class kind, `v instanceof open.ctor` and, per argument, identity (invariant) or `isAssignableFrom` (covariant) against `v.$typeArguments$<collection>`; for an interface kind, nominal through the class literal's `interfaces` (from `v.constructor` up, the nearest constructor with an own `$runtimeType` of kind `collection` whose `interfaces` name `open.collection`), then each argument through the entry's index mapping; an absent slot, a `null` mapping or `UnknownType` on either side matches anything. An interface descriptor imports no class; a 011h class, or a user class whose literal lists the interface, joins the test by listing it.
+- **Specialization lives in reflection.** `system/reflection` gains `specializeCollection(open, typeArguments)` (`specialize-collection.ts`), memoized on the identity of the open literal and of each argument (`memoNodeFor`), returning `{ ...open, name: "List<String>", fullName: "System.Collections.Generic.List<System.String>", typeArguments, test }` (the `specialize` naming convention). Its `test`: for a class kind, `v instanceof open.ctor` and, per argument, identity (invariant) or `isAssignableFrom` (covariant) against `v.$typeArguments$<collection>`; for an interface kind, nominal through the class literal's `interfaces` (from `v.constructor` up, the nearest constructor with an own `$runtimeType` of kind `collection` whose `interfaces` name `open.collection`), then each argument through the entry's index mapping; an absent slot, a `null` mapping or `UnknownType` on either side matches anything. An interface descriptor imports no class; a 011h class joins the test by listing the interface in its literal. A user class implementing a collection interface has a `class` literal (not `collection`), so the test is `false` for it: a documented divergence and follow-up (§ Documented divergences).
 - **Factories.** `listType(e) = specializeCollection(List.$runtimeType, [e])`, the interface factories `specializeCollection(<open interface literal>, args)`. Memoization is the reflection memo, so `listType(StringType) === listType(StringType)` and `Type ==` is `===`; the memo root is a module-level `let` filled on first call (no module-scope `new`).
 - `CollectionType` amendment (contracts/runtime-types.md, D30): optional `interfaces: ReadonlyArray<{ readonly collection: CollectionKindName; readonly arguments: ReadonlyArray<number> | null }>` on class kinds. 011h's classes follow the same rules.
 - 011h adds `immutableListType`, `readOnlyListType`, `immutableHashSetType`, `immutableDictionaryType`, `sortedSetType`, `sortedDictionaryType`, `sortedListType`, `concurrentDictionaryType` and `iImmutableListType`, `iImmutableSetType`, `iImmutableDictionaryType` to `descriptors.ts` in the same shape.
@@ -583,7 +583,8 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `r[i]` (read) | `r.get(i)` |
 | `r[i] = v` | `r.set(i, v)` |
 | `r[i] op= v`, `r[i]++` / `--` in statement position | *direct form* `r.set(i, r.get(i) op v)` |
-| `r[i] ??= v`, `r[i]++` whose value is used, no binding possible | `r.update(i, (v$) => …)` / `r.updateReturningOld(i, (v$) => v$ + 1)` |
+| `r[i] op= v`, `r[i]++` / `--` whose value is used (expression position) | `r.update(i, (v$) => v$ op v)` / `r.updateReturningOld(i, (v$) => v$ + 1)`, or the comma shapes of § Indexer compound assignments |
+| `r[i] ??= v` (statement or expression position) | the `??=` shape of § Indexer compound assignments (never `update`, which always writes) |
 | `r[^n]` (read) | `r.fromEnd(n)` |
 | `r[^n] = v` | `r.set(r.count - n, v)` with `r` bound once when not reusable |
 | `r[a..b]`, `r[a..]`, `r.Slice(start, length)` | `r.slice(a, b)`, `r.slice(a)`, `r.getRange(start, length)`; a `^n` bound renders `r.count - n` (receiver bound once) |
@@ -606,7 +607,7 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `e.MoveNext()` / `e.Current` / `e.Reset()` on an enumerator | `MS0001`, as in 2.x (`Enumerators.cs`: only iterating the result is supported) |
 | `r.ToString()`, `$"{r}"` | `r.toString()` |
 | `foreach (var x in r)`, `r` statically `List<T>` | the lowered loop (§ Lowered `foreach`) + `throwModified` import |
-| `foreach (var (a, b) in r)` / a positional pattern, `r` statically `List<T>` | the lowered loop with the element binding `const [a, b] = $a[$i];` (a record deconstruction applies the existing `Deconstruct` lowering to `$a[$i]`) |
+| `foreach (var (a, b) in r)` / a positional pattern, `r` statically `List<T>` | the lowered loop with the element binding `const [a, b] = $a[$i];` (a discard prints a hole: `foreach (var (_, b) in r)` → `const [, b] = $a[$i];`) (a record deconstruction applies the existing `Deconstruct` lowering to `$a[$i]`) |
 | `foreach (var x in r)`, `r` an interface | `for (const x of r)` |
 | array → `IList<T>` / `ICollection<T>` / `IReadOnlyList<T>` / `IReadOnlyCollection<T>` (implicit or explicit) | `List.adopt(arr, { fixedSize: true })` / `(arr, { fixedSize: true }, $targs)` |
 | `(T[])r`, `r is T[]`, `r as T[]` | through `asArray(r)` (`asArray(r) !== null`, …; the `Array` category, FR-021) |
@@ -627,7 +628,8 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `r.Count` / `r.Keys` / `r.Values` | `r.count` / `r.keys` / `r.values` |
 | `r[k]` / `r[k] = v` | `r.get(k)` / `r.set(k, v)` |
 | `r[k] op= v`, `r[k]++` in statement position | *direct form* `r.set(k, r.get(k) op v)` |
-| `r[k] ??= v`, `r[k]++` whose value is used, no binding possible | `r.update(k, (v$) => …)` / `r.updateReturningOld(k, …)` |
+| `r[k] op= v`, `r[k]++` whose value is used (expression position) | `r.update(k, (v$) => v$ op v)` / `r.updateReturningOld(k, …)`, or the comma shapes of § Indexer compound assignments |
+| `r[k] ??= v` | the `??=` shape of § Indexer compound assignments |
 | `r.Add(k, v)` / `TryAdd(k, v)` / `Remove(k)` / `Clear()` | `r.add(k, v)` / `r.tryAdd(k, v)` / `r.remove(k)` / `r.clear()` |
 | `r.ContainsKey(k)` / `ContainsValue(v)` | `r.containsKey(k)` / `r.containsValue(v)` |
 | `r.TryGetValue(k, out var v)` | `const [found, v] = r.tryGetValue(k, default(V))` (the `IrOutArgumentCall` lowering, unchanged) |
@@ -667,19 +669,32 @@ The `$v` capture is guarded too, so that with the checks defined `false` no `_ve
 | `GetEnumerator()` / `ToString()` / `foreach` (both) | `[Symbol.iterator]()` / `toString()` / `for..of` (`Stack` top first, so `Stack.GetEnumerator` is now mapped, FR-007) |
 | `EnsureCapacity`, `TrimExcess` | `MS0001` |
 
+### Indexer compound assignments (FR-010, normative shapes)
+
+For a class or interface receiver, list or dictionary. In **statement position** with a reusable receiver and index the direct form stays `r.set(i, r.get(i) op v)`. Everywhere else (a non-reusable receiver or index, or a used value) the bridge declares `let $r, $i, $o;` (only the ones needed, distinct names per site) at the head of the **nearest enclosing statement list of the same function** (an expression-bodied arrow becomes a block body) and assigns them **inline**, in a comma expression at the original position, so C#'s evaluation order (receiver, index, read, right-hand side, write) and every short-circuit (`&&`, `||`, `?:`, `??`, a lambda body, a skipped argument) are kept. A reusable receiver or index is used directly instead of a temporary.
+
+| C# | Shape (value of the expression last) |
+|---|---|
+| `r[i]++` / `r[i]--` (value used) | `($r = R(), $i = I(), $o = $r.get($i), $r.set($i, $o + 1), $o)` |
+| `++r[i]` / `--r[i]` / `r[i] op= v` (value used) | `($r = R(), $i = I(), $r.set($i, $o = $r.get($i) op v), $o)` |
+| `r[i] op= v` / `r[i]++` in statement position, non-reusable parts | `$r = R(), $i = I(), $r.set($i, $r.get($i) op v);` |
+| `r[i] ??= v` (any position) | `($r = R(), $i = I(), $r.get($i) ?? ($r.set($i, $t = v), $t))`: `v` is evaluated and written only when the current value is `null` / `undefined`, as C#, so a running enumeration sees no write (and no `_version` bump) otherwise |
+
+The same shapes apply with a key (`$k`) to `Dictionary` / `IDictionary`; a missing key throws `KeyNotFoundException` at the read, as the C# read does. For a **class** receiver, `update` / `updateReturningOld` remain an allowed lowering of `op=` and `++` / `--` in expression position: they are an ordinary call at the original position, so the receiver and index are evaluated in place and in order, `f` runs after the read, and nothing runs when the branch is skipped (order and short-circuit kept); they always write, which is what `op=` and `++` do. They are **not** used for `??=`, which must not write when the value is non-null. Earlier text that lowers `??=` as `set(i, get(i) ?? v)` or `update(…, (v) => v ?? x)` (e.g. contracts/ts-emission.md's `added.update("x", (v) => v ?? 2)`) is superseded by the `??=` shape.
+
 ### Interface receivers (`IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `ISet<T>`, `IReadOnlySet<T>`; W4-13)
 
-Only the interface members of § Interfaces exist on the receiver, so the class-only conveniences lower through them; a non-reusable receiver or index is bound once to a temporary (in expression position the bridge hoists it to the enclosing statement; never an IIFE, FR-009).
+Only the interface members of § Interfaces exist on the receiver, so the class-only conveniences lower through them, with the temporaries and shapes of § Indexer compound assignments (never an IIFE, FR-009).
 
 | C# | Emitted TS |
 |---|---|
 | `r.Count`, `r[i]`, `r[i] = v`, `r[k]`, `r[k] = v`, and every member of the C# interface | the camelCase member (`r.count`, `r.get(i)`, `r.set(i, v)`, …) |
 | `r[^n]` | `r.get(r.count - n)` (`r` bound once when not reusable) |
 | `r[^n] = v` | `r.set(r.count - n, v)` (likewise) |
-| `r[i] op= v`, `r[i]++`, `r[i] ??= v`, `r[k] op= v`, … | the direct form `r.set(i, r.get(i) op v)` over the bound temporaries, in statement and expression position (no `update` member on an interface) |
+| `r[i] op= v`, `r[i]++`, `r[i] ??= v`, `r[k] op= v`, … | the shapes of § Indexer compound assignments (no `update` member on an interface) |
 | `r.TryGetValue(k, out var v)` | `const [found, v] = r.tryGetValue(k, default(V))` |
 | `r.GetValueOrDefault(k)` / `(k, d)` (`IReadOnlyDictionary` extension) | `r.tryGetValue(k, default(V))[1]` / `r.tryGetValue(k, d)[1]` |
-| `r.Contains(x)` / `IndexOf(x)` on `IReadOnlyList<T>` / `IReadOnlyCollection<T>` | the LINQ mappings (they are `Enumerable` extensions in C#) |
+| `r.Contains(x)` on `IReadOnlyList<T>` / `IReadOnlyCollection<T>` | the LINQ `contains` terminal (`Enumerable.Contains`). It compares with `===` today (`system/linq/terminals.ts`), not `elementEquals`, so a record element is not found by value: a pre-existing divergence, listed as a follow-up for group C (route LINQ `contains` through `elementEquals`) |
 | a C# class implementing one of these interfaces | `implements` the TS interface; it declares exactly the C# members, no synthesized ones |
 
 ### `params` collections (C# 13)
@@ -688,7 +703,7 @@ Only the interface members of § Interfaces exist on the receiver, so the class-
 |---|---|
 | declaration `void F(params List<T> xs)` / `params IEnumerable<T> xs` / `params HashSet<T> xs` | an ordinary parameter of the mapped type (`xs: List<T>` / `Iterable<T>` / `HashSet<T>`), not a rest parameter |
 | call `F(a, b)` with `params List<T>` / `IList<T>` / `ICollection<T>` | `F(List.of([a, b]))` (C# builds a `List<T>`) |
-| call with `params IEnumerable<T>` / `IReadOnlyList<T>` / `IReadOnlyCollection<T>` | `F([a, b])` for `IEnumerable<T>`; `F(List.adopt([a, b], { fixedSize: true }))` for the read-only interfaces (C# builds a read-only array-backed value) |
+| call with `params IEnumerable<T>` / `IReadOnlyList<T>` / `IReadOnlyCollection<T>` | `F([a, b])` for `IEnumerable<T>`; `F(List.adopt([a, b], { fixedSize: true }))` for the read-only interfaces (C# builds a read-only array; documented divergence: the TS value accepts an indexer write) |
 | call with `params HashSet<T>` | `F(HashSet.of([a, b]))` |
 | call passing a collection explicitly (`F(xs)`) | `F(xs)` |
 | `params T[]` / `params ReadOnlySpan<T>` | unchanged |
@@ -730,7 +745,9 @@ One 2.x behaviour changes in R1 although C has not flipped: **`HashSet.add` retu
 - **`toString()` without a slot** prints the type-parameter names (``List`1[T]``); `ToString()` is not a reachability trigger.
 - **`Comparer<string>.Default`** is ordinal (as LINQ's `orderBy`); .NET's is culture-sensitive.
 - **`Dictionary.from(null)`** names `collection` for both copy constructors; .NET names `dictionary` for the `IDictionary` overload.
-- **User implementers of the collection interfaces**: `x is IList<int>` on a user class is `true` only when its literal lists the interface, which C emits only when the interface is reached.
+- **User implementers of the collection interfaces**: `x is IList<int>` (and every collection-interface test) on an instance of a user class that implements the interface is `false` in TS, `true` in .NET; follow-up (a user-class entry form for the collection interfaces).
+- **`params IReadOnlyList<T>` / `IReadOnlyCollection<T>` / `IEnumerable<T>`**: .NET passes a synthesized read-only array (`<>z__ReadOnlyArray`1`; an empty call passes `T[]`), so through `IList<T>` an indexer write, `Add` and `Clear` throw `NotSupportedException` (`Specified method is not supported.`) and `IsReadOnly` is `true`; `xs is IList<T>` is `true` for all three. TS passes `List.adopt([…], { fixedSize: true })` for the two read-only interfaces (an indexer write succeeds, `add` throws `Collection was of a fixed size.`, `clear` `Collection is read-only.`) and a native array for `IEnumerable<T>` (`xs is IList<T>` is `false`). Probed on .NET; follow-up: pass 011h's `ReadOnlyList` once it exists.
+- **`initAdd` / `initAssign` and `Dictionary.of`** evaluate every element of the initializer before the first add (the array literal is built first), so a duplicate key is reported after the later elements' side effects have run; C# interleaves each element's evaluation with its `Add`.
 - **`ICollection<K> c = dict.Keys`** fails `tsgo` (the views implement `IReadOnlyCollection` only); follow-up.
 - **`default(T)` for a user struct** passed to `tryGetValue` / `tryDequeue` / `tryPeek` / `tryPop` / `find` / `findLast` / `getValueOrDefault` is evaluated at every call (a struct lowered to a class allocates a zeroed instance each time, hit or miss).
 
