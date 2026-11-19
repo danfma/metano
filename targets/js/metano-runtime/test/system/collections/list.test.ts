@@ -275,6 +275,20 @@ describe("List order", () => {
     expect(strings.toArray()).toEqual(["A", "B", "a", "b"]);
   });
 
+  test("sort() without a comparison orders by value, not as strings (2.x sorted [10, 9, 100] as text)", () => {
+    const numbers = List.of([10, 9, 100, -5, -50, 0.5]);
+    const bigints = List.of([10n, 9n, 100n, -5n]);
+    const strings = List.of(["b", "10", "9", "a"]);
+
+    numbers.sort();
+    bigints.sort();
+    strings.sort();
+
+    expect(numbers.toArray()).toEqual([-50, -5, 0.5, 9, 10, 100]);
+    expect(bigints.toArray()).toEqual([-5n, 9n, 10n, 100n]);
+    expect(strings.toArray()).toEqual(["10", "9", "a", "b"]);
+  });
+
   test("a comparison failure is wrapped as .NET's Array.Sort wraps it", () => {
     const objects = List.of([{}, {}]);
     const error = thrown(() => objects.sort());
