@@ -63,7 +63,7 @@ Every class keeps its state in **non-enumerable, non-configurable, string-keyed 
 | `List<T>` | `_items: T[]` (writable `false`; the one backing array for life), `_version: number` (writable), `$typeArguments$List: readonly RuntimeType[] \| undefined` | **`_items` and `_version`** (lowered `foreach`, FR-057); public in the `.d.ts`, no `@internal` |
 | `Dictionary<K, V>` | `_store` (the `hash-core` store), `_version`, `_keys` / `_values` (the cached views, `undefined` until first read), `$typeArguments$Dictionary` | none |
 | `HashSet<T>` | `_store`, `_version`, `$typeArguments$HashSet` | none |
-| `Queue<T>` | `_items` (ring buffer), `_head`, `_size`, `_version`, `$typeArguments$Queue` | none |
+| `Queue<T>` | `_items` (the queued elements are `_items[_head..]`; the consumed prefix is dropped once it is at least half of the array, R2), `_head`, `_version`, `$typeArguments$Queue` | none |
 | `Stack<T>` | `_items` (bottom to top), `_version`, `$typeArguments$Stack` | none |
 | `KeyCollection<K>` / `ValueCollection<V>` | `_source` (a `KeyValueSource`) | none |
 
@@ -155,7 +155,7 @@ export class HashCore<K, V> {
 }
 ```
 
-No null-key validation and no version inside the core; the classes own both (the mutation-tolerant iterator is what `Dictionary`'s `remove` / `clear` exemption and `ConcurrentDictionary`'s non-throwing enumerator rely on). `HashSet<T>` stores its elements as `HashCore<T, T>`. A `hash-core.ts` instance lives in the owning class's `_store` field.
+No null-key validation and no version inside the core; the classes own both (the mutation-tolerant iterator is what `Dictionary`'s `remove` / `clear` exemption and `ConcurrentDictionary`'s non-throwing enumerator rely on). `HashSet<T>` stores its elements as `HashCore<T, T>`. A `hash-core.ts` instance lives in the owning class's `_store` field. **One lookup per operation (R2):** a key that can only equal itself (a primitive, a function, an object without value equality) with no user comparer goes straight to the native `Map`, one probe per member (`set` reports an insertion by comparing the `Map`'s size before and after); any other key resolves through the hash index first. The owners add one probe only where the API needs it: `Dictionary.get` / `tryGetValue` read `get` and call `has` only when the value read is `undefined` (a miss, or a stored `undefined`), and `add` / `tryAdd` test `has` before `set` (they must not overwrite). Key validation (`ArgumentNullException` for a `null` key) runs only in `Dictionary`, where .NET throws. The API above is unchanged.
 
 ### `set-algebra.ts` (internal, written by R)
 
@@ -434,7 +434,7 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   static withCapacity<T>(capacity: number, typeArguments?: readonly RuntimeType[] | null): Queue<T>;
   get count(): number;
   enqueue(item: T): void;
-  dequeue(): T;                                                // O(1) (ring buffer); throwEmptyQueue
+  dequeue(): T;                                                // amortized O(1) (array + head index, R2); throwEmptyQueue
   peek(): T;                                                   // throwEmptyQueue
   tryDequeue<D>(missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
   tryPeek<D>(missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
@@ -1168,7 +1168,7 @@ An omitted source argument emits `null`; the copy constructors (a C# source argu
 | `Dictionary` / `ConcurrentDictionary` / `HashSet` primitive keys | ≤ 2.0 ns over the named `Map` / `Set` calls | estimated, confirmed in 011c (over budget in R1, W4-35: the class implementation, two `Map` lookups and key validation per call, not the checks mechanism; met by hand-in R2's single-lookup hash core before 011g) |
 | `Queue` / `Stack` | ≤ 1.5 ns over `push` / `a[head++]` / `pop` / `at(-1)` | estimated, confirmed in 011c (`Queue` over budget on Node.js in R1: hand-in R2's, W4-37) |
 | record keys, sorted and immutable classes | recorded per release; `SortedSet` / `SortedDictionary`: time per op at 1e5 ≤ 2.5× at 1e3; `SortedList`: reads only; immutable: 1e4 repeated `Add` ≤ 50 ms | no native equivalent |
-| `Queue.dequeue` | O(1) | ring buffer (today O(n)) |
+| `Queue.dequeue` | amortized O(1), interleaved with `enqueue` too | an array and a head index whose consumed prefix is dropped once it is half the array (R2; 2.x's `shift` was O(n)) |
 | Checks off (FR-058) | in the bun / esbuild bundle, no store to or read of `_version` outside the constructor, and `get` / `set` do not call the out-of-range throw function | inline `typeof __METANO_CHECKS__` guard, default on |
 | `List` alone, minified + gz | ≤ 4586 B | NFR-008, raised by W4-25 (d) to the measured size + 10% (bun 4169 B / esbuild 4113 B; research R13's 1.67 KB had no FR-013 exceptions): FR-016's exception classes (about 0.97 KB) plus `elementEquals` / `defaultEquals` (about 0.5 KB), shared when several collections are used; slimming the exceptions is a follow-up |
 | `Dictionary` / `HashSet` / `Queue` / `Stack` alone | ≤ 4506 / 4283 / 3128 / 2947 B | NFR-008, W4-25 (d): measured + 10%, same reason |

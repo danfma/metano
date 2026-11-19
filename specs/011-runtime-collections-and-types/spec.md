@@ -304,7 +304,7 @@ A consumer bundles a generated package with bun, esbuild, Rollup or webpack. Eve
   | `HashSet<T>`, `ISet<T>`, `IReadOnlySet<T>` | `HashSet<T>` (reworked) / the runtime interfaces | runtime `HashSet<T>` |
   | `SortedSet<T>` (OD-18) | `SortedSet<T>` (red-black tree, FR-054) | runtime `HashSet<T>` |
   | `ImmutableHashSet<T>`, `IImmutableSet<T>` | `ImmutableHashSet<T>` (copy-on-write, FR-054) / the runtime interface | runtime `HashSet<T>` |
-  | `Queue<T>` | `Queue<T>` (ring buffer) | `T[]` |
+  | `Queue<T>` | `Queue<T>` (amortized O(1) `dequeue`) | `T[]` |
   | `Stack<T>` | `Stack<T>` | `T[]` |
   | `ImmutableList<T>`, `ImmutableArray<T>` (OD-17), `IImmutableList<T>` | `ImmutableList<T>` (copy-on-write, FR-054) / the runtime interface | `T[]` + `ImmutableCollection.*` |
   | `ReadOnlyCollection<T>` (`list.AsReadOnly()`, `Array.AsReadOnly`, `new ReadOnlyCollection<T>(source)`) | `ReadOnlyList<T>` (a live read-only view, FR-054) | no mapping (a bare named reference) |
