@@ -34,6 +34,10 @@ the migration list.
 
 - An enum over `long` / `ulong` emits exact `bigint` members (`High: 1099511627776n`, `Max: 18446744073709551615n`), its `[Flags]` brand is `bigint & { readonly __enum?: "E" }`, and its operators and conversions lower as on the underlying `long` / `ulong` (`|` keeps all 64 bits, `e + 1` wraps through `BigInt.asIntN(64, …)`, `(int)e` is `Number(BigInt.asIntN(32, e))`, `(long)e` is `e`). Hand-written TypeScript that reads such a value must use `bigint` (`Wide.High === 1099511627776n`); mixing it with a `number` throws `TypeError`. Its descriptor tests `isInt64` / `isUInt64`, `Enum.Parse` / `ToObject` return a `bigint`, a boxed 64-bit `[Flags]` value prints its exact member names, and JSON writes and reads its exact digits. `MS0064` is no longer reported. Enums of 32 bits or fewer are unchanged.
 
+### ⚠ `Solid.For` takes a `JsArray<T>` (spec 011 stage 011c, #335)
+
+- `Solid.For` (`bindings/Metano.TypeScript.SolidJs`) now takes `JsArray<T>` instead of `IReadOnlyList<T>`, because Solid's `<For each>` needs a native array and a `List<T>` is now a runtime collection. Pass `list.AsJsArray()` (a zero-copy view) or `list.ToJsArray()` / `JsArray.From(...)` (a copy).
+
 ### `dynamic` (spec 011 FR-030, #335)
 
 - Operations on a `dynamic` receiver keep their C# member names verbatim (`d.AppName`, `d.Run()`), where 2.x camelCased them (`d.appName`); `ToString` / `GetHashCode` / `Equals` / `GetType` keep the `object` lowering. Type arguments of a dynamic generic call are dropped.
