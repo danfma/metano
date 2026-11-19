@@ -895,9 +895,9 @@ public static class SymbolHelper
     /// Reads <c>[StrictUnionGuard]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. When present on
     /// a <c>[GenerateGuard]</c> abstract base, the emitted guard
-    /// dispatches per-variant shape validation via the runtime
-    /// <c>UnionGuardRegistry</c> instead of relying on the
-    /// discriminator-only narrow. Namespace-qualified match so
+    /// dispatches per-variant shape validation to the variants' guards
+    /// (from its own guard module, spec 011 FR-029) instead of relying on
+    /// the discriminator-only narrow. Namespace-qualified match so
     /// unrelated <c>[StrictUnionGuard]</c> attributes from other
     /// libraries cannot be mistaken for the Metano variant.
     /// </summary>

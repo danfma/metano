@@ -20,6 +20,13 @@ the migration list.
 - Static state is annotated `/* @__PURE__ */` (JSON-context defaults, static-constructor slots, overload tokens, static field initializers, side-effect-free module state), so a bundle drops a type nothing uses; a pure-annotated static field asserts its type (`= /* @__PURE__ */ new Ctx() as Ctx`) so tsgo and Biome keep the annotation.
 - `metano-runtime` evaluates nothing a bundler must keep at load: a side-effect-only import of any of its modules, the root included, bundles to 0 bytes under bun, esbuild and Rollup, and so does every golden of the test suite (CI gates both).
 
+### Runtime type questions (spec 011 stage 011b, #335)
+
+- The strict union guard registry is removed from the `metano-runtime` `system/json` exports (`UnionGuardRegistry`, `registerUnionGuard`, `getUnionGuard`). A `[StrictUnionGuard]` base's `isT` / `assertT` now live in `<base-file>.guard.ts` (`shape.guard.ts`), re-exported by the barrel; hand-written code that imported `isShape` from `./shape` imports it from `./shape.guard` (or the barrel), and code that registered guards by hand drops the call.
+- A `[PlainObject]` test (`is`, `as`, patterns, dispatch) checks its shape through its synthesized guard, with or without `[GenerateGuard]` (2.x reported MS0001 without it); a cast checks it through `castTo(o, Dto$runtimeType)`. The test is structural: MS0047 warns when another plain object would pass it. An `[EmitPackage]` library declares the guard and the `PlainObjectType` descriptor of every public plain object.
+- `Enum.Parse`, `Enum.ToObject` and `Enum.IsDefined` follow .NET through `enumFromRaw` / `enumIsDefined`: flag lists, numeric strings (only as the whole text), `ignoreCase`, the underlying type's width and range (`OverflowException`), and `ArgumentException` for an unknown name. 2.x's `Enum.Parse<T>` indexed the enum object by name.
+- A test of a `T[]` whose element is not `object` warns MS0046 (the element is erased); MS0005 now reports only cycles of imports a module evaluates, never one through an `import type`.
+
 ### `dynamic` (spec 011 FR-030, #335)
 
 - Operations on a `dynamic` receiver keep their C# member names verbatim (`d.AppName`, `d.Run()`), where 2.x camelCased them (`d.appName`); `ToString` / `GetHashCode` / `Equals` / `GetType` keep the `object` lowering. Type arguments of a dynamic generic call are dropped.

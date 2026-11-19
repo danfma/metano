@@ -5,36 +5,24 @@ namespace Metano.Annotations.TypeScript;
 /// validation. Without this attribute the base's emitted <c>isT</c> guard
 /// narrows on the discriminator field alone — fast, but only sound when
 /// the caller trusts the wire shape. With <c>[StrictUnionGuard]</c> the
-/// base's guard performs a per-variant shape check by looking the
-/// discriminator value up in a shared runtime registry
-/// (<c>UnionGuardRegistry</c>) and delegating to the registered variant
-/// guard.
+/// discriminator picks the variant, whose own guard then validates the
+/// shape; an unknown discriminator is rejected.
 ///
 /// <para>
-/// The registry is populated as a side-effect when each variant module
-/// loads: the generated variant <c>.ts</c> emits a top-level
-/// <c>registerUnionGuard("Circle", isCircle)</c> call. This avoids the
-/// ESM import cycle that would arise if the abstract base file imported
-/// every variant module directly: the base only imports the registry
-/// (which has no dependency on the variants), so the value-import graph
-/// stays acyclic. Variants still import the base for type/inheritance
-/// purposes, which TypeScript handles without runtime ordering issues.
+/// The strict guard lives in its own module, <c>&lt;base-file&gt;.guard.ts</c>
+/// (<c>shape.guard.ts</c> beside <c>shape.ts</c>), which imports the base and
+/// every variant guard and holds a <c>variants</c> thunk table (spec 011
+/// FR-029). The base module never imports a variant: a variant module extends
+/// the base at load, so a base that imported it would be an ESM cycle. Nothing
+/// registers at module load, so a bundle with <c>sideEffects: false</c> keeps
+/// what it uses. A base whose variants are all nested in it declares them in
+/// its own file, so its strict guard stays there.
 /// </para>
 ///
 /// <para>
-/// Fallback semantics: when no variant has registered a guard for the
-/// observed discriminator (e.g., the variant module hasn't been loaded
-/// yet, or the consumer only imported the base type), the strict guard
-/// degrades gracefully to the discriminator-only check. The strict path
-/// is therefore never <em>more</em> restrictive than the non-strict one
-/// — opting in only tightens validation, never loosens it.
-/// </para>
-///
-/// <para>
-/// This attribute is TypeScript-specific. Dart and other targets have no
-/// equivalent registry-based dispatch convention, so it lives in the
-/// <see cref="Metano.Annotations.TypeScript"/> namespace and is treated
-/// as a no-op outside the TS target.
+/// This attribute is TypeScript-specific: it lives in the
+/// <see cref="Metano.Annotations.TypeScript"/> namespace and is a no-op
+/// outside the TS target.
 /// </para>
 /// </summary>
 [AttributeUsage(
