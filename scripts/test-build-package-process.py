@@ -21,6 +21,8 @@ root = pathlib.Path(os.environ["PROCESS_FIXTURE"])
 role = "child" if len(sys.argv) > 1 and sys.argv[1] == "child" else "parent"
 def stop(signum, frame):
     (root / (role + ".signal")).write_text(str(signum))
+    if role == "child" and os.environ.get("IGNORE_CHILD_SIGNAL") == "1":
+        return
     sys.exit(0)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
@@ -35,11 +37,12 @@ while True:
 stub.chmod(0o755)
 
 
-def check_tree(name, termination=None):
+def check_tree(name, termination=None, bash_only=False, ignoring_child=False):
     fixture = root / name
     fixture.mkdir()
     env = dict(os.environ, PATH=str(stub_dir) + os.pathsep + os.environ["PATH"])
     env["PROCESS_FIXTURE"] = str(fixture)
+    env["IGNORE_CHILD_SIGNAL"] = "1" if ignoring_child else "0"
     # Leave enough time for both Python descendants to start on a busy CI runner.
     # Five seconds still proves the override instead of waiting for the 300s default.
     env["METANO_SMOKE_DOTNET_TIMEOUT_SECONDS"] = "5" if termination is None else "10"
@@ -57,7 +60,8 @@ def check_tree(name, termination=None):
                 raise AssertionError("dotnet process tree did not become ready")
             time.sleep(0.01)
         if termination is not None:
-            os.kill(int((fixture / "wrapper.pid").read_text()), termination)
+            target = process.pid if bash_only else int((fixture / "wrapper.pid").read_text())
+            os.kill(target, termination)
         output = process.communicate(timeout=10)[0].decode()
         expected = 124 if termination is None else 128 + termination
         assert process.returncode == expected, (process.returncode, output)
@@ -95,4 +99,7 @@ def check_tree(name, termination=None):
 check_tree("deadline")
 check_tree("sigterm", signal.SIGTERM)
 check_tree("sigint", signal.SIGINT)
+check_tree("bash-sigterm", signal.SIGTERM, bash_only=True)
+check_tree("bash-sigint", signal.SIGINT, bash_only=True)
+check_tree("ignoring-child", signal.SIGTERM, ignoring_child=True)
 print("Build-package smoke deadline/process-group tests passed.")

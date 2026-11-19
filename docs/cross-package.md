@@ -74,12 +74,13 @@ topmost directory is:
 5. else (the output shares only the filesystem root with the project) the
    output folder itself.
 
-Default inference resolves existing directory symlinks before applying these
-boundaries, including ancestors of an output folder that does not exist yet.
-Aliases such as macOS's `/var` and `/private/var` therefore identify the same
-workspace. The result retains the output path's spelling when it identifies the
-same root. A link to an unrelated output directory does not widen the project
-boundary. An explicit `MetanoPackageRoot` is still used as given.
+Default inference walks the written output path's ancestors for markers,
+`package.json`, and the fallback parent; the chosen root remains on that path.
+Only containment comparisons with the C# project resolve directory symlinks,
+including ancestors of missing output folders. Thus macOS's `/var` and
+`/private/var` aliases compare equal without moving package ownership or changing
+the writer's relative import/export paths for outputs linked outside a repository.
+An explicit `MetanoPackageRoot` is still used as given.
 
 If no package file is found, it falls back to the legacy convention: the parent
 directory of the output folder. When that parent lies above the topmost

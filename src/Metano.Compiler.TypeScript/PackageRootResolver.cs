@@ -35,10 +35,12 @@ namespace Metano;
 /// <para>
 /// Known trade-offs: a repository root takes precedence, so a home directory kept
 /// under git (dotfiles) widens the workspace to the home directory, and a monorepo's
-/// root <c>package.json</c> wins when the generated package has none of its own. Inferred
-/// paths resolve existing directory symbolic links, including ancestors of output directories
-/// that do not exist yet, so aliases such as macOS's /var and /private/var share a boundary.
-/// An explicit root is used as given. The comparison ignores case on Windows and macOS.
+/// root <c>package.json</c> wins when the generated package has none of its own. The search
+/// follows the written output ancestors; only project-containment comparisons resolve
+/// existing directory symbolic links, including ancestors of missing outputs, so macOS's
+/// /var and /private/var aliases compare equal without moving package ownership or changing
+/// writer-relative paths. An explicit root is used as given. Comparisons ignore case on
+/// Windows and macOS.
 /// </para>
 /// </summary>
 public static class PackageRootResolver
@@ -66,8 +68,7 @@ public static class PackageRootResolver
         if (explicitPackageRoot is not null)
             return PackageRootResolution.Resolved(Path.GetFullPath(explicitPackageRoot));
 
-        var writtenOutputDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDir));
-        var outputDirectory = NormalizeDirectory(writtenOutputDirectory);
+        var outputDirectory = NormalizeDirectory(outputDir);
         var projectDirectory = ProjectDirectoryOf(projectPath);
         var topmostDirectory = FindTopmostDirectory(outputDirectory, projectDirectory);
         var defaultPackageRoot = Path.GetDirectoryName(outputDirectory);
@@ -76,31 +77,20 @@ public static class PackageRootResolver
             .FirstOrDefault(HasPackageJson);
 
         if (nearestPackageJsonDirectory is not null)
-            return PackageRootResolution.Resolved(
-                RootAsWritten(nearestPackageJsonDirectory, writtenOutputDirectory)
-            );
+            return PackageRootResolution.Resolved(nearestPackageJsonDirectory);
 
         if (FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot))
             return PackageRootResolution.Refused(
-                CreateOutsideWorkspaceDiagnostic(
-                    writtenOutputDirectory,
-                    Path.GetDirectoryName(writtenOutputDirectory)
-                )
+                CreateOutsideWorkspaceDiagnostic(outputDirectory, defaultPackageRoot)
             );
 
-        return PackageRootResolution.Resolved(
-            RootAsWritten(defaultPackageRoot, writtenOutputDirectory)
-        );
+        return PackageRootResolution.Resolved(defaultPackageRoot);
     }
 
-    // Keep the caller's spelling only for an ancestor identifying the same physical root.
-    // A lexical parent above a symlink can belong to a completely different package.
-    private static string RootAsWritten(string root, string writtenOutputDirectory) =>
-        SelfAndAncestors(writtenOutputDirectory)
-            .FirstOrDefault(directory => IsSamePath(NormalizeDirectory(directory), root))
-        ?? root;
+    private static string NormalizeDirectory(string path) =>
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
-    private static string NormalizeDirectory(string path)
+    private static string PhysicalDirectory(string path)
     {
         var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var parent = Path.GetDirectoryName(fullPath);
@@ -109,13 +99,13 @@ public static class PackageRootResolver
             return fullPath;
 
         var directory = new DirectoryInfo(
-            Path.Combine(NormalizeDirectory(parent), Path.GetFileName(fullPath))
+            Path.Combine(PhysicalDirectory(parent), Path.GetFileName(fullPath))
         );
 
         // Resolve each existing ancestor: the leaf need not exist, and resolving only the
         // leaf would miss /var -> /private/var and other links in the middle of the path.
         return directory.Exists && directory.LinkTarget is not null
-            ? NormalizeDirectory(directory.ResolveLinkTarget(returnFinalTarget: true)!.FullName)
+            ? PhysicalDirectory(directory.ResolveLinkTarget(returnFinalTarget: true)!.FullName)
             : directory.FullName;
     }
 
@@ -144,7 +134,7 @@ public static class PackageRootResolver
         if (sharedAncestor is null)
             return outputDirectory;
 
-        if (IsSamePath(sharedAncestor, projectDirectory))
+        if (IsSamePath(PhysicalDirectory(sharedAncestor), PhysicalDirectory(projectDirectory)))
             return sharedAncestor;
 
         // The shared directory is often generic (a home or temp folder): stop below it.
@@ -201,6 +191,11 @@ public static class PackageRootResolver
 
     private static bool IsSameOrUnder(string path, string ancestor)
     {
+        // Only containment uses physical identities. Search roots and writer-relative
+        // paths must stay on the written output tree, even when it links outside the repo.
+        path = PhysicalDirectory(path);
+        ancestor = PhysicalDirectory(ancestor);
+
         var ancestorPrefix = Path.EndsInDirectorySeparator(ancestor)
             ? ancestor
             : ancestor + Path.DirectorySeparatorChar;

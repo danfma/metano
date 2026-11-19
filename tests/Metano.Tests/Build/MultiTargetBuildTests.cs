@@ -280,6 +280,8 @@ public class MultiTargetBuildTests
     [Arguments(false, true, "METANOBUILD003", false)]
     [Arguments(true, true, "METANOBUILD003", false)]
     [Arguments(false, true, "OTHER%3Bmetanobuild003", false)]
+    [Arguments(false, true, "OTHER%2Cmetanobuild003%2CANOTHER", false)]
+    [Arguments(true, true, "OTHER%2CMETANOBUILD003%2CANOTHER", false)]
     [Arguments(false, true, "METANOBUILD0030", true)]
     public async Task CommonTargetCopies_WarnOnlyOnUnsuppressedContentSkew(
         bool otherFirst,

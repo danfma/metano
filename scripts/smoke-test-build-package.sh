@@ -66,7 +66,21 @@ fail() {
 
 # Bound every dotnet invocation, including the compiler processes MSBuild starts.
 # Python is available on the CI runners and avoids a GNU timeout dependency on macOS.
+smoke_wrapper_pid=""
+terminate_smoke() {
+  local signum="$1"
+  trap '' TERM INT
+  if [ -n "$smoke_wrapper_pid" ]; then
+    kill -"$signum" "$smoke_wrapper_pid" 2>/dev/null || true
+    wait "$smoke_wrapper_pid" 2>/dev/null || true
+  fi
+  exit "$((128 + signum))"
+}
+trap 'terminate_smoke 15' TERM
+trap 'terminate_smoke 2' INT
+
 run_dotnet() {
+  local status=0
   python3 -c '
 import math, os, signal, subprocess, sys
 deadline = float(os.environ.get("METANO_SMOKE_DOTNET_TIMEOUT_SECONDS", "300"))
@@ -80,25 +94,40 @@ def kill_group(signum):
     except ProcessLookupError:
         pass
 
+class SmokeSignal(BaseException):
+    def __init__(self, signum):
+        self.signum = signum
+
 def forward_signal(signum, frame):
-    kill_group(signum)
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        kill_group(signal.SIGKILL)
-        process.wait()
-    sys.exit(128 + signum)
+    # Unwind the active wait before reaping: wait() is not signal-reentrant.
+    raise SmokeSignal(signum)
 
 signal.signal(signal.SIGTERM, forward_signal)
 signal.signal(signal.SIGINT, forward_signal)
 try:
     sys.exit(process.wait(timeout=deadline))
+except SmokeSignal as termination:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    kill_group(termination.signum)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    # The parent can exit before descendants that ignore the forwarded signal.
+    kill_group(signal.SIGKILL)
+    process.wait()
+    sys.exit(128 + termination.signum)
 except subprocess.TimeoutExpired:
     kill_group(signal.SIGKILL)
     process.wait()
     print(f"dotnet exceeded the {deadline:g}-second smoke-test deadline", file=sys.stderr)
     sys.exit(124)
-' "$@"
+' "$@" &
+  smoke_wrapper_pid=$!
+  wait "$smoke_wrapper_pid" || status=$?
+  smoke_wrapper_pid=""
+  return "$status"
 }
 
 # Retry only restore/download failures. Compilation, assertions and missing-tool
