@@ -30,10 +30,10 @@
 
 Example: `'o is Action<int>' cannot be lowered: delegates have no runtime type test in TypeScript (spec 011 FR-021).`
 
-**MS0046 — ErasedTypeArgumentTest** (Warning). The output is `asArray(v) !== null` (arrays) or the `instanceof` + wildcard test (collections).
+**MS0046 — ErasedTypeArgumentTest** (Warning). The output is `asArray(v) !== null` (arrays) or the descriptor test with a wildcard for the argument that has none (collections).
 
 1. `is` / `as` / pattern / cast against `T[]` or `JsArray<T>` where `T` is not `object`.
-2. `is List<X>` (or another runtime collection) where the tested expression's static type cannot guarantee that the collection carries `$typeArguments$<Class>` and `X` is not `object` (an absent field or `UnknownType` matches).
+2. `is List<X>` (or another runtime collection, as `as` or a pattern) where `X` is not `object` and has no descriptor (a type parameter that is not reified, a type without a descriptor): that argument is `UnknownType`, so the check degrades to the wildcard for it (D31).
 
 **MS0047 — PlainObjectShapeOverlap** (Warning).
 

@@ -44,6 +44,40 @@ const shared = List.adopt(copy);
 
 No reflection import: this compilation asks no runtime question about any collection kind (FR-008). The golden `collections-type-arguments.ts` adds one `o is List<string>` to the same source and pins the result: `List.of([1, 2], [Int32Type])`, `new Queue<number>()` unchanged (no question about `Queue`), `Dictionary.assign([["a", new Point(1, 2)]], [StringType, UnknownType])` (`Point` is not reached), and `import { Int32Type, StringType, UnknownType } from "metano-runtime/system/reflection"`.
 
+### Collection tests and JSON reachability (D31; `collections-type-arguments.ts`, `json-runtime-type.ts`)
+
+```csharp
+public record Item(string Name, List<int> Tags);
+public static bool IsL(object o) => o is List<int>;
+public static bool IsI(object o) => o is IList<string>;
+public static string Pat(object o) => o switch { Dictionary<string, int> => "d", _ => "n" };
+public static bool Legacy(object o) => o is IList<int>;     // some transpiled class implements IList<int>
+[JsonSerializable(typeof(Item))] public partial class Ctx : JsonSerializerContext;
+```
+
+```ts
+import { dictionaryType, iListType, listType } from "metano-runtime/system/collections";
+import { Int32Type, isType, StringType } from "metano-runtime/system/reflection";
+
+static isL(o: object): boolean { return isType(o, listType(Int32Type)); }
+static isI(o: object): boolean { return isType(o, iListType(StringType)); }
+// a pattern renders the same test: isType($s, dictionaryType(StringType, Int32Type))
+// `Legacy`: MS0001, the site is the throwing placeholder (W4-17): never `false`.
+```
+
+`List`, `IList` and every class implementing `IList` are now questioned, so their constructions pass the slot (`List.of([1, 2], [Int32Type])`); `Queue` is not (`new Queue<number>()`). The context spec of a reached record links its descriptor, and the record's module gains its `$runtimeType` getter:
+
+```ts
+this._item ??= this.createSpec({
+  type: Item,
+  runtimeType: () => Item.$runtimeType,
+  factory: (p) => new Item(p.name as string, p.tags as List<number>),
+  properties: [ …, { ts: "tags", json: "Tags", type: { kind: "list", element: { kind: "primitive", numberType: "System.Int32" }, create: (items) => List.of(items, [Int32Type]) } } ],
+});
+```
+
+(`create` passes the slot only when `List` is questioned.)
+
 ## Array interop (`collections-array-interop.ts`, FR-055, FR-056)
 
 ```csharp
