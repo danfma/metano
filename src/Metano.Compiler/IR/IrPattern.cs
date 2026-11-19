@@ -14,7 +14,18 @@ namespace Metano.Compiler.IR;
 public abstract record IrPattern;
 
 /// <summary>Constant pattern: <c>case 1:</c>, <c>x is null</c>, <c>x is "foo"</c>.</summary>
-public sealed record IrConstantPattern(IrExpression Value) : IrPattern;
+public sealed record IrConstantPattern(IrExpression Value) : IrPattern
+{
+    /// <summary>
+    /// The static type of the tested value, when it may hold the constant only
+    /// as a boxed enum (<c>object</c>, <c>ValueType</c>, <c>Enum</c>, an
+    /// interface; spec 011 FR-050); <c>null</c> otherwise.
+    /// </summary>
+    public IrTypeRef? InputType { get; init; }
+
+    /// <summary>The constant's enum type when <see cref="InputType"/> is set.</summary>
+    public IrTypeRef? ConstantType { get; init; }
+}
 
 /// <summary>
 /// A local a pattern declares (<c>f</c> in <c>x is Foo f</c>, <c>y</c> in

@@ -58,6 +58,23 @@ internal sealed record RuntimeTypeReachabilityResult
     /// </summary>
     public required IReadOnlySet<SupertypeKey> Undescribable { get; init; }
 
+    /// <summary>
+    /// Whether enum boxing conversions box (spec 011 FR-050): the assembly does
+    /// not carry <c>[assembly: DisableBoxing]</c>. Type questions on a value that
+    /// can hold a box then test for one.
+    /// </summary>
+    public bool BoxingEnabled { get; init; }
+
+    /// <summary>
+    /// Whether the compilation boxes at least one value (a boxing conversion of
+    /// an enum with a descriptor, boxing on): the gate of the interop
+    /// <c>unbox</c> (FR-051).
+    /// </summary>
+    public bool HasBoxingConversion { get; init; }
+
+    /// <summary>Whether interop boundaries unbox (FR-051).</summary>
+    public bool UnboxesAtInterop => BoxingEnabled && HasBoxingConversion;
+
     /// <summary>A result that reaches nothing.</summary>
     public static RuntimeTypeReachabilityResult Empty { get; } =
         new()
@@ -130,6 +147,8 @@ internal sealed record RuntimeTypeReachabilityResult
                     .. Undescribable
                         .Select(key => $"undescribable:{Display(key)}")
                         .Order(StringComparer.Ordinal),
+                    $"boxing:{BoxingEnabled}",
+                    $"boxes:{HasBoxingConversion}",
                 ]
             )
         );

@@ -162,6 +162,9 @@ internal sealed class RuntimeQuestionScanner
 
     private void Inspect(IOperation operation)
     {
+        if (operation is IConversionOperation conversion)
+            InspectBoxing(conversion);
+
         switch (operation)
         {
             case IIsTypeOperation isType:
@@ -200,6 +203,28 @@ internal sealed class RuntimeQuestionScanner
                 );
 
                 break;
+            case IConstantPatternOperation constant
+                when UnconvertedType(constant.Value) is { TypeKind: TypeKind.Enum } constantType:
+                Record(
+                    IrRuntimeQuestionKind.Test,
+                    constantType,
+                    constant.Syntax,
+                    constant.InputType
+                );
+
+                break;
+            case ISingleValueCaseClauseOperation
+            {
+                Parent: ISwitchCaseOperation { Parent: ISwitchOperation { Value: var subject } },
+            } label when UnconvertedType(label.Value) is { TypeKind: TypeKind.Enum } labelType:
+                Record(
+                    IrRuntimeQuestionKind.Test,
+                    labelType,
+                    label.Syntax,
+                    UnconvertedType(subject)
+                );
+
+                break;
             case IConversionOperation { IsTryCast: true } asCast:
                 Record(IrRuntimeQuestionKind.As, asCast.Type, asCast.Syntax, asCast.Operand.Type);
                 break;
@@ -222,6 +247,62 @@ internal sealed class RuntimeQuestionScanner
                 break;
         }
     }
+
+    /// <summary>
+    /// A boxing conversion of an enum or <c>[InlineWrapper]</c> value, to
+    /// <c>object</c>, <c>ValueType</c>, <c>Enum</c> or an interface (spec 011
+    /// FR-050), outside an interop-bound slot.
+    /// </summary>
+    private void InspectBoxing(IConversionOperation conversion)
+    {
+        if (
+            !conversion.GetConversion().IsBoxing
+            || conversion.Operand.Type is not { } source
+            || BoxingFacts.IsInteropBoundSlot(conversion)
+            || IsMappedRawArgument(conversion)
+        )
+            return;
+
+        var boxed = source.UnwrapNullableValueType();
+
+        if (boxed.TypeKind is not TypeKind.Enum && !SymbolHelper.HasInlineWrapper(boxed))
+            return;
+
+        _questions.Add(
+            Question(IrRuntimeQuestionKind.Box, boxed, conversion.Syntax.GetLocation()) with
+            {
+                InputType = RuntimeQuestionFacts.QuestionedTypeOf(conversion.Type),
+                Text = conversion.Syntax.ToString(),
+                FeedsTypeQuestion = BoxingFacts.FeedsTypeQuestion(conversion),
+            }
+        );
+    }
+
+    /// <summary>
+    /// Whether <paramref name="conversion"/> fills an <c>object</c>,
+    /// <c>ValueType</c> or <c>Enum</c> parameter of a BCL member with a
+    /// declarative mapping, whose JS reads the raw value (FR-050); the members of
+    /// <c>System.Object</c> keep the box.
+    /// </summary>
+    private bool IsMappedRawArgument(IConversionOperation conversion) =>
+        conversion.Parent
+            is IArgumentOperation
+            {
+                Parameter: { ContainingSymbol: IMethodSymbol method } parameter,
+            }
+        && method.ContainingType.SpecialType is not SpecialType.System_Object
+        && !SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, _compilation.Assembly)
+        && parameter.OriginalDefinition.Type.SpecialType
+            is SpecialType.System_Object
+                or SpecialType.System_ValueType
+                or SpecialType.System_Enum
+        && _methodMappings.ContainsKey((method.ContainingType.GetStableFullName(), method.Name));
+
+    /// <summary>The type of <paramref name="operation"/> before its implicit conversions.</summary>
+    private static ITypeSymbol? UnconvertedType(IOperation? operation) =>
+        operation is IConversionOperation { IsImplicit: true } conversion
+            ? UnconvertedType(conversion.Operand)
+            : operation?.Type;
 
     /// <summary>A late-bound <c>d.GetType()</c> on a <c>dynamic</c> receiver.</summary>
     private static bool IsDynamicGetType(IDynamicInvocationOperation call) =>

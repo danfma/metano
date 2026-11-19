@@ -247,7 +247,7 @@ public sealed partial class IrExpressionExtractor
             ?? ExtractUnbound(expression);
 
         return WithImplicitUserConversion(expression, value)
-            ?? WithImplicitNumericConversion(expression, value);
+            ?? WithBoxingConversion(expression, WithImplicitNumericConversion(expression, value));
     }
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
@@ -847,7 +847,13 @@ public sealed partial class IrExpressionExtractor
         {
             ConstantPatternSyntax constant when NamedPatternType(constant.Expression) is { } type =>
                 ExtractTypePattern(constant, type),
-            ConstantPatternSyntax constant => new IrConstantPattern(Extract(constant.Expression)),
+            ConstantPatternSyntax constant => WithBoxedConstantFacts(
+                new IrConstantPattern(Extract(constant.Expression)),
+                constant.Expression,
+                _semantic.GetOperation(constant) is IPatternOperation { InputType: var input }
+                    ? input
+                    : null
+            ),
             DeclarationPatternSyntax decl => ExtractTypePattern(
                 decl,
                 ResolvePatternType(decl.Type),
@@ -1827,6 +1833,21 @@ public sealed partial class IrExpressionExtractor
         // Roslyn parses bare `o is Foo` (type test without designator) as a
         // BinaryExpressionSyntax of kind IsExpression, not as an IsPatternExpression.
         // Normalize to IrIsPatternExpression so backends see a single pattern shape.
+        if (
+            bin.Kind() == SyntaxKind.IsExpression
+            && !_context.KeepsReflectionSourceForms
+            && _semantic.GetOperation(bin)
+                is IIsPatternOperation { Pattern: IConstantPatternOperation pattern }
+        )
+            return new IrIsPatternExpression(
+                Extract(bin.Left),
+                WithBoxedConstantFacts(
+                    new IrConstantPattern(ExtractConstantName(bin.Right)),
+                    bin.Right,
+                    pattern.InputType
+                )
+            );
+
         if (bin.Kind() == SyntaxKind.IsExpression && bin.Right is TypeSyntax typeRhs)
             return ExtractIsTypeTest(bin, typeRhs);
 
@@ -2858,6 +2879,9 @@ public sealed partial class IrExpressionExtractor
 
         if (TryExtractGetType(inv, symbol) is { } getType)
             return getType;
+
+        if (TryExtractDefaultEquals(inv, symbol) is { } defaultEquals)
+            return defaultEquals;
 
         // `Nullable<T>.GetValueOrDefault` lives with the other `Nullable<T>`
         // members rather than in `IntrinsicBclLoweringTable`: a side-effecting
@@ -5505,6 +5529,9 @@ public sealed partial class IrExpressionExtractor
 
             return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
         }
+
+        if (ExplicitBoxOf(cast, inner, sourceType, targetType) is { } box)
+            inner = box;
 
         return new IrCastExpression(
             inner,

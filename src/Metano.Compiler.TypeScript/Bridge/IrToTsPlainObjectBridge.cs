@@ -302,6 +302,15 @@ public static class IrToTsPlainObjectBridge
             {
                 Value = RewriteThis(asDynamic.Value, identifierName),
             },
+            IrBoxExpression box => box with { Value = RewriteThis(box.Value, identifierName) },
+            IrUnboxExpression unbox => unbox with
+            {
+                Value = RewriteThis(unbox.Value, identifierName),
+            },
+            IrConcatenatedValue concatenated => concatenated with
+            {
+                Value = RewriteThis(concatenated.Value, identifierName),
+            },
             IrNumericConversion conversion => conversion with
             {
                 Operand = RewriteThis(conversion.Operand, identifierName),

@@ -468,6 +468,16 @@ public static class DiagnosticCodes
     /// still emitted (spec 011 FR-036, OD-22).</summary>
     public const string DynamicAccessToRenamedMember = "MS0057";
 
+    /// <summary>MS0058 — a type question (<c>GetType()</c>, <c>is</c>, <c>as</c>, a
+    /// cast, a pattern, a <c>switch</c> on the type) that may meet an enum or
+    /// <c>[InlineWrapper]</c> value carrying no runtime type: with
+    /// <c>[assembly: DisableBoxing]</c>, on a receiver of static type <c>object</c>,
+    /// <c>ValueType</c>, <c>Enum</c> or an interface such a type implements (reason 1);
+    /// with boxing on, at the conversion of an enum without a descriptor, or of an enum
+    /// or wrapper to an interface, whose value a type question reads (reason 2). A
+    /// warning; the answer is the raw value's (spec 011 FR-050, OD-23).</summary>
+    public const string TypeQuestionOnUnboxedValue = "MS0058";
+
     /// <summary>MS0056 — a <c>Js.Code</c> hole that falls inside a JS string literal
     /// of the inline text, so the value is spliced as code rather than quoted. A
     /// warning, at the hole; the TypeScript target decides it (spec 011 FR-031).</summary>

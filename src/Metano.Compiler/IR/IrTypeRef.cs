@@ -16,6 +16,14 @@ public abstract record IrTypeRef
         this
             is IrPrimitiveTypeRef { Primitive: IrPrimitive.Object }
                 or IrNamedTypeRef { Name: "Object", Namespace: "System" };
+
+    /// <summary>
+    /// Whether the type is <c>object</c>, <c>ValueType</c> or <c>Enum</c>: a C#
+    /// boxing conversion of a value type produces a value of it (spec 011
+    /// FR-050).
+    /// </summary>
+    public bool AcceptsBoxedValues =>
+        IsObject || this is IrNamedTypeRef { Name: "ValueType" or "Enum", Namespace: "System" };
 }
 
 /// <summary>

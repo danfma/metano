@@ -1171,12 +1171,12 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task BareEnumTypeArm_TestsTheEnumValuesInline()
+    public async Task BareEnumTypeArm_OnObject_TestsForABox()
     {
         // An enum lowers to a number / string union with no class value, so
-        // `instanceof Color` would throw at runtime; the arm tests an integral
-        // number in its range (numeric) or one of its strings ([StringEnum]),
-        // inline, with no descriptor read (spec 011 FR-049 as decided).
+        // `instanceof Color` would throw at runtime; on an `object` the value
+        // holds an enum only as a box (spec 011 FR-050), so the arm tests for a
+        // box of that enum.
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations.TypeScript;
@@ -1201,8 +1201,9 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["kinds.ts"];
-        await Assert.That(output).Contains("isInt32(o) ? \"color\"");
-        await Assert.That(output).Contains("o === \"Small\" || o === \"Large\" ? \"size\"");
+        // On an `object` an enum exists only as a box (spec 011 FR-050).
+        await Assert.That(output).Contains("isBoxOf(o, Color$runtimeType) ? \"color\"");
+        await Assert.That(output).Contains("isBoxOf(o, Size$runtimeType) ? \"size\"");
         await Assert.That(output).DoesNotContain("instanceof");
     }
 

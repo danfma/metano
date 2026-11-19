@@ -60,6 +60,7 @@ public static partial class IrToTsExpressionBridge
     private static bool ReadsSubjectOnce(IrPattern pattern) =>
         pattern switch
         {
+            IrConstantPattern { InputType: not null } => false,
             IrConstantPattern or IrRelationalPattern or IrDiscardPattern => true,
             IrLogicalPattern { Operator: IrLogicalOp.Not } notPattern => ReadsSubjectOnce(
                 notPattern.Left
@@ -78,12 +79,13 @@ public static partial class IrToTsExpressionBridge
         switch (node.Pattern)
         {
             case IrConstantPattern constant:
-                return BuildConstantPatternTest(
-                    lowered,
-                    BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
-                    constant.Value,
-                    context
-                );
+                return BuildBoxedConstantTest(lowered, constant, context)
+                    ?? BuildConstantPatternTest(
+                        lowered,
+                        BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
+                        constant.Value,
+                        context
+                    );
             case IrTypePattern typePat:
                 return BuildTypeTest(lowered, typePat.Type, typePat.InputType, context);
             case IrDiscardPattern:
@@ -128,15 +130,80 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     internal static TsExpression BuildCaseLabelTest(
         TsExpression subject,
-        IrExpression label,
+        IrConstantCaseLabel label,
         IrToTsBridgeContext context
     ) =>
-        BuildConstantPatternTest(
+        BuildBoxedConstantTest(subject, label.Value, label.InputType, label.ConstantType, context)
+        ?? BuildConstantPatternTest(
             subject,
-            BinaryOperatorToken(IrBinaryOp.Equal, right: label),
-            label,
+            BinaryOperatorToken(IrBinaryOp.Equal, right: label.Value),
+            label.Value,
             context
         );
+
+    private static TsExpression? BuildBoxedConstantTest(
+        TsExpression value,
+        IrConstantPattern constant,
+        IrToTsBridgeContext context
+    ) =>
+        BuildBoxedConstantTest(
+            value,
+            constant.Value,
+            constant.InputType,
+            constant.ConstantType,
+            context
+        );
+
+    /// <summary>
+    /// An enum constant compared with a value that may hold it only as a box
+    /// (spec 011 FR-050, <c>o is Color.Red</c> on an <c>object</c>):
+    /// <c>isBoxOf(o, Color$runtimeType) &amp;&amp; unbox(o) === Color.Red</c>; on an
+    /// interface value, which may hold a raw value too,
+    /// <c>unbox(o) === Color.Red</c>. <c>null</c> for any other constant, and with
+    /// boxing off.
+    /// </summary>
+    private static TsExpression? BuildBoxedConstantTest(
+        TsExpression value,
+        IrExpression constant,
+        IrTypeRef? inputType,
+        IrTypeRef? constantType,
+        IrToTsBridgeContext context
+    )
+    {
+        if (
+            constantType is null
+            || IrToTsRuntimeTestBridge.BoxedTestKindOf(
+                constantType,
+                inputType,
+                context.RuntimeTypes
+            )
+                is not { } kind
+        )
+            return null;
+
+        var raw = constant is IrBoxExpression box ? box.Value : constant;
+
+        var comparison = new TsBinaryExpression(
+            new TsCallExpression(new TsRuntimeHelperReference("unbox"), [value]),
+            "===",
+            Map(raw, context)
+        );
+
+        if (kind is not BoxedTestKind.BoxOnly)
+            return comparison;
+
+        var descriptor = IrToTsRuntimeTypeReferences.Of(
+            constantType,
+            "boxed enum constant",
+            context.RuntimeTypes
+        )!;
+
+        return new TsBinaryExpression(
+            new TsCallExpression(new TsRuntimeHelperReference("isBoxOf"), [value, descriptor]),
+            "&&",
+            comparison
+        );
+    }
 
     internal static bool IsNaNConstant(IrExpression constant) =>
         constant switch
@@ -164,12 +231,13 @@ public static partial class IrToTsExpressionBridge
     ) =>
         pattern switch
         {
-            IrConstantPattern constant => BuildConstantPatternTest(
-                value,
-                BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
-                constant.Value,
-                context
-            ),
+            IrConstantPattern constant => BuildBoxedConstantTest(value, constant, context)
+                ?? BuildConstantPatternTest(
+                    value,
+                    BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
+                    constant.Value,
+                    context
+                ),
             IrTypePattern typePat => BuildTypeTest(value, typePat.Type, typePat.InputType, context),
             IrDiscardPattern => new TsLiteral("true"),
             IrVarPattern => new TsLiteral("true"),
@@ -601,9 +669,10 @@ public static partial class IrToTsExpressionBridge
     private static IReadOnlyList<TsStatement> BuildPatternBindings(
         TsExpression value,
         IrPattern pattern,
-        IReadOnlySet<string> reassigned
+        IReadOnlySet<string> reassigned,
+        bool unboxes
     ) =>
-        EnumeratePatternBindings(value, pattern)
+        EnumeratePatternBindings(value, pattern, unboxes)
             .Select(binding =>
                 (TsStatement)
                     new TsVariableDeclaration(
@@ -620,7 +689,8 @@ public static partial class IrToTsExpressionBridge
     /// first one.
     /// </summary>
     private static bool HasDesignators(IrPattern pattern) =>
-        EnumeratePatternBindings(new TsIdentifier(ScrutineeParameterName), pattern).Any();
+        EnumeratePatternBindings(new TsIdentifier(ScrutineeParameterName), pattern, unboxes: false)
+            .Any();
 
     /// <summary>
     /// Every designator the pattern introduces with the value it reads, in
@@ -629,13 +699,17 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static IEnumerable<PatternBinding> EnumeratePatternBindings(
         TsExpression value,
-        IrPattern pattern
+        IrPattern pattern,
+        bool unboxes
     ) =>
         pattern switch
         {
-            IrTypePattern { Designator: { } designator } =>
+            IrTypePattern { Designator: { } designator } typePattern =>
             [
-                new PatternBinding(designator.Name, value),
+                new PatternBinding(
+                    designator.Name,
+                    UnboxedBindingValue(value, typePattern, unboxes)
+                ),
             ],
             IrVarPattern varPattern => [new PatternBinding(varPattern.Designator.Name, value)],
             IrPropertyPattern property => DesignatorBinding(property.Designator, value)
@@ -643,7 +717,8 @@ public static partial class IrToTsExpressionBridge
                     property.Subpatterns.SelectMany(sub =>
                         EnumeratePatternBindings(
                             PropertyPatternMemberAccess(value, sub),
-                            sub.Pattern
+                            sub.Pattern,
+                            unboxes
                         )
                     )
                 ),
@@ -653,21 +728,62 @@ public static partial class IrToTsExpressionBridge
                         (element, i) =>
                             EnumeratePatternBindings(
                                 PositionalElementAccess(value, positional, i),
-                                element
+                                element,
+                                unboxes
                             )
                     )
                 ),
             IrListPattern list => list
                 .Elements.SelectMany(
                     (element, i) =>
-                        EnumeratePatternBindings(ListElementAccess(value, list, i), element)
+                        EnumeratePatternBindings(
+                            ListElementAccess(value, list, i),
+                            element,
+                            unboxes
+                        )
                 )
                 .Concat(SliceBinding(value, list)),
             IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
-                EnumeratePatternBindings(value, and.Left)
-                    .Concat(EnumeratePatternBindings(value, right)),
+                EnumeratePatternBindings(value, and.Left, unboxes)
+                    .Concat(EnumeratePatternBindings(value, right, unboxes)),
             _ => [],
         };
+
+    /// <summary>
+    /// The value a type pattern's designator reads: an enum matched on a value
+    /// that may hold a box of it (spec 011 FR-050) reads the raw value,
+    /// <c>unbox(value) as Color</c>; a raw value passes through <c>unbox</c>
+    /// unchanged.
+    /// </summary>
+    private static TsExpression UnboxedBindingValue(
+        TsExpression value,
+        IrTypePattern pattern,
+        bool unboxes
+    )
+    {
+        var mayHoldBox =
+            unboxes
+            && pattern.InputType is { } input
+            && (
+                input.AcceptsBoxedValues
+                || input is IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface }
+            );
+
+        if (
+            !mayHoldBox
+            || pattern.Type
+                is not IrNamedTypeRef
+                {
+                    Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
+                }
+        )
+            return value;
+
+        return new TsCastExpression(
+            new TsCallExpression(new TsRuntimeHelperReference("unbox"), [value]),
+            IrToTsTypeMapper.Map(pattern.Type)
+        );
+    }
 
     private static IEnumerable<PatternBinding> DesignatorBinding(
         IrPatternDesignator? designator,

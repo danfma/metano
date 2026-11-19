@@ -38,7 +38,7 @@ public class CrossPackageExpressionImportTests
     public async Task EnumMemberAccess_ImportsEnumAsValue(bool withSubpathRoot)
     {
         var output = TranspileUsage(
-            "public static object Kind() => EpisodeKind.Feature;",
+            "public static EpisodeKind Kind() => EpisodeKind.Feature;",
             withSubpathRoot
         );
 
@@ -97,7 +97,7 @@ public class CrossPackageExpressionImportTests
     public async Task NamespaceQualifiedEnumAccess_DropsNamespaceAndImportsEnum()
     {
         var output = TranspileUsage(
-            "public static object Kind() => Acme.Domain.Episodes.EpisodeKind.Short;"
+            "public static Acme.Domain.Episodes.EpisodeKind Kind() => Acme.Domain.Episodes.EpisodeKind.Short;"
         );
 
         await Assert.That(output).Contains($"import {{ EpisodeKind }} from \"{FullSpecifier}\"");
@@ -116,7 +116,7 @@ public class CrossPackageExpressionImportTests
     [Test]
     public async Task NestedTypeAccess_ImportsTopLevelContainer()
     {
-        var output = TranspileUsage("public static object Mode() => Season.Mode.Live;");
+        var output = TranspileUsage("public static Season.Mode Mode() => Season.Mode.Live;");
 
         await Assert.That(output).Contains($"import {{ Season }} from \"{FullSpecifier}\"");
         await Assert.That(output).Contains("return Season.Mode.Live;");
@@ -129,7 +129,7 @@ public class CrossPackageExpressionImportTests
             """
             public static Circle? Keep(Circle? c) => c;
             public static object Make() => new EntityId("x");
-            public static object Kind() => EpisodeKind.Feature;
+            public static EpisodeKind Kind() => EpisodeKind.Feature;
             """
         );
 
@@ -163,7 +163,7 @@ public class CrossPackageExpressionImportTests
         var libCompilation = TranspileHelper.CompileLibrary(Library(withSubpathRoot: false));
 
         var consumerCompilation = TranspileHelper.CompileConsumer(
-            Consumer("public static object Kind() => EpisodeKind.Feature;"),
+            Consumer("public static EpisodeKind Kind() => EpisodeKind.Feature;"),
             libCompilation
         );
 
@@ -192,7 +192,7 @@ public class CrossPackageExpressionImportTests
 
             public static class Palette
             {
-                public static object Pick() => Lib.Shade.Dark;
+                public static Lib.Shade Pick() => Lib.Shade.Dark;
             }
             """;
 
@@ -235,7 +235,7 @@ public class CrossPackageExpressionImportTests
                 {
                     public static int Count() => App.Mods.Counter.Count(3);
 
-                    public static object K() => App.Mods.Kind.B;
+                    public static App.Mods.Kind K() => App.Mods.Kind.B;
                 }
             }
             """

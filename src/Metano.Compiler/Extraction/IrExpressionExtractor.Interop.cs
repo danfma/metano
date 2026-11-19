@@ -32,11 +32,14 @@ public sealed partial class IrExpressionExtractor
         {
             InteropMethodKind.Code => InlineCodeExpressionOf(call, method!),
             InteropMethodKind.UnsafeCast => new IrUnsafeCastExpression(
-                ExtractInteropOperand(call, method!),
+                WithoutBox(ExtractInteropOperand(call, method!)),
                 IrTypeRefMapper.Map(method!.TypeArguments[0], _originResolver, _target)
             ),
             InteropMethodKind.AsDynamic => new IrAsDynamicExpression(
-                ExtractInteropOperand(call, method!)
+                InteropUnboxed(
+                    InteropOperandType(call, method!),
+                    ExtractInteropOperand(call, method!)
+                )
             ),
             _ when method is null => UnsupportedLateBoundInteropCall(call),
             _ => null,
@@ -144,6 +147,18 @@ public sealed partial class IrExpressionExtractor
         return Extract(call.ArgumentList.Arguments[0].Expression);
     }
 
+    /// <summary>The static type of the operand of <c>UnsafeCast</c> / <c>AsDynamic</c>.</summary>
+    private ITypeSymbol? InteropOperandType(InvocationExpressionSyntax call, IMethodSymbol method)
+    {
+        var operand =
+            method.ReducedFrom is not null
+            && QualifiedMemberSyntax.From(call.Expression) is { } access
+                ? access.Receiver
+                : call.ArgumentList.Arguments[0].Expression;
+
+        return _semantic.GetTypeInfo(operand).Type;
+    }
+
     /// <summary>
     /// The text and holes of the <c>code</c> argument, or <c>null</c> after
     /// reporting <c>MS0052</c>. An interpolated string is always split, even when C#
@@ -207,12 +222,26 @@ public sealed partial class IrExpressionExtractor
                     break;
                 case IInterpolationOperation { Syntax: InterpolationSyntax hole } interpolation:
                     valid &= IsValidHole(hole, interpolation);
-                    parts.Add(new IrInlineCodeHole(Extract(hole.Expression), SpanOf(hole)));
+                    parts.Add(InlineCodeHoleOf(hole));
                     break;
             }
         }
 
         return valid ? parts : null;
+    }
+
+    /// <summary>
+    /// A hole of the inline code: JS reads its value raw, so a value that may
+    /// hold a box is unboxed (spec 011 FR-051).
+    /// </summary>
+    private IrInlineCodeHole InlineCodeHoleOf(InterpolationSyntax hole)
+    {
+        var value = InteropUnboxed(
+            _semantic.GetTypeInfo(hole.Expression).Type,
+            Extract(hole.Expression)
+        );
+
+        return new IrInlineCodeHole(value, SpanOf(hole));
     }
 
     private bool IsValidHole(InterpolationSyntax hole, IInterpolationOperation interpolation)

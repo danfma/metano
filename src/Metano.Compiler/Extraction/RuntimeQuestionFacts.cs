@@ -79,6 +79,17 @@ internal static class RuntimeQuestionFacts
 
     /// <summary>The neutral facts of <paramref name="type"/> as a questioned type.</summary>
     public static IrQuestionedType QuestionedTypeOf(ITypeSymbol? type) =>
+        ShapeOf(type) with
+        {
+            AcceptsBoxedValues =
+                type is IDynamicTypeSymbol
+                || type?.SpecialType
+                    is SpecialType.System_Object
+                        or SpecialType.System_ValueType
+                        or SpecialType.System_Enum,
+        };
+
+    private static IrQuestionedType ShapeOf(ITypeSymbol? type) =>
         type switch
         {
             null => Shaped(IrQuestionedTypeShape.Other),

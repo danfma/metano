@@ -20,6 +20,16 @@ public abstract record IrCaseLabel
 /// </summary>
 public sealed record IrConstantCaseLabel(IrExpression Value) : IrCaseLabel
 {
+    /// <summary>
+    /// The static type of the tested value, when it may hold the constant only
+    /// as a boxed enum (<c>object</c>, <c>ValueType</c>, <c>Enum</c>, an
+    /// interface; spec 011 FR-050); <c>null</c> otherwise.
+    /// </summary>
+    public IrTypeRef? InputType { get; init; }
+
+    /// <summary>The constant's enum type when <see cref="InputType"/> is set.</summary>
+    public IrTypeRef? ConstantType { get; init; }
+
     public override IrCaseLabel MapExpressions(Func<IrExpression, IrExpression> rewrite) =>
         this with
         {

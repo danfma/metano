@@ -643,6 +643,15 @@ public static class IrToTsJsxComponentBridge
             {
                 Value = Rewrite(asDynamic.Value, propNames, referenced),
             },
+            IrBoxExpression box => box with { Value = Rewrite(box.Value, propNames, referenced) },
+            IrUnboxExpression unbox => unbox with
+            {
+                Value = Rewrite(unbox.Value, propNames, referenced),
+            },
+            IrConcatenatedValue concatenated => concatenated with
+            {
+                Value = Rewrite(concatenated.Value, propNames, referenced),
+            },
             // True leaves — no nested expression to descend into. An
             // unsupported placeholder was already reported by the extractor.
             IrLiteral

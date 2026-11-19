@@ -102,6 +102,9 @@ public static class IrNodeChildren
             IrInlineCodeExpression inlineCode => IrInlineCodeParts.HolesOf(inlineCode.Parts),
             IrUnsafeCastExpression unsafeCast => [unsafeCast.Value],
             IrAsDynamicExpression asDynamic => [asDynamic.Value],
+            IrBoxExpression box => [box.Value],
+            IrUnboxExpression unbox => [unbox.Value],
+            IrConcatenatedValue concatenated => [concatenated.Value],
             IrGetTypeExpression getType => [getType.Receiver],
             _ => [],
         };

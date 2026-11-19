@@ -30,9 +30,9 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         return new IrBinaryExpression(
-            ConcatenationOperand(bin.Left),
+            BoxTextOperand(bin.Left, ConcatenationOperand(bin.Left)),
             IrBinaryOp.Add,
-            ConcatenationOperand(bin.Right)
+            BoxTextOperand(bin.Right, ConcatenationOperand(bin.Right))
         );
     }
 
@@ -50,7 +50,7 @@ public sealed partial class IrExpressionExtractor
         if (!IsStringConcatenation(assign))
             return null;
 
-        var value = ConcatenationOperand(assign.Right);
+        var value = BoxTextOperand(assign.Right, ConcatenationOperand(assign.Right));
 
         if (!MayFormatAsNull(assign.Left) || !IrEvaluationTraits.IsReusableReceiver(target))
             return new IrBinaryExpression(target, IrBinaryOp.AddAssign, value);

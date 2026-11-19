@@ -664,6 +664,15 @@ public enum IrBinaryOp
     ValueNotEqual,
 
     /// <summary>
+    /// C#'s virtual <c>left.Equals(right)</c> (<c>object.Equals(object)</c>) on a
+    /// receiver whose static type is <c>object</c>, <c>ValueType</c> or
+    /// <c>Enum</c>, so the override that answers is the runtime value's: a user
+    /// <c>Equals</c>, a boxed value's equality (spec 011 FR-051), or reference
+    /// identity.
+    /// </summary>
+    DefaultEqual,
+
+    /// <summary>
     /// C#'s non-short-circuit <c>&amp;</c> over <c>bool</c> operands: both
     /// operands are evaluated, left to right, then conjoined. A <c>bool?</c>
     /// operand never reaches it, since the extractor lowers the three-valued

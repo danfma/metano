@@ -32,7 +32,10 @@ public static partial class IrToTsExpressionBridge
             IrTypePattern { Designator: { } designator } typePattern => new TsBinaryExpression(
                 BuildTypeTest(value, typePattern.Type, typePattern.InputType, context),
                 "&&",
-                AssignDesignator(designator, value)
+                AssignDesignator(
+                    designator,
+                    UnboxedBindingValue(value, typePattern, context.RuntimeTypes.BoxingEnabled)
+                )
             ),
             IrVarPattern varPattern => AssignDesignator(varPattern.Designator, value),
             IrPropertyPattern property => BuildBindingPropertyPatternTest(value, property, context),
@@ -219,7 +222,13 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var bindings = EnumeratePatternBindings(subject, pattern).ToList();
+        var bindings = EnumeratePatternBindings(
+                subject,
+                pattern,
+                context.RuntimeTypes.BoxingEnabled
+            )
+            .ToList();
+
         var lowered = Map(guard, context);
 
         if (!IrReferencedNames.AnyIn(guard, bindings.Select(binding => binding.Name)))
@@ -247,6 +256,7 @@ public static partial class IrToTsExpressionBridge
     internal static IReadOnlyList<TsStatement> BuildCaseLabelBindings(
         TsExpression subject,
         IrPatternCaseLabel label,
-        IReadOnlySet<string> reassigned
-    ) => BuildPatternBindings(subject, label.Pattern, reassigned);
+        IReadOnlySet<string> reassigned,
+        bool unboxes
+    ) => BuildPatternBindings(subject, label.Pattern, reassigned, unboxes);
 }

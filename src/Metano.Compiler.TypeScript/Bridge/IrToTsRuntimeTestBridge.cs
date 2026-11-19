@@ -47,11 +47,12 @@ internal static class IrToTsRuntimeTestBridge
         IrTypeRef type,
         IrTypeRef? staticType,
         RuntimeTypeReachabilityResult reachability
-    ) => Render(value, type, Classify(value, type, staticType), reachability);
+    ) => Render(value, type, staticType, Classify(value, type, staticType), reachability);
 
     private static TsExpression? Render(
         TsExpression value,
         IrTypeRef type,
+        IrTypeRef? staticType,
         IrRuntimeTypeTest test,
         RuntimeTypeReachabilityResult reachability
     ) =>
@@ -63,7 +64,12 @@ internal static class IrToTsRuntimeTestBridge
             IrRuntimeTypeTest.NominalClass => ClassTest(value, type),
             IrRuntimeTypeTest.NominalInterface => DescriptorTest(value, type, reachability),
             IrRuntimeTypeTest.ErasedShape => ShapeTest(value, type, reachability),
-            IrRuntimeTypeTest.Primitive primitive => PrimitiveOrEnumTest(value, type, primitive),
+            IrRuntimeTypeTest.Primitive primitive => BoxedEnumTest(
+                value,
+                type,
+                staticType,
+                reachability
+            ) ?? PrimitiveOrEnumTest(value, type, primitive),
             IrRuntimeTypeTest.FixedTuple { Arity: var arity } => FixedTupleTest(value, arity),
             IrRuntimeTypeTest.Array => ArrayTest(value),
             IrRuntimeTypeTest.Iterable => TypeofTest(value, "object"),
@@ -267,6 +273,63 @@ internal static class IrToTsRuntimeTestBridge
     }
 
     /// <summary>
+    /// An enum tested on a value that may hold a box of it (spec 011 FR-050):
+    /// with boxing on, a value of static type <c>object</c>, <c>ValueType</c> or
+    /// <c>Enum</c> holds an enum only as a box, so the test requires one,
+    /// <c>isBoxOf(value, E$runtimeType)</c> (a raw number is a boxed <c>int</c> in
+    /// .NET); an interface value may hold a box or a raw value (a conversion to an
+    /// interface stays raw), so <c>isType(value, E$runtimeType)</c> accepts both.
+    /// <c>null</c> for every other test, which renders inline.
+    /// </summary>
+    private static TsExpression? BoxedEnumTest(
+        TsExpression value,
+        IrTypeRef type,
+        IrTypeRef? staticType,
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        if (BoxedTestKindOf(type, staticType, reachability) is not { } kind)
+            return null;
+
+        var descriptor = IrToTsRuntimeTypeReferences.Of(type, "boxed enum test", reachability)!;
+
+        return kind is BoxedTestKind.BoxOnly
+            ? new TsCallExpression(new TsRuntimeHelperReference("isBoxOf"), [value, descriptor])
+            : IsTypeCall(value, descriptor);
+    }
+
+    /// <summary>
+    /// How a test of <paramref name="type"/> on a value of static type
+    /// <paramref name="staticType"/> meets boxes; <c>null</c> when it never does
+    /// (boxing off, a type without a descriptor, a static type that holds no box).
+    /// </summary>
+    public static BoxedTestKind? BoxedTestKindOf(
+        IrTypeRef type,
+        IrTypeRef? staticType,
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        if (
+            !reachability.BoxingEnabled
+            || staticType is null
+            || type
+                is not IrNamedTypeRef
+                {
+                    Semantics.Kind: IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum,
+                } enumType
+            || !IrToTsRuntimeTypeReferences.IsDescribable(enumType, reachability)
+        )
+            return null;
+
+        if (staticType.AcceptsBoxedValues)
+            return BoxedTestKind.BoxOnly;
+
+        return staticType is IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface }
+            ? BoxedTestKind.BoxOrRaw
+            : null;
+    }
+
+    /// <summary>
     /// An enum tests its values inline (<see cref="IrToTsEnumValueTest"/>); any
     /// other value of the category tests its primitive.
     /// </summary>
@@ -354,4 +417,14 @@ internal static class IrToTsRuntimeTestBridge
                 new TsLiteral(arity.ToString(CultureInfo.InvariantCulture))
             )
         );
+}
+
+/// <summary>How a type test of an enum meets boxes (<see cref="IrToTsRuntimeTestBridge.BoxedTestKindOf"/>).</summary>
+internal enum BoxedTestKind
+{
+    /// <summary>The value holds the enum only as a box: <c>isBoxOf</c>.</summary>
+    BoxOnly,
+
+    /// <summary>The value holds a box or a raw value: <c>isType</c>.</summary>
+    BoxOrRaw,
 }

@@ -674,7 +674,8 @@ public class RuntimeTypeDescriptorTests
 
         var use = files["levels/use.ts"];
 
-        await Assert.That(use).Contains("return isByte(o);");
+        // On an `object` a Level exists only as a box (spec 011 FR-050).
+        await Assert.That(use).Contains("return isBoxOf(o, Level$runtimeType);");
         await Assert.That(use).Contains("isByte(args[0])");
         await Assert.That(use).Contains("castTo<Level>(o, Level$runtimeType)");
 

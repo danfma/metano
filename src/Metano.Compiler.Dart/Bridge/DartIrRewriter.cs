@@ -266,6 +266,10 @@ public sealed class DartIrRewriter
                 RewriteExpression(asDynamic.Value),
                 new IrUnknownTypeRef()
             ),
+            // Dart has no boxes (spec 011 FR-050): the raw value.
+            IrBoxExpression box => RewriteExpression(box.Value),
+            IrUnboxExpression unbox => RewriteExpression(unbox.Value),
+            IrConcatenatedValue concatenated => RewriteExpression(concatenated.Value),
             IrInlineCodeExpression inlineCode => DartInlineCodePlaceholder.Of(inlineCode.Span),
             _ => expr,
         };

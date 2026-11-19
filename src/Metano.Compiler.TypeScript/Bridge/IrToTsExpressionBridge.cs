@@ -191,6 +191,12 @@ public static partial class IrToTsExpressionBridge
                 asDynamic,
                 context
             ),
+            IrBoxExpression box => IrToTsBoxingBridge.MapBox(box, context),
+            IrUnboxExpression unbox => IrToTsBoxingBridge.MapUnbox(unbox, context),
+            IrConcatenatedValue concatenated => IrToTsBoxingBridge.MapConcatenatedValue(
+                concatenated,
+                context
+            ),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };
     }
@@ -251,6 +257,12 @@ public static partial class IrToTsExpressionBridge
 
         if (bin.Operator is IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual)
             return MapValueEquality(bin, context);
+
+        if (bin.Operator is IrBinaryOp.DefaultEqual)
+            return new TsCallExpression(
+                new TsRuntimeHelperReference("defaultEquals"),
+                [Map(bin.Left, context), Map(bin.Right, context)]
+            );
 
         if (bin.Operator is IrBinaryOp.NullCoalescing)
             return MapNullCoalescing(bin, rightToleratesUndefined: false, context);
@@ -2663,9 +2675,9 @@ public static partial class IrToTsExpressionBridge
                 throw new System.Diagnostics.UnreachableException(
                     "Boolean logic has no JS operator; it lowers through MapBooleanLogic."
                 ),
-            IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual =>
+            IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual or IrBinaryOp.DefaultEqual =>
                 throw new System.Diagnostics.UnreachableException(
-                    "Value equality has no JS operator; it lowers through MapValueEquality."
+                    "Value equality has no JS operator; it lowers through a runtime helper."
                 ),
             _ => "?",
         };

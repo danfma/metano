@@ -20,6 +20,14 @@ public enum IrRuntimeQuestionKind
 
     /// <summary>A parameter type of an overload group that a target may dispatch at runtime.</summary>
     OverloadParameter,
+
+    /// <summary>
+    /// A boxing conversion of an enum or <c>[InlineWrapper]</c> value (spec 011
+    /// FR-050); the questioned type is the boxed type, the input type the
+    /// conversion's target (<c>object</c>, <c>ValueType</c>, <c>Enum</c> or an
+    /// interface). Conversions into an interop-bound slot are not recorded.
+    /// </summary>
+    Box,
 }
 
 /// <summary>The shape of a questioned type, as far as a runtime question cares.</summary>
@@ -88,6 +96,13 @@ public sealed record IrQuestionedType
     /// (spec 011 FR-023) reaches the arguments' descriptors too; empty otherwise.
     /// </summary>
     public IReadOnlyList<IrQuestionedType> TypeArguments { get; init; } = [];
+
+    /// <summary>
+    /// Whether the type is <c>object</c>, <c>ValueType</c>, <c>Enum</c> or
+    /// <c>dynamic</c>: a C# boxing conversion of any value type (or enum) can
+    /// produce a value of it.
+    /// </summary>
+    public bool AcceptsBoxedValues { get; init; }
 }
 
 /// <summary>
@@ -117,4 +132,12 @@ public sealed record IrRuntimeQuestion
 
     /// <summary>The source text of a test, <c>as</c> or cast, for a target's message.</summary>
     public string? Text { get; init; }
+
+    /// <summary>
+    /// For a <see cref="IrRuntimeQuestionKind.Box"/>, whether a type question reads
+    /// the converted value locally: the conversion is the direct operand of a test,
+    /// <c>as</c>, cast, pattern, <c>switch</c> or <c>GetType()</c>, or initializes a
+    /// local whose only uses are such operands in the same body.
+    /// </summary>
+    public bool FeedsTypeQuestion { get; init; }
 }

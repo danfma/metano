@@ -99,6 +99,8 @@ internal static class IrToTsSwitchStatementBridge
         label switch
         {
             IrPatternCaseLabel => true,
+            // A boxed enum constant compares through the box (spec 011 FR-050).
+            IrConstantCaseLabel { InputType: not null } => true,
             IrConstantCaseLabel { Value: var value } => DefeatsStrictEquality(value),
             _ => false,
         };
@@ -192,7 +194,7 @@ internal static class IrToTsSwitchStatementBridge
         {
             IrConstantCaseLabel constant => IrToTsExpressionBridge.BuildCaseLabelTest(
                 subject,
-                constant.Value,
+                constant,
                 context
             ),
             IrPatternCaseLabel pattern => IrToTsExpressionBridge.BuildCasePatternTest(
@@ -222,7 +224,13 @@ internal static class IrToTsSwitchStatementBridge
 
         var label = (IrPatternCaseLabel)section.Labels[0];
         var reassigned = IrLocalReassignmentCollector.CollectFromStatements(section.Body);
-        var bindings = IrToTsExpressionBridge.BuildCaseLabelBindings(subject, label, reassigned);
+
+        var bindings = IrToTsExpressionBridge.BuildCaseLabelBindings(
+            subject,
+            label,
+            reassigned,
+            context.RuntimeTypes.BoxingEnabled
+        );
 
         return [new TsBlockStatement([.. bindings, .. body])];
     }

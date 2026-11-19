@@ -51,6 +51,9 @@ internal sealed class RuntimeTypeReachability
     private readonly HashSet<SupertypeKey> _undescribable = [];
     private readonly HashSet<SupertypeKey> _guarded = [];
     private readonly HashSet<SupertypeKey> _foldedPlainObjects = [];
+    private readonly bool _boxingEnabled;
+    private readonly IReadOnlyList<INamedTypeSymbol> _boxableValueTypes;
+    private bool _hasBoxingConversion;
 
     private readonly Dictionary<
         SupertypeKey,
@@ -72,6 +75,14 @@ internal sealed class RuntimeTypeReachability
             .ToDictionary(group => group.Key, group => group.First());
 
         _plainObjects = [.. emittedTypes.Where(SymbolHelper.HasPlainObject)];
+        _boxingEnabled = !compilation.Assembly.HasAttribute(nameof(DisableBoxingAttribute));
+
+        _boxableValueTypes =
+        [
+            .. emittedTypes.Where(type =>
+                type.TypeKind is TypeKind.Enum || SymbolHelper.HasInlineWrapper(type)
+            ),
+        ];
     }
 
     /// <summary>
@@ -116,6 +127,8 @@ internal sealed class RuntimeTypeReachability
 
     private void Answer(IrRuntimeQuestion question)
     {
+        ReportUnboxedTypeQuestion(question);
+
         switch (question.Kind)
         {
             case IrRuntimeQuestionKind.Test:
@@ -141,8 +154,144 @@ internal sealed class RuntimeTypeReachability
             case IrRuntimeQuestionKind.GetType:
                 ReachReceiver(question);
                 break;
+            case IrRuntimeQuestionKind.Box when _boxingEnabled:
+                AnswerBox(question);
+                break;
         }
     }
+
+    /// <summary>
+    /// A boxing conversion (FR-050): to <c>object</c>, <c>ValueType</c> or
+    /// <c>Enum</c>, an enum with a descriptor is boxed with it, so the
+    /// conversion reaches it; an enum without one, or any conversion to an
+    /// interface, stays raw and reports <c>MS0058</c> reason 2 where a type
+    /// question reads the value.
+    /// </summary>
+    private void AnswerBox(IrRuntimeQuestion question)
+    {
+        var toInterface = question.InputType?.AcceptsBoxedValues is not true;
+
+        if (BoxedEnumOf(question.Type) is not { } boxed)
+            return;
+
+        if (toInterface)
+        {
+            ReportUnboxedConversion(question, "a conversion to an interface stays raw");
+
+            return;
+        }
+
+        if (DescribableOf(boxed) is { } described)
+        {
+            Reach(described);
+            _hasBoxingConversion = true;
+
+            return;
+        }
+
+        if (HasRuntimeDescriptor(boxed))
+        {
+            _hasBoxingConversion = true;
+
+            return;
+        }
+
+        ReportUnboxedConversion(question, $"'{boxed.ToDisplayString()}' has no runtime descriptor");
+    }
+
+    /// <summary>
+    /// Whether a tested value of static type <paramref name="input"/> may hold a
+    /// box with boxing on (<c>object</c>, <c>ValueType</c>, <c>Enum</c>, an
+    /// interface): an enum test then reads the enum's descriptor (FR-050).
+    /// </summary>
+    private bool MayHoldBox(IrQuestionedType? input) =>
+        _boxingEnabled
+        && input is not null
+        && input.Shape is not IrQuestionedTypeShape.Dynamic
+        && (
+            input.AcceptsBoxedValues
+            || (
+                input is { Shape: IrQuestionedTypeShape.Named, Key: { } key }
+                && IrTypeKeys.Find(key, _compilation) is { TypeKind: TypeKind.Interface }
+            )
+        );
+
+    private INamedTypeSymbol? BoxedEnumOf(IrQuestionedType boxed) =>
+        boxed is { Shape: IrQuestionedTypeShape.Named, Key: { } key }
+        && IrTypeKeys.Find(key, _compilation) is { TypeKind: TypeKind.Enum } symbol
+            ? symbol
+            : null;
+
+    private void ReportUnboxedConversion(IrRuntimeQuestion question, string reason)
+    {
+        if (!question.FeedsTypeQuestion)
+            return;
+
+        _report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.TypeQuestionOnUnboxedValue,
+                $"'{question.Text}' is not boxed ({reason}), so a type question on its value "
+                    + "answers for the raw value (spec 011 FR-050).",
+                LocationOf(question)
+            )
+        );
+    }
+
+    /// <summary>
+    /// <c>MS0058</c> reason 1: with <c>[assembly: DisableBoxing]</c>, a
+    /// <c>GetType()</c>, or a test, <c>as</c> or cast of an enum, a primitive or an
+    /// interface, on a value whose static type may hold a raw enum or wrapper of
+    /// the compilation.
+    /// </summary>
+    private void ReportUnboxedTypeQuestion(IrRuntimeQuestion question)
+    {
+        if (_boxingEnabled || _boxableValueTypes.Count == 0)
+            return;
+
+        var receiver = question.Kind switch
+        {
+            IrRuntimeQuestionKind.GetType => question.Type,
+            IrRuntimeQuestionKind.Test
+            or IrRuntimeQuestionKind.As
+            or IrRuntimeQuestionKind.Cast when MayBeRawValueTest(question.Type) =>
+                question.InputType,
+            _ => null,
+        };
+
+        if (receiver is null || !MayHoldRawValue(receiver))
+            return;
+
+        _report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.TypeQuestionOnUnboxedValue,
+                $"'{question.Text ?? "GetType()"}' may meet an enum or [InlineWrapper] value that "
+                    + "carries no runtime type: [assembly: DisableBoxing] keeps those values raw, "
+                    + "so the answer is the raw value's (spec 011 FR-050).",
+                LocationOf(question)
+            )
+        );
+    }
+
+    private bool MayBeRawValueTest(IrQuestionedType tested) =>
+        tested.Shape is IrQuestionedTypeShape.Primitive
+        || (
+            tested is { Shape: IrQuestionedTypeShape.Named, Key: { } key }
+            && IrTypeKeys.Find(key, _compilation)
+                is { TypeKind: TypeKind.Enum or TypeKind.Interface }
+                    or { IsValueType: true }
+        );
+
+    private bool MayHoldRawValue(IrQuestionedType receiver) =>
+        receiver.AcceptsBoxedValues
+        || (
+            receiver is { Shape: IrQuestionedTypeShape.Named, Key: { } key }
+            && IrTypeKeys.Find(key, _compilation) is { TypeKind: TypeKind.Interface } iface
+            && _boxableValueTypes.Any(type =>
+                type.AllInterfaces.Contains(iface, SymbolEqualityComparer.Default)
+            )
+        );
 
     /// <summary>
     /// TypeScript tests an interface through its descriptor everywhere. An
@@ -186,6 +335,7 @@ internal sealed class RuntimeTypeReachability
         {
             case DescriptorKind.Interface:
             case DescriptorKind.Enum when read is not DescriptorRead.None:
+            case DescriptorKind.Enum when MayHoldBox(question.InputType):
                 Reach(type);
                 break;
             case DescriptorKind.PlainObject:
@@ -568,6 +718,8 @@ internal sealed class RuntimeTypeReachability
             QuestionedCollectionTypes = ir.QuestionedCollectionTypes,
             OverridingGetters = OverridingGetters(),
             Undescribable = _undescribable,
+            BoxingEnabled = _boxingEnabled,
+            HasBoxingConversion = _hasBoxingConversion,
         };
 
     private Dictionary<
