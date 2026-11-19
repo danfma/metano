@@ -1,7 +1,9 @@
 /**
  * `System.Collections.Generic.Queue<T>` (spec 011 FR-001, FR-006;
- * contracts/runtime-collections.md § `Queue<T>`): a ring buffer, so `dequeue` is
- * O(1) (2.x lowered it to `shift`, O(n)).
+ * contracts/runtime-collections.md § `Queue<T>`): an array and a head index. `enqueue`
+ * pushes, `dequeue` reads at the head and advances it; the consumed prefix is dropped once
+ * it is at least half of the array, so both stay amortized O(1), interleaved too (2.x
+ * lowered `Dequeue` to `shift`, O(n)).
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
 import { closeCollectionFor } from "./close-collection.ts";
@@ -17,29 +19,28 @@ import {
 } from "./throw-helpers.ts";
 
 /*
- * Ring reads cast `items[i] as T`: every read is of one of the `_size` occupied slots from
- * `_head` (the free slots hold `undefined` and are never read as elements).
+ * Element reads cast `items[i] as T`: every read is of a slot from `_head` to the end of
+ * the array, which hold the queued elements (the consumed slots before `_head` hold
+ * `undefined` and are never read).
  */
 
-/** The smallest ring a full wrapped queue grows into. */
-const MINIMUM_CAPACITY = 4;
+/** A consumed prefix shorter than this is never compacted (it is cheaper to keep it). */
+const MINIMUM_COMPACTION = 32;
 
 let Queue$rt: CollectionType<Queue<unknown>> | undefined;
 
 export class Queue<T> implements IReadOnlyCollection<T> {
-  /** The ring: `_size` elements from `_head`, wrapping at `_items.length`. */
-  declare _items: (T | undefined)[];
+  /** The queued elements are `_items[_head..]`; the slots before `_head` are consumed. */
+  declare readonly _items: (T | undefined)[];
   declare _head: number;
-  declare _size: number;
   declare _version: number;
   declare readonly $typeArguments$Queue: readonly RuntimeType[] | undefined;
 
   constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[] | null) {
     const initial = items === null || items === undefined ? [] : Array.from(items);
 
-    Object.defineProperty(this, "_items", { value: initial, writable: true });
+    Object.defineProperty(this, "_items", { value: initial });
     Object.defineProperty(this, "_head", { value: 0, writable: true });
-    Object.defineProperty(this, "_size", { value: initial.length, writable: true });
     Object.defineProperty(this, "_version", { value: 0, writable: true });
     Object.defineProperty(this, "$typeArguments$Queue", { value: typeArguments ?? undefined });
   }
@@ -84,28 +85,16 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   }
 
   get count(): number {
-    return this._size;
+    return this._items.length - this._head;
   }
 
   enqueue(item: T): void {
-    if (this._size === this._items.length && this._head === 0) {
-      this._items.push(item);
-    } else {
-      if (this._size === this._items.length) {
-        this._grow();
-      }
-
-      const items = this._items;
-
-      items[wrap(this._head + this._size, items.length)] = item;
-    }
-
-    this._size++;
+    this._items.push(item);
     this._bump();
   }
 
   dequeue(): T {
-    if (this._size === 0) {
+    if (this._head === this._items.length) {
       throwEmptyQueue();
     }
 
@@ -113,7 +102,7 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   }
 
   peek(): T {
-    if (this._size === 0) {
+    if (this._head === this._items.length) {
       throwEmptyQueue();
     }
 
@@ -124,13 +113,15 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   tryDequeue<D>(
     missingValue: D,
   ): readonly [found: true, value: T] | readonly [found: false, value: D] {
-    return this._size === 0 ? [false, missingValue] : [true, this._take()];
+    return this._head === this._items.length ? [false, missingValue] : [true, this._take()];
   }
 
   tryPeek<D>(
     missingValue: D,
   ): readonly [found: true, value: T] | readonly [found: false, value: D] {
-    return this._size === 0 ? [false, missingValue] : [true, this._items[this._head] as T];
+    return this._head === this._items.length
+      ? [false, missingValue]
+      : [true, this._items[this._head] as T];
   }
 
   contains(item: T): boolean {
@@ -144,9 +135,8 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   }
 
   clear(): void {
-    this._items = [];
+    this._items.length = 0;
     this._head = 0;
-    this._size = 0;
     this._bump();
   }
 
@@ -156,13 +146,7 @@ export class Queue<T> implements IReadOnlyCollection<T> {
 
   /** A detached copy, front to back (FR-055). */
   toArray(): T[] {
-    const result: T[] = [];
-
-    for (let offset = 0; offset < this._size; offset++) {
-      result.push(this._at(offset));
-    }
-
-    return result;
+    return this._items.slice(this._head) as T[];
   }
 
   toJSON(): T[] {
@@ -184,39 +168,34 @@ export class Queue<T> implements IReadOnlyCollection<T> {
 
   /** The element `offset` places behind the head. Internal. */
   _at(offset: number): T {
-    const items = this._items;
-
-    return items[wrap(this._head + offset, items.length)] as T;
+    return this._items[this._head + offset] as T;
   }
 
   private _take(): T {
     const items = this._items;
-    const item = items[this._head] as T;
+    const head = this._head;
+    const item = items[head] as T;
 
-    items[this._head] = undefined;
-    this._head = wrap(this._head + 1, items.length);
-    this._size--;
+    items[head] = undefined;
+    this._head = head + 1;
+    this._compact();
     this._bump();
 
     return item;
   }
 
-  /**
-   * Grows a full ring whose head is not at 0: copies it front to back into an array of
-   * twice its length (head at 0, the free slots `undefined`, never holes), so interleaved
-   * enqueues and dequeues stay amortized O(1). A full ring with its head at 0 grows
-   * through the array's own `push` instead.
-   */
-  private _grow(): void {
-    const grown = this.toArray() as (T | undefined)[];
-    const capacity = Math.max(MINIMUM_CAPACITY, this._items.length * 2);
+  /** Drops the consumed prefix once it is at least half of the array (amortized O(1)). */
+  private _compact(): void {
+    const items = this._items;
+    const head = this._head;
 
-    while (grown.length < capacity) {
-      grown.push(undefined);
+    if (head === items.length) {
+      items.length = 0;
+      this._head = 0;
+    } else if (head >= MINIMUM_COMPACTION && head * 2 >= items.length) {
+      items.splice(0, head);
+      this._head = 0;
     }
-
-    this._items = grown;
-    this._head = 0;
   }
 
   private _bump(): void {
@@ -248,7 +227,7 @@ class QueueIterator<T> implements IterableIterator<T> {
       throwModified();
     }
 
-    if (this._offset >= queue._size) {
+    if (this._offset >= queue.count) {
       return { done: true, value: undefined };
     }
 
@@ -258,9 +237,4 @@ class QueueIterator<T> implements IterableIterator<T> {
   [Symbol.iterator](): IterableIterator<T> {
     return this;
   }
-}
-
-/** `position` folded back into `0..length - 1` (it never exceeds `2 * length - 1`). */
-function wrap(position: number, length: number): number {
-  return position >= length ? position - length : position;
 }
