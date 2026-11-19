@@ -742,7 +742,8 @@ The 2.x compiler emits these; the runtime keeps them, unchanged in behaviour, un
 |---|---|---|---|
 | `listRemove` | `list-helpers.ts` | is | C (flip) |
 | `immutableInsert`, `immutableRemoveAt`, `immutableRemove` | `list-helpers.ts` | is (used by `ImmutableCollections.cs`) | H (011h compiler half) |
-| `addEntry`, `tryGetValue`, `getValueOrDefault` (free functions over a native `Map`) | `dictionary-helpers.ts` | is | C (flip) |
+| `addEntry` (free function over a native `Map`) | `dictionary-helpers.ts` | is | C (flip) |
+| `tryGetValue`, `getValueOrDefault` (free functions over a native `Map`) | `dictionary-helpers.ts` | is (the 011h receivers still lower through them over a native `Map` until 011h; W4-31) | H |
 | `ImmutableCollection` | `immutable-collection.ts` | is | H |
 | `HashSet.size`, `has`, `delete`, `values()`, `forEach` | `hash-set.ts` | members of the reworked class, `@deprecated`, delegating to `count` / `contains` / `remove` / the iterator | C (flip) |
 | `HashSet` constructor `(items?)` | `hash-set.ts` | source-compatible: `items` stays the first parameter | — |
