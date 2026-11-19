@@ -32,7 +32,7 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
     valueComparer?: IEqualityComparer<V> | null,
     typeArguments?: readonly RuntimeType[] | null,
   ) {
-    // `instanceof` cannot narrow the type arguments: a source passed as this builder\'s type holds them.
+    // `instanceof` cannot narrow the type arguments: a source passed as this builder's type holds them.
     const immutable =
       source instanceof ImmutableDictionary ? (source as ImmutableDictionary<K, V>) : undefined;
     const dictionary = new Dictionary<K, V>(

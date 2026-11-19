@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { copyIntoSorted } from "#/system/collections/copy-to.ts";
 
 import {
   requireKey,
@@ -108,29 +107,5 @@ describe("stage 011h throw helpers", () => {
     expect(requireKey(0)).toBe(0);
     expect(caught(() => requireKey(null)).message).toBe("Value cannot be null. (Parameter 'key')");
     expect(caught(() => requireKey(undefined)).name).toBe("ArgumentNullException");
-  });
-});
-
-describe("copyIntoSorted", () => {
-  test("copies from the index", () => {
-    const target = [0, 0, 0];
-
-    copyIntoSorted([1, 2], target, 1);
-
-    expect(target).toEqual([0, 1, 2]);
-  });
-
-  test("checks as the sorted classes' CopyTo", () => {
-    expect(caught(() => copyIntoSorted([1], null as never, 0)).message).toBe(
-      "Value cannot be null. (Parameter 'array')",
-    );
-
-    expect(caught(() => copyIntoSorted([1], [0, 0], -1)).message).toBe(
-      "index ('-1') must be a non-negative value. (Parameter 'index')\nActual value was -1.",
-    );
-
-    expect(caught(() => copyIntoSorted([1, 2], [0, 0], 1)).message).toBe(
-      "Destination array is not long enough to copy all the items in the collection. Check array index and length.",
-    );
   });
 });

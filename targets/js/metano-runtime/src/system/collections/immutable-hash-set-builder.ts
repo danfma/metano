@@ -28,7 +28,7 @@ export class ImmutableHashSetBuilder<T> implements ISet<T> {
     comparer?: IEqualityComparer<T> | null,
     typeArguments?: readonly RuntimeType[] | null,
   ) {
-    // `instanceof` cannot narrow the type arguments: a source passed as this builder\'s type holds them.
+    // `instanceof` cannot narrow the type arguments: a source passed as this builder's type holds them.
     const immutable =
       source instanceof ImmutableHashSet ? (source as ImmutableHashSet<T>) : undefined;
     const ownComparer = comparer ?? immutable?._storage.comparer ?? null;

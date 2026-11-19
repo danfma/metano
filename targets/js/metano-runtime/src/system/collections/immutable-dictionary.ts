@@ -111,14 +111,31 @@ export class ImmutableDictionary<K, V>
     );
   }
 
-  /** `source.ToImmutableDictionary(keySelector[, elementSelector][, keyComparer[, valueComparer]])`. */
+  /** `source.ToImmutableDictionary(keySelector[, keyComparer[, valueComparer]])`: each element is its value. */
+  static fromSelectors<S, K>(
+    source: Iterable<S> | null | undefined,
+    keySelector: (item: S) => K,
+    valueSelector?: null,
+    keyComparer?: IEqualityComparer<K> | null,
+    valueComparer?: IEqualityComparer<S> | null,
+  ): ImmutableDictionary<K, S>;
+
+  /** `source.ToImmutableDictionary(keySelector, elementSelector[, keyComparer[, valueComparer]])`. */
+  static fromSelectors<S, K, V>(
+    source: Iterable<S> | null | undefined,
+    keySelector: (item: S) => K,
+    valueSelector: (item: S) => V,
+    keyComparer?: IEqualityComparer<K> | null,
+    valueComparer?: IEqualityComparer<V> | null,
+  ): ImmutableDictionary<K, V>;
+
   static fromSelectors<S, K, V>(
     source: Iterable<S> | null | undefined,
     keySelector: (item: S) => K,
     valueSelector?: ((item: S) => V) | null,
     keyComparer?: IEqualityComparer<K> | null,
-    valueComparer?: IEqualityComparer<V> | null,
-  ): ImmutableDictionary<K, V> {
+    valueComparer?: IEqualityComparer<S | V> | null,
+  ): ImmutableDictionary<K, S | V> {
     if (source === null || source === undefined) {
       throwArgumentNull("source");
     }
@@ -127,15 +144,13 @@ export class ImmutableDictionary<K, V>
       throwArgumentNull("keySelector");
     }
 
-    // Without an element selector the element is the value (C#: `TValue` is `TSource`).
-    const select = valueSelector ?? ((item: S) => item as unknown as V);
-    const entries: (readonly [K, V])[] = [];
+    const entries: (readonly [K, S | V])[] = [];
 
     for (const item of source) {
-      entries.push([keySelector(item), select(item)]);
+      entries.push([keySelector(item), valueSelector ? valueSelector(item) : item]);
     }
 
-    return ImmutableDictionary.create<K, V>(keyComparer, valueComparer).addRange(entries);
+    return ImmutableDictionary.create<K, S | V>(keyComparer, valueComparer).addRange(entries);
   }
 
   static get $runtimeType(): CollectionType<ImmutableDictionary<unknown, unknown>> {
