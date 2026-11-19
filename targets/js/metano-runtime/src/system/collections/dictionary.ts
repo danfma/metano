@@ -23,9 +23,9 @@ import {
 } from "./throw-helpers.ts";
 
 /*
- * Value reads cast `store.get(key) as V`: they follow a successful `has` (or a `get` whose
- * miss was ruled out), so the value is the one stored, `undefined` only if `undefined`
- * was stored.
+ * Value reads cast `value as V`: a `get` whose miss was ruled out (the value is not
+ * `undefined`, or `has` confirmed the key), so the value is the one stored, `undefined`
+ * only if `undefined` was stored.
  */
 
 let Dictionary$rt: CollectionType<Dictionary<unknown, unknown>> | undefined;
@@ -146,14 +146,16 @@ export class Dictionary<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
     return this._values;
   }
 
+  /** One lookup; a second only when the value read is `undefined` (a miss or a stored `undefined`). */
   get(key: K): V {
     const store = this._store;
+    const value = store.get(requireKey(key));
 
-    if (!store.has(requireKey(key))) {
+    if (value === undefined && !store.has(key)) {
       throwKeyNotFound(key);
     }
 
-    return store.get(key) as V;
+    return value as V;
   }
 
   /** The indexer write: inserts a new key (invalidating enumerations) or overwrites. */
@@ -228,8 +230,9 @@ export class Dictionary<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
     missingValue: D,
   ): readonly [found: true, value: V] | readonly [found: false, value: D] {
     const store = this._store;
+    const value = store.get(requireKey(key));
 
-    return store.has(requireKey(key)) ? [true, store.get(key) as V] : [false, missingValue];
+    return value !== undefined || store.has(key) ? [true, value as V] : [false, missingValue];
   }
 
   getValueOrDefault(key: K): V | null;

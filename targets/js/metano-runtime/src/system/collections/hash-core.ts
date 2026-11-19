@@ -20,9 +20,15 @@ import {
 } from "./default-comparer.ts";
 
 /** The result of a lookup that found no stored key (an object literal: no module-load call). */
-const MISSING: { readonly missing: true } = { missing: true };
+const MISSING: Missing = { missing: true };
 
-type Lookup<K> = K | typeof MISSING;
+interface Missing {
+  readonly missing: true;
+}
+
+function isMissing<K>(stored: K | Missing): stored is Missing {
+  return stored === MISSING;
+}
 
 export class HashCore<K, V> {
   /** `null`: `elementEquals` / `elementHashCode` with the native `Map` fast path. */
@@ -40,55 +46,78 @@ export class HashCore<K, V> {
     return this._entries.size;
   }
 
+  /*
+   * Every member takes one of two paths (spec 011 R2: one `Map` probe per operation on
+   * the direct path). A key that can only equal itself (a primitive, a function, an object
+   * without value equality) with no user comparer is the `Map` key itself; any other key
+   * is first resolved through the hash index to the stored key equal to it.
+   */
+
   has(key: K): boolean {
-    return this._stored(key) !== MISSING;
+    return this._direct(key) ? this._entries.has(key) : !isMissing(this._find(key));
   }
 
   /** The value stored under `key`; `undefined` only on a miss (or a stored `undefined`). */
   get(key: K): V | undefined {
-    const stored = this._stored(key);
+    if (this._direct(key)) {
+      return this._entries.get(key);
+    }
 
-    return stored === MISSING ? undefined : this._entries.get(stored as K);
+    const stored = this._find(key);
+
+    return isMissing(stored) ? undefined : this._entries.get(stored);
   }
 
   /** The stored key equal to `key` (`HashSet.TryGetValue`), `undefined` on a miss. */
   findKey(key: K): K | undefined {
-    const stored = this._stored(key);
+    if (this._direct(key)) {
+      return this._entries.has(key) ? key : undefined;
+    }
 
-    return stored === MISSING ? undefined : (stored as K);
+    const stored = this._find(key);
+
+    return isMissing(stored) ? undefined : stored;
   }
 
   /** Stores `value` under `key`: `true` when inserted; an overwrite keeps the entry's position. */
   set(key: K, value: V): boolean {
-    const stored = this._stored(key);
+    const entries = this._entries;
 
-    if (stored !== MISSING) {
-      this._entries.set(stored as K, value);
+    if (this._direct(key)) {
+      const size = entries.size;
+
+      entries.set(key, value);
+
+      return entries.size !== size;
+    }
+
+    const stored = this._find(key);
+
+    if (!isMissing(stored)) {
+      entries.set(stored, value);
 
       return false;
     }
 
-    this._entries.set(key, value);
-
-    if (this._indexes(key)) {
-      this._bucketOf(this._hash(key)).push(key);
-    }
+    entries.set(key, value);
+    this._bucketOf(this._hash(key)).push(key);
 
     return true;
   }
 
   delete(key: K): boolean {
-    const stored = this._stored(key);
+    if (this._direct(key)) {
+      return this._entries.delete(key);
+    }
 
-    if (stored === MISSING) {
+    const stored = this._find(key);
+
+    if (isMissing(stored)) {
       return false;
     }
 
-    this._entries.delete(stored as K);
-
-    if (this._indexes(stored as K)) {
-      this._unindex(stored as K);
-    }
+    this._entries.delete(stored);
+    this._unindex(stored);
 
     return true;
   }
@@ -128,11 +157,15 @@ export class HashCore<K, V> {
     return this._entries.values();
   }
 
-  private _stored(key: K): Lookup<K> {
-    if (!this._indexes(key)) {
-      return this._entries.has(key) ? key : MISSING;
-    }
+  /** Whether `key` is its own `Map` key: no user comparer, and identity is its equality. */
+  private _direct(key: K): boolean {
+    return (
+      this.comparer === null && (typeof key !== "object" || key === null || !equalsByValue(key))
+    );
+  }
 
+  /** The stored key the index holds for `key`, or `MISSING`. */
+  private _find(key: K): K | Missing {
     const bucket = this._index?.get(this._hash(key));
 
     if (bucket === undefined) {
@@ -146,10 +179,6 @@ export class HashCore<K, V> {
     }
 
     return MISSING;
-  }
-
-  private _indexes(key: K): boolean {
-    return this.comparer !== null || equalsByValue(key);
   }
 
   private _hash(key: K): number {

@@ -203,7 +203,8 @@ export const CASES: readonly BenchCase[] = [
     deferredTo: "R2",
     ops: "N",
     setup: `const keys = Array.from({ length: N }, (_, i) => "k" + i);`,
-    baseline: "const m = new Map(); for (let i = 0; i < N; i++) m.set(keys[i], i); return m.size;",
+    baseline:
+      "const m = new Map(); for (let i = 0; i < N; i++) { const k = keys[i]; if (!m.has(k)) m.set(k, i); } return m.size;",
     variant:
       "const d = new Dictionary(); for (let i = 0; i < N; i++) d.add(keys[i], i); return d.count;",
   },
