@@ -284,6 +284,169 @@ public class DefaultTextTranspileTests
         await Assert.That(output).Contains("formatText");
     }
 
+    [Test]
+    [Arguments("return $\"{value}\";")]
+    [Arguments("return $\"{(value)}\";")]
+    [Arguments("return \"x\" + value;")]
+    [Arguments("string text = \"\"; text += value; return text;")]
+    [Arguments("return value.ToString();")]
+    [Arguments("return string.Join(\",\", new[] { value });")]
+    public async Task EnumTextSites_ReachTheDescriptorThroughTheSharedRule(string body)
+    {
+        var files = TranspileHelper.Transpile(
+            $$"""
+            [Transpile] public enum Color { Red, Green }
+            [Transpile] public static class Text
+            {
+                public static string A(Color value) { {{body}} }
+            }
+            """
+        );
+
+        await Assert.That(files["text.ts"]).Contains("enumText(");
+        await Assert.That(files["text.ts"]).Contains("Color$runtimeType");
+        await Assert.That(files["color.ts"]).Contains("export const Color$runtimeType");
+    }
+
+    [Test]
+    [Arguments("[Transpile, Ignore(TargetLanguage.TypeScript)]")]
+    [Arguments("[Ignore(TargetLanguage.TypeScript)]")]
+    public async Task TypeScriptIgnoredEnumText_DoesNotReadAnUnreachableDescriptor(
+        string attributes
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            {{attributes}} public enum Hidden { A, B }
+            [Transpile] public static class Text
+            {
+                public static string A(Hidden value, Hidden? nullable) =>
+                    $"{value}|{nullable}" + value + nullable + value.ToString() + nullable.ToString();
+                public static string B(Hidden[] values) => string.Join(";", values);
+                public static string C(Hidden value) { string s = ""; s += value; return s; }
+            }
+            """
+        );
+
+        await Assert.That(files.ContainsKey("hidden.ts")).IsFalse();
+        await Assert.That(files["text.ts"]).DoesNotContain("enumText");
+        await Assert.That(files["text.ts"]).DoesNotContain("Hidden$runtimeType");
+
+        await Assert
+            .That(
+                diagnostics.All(diagnostic =>
+                    diagnostic.Code
+                    == Metano.Compiler.Diagnostics.DiagnosticCodes.IgnoreReferencedByTranspiledCode
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task DartIgnoredEnumText_StillReachesTheTypeScriptDescriptor()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [Transpile, Ignore(TargetLanguage.Dart)] public enum Visible { A, B }
+            [Transpile] public static class Text
+            {
+                public static string A(Visible value) => $"{value}";
+            }
+            """
+        );
+
+        await Assert.That(files["text.ts"]).Contains("enumText(value, Visible$runtimeType)");
+        await Assert.That(files["visible.ts"]).Contains("Visible$runtimeType");
+    }
+
+    [Test]
+    public async Task StringEnum_ImplicitTextKeepsNativeConversionButInvocationUsesItsDescriptor()
+    {
+        var implicitFiles = TranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum] public enum Color { Red, Green }
+            [Transpile] public static class Text
+            {
+                public static string A(Color value) => $"{value}" + value;
+                public static string B(Color[] values) => string.Join(";", values);
+                public static string C(Color value) { string s = ""; s += value; return s; }
+            }
+            """
+        );
+
+        await Assert.That(implicitFiles["text.ts"]).DoesNotContain("enumText");
+
+        // Concatenation boxes its enum operand independently of default-text conversion.
+        // That existing boxing rule may reach the descriptor even without an enumText call.
+
+        var invocationFiles = TranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum] public enum Color { Red, Green }
+            [Transpile] public static class Text
+            {
+                public static string A(Color value) => value.ToString();
+            }
+            """
+        );
+
+        await Assert
+            .That(invocationFiles["text.ts"])
+            .Contains("enumText(value, Color$runtimeType)");
+
+        await Assert.That(invocationFiles["color.ts"]).Contains("Color$runtimeType");
+    }
+
+    [Test]
+    public async Task DecimalScale_FollowsTheMappedFormatterRatherThanTheExportPackage()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: ExportFromBcl(typeof(decimal), ExportedName = "Decimal", FromPackage = "custom-decimal")]
+            [Transpile] public static class Text
+            {
+                public static string A() => $"{1.20m}";
+            }
+            """
+        )["text.ts"];
+
+        await Assert.That(output).Contains("from \"custom-decimal\"");
+        await Assert.That(output).Contains("withDecimalScale(new Decimal(\"1.20\"), 2)");
+    }
+
+    [Test]
+    public async Task TransparentSyntaxWrappers_KeepTheirDefaultTextConversion()
+    {
+        var output = TranspileText(
+            """
+            public static string A(bool? value) => $"{(value!)}" + (value!);
+            """
+        );
+
+        await Assert.That(output).Contains("formatBoolean(");
+        await Assert.That(output).DoesNotContain("${value");
+    }
+
+    [Test]
+    public async Task DecimalScale_IsNotRegisteredWhenTheDefaultTextMappingDoesNotReadIt()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: MapMethod(typeof(decimal), nameof(decimal.ToString), JsTemplate = "$this.toString()", WhenArgCount = 0)]
+            [Transpile] public static class Text
+            {
+                public static string A() => $"{1.20m}";
+            }
+            """
+        )["text.ts"];
+
+        await Assert.That(output).DoesNotContain("withDecimalScale");
+    }
+
     private static string TranspileText(string members) =>
         TranspileHelper.Transpile(
             $$"""

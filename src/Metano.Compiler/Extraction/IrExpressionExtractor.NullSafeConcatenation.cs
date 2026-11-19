@@ -71,13 +71,8 @@ public sealed partial class IrExpressionExtractor
         ConcatenationOperand(hole.Expression);
 
     private bool IsStringConcatenation(ExpressionSyntax operatorSyntax) =>
-        _semantic.GetSymbolInfo(operatorSyntax).Symbol
-            is IMethodSymbol
-            {
-                MethodKind: MethodKind.BuiltinOperator,
-                Name: WellKnownMemberNames.AdditionOperatorName,
-                ContainingType.SpecialType: SpecialType.System_String,
-            };
+        DefaultTextSites.Classify(_semantic.GetOperation(operatorSyntax))
+        == DefaultTextSite.Implicit;
 
     private IrExpression ConcatenationOperand(ExpressionSyntax operand)
     {
@@ -120,13 +115,14 @@ public sealed partial class IrExpressionExtractor
     {
         var type = _semantic.GetTypeInfo(operand).Type;
 
-        if (type?.UnwrapNullableValueType().HasStringEnum() == true)
-            return null;
-
         return
             DefaultTextConversion.MappedToString(
                 type is ITypeParameterSymbol ? _semantic.Compilation.ObjectType : type,
-                _context.LowersByDeclarativeMapping
+                new(
+                    _target,
+                    _context.LowersByDeclarativeMapping,
+                    DefaultTextSites.ForOperand(operand, _semantic)
+                )
             )
                 is { } toString
             ? DefaultTextCall(value, toString, type)
@@ -151,8 +147,7 @@ public sealed partial class IrExpressionExtractor
     )
     {
         if (
-            method is not { Name: nameof(ToString), IsStatic: false, Parameters.Length: 0 }
-            || !method.ContainingAssembly.IsBclAssembly()
+            !DefaultTextSites.IsInvocation(method)
             || QualifiedMemberSyntax.From(invocation.Expression) is not { } member
         )
             return null;
@@ -162,7 +157,7 @@ public sealed partial class IrExpressionExtractor
         if (
             DefaultTextConversion.MappedToString(
                 type is ITypeParameterSymbol ? _semantic.Compilation.ObjectType : type,
-                _context.LowersByDeclarativeMapping
+                new(_target, _context.LowersByDeclarativeMapping, DefaultTextSite.Invocation)
             ) is
             { } toString
         )

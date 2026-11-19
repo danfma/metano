@@ -78,7 +78,8 @@ public static partial class IrToTsExpressionBridge
                 MapLiteral(
                     lit.EnumConversionType is { } enumType
                         ? TsEnumRepresentation.Constant(lit, enumType)
-                        : lit
+                        : lit,
+                    context
                 ),
                 lit.EnumConversionType
             ),
@@ -2641,7 +2642,7 @@ public static partial class IrToTsExpressionBridge
                 positionalArgs
             );
 
-    private static TsExpression MapLiteral(IrLiteral lit) =>
+    private static TsExpression MapLiteral(IrLiteral lit, IrToTsBridgeContext context) =>
         lit.Kind switch
         {
             IrLiteralKind.Null => new TsLiteral("null"),
@@ -2655,7 +2656,7 @@ public static partial class IrToTsExpressionBridge
             // receiver type. The extractor passes through the raw source
             // token text so precision is preserved. The origin carries the
             // decimal.js import to the collector (issue #477).
-            IrLiteralKind.Decimal => MapDecimalLiteral(lit),
+            IrLiteralKind.Decimal => MapDecimalLiteral(lit, context),
             // BigInteger literals use the native bigint suffix `n`, and so do
             // 64-bit ones (spec 012 FR-007).
             IrLiteralKind.BigInteger or IrLiteralKind.Int64 or IrLiteralKind.UInt64 =>
@@ -2665,18 +2666,13 @@ public static partial class IrToTsExpressionBridge
 
     private static TsLiteral BigIntLiteral(object? value) => new(FormatNumericValue(value) + "n");
 
-    private static TsExpression MapDecimalLiteral(IrLiteral literal)
+    private static TsExpression MapDecimalLiteral(IrLiteral literal, IrToTsBridgeContext context)
     {
         var text = FormatNumericValue(literal.Value);
         var value = new TsNewExpression(BclDecimalValueReference(), [new TsStringLiteral(text)]);
         var point = text.IndexOf('.');
 
-        if (
-            point < 0
-            || !text.EndsWith('0')
-            || IrToTsTypeMapper.BclOverrides?.OriginOf(IrPrimitive.Decimal)?.PackageName
-                != "metano-runtime/system/decimal"
-        )
+        if (point < 0 || !text.EndsWith('0') || !UsesDecimalScaleText(context.Bcl))
             return value;
 
         return new TsTemplate(
@@ -2688,6 +2684,17 @@ public static partial class IrToTsExpressionBridge
             RuntimeImports = ["withDecimalScale"],
         };
     }
+
+    /// <summary>Register presentation scale only when the mapped default formatter reads it.</summary>
+    private static bool UsesDecimalScaleText(DeclarativeMappingRegistry? mappings) =>
+        mappings?.TryGetMethodsByFullName("decimal", nameof(ToString), out var entries) == true
+        && entries
+            .FirstOrDefault(entry =>
+                entry.HasJsMapping
+                && entry.MatchesOverload(0, [])
+                && DeclarativeMappingRendering.MatchesArgFilter(entry, [])
+            )
+            ?.RuntimeImportsList.Contains("formatText") == true;
 
     private static string FormatNumericValue(object? value) =>
         value is IFormattable f

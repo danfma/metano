@@ -21,15 +21,21 @@ internal static class DefaultTextConversion
     /// </summary>
     public static IMethodSymbol? MappedToString(
         ITypeSymbol? type,
-        Func<IMethodSymbol, int, bool>? lowersByDeclarativeMapping
+        DefaultTextConversionPolicy policy
     )
     {
-        if (type?.UnwrapNullableValueType() is not { } value || !HasInvariantText(value))
+        if (
+            policy.Site == DefaultTextSite.None
+            || type?.UnwrapNullableValueType() is not { } value
+            || !HasInvariantText(value, policy)
+            || value.HasStringEnum() && policy.Site != DefaultTextSite.Invocation
+        )
             return null;
 
         var toString = ParameterlessToString(value);
 
-        return toString is not null && lowersByDeclarativeMapping?.Invoke(toString, 0) == true
+        return
+            toString is not null && policy.LowersByDeclarativeMapping?.Invoke(toString, 0) == true
             ? toString
             : null;
     }
@@ -75,9 +81,10 @@ internal static class DefaultTextConversion
         return null;
     }
 
-    private static bool HasInvariantText(ITypeSymbol type) =>
+    private static bool HasInvariantText(ITypeSymbol type, DefaultTextConversionPolicy policy) =>
         type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
-            && IrTypeRefMapper.IsTranspilableType(enumType, target: null)
+            && !SymbolHelper.HasIgnore(enumType, policy.Target)
+            && IrTypeRefMapper.IsTranspilableType(enumType, policy.Target)
         || type.TypeKind == TypeKind.TypeParameter
         || type is INamedTypeSymbol { IsTupleType: true }
         || type.ToDisplayString() == "System.TimeSpan"

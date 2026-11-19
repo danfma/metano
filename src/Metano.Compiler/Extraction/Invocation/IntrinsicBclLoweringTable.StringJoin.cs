@@ -28,7 +28,7 @@ public sealed partial class IntrinsicBclLoweringTable
             var method in stringType
                 .GetMembers("Join")
                 .OfType<IMethodSymbol>()
-                .Where(m => m.IsStatic && m.Parameters.Length == 2)
+                .Where(DefaultTextSites.IsJoin)
         )
         {
             _entries[method.OriginalDefinition] = BuildStringJoinCall;
@@ -78,13 +78,10 @@ public sealed partial class IntrinsicBclLoweringTable
         var value = ctx.Recurse(element);
         var type = ctx.SemanticModel.GetTypeInfo(element).Type;
 
-        if (type?.UnwrapNullableValueType().HasStringEnum() == true)
-            return value;
-
         return
             DefaultTextConversion.MappedToString(
                 type is ITypeParameterSymbol ? ctx.SemanticModel.Compilation.ObjectType : type,
-                _lowersByDeclarativeMapping
+                new(_helpers.Target, _lowersByDeclarativeMapping, DefaultTextSite.Implicit)
             )
                 is { } toString
             ? JoinTextCall(value, toString, type)
@@ -104,7 +101,7 @@ public sealed partial class IntrinsicBclLoweringTable
             ? argument
             : (ctx.Symbol?.Parameters.LastOrDefault()?.Type as IArrayTypeSymbol)?.ElementType;
 
-        if (element is null || element.UnwrapNullableValueType().HasStringEnum())
+        if (element is null)
             return values;
 
         if (
@@ -112,7 +109,7 @@ public sealed partial class IntrinsicBclLoweringTable
                 element is ITypeParameterSymbol
                     ? ctx.SemanticModel.Compilation.ObjectType
                     : element,
-                _lowersByDeclarativeMapping
+                new(_helpers.Target, _lowersByDeclarativeMapping, DefaultTextSite.Implicit)
             )
             is not { } toString
         )

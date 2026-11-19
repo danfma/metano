@@ -436,80 +436,36 @@ internal sealed class RuntimeQuestionScanner
     /// </summary>
     private void InspectEnumText(IOperation operation)
     {
-        if (
-            operation.Type?.UnwrapNullableValueType()
-                is not INamedTypeSymbol { TypeKind: TypeKind.Enum } type
-            || !IrTypeRefMapper.IsTranspilableType(type, _target)
-        )
-            return;
-
-        var parent = operation.Parent;
-
-        while (parent is IConversionOperation conversion)
-            parent = conversion.Parent;
-
-        if (parent is IArgumentOperation argument)
-            parent = argument.Parent;
-
-        if (
-            type.HasStringEnum()
-            && parent
-                is not IInvocationOperation
-                {
-                    TargetMethod.Name: nameof(ToString),
-                    Arguments.Length: 0,
-                }
-        )
-            return;
-
-        var isTextSite = parent switch
-        {
-            IInterpolationOperation => true,
-            IBinaryOperation { Type.SpecialType: SpecialType.System_String } => true,
-            ICompoundAssignmentOperation { Type.SpecialType: SpecialType.System_String } => true,
-            IInvocationOperation { TargetMethod.Name: nameof(ToString), Arguments.Length: 0 } =>
-                true,
-            IInvocationOperation
-            {
-                TargetMethod.Name: "Join",
-                TargetMethod.ContainingType.SpecialType: SpecialType.System_String,
-            } => true,
-            _ => false,
-        };
-
-        if (
-            isTextSite
-            && _mappings.TryGetMethodsByFullName("System.Enum", nameof(ToString), out var mappings)
-            && mappings.Any(mapping => mapping.DescribedTypeArguments.Contains(0))
-        )
-            Record(IrRuntimeQuestionKind.TypeOf, type, operation.Syntax);
+        RecordEnumText(operation.Type, DefaultTextSites.ForOperand(operation), operation.Syntax);
     }
 
     private void InspectEnumJoin(IInvocationOperation invocation)
     {
         var method = invocation.TargetMethod;
 
-        if (
-            method.Name != "Join"
-            || method.ContainingType.SpecialType != SpecialType.System_String
-            || method.TypeArguments.Length != 1
-        )
+        if (!DefaultTextSites.IsJoin(method) || method.TypeArguments.Length != 1)
             return;
 
-        var type = method.TypeArguments[0].UnwrapNullableValueType();
+        RecordEnumText(method.TypeArguments[0], DefaultTextSite.Implicit, invocation.Syntax);
+    }
 
+    private void RecordEnumText(ITypeSymbol? type, DefaultTextSite site, SyntaxNode syntax)
+    {
         if (
-            type is not INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
-            || !IrTypeRefMapper.IsTranspilableType(enumType, _target)
-            || type.HasStringEnum()
-        )
-            return;
-
-        if (
-            _mappings.TryGetMethodsByFullName("System.Enum", nameof(ToString), out var mappings)
+            type?.UnwrapNullableValueType() is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+            && DefaultTextConversion.MappedToString(
+                enumType,
+                new(_target, _mappings.HasJsMappingFor, site)
+            )
+                is { } method
+            && _mappings.TryGetMethodsByFullName(
+                method.ContainingType.GetStableFullName(),
+                method.Name,
+                out var mappings
+            )
             && mappings.Any(mapping => mapping.DescribedTypeArguments.Contains(0))
         )
-            Record(IrRuntimeQuestionKind.TypeOf, type, invocation.Syntax);
+            Record(IrRuntimeQuestionKind.TypeOf, enumType, syntax);
     }
 
     private void InspectGetType(IInvocationOperation invocation)
