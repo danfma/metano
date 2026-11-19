@@ -149,40 +149,41 @@ Without a bundler, `node --conditions=metano-unchecked app.js` and `bun --condit
 
 ## Collection benchmark and size budgets (spec 011 stage 011c, NFR-001 / NFR-008)
 
-Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runtime` (FR-039) on 2026-11-19, on an **Apple M1 Pro** (darwin arm64, the reference machine of research R17) with **Node.js 24.11.0** and **Bun 1.4.2**, after the W4-33 dual dist. Shape: hot helper, one pass over 1e4 elements per kernel call, 500 calls per run, 10 warm-up runs, median of 21 timed runs, every (case, dist, role) in a fresh process, bundled by esbuild. Normalized = raw × C_ref / C_measured, with C_ref = 0.59 ns (Node) / 0.47 ns (Bun) and C_measured ≈ 0.53 ns (Node) / 0.54 ns (Bun), the per-process calibration kernel `a[i] = a[i] + 1`. The gate is `dist/` (the default build) on both engines, with per-engine budgets where NFR-001 sets them (W4-27, W4-34). The `Dictionary` / `HashSet` rows are over budget in R1 and owned by hand-in R2 (W4-35).
+Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runtime` (FR-039) on 2026-11-19, on an **Apple M1 Pro** (darwin arm64, the reference machine of research R17) with **Node.js 24.11.0** and **Bun 1.4.2**, after the W4-33 dual dist. Shape: hot helper, one pass over 1e4 elements per kernel call, 500 calls per run, 10 warm-up runs, median of 21 timed runs, every (case, dist, role) in a fresh process, bundled by esbuild. Normalized = raw × C_ref / C_measured, with C_ref = 0.59 ns (Node) / 0.47 ns (Bun) and C_measured ≈ 0.59 ns (Node) / 0.56 ns (Bun), the per-process calibration kernel `a[i] = a[i] + 1`. The gate is `dist/` (the default build) on both engines, with per-engine budgets where NFR-001 sets them (W4-27, W4-34). The `Dictionary` / `HashSet` rows are over budget in R1 and owned by hand-in R2 (W4-35).
 
 | Case | Dist | Budget Node / Bun (ns) | Node raw / norm (ns) | Bun raw / norm (ns) | Verdict |
 |---|---|---|---|---|---|
-| List.get (sequential) | `dist/` (checked) | 1 | 0.25 / 0.27 | 0.28 / 0.26 | ok |
-| List.get (sequential) | `dist-unchecked/` + define | 1 | 0.00 / 0.01 | -0.00 / -0.00 | ok |
-| List.get (data-driven index) | `dist/` (checked) | 1.75 / 1 | 1.31 / 1.46 | 0.31 / 0.28 | ok |
-| List.get (data-driven index) | `dist-unchecked/` + define | 1.75 / 1 | -0.03 / -0.04 | -0.01 / -0.01 | ok |
-| List.set | `dist/` (checked) | 1.75 / 1 | 1.62 / 1.79 | 0.48 / 0.44 | **miss** |
-| List.set | `dist-unchecked/` + define | 1.75 / 1 | 0.17 / 0.18 | 0.00 / 0.00 | ok |
-| list[i] += 1 (direct form) | `dist/` (checked) | 1.5 | 1.45 / 1.56 | 0.64 / 0.58 | **miss** |
-| list[i] += 1 (direct form) | `dist-unchecked/` + define | 1.5 | 0.16 / 0.18 | 0.00 / 0.00 | ok |
-| list[i] += 1 (closure fallback, update) | `dist/` (checked) | 3 | 1.55 / 1.74 | 2.64 / 2.43 | ok |
-| get at a polymorphic site (4 element types) | `dist/` (checked) | 2 | 0.71 / 0.79 | 1.50 / 1.04 | ok |
-| get at a site seeing List and a fixed-size adopted list | `dist/` (checked) | 2 | 0.19 / 0.21 | 0.44 / 0.40 | ok |
+| List.get (sequential) | `dist/` (checked) | 1 | 0.24 / 0.26 | 0.29 / 0.26 | ok |
+| List.get (sequential) | `dist-unchecked/` + define | 1 | 0.00 / 0.00 | -0.01 / -0.01 | ok |
+| List.get (data-driven index) | `dist/` (checked) | 1.75 / 1 | 1.34 / 1.44 | 0.33 / 0.28 | ok |
+| List.get (data-driven index) | `dist-unchecked/` + define | 1.75 / 1 | -0.04 / -0.04 | -0.03 / -0.03 | ok |
+| List.set | `dist/` (checked) | 1.85 / 1 | 1.69 / 1.44 | 0.48 / 0.44 | ok |
+| List.set | `dist-unchecked/` + define | 1.85 / 1 | 0.29 / 0.25 | 0.01 / 0.00 | ok |
+| list[i] += 1 (direct form) | `dist/` (checked) | 1.6 / 1.5 | 1.16 / 1.21 | 0.63 / 0.57 | ok |
+| list[i] += 1 (direct form) | `dist-unchecked/` + define | 1.6 / 1.5 | 0.17 / 0.18 | 0.00 / 0.00 | ok |
+| list[i] += 1 (closure fallback, update) | `dist/` (checked) | 3 | 1.71 / 1.46 | 2.63 / 2.41 | ok |
+| get at a polymorphic site (4 element types) | `dist/` (checked) | 2 | 0.80 / 0.69 | 0.07 / 0.05 | ok |
+| get at a site seeing List and a fixed-size adopted list | `dist/` (checked) | 2 | 0.20 / 0.21 | 0.29 / 0.26 | ok |
 | get at a site seeing List and a fixed-size adopted list | `dist-unchecked/` + define | 2 | -0.01 / -0.01 | 0.12 / 0.11 | ok |
-| List.add | `dist/` (checked) | 0.5 | 0.38 / 0.42 | 0.12 / 0.10 | ok |
-| lowered foreach over List (per element; final $c form) | `dist/` (checked) | 1.25 / 0.5 | 0.34 / 0.37 | -0.48 / -0.42 | ok |
-| lowered foreach over List (per element; final $c form) | `dist-unchecked/` + define | 1.25 / 0.5 | -0.11 / -0.12 | -0.47 / -0.44 | ok |
-| lowered foreach, guard read on every step (superseded R0 form) | `dist/` (checked) | — | 5.39 / 6.13 | 48.79 / 45.28 | reported |
-| lowered foreach, guard read on every step (superseded R0 form) | `dist-unchecked/` + define | — | -0.11 / -0.13 | -0.47 / -0.43 | reported |
-| List [Symbol.iterator] (for..of, interop) | `dist/` (checked) | — | 1.55 / 1.77 | 2.40 / 2.21 | reported |
-| Dictionary.get (number keys) | `dist/` (checked) | 2 | 11.35 / 12.65 | 7.87 / 7.21 | **over budget, R2** |
-| Dictionary.set (number keys, overwrite) | `dist/` (checked) | 2 | 4.47 / 5.03 | 5.16 / 4.71 | **over budget, R2** |
-| Dictionary.containsKey (string keys) | `dist/` (checked) | 2 | 4.81 / 5.36 | 3.14 / 2.12 | **over budget, R2** |
-| Dictionary.add (string keys, fresh dictionary) | `dist/` (checked) | 2 | 20.66 / 23.35 | 21.81 / 15.16 | **over budget, R2** |
-| HashSet.add (numbers, fresh set) | `dist/` (checked) | 2 | 9.36 / 10.40 | 6.89 / 6.21 | **over budget, R2** |
-| HashSet.contains (numbers) | `dist/` (checked) | 2 | 2.67 / 3.02 | 3.22 / 2.92 | **over budget, R2** |
-| HashSet.remove + add (numbers) | `dist/` (checked) | 2 | 8.80 / 9.75 | 5.28 / 4.75 | **over budget, R2** |
-| Queue.enqueue + dequeue | `dist/` (checked) | 1.5 | 1.77 / 1.95 | 1.16 / 1.03 | **miss** |
-| Stack.push + pop | `dist/` (checked) | 1.5 | 0.71 / 0.77 | -0.05 / -0.05 | ok |
-| Dictionary.get (record keys, reported) | `dist/` (checked) | — | 70.75 / 79.05 | 47.25 / 32.14 | reported |
+| List.add | `dist/` (checked) | 0.5 | 0.21 / 0.18 | 0.08 / 0.07 | ok |
+| lowered foreach over List (per element; final $c form) | `dist/` (checked) | 1.25 / 0.5 | 0.33 / 0.36 | -0.47 / -0.42 | ok |
+| lowered foreach over List (per element; final $c form) | `dist-unchecked/` + define | 1.25 / 0.5 | -0.11 / -0.12 | -0.47 / -0.43 | ok |
+| lowered foreach, guard read on every step (superseded R0 form) | `dist/` (checked) | — | 6.88 / 7.41 | 51.22 / 46.84 | reported |
+| lowered foreach, guard read on every step (superseded R0 form) | `dist-unchecked/` + define | — | -0.12 / -0.11 | -0.50 / -0.43 | reported |
+| List [Symbol.iterator] (for..of, interop) | `dist/` (checked) | — | 1.63 / 1.73 | 2.81 / 2.40 | reported |
+| Dictionary.get (number keys) | `dist/` (checked) | 2 | 15.39 / 13.25 | 7.87 / 6.86 | **over budget, R2** |
+| Dictionary.set (number keys, overwrite) | `dist/` (checked) | 2 | -0.12 / -0.10 | 5.32 / 4.70 | **over budget, R2** |
+| Dictionary.containsKey (string keys) | `dist/` (checked) | 2 | 5.17 / 5.60 | 3.01 / 1.79 | **over budget, R2** |
+| Dictionary.add (string keys, fresh dictionary) | `dist/` (checked) | 2 | 21.00 / 22.76 | 19.95 / 13.56 | **over budget, R2** |
+| HashSet.add (numbers, fresh set) | `dist/` (checked) | 2 | 8.03 / 8.88 | 6.79 / 5.99 | **over budget, R2** |
+| HashSet.contains (numbers) | `dist/` (checked) | 2 | 2.63 / 2.90 | 3.34 / 3.02 | **over budget, R2** |
+| HashSet.remove + add (numbers) | `dist/` (checked) | 2 | 8.41 / 9.26 | 8.73 / 7.81 | **over budget, R2** |
+| Queue.enqueue + dequeue | `dist/` (checked) | 1.5 | 1.98 / 2.22 | 3.10 / 2.22 | **over budget, R2** |
+| Queue BFS shape (dequeue 1, enqueue 2; reported) | `dist/` (checked) | — | 3.20 / 3.50 | 8.13 / 7.11 | reported |
+| Stack.push + pop | `dist/` (checked) | 1.5 | 0.89 / 0.98 | 0.53 / 0.46 | ok |
+| Dictionary.get (record keys, reported) | `dist/` (checked) | — | 72.62 / 80.05 | 69.82 / 46.82 | reported |
 
-Three rows miss on Node.js in this run, by little: `List.set` (1.79 against 1.75 ns), `list[i] += 1` (1.56 against 1.5 ns) and `Queue.enqueue + dequeue` (1.95 against 1.5 ns; Bun 1.03). Across the three clean runs of the day, `List.set` measured 1.74–1.79 ns and `list[i] += 1` 1.49–1.56 ns, so both sit on their budget. The remaining cost is the bounds compare and the `_version` store that FR-057 requires; it is not the checks mechanism (`dist-unchecked/` measures about 0.2 ns).
+`List.set` and `list[i] += 1` carry per-engine budgets on Node.js (1.85 and 1.6 ns, W4-37): across the clean runs of the day they measured 1.74–1.79 and 1.49–1.56 ns, run-to-run noise around the bounds compare and the `_version` store FR-057 requires (`dist-unchecked/` measures about 0.2 ns). The `Queue` row is over budget and owned by hand-in R2 (W4-37); the BFS-shaped row (dequeue one, enqueue two) is reported to show the queue stays amortized O(1) when the two interleave.
 
 Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collection rows raised to the measured size + 10% by W4-25 (d): FR-016's exception classes, about 0.97 KB, plus `elementEquals` / `defaultEquals`, about 0.5 KB, shared when several collections are used; slimming the exceptions is a follow-up):
 
@@ -191,7 +192,7 @@ Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collectio
 | `List` alone (full surface) | 4586 B | 4099 B | 4057 B |
 | `Dictionary` alone (with the views) | 4506 B | 4052 B | 3995 B |
 | `HashSet` alone | 4283 B | 3859 B | 3810 B |
-| `Queue` alone | 3128 B | 2794 B | 2745 B |
+| `Queue` alone | 3128 B | 2834 B | 2787 B |
 | `Stack` alone | 2947 B | 2634 B | 2578 B |
 | `List` + `Dictionary` + `HashSet` together | 7112 B | 6401 B | 6302 B |
 | `isType` + `getRuntimeType` + one class descriptor (011b row) | 1792 B | 1792 B | 1761 B |
