@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ArgumentException } from "#/system/exceptions/argument-exception.ts";
+import { OverflowException } from "#/system/exceptions/overflow-exception.ts";
 import { enumFromRaw } from "#/system/reflection/enum-from-raw.ts";
 import { enumIsDefined } from "#/system/reflection/enum-is-defined.ts";
 import type { EnumType } from "#/system/reflection/runtime-type.ts";
@@ -46,7 +47,9 @@ describe("enumFromRaw with an integral number", () => {
   });
 
   test("rejects a non-integral number and other types", () => {
-    expect(() => enumFromRaw(Color$rt, 1.5)).toThrow(ArgumentException);
+    expect(() => enumFromRaw(Color$rt, 1.5)).toThrow(
+      "The value passed in must be an enum base or an underlying type for an enum, such as an Int32. (Parameter 'value')",
+    );
     expect(() => enumFromRaw(Color$rt, null)).toThrow(ArgumentException);
     expect(() => enumFromRaw(Color$rt, true)).toThrow(ArgumentException);
   });
@@ -72,19 +75,77 @@ describe("enumFromRaw with a string", () => {
     expect(enumFromRaw(Perms$rt, "Read, Execute")).toBe(5);
     expect(enumFromRaw(Perms$rt, "Read,Write,Execute")).toBe(7);
     expect(enumFromRaw(Perms$rt, "read, WRITE", true)).toBe(3);
-    expect(enumFromRaw(Perms$rt, "Read, 8")).toBe(9);
+  });
+
+  test("accepts a number only as the whole text, not inside a list", () => {
+    expect(enumFromRaw(Perms$rt, "+5")).toBe(5);
+    expect(() => enumFromRaw(Perms$rt, "Read, 8")).toThrow("Requested value 'Read, 8' was not found.");
+    expect(() => enumFromRaw(Perms$rt, "1, 2")).toThrow("Requested value '1, 2' was not found.");
   });
 
   test("throws ArgumentException for an unknown name", () => {
     expect(() => enumFromRaw(Perms$rt, "Read, Nope")).toThrow(ArgumentException);
-    expect(() => enumFromRaw(Perms$rt, "Read, Nope")).toThrow("Requested value 'Nope' was not found.");
-    expect(() => enumFromRaw(Color$rt, "")).toThrow(ArgumentException);
+    expect(() => enumFromRaw(Perms$rt, "Read, Nope")).toThrow("Requested value 'Read, Nope' was not found.");
+    expect(() => enumFromRaw(Color$rt, "   ")).toThrow(
+      "Must specify valid information for parsing in the string. (Parameter 'value')",
+    );
   });
 
   test("maps a string enum's name to its value", () => {
     expect(enumFromRaw(Mode$rt, "Slow")).toBe("slow");
     expect(enumFromRaw(Mode$rt, "slow", true)).toBe("slow");
     expect(() => enumFromRaw(Mode$rt, "Medium")).toThrow("Requested value 'Medium' was not found.");
+  });
+});
+
+const Tiny$rt: EnumType<number> = {
+  kind: "enum",
+  name: "Tiny",
+  fullName: "Geo.Tiny",
+  namespace: "Geo",
+  values: [1],
+  names: ["One"],
+  isFlags: false,
+  underlying: "Byte",
+  test: (v: unknown): v is number => typeof v === "number",
+};
+
+const Big$rt: EnumType<number> = {
+  kind: "enum",
+  name: "Big",
+  fullName: "Geo.Big",
+  namespace: "Geo",
+  values: [1, 3000000000],
+  names: ["A", "B"],
+  isFlags: false,
+  underlying: "UInt32",
+  test: (v: unknown): v is number => typeof v === "number",
+};
+
+describe("enumFromRaw in the underlying type's width", () => {
+  test("ToObject wraps an integer, a bigint included", () => {
+    expect(enumFromRaw(Tiny$rt, 300)).toBe(44);
+    expect(enumFromRaw(Color$rt, 1n)).toBe(1);
+  });
+
+  test("Parse rejects a number outside the range", () => {
+    expect(() => enumFromRaw(Tiny$rt, "300")).toThrow(OverflowException);
+    expect(() => enumFromRaw(Tiny$rt, "300")).toThrow(
+      "Value was either too large or too small for an unsigned byte.",
+    );
+    expect(() => enumFromRaw(Perms$rt, "99999999999")).toThrow(
+      "Value was either too large or too small for an Int32.",
+    );
+  });
+
+  test("an unsigned enum keeps its values above the Int32 range", () => {
+    expect(enumFromRaw(Big$rt, "3000000000")).toBe(3000000000);
+    expect(enumFromRaw(Big$rt, "A, B")).toBe(3000000001);
+  });
+
+  test("a string enum maps a number through its members' positions", () => {
+    expect(enumFromRaw(Mode$rt, 1)).toBe("slow");
+    expect(enumFromRaw(Mode$rt, "1")).toBe("slow");
   });
 });
 

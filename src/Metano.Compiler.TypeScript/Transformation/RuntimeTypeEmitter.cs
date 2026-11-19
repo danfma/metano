@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
@@ -106,6 +107,59 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     }
 
     /// <summary>
+    /// <c>underlying: "Byte"</c>: the C# underlying type <c>Enum.Parse</c> /
+    /// <c>ToObject</c> work in (FR-024), omitted for <c>Int32</c>.
+    /// </summary>
+    private static IEnumerable<TsObjectProperty> UnderlyingProperty(INamedTypeSymbol type) =>
+        type.EnumUnderlyingType?.SpecialType switch
+        {
+            null or SpecialType.System_Int32 => [],
+            var special =>
+            [
+                new TsObjectProperty(
+                    "underlying",
+                    new TsStringLiteral(special.Value.ToString()["System_".Length..])
+                ),
+            ],
+        };
+
+    /// <summary>
+    /// <c>ordinals: [0, 5]</c>: a <c>[StringEnum]</c>'s members' C# values, which
+    /// <c>Enum.ToObject</c> and a numeric <c>Enum.Parse</c> map through; omitted
+    /// when they are the members' positions.
+    /// </summary>
+    private static IEnumerable<TsObjectProperty> OrdinalsProperty(
+        INamedTypeSymbol type,
+        IrEnumDeclaration ir
+    )
+    {
+        if (ir.Style is not IrEnumStyle.String)
+            return [];
+
+        var ordinals = ir
+            .Members.Select(member =>
+                type.GetMembers(member.Name).OfType<IFieldSymbol>().FirstOrDefault()?.ConstantValue
+            )
+            .Select(value => Convert.ToInt64(value, CultureInfo.InvariantCulture))
+            .ToList();
+
+        if (ordinals.Select((ordinal, index) => ordinal == index).All(isPosition => isPosition))
+            return [];
+
+        return
+        [
+            new TsObjectProperty(
+                "ordinals",
+                new TsArrayLiteral([
+                    .. ordinals.Select(ordinal =>
+                        (TsExpression)new TsLiteral(ordinal.ToString(CultureInfo.InvariantCulture))
+                    ),
+                ])
+            ),
+        ];
+    }
+
+    /// <summary>
     /// The <c>[PlainObject]</c> implementers' descriptors, as thunks, in the
     /// deterministic order of the reachability phase (OD-8).
     /// </summary>
@@ -171,6 +225,8 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
                 ])
             ),
             new TsObjectProperty("isFlags", BooleanLiteral(ir.IsFlags)),
+            .. UnderlyingProperty(type),
+            .. OrdinalsProperty(type, ir),
             new TsObjectProperty(
                 "test",
                 Predicate(

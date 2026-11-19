@@ -24,6 +24,24 @@ public enum RtPerm
     Write = 2,
 }
 
+public enum RtTiny : byte
+{
+    One = 1,
+}
+
+public enum RtBig : uint
+{
+    A = 1,
+    B = 3000000000,
+}
+
+[StringEnum]
+public enum RtSe
+{
+    X,
+    Y,
+}
+
 /// <summary>
 /// Spec 011 stage 011b B2: plain objects as shapes (FR-020), plain-object
 /// implementers (FR-019), closed generic descriptors (FR-023) and the enum
@@ -131,6 +149,24 @@ public static class RuntimeTypeShapeProbes
         return dto.GetType().Name + "|" + new RtDto("b").GetType().Name;
     }
 
+    private static int s_ticks;
+
+    private static string Tick()
+    {
+        s_ticks++;
+
+        return "t";
+    }
+
+    public static string PlainObjectGetTypeKeepsEffects()
+    {
+        s_ticks = 0;
+
+        var name = new RtDto(Tick()).GetType().Name;
+
+        return name + "|" + s_ticks;
+    }
+
     public static string PlainObjectGetTypeOfNull()
     {
         try
@@ -142,6 +178,107 @@ public static class RuntimeTypeShapeProbes
         catch (NullReferenceException e)
         {
             return e.GetType().Name;
+        }
+    }
+
+    private static string Failure(Exception e) => e.GetType().Name + ": " + e.Message;
+
+    public static string EnumParseNumberInList()
+    {
+        try
+        {
+            return ((int)Enum.Parse<RtPerm>("Read, 8")).ToString();
+        }
+        catch (ArgumentException e)
+        {
+            return Failure(e);
+        }
+    }
+
+    public static string EnumParseNumberList()
+    {
+        try
+        {
+            return ((int)Enum.Parse<RtPerm>("1, 2")).ToString();
+        }
+        catch (ArgumentException e)
+        {
+            return Failure(e);
+        }
+    }
+
+    public static string EnumParseSignedNumber() => ((int)Enum.Parse<RtPerm>(" +3 ")).ToString();
+
+    public static string EnumParseUnsigned() =>
+        (uint)Enum.Parse<RtBig>("3000000000") + "|" + (uint)Enum.Parse<RtBig>("A, B");
+
+    public static string EnumParseNotFoundNamesTheInput()
+    {
+        try
+        {
+            return ((int)Enum.Parse<RtPerm>("Read, Nope")).ToString();
+        }
+        catch (ArgumentException e)
+        {
+            return Failure(e);
+        }
+    }
+
+    public static string EnumParseWhitespace()
+    {
+        try
+        {
+            return ((int)Enum.Parse<RtPerm>("   ")).ToString();
+        }
+        catch (ArgumentException e)
+        {
+            return Failure(e);
+        }
+    }
+
+    public static string EnumParseOverflow()
+    {
+        try
+        {
+            return ((int)Enum.Parse<RtTiny>("300")).ToString();
+        }
+        catch (OverflowException e)
+        {
+            return Failure(e);
+        }
+    }
+
+    public static string EnumParseInt32Overflow()
+    {
+        try
+        {
+            return ((int)Enum.Parse<RtPerm>("99999999999")).ToString();
+        }
+        catch (OverflowException e)
+        {
+            return Failure(e);
+        }
+    }
+
+    public static string EnumParseStringEnumNumber() => Enum.Parse<RtSe>("1").ToString();
+
+    public static string EnumToObjectStringEnum() => Enum.ToObject(typeof(RtSe), 1).ToString()!;
+
+    public static string EnumToObjectLong() =>
+        ((int)(RtColor)Enum.ToObject(typeof(RtColor), 1L)).ToString();
+
+    public static string EnumToObjectWraps() =>
+        ((int)(RtTiny)Enum.ToObject(typeof(RtTiny), 300)).ToString();
+
+    public static string EnumToObjectNonIntegral()
+    {
+        try
+        {
+            return Enum.ToObject(typeof(RtColor), 1.5).ToString()!;
+        }
+        catch (ArgumentException e)
+        {
+            return Failure(e);
         }
     }
 }

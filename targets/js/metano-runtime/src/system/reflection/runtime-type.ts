@@ -86,6 +86,13 @@ export interface EnumType<T> extends RuntimeTypeBase<T> {
   /** Parallel to {@link values}. */
   readonly names: ReadonlyArray<string>;
   readonly isFlags: boolean;
+  /** The C# underlying type; absent for `Int32`. `Enum.Parse` / `ToObject` work in its width. */
+  readonly underlying?: PrimitiveName;
+  /**
+   * A `[StringEnum]`'s members' C# values, parallel to {@link values}; absent when they are
+   * their positions (0, 1, …).
+   */
+  readonly ordinals?: ReadonlyArray<number>;
 }
 
 /** A native array; the element type is erased. */
