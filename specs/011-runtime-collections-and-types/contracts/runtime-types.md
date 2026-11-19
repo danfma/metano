@@ -83,7 +83,7 @@ export function getRuntimeTypeFromType(ctorOrDescriptor: unknown): RuntimeType; 
 export function getNumberType(n: number): PrimitiveType<number>;                   // FR-048: Int32Type | DoubleType (a bigint answers Int64Type / UInt64Type / BigIntegerType by range)
 export function enumFromRaw<E>(type: EnumType<E>, raw: unknown, ignoreCase?: boolean): E;   // FR-049: .NET-faithful Enum.ToObject (an integral number or bigint, wrapped to the underlying width) / Enum.Parse (the whole text as an in-range integer, else comma-separated names OR-ed in the underlying width; ArgumentException for an unknown name, OverflowException out of range); a [StringEnum] maps numbers through its ordinals, and an undeclared one returns String(raw)
 export function box<T>(value: T, type: RuntimeType<T>): Boxed<T>;                   // FR-050: system/reflection/box.ts
-export function unbox(value: unknown): unknown;                                    // FR-050 / FR-051: `value instanceof Boxed` -> raw, anything else unchanged (no duck typing)
+export function unbox(value: unknown): unknown;                                    // FR-050 / FR-051: a box (brand field `$boxed === true`, not instanceof) -> raw, anything else unchanged; an object with an own `$boxed: true` is taken for a box (documented limit)
 export function boxNullable<T>(value: T | null, type: RuntimeType<T>): Boxed<T> | null; // FR-050: evaluate-once form of `c === null ? null : box(c, type)`
 export function tryFilter(filter: () => boolean): boolean;                  // FR-015: false when the filter throws
 ```
@@ -98,7 +98,7 @@ Each descriptor's `test` is self-contained: `class` → `v instanceof ctor` (plu
 // system/reflection/box.ts: one small class; no module-scope effect; shaken when no boxing conversion exists
 export class Boxed<T> {
   constructor(readonly value: T, readonly type: RuntimeType<T>) {}
-  toString(): string { /* .NET enum formatting: the member name, "99" for an undeclared value, "Read, 8" for a flags value with an undeclared bit */ }
+  toString(): string { /* .NET enum formatting: the member name, "99" for an undeclared value, the whole number for a flags value with an undeclared bit (`(Perms)9` -> "9", as .NET 10 prints) */ }
   valueOf(): T { return this.value; }
   toJSON(): T { return this.value; }
 }
