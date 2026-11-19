@@ -19,20 +19,16 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
+    /// <summary>How deep the type-argument walks look for a nested array.</summary>
+    private const int MaxNestedConversionDepth = 16;
+
     /// <summary>
     /// Reports <paramref name="expression"/> when its implicit conversion or
     /// its generic instantiation is one of the B3 shapes.
     /// </summary>
     private void ReportNestedArrayAsListInterface(ExpressionSyntax expression)
     {
-        var info = _semantic.GetTypeInfo(expression);
-
-        if (
-            info.Type is { } source
-            && info.ConvertedType is { } target
-            && !SymbolEqualityComparer.Default.Equals(source, target)
-            && NestsArrayAsListInterface(source, target, depth: 0, nested: false)
-        )
+        if (NestedArrayConversionOf(_semantic.GetTypeInfo(expression)) is (var source, var target))
         {
             ReportNestedArray(
                 expression,
@@ -52,6 +48,21 @@ public sealed partial class IrExpressionExtractor
                     + "is not at run time. Pass a List<T> instead."
             );
     }
+
+    /// <summary>
+    /// The source and target types of the implicit conversion
+    /// <paramref name="info"/> records when it nests an array as a list
+    /// interface (reason 1); <c>null</c> for any other conversion.
+    /// </summary>
+    private static (ITypeSymbol Source, ITypeSymbol Target)? NestedArrayConversionOf(
+        TypeInfo info
+    ) =>
+        info.Type is { } source
+        && info.ConvertedType is { } target
+        && !SymbolEqualityComparer.Default.Equals(source, target)
+        && NestsArrayAsListInterface(source, target, depth: 0, nested: false)
+            ? (source, target)
+            : null;
 
     private static void ReportNestedArray(ExpressionSyntax expression, string message) =>
         ExtractionDiagnostics.Report(
@@ -76,7 +87,7 @@ public sealed partial class IrExpressionExtractor
         bool nested
     )
     {
-        if (depth > 16)
+        if (depth > MaxNestedConversionDepth)
             return false;
 
         if (
@@ -219,7 +230,7 @@ public sealed partial class IrExpressionExtractor
     }
 
     private static bool ContainsArray(ITypeSymbol type, int depth) =>
-        depth <= 16
+        depth <= MaxNestedConversionDepth
         && type switch
         {
             IArrayTypeSymbol => true,

@@ -43,11 +43,7 @@ public sealed partial class IrExpressionExtractor
         if (assign.IsKind(SyntaxKind.SimpleAssignmentExpression))
             return null;
 
-        var result = assign.IsKind(SyntaxKind.CoalesceAssignmentExpression)
-            ? IrIndexerUpdateResult.Coalesce
-            : IrIndexerUpdateResult.NewValue;
-
-        return TryExtractCollectionElementUpdate(assign, assign.Left, result, () =>
+        return TryExtractCollectionElementUpdate(assign, assign.Left, UpdateResultOf(assign), () =>
             WithEnumResultType(assign, ExtractAssignment(assign))
         );
     }
@@ -80,20 +76,30 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IrExpression> store
     )
     {
-        if (
-            assign.IsKind(SyntaxKind.SimpleAssignmentExpression)
-            || rebound is not IrElementAccess { TargetType: IrCollectionTypeRef type } element
-        )
+        if (assign.IsKind(SyntaxKind.SimpleAssignmentExpression))
             return null;
 
-        var place = new IrCollectionElement(element.Target, element.Index, FromEnd: false, type);
+        if (ReboundCollectionElementOf(rebound) is not { } place)
+            return null;
 
-        var result = assign.IsKind(SyntaxKind.CoalesceAssignmentExpression)
+        return UpdateOf(assign, place, UpdateResultOf(assign), store);
+    }
+
+    /// <summary>What the compound assignment <paramref name="assign"/> yields.</summary>
+    private static IrIndexerUpdateResult UpdateResultOf(AssignmentExpressionSyntax assign) =>
+        assign.IsKind(SyntaxKind.CoalesceAssignmentExpression)
             ? IrIndexerUpdateResult.Coalesce
             : IrIndexerUpdateResult.NewValue;
 
-        return UpdateOf(assign, place, result, store);
-    }
+    /// <summary>
+    /// The collection element a null-conditional write's rebound target
+    /// addresses (an element access on a stage 011c collection); <c>null</c>
+    /// for any other target.
+    /// </summary>
+    private static IrCollectionElement? ReboundCollectionElementOf(IrExpression rebound) =>
+        rebound is IrElementAccess { TargetType: IrCollectionTypeRef type } element
+            ? new IrCollectionElement(element.Target, element.Index, FromEnd: false, type)
+            : null;
 
     private IrExpression? TryExtractCollectionElementUpdate(
         ExpressionSyntax node,
@@ -223,18 +229,13 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrCollectionElement? CollectionElementOf(ExpressionSyntax syntax)
     {
-        if (
-            Unparenthesize(syntax)
-                is not ElementAccessExpressionSyntax
-                {
-                    ArgumentList.Arguments: [var argument],
-                } element
-            || !IsCollectionIndexer(_semantic.GetSymbolInfo(element).Symbol)
-            || CollectionReceiverTypeOf(element.Expression) is not { } type
-        )
+        if (CollectionIndexerAccessOf(syntax) is not { } element)
             return null;
 
-        var operand = Unparenthesize(argument.Expression);
+        if (CollectionReceiverTypeOf(element.Expression) is not { } type)
+            return null;
+
+        var operand = Unparenthesize(element.ArgumentList.Arguments[0].Expression);
         var receiver = Extract(element.Expression);
 
         if (AsIndexFromEnd(operand) is { } fromEnd)
@@ -245,6 +246,17 @@ public sealed partial class IrExpressionExtractor
 
         return new IrCollectionElement(receiver, Extract(operand), false, type);
     }
+
+    /// <summary>
+    /// <paramref name="syntax"/> as a one-argument access through the indexer
+    /// a stage 011c collection declares; <c>null</c> for any other place.
+    /// </summary>
+    private ElementAccessExpressionSyntax? CollectionIndexerAccessOf(ExpressionSyntax syntax) =>
+        Unparenthesize(syntax)
+            is ElementAccessExpressionSyntax { ArgumentList.Arguments: [_] } element
+        && IsCollectionIndexer(_semantic.GetSymbolInfo(element).Symbol)
+            ? element
+            : null;
 
     /// <summary>
     /// Whether <paramref name="symbol"/> is the indexer a stage 011c

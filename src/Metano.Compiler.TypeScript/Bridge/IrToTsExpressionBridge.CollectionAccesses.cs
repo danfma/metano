@@ -23,6 +23,22 @@ public static partial class IrToTsExpressionBridge
         + "list to declare them in (a field or static initializer, a constructor-initializer "
         + "argument).";
 
+    // The stems of the temporaries a collection access binds (TsTemporaries
+    // makes each name unique within the body).
+    private const string ReceiverStem = "$r";
+
+    private const string IndexStem = "$i";
+
+    private const string KeyStem = "$k";
+
+    private const string OldValueStem = "$o";
+
+    private const string WrittenValueStem = "$t";
+
+    private const string SliceStartStem = "$s";
+
+    private const string SliceEndStem = "$e";
+
     private static TsRuntimeHelperReference ListClass =>
         RuntimeCollections.ReferenceTo(IrCollectionKind.List);
 
@@ -224,7 +240,7 @@ public static partial class IrToTsExpressionBridge
 
         if (update.Result is IrIndexerUpdateResult.Coalesce)
         {
-            var written = temporaries.Declare("$t");
+            var written = temporaries.Declare(WrittenValueStem);
 
             var store = Comma([
                 Set(bound.Receiver, bound.Index, Assign(written, Map(update.NewValue, context))),
@@ -242,7 +258,7 @@ public static partial class IrToTsExpressionBridge
                 Set(bound.Receiver, bound.Index, NewValueOver(update, read, context)),
             ]);
 
-        var old = temporaries.Declare("$o");
+        var old = temporaries.Declare(OldValueStem);
 
         var bindsOld = update.Result is IrIndexerUpdateResult.OldValue || !readsOnce;
 
@@ -277,13 +293,15 @@ public static partial class IrToTsExpressionBridge
         var receiver = Bound(
             update.Element.Receiver,
             IrEvaluationTraits.IsReusableReceiver(update.Element.Receiver),
-            "$r",
+            ReceiverStem,
             temporaries,
             effects,
             context
         );
 
-        var key = RuntimeCollections.IsKeyed(update.Element.ReceiverType.Kind) ? "$k" : "$i";
+        var key = RuntimeCollections.IsKeyed(update.Element.ReceiverType.Kind)
+            ? KeyStem
+            : IndexStem;
 
         var index = Bound(
             update.Element.Index,
@@ -315,7 +333,7 @@ public static partial class IrToTsExpressionBridge
         var receiver = Bound(
             receiverExpression,
             IrEvaluationTraits.IsReusableReceiver(receiverExpression),
-            "$r",
+            ReceiverStem,
             temporaries,
             effects,
             context
@@ -328,7 +346,7 @@ public static partial class IrToTsExpressionBridge
                 effects
             );
 
-        var index = temporaries.Declare("$i");
+        var index = temporaries.Declare(IndexStem);
 
         effects.Add(Assign(index, Map(offsetExpression, context)));
         effects.Add(Assign(index, CountMinus(receiver, index)));
@@ -528,7 +546,7 @@ public static partial class IrToTsExpressionBridge
         var receiver = BoundPart(
             slice.Target,
             IrEvaluationTraits.IsReusableReceiver(slice.Target),
-            "$r"
+            ReceiverStem
         );
 
         var length = slice.TargetType is IrArrayTypeRef ? "length" : "count";
@@ -545,8 +563,8 @@ public static partial class IrToTsExpressionBridge
                 : value;
         }
 
-        var start = ResolvedBound(slice.Start, slice.StartFromEnd, "$s");
-        var end = ResolvedBound(slice.End, slice.EndFromEnd, "$e");
+        var start = ResolvedBound(slice.Start, slice.StartFromEnd, SliceStartStem);
+        var end = ResolvedBound(slice.End, slice.EndFromEnd, SliceEndStem);
 
         var call = new TsCallExpression(
             new TsPropertyAccess(receiver, "slice"),
@@ -591,7 +609,7 @@ public static partial class IrToTsExpressionBridge
         if (context.Temporaries is not { } temporaries)
             return UnsupportedCollectionAccess("This indexer assignment, whose value is used,");
 
-        var written = temporaries.Declare("$t");
+        var written = temporaries.Declare(WrittenValueStem);
 
         return new TsParenthesized(
             Comma([SetOf(store, Assign(written, Map(store.Right, context)), context), written])

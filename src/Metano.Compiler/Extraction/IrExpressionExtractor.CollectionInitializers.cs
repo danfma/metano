@@ -27,15 +27,9 @@ public sealed partial class IrExpressionExtractor
     )
     {
         if (
-            createdType is not INamedTypeSymbol named
-            || CollectionKindResolver.KindOf(named)
-                is not (
-                    IrCollectionKind.List
-                    or IrCollectionKind.HashSet
-                    or IrCollectionKind.Dictionary
-                )
-            || MapNonNullType(named) is not IrCollectionTypeRef type
-            || _semantic.GetOperation(initializer.Parent!) is not IObjectCreationOperation operation
+            FactoryCollectionOf(createdType, initializer)
+            is not
+            (var named, var type, var operation)
         )
             return null;
 
@@ -74,6 +68,30 @@ public sealed partial class IrExpressionExtractor
                     ),
         };
     }
+
+    /// <summary>
+    /// The created collection when it is one whose initializer lowers to a
+    /// factory (a <c>List</c>, <c>HashSet</c> or <c>Dictionary</c> created by
+    /// an object creation): its symbol, its IR type and the creation;
+    /// <c>null</c> for any other creation.
+    /// </summary>
+    private (
+        INamedTypeSymbol Symbol,
+        IrCollectionTypeRef Type,
+        IObjectCreationOperation Creation
+    )? FactoryCollectionOf(ITypeSymbol? createdType, InitializerExpressionSyntax initializer) =>
+        createdType is INamedTypeSymbol named
+        && HasInitializerFactory(named)
+        && MapNonNullType(named) is IrCollectionTypeRef type
+        && _semantic.GetOperation(initializer.Parent!) is IObjectCreationOperation operation
+            ? (named, type, operation)
+            : null;
+
+    private static bool HasInitializerFactory(INamedTypeSymbol type) =>
+        CollectionKindResolver.KindOf(type)
+            is IrCollectionKind.List
+                or IrCollectionKind.HashSet
+                or IrCollectionKind.Dictionary;
 
     /// <summary>
     /// The values of each <c>Add</c> element, or <c>null</c> when an element
