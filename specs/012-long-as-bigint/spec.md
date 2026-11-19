@@ -324,7 +324,7 @@ The wire contract is in [contracts/json-int64.md](./contracts/json-int64.md).
 - **FR-058 — Long-backed enums.** **Superseded in wave 4 (#701):** 64-bit enums now emit `bigint` member values (spec 011 FR-044 as amended), which OQ-1 (b) anticipated once 011's `const`-object enums landed; the member values are exact and `MS0064` is not reported. The text below is withdrawn. An enum whose underlying type is `long` / `ulong` (or `nint` / `nuint`) MUST keep emitting `number` member values (DECIDED-15). A member whose value is not exactly representable as a double (magnitude above 2^53 and not a multiple of the double's ulp there) MUST report `MS0064` at the member, and the emitted value is the nearest double (`Number(value)`). A member of a `[Flags]` enum `: long` / `: ulong` (or `nint` / `nuint`) whose value is 2^31 or more MUST also report `MS0064`, because JS bit operators on `number` truncate to 32 bits.
 - **FR-059 — Interop declarations.** A `long` / `ulong` (including nullable, array, generic argument and delegate parameter forms) in the signature of an `[Import]`, `[Emit]` or `[External]` member or type, or of a BCL member mapped by a user assembly's `[MapMethod]` / `[MapProperty]` template (Metano's own `src/Metano/Runtime` mappings excluded), MUST report `MS0065` once per declaration or mapping (DECIDED-18). The emitted TS type is `bigint`; no coercion is inserted.
 - **FR-060 — `[PlainObject]`.** A 64-bit `[PlainObject]` field MUST be `field?: bigint`, and `new T(args)` → object literal MUST convert its arguments per FR-010. The docs MUST state that `JSON.stringify` on such an object throws and that the generated context is the supported writer (R10).
-- **FR-061 — Diagnostics.** `MS0064`–`MS0066` MUST be implemented as [contracts/diagnostics.md](./contracts/diagnostics.md) defines them, each with a test asserting code, severity and location.
+- **FR-061 — Diagnostics.** `MS0065`–`MS0066` MUST be implemented (`MS0064` withdrawn in wave 4, #701) as [contracts/diagnostics.md](./contracts/diagnostics.md) defines them, each with a test asserting code, severity and location.
 
 #### J. Release, tests, documentation
 
@@ -392,7 +392,7 @@ The wire contract is in [contracts/json-int64.md](./contracts/json-int64.md).
 - **SC-002**: Every JSON fixture of FR-065 round-trips byte-identically, including `2^60 + 1`, `long.MinValue` and `ulong.MaxValue`.
 - **SC-003**: Every lowering row of contracts/ts-emission.md has a golden, and no golden contains a `bigint` / `number` mix (`tsgo --strict` passes on the consumer that compiles them).
 - **SC-004**: Outside 64-bit code, `uint` / `int` promotions and the non-64-bit shapes NFR-001 lists (`BigInteger` conversions, `(int)dec`, sized arrays), every existing golden and every `targets/` output is unchanged except the reviewed `checked` / `unchecked` fixes (NFR-001).
-- **SC-005**: Each `MS0064`–`MS0066` reason has a test asserting code, severity and location.
+- **SC-005**: Each `MS0065`–`MS0066` reason has a test (`MS0064` withdrawn in wave 4, #701) asserting code, severity and location.
 - **SC-006**: The benchmark of FR-066 is recorded with both runtimes before 3.0.0 ships.
 
 ## Divergences from C# (documented)

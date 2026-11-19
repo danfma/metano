@@ -63,11 +63,11 @@ All paths repo-relative, line numbers on `main` at `90be699e`.
 | `Extraction/DefaultValueLiterals.cs` L49 | `Int64` default literal | `UInt64`, `0n` semantics via the literal kind (FR-004) |
 | `Extraction/IrLinqChainFuser.cs` L353-393 | fuses `Int64` literals | `UInt64` |
 | `Extraction/Invocation/IntrinsicBclLoweringTable.cs` | decimal / rounding / tuple intrinsics | `Math` / `long.*` statics, `Parse` styles, `Convert`, `LongCount`, `Sum` / `Average` / `Min` / `Max` element-type routing (FR-035–FR-041) |
-| `Extraction/IrEnumExtractor.cs` | — | `MS0064` (FR-058) |
+| `Extraction/IrEnumExtractor.cs` | — | `MS0064` (FR-058) (historical: `MS0064` was withdrawn in wave 4, #701) |
 | `Extraction/IrExpressionTreeExtractor.cs` | no conversion node | `convert` nodes and typed 64-bit constants (FR-044) |
 | `Analysis/IrRuntimeRequirementScanner.cs` L254-268 | `Int64` → `isInt64` | `UInt64` → `isUInt64`; the `system/int64` helpers as runtime requirements |
 | `Analysis/IrNodeChildren.cs` L75 | — | children of the two new nodes |
-| `Diagnostics/MetaSharpDiagnostic.cs` | codes up to `MS0063` | `MS0064`–`MS0066` (FR-061) |
+| `Diagnostics/MetaSharpDiagnostic.cs` | codes up to `MS0063` | `MS0064`–`MS0066` (FR-061) (historical: `MS0064` was withdrawn in wave 4, #701) |
 
 ### TypeScript target (`src/Metano.Compiler.TypeScript/`)
 
@@ -194,7 +194,7 @@ Deferred / follow-ups: `checked` / wrap semantics for `int` and narrower (OQ-4);
   `int64-format-parse`, `int64-convert`, `int64-linq`, `int64-ticks`, `int64-json-context`,
   `int64-guards-dispatch`, `int64-plain-object`, `int64-branded`, `int64-expression-tree`,
   `checked-unchecked-int32` (012a, NFR-001 boundary).
-- **Diagnostics**: one test per reason of contracts/diagnostics.md (MS0064 1, MS0065 1 per declaration kind,
+- **Diagnostics**: one test per reason of contracts/diagnostics.md (MS0064 1, historical: withdrawn in wave 4, #701; MS0065 1 per declaration kind,
   MS0066 2), asserting code, severity, location and that the output is still emitted.
 - **Reference conformance (FR-064)**: `tests/Int64Reference/` writes `fixtures/{operators,conversions,bcl}.json`
   (`{ "case": "add.long.unchecked", "args": ["9223372036854775807", "1"], "result": "-9223372036854775808" }` or

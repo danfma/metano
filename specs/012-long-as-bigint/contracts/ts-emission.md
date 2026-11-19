@@ -70,6 +70,9 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `(long)e`, `(ulong)e` (`long` enum) | `e`, `BigInt.asUintN(64, e)` | `e`, `checkedUInt64(e)` |
 | `(IntEnum)l` | `Number(BigInt.asIntN(32, l))` | `Number(checkedNarrow(l, 32, true))` |
 | `(LongEnum)l`, `(LongEnum)i` | `l` (`l as E` for a closed-union alias), `BigInt(i)` | same (#701) |
+| `(long)ue`, `(ulong)ue` (`ulong` enum) | `BigInt.asIntN(64, ue)`, `ue` | `checkedInt64(ue)`, `ue` (#701) |
+| `(ULongEnum)i`, `(ULongEnum)l` | `BigInt.asUintN(64, BigInt(i))`, `BigInt.asUintN(64, l)` | `checkedUInt64(BigInt(i))`, `checkedUInt64(l)` (#701) |
+| `Convert.ToInt64(e)` / `Convert.ToUInt64(e)` (binds the `object` overload) | `convertObjectToInt64(v)` / `convertObjectToUInt64(v)`, which unbox a 64-bit enum box (its raw `bigint`) as they unbox any box | same (#701) |
 | `long? x = ni;` (`int? ni`, identifier) | `ni == null ? null : BigInt(ni)` (also catches `undefined`) | same |
 | `long? x = F();` (`int? F()`) | `mapNullable(f(), BigInt)` | same |
 

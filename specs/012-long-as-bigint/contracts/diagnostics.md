@@ -1,4 +1,4 @@
-# Contract: Diagnostics `MS0064`–`MS0066`
+# Contract: Diagnostics `MS0065`–`MS0066` (`MS0064` withdrawn)
 
 **Normative for**: FR-037, FR-038, FR-058, FR-059, FR-061. This spec PR reserves the codes in
 [diagnostic-catalog.md](../../001-project-baseline-evolution/baseline/diagnostic-catalog.md). `MS0063` is the
@@ -8,7 +8,7 @@ code after this block is `MS0067`.
 
 | Code | Name | Severity | Location |
 |---|---|---|---|
-| `MS0064` | `Int64EnumValuePrecision` | Warning | the enum member |
+| `MS0064` | `Int64EnumValuePrecision` | Warning | the enum member (historical: `MS0064` was withdrawn in wave 4, #701) |
 | `MS0065` | `BigIntAtInteropBoundary` | Warning | the `[Import]` / `[Emit]` / `[External]` declaration, or the user `[MapMethod]` / `[MapProperty]` attribute (once) |
 | `MS0066` | `UnsupportedInt64Format` | Warning | the format or `NumberStyles` argument (the interpolation hole for `$"{x:…}"`) |
 
@@ -24,7 +24,7 @@ differs from C# or from 2.x interop expectations.
 2. A member of a `[Flags]` enum with such an underlying type has a value of 2^31 or more: JS bit operators on
    `number` keep only 32 bits, so `A | B` and `HasFlag` lose it.
 
-Example: `Enum member 'Big.A' has the value 9007199254740993, which TypeScript enum members cannot hold exactly; it is emitted as 9007199254740992 (spec 012 FR-058).`
+Historical example (no longer reported, #701): `Enum member 'Big.A' has the value 9007199254740993, which TypeScript enum members cannot hold exactly; it is emitted as 9007199254740992 (spec 012 FR-058).`
 
 **MS0065 — BigIntAtInteropBoundary** (Warning). FR-059.
 

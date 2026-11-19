@@ -142,7 +142,7 @@ A `ulong` value of 2^63 or more is a negative Dart `int`: unsigned `/`, `%`, `>>
 
 | Code | Raised by | Inputs |
 |---|---|---|
-| `MS0064` | the enum extractor | the member's constant value, the enum's underlying `SpecialType` and `[Flags]` |
+| `MS0064` | the enum extractor (historical: `MS0064` was withdrawn in wave 4, #701) | the member's constant value, the enum's underlying `SpecialType` and `[Flags]` |
 | `MS0065` | the declaration extractor for `[Import]` / `[Emit]` / `[External]`, and the user `[MapMethod]` / `[MapProperty]` reader | the member's signature types, walked through nullable, array, generic and delegate types |
 | `MS0066` | the BCL lowering of `ToString` / interpolation / `Parse` | the constant format string or `NumberStyles` value |
 
