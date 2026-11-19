@@ -78,63 +78,49 @@ export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>> 
 }
 
 export function immutableListType<T>(element: RuntimeType<T>): CollectionType<ImmutableList<T>> {
-  return specializeCollection(ImmutableList.$runtimeType, [element]) as CollectionType<
-    ImmutableList<T>
-  >;
+  return closed<ImmutableList<T>>(ImmutableList.$runtimeType, [element]);
 }
 
 export function immutableHashSetType<T>(
   element: RuntimeType<T>,
 ): CollectionType<ImmutableHashSet<T>> {
-  return specializeCollection(ImmutableHashSet.$runtimeType, [element]) as CollectionType<
-    ImmutableHashSet<T>
-  >;
+  return closed<ImmutableHashSet<T>>(ImmutableHashSet.$runtimeType, [element]);
 }
 
 export function immutableDictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<ImmutableDictionary<K, V>> {
-  return specializeCollection(ImmutableDictionary.$runtimeType, [key, value]) as CollectionType<
-    ImmutableDictionary<K, V>
-  >;
+  return closed<ImmutableDictionary<K, V>>(ImmutableDictionary.$runtimeType, [key, value]);
 }
 
 export function readOnlyListType<T>(element: RuntimeType<T>): CollectionType<ReadOnlyList<T>> {
-  return specializeCollection(ReadOnlyList.$runtimeType, [element]) as CollectionType<
-    ReadOnlyList<T>
-  >;
+  return closed<ReadOnlyList<T>>(ReadOnlyList.$runtimeType, [element]);
 }
 
 export function concurrentDictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<ConcurrentDictionary<K, V>> {
-  return specializeCollection(ConcurrentDictionary.$runtimeType, [key, value]) as CollectionType<
-    ConcurrentDictionary<K, V>
-  >;
+  return closed<ConcurrentDictionary<K, V>>(ConcurrentDictionary.$runtimeType, [key, value]);
 }
 
 export function sortedSetType<T>(element: RuntimeType<T>): CollectionType<SortedSet<T>> {
-  return specializeCollection(SortedSet.$runtimeType, [element]) as CollectionType<SortedSet<T>>;
+  return closed<SortedSet<T>>(SortedSet.$runtimeType, [element]);
 }
 
 export function sortedDictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<SortedDictionary<K, V>> {
-  return specializeCollection(SortedDictionary.$runtimeType, [key, value]) as CollectionType<
-    SortedDictionary<K, V>
-  >;
+  return closed<SortedDictionary<K, V>>(SortedDictionary.$runtimeType, [key, value]);
 }
 
 export function sortedListType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<SortedList<K, V>> {
-  return specializeCollection(SortedList.$runtimeType, [key, value]) as CollectionType<
-    SortedList<K, V>
-  >;
+  return closed<SortedList<K, V>>(SortedList.$runtimeType, [key, value]);
 }
 
 export function iListType<T>(element: RuntimeType<T>): CollectionType<IList<T>> {
@@ -178,25 +164,18 @@ export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IRe
 }
 
 export function iImmutableListType<T>(element: RuntimeType<T>): CollectionType<IImmutableList<T>> {
-  return specializeCollection(openInterface("IImmutableList"), [element]) as CollectionType<
-    IImmutableList<T>
-  >;
+  return closed<IImmutableList<T>>(openInterface("IImmutableList"), [element]);
 }
 
 export function iImmutableSetType<T>(element: RuntimeType<T>): CollectionType<IImmutableSet<T>> {
-  return specializeCollection(openInterface("IImmutableSet"), [element]) as CollectionType<
-    IImmutableSet<T>
-  >;
+  return closed<IImmutableSet<T>>(openInterface("IImmutableSet"), [element]);
 }
 
 export function iImmutableDictionaryType<K, V>(
   key: RuntimeType<K>,
   value: RuntimeType<V>,
 ): CollectionType<IImmutableDictionary<K, V>> {
-  return specializeCollection(openInterface("IImmutableDictionary"), [
-    key,
-    value,
-  ]) as CollectionType<IImmutableDictionary<K, V>>;
+  return closed<IImmutableDictionary<K, V>>(openInterface("IImmutableDictionary"), [key, value]);
 }
 
 type InterfaceKind =
