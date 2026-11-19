@@ -16,8 +16,6 @@ import {
   throwNegative,
 } from "./throw-helpers.ts";
 
-const INITIAL_CAPACITY = 4;
-
 let Queue$rt: CollectionType<Queue<unknown>> | undefined;
 
 export class Queue<T> implements IReadOnlyCollection<T> {
@@ -83,12 +81,17 @@ export class Queue<T> implements IReadOnlyCollection<T> {
 
   enqueue(item: T): void {
     if (this._size === this._items.length) {
-      this._grow();
+      if (this._head !== 0) {
+        this._unwrap();
+      }
+
+      this._items.push(item);
+    } else {
+      const items = this._items;
+
+      items[wrap(this._head + this._size, items.length)] = item;
     }
 
-    const items = this._items;
-
-    items[(this._head + this._size) % items.length] = item;
     this._size++;
     this._bump();
   }
@@ -175,7 +178,7 @@ export class Queue<T> implements IReadOnlyCollection<T> {
   _at(offset: number): T {
     const items = this._items;
 
-    return items[(this._head + offset) % items.length] as T;
+    return items[wrap(this._head + offset, items.length)] as T;
   }
 
   private _take(): T {
@@ -183,19 +186,19 @@ export class Queue<T> implements IReadOnlyCollection<T> {
     const item = items[this._head] as T;
 
     items[this._head] = undefined;
-    this._head = (this._head + 1) % items.length;
+    this._head = wrap(this._head + 1, items.length);
     this._size--;
     this._bump();
 
     return item;
   }
 
-  /** Doubles the ring, unwrapping it so the head is at 0. */
-  private _grow(): void {
-    const grown = this.toArray() as (T | undefined)[];
-
-    grown.length = Math.max(INITIAL_CAPACITY, this._items.length * 2);
-    this._items = grown;
+  /**
+   * A full ring whose head is not at 0: copies it front to back (head at 0) and lets the
+   * next `push` grow the array natively, as a full ring with its head at 0 does.
+   */
+  private _unwrap(): void {
+    this._items = this.toArray() as (T | undefined)[];
     this._head = 0;
   }
 
@@ -238,4 +241,9 @@ class QueueIterator<T> implements IterableIterator<T> {
   [Symbol.iterator](): IterableIterator<T> {
     return this;
   }
+}
+
+/** `position` folded back into `0..length - 1` (it never exceeds `2 * length - 1`). */
+function wrap(position: number, length: number): number {
+  return position >= length ? position - length : position;
 }
