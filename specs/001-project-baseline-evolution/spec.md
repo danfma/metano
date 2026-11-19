@@ -1379,10 +1379,13 @@ Product requirements added after the migration (normative; each one is traced by
      `Directory.Build.*` MUST rerun the tool and preserve literal semicolons in generated
       file prefixes. Consumers MUST exercise default package-root inference without a
       `MetanoPackageRoot` pin, including macOS's `/var` → `/private/var` alias (#706).
-      Inference (baseline FR-030) resolves existing directory symlinks before comparing
-      workspace boundaries, including existing ancestors of not-yet-created output paths;
-      aliases of one workspace MUST NOT cause `MS0044`. The boundary ranking and refusal
-      for genuinely unrelated output directories remain unchanged. An explicit package root
+       Inference (baseline FR-030) MUST walk the written output path's ancestors for markers,
+       package files and the fallback parent; the chosen root MUST stay on that path.
+       Only containment comparisons against the project directory resolve existing symlinks,
+       including ancestors of not-yet-created output paths; aliases of one workspace MUST NOT
+       cause `MS0044`. Outputs linked to sibling or far trees MUST retain their written-path
+       package ownership and writer-relative paths. The boundary ranking and refusal for
+       genuinely unrelated written outputs remain unchanged. An explicit package root
       still wins as given. Deprecating `Metano.Build` on nuget.org remains outside #706.
   2. *Multi-target tests.* With a test-only `.targets` that declares a synthetic second prefix
      over the shared file, tests cover precedence (prefixed over global over default),
