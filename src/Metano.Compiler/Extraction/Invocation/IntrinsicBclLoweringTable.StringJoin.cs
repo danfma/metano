@@ -78,9 +78,16 @@ public sealed partial class IntrinsicBclLoweringTable
         var value = ctx.Recurse(element);
         var type = ctx.SemanticModel.GetTypeInfo(element).Type;
 
+        if (type?.UnwrapNullableValueType().HasStringEnum() == true)
+            return value;
+
         return
-            DefaultTextConversion.MappedToString(type, _lowersByDeclarativeMapping) is { } toString
-            ? DefaultTextConversion.Call(value, toString, _helpers.BuildOrigin(toString))
+            DefaultTextConversion.MappedToString(
+                type is ITypeParameterSymbol ? ctx.SemanticModel.Compilation.ObjectType : type,
+                _lowersByDeclarativeMapping
+            )
+                is { } toString
+            ? JoinTextCall(value, toString, type)
             : value;
     }
 
@@ -93,11 +100,20 @@ public sealed partial class IntrinsicBclLoweringTable
     /// </summary>
     private IrExpression WithDefaultText(InvocationRewriteContext ctx, IrExpression values)
     {
-        if (ctx.Symbol is not { IsGenericMethod: true, TypeArguments: [var element] })
+        var element = ctx.Symbol is { IsGenericMethod: true, TypeArguments: [var argument] }
+            ? argument
+            : (ctx.Symbol?.Parameters.LastOrDefault()?.Type as IArrayTypeSymbol)?.ElementType;
+
+        if (element is null || element.UnwrapNullableValueType().HasStringEnum())
             return values;
 
         if (
-            DefaultTextConversion.MappedToString(element, _lowersByDeclarativeMapping)
+            DefaultTextConversion.MappedToString(
+                element is ITypeParameterSymbol
+                    ? ctx.SemanticModel.Compilation.ObjectType
+                    : element,
+                _lowersByDeclarativeMapping
+            )
             is not { } toString
         )
             return values;
@@ -107,19 +123,23 @@ public sealed partial class IntrinsicBclLoweringTable
         var convert = new IrLambdaExpression(
             [new IrParameter(ItemName, _helpers.MapTypeRef(element), HasExplicitType: false)],
             ReturnType: null,
-            [
-                new IrReturnStatement(
-                    DefaultTextConversion.Call(
-                        new IrIdentifier(ItemName),
-                        toString,
-                        _helpers.BuildOrigin(toString)
-                    )
-                ),
-            ]
+            [new IrReturnStatement(JoinTextCall(new IrIdentifier(ItemName), toString, element))]
         );
 
         return new IrCallExpression(new IrMemberAccess(values, "map"), [new IrArgument(convert)]);
     }
+
+    private IrCallExpression JoinTextCall(
+        IrExpression value,
+        IMethodSymbol toString,
+        ITypeSymbol? type
+    ) =>
+        DefaultTextConversion.Call(value, toString, _helpers.BuildOrigin(toString)) with
+        {
+            TypeArguments = type?.UnwrapNullableValueType() is { TypeKind: TypeKind.Enum } enumType
+                ? [_helpers.MapTypeRef(enumType)]
+                : null,
+        };
 
     private bool LowersToArray(ITypeSymbol type) =>
         _helpers.MapTypeRef(type).AsLegacyArray() is not null;

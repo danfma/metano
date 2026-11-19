@@ -2896,6 +2896,9 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractBaseObjectMemberCall(inv, symbol) is { } baseObjectMemberCall)
             return baseObjectMemberCall;
 
+        if (TryExtractDefaultTextInvocation(inv, symbol) is { } defaultText)
+            return defaultText;
+
         if (TryExtractDirectOverloadCall(inv, symbol) is { } directOverloadCall)
             return directOverloadCall;
 

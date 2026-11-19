@@ -8,6 +8,14 @@
 
 using Metano.Annotations;
 
+[assembly: MapMethod(
+    typeof(TimeSpan),
+    nameof(TimeSpan.ToString),
+    JsTemplate = "formatTimeSpan($this)",
+    RuntimeImports = "formatTimeSpan",
+    WhenArgCount = 0
+)]
+
 // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()
 [assembly: MapProperty(
     typeof(DateTimeOffset),

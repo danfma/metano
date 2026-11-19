@@ -1,4 +1,4 @@
-import { isInt32, isString, valueHashCode } from "metano-runtime";
+import { isInt32, isString, objectText, valueHashCode } from "metano-runtime";
 
 export class Probe {
   protected static readonly byProbeDefault = /* @__PURE__ */ Symbol("Probe()");
@@ -128,7 +128,7 @@ export class Probe {
   }
 
   objectMembers(d: any): void {
-    const s = d.toString();
+    const s = objectText(d);
     const h = valueHashCode(d);
     const e = d.equals(1);
   }

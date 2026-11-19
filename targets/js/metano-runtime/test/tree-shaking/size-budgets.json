@@ -200,7 +200,17 @@
         "Queue empty.",
         "upperValue"
       ],
-      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4505 B / esbuild 4459 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4505 B / esbuild 4459 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used.",
+      "name": "default erased value text",
+      "entry": "entries/default-text.js",
+      "maxGzip": 3072,
+      "$comment": "#694: measured bun 2783 B / esbuild 2732 B; capped at 3 KiB."
+    },
+    {
+      "name": "TimeSpan constant text",
+      "entry": "entries/time-span-text.js",
+      "maxGzip": 448,
+      "$comment": "#694: measured bun 377 B / esbuild 377 B."
     }
   ],
   "modules": [
@@ -250,6 +260,7 @@
     "system/date-time-offset",
     "system/decimal-parsing",
     "system/decimal",
+    "system/default-text",
     "system/delegates",
     "system/double-format",
     "system/dynamic-conversion",
@@ -366,6 +377,7 @@
     "system/string-members",
     "system/strings",
     "system/temporal-helpers",
+    "system/time-span-format",
     "system/time-span",
     "system/type-initializer",
     "system/uuid",

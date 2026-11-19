@@ -37,7 +37,7 @@ public class StringJoinMappingTests
         );
 
         await Assert.That(output).Contains("return [\"a\", \"b\"].join(\"-\");");
-        await Assert.That(output).Contains("return [value, 1, \"x\"].join(separator);");
+        await Assert.That(output).Contains("[objectText(value ?? \"\"), 1, \"x\"]");
         await Assert.That(output).DoesNotContain("String.join");
     }
 
@@ -54,9 +54,11 @@ public class StringJoinMappingTests
 
         await Assert.That(output).Contains("return [...values].join(\"-\");");
         await Assert.That(output).Contains("return [...values].join(\", \");");
+
         await Assert
             .That(output)
             .Contains("return [...linq(values, where((v: number) => v > 1))].join(\"|\");");
+
         await Assert.That(output).DoesNotContain("String.join");
     }
 

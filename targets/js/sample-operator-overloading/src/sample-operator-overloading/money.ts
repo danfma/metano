@@ -4,11 +4,12 @@ import {
   bigIntegerFromDecimal,
   copyRecordWith,
   decimalTextFromBigInteger,
+  enumText,
   isBigInt,
   roundDecimal,
 } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import type { Currency } from "./currency";
+import { Currency$runtimeType, type Currency } from "./currency";
 import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
 
 export class Money {
@@ -118,7 +119,7 @@ export class Money {
   }
 
   toString(): string {
-    return `${this.toDecimal()} ${this.currency.toString().toUpperCase()}`;
+    return `${this.toDecimal()} ${enumText(this.currency, Currency$runtimeType).toUpperCase()}`;
   }
 
   static fromCents(cents: bigint, currency: Currency): Money {

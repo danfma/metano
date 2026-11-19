@@ -18,30 +18,27 @@ BoxingProbes.isTests = True|False|True|True|True|False
 BoxingProbes.objectHashSetMixedCount = 1
 BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
-CastProbes.enums = 1|1|1
 CastProbes.genericFail THROWS TypeError: CastProbes.g(...).bark is not a function
 CastProbes.thisCastFail THROWS TypeError: a.asDog(...).bark is not a function
 CatchProbes.all = ioe:ioe;arg:arg;app:app;sub:sub;nre;argnull:p;ex:plain;none;appinner:inner;knf;none;ns:ns;fmt:fmt;oc:oc;
 CatchProbes.dictMissing = none
 CatchProbes.indexOut = none
 DecimalProbes.arithmetic = 3.305|2.4255|1.105|2.0045454545454545454545454545|0.005|-1.1
-DecimalProbes.big = 7.9228162514264337593543950335e+28|1e-28|7.9228162514264337593543950334e+28|1e-28|24691357802469135780.246913578
+DecimalProbes.big = 79228162514264337593543950335|0.0000000000000000000000000001|7.9228162514264337593543950334e+28|1e-28|24691357802469135780.246913578
 DecimalProbes.collections = 7|2.3333333333333333333333333333|3|1.5|False|-1|2|3,2.5,1.5|14|7
 DecimalProbes.compound = 3
 DecimalProbes.dictKey = F2miss
 DecimalProbes.divZero = no:Infinity
-DecimalProbes.negatives = 0|-0|-1.5|0|0
+DecimalProbes.negatives = 0|-0|-1.5|0|0.00
 DecimalProbes.overflow THROWS TypeError: Cannot read properties of undefined (reading 'plus')
-DecimalProbes.parseTry = True|12.5|False|0|False|True|1234.5
 DecimalProbes.precision = 0.3|T|1.358024679135802467913580237|0.14285714285714285714285714286
-DecimalProbes.records = T|1.1|2.2|[object Object]
+DecimalProbes.records = T|1.10|2.2|[object Object]
 DecimalProbes.rounding = 2|4|2.34|2.36|3|-2|2|-1|1
 DecimalProbes.thirds = 0.33333333333333333333333333333|0.66666666666666666666666666667|2.5|0.99999999999999999999999999999
-DecimalProbes.trailingZeros = 1.5|3|1|100|2.5
+DecimalProbes.trailingZeros = 1.50|3|1|100|2.500
 DecimalProbes.typeTests = decdbldblT
 DefaultProbes.arrays THROWS Error: Unsupported expression: ArrayCreationExpression
 DefaultProbes.bcl THROWS TypeError: Cannot read properties of undefined (reading 'year')
-DefaultProbes.enums = 0|0|fast|notlow
 DefaultProbes.fields THROWS TypeError: Cannot read properties of undefined (reading 'year')
 DefaultProbes.generic = null|null|F|null|null|null|notlow|null|null|null
 DefaultProbes.genericQ = null|null|null
@@ -83,11 +80,7 @@ LinqProbes.intOverflowSum THROWS ReferenceError: Int32 is not defined
 LinqProbes.minMaxDecimal = 0.5|2|1.5|10|13.75|4.5833333333333333333333333333|24.25|4|1.3333333333333333333333333333
 LinqSetProbes.comparers THROWS Error: Unsupported expression: UnsupportedLinqOverload
 LinqSetProbes.setOpsRecords = 3|1|1|2|1|1|2
-NullGuardProbes.concatDecimal = a1.5
-NullGuardProbes.interpGeneric = ghg5hgtruehg1.5h
 ParseProbes.convertCalls = Exception|Exception|Exception|Exception
-ParseProbes.decimalParse = 1.5|1234.5|FormatException|FormatException|-0.5|FormatException|OverflowException|FormatException|FormatException|FormatException
-ParseProbes.decimalTry = 1.5;F;F;2;F;F;F;F;15;7;5;0.5;F;F;F;F;
 ParseProbes.doubleOk = 1.5|1000|1000.5|-0.5|5|Infinity|-Infinity|NaN|1E-07|3|Infinity|Infinity
 ParseProbes.offsets THROWS TypeError: o.toUnixTimeSeconds is not a function
 ParseProbes.timeSpans THROWS ReferenceError: TimeSpan is not defined
@@ -100,32 +93,20 @@ RbBProbes.queueStack THROWS TypeError: q.push is not a function
 RbBProbes.typedToObject THROWS Error: Unsupported expression: UnloweredLinqCall
 Round2Probes.decToDoubleThird = 0.3333333333333333|T
 Round2Probes.exCtorArgs = noparam;p;mnoparam;in;Specified method is not supported.;The given key was not present in the dictionary.;One of the identified items was in an invalid format.;Exception of type 'System.Exception' was thrown.;has;i;
-Round2Probes.nullableText = true|1e-7|0.10000000149011612|True1E-070.1|True1E-070.1|True1E-07
-Round2Probes.nullableTextNull THROWS TypeError: Cannot read properties of null (reading 'toString')
 Round3Probes.decimalRoutes THROWS TypeError: Decimal.toDouble is not a function
 Round3Probes.mathCalls = v1E+21|1E-07|2||1.7976931348623157E+308|1|2|-1
 Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operators with Temporal objects. When comparing, use Temporal.PlainDateTime.compare(obj1, obj2), not obj1 > obj2. When coercing to strings, use `${obj}` or String(obj), not '' + obj. When coercing to numbers, use properties or methods of the object, not `+obj`. When concatenating with strings, use `${str}${obj}` or str.concat(obj), not str + obj. In React, coerce to a string before rendering a Temporal object.
-Round4Probes.compoundIndexOnce = nullx,by,null|3|pq|1
-Round4Probes.compoundReceiverOnce = nullx|sy|nullz|4
 RuntimeTypeProbes.enumMembership = True|True
 RuntimeTypeShapeProbes.closedGenericName = RtBox`1<Int32>|Conformance
 RuntimeTypeShapeProbes.plainObjectIsStructural = True|True|False
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function
 StringProbes.compare THROWS TypeError: String.compare is not a function
-StringProbes.condChainNested = 11|null|7|null|true|null
 StringProbes.emptyAndNullArgs = False
 StringProbes.equalsCalls THROWS TypeError: s.equals is not a function
 StringProbes.formatting THROWS TypeError: String.format is not a function
 StringProbes.lengthAndIndex THROWS TypeError: Cannot read properties of undefined (reading 'toString')
 StringProbes.trimSpecial = [x][1]
-TextProbes.boolNullable = aTrue|True|nulltrue|
-TextProbes.boxed = true|1e-7|true|true1e-7
-TextProbes.compound = v:True1E-070.15c2.53
-TextProbes.dates = 2024-03-05|aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee|aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee|PT1H2M3S|PT1H2M3S|PT1.5S|P1DT12H
-TextProbes.enumsText = 1|1|1||7|Slow|Fast
 TextProbes.floatMath = 0.3|0.10000000149011612|F|0.3|0.1|0.3
-TextProbes.generic = <true>truetrue<1e-7>1e-71e-7<0.10000000149011612>0.100000001490116120.10000000149011612<1>11<>
-TextProbes.joinArrays = True,False|1E-07,2,1E+21|0.1|true,1e-7,1,s|True|2E-07,4,2E+21
+TextProbes.generic = <True>TrueTrue<1E-07>1E-071E-07<0.10000000149011612>0.100000001490116120.10000000149011612<1>11<>
 TextProbes.recordToString = [object Object]
-TextProbes.tupleToString = true,1e-7|1,a

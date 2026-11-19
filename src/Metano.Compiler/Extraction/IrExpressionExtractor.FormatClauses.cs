@@ -130,9 +130,16 @@ public sealed partial class IrExpressionExtractor
         if (!formats.PrintsAsDefaultText(valueType, format))
             return UnsupportedHole(hole, type, format);
 
-        return alignment is null
-            ? new IrInterpolationExpression(ExtractInterpolationHole(hole))
-            : new IrInterpolationExpression(Extract(hole.Expression), Alignment: alignment);
+        // This capability promises the target's native text for the explicit format,
+        // not the parameterless ToString text (an enum's D is numeric, not its name).
+        var value = Extract(hole.Expression);
+
+        return new IrInterpolationExpression(
+            mayBeNull
+                ? new IrBinaryExpression(value, IrBinaryOp.NullCoalescing, EmptyStringLiteral)
+                : value,
+            Alignment: alignment
+        );
     }
 
     /// <summary>

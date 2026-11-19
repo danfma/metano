@@ -419,15 +419,15 @@ public class BoxingTranspileTests
     }
 
     [Test]
-    public async Task Concatenation_AppendsTheTextOfABoxOnlyWhenTheCompilationBoxes()
+    public async Task Concatenation_UsesDefaultTextWhetherTheCompilationBoxesOrNot()
     {
         const string concat = "public static string Text(object o) => \"a\" + o;";
 
-        await Assert.That(Transpile(concat)).Contains("return \"a\" + o;");
+        await Assert.That(Transpile(concat)).Contains("return \"a\" + objectText(o ?? \"\");");
 
         await Assert
             .That(Transpile(concat + " public static object Boxed() => Color.Red;"))
-            .Contains("return \"a\" + String(o);");
+            .Contains("return \"a\" + String(objectText(o ?? \"\"));");
     }
 
     [Test]

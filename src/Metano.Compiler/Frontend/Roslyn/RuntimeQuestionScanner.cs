@@ -159,6 +159,8 @@ internal sealed class RuntimeQuestionScanner
 
     private void Inspect(IOperation operation)
     {
+        InspectEnumText(operation);
+
         if (operation is IConversionOperation conversion)
             InspectBoxing(conversion);
 
@@ -379,6 +381,7 @@ internal sealed class RuntimeQuestionScanner
 
         InspectEnumEquals(invocation);
         RecordDescribedTypeArguments(invocation);
+        InspectEnumJoin(invocation);
     }
 
     /// <summary>
@@ -425,6 +428,80 @@ internal sealed class RuntimeQuestionScanner
 
         foreach (var index in indices.Where(index => index < method.TypeArguments.Length))
             Record(IrRuntimeQuestionKind.TypeOf, method.TypeArguments[index], invocation.Syntax);
+    }
+
+    /// <summary>
+    /// Default text of an enum can declaratively read its descriptor, just as a mapped
+    /// generic call can. Record the enum at each text site, including implicit calls.
+    /// </summary>
+    private void InspectEnumText(IOperation operation)
+    {
+        if (operation.Type?.UnwrapNullableValueType() is not { TypeKind: TypeKind.Enum } type)
+            return;
+
+        var parent = operation.Parent;
+
+        while (parent is IConversionOperation conversion)
+            parent = conversion.Parent;
+
+        if (parent is IArgumentOperation argument)
+            parent = argument.Parent;
+
+        if (
+            type.HasStringEnum()
+            && parent
+                is not IInvocationOperation
+                {
+                    TargetMethod.Name: nameof(ToString),
+                    Arguments.Length: 0,
+                }
+        )
+            return;
+
+        var isTextSite = parent switch
+        {
+            IInterpolationOperation => true,
+            IBinaryOperation { Type.SpecialType: SpecialType.System_String } => true,
+            ICompoundAssignmentOperation { Type.SpecialType: SpecialType.System_String } => true,
+            IInvocationOperation { TargetMethod.Name: nameof(ToString), Arguments.Length: 0 } =>
+                true,
+            IInvocationOperation
+            {
+                TargetMethod.Name: "Join",
+                TargetMethod.ContainingType.SpecialType: SpecialType.System_String,
+            } => true,
+            _ => false,
+        };
+
+        if (
+            isTextSite
+            && _mappings.TryGetMethodsByFullName("System.Enum", nameof(ToString), out var mappings)
+            && mappings.Any(mapping => mapping.DescribedTypeArguments.Contains(0))
+        )
+            Record(IrRuntimeQuestionKind.TypeOf, type, operation.Syntax);
+    }
+
+    private void InspectEnumJoin(IInvocationOperation invocation)
+    {
+        var method = invocation.TargetMethod;
+
+        if (
+            method.Name != "Join"
+            || method.ContainingType.SpecialType != SpecialType.System_String
+            || method.TypeArguments.Length != 1
+        )
+            return;
+
+        var type = method.TypeArguments[0].UnwrapNullableValueType();
+
+        if (type.TypeKind != TypeKind.Enum || type.HasStringEnum())
+            return;
+
+        if (
+            _mappings.TryGetMethodsByFullName("System.Enum", nameof(ToString), out var mappings)
+            && mappings.Any(mapping => mapping.DescribedTypeArguments.Contains(0))
+        )
+            Record(IrRuntimeQuestionKind.TypeOf, type, invocation.Syntax);
     }
 
     private void InspectGetType(IInvocationOperation invocation)

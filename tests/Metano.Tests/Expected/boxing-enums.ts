@@ -1,4 +1,4 @@
-import { box, castTo, defaultEquals, formatBoolean, getRuntimeType, isType, unbox, unboxFor } from "metano-runtime";
+import { box, castTo, defaultEquals, enumText, formatBoolean, getRuntimeType, isType, objectText, unbox, unboxFor } from "metano-runtime";
 import { Color, Color$runtimeType } from "./color";
 
 export class Probe {
@@ -10,7 +10,7 @@ export class Probe {
 
   static questions(o: Object): string {
     const t = getRuntimeType(o);
-    const s = o.toString();
+    const s = objectText(o);
     const eq = defaultEquals(o, box(Color.Red, Color$runtimeType));
     const c = castTo<Color>(o, Color$runtimeType) as Color;
     let k: Color;
@@ -27,10 +27,10 @@ export class Probe {
       if (isType($s, Color$runtimeType)) {
         const other = unbox($s) as Color;
 
-        return other.toString();
+        return enumText(other, Color$runtimeType);
       }
 
-      return `${t.name} ${s ?? ""} ${formatBoolean(eq)} ${c}`;
+      return `${t.name} ${s ?? ""} ${formatBoolean(eq)} ${enumText(c, Color$runtimeType)}`;
     })(o);
   }
 

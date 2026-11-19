@@ -187,6 +187,68 @@ public class DefaultTextTranspileTests
         await Assert.That(output).Contains("const a = 97;");
     }
 
+    [Test]
+    public async Task ErasedValues_UseTheObjectMappingWithoutLosingNullConcatenation()
+    {
+        var output = TranspileText(
+            """
+            public static string Boxed(object value) => $"{value}" + value.ToString();
+            public static string Generic<T>(T value) => $"{value}" + value.ToString();
+            """
+        );
+
+        await Assert.That(output).Contains("${objectText(value ?? \"\")}");
+        await Assert.That(output).Contains("objectText(value)");
+    }
+
+    [Test]
+    public async Task NullableToString_UsesTheUnderlyingFormatterOrNullableMapping()
+    {
+        var output = TranspileText(
+            """
+            public static string A(bool? b, double? d, int? i) => b.ToString() + d.ToString() + i.ToString();
+            """
+        );
+
+        await Assert.That(output).Contains("formatBoolean(b) ?? \"\"");
+        await Assert.That(output).Contains("formatDouble(d) ?? \"\"");
+        await Assert.That(output).Contains("formatText(i) ?? \"\"");
+    }
+
+    [Test]
+    public async Task TupleAndTimeSpan_UseDeclarativeDefaultTextMappings()
+    {
+        var output = TranspileText(
+            """
+            public static string A(System.TimeSpan span) => $"{span}" + (1, "a").ToString();
+            """
+        );
+
+        await Assert.That(output).Contains("${formatTimeSpan(span)}");
+        await Assert.That(output).Contains("formatTuple([1, \"a\"] as [number, string])");
+    }
+
+    [Test]
+    public async Task EnumDefaultText_UsesItsDescriptorButDFormatRemainsNumeric()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile] public enum Color { Red, Green }
+            [Transpile] public static class Text
+            {
+                public static string A(Color value) => $"{value}|{value:D}" + value.ToString();
+            }
+            """
+        );
+
+        await Assert
+            .That(files["text.ts"])
+            .Contains("${enumText(value, Color$runtimeType)}|${value}");
+
+        await Assert.That(files["text.ts"]).Contains("enumText(value, Color$runtimeType)");
+        await Assert.That(files["color.ts"]).Contains("Color$runtimeType");
+    }
+
     private static string TranspileText(string members) =>
         TranspileHelper.Transpile(
             $$"""

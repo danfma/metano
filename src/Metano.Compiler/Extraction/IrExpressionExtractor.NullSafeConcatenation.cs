@@ -39,8 +39,8 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// <c>target += value</c> on a string: a <c>value</c> that may be
     /// <c>null</c> is appended as <c>""</c>, and so is a <c>target</c> that
-    /// may be <c>null</c> and can be read twice
-    /// (<c>target = (target ?? "") + value</c>).
+    /// may be <c>null</c> (<c>target = (target ?? "") + value</c>).
+    /// The existing read-modify-write binding evaluates its receiver and index once.
     /// </summary>
     private IrExpression? TryExtractStringCompoundConcatenation(
         AssignmentExpressionSyntax assign,
@@ -52,16 +52,14 @@ public sealed partial class IrExpressionExtractor
 
         var value = BoxTextOperand(assign.Right, ConcatenationOperand(assign.Right));
 
-        if (!MayFormatAsNull(assign.Left) || !IrEvaluationTraits.IsReusableReceiver(target))
+        if (!MayFormatAsNull(assign.Left))
             return new IrBinaryExpression(target, IrBinaryOp.AddAssign, value);
 
-        var appended = new IrBinaryExpression(
-            new IrBinaryExpression(target, IrBinaryOp.NullCoalescing, EmptyStringLiteral),
+        return BuildReadModifyWrite(target, assign, current => new IrBinaryExpression(
+            new IrBinaryExpression(current, IrBinaryOp.NullCoalescing, EmptyStringLiteral),
             IrBinaryOp.Add,
             value
-        );
-
-        return new IrBinaryExpression(target, IrBinaryOp.Assign, appended);
+        ));
     }
 
     /// <summary>
@@ -118,14 +116,70 @@ public sealed partial class IrExpressionExtractor
     /// <c>null</c> as <c>""</c>, so the operand needs no coalesce. <c>null</c> for any other
     /// operand.
     /// </summary>
-    private IrCallExpression? DefaultTextCall(ExpressionSyntax operand, IrExpression value) =>
-        DefaultTextConversion.MappedToString(
-            _semantic.GetTypeInfo(operand).Type,
-            _context.LowersByDeclarativeMapping
-        )
-            is { } toString
-            ? DefaultTextConversion.Call(value, toString, BuildOrigin(toString))
+    private IrCallExpression? DefaultTextCall(ExpressionSyntax operand, IrExpression value)
+    {
+        var type = _semantic.GetTypeInfo(operand).Type;
+
+        if (type?.UnwrapNullableValueType().HasStringEnum() == true)
+            return null;
+
+        return
+            DefaultTextConversion.MappedToString(
+                type is ITypeParameterSymbol ? _semantic.Compilation.ObjectType : type,
+                _context.LowersByDeclarativeMapping
+            )
+                is { } toString
+            ? DefaultTextCall(value, toString, type)
             : null;
+    }
+
+    private IrCallExpression DefaultTextCall(
+        IrExpression value,
+        IMethodSymbol toString,
+        ITypeSymbol? type
+    ) =>
+        DefaultTextConversion.Call(value, toString, BuildOrigin(toString)) with
+        {
+            TypeArguments = type?.UnwrapNullableValueType() is { TypeKind: TypeKind.Enum } enumType
+                ? [IrTypeRefMapper.Map(enumType, _originResolver, _target)]
+                : null,
+        };
+
+    private IrExpression? TryExtractDefaultTextInvocation(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol? method
+    )
+    {
+        if (
+            method is not { Name: nameof(ToString), IsStatic: false, Parameters.Length: 0 }
+            || !method.ContainingAssembly.IsBclAssembly()
+            || QualifiedMemberSyntax.From(invocation.Expression) is not { } member
+        )
+            return null;
+
+        var type = _semantic.GetTypeInfo(member.Receiver).Type;
+
+        if (
+            DefaultTextConversion.MappedToString(
+                type is ITypeParameterSymbol ? _semantic.Compilation.ObjectType : type,
+                _context.LowersByDeclarativeMapping
+            ) is
+            { } toString
+        )
+        {
+            var value = Extract(member.Receiver);
+            var text = DefaultTextCall(value, toString, type);
+
+            return toString.ContainingType.SpecialType == SpecialType.System_Object
+                ? text with
+                {
+                    Target = new IrMemberAccess(value, toString.Name, BuildOrigin(toString)),
+                }
+                : text;
+        }
+
+        return null;
+    }
 
     private bool MayFormatAsNull(ExpressionSyntax operand) =>
         ReferenceNullability.MayBeNull(_semantic, operand);

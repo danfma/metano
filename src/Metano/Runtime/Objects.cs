@@ -17,6 +17,28 @@ using Metano.Annotations;
 
 [assembly: MapMethod(
     typeof(object),
+    nameof(object.ToString),
+    JsTemplate = "objectText($this)",
+    RuntimeImports = "objectText",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(Nullable<>),
+    nameof(object.ToString),
+    JsTemplate = "formatText($this)",
+    RuntimeImports = "formatText",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(Enum),
+    nameof(Enum.ToString),
+    JsTemplate = "enumText($this, $R0)",
+    RuntimeImports = "enumText",
+    WhenArgCount = 0
+)]
+
+[assembly: MapMethod(
+    typeof(object),
     nameof(object.GetHashCode),
     JsTemplate = "valueHashCode($this)",
     RuntimeImports = "valueHashCode"

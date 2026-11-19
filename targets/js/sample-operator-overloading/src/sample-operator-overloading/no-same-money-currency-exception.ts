@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { ClassType } from "metano-runtime";
+import { enumText, type ClassType } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
-import type { Currency } from "./currency";
+import { Currency$runtimeType, type Currency } from "./currency";
 
 let NoSameMoneyCurrencyException$rt: ClassType<NoSameMoneyCurrencyException> | undefined;
 
@@ -9,7 +9,9 @@ export class NoSameMoneyCurrencyException extends Exception {
   override readonly name: string = "NoSameMoneyCurrencyException";
 
   constructor(expected: Currency, provided: Currency) {
-    super(`Not same currency. Money has ${provided}, but expected ${expected}`);
+    super(
+      `Not same currency. Money has ${enumText(provided, Currency$runtimeType)}, but expected ${enumText(expected, Currency$runtimeType)}`,
+    );
   }
 
   static override get $runtimeType(): ClassType<NoSameMoneyCurrencyException> {

@@ -28,8 +28,6 @@ BoxPBProbes.propertyPatterns          none  accepted FR-049 divergence until 011
 BoxPCProbes.equalityForms             none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Eq(0)); EqualityFormsBoxed matches
 BoxPCProbes.genericPatterns           none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (Gen(0)); and a raw enum under T = BpHue tests as int (Gen(BpHue.Red)); GenericPatternsBoxed matches
 BoxingProbes.objectHashSetMixedCount none  a HashSet<object> stores raw values until 011c (defaultEquals collections): a boxed enum and the int 0 collide
-CastProbes.enums                      none  a numeric enum prints its number, .NET prints the member name
-TextProbes.enumsText                  none  a numeric enum prints its number, .NET prints the member name
 CatchProbes.all                       none  an out-of-range index and a missing dictionary key do not throw
 CatchProbes.dictMissing               none  a missing dictionary key does not throw KeyNotFoundException
 CatchProbes.indexOut                  none  an out-of-range list index does not throw
@@ -45,16 +43,12 @@ Round2Probes.decToDoubleThird         #465  decimal.js precision and rounding ar
 DecimalProbes.collections             #687  IndexOf / Contains over decimals use reference identity
 DecimalProbes.arithmetic              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.negatives               #662  decimal.js drops the decimal scale (1.10m prints 1.1)
-DecimalProbes.parseTry                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.rounding                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.trailingZeros           #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.records                 #664  record ToString and decimal scale
 IndexProbes.decimalElems              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 LinqProbes.decimalLambda              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 LinqProbes.minMaxDecimal              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
-NullGuardProbes.concatDecimal         #662  decimal.js drops the decimal scale (1.10m prints 1.1)
-ParseProbes.decimalParse              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
-ParseProbes.decimalTry                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.compound                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
 DecimalProbes.dictKey                 none  a decimal dictionary key is compared by reference
@@ -90,21 +84,9 @@ StringProbes.formatting               #686  string.Format is unmapped (composite
 StringProbes.cases                    none  ToUpperInvariant("ß") gives SS in JavaScript
 StringProbes.emptyAndNullArgs         none  "abc".Contains(null) does not throw ArgumentNullException
 StringProbes.trimSpecial              none  JavaScript trims U+FEFF, .NET does not
-StringProbes.condChainNested          none  a boxed bool prints true, .NET prints True
-NullGuardProbes.interpGeneric         none  a boxed bool prints true, .NET prints True
-TextProbes.boolNullable               none  a boxed bool prints true, .NET prints True
-TextProbes.boxed                      none  a boxed bool or double prints true / 1e-7, .NET prints True / 1E-07
-TextProbes.compound                   none  a double in string concatenation prints 2.5 for 2.50m, .NET keeps the scale
-TextProbes.generic                    none  a boxed bool or double prints true / 1e-7, .NET prints True / 1E-07
-TextProbes.joinArrays                 none  a boxed bool or double prints true / 1e-7, .NET prints True / 1E-07
-TextProbes.dates                      none  TimeSpan prints as an ISO duration, .NET prints 01:02:03
+TextProbes.generic                    none  generic float text loses Single type identity; bool and double default text now matches
 TextProbes.floatMath                  none  float equality after a float computation
 TextProbes.recordToString             #664  record ToString prints [object Object]
-TextProbes.tupleToString              none  a tuple ToString prints a bare list
-Round2Probes.nullableText             none  a nullable bool or double prints true / 1e-7, .NET prints True / 1E-07
-Round2Probes.nullableTextNull         none  ToString() of a null nullable throws TypeError instead of printing an empty text
-Round4Probes.compoundIndexOnce        none  compound string concatenation onto null prints "null"
-Round4Probes.compoundReceiverOnce     none  compound string concatenation onto null prints "null"
 LazyDirectProbes.baseModuleFirst      none  importing the base module of a lazy static constructor cycle directly (not through the barrel) hits the extends TDZ; follow-up: automatic co-location of cycle members (FR-066 option C, to be filed)
 LazyFieldProbes.structDefaultDoesNotTrigger #291  `new S()` of a struct runs its declared constructor instead of the default value; the lazy static constructor still runs at the first instance method call
 LazyStructProbes.paramsConstructorWithoutArguments #291  `new S()` of a struct whose only constructor takes `params` runs that constructor (its static constructor and field initializers) instead of the default value

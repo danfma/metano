@@ -11,7 +11,7 @@
  * from its left operand's class. Division keeps 29 significant digits where `System.Decimal`
  * keeps 28 decimal places (`1m / 3m` has one digit more here), a result below `1e-28` is kept
  * where `System.Decimal` rounds it to zero, and a result's trailing zeros are dropped (`1.10m`
- * prints `1.1`; #662).
+ * arithmetic still drops scale; #662). Constructed values retain their input scale for text.
  *
  * Not part of the barrel: only a program that uses `decimal` loads decimal.js.
  */
@@ -28,9 +28,36 @@ const DECIMAL_PRECISION = 29;
 const ROUND_HALF_EVEN = 6;
 
 // Pure (spec 011 FR-043): a side-effect-only import of this module bundles to nothing.
-export const Decimal = /* @__PURE__ */ DecimalJs.clone({
+const DecimalNumber = /* @__PURE__ */ DecimalJs.clone({
   precision: DECIMAL_PRECISION,
   rounding: ROUND_HALF_EVEN,
 });
 
-export type Decimal = DecimalJs;
+const textScales = /* @__PURE__ */ new WeakMap<DecimalJs, number>();
+
+/** A constructed decimal retains its input scale for .NET's default text. */
+export class Decimal extends DecimalNumber {
+  constructor(value: DecimalJs.Value) {
+    super(value);
+    textScales.set(this, scaleOf(value, this.decimalPlaces()));
+  }
+
+  override toString(): string {
+    return this.toFixed(Math.max(textScales.get(this) ?? 0, this.decimalPlaces()));
+  }
+
+  override valueOf(): string {
+    return this.toString();
+  }
+}
+
+function scaleOf(value: DecimalJs.Value, fallback: number): number {
+  if (typeof value !== "string") {
+    return typeof value === "object" ? (textScales.get(value) ?? fallback) : fallback;
+  }
+
+  const [mantissa = "", exponent = "0"] = value.toLowerCase().split("e");
+  const fraction = mantissa.includes(".") ? mantissa.length - mantissa.indexOf(".") - 1 : 0;
+
+  return Math.max(0, fraction - Number(exponent));
+}

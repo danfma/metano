@@ -194,6 +194,13 @@ DefaultProbes.structParam = 0,0,null|2,0,null|0:0
 DefaultProbes.structs = 0,0,null|0,0,null|0,0
 DefaultProbes.ternary = 0|null|0,0,null
 DefaultProbes.tuples = 0|null|0|F
+DefaultValueTextProbes.decimalScaleText = v=2.50|2.50|2.50|2.50/2.50/2.50|2.50|0.00
+DefaultValueTextProbes.durationText = -1.00:00:00.0000001|-1.00:00:00.0000001|-1.00:00:00.0000001||-1.00:00:00.0000001|-1.00:00:00.0000001/-1.00:00:00.0000001/-1.00:00:00.0000001|00:00:00
+DefaultValueTextProbes.enumJoin = Read;Write|Read;Write|1
+DefaultValueTextProbes.enumNames = Read, Write|Read, Write|Read, Write||Read, Write|Read, Write|8|None
+DefaultValueTextProbes.erasedPrimitives = True|1E-07|True1E-07|True/True/True|1E-07/1E-07/1E-07|True;1E-07;
+DefaultValueTextProbes.nullNullableText = [||]
+DefaultValueTextProbes.tupleText = (1, a)|(True, 1E-07, (1, a))|(, False)
 DerivedProbes.derivedToString = M3:5|X5|M3:5|Y5|M3:5|M3:5|M3:5|TTT
 DispatchProbes.bigInt = 10|2
 DispatchProbes.direct = objectshapesquaresquarestringint

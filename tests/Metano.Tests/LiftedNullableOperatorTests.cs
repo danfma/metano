@@ -314,7 +314,7 @@ public class LiftedNullableOperatorTests
             "public static string Show<T>(T value) => \"v=\" + value;"
         );
 
-        await Assert.That(output).Contains("return \"v=\" + (value ?? \"\");");
+        await Assert.That(output).Contains("return \"v=\" + objectText(value ?? \"\");");
     }
 
     [Test]

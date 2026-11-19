@@ -1,5 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { box, defaultEquals, getRuntimeType, isType, type RuntimeType } from "metano-runtime";
+import {
+  box,
+  defaultEquals,
+  getRuntimeType,
+  isType,
+  objectText,
+  type RuntimeType,
+} from "metano-runtime";
 import { Color, Color$runtimeType } from "./color";
 
 export class Boxing {
@@ -14,7 +21,7 @@ export class Boxing {
   }
 
   static textOf(value: Object): string {
-    return value.toString() ?? "";
+    return objectText(value) ?? "";
   }
 
   static isRed(value: Object): boolean {
