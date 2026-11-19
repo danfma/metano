@@ -82,7 +82,7 @@ public sealed partial class IrExpressionExtractor
             && operand is RangeExpressionSyntax range
             && IsLowerableRange(access, range)
         )
-            return ExtractRangeAccess(receiverSyntax, range, length);
+            return ExtractRangeAccess(elem, receiverSyntax, range, length);
 
         return ReportUnsupported(
             elem,
@@ -138,11 +138,10 @@ public sealed partial class IrExpressionExtractor
             !_context.KeepsNativeCollections
             && FromEndReceiverTypeOf(receiverSyntax, isWriteTarget) is { } receiverType
         )
-            return new IrFromEndElementAccess(
-                receiver,
-                Extract(indexFromEnd.Operand),
-                receiverType
-            );
+            return new IrFromEndElementAccess(receiver, Extract(indexFromEnd.Operand), receiverType)
+            {
+                Location = SourceLocationOf(elem),
+            };
 
         if (!IrEvaluationTraits.IsReusableReceiver(receiver) && isWriteTarget)
             return ReportUnsupported(
@@ -190,6 +189,7 @@ public sealed partial class IrExpressionExtractor
     /// read after every bound has been evaluated, as in C#.
     /// </summary>
     private IrExpression ExtractRangeAccess(
+        ExpressionSyntax elem,
         ExpressionSyntax receiverSyntax,
         RangeExpressionSyntax range,
         ISymbol length
@@ -211,6 +211,7 @@ public sealed partial class IrExpressionExtractor
             {
                 StartFromEnd = start is { FromEnd: true },
                 EndFromEnd = end is { FromEnd: true },
+                Location = SourceLocationOf(elem),
             };
 
         return BindReceiverOnce(receiver, target =>

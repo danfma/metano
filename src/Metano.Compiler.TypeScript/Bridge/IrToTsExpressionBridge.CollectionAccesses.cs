@@ -79,7 +79,7 @@ public static partial class IrToTsExpressionBridge
             return UpdateCall(update, context);
 
         if (context.Temporaries is not { } temporaries)
-            return UnsupportedCollectionAccess("This element update");
+            return UnsupportedCollectionAccess("This element update", update.Location);
 
         var shape = CommaUpdate(update, temporaries, context, isStatement);
 
@@ -197,7 +197,7 @@ public static partial class IrToTsExpressionBridge
         }
 
         if (context.Temporaries is not { } temporaries)
-            return UnsupportedCollectionAccess("This index-from-end access");
+            return UnsupportedCollectionAccess("This index-from-end access", access.Location);
 
         var bound = BindFromEnd(access.Receiver, access.Offset, temporaries, context);
 
@@ -450,13 +450,14 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression Comma(IReadOnlyList<TsExpression> parts) =>
         parts.Aggregate((left, right) => new TsBinaryExpression(left, ",", right));
 
-    private static TsExpression UnsupportedCollectionAccess(string what)
+    private static TsExpression UnsupportedCollectionAccess(string what, IrSourceLocation? location)
     {
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.UnsupportedFeature,
-                $"{what} {CollectionsGuardMessage}"
+                $"{what} {CollectionsGuardMessage}",
+                location is null ? null : SourceLocations.ToRoslyn(location)
             )
         );
 
@@ -554,7 +555,7 @@ public static partial class IrToTsExpressionBridge
             && parts.Skip(1).All(part => part is null || IrEvaluationTraits.IsSideEffectFree(part));
 
         if (!allReusable && context.Temporaries is null)
-            return UnsupportedCollectionAccess("This range access");
+            return UnsupportedCollectionAccess("This range access", slice.Location);
 
         var effects = new List<TsExpression>();
 
@@ -627,7 +628,10 @@ public static partial class IrToTsExpressionBridge
             return SetOf(store, Map(store.Right, context), context);
 
         if (context.Temporaries is not { } temporaries)
-            return UnsupportedCollectionAccess("This indexer assignment, whose value is used,");
+            return UnsupportedCollectionAccess(
+                "This indexer assignment, whose value is used,",
+                store.Location
+            );
 
         var written = temporaries.Declare(WrittenValueStem);
 

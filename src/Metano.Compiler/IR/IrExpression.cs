@@ -244,6 +244,13 @@ public sealed record IrSliceExpression(
 
     /// <summary>Whether <see cref="End"/> is the <c>n</c> of a from-end bound (<c>..^n</c>).</summary>
     public bool EndFromEnd { get; init; }
+
+    /// <summary>
+    /// The source of the range access, for a diagnostic the target reports
+    /// while it lowers it; set only for a target whose collections are runtime
+    /// classes.
+    /// </summary>
+    public IrSourceLocation? Location { get; init; }
 }
 
 /// <summary>
@@ -593,6 +600,13 @@ public sealed record IrBinaryExpression(
     /// comparisons and simple assignments.
     /// </summary>
     public IrTypeRef? EnumResultType { get; init; }
+
+    /// <summary>
+    /// The source of an assignment that stores through an element access, for
+    /// a diagnostic the target reports while it lowers it; set only on such a
+    /// store, and only for a target whose collections are runtime classes.
+    /// </summary>
+    public IrSourceLocation? Location { get; init; }
 }
 
 /// <summary>
@@ -923,7 +937,14 @@ public sealed record IrIndexerUpdateExpression(
     string CurrentName,
     IrExpression NewValue,
     IrIndexerUpdateResult Result
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The source of the update, for a diagnostic the target reports while it
+    /// lowers it; set only for a target whose collections are runtime classes.
+    /// </summary>
+    public IrSourceLocation? Location { get; init; }
+}
 
 /// <summary>
 /// <c>r[^n]</c> on a stage 011c collection, an array or a <c>JsArray&lt;T&gt;</c>
@@ -937,7 +958,14 @@ public sealed record IrFromEndElementAccess(
     IrExpression Receiver,
     IrExpression Offset,
     IrTypeRef ReceiverType
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The source of the access, for a diagnostic the target reports while it
+    /// lowers it; set only for a target whose collections are runtime classes.
+    /// </summary>
+    public IrSourceLocation? Location { get; init; }
+}
 
 /// <summary>
 /// A C# conversion, implicit or explicit, from <c>T[]</c> / <c>JsArray&lt;T&gt;</c>

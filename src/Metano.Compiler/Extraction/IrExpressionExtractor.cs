@@ -379,6 +379,22 @@ public sealed partial class IrExpressionExtractor
             )
         );
 
+    /// <summary>The neutral <see cref="IrSourceLocation"/> of <paramref name="node"/>.</summary>
+    private static IrSourceLocation SourceLocationOf(SyntaxNode node)
+    {
+        var lines = node.GetLocation().GetLineSpan();
+
+        return new IrSourceLocation(
+            lines.Path,
+            node.Span.Start,
+            node.Span.Length,
+            lines.StartLinePosition.Line,
+            lines.StartLinePosition.Character,
+            lines.EndLinePosition.Line,
+            lines.EndLinePosition.Character
+        );
+    }
+
     /// <summary>
     /// Lowers a null-conditional access (<c>a?.B</c>, <c>a?.B(x).C</c>,
     /// <c>a?[i]</c>, <c>a?.B?.C</c>, <c>a?.B = c</c>). Every step after the
@@ -2211,11 +2227,36 @@ public sealed partial class IrExpressionExtractor
         if (IsUnsupportedPlaceholder(target))
             return target;
 
-        return TryExtractNullableBooleanCompoundAssignment(assign, target)
+        var assignment = TryExtractNullableBooleanCompoundAssignment(assign, target)
             ?? TryExtractLiftedCompoundAssignment(assign, target)
             ?? TryExtractStringCompoundConcatenation(assign, target)
             ?? BuildCompoundAssignment(target, assign);
+
+        return WithElementStoreLocation(assign, assignment);
     }
+
+    /// <summary>
+    /// <paramref name="assignment"/> with its <see cref="IrBinaryExpression.Location"/>
+    /// when it stores through an element access (<c>r[i] = v</c>,
+    /// <c>r[^n] = v</c>) for a target whose collections are runtime classes,
+    /// which may report the store where its value is used.
+    /// </summary>
+    private IrExpression WithElementStoreLocation(
+        AssignmentExpressionSyntax assign,
+        IrExpression assignment
+    ) =>
+        !_context.KeepsNativeCollections
+        && assignment
+            is IrBinaryExpression
+            {
+                Operator: IrBinaryOp.Assign,
+                Left: IrElementAccess or IrFromEndElementAccess,
+            } store
+            ? store with
+            {
+                Location = SourceLocationOf(assign),
+            }
+            : assignment;
 
     private IrExpression ExtractUnary(ExpressionSyntax node, bool isPrefix)
     {

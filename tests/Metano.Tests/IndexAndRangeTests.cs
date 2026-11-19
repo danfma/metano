@@ -429,6 +429,50 @@ public class IndexAndRangeTests
         await Assert.That(output).Contains("items[items.length - 1]");
     }
 
+    /// <summary>
+    /// A collection access that needs temporaries, in a position with no
+    /// statement list to declare them in (a field initializer), reports MS0001
+    /// at the access itself (spec 011 contracts/runtime-collections.md §
+    /// Indexer compound assignments).
+    /// </summary>
+    [Test]
+    public async Task CollectionAccessWithoutStatementList_ReportsAtTheAccess()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Holder
+            {
+                private static int _next;
+
+                private static readonly List<int> Items = [1, 2, 3];
+
+                private static readonly IList<int> Shared = new List<int> { 1, 2, 3 };
+
+                private readonly int _last = Shared[^Next()];
+
+                private readonly int _count = Items[..^Next()].Count;
+
+                private readonly int _bumped = Shared[Next()] += 1;
+
+                private readonly int _stored = Items[Next()] = 5;
+
+                private static int Next() => _next++;
+            }
+            """
+        );
+
+        // The helper prepends three lines of usings: zero-based, each line is three below its source.
+        var lines = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Select(d => d.Location?.GetLineSpan().StartLinePosition.Line)
+            .ToList();
+
+        await Assert.That(lines).IsEquivalentTo(new int?[] { 14, 16, 18, 20 });
+    }
+
     private static async Task AssertSingleUnsupported(
         IReadOnlyList<MetanoDiagnostic> diagnostics,
         string expression

@@ -146,7 +146,10 @@ public sealed partial class IrExpressionExtractor
                 $"'{node}' is not supported: the element update has no single value to write."
             );
 
-        return new IrIndexerUpdateExpression(place, current.Name, newValue, result);
+        return new IrIndexerUpdateExpression(place, current.Name, newValue, result)
+        {
+            Location = SourceLocationOf(node),
+        };
     }
 
     private IrExpression Probing(
