@@ -7,8 +7,12 @@
       "maxGzip": 665,
       "mustNotContain": [
         "AbortError",
-        "Unable to cast object"
-      ]
+        "Unable to cast object",
+        "[object Temporal.PlainDate]",
+        "plainImplementers",
+        ".test("
+      ],
+      "$comment": "The reflection functions stay out of an exception bundle. Minified bundles rename them, so each is marked by text only its body keeps: getRuntimeType by its Temporal toStringTag cases, implementsInterface by its plainImplementers read, isType by its descriptor .test( call."
     },
     {
       "name": "typed catch (toException + tryFilter)",
