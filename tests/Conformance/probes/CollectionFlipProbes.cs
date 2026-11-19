@@ -250,11 +250,13 @@ public static class CollectionFlipProbes
         IList<int> il = new List<int> { 1, 2, 3 };
         IReadOnlyList<int> ro = new List<int> { 1, 2, 3 };
         IList<int> adopted = new[] { 7, 8 };
+
         var nested = new List<List<int>>
         {
             new() { 1 },
             new() { 2, 3 },
         };
+
         var inner = nested is [[var x], [_, var y]] ? x + y : -1;
 
         return $"{il is [1, _, 3]},{il is [1, _]},{ro is [.., 3]},{ro is [2, ..]}|"
