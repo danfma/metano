@@ -21,7 +21,11 @@ declare const meta: QueryableMeta;
 const miss = linq(numbers, firstOrDefault());
 expectType<Equal<typeof miss, number | null>>();
 
-const lastMiss = linq(numbers, lastOrDefault((x) => x > 1));
+const lastMiss = linq(
+  numbers,
+  lastOrDefault((x) => x > 1),
+);
+
 expectType<Equal<typeof lastMiss, number | null>>();
 
 const explicitMiss = linq(numbers, singleOrDefault<number>());
@@ -35,13 +39,21 @@ const notANumber: number = linq(numbers, firstOrDefault());
 const zero = linq(numbers, firstOrDefault(undefined, 0));
 expectType<Equal<typeof zero, number>>();
 
-const matched = linq(numbers, lastOrDefault((x) => x > 1, 42));
+const matched = linq(
+  numbers,
+  lastOrDefault((x) => x > 1, 42),
+);
+
 expectType<Equal<typeof matched, number>>();
 
 const big = linq(wide, singleOrDefault(undefined, 0n));
 expectType<Equal<typeof big, bigint>>();
 
-const explicitElement = linq(numbers, firstOrDefault<number>((x) => x > 1, 0));
+const explicitElement = linq(
+  numbers,
+  firstOrDefault<number>((x) => x > 1, 0),
+);
+
 expectType<Equal<typeof explicitElement, number>>();
 
 const nullableElement = linq(maybes, firstOrDefault(undefined, 42));
@@ -54,7 +66,11 @@ linq(numbers, firstOrDefault(undefined, "none"));
 
 declare const maybeDefault: number | null;
 
-const nullableDefault = linq(numbers, firstOrDefault((x) => x > 1, maybeDefault));
+const nullableDefault = linq(
+  numbers,
+  firstOrDefault((x) => x > 1, maybeDefault),
+);
+
 expectType<Equal<typeof nullableDefault, number | null>>();
 
 const nullableLast = linq(numbers, lastOrDefault(undefined, maybeDefault));
@@ -66,7 +82,10 @@ expectType<Equal<typeof nullableSingle, number | null>>();
 // ─── An optional default value yields null when it is missing ─────────────────
 
 function pick(fallback?: number) {
-  return linq(numbers, firstOrDefault((x) => x > 1, fallback));
+  return linq(
+    numbers,
+    firstOrDefault((x) => x > 1, fallback),
+  );
 }
 
 expectType<Equal<ReturnType<typeof pick>, number | null>>();
@@ -78,7 +97,11 @@ expectType<Equal<typeof optionalLast, number | null>>();
 
 declare const looseDefault: number | null | undefined;
 
-const looseSingle = linq(numbers, singleOrDefault((x) => x > 1, looseDefault));
+const looseSingle = linq(
+  numbers,
+  singleOrDefault((x) => x > 1, looseDefault),
+);
+
 expectType<Equal<typeof looseSingle, number | null>>();
 
 // ─── A standalone term takes its element type from a type argument ────────────
@@ -110,8 +133,16 @@ expectType<Equal<typeof widened, Animal>>();
 
 // ─── The queryable tree stays the third argument ──────────────────────────────
 
-const queried = linq(numbers, firstOrDefault((x) => x > 1, undefined, meta));
+const queried = linq(
+  numbers,
+  firstOrDefault((x) => x > 1, undefined, meta),
+);
+
 expectType<Equal<typeof queried, number | null>>();
 
-const queriedWithDefault = linq(numbers, firstOrDefault((x) => x > 1, 0, meta));
+const queriedWithDefault = linq(
+  numbers,
+  firstOrDefault((x) => x > 1, 0, meta),
+);
+
 expectType<Equal<typeof queriedWithDefault, number>>();

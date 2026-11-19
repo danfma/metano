@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   JsonSerializer,
   type JsonConverter,
@@ -6,6 +7,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { expectJsonException } from "./json-exception-assertions.ts";
 import { abstractFactory } from "./spec-fixtures.ts";
 
@@ -178,6 +180,7 @@ describe("Spec plans: custom converters per call", () => {
     const json = JsonSerializer.serialize([new Price("a", 4)], prices, [decimalAsText]);
 
     expect(json).toEqual([{ Label: "a", Amount: "4" }]);
+
     expect(JsonSerializer.serialize([new Price("a", 4)], prices)).toEqual([
       { Label: "a", Amount: 4 },
     ]);

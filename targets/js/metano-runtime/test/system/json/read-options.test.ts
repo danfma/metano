@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   type JsonReadOptions,
   JsonSerializer,
@@ -6,6 +7,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import {
   cannotConvertMessage,
   expectJsonException,
@@ -13,6 +15,7 @@ import {
   METADATA_NOT_FIRST_MESSAGE,
   missingDiscriminatorMessage,
 } from "./json-exception-assertions.ts";
+
 import { abstractFactory } from "./spec-fixtures.ts";
 
 /**
@@ -101,7 +104,11 @@ class WebContext extends SerializerContext {
       type: Clip,
       factory: abstractFactory,
       properties: [
-        { ts: "seconds", json: "seconds", type: { kind: "primitive", numberType: "System.Double" } },
+        {
+          ts: "seconds",
+          json: "seconds",
+          type: { kind: "primitive", numberType: "System.Double" },
+        },
       ],
       polymorphism: {
         discriminator: "kind",
@@ -145,7 +152,7 @@ class DefaultContext extends SerializerContext {
 }
 
 function read<T>(text: string, spec: TypeSpec<T>): T | null {
-  return JsonSerializer.deserialize(JSON.parse(text), spec);
+  return JsonSerializer.deserialize(JSON.parse(text) as unknown, spec);
 }
 
 // ─── Context attachment ──────────────────────────────────────────────────────
@@ -260,6 +267,7 @@ describe("read options — polymorphic payloads", () => {
 
   test("the derived contract reads keys ignoring case and numbers from strings", () => {
     expect(read('{"kind":"image","PATH":"a","Seconds":1}', clip)).toEqual(new ImageClip("a", 1));
+
     expect(read('{"kind":"image","path":"a","seconds":"2.5"}', clip)).toEqual(
       new ImageClip("a", 2.5),
     );
@@ -303,7 +311,10 @@ describe("read options — polymorphic payloads", () => {
     });
 
     test("a data key first leaves the later tag misplaced", () => {
-      expectJsonException(() => read('{"Kind":"x","kind":"k"}', kindBase), METADATA_NOT_FIRST_MESSAGE);
+      expectJsonException(
+        () => read('{"Kind":"x","kind":"k"}', kindBase),
+        METADATA_NOT_FIRST_MESSAGE,
+      );
     });
 
     // System.Text.Json rejects a property named exactly like the discriminator

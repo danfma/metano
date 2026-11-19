@@ -18,35 +18,47 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "",
     error:
-      "The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true.",
+      "The input does not contain any JSON tokens. Expected " +
+        "the input to start with a valid JSON token, when " +
+        "isFinalBlock is true.",
   },
   {
     text: " ",
     error:
-      "The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true.",
+      "The input does not contain any JSON tokens. Expected " +
+        "the input to start with a valid JSON token, when " +
+        "isFinalBlock is true.",
   },
   { text: "x", error: "'x' is an invalid start of a value." },
   {
     text: "{",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: "[",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   { text: "}", error: "'}' is an invalid start of a value." },
   { text: "]", error: "']' is an invalid start of a value." },
   {
     text: "[1,]",
     error:
-      "The JSON array contains a trailing comma at the end which is not supported in this mode. Change the reader options.",
+      "The JSON array contains a trailing comma at the end " +
+        "which is not supported in this mode. Change the reader " +
+        "options.",
   },
   {
     text: '{"a":1,}',
     error:
-      "The JSON object contains a trailing comma at the end which is not supported in this mode. Change the reader options.",
+      "The JSON object contains a trailing comma at the end " +
+        "which is not supported in this mode. Change the reader " +
+        "options.",
   },
   { text: "[1 2]", error: "'2' is invalid after a value. Expected either ',', '}', or ']'." },
   { text: '{"a" 1}', error: "'1' is invalid after a property name. Expected a ':'." },
@@ -72,17 +84,20 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '"\\x"',
     error:
-      "'x' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'x' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '"\\u12G4"',
     error:
-      "'G' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'G' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '"\\u12"',
     error:
-      "'\"' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'\"' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '"a\nb"',
@@ -114,21 +129,26 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "1.e5",
     error:
-      "'e' is invalid within a number, immediately after a decimal point ('.'). Expected a digit ('0'-'9').",
+      "'e' is invalid within a number, immediately after a " +
+        "decimal point ('.'). Expected a digit ('0'-'9').",
   },
   { text: ".5", error: "'.' is an invalid start of a value." },
   { text: "-", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
   {
     text: "-a",
     error:
-      "'a' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'a' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit " +
+        "('0'-'9').",
   },
   { text: "1e", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
   { text: "1e+", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
   {
     text: "1ee",
     error:
-      "'e' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'e' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit " +
+        "('0'-'9').",
   },
   { text: "1.5.5", error: "'.' is an invalid end of a number. Expected 'E' or 'e'." },
   { text: "0x10", error: "'x' is an invalid end of a number. Expected a delimiter." },
@@ -139,7 +159,9 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "-Infinity",
     error:
-      "'I' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'I' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit " +
+        "('0'-'9').",
   },
   { text: "'a'", error: "''' is an invalid start of a value." },
   { text: " 1", error: "'0xC2' is an invalid start of a value." },
@@ -181,7 +203,9 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '["a"',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: '["a",',
@@ -190,7 +214,9 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '{"a":',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: '{"a":1,',
@@ -199,38 +225,52 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "[true",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   { text: "[tru", error: "'tru' is an invalid JSON literal. Expected the literal 'true'." },
   {
     text: "[null",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: '{"a":"b"',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: "[ ",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: "{ ",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: '{"a":1 ',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: "[1 ",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   { text: "[-", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
   { text: "[1.", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
@@ -254,12 +294,16 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '["a" ',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   {
     text: '{"a":true',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that " +
+        "should be closed.",
   },
   { text: '{"a":nul', error: "'nul' is an invalid JSON literal. Expected the literal 'null'." },
   { text: "[1]x", error: "'x' is invalid after a single JSON value. Expected end of data." },
@@ -271,7 +315,9 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "[-]",
     error:
-      "']' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "']' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit " +
+        "('0'-'9').",
   },
   { text: "{,}", error: "',' is an invalid start of a property name. Expected a '\"'." },
   { text: '{"a":1,,}', error: "',' is an invalid start of a property name. Expected a '\"'." },
@@ -291,17 +337,20 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "[-x]",
     error:
-      "'x' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'x' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   {
     text: "[1.x]",
     error:
-      "'x' is invalid within a number, immediately after a decimal point ('.'). Expected a digit ('0'-'9').",
+      "'x' is invalid within a number, immediately after a " +
+        "decimal point ('.'). Expected a digit ('0'-'9').",
   },
   {
     text: "[1ex]",
     error:
-      "'x' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'x' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   { text: "[1.0x]", error: "'x' is an invalid end of a number. Expected 'E' or 'e'." },
   { text: "[1e5x]", error: "'x' is an invalid end of a number. Expected a delimiter." },
@@ -309,7 +358,8 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "[0.]",
     error:
-      "']' is invalid within a number, immediately after a decimal point ('.'). Expected a digit ('0'-'9').",
+      "']' is invalid within a number, immediately after a " +
+        "decimal point ('.'). Expected a digit ('0'-'9').",
   },
   { text: "[00]", error: "Invalid leading zero before '0'." },
   { text: "[1E5]" },
@@ -367,12 +417,14 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "[1.5e]",
     error:
-      "']' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "']' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   {
     text: "[1.5e-]",
     error:
-      "']' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "']' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   { text: "[1.5E+5]" },
   { text: "[1.5e5.5]", error: "'.' is an invalid end of a number. Expected a delimiter." },
@@ -381,19 +433,22 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: "[0e]",
     error:
-      "']' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "']' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   { text: "[0.0.0]", error: "'.' is an invalid end of a number. Expected 'E' or 'e'." },
   { text: "[0e1]" },
   {
     text: "[-.5]",
     error:
-      "'.' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'.' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   {
     text: "[-e]",
     error:
-      "'e' is invalid within a number, immediately after a sign character ('+' or '-'). Expected a digit ('0'-'9').",
+      "'e' is invalid within a number, immediately after a " +
+        "sign character ('+' or '-'). Expected a digit ('0'-'9').",
   },
   { text: "[.5]", error: "'.' is an invalid start of a value." },
   { text: "[1\n2]", error: "'2' is invalid after a value. Expected either ',', '}', or ']'." },
@@ -416,44 +471,52 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '["\\U0041"]',
     error:
-      "'U' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'U' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '["\\a"]',
     error:
-      "'a' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'a' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '["\\\'"]',
     error:
-      "''' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "''' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '["\\é"]',
     error:
-      "'0xC3' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'0xC3' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '["\\\u0001"]',
     error:
-      "'0x01' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'0x01' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '["\\u"]',
     error:
-      "'\"' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'\"' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   { text: '["\\uDFFF\\uD800"]' },
   { text: '{"a" ', error: "Expected a value, but instead reached end of data." },
   {
     text: '{"a": ',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   {
     text: '"\\x',
     error:
-      "'x' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'x' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '"a\u0001',
@@ -462,40 +525,47 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '"\\u12G',
     error:
-      "'G' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'G' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   { text: '"\\u', error: "Expected end of string, but instead reached end of data." },
   {
     text: '["\\x',
     error:
-      "'x' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'x' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: "[1,2 ",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   { text: '{"a":1}x', error: "'x' is invalid after a single JSON value. Expected end of data." },
   { text: '{"a":1} x', error: "'x' is invalid after a single JSON value. Expected end of data." },
   {
     text: "[[1]",
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   {
     text: '{"a":{}',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   {
     text: '[{"a":1}',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   {
     text: '{"a":[1]',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   { text: '" ', error: "Expected end of string, but instead reached end of data." },
   {
@@ -506,14 +576,16 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '{"a":1,"b":',
     error:
-      "Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed.",
+      "Expected depth to be zero at the end of the JSON " +
+        "payload. There is an open JSON object or array that should be closed.",
   },
   { text: "[-1.", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
   { text: "[0.5e", error: "Expected a digit ('0'-'9'), but instead reached end of data." },
   {
     text: '{"\\x":1}',
     error:
-      "'x' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'x' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '{"a\u0001":1}',
@@ -522,17 +594,20 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '{"a":"\\u00"}',
     error:
-      "'\"' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'\"' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '["\\uZZZZ"]',
     error:
-      "'Z' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'Z' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   {
     text: '"\\uD83D\\uDE00\\u12"',
     error:
-      "'\"' is not a hex digit following '\\u' within a JSON string. The string should be correctly escaped.",
+      "'\"' is not a hex digit following '\\u' within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   { text: "[1,é]", error: "'0xC3' is an invalid start of a value." },
   { text: "[1\r\n,2]" },
@@ -540,14 +615,16 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   {
     text: '{"中":1,}',
     error:
-      "The JSON object contains a trailing comma at the end which is not supported in this mode. Change the reader options.",
+      "The JSON object contains a trailing comma at the end " +
+        "which is not supported in this mode. Change the reader options.",
   },
   { text: "中", error: "'0xE4' is an invalid start of a value." },
   { text: "[😀]", error: "'0xF0' is an invalid start of a value." },
   {
     text: '"\\😀"',
     error:
-      "'0xF0' is an invalid escapable character within a JSON string. The string should be correctly escaped.",
+      "'0xF0' is an invalid escapable character within a JSON " +
+        "string. The string should be correctly escaped.",
   },
   { text: "[ÿ]", error: "'0xC3' is an invalid start of a value." },
   { text: "", error: "'0xC2' is an invalid start of a value." },

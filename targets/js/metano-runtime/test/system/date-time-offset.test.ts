@@ -16,9 +16,7 @@ describe("dateTimeOffset", () => {
   });
 
   test("rejects an offset that is not a whole number of minutes", () => {
-    expect(() => dateTimeOffset(2024, 1, 2, 3, 4, 5, 0, thirtySeconds)).toThrow(
-      ArgumentException,
-    );
+    expect(() => dateTimeOffset(2024, 1, 2, 3, 4, 5, 0, thirtySeconds)).toThrow(ArgumentException);
   });
 
   test("rejects an offset beyond fourteen hours", () => {

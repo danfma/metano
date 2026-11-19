@@ -20,6 +20,7 @@ describe("isDelegate", () => {
 describe("createDelegate", () => {
   test("calls all handlers and returns the last result", () => {
     const results: string[] = [];
+
     const d = createDelegate(
       (msg: string) => {
         results.push(`A:${msg}`);
@@ -56,12 +57,15 @@ describe("delegateAdd", () => {
 
   test("multicast delegate calls all handlers in order", () => {
     const log: number[] = [];
+
     const a = (x: number) => {
       log.push(x);
     };
+
     const b = (x: number) => {
       log.push(x * 10);
     };
+
     const c = (x: number) => {
       log.push(x * 100);
     };

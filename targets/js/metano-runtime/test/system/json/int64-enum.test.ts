@@ -33,9 +33,7 @@ function root(descriptor: TypeDescriptor): ValueSpec {
 
 describe("64-bit numeric enums", () => {
   test("write the exact digits of a bigint member", () => {
-    expect(JSON.stringify(JsonSerializer.serialize(Wide.Both, root(WIDE)))).toBe(
-      "1099511627777",
-    );
+    expect(JSON.stringify(JsonSerializer.serialize(Wide.Both, root(WIDE)))).toBe("1099511627777");
 
     expect(JSON.stringify(JsonSerializer.serialize(Big.Max, root(BIG)))).toBe(
       "18446744073709551615",

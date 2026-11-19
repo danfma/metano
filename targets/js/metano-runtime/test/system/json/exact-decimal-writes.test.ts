@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { Decimal } from "decimal.js";
 import { exactNumberWriterOf } from "#/system/json/exact-json-number";
 import { JsonSerializer, type ValueSpec } from "#/system/json";
+
 import {
   DECIMAL_DOMAIN_ROWS,
   DECIMAL_WRITE_ROWS,
@@ -51,7 +52,10 @@ describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () =
     // exact only for values a double holds; deserializeText reads the text
     // exactly (exact-decimal-reads.test.ts, #457).
     test(`${row.csharp} round-trips through the text as JSON.parse reads it`, () => {
-      const read = JsonSerializer.deserialize(JSON.parse(writtenTextOf(row)), decimalSpec);
+      const read = JsonSerializer.deserialize(
+        JSON.parse(writtenTextOf(row)) as unknown,
+        decimalSpec,
+      );
 
       expect(read?.equals(new Decimal(Number(row.text)))).toBe(true);
     });
@@ -113,7 +117,8 @@ describe("JsonSerializer — decimal writes within the System.Decimal domain", (
     const notANumber = { toNumber: () => Number.NaN, toString: () => "NaN" };
 
     expect(() => JsonSerializer.serialize(notANumber as unknown as Decimal, decimalSpec)).toThrow(
-      "The value NaN cannot be written as System.Decimal: it is outside the System.Decimal range.",
+      "The value NaN cannot be written as System.Decimal: it is outside " +
+        "the System.Decimal range.",
     );
   });
 
@@ -129,7 +134,7 @@ describe("JsonSerializer — decimal raw values without a descriptor type", () =
   const rawSpec: ValueSpec<unknown> = { descriptor: { kind: "decimal" } };
 
   test("a raw JSON number is written back as is", () => {
-    const read = JsonSerializer.deserialize(JSON.parse("19.99"), rawSpec);
+    const read = JsonSerializer.deserialize(JSON.parse("19.99") as unknown, rawSpec);
 
     expect(JsonSerializer.serialize(read, rawSpec)).toBe(19.99);
   });

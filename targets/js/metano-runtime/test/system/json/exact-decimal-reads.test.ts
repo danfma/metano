@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Decimal } from "decimal.js";
+
 import {
   JsonException,
   JsonSerializer,
@@ -12,7 +13,9 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json";
+
 import { specNumberTextLeaves } from "#/system/json/exact-number-reads";
+
 import {
   DECIMAL_READ_ROWS,
   decimalSpec,
@@ -22,6 +25,7 @@ import {
   textRoundTripOf,
   withoutScale,
 } from "./exact-decimal-read-rows.ts";
+
 import { DECIMAL_WRITE_ROWS, expectedTextOf, writtenTextOf } from "./exact-decimal-rows.ts";
 import { expectedTextOutcomeOf, JSON_TEXT_ROWS } from "./json-text-rows.ts";
 
@@ -70,7 +74,7 @@ describe("deserializeText — decimals as System.Text.Json reads them (#457)", (
   });
 
   test("the tree path keeps rounding long decimals to a double", () => {
-    const read = JsonSerializer.deserialize(JSON.parse(LONG), decimalSpec);
+    const read = JsonSerializer.deserialize(JSON.parse(LONG) as unknown, decimalSpec);
 
     expect(read?.toFixed()).toBe("12345678901234567000");
   });
@@ -93,7 +97,8 @@ describe("deserializeText — decimals as System.Text.Json reads them (#457)", (
   });
 });
 
-describe("deserializeText — the other values of an exact tree read as JSON.parse reads them", () => {
+describe("deserializeText — the other values of an exact tree " +
+  "read as JSON.parse reads them", () => {
   const spec = holderSpec([
     { ts: "price", json: "price", type: decimal },
     { ts: "ratio", json: "ratio", type: primitive },
@@ -103,7 +108,8 @@ describe("deserializeText — the other values of an exact tree read as JSON.par
 
   test("doubles and integers beyond 2^53 are numbers", () => {
     const read = JsonSerializer.deserializeText(
-      `{"price":${LONG},"ratio":0.30000000000000004,"id":12345678901234567890,"list":[1.00000000000000001]}`,
+      `{"price":${LONG},"ratio":0.30000000000000004,` +
+        '"id":12345678901234567890,"list":[1.00000000000000001]}',
       spec,
     );
 
@@ -131,6 +137,7 @@ describe("deserializeText — the other values of an exact tree read as JSON.par
     expect(() => JsonSerializer.deserializeText(`{"inner":${LONG}}`, nested)).toThrow(
       JsonException,
     );
+
     expect(() => JsonSerializer.deserializeText(LONG, spec)).toThrow(JsonException);
   });
 
@@ -207,7 +214,7 @@ describe("deserializeText — the other values of an exact tree read as JSON.par
 
         JsonSerializer.deserializeText(`{"price":${LONG},"value":${json}}`, spec, [spy]);
 
-        expect(seen).toEqual([JSON.parse(json)]);
+        expect(seen).toEqual([JSON.parse(json) as unknown]);
       });
     }
   });
@@ -256,6 +263,7 @@ describe("deserializeText — the path chosen per spec", () => {
   const withoutDecimals = holderSpec([
     { ts: "list", json: "list", type: { kind: "array", element: primitive } },
   ]);
+
   const withDecimals = holderSpec([
     { ts: "list", json: "list", type: { kind: "array", element: primitive } },
     { ts: "price", json: "price", type: { kind: "nullable", inner: decimal }, optional: true },
@@ -266,6 +274,7 @@ describe("deserializeText — the path chosen per spec", () => {
 
     expect(() => JsonSerializer.deserializeText('{"list":}', withoutDecimals)).toThrow(message);
     expect(() => JsonSerializer.deserializeText('{"list":}', withDecimals)).toThrow(message);
+
     expect(() => JsonSerializer.deserializeText(`{"price":${LONG},"list":}`, withDecimals)).toThrow(
       message,
     );
@@ -277,14 +286,17 @@ describe("deserializeText — the path chosen per spec", () => {
     const deep = `{"list":[],"unknown":${nestedArrays(65)}`;
 
     expect(JsonSerializer.deserializeText(`${deep}}`, withoutDecimals)).toEqual({ list: [] });
+
     expect(JsonSerializer.deserializeText(`${deep}}`, withDecimals)).toEqual({
       list: [],
       price: null,
     });
+
     expect(JsonSerializer.deserializeText(`${deep},"price":${LONG}}`, withDecimals)).toEqual({
       list: [],
       price: new Decimal(LONG),
     });
+
     expect(
       JsonSerializer.deserializeText(`${deep},"note":"card 4111111111111111"}`, withDecimals),
     ).toEqual({ list: [], price: null });
@@ -292,15 +304,19 @@ describe("deserializeText — the path chosen per spec", () => {
 
   test("a read container nested past 64 levels throws on every path", () => {
     const listOf = (depth: number) => `{"list":${nestedArrays(depth)}`;
+
     const message =
       "The maximum configured depth of 64 has been exceeded. Cannot read next JSON array.";
+
     const nested = holderSpec([{ ts: "list", json: "list", type: nestedListOf(64) }]);
+
     const nestedWithDecimals = holderSpec([
       { ts: "list", json: "list", type: nestedListOf(64) },
       { ts: "price", json: "price", type: decimal },
     ]);
 
     expect(() => JsonSerializer.deserializeText(`${listOf(65)}}`, nested)).toThrow(message);
+
     expect(() =>
       JsonSerializer.deserializeText(`${listOf(65)},"price":${LONG}}`, nestedWithDecimals),
     ).toThrow(message);
@@ -326,7 +342,8 @@ describe("deserializeText — the path chosen per spec", () => {
 });
 
 describe("specNumberTextLeaves — the closure of a spec", () => {
-  test("a spec reads number texts through properties, bases, derived contracts and collections", () => {
+  test("a spec reads number texts through properties, bases, " +
+    "derived contracts and collections", () => {
     const leaf = holderSpec([{ ts: "price", json: "price", type: decimal }]);
     const derived: TypeSpec<Holder> = { ...holderSpec([]), base: leaf };
 

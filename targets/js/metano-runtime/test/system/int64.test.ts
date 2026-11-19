@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
 import { DivideByZeroException, OverflowException } from "#/system/exceptions/index.ts";
+
 import {
   INT64_MAX,
   INT64_MIN,
@@ -299,23 +300,47 @@ describe("double to 64 and 32 bits", () => {
     [3.7, 3n, 3n, 3n, 3n, 3, 3, 3, 3],
     [-3.7, -3n, -3n, 0n, T, -3, -3, 0, T],
     [300.5, 300n, 300n, 300n, 300n, 300, 300, 300, 300],
-    [2147483647, 2147483647n, 2147483647n, 2147483647n, 2147483647n, INT_MAX, INT_MAX, 2147483647, 2147483647],
-    [2147483647.5, 2147483647n, 2147483647n, 2147483647n, 2147483647n, INT_MAX, INT_MAX, 2147483647, 2147483647],
-    [2147483648, 2147483648n, 2147483648n, 2147483648n, 2147483648n, INT_MAX, T, 2147483648, 2147483648],
+    [
+      2147483647, 2147483647n, 2147483647n, 2147483647n, 2147483647n,
+      INT_MAX, INT_MAX, 2147483647, 2147483647,
+    ],
+    [
+      2147483647.5, 2147483647n, 2147483647n, 2147483647n, 2147483647n,
+      INT_MAX, INT_MAX, 2147483647, 2147483647,
+    ],
+    [
+      2147483648, 2147483648n, 2147483648n, 2147483648n, 2147483648n,
+      INT_MAX, T, 2147483648, 2147483648,
+    ],
     [-2147483648, -2147483648n, -2147483648n, 0n, T, INT_MIN, INT_MIN, 0, T],
     [-2147483648.5, -2147483648n, -2147483648n, 0n, T, INT_MIN, INT_MIN, 0, T],
     [-2147483649, -2147483649n, -2147483649n, 0n, T, INT_MIN, T, 0, T],
-    [4294967295, 4294967295n, 4294967295n, 4294967295n, 4294967295n, INT_MAX, T, UINT_MAX, UINT_MAX],
-    [4294967295.9, 4294967295n, 4294967295n, 4294967295n, 4294967295n, INT_MAX, T, UINT_MAX, UINT_MAX],
+    [
+      4294967295, 4294967295n, 4294967295n, 4294967295n, 4294967295n,
+      INT_MAX, T, UINT_MAX, UINT_MAX,
+    ],
+    [
+      4294967295.9, 4294967295n, 4294967295n, 4294967295n, 4294967295n,
+      INT_MAX, T, UINT_MAX, UINT_MAX,
+    ],
     [4294967296, 4294967296n, 4294967296n, 4294967296n, 4294967296n, INT_MAX, T, UINT_MAX, T],
     [1e10, 10000000000n, 10000000000n, 10000000000n, 10000000000n, INT_MAX, T, UINT_MAX, T],
-    [2 ** 53 - 1, 9007199254740991n, 9007199254740991n, 9007199254740991n, 9007199254740991n, INT_MAX, T, UINT_MAX, T],
-    [2 ** 53, 9007199254740992n, 9007199254740992n, 9007199254740992n, 9007199254740992n, INT_MAX, T, UINT_MAX, T],
+    [
+      2 ** 53 - 1, 9007199254740991n, 9007199254740991n, 9007199254740991n, 9007199254740991n,
+      INT_MAX, T, UINT_MAX, T,
+    ],
+    [
+      2 ** 53, 9007199254740992n, 9007199254740992n, 9007199254740992n, 9007199254740992n,
+      INT_MAX, T, UINT_MAX, T,
+    ],
     [-(2 ** 53), -9007199254740992n, -9007199254740992n, 0n, T, INT_MIN, T, 0, T],
     [2 ** 63, LONG_MAX, T, 9223372036854775808n, 9223372036854775808n, INT_MAX, T, UINT_MAX, T],
     [-(2 ** 63), LONG_MIN, LONG_MIN, 0n, T, INT_MIN, T, 0, T],
     [-9223372036854777856, LONG_MIN, T, 0n, T, INT_MIN, T, 0, T],
-    [18446744073709549568, LONG_MAX, T, 18446744073709549568n, 18446744073709549568n, INT_MAX, T, UINT_MAX, T],
+    [
+      18446744073709549568, LONG_MAX, T, 18446744073709549568n, 18446744073709549568n,
+      INT_MAX, T, UINT_MAX, T,
+    ],
     [2 ** 64, LONG_MAX, T, ULONG_MAX, T, INT_MAX, T, UINT_MAX, T],
     [1e19, LONG_MAX, T, 10000000000000000000n, 10000000000000000000n, INT_MAX, T, UINT_MAX, T],
     [-1e19, LONG_MIN, T, 0n, T, INT_MIN, T, 0, T],
@@ -327,7 +352,10 @@ describe("double to 64 and 32 bits", () => {
 
   test.each(rows)(
     "%p converts as C# casts do",
-    (value, int64, int64Checked, uint64, uint64Checked, int32, int32Checked, uint32, uint32Checked) => {
+    (
+      value, int64, int64Checked, uint64, uint64Checked,
+      int32, int32Checked, uint32, uint32Checked,
+    ) => {
       expectOutcome(() => int64FromDouble(value), int64, OVERFLOW);
       expectOutcome(() => int64FromDoubleChecked(value), int64Checked, OVERFLOW);
       expectOutcome(() => uint64FromDouble(value), uint64, OVERFLOW);
@@ -350,13 +378,16 @@ describe("double to 64 and 32 bits", () => {
     }
   });
 
-  test("keeps the low bits of the saturated int for a narrower target, as (byte)300.5 is 44", () => {
-    expect(int32FromDouble(300.5) & 0xff).toBe(44);
-    expect(int32FromDouble(-3.7) & 0xff).toBe(253);
-    expect(int32FromDouble(1e10) & 0xff).toBe(255);
-    expect(int32FromDouble(-1e19) & 0xff).toBe(0);
-    expect(int32FromDouble(NaN) & 0xff).toBe(0);
-  });
+  test(
+    "keeps the low bits of the saturated int for a narrower target, as (byte)300.5 is 44",
+    () => {
+      expect(int32FromDouble(300.5) & 0xff).toBe(44);
+      expect(int32FromDouble(-3.7) & 0xff).toBe(253);
+      expect(int32FromDouble(1e10) & 0xff).toBe(255);
+      expect(int32FromDouble(-1e19) & 0xff).toBe(0);
+      expect(int32FromDouble(NaN) & 0xff).toBe(0);
+    },
+  );
 });
 
 describe("int64ToSingle", () => {

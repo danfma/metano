@@ -12,6 +12,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
 // JSON `null` reaching a non-nullable value-type member or element, measured
@@ -109,7 +110,11 @@ const dictionaryStringInt32: ValueSpec<Map<string, number>> = {
 };
 
 const dictionaryStringNullableInt32: ValueSpec<Map<string, number | null>> = {
-  descriptor: { kind: "map", key: { kind: "primitive" }, value: { kind: "nullable", inner: int32 } },
+  descriptor: {
+    kind: "map",
+    key: { kind: "primitive" },
+    value: { kind: "nullable", inner: int32 },
+  },
 };
 
 const int32Array: ValueSpec<number[]> = {
@@ -215,7 +220,9 @@ describe("nullable slots keep reading null", () => {
     const spec: TypeSpec<HolderInt> = {
       type: HolderInt,
       factory: (properties) => new HolderInt(properties.n as number),
-      properties: [{ ts: "n", json: "N", type: { kind: "nullable", inner: int32 }, optional: true }],
+      properties: [
+        { ts: "n", json: "N", type: { kind: "nullable", inner: int32 }, optional: true },
+      ],
     };
 
     expect(JsonSerializer.deserialize({ N: null }, spec)?.n).toBeNull();

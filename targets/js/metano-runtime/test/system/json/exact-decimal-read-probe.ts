@@ -6,12 +6,14 @@
  * `bun build`) and Bun.
  */
 import { parseJsonText, readJsonText } from "#/system/json/json-text-reader";
+
 import {
   DECIMAL_READ_ROWS,
   readOutcomeOf,
   STJ_DECIMAL_TEXTS,
   textRoundTripOf,
 } from "./exact-decimal-read-rows.ts";
+
 import { JSON_TEXT_ROWS, textOutcomeOf } from "./json-text-rows.ts";
 
 console.log(

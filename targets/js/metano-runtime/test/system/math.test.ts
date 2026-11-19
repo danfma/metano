@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ArgumentException, ArgumentOutOfRangeException } from "#/system/exceptions/index.ts";
+
 import {
   type DecimalRoundable,
   MidpointRounding,
@@ -78,12 +79,11 @@ const dotnetRoundCases: [number, number, MidpointRounding, number][] = [
 ];
 
 describe("roundNumber", () => {
-  test.each(dotnetRoundCases)(
-    "Math.Round(%p, %p, mode %p) is %p",
-    (value, digits, mode, expected) => {
-      expect(Object.is(roundNumber(value, digits, mode), expected)).toBe(true);
-    },
-  );
+  test.each(
+    dotnetRoundCases,
+  )("Math.Round(%p, %p, mode %p) is %p", (value, digits, mode, expected) => {
+    expect(Object.is(roundNumber(value, digits, mode), expected)).toBe(true);
+  });
 
   test("defaults to zero digits and banker's rounding, like Math.Round(x)", () => {
     expect(roundNumber(0.5)).toBe(0);
@@ -113,13 +113,15 @@ describe("roundNumber", () => {
   });
 
   test("rejects digit counts and modes that .NET rejects", () => {
-    const digitsMessage = "Rounding digits must be between 0 and 15, inclusive. (Parameter 'digits')";
+    const digitsMessage =
+      "Rounding digits must be between 0 and 15, inclusive. (Parameter 'digits')";
 
     expect(() => roundNumber(1, -1)).toThrow(ArgumentOutOfRangeException);
     expect(() => roundNumber(1, 16)).toThrow(ArgumentOutOfRangeException);
     expect(() => roundNumber(1, 16)).toThrow(digitsMessage);
     expect(() => roundNumber(1, 1.5)).toThrow(ArgumentOutOfRangeException);
     expect(() => roundNumber(1, 0, 5 as MidpointRounding)).toThrow(ArgumentException);
+
     expect(() => roundNumber(1, 0, 5 as MidpointRounding)).toThrow(
       "The value '5' is not valid for this usage of the type MidpointRounding. (Parameter 'mode')",
     );
@@ -166,9 +168,11 @@ describe("roundDecimal", () => {
 
   test("rejects digit counts and modes that .NET rejects", () => {
     expect(() => roundingFor(29)).toThrow(ArgumentOutOfRangeException);
+
     expect(() => roundingFor(29)).toThrow(
       "Decimal can only round to between 0 and 28 digits of precision. (Parameter 'decimals')",
     );
+
     expect(() => roundingFor(0, -1 as MidpointRounding)).toThrow(ArgumentException);
   });
 });
@@ -183,8 +187,6 @@ describe("MidpointRounding modes", () => {
       expect(() => roundNumber(1.5, 0, mode)).not.toThrow();
     }
 
-    expect(() => roundNumber(1.5, 0, modes.length as MidpointRounding)).toThrow(
-      ArgumentException,
-    );
+    expect(() => roundNumber(1.5, 0, modes.length as MidpointRounding)).toThrow(ArgumentException);
   });
 });

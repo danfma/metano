@@ -23,9 +23,7 @@ describe("temporalTextOf — TimeOnly (Temporal.PlainTime)", () => {
   });
 
   test("truncates a fraction to ticks (100 ns)", () => {
-    expect(temporalTextOf(Temporal.PlainTime.from("03:04:05.123456789"))).toBe(
-      "03:04:05.1234567",
-    );
+    expect(temporalTextOf(Temporal.PlainTime.from("03:04:05.123456789"))).toBe("03:04:05.1234567");
   });
 
   test("a fraction below one tick writes no fraction", () => {

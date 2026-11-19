@@ -40,7 +40,7 @@ const initSpec: TypeSpec<Init> = {
 };
 
 function roundTrip(json: string): string {
-  const value = JsonSerializer.deserialize(JSON.parse(json), initSpec);
+  const value = JsonSerializer.deserialize(JSON.parse(json) as unknown, initSpec);
 
   return JSON.stringify(JsonSerializer.serialize(value, initSpec));
 }
@@ -60,6 +60,7 @@ describe("assignIfPresent", () => {
 
   test("a missing assignIfPresent member is left out of the factory's input", () => {
     const seen: Record<string, unknown>[] = [];
+
     const spec: TypeSpec<Init> = {
       ...initSpec,
       factory: (p) => {

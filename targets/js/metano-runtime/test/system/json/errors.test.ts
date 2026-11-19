@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   JsonException,
   JsonSerializer,
@@ -6,6 +7,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { expectJsonException } from "./json-exception-assertions.ts";
 
 class Tag {

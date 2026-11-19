@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
+
 import {
   ArgumentException,
   ArgumentOutOfRangeException,
@@ -7,6 +8,7 @@ import {
   InvalidCastException,
   OverflowException,
 } from "#/system/exceptions/index.ts";
+
 import {
   convertDecimalToInt64,
   convertDecimalToUInt64,
@@ -30,7 +32,11 @@ describe("Convert into 64-bit integers", () => {
     expect(convertDoubleToInt64(-9223372036854775808)).toBe(-9223372036854775808n);
     expect(convertDoubleToUInt64(-0.5)).toBe(0n);
     expect(convertDoubleToUInt64(9223372036854775808)).toBe(9223372036854775808n);
-    expect(() => convertDoubleToInt64(9223372036854775808)).toThrow(new OverflowException(OVERFLOW));
+
+    expect(() => convertDoubleToInt64(9223372036854775808)).toThrow(
+      new OverflowException(OVERFLOW),
+    );
+
     expect(() => convertDoubleToInt64(Number.NaN)).toThrow(new OverflowException(OVERFLOW));
     expect(() => convertDoubleToUInt64(-0.6)).toThrow(new OverflowException(OVERFLOW));
   });
@@ -39,9 +45,11 @@ describe("Convert into 64-bit integers", () => {
     expect(convertDecimalToInt64(new Decimal("2.5"))).toBe(2n);
     expect(convertDecimalToInt64(new Decimal("-0.6"))).toBe(-1n);
     expect(convertDecimalToUInt64(new Decimal("9223372036854775807.5"))).toBe(9223372036854775808n);
+
     expect(() => convertDecimalToInt64(new Decimal("9223372036854775807.5"))).toThrow(
       new OverflowException("Value was either too large or too small for an Int64."),
     );
+
     expect(() => convertDecimalToUInt64(new Decimal("-0.6"))).toThrow(
       new OverflowException("Value was either too large or too small for a UInt64."),
     );
@@ -65,26 +73,34 @@ describe("Convert into 64-bit integers", () => {
     expect(convertStringToInt64(null, 16)).toBe(0n);
     expect(() => convertStringToInt64("1", 3)).toThrow(new ArgumentException("Invalid Base."));
     expect(() => convertStringToInt64(null, 3)).toThrow(new ArgumentException("Invalid Base."));
+
     expect(() => convertStringToInt64("-1", 16)).toThrow(
       new ArgumentException("String cannot contain a minus sign if the base is not 10."),
     );
+
     expect(() => convertStringToUInt64("-1", 10)).toThrow(
       new OverflowException(
-        "The string was being parsed as an unsigned number and could not have a negative sign.",
+        "The string was being parsed as an unsigned number and could not " +
+          "have a negative sign.",
       ),
     );
+
     expect(() => convertStringToInt64(" 10", 10)).toThrow(
       new FormatException("Could not find any recognizable digits."),
     );
+
     expect(() => convertStringToInt64("10 ", 2)).toThrow(
       new FormatException("Additional non-parsable characters are at the end of the string."),
     );
+
     expect(() => convertStringToInt64("2000000000000000000000", 8)).toThrow(
       new OverflowException("Value was either too large or too small for a UInt64."),
     );
+
     expect(() => convertStringToInt64("9223372036854775808", 10)).toThrow(
       new OverflowException("Value was either too large or too small for an Int64."),
     );
+
     expect(() => convertStringToInt64("", 10)).toThrow(ArgumentOutOfRangeException);
   });
 

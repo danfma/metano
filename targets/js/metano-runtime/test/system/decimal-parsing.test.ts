@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseDecimalText } from "#/system/decimal-parsing.ts";
+
 import {
   ArgumentNullException,
   FormatException,
@@ -20,9 +21,11 @@ describe("parseDecimalText", () => {
 
   test("rejects what .NET rejects", () => {
     expect(() => parseDecimalText("zz")).toThrow(FormatException);
+
     expect(() => parseDecimalText("zz")).toThrow(
       "The input string 'zz' was not in a correct format.",
     );
+
     expect(() => parseDecimalText("1e5")).toThrow(FormatException);
     expect(() => parseDecimalText("-5-")).toThrow(FormatException);
     expect(() => parseDecimalText("99999999999999999999999999999999")).toThrow(OverflowException);

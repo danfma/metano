@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+
 import {
   JsonSerializer,
   type PolymorphismSpec,
   type TypeSpec,
   type UnknownDerivedTypeHandling,
 } from "#/system/json/index.ts";
+
 import {
   expectNotSupportedException,
   unsupportedRuntimeTypeMessage,
 } from "./json-exception-assertions.ts";
+
 import { abstractFactory } from "./spec-fixtures.ts";
 
 // Hand-written specs shaped like contracts/context-codegen.md §1b: `[PlainObject]` variants have
@@ -73,7 +76,8 @@ function shapeBase(polymorphism: Partial<PolymorphismSpec>): TypeSpec<Shape> {
   return {
     factory: () => {
       throw new Error(
-        "Cannot deserialize abstract type 'Shape' directly; deserialize it through a polymorphic spec.",
+        "Cannot deserialize abstract type 'Shape' directly; " +
+          "deserialize it through a polymorphic spec.",
       );
     },
     properties: [],
@@ -95,7 +99,7 @@ function write<T>(value: T, spec: TypeSpec<T>): string {
 }
 
 function read<T>(json: string, spec: TypeSpec<T>): T {
-  return JsonSerializer.deserialize(JSON.parse(json), spec)!;
+  return JsonSerializer.deserialize(JSON.parse(json) as unknown, spec)!;
 }
 
 describe("structural dispatch — [PlainObject] variants (FR-019)", () => {

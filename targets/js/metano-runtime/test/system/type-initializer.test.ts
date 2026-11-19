@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   Exception,
   InvalidOperationException,
   SystemException,
   TypeInitializationException,
 } from "#/system/exceptions/index.ts";
+
 import { typeInitializer } from "#/system/type-initializer.ts";
 
 describe("typeInitializer", () => {
@@ -21,6 +23,7 @@ describe("typeInitializer", () => {
 
   test("a re-entrant call sees the type as initialized", () => {
     const log: string[] = [];
+
     const init: () => void = typeInitializer("Registry", () => {
       log.push("start");
       init();
@@ -35,6 +38,7 @@ describe("typeInitializer", () => {
   test("wraps a failure and rethrows the same exception at every later call", () => {
     let runs = 0;
     const cause = new InvalidOperationException("boom");
+
     const init = typeInitializer("Outer.Inner", () => {
       runs++;
 

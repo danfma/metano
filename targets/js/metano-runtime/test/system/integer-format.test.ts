@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { FormatException, NotSupportedException } from "#/system/exceptions/index.ts";
 import { formatInteger, type IntegerBits } from "#/system/integer-format.ts";
 
-/** Every expected text below was printed by `ToString(format)` on .NET 10.0.12 (invariant culture). */
+/**
+ * Every expected text below was printed by `ToString(format)` on .NET 10.0.12 (invariant culture).
+ */
 describe("formatInteger", () => {
   const rows: [number, IntegerBits, string | null, string][] = [
     [-3, 32, null, "-3"],
@@ -57,6 +59,7 @@ describe("formatInteger", () => {
     expect(() => formatInteger(5, 32, "B")).toThrow(
       new NotSupportedException("The format 'B' is not supported for integers in TypeScript."),
     );
+
     expect(() => formatInteger(5, 32, "0.00")).toThrow(
       new NotSupportedException("The format '0.00' is not supported for integers in TypeScript."),
     );
@@ -69,7 +72,10 @@ describe("formatInteger", () => {
   });
 
   test("invalid formats throw FormatException", () => {
-    expect(() => formatInteger(3, 32, "Z")).toThrow(new FormatException("Format specifier was invalid."));
+    expect(() => formatInteger(3, 32, "Z")).toThrow(
+      new FormatException("Format specifier was invalid."),
+    );
+
     expect(() => formatInteger(3, 32, "D1000000000")).toThrow(FormatException);
   });
 });

@@ -105,13 +105,15 @@ export const textRegistry: RowRegistry = {
   formatSingle,
 };
 
-const decimalRow = (apply: (left: Decimal, right: Decimal) => Decimal) => (left: string, right: string) =>
-  apply(new Decimal(left), new Decimal(right)).toFixed();
+const decimalRow =
+  (apply: (left: Decimal, right: Decimal) => Decimal) => (left: string, right: string) =>
+    apply(new Decimal(left), new Decimal(right)).toFixed();
 
 export const decimalRegistry: RowRegistry = {
   decimalPlus: decimalRow((left, right) => left.plus(right)),
   decimalMinus: decimalRow((left, right) => left.minus(right)),
   decimalTimes: decimalRow((left, right) => left.times(right)),
   decimalDivideExact: decimalRow((left, right) => left.div(right)),
-  decimalRoundToEven: (value: string, places: number) => new Decimal(value).toDecimalPlaces(places).toFixed(),
+  decimalRoundToEven: (value: string, places: number) =>
+    new Decimal(value).toDecimalPlaces(places).toFixed(),
 };

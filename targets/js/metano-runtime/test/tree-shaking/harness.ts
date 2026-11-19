@@ -21,6 +21,8 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
@@ -147,8 +149,6 @@ export function moduleLoadCode(bundle: string): string {
     .trim();
 }
 
-let entryCounter = 0;
-
 /**
  * Bundles `source` (an entry module written into the directory) with
  * `bundler`, minified, with every third-party package left as an import.
@@ -159,7 +159,7 @@ export async function bundle(
   source: string,
   define?: Readonly<Record<string, string>>,
 ): Promise<string> {
-  const entry = join(directory.root, `__entry_${entryCounter++}.js`);
+  const entry = join(directory.root, `__entry_${randomUUID()}.js`);
 
   writeFileSync(entry, source);
 
@@ -175,8 +175,11 @@ export async function bundle(
  * directory), as `/`-separated paths relative to the directory, sorted: what a bundle
  * pulls in, whatever its minified text looks like.
  */
-export async function bundledModules(directory: BundleDirectory, source: string): Promise<string[]> {
-  const entry = join(directory.root, `__entry_${entryCounter++}.js`);
+export async function bundledModules(
+  directory: BundleDirectory,
+  source: string,
+): Promise<string[]> {
+  const entry = join(directory.root, `__entry_${randomUUID()}.js`);
 
   writeFileSync(entry, source);
 

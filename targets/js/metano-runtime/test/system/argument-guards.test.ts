@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
+
 import {
   throwIfEqual,
   throwIfGreaterThan,
@@ -15,6 +16,7 @@ import {
   throwIfNullOrWhiteSpace,
   throwIfZero,
 } from "#/system/argument-guards.ts";
+
 import {
   ArgumentException,
   ArgumentNullException,
@@ -38,7 +40,8 @@ describe("argument guards", () => {
     );
 
     expect(() => throwIfNullOrWhiteSpace("  ", "w")).toThrow(
-      "The value cannot be an empty string or composed entirely of whitespace. (Parameter 'w')",
+      "The value cannot be an empty string or composed entirely of " +
+        "whitespace. (Parameter 'w')",
     );
 
     expect(() => throwIfNullOrWhiteSpace(" a ", "w")).not.toThrow();
@@ -148,7 +151,6 @@ describe("argument guards", () => {
     expect(() => throwIfNegative(-0, "z")).toThrow(
       "z ('-0') must be a non-negative value. (Parameter 'z')\nActual value was -0.",
     );
-
   });
 
   test("other kinds compare as .NET does", () => {
@@ -183,8 +185,18 @@ describe("argument guards", () => {
     ["nested tuples", [[1, 2], "a"], [[1, 2], "a"], true],
     ["different tuples", [1, 2], [1, 3], false],
     ["[PlainObject] records", { name: "a", age: 1 }, { name: "a", age: 1 }, true],
-    ["durations", Temporal.Duration.from({ minutes: 5 }), Temporal.Duration.from({ seconds: 300 }), true],
-    ["different durations", Temporal.Duration.from({ minutes: 5 }), Temporal.Duration.from({ minutes: 6 }), false],
+    [
+      "durations",
+      Temporal.Duration.from({ minutes: 5 }),
+      Temporal.Duration.from({ seconds: 300 }),
+      true,
+    ],
+    [
+      "different durations",
+      Temporal.Duration.from({ minutes: 5 }),
+      Temporal.Duration.from({ minutes: 6 }),
+      false,
+    ],
     ["dates", Temporal.PlainDate.from("2024-01-02"), Temporal.PlainDate.from("2024-01-02"), true],
     ["decimals", new Decimal("1.0"), new Decimal("1"), true],
     ["nulls", null, null, true],

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   type JsonReadOptions,
   JsonSerializer,
@@ -6,6 +7,7 @@ import {
   type TypeDescriptor,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
 /**
@@ -113,6 +115,7 @@ describe("numbers from strings — signed integers", () => {
       ["-0", 0],
       ["+0", 0],
     ]);
+
     expectReads("System.SByte", [["-0", 0]]);
     expectReads("System.Int64", [["-0", 0]]);
   });
@@ -127,28 +130,35 @@ describe("numbers from strings — signed integers", () => {
       ["-128", -128],
       ["+5", 5],
     ]);
+
     expectRejects("System.SByte", ["128", "-129"]);
+
     expectReads("System.Int16", [
       ["32767", 32_767],
       ["-32768", -32_768],
       ["+5", 5],
     ]);
+
     expectRejects("System.Int16", ["32768", "-32769"]);
+
     expectReads("System.Int32", [
       ["2147483647", 2_147_483_647],
       ["-2147483648", -2_147_483_648],
     ]);
+
     expectRejects("System.Int32", ["2147483648", "-2147483649"]);
+
     expectReads("System.Int64", [
       ["9223372036854775807", 9_223_372_036_854_775_807],
       ["-9223372036854775808", -9_223_372_036_854_775_808],
       ["+5", 5],
     ]);
+
     expectRejects("System.Int64", ["9223372036854775808", "-9223372036854775809"]);
   });
 
   test("an Int64 beyond 2^53 reads as JSON.parse reads the same number", () => {
-    expectReads("System.Int64", [["9007199254740993", JSON.parse("9007199254740993")]]);
+    expectReads("System.Int64", [["9007199254740993", JSON.parse("9007199254740993") as number]]);
   });
 });
 
@@ -159,6 +169,7 @@ describe("numbers from strings — unsigned integers", () => {
       ["0255", 255],
       ["255", 255],
     ]);
+
     expectRejects("System.Byte", ["+5", "+255", "-0", "-1", "256", ...INTEGER_REJECTED]);
     expectReads("System.UInt16", [["65535", 65_535]]);
     expectRejects("System.UInt16", ["+5", "-0", "-1", "65536"]);
@@ -273,6 +284,7 @@ describe("numbers from strings — floating point", () => {
       ["3.40282356779733661e38", 3.40282356779733661e38],
       ["340282356779733661637539395458142568447", 3.4028235677973366e38],
     ]);
+
     expectRejects("System.Single", [
       "340282356779733661637539395458142568448",
       "-340282356779733661637539395458142568448",
@@ -334,7 +346,10 @@ describe("numbers from strings — decimal", () => {
     ];
 
     for (const text of rejected) {
-      expectJsonException(() => readRoot(text, decimalRoot), cannotConvertMessage("System.Decimal"));
+      expectJsonException(
+        () => readRoot(text, decimalRoot),
+        cannotConvertMessage("System.Decimal"),
+      );
     }
   });
 
@@ -356,15 +371,23 @@ describe("numbers from strings — decimal", () => {
     ];
 
     for (const text of limits) {
-      expect(readRoot(JSON.parse(text), decimalRoot)).toBe(JSON.parse(text));
+      expect(readRoot(JSON.parse(text) as number, decimalRoot)).toBe(JSON.parse(text) as number);
     }
   });
 
   test("a JSON number outside the decimal range, or any other JSON value, is rejected", () => {
-    const outside = [JSON.parse("79228162514264355185729994752"), -7.922816251426436e28, 1e29, -1e29];
+    const outside = [
+      JSON.parse("79228162514264355185729994752") as number,
+      -7.922816251426436e28,
+      1e29,
+      -1e29,
+    ];
 
     for (const value of [...outside, true, {}]) {
-      expectJsonException(() => readRoot(value, decimalRoot), cannotConvertMessage("System.Decimal"));
+      expectJsonException(
+        () => readRoot(value, decimalRoot),
+        cannotConvertMessage("System.Decimal"),
+      );
     }
   });
 });
@@ -391,6 +414,7 @@ describe("decimal — values built by the descriptor's type", () => {
 
   test("a JSON string builds a value from the exact text when the context reads strings", () => {
     expect(readDecimal("1.10", READS_NUMBERS)).toEqual(new ExactDecimal("1.10"));
+
     expect(readDecimal("79228162514264337593543950335", READS_NUMBERS)).toEqual(
       new ExactDecimal("79228162514264337593543950335"),
     );
@@ -414,9 +438,9 @@ describe("numbers from strings — where the option applies", () => {
 
     expect(readRoot(["1", 2], { kind: "array", element: int32 })).toEqual([1, 2]);
 
-    expect(
-      readRoot({ k: "3" }, { kind: "map", key: { kind: "primitive" }, value: int32 }),
-    ).toEqual(new Map([["k", 3]]));
+    expect(readRoot({ k: "3" }, { kind: "map", key: { kind: "primitive" }, value: int32 })).toEqual(
+      new Map([["k", 3]]),
+    );
 
     expectJsonException(
       () => readRoot({ k: "5.0" }, { kind: "map", key: { kind: "primitive" }, value: int32 }),
@@ -454,6 +478,7 @@ describe("numbers from strings — where the option applies", () => {
     expectJsonException(() => readRoot("5.5", nullableInt32), cannotConvertMessage(nullableName));
 
     expect(readRoot(["5", null], { kind: "array", element: nullableInt32 })).toEqual([5, null]);
+
     expectJsonException(
       () => readRoot(["null"], { kind: "array", element: nullableInt32 }),
       cannotConvertMessage(nullableName),
@@ -483,7 +508,7 @@ describe("numbers from strings — where the option applies", () => {
     expect(JsonSerializer.deserialize("5.5", strict)).toBe("5.5");
   });
 
-  test("without the option, a decimal rejects every string (measured: General, \"1\")", () => {
+  test('without the option, a decimal rejects every string (measured: General, "1")', () => {
     expectJsonException(
       () => JsonSerializer.deserialize("1", { descriptor: { kind: "decimal" } }),
       cannotConvertMessage("System.Decimal"),

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { JsonException } from "#/system/json";
 import { JsonNonIntegerNumber, JsonNumberText } from "#/system/json/exact-json-number";
+
 import {
   mayHoldInexactNumber,
   mayHoldNonIntegerNumber,
@@ -8,6 +9,7 @@ import {
   parseJsonText,
   readJsonText,
 } from "#/system/json/json-text-reader";
+
 import { expectedTextOutcomeOf, JSON_TEXT_ROWS, textOutcomeOf } from "./json-text-rows.ts";
 
 /** The tree with every number leaf read as `JSON.parse` reads it. */
@@ -43,7 +45,7 @@ function outcomeOf(read: () => unknown): string {
 
 function jsonParseOutcomeOf(text: string): string {
   try {
-    return `OK ${JSON.stringify(JSON.parse(text))}`;
+    return `OK ${JSON.stringify(JSON.parse(text) as unknown)}`;
   } catch {
     return "rejected";
   }
@@ -53,7 +55,7 @@ describe("readJsonText — System.Text.Json's reader messages (#457)", () => {
   for (const row of JSON_TEXT_ROWS) {
     const expected = row.error
       ? `JsonException ${row.error}`
-      : `OK ${JSON.stringify(JSON.parse(row.text))}`;
+      : `OK ${JSON.stringify(JSON.parse(row.text) as unknown)}`;
 
     test(`${JSON.stringify(row.text)} → ${expected}`, () => {
       expect(outcomeOf(() => readJsonText(row.text))).toBe(expected);
@@ -81,7 +83,7 @@ describe("readJsonText — depth", () => {
 
   test("documents nested past 64 levels read as JSON.parse reads them", () => {
     for (const text of [nestedArrays(65), nestedObjects(65), nestedArrays(1000)]) {
-      expect(asParsed(readJsonText(text))).toEqual(JSON.parse(text));
+      expect(asParsed(readJsonText(text))).toEqual(JSON.parse(text) as unknown);
     }
   });
 
@@ -116,12 +118,14 @@ describe("readJsonText — a slash where a value or property opens", () => {
 
 describe("readJsonText — the tree JSON.parse builds", () => {
   const sameAsJsonParse = (text: string) =>
-    expect(asParsed(readJsonText(text))).toEqual(JSON.parse(text));
+    expect(asParsed(readJsonText(text))).toEqual(JSON.parse(text) as unknown);
 
   test("the last duplicate key wins at the first key's position", () => {
     const text = '{"a":1,"b":2,"a":3}';
 
-    expect(Object.entries(readJsonText(text) as object)).toEqual(Object.entries(JSON.parse(text)));
+    expect(Object.entries(readJsonText(text) as object)).toEqual(
+      Object.entries(JSON.parse(text) as object),
+    );
   });
 
   test("__proto__ is an own property, not the prototype", () => {
@@ -135,7 +139,9 @@ describe("readJsonText — the tree JSON.parse builds", () => {
   test("integer-like keys are enumerated first, as JSON.parse enumerates them", () => {
     const text = '{"b":1,"2":2,"a":3,"1":4}';
 
-    expect(Object.keys(readJsonText(text) as object)).toEqual(Object.keys(JSON.parse(text)));
+    expect(Object.keys(readJsonText(text) as object)).toEqual(
+      Object.keys(JSON.parse(text) as object),
+    );
   });
 
   // Spelled with escaped backslashes rather than String.raw: Bun's transpiler
@@ -236,7 +242,9 @@ describe("readJsonText — inexactOrNonInteger leaves (spec 012 FR-053)", () => 
   test("the tree is JSON.parse's once the leaves are read as doubles", () => {
     const text = '{"a":[1,2.5,3e2],"b":{"c":-0.0,"d":"1.0"}}';
 
-    expect(asParsed(readJsonText(text, "inexactOrNonInteger"))).toEqual(JSON.parse(text));
+    expect(asParsed(readJsonText(text, "inexactOrNonInteger"))).toEqual(
+      JSON.parse(text) as unknown,
+    );
   });
 });
 
@@ -252,7 +260,9 @@ function mutate(seed: string, at: number, character: string, kind: number): stri
   }
 }
 
-/** Seeded mutations of valid documents: `readJsonText` accepts exactly what `JSON.parse` accepts. */
+/**
+ * Seeded mutations of valid documents: `readJsonText` accepts exactly what `JSON.parse` accepts.
+ */
 describe("readJsonText — acceptance equals JSON.parse on mutated documents", () => {
   const SEEDS = [
     '{"id":1,"name":"Ana","tags":["a","b"],"price":19.99,"note":null,"ok":true}',

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   JsonSerializer,
   SerializerContext,
@@ -7,6 +8,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import {
   abstractTypeMessage,
   cannotConvertMessage,
@@ -21,49 +23,59 @@ import {
   unrecognizedDiscriminatorMessage,
   unsupportedRuntimeTypeMessage,
 } from "./json-exception-assertions.ts";
+
 import { abstractFactory } from "./spec-fixtures.ts";
 
 // Hand-written specs shaped like the generated context of contracts/context-codegen.md §1.
 // Expected text mirrors System.Text.Json source-generated contexts on .NET 10 (research.md R1,
 // R8, and an S5 probe):
-//   Clip [JsonPolymorphic("kind")] image/silence   ImageClip("a.png",1.5) → {"kind":"image","Path":"a.png","Seconds":1.5}
-//   {"kind":"video",…} / {"kind":"Image",…}        → JsonException "Read unrecognized type discriminator id 'video'."
-//   {"Seconds":2} / tag not first (abstract base)  → NotSupportedException "… must specify a type discriminator."
+//   Clip [JsonPolymorphic("kind")] image/silence   ImageClip("a.png",1.5) →
+//     {"kind":"image","Path":"a.png","Seconds":1.5}
+//   {"kind":"video",…} / {"kind":"Image",…} →
+//     JsonException "Read unrecognized type discriminator id 'video'."
+//   {"Seconds":2} / tag not first (abstract base) →
+//     NotSupportedException "… must specify a type discriminator."
 //   tag not first on a concrete base, a later tag, $id / $ref
-//                                                  → JsonException "The metadata property is either not supported …"
+//     → JsonException "The metadata property is either not supported …"
 //   any other key starting with '$' (after the tag, or on a concrete base)
-//                                                  → JsonException "Properties that start with '$' are not allowed …"
-//   {"$type":"d","0":5,…}                          → reads CDer (an index key after the tag is fine)
+//     → JsonException "Properties that start with '$' are not allowed …"
+//   {"$type":"d","0":5,…} → reads CDer (an index key after the tag is fine)
 //   tag not first + AllowOutOfOrderMetadataProperties → reads the derived type
-//   IBase int tag 1 / string tag "s"               IA(5) → {"$type":1,"X":5}; {"$type":"1"} unrecognized '1'
+//   IBase int tag 1 / string tag "s" → IA(5) → {"$type":1,"X":5};
+//     {"$type":"1"} unrecognized '1'
 //   {"$type":2} / {"$type":-1}                     → unrecognized id '2' / '-1'
-//   {"$type":1.5} / {"$type":3000000000}           → JsonException "The JSON value could not be converted to IBase."
+//   {"$type":1.5} / {"$type":3000000000} →
+//     JsonException "The JSON value could not be converted to IBase."
 //   {"t":1} on a base with string tags only         → unrecognized id '1'
-//   Self-registered SBase "b"                       SBase(1) → {"$type":"b","V":1}, reads back as SBase
-//   FallBackToNearestAncestor, NSelfZ : NSelf       → {"$type":"b","V":1} (nearest = self-registered base)
+//   Self-registered SBase "b" → SBase(1) → {"$type":"b","V":1}, reads back as SBase
+//   FallBackToNearestAncestor, NSelfZ : NSelf → {"$type":"b","V":1}
+//     (nearest = self-registered base)
 //   FallBackToNearestAncestor, UNearB : UNearA "a"  → {"$type":"a","B":2,"A":1}
 //   FallBackToNearestAncestor, none registered      → base contract, no tag ({"V":1})
 //   FallBackToBaseType, UBaseX : UBaseH (abstract)  → {"A":1}
 //   Untagged UA : UBase                             → {"A":2,"V":1}; {"V":1,"A":2} reads as UBase
-//   Only untagged registrations (S6 review probe)  → {"$type":"x","V":1} / {"V":1,"$x":1} read as UB;
+//   Only untagged registrations (S6 review probe) → {"$type":"x","V":1} / {"V":1,"$x":1}
+//     read as UB;
 //                                                    abstract UAB {"A":1} → NotSupportedException
-//                                                    "Deserialization of interface or abstract types is not
+//     "Deserialization of interface or abstract types is not
 //                                                    supported. Type 'UAB'."
-//   IgnoreUnrecognizedTypeDiscriminators            concrete base → base; abstract → NotSupportedException
-//   Nested NMid : NBase (both polymorphic)          → outer tag only; NLeaf (on NMid only) fails via NBase
-//   Interface IShape                               Sq(2) → {"$type":"sq","Side":2}; Other → NotSupportedException
+//   IgnoreUnrecognizedTypeDiscriminators → concrete base → base;
+//     abstract → NotSupportedException
+//   Nested NMid : NBase (both polymorphic) → outer tag only;
+//     NLeaf (on NMid only) fails via NBase
+//   Interface IShape → Sq(2) → {"$type":"sq","Side":2}; Other → NotSupportedException
 // DECIDED-12 (S6 probe, source generation and reflection alike), abstract AMid registered "m" on AB
 // under FallBackToNearestAncestor:
 //   {"$type":"m","M":2,"A":1} / {"$type":"m"} / {"$type":"m","$x":1}
-//                                                  → NotSupportedException "Deserialization of interface or
+//     → NotSupportedException "Deserialization of interface or
 //                                                    abstract types is not supported. Type 'AMid'."
 //     (also on a concrete base and under IgnoreUnrecognizedTypeDiscriminators)
 //   {"$type":"m","$id":"1"} / {"$type":"m","$values":[]}
-//                                                  → JsonException "The metadata property … not the first property …"
+//     → JsonException "The metadata property … not the first property …"
 //   AllowOutOfOrderMetadataProperties: {"A":1,"$type":"m"} → the NotSupportedException above;
-//                                      {"$type":"m","$x":1} → JsonException "Properties that start with '$' …"
+//     {"$type":"m","$x":1} → JsonException "Properties that start with '$' …"
 //   abstract QMid registered "m", itself polymorphic: {"$type":"m","M":2}
-//                                                  → NotSupportedException "… abstract type 'QMid' must specify a
+//     → NotSupportedException "… abstract type 'QMid' must specify a
 //                                                    type discriminator."
 
 const primitive = { kind: "primitive" } as const;
@@ -124,7 +136,8 @@ class StudioContext extends SerializerContext {
       type: Clip,
       factory: () => {
         throw new Error(
-          "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
+          "Cannot deserialize abstract type 'Clip' directly; " +
+            "deserialize it through a polymorphic spec.",
         );
       },
       properties: [{ ts: "seconds", json: "Seconds", type: primitive }],
@@ -215,7 +228,7 @@ function write<T>(value: T, spec: TypeSpec<T>): string {
 
 /** Parses `json` and deserializes it through `spec`. */
 function read<T>(json: string, spec: TypeSpec<T>): T {
-  return JsonSerializer.deserialize(JSON.parse(json), spec)!;
+  return JsonSerializer.deserialize(JSON.parse(json) as unknown, spec)!;
 }
 
 describe("polymorphism — string tags (Clip)", () => {
@@ -329,7 +342,8 @@ describe("polymorphism — dispatch through containers", () => {
     const json = write(timeline, studio.timeline);
 
     expect(json).toBe(
-      '{"Name":"t","Main":{"kind":"image","Path":"a.png","Seconds":1.5},"Clips":[{"kind":"silence","Seconds":2}]}',
+      '{"Name":"t","Main":{"kind":"image","Path":"a.png","Seconds":1.5},' +
+        '"Clips":[{"kind":"silence","Seconds":2}]}',
     );
 
     const back = read(json, studio.timeline);
@@ -345,7 +359,7 @@ describe("polymorphism — dispatch through containers", () => {
 
     expect(json).toBe('[{"kind":"image","Path":"a","Seconds":1.5},{"kind":"silence","Seconds":2}]');
 
-    const back = JsonSerializer.deserialize(JSON.parse(json), studio.listClip);
+    const back = JsonSerializer.deserialize(JSON.parse(json) as unknown, studio.listClip);
 
     expect(back?.[0]).toBeInstanceOf(ImageClip);
     expect(back?.[1]).toBeInstanceOf(SilenceClip);
@@ -357,7 +371,10 @@ describe("polymorphism — dispatch through containers", () => {
 
     expect(json).toBe('{"x":{"kind":"silence","Seconds":2}}');
 
-    const back = JsonSerializer.deserialize(JSON.parse(json), studio.dictionaryStringClip);
+    const back = JsonSerializer.deserialize(
+      JSON.parse(json) as unknown,
+      studio.dictionaryStringClip,
+    );
 
     expect(back?.get("x")).toBeInstanceOf(SilenceClip);
   });
@@ -406,6 +423,7 @@ describe("polymorphism — getter access order", () => {
     const imageClip = context.imageClip;
 
     expect(imageClip.base).toBe(context.clip);
+
     expect(write(new ImageClip("a", 1), context.clip)).toBe(
       '{"kind":"image","Path":"a","Seconds":1}',
     );
@@ -891,7 +909,8 @@ describe("polymorphism — unknown derived type handling", () => {
     expect(write(new UNearZ(1), uNearSpec)).toBe('{"A":1}');
   });
 
-  test("fallBackToBaseType writes the base contract with no tag, also for an abstract base (W13)", () => {
+  test("fallBackToBaseType writes the base contract with no tag, " +
+    "also for an abstract base (W13)", () => {
     const json = write(new UBaseX(1, 2), uBaseHSpec);
 
     expect(json).toBe('{"A":1}');
@@ -1067,7 +1086,8 @@ describe("polymorphism — ignoreUnrecognizedTags", () => {
     expectJsonException(() => read('{"k":null,"V":1}', ignBaseSpec), metadataTokenMessage("Null"));
   });
 
-  test("with out-of-order metadata, a pending $values and an unknown tag is misplaced metadata (V4)", () => {
+  test("with out-of-order metadata, a pending $values and an unknown tag " +
+    "is misplaced metadata (V4)", () => {
     const ignAbsAnywhere: TypeSpec<IgnAbs> = {
       ...ignAbsSpec,
       readOptions: { allowOutOfOrderMetadataProperties: true },
@@ -1221,6 +1241,7 @@ describe("polymorphism — '$'-prefixed keys", () => {
       () => read('{"$id":"1","Seconds":1}', studio.clip),
       METADATA_NOT_FIRST_MESSAGE,
     );
+
     expectJsonException(() => read('{"$values":[]}', studio.clip), LEADING_VALUES_MESSAGE);
   });
 
@@ -1303,7 +1324,8 @@ describe("polymorphism — '$'-prefixed keys", () => {
       });
     }
 
-    test("a pending $values without a tag is a leading $values, even on an abstract base (P2, S1)", () => {
+    test("a pending $values without a tag is a leading $values, " +
+      "even on an abstract base (P2, S1)", () => {
       expectJsonException(() => read('{"$values":[]}', clipAnywhere), LEADING_VALUES_MESSAGE);
       expectJsonException(() => read('{"$values":[]}', cBaseAnywhere), LEADING_VALUES_MESSAGE);
     });
@@ -1517,7 +1539,8 @@ function interfaceBase(polymorphism: Partial<PolymorphismSpec>): TypeSpec<Shape>
   return {
     factory: () => {
       throw new Error(
-        "Cannot deserialize interface type 'IShape' directly; deserialize it through a polymorphic spec.",
+        "Cannot deserialize interface type 'IShape' directly; " +
+          "deserialize it through a polymorphic spec.",
       );
     },
     properties: [{ ts: "area", json: "Area", type: primitive }],

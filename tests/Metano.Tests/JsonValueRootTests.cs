@@ -109,7 +109,10 @@ public class JsonValueRootTests
 
         var (files, _) = TranspileHelper.TranspileWithJsonSourceGenerator(source);
 
-        await TranspileHelper.AssertGolden("json-context-value-roots.ts", files[ContextPath]);
+        await TranspileHelper.AssertGolden(
+            "json-context-value-roots-source-generator.ts",
+            files[ContextPath]
+        );
     }
 
     [Test]

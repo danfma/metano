@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   JsonSerializer,
   collectProperties,
@@ -198,7 +199,8 @@ describe("JsonSerializer — wire order", () => {
 });
 
 // [JsonPropertyOrder] (FR-046, slice S6b), measured on .NET 10:
-//   class Ord { A; [Order(-1)] B; C; [Order(1)] D; [Order(-1)] E } → {"B":2,"E":5,"A":1,"C":3,"D":4}
+//   class Ord { A; [Order(-1)] B; C; [Order(1)] D; [Order(-1)] E } →
+//   {"B":2,"E":5,"A":1,"C":3,"D":4}
 //   class OrdBase { Base1; [Order(5)] Base2; [Order(-5)] Base3 }
 //   class OrdDer : OrdBase { Der1; [Order(-5)] Der2; [Order(1)] Der3 }
 //     → {"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}

@@ -12,17 +12,29 @@
  * files is split at each top-level `import` that follows code; a part that
  * fails to compile or bundle is reported, never skipped.
  *
- * Writes one JSON object to the report file: `{ canary, goldens: { [file]: { [bundler]: code } } }`,
+ * Writes one JSON object to the report file:
+ * `{ canary, goldens: { [file]: { [bundler]: code } } }`,
  * where `code` is the module code the bundle keeps ("" when none), or
  * `{ error }` for a golden that could not be checked.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import terser from "@rollup/plugin-terser";
 import * as esbuild from "esbuild";
 import { rollup } from "rollup";
+
 import {
   BUNDLERS,
   type Bundler,
@@ -60,7 +72,10 @@ try {
  * under `<bundler> (biome)`.
  */
 async function check(directory: string) {
-  const goldens = readdirSync(directory).filter((file) => file.endsWith(".ts")).sort();
+  const goldens = readdirSync(directory)
+    .filter((file) => file.endsWith(".ts"))
+    .sort();
+
   const emitted = await checkVariant(join(work, "emitted"), directory, goldens, false);
   const formatted = await checkVariant(join(work, "biome"), directory, goldens, true);
   const results: Record<string, GoldenResult> = {};
@@ -105,7 +120,12 @@ async function checkVariant(
   compile(root);
 
   const out = join(root, "out");
-  writeFileSync(join(out, "package.json"), JSON.stringify({ name: "golden-probe", type: "module" }));
+
+  writeFileSync(
+    join(out, "package.json"),
+    JSON.stringify({ name: "golden-probe", type: "module" }),
+  );
+
   writeFileSync(join(out, CANARY), "register();\n");
 
   const canary = await bundleAll(out, CANARY);
@@ -120,7 +140,11 @@ async function checkVariant(
 
 /** Formats `<root>/src` with Biome under the repository's formatter settings. */
 function formatSources(root: string): void {
-  const settings = JSON.parse(readFileSync(join(REPOSITORY_ROOT, "biome.json"), "utf8"));
+  const settings = JSON.parse(readFileSync(join(REPOSITORY_ROOT, "biome.json"), "utf8")) as {
+    formatter: Record<string, unknown>;
+    javascript: Record<string, unknown>;
+  };
+
   const config = { formatter: settings.formatter, javascript: settings.javascript };
 
   writeFileSync(join(root, "biome.json"), JSON.stringify(config));
@@ -307,7 +331,9 @@ async function withRollup(entry: string, target: string): Promise<string> {
   const build = await rollup({
     input: entry,
     external: (specifier, importer) =>
-      importer !== undefined && specifier !== target && !(importer === entry && specifier.startsWith("./")),
+      importer !== undefined &&
+      specifier !== target &&
+      !(importer === entry && specifier.startsWith("./")),
     plugins: [
       {
         name: "resolve-the-part",

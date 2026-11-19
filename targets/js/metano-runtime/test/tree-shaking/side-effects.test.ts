@@ -6,12 +6,23 @@
  * trusted `sideEffects: false` would fail here before passing a real module.
  */
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import terser from "@rollup/plugin-terser";
 import { rollup } from "rollup";
+
 import {
   BUNDLERS,
   type BundleDirectory,
@@ -47,8 +58,8 @@ const SUBPATH_EXPORTS = [
 /** Each test bundles with up to three bundlers; a slow runner needs more than the default 5 s. */
 setDefaultTimeout(60_000);
 
-const allowlist: string[] = JSON.parse(
-  readFileSync(join(import.meta.dir, "allowlist.json"), "utf8"),
+const allowlist = (
+  JSON.parse(readFileSync(join(import.meta.dir, "allowlist.json"), "utf8")) as { modules: string[] }
 ).modules;
 
 const allowed = new Set(allowlist);
@@ -193,11 +204,17 @@ function linkPackages(consumer: string): void {
 
   mkdirSync(canary, { recursive: true });
   symlinkSync(RUNTIME_DIR, join(nodeModules, "metano-runtime"), "dir");
-  writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "consumer", type: "module" }));
+
+  writeFileSync(
+    join(consumer, "package.json"),
+    JSON.stringify({ name: "consumer", type: "module" }),
+  );
+
   writeFileSync(
     join(canary, "package.json"),
     readFileSync(join(import.meta.dir, "fixtures/canary-package.json"), "utf8"),
   );
+
   writeFileSync(join(canary, "canary.js"), "register();\n");
 }
 

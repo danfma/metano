@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { InvalidOperationException, OverflowException } from "#/system/exceptions/index.ts";
+
 import {
   averageInt64,
   averageNullableInt64,
@@ -20,15 +21,24 @@ describe("64-bit LINQ terminals", () => {
     expect(linq([1n, 2n, 3n], sumInt64())).toBe(6n);
     expect(linq([null, 5n], sumInt64())).toBe(5n);
     expect(linq([] as bigint[], sumInt64())).toBe(0n);
-    expect(linq([{ size: 4n }, { size: 6n }], sumInt64((x) => x.size))).toBe(10n);
+
+    expect(
+      linq(
+        [{ size: 4n }, { size: 6n }],
+        sumInt64((x) => x.size),
+      ),
+    ).toBe(10n);
+
     expect(() => linq([MAX, 1n, -5n], sumInt64())).toThrow(OverflowException);
   });
 
   test("averageInt64 divides the checked sum; empty throws, nullable gives null", () => {
     expect(linq([1n, 2n], averageInt64())).toBe(1.5);
+
     expect(() => linq([] as bigint[], averageInt64())).toThrow(
       new InvalidOperationException("Sequence contains no elements"),
     );
+
     expect(() => linq([MAX, MAX], averageInt64())).toThrow(OverflowException);
     expect(linq([null] as (bigint | null)[], averageNullableInt64())).toBeNull();
     expect(linq([null, 4n], averageNullableInt64())).toBe(4);

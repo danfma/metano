@@ -11,6 +11,7 @@
  *   method asserts the recursion order via a call log.
  */
 import { describe, expect, test } from "bun:test";
+
 import type {
   ExprBinary,
   ExprCall,
@@ -25,6 +26,7 @@ import type {
   ExprUnary,
   QueryableMeta,
 } from "#/system/linq/expr-tree.ts";
+
 import {
   ExprTreeVisitor,
   compareValues,
@@ -43,13 +45,15 @@ describe("evaluateExprTree", () => {
 
   test("param node with mismatched name throws", () => {
     const tree: ExprParam = { kind: "param", name: "u" };
-    expect(() =>
-      evaluateExprTree(tree, { paramName: "v", paramValue: 1, captures: {} }),
-    ).toThrow(/param 'u' does not match scope 'v'/);
+
+    expect(() => evaluateExprTree(tree, { paramName: "v", paramValue: 1, captures: {} })).toThrow(
+      /param 'u' does not match scope 'v'/,
+    );
   });
 
   test("capture lookup pulls from the captures bundle", () => {
     const tree: ExprCapture = { kind: "capture", name: "minAge" };
+
     expect(
       evaluateExprTree(tree, { paramName: "u", paramValue: null, captures: { minAge: 18 } }),
     ).toBe(18);
@@ -57,6 +61,7 @@ describe("evaluateExprTree", () => {
 
   test("missing capture throws", () => {
     const tree: ExprCapture = { kind: "capture", name: "ghost" };
+
     expect(() => evaluateExprTree(tree, emptyScope)).toThrow(
       /capture 'ghost' missing from captures bundle/,
     );
@@ -66,12 +71,15 @@ describe("evaluateExprTree", () => {
     expect(evaluateExprTree({ kind: "literal", value: 42 } satisfies ExprLiteral, emptyScope)).toBe(
       42,
     );
+
     expect(
       evaluateExprTree({ kind: "literal", value: "hi" } satisfies ExprLiteral, emptyScope),
     ).toBe("hi");
+
     expect(
       evaluateExprTree({ kind: "literal", value: true } satisfies ExprLiteral, emptyScope),
     ).toBe(true);
+
     expect(
       evaluateExprTree({ kind: "literal", value: null } satisfies ExprLiteral, emptyScope),
     ).toBe(null);
@@ -87,10 +95,12 @@ describe("evaluateExprTree", () => {
       },
       member: "city",
     };
+
     const value = { address: { city: "Lisbon" } };
-    expect(
-      evaluateExprTree(tree, { paramName: "u", paramValue: value, captures: {} }),
-    ).toBe("Lisbon");
+
+    expect(evaluateExprTree(tree, { paramName: "u", paramValue: value, captures: {} })).toBe(
+      "Lisbon",
+    );
   });
 
   test("member access on null throws TypeError", () => {
@@ -99,6 +109,7 @@ describe("evaluateExprTree", () => {
       target: { kind: "literal", value: null },
       member: "anything",
     };
+
     expect(() => evaluateExprTree(tree, emptyScope)).toThrow(TypeError);
   });
 
@@ -109,24 +120,28 @@ describe("evaluateExprTree", () => {
       left: { kind: "literal", value: 18 },
       right: { kind: "literal", value: 18 },
     };
+
     const lt: ExprBinary = {
       kind: "binary",
       op: "<",
       left: { kind: "literal", value: 1 },
       right: { kind: "literal", value: 2 },
     };
+
     const eq: ExprBinary = {
       kind: "binary",
       op: "==",
       left: { kind: "literal", value: "a" },
       right: { kind: "literal", value: "a" },
     };
+
     const ne: ExprBinary = {
       kind: "binary",
       op: "!=",
       left: { kind: "literal", value: 1 },
       right: { kind: "literal", value: 2 },
     };
+
     expect(evaluateExprTree(ge, emptyScope)).toBe(true);
     expect(evaluateExprTree(lt, emptyScope)).toBe(true);
     expect(evaluateExprTree(eq, emptyScope)).toBe(true);
@@ -146,6 +161,7 @@ describe("evaluateExprTree", () => {
         member: "x",
       },
     };
+
     expect(evaluateExprTree(tree, emptyScope)).toBe(false);
   });
 
@@ -160,6 +176,7 @@ describe("evaluateExprTree", () => {
         member: "x",
       },
     };
+
     expect(evaluateExprTree(tree, emptyScope)).toBe(true);
   });
 
@@ -170,12 +187,14 @@ describe("evaluateExprTree", () => {
       left: { kind: "literal", value: 2 },
       right: { kind: "literal", value: 3 },
     };
+
     const mod: ExprBinary = {
       kind: "binary",
       op: "%",
       left: { kind: "literal", value: 7 },
       right: { kind: "literal", value: 4 },
     };
+
     expect(evaluateExprTree(add, emptyScope)).toBe(5);
     expect(evaluateExprTree(mod, emptyScope)).toBe(3);
   });
@@ -196,6 +215,7 @@ describe("evaluateExprTree", () => {
       whenTrue: { kind: "literal", value: "yes" },
       whenFalse: { kind: "literal", value: "no" },
     };
+
     expect(evaluateExprTree(tree, emptyScope)).toBe("yes");
 
     const flipped: ExprConditional = { ...tree, condition: { kind: "literal", value: false } };
@@ -209,11 +229,13 @@ describe("evaluateExprTree", () => {
       method: "toUpperCase",
       args: [],
     };
+
     expect(evaluateExprTree(tree, emptyScope)).toBe("HELLO");
   });
 
   test("free-function call (no target) is unsupported", () => {
     const tree: ExprCall = { kind: "call", target: null, method: "noop", args: [] };
+
     expect(() => evaluateExprTree(tree, emptyScope)).toThrow(
       /free-function call 'noop' is not supported/,
     );
@@ -226,9 +248,10 @@ describe("evaluateExprTree", () => {
         emptyScope,
       ),
     ).toThrow(/kind 'lambda' not supported/);
-    expect(() =>
-      evaluateExprTree({ kind: "new", type: "Point", args: [] }, emptyScope),
-    ).toThrow(/kind 'new' not supported/);
+
+    expect(() => evaluateExprTree({ kind: "new", type: "Point", args: [] }, emptyScope)).toThrow(
+      /kind 'new' not supported/,
+    );
   });
 });
 
@@ -243,6 +266,7 @@ describe("compileLambdaBody", () => {
       },
       captures: { minAge: 21 },
     };
+
     const predicate = compileLambdaBody(meta);
     expect(Boolean(predicate({ age: 30 }))).toBe(true);
     expect(Boolean(predicate({ age: 18 }))).toBe(false);
@@ -284,9 +308,8 @@ describe("compileLambdaBody", () => {
     const refsCapture: QueryableMeta = {
       tree: { kind: "capture", name: "absent" },
     };
-    expect(() => compileLambdaBody(refsCapture)(undefined)).toThrow(
-      /capture 'absent' missing/,
-    );
+
+    expect(() => compileLambdaBody(refsCapture)(undefined)).toThrow(/capture 'absent' missing/);
   });
 });
 
@@ -303,6 +326,7 @@ describe("readParamName", () => {
         right: { kind: "param", name: "found" },
       },
     };
+
     expect(readParamName(tree)).toBe("found");
   });
 
@@ -317,6 +341,7 @@ describe("readParamName", () => {
       method: "noop",
       args: [{ kind: "param", name: "argParam" }],
     };
+
     expect(readParamName(tree)).toBe("argParam");
   });
 });
@@ -375,6 +400,7 @@ describe("ExprTreeVisitor subclass", () => {
       left: { kind: "member", target: { kind: "param", name: "u" }, member: "age" },
       right: { kind: "literal", value: 18 },
     };
+
     const visitor = new LoggingVisitor();
     visitor.visit(tree);
 
@@ -420,6 +446,7 @@ describe("ExprTreeVisitor subclass", () => {
       whenTrue: { kind: "literal", value: "yes" },
       whenFalse: { kind: "literal", value: "never-visited" },
     };
+
     const visitor = new CountingVisitor();
     visitor.visit(tree);
     // condition + whenTrue == 2 leaves; whenFalse skipped by override.
@@ -428,6 +455,7 @@ describe("ExprTreeVisitor subclass", () => {
 
   test("base leaf() throws when not overridden", () => {
     class BareVisitor extends ExprTreeVisitor<string> {}
+
     expect(() =>
       new BareVisitor().visit({ kind: "literal", value: 1 } satisfies ExprLiteral),
     ).toThrow(/no default leaf value/);
@@ -464,19 +492,22 @@ describe("evaluateExprTree — let/ref hoisting (#209)", () => {
       },
     };
 
-    expect(
-      evaluateExprTree(tree, { paramName: "u", paramValue: { age: 30 }, captures: {} }),
-    ).toBe(true);
-    expect(
-      evaluateExprTree(tree, { paramName: "u", paramValue: { age: 17 }, captures: {} }),
-    ).toBe(false);
-    expect(
-      evaluateExprTree(tree, { paramName: "u", paramValue: { age: 70 }, captures: {} }),
-    ).toBe(false);
+    expect(evaluateExprTree(tree, { paramName: "u", paramValue: { age: 30 }, captures: {} })).toBe(
+      true,
+    );
+
+    expect(evaluateExprTree(tree, { paramName: "u", paramValue: { age: 17 }, captures: {} })).toBe(
+      false,
+    );
+
+    expect(evaluateExprTree(tree, { paramName: "u", paramValue: { age: 70 }, captures: {} })).toBe(
+      false,
+    );
   });
 
   test("ref outside a let binding throws", () => {
     const orphan: ExprRef = { kind: "ref", name: "$0" };
+
     expect(() => evaluateExprTree(orphan, emptyScope)).toThrow(
       /ref '\$0' resolves outside any enclosing let binding/,
     );
@@ -500,6 +531,7 @@ describe("evaluateExprTree — let/ref hoisting (#209)", () => {
         },
       },
     };
+
     const predicate = compileLambdaBody(meta);
     expect(predicate({ age: 25 })).toBe(true);
     expect(predicate({ age: 10 })).toBe(false);
@@ -573,6 +605,7 @@ describe("ExprTreeVisitor — let/ref (#209)", () => {
         },
       },
     };
+
     const visitor = new LoggingLetVisitor();
     visitor.visit(tree);
 
@@ -593,6 +626,7 @@ describe("ExprTreeVisitor — let/ref (#209)", () => {
 describe("convert nodes (spec 012 FR-044)", () => {
   const int64 = { name: "System.Int64" };
   const uint64 = { name: "System.UInt64" };
+
   const count = {
     kind: "member",
     target: { kind: "param", name: "x" },
@@ -601,16 +635,19 @@ describe("convert nodes (spec 012 FR-044)", () => {
 
   test("a conversion into System.Int64 makes a bigint, truncated and wrapped", () => {
     const widened: ExprTree = { kind: "convert", operand: count, type: int64 };
+
     const truncated: ExprTree = {
       kind: "convert",
       operand: { kind: "literal", value: -3.7 },
       type: int64,
     };
+
     const wrapped: ExprTree = {
       kind: "convert",
       operand: { kind: "literal", value: -1n },
       type: uint64,
     };
+
     const scope = { paramName: "x", paramValue: { count: 2 }, captures: {} };
 
     expect(evaluateExprTree(widened, scope)).toBe(2n);
@@ -634,6 +671,7 @@ describe("convert nodes (spec 012 FR-044)", () => {
       operand: { kind: "literal", value: null },
       type: int64,
     };
+
     const saturated: ExprTree = {
       kind: "convert",
       operand: { kind: "literal", value: Number.POSITIVE_INFINITY },

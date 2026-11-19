@@ -5,6 +5,7 @@
  */
 
 import { checkRows } from "./conformance-rows.ts";
+
 import {
   decimalRegistry,
   numberParsingRegistry,

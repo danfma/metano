@@ -3,7 +3,9 @@ import { FormatException, NotSupportedException } from "#/system/exceptions/inde
 import { INT64_MIN, UINT64_MAX } from "#/system/int64.ts";
 import { formatInt64 } from "#/system/int64-format.ts";
 
-/** Every expected text below was printed by `ToString(format)` on .NET 10.0.12 (invariant culture). */
+/**
+ * Every expected text below was printed by `ToString(format)` on .NET 10.0.12 (invariant culture).
+ */
 describe("formatInt64", () => {
   const rows: [bigint, string | null, string][] = [
     [-1234567n, null, "-1234567"],
@@ -64,7 +66,10 @@ describe("formatInt64", () => {
   });
 
   test("invalid formats throw FormatException", () => {
-    expect(() => formatInt64(1n, "Q")).toThrow(new FormatException("Format specifier was invalid."));
+    expect(() => formatInt64(1n, "Q")).toThrow(
+      new FormatException("Format specifier was invalid."),
+    );
+
     expect(() => formatInt64(1n, "D1000000000")).toThrow(FormatException);
   });
 });

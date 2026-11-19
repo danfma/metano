@@ -2,6 +2,7 @@
 // (#618, #657), run by `test/typecheck-fixtures.test.ts` through
 // `tsgo -p tsconfig.typecheck.json`.
 import Decimal from "decimal.js";
+
 import {
   averageDecimal,
   averageNullableDecimal,
@@ -35,7 +36,11 @@ expectType<Equal<typeof earliest, string>>();
 const lowest = linq(amounts, max());
 expectType<Equal<typeof lowest, Decimal>>();
 
-const byName = linq(people, min((p) => p.name));
+const byName = linq(
+  people,
+  min((p) => p.name),
+);
+
 expectType<Equal<typeof byName, string>>();
 
 // ─── A nullable terminal adds null and drops it from the values ───────────────
@@ -43,10 +48,18 @@ expectType<Equal<typeof byName, string>>();
 const nullable = linq(maybes, minNullable());
 expectType<Equal<typeof nullable, number | null>>();
 
-const nullableName = linq(people, maxNullable((p) => p.name));
+const nullableName = linq(
+  people,
+  maxNullable((p) => p.name),
+);
+
 expectType<Equal<typeof nullableName, string | null>>();
 
-const youngest = linq(people, minByNullable((p) => p.age));
+const youngest = linq(
+  people,
+  minByNullable((p) => p.age),
+);
+
 expectType<Equal<typeof youngest, { name: string; age: number | null } | null>>();
 
 // ─── Sums and averages ────────────────────────────────────────────────────────
@@ -68,5 +81,9 @@ declare const maybeAmounts: (Decimal | null)[];
 const nullableDecimalMean = linq(maybeAmounts, averageNullableDecimal());
 expectType<Equal<typeof nullableDecimalMean, Decimal | null>>();
 
-const selectedDecimalMean = linq(people, averageNullableDecimal(() => null as Decimal | null));
+const selectedDecimalMean = linq(
+  people,
+  averageNullableDecimal(() => null as Decimal | null),
+);
+
 expectType<Equal<typeof selectedDecimalMean, Decimal | null>>();

@@ -15,22 +15,25 @@ const dotnetReplacements: [string, string, string | null, string][] = [
 ];
 
 describe("stringReplace", () => {
-  test.each(dotnetReplacements)(
-    "%p.Replace(%p, %p) is %p",
-    (value, oldValue, newValue, expected) => {
-      expect(stringReplace(value, oldValue, newValue)).toBe(expected);
-    },
-  );
+  test.each(
+    dotnetReplacements,
+  )("%p.Replace(%p, %p) is %p", (value, oldValue, newValue, expected) => {
+    expect(stringReplace(value, oldValue, newValue)).toBe(expected);
+  });
 
   test("throws an ArgumentException with .NET's message on an empty old value", () => {
     expect(() => stringReplace("ab", "", "z")).toThrow(ArgumentException);
+
     expect(() => stringReplace("ab", "", "z")).toThrow(
       "The value cannot be an empty string. (Parameter 'oldValue')",
     );
   });
 
   test("throws an ArgumentNullException with .NET's message on a null old value", () => {
-    expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(ArgumentNullException);
+    expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(
+      ArgumentNullException,
+    );
+
     expect(() => stringReplace("ab", null as unknown as string, "z")).toThrow(
       "Value cannot be null. (Parameter 'oldValue')",
     );

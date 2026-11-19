@@ -24,7 +24,12 @@ const nullable = { kind: "nullable", inner: { kind: "primitive" } } as const;
 const spec: TypeSpec<Mixed> = {
   type: Mixed,
   factory: (p) =>
-    new Mixed(p.id as string, p.keep as string | null, p.omit as string | null, p.opt as number | null),
+    new Mixed(
+      p.id as string,
+      p.keep as string | null,
+      p.omit as string | null,
+      p.opt as number | null,
+    ),
   properties: [
     { ts: "id", json: "id", type: { kind: "primitive" } },
     { ts: "keep", json: "keep", type: nullable, optional: true },

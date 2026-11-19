@@ -91,7 +91,10 @@ describe("formatDouble", () => {
   });
 
   test("formats .NET rejects for double throw FormatException", () => {
-    expect(() => formatDouble(1.5, "D")).toThrow(new FormatException("Format specifier was invalid."));
+    expect(() => formatDouble(1.5, "D")).toThrow(
+      new FormatException("Format specifier was invalid."),
+    );
+
     expect(() => formatDouble(1.5, "X")).toThrow(FormatException);
     expect(() => formatDouble(1.5, "F1000000000")).toThrow(FormatException);
   });

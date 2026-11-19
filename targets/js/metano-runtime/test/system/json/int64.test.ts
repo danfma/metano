@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   type JsonConverter,
   JsonException,
@@ -10,6 +11,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { Decimal } from "decimal.js";
 import { specNumberTextLeaves } from "#/system/json/exact-number-reads.ts";
 import { readExactNumberText } from "#/system/json/number-from-string.ts";
@@ -66,7 +68,11 @@ function int64Root(numberType: NumberTypeName, readOptions?: JsonReadOptions): V
 }
 
 /** Reads a tree value through a `long` / `ulong` root descriptor. */
-function readRoot(data: unknown, numberType: NumberTypeName, readOptions?: JsonReadOptions): unknown {
+function readRoot(
+  data: unknown,
+  numberType: NumberTypeName,
+  readOptions?: JsonReadOptions,
+): unknown {
   return JsonSerializer.deserialize(data, int64Root(numberType, readOptions));
 }
 
@@ -117,6 +123,7 @@ describe("int64 — writes (FR-051)", () => {
     };
 
     expect(JSON.stringify(JsonSerializer.serialize(null, { descriptor: nullable }))).toBe("null");
+
     expect(JSON.stringify(JsonSerializer.serialize(LONG_MIN, { descriptor: nullable }))).toBe(
       "-9223372036854775808",
     );
@@ -142,7 +149,12 @@ describe("int64 — tree reads (FR-052)", () => {
       () => readRoot(ULONG_MAX, "System.Int64"),
       cannotConvertMessage("System.Int64"),
     );
-    expectJsonException(() => readRoot(-1n, "System.UInt64"), cannotConvertMessage("System.UInt64"));
+
+    expectJsonException(
+      () => readRoot(-1n, "System.UInt64"),
+      cannotConvertMessage("System.UInt64"),
+    );
+
     expectJsonException(
       () => readRoot(2n ** 64n, "System.UInt64"),
       cannotConvertMessage("System.UInt64"),
@@ -153,6 +165,7 @@ describe("int64 — tree reads (FR-052)", () => {
     expect(readRoot(JSON.rawJSON("1152921504606846977"), "System.Int64")).toBe(
       1152921504606846977n,
     );
+
     expect(readRoot(JSON.rawJSON("-9223372036854775808"), "System.Int64")).toBe(LONG_MIN);
     expect(readRoot(JSON.rawJSON("18446744073709551615"), "System.UInt64")).toBe(ULONG_MAX);
   });
@@ -188,9 +201,9 @@ describe("int64 — tree reads (FR-052)", () => {
   test("a number beyond the safe integers names the exact read path (OQ-3 d)", () => {
     expectJsonException(
       () => readRoot(BEYOND_SAFE, "System.Int64"),
-      "The JSON value 1152921504606846976 could not be converted to System.Int64: it is beyond "
-        + "the integers a JS number holds exactly. Read the JSON text with "
-        + "JsonSerializer.deserializeText, which keeps every digit.",
+      "The JSON value 1152921504606846976 could not be converted to System.Int64: it is beyond " +
+        "the integers a JS number holds exactly. Read the JSON text with " +
+        "JsonSerializer.deserializeText, which keeps every digit.",
     );
   });
 
@@ -203,10 +216,17 @@ describe("int64 — tree reads (FR-052)", () => {
     }
   });
 
-  test("a string is rejected without the option, and read by the string grammar with it (FR-054)", () => {
-    expectJsonException(() => readRoot("5", "System.Int64"), cannotConvertMessage("System.Int64"));
-    expect(readRoot("5", "System.Int64", READS_NUMBERS)).toBe(5n);
-  });
+  test(
+    "a string is rejected without the option, and read by the string grammar with it (FR-054)",
+    () => {
+      expectJsonException(
+        () => readRoot("5", "System.Int64"),
+        cannotConvertMessage("System.Int64"),
+      );
+
+      expect(readRoot("5", "System.Int64", READS_NUMBERS)).toBe(5n);
+    },
+  );
 
   test("null throws for the value-type root and reads null through the nullable wrapper", () => {
     expectJsonException(() => readRoot(null, "System.Int64"), cannotConvertMessage("System.Int64"));
@@ -236,6 +256,7 @@ describe("int64 — tree reads (FR-052)", () => {
       () => JsonSerializer.deserialize([1, "x"], { descriptor: array }),
       cannotConvertMessage("System.Int64"),
     );
+
     expectJsonException(
       () => JsonSerializer.deserialize([1, null], { descriptor: array }),
       cannotConvertMessage("System.Int64"),
@@ -265,6 +286,7 @@ describe("int64 — tree reads (FR-052)", () => {
 
   test("an object slot keeps today's read: the JSON value as parsed (FR-056)", () => {
     expect(JsonSerializer.deserialize(5, { descriptor: { kind: "primitive" } })).toBe(5);
+
     expect(JsonSerializer.deserialize({ id: 5 }, { descriptor: { kind: "primitive" } })).toEqual({
       id: 5,
     });
@@ -315,8 +337,9 @@ describe("int64 — numbers from strings (FR-054)", () => {
     };
 
     expect(JsonSerializer.deserialize("5", primitive)).toBe(5);
+
     expect(JsonSerializer.deserialize("9007199254740993", primitive)).toBe(
-      JSON.parse("9007199254740993"),
+      JSON.parse("9007199254740993") as unknown,
     );
   });
 });
@@ -334,6 +357,7 @@ describe("int64 — dictionary values (FR-065)", () => {
     });
 
     expect(JSON.stringify(tree)).toBe('{"a":9223372036854775807}');
+
     expect(JsonSerializer.deserialize(tree, { descriptor: stringKeysLongValues })).toEqual(
       new Map([["a", LONG_MAX]]),
     );
@@ -341,7 +365,7 @@ describe("int64 — dictionary values (FR-065)", () => {
 
   test("a parsed 16-digit value is beyond what a number holds — the documented throw", () => {
     expect(() =>
-      JsonSerializer.deserialize(JSON.parse('{"a":9223372036854775807}'), {
+      JsonSerializer.deserialize(JSON.parse('{"a":9223372036854775807}') as unknown, {
         descriptor: stringKeysLongValues,
       }),
     ).toThrow();
@@ -349,7 +373,7 @@ describe("int64 — dictionary values (FR-065)", () => {
 
   test("a 64-bit dictionary value rejects what the property path rejects", () => {
     expect(() =>
-      JsonSerializer.deserialize(JSON.parse('{"a":1.5}'), {
+      JsonSerializer.deserialize(JSON.parse('{"a":1.5}') as unknown, {
         descriptor: stringKeysLongValues,
       }),
     ).toThrow();
@@ -379,9 +403,12 @@ describe("int64 — dictionary keys (FR-055)", () => {
     );
 
     expect(JSON.stringify(tree)).toBe('{"9223372036854775807":"a","-3":"b"}');
-    expect(JSON.stringify(JsonSerializer.serialize(new Map([[ULONG_MAX, "a"]]), { descriptor: ulongKeys }))).toBe(
-      '{"18446744073709551615":"a"}',
-    );
+
+    expect(
+      JSON.stringify(
+        JsonSerializer.serialize(new Map([[ULONG_MAX, "a"]]), { descriptor: ulongKeys }),
+      ),
+    ).toBe('{"18446744073709551615":"a"}');
   });
 
   test("keys read the FR-048 integer grammar, whatever the read options (measured)", () => {
@@ -394,13 +421,16 @@ describe("int64 — dictionary keys (FR-055)", () => {
         [0n, "c"],
       ]),
     );
+
     expect(JsonSerializer.deserialize({ "05": "a" }, { descriptor: ulongKeys })).toEqual(
       new Map<bigint, string>([[5n, "a"]]),
     );
 
     const withOption: TypeDescriptor = { ...longKeys, readOptions: READS_NUMBERS };
 
-    expect(JsonSerializer.deserialize({ "05": "a", "+7": "b" }, { descriptor: withOption })).toEqual(
+    expect(
+      JsonSerializer.deserialize({ "05": "a", "+7": "b" }, { descriptor: withOption }),
+    ).toEqual(
       new Map<bigint, string>([
         [5n, "a"],
         [7n, "b"],
@@ -442,9 +472,7 @@ describe("int64 — object slots (FR-056)", () => {
   test("a bigint in a plain-object slot of a contract writes exactly", () => {
     const spec: TypeSpec<{ value: bigint }> = {
       factory: (props) => props as { value: bigint },
-      properties: [
-        { ts: "value", json: "Value", type: { kind: "primitive" } } as PropertySpec,
-      ],
+      properties: [{ ts: "value", json: "Value", type: { kind: "primitive" } } as PropertySpec],
     };
 
     const tree = JsonSerializer.serialize({ value: 1152921504606846977n }, spec);
@@ -479,32 +507,36 @@ describe("int64 — writes range-check (review round 1)", () => {
   test("a bigint outside the slot's range cannot be written", () => {
     expectJsonException(
       () => writtenText(2n ** 64n, "System.Int64"),
-      "The value 18446744073709551616 cannot be written as System.Int64: only an exact integer "
-        + "within the System.Int64 range can be written.",
+      "The value 18446744073709551616 cannot be written as System.Int64: only an exact integer " +
+        "within the System.Int64 range can be written.",
     );
+
     expectJsonException(
       () => writtenText(-1n, "System.UInt64"),
-      "The value -1 cannot be written as System.UInt64: only an exact integer within the "
-        + "System.UInt64 range can be written.",
+      "The value -1 cannot be written as System.UInt64: only an exact integer within the " +
+        "System.UInt64 range can be written.",
     );
   });
 
   test("a negative or fractional number cannot be written, a ulong's -0 included", () => {
     expectJsonException(
       () => writtenText(-5, "System.UInt64"),
-      "The value -5 cannot be written as System.UInt64: only an exact integer within the "
-        + "System.UInt64 range can be written.",
+      "The value -5 cannot be written as System.UInt64: only an exact integer within the " +
+        "System.UInt64 range can be written.",
     );
+
     expectJsonException(
       () => writtenText(-0, "System.UInt64"),
-      "The value 0 cannot be written as System.UInt64: only an exact integer within the "
-        + "System.UInt64 range can be written.",
+      "The value 0 cannot be written as System.UInt64: only an exact integer within the " +
+        "System.UInt64 range can be written.",
     );
+
     expectJsonException(
       () => writtenText(1.5, "System.Int64"),
-      "The value 1.5 cannot be written as System.Int64: only an exact integer within the "
-        + "System.Int64 range can be written.",
+      "The value 1.5 cannot be written as System.Int64: only an exact integer within the " +
+        "System.Int64 range can be written.",
     );
+
     expect(writtenText(-5, "System.Int64")).toBe("-5");
     expect(writtenText(-0, "System.Int64")).toBe("0");
   });
@@ -526,9 +558,11 @@ describe("int64 — the branded factory on reads (review round 1)", () => {
   test("create builds the value after the exact read, on every accepted leaf", () => {
     expect(readBranded(5)).toEqual({ int64: 5n });
     expect(readBranded(9007199254740991n)).toEqual({ int64: 9007199254740991n });
+
     expect(readBranded(JSON.rawJSON("1152921504606846977"))).toEqual({
       int64: 1152921504606846977n,
     });
+
     expect(readBranded("5", READS_NUMBERS)).toEqual({ int64: 5n });
     expect(readBranded(null)).toBeNull();
   });
@@ -569,31 +603,38 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
     expect(JsonSerializer.deserializeText("1152921504606846977", int64Root("System.Int64"))).toBe(
       1152921504606846977n,
     );
+
     expect(JsonSerializer.deserializeText("-9223372036854775808", int64Root("System.Int64"))).toBe(
       LONG_MIN,
     );
-    expect(
-      JsonSerializer.deserializeText("18446744073709551615", int64Root("System.UInt64")),
-    ).toBe(ULONG_MAX);
+
+    expect(JsonSerializer.deserializeText("18446744073709551615", int64Root("System.UInt64"))).toBe(
+      ULONG_MAX,
+    );
   });
 
-  test("its errors are STJ's: one past the range, a fractional 19-digit leaf and strings throw", () => {
+  test("its errors are STJ's: one past the range, a fractional " +
+    "19-digit leaf and strings throw", () => {
     expectJsonException(
       () => JsonSerializer.deserializeText("9223372036854775808", int64Root("System.Int64")),
       cannotConvertMessage("System.Int64"),
     );
+
     expectJsonException(
       () => JsonSerializer.deserializeText("1152921504606846977.0", int64Root("System.Int64")),
       cannotConvertMessage("System.Int64"),
     );
+
     expectJsonException(
       () => JsonSerializer.deserializeText("1152921504606846977e3", int64Root("System.Int64")),
       cannotConvertMessage("System.Int64"),
     );
+
     expectJsonException(
       () => JsonSerializer.deserializeText("-0", int64Root("System.UInt64")),
       cannotConvertMessage("System.UInt64"),
     );
+
     expectJsonException(
       () => JsonSerializer.deserializeText('"5"', int64Root("System.Int64")),
       cannotConvertMessage("System.Int64"),
@@ -639,10 +680,9 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
       ],
     };
 
-    const snowflake = JsonSerializer.deserializeText(
-      '{"Id":1152921504606846977}',
-      spec,
-    ) as { id: bigint };
+    const snowflake = JsonSerializer.deserializeText('{"Id":1152921504606846977}', spec) as {
+      id: bigint;
+    };
 
     expect(snowflake.id).toBe(1152921504606846977n);
 
@@ -738,6 +778,7 @@ describe("int64 — exact reads in every position (FR-053)", () => {
     };
 
     expect(JsonSerializer.deserializeText("null", nullableRoot)).toBeNull();
+
     expect(JsonSerializer.deserializeText("9007199254740993", nullableRoot)).toBe(
       9007199254740993n,
     );
@@ -908,14 +949,15 @@ describe("int64 — other converters of a 64-bit closure read doubles (FR-053)",
         create: (value: unknown) => ({ wrapped: value }),
       });
 
-      expect(read).toEqual({ wrapped: JSON.parse(subtreeText) });
+      expect(read).toEqual({ wrapped: JSON.parse(subtreeText) as unknown });
     });
 
     test("an enum names the parsed subtree in its error", () => {
       const read = readSlot({ kind: "enum", typeName: "MyApp.Color", values: { Red: "red" } });
 
       expect(read).toBe(
-        `Invalid enum value: ${JSON.stringify(JSON.parse(subtreeText))}. Expected one of: red`,
+        `Invalid enum value: ${JSON.stringify(JSON.parse(subtreeText) as unknown)}. ` +
+          "Expected one of: red",
       );
     });
 
@@ -927,7 +969,7 @@ describe("int64 — other converters of a 64-bit closure read doubles (FR-053)",
       });
 
       expect(read).toBe(
-        `Invalid numeric enum value: ${JSON.stringify(JSON.parse(subtreeText))}. ` +
+        `Invalid numeric enum value: ${JSON.stringify(JSON.parse(subtreeText) as unknown)}. ` +
           "Expected one of: 0",
       );
     });

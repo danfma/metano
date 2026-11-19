@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { durationTicks } from "#/system/temporal-helpers.ts";
+
 import {
   timeSpanFromMinutes,
   timeSpanFromParts,

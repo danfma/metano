@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   type JsonConverter,
   JsonSerializer,
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { expectJsonException } from "./json-exception-assertions.ts";
 
 // `byte[]` as base64 (FR-046, slice S6b), measured against a source-generated
@@ -48,7 +50,9 @@ const blobSpec: TypeSpec<Blob> = {
 const hundredBytes = Array.from({ length: 100 }, (_, index) => index);
 
 const HUNDRED_BYTES_BASE64 =
-  "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiYw==";
+  "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vM" +
+  "DEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYG" +
+  "FiYw==";
 
 describe("bytes descriptor — write", () => {
   test.each([
@@ -138,14 +142,18 @@ describe("bytes descriptor — read", () => {
   });
 
   test("a property and a nullable property read back", () => {
-    const blob = JsonSerializer.deserialize(JSON.parse('{"Data":"AQID","Maybe":"BA=="}'), blobSpec);
+    const blob = JsonSerializer.deserialize(
+      JSON.parse('{"Data":"AQID","Maybe":"BA=="}') as unknown,
+      blobSpec,
+    );
 
     expect(blob).toEqual(new Blob([1, 2, 3], [4]));
   });
 
   test("a rejected property names System.Byte[]", () => {
     expectJsonException(
-      () => JsonSerializer.deserialize(JSON.parse('{"Data":[1],"Maybe":null}'), blobSpec),
+      () =>
+        JsonSerializer.deserialize(JSON.parse('{"Data":[1],"Maybe":null}') as unknown, blobSpec),
       CONVERSION_ERROR,
     );
   });

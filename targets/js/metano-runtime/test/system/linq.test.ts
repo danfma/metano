@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { InvalidOperationException } from "#/system/exceptions/index.ts";
+
 import {
   aggregate,
   all,
@@ -42,17 +43,20 @@ describe("linq operators", () => {
       select((x) => x * 10),
       toArray(),
     );
+
     expect(result).toEqual([20, 40]);
   });
 
   test("take short-circuits", () => {
     let visited = 0;
+
     function* infinite(): Iterable<number> {
       for (let i = 0; ; i++) {
         visited++;
         yield i;
       }
     }
+
     const result = linq(infinite(), take<number>(3), toArray());
     expect(result).toEqual([0, 1, 2]);
     expect(visited).toBe(3);
@@ -70,6 +74,7 @@ describe("linq operators", () => {
         toArray(),
       ),
     ).toEqual([1, 2]);
+
     expect(
       linq(
         [1, 2, 3, 4, 1],
@@ -82,11 +87,13 @@ describe("linq operators", () => {
   test("distinct + distinctBy", () => {
     expect(linq([1, 1, 2, 3, 2], distinct<number>(), toArray())).toEqual([1, 2, 3]);
     type Person = { id: number; name: string };
+
     const people: Person[] = [
       { id: 1, name: "a" },
       { id: 2, name: "b" },
       { id: 1, name: "c" },
     ];
+
     expect(
       linq(
         people,
@@ -117,6 +124,7 @@ describe("linq operators", () => {
         toArray(),
       ),
     ).toEqual([1, 2, 3]);
+
     expect(
       linq(
         [3, 1, 2],
@@ -143,14 +151,23 @@ describe("linq operators", () => {
 
   test("first / firstOrDefault", () => {
     expect(linq([1, 2, 3], first<number>())).toBe(1);
-    expect(linq([1, 2, 3], firstOrDefault<number>((x) => x > 10))).toBeNull();
+
+    expect(
+      linq(
+        [1, 2, 3],
+        firstOrDefault<number>((x) => x > 10),
+      ),
+    ).toBeNull();
+
     expect(() => linq([] as number[], first<number>())).toThrow(
       new InvalidOperationException("Sequence contains no elements"),
     );
+
     expect(() => linq([] as number[], first<number>())).toThrow(InvalidOperationException);
   });
 
-  test("firstOrDefault / lastOrDefault / singleOrDefault return the given default on a miss", () => {
+  test("firstOrDefault / lastOrDefault / singleOrDefault return " +
+    "the given default on a miss", () => {
     const none: number[] = [];
     const zero: number = linq(none, firstOrDefault(undefined, 0));
     const wide: bigint = linq([] as bigint[], firstOrDefault(undefined, 0n));
@@ -158,32 +175,114 @@ describe("linq operators", () => {
     expect(zero).toBe(0);
     expect(wide + 3n).toBe(3n);
     expect(linq([] as boolean[], firstOrDefault(undefined, false))).toBe(false);
-    expect(linq([1, 2, 3], firstOrDefault((x) => x > 10, 42))).toBe(42);
-    expect(linq([1, 2, 3], firstOrDefault((x) => x > 1, 42))).toBe(2);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        firstOrDefault((x) => x > 10, 42),
+      ),
+    ).toBe(42);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        firstOrDefault((x) => x > 1, 42),
+      ),
+    ).toBe(2);
+
     expect(linq(none, lastOrDefault(undefined, 0))).toBe(0);
-    expect(linq([1, 2, 3], lastOrDefault((x) => x > 10, 42))).toBe(42);
-    expect(linq([1, 2, 3], lastOrDefault((x) => x < 3, 42))).toBe(2);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        lastOrDefault((x) => x > 10, 42),
+      ),
+    ).toBe(42);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        lastOrDefault((x) => x < 3, 42),
+      ),
+    ).toBe(2);
+
     expect(linq(none, singleOrDefault(undefined, 0))).toBe(0);
-    expect(linq([1, 2, 3], singleOrDefault((x) => x > 10, 42))).toBe(42);
-    expect(linq([1, 2, 3], singleOrDefault((x) => x === 2, 42))).toBe(2);
-    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(
-      InvalidOperationException,
-    );
-    expect(() => linq([1, 2, 3], singleOrDefault((x) => x > 1, 42))).toThrow(
-      "Sequence contains more than one matching element",
-    );
+
+    expect(
+      linq(
+        [1, 2, 3],
+        singleOrDefault((x) => x > 10, 42),
+      ),
+    ).toBe(42);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        singleOrDefault((x) => x === 2, 42),
+      ),
+    ).toBe(2);
+
+    expect(() =>
+      linq(
+        [1, 2, 3],
+        singleOrDefault((x) => x > 1, 42),
+      ),
+    ).toThrow(InvalidOperationException);
+
+    expect(() =>
+      linq(
+        [1, 2, 3],
+        singleOrDefault((x) => x > 1, 42),
+      ),
+    ).toThrow("Sequence contains more than one matching element");
   });
 
   test("a falsy element is returned as the match, not replaced by the default", () => {
-    expect(linq([0, 1], firstOrDefault((x) => x === 0, 42))).toBe(0);
-    expect(linq([1, 0], lastOrDefault((x) => x === 0, 42))).toBe(0);
-    expect(linq([1, 0], singleOrDefault((x) => x === 0, 42))).toBe(0);
-    expect(linq([false, true], firstOrDefault((x) => !x, true))).toBe(false);
-    expect(linq([true, false], lastOrDefault((x) => !x, true))).toBe(false);
-    expect(linq([0n, 1n], singleOrDefault((x) => x === 0n, 42n))).toBe(0n);
+    expect(
+      linq(
+        [0, 1],
+        firstOrDefault((x) => x === 0, 42),
+      ),
+    ).toBe(0);
+
+    expect(
+      linq(
+        [1, 0],
+        lastOrDefault((x) => x === 0, 42),
+      ),
+    ).toBe(0);
+
+    expect(
+      linq(
+        [1, 0],
+        singleOrDefault((x) => x === 0, 42),
+      ),
+    ).toBe(0);
+
+    expect(
+      linq(
+        [false, true],
+        firstOrDefault((x) => !x, true),
+      ),
+    ).toBe(false);
+
+    expect(
+      linq(
+        [true, false],
+        lastOrDefault((x) => !x, true),
+      ),
+    ).toBe(false);
+
+    expect(
+      linq(
+        [0n, 1n],
+        singleOrDefault((x) => x === 0n, 42n),
+      ),
+    ).toBe(0n);
   });
 
-  test("an OrDefault terminal without a default returns null, and a null element is a match", () => {
+  test("an OrDefault terminal without a default returns null, " +
+    "and a null element is a match", () => {
     const maybes: (number | null)[] = [null, 4];
     const nulls: (number | null)[] = [4, null];
 
@@ -191,7 +290,14 @@ describe("linq operators", () => {
     expect(linq([] as number[], singleOrDefault<number>())).toBeNull();
     expect(linq(maybes, firstOrDefault(undefined, 42))).toBeNull();
     expect(linq(nulls, lastOrDefault(undefined, 42))).toBeNull();
-    expect(linq(nulls, singleOrDefault((x) => x === null, 42))).toBeNull();
+
+    expect(
+      linq(
+        nulls,
+        singleOrDefault((x) => x === null, 42),
+      ),
+    ).toBeNull();
+
     expect(linq([] as (number | null)[], firstOrDefault(undefined, 42))).toBe(42);
   });
 
@@ -199,9 +305,27 @@ describe("linq operators", () => {
     const missing: number | undefined = undefined;
 
     expect(linq([] as number[], firstOrDefault(undefined, missing))).toBeNull();
-    expect(linq([1, 2, 3], lastOrDefault((x) => x > 10, missing))).toBeNull();
-    expect(linq([1, 2, 3], singleOrDefault((x) => x > 10, missing))).toBeNull();
-    expect(linq([1, 2, 3], firstOrDefault((x) => x > 1, missing))).toBe(2);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        lastOrDefault((x) => x > 10, missing),
+      ),
+    ).toBeNull();
+
+    expect(
+      linq(
+        [1, 2, 3],
+        singleOrDefault((x) => x > 10, missing),
+      ),
+    ).toBeNull();
+
+    expect(
+      linq(
+        [1, 2, 3],
+        firstOrDefault((x) => x > 1, missing),
+      ),
+    ).toBe(2);
   });
 
   test("last", () => {
@@ -209,25 +333,57 @@ describe("linq operators", () => {
   });
 
   test("any / all / count / contains", () => {
-    expect(linq([1, 2, 3], any<number>((x) => x > 2))).toBe(true);
-    expect(linq([1, 2, 3], any<number>((x) => x > 10))).toBe(false);
-    expect(linq([1, 2, 3], all<number>((x) => x > 0))).toBe(true);
-    expect(linq([1, 2, 3], all<number>((x) => x > 1))).toBe(false);
+    expect(
+      linq(
+        [1, 2, 3],
+        any<number>((x) => x > 2),
+      ),
+    ).toBe(true);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        any<number>((x) => x > 10),
+      ),
+    ).toBe(false);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        all<number>((x) => x > 0),
+      ),
+    ).toBe(true);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        all<number>((x) => x > 1),
+      ),
+    ).toBe(false);
+
     expect(linq([1, 2, 3], count<number>())).toBe(3);
     expect(linq([1, 2, 3], contains<number>(2))).toBe(true);
   });
 
   test("sum + aggregate", () => {
     expect(linq([1, 2, 3], sum<number>())).toBe(6);
-    expect(linq([1, 2, 3], aggregate(0, (a: number, b: number) => a + b * 2))).toBe(12);
+
+    expect(
+      linq(
+        [1, 2, 3],
+        aggregate(0, (a: number, b: number) => a + b * 2),
+      ),
+    ).toBe(12);
   });
 
   test("toMap / toSet", () => {
     type Item = { id: number; name: string };
+
     const items: Item[] = [
       { id: 1, name: "a" },
       { id: 2, name: "b" },
     ];
+
     const map = linq(
       items,
       toMap(
@@ -235,6 +391,7 @@ describe("linq operators", () => {
         (i: Item) => i.name,
       ),
     );
+
     expect(map.get(1)).toBe("a");
     expect(map.get(2)).toBe("b");
 
@@ -244,6 +401,7 @@ describe("linq operators", () => {
 
   test("re-enumerable — chain can be iterated multiple times (.NET LINQ parity)", () => {
     const items = [1, 2, 3, 4, 5];
+
     const chain = linq(
       items,
       where<number>((x) => x % 2 === 0),
@@ -260,10 +418,12 @@ describe("linq operators", () => {
 
   test("re-enumerable — orderBy re-sorts on each enumeration", () => {
     const items = [3, 1, 2];
+
     const sorted = linq(
       items,
       orderBy<number, number>((x) => x),
     );
+
     expect([...sorted]).toEqual([1, 2, 3]);
     items.push(0);
     expect([...sorted]).toEqual([0, 1, 2, 3]);
@@ -273,24 +433,22 @@ describe("linq operators", () => {
     // The compiler populates `queryable` when the call site uses an
     // opt-in IQueryable surface. Hand-author here to pin the shape
     // consumers will see.
-    const w = where<{ age: number }>(
-      (u) => u.age > 18,
-      {
-        tree: {
-          kind: "binary",
-          op: ">",
-          left: {
-            kind: "member",
-            target: { kind: "param", name: "u", type: "User" },
-            member: "age",
-          },
-          right: { kind: "literal", value: 18, type: "number" },
+    const w = where<{ age: number }>((u) => u.age > 18, {
+      tree: {
+        kind: "binary",
+        op: ">",
+        left: {
+          kind: "member",
+          target: { kind: "param", name: "u", type: "User" },
+          member: "age",
         },
+        right: { kind: "literal", value: 18, type: "number" },
       },
-    );
+    });
 
     expect(w.queryable).toBeDefined();
     expect(w.queryable!.tree.kind).toBe("binary");
+
     if (w.queryable?.tree.kind === "binary") {
       expect(w.queryable.tree.op).toBe(">");
       expect(w.queryable.tree.left.kind).toBe("member");
@@ -304,22 +462,20 @@ describe("linq operators", () => {
 
   test("queryable meta carries closure captures for runtime resolution", () => {
     const minAge = 18;
-    const w = where<{ age: number }>(
-      (u) => u.age > minAge,
-      {
-        tree: {
-          kind: "binary",
-          op: ">",
-          left: {
-            kind: "member",
-            target: { kind: "param", name: "u" },
-            member: "age",
-          },
-          right: { kind: "capture", name: "minAge", type: "number" },
+
+    const w = where<{ age: number }>((u) => u.age > minAge, {
+      tree: {
+        kind: "binary",
+        op: ">",
+        left: {
+          kind: "member",
+          target: { kind: "param", name: "u" },
+          member: "age",
         },
-        captures: { minAge },
+        right: { kind: "capture", name: "minAge", type: "number" },
       },
-    );
+      captures: { minAge },
+    });
 
     expect(w.queryable!.captures).toBeDefined();
     expect(w.queryable!.captures!.minAge).toBe(18);
@@ -392,10 +548,12 @@ describe("linq operators", () => {
     const stages = getStages(result);
     expect(stages).toEqual([whereOp, selectOp, orderByOp, toArrayOp]);
     expect(Object.getOwnPropertyDescriptor(result, LINQ_STAGES)?.enumerable).toBe(false);
+
     // README claims the slot stays out of every wire shape — pin it.
     expect(JSON.stringify(result)).toBe(
       JSON.stringify([{ value: 20 }, { value: 30 }, { value: 40 }, { value: 50 }]),
     );
+
     expect(Object.keys(result).length).toBe(4);
   });
 
@@ -412,10 +570,12 @@ describe("linq operators", () => {
     // on it too. Providers that materialise via .toMap() need the
     // chain to remain inspectable on the result.
     const whereOp = where<number>((x) => x > 0);
+
     const toMapOp = toMap<number, string, number>(
       (x) => `k${x}`,
       (x) => x,
     );
+
     const map = linq([1, 2, 3], whereOp, toMapOp);
     expect(map instanceof Map).toBe(true);
     const stages = getStages(map);
@@ -424,12 +584,14 @@ describe("linq operators", () => {
 
   test("lazy semantics — generators not executed until terminal", () => {
     let calls = 0;
+
     function* counter(): Iterable<number> {
       for (let i = 0; i < 1000; i++) {
         calls++;
         yield i;
       }
     }
+
     linq(
       counter(),
       where<number>((x) => x % 2 === 0),
@@ -437,6 +599,7 @@ describe("linq operators", () => {
       take<number>(2),
       toArray(),
     );
+
     // take(2) over even numbers stops at i=2 → 3 yields visited.
     expect(calls).toBe(3);
   });

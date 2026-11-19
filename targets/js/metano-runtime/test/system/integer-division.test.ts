@@ -18,7 +18,9 @@ const dotnetQuotients: [number, number, number][] = [
 ];
 
 describe("intDiv", () => {
-  test.each(dotnetQuotients)("%p / %p truncates toward zero to %p", (dividend, divisor, quotient) => {
+  test.each(
+    dotnetQuotients,
+  )("%p / %p truncates toward zero to %p", (dividend, divisor, quotient) => {
     expect(intDiv(dividend, divisor)).toBe(quotient);
   });
 

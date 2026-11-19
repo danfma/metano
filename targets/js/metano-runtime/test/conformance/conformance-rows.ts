@@ -12,7 +12,10 @@ export type RowOutcome =
   | { readonly result: unknown }
   | { readonly error: string; readonly param: string | null; readonly message: string };
 
-export type ConformanceRow = { readonly fn: string; readonly args: readonly unknown[] } & RowOutcome;
+export type ConformanceRow = {
+  readonly fn: string;
+  readonly args: readonly unknown[];
+} & RowOutcome;
 
 export type RowFunction = (...args: never[]) => unknown;
 
@@ -24,7 +27,10 @@ export function readRows(file: string): readonly ConformanceRow[] {
   return JSON.parse(readFileSync(new URL(file, fixtureDirectory), "utf8")) as ConformanceRow[];
 }
 
-/** The mismatches between the rows of `file` and the registry's functions; empty when they all agree. */
+/**
+ * The mismatches between the rows of `file` and the registry's functions; empty when they all
+ * agree.
+ */
 export function checkRows(file: string, registry: RowRegistry): string[] {
   return readRows(file).flatMap((row) => {
     const mismatch = compareRow(row, registry);

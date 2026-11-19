@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import {
   type BundleDirectory,
   bundle,
@@ -41,9 +42,9 @@ interface SizeBudgets {
 /** Bundling every entry with two bundlers takes a few seconds on a slow runner. */
 const BUNDLE_TIMEOUT_MS = 60_000;
 
-const sizeBudgets: SizeBudgets = JSON.parse(
+const sizeBudgets = JSON.parse(
   readFileSync(join(import.meta.dir, "size-budgets.json"), "utf8"),
-);
+) as SizeBudgets;
 
 /** Each budget under each size bundler, so a failure names both. */
 const cases = sizeBudgets.budgets.flatMap((budget) =>

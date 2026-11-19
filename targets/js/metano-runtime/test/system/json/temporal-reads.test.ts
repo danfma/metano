@@ -47,7 +47,8 @@ function localOffsetText(iso: string): string {
   const sign = minutes < 0 ? "-" : "+";
   const absolute = Math.abs(minutes);
 
-  return `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
+  return `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:` +
+    `${String(absolute % 60).padStart(2, "0")}`;
 }
 
 // ─── Accepted inputs ─────────────────────────────────────────────────────────
@@ -174,20 +175,17 @@ describe("temporal reads System.Text.Json accepts — DateTimeOffset", () => {
   });
 
   test("keeps the \u00b114:00 offset bound", () => {
-    expect(String(readWith("2024-01-31T10:20:30+14:00"))).toBe(
-      "2024-01-31T10:20:30+14:00[+14:00]",
-    );
+    expect(String(readWith("2024-01-31T10:20:30+14:00"))).toBe("2024-01-31T10:20:30+14:00[+14:00]");
 
-    expect(String(readWith("2024-01-31T10:20:30-14:00"))).toBe(
-      "2024-01-31T10:20:30-14:00[-14:00]",
-    );
+    expect(String(readWith("2024-01-31T10:20:30-14:00"))).toBe("2024-01-31T10:20:30-14:00[-14:00]");
   });
 
   test("assumes the local offset without one", () => {
     const moment = readWith("2024-01-31T10:20:30");
 
     expect(String(moment)).toBe(
-      `2024-01-31T10:20:30${localOffsetText("2024-01-31T10:20:30")}[${localOffsetText("2024-01-31T10:20:30")}]`,
+      `2024-01-31T10:20:30${localOffsetText("2024-01-31T10:20:30")}` +
+        `[${localOffsetText("2024-01-31T10:20:30")}]`,
     );
   });
 
@@ -256,10 +254,7 @@ describe("temporal reads System.Text.Json rejects", () => {
       { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
       "2024-1-31",
     ],
-    [
-      { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
-      "20240131",
-    ],
+    [{ kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" }, "20240131"],
     [
       { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
       "2024-01-31T00:00:00",
@@ -352,46 +347,22 @@ describe("temporal reads System.Text.Json rejects", () => {
       { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
       "10:20:30:40",
     ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      "+10:20:30",
-    ],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "+10:20:30"],
     [
       { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
       "10:20:30.12345678",
     ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      "10:20:30Z",
-    ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      "10:60:30",
-    ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      "24:00:00",
-    ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      "1.10",
-    ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      "10:20.5",
-    ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      ".5",
-    ],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "10:20:30Z"],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "10:60:30"],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "24:00:00"],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "1.10"],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "10:20.5"],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, ".5"],
     [
       { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
       "10675200.00:00:00",
     ],
-    [
-      { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
-      " 10:20:30",
-    ],
+    [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, " 10:20:30"],
     [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, ""],
     [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "PXY"],
     // A fraction run past sixteen digits (measured on .NET 10: STJ rejects it).

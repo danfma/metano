@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   ArgumentException,
   DivideByZeroException,
   OverflowException,
 } from "#/system/exceptions/index.ts";
+
 import { INT64_MAX, INT64_MIN, UINT64_MAX } from "#/system/int64.ts";
+
 import {
   absInt64,
   bigMulInt64,
@@ -26,6 +29,7 @@ describe("64-bit Math statics", () => {
   test("absInt64 negates negatives and rejects long.MinValue", () => {
     expect(absInt64(-5n)).toBe(5n);
     expect(absInt64(INT64_MAX)).toBe(INT64_MAX);
+
     expect(() => absInt64(INT64_MIN)).toThrow(
       new OverflowException("Negating the minimum value of a twos complement number is invalid."),
     );
@@ -51,10 +55,14 @@ describe("64-bit Math statics", () => {
     expect(clampInt64(-20n, -10n, -1n)).toBe(-10n);
     expect(clampInt64(5n, 1n, 10n)).toBe(5n);
     expect(clampUInt64(UINT64_MAX, 1n, 10n)).toBe(10n);
+
     expect(() => clampInt64(5n, -1n, -10n)).toThrow(
       new ArgumentException("'-1' cannot be greater than -10."),
     );
-    expect(() => clampUInt64(5n, 10n, 1n)).toThrow(new ArgumentException("'10' cannot be greater than 1."));
+
+    expect(() => clampUInt64(5n, 10n, 1n)).toThrow(
+      new ArgumentException("'10' cannot be greater than 1."),
+    );
   });
 
   test("divRem returns the truncated quotient and the remainder, with .NET's exceptions", () => {

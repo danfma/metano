@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   JsonSerializer,
   type PropertySpec,
@@ -6,6 +7,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 import manifest from "../../../../sample-json-contracts/test/fixtures/stj/cases.json";
 

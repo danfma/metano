@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import Decimal from "decimal.js";
 import { InvalidOperationException } from "#/system/exceptions/index.ts";
+
 import {
   average,
   averageDecimal,
@@ -67,14 +68,33 @@ describe("Min and Max", () => {
 
   test("decimals are ordered by value, not by text", () => {
     expect(linq([d(1.5), d(2.5), d(4)], max())).toEqual(d(4));
-    expect(linq([d(1.5), d(2.5), d(4)], min((x) => x.neg()))).toEqual(d(-4));
+
+    expect(
+      linq(
+        [d(1.5), d(2.5), d(4)],
+        min((x) => x.neg()),
+      ),
+    ).toEqual(d(-4));
+
     expect(linq([null, d(10), d(9)], minNullable())).toEqual(d(9));
   });
 
   test("a selector reads each element", () => {
     const people = [{ name: "b" }, { name: "a" }];
-    expect(linq(people, min((p) => p.name))).toBe("a");
-    expect(linq([] as { name: string }[], minNullable((p) => p.name))).toBeNull();
+
+    expect(
+      linq(
+        people,
+        min((p) => p.name),
+      ),
+    ).toBe("a");
+
+    expect(
+      linq(
+        [] as { name: string }[],
+        minNullable((p) => p.name),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -85,16 +105,56 @@ describe("MinBy and MaxBy", () => {
   ];
 
   test("pick the first element on the smallest or largest key", () => {
-    expect(linq(people, minBy((p) => p.name))).toBe(people[1]);
-    expect(linq(people, maxBy((p) => p.name))).toBe(people[0]);
-    expect(linq(people, minByNullable((p) => p.age))).toBe(people[0]);
+    expect(
+      linq(
+        people,
+        minBy((p) => p.name),
+      ),
+    ).toBe(people[1]);
+
+    expect(
+      linq(
+        people,
+        maxBy((p) => p.name),
+      ),
+    ).toBe(people[0]);
+
+    expect(
+      linq(
+        people,
+        minByNullable((p) => p.age),
+      ),
+    ).toBe(people[0]);
   });
 
   test("an empty sequence throws for a value element and gives null for a nullable one", () => {
-    expect(() => linq([] as number[], minBy((x) => x))).toThrow(NO_ELEMENTS);
-    expect(() => linq([] as number[], maxBy((x) => x))).toThrow(NO_ELEMENTS);
-    expect(linq([] as typeof people, minByNullable((p) => p.age))).toBeNull();
-    expect(linq([] as typeof people, maxByNullable((p) => p.age))).toBeNull();
+    expect(() =>
+      linq(
+        [] as number[],
+        minBy((x) => x),
+      ),
+    ).toThrow(NO_ELEMENTS);
+
+    expect(() =>
+      linq(
+        [] as number[],
+        maxBy((x) => x),
+      ),
+    ).toThrow(NO_ELEMENTS);
+
+    expect(
+      linq(
+        [] as typeof people,
+        minByNullable((p) => p.age),
+      ),
+    ).toBeNull();
+
+    expect(
+      linq(
+        [] as typeof people,
+        maxByNullable((p) => p.age),
+      ),
+    ).toBeNull();
   });
 
   test("null keys are skipped, and the first element stands in when all are null", () => {
@@ -102,13 +162,31 @@ describe("MinBy and MaxBy", () => {
       { id: 1, key: null as number | null },
       { id: 2, key: 5 as number | null },
     ];
-    expect(linq(rows, minByNullable((r) => r.key))).toBe(rows[1]);
-    expect(linq(rows, minByNullable(() => null))).toBe(rows[0]);
+
+    expect(
+      linq(
+        rows,
+        minByNullable((r) => r.key),
+      ),
+    ).toBe(rows[1]);
+
+    expect(
+      linq(
+        rows,
+        minByNullable(() => null),
+      ),
+    ).toBe(rows[0]);
   });
 
   test("decimal keys are ordered by value", () => {
     const rows = [{ key: d(10) }, { key: d(9) }];
-    expect(linq(rows, minBy((r) => r.key))).toBe(rows[1]);
+
+    expect(
+      linq(
+        rows,
+        minBy((r) => r.key),
+      ),
+    ).toBe(rows[1]);
   });
 });
 
@@ -138,7 +216,13 @@ describe("Sum and Average", () => {
 
   test("a decimal selector reads each element", () => {
     const rows = [{ price: d("1.5") }, { price: d("2.5") }];
-    expect(linq(rows, sumDecimal(Decimal, (r) => r.price)).toString()).toBe("4");
+
+    expect(
+      linq(
+        rows,
+        sumDecimal(Decimal, (r) => r.price),
+      ).toString(),
+    ).toBe("4");
   });
 });
 
@@ -161,7 +245,12 @@ describe("Union, Intersect and Except", () => {
   });
 
   test("they are lazy and re-enumerable", () => {
-    const seen = linq([1, 2, 3], except([2]), select((x) => x * 2));
+    const seen = linq(
+      [1, 2, 3],
+      except([2]),
+      select((x) => x * 2),
+    );
+
     expect([...seen]).toEqual([2, 6]);
     expect([...seen]).toEqual([2, 6]);
   });

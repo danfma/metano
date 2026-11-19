@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "#/system/decimal.ts";
+
 import {
   bigintFromDynamic,
   charFromDynamic,
   decimalSourceFromDynamic,
   numberFromDynamic,
 } from "#/system/dynamic-conversion.ts";
+
 import { InvalidCastException, OverflowException } from "#/system/exceptions/index.ts";
 
 /** The expected values are the ones .NET 10 gives for the same `(T)d` casts. */
@@ -28,9 +30,11 @@ describe("numberFromDynamic", () => {
 
   test("range-checks in a checked context", () => {
     expect(numberFromDynamic(255, "Byte", true)).toBe(255);
+
     expect(() => numberFromDynamic(300, "Byte", true)).toThrow(
       "Arithmetic operation resulted in an overflow.",
     );
+
     expect(() => numberFromDynamic(Number.NaN, "Int32", true)).toThrow(OverflowException);
   });
 
@@ -44,9 +48,11 @@ describe("numberFromDynamic", () => {
   test("converts a decimal, throwing out of range in every context", () => {
     expect(numberFromDynamic(new Decimal("3.9"), "Int32")).toBe(3);
     expect(numberFromDynamic(new Decimal("2.5"), "Double")).toBe(2.5);
+
     expect(() => numberFromDynamic(new Decimal("1e12"), "Int32")).toThrow(
       "Value was either too large or too small for an Int32.",
     );
+
     expect(() => numberFromDynamic(new Decimal("1e12"), "UInt32")).toThrow(
       "Value was either too large or too small for a UInt32.",
     );
@@ -61,10 +67,15 @@ describe("numberFromDynamic", () => {
     expect(() => numberFromDynamic(null, "Int32")).toThrow(
       "Cannot convert null to 'int' because it is a non-nullable value type",
     );
+
     expect(() => numberFromDynamic("abc", "Int32")).toThrow(InvalidCastException);
     expect(() => numberFromDynamic("42", "Int32")).toThrow("Cannot convert type 'string' to 'int'");
     expect(() => numberFromDynamic(true, "Int32")).toThrow("Cannot convert type 'bool' to 'int'");
-    expect(() => numberFromDynamic({}, "Double")).toThrow("Cannot convert type 'Object' to 'double'");
+
+    expect(() => numberFromDynamic({}, "Double")).toThrow(
+      "Cannot convert type 'Object' to 'double'",
+    );
+
     expect(() => numberFromDynamic(Object.create(null), "Double")).toThrow(
       "Cannot convert type 'object' to 'double'",
     );
@@ -97,6 +108,7 @@ describe("bigintFromDynamic", () => {
     expect(bigintFromDynamic(1e20, "UInt64")).toBe(18446744073709551615n);
     expect(bigintFromDynamic(1e20, "Int64")).toBe(9223372036854775807n);
     expect(() => bigintFromDynamic(-1n, "UInt64", true)).toThrow(OverflowException);
+
     expect(() => bigintFromDynamic(1e20, "Int64", true)).toThrow(
       "Arithmetic operation resulted in an overflow.",
     );
@@ -112,6 +124,7 @@ describe("bigintFromDynamic", () => {
     expect(bigintFromDynamic(1180591620717411303424n, "BigInteger")).toBe(1180591620717411303424n);
     expect(bigintFromDynamic(-2.5, "BigInteger")).toBe(-2n);
     expect(() => bigintFromDynamic(Number.NaN, "BigInteger")).toThrow("The value is not a number.");
+
     expect(() => bigintFromDynamic(Number.POSITIVE_INFINITY, "BigInteger")).toThrow(
       "BigInteger cannot represent infinity.",
     );
@@ -127,6 +140,7 @@ describe("decimalSourceFromDynamic", () => {
   test("gives new Decimal the exact value of every numeric value", () => {
     expect(new Decimal(decimalSourceFromDynamic(2.5)).toString()).toBe("2.5");
     expect(decimalSourceFromDynamic(12345678901234567890n)).toBe("12345678901234567890");
+
     expect(decimalSourceFromDynamic(new Decimal("1.2500000000000000000000000001"))).toBe(
       "1.2500000000000000000000000001",
     );

@@ -106,7 +106,8 @@ export const DECIMAL_DOMAIN_ROWS: readonly DecimalDomainRow[] = [
 
 /** The error a rejected row throws. */
 export function domainErrorOf(row: DecimalDomainRow): string {
-  return `JsonException: The value ${row.rejectedAs} cannot be written as System.Decimal: it is outside the System.Decimal range.`;
+  return `JsonException: The value ${row.rejectedAs} cannot be written as System.Decimal: ` +
+    "it is outside the System.Decimal range.";
 }
 
 /** The text written for the row's value, or the error it throws. */

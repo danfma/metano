@@ -1,7 +1,8 @@
 /**
  * Prints, as one JSON line, the text the runtime writes for each row of
  * `DECIMAL_WRITE_ROWS` and the outcome of each `DECIMAL_DOMAIN_ROWS` row,
- * so the same check runs under Node (bundled with `bun build`) and Bun. `--without-raw-json` removes `JSON.rawJSON` and
+ * so the same check runs under Node (bundled with `bun build`) and Bun.
+ * `--without-raw-json` removes `JSON.rawJSON` and
  * `JSON.isRawJSON` before the runtime loads, as on an engine without them.
  */
 const withoutRawJson = process.argv.includes("--without-raw-json");

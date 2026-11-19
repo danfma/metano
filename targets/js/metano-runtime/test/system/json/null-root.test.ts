@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
+
 import {
   type JsonConverter,
   JsonSerializer,
@@ -8,6 +9,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
 // JSON `null`, as measured on System.Text.Json (.NET 10, source generated
@@ -249,6 +251,7 @@ const NULLABLE_VALUE_ROOTS: readonly Row<ValueSpec<unknown>>[] = [
 /** Every read entry point, static and bound, tree and text, returns `null`. */
 function expectNullAtEveryEntryPoint(spec: TypeSpec<unknown>): void;
 function expectNullAtEveryEntryPoint(spec: ValueSpec<unknown>): void;
+
 function expectNullAtEveryEntryPoint(spec: JsonTypeInfo<unknown>): void {
   // The entry points dispatch on the spec's kind at runtime; the overloads
   // above keep each caller's spec kind checked.
@@ -331,8 +334,15 @@ describe("JSON null at a value-type root throws JsonException", () => {
     const point: TypeSpec<SPoint> = { ...ctx.sPoint, typeName: undefined };
     const int32: ValueSpec<number> = { descriptor: { kind: "primitive" }, valueType: true };
 
-    expectJsonException(() => JsonSerializer.deserialize(null, point), cannotConvertMessage("SPoint"));
-    expectJsonException(() => JsonSerializer.deserialize(null, int32), cannotConvertMessage("Object"));
+    expectJsonException(
+      () => JsonSerializer.deserialize(null, point),
+      cannotConvertMessage("SPoint"),
+    );
+
+    expectJsonException(
+      () => JsonSerializer.deserialize(null, int32),
+      cannotConvertMessage("Object"),
+    );
   });
 
   test("the check runs before a custom converter of the root's kind", () => {
@@ -353,7 +363,10 @@ describe("JSON null for a struct contract below the root", () => {
   const message = cannotConvertMessage("Probe.SPoint");
 
   test("a non-nullable struct property throws", () => {
-    expectJsonException(() => JsonSerializer.deserialize({ P: null, M: null }, ctx.holder), message);
+    expectJsonException(
+      () => JsonSerializer.deserialize({ P: null, M: null }, ctx.holder),
+      message,
+    );
   });
 
   test("a Nullable<struct> property reads null", () => {

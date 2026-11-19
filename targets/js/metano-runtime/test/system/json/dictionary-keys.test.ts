@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
+
 import {
   type JsonConverter,
   JsonSerializer,
@@ -8,6 +9,7 @@ import {
   type TypeDescriptor,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
 // Dictionary keys (#479): every JSON property name is parsed into the key's
@@ -57,17 +59,12 @@ const BYTE_LEVEL_KEY = mapSpec({
 
 const reads = {
   tree: (json: string, spec: IntValuedMapSpec) =>
-    JsonSerializer.deserialize(JSON.parse(json), spec),
-  text: (json: string, spec: IntValuedMapSpec) =>
-    JsonSerializer.deserializeText(json, spec),
+    JsonSerializer.deserialize(JSON.parse(json) as unknown, spec),
+  text: (json: string, spec: IntValuedMapSpec) => JsonSerializer.deserializeText(json, spec),
 };
 
 /** The keys a read of `name` gives, on the `path` read. */
-function keysOf(
-  path: keyof typeof reads,
-  spec: IntValuedMapSpec,
-  name: string,
-): unknown[] {
+function keysOf(path: keyof typeof reads, spec: IntValuedMapSpec, name: string): unknown[] {
   return [...(reads[path](JSON.stringify({ [name]: 1 }), spec)?.keys() ?? [])];
 }
 
@@ -365,7 +362,8 @@ describe("dictionary keys — reads", () => {
     expect([...(reads.text('{"01":1,"1":2}', INT32_KEY) ?? [])]).toEqual([[1, 1]]);
   });
 
-  test("a numeric enum key without a typeName still parses, and reports Object when it fails", () => {
+  test("a numeric enum key without a typeName still parses, " +
+    "and reports Object when it fails", () => {
     expect(keysOf("tree", mapSpec({ kind: "numericEnum", values: Level }), "High")).toEqual([
       Level.High,
     ]);

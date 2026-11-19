@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { HashSet } from "#/system/collections/hash-set.ts";
+
 import {
   type JsonConverter,
   JsonSerializer,
@@ -8,6 +9,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
+
 import { expectJsonException } from "./json-exception-assertions.ts";
 
 // ─── Test Domain ─────────────────────────────────────────────────────────────
@@ -217,6 +219,7 @@ describe("JsonSerializer — ref (nested objects)", () => {
 
     const shape = new Shape([new Point(0, 0), new Point(1, 1)]);
     const json = JsonSerializer.serialize(shape, shapeSpec);
+
     expect(json.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -254,6 +257,7 @@ describe("JsonSerializer — map", () => {
         ["b", 2],
       ]),
     );
+
     const json = JsonSerializer.serialize(obj, spec);
     expect(json.metadata).toEqual({ a: 1, b: 2 });
   });

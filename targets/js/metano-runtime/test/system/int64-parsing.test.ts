@@ -1,16 +1,13 @@
 import { describe, expect, test } from "bun:test";
+
 import {
   ArgumentNullException,
   FormatException,
   NotSupportedException,
   OverflowException,
 } from "#/system/exceptions/index.ts";
-import {
-  parseInt64,
-  parseUInt64,
-  tryParseInt64,
-  tryParseUInt64,
-} from "#/system/int64-parsing.ts";
+
+import { parseInt64, parseUInt64, tryParseInt64, tryParseUInt64 } from "#/system/int64-parsing.ts";
 
 const INTEGER = 7;
 const HEX_NUMBER = 515;
@@ -19,7 +16,10 @@ const NUMBER = 111;
 const INT64_RANGE = "Value was either too large or too small for an Int64.";
 const UINT64_RANGE = "Value was either too large or too small for a UInt64.";
 
-/** Every expected value and message below was printed by `long.Parse` / `ulong.Parse` on .NET 10.0.12. */
+/**
+ * Every expected value and message below was printed by `long.Parse` / `ulong.Parse` on .NET
+ * 10.0.12.
+ */
 describe("parseInt64 and parseUInt64", () => {
   test("Integer accepts .NET's white space, one leading sign and trailing NULs", () => {
     expect(parseInt64(" 12 ")).toBe(12n);
@@ -33,7 +33,19 @@ describe("parseInt64 and parseUInt64", () => {
   });
 
   test("Integer rejects other text with FormatException", () => {
-    for (const text of ["", " ", " 12", "--5", "- 5", "1,234", "0x10", "1e3", "\u000012", "5-", "١٢"]) {
+    for (const text of [
+      "",
+      " ",
+      " 12",
+      "--5",
+      "- 5",
+      "1,234",
+      "0x10",
+      "1e3",
+      "\u000012",
+      "5-",
+      "١٢",
+    ]) {
       expect(() => parseInt64(text)).toThrow(
         new FormatException(`The input string '${text}' was not in a correct format.`),
       );
@@ -55,7 +67,11 @@ describe("parseInt64 and parseUInt64", () => {
     expect(parseUInt64("FFFFFFFFFFFFFFFF", HEX_NUMBER)).toBe(18446744073709551615n);
     expect(parseInt64("8000000000000000", HEX_NUMBER)).toBe(-9223372036854775808n);
     expect(parseInt64(" 0000000000000000000ff ", HEX_NUMBER)).toBe(255n);
-    expect(() => parseInt64("10000000000000000", HEX_NUMBER)).toThrow(new OverflowException(INT64_RANGE));
+
+    expect(() => parseInt64("10000000000000000", HEX_NUMBER)).toThrow(
+      new OverflowException(INT64_RANGE),
+    );
+
     expect(() => parseInt64("-FF", HEX_NUMBER)).toThrow(FormatException);
     expect(() => parseInt64("0x10", HEX_NUMBER)).toThrow(FormatException);
   });

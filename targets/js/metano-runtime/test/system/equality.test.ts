@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
+
 import {
   defaultEquals,
   equals,
@@ -80,10 +81,12 @@ describe("equals", () => {
         ["x", 1],
         ["y", 2],
       ]);
+
       const b = new Map([
         ["x", 1],
         ["y", 2],
       ]);
+
       expect(equals(a, b)).toBe(true);
     });
 
@@ -92,10 +95,12 @@ describe("equals", () => {
         ["x", 1],
         ["y", 2],
       ]);
+
       const b = new Map([
         ["y", 2],
         ["x", 1],
       ]);
+
       expect(equals(a, b)).toBe(true);
     });
 
@@ -183,6 +188,7 @@ describe("equals", () => {
           );
         }
       }
+
       expect(equals(new Money(10, "USD"), new Money(10, "USD"))).toBe(true);
       expect(equals(new Money(10, "USD"), new Money(10, "EUR"))).toBe(false);
     });
@@ -221,10 +227,12 @@ describe("hashCode", () => {
       ["x", 1],
       ["y", 2],
     ]);
+
     const b = new Map([
       ["y", 2],
       ["x", 1],
     ]);
+
     expect(hashCode(a)).toBe(hashCode(b));
   });
 
@@ -239,6 +247,7 @@ describe("hashCode", () => {
         return 12345;
       }
     }
+
     expect(hashCode(new Tagged("a"))).toBe(12345);
     expect(hashCode(new Tagged("b"))).toBe(12345);
   });
@@ -256,6 +265,7 @@ describe("hashCode", () => {
         [1, "two", true],
       ],
     ];
+
     for (const [a, b] of cases) {
       expect(equals(a, b)).toBe(true);
       expect(hashCode(a)).toBe(hashCode(b));
@@ -419,7 +429,17 @@ describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", 
       expect(tupleEquals([array, 3], [[1, 2], 3], [null, null])).toBe(false);
       // A tuple element next to an array element: value vs reference per position.
       expect(tupleEquals([[1, 2], array], [[1, 2], array], [[], null])).toBe(true);
-      expect(tupleEquals([[1, 2], array], [[1, 2], [1, 2]], [[], null])).toBe(false);
+
+      expect(
+        tupleEquals(
+          [[1, 2], array],
+          [
+            [1, 2],
+            [1, 2],
+          ],
+          [[], null],
+        ),
+      ).toBe(false);
     });
 
     test("null operands follow Nullable<T>.Equals", () => {
