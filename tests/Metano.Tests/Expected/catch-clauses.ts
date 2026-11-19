@@ -245,7 +245,7 @@ export class Handlers {
       for (let $i = 0; ; $i++) {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
-        const kind = $a[$i];
+        const kind = $a[$i]!;
         try {
           this.work(kind);
         } catch (e$) {

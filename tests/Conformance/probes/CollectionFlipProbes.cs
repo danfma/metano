@@ -192,4 +192,39 @@ public static class CollectionFlipProbes
             return ex.Message;
         }
     }
+
+    public static string AssignmentAsValue()
+    {
+        var l = new List<int> { 1, 2, 3 };
+        IList<int> s = new List<int> { 4 };
+        var d = new Dictionary<string, int>();
+        var x = (l[1] = 5);
+        var y = 0;
+
+        y = l[2] = 9;
+
+        var t = s[0] = s[0] * 2;
+        var z = (l[^1] = 4);
+
+        return $"{x},{y},{t},{z},{d["k"] = 6}|{string.Join(",", l)}|{s[0]}|{d["k"]}";
+    }
+
+    public static string ForeachWithCommaUpdates()
+    {
+        _calls = 0;
+        var l = new List<int> { 1, 2 };
+        IList<int> counts = new List<int> { 0, 0 };
+        var total = 0;
+
+        foreach (var x in l)
+        {
+            counts[Next() % 2] += x;
+            total += counts[Next() % 2]++;
+
+            foreach (var y in l)
+                total += y;
+        }
+
+        return $"{total}|{string.Join(",", counts)}|{_calls}";
+    }
 }

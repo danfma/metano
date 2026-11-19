@@ -230,20 +230,8 @@ public static partial class IrToTsExpressionBridge
     {
         var bin = IrToTsNumericConversionBridge.WithCharOperandsAsText(binary);
 
-        if (
-            bin.Operator is IrBinaryOp.Assign
-            && bin.Left is IrElementAccess ea
-            && StoresThroughIndexer(ea.TargetType)
-        )
-        {
-            var target = Map(ea.Target, context);
-            var key = AsArrayIndex(Map(ea.Index, context), ea.IndexKind);
-            var value = Map(bin.Right, context);
-            return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
-        }
-
-        if (bin is { Operator: IrBinaryOp.Assign, Left: IrFromEndElementAccess fromEnd })
-            return MapFromEndWrite(fromEnd, bin.Right, context);
+        if (IsIndexerStore(bin))
+            return MapIndexerStore(bin, context, isStatement: false);
 
         if (
             IrToTsInt64OperatorBridge.TryMap(bin, operand => Map(operand, context)) is

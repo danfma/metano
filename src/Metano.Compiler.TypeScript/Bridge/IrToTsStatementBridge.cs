@@ -62,29 +62,33 @@ public static class IrToTsStatementBridge
     /// the version and length checked at the start of every step (the final
     /// one included, never after a <c>break</c> / <c>return</c>), each check
     /// under the function-local FR-058 flag <c>$c</c>, read first so a bundler
-    /// folds it. A loop nested in the body takes the next names
-    /// (<c>$c1</c>, <c>$l1</c>, …).
+    /// folds it. Its locals and every temporary of the body come from one
+    /// allocator (<see cref="TsTemporaries.Reserve"/>), so a nested loop or a
+    /// comma-shape update in the body never shadows them (<c>$i1</c>, …). The
+    /// element read is asserted (<c>$a[$i]!</c>): the index is in range, which
+    /// <c>noUncheckedIndexedAccess</c> cannot see.
     /// </summary>
     private static TsStatement MapListForEach(IrForEachStatement fe, IrToTsBridgeContext context)
     {
-        var depth = context.LoweredLoopDepth;
-        var suffix = depth == 0 ? "" : depth.ToString(CultureInfo.InvariantCulture);
-
-        string Name(string stem) => stem + suffix;
+        var names = TsTemporaries.Reserve(
+            context,
+            ["$c", "$l", "$a", "$n", "$v", "$i"],
+            out var bodyContext
+        );
 
         var (checks, list, items, length, version, index) = (
-            Name("$c"),
-            Name("$l"),
-            Name("$a"),
-            Name("$n"),
-            Name("$v"),
-            Name("$i")
+            names[0],
+            names[1],
+            names[2],
+            names[3],
+            names[4],
+            names[5]
         );
 
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
 
-        var body = MapBody(fe.Body, context with { LoweredLoopDepth = depth + 1 });
+        var body = MapBody(fe.Body, bodyContext);
 
         var throwModified = new TsCallExpression(
             new TsRuntimeHelperReference("throwModified", RuntimeCollections.Module),
@@ -102,7 +106,7 @@ public static class IrToTsStatementBridge
             $"  for (let {index} = 0; ; {index}++) {{",
             $"    if ({checks} && ({list}._version !== {version} || {items}.length !== {length})) {PrintExpression(throwModified)};",
             $"    if ({index} === {length}) break;",
-            $"    const {loopVariable} = {items}[{index}];"
+            $"    const {loopVariable} = {items}[{index}]!;"
         );
 
         var printedBody = RenderIndentedBody(body).TrimEnd('\n');
@@ -349,6 +353,10 @@ public static class IrToTsStatementBridge
             ),
             IrExpressionStatement { Expression: IrNullConditionalAccess access } =>
                 IrToTsExpressionBridge.MapNullConditionalStatement(access, context),
+            IrExpressionStatement { Expression: IrBinaryExpression store }
+                when IrToTsExpressionBridge.IsIndexerStore(store) => new TsExpressionStatement(
+                IrToTsExpressionBridge.MapIndexerStore(store, context, isStatement: true)
+            ),
             IrExpressionStatement { Expression: IrIndexerUpdateExpression update } =>
                 new TsExpressionStatement(
                     IrToTsExpressionBridge.MapIndexerUpdate(update, context, isStatement: true)

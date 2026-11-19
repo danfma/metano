@@ -100,16 +100,6 @@ public static partial class IrToTsExpressionBridge
         return WithBoundFromEnd(access, context, bound => Get(bound.Receiver, bound.Index));
     }
 
-    /// <summary><c>r[^n] = v</c>: <c>r.set(r.count - n, v)</c>, the receiver bound once.</summary>
-    private static TsExpression MapFromEndWrite(
-        IrFromEndElementAccess access,
-        IrExpression value,
-        IrToTsBridgeContext context
-    ) =>
-        WithBoundFromEnd(access, context, bound =>
-            Set(bound.Receiver, bound.Index, Map(value, context))
-        );
-
     /// <summary>
     /// An array viewed as one of the list interfaces (FR-003):
     /// <c>List.adopt(arr, { fixedSize: true })</c>.
@@ -560,5 +550,61 @@ public static partial class IrToTsExpressionBridge
         );
 
         return effects.Count == 0 ? call : new TsParenthesized(Comma([.. effects, call]));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="binary"/> is <c>r[i] = v</c> / <c>r[^n] = v</c>
+    /// through the indexer of a runtime collection (or a 2.x native
+    /// <c>Map</c>), which writes through <c>set</c>.
+    /// </summary>
+    internal static bool IsIndexerStore(IrBinaryExpression binary) =>
+        binary is { Operator: IrBinaryOp.Assign, Left: IrFromEndElementAccess }
+        || binary is { Operator: IrBinaryOp.Assign, Left: IrElementAccess element }
+            && StoresThroughIndexer(element.TargetType);
+
+    /// <summary>
+    /// <c>r[i] = v</c> through <c>set</c>, which returns nothing: in statement
+    /// position the call itself; where the value is used (<c>x = (r[i] = v)</c>,
+    /// <c>F(r[i] = v)</c>) <c>(r.set(i, $t = v), $t)</c>, which keeps C#'s
+    /// order (receiver, index, value) and yields the value written, with the
+    /// temporary declared at the head of the enclosing statement list.
+    /// </summary>
+    internal static TsExpression MapIndexerStore(
+        IrBinaryExpression store,
+        IrToTsBridgeContext context,
+        bool isStatement
+    )
+    {
+        if (isStatement)
+            return SetOf(store, Map(store.Right, context), context);
+
+        if (context.Temporaries is not { } temporaries)
+            return UnsupportedCollectionAccess("This indexer assignment, whose value is used,");
+
+        var written = temporaries.Declare("$t");
+
+        return new TsParenthesized(
+            Comma([SetOf(store, Assign(written, Map(store.Right, context)), context), written])
+        );
+    }
+
+    private static TsExpression SetOf(
+        IrBinaryExpression store,
+        TsExpression value,
+        IrToTsBridgeContext context
+    )
+    {
+        if (store.Left is IrFromEndElementAccess fromEnd)
+            return WithBoundFromEnd(fromEnd, context, bound =>
+                Set(bound.Receiver, bound.Index, value)
+            );
+
+        var element = (IrElementAccess)store.Left;
+
+        return Set(
+            Map(element.Target, context),
+            AsArrayIndex(Map(element.Index, context), element.IndexKind),
+            value
+        );
     }
 }

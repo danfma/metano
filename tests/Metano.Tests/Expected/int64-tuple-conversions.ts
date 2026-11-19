@@ -78,7 +78,7 @@ export class Pairs {
       for (let $i = 0; ; $i++) {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
-        const pair$element = $a[$i];
+        const pair$element = $a[$i]!;
         const pair = [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
         total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
       }
@@ -98,7 +98,7 @@ export class Pairs {
       for (let $i = 0; ; $i++) {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
-        const pair$element = $a[$i];
+        const pair$element = $a[$i]!;
         const pair = [Number(BigInt.asIntN(32, pair$element[0])), Number(BigInt.asIntN(32, pair$element[1]))] as [number, number];
         total = (total + (pair[0] + pair[1])) | 0;
       }
@@ -120,7 +120,7 @@ export class Pairs {
         for (let $i = 0; ; $i++) {
           if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
           if ($i === $n) break;
-          const pair$element = $a[$i];
+          const pair$element = $a[$i]!;
           const pair = [Number(checkedNarrow(pair$element[0], 32, true)), Number(checkedNarrow(pair$element[1], 32, true))] as [number, number];
           total = checkedInt32(total + checkedInt32(pair[0] + pair[1]));
         }
@@ -141,7 +141,7 @@ export class Pairs {
       for (let $i = 0; ; $i++) {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
-        const pair$element = $a[$i];
+        const pair$element = $a[$i]!;
         const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
           throw new InvalidOperationException("Nullable object must have a value.");
         })());
@@ -163,7 +163,7 @@ export class Pairs {
       for (let $i = 0; ; $i++) {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
-        const pair$element = $a[$i];
+        const pair$element = $a[$i]!;
         const pair = pair$element == null ? null : [BigInt(pair$element[0]), BigInt(pair$element[1])] as [bigint, bigint];
         missing = (missing + (pair == null ? 1 : 0)) | 0;
       }

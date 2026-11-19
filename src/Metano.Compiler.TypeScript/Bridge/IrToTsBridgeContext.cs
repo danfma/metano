@@ -55,10 +55,12 @@ internal sealed record IrToTsBridgeContext(
     public bool KeepsBaseMessage { get; init; }
 
     /// <summary>
-    /// How many lowered <c>foreach</c> loops over a <c>List&lt;T&gt;</c> enclose
-    /// the position, so a nested loop names its temporaries apart.
+    /// The generated locals (<c>$</c>-names) the enclosing lowered loops
+    /// declare, which no temporary of a nested statement list may reuse
+    /// (<see cref="TsTemporaries"/>).
     /// </summary>
-    public int LoweredLoopDepth { get; init; }
+    public System.Collections.Immutable.ImmutableHashSet<string> ReservedLocals { get; init; } =
+        System.Collections.Immutable.ImmutableHashSet<string>.Empty;
 
     /// <summary>
     /// The statement list being lowered, whose head declares the temporaries
