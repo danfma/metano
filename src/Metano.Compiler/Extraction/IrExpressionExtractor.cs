@@ -995,9 +995,19 @@ public sealed partial class IrExpressionExtractor
             elements,
             sliceIndex,
             slicePattern,
-            ListSubjectMayBeNull(list, operation?.InputType)
+            ListSubjectMayBeNull(list, operation?.InputType),
+            ListPatternCollectionOf(operation?.InputType)
         );
     }
+
+    /// <summary>
+    /// The stage 011c collection a list pattern matches, for a target whose
+    /// collections are runtime classes; <c>null</c> otherwise.
+    /// </summary>
+    private IrCollectionTypeRef? ListPatternCollectionOf(ITypeSymbol? inputType) =>
+        _context.KeepsNativeCollections || inputType is null
+            ? null
+            : MapNonNullType(inputType) as IrCollectionTypeRef;
 
     /// <summary>
     /// <c>&lt;</c> / <c>&lt;=</c> / <c>&gt;</c> / <c>&gt;=</c> against a

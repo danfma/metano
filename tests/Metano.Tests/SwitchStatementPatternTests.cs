@@ -634,6 +634,61 @@ public class SwitchStatementPatternTests
     }
 
     [Test]
+    [Arguments("System.Collections.Generic.List<int>")]
+    [Arguments("System.Collections.Generic.IList<int>")]
+    [Arguments("System.Collections.Generic.IReadOnlyList<int>")]
+    public async Task ListPatternOnACollection_ReadsCountAndGet(string type)
+    {
+        var output = TranspileDescriber(
+            $"public static bool Ends({type} values) => values is [1, _, .., 3];",
+            "#nullable enable"
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return values.count >= 3 && values.get(0) === 1 "
+                    + "&& values.get(values.count - 1) === 3"
+            );
+    }
+
+    [Test]
+    public async Task ListSlicePatternOnAList_SlicesWithAbsoluteBounds()
+    {
+        var output = TranspileDescriber(
+            """
+            public static int Middle(System.Collections.Generic.List<int> values) =>
+                values is [var first, .. var middle, var last] ? first + middle.Count + last : -1;
+            """,
+            "#nullable enable"
+        );
+
+        await Assert.That(output).Contains("(first = values.get(0), true)");
+        await Assert.That(output).Contains("(last = values.get(values.count - 1), true)");
+        await Assert.That(output).Contains("(middle = values.slice(1, values.count - 1), true)");
+    }
+
+    [Test]
+    public async Task ListPatternSwitchOnAList_ReadsCountAndGet()
+    {
+        var output = TranspileDescriber(
+            """
+            public static string Shape(System.Collections.Generic.List<int> values) => values switch
+            {
+                [] => "empty",
+                [var only] => "one " + only,
+                [var first, ..] => "many " + first,
+            };
+            """,
+            "#nullable enable"
+        );
+
+        await Assert.That(output).Contains("if ($s.count === 0)");
+        await Assert.That(output).Contains("const only = $s.get(0);");
+        await Assert.That(output).Contains("if ($s.count >= 1)");
+    }
+
+    [Test]
     public async Task DesignatorOfALabel_WithoutAGuard_IsNotAssertedAssigned()
     {
         var output = TranspileDescriber(

@@ -141,11 +141,18 @@ public enum IrLogicalOp
 /// <param name="InputMayBeNull">Whether the matched value's static type admits
 /// <c>null</c>. C# list patterns fail on <c>null</c>, so backends test for it
 /// before reading the length.</param>
+/// <param name="Collection">The matched value's stage 011c collection type
+/// (<c>List&lt;T&gt;</c>, <c>IList&lt;T&gt;</c>, <c>IReadOnlyList&lt;T&gt;</c>),
+/// whose count and elements a target with runtime collection classes reads
+/// through the collection's members; <c>null</c> for an array, a string or any
+/// other countable type, and for a target that keeps native collections
+/// (spec 011 FR-010).</param>
 public sealed record IrListPattern(
     IReadOnlyList<IrPattern> Elements,
     int? SliceIndex = null,
     IrPattern? SlicePattern = null,
-    bool InputMayBeNull = false
+    bool InputMayBeNull = false,
+    IrCollectionTypeRef? Collection = null
 ) : IrPattern;
 
 /// <summary>

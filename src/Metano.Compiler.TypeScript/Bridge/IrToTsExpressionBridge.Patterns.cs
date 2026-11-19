@@ -576,14 +576,14 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// <c>value.length === n</c>, or <c>&gt;= n</c> when a <c>..</c> slice
-    /// absorbs any further elements; preceded by a non-null test when the
-    /// value may be <c>null</c>.
+    /// <c>value.length === n</c> (<c>value.count</c> on a runtime collection),
+    /// or <c>&gt;= n</c> when a <c>..</c> slice absorbs any further elements;
+    /// preceded by a non-null test when the value may be <c>null</c>.
     /// </summary>
     private static TsExpression ListLengthCheck(TsExpression value, IrListPattern pattern)
     {
         var lengthCheck = new TsBinaryExpression(
-            new TsPropertyAccess(value, "length"),
+            ListLength(value, pattern),
             pattern.SliceIndex is null ? "===" : ">=",
             new TsLiteral(pattern.Elements.Count.ToString())
         );
@@ -597,7 +597,8 @@ public static partial class IrToTsExpressionBridge
     /// The element a list sub-pattern inspects: <c>arr[i]</c> before the
     /// slice, and — for the tail element <c>k</c> positions past a
     /// <c>..</c> slice — <c>arr[arr.length - k]</c>, so <c>[a, .., b]</c>
-    /// tests <c>arr[arr.length - 1]</c>.
+    /// tests <c>arr[arr.length - 1]</c>. A runtime collection reads
+    /// <c>list.get(i)</c> / <c>list.get(list.count - k)</c>.
     /// </summary>
     private static TsExpression ListElementAccess(
         TsExpression value,
@@ -605,17 +606,34 @@ public static partial class IrToTsExpressionBridge
         int index
     )
     {
-        if (pattern.SliceIndex is null || index < pattern.SliceIndex)
-            return new TsElementAccess(value, new TsLiteral(index.ToString()));
+        var position =
+            pattern.SliceIndex is null || index < pattern.SliceIndex
+                ? new TsLiteral(index.ToString())
+                : ListTailPosition(value, pattern, index);
 
+        return pattern.Collection is null
+            ? new TsElementAccess(value, position)
+            : Get(value, position);
+    }
+
+    private static TsExpression ListTailPosition(
+        TsExpression value,
+        IrListPattern pattern,
+        int index
+    )
+    {
         var tailOffset = pattern.Elements.Count - index;
-        var lengthAccess = new TsPropertyAccess(value, "length");
 
-        return new TsElementAccess(
-            value,
-            new TsBinaryExpression(lengthAccess, "-", new TsLiteral(tailOffset.ToString()))
+        return new TsBinaryExpression(
+            ListLength(value, pattern),
+            "-",
+            new TsLiteral(tailOffset.ToString())
         );
     }
+
+    /// <summary><c>value.length</c>, or <c>value.count</c> on a runtime collection.</summary>
+    private static TsPropertyAccess ListLength(TsExpression value, IrListPattern pattern) =>
+        new(value, pattern.Collection is null ? "length" : "count");
 
     /// <summary>
     /// Lowers <c>(p0, p1, …)</c> / <c>Point(p0, p1)</c>: an optional
@@ -896,7 +914,9 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The elements a <c>..</c> slice spans: <c>value.slice(i)</c>, or
-    /// <c>value.slice(i, -k)</c> when <c>k</c> elements follow it.
+    /// <c>value.slice(i, -k)</c> when <c>k</c> elements follow it. A runtime
+    /// <c>List</c> (the one collection C# slices, through <c>Slice</c>) takes
+    /// absolute bounds: <c>value.slice(i, value.count - k)</c>.
     /// </summary>
     private static TsExpression ListSliceAccess(TsExpression value, IrListPattern list)
     {
@@ -905,10 +925,15 @@ public static partial class IrToTsExpressionBridge
         var startLiteral = new TsLiteral(start.ToString());
 
         TsExpression[] arguments =
-            tailCount == 0 ? [startLiteral] : [startLiteral, new TsLiteral($"-{tailCount}")];
+            tailCount == 0 ? [startLiteral] : [startLiteral, SliceEnd(value, list, tailCount)];
 
         return new TsCallExpression(new TsPropertyAccess(value, "slice"), arguments);
     }
+
+    private static TsExpression SliceEnd(TsExpression value, IrListPattern list, int tailCount) =>
+        list.Collection is null
+            ? new TsLiteral($"-{tailCount}")
+            : CountMinus(value, new TsLiteral(tailCount.ToString()));
 
     /// <summary>A designator a pattern binds and the value it reads.</summary>
     private sealed record PatternBinding(string Name, TsExpression Value);

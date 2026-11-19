@@ -227,4 +227,37 @@ public static class CollectionFlipProbes
 
         return $"{total}|{string.Join(",", counts)}|{_calls}";
     }
+
+    static string Shape(List<int> l) =>
+        l switch
+        {
+            [] => "empty",
+            [var a] => "one" + a,
+            [var a, .., var z] => "many" + a + z,
+        };
+
+    public static string ListPatternsOnAList()
+    {
+        var l = new List<int> { 1, 2, 3 };
+        var mid = l is [var a, .. var m, var z] ? $"{a}:{string.Join(",", m)}:{z}" : "no";
+        var rest = l is [_, .. var r] ? string.Join(",", r) : "no";
+
+        return $"{Shape([])},{Shape([4])},{Shape(l)}|{l is [50, ..]},{l is [1, ..]}|{mid}|{rest}";
+    }
+
+    public static string ListPatternsOnInterfaces()
+    {
+        IList<int> il = new List<int> { 1, 2, 3 };
+        IReadOnlyList<int> ro = new List<int> { 1, 2, 3 };
+        IList<int> adopted = new[] { 7, 8 };
+        var nested = new List<List<int>>
+        {
+            new() { 1 },
+            new() { 2, 3 },
+        };
+        var inner = nested is [[var x], [_, var y]] ? x + y : -1;
+
+        return $"{il is [1, _, 3]},{il is [1, _]},{ro is [.., 3]},{ro is [2, ..]}|"
+            + $"{adopted is [7, 8]},{adopted is [_, .., 9]}|{inner}";
+    }
 }
