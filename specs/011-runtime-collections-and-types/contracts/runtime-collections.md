@@ -1,29 +1,171 @@
 # Contract: `metano-runtime/system/collections`
 
-**Normative for**: FR-001–FR-012, FR-016, FR-054–FR-058, NFR-001, NFR-006–NFR-009. Every class below ships in 3.0.0 (FR-054, D24): stage 011c delivers `List`, `HashSet`, `Dictionary`, `Queue`, `Stack`, their interfaces and the dictionary views; stage 011h the read-only, immutable, sorted and concurrent classes. Every member below has a runtime test (FR-041). Names follow OD-2 (C#-like camelCase). Exceptions are the classes of [contracts/runtime-types.md](./runtime-types.md) § Exceptions, imported per class from `system/exceptions/*`. `RuntimeType` and `UnknownType` come from `metano-runtime/system/reflection`; the collection descriptor factories live here (`descriptors.ts`).
+**Normative for**: FR-001–FR-012, FR-016, FR-028 (runtime half of the collection kinds), FR-054–FR-058, NFR-001, NFR-006–NFR-009. Every class below ships in 3.0.0 (FR-054, D24): stage 011c delivers `List`, `HashSet`, `Dictionary`, `Queue`, `Stack`, their interfaces and the dictionary views; stage 011h the read-only, immutable, sorted and concurrent classes. Every member below has a runtime test (FR-041). Names follow OD-2 (C#-like camelCase). Exceptions are the classes of [contracts/runtime-types.md](./runtime-types.md) § Exceptions, imported per class from `system/exceptions/*`. `RuntimeType` and `UnknownType` come from `metano-runtime/system/reflection`; the collection descriptor factories live here (`descriptors.ts`).
 
-## Equality (`default-comparer.ts`, D18)
+**Stage 011c API freeze (R0, 2026-11-19, D30).** The sections up to § 011h classes are the exact TypeScript API that the compiler (stage 011c, group C) emits against and that the runtime (group R) implements. A signature, module path, field name, helper name or message written here changes only through a spec amendment. The .NET behaviour quoted below was probed on .NET 10 / 11 (`List<T>`, `Dictionary<K,V>`, `HashSet<T>`, `Queue<T>`, `Stack<T>`, `System.Text.Json`); each probed behaviour becomes a runtime test in R1 and, where a C# probe can show it end to end, a conformance row in C.
+
+### Corrections the code forced (R0)
+
+| Was (this contract before R0) | Now | Forced by |
+|---|---|---|
+| `defaultEquals` / `defaultHashCode` defined in `default-comparer.ts` | The collections key and search through **`elementEquals` / `elementHashCode`** (`default-comparer.ts`). `elementEquals` delegates to the existing `defaultEquals` of `system/equality.ts` except that a top-level array compares by reference | `system/equality.ts` already exports a `defaultEquals` (`EqualityComparer<T>.Default` for open-typed record fields, #674; Boxed-aware since 011b B3) that compares arrays element by element (a C# tuple is a JS array). A second `defaultEquals` would collide in the root barrel (`export *` from both drops the name). Inside a collection an array element is a C# array (tuple-typed collections keep `MS0001`, FR-054), which .NET compares by reference; 2.x's `includes` / `Map` did so too, so element-wise comparison would be a regression for `List<int[]>` / `HashSet<int[]>`. |
+| `HashSet` "keeps its storage" (`hash-set.ts` L100-157) | `HashSet` and `Dictionary` share one internal keyed store (`hash-core.ts`, the one D24 names for `ConcurrentDictionary`) | Today's storage enumerates primitives before objects (not insertion order, which .NET keeps until a removal), hashes every object without `hashCode()` to bucket `0` (`HashCode.combine` → `hashValue` returns `0`, so reference keys are O(n) per operation) and declares enumerable class fields (`_buckets`, `_size`, `_primitiveSet`), against FR-002. |
+| `tryGetValue(key): [true, V] \| [false, null]`; `tryDequeue` / `tryPeek` / `tryPop` likewise; `find` / `findLast` return `T \| null` | Each takes the value C# stores on a miss: `tryGetValue(key, missingValue)` returns `[false, missingValue]`; `find(match, defaultValue)` returns `defaultValue` | C# stores `default(T)` (`0` for `int`, `false`, …), not `null`; the compiler already passes it for `TryGetValue` / `GetValueOrDefault` (`Dictionaries.cs`, `IrOutArgumentCall`) and for `Find` (`Lists.cs`). |
+| `sort(comparison?)`, `binarySearch(item, comparison?)` | Both take `comparison?: Comparison<T> \| IComparer<T> \| null`, told apart by `typeof comparison === "function"` (a lowered `IComparer<T>` is always an object) | `Sort` has both C# overloads; `BinarySearch(T, IComparer<T>)` exists; one parameter shape shared with 011h's `ImmutableList` (group H's request). |
+| `IReadOnlyList<T>` declares `slice` / `getRange` | Removed from the interface (kept on `List<T>`) | C# cannot call them through `IReadOnlyList<T>` (no `Slice` / `GetRange` members), and they would force every 011h implementer to return and import a `List`. |
+| `IReadOnlyDictionary.keys: KeyCollection<K>` | `keys: IReadOnlyCollection<K>`, `values: IReadOnlyCollection<V>` (`Dictionary` narrows them to `KeyCollection` / `ValueCollection`) | `ConcurrentDictionary` (011h) returns snapshots, not `KeyCollection`. |
+| Fixed-size adopted list: `clear` throws `Collection was of a fixed size.`; `set` / `sort` / `reverse` bump nothing stated | `clear` throws `Collection is read-only.`; a fixed-size adopted list's writes never bump `_version` and `isReadOnly` is `true` | .NET (an array as `IList<T>`): `Clear` → `NotSupportedException: Collection is read-only.`; array enumerators never detect writes; `ICollection<T>.IsReadOnly` of an array is `true`. |
+| `remove` and `clear` are the only non-invalidating dictionary members; "`add` / `set` of a new key / `update` do" | `Dictionary`: only an insertion of a new key invalidates (`add`, `set` / `tryAdd` of a new key); overwriting an existing key (`set`, `update`) does not. `HashSet`: only an addition invalidates (`add` of a new item, `unionWith` / `symmetricExceptWith` when they add); `remove`, `clear`, `exceptWith`, `intersectWith`, `removeWhere` do not | Probed on .NET 10: `foreach (kv in d) d[kv.Key] = 5` and `d[kv.Key] += 1` do not throw; `HashSet.Remove` / `Clear` / `ExceptWith` / `IntersectWith` / `RemoveWhere` during enumeration do not throw. |
+| `Stack` enumeration failure uses the common message | `Stack`'s enumerator throws `Collection was modified after the enumerator was instantiated.` | .NET's `Stack<T>.Enumerator` message. |
+| `Queue` / `Stack` share the `of` factory | No `of` on `Queue` / `Stack` | C# has no collection initializer or collection expression for them (no `Add`). |
+| `List.of(items: readonly T[])` (copy implied) | `List.of(items: T[])` takes ownership of the array (no copy) | FR-002 (one pass, no extra copy) and NFR-001: the compiler always passes a fresh array literal. |
+| Comparer-less factories (`HashSet.of(items, typeArguments?)`, `Dictionary.of` / `assign(entries, typeArguments?)`) | A comparer goes before `typeArguments`: `of(items, comparer?, typeArguments?)`, `assign(entries, comparer?, typeArguments?)` | A collection initializer on a comparer constructor (`new HashSet<T>(cmp) { … }`) lowers to one factory call, without the `IrLetExpression` sequence; 011h's sorted / concurrent factories use the same order (group H's request). |
+| `KeyCollection` / `ValueCollection` in `dictionary.ts` over a `Dictionary` | In `dictionary-views.ts`, over `KeyValueSource<K, V>`; the module does not import `Dictionary` | 011h's `SortedDictionary` and `ImmutableDictionary` reuse the views (group H's request). |
+| Interface descriptors test "`instanceof` any implementing class" | Nominal through the class literal's `interfaces` list (the `implementsInterface` walk), matched by collection kind; an interface descriptor imports no class | A 011h class (or a user class implementing `IList<T>`) joins `is IReadOnlyList<T>` by listing it; `descriptors.ts` would otherwise import every class (group H's request). |
+| JSON collection kinds name the runtime class in `system/json` | Each kind carries a `create` closure that the context writes (`SequenceCollectionDescriptor` / `KeyedCollectionDescriptor`), so `system/json` imports no collection class | A context that uses only `List` must not bundle every collection class (group H's request; NFR-008). |
+| `HashSet` capacity constructors drop the argument (`Sets.cs`) | Every class has `withCapacity(capacity, …)`, which evaluates the argument once and throws on a negative one | .NET throws `ArgumentOutOfRangeException` (`Non-negative number required. (Parameter 'capacity')`); dropping the argument also drops its side effects (the reason `List.withCapacity` exists). |
+
+## Modules (stage 011c)
+
+Every module is under `targets/js/metano-runtime/src/system/collections/`, is side-effect free (NFR-006: 0 B on a side-effect-only import, FR-043) and has a size-budget row (NFR-008). The package `exports` entries `./system/collections` and `./system/collections/*` (with `source` / `types` / `import`) already exist since stage 011a (FR-011); no new entry is needed.
+
+| Module | Exports | Barrel (`system/collections/index.ts`) |
+|---|---|---|
+| `list.ts` | `List` | yes |
+| `dictionary.ts` | `Dictionary` | yes |
+| `dictionary-views.ts` | `KeyCollection`, `ValueCollection`; type `KeyValueSource` (imports no `Dictionary`) | yes |
+| `hash-set.ts` | `HashSet` (reworked in place) | yes |
+| `queue.ts` | `Queue` | yes |
+| `stack.ts` | `Stack` | yes |
+| `interfaces.ts` | types only: `IReadOnlyCollection`, `IReadOnlyList`, `ICollection`, `IList`, `IReadOnlyDictionary`, `IDictionary`, `IReadOnlySet`, `ISet`, `Span` | yes (`export type`) |
+| `default-comparer.ts` | `elementEquals`, `elementHashCode`, `defaultCompare`, `createComparer`, `defaultEqualityComparer`, `defaultComparer`; types `IEqualityComparer`, `IComparer`, `Comparison` | yes |
+| `helpers.ts` | `fromEnd`, `isIterable`, `asArray`, `asJsArray`, `asSpan`, `asReadOnlySpan` | yes |
+| `descriptors.ts` | `listType`, `dictionaryType`, `hashSetType`, `queueType`, `stackType`, `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType` | yes |
+| `throw-helpers.ts` | the cold throw functions (§ Cold throw helpers) | `throwModified` only |
+| `checks.ts` | the ambient `__METANO_CHECKS__` declaration (§ Production checks) and a type `MetanoChecks` that carries it into every entry's declarations | type only |
+| `hash-core.ts` | `HashCore` (internal): the keyed store shared by `Dictionary`, `HashSet`, (011h) `ConcurrentDictionary` and `immutable-hash-storage.ts` (§ Equality and comparison) | no (internal; reached by 011h through the `./system/collections/*` wildcard) |
+| `set-algebra.ts` | the `ISet` / `IReadOnlySet` algorithms over `SetLike<T>` (internal), written by R for `HashSet` and shared by 011h's sets | no (internal) |
+| `list-helpers.ts`, `dictionary-helpers.ts`, `immutable-collection.ts` | legacy, unchanged (§ Legacy symbols) | yes, until removed |
+
+**Generated code imports** every collection value and type from the barrel `metano-runtime/system/collections` (types with the per-name `type` qualifier: `import { List, throwModified, type Span } from "metano-runtime/system/collections"`), and the type-argument descriptors from `metano-runtime/system/reflection`. The root barrel `metano-runtime` keeps re-exporting the collections barrel; no exported name collides with another root export (checked in R1 by a test that imports every barrel).
+
+**Dependency direction** (data-model.md § 4): `collections` imports `exceptions/*` (per class), `reflection` (types, `UnknownType`, `memoNodeFor`, `isAssignableFrom`) and `system/equality.ts` (`defaultEquals`, `valueHashCode`'s helpers); `reflection` never imports `collections`; `json` and `linq` import the collection classes they build.
+
+## Storage ABI (FR-002, FR-008, FR-057)
+
+Every class keeps its state in **non-enumerable, non-configurable, string-keyed own data properties** defined in the constructor through `Object.defineProperty`, always the same ones in the same order, so that every construction path (constructor, `of`, `from`, `withCapacity`, `adopt`, `slice`, JSON) yields one hidden class per class. They are declared in the class body with `declare` (no class-field initializer: under `useDefineForClassFields` an initializer would define an enumerable field before the constructor runs). No `#private`, no symbol keys, no `Proxy`, no closures over state.
+
+| Class | Fields, in definition order | Read by generated code |
+|---|---|---|
+| `List<T>` | `_items: T[]` (writable `false`; the one backing array for life), `_version: number` (writable), `$typeArguments$List: readonly RuntimeType[] \| undefined` | **`_items` and `_version`** (lowered `foreach`, FR-057); public in the `.d.ts`, no `@internal` |
+| `Dictionary<K, V>` | `_store` (the `hash-core` store), `_version`, `_keys` / `_values` (the cached views, `undefined` until first read), `$typeArguments$Dictionary` | none |
+| `HashSet<T>` | `_store`, `_version`, `$typeArguments$HashSet` | none |
+| `Queue<T>` | `_items` (ring buffer), `_head`, `_size`, `_version`, `$typeArguments$Queue` | none |
+| `Stack<T>` | `_items` (bottom to top), `_version`, `$typeArguments$Stack` | none |
+| `KeyCollection<K>` / `ValueCollection<V>` | `_source` (a `KeyValueSource`) | none |
+
+Only `List`'s `_items` / `_version` are ABI; the other fields are implementation details (still non-enumerable, so `Object.keys`, spread, `JSON.stringify`, `toEqual`, `structuredClone` and the structural `equals` of `system/equality` see nothing). `$typeArguments$<Class>` is always defined, `undefined` when no descriptors are passed (FR-008).
+
+`count` is a prototype getter on every class (`List`: `this._items.length`, so a length change through `asJsArray()` keeps it right, FR-057).
+
+## Production checks (FR-058, D26)
+
+- **Identifier: `__METANO_CHECKS__`** (confirmed; FR-058's "name to be confirmed in 011c"). Declared once, in `checks.ts`, as `declare global { const __METANO_CHECKS__: boolean | undefined; }`; `checks.ts` also exports `type MetanoChecks = boolean | undefined`, which `list.ts`, the collections barrel and the root barrel re-export as a type, so the declaration reaches every entry point's `.d.ts` and the generated code of every dependent package type-checks under `tsgo --strict` (R1 adds a consumer fixture that proves it). No module derives a module-scope constant from it.
+- **Guard text** (normative; the compiler emits it verbatim, the runtime uses the same text): `(typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)`. With `define: { __METANO_CHECKS__: "false" }` bun and esbuild fold it to `false` and drop the guarded code (FR-043 acceptance, R1).
+- **Guarded in the runtime**: the bounds checks of `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`; every `_version` store of every class; every enumeration check (`List`, `Dictionary`, `KeyCollection`, `ValueCollection`, `HashSet`, `Queue`, `Stack` iterators, `List.forEach`). Never guarded: `insert`, `insertRange`, `removeAt`, `removeRange`, `getRange`, `slice`, `copyTo`, `withCapacity`, every `KeyNotFoundException`, `ArgumentNullException`, `ArgumentException`, `NotSupportedException`, empty `Queue` / `Stack`, the free helper `fromEnd(array, n)`.
+- **Guarded in generated code**: the two check sites of the lowered `foreach` (§ Lowered `foreach`).
+
+## Cold throw helpers (`throw-helpers.ts`, FR-016)
+
+Module-level functions returning `never`, each constructing the FR-013 class with .NET's exact message (probed), kept out of the hot members so those stay small and inlinable (research R17). Only `throwModified` is part of the C → R contract (the compiler emits it); the others are used by the runtime classes and by 011h's classes, which import them from `./throw-helpers.ts`.
+
+| Function | Throws | Message (`(Parameter …)` is appended by the exception class) | Used by |
+|---|---|---|---|
+| `throwModified(): never` | `InvalidOperationException` | `Collection was modified; enumeration operation may not execute.` | lowered `foreach` (generated), every iterator except `Stack`'s, `List.forEach` |
+| `throwStackModified(): never` | `InvalidOperationException` | `Collection was modified after the enumerator was instantiated.` | `Stack` iterator |
+| `throwOOR(): never` | `ArgumentOutOfRangeException` (param `index`) | `Index was out of range. Must be non-negative and less than the size of the collection.` | `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`, `removeAt` |
+| `throwInsertOOR(): never` | `ArgumentOutOfRangeException` (`index`) | `Index must be within the bounds of the List.` | `List.insert` |
+| `throwIndexAtMostCount(): never` | `ArgumentOutOfRangeException` (`index`) | `Index was out of range. Must be non-negative and less than or equal to the size of the collection.` | `List.insertRange`, `indexOf(item, index)` |
+| `throwNegative(paramName: string): never` | `ArgumentOutOfRangeException` (`paramName`) | `Non-negative number required.` | `getRange`, `removeRange`, `slice` (`index` / `count`), `withCapacity` (`capacity`) |
+| `throwInvalidRange(): never` | `ArgumentException` | `Offset and length were out of bounds for the array or count is greater than the number of elements from index to the end of the source collection.` | `getRange`, `removeRange`, `slice` |
+| `throwArgumentNull(paramName: string): never` | `ArgumentNullException` (`paramName`) | `Value cannot be null.` | null `key` (every dictionary-shaped class), null `collection` / `match` / `converter` / `action` / `other` / `array` |
+| `throwKeyNotFound(key: unknown): never` | `KeyNotFoundException` | ``The given key '<key>' was not present in the dictionary.`` (`<key>` by `messageValue`) | `Dictionary.get`, `update`, `updateReturningOld` |
+| `throwDuplicateKey(key: unknown): never` | `ArgumentException` | `An item with the same key has already been added. Key: <key>` | `Dictionary.add`, `of`, `from` |
+| `throwFixedSize(): never` | `NotSupportedException` | `Collection was of a fixed size.` | fixed-size adopted `List`: `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll` |
+| `throwReadOnly(): never` | `NotSupportedException` | `Collection is read-only.` | fixed-size adopted `List.clear` (011h: `ReadOnlyList`) |
+| `throwEmptyQueue(): never` | `InvalidOperationException` | `Queue empty.` | `Queue.dequeue`, `peek` |
+| `throwEmptyStack(): never` | `InvalidOperationException` | `Stack empty.` | `Stack.pop`, `peek` |
+| `throwCompareFailed(inner: unknown): never` | `InvalidOperationException`, `innerException` = the thrown value when it is an `Error` (no `toException`, which would pull its module into every `List` bundle) | `Failed to compare two elements in the array.` | `List.sort`, `binarySearch`: any exception the comparison throws, the default comparer's included |
+| `throwNotComparable(): never` | `ArgumentException` | `At least one object must implement IComparable.` | `defaultCompare` |
+| `throwArrayTooSmall(): never` | `ArgumentException` (`destinationArray`) | `Destination array was not long enough. Check the destination index, length, and the array's lower bounds.` | every `copyTo` |
+
+`copyTo(array, -1)` throws `ArgumentOutOfRangeException` (`destinationIndex`) with `destinationIndex ('-1') must be greater than or equal to '0'.` and the actual value, as .NET; it is built inline in `copyTo` (a cold branch). Values quoted in a message are formatted by `messageValue` (FR-016's caveat: JavaScript's text, so a record key quotes its `toString()`).
+
+## Equality and comparison (`default-comparer.ts`, D18)
 
 ```ts
-export function defaultEquals<T>(a: T, b: T): boolean;      // a === b || (a is NaN && b is NaN) || (hasEquals(a) && a.equals(b))
-export function defaultHashCode<T>(value: T): number;       // primitives by value; hasHashCode(value) ? value.hashCode() : identityHash(value)
+export type Comparison<T> = (a: T, b: T) => number;
 export interface IEqualityComparer<T> { equals(a: T, b: T): boolean; getHashCode(value: T): number; }
+export interface IComparer<T> { compare(a: T, b: T): number; }
+
+export function elementEquals(a: unknown, b: unknown): boolean;   // EqualityComparer<T>.Default for collection elements and keys
+export function elementHashCode(value: unknown): number;          // consistent with elementEquals
+export function defaultCompare(a: unknown, b: unknown): number;   // Comparer<T>.Default.Compare
+export const defaultEqualityComparer: IEqualityComparer<unknown>; // { equals: elementEquals, getHashCode: elementHashCode }
+export const defaultComparer: IComparer<unknown>;                 // { compare: defaultCompare }
+export function createComparer<T>(comparison: Comparison<T>): IComparer<T>; // Comparer<T>.Create(comparison): { compare: comparison }
 ```
 
-This is the `EqualityComparer<T>.Default` analogue (today's `HashSet._areEqual` / `_getHash`, `hash-set.ts` L134-157): a user `equals()` / `hashCode()` when present (records, `IEquatable<T>` implementers lowered to classes), **reference identity otherwise**, SameValueZero for `NaN`. It is **never** `system/equality.equals`, whose structural fallback would merge two distinct class instances with equal fields (research R14). `identityHash` assigns a sequential number per object through a `WeakMap`.
+- **`elementEquals(a, b)`** = `Array.isArray(a) || Array.isArray(b) ? a === b : defaultEquals(a, b)`, where `defaultEquals` is the existing `system/equality.ts` function: the same reference or both nullish; numbers by `===` or both `NaN` (SameValueZero, so `0` equals `-0`, as `double.Equals` does); a `Boxed` equals only a box of the same type and value (FR-051); a value with an `equals` method (records, structs, `Decimal`, Temporal values, user overrides) through it; a `Temporal.Duration` by length; a `Date` by time; **reference identity otherwise** (a class without `Equals`, a `Map`, a `Set`, a runtime collection, an array). It is never `system/equality.equals` (structural; research R14).
+- **`elementHashCode(value)`**: `0` for `null` / `undefined`; primitives by value (`HashCode.combine`; a `bigint` by `hashInt64`); a `Boxed` by its raw value; a value with `hashCode()` through it; a `Duration` / `Date` by length / time; anything else (arrays included) by an identity hash: a sequential number per object kept in a `WeakMap` created lazily on first use (no module-scope `new`, NFR-006).
+- The collections do not call `elementHashCode` for primitives or identity-keyed objects: `hash-core` keys those straight in a native `Map` / `Set` (O(1), SameValueZero = `elementEquals` for them) and indexes only the values whose equality is not identity (a value with `equals`, a box, a `Duration`, a `Date`) by `elementHashCode`. With a user `IEqualityComparer<T>` every key goes through the comparer. Enumeration order is insertion order in both paths.
+- **`defaultCompare(a, b)`** (`Comparer<T>.Default`, shared by `List.sort`, `List.binarySearch` and 011h's sorted classes): `0` when `a === b`; `null` / `undefined` sorts before every value and equals itself; numbers as `double.CompareTo` (`NaN` before every number, `-0` equals `0`); `bigint` and `boolean` (`false < true`) by value; strings **ordinally** (UTF-16 code units, as `<`; D30); a `Boxed` by its raw value; a value with `compareTo(other)` (a lowered `IComparable<T>` / `IComparable`) through it; `Decimal` through `cmp`; a Temporal value through its constructor's `compare`; otherwise `throwNotComparable()`. Documented divergence: .NET's `Comparer<string>.Default` is culture-sensitive (`["b", "a", "B", "A"]` sorts `a, A, b, B` on .NET under ICU and `A, B, a, b` here), the order LINQ's `orderBy` already uses (`compareKeys`). `compareKeys` (LINQ) is not changed by 011c; folding it into `defaultCompare` is a follow-up (one rule per concept). `defaultCompare` itself throws the `ArgumentException`; `List.sort` / `binarySearch` (and 011h's `ImmutableList`) wrap it in `throwCompareFailed`, while the sorted classes surface it unwrapped, as .NET does.
 
-## Interfaces
+### `hash-core.ts` (internal, frozen for 011h)
+
+```ts
+export class HashCore<K, V> {
+  constructor(comparer?: IEqualityComparer<K> | null);
+  readonly comparer: IEqualityComparer<K> | null;   // null = elementEquals / elementHashCode with the native Map fast path
+  readonly size: number;
+  has(key: K): boolean;
+  get(key: K): V | undefined;                        // undefined only on a miss
+  findKey(key: K): K | undefined;                    // the stored key equal to `key` (HashSet.tryGetValue, 011h TryGetKey)
+  set(key: K, value: V): boolean;                    // true when inserted; an overwrite keeps the entry's position
+  delete(key: K): boolean;
+  clear(): void;
+  clone(): HashCore<K, V>;                           // O(n): same comparer, same enumeration order
+  [Symbol.iterator](): Iterator<[K, V]>;             // insertion order; never throws while the core changes (Map semantics: an entry deleted before it is reached is skipped, one added is yielded once)
+}
+```
+
+No null-key validation and no version inside the core; the classes own both (the mutation-tolerant iterator is what `Dictionary`'s `remove` / `clear` exemption and `ConcurrentDictionary`'s non-throwing enumerator rely on). `HashSet<T>` stores its elements as `HashCore<T, T>`. A `hash-core.ts` instance lives in the owning class's `_store` field.
+
+### `set-algebra.ts` (internal, written by R)
+
+```ts
+export interface SetLike<T> extends Iterable<T> { readonly count: number; contains(item: T): boolean; }
+// `distinct` builds a set with the receiver's comparer, so `other` is deduplicated by the receiver's rule
+export function isSubsetOf<T>(set: SetLike<T>, other: Iterable<T>, distinct: (items: Iterable<T>) => SetLike<T>): boolean;
+export function isSupersetOf<T>(set: SetLike<T>, other: Iterable<T>): boolean;
+export function isProperSubsetOf<T>(set: SetLike<T>, other: Iterable<T>, distinct: (items: Iterable<T>) => SetLike<T>): boolean;
+export function isProperSupersetOf<T>(set: SetLike<T>, other: Iterable<T>, distinct: (items: Iterable<T>) => SetLike<T>): boolean;
+export function overlaps<T>(set: SetLike<T>, other: Iterable<T>): boolean;
+export function setEquals<T>(set: SetLike<T>, other: Iterable<T>, distinct: (items: Iterable<T>) => SetLike<T>): boolean;
+```
+
+`HashSet`'s read-only set members delegate here; its mutating ones (`unionWith`, …) stay members (they touch the version). Each function throws `throwArgumentNull("other")` for a `null` `other`.
+
+## Interfaces (`interfaces.ts`, FR-003)
 
 ```ts
 export interface IReadOnlyCollection<T> extends Iterable<T> {
   readonly count: number;
 }
 export interface IReadOnlyList<T> extends IReadOnlyCollection<T> {
-  get(index: number): T;              // ArgumentOutOfRangeException
-  fromEnd(n: number): T;              // list[^n]; ArgumentOutOfRangeException
-  slice(start?: number, end?: number): List<T>; // list[a..b], a new List
-  getRange(index: number, count: number): List<T>;
-  indexOf(item: T): number;           // defaultEquals
+  get(index: number): T;                                       // ArgumentOutOfRangeException
+  fromEnd(n: number): T;                                       // list[^n]
+  indexOf(item: T): number;                                    // elementEquals
   contains(item: T): boolean;
 }
 export interface ICollection<T> extends IReadOnlyCollection<T> {
@@ -35,27 +177,26 @@ export interface ICollection<T> extends IReadOnlyCollection<T> {
   copyTo(array: T[], arrayIndex?: number): void;
 }
 export interface IList<T> extends ICollection<T>, IReadOnlyList<T> {
-  set(index: number, value: T): void; // ArgumentOutOfRangeException
-  update(index: number, f: (current: T) => T): T;            // list[i] op= …; returns the new value
-  updateReturningOld(index: number, f: (current: T) => T): T; // list[i]++ in expression position
+  set(index: number, value: T): void;
+  update(index: number, f: (current: T) => T): T;              // list[i] op= …; returns the new value
+  updateReturningOld(index: number, f: (current: T) => T): T;  // list[i]++ whose value is used; returns the old value
   insert(index: number, item: T): void;
   removeAt(index: number): void;
 }
 export interface IReadOnlyDictionary<K, V> extends Iterable<readonly [K, V]> {
   readonly count: number;
-  readonly keys: KeyCollection<K>;
-  readonly values: ValueCollection<V>;
-  get(key: K): V;                      // KeyNotFoundException; ArgumentNullException for null
+  readonly keys: IReadOnlyCollection<K>;
+  readonly values: IReadOnlyCollection<V>;
+  get(key: K): V;                                              // KeyNotFoundException; ArgumentNullException for null
   containsKey(key: K): boolean;
-  tryGetValue(key: K): readonly [true, V] | readonly [false, null];
-  getValueOrDefault(key: K): V | null;
+  tryGetValue<D>(key: K, missingValue: D): readonly [found: true, value: V] | readonly [found: false, value: D];
   getValueOrDefault<D>(key: K, defaultValue: D): V | D;
 }
 export interface IDictionary<K, V> extends IReadOnlyDictionary<K, V> {
-  set(key: K, value: V): void;         // indexer write: insert or overwrite
-  update(key: K, f: (current: V) => V): V;            // dict[k] op= …; KeyNotFoundException on a miss (the C# read throws)
+  set(key: K, value: V): void;                                 // indexer write: insert or overwrite
+  update(key: K, f: (current: V) => V): V;                     // dict[k] op= …; KeyNotFoundException on a miss
   updateReturningOld(key: K, f: (current: V) => V): V;
-  add(key: K, value: V): void;         // ArgumentException on duplicate, ArgumentNullException on null key
+  add(key: K, value: V): void;                                 // ArgumentException on a duplicate
   remove(key: K): boolean;
   clear(): void;
 }
@@ -68,6 +209,13 @@ export interface IReadOnlySet<T> extends IReadOnlyCollection<T> {
   overlaps(other: Iterable<T>): boolean;
   setEquals(other: Iterable<T>): boolean;
 }
+export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
+  add(item: T): boolean;                                       // ISet<T>.Add returns bool; assignable to ICollection's void add
+  unionWith(other: Iterable<T>): void;
+  intersectWith(other: Iterable<T>): void;
+  exceptWith(other: Iterable<T>): void;
+  symmetricExceptWith(other: Iterable<T>): void;
+}
 // A view of a List's backing array (FR-056): index writes and the in-place members that keep the length;
 // push / pop / shift / unshift / splice and a length assignment do not type-check (tsgo --strict, research R16).
 export interface Span<T> extends ReadonlyArray<T> {
@@ -77,86 +225,469 @@ export interface Span<T> extends ReadonlyArray<T> {
   fill(value: T, start?: number, end?: number): this;
   copyWithin(target: number, start: number, end?: number): this;
 }
-export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
-  add(item: T): boolean;               // C# ISet<T>.Add returns bool
-  unionWith(other: Iterable<T>): void;
-  intersectWith(other: Iterable<T>): void;
-  exceptWith(other: Iterable<T>): void;
-  symmetricExceptWith(other: Iterable<T>): void;
-}
 ```
 
-`ICollection<T>.add` returns `void` while `ISet<T>.add` returns `boolean`; `HashSet<T>` implements `ISet<T>` and its `add` returns `boolean`, which TS accepts for the `void`-returning `ICollection<T>.add`.
+Which runtime class implements which interface follows .NET: `List` → `IList`, `ICollection`, `IReadOnlyList`, `IReadOnlyCollection`; `Dictionary` → `IDictionary`, `IReadOnlyDictionary` (and `IReadOnlyCollection<[K, V]>` structurally); `HashSet` → `ISet`, `IReadOnlySet`, `ICollection`, `IReadOnlyCollection`; `Queue`, `Stack`, `KeyCollection`, `ValueCollection` → `IReadOnlyCollection` only (.NET's `Queue<T>` / `Stack<T>` do not implement `ICollection<T>`; .NET's key / value collections do, with throwing mutators, which the runtime does not mirror: a C# `ICollection<K> c = dict.Keys` reports nothing in C# and fails `tsgo`, a rare shape listed as a follow-up). Arguments of type `Iterable<T>` accept any runtime collection, a native array, a `Set`, a generator or a LINQ pipe.
 
 ## Classes
 
-Every class: `implements Iterable<T>`; does not extend `Array`; `Array.isArray(x) === false`; exposes `count`; declares **no `#private` fields** (proxies used by Solid / Vue / MobX cannot see through them); keeps its storage in **non-enumerable string-keyed fields** defined in the constructor through `Object.defineProperty` (`_items`, `_version`, `_comparer`, and the per-class slot `$typeArguments$List` / `$typeArguments$Dictionary` / …, always defined and `undefined` when no descriptors are passed, so each construction path has one hidden class; FR-002, FR-008), so that `Object.keys`, spread, `JSON.stringify` and the structural `equals` of `system/equality` see nothing; implements `toJSON()`; keeps a `_version` counter for the enumeration-invalidation rule (spec Edge Cases); carries the lazy `$runtimeType` getter of FR-018, which returns a data literal (a collection is reachable through `is List<T>` only via `instanceof`, so the getter is read only by `getRuntimeType`, which specializes it from the most-derived `$typeArguments$<Class>` slot).
+Every class: `implements Iterable<T>` through `[Symbol.iterator]()` returning a small iterator **class** instance (no generator: 8–28× slower, research R17) that checks the version on every `next()`, the last one included; does not extend `Array` (`Array.isArray(x) === false`); exposes `count`; implements `toJSON()` and `toString()`; carries the lazy static `$runtimeType` getter of FR-018 (§ Type-argument descriptors). `toString()` returns .NET's `Type.ToString()` text built from the `$typeArguments$<Class>` slot (``System.Collections.Generic.List`1[System.Int32]``, ``System.Collections.Generic.Dictionary`2+KeyCollection[System.String,System.Int32]``, nested collection arguments in the same form); without a slot, or for an `UnknownType` argument, the argument prints as its C# type-parameter name (``List`1[T]``, ``Dictionary`2[TKey,TValue]``), an open question for FR-008 (§ Open points).
 
 ### Common signatures
 
-Constructors and factories share one trailing optional `typeArguments` parameter, passed only under FR-008; `null` and `undefined` are both accepted for an absent `items`:
+Every factory and constructor takes one trailing optional `typeArguments?: readonly RuntimeType[] | null` (FR-008), passed by the compiler only when the compilation asks a runtime question about that collection kind. `items` / `entries` given to a **constructor** accept `null` / `undefined` (an empty collection, for hand-written TS); the **`from`** factories are the C# copy constructors and throw `ArgumentNullException` (`collection`) for `null`, as .NET does.
 
-```ts
-constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[]);
-static of<T>(items: readonly T[], typeArguments?: readonly RuntimeType[]): List<T>;    // collection initializers / expressions
-static from<T>(items: Iterable<T>, typeArguments?): List<T>;                           // copy
-static withCapacity<T>(capacity: number, typeArguments?): List<T>;                     // capacity hint dropped, argument evaluated once
-static adopt<T>(array: T[], options?: { fixedSize?: boolean }, typeArguments?): List<T>; // zero copy: the array is the backing store
-```
-
-`List.of([1, 2])` with no descriptors is the common emission; `List.of([1, 2], [Int32Type])` only when the compilation asks about `List` (FR-008).
-
-### `List<T>`
+### `List<T>` (`list.ts`)
 
 ```ts
 export class List<T> implements IList<T> {
-  readonly count: number;
-  get(index: number): T;  set(index: number, value: T): void;  update(index, f): T;  updateReturningOld(index, f): T;
-  fromEnd(n: number): T;  slice(start?: number, end?: number): List<T>;  getRange(index: number, count: number): List<T>;
-  add(item: T): void;  addRange(items: Iterable<T>): void;
-  insert(index: number, item: T): void;  insertRange(index: number, items: Iterable<T>): void;
-  remove(item: T): boolean;  removeAt(index: number): void;  removeRange(index: number, count: number): void;
-  removeAll(predicate: (item: T) => boolean): number;
-  clear(): void;
-  contains(item: T): boolean;  indexOf(item: T): number;  lastIndexOf(item: T): number;
-  find(predicate: (item: T) => boolean): T | null;  findIndex(predicate: (item: T) => boolean): number;
-  findLast(predicate): T | null;  findAll(predicate): List<T>;  exists(predicate): boolean;  trueForAll(predicate): boolean;
-  forEach(action: (item: T) => void): void;
+  declare readonly _items: T[];
+  declare _version: number;
+  declare readonly $typeArguments$List: readonly RuntimeType[] | undefined;
+
+  constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[] | null); // copies items in one pass
+  static of<T>(items: T[], typeArguments?: readonly RuntimeType[] | null): List<T>;        // takes ownership of items (no copy)
+  static from<T>(items: Iterable<T>, typeArguments?: readonly RuntimeType[] | null): List<T>; // copy; null → ArgumentNullException('collection')
+  static withCapacity<T>(capacity: number, typeArguments?: readonly RuntimeType[] | null): List<T>; // negative → ArgumentOutOfRangeException('capacity')
+  static adopt<T>(array: T[], options?: { readonly fixedSize?: boolean } | null, typeArguments?: readonly RuntimeType[] | null): List<T>; // the array becomes _items
+
+  get count(): number;
+  get isReadOnly(): boolean;                                   // false; true for a fixed-size adopted list
+  get isFixedSize(): boolean;                                  // false; true for a fixed-size adopted list (non-generic IList.IsFixedSize)
+  get(index: number): T;
+  set(index: number, value: T): void;
+  update(index: number, f: (current: T) => T): T;
+  updateReturningOld(index: number, f: (current: T) => T): T;
+  fromEnd(n: number): T;                                       // get(count - n)
+  slice(start: number, end?: number): List<T>;                 // list[a..b]: getRange(start, (end ?? count) - start); absolute indices, no negative JS semantics
+  getRange(index: number, count: number): List<T>;
+  add(item: T): void;
+  addRange(items: Iterable<T>): void;                          // AddRange(this) appends a snapshot, as .NET
+  insert(index: number, item: T): void;
+  insertRange(index: number, items: Iterable<T>): void;
+  remove(item: T): boolean;
+  removeAt(index: number): void;
+  removeRange(index: number, count: number): void;
+  removeAll(match: (item: T) => boolean): number;
+  clear(): void;                                               // _items.length = 0
+  contains(item: T): boolean;
+  indexOf(item: T, index?: number): number;
+  lastIndexOf(item: T): number;
+  find(match: (item: T) => boolean): T | null;
+  find<D>(match: (item: T) => boolean, defaultValue: D): T | D;
+  findIndex(match: (item: T) => boolean): number;
+  findLast(match: (item: T) => boolean): T | null;
+  findLast<D>(match: (item: T) => boolean, defaultValue: D): T | D;
+  findLastIndex(match: (item: T) => boolean): number;
+  findAll(match: (item: T) => boolean): List<T>;
+  exists(match: (item: T) => boolean): boolean;
+  trueForAll(match: (item: T) => boolean): boolean;
+  forEach(action: (item: T) => void): void;                    // checks the version after each call, as .NET
   convertAll<U>(converter: (item: T) => U): List<U>;
-  binarySearch(item: T, comparison?: (a: T, b: T) => number): number;   // ~insertionPoint when absent, as .NET
-  sort(comparison?: (a: T, b: T) => number): void;  reverse(): void;
-  toArray(): T[];                                             // detached shallow copy (slice of the backing array); ToArray() / ToJsArray() (FR-055)
-  asJsArray(): T[];                                           // the backing array itself; AsJsArray() (FR-056)
-  asSpan(): Span<T>;                                          // the backing array itself; AsSpan() / CollectionsMarshal.AsSpan(list)
-  asReadOnlySpan(): ReadonlyArray<T>;                         // the backing array itself; AsReadOnlySpan()
-  toJSON(): T[];
+  binarySearch(item: T, comparison?: Comparison<T> | IComparer<T> | null): number; // ~insertionPoint when absent; C# passes an IComparer<T>
+  sort(comparison?: Comparison<T> | IComparer<T> | null): void;  // told apart by typeof === "function"; in place; stable (.NET's introsort is not: equal elements may order differently, documented)
+  reverse(): void;
+  copyTo(array: T[], arrayIndex?: number): void;
+  toArray(): T[];                                              // _items.slice(): detached copy (FR-055)
+  asJsArray(): T[];                                            // _items itself (FR-056)
+  asSpan(): Span<T>;                                           // _items itself
+  asReadOnlySpan(): ReadonlyArray<T>;                          // _items itself
+  toJSON(): T[];                                               // a detached copy
+  toString(): string;
   [Symbol.iterator](): Iterator<T>;
 }
 ```
 
-- `get` / `set` / `update` / `insert` / `removeAt` / `fromEnd` / `removeRange` / `getRange` throw `ArgumentOutOfRangeException` with .NET's message (`Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')`).
-- **ABI and `foreach` lowering** (FR-057): `_items` and `_version` are declared in the public `.d.ts` and are read by generated code; indexers emit `get` / `set` (FR-010). `foreach (var x in <receiver>)` over a static `List<T>` lowers to:
+- `get` / `set` / `update` / `updateReturningOld` / `fromEnd` test `(index >>> 0) >= this._items.length` (one unsigned compare, FR-057 divergence (4)) under the FR-058 guard and call `throwOOR()`; `removeAt` uses the same compare unguarded; `insert` accepts `0..count` (`throwInsertOOR`); `insertRange` and `indexOf(item, index)` accept `0..count` (`throwIndexAtMostCount`); `getRange` / `removeRange` / `slice` throw `throwNegative("index")` / `throwNegative("count")`, then `throwInvalidRange()`.
+- `contains` / `indexOf` / `lastIndexOf` / `remove` use `elementEquals` with a `===` fast path for primitives (`NaN` is found, as .NET's `IndexOf(double.NaN)` finds it).
+- `find` / `findLast` return `defaultValue` on a miss (the compiler passes C#'s `default(T)`: `0`, `false`, `null`, …); the one-argument overloads return `null` for hand-written TS. A `null` delegate throws `ArgumentNullException` (`match`, `converter`, `action`); a `null` collection argument `ArgumentNullException` (`collection`).
+- `sort()` without a comparison uses `defaultCompare`; any exception the comparison throws (the default comparer's `ArgumentException` included) becomes `throwCompareFailed(e)`; a list of 0 or 1 element never calls the comparison (no throw, as .NET). `binarySearch` likewise.
+- **Fixed-size adopted list** (FR-003): `List.adopt(arr, { fixedSize: true })` returns an instance of an internal subclass of `List` (not exported; same fields, built through `List`'s constructor path, its own static `$runtimeType` getter returning `List`'s) whose `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll` call `throwFixedSize()` and `clear` calls `throwReadOnly()`; `set` / `update` / `sort` / `reverse` write through to the shared array and **do not bump `_version`** (a .NET array enumerator detects no write). `instanceof List` is `true` (documented divergence, spec Edge Cases). `List`'s own hot members carry no fixed-size flag test.
+- **One backing array for life** (FR-057): `_items` is defined once (constructor or `adopt`) and every member mutates it in place. `asJsArray()`, `asSpan()`, `asReadOnlySpan()` and the free helpers return `_items` itself (`list.asSpan() === list.asJsArray()`).
+- Runtime-built lists (`slice`, `getRange`, `findAll`, `convertAll`) copy the source's `$typeArguments$List` when present (`convertAll` passes none: its element type differs).
+- Not implemented, `MS0001` at the call site (FR-001): `Capacity`, `EnsureCapacity`, `TrimExcess`, `AsReadOnly` (stage 011h, `asReadOnly(list)`), and the index / count overloads of `IndexOf(item, index, count)`, `LastIndexOf(item, index[, count])`, `FindIndex(start, …)`, `FindLastIndex(start, …)`, `Sort(index, count, comparer)`, `Reverse(index, count)`, `BinarySearch(index, count, item, comparer)`, `CopyTo(index, array, arrayIndex, count)`.
 
-  ```ts
-  {
-    const $l = <receiver>;            // always a temporary: the body may reassign a local receiver
-    const $a = $l._items; const $v = $l._version; const $n = $a.length;
-    for (let $i = 0; ; $i++) {
-      if ($l._version !== $v || $a.length !== $n) throwModified(); // every MoveNext, the final one included
-      if ($i === $n) break;
-      const x = $a[$i];
-      /* body: a `break`, `return` or `throw` leaves without a further check */
-    }
+### `Dictionary<K, V>` (`dictionary.ts`), `KeyCollection<K>`, `ValueCollection<V>` (`dictionary-views.ts`)
+
+```ts
+export class Dictionary<K, V> implements IDictionary<K, V> {
+  declare readonly $typeArguments$Dictionary: readonly RuntimeType[] | undefined;
+
+  constructor(entries?: Iterable<readonly [K, V]> | null, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null); // add semantics
+  static of<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>;     // { { k, v } }: add, a duplicate throws
+  static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>; // { [k] = v }: set, last wins
+  static from<K, V>(source: Iterable<readonly [K, V]>, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>; // copy ctors; null → ArgumentNullException('collection'); duplicate → ArgumentException
+  static withCapacity<K, V>(capacity: number, comparer?: IEqualityComparer<K> | null, typeArguments?: readonly RuntimeType[] | null): Dictionary<K, V>;
+
+  get count(): number;
+  get keys(): KeyCollection<K>;                                // live view, cached (dict.keys === dict.keys, as .NET)
+  get values(): ValueCollection<V>;
+  get(key: K): V;
+  set(key: K, value: V): void;
+  update(key: K, f: (current: V) => V): V;
+  updateReturningOld(key: K, f: (current: V) => V): V;
+  add(key: K, value: V): void;
+  tryAdd(key: K, value: V): boolean;
+  remove(key: K): boolean;
+  clear(): void;
+  containsKey(key: K): boolean;
+  containsValue(value: V): boolean;                            // elementEquals
+  tryGetValue<D>(key: K, missingValue: D): readonly [found: true, value: V] | readonly [found: false, value: D];
+  getValueOrDefault(key: K): V | null;
+  getValueOrDefault<D>(key: K, defaultValue: D): V | D;
+  toMap(): Map<K, V>;                                          // interop copy (hand-written TS)
+  toJSON(): Record<string, V>;                                 // String(key) → value
+  toString(): string;
+  [Symbol.iterator](): Iterator<readonly [K, V]>;              // a fresh [key, value] tuple per step
+}
+// dictionary-views.ts (imports no Dictionary)
+export interface KeyValueSource<K, V> extends Iterable<readonly [K, V]> { readonly count: number; containsKey(key: K): boolean; }
+export class KeyCollection<K> implements IReadOnlyCollection<K> {
+  constructor(source: KeyValueSource<K, unknown>);             // ArgumentNullException('dictionary') for null
+  get count(): number; contains(key: K): boolean; copyTo(array: K[], arrayIndex?: number): void;
+  toArray(): K[]; toJSON(): K[]; toString(): string; [Symbol.iterator](): Iterator<K>;
+}
+export class ValueCollection<V> implements IReadOnlyCollection<V> {
+  constructor(source: KeyValueSource<unknown, V>);
+  get count(): number; contains(value: V): boolean;             // elementEquals copyTo(array: V[], arrayIndex?: number): void;
+  toArray(): V[]; toJSON(): V[]; toString(): string; [Symbol.iterator](): Iterator<V>;
+}
+```
+
+- Keys and values key through `elementEquals` / `elementHashCode` (or the comparer) over `hash-core` (§ Equality). A record key with `equals` / `hashCode` addresses one entry; two instances of a class without them are two keys.
+- `null` / `undefined` keys throw `throwArgumentNull("key")` from `get`, `set`, `update`, `updateReturningOld`, `add`, `tryAdd`, `remove`, `containsKey`, `tryGetValue`, `getValueOrDefault`; `get` / `update` on a missing key throw `throwKeyNotFound(key)`; `add` / `of` / `from` / the constructor throw `throwDuplicateKey(key)`.
+- Enumeration order is insertion order, also after removals (.NET may refill a freed slot: `{1,2,3}`, `Remove(2)`, `[4] = 4` enumerates `1, 4, 3` on .NET and `1, 3, 4` here; documented divergence, OD-18). Entries removed during an enumeration and not yet visited are skipped, as .NET does.
+- `keys` / `values` are live (FR-012): the views read through the source (`count`, `containsKey`, its iterator), so their enumeration follows the source's version rule (`Dictionary`'s here, 011h's for `SortedDictionary` / `ImmutableDictionary`).
+- Not implemented, `MS0001`: `Comparer`, `EnsureCapacity`, `TrimExcess`, `Remove(key, out value)`, `GetAlternateLookup`.
+
+### `HashSet<T>` (`hash-set.ts`, reworked)
+
+```ts
+export class HashSet<T> implements ISet<T>, IReadOnlySet<T> {
+  declare readonly $typeArguments$HashSet: readonly RuntimeType[] | undefined;
+
+  constructor(items?: Iterable<T> | null, comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null);
+  static of<T>(items: readonly T[], comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null): HashSet<T>;  // initializers / collection expressions; duplicates collapse
+  static from<T>(items: Iterable<T>, comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null): HashSet<T>; // null → ArgumentNullException('collection')
+  static withCapacity<T>(capacity: number, comparer?: IEqualityComparer<T> | null, typeArguments?: readonly RuntimeType[] | null): HashSet<T>;
+
+  get count(): number;
+  get isReadOnly(): boolean;                                   // false
+  add(item: T): boolean;                                       // was `this` (2.x); see § Legacy symbols
+  remove(item: T): boolean;
+  contains(item: T): boolean;
+  clear(): void;
+  tryGetValue<D>(equalValue: T, missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
+  removeWhere(match: (item: T) => boolean): number;
+  unionWith(other: Iterable<T>): void; intersectWith(other: Iterable<T>): void;
+  exceptWith(other: Iterable<T>): void; symmetricExceptWith(other: Iterable<T>): void;
+  isSubsetOf(other: Iterable<T>): boolean; isSupersetOf(other: Iterable<T>): boolean;
+  isProperSubsetOf(other: Iterable<T>): boolean; isProperSupersetOf(other: Iterable<T>): boolean;
+  overlaps(other: Iterable<T>): boolean; setEquals(other: Iterable<T>): boolean;
+  copyTo(array: T[], arrayIndex?: number): void;
+  toArray(): T[];                                              // detached copy, enumeration order (FR-055)
+  toJSON(): T[];
+  toString(): string;
+  [Symbol.iterator](): Iterator<T>;
+}
+```
+
+- Elements key through `elementEquals` / `elementHashCode` or the comparer; `null` is a valid element. A `null` `other` throws `throwArgumentNull("other")`. The set algebra compares `other`'s elements through this set's comparer, as .NET does. No view (FR-056). `system/equality.equals` is **not** taught about `HashSet` or `Dictionary` (D18).
+- Not implemented, `MS0001`: `Comparer`, `EnsureCapacity`, `TrimExcess`, `CreateSetComparer`.
+
+### `Queue<T>` (`queue.ts`)
+
+```ts
+export class Queue<T> implements IReadOnlyCollection<T> {
+  declare readonly $typeArguments$Queue: readonly RuntimeType[] | undefined;
+  constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[] | null);
+  static from<T>(items: Iterable<T>, typeArguments?: readonly RuntimeType[] | null): Queue<T>;    // enqueues in order; null → ArgumentNullException('collection')
+  static withCapacity<T>(capacity: number, typeArguments?: readonly RuntimeType[] | null): Queue<T>;
+  get count(): number;
+  enqueue(item: T): void;
+  dequeue(): T;                                                // O(1) (ring buffer); throwEmptyQueue
+  peek(): T;                                                   // throwEmptyQueue
+  tryDequeue<D>(missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
+  tryPeek<D>(missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
+  contains(item: T): boolean;  clear(): void;  copyTo(array: T[], arrayIndex?: number): void;
+  toArray(): T[];                                              // detached copy, front to back
+  toJSON(): T[];  toString(): string;
+  [Symbol.iterator](): Iterator<T>;                            // front to back
+}
+```
+
+Not implemented, `MS0001`: `EnsureCapacity`, `TrimExcess`.
+
+### `Stack<T>` (`stack.ts`)
+
+```ts
+export class Stack<T> implements IReadOnlyCollection<T> {
+  declare readonly $typeArguments$Stack: readonly RuntimeType[] | undefined;
+  constructor(items?: Iterable<T> | null, typeArguments?: readonly RuntimeType[] | null);
+  static from<T>(items: Iterable<T>, typeArguments?: readonly RuntimeType[] | null): Stack<T>;    // pushes in order: new Stack(new[]{1,2,3}) enumerates 3,2,1
+  static withCapacity<T>(capacity: number, typeArguments?: readonly RuntimeType[] | null): Stack<T>;
+  get count(): number;
+  push(item: T): void;
+  pop(): T;                                                    // throwEmptyStack
+  peek(): T;                                                   // throwEmptyStack
+  tryPop<D>(missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
+  tryPeek<D>(missingValue: D): readonly [found: true, value: T] | readonly [found: false, value: D];
+  contains(item: T): boolean;  clear(): void;  copyTo(array: T[], arrayIndex?: number): void; // copyTo writes top first
+  toArray(): T[];                                              // detached copy, top first
+  toJSON(): T[];                                               // top first
+  toString(): string;
+  [Symbol.iterator](): Iterator<T>;                            // top first (C# semantics); throwStackModified
+}
+```
+
+Not implemented, `MS0001`: `EnsureCapacity`, `TrimExcess`.
+
+### Enumeration invalidation (`_version`, spec Edge Cases, probed on .NET 10)
+
+A member that **bumps** `_version` makes a running enumeration (an iterator, a lowered `foreach`, `List.forEach`) throw on its next step; every store is under the FR-058 guard.
+
+| Class | Bumps | Does not bump |
+|---|---|---|
+| `List` | `add`, `insert`, `set`, `update`, `updateReturningOld`, `removeAt`, `clear` (always, even when empty), `sort`, `reverse` (always); `addRange` / `insertRange` / `removeRange` / `removeAll` / `remove` only when they change something | reads; `addRange` / `insertRange` of nothing, `removeRange(i, 0)`, `removeAll` that removes nothing, `remove` of an absent item; every write of a fixed-size adopted list |
+| `Dictionary` (and its views) | insertion of a new key: `add`, `set` / `tryAdd` of a new key | `set` / `update` / `updateReturningOld` of an existing key, `tryAdd` of an existing key, `remove`, `clear` (.NET Core 3.0+) |
+| `HashSet` | `add` of a new item; `unionWith` / `symmetricExceptWith` when they add | `add` of a present item, `remove`, `clear`, `exceptWith`, `intersectWith`, `removeWhere` |
+| `Queue` | `enqueue`, `dequeue`, a successful `tryDequeue`, `clear` (always) | `peek`, `tryPeek`, reads |
+| `Stack` | `push`, `pop`, a successful `tryPop`, `clear` (always) | `peek`, `tryPeek`, reads |
+
+A `List` enumeration also records `_items.length` at its start and treats a difference as a modification (FR-057), so a length change through `asJsArray()` is detected; an element write through a view bumps nothing.
+
+## Helpers (`helpers.ts`)
+
+```ts
+export function fromEnd<T>(array: readonly T[], n: number): T;            // arr[^n] on T[] / JsArray<T>; IndexOutOfRangeException ("Index was outside the bounds of the array."), always checked
+export function isIterable(value: unknown): value is Iterable<unknown>;    // Symbol.iterator present (strings included)
+export function asArray(value: unknown): unknown[] | null;                 // a native array; the backing array of a fixed-size adopted List (isFixedSize); else null
+export function asJsArray<T>(list: List<T> | null | undefined): T[];       // AsJsArray(); list._items; ArgumentNullException('list') for null (FR-056)
+export function asSpan<T>(list: List<T> | null | undefined): Span<T>;      // AsSpan() / CollectionsMarshal.AsSpan(list); list._items; a fresh [] for null
+export function asReadOnlySpan<T>(list: List<T> | null | undefined): ReadonlyArray<T>; // AsReadOnlySpan(); list._items; a fresh [] for null
+```
+
+The C# calls lower to these free helpers (each tree-shakes on its own); the `List` members of the same names are the same views for hand-written TS.
+
+## Descriptor factories (`descriptors.ts`, FR-017)
+
+```ts
+export function listType<T>(element: RuntimeType<T>): CollectionType<List<T>>;
+export function dictionaryType<K, V>(key: RuntimeType<K>, value: RuntimeType<V>): CollectionType<Dictionary<K, V>>;
+export function hashSetType<T>(element: RuntimeType<T>): CollectionType<HashSet<T>>;
+export function queueType<T>(element: RuntimeType<T>): CollectionType<Queue<T>>;
+export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>>;
+export function iListType<T>(element: RuntimeType<T>): CollectionType<IList<T>>;               // invariant
+export function iCollectionType<T>(element: RuntimeType<T>): CollectionType<ICollection<T>>;   // invariant
+export function iReadOnlyListType<T>(element: RuntimeType<T>): CollectionType<IReadOnlyList<T>>;             // covariant
+export function iReadOnlyCollectionType<T>(element: RuntimeType<T>): CollectionType<IReadOnlyCollection<T>>; // covariant
+export function iDictionaryType<K, V>(key: RuntimeType<K>, value: RuntimeType<V>): CollectionType<IDictionary<K, V>>;             // invariant
+export function iReadOnlyDictionaryType<K, V>(key: RuntimeType<K>, value: RuntimeType<V>): CollectionType<IReadOnlyDictionary<K, V>>; // invariant (as .NET)
+export function iSetType<T>(element: RuntimeType<T>): CollectionType<ISet<T>>;                 // invariant
+export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IReadOnlySet<T>>; // invariant
+```
+
+- Each is memoized on the identity of its arguments (`memoNodeFor` of `system/reflection/identity-memo.ts`), so `listType(StringType) === listType(StringType)` and `Type ==` is `===`. The memo root is a module-level `let` filled on first call (no module-scope `new`).
+- Shape (`CollectionType` of contracts/runtime-types.md): `kind: "collection"`, `collection: "List"` (…), `name: "List<String>"`, `fullName: "System.Collections.Generic.List<System.String>"` (the `specialize` convention), `namespace: "System.Collections.Generic"`, `ctor` (classes only), `typeArguments`, `variance`, and `close` (below). `test(v)`: for a class kind `v instanceof Ctor` and, per argument, identity (invariant) or `isAssignableFrom` (covariant) against `v.$typeArguments$<Class>`, an absent slot or `UnknownType` on either side matching anything; for an interface kind the test is **nominal through the class literal's `interfaces` list**, as `implementsInterface` walks it: from `v.constructor` up, the nearest constructor with an own `$runtimeType` whose `interfaces` (transitively) list the interface's open descriptor (`iListType(UnknownType)`, …, matched by `collection` kind), then each argument compared by variance against the instance's slot mapped to the interface's arguments (a `Dictionary` tested as `IReadOnlyCollection<T>` matches any `T`). An interface descriptor imports no class; a 011h class, or a user class whose literal lists the interface, joins the test by listing it.
+- **Class literal ABI.** Each class's static `$runtimeType` getter returns the wildcard specialization (`listType(UnknownType)`, `dictionaryType(UnknownType, UnknownType)`, …), whose `interfaces` lists the open interface descriptors of § Interfaces' implementation table as thunks (`[() => iListType(UnknownType), () => iCollectionType(UnknownType), () => iReadOnlyListType(UnknownType), () => iReadOnlyCollectionType(UnknownType)]` for `List`); `name` / `fullName` follow `specialize` (`List<String>`, `System.Collections.Generic.List<System.String>`); `toString()` of an instance uses .NET's backtick form instead (§ Classes). 011h's classes follow the same three rules.
+- `interfaces` (new optional member of `CollectionType`, a contracts/runtime-types.md amendment of D30): the thunk list above, present on class kinds.
+- `close(typeArguments)` (new optional member of `CollectionType`, a contracts/runtime-types.md amendment of D30): the factory itself bound to the kind, so `getRuntimeType` can specialize without importing `collections` (below).
+- Importing `List` alone does not pull `descriptors.ts`: the static `$runtimeType` getter that references it is dropped when nothing reads it (research R13; measured by an NFR-008 `mustNotContain` row).
+
+## Type-argument descriptors (FR-008) and `GetType()`
+
+The slot `$typeArguments$<Class>` (`List`, `Dictionary`, `HashSet`, `Queue`, `Stack`) is defined once by the class's constructor from the trailing `typeArguments` argument (or `undefined`); a C# subclass that closes the arguments (`class IntList : List<int>`) passes them to `super` and defines no slot. Runtime-built collections copy the source's slot (§ `List`). Each class's static getter `$runtimeType` returns `listType(UnknownType)` (…), a lazily read static getter that bundlers drop when unused (research R13). `getRuntimeType(v)` (stage 011b) gains one rule: when the constructor's own descriptor has `kind: "collection"` and a `close` member, and `v["$typeArguments$" + descriptor.collection]` is defined, it returns `descriptor.close(slot)`; otherwise the wildcard descriptor. So `new List<int>()` built with `[Int32Type]` answers `GetType() == typeof(List<int>)` as `true`.
+
+## JSON collection kinds (runtime half of FR-028, W4-5)
+
+`system/json/types.ts` gains two generic descriptor shapes; `system/json/converters.ts` reads and writes them with two generic cases (array form, object form) and **imports no collection class**: the context writes a `create` closure that builds the class (with the FR-008 type arguments when the compilation asks, which is group J's). 011h widens the `kind` unions with its kinds.
+
+```ts
+export type SequenceCollectionDescriptor = {      // JSON array
+  readonly kind: "list" | "queue" | "stack" | "hashSet";
+  readonly element: TypeDescriptor;
+  readonly create: (items: unknown[]) => Iterable<unknown>;
+};
+export type KeyedCollectionDescriptor = {         // JSON object; keys parsed by dictionary-keys.ts (#479)
+  readonly kind: "dictionary";
+  readonly key: TypeDescriptor;
+  readonly value: TypeDescriptor;
+  readonly create: (entries: Array<readonly [unknown, unknown]>) => Iterable<readonly [unknown, unknown]>;
+};
+```
+
+Read: the element (or key and value) converters run first, then `create` receives the values in document order. Write: iteration (`for..of`) of any iterable, a dictionary entry as `String(keyConverter.serialize(k))` → value (the `map` key rule).
+
+| Kind | `create` the context writes | Behaviour (matches .NET 10, probed) |
+|---|---|---|
+| `list` | `(items) => List.of(items)` | array in list order |
+| `hashSet` | `(items) => HashSet.from(items)` | duplicates collapse (`[1,1,2]` → count 2) |
+| `queue` | `(items) => Queue.from(items)` | written front to back; read enqueued in order (`peek()` is the first element) |
+| `stack` | `(items) => Stack.from(items)` | written top first (`[3,2,1]` for pushes 1, 2, 3); read pushed in array order, so `[1,2,3]` reads with `peek() === 3` (a round trip reverses the stack on both sides) |
+| `dictionary` | `(entries) => Dictionary.assign(entries)` | a repeated key keeps the **last** value (`{"1":1,"01":2}` as `Dictionary<int,int>` reads one entry `1 → 2`) |
+
+Transition (W4-6): `hashSet` keeps accepting today's descriptor without `create` (read through `new HashSet(items)`, the import `converters.ts` has today) until C's flip makes the context write `create`; C then makes `create` required and drops that import. `array` stays for `T[]` / `JsArray<T>`; `map` (`MapDescriptor`) stays until C's flip, which removes it. Element / key / value conversion, the null-element rule (#471), the container-depth rule and custom converters are today's.
+
+## Lowered `foreach` over `List<T>` (FR-057, normative emission)
+
+`foreach (var x in <receiver>)` whose receiver's static type is `List<T>` (or a class deriving from it) lowers to exactly this shape (`$l` … `$i` follow the printer's temporary naming rules; nested loops get distinct names):
+
+```ts
+{
+  const $l = <receiver>;
+  const $a = $l._items;
+  const $n = $a.length;
+  const $v = (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) ? $l._version : 0;
+  for (let $i = 0; ; $i++) {
+    if ((typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) && ($l._version !== $v || $a.length !== $n)) throwModified();
+    if ($i === $n) break;
+    const x = $a[$i];
+    /* body */
   }
-  ```
+}
+```
 
-  `continue` in the body reaches the next step's check. `goto` is not lowered by Metano: inside a `foreach` it reports `MS0001` and the method body becomes a stub; if `goto` is supported later, it also leaves without a further check. With FR-058's constant defined as `false`, the check line is eliminated. The design that meets NFR-001 (one unsigned bounds compare, cold `throwOOR` / `throwModified`, constructor field order) is in plan.md § Benchmark plan and research R17.
-- A fixed-size adopted list (FR-003) throws `NotSupportedException` (`Collection was of a fixed size.`) from `add`, `addRange`, `insert`, `insertRange`, `remove`, `removeAt`, `removeRange`, `removeAll`, `clear`; `set` / `update` / `sort` / `reverse` write through to the shared array. `asArray(list)` (reflection helper) returns its backing array.
-- `contains` / `indexOf` / `remove` / `lastIndexOf` / `binarySearch` use `defaultEquals` with a `===` fast path for primitives.
-- `sort()` without a comparison uses `Comparer<T>.Default` semantics for numbers, strings, booleans, temporal values (by tag) and `IComparable` implementers (`compareTo`); otherwise throws `InvalidOperationException` (`Failed to compare two elements in the array.`).
-- Mutation during enumeration throws `InvalidOperationException` (`Collection was modified; enumeration operation may not execute.`) through `_version` and the backing array's `length` recorded at the start (two integer compares per `next()`), so a length change made through `asJsArray()` is detected too (FR-057). Element writes through a view bump nothing: through `asSpan()` this matches .NET (a span write bumps nothing); through `asJsArray()` it diverges, because .NET's `JsArray<T>` writes through the list's indexer and bumps the version (documented, FR-057). The lowered `foreach` above performs the same two checks (normative, FR-057).
-- **One backing array for life** (FR-057): `_items` is assigned once (in the constructor, or by `adopt`) and every member mutates it in place (`clear` sets `length = 0`, `sort` / `reverse` are in place); `count` reads `_items.length`. `asJsArray()`, `asSpan()` and `asReadOnlySpan()` return `_items` itself (`list.asSpan() === list.asJsArray()`, and the free helpers return the same object), so they never go stale (unlike a .NET span after a reallocation, documented). Nothing polices a view at run time: `Span<T>` and `ReadonlyArray<T>` restrict what typed TS may do, a cast does not; a write past the end through `asJsArray()` leaves holes that `get` returns as `undefined` (documented).
-- Memory: one backing array plus `count` = the array's `length`; no per-element structures. A C# `List<T>` member not listed here (for example `Capacity`, `TrimExcess`, `EnsureCapacity`, `ForEach` with index) reports `MS0001` at the call site (FR-001).
+The `$v` capture is guarded too, so that with the checks defined `false` no `_version` read survives (FR-058's acceptance: a property read is not removable dead code). A `null` receiver throws at `$l._items` (a `TypeError`, `NullReferenceException` through `toException`). `break`, `return` and `throw` leave with no further check; `continue` reaches the next step's check.
+
+## Compiler contract (C → R): C# member → emitted TypeScript
+
+`r` is the receiver, `T` / `K` / `V` the C# type arguments rendered as TS types, `$targs` the trailing `typeArguments` argument (an array literal of descriptors, `[Int32Type]`), emitted **only** under FR-008, and `default(X)` the value C# would store (`0`, `false`, `null`, `0n`, …), which the compiler already computes for `out` / default slots. Every mapping is a plain member rename (FR-007: no template with two `$this`), a factory, or a free helper; a receiver with side effects is evaluated once because it is the single receiver of the call. A row marked *direct form* follows FR-010 (receiver and index reusable, or bound once to a temporary in statement position).
+
+### `List<T>`, `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`
+
+| C# | Emitted TS |
+|---|---|
+| `new List<T>()` | `new List<T>()` (`new List<T>(null, $targs)` under FR-008) |
+| `new List<T>(capacity)` | `List.withCapacity<T>(capacity)` / `(capacity, $targs)` |
+| `new List<T>(source)` | `List.from(source)` / `(source, $targs)` |
+| `new List<T> { a, b }`, `List<T> xs = [a, b, ..c]` | `List.of([a, b])`, `List.of([a, b, ...c])` / `(…, $targs)` |
+| `r.Count` | `r.count` |
+| `r[i]` (read) | `r.get(i)` |
+| `r[i] = v` | `r.set(i, v)` |
+| `r[i] op= v`, `r[i]++` / `--` in statement position | *direct form* `r.set(i, r.get(i) op v)` |
+| `r[i] ??= v`, `r[i]++` whose value is used, no binding possible | `r.update(i, (v$) => …)` / `r.updateReturningOld(i, (v$) => v$ + 1)` |
+| `r[^n]` (read) | `r.fromEnd(n)` |
+| `r[^n] = v` | `r.set(r.count - n, v)` with `r` bound once when not reusable |
+| `r[a..b]`, `r[a..]`, `r.Slice(start, length)` | `r.slice(a, b)`, `r.slice(a)`, `r.getRange(start, length)`; a `^n` bound renders `r.count - n` (receiver bound once) |
+| `r.Add(x)` / `AddRange(xs)` / `Insert(i, x)` / `InsertRange(i, xs)` | `r.add(x)` / `r.addRange(xs)` / `r.insert(i, x)` / `r.insertRange(i, xs)` |
+| `r.Remove(x)` / `RemoveAt(i)` / `RemoveRange(i, n)` / `RemoveAll(p)` / `Clear()` | `r.remove(x)` / `r.removeAt(i)` / `r.removeRange(i, n)` / `r.removeAll(p)` / `r.clear()` |
+| `r.Contains(x)` / `IndexOf(x)` / `IndexOf(x, i)` / `LastIndexOf(x)` | `r.contains(x)` / `r.indexOf(x)` / `r.indexOf(x, i)` / `r.lastIndexOf(x)` |
+| `r.Find(p)` / `FindLast(p)` | `r.find(p, default(T))` / `r.findLast(p, default(T))` |
+| `r.FindIndex(p)` / `FindLastIndex(p)` / `FindAll(p)` / `Exists(p)` / `TrueForAll(p)` / `ForEach(a)` / `ConvertAll(f)` | `r.findIndex(p)` / `r.findLastIndex(p)` / `r.findAll(p)` / `r.exists(p)` / `r.trueForAll(p)` / `r.forEach(a)` / `r.convertAll(f)` |
+| `r.Sort()` / `Sort(comparison)` / `Sort(comparer)` | `r.sort()` / `r.sort(comparison)` / `r.sort(comparer)` |
+| `r.BinarySearch(x)` / `BinarySearch(x, comparer)` | `r.binarySearch(x)` / `r.binarySearch(x, comparer)` |
+| `r.Reverse()` (the `List<T>` instance method) | `r.reverse()` |
+| `r.GetRange(i, n)` | `r.getRange(i, n)` |
+| `r.CopyTo(arr)` / `CopyTo(arr, i)` | `r.copyTo(arr)` / `r.copyTo(arr, i)` |
+| `r.IsReadOnly` (via `ICollection<T>`) | `r.isReadOnly` |
+| `r.ToArray()`, `r.ToJsArray()` | `r.toArray()` |
+| `r.AsJsArray()` / `r.AsSpan()` / `CollectionsMarshal.AsSpan(r)` / `r.AsReadOnlySpan()` | `asJsArray(r)` / `asSpan(r)` / `asSpan(r)` / `asReadOnlySpan(r)` |
+| `JsArray.From(r)` | `Array.from(r)` |
+| `jsArray.AsList()` | `List.adopt(jsArray)` |
+| `r.GetEnumerator()` | `r[Symbol.iterator]()` |
+| `r.ToString()`, `$"{r}"` | `r.toString()` |
+| `foreach (var x in r)`, `r` statically `List<T>` | the lowered loop (§ Lowered `foreach`) + `throwModified` import |
+| `foreach (var x in r)`, `r` an interface | `for (const x of r)` |
+| array → `IList<T>` / `ICollection<T>` / `IReadOnlyList<T>` / `IReadOnlyCollection<T>` (implicit or explicit) | `List.adopt(arr, { fixedSize: true })` / `(arr, { fixedSize: true }, $targs)` |
+| `(T[])r`, `r is T[]`, `r as T[]` | through `asArray(r)` (`asArray(r) !== null`, …; the `Array` category, FR-021) |
+| array / `List<T>` → `IEnumerable<T>` | nothing |
+| `Capacity`, `EnsureCapacity`, `TrimExcess`, the index / count overloads listed under `List<T>` | `MS0001` |
+
+### `Dictionary<K, V>`, `IDictionary<K, V>`, `IReadOnlyDictionary<K, V>`, `KeyCollection`, `ValueCollection`
+
+| C# | Emitted TS |
+|---|---|
+| `new Dictionary<K, V>()` / `(capacity)` | `new Dictionary<K, V>()` / `Dictionary.withCapacity<K, V>(capacity)` |
+| `new Dictionary<K, V>(comparer)` / `(capacity, comparer)` | `new Dictionary<K, V>(null, comparer)` / `Dictionary.withCapacity<K, V>(capacity, comparer)` |
+| `new Dictionary<K, V>(source)` / `(source, comparer)` (`IDictionary` or `IEnumerable<KeyValuePair>`) | `Dictionary.from(source)` / `Dictionary.from(source, comparer)` |
+| `new Dictionary<K, V> { { k, v } }` / `{ [k] = v }` | `Dictionary.of([[k, v]])` / `Dictionary.assign([[k, v]])` |
+| `new Dictionary<K, V>(comparer) { { k, v } }` / `{ [k] = v }` | `Dictionary.of([[k, v]], comparer)` / `Dictionary.assign([[k, v]], comparer)` |
+| `$targs` under FR-008 | appended as the last argument of each form above, with `null` for a skipped comparer (`new Dictionary<K, V>(null, null, $targs)`, `Dictionary.of([[k, v]], null, $targs)`) |
+| `r.Count` / `r.Keys` / `r.Values` | `r.count` / `r.keys` / `r.values` |
+| `r[k]` / `r[k] = v` | `r.get(k)` / `r.set(k, v)` |
+| `r[k] op= v`, `r[k]++` in statement position | *direct form* `r.set(k, r.get(k) op v)` |
+| `r[k] ??= v`, `r[k]++` whose value is used, no binding possible | `r.update(k, (v$) => …)` / `r.updateReturningOld(k, …)` |
+| `r.Add(k, v)` / `TryAdd(k, v)` / `Remove(k)` / `Clear()` | `r.add(k, v)` / `r.tryAdd(k, v)` / `r.remove(k)` / `r.clear()` |
+| `r.ContainsKey(k)` / `ContainsValue(v)` | `r.containsKey(k)` / `r.containsValue(v)` |
+| `r.TryGetValue(k, out var v)` | `const [found, v] = r.tryGetValue(k, default(V))` (the `IrOutArgumentCall` lowering, unchanged) |
+| `r.GetValueOrDefault(k)` / `(k, d)` | `r.getValueOrDefault(k, default(V))` / `r.getValueOrDefault(k, d)` |
+| `r.Keys.Count` / `r.Values.Count` / `r.Keys.Contains(k)` | `r.count` / `r.count` / `r.containsKey(k)` (`DictionaryKeysContainsRewriter`, FR-012) |
+| `r.Values.Contains(v)` (LINQ) | the LINQ mapping (`ValueCollection.contains` is for hand-written TS) |
+| `keys.CopyTo(arr, i)` / `values.CopyTo(arr, i)` | `keys.copyTo(arr, i)` / `values.copyTo(arr, i)` |
+| `foreach (var (k, v) in r)`, `kv.Key` / `kv.Value` | `for (const [k, v] of r)`, `kv[0]` / `kv[1]` (unchanged) |
+| `r.GetEnumerator()` / `r.ToString()` | `r[Symbol.iterator]()` / `r.toString()` |
+| `Comparer`, `EnsureCapacity`, `TrimExcess`, `Remove(k, out v)` | `MS0001` |
+
+### `HashSet<T>`, `ISet<T>`, `IReadOnlySet<T>`
+
+| C# | Emitted TS |
+|---|---|
+| `new HashSet<T>()` / `(capacity)` / `(comparer)` / `(capacity, comparer)` | `new HashSet<T>()` / `HashSet.withCapacity<T>(capacity)` / `new HashSet<T>(null, comparer)` / `HashSet.withCapacity<T>(capacity, comparer)` |
+| `new HashSet<T>(source)` / `(source, comparer)` | `HashSet.from(source)` / `HashSet.from(source, comparer)` |
+| `new HashSet<T> { a, b }`, `HashSet<T> s = [a, b]` / `new HashSet<T>(comparer) { a, b }` | `HashSet.of([a, b])` / `HashSet.of([a, b], comparer)` |
+| `$targs` under FR-008 | the last argument (`new HashSet<T>(null, null, $targs)`) |
+| `r.Count` / `Add(x)` / `Remove(x)` / `Contains(x)` / `Clear()` | `r.count` / `r.add(x)` / `r.remove(x)` / `r.contains(x)` / `r.clear()` |
+| `r.TryGetValue(x, out var actual)` | `const [found, actual] = r.tryGetValue(x, default(T))` |
+| `r.RemoveWhere(p)`, `UnionWith`, `IntersectWith`, `ExceptWith`, `SymmetricExceptWith`, `IsSubsetOf`, `IsSupersetOf`, `IsProperSubsetOf`, `IsProperSupersetOf`, `Overlaps`, `SetEquals`, `CopyTo` | the camelCase member of the same name |
+| `r.GetEnumerator()` / `r.ToString()` / `foreach` | `r[Symbol.iterator]()` / `r.toString()` / `for..of` |
+| `Comparer`, `EnsureCapacity`, `TrimExcess`, `CreateSetComparer` | `MS0001` |
+
+### `Queue<T>`, `Stack<T>`
+
+| C# | Emitted TS |
+|---|---|
+| `new Queue<T>()` / `(capacity)` / `(source)` | `new Queue<T>()` / `Queue.withCapacity<T>(capacity)` / `Queue.from(source)`; `$targs` last under FR-008 |
+| `q.Count` / `Enqueue(x)` / `Dequeue()` / `Peek()` / `Contains(x)` / `Clear()` / `ToArray()` / `CopyTo(arr, i)` | `q.count` / `q.enqueue(x)` / `q.dequeue()` / `q.peek()` / `q.contains(x)` / `q.clear()` / `q.toArray()` / `q.copyTo(arr, i)` |
+| `q.TryDequeue(out var x)` / `TryPeek(out var x)` | `const [ok, x] = q.tryDequeue(default(T))` / `q.tryPeek(default(T))` |
+| `new Stack<T>()` / `(capacity)` / `(source)` | `new Stack<T>()` / `Stack.withCapacity<T>(capacity)` / `Stack.from(source)`; `$targs` last under FR-008 |
+| `s.Count` / `Push(x)` / `Pop()` / `Peek()` / `Contains(x)` / `Clear()` / `ToArray()` / `CopyTo(arr, i)` | `s.count` / `s.push(x)` / `s.pop()` / `s.peek()` / `s.contains(x)` / `s.clear()` / `s.toArray()` / `s.copyTo(arr, i)` |
+| `s.TryPop(out var x)` / `TryPeek(out var x)` | `const [ok, x] = s.tryPop(default(T))` / `s.tryPeek(default(T))` |
+| `GetEnumerator()` / `ToString()` / `foreach` (both) | `[Symbol.iterator]()` / `toString()` / `for..of` (`Stack` top first, so `Stack.GetEnumerator` is now mapped, FR-007) |
+| `EnsureCapacity`, `TrimExcess` | `MS0001` |
+
+### Comparers, helpers and type questions
+
+| C# | Emitted TS |
+|---|---|
+| `EqualityComparer<T>.Default` / `Comparer<T>.Default` (as a value) | `defaultEqualityComparer` / `defaultComparer` |
+| `Comparer<T>.Create(comparison)` | `createComparer(comparison)` |
+| `EqualityComparer<T>.Default.Equals(a, b)` | unchanged: `defaultEquals(a, b)` of `system/equality` (#674; not the collection rule) |
+| `Comparer<T>.Default.Compare(a, b)` | `defaultCompare(a, b)` |
+| a user `IEqualityComparer<T>` / `IComparer<T>` implementation | a class with `equals` / `getHashCode` / `compare` members (the interfaces of `default-comparer.ts`) |
+| `arr[^n]` on `T[]` / `JsArray<T>` | `fromEnd(arr, n)` |
+| `typeof(List<string>)`, `is` / `as` / pattern against a collection type (011b's collection category) | `listType(StringType)` (…) through `isType` / `asType` / `castTo` |
+
+## Legacy symbols kept until group C's flip (W4-6)
+
+The 2.x compiler emits these; the runtime keeps them, unchanged in behaviour, until C's flip stops emitting them, and C deletes them in that hand-in (H deletes `ImmutableCollection` in 011h). Runtime-internal callers (`system/linq`, `system/json`) move to the new members in R1.
+
+| Symbol | Module | Kept as | Removed by |
+|---|---|---|---|
+| `listRemove` | `list-helpers.ts` | is | C (flip) |
+| `immutableInsert`, `immutableRemoveAt`, `immutableRemove` | `list-helpers.ts` | is (used by `ImmutableCollections.cs`) | H (011h compiler half) |
+| `addEntry`, `tryGetValue`, `getValueOrDefault` (free functions over a native `Map`) | `dictionary-helpers.ts` | is | C (flip) |
+| `ImmutableCollection` | `immutable-collection.ts` | is | H |
+| `HashSet.size`, `has`, `delete`, `values()`, `forEach` | `hash-set.ts` | members of the reworked class, `@deprecated`, delegating to `count` / `contains` / `remove` / the iterator | C (flip) |
+| `HashSet` constructor `(items?)` | `hash-set.ts` | source-compatible: `items` stays the first parameter | — |
+| `MapDescriptor` / JSON kind `map` | `system/json` | is | C (flip: the context emits `dictionary`) |
+
+One 2.x behaviour changes in R1 although C has not flipped: **`HashSet.add` returns `boolean`** instead of `this`. In 2.x a C# `if (set.Add(x))` was always true (the truthy `this`, a silent wrong value that the `boolean` fixes), and no generated or hand-written code in the repository chains `.add(…).add(…)` (searched); a hand-written consumer that chains breaks (migration notes).
+
+## LINQ terminals (group C)
+
+`toList()` → a new `List<T>`; `toArray()` → `T[]`; `toDictionary(...)` → `Dictionary`; `toHashSet(...)` → `HashSet`, in the term shape of `system/linq/terminals.ts`. Every operator keeps accepting `Iterable<T>` and stays a standalone function (ADR-0012). Group C writes them over the classes above; R does not add them.
+
+## Open points (R0)
+
+- **`toString()` without a slot.** .NET's text needs the type arguments, which the instance carries only under FR-008. Proposed for C / J: count a collection receiver of `ToString()` (and of string interpolation / concatenation) as a runtime question of its kind; until then the parameter names print (``List`1[T]``).
+- **Culture-sensitive string order** of `Comparer<string>.Default` (§ Equality and comparison): ordinal here, as LINQ's `orderBy` today.
+- **Interface tests and user implementers.** `x is IList<int>` on a user class implementing `IList<T>` is `true` only when the class's emitted literal lists `iListType(…)` in `interfaces` (§ Descriptor factories); whether the compiler emits that is group C's call (with the 011b interface rules).
+- **`Dictionary.from(null)`** reports `collection` for both copy constructors; .NET names `dictionary` for the `IDictionary` overload.
+- **`ICollection<K> c = dict.Keys`** fails `tsgo` (the views implement `IReadOnlyCollection` only).
+
+## 011h classes
+
+The sections below are stage 011h's (group H), unchanged by R0; they build on the 011c API above (`hash-core.ts`, `defaultCompare`, `elementEquals` / `elementHashCode`, the interfaces, the throw helpers).
 
 ### `ReadOnlyList<T>` (`ReadOnlyCollection<T>`; stage 011h)
 
@@ -168,7 +699,7 @@ Its own class (`instanceof List` is `false`): a live view over an `IList<T>` or 
 
 ### `ImmutableHashSet<T>`, `ImmutableDictionary<K, V>` (stage 011h)
 
-The `HashSet` / `Dictionary` surfaces of reads plus `IImmutableSet<T>` / `IImmutableDictionary<K,V>` mutators (`add`, `remove`, `setItem`, `union`, `except`, …) that return a **new** instance after an O(n) copy of the storage; same `defaultEquals` / `defaultHashCode` keying (D18), same comparers; builders as for `ImmutableList`.
+The `HashSet` / `Dictionary` surfaces of reads plus `IImmutableSet<T>` / `IImmutableDictionary<K,V>` mutators (`add`, `remove`, `setItem`, `union`, `except`, …) that return a **new** instance after an O(n) copy of the storage; same `elementEquals` / `elementHashCode` keying (D18, D30), same comparers; builders as for `ImmutableList`.
 
 ### `SortedSet<T>`, `SortedDictionary<K, V>` (stage 011h)
 
@@ -182,73 +713,6 @@ Two parallel sorted arrays with binary search: O(log n) `get` / `containsKey` / 
 
 `class ConcurrentDictionary<K, V> implements IDictionary<K, V>`, a **sibling** of `Dictionary` (both compose the internal `hash-core.ts`; `instanceof Dictionary` is `false`, as `is Dictionary<K,V>` is in .NET), with the dictionary surface plus `getOrAdd(key, valueOrFactory)`, `addOrUpdate(key, addValueOrFactory, updateFactory)`, `tryAdd`, `tryUpdate(key, newValue, comparisonValue)`, `tryRemove(key): readonly [true, V] | readonly [false, null]`, `toArray()` (a `[K, V][]` snapshot), `isEmpty`. Each call runs to completion without yielding, so it is atomic (JavaScript shares no object between threads; FR-054). Its enumerator does **not** throw on modification: like .NET's, it is safe while the dictionary changes and is not a moment-in-time snapshot. `keys` / `values` return **snapshots** (new read-only collections), as .NET's `Keys` / `Values` do, not live views.
 
-### `Dictionary<K, V>`
-
-```ts
-export class Dictionary<K, V> implements IDictionary<K, V> {
-  constructor(entries?: Iterable<readonly [K, V]> | null, comparer?: IEqualityComparer<K> | null, typeArguments?);
-  static of<K, V>(entries: ReadonlyArray<readonly [K, V]>, typeArguments?): Dictionary<K, V>;      // { { k, v } } initializer: add semantics, duplicate throws
-  static assign<K, V>(entries: ReadonlyArray<readonly [K, V]>, typeArguments?): Dictionary<K, V>;  // { [k] = v } initializer: last wins
-  static from<K, V>(source: Iterable<readonly [K, V]> | ReadonlyMap<K, V>, comparer?, typeArguments?): Dictionary<K, V>;
-  readonly count: number;
-  readonly keys: KeyCollection<K>;  readonly values: ValueCollection<V>;
-  get(key: K): V;  set(key: K, value: V): void;  update(key, f): V;  updateReturningOld(key, f): V;
-  add(key: K, value: V): void;  tryAdd(key: K, value: V): boolean;
-  remove(key: K): boolean;  clear(): void;
-  containsKey(key: K): boolean;  containsValue(value: V): boolean;
-  tryGetValue(key: K): readonly [true, V] | readonly [false, null];
-  getValueOrDefault(key: K): V | null;  getValueOrDefault<D>(key: K, defaultValue: D): V | D;
-  toMap(): Map<K, V>;                                            // interop copy
-  toJSON(): Record<string, V>;                                   // String(key) → value
-  [Symbol.iterator](): Iterator<readonly [K, V]>;
-}
-export class KeyCollection<K> implements IReadOnlyCollection<K> { readonly count; contains(key: K): boolean; [Symbol.iterator](); toArray(): K[]; toJSON(): K[]; }
-export class ValueCollection<V> implements IReadOnlyCollection<V> { readonly count; contains(value: V): boolean; [Symbol.iterator](); toArray(): V[]; toJSON(): V[]; }
-```
-
-- Keys: primitives (string, number, boolean, bigint, symbol) go through a native `Map` fast path; objects hash through `defaultHashCode` / `defaultEquals` (or the comparer) into buckets, as `HashSet` does today (`hash-set.ts` L100-157). A record key with `equals` / `hashCode` addresses one entry; two instances of a class without them are two keys.
-- `get` throws `KeyNotFoundException` (`The given key '<key>' was not present in the dictionary.`); `get(null)` / `containsKey(null)` / `add(null, …)` / `remove(null)` throw `ArgumentNullException` (`Value cannot be null. (Parameter 'key')`); `add` throws `ArgumentException` (`An item with the same key has already been added. Key: <key>`).
-- Enumeration order is insertion order, also after removals (.NET reuses freed slots; documented divergence, OD-18). `remove` and `clear` do not invalidate a running enumeration (.NET Core 3.0+); `add` / `set` of a new key / `update` do.
-- `keys` / `values` are live views (FR-012); `[...dict.keys]` copies.
-
-### `HashSet<T>` (reworked)
-
-Today's class (`hash-set.ts`) keeps its storage and gains the `ISet<T>` surface: `add(): boolean`, `remove(): boolean`, `contains`, `count`, `clear`, the set algebra of `ISet<T>` / `IReadOnlySet<T>`, a `comparer` constructor argument, `static of` / `from`, `toArray` (a detached copy, FR-055), `toJSON`, `_version`. No view: .NET has no span over a set (FR-056). Removed: `size`, `has`, `delete`, `values()`, `forEach` (breaking, migration notes). `system/equality.equals` is **not** taught about `HashSet` or `Dictionary`: a record with a collection field compares it by reference, as .NET does (D18).
-
-### `Queue<T>`
-
-Ring buffer: `enqueue`, `dequeue` (throws `InvalidOperationException`, `Queue empty.`), `peek`, `tryDequeue(): readonly [true, T] | readonly [false, null]`, `tryPeek`, `count`, `contains`, `clear`, `toArray` (a detached copy, front to back, FR-055), `toJSON`, iteration front-to-back, `_version`. `dequeue` is O(1) amortised (today `shift` is O(n)).
-
-### `Stack<T>`
-
-`push`, `pop` (throws `InvalidOperationException`, `Stack empty.`), `peek`, `tryPop`, `tryPeek`, `count`, `contains`, `clear`, `toArray` (a detached copy, top first, FR-055), `toJSON` (top first), iteration **top-first** (C# semantics; `Enumerators.cs` left `Stack` unmapped for this reason), `_version`.
-
-## Helpers (`helpers.ts`)
-
-```ts
-export function fromEnd<T>(array: readonly T[], n: number): T;          // arr[^n]; IndexOutOfRangeException
-export function isIterable(value: unknown): value is Iterable<unknown>;  // Symbol.iterator present (strings included)
-export function asArray(value: unknown): unknown[] | null;               // native array, or the backing array of a fixed-size adopted List, else null
-export function asJsArray<T>(list: List<T> | null): T[];                  // AsJsArray(); the backing array; ArgumentNullException for null (FR-056)
-export function asSpan<T>(list: List<T> | null): Span<T>;                 // AsSpan() / CollectionsMarshal.AsSpan(list); the backing array; [] for null
-export function asReadOnlySpan<T>(list: List<T> | null): ReadonlyArray<T>; // AsReadOnlySpan(); the backing array; [] for null
-```
-
-The C# calls lower to these free helpers (each tree-shakes on its own); the `List` members `asJsArray()` / `asSpan()` / `asReadOnlySpan()` are the same views for hand-written TS.
-
-`addEntry`, `listRemove`, `tryGetValue`, `getValueOrDefault` (free functions) are **removed**; their callers are the class members above. `ImmutableCollection` is removed by stage 011h, replaced by the immutable classes.
-
-## Descriptor factories (`descriptors.ts`, FR-017)
-
-`listType(elem)`, `dictionaryType(key, value)`, `hashSetType(elem)`, `queueType(elem)`, `stackType(elem)`, `immutableListType(elem)`, `readOnlyListType(elem)`, `immutableHashSetType(elem)`, `immutableDictionaryType(key, value)`, `sortedSetType(elem)`, `sortedDictionaryType(key, value)`, `sortedListType(key, value)`, `concurrentDictionaryType(key, value)` (these with stage 011h), and the interface descriptors `iListType`, `iCollectionType`, `iReadOnlyListType`, `iReadOnlyCollectionType`, `iDictionaryType`, `iReadOnlyDictionaryType`, `iSetType`, `iReadOnlySetType`, and (stage 011h) `iImmutableListType`, `iImmutableSetType`, `iImmutableDictionaryType`, each memoized on argument identity and carrying `variance` (`invariant` for classes, `covariant` for the `out` parameters of the read-only interfaces and `IEnumerable<out T>`). Importing `List` alone does not pull them (separate module; measured).
-
-## Type-argument descriptors (FR-008)
-
-Passed only when the compilation asks a runtime question about that collection kind; `UnknownType` for a non-reified `T`; a class argument's descriptor only when the class is reached. Stored in the per-class slot (`$typeArguments$List`, …), defined once by the runtime class's constructor; a C# subclass that closes the arguments (`class IntList : List<int>`) passes them to `super` and defines no slot. Runtime-built collections (`slice`, `getRange`, `findAll`, `convertAll`, `toList`) copy the source's slot when present. The test rule: identity for invariant classes, assignability for covariant interfaces, wildcard for an absent field or `UnknownType`.
-
-## LINQ terminals
-
-`toList()` → `List<T>` (new); `toArray()` → `T[]`; `toDictionary(...)` → `Dictionary`; `toHashSet(...)` → `HashSet`. Every operator keeps accepting `Iterable<T>` and stays a standalone function (ADR-0012), so runtime collections are sources without conversion and the operators shake independently of the classes.
 
 ## Performance and size budgets (NFR-001, NFR-008)
 
