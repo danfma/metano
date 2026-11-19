@@ -10,8 +10,8 @@
  * an `instanceof` the other's (the clones share one prototype). An operation takes its precision
  * from its left operand's class. Division keeps 29 significant digits where `System.Decimal`
  * keeps 28 decimal places (`1m / 3m` has one digit more here), a result below `1e-28` is kept
- * where `System.Decimal` rounds it to zero, and a result's trailing zeros are dropped (`1.10m`
- * arithmetic still drops scale; #662). Constructed values retain their input scale for text.
+ * where `System.Decimal` rounds it to zero. Arithmetic still drops scale (#662);
+ * constructed values retain their input scale for default text.
  *
  * Not part of the barrel: only a program that uses `decimal` loads decimal.js.
  */
@@ -35,20 +35,38 @@ const DecimalNumber = /* @__PURE__ */ DecimalJs.clone({
 
 const textScales = /* @__PURE__ */ new WeakMap<DecimalJs, number>();
 
-/** A constructed decimal retains its input scale for .NET's default text. */
-export class Decimal extends DecimalNumber {
-  constructor(value: DecimalJs.Value) {
-    super(value);
-    textScales.set(this, scaleOf(value, this.decimalPlaces()));
-  }
+/** Retains constructor scale without changing decimal.js's prototype or static configuration. */
+export const Decimal = /* @__PURE__ */ withDefaultTextScale(DecimalNumber);
+export type Decimal = DecimalJs;
 
-  override toString(): string {
-    return this.toFixed(Math.max(textScales.get(this) ?? 0, this.decimalPlaces()));
-  }
+function withDefaultTextScale(decimalConstructor: typeof DecimalJs): typeof DecimalJs {
+  return new Proxy(decimalConstructor, {
+    construct(target, argumentsList: readonly unknown[]) {
+      return decimalWithScale(target, argumentsList[0] as DecimalJs.Value);
+    },
+    apply(target, _receiver: unknown, argumentsList: readonly unknown[]) {
+      return decimalWithScale(target, argumentsList[0] as DecimalJs.Value);
+    },
+  });
+}
 
-  override valueOf(): string {
-    return this.toString();
-  }
+function decimalWithScale(
+  decimalConstructor: typeof DecimalJs,
+  source: DecimalJs.Value,
+): DecimalJs {
+  const value = new decimalConstructor(source);
+  textScales.set(value, scaleOf(source, value.decimalPlaces()));
+
+  Object.defineProperties(value, {
+    toString: { value: decimalText, writable: true, configurable: true },
+    valueOf: { value: decimalText, writable: true, configurable: true },
+  });
+
+  return value;
+}
+
+function decimalText(this: DecimalJs): string {
+  return this.toFixed(Math.max(textScales.get(this) ?? 0, this.decimalPlaces()));
 }
 
 function scaleOf(value: DecimalJs.Value, fallback: number): number {
