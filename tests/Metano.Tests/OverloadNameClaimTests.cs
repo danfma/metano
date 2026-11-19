@@ -861,6 +861,45 @@ public class OverloadNameClaimTests
             );
     }
 
+    [Test]
+    public async Task NestedIndistinguishableConstructions_AddTheFirstBranchWinsNote()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public interface ISink<T>
+            {
+                int Put(T x);
+
+                int Put(T x, int n);
+            }
+
+            [Transpile]
+            public class Sink : ISink<List<List<int>>>, ISink<List<int[]>>
+            {
+                public int Put(List<List<int>> x) => 1;
+
+                public int Put(List<List<int>> x, int n) => 2;
+
+                public int Put(List<int[]> x) => 3;
+
+                public int Put(List<int[]> x, int n) => 4;
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.MultiplyConstructedOverloadGroup);
+
+        await Assert
+            .That(report!.Message)
+            .EndsWith(
+                "The constructions 'ISink<List<List<int>>>' and 'ISink<List<int[]>>' cannot be "
+                    + "told apart at run time; the first branch wins."
+            );
+    }
+
     /// <summary>
     /// DECIDED-31: an explicit overload with the signature of a class member
     /// of the same name keeps today's <c>MS0031</c> and is dropped; one with

@@ -146,24 +146,6 @@ public static class RoslynTypeQueries
         && (type.MetadataName is "Dictionary`2" or "IDictionary`2" or "IReadOnlyDictionary`2");
 
     /// <summary>
-    /// The element type of <c>Dictionary&lt;K,V&gt;.KeyCollection</c>
-    /// (<c>K</c>) or <c>Dictionary&lt;K,V&gt;.ValueCollection</c>
-    /// (<c>V</c>); <c>null</c> for any other type.
-    /// </summary>
-    public static ITypeSymbol? DictionaryViewElementType(this INamedTypeSymbol type)
-    {
-        if (type.ContainingType is not { } dictionary || !dictionary.IsBclDictionaryDefinition())
-            return null;
-
-        return type.Name switch
-        {
-            "KeyCollection" => dictionary.TypeArguments[0],
-            "ValueCollection" => dictionary.TypeArguments[1],
-            _ => null,
-        };
-    }
-
-    /// <summary>
     /// True for the BCL set types (and their nested types). A name matches
     /// only up to a generic boundary, as in <see cref="IsDictionaryLike"/>.
     /// </summary>

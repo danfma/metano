@@ -562,11 +562,15 @@ public static partial class IrToTsExpressionBridge
         bool readsElement = false
     )
     {
-        if (place is not IrElementAccess ea || ea.TargetType.WithLegacyCollection() is IrMapTypeRef)
+        if (place is not IrElementAccess ea)
+            return Map(place, context);
+
+        var targetType = ea.TargetType.WithLegacyCollection();
+
+        if (targetType is IrMapTypeRef)
             return Map(place, context);
 
         var element = MapUncheckedElementAccess(ea, context);
-        var targetType = ea.TargetType.WithLegacyCollection();
 
         return readsElement && !IsNullableElement(targetType)
             ? CheckedElementRead(element, targetType)

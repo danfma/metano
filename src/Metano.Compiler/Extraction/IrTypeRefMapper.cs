@@ -163,16 +163,11 @@ public static class IrTypeRefMapper
                 return new IrPrimitiveTypeRef(IrPrimitive.Object);
 
             // A stage 011c collection, its interfaces and the dictionary views
-            // (spec 011 FR-001), by symbol identity.
+            // (spec 011 FR-001), by symbol identity. Checked before the
+            // dictionary-like case, whose display-name prefix also matches
+            // Dictionary<K,V>.KeyCollection / ValueCollection.
             if (CollectionKindResolver.KindOf(named) is { } kind)
                 return MapCollection(named, kind, originResolver, target);
-
-            // Dictionary<K,V>.KeyCollection / ValueCollection → Array: a sized
-            // collection of the keys or values, like the ICollection<K> that
-            // IDictionary<K,V>.Keys returns. Checked before the dictionary
-            // case, whose display-name prefix also matches these nested types.
-            if (named.DictionaryViewElementType() is { } viewElement)
-                return new IrArrayTypeRef(Map(viewElement, originResolver, target));
 
             // Dictionary-like → Map
             if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)

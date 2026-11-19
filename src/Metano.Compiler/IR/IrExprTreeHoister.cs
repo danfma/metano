@@ -342,7 +342,7 @@ public static class IrExprTreeHoister
                     && Equals(a.Left, b.Left)
                     && Equals(a.Right, b.Right),
                 (IrExprUnary a, IrExprUnary b) => a.Op == b.Op && Equals(a.Operand, b.Operand),
-                (IrExprConvert a, IrExprConvert b) => Equals(a.Type, b.Type)
+                (IrExprConvert a, IrExprConvert b) => SameConversionType(a.Type, b.Type)
                     && Equals(a.Operand, b.Operand),
                 (IrExprConditional a, IrExprConditional b) => Equals(a.Condition, b.Condition)
                     && Equals(a.WhenTrue, b.WhenTrue)
@@ -362,6 +362,7 @@ public static class IrExprTreeHoister
         {
             var hash = new HashCode();
             hash.Add(obj.GetType());
+
             switch (obj)
             {
                 case IrExprParam p:
@@ -394,7 +395,7 @@ public static class IrExprTreeHoister
                     hash.Add(GetHashCode(u.Operand));
                     break;
                 case IrExprConvert cv:
-                    hash.Add(cv.Type);
+                    hash.Add(cv.Type.ToLegacyTypeRef());
                     hash.Add(GetHashCode(cv.Operand));
                     break;
                 case IrExprConditional cond:
@@ -431,8 +432,16 @@ public static class IrExprTreeHoister
                     hash.Add(r.Name);
                     break;
             }
+
             return hash.ToHashCode();
         }
+
+        /// <summary>
+        /// Whether two conversions target the same type, a collection compared
+        /// as its pre-011c form at every level (spec 011 data-model § 2, W4-23).
+        /// </summary>
+        private static bool SameConversionType(IrTypeRef left, IrTypeRef right) =>
+            ReferenceEquals(left, right) || Equals(left.ToLegacyTypeRef(), right.ToLegacyTypeRef());
 
         private bool SequenceEquals(
             IReadOnlyList<IrExprTreeNode> a,

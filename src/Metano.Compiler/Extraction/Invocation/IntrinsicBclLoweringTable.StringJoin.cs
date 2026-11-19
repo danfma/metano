@@ -122,12 +122,5 @@ public sealed partial class IntrinsicBclLoweringTable
     }
 
     private bool LowersToArray(ITypeSymbol type) =>
-        _helpers.MapTypeRef(type) switch
-        {
-            IrArrayTypeRef => true,
-            IrCollectionTypeRef { LegacyForm: IrArrayTypeRef } => true,
-            IrNullableTypeRef { Inner: IrArrayTypeRef } => true,
-            IrNullableTypeRef { Inner: IrCollectionTypeRef { LegacyForm: IrArrayTypeRef } } => true,
-            _ => false,
-        };
+        _helpers.MapTypeRef(type).AsLegacyArray() is not null;
 }

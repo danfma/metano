@@ -69,19 +69,7 @@ public sealed record IrParameter(
     /// whose arguments a call passes one by one; <c>null</c> for any other
     /// parameter, including a <c>params</c> collection the IR models otherwise.
     /// </summary>
-    public IrTypeRef? ParamsElementType =>
-        this switch
-        {
-            { IsParams: true, Type: IrArrayTypeRef array } => array.ElementType,
-            { IsParams: true, Type: IrCollectionTypeRef collection } => (
-                collection.LegacyForm as IrArrayTypeRef
-            )?.ElementType,
-            { IsParams: true, Type: IrNullableTypeRef { Inner: IrCollectionTypeRef collection } } =>
-                (collection.LegacyForm as IrArrayTypeRef)?.ElementType,
-            { IsParams: true, Type: IrNullableTypeRef { Inner: IrArrayTypeRef array } } =>
-                array.ElementType,
-            _ => null,
-        };
+    public IrTypeRef? ParamsElementType => IsParams ? Type.AsLegacyArray()?.ElementType : null;
 }
 
 /// <summary>

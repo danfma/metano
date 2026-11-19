@@ -135,17 +135,85 @@ public class CollectionTypeFactsTests
     }
 
     [Test]
-    public async Task Equality_ComparesKindAndArgumentsByValue()
+    public async Task Equality_OfTwoExtractions_ComparesByValue()
     {
         var first = MapFieldType("List<List<int>>");
         var second = MapFieldType("List<List<int>>");
-        var other = MapFieldType("IList<List<int>>");
 
         await Assert.That(first).IsEqualTo(second);
         await Assert.That(first.GetHashCode()).IsEqualTo(second.GetHashCode());
-        await Assert.That(first).IsNotEqualTo(other);
-        await Assert.That(IrTypeRefEquivalence.AreEquivalent(first, second)).IsTrue();
-        await Assert.That(IrTypeRefEquivalence.AreEquivalent(first, other)).IsFalse();
+    }
+
+    [Test]
+    [Arguments("IList<List<int>>")]
+    [Arguments("IReadOnlyList<IList<int>>")]
+    public async Task Equality_FollowsTheLegacyForm(string sameLegacyShape)
+    {
+        var list = MapFieldType("List<List<int>>");
+        var other = MapFieldType(sameLegacyShape);
+
+        await Assert.That(list).IsEqualTo(other);
+    }
+
+    [Test]
+    public async Task Equality_TellsLegacyShapesApart()
+    {
+        var list = MapFieldType("List<int>");
+        var set = MapFieldType("HashSet<int>");
+
+        await Assert.That(list).IsNotEqualTo(set);
+    }
+
+    [Test]
+    [Arguments("List<int>", "int[]")]
+    [Arguments("Dictionary<string, int>", "IDictionary<string, int>")]
+    [Arguments("List<List<int>>", "int[][]")]
+    public async Task Equivalence_FollowsTheLegacyForm(string collection, string sameLegacyShape)
+    {
+        var left = MapFieldType(collection);
+        var right = MapFieldType(sameLegacyShape);
+
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(left, right)).IsTrue();
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(right, left)).IsTrue();
+    }
+
+    [Test]
+    public async Task Equivalence_TellsLegacyShapesApart()
+    {
+        var list = MapFieldType("List<int>");
+        var set = MapFieldType("HashSet<int>");
+
+        await Assert.That(IrTypeRefEquivalence.AreEquivalent(list, set)).IsFalse();
+    }
+
+    [Test]
+    public async Task DeepLegacyForm_ReplacesEveryNestedCollection()
+    {
+        var nested = MapFieldType("Dictionary<string, List<List<int>>>").ToLegacyTypeRef();
+        var arrays = MapFieldType("Dictionary<string, int[][]>").ToLegacyTypeRef();
+
+        await Assert.That(nested).IsEqualTo(arrays);
+    }
+
+    [Test]
+    public async Task DeepLegacyForm_KeepsACollectionFreeRef()
+    {
+        var array = MapFieldType("int[][]");
+
+        await Assert.That(ReferenceEquals(array.ToLegacyTypeRef(), array)).IsTrue();
+    }
+
+    [Test]
+    [Arguments("IReadOnlySet<int>")]
+    [Arguments("Dictionary<string, IReadOnlySet<int>>")]
+    public async Task ReadOnlySet_IsNeverResolvedBeforeTheFlip(string type)
+    {
+        // The deep legacy form reads LegacyForm on every collection ref, and
+        // LegacyForm throws for the IReadOnlySet kind: no throw means the
+        // resolver produced none at any nesting level.
+        var mapped = MapFieldType(type);
+
+        await Assert.That(() => mapped.ToLegacyTypeRef()).ThrowsNothing();
     }
 
     [Test]
@@ -182,6 +250,27 @@ public class CollectionTypeFactsTests
         await Assert
             .That(((IrCollectionTypeRef)loop.CollectionType!).Kind)
             .IsEqualTo(IrCollectionKind.List);
+    }
+
+    [Test]
+    public async Task ForEach_OverAnArray_HasNoCollectionType()
+    {
+        var body = ExtractBody("foreach (var x in array) { }");
+        var loop = body.OfType<IrForEachStatement>().Single();
+
+        await Assert.That(loop.CollectionType).IsTypeOf<IrArrayTypeRef>();
+    }
+
+    [Test]
+    public async Task TupleDeconstructionIntoElements_IsUnsupported()
+    {
+        // Deconstruction into existing locations is not modelled (spec 003,
+        // research D7), so the swap holds no element access to carry a type.
+        var body = ExtractBody("(xs[0], xs[1]) = (xs[1], xs[0]);");
+        var expressions = Descendants(body).ToList();
+
+        await Assert.That(expressions.OfType<IrUnsupportedExpression>()).IsNotEmpty();
+        await Assert.That(expressions.OfType<IrElementAccess>()).IsEmpty();
     }
 
     [Test]
@@ -243,7 +332,7 @@ public class CollectionTypeFactsTests
             }
             public class T
             {
-                void Run(List<int> xs, Dictionary<string, int> map, Holder? holder)
+                void Run(List<int> xs, Dictionary<string, int> map, Holder? holder, int[] array)
                 {
                     {{statement}}
                 }

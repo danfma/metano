@@ -24,8 +24,11 @@ public static class IrTypeRefEquivalence
                 && l.PrivateNestedSegments == r.PrivateNestedSegments
                 && AreEquivalent(l.TypeArguments ?? [], r.TypeArguments ?? []),
             (IrNullableTypeRef l, IrNullableTypeRef r) => AreEquivalent(l.Inner, r.Inner),
-            (IrCollectionTypeRef l, IrCollectionTypeRef r) => l.Kind == r.Kind
-                && AreEquivalent(l.TypeArguments, r.TypeArguments),
+            // Until the 011c flip a collection compares as its pre-011c form
+            // (spec 011 data-model § 2, W4-23): List<int> is equivalent to
+            // int[] and to IList<int>, as on main.
+            (IrCollectionTypeRef l, _) => AreEquivalent(l.LegacyForm, right),
+            (_, IrCollectionTypeRef r) => AreEquivalent(left, r.LegacyForm),
             (IrArrayTypeRef l, IrArrayTypeRef r) => AreEquivalent(l.ElementType, r.ElementType),
             (IrSetTypeRef l, IrSetTypeRef r) => AreEquivalent(l.ElementType, r.ElementType),
             (IrIterableTypeRef l, IrIterableTypeRef r) => AreEquivalent(

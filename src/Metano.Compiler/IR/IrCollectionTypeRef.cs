@@ -38,8 +38,12 @@ public enum IrVariance
 /// <summary>
 /// A BCL collection type (spec 011 FR-001): its kind, its type arguments
 /// (the element, or the key and value; a dictionary view carries its own
-/// element) and the variance of each argument. Equality compares the kind and
-/// the arguments element by element; the variance follows from the kind.
+/// element) and the variance of each argument, read from the BCL definition
+/// (carried for the covariant type tests of FR-008, which a later stage
+/// renders). Until the 011c flip, equality follows <see cref="LegacyForm"/>
+/// (spec 011 data-model § 2, W4-23): two refs are equal when their pre-011c
+/// forms are, so <c>List&lt;int&gt;</c> equals <c>IList&lt;int&gt;</c> as on
+/// main.
 /// </summary>
 public sealed record IrCollectionTypeRef(
     IrCollectionKind Kind,
@@ -48,13 +52,16 @@ public sealed record IrCollectionTypeRef(
 ) : IrTypeRef
 {
     /// <summary>
-    /// The pre-011c IR of this type: <see cref="IrArrayTypeRef"/> for the
-    /// list-shaped kinds, the queue, the stack and the dictionary views,
+    /// The pre-011c IR of this type, computed on each read (it allocates one
+    /// small ref): <see cref="IrArrayTypeRef"/> for the list-shaped kinds, the
+    /// queue, the stack and the dictionary views,
     /// <see cref="IrIterableTypeRef"/> for <c>IReadOnlyCollection&lt;T&gt;</c>,
     /// <see cref="IrMapTypeRef"/> for the dictionaries and
     /// <see cref="IrSetTypeRef"/> for <c>HashSet&lt;T&gt;</c> and
     /// <c>ISet&lt;T&gt;</c>. Transitional (spec 011 data-model § 2, D28): the
     /// targets whose collections are still native render it; FR-038 removes it.
+    /// <c>IReadOnlySet&lt;T&gt;</c> is never resolved before the flip
+    /// (<c>CollectionKindResolver</c>), so its arm is unreachable.
     /// </summary>
     public IrTypeRef LegacyForm =>
         Kind switch
@@ -74,18 +81,9 @@ public sealed record IrCollectionTypeRef(
         };
 
     public bool Equals(IrCollectionTypeRef? other) =>
-        other is not null && Kind == other.Kind && TypeArguments.SequenceEqual(other.TypeArguments);
+        other is not null && LegacyForm.Equals(other.LegacyForm);
 
-    public override int GetHashCode()
-    {
-        var hash = new HashCode();
-        hash.Add(Kind);
-
-        foreach (var argument in TypeArguments)
-            hash.Add(argument);
-
-        return hash.ToHashCode();
-    }
+    public override int GetHashCode() => LegacyForm.GetHashCode();
 }
 
 /// <summary>
@@ -101,4 +99,170 @@ public static class IrCollectionTypeRefLegacy
     /// </summary>
     public static IrTypeRef? WithLegacyCollection(this IrTypeRef? type) =>
         type is IrCollectionTypeRef collection ? collection.LegacyForm : type;
+
+    /// <summary>
+    /// The array a type lowers to before the flip: a C# array, or a
+    /// list-shaped collection, either one nullable or not; <c>null</c> for any
+    /// other type.
+    /// </summary>
+    public static IrArrayTypeRef? AsLegacyArray(this IrTypeRef? type) =>
+        type is IrNullableTypeRef nullable
+            ? nullable.Inner.WithLegacyCollection() as IrArrayTypeRef
+            : type.WithLegacyCollection() as IrArrayTypeRef;
+
+    /// <summary>
+    /// <paramref name="type"/> with every collection ref, at every nesting
+    /// level, replaced by its pre-011c form, for the sites that compare two
+    /// types by record equality as main did. A ref with no collection inside
+    /// is returned as the same instance.
+    /// </summary>
+    public static IrTypeRef ToLegacyTypeRef(this IrTypeRef type) =>
+        type switch
+        {
+            IrCollectionTypeRef collection => collection.LegacyForm.ToLegacyTypeRef(),
+            IrNullableTypeRef nullable => Rebuilt(nullable, nullable.Inner, inner =>
+                nullable with
+                {
+                    Inner = inner,
+                }
+            ),
+            IrArrayTypeRef array => Rebuilt(array, array.ElementType, element =>
+                array with
+                {
+                    ElementType = element,
+                }
+            ),
+            IrSetTypeRef set => Rebuilt(set, set.ElementType, element =>
+                set with
+                {
+                    ElementType = element,
+                }
+            ),
+            IrIterableTypeRef iterable => Rebuilt(iterable, iterable.ElementType, element =>
+                iterable with
+                {
+                    ElementType = element,
+                }
+            ),
+            IrIteratorTypeRef iterator => Rebuilt(iterator, iterator.ElementType, element =>
+                iterator with
+                {
+                    ElementType = element,
+                }
+            ),
+            IrGeneratorTypeRef generator => Rebuilt(generator, generator.YieldType, yield =>
+                generator with
+                {
+                    YieldType = yield,
+                }
+            ),
+            IrPromiseTypeRef promise => Rebuilt(promise, promise.ResultType, result =>
+                promise with
+                {
+                    ResultType = result,
+                }
+            ),
+            IrMapTypeRef map => RebuiltPair(map, map.KeyType, map.ValueType, (key, value) =>
+                map with
+                {
+                    KeyType = key,
+                    ValueType = value,
+                }
+            ),
+            IrKeyValuePairTypeRef pair => RebuiltPair(
+                pair,
+                pair.KeyType,
+                pair.ValueType,
+                (key, value) => pair with { KeyType = key, ValueType = value }
+            ),
+            IrGroupingTypeRef grouping => RebuiltPair(
+                grouping,
+                grouping.KeyType,
+                grouping.ElementType,
+                (key, element) => grouping with { KeyType = key, ElementType = element }
+            ),
+            IrTupleTypeRef tuple => RebuiltList(tuple, tuple.Elements, elements =>
+                tuple with
+                {
+                    Elements = elements,
+                }
+            ),
+            IrNamedTypeRef { TypeArguments: { } arguments } named => RebuiltList(
+                named,
+                arguments,
+                rebuilt => named with { TypeArguments = rebuilt }
+            ),
+            IrFunctionTypeRef function => LegacyFunction(function),
+            _ => type,
+        };
+
+    private static IrTypeRef LegacyFunction(IrFunctionTypeRef function)
+    {
+        var parameters = function
+            .Parameters.Select(parameter =>
+                parameter with
+                {
+                    Type = parameter.Type.ToLegacyTypeRef(),
+                }
+            )
+            .ToList();
+
+        var returnType = function.ReturnType.ToLegacyTypeRef();
+        var thisType = function.ThisType?.ToLegacyTypeRef();
+
+        var unchanged =
+            ReferenceEquals(returnType, function.ReturnType)
+            && ReferenceEquals(thisType, function.ThisType)
+            && parameters
+                .Zip(function.Parameters)
+                .All(pair => ReferenceEquals(pair.First.Type, pair.Second.Type));
+
+        return unchanged
+            ? function
+            : function with
+            {
+                Parameters = parameters,
+                ReturnType = returnType,
+                ThisType = thisType,
+            };
+    }
+
+    private static IrTypeRef Rebuilt(
+        IrTypeRef type,
+        IrTypeRef child,
+        Func<IrTypeRef, IrTypeRef> rebuild
+    )
+    {
+        var legacy = child.ToLegacyTypeRef();
+
+        return ReferenceEquals(legacy, child) ? type : rebuild(legacy);
+    }
+
+    private static IrTypeRef RebuiltPair(
+        IrTypeRef type,
+        IrTypeRef first,
+        IrTypeRef second,
+        Func<IrTypeRef, IrTypeRef, IrTypeRef> rebuild
+    )
+    {
+        var legacyFirst = first.ToLegacyTypeRef();
+        var legacySecond = second.ToLegacyTypeRef();
+
+        var unchanged =
+            ReferenceEquals(legacyFirst, first) && ReferenceEquals(legacySecond, second);
+
+        return unchanged ? type : rebuild(legacyFirst, legacySecond);
+    }
+
+    private static IrTypeRef RebuiltList(
+        IrTypeRef type,
+        IReadOnlyList<IrTypeRef> children,
+        Func<IReadOnlyList<IrTypeRef>, IrTypeRef> rebuild
+    )
+    {
+        var legacy = children.Select(ToLegacyTypeRef).ToList();
+        var unchanged = legacy.Zip(children).All(pair => ReferenceEquals(pair.First, pair.Second));
+
+        return unchanged ? type : rebuild(legacy);
+    }
 }

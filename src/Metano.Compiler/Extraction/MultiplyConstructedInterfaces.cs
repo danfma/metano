@@ -93,7 +93,7 @@ public static class MultiplyConstructedInterfaces
                     .TypeArguments.Select(argument =>
                         IrTypeRefMapper
                             .Map(argument, originResolver: null, target)
-                            .WithLegacyCollection()
+                            .ToLegacyTypeRef()
                     )
                     .ToList()
             )

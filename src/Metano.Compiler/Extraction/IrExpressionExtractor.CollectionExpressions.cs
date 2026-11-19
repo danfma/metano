@@ -28,7 +28,11 @@ public sealed partial class IrExpressionExtractor
             return ListLiteralOf(coll, operation);
 
         if (IsSetTarget(target))
-            return NewCollectionOf(SetTypeOf(target), coll);
+            return NewCollectionOf(
+                (IrTypeRef?)StageCollectionOf(target)
+                    ?? new IrSetTypeRef(ToIrTypeArgument(target, 0)),
+                coll
+            );
 
         if (!IsMapTarget(target))
             return ListLiteralOf(coll, operation);
@@ -42,26 +46,11 @@ public sealed partial class IrExpressionExtractor
                     + "does not reproduce. Build the dictionary with explicit Add calls instead."
             );
 
-        return NewCollectionOf(MapTypeOf(target), coll);
+        var mapType = (IrTypeRef?)StageCollectionOf(target)
+            ?? new IrMapTypeRef(ToIrTypeArgument(target, 0), ToIrTypeArgument(target, 1));
+
+        return NewCollectionOf(mapType, coll);
     }
-
-    /// <summary>
-    /// The set a collection expression constructs: the collection ref of a
-    /// stage 011c set, the 2.x set ref of any other.
-    /// </summary>
-    private IrTypeRef SetTypeOf(INamedTypeSymbol target) =>
-        CollectionKindResolver.KindOf(target) is not null
-            ? IrTypeRefMapper.Map(target, _originResolver, _target)
-            : new IrSetTypeRef(ToIrTypeArgument(target, 0));
-
-    /// <summary>
-    /// The dictionary a collection expression constructs: the collection ref
-    /// of a stage 011c dictionary, a map of the key and value otherwise.
-    /// </summary>
-    private IrTypeRef MapTypeOf(INamedTypeSymbol target) =>
-        CollectionKindResolver.KindOf(target) is not null
-            ? IrTypeRefMapper.Map(target, _originResolver, _target)
-            : new IrMapTypeRef(ToIrTypeArgument(target, 0), ToIrTypeArgument(target, 1));
 
     /// <summary>
     /// The array literal of a list or array target, with the element type the
@@ -82,28 +71,41 @@ public sealed partial class IrExpressionExtractor
         };
 
     /// <summary>
-    /// The collection a list-shaped collection expression constructs: a
-    /// <c>List&lt;T&gt;</c> for <c>List&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and
-    /// <c>ICollection&lt;T&gt;</c>, the read-only interface itself for
-    /// <c>IReadOnlyList&lt;T&gt;</c> / <c>IReadOnlyCollection&lt;T&gt;</c>
-    /// (C# builds a read-only array), <c>null</c> for an array, a span or
-    /// <c>IEnumerable&lt;T&gt;</c>.
+    /// The collection a list-shaped collection expression constructs
+    /// (<see cref="ConstructedCollectionOf"/>); <c>null</c> for an array, a
+    /// span or any other target.
     /// </summary>
     private IrCollectionTypeRef? TargetCollectionOf(ITypeSymbol? target) =>
+        StageCollectionOf(target) is { } collection ? ConstructedCollectionOf(collection) : null;
+
+    /// <summary>
+    /// The stage 011c collection ref of a collection-expression target, the
+    /// one rule every collection expression detects its collection by;
+    /// <c>null</c> for a type the 011c kinds do not cover.
+    /// </summary>
+    private IrCollectionTypeRef? StageCollectionOf(ITypeSymbol? target) =>
         target is INamedTypeSymbol named
-        && IrTypeRefMapper.Map(named, _originResolver, _target) is IrCollectionTypeRef collection
-            ? collection.Kind switch
-            {
-                IrCollectionKind.List or IrCollectionKind.IList or IrCollectionKind.ICollection =>
-                    collection with
-                    {
-                        Kind = IrCollectionKind.List,
-                    },
-                IrCollectionKind.IReadOnlyList or IrCollectionKind.IReadOnlyCollection =>
-                    collection,
-                _ => null,
-            }
+            ? IrTypeRefMapper.Map(named, _originResolver, _target) as IrCollectionTypeRef
             : null;
+
+    /// <summary>
+    /// What C# builds for a list-shaped target: a <c>List&lt;T&gt;</c> for
+    /// <c>List&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>ICollection&lt;T&gt;</c>,
+    /// a read-only array for <c>IReadOnlyList&lt;T&gt;</c> /
+    /// <c>IReadOnlyCollection&lt;T&gt;</c> (kept as that interface's kind);
+    /// <c>null</c> for any other kind.
+    /// </summary>
+    private static IrCollectionTypeRef? ConstructedCollectionOf(IrCollectionTypeRef collection) =>
+        collection.Kind switch
+        {
+            IrCollectionKind.List or IrCollectionKind.IList or IrCollectionKind.ICollection =>
+                collection with
+                {
+                    Kind = IrCollectionKind.List,
+                },
+            IrCollectionKind.IReadOnlyList or IrCollectionKind.IReadOnlyCollection => collection,
+            _ => null,
+        };
 
     /// <summary>
     /// <c>new T()</c> for an empty collection expression; otherwise
