@@ -20,6 +20,7 @@ export class JsonContext extends SerializerContext {
   get keys(): TypeSpec<Keys> {
     return this._keys ??= this.createSpec({
       type: Keys,
+      runtimeType: () => Keys.$runtimeType,
       factory: (p: Record<string, unknown>) => new Keys(p.byInt as Dictionary<number, string>, p.byLong as Dictionary<bigint, string>, p.byShort as Dictionary<number, string>, p.byByte as Dictionary<number, string>, p.byUInt as Dictionary<number, string>, p.byDouble as Dictionary<number, string>, p.byFlag as Dictionary<boolean, string>, p.byLevel as Dictionary<Level, string>, p.byShade as Dictionary<Shade, string>, p.byMood as Dictionary<Mood, string>, p.byId as Dictionary<UUID, string>, p.byDay as Dictionary<Temporal.PlainDate, string>, p.byPrice as Dictionary<Decimal, string>, p.byName as Dictionary<string, string>, p.byTag as Dictionary<Tag, string>),
       properties: [
         {

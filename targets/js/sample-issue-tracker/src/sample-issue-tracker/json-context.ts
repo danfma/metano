@@ -56,6 +56,7 @@ export class JsonContext extends SerializerContext {
   get issueSnapshot(): TypeSpec<IssueSnapshot> {
     return (this._issueSnapshot ??= this.createSpec({
       type: IssueSnapshot,
+      runtimeType: () => IssueSnapshot.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new IssueSnapshot(
           p.id as IssueId,
@@ -181,6 +182,7 @@ export class JsonContext extends SerializerContext {
   get comment(): TypeSpec<Comment> {
     return (this._comment ??= this.createSpec({
       type: Comment,
+      runtimeType: () => Comment.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Comment(
           p.authorId as UserId,
@@ -237,6 +239,7 @@ export class JsonContext extends SerializerContext {
   get issueActivity(): TypeSpec<IssueActivity> {
     return (this._issueActivity ??= this.createSpec({
       type: IssueActivity,
+      runtimeType: () => IssueActivity.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new IssueActivity(
           p.id as SnowflakeId,
@@ -303,6 +306,7 @@ export class JsonContext extends SerializerContext {
   get activityFeed(): TypeSpec<ActivityFeed> {
     return (this._activityFeed ??= this.createSpec({
       type: ActivityFeed,
+      runtimeType: () => ActivityFeed.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new ActivityFeed(p.entries as IReadOnlyDictionary<bigint, IssueActivity>),
       properties: [

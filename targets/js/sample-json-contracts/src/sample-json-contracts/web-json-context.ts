@@ -61,6 +61,7 @@ export class WebJsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec({
       type: Clip,
+      runtimeType: () => Clip.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
@@ -97,6 +98,7 @@ export class WebJsonContext extends SerializerContext {
   get imageClip(): TypeSpec<ImageClip> {
     return (this._imageClip ??= this.createSpec({
       type: ImageClip,
+      runtimeType: () => ImageClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new ImageClip(p.path as string, p.seconds as number),
       properties: [
@@ -112,6 +114,7 @@ export class WebJsonContext extends SerializerContext {
   get iBase(): TypeSpec<IBase> {
     return (this._iBase ??= this.createSpec({
       type: IBase,
+      runtimeType: () => IBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'IBase' directly; deserialize it through a polymorphic spec.",
@@ -138,6 +141,7 @@ export class WebJsonContext extends SerializerContext {
   get nums(): TypeSpec<Nums> {
     return (this._nums ??= this.createSpec({
       type: Nums,
+      runtimeType: () => Nums.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Nums(
           p.n as number,
@@ -204,6 +208,7 @@ export class WebJsonContext extends SerializerContext {
   get softNums(): TypeSpec<SoftNums> {
     return (this._softNums ??= this.createSpec({
       type: SoftNums,
+      runtimeType: () => SoftNums.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new SoftNums(
           p.n as number | null,
@@ -263,6 +268,7 @@ export class WebJsonContext extends SerializerContext {
   get silenceClip(): TypeSpec<SilenceClip> {
     return (this._silenceClip ??= this.createSpec({
       type: SilenceClip,
+      runtimeType: () => SilenceClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new SilenceClip(p.seconds as number),
       properties: [],
@@ -272,6 +278,7 @@ export class WebJsonContext extends SerializerContext {
   get group(): TypeSpec<Group> {
     return (this._group ??= this.createSpec({
       type: Group,
+      runtimeType: () => Group.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) =>
         Object.assign(new Group(p.name as string, p.members as IReadOnlyList<Clip>), {
@@ -302,6 +309,7 @@ export class WebJsonContext extends SerializerContext {
   get iA(): TypeSpec<IA> {
     return (this._iA ??= this.createSpec({
       type: IA,
+      runtimeType: () => IA.$runtimeType,
       base: this.iBase,
       factory: (p: Record<string, unknown>) => new IA(p.x as number),
       properties: [
@@ -317,6 +325,7 @@ export class WebJsonContext extends SerializerContext {
   get iS(): TypeSpec<IS> {
     return (this._iS ??= this.createSpec({
       type: IS,
+      runtimeType: () => IS.$runtimeType,
       base: this.iBase,
       factory: (p: Record<string, unknown>) => new IS(p.y as number),
       properties: [

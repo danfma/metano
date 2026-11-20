@@ -61,13 +61,16 @@ public class ListInterfaceCastTests
     }
 
     [Test]
-    public async Task AsFromObject_StillReportsMs0001()
+    public async Task AsFromObject_TestsThroughTheCollectionDescriptor()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Returning("object value", "value as IList<int>")
         );
 
-        await Assert.That(UnsupportedFeatures(diagnostics)).IsNotEmpty();
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert
+            .That(files["casts.ts"])
+            .Contains("isType(value, iListType(Int32Type)) ? value : null");
     }
 
     private static string Returning(string parameter, string expression) =>

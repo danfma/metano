@@ -15,6 +15,7 @@ export class ShopJsonContext extends SerializerContext {
   get money(): TypeSpec<Money> {
     return this._money ??= this.createSpec({
       type: Money,
+      runtimeType: () => Money.$runtimeType,
       factory: (p: Record<string, unknown>) => Object.assign(Money.fromAmountCurrency(p.amount as Decimal, p.currency as string), { note: p.note as string | null }),
       properties: [
         {
@@ -43,6 +44,7 @@ export class ShopJsonContext extends SerializerContext {
   get tag(): TypeSpec<Tag> {
     return this._tag ??= this.createSpec({
       type: Tag,
+      runtimeType: () => Tag.$runtimeType,
       factory: (p: Record<string, unknown>) => Tag.fromName(p.name as string),
       properties: [
         {
@@ -55,7 +57,9 @@ export class ShopJsonContext extends SerializerContext {
   }
 }
 
-import { isInt32, isString } from "metano-runtime";
+import { isInt32, isString, type ClassType } from "metano-runtime";
+
+let Tag$rt: ClassType<Tag> | undefined;
 
 export class Tag {
   protected static readonly byTagId = /* @__PURE__ */ Symbol("Tag(int id)");
@@ -98,6 +102,21 @@ export class Tag {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static get $runtimeType(): ClassType<Tag> {
+    return (Tag$rt ??= {
+      kind: "class",
+      name: "Tag",
+      fullName: "Tag",
+      namespace: "",
+      ctor: Tag,
+      interfaces: [],
+      typeParameters: [],
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Tag => v instanceof Tag,
+    });
   }
 
   static fromId(id: number): Tag {

@@ -28,6 +28,7 @@ export class JsonContext extends SerializerContext {
   get blob(): TypeSpec<Blob> {
     return this._blob ??= this.createSpec({
       type: Blob,
+      runtimeType: () => Blob.$runtimeType,
       factory: (p: Record<string, unknown>) => new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as List<number>),
       properties: [
         {
@@ -60,6 +61,7 @@ export class JsonContext extends SerializerContext {
   get account(): TypeSpec<Account> {
     return this._account ??= this.createSpec({
       type: Account,
+      runtimeType: () => Account.$runtimeType,
       factory: () => new Account(),
       properties: [
         {
@@ -96,6 +98,7 @@ export class JsonContext extends SerializerContext {
   get ordDer(): TypeSpec<OrdDer> {
     return this._ordDer ??= this.createSpec({
       type: OrdDer,
+      runtimeType: () => OrdDer.$runtimeType,
       base: this.ordBase,
       factory: (p: Record<string, unknown>) => Object.assign(new OrdDer(p.base1 as number, p.der1 as number), { base2: p.base2 as number, der2: p.der2 as number }),
       properties: [
@@ -123,6 +126,7 @@ export class JsonContext extends SerializerContext {
   get init(): TypeSpec<Init> {
     return this._init ??= this.createSpec({
       type: Init,
+      runtimeType: () => Init.$runtimeType,
       factory: () => new Init(),
       properties: [
         {
@@ -160,6 +164,7 @@ export class JsonContext extends SerializerContext {
   get noted(): TypeSpec<Noted> {
     return this._noted ??= this.createSpec({
       type: Noted,
+      runtimeType: () => Noted.$runtimeType,
       factory: (p: Record<string, unknown>) => Object.assign(new Noted(p.a as number), { note: p.note as string | null }),
       properties: [
         {
@@ -183,6 +188,7 @@ export class JsonContext extends SerializerContext {
   get bX(): TypeSpec<BX> {
     return this._bX ??= this.createSpec({
       type: BX,
+      runtimeType: () => BX.$runtimeType,
       factory: (p: Record<string, unknown>) => new BX(p.x as number),
       properties: [
         {
@@ -197,6 +203,7 @@ export class JsonContext extends SerializerContext {
   get dX(): TypeSpec<DX> {
     return this._dX ??= this.createSpec({
       type: DX,
+      runtimeType: () => DX.$runtimeType,
       base: this.bX,
       factory: () => new DX(),
       properties: [
@@ -213,6 +220,7 @@ export class JsonContext extends SerializerContext {
   get ordBase(): TypeSpec<OrdBase> {
     return this._ordBase ??= this.createSpec({
       type: OrdBase,
+      runtimeType: () => OrdBase.$runtimeType,
       factory: (p: Record<string, unknown>) => Object.assign(new OrdBase(p.base1 as number), { base2: p.base2 as number }),
       properties: [
         {

@@ -17,6 +17,7 @@ export class JsonContext extends SerializerContext {
   get feed(): TypeSpec<Feed> {
     return this._feed ??= this.createSpec({
       type: Feed,
+      runtimeType: () => Feed.$runtimeType,
       factory: (p: Record<string, unknown>) => new Feed(p.latest as Page<EpisodeSummary>),
       properties: [
         {
@@ -34,6 +35,7 @@ export class JsonContext extends SerializerContext {
   get pageEpisodeSummary(): TypeSpec<Page<EpisodeSummary>> {
     return this._pageEpisodeSummary ??= this.createSpec<Page<EpisodeSummary>>({
       type: Page,
+      runtimeType: () => Page.$runtimeType,
       factory: (p: Record<string, unknown>) => new Page(p.items as IReadOnlyList<EpisodeSummary>, p.total as number),
       properties: [
         {
@@ -60,6 +62,7 @@ export class JsonContext extends SerializerContext {
   get episodeSummary(): TypeSpec<EpisodeSummary> {
     return this._episodeSummary ??= this.createSpec({
       type: EpisodeSummary,
+      runtimeType: () => EpisodeSummary.$runtimeType,
       factory: (p: Record<string, unknown>) => new EpisodeSummary(p.title as string, p.number as number),
       properties: [
         {

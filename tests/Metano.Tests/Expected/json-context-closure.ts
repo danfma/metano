@@ -14,6 +14,7 @@ export class JsonContext extends SerializerContext {
   get script(): TypeSpec<Script> {
     return this._script ??= this.createSpec({
       type: Script,
+      runtimeType: () => Script.$runtimeType,
       factory: (p: Record<string, unknown>) => new Script(p.words as ScriptWord[]),
       properties: [
         {
@@ -34,6 +35,7 @@ export class JsonContext extends SerializerContext {
   get scriptWord(): TypeSpec<ScriptWord> {
     return this._scriptWord ??= this.createSpec({
       type: ScriptWord,
+      runtimeType: () => ScriptWord.$runtimeType,
       factory: (p: Record<string, unknown>) => new ScriptWord(p.text as string, p.start as number),
       properties: [
         {

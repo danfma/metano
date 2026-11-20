@@ -1693,3 +1693,22 @@ when a framework helper calls `JSON.stringify` for you. Keep such DTOs
 - [Diagnostic catalog](../specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md) — `MS0032`–`MS0037`
 - [Feature support matrix](../specs/001-project-baseline-evolution/baseline/feature-support-matrix.md) — current support status of the serialization features
 - [`samples/SampleJsonContracts`](../samples/SampleJsonContracts/README.md) — the conformance sample checked against System.Text.Json in CI
+
+
+## Collection kinds and the descriptor link (spec 011 FR-028)
+
+A list, set, queue, stack or dictionary property deserializes into the `metano-runtime`
+collection class (`List`, `HashSet`, `Queue`, `Stack`, `Dictionary`) and serializes through
+iteration; the wire format is the one System.Text.Json writes (arrays for the sequence
+kinds, an object for a dictionary; a repeated dictionary key keeps its last value). The
+context writes a `create` closure per collection descriptor (`create: (items) => List.of(items)`)
+so `system/json` imports no collection class. When the compilation asks a runtime question
+about the collection kind (see [BCL mappings](bcl-mappings.md#runtime-collection-classes-300)),
+the closure passes the type arguments (`List.of(items, [Int32Type])`), so a deserialized
+`List<int>` is a `List<int>` and not a `List<string>` at a type test.
+
+A `TypeSpec` for a class, record or struct contract also carries
+`runtimeType: () => Item.$runtimeType`, the thunk of the type's runtime descriptor, and the
+class emits its `$runtimeType` getter for it (a `[PlainObject]` or interface contract has no
+class and no thunk). Nothing in the serializer reads the link yet; it costs the class's
+descriptor literal only where the class is bundled.

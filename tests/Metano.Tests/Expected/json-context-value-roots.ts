@@ -39,6 +39,7 @@ export class JsonContext extends SerializerContext {
   get episodeSummary(): TypeSpec<EpisodeSummary> {
     return this._episodeSummary ??= this.createSpec({
       type: EpisodeSummary,
+      runtimeType: () => EpisodeSummary.$runtimeType,
       factory: (p: Record<string, unknown>) => new EpisodeSummary(p.title as string, p.number as number),
       properties: [
         {
@@ -212,6 +213,7 @@ export class JsonContext extends SerializerContext {
   get shotTiming(): TypeSpec<ShotTiming> {
     return this._shotTiming ??= this.createSpec({
       type: ShotTiming,
+      runtimeType: () => ShotTiming.$runtimeType,
       factory: (p: Record<string, unknown>) => new ShotTiming(p.start as number, p.end as number),
       properties: [
         {
@@ -231,6 +233,7 @@ export class JsonContext extends SerializerContext {
   get leaf(): TypeSpec<Leaf> {
     return this._leaf ??= this.createSpec({
       type: Leaf,
+      runtimeType: () => Leaf.$runtimeType,
       factory: (p: Record<string, unknown>) => new Leaf(p.name as string),
       properties: [
         {

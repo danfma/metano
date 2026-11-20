@@ -23,6 +23,7 @@ export class JsonContext extends SerializerContext {
   get snowflake(): TypeSpec<Snowflake> {
     return this._snowflake ??= this.createSpec({
       type: Snowflake,
+      runtimeType: () => Snowflake.$runtimeType,
       factory: (p: Record<string, unknown>) => new Snowflake(p.id as bigint, p.mask as bigint, p.parent as bigint | null, p.origin as EntityId | null),
       properties: [
         {
@@ -65,6 +66,7 @@ export class JsonContext extends SerializerContext {
   get boxes(): TypeSpec<Boxes> {
     return this._boxes ??= this.createSpec({
       type: Boxes,
+      runtimeType: () => Boxes.$runtimeType,
       factory: (p: Record<string, unknown>) => new Boxes(p.values as bigint[], p.more as List<bigint>, p.byName as Dictionary<bigint, string>, p.counts as Dictionary<string, bigint>, p.set as HashSet<bigint>, p.id as EntityId, p.byToken as Dictionary<EntityId, string>, p.token as TokenId),
       properties: [
         {

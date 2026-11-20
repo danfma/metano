@@ -27,6 +27,7 @@ export class JsonContext extends SerializerContext {
   get sPoint(): TypeSpec<SPoint> {
     return this._sPoint ??= this.createSpec({
       type: SPoint,
+      runtimeType: () => SPoint.$runtimeType,
       factory: (p: Record<string, unknown>) => new SPoint(p.x as number, p.y as number),
       properties: [
         {
@@ -60,6 +61,7 @@ export class JsonContext extends SerializerContext {
   get segment(): TypeSpec<Segment> {
     return this._segment ??= this.createSpec({
       type: Segment,
+      runtimeType: () => Segment.$runtimeType,
       factory: (p: Record<string, unknown>) => new Segment(p.from as SPoint, p.to as SPoint | null, p.tip as Corner),
       properties: [
         {
@@ -130,6 +132,7 @@ export class JsonContext extends SerializerContext {
   get inner(): TypeSpec<Outer.Inner> {
     return this._inner ??= this.createSpec({
       type: Outer.Inner,
+      runtimeType: () => Outer$Inner.$runtimeType,
       factory: (p: Record<string, unknown>) => new Outer.Inner(p.v as number),
       properties: [
         {
@@ -146,6 +149,7 @@ export class JsonContext extends SerializerContext {
   get pairInt32(): TypeSpec<Pair<number>> {
     return this._pairInt32 ??= this.createSpec<Pair<number>>({
       type: Pair,
+      runtimeType: () => Pair.$runtimeType,
       factory: (p: Record<string, unknown>) => new Pair(p.a as number),
       properties: [
         {
@@ -162,6 +166,7 @@ export class JsonContext extends SerializerContext {
   get corner(): TypeSpec<Corner> {
     return this._corner ??= this.createSpec({
       type: Corner,
+      runtimeType: () => Corner.$runtimeType,
       factory: (p: Record<string, unknown>) => new Corner(p.x as number),
       properties: [
         {

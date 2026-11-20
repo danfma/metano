@@ -41,6 +41,7 @@ export class MembersJsonContext extends SerializerContext {
   get blob(): TypeSpec<Blob> {
     return (this._blob ??= this.createSpec({
       type: Blob,
+      runtimeType: () => Blob.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as List<number>),
       properties: [
@@ -74,6 +75,7 @@ export class MembersJsonContext extends SerializerContext {
   get account(): TypeSpec<Account> {
     return (this._account ??= this.createSpec({
       type: Account,
+      runtimeType: () => Account.$runtimeType,
       factory: () => new Account(),
       properties: [
         {
@@ -105,6 +107,7 @@ export class MembersJsonContext extends SerializerContext {
   get ordBase(): TypeSpec<OrdBase> {
     return (this._ordBase ??= this.createSpec({
       type: OrdBase,
+      runtimeType: () => OrdBase.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new OrdBase(p.second as number, p.first as number, p.third as number),
       properties: [
@@ -132,6 +135,7 @@ export class MembersJsonContext extends SerializerContext {
   get initRec(): TypeSpec<InitRec> {
     return (this._initRec ??= this.createSpec({
       type: InitRec,
+      runtimeType: () => InitRec.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         Object.assign(new InitRec(p.a as number), { note: p.note as string | null }),
       properties: [
@@ -156,6 +160,7 @@ export class MembersJsonContext extends SerializerContext {
   get setClass(): TypeSpec<SetClass> {
     return (this._setClass ??= this.createSpec({
       type: SetClass,
+      runtimeType: () => SetClass.$runtimeType,
       factory: (p: Record<string, unknown>) => Object.assign(new SetClass(), { n: p.n as number }),
       properties: [
         {

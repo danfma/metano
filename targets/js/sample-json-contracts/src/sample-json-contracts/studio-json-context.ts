@@ -183,6 +183,7 @@ export class StudioJsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec({
       type: Clip,
+      runtimeType: () => Clip.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
@@ -219,6 +220,7 @@ export class StudioJsonContext extends SerializerContext {
   get timeline(): TypeSpec<Timeline> {
     return (this._timeline ??= this.createSpec({
       type: Timeline,
+      runtimeType: () => Timeline.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Timeline(p.name as string, p.main as Clip, p.clips as IReadOnlyList<Clip>),
       properties: [
@@ -293,6 +295,7 @@ export class StudioJsonContext extends SerializerContext {
   get group(): TypeSpec<Group> {
     return (this._group ??= this.createSpec({
       type: Group,
+      runtimeType: () => Group.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) =>
         Object.assign(new Group(p.name as string, p.members as IReadOnlyList<Clip>), {
@@ -323,6 +326,7 @@ export class StudioJsonContext extends SerializerContext {
   get hBase(): TypeSpec<HBase> {
     return (this._hBase ??= this.createSpec({
       type: HBase,
+      runtimeType: () => HBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'HBase' directly; deserialize it through a polymorphic spec.",
@@ -355,6 +359,7 @@ export class StudioJsonContext extends SerializerContext {
   get iBase(): TypeSpec<IBase> {
     return (this._iBase ??= this.createSpec({
       type: IBase,
+      runtimeType: () => IBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'IBase' directly; deserialize it through a polymorphic spec.",
@@ -381,6 +386,7 @@ export class StudioJsonContext extends SerializerContext {
   get dBase(): TypeSpec<DBase> {
     return (this._dBase ??= this.createSpec({
       type: DBase,
+      runtimeType: () => DBase.$runtimeType,
       factory: () => new DBase(),
       properties: [],
       polymorphism: {
@@ -398,6 +404,7 @@ export class StudioJsonContext extends SerializerContext {
   get sBase(): TypeSpec<SBase> {
     return (this._sBase ??= this.createSpec({
       type: SBase,
+      runtimeType: () => SBase.$runtimeType,
       factory: (p: Record<string, unknown>) => new SBase(p.v as number),
       properties: [
         {
@@ -421,6 +428,7 @@ export class StudioJsonContext extends SerializerContext {
   get uFail(): TypeSpec<UFail> {
     return (this._uFail ??= this.createSpec({
       type: UFail,
+      runtimeType: () => UFail.$runtimeType,
       factory: () => new UFail(),
       properties: [],
       polymorphism: {
@@ -438,6 +446,7 @@ export class StudioJsonContext extends SerializerContext {
   get uNear(): TypeSpec<UNear> {
     return (this._uNear ??= this.createSpec({
       type: UNear,
+      runtimeType: () => UNear.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'UNear' directly; deserialize it through a polymorphic spec.",
@@ -472,6 +481,7 @@ export class StudioJsonContext extends SerializerContext {
   get uBaseH(): TypeSpec<UBaseH> {
     return (this._uBaseH ??= this.createSpec({
       type: UBaseH,
+      runtimeType: () => UBaseH.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'UBaseH' directly; deserialize it through a polymorphic spec.",
@@ -501,6 +511,7 @@ export class StudioJsonContext extends SerializerContext {
   get nBase(): TypeSpec<NBase> {
     return (this._nBase ??= this.createSpec({
       type: NBase,
+      runtimeType: () => NBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'NBase' directly; deserialize it through a polymorphic spec.",
@@ -529,6 +540,7 @@ export class StudioJsonContext extends SerializerContext {
   get nMid(): TypeSpec<NMid> {
     return (this._nMid ??= this.createSpec({
       type: NMid,
+      runtimeType: () => NMid.$runtimeType,
       base: this.nBase,
       factory: (p: Record<string, unknown>) => new NMid(p.a as number, p.b as number),
       properties: [
@@ -553,6 +565,7 @@ export class StudioJsonContext extends SerializerContext {
   get oBase(): TypeSpec<OBase> {
     return (this._oBase ??= this.createSpec({
       type: OBase,
+      runtimeType: () => OBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'OBase' directly; deserialize it through a polymorphic spec.",
@@ -586,6 +599,7 @@ export class StudioJsonContext extends SerializerContext {
   get gBaseInt32(): TypeSpec<GBase<number>> {
     return (this._gBaseInt32 ??= this.createSpec<GBase<number>>({
       type: GBase,
+      runtimeType: () => GBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'GBase' directly; deserialize it through a polymorphic spec.",
@@ -614,6 +628,7 @@ export class StudioJsonContext extends SerializerContext {
   get feed(): TypeSpec<Feed> {
     return (this._feed ??= this.createSpec({
       type: Feed,
+      runtimeType: () => Feed.$runtimeType,
       factory: (p: Record<string, unknown>) => new Feed(p.latest as Page<EpisodeSummary>),
       properties: [
         {
@@ -716,6 +731,7 @@ export class StudioJsonContext extends SerializerContext {
   get mixedBase(): TypeSpec<MixedBase> {
     return (this._mixedBase ??= this.createSpec({
       type: MixedBase,
+      runtimeType: () => MixedBase.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'MixedBase' directly; deserialize it through a polymorphic spec.",
@@ -743,6 +759,7 @@ export class StudioJsonContext extends SerializerContext {
   get episodeSummary(): TypeSpec<EpisodeSummary> {
     return (this._episodeSummary ??= this.createSpec({
       type: EpisodeSummary,
+      runtimeType: () => EpisodeSummary.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new EpisodeSummary(p.id as string, p.title as string),
       properties: [
@@ -812,6 +829,7 @@ export class StudioJsonContext extends SerializerContext {
   get intMapHolder(): TypeSpec<IntMapHolder> {
     return (this._intMapHolder ??= this.createSpec({
       type: IntMapHolder,
+      runtimeType: () => IntMapHolder.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new IntMapHolder(p.byKey as Dictionary<number, string>),
       properties: [
@@ -832,6 +850,7 @@ export class StudioJsonContext extends SerializerContext {
   get levelMapHolder(): TypeSpec<LevelMapHolder> {
     return (this._levelMapHolder ??= this.createSpec({
       type: LevelMapHolder,
+      runtimeType: () => LevelMapHolder.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new LevelMapHolder(p.byLevel as Dictionary<Level, string>),
       properties: [
@@ -857,6 +876,7 @@ export class StudioJsonContext extends SerializerContext {
   get guidMapHolder(): TypeSpec<GuidMapHolder> {
     return (this._guidMapHolder ??= this.createSpec({
       type: GuidMapHolder,
+      runtimeType: () => GuidMapHolder.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new GuidMapHolder(p.byId as Dictionary<UUID, string>),
       properties: [
@@ -1015,6 +1035,7 @@ export class StudioJsonContext extends SerializerContext {
   get schedule(): TypeSpec<Schedule> {
     return (this._schedule ??= this.createSpec({
       type: Schedule,
+      runtimeType: () => Schedule.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Schedule(
           p.at as Temporal.PlainDateTime,
@@ -1064,6 +1085,7 @@ export class StudioJsonContext extends SerializerContext {
   get holderInt(): TypeSpec<HolderInt> {
     return (this._holderInt ??= this.createSpec({
       type: HolderInt,
+      runtimeType: () => HolderInt.$runtimeType,
       factory: (p: Record<string, unknown>) => new HolderInt(p.n as number),
       properties: [
         {
@@ -1078,6 +1100,7 @@ export class StudioJsonContext extends SerializerContext {
   get holderLevel(): TypeSpec<HolderLevel> {
     return (this._holderLevel ??= this.createSpec({
       type: HolderLevel,
+      runtimeType: () => HolderLevel.$runtimeType,
       factory: (p: Record<string, unknown>) => new HolderLevel(p.level as Level),
       properties: [
         {
@@ -1092,6 +1115,7 @@ export class StudioJsonContext extends SerializerContext {
   get holderChar(): TypeSpec<HolderChar> {
     return (this._holderChar ??= this.createSpec({
       type: HolderChar,
+      runtimeType: () => HolderChar.$runtimeType,
       factory: (p: Record<string, unknown>) => new HolderChar(p.c as string),
       properties: [
         {
@@ -1106,6 +1130,7 @@ export class StudioJsonContext extends SerializerContext {
   get holderSPoint(): TypeSpec<HolderSPoint> {
     return (this._holderSPoint ??= this.createSpec({
       type: HolderSPoint,
+      runtimeType: () => HolderSPoint.$runtimeType,
       factory: (p: Record<string, unknown>) => new HolderSPoint(p.s as SPoint),
       properties: [
         {
@@ -1258,6 +1283,7 @@ export class StudioJsonContext extends SerializerContext {
   get sPoint(): TypeSpec<SPoint> {
     return (this._sPoint ??= this.createSpec({
       type: SPoint,
+      runtimeType: () => SPoint.$runtimeType,
       factory: (p: Record<string, unknown>) => new SPoint(p.x as number, p.y as number),
       properties: [
         {
@@ -1287,6 +1313,7 @@ export class StudioJsonContext extends SerializerContext {
   get episodeRec(): TypeSpec<EpisodeRec> {
     return (this._episodeRec ??= this.createSpec({
       type: EpisodeRec,
+      runtimeType: () => EpisodeRec.$runtimeType,
       factory: (p: Record<string, unknown>) => new EpisodeRec(p.id as string, p.note as Title),
       properties: [
         {
@@ -1306,6 +1333,7 @@ export class StudioJsonContext extends SerializerContext {
   get int64Box(): TypeSpec<Int64Box> {
     return (this._int64Box ??= this.createSpec({
       type: Int64Box,
+      runtimeType: () => Int64Box.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Int64Box(p.id as bigint, p.mask as bigint, p.parent as bigint | null),
       properties: [
@@ -1335,6 +1363,7 @@ export class StudioJsonContext extends SerializerContext {
   get int64Containers(): TypeSpec<Int64Containers> {
     return (this._int64Containers ??= this.createSpec({
       type: Int64Containers,
+      runtimeType: () => Int64Containers.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Int64Containers(
           p.values as bigint[],
@@ -1393,6 +1422,7 @@ export class StudioJsonContext extends SerializerContext {
   get imageClip(): TypeSpec<ImageClip> {
     return (this._imageClip ??= this.createSpec({
       type: ImageClip,
+      runtimeType: () => ImageClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new ImageClip(p.path as string, p.seconds as number),
       properties: [
@@ -1408,6 +1438,7 @@ export class StudioJsonContext extends SerializerContext {
   get silenceClip(): TypeSpec<SilenceClip> {
     return (this._silenceClip ??= this.createSpec({
       type: SilenceClip,
+      runtimeType: () => SilenceClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new SilenceClip(p.seconds as number),
       properties: [],
@@ -1417,6 +1448,7 @@ export class StudioJsonContext extends SerializerContext {
   get hMid(): TypeSpec<HMid> {
     return (this._hMid ??= this.createSpec({
       type: HMid,
+      runtimeType: () => HMid.$runtimeType,
       base: this.hBase,
       factory: (p: Record<string, unknown>) => new HMid(p.a as number, p.b as number),
       properties: [
@@ -1432,6 +1464,7 @@ export class StudioJsonContext extends SerializerContext {
   get hLeaf(): TypeSpec<HLeaf> {
     return (this._hLeaf ??= this.createSpec({
       type: HLeaf,
+      runtimeType: () => HLeaf.$runtimeType,
       base: this.hMid,
       factory: (p: Record<string, unknown>) =>
         new HLeaf(p.a as number, p.b as number, p.c as number),
@@ -1448,6 +1481,7 @@ export class StudioJsonContext extends SerializerContext {
   get iA(): TypeSpec<IA> {
     return (this._iA ??= this.createSpec({
       type: IA,
+      runtimeType: () => IA.$runtimeType,
       base: this.iBase,
       factory: (p: Record<string, unknown>) => new IA(p.x as number),
       properties: [
@@ -1463,6 +1497,7 @@ export class StudioJsonContext extends SerializerContext {
   get iS(): TypeSpec<IS> {
     return (this._iS ??= this.createSpec({
       type: IS,
+      runtimeType: () => IS.$runtimeType,
       base: this.iBase,
       factory: (p: Record<string, unknown>) => new IS(p.y as number),
       properties: [
@@ -1478,6 +1513,7 @@ export class StudioJsonContext extends SerializerContext {
   get dBer(): TypeSpec<DBer> {
     return (this._dBer ??= this.createSpec({
       type: DBer,
+      runtimeType: () => DBer.$runtimeType,
       base: this.dBase,
       factory: (p: Record<string, unknown>) => new DBer(p.w as number),
       properties: [
@@ -1493,6 +1529,7 @@ export class StudioJsonContext extends SerializerContext {
   get uFailY(): TypeSpec<UFailY> {
     return (this._uFailY ??= this.createSpec({
       type: UFailY,
+      runtimeType: () => UFailY.$runtimeType,
       base: this.uFail,
       factory: () => new UFailY(),
       properties: [],
@@ -1502,6 +1539,7 @@ export class StudioJsonContext extends SerializerContext {
   get uNearA(): TypeSpec<UNearA> {
     return (this._uNearA ??= this.createSpec({
       type: UNearA,
+      runtimeType: () => UNearA.$runtimeType,
       base: this.uNear,
       factory: (p: Record<string, unknown>) => new UNearA(p.a as number, p.b as number),
       properties: [
@@ -1517,6 +1555,7 @@ export class StudioJsonContext extends SerializerContext {
   get uNearAbs(): TypeSpec<UNearAbs> {
     return (this._uNearAbs ??= this.createSpec({
       type: UNearAbs,
+      runtimeType: () => UNearAbs.$runtimeType,
       base: this.uNear,
       factory: () => {
         throw new Error("Cannot construct abstract type 'UNearAbs'.");
@@ -1528,6 +1567,7 @@ export class StudioJsonContext extends SerializerContext {
   get uBaseA(): TypeSpec<UBaseA> {
     return (this._uBaseA ??= this.createSpec({
       type: UBaseA,
+      runtimeType: () => UBaseA.$runtimeType,
       base: this.uBaseH,
       factory: (p: Record<string, unknown>) => new UBaseA(p.a as number),
       properties: [],
@@ -1537,6 +1577,7 @@ export class StudioJsonContext extends SerializerContext {
   get nLeaf(): TypeSpec<NLeaf> {
     return (this._nLeaf ??= this.createSpec({
       type: NLeaf,
+      runtimeType: () => NLeaf.$runtimeType,
       base: this.nMid,
       factory: (p: Record<string, unknown>) =>
         new NLeaf(p.a as number, p.b as number, p.c as number),
@@ -1553,6 +1594,7 @@ export class StudioJsonContext extends SerializerContext {
   get oDer(): TypeSpec<ODer> {
     return (this._oDer ??= this.createSpec({
       type: ODer,
+      runtimeType: () => ODer.$runtimeType,
       base: this.oBase,
       factory: (p: Record<string, unknown>) =>
         Object.assign(new ODer(), {
@@ -1578,6 +1620,7 @@ export class StudioJsonContext extends SerializerContext {
   get gDer(): TypeSpec<GDer> {
     return (this._gDer ??= this.createSpec({
       type: GDer,
+      runtimeType: () => GDer.$runtimeType,
       base: this.gBaseInt32,
       factory: (p: Record<string, unknown>) =>
         Object.assign(new GDer(p.extra as number), { value: p.value as number }),
@@ -1594,6 +1637,7 @@ export class StudioJsonContext extends SerializerContext {
   get pageEpisodeSummary(): TypeSpec<Page<EpisodeSummary>> {
     return (this._pageEpisodeSummary ??= this.createSpec<Page<EpisodeSummary>>({
       type: Page,
+      runtimeType: () => Page.$runtimeType,
       factory: (p: Record<string, unknown>) => new Page(p.items as IReadOnlyList<EpisodeSummary>),
       properties: [
         {
@@ -1615,6 +1659,7 @@ export class StudioJsonContext extends SerializerContext {
   get sq(): TypeSpec<Sq> {
     return (this._sq ??= this.createSpec({
       type: Sq,
+      runtimeType: () => Sq.$runtimeType,
       factory: (p: Record<string, unknown>) => new Sq(p.side as number),
       properties: [
         {
@@ -1629,6 +1674,7 @@ export class StudioJsonContext extends SerializerContext {
   get sqB(): TypeSpec<SqB> {
     return (this._sqB ??= this.createSpec({
       type: SqB,
+      runtimeType: () => SqB.$runtimeType,
       factory: (p: Record<string, unknown>) => new SqB(p.area as number, p.side as number),
       properties: [
         {
@@ -1704,6 +1750,7 @@ export class StudioJsonContext extends SerializerContext {
   get mixedClass(): TypeSpec<MixedClass> {
     return (this._mixedClass ??= this.createSpec({
       type: MixedClass,
+      runtimeType: () => MixedClass.$runtimeType,
       base: this.mixedBase,
       factory: (p: Record<string, unknown>) => new MixedClass(p.w as number),
       properties: [

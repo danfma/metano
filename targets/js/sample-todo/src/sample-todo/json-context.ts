@@ -33,6 +33,7 @@ export class JsonContext extends SerializerContext {
   get todoItem(): TypeSpec<TodoItem> {
     return (this._todoItem ??= this.createSpec({
       type: TodoItem,
+      runtimeType: () => TodoItem.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new TodoItem(p.title as string, p.completed as boolean, p.priority as Priority),
       properties: [

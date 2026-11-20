@@ -139,18 +139,56 @@ automatically whenever any Temporal mapping is used.
 
 ## Collections
 
+### Runtime collection classes (3.0.0)
+
+`List<T>`, `Dictionary<K, V>`, `HashSet<T>`, `Queue<T>` and `Stack<T>` are
+`metano-runtime` classes (`metano-runtime/system/collections`), and their
+interfaces are the TypeScript interfaces of the same name; a `T[]` stays a native
+array. The rows of the table below that name `List<T>` describe the 2.x lowering
+and are superseded by this subsection.
+
+| C# | TypeScript |
+|----|----|
+| `List<T>` / `IList<T>` / `IReadOnlyList<T>` | `List<T>` / `IList<T>` / `IReadOnlyList<T>` |
+| `Dictionary<K, V>` / `IDictionary<K, V>` / `IReadOnlyDictionary<K, V>` | `Dictionary<K, V>` / `IDictionary<K, V>` / `IReadOnlyDictionary<K, V>` |
+| `HashSet<T>` / `ISet<T>` / `IReadOnlySet<T>`, `Queue<T>`, `Stack<T>` | the class or interface of the same name |
+| `list[i]`, `list[i] += v`, `list[^1]`, `list[a..b]` | `list.get(i)`, `list.set(i, list.get(i) + v)`, `list.fromEnd(1)`, `list.slice(a, b)` |
+| `new List<T> { a, b }`, `[a, b]` for a list | `List.of([a, b])` |
+| `new Dictionary<K, V> { ["k"] = v }` / `{ { "k", v } }` | `Dictionary.assign([["k", v]])` / `Dictionary.of([["k", v]])` |
+| `list.ToArray()` | `list.toArray()` (a copy); `AsJsArray()` / `AsSpan()` are the zero-copy views |
+| `xs.ToList()`, `xs.ToDictionary(...)`, `xs.ToHashSet()` | the LINQ terminals `toList()`, `toDictionary(...)`, `toHashSet()`, which build the runtime classes |
+| `o is List<int>`, `o is IList<int>`, `o is Dictionary<string, int>`, type patterns and `as` | `isType(o, listType(Int32Type))`, `isType(o, iListType(Int32Type))`, `isType(o, dictionaryType(StringType, Int32Type))` |
+
+**Type arguments at runtime.** When the compilation asks a runtime question about a
+collection kind (a test, `as`, pattern, `GetType()` or `typeof` that names it, or an
+interface it implements), every construction of that kind passes its type arguments as
+the trailing argument (`new List<number>(null, [Int32Type])`, `List.of([1], [Int32Type])`,
+`toList([Int32Type])`, `super(null, [Int32Type])` in a subclass of `List<int>`), and a
+class argument gets its descriptor. A compilation that asks nothing emits no argument and
+no reflection import. A test compares type arguments by identity for the invariant classes
+and interfaces and by reference conversion for the covariant read-only interfaces
+(`List<string>` is an `IReadOnlyList<object>`, `List<int>` is not). A collection built
+without the slot (by a separately compiled library) or an open type parameter that is
+not reified matches every argument (`MS0046` warns at the test).
+
+**User implementers.** A transpiled class that implements `IList<T>` (or another collection
+interface) has no collection descriptor, so `o is IList<int>` could answer `false` for it
+where .NET answers `true`. The compiler reports `MS0001` at that test instead, and the site
+throws at run time. An overload dispatcher's branch for such a parameter still tests the
+runtime classes only.
+
 ### Lists and arrays
 
 | C# | TypeScript |
 |----|----|
 | `T[]` | `T[]` |
-| `List<T>` / `IList<T>` / `IReadOnlyList<T>` | `T[]` |
-| `List<T>.Add(item)` | `list.push(item)` |
-| `List<T>.Contains(item)` | `list.includes(item)` |
+| `List<T>` / `IList<T>` / `IReadOnlyList<T>` | see above (`T[]` before 3.0.0) |
+| `List<T>.Add(item)` | `list.add(item)` |
+| `List<T>.Contains(item)` | `list.contains(item)` |
 | `List<T>.IndexOf(item)` | `list.indexOf(item)` |
-| `List<T>.Count` | `list.length` |
-| `List<T>.Remove(item)` | `listRemove(list, item)` (runtime helper) |
-| `List<T>.ToArray()` | `list.slice()` |
+| `List<T>.Count` | `list.count` |
+| `List<T>.Remove(item)` | `list.remove(item)` |
+| `List<T>.ToArray()` | `list.toArray()` |
 | `array.Contains(item)` (`MemoryExtensions`) | `array.includes(item)` |
 | `array.IndexOf(item)` / `array.LastIndexOf(item)` (`MemoryExtensions`) | `array.indexOf(item)` / `array.lastIndexOf(item)` |
 | `array.IndexOf(item, null)` (a `null` constant comparer, also `Contains` / `LastIndexOf`) | `array.indexOf(item)` |

@@ -210,16 +210,17 @@ public class AsCastTranspileTests
     }
 
     [Test]
-    public async Task AsList_ReportsUnsupported()
+    public async Task AsList_TestsThroughTheCollectionDescriptor()
     {
-        var (_, diagnostics) = TranspileCastsWithDiagnostics(
+        var (output, diagnostics) = TranspileCastsWithDiagnostics(
             """
             public static System.Collections.Generic.List<string>? Of(object o) =>
                 o as System.Collections.Generic.List<string>;
             """
         );
 
-        await AssertSingleUnsupported(diagnostics, "o as System.Collections.Generic.List<string>");
+        await Assert.That(output).Contains("isType(o, listType(StringType)) ? o : null");
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]

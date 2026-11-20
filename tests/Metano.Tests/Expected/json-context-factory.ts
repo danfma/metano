@@ -20,6 +20,7 @@ export class JsonContext extends SerializerContext {
   get video(): TypeSpec<Video> {
     return this._video ??= this.createSpec({
       type: Video,
+      runtimeType: () => Video.$runtimeType,
       factory: (p: Record<string, unknown>) => new Video(p.title as Title, p.slug as Slug, p.note as Plain, p.subtitle as Title | null, p.aliases as Title[], p.codes as Dictionary<Title, Episode.Code>),
       properties: [
         {

@@ -44,6 +44,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec({
       type: Clip,
+      runtimeType: () => Clip.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
@@ -80,6 +81,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
   get imageClip(): TypeSpec<ImageClip> {
     return (this._imageClip ??= this.createSpec({
       type: ImageClip,
+      runtimeType: () => ImageClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new ImageClip(p.path as string, p.seconds as number),
       properties: [
@@ -95,6 +97,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
   get silenceClip(): TypeSpec<SilenceClip> {
     return (this._silenceClip ??= this.createSpec({
       type: SilenceClip,
+      runtimeType: () => SilenceClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new SilenceClip(p.seconds as number),
       properties: [],
@@ -104,6 +107,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
   get group(): TypeSpec<Group> {
     return (this._group ??= this.createSpec({
       type: Group,
+      runtimeType: () => Group.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) =>
         Object.assign(new Group(p.name as string, p.members as IReadOnlyList<Clip>), {

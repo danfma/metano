@@ -41,6 +41,7 @@ export class JsonContext extends SerializerContext {
   get holder(): TypeSpec<Holder> {
     return this._holder ??= this.createSpec({
       type: Holder,
+      runtimeType: () => Holder.$runtimeType,
       factory: (p: Record<string, unknown>) => new Holder(p.main as IShape, p.all as List<IShape>),
       properties: [
         {
@@ -157,6 +158,7 @@ export class JsonContext extends SerializerContext {
   get mixed(): TypeSpec<Mixed> {
     return this._mixed ??= this.createSpec({
       type: Mixed,
+      runtimeType: () => Mixed.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'Mixed' directly; deserialize it through a polymorphic spec.");
       },
@@ -306,6 +308,7 @@ export class JsonContext extends SerializerContext {
   get mC(): TypeSpec<MC> {
     return this._mC ??= this.createSpec({
       type: MC,
+      runtimeType: () => MC.$runtimeType,
       base: this.mixed,
       factory: (p: Record<string, unknown>) => new MC(p.s as string),
       properties: [
@@ -321,6 +324,7 @@ export class JsonContext extends SerializerContext {
   get sq(): TypeSpec<Sq> {
     return this._sq ??= this.createSpec({
       type: Sq,
+      runtimeType: () => Sq.$runtimeType,
       factory: (p: Record<string, unknown>) => new Sq(p.side as number),
       properties: [
         {
@@ -340,6 +344,7 @@ export class JsonContext extends SerializerContext {
   get circle(): TypeSpec<Circle> {
     return this._circle ??= this.createSpec({
       type: Circle,
+      runtimeType: () => Circle.$runtimeType,
       factory: (p: Record<string, unknown>) => new Circle(p.radius as number),
       properties: [
         {

@@ -33,6 +33,7 @@ export class SnakeCaseJsonContext extends SerializerContext {
   get stats(): TypeSpec<Stats> {
     return (this._stats ??= this.createSpec({
       type: Stats,
+      runtimeType: () => Stats.$runtimeType,
       factory: (p: Record<string, unknown>) =>
         new Stats(p.count as number, p.ratio as number, p.userName as string),
       properties: [

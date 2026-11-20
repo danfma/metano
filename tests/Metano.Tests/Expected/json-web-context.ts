@@ -33,6 +33,7 @@ export class JsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return this._clip ??= this.createSpec({
       type: Clip,
+      runtimeType: () => Clip.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.");
       },
@@ -63,6 +64,7 @@ export class JsonContext extends SerializerContext {
   get shape(): TypeSpec<Shape> {
     return this._shape ??= this.createSpec({
       type: Shape,
+      runtimeType: () => Shape.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'Shape' directly; deserialize it through a polymorphic spec.");
       },
@@ -89,6 +91,7 @@ export class JsonContext extends SerializerContext {
   get stats(): TypeSpec<Stats> {
     return this._stats ??= this.createSpec({
       type: Stats,
+      runtimeType: () => Stats.$runtimeType,
       factory: (p: Record<string, unknown>) => new Stats(p.count as number, p.ratio as number, p.url as string),
       properties: [
         {
@@ -113,6 +116,7 @@ export class JsonContext extends SerializerContext {
   get reading(): TypeSpec<Reading> {
     return this._reading ??= this.createSpec({
       type: Reading,
+      runtimeType: () => Reading.$runtimeType,
       factory: (p: Record<string, unknown>) => new Reading(p.amount as Decimal, p.total as bigint | null, p.weight as number, p.samples as IReadOnlyList<number>, p.offsets as Dictionary<number, number>, p.level as Level, p.valid as boolean),
       properties: [
         {
@@ -189,6 +193,7 @@ export class JsonContext extends SerializerContext {
   get imageClip(): TypeSpec<ImageClip> {
     return this._imageClip ??= this.createSpec({
       type: ImageClip,
+      runtimeType: () => ImageClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new ImageClip(p.path as string, p.seconds as number),
       properties: [
@@ -204,6 +209,7 @@ export class JsonContext extends SerializerContext {
   get silenceClip(): TypeSpec<SilenceClip> {
     return this._silenceClip ??= this.createSpec({
       type: SilenceClip,
+      runtimeType: () => SilenceClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new SilenceClip(p.seconds as number),
       properties: [],
@@ -213,6 +219,7 @@ export class JsonContext extends SerializerContext {
   get square(): TypeSpec<Square> {
     return this._square ??= this.createSpec({
       type: Square,
+      runtimeType: () => Square.$runtimeType,
       base: this.shape,
       factory: (p: Record<string, unknown>) => new Square(p.sideLength as number, p.fillColor as string),
       properties: [

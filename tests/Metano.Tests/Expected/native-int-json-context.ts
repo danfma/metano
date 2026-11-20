@@ -19,6 +19,7 @@ export class JsonContext extends SerializerContext {
   get handles(): TypeSpec<Handles> {
     return this._handles ??= this.createSpec({
       type: Handles,
+      runtimeType: () => Handles.$runtimeType,
       factory: (p: Record<string, unknown>) => new Handles(p.signed as bigint, p.unsigned as bigint, p.parent as bigint | null, p.values as bigint[], p.byHandle as Dictionary<bigint, string>, p.counts as Dictionary<string, bigint>, p.id as NativeId, p.byToken as Dictionary<NativeId, string>, p.quota as NativeQuota),
       properties: [
         {

@@ -38,6 +38,7 @@ export class IgnoreJsonContext extends SerializerContext {
   get ignBase(): TypeSpec<IgnBase> {
     return (this._ignBase ??= this.createSpec({
       type: IgnBase,
+      runtimeType: () => IgnBase.$runtimeType,
       factory: (p: Record<string, unknown>) => new IgnBase(p.v as number),
       properties: [
         {
@@ -62,6 +63,7 @@ export class IgnoreJsonContext extends SerializerContext {
   get ignAbs(): TypeSpec<IgnAbs> {
     return (this._ignAbs ??= this.createSpec({
       type: IgnAbs,
+      runtimeType: () => IgnAbs.$runtimeType,
       factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'IgnAbs' directly; deserialize it through a polymorphic spec.",
@@ -91,6 +93,7 @@ export class IgnoreJsonContext extends SerializerContext {
   get ignDer(): TypeSpec<IgnDer> {
     return (this._ignDer ??= this.createSpec({
       type: IgnDer,
+      runtimeType: () => IgnDer.$runtimeType,
       base: this.ignBase,
       factory: (p: Record<string, unknown>) => new IgnDer(p.v as number, p.w as number),
       properties: [
@@ -106,6 +109,7 @@ export class IgnoreJsonContext extends SerializerContext {
   get ignAbsDer(): TypeSpec<IgnAbsDer> {
     return (this._ignAbsDer ??= this.createSpec({
       type: IgnAbsDer,
+      runtimeType: () => IgnAbsDer.$runtimeType,
       base: this.ignAbs,
       factory: (p: Record<string, unknown>) => new IgnAbsDer(p.v as number, p.w as number),
       properties: [

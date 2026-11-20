@@ -44,6 +44,7 @@ export class JsonContext extends SerializerContext {
   get timeline(): TypeSpec<Timeline> {
     return this._timeline ??= this.createSpec({
       type: Timeline,
+      runtimeType: () => Timeline.$runtimeType,
       factory: (p: Record<string, unknown>) => new Timeline(p.name as string, p.main as Clip, p.clips as IReadOnlyList<Clip>),
       properties: [
         {
@@ -91,6 +92,7 @@ export class JsonContext extends SerializerContext {
   get intBase(): TypeSpec<IntBase> {
     return this._intBase ??= this.createSpec({
       type: IntBase,
+      runtimeType: () => IntBase.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'IntBase' directly; deserialize it through a polymorphic spec.");
       },
@@ -115,6 +117,7 @@ export class JsonContext extends SerializerContext {
   get sBase(): TypeSpec<SBase> {
     return this._sBase ??= this.createSpec({
       type: SBase,
+      runtimeType: () => SBase.$runtimeType,
       factory: (p: Record<string, unknown>) => new SBase(p.v as number),
       properties: [
         {
@@ -142,6 +145,7 @@ export class JsonContext extends SerializerContext {
   get gBaseInt32(): TypeSpec<GBase<number>> {
     return this._gBaseInt32 ??= this.createSpec<GBase<number>>({
       type: GBase,
+      runtimeType: () => GBase.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'GBase' directly; deserialize it through a polymorphic spec.");
       },
@@ -168,6 +172,7 @@ export class JsonContext extends SerializerContext {
   get aB(): TypeSpec<AB> {
     return this._aB ??= this.createSpec({
       type: AB,
+      runtimeType: () => AB.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'AB' directly; deserialize it through a polymorphic spec.");
       },
@@ -200,6 +205,7 @@ export class JsonContext extends SerializerContext {
   get ignBase(): TypeSpec<IgnBase> {
     return this._ignBase ??= this.createSpec({
       type: IgnBase,
+      runtimeType: () => IgnBase.$runtimeType,
       factory: (p: Record<string, unknown>) => new IgnBase(p.v as number),
       properties: [
         {
@@ -225,6 +231,7 @@ export class JsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return this._clip ??= this.createSpec({
       type: Clip,
+      runtimeType: () => Clip.$runtimeType,
       factory: () => {
         throw new Error("Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.");
       },
@@ -255,6 +262,7 @@ export class JsonContext extends SerializerContext {
   get intA(): TypeSpec<IntA> {
     return this._intA ??= this.createSpec({
       type: IntA,
+      runtimeType: () => IntA.$runtimeType,
       base: this.intBase,
       factory: (p: Record<string, unknown>) => new IntA(p.x as number),
       properties: [
@@ -270,6 +278,7 @@ export class JsonContext extends SerializerContext {
   get intS(): TypeSpec<IntS> {
     return this._intS ??= this.createSpec({
       type: IntS,
+      runtimeType: () => IntS.$runtimeType,
       base: this.intBase,
       factory: (p: Record<string, unknown>) => new IntS(p.y as number),
       properties: [
@@ -285,6 +294,7 @@ export class JsonContext extends SerializerContext {
   get sDer(): TypeSpec<SDer> {
     return this._sDer ??= this.createSpec({
       type: SDer,
+      runtimeType: () => SDer.$runtimeType,
       base: this.sBase,
       factory: (p: Record<string, unknown>) => new SDer(p.v as number, p.w as number),
       properties: [
@@ -300,6 +310,7 @@ export class JsonContext extends SerializerContext {
   get gDer(): TypeSpec<GDer> {
     return this._gDer ??= this.createSpec({
       type: GDer,
+      runtimeType: () => GDer.$runtimeType,
       base: this.gBaseInt32,
       factory: (p: Record<string, unknown>) => new GDer(p.value as number, p.extra as number),
       properties: [
@@ -315,6 +326,7 @@ export class JsonContext extends SerializerContext {
   get aMid(): TypeSpec<AMid> {
     return this._aMid ??= this.createSpec({
       type: AMid,
+      runtimeType: () => AMid.$runtimeType,
       base: this.aB,
       factory: () => {
         throw new Error("Cannot construct abstract type 'AMid'.");
@@ -332,6 +344,7 @@ export class JsonContext extends SerializerContext {
   get aLeaf(): TypeSpec<ALeaf> {
     return this._aLeaf ??= this.createSpec({
       type: ALeaf,
+      runtimeType: () => ALeaf.$runtimeType,
       base: this.aMid,
       factory: (p: Record<string, unknown>) => new ALeaf(p.l as number, p.m as number, p.a as number),
       properties: [
@@ -347,6 +360,7 @@ export class JsonContext extends SerializerContext {
   get ignA(): TypeSpec<IgnA> {
     return this._ignA ??= this.createSpec({
       type: IgnA,
+      runtimeType: () => IgnA.$runtimeType,
       base: this.ignBase,
       factory: (p: Record<string, unknown>) => new IgnA(p.v as number),
       properties: [],
@@ -356,6 +370,7 @@ export class JsonContext extends SerializerContext {
   get imageClip(): TypeSpec<ImageClip> {
     return this._imageClip ??= this.createSpec({
       type: ImageClip,
+      runtimeType: () => ImageClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new ImageClip(p.path as string, p.seconds as number),
       properties: [
@@ -371,6 +386,7 @@ export class JsonContext extends SerializerContext {
   get silenceClip(): TypeSpec<SilenceClip> {
     return this._silenceClip ??= this.createSpec({
       type: SilenceClip,
+      runtimeType: () => SilenceClip.$runtimeType,
       base: this.clip,
       factory: (p: Record<string, unknown>) => new SilenceClip(p.seconds as number),
       properties: [],
