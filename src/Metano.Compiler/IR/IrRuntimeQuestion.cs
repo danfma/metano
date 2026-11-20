@@ -113,6 +113,23 @@ public sealed record IrQuestionedType
     /// produce a value of it.
     /// </summary>
     public bool AcceptsBoxedValues { get; init; }
+
+    /// <summary>
+    /// Whether an array can be stored in a variable of this type: an implicit
+    /// conversion exists from some array type (<c>object</c>,
+    /// <c>IEnumerable&lt;T&gt;</c>, <c>IList&lt;T&gt;</c>, <c>Array</c>, an array
+    /// itself). Set on the static type of a tested, <c>as</c> or cast value only.
+    /// </summary>
+    public bool AcceptsArrays { get; init; }
+
+    /// <summary>
+    /// Whether a <c>Dictionary&lt;,&gt;.KeyCollection</c> or <c>ValueCollection</c>
+    /// view can be stored in a variable of this type (<c>object</c>,
+    /// <c>IEnumerable&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
+    /// <c>IReadOnlyCollection&lt;T&gt;</c>). Set on the static type of a tested,
+    /// <c>as</c> or cast value only.
+    /// </summary>
+    public bool AcceptsDictionaryViews { get; init; }
 }
 
 /// <summary>

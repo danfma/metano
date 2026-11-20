@@ -180,9 +180,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
-    /// Reads the roots, names them and computes their closure, reporting every
-    /// <c>MS0035</c> / <c>MS0036</c> / <c>MS0037</c> to <paramref name="report"/>. <c>null</c>
-    /// when the context has no admitted root (nothing is emitted).
+    /// The plan of each serializer context (<see cref="BuildPlan"/>), <c>null</c> for
+    /// a context with no admitted root.
     /// </summary>
     internal IReadOnlyDictionary<INamedTypeSymbol, JsonContextPlan?> PlanContexts(
         IEnumerable<INamedTypeSymbol> contexts
@@ -195,6 +194,11 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     private JsonContextPlan? PlanOf(INamedTypeSymbol type) => _context.JsonPlans[type];
 
+    /// <summary>
+    /// Reads the roots, names them and computes their closure, reporting every
+    /// <c>MS0035</c> / <c>MS0036</c> / <c>MS0037</c> to <paramref name="report"/>. <c>null</c>
+    /// when the context has no admitted root (nothing is emitted).
+    /// </summary>
     private JsonContextPlan? BuildPlan(
         INamedTypeSymbol contextType,
         Action<MetanoDiagnostic> report

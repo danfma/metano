@@ -135,10 +135,11 @@ internal sealed record RuntimeTypeReachabilityResult
         operand switch
         {
             IrNullableTypeRef nullable => OperandKey(nullable.Inner),
-            IrArrayTypeRef => "[]",
-            IrCollectionTypeRef collection => Bridge.RuntimeCollections.ClrNameOf(collection.Kind),
-            IrNamedTypeRef named when !named.IsObject => $"{named.Namespace}.{named.Name}",
-            _ => "*",
+            IrArrayTypeRef => CollectionTestKey.ArrayOperand,
+            IrCollectionTypeRef collection => CollectionTestKey.OperandOfCollection(
+                collection.Kind
+            ),
+            _ => CollectionTestKey.OpenOperand,
         };
 
     /// <summary>Whether the descriptor of <paramref name="key"/> is emitted.</summary>

@@ -163,6 +163,10 @@ public static class RuntimeCollections
     public static string ClrNameOf(IrCollectionKind kind) =>
         $"System.Collections.Generic.{ClrNamesByKind[kind]}";
 
+    /// <summary>The CLR definition name of <paramref name="kind"/>, <c>null</c> for a kind with none (a dictionary view).</summary>
+    public static string? TryClrNameOf(IrCollectionKind kind) =>
+        ClrNamesByKind.ContainsKey(kind) ? ClrNameOf(kind) : null;
+
     /// <summary>The kind a CLR definition name names, <c>null</c> for any other type.</summary>
     public static IrCollectionKind? KindOfClrName(string clrName) =>
         ClrNamesByKind
@@ -185,6 +189,21 @@ public static class RuntimeCollections
     /// </summary>
     public static bool ShapeImplementsMutableInterface(IrCollectionKind kind) =>
         !KindsWithoutMutableShape.Contains(kind);
+
+    /// <summary>
+    /// Whether a native array implements <paramref name="kind"/> in .NET
+    /// (<c>IList</c>, <c>ICollection</c>, <c>IReadOnlyList</c>, <c>IReadOnlyCollection</c>),
+    /// which no collection descriptor answers for.
+    /// </summary>
+    public static bool IsImplementedByArrays(IrCollectionKind kind) =>
+        kind is not IrCollectionKind.List && ArrayBackedKindOf(kind) == IrCollectionKind.List;
+
+    /// <summary>
+    /// Whether the dictionary views (<c>Keys</c> / <c>Values</c>) implement
+    /// <paramref name="kind"/> in .NET; they have no collection descriptor.
+    /// </summary>
+    public static bool IsImplementedByDictionaryViews(IrCollectionKind kind) =>
+        kind is IrCollectionKind.ICollection or IrCollectionKind.IReadOnlyCollection;
 
     /// <summary>The runtime class kinds (every kind that is not an interface).</summary>
     public static IEnumerable<IrCollectionKind> ClassKinds() =>

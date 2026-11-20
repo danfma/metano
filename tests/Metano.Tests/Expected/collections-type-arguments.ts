@@ -37,8 +37,8 @@ export class Point {
 }
 
 // slots/probe.ts
-import { Dictionary, List, Queue, iReadOnlyListType, listType } from "metano-runtime/system/collections";
-import { Int32Type, isType, ObjectType, StringType } from "metano-runtime";
+import { Dictionary, List, Queue, iReadOnlyListType, listType, type IReadOnlyList } from "metano-runtime/system/collections";
+import { Int32Type, isType, StringType } from "metano-runtime";
 import { linq, toList } from "metano-runtime/system/linq";
 import { Point } from "./point";
 
@@ -49,8 +49,12 @@ export class Probe {
     return isType(o, listType(StringType));
   }
 
-  static isReadOnly(o: Object): boolean {
-    return isType(o, iReadOnlyListType(ObjectType));
+  static isReadOnly(o: List<Object>): boolean {
+    return isType(o, iReadOnlyListType(StringType));
+  }
+
+  static covariant(xs: string[]): IReadOnlyList<Object> {
+    return List.adopt<Object>(xs, { fixedSize: true }, [StringType]);
   }
 
   static make(): List<number> {

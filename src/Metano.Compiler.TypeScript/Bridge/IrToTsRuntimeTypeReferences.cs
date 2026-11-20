@@ -262,7 +262,10 @@ internal static class IrToTsRuntimeTypeReferences
     private static TsCallExpression Helper(string name, params TsExpression[] arguments) =>
         new(new TsRuntimeHelperReference(name), arguments);
 
-    /// <summary>A generic argument descriptor, or the erased-argument wildcard.</summary>
+    /// <summary>
+    /// A generic argument descriptor, or the erased-argument wildcard for a type
+    /// with none or a class of this compilation the reachability phase did not reach.
+    /// </summary>
     public static TsExpression ArgumentOf(
         IrTypeRef type,
         string site,
@@ -270,8 +273,11 @@ internal static class IrToTsRuntimeTypeReferences
     ) =>
         type is IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named
         && !reachability.Reaches(named.SupertypeKey)
-            ? new TsRuntimeHelperReference("UnknownType")
-            : Of(type, site, reachability) ?? new TsRuntimeHelperReference("UnknownType");
+            ? Wildcard()
+            : Of(type, site, reachability) ?? Wildcard();
+
+    /// <summary><c>UnknownType</c>: the descriptor that matches every value (FR-008).</summary>
+    private static TsExpression Wildcard() => new TsRuntimeHelperReference("UnknownType");
 
     private static bool IsValueType(IrTypeRef type) =>
         type

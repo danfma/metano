@@ -105,6 +105,7 @@ internal sealed partial class RuntimeTypeReachability
         analysis.ReachRoots(ir);
         analysis.ReachJsonRoots(jsonRoots ?? []);
         analysis.ReachCollectionConstructions(ir);
+        analysis.ReportUnanswerableInterfaceTests(ir);
         analysis.Close();
 
         return analysis.ToResult(ir);

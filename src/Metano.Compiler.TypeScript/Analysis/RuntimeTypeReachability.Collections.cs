@@ -83,7 +83,7 @@ internal sealed partial class RuntimeTypeReachability
 
         ReachTypeArguments(question.Type);
         ReportArgumentWithoutDescriptor(question);
-        ReportUnanswerableInterfaceTest(question, name);
+        CollectUnanswerableInterfaceTest(question, name);
     }
 
     /// <summary>
@@ -120,51 +120,74 @@ internal sealed partial class RuntimeTypeReachability
         };
 
     /// <summary>
-    /// W4-17: a test against a collection interface some type that is not a
-    /// runtime collection implements, and that can be the operand, would answer
-    /// <c>false</c> for it: <c>MS0001</c> instead, and the site lowers to the
-    /// throwing placeholder.
+    /// W4-17: a test against a collection interface that some value without a
+    /// collection descriptor implements (a type that is not a runtime collection,
+    /// a native array, a dictionary view) and that can be the operand would answer
+    /// <c>false</c> for it. The test is recorded here; <see cref="ReportUnanswerableInterfaceTests"/>
+    /// reports it.
     /// </summary>
-    private void ReportUnanswerableInterfaceTest(IrRuntimeQuestion question, string name)
+    private void CollectUnanswerableInterfaceTest(IrRuntimeQuestion question, string name)
     {
         if (
             RuntimeCollections.KindOfClrName(name) is not { } tested
             || !RuntimeCollections.IsInterface(tested)
-            || !ImplementerMayBeOperand(tested, name, question.InputType)
+            || !UnanswerableValueMayBeOperand(tested, name, question.InputType)
         )
             return;
 
         _unanswerableCollectionTests.Add(
             CollectionTestKey.From(tested, OperandKeyOf(question.InputType))
         );
-
-        _report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.UnsupportedFeature,
-                $"'{question.Text}' cannot be lowered: a type that is not a runtime collection "
-                    + "implements the collection interface and may be the value, and it has no "
-                    + "collection descriptor, so the test would answer false for it (spec 011 W4-17).",
-                LocationOf(question)
-            )
-        );
     }
 
-    private string OperandKeyOf(IrQuestionedType? operand)
+    /// <summary>
+    /// <c>MS0001</c> for every test the bridge lowers to the throwing placeholder: the
+    /// bridge reads the operand's key only coarsely (an array, a runtime collection, any
+    /// other type), so a test whose key was recorded is reported even where its own
+    /// operand could not hold such a value. Run once every question has been answered.
+    /// </summary>
+    private void ReportUnanswerableInterfaceTests(IrCompilation ir)
     {
-        if (operand is { Shape: IrQuestionedTypeShape.Array })
-            return "[]";
-
-        if (IsOpenOperand(operand))
-            return "*";
-
-        if (operand!.CollectionDefinitionName is { } collection)
-            return collection;
-
-        return operand.Key is { } key && IrTypeKeys.Find(key, _compilation) is { } symbol
-            ? $"{symbol.ContainingNamespace.ToDisplayString()}.{symbol.Name}"
-            : "*";
+        foreach (var question in ir.RuntimeQuestions.Where(IsUnanswerableInterfaceTest))
+        {
+            _report(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"'{question.Text}' cannot be lowered: a value that is not a runtime collection "
+                        + "(a native array, a dictionary view, or a type implementing the collection "
+                        + "interface) may be the operand and has no collection descriptor, so the test "
+                        + "would answer false for it (spec 011 W4-17).",
+                    LocationOf(question)
+                )
+            );
+        }
     }
+
+    private bool IsUnanswerableInterfaceTest(IrRuntimeQuestion question) =>
+        question
+            is {
+                Kind: IrRuntimeQuestionKind.Test or IrRuntimeQuestionKind.As,
+                Type.CollectionDefinitionName: { } name,
+            }
+        && RuntimeCollections.KindOfClrName(name) is { } tested
+        && RuntimeCollections.IsInterface(tested)
+        && _unanswerableCollectionTests.Contains(
+            CollectionTestKey.From(tested, OperandKeyOf(question.InputType))
+        );
+
+    /// <summary>
+    /// The operand's key as the bridge reads it from the static type
+    /// (<see cref="RuntimeTypeReachabilityResult.IsUnanswerable"/>): an array, a runtime
+    /// collection kind, else open.
+    /// </summary>
+    private static string OperandKeyOf(IrQuestionedType? operand) =>
+        operand switch
+        {
+            { Shape: IrQuestionedTypeShape.Array } => CollectionTestKey.ArrayOperand,
+            { CollectionDefinitionName: { } name } => CollectionTestKey.OperandOfClrName(name),
+            _ => CollectionTestKey.OpenOperand,
+        };
 
     private static bool IsOpenOperand(IrQuestionedType? operand) =>
         operand is null
@@ -174,15 +197,39 @@ internal sealed partial class RuntimeTypeReachability
                 or IrQuestionedTypeShape.TypeParameter
                 or IrQuestionedTypeShape.Dynamic;
 
+    /// <summary>
+    /// Whether a value no collection descriptor answers for can be the operand: a
+    /// native array behind an array-backed list interface, a dictionary view behind
+    /// <c>ICollection</c> / <c>IReadOnlyCollection</c>, or a type that implements the
+    /// interface itself (<see cref="ImplementerMayBeOperand"/>).
+    /// </summary>
+    private bool UnanswerableValueMayBeOperand(
+        IrCollectionKind tested,
+        string testedName,
+        IrQuestionedType? operand
+    ) =>
+        NativeValueMayBeOperand(tested, operand)
+        || ImplementerMayBeOperand(tested, testedName, operand);
+
+    private static bool NativeValueMayBeOperand(IrCollectionKind tested, IrQuestionedType? operand)
+    {
+        var open = IsOpenOperand(operand);
+
+        return (
+                RuntimeCollections.IsImplementedByArrays(tested) && (open || operand!.AcceptsArrays)
+            )
+            || (
+                RuntimeCollections.IsImplementedByDictionaryViews(tested)
+                && (open || operand!.AcceptsDictionaryViews)
+            );
+    }
+
     private bool ImplementerMayBeOperand(
         IrCollectionKind tested,
         string testedName,
         IrQuestionedType? operand
     )
     {
-        if (operand is { Shape: IrQuestionedTypeShape.Array })
-            return RuntimeCollections.ArrayBackedKindOf(tested) == IrCollectionKind.List;
-
         var open = IsOpenOperand(operand);
 
         if (!open && operand is not { Shape: IrQuestionedTypeShape.Named, Key: { } })

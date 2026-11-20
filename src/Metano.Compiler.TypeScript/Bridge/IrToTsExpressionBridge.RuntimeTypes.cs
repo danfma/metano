@@ -107,11 +107,11 @@ public static partial class IrToTsExpressionBridge
                 TypeArgumentDescriptors =
                 [
                     .. (call.TypeArguments ?? []).Select(argument =>
-                        IrToTsRuntimeTypeReferences.Of(
+                        IrToTsRuntimeTypeReferences.ArgumentOf(
                             argument,
                             "mapped type argument",
                             context.RuntimeTypes
-                        ) ?? new TsRuntimeHelperReference("UnknownType")
+                        )
                     ),
                 ],
             }

@@ -242,8 +242,9 @@ internal sealed class RuntimeQuestionScanner
             case ITypeOfOperation typeOf:
                 InspectTypeOf(typeOf);
                 break;
-            case IConversionOperation { Operand.Type: IArrayTypeSymbol } arrayConversion:
+            case IConversionOperation { Operand.Type: IArrayTypeSymbol source } arrayConversion:
                 RecordCollectionConstruction(arrayConversion.Type, arrayConversion.Syntax);
+                RecordAdoptedArray(source, arrayConversion.Syntax);
                 break;
             case IObjectCreationOperation or ICollectionExpressionOperation:
                 RecordCollectionConstruction(operation.Type, operation.Syntax);
@@ -282,6 +283,18 @@ internal sealed class RuntimeQuestionScanner
         _questions.Add(
             Question(IrRuntimeQuestionKind.CollectionConstruction, named, syntax.GetLocation())
         );
+    }
+
+    /// <summary>
+    /// An array converted to a collection interface becomes a <c>List&lt;E&gt;</c> of its
+    /// own element type <c>E</c>, which can differ from the target's argument by array
+    /// covariance: that list is the construction a target reaches the element's
+    /// descriptor from.
+    /// </summary>
+    private void RecordAdoptedArray(IArrayTypeSymbol source, SyntaxNode syntax)
+    {
+        if (_compilation.GetTypeByMetadataName("System.Collections.Generic.List`1") is { } list)
+            RecordCollectionConstruction(list.Construct(source.ElementType), syntax);
     }
 
     /// <summary>
@@ -608,12 +621,61 @@ internal sealed class RuntimeQuestionScanner
         _questions.Add(
             Question(kind, type, site.GetLocation()) with
             {
-                InputType = inputType is null
-                    ? null
-                    : RuntimeQuestionFacts.QuestionedTypeOf(inputType),
+                InputType = inputType is null ? null : QuestionedInputOf(inputType),
                 Text = site.ToString(),
             }
         );
+
+    /// <summary>
+    /// The static type of a tested value, with what its values can be at run time
+    /// beyond the type's own shape: a native array or a dictionary view, which a
+    /// target that has no descriptor for them must not answer a collection test for.
+    /// </summary>
+    private IrQuestionedType QuestionedInputOf(ITypeSymbol inputType) =>
+        RuntimeQuestionFacts.QuestionedTypeOf(inputType) with
+        {
+            AcceptsArrays = CanHoldArray(inputType),
+            AcceptsDictionaryViews = CanHoldDictionaryView(inputType),
+        };
+
+    /// <summary>
+    /// Whether some array converts implicitly to <paramref name="type"/>: an array of
+    /// the type's own single type argument (<c>IList&lt;int&gt;</c> holds an
+    /// <c>int[]</c>), else an <c>object[]</c> (<c>object</c>, <c>Array</c>).
+    /// </summary>
+    private bool CanHoldArray(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol)
+            return true;
+
+        var element = ElementOf(type);
+
+        return _compilation.ClassifyConversion(_compilation.CreateArrayTypeSymbol(element), type)
+            is { IsImplicit: true };
+    }
+
+    private bool CanHoldDictionaryView(ITypeSymbol type)
+    {
+        if (
+            _compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2")
+            is not { } dictionary
+        )
+            return false;
+
+        var element = ElementOf(type);
+        var anything = _compilation.ObjectType;
+
+        return ViewOf(dictionary.Construct(element, anything), "KeyCollection") is { } keys
+                && _compilation.ClassifyConversion(keys, type) is { IsImplicit: true }
+            || ViewOf(dictionary.Construct(anything, element), "ValueCollection") is { } values
+                && _compilation.ClassifyConversion(values, type) is { IsImplicit: true };
+    }
+
+    private static INamedTypeSymbol? ViewOf(INamedTypeSymbol dictionary, string name) =>
+        dictionary.GetTypeMembers(name).FirstOrDefault();
+
+    private ITypeSymbol ElementOf(ITypeSymbol type) =>
+        type is INamedTypeSymbol { TypeArguments: [var single] } ? single : _compilation.ObjectType;
 
     private void AddQuestion(IrRuntimeQuestionKind kind, ITypeSymbol? type, Location? location) =>
         _questions.Add(Question(kind, type, location));

@@ -14,28 +14,48 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class CollectionTypeArgumentSlots
 {
-    private static readonly IReadOnlyDictionary<
-        (IrCollectionKind Kind, string Member),
-        int
-    > Positions = new Dictionary<(IrCollectionKind, string), int>
+    /// <summary>The runtime member a slot is appended to the call of.</summary>
+    private enum Member
     {
-        [(IrCollectionKind.List, "new")] = 1,
-        [(IrCollectionKind.List, "of")] = 1,
-        [(IrCollectionKind.List, "from")] = 1,
-        [(IrCollectionKind.List, "withCapacity")] = 1,
-        [(IrCollectionKind.List, "adopt")] = 2,
-        [(IrCollectionKind.List, "toList")] = 0,
-        [(IrCollectionKind.HashSet, "new")] = 2,
-        [(IrCollectionKind.HashSet, "of")] = 2,
-        [(IrCollectionKind.HashSet, "from")] = 2,
-        [(IrCollectionKind.HashSet, "withCapacity")] = 2,
-        [(IrCollectionKind.HashSet, "toHashSet")] = 0,
-        [(IrCollectionKind.Dictionary, "new")] = 2,
-        [(IrCollectionKind.Dictionary, "of")] = 2,
-        [(IrCollectionKind.Dictionary, "from")] = 2,
-        [(IrCollectionKind.Dictionary, "assign")] = 2,
-        [(IrCollectionKind.Dictionary, "withCapacity")] = 2,
-        [(IrCollectionKind.Dictionary, "toDictionary")] = 4,
+        New,
+        Of,
+        From,
+        WithCapacity,
+        Assign,
+        Adopt,
+        ToList,
+        ToHashSet,
+        ToDictionary,
+    }
+
+    private static readonly IReadOnlyDictionary<
+        (IrCollectionKind Kind, Member Member),
+        int
+    > Positions = new Dictionary<(IrCollectionKind, Member), int>
+    {
+        [(IrCollectionKind.List, Member.New)] = 1,
+        [(IrCollectionKind.List, Member.Of)] = 1,
+        [(IrCollectionKind.List, Member.From)] = 1,
+        [(IrCollectionKind.List, Member.WithCapacity)] = 1,
+        [(IrCollectionKind.List, Member.Adopt)] = 2,
+        [(IrCollectionKind.List, Member.ToList)] = 0,
+        [(IrCollectionKind.Queue, Member.New)] = 1,
+        [(IrCollectionKind.Queue, Member.From)] = 1,
+        [(IrCollectionKind.Queue, Member.WithCapacity)] = 1,
+        [(IrCollectionKind.Stack, Member.New)] = 1,
+        [(IrCollectionKind.Stack, Member.From)] = 1,
+        [(IrCollectionKind.Stack, Member.WithCapacity)] = 1,
+        [(IrCollectionKind.HashSet, Member.New)] = 2,
+        [(IrCollectionKind.HashSet, Member.Of)] = 2,
+        [(IrCollectionKind.HashSet, Member.From)] = 2,
+        [(IrCollectionKind.HashSet, Member.WithCapacity)] = 2,
+        [(IrCollectionKind.HashSet, Member.ToHashSet)] = 0,
+        [(IrCollectionKind.Dictionary, Member.New)] = 2,
+        [(IrCollectionKind.Dictionary, Member.Of)] = 2,
+        [(IrCollectionKind.Dictionary, Member.From)] = 2,
+        [(IrCollectionKind.Dictionary, Member.Assign)] = 2,
+        [(IrCollectionKind.Dictionary, Member.WithCapacity)] = 2,
+        [(IrCollectionKind.Dictionary, Member.ToDictionary)] = 4,
     };
 
     /// <summary>
@@ -57,12 +77,13 @@ internal static class CollectionTypeArgumentSlots
         {
             TsNewExpression created when IsRuntimeClass(created.Callee, type) => created with
             {
-                Arguments = Padded(created.Arguments, PositionOf(type.Kind, "new"), slot),
+                Arguments = Padded(created.Arguments, PositionOf(type.Kind, Member.New), slot),
             },
             TsCallExpression { Callee: TsPropertyAccess { Object: var owner } access } call
-                when IsRuntimeClass(owner, type) => call with
+                when IsRuntimeClass(owner, type)
+                    && MemberOfProperty(access.Property) is { } member => call with
             {
-                Arguments = Padded(call.Arguments, PositionOf(type.Kind, access.Property), slot),
+                Arguments = Padded(call.Arguments, PositionOf(type.Kind, member), slot),
             },
             _ => construction,
         };
@@ -80,7 +101,7 @@ internal static class CollectionTypeArgumentSlots
         SlotOf(baseType, reachability) is { } slot
             ? call with
             {
-                Arguments = Padded(call.Arguments, PositionOf(baseType.Kind, "new"), slot),
+                Arguments = Padded(call.Arguments, PositionOf(baseType.Kind, Member.New), slot),
             }
             : call;
 
@@ -98,16 +119,16 @@ internal static class CollectionTypeArgumentSlots
     {
         var member = terminal switch
         {
-            IrLinqOperator.ToList => "toList",
-            IrLinqOperator.ToSet => "toHashSet",
-            IrLinqOperator.ToMap => "toDictionary",
-            _ => null,
+            IrLinqOperator.ToList => Member.ToList,
+            IrLinqOperator.ToSet => Member.ToHashSet,
+            IrLinqOperator.ToMap => Member.ToDictionary,
+            _ => (Member?)null,
         };
 
         if (member is null || SlotOf(type, reachability) is not { } slot)
             return stageCall;
 
-        var position = PositionOf(type.Kind, member);
+        var position = PositionOf(type.Kind, member.Value);
 
         return stageCall is TsCallExpression call && call.Arguments.Count <= position
             ? call with
@@ -148,12 +169,7 @@ internal static class CollectionTypeArgumentSlots
 
         var count = TopLevelArgumentCount(text[(open + 1)..^1]);
 
-        var member = Positions
-            .Keys.Select(key => key.Member)
-            .FirstOrDefault(name => text[..open].EndsWith($".{name}"))
-            ?? "new";
-
-        var position = PositionOf(type.Kind, member);
+        var position = PositionOf(type.Kind, MemberOfTemplate(text, open));
         var nulls = string.Concat(Enumerable.Repeat("null, ", Math.Max(0, position - count)));
         var index = template.Arguments.Count;
         var lead = count > 0 ? ", " : "";
@@ -163,6 +179,35 @@ internal static class CollectionTypeArgumentSlots
             Template = $"{text[..^1]}{lead}{nulls}${index})",
             Arguments = [.. template.Arguments, slot],
         };
+    }
+
+    /// <summary>
+    /// The member a mapped template calls: the one its callee text, the part before
+    /// the parenthesis at <paramref name="open"/>, ends with
+    /// (<c>List.of(</c>, <c>$0.toList(</c>), or <see cref="Member.New"/> when the
+    /// callee names none (<c>new List&lt;$T0&gt;(</c>).
+    /// </summary>
+    private static Member MemberOfTemplate(string text, int open)
+    {
+        var callee = text[..open];
+
+        return Enum.GetValues<Member>()
+            .Where(member => member is not Member.New)
+            .Cast<Member?>()
+            .FirstOrDefault(member => callee.EndsWith($".{Spelling(member!.Value)}"))
+            ?? Member.New;
+    }
+
+    private static Member? MemberOfProperty(string property) =>
+        Enum.GetValues<Member>()
+            .Cast<Member?>()
+            .FirstOrDefault(member => Spelling(member!.Value) == property);
+
+    private static string Spelling(Member member)
+    {
+        var name = member.ToString();
+
+        return $"{char.ToLowerInvariant(name[0])}{name[1..]}";
     }
 
     private static int MatchingOpenParenthesis(string text)
@@ -232,12 +277,15 @@ internal static class CollectionTypeArgumentSlots
 
     /// <summary>
     /// The index of the <c>typeArguments</c> parameter: after the comparer of a
-    /// dictionary or a set, after the options of <c>adopt</c>, else second.
+    /// dictionary or a set, after the options of <c>adopt</c>, else second. A kind
+    /// with no row for the member is an internal error, never a guess.
     /// </summary>
-    private static int PositionOf(IrCollectionKind kind, string member) =>
+    private static int PositionOf(IrCollectionKind kind, Member member) =>
         Positions.TryGetValue((kind, member), out var position)
             ? position
-            : Positions[(IrCollectionKind.List, member)];
+            : throw new InvalidOperationException(
+                $"Internal error: no type-argument slot position for '{kind}.{Spelling(member)}'."
+            );
 
     private static IReadOnlyList<TsExpression> Padded(
         IReadOnlyList<TsExpression> arguments,

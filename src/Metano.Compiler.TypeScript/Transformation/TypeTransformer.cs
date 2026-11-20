@@ -651,11 +651,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // group agrees and a warm group cache keeps the phase's diagnostics.
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
 
-        var jsonPlans =
-            (IReadOnlyDictionary<INamedTypeSymbol, JsonContextPlan?>)
-                new Dictionary<INamedTypeSymbol, JsonContextPlan?>(SymbolEqualityComparer.Default);
-
-        TypeScriptTransformContext NewContext(RuntimeTypeReachabilityResult reachability) =>
+        TypeScriptTransformContext NewContext(
+            RuntimeTypeReachabilityResult reachability,
+            IReadOnlyDictionary<INamedTypeSymbol, JsonContextPlan?> jsonPlans
+        ) =>
             new TypeScriptTransformContext(
                 compilation,
                 _currentAssembly,
@@ -685,14 +684,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             };
 
         // The JSON contexts' contract classes are reachability roots (FR-028, D31); their
-        // plans need a context, which the first pass builds without any reachability.
-        _context = NewContext(RuntimeTypeReachabilityResult.Empty);
+        // plans need a context, which is built without any plan or reachability, and the
+        // context every later phase reads is built once with the plans.
+        _context = NewContext(
+            RuntimeTypeReachabilityResult.Empty,
+            new Dictionary<INamedTypeSymbol, JsonContextPlan?>(SymbolEqualityComparer.Default)
+        );
 
-        jsonPlans = new JsonSerializerContextTransformer(Context).PlanContexts(
+        var jsonPlans = new JsonSerializerContextTransformer(Context).PlanContexts(
             emittedTypes.Where(IsJsonSerializerContextType)
         );
 
-        _context = NewContext(RuntimeTypeReachabilityResult.Empty);
+        _context = NewContext(RuntimeTypeReachabilityResult.Empty, jsonPlans);
 
         var runtimeTypes = RuntimeTypeReachability.Compute(
             ir,
@@ -719,7 +722,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 .ToHashSet(),
         };
 
-        _context = NewContext(runtimeTypes);
+        _context = NewContext(runtimeTypes, jsonPlans);
 
         new PlainObjectOverlapReporter(Context, emittedTypes).Report(ir.RuntimeQuestions);
 

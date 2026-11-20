@@ -61,17 +61,37 @@ public class ListInterfaceCastTests
     }
 
     [Test]
-    public async Task AsFromObject_TestsThroughTheCollectionDescriptor()
+    public async Task AsFromObject_ReportsBecauseANativeArrayHasNoDescriptor()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Returning("object value", "value as IList<int>")
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task AsFromObject_ToADictionaryInterface_TestsThroughTheCollectionDescriptor()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            Returning("object value", "value as IList<int>")
+            """
+            using System.Collections.Generic;
+            using Metano.Annotations;
+
+            [Transpile]
+            public static class Casts
+            {
+                public static IDictionary<string, int>? View(object value) =>
+                    value as IDictionary<string, int>;
+            }
+            """
         );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
 
         await Assert
             .That(files["casts.ts"])
-            .Contains("isType(value, iListType(Int32Type)) ? value : null");
+            .Contains("isType(value, iDictionaryType(StringType, Int32Type)) ? value : null");
     }
 
     private static string Returning(string parameter, string expression) =>

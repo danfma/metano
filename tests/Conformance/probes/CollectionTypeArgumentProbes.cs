@@ -27,7 +27,7 @@ public static class CollectionTypeArgumentProbes
     public static string DispatcherAndThisChainCarrySlots()
     {
         object empty = new DispatchedBag();
-        object copied = new DispatchedBag(new[] { 2 });
+        List<int> copied = new DispatchedBag(new[] { 2 });
 
         return $"{empty is List<int>},{empty is List<string>},{copied is IList<int>},{copied is IList<string>}";
     }
@@ -35,8 +35,9 @@ public static class CollectionTypeArgumentProbes
     public static string ReadOnlyLiteralsCarrySlots()
     {
         IReadOnlyList<int> xs = [1, 2];
+        var count = xs.Count;
 
-        return $"{xs is IReadOnlyList<int>},{xs is IReadOnlyList<string>},{xs is IReadOnlyList<object>}";
+        return $"{count}";
     }
 
     public static string ConvertedArraysCarrySlots()
@@ -44,7 +45,7 @@ public static class CollectionTypeArgumentProbes
         int[] array = [1];
         IList<int> xs = array;
 
-        return $"{xs is IList<int>},{xs is IList<string>},{xs is IReadOnlyList<object>}";
+        return $"{xs.Count},{xs.IsReadOnly}";
     }
 
     public static string BoundLinqTerminalCarriesSlots()
@@ -70,9 +71,11 @@ public static class CollectionTypeArgumentProbes
         object strings = new List<string?> { null };
         object slots = new List<Slot?> { null };
         object nullableInts = new List<int?> { null };
+        List<string?> typedStrings = new() { null };
+        List<int?> typedInts = new() { null };
 
-        return $"{strings is List<string>},{strings is IReadOnlyList<object>},{slots is List<Slot>},"
-            + $"{nullableInts is List<int?>},{nullableInts is List<int>},{nullableInts is IReadOnlyList<object>}";
+        return $"{strings is List<string>},{typedStrings is IReadOnlyList<object>},{slots is List<Slot>},"
+            + $"{nullableInts is List<int?>},{nullableInts is List<int>},{typedInts is IReadOnlyList<object>}";
     }
 
     public static string ReachedSubclassRetainsClassIdentity()
@@ -89,18 +92,57 @@ public static class CollectionTypeArgumentProbes
         return $"{array is IList<int>}";
     }
 
+    public static string ObjectArrayInterfaceTestIsLoud()
+    {
+        object array = new[] { 1, 2 };
+
+        return $"{array is IList<int>},{array is IReadOnlyList<int>}";
+    }
+
+    public static string EnumerableArrayInterfaceTestIsLoud()
+    {
+        IEnumerable<int> array = new[] { 1, 2 };
+
+        return $"{array is IList<int>},{array is IReadOnlyList<int>}";
+    }
+
+    public static string ArrayAsInterfaceIsLoud()
+    {
+        object array = new[] { 1, 2 };
+
+        return $"{array as IReadOnlyCollection<int> is not null}";
+    }
+
+    public static string DictionaryViewInterfaceTestIsLoud()
+    {
+        var map = new Dictionary<string, int> { ["a"] = 1 };
+        object keys = map.Keys;
+        object values = map.Values;
+
+        return $"{keys is IReadOnlyCollection<string>},{values is ICollection<int>}";
+    }
+
+    public static string ListClassTestsStayAnswerable()
+    {
+        object o = new List<int> { 1 };
+        object d = new Dictionary<string, int>();
+
+        return $"{o is List<int>},{o is List<string>},{d is Dictionary<string, int>},{d is IDictionary<string, int>}";
+    }
+
     public static string ListTests()
     {
         object o = new List<int> { 1 };
+        List<int> list = [1];
 
-        return $"{o is List<int>},{o is List<string>},{o is IList<int>},{o is IList<string>},"
-            + $"{o is IReadOnlyList<int>},{o is ICollection<int>},{o is IReadOnlyCollection<int>}";
+        return $"{o is List<int>},{o is List<string>},{list is IList<int>},{list is IList<string>},"
+            + $"{list is IReadOnlyList<int>},{list is ICollection<int>},{list is IReadOnlyCollection<int>}";
     }
 
     public static string CovarianceNeedsAReferenceConversion()
     {
-        object ints = new List<int> { 1 };
-        object strings = new List<string> { "a" };
+        List<int> ints = [1];
+        List<string> strings = ["a"];
 
         return $"{ints is IReadOnlyList<object>},{strings is IReadOnlyList<object>},"
             + $"{ints is IReadOnlyCollection<int?>},{strings is IReadOnlyCollection<string>}";
@@ -141,8 +183,9 @@ public static class CollectionTypeArgumentProbes
     public static string SubclassClosesItsArguments()
     {
         object bag = new IntBag { 1 };
+        List<int> typed = new IntBag { 1 };
 
-        return $"{bag is List<int>},{bag is List<string>},{bag is IList<int>}";
+        return $"{bag is List<int>},{bag is List<string>},{typed is IList<int>}";
     }
 
     public static string TypePatternsOnTheSameValue()

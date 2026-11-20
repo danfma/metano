@@ -123,7 +123,13 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapAdoptedArray(
         IrArrayToCollectionConversion conversion,
         IrToTsBridgeContext context
-    ) => AdoptedFixedSize(Map(conversion.Value, context), conversion.Target, context);
+    ) =>
+        AdoptedFixedSize(
+            Map(conversion.Value, context),
+            conversion.Target,
+            context,
+            conversion.SourceElementType
+        );
 
     /// <summary>
     /// A cast to a list interface from a value that may be a native array
@@ -146,11 +152,18 @@ public static partial class IrToTsExpressionBridge
         return new TsCastExpression(call, IrToTsTypeMapper.Map(cast.TargetType));
     }
 
-    /// <summary><c>List.adopt&lt;T&gt;(array, { fixedSize: true })</c>.</summary>
+    /// <summary>
+    /// <c>List.adopt&lt;T&gt;(array, { fixedSize: true })</c>. The slot a questioned
+    /// kind carries is the array's own element type when it is known
+    /// (<paramref name="sourceElementType"/>: a <c>string[]</c> converted to
+    /// <c>IReadOnlyList&lt;object&gt;</c> is still a list of strings at run time);
+    /// a collection literal has none, so it takes the target's argument.
+    /// </summary>
     internal static TsExpression AdoptedFixedSize(
         TsExpression array,
         IrCollectionTypeRef target,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        IrTypeRef? sourceElementType = null
     ) =>
         CollectionTypeArgumentSlots.Append(
             new TsCallExpression(
@@ -164,6 +177,9 @@ public static partial class IrToTsExpressionBridge
             target with
             {
                 Kind = RuntimeCollections.ArrayBackedKindOf(target.Kind),
+                TypeArguments = sourceElementType is null
+                    ? target.TypeArguments
+                    : [sourceElementType],
             },
             context.RuntimeTypes
         );

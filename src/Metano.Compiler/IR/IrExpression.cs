@@ -999,7 +999,16 @@ public sealed record IrFromEndElementAccess(
 /// gets the node.
 /// </summary>
 public sealed record IrArrayToCollectionConversion(IrExpression Value, IrCollectionTypeRef Target)
-    : IrExpression;
+    : IrExpression
+{
+    /// <summary>
+    /// The element type of the converted array, which can differ from the
+    /// target's argument by array covariance (<c>IReadOnlyList&lt;object&gt; x =
+    /// new string[] { "a" }</c>): the run-time identity of the value, which a
+    /// type test reads back. <c>null</c> when unknown.
+    /// </summary>
+    public IrTypeRef? SourceElementType { get; init; }
+}
 
 /// <summary>
 /// An explicit cast <c>(IList&lt;T&gt;)v</c>, <c>(ICollection&lt;T&gt;)v</c>,

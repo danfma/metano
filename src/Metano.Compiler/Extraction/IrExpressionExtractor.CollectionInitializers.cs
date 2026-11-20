@@ -253,25 +253,34 @@ public sealed partial class IrExpressionExtractor
     {
         var info = _semantic.GetTypeInfo(expression);
 
-        return ArrayToCollectionTargetOf(info.Type, info.ConvertedType) is { } target
-            ? new IrArrayToCollectionConversion(value, target)
-            : value;
+        return ArrayToCollectionConversionOf(value, info.Type, info.ConvertedType) ?? value;
     }
 
     /// <summary>
-    /// The list interface an array of <paramref name="source"/> converts to
+    /// <paramref name="value"/> converted from the array <paramref name="source"/> to
+    /// the list interface <paramref name="target"/>
     /// (<c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
-    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>);
-    /// <c>null</c> for any other pair.
+    /// <c>IReadOnlyList&lt;T&gt;</c>, <c>IReadOnlyCollection&lt;T&gt;</c>), with the
+    /// array's own element type; <c>null</c> for any other pair.
     /// </summary>
-    private IrCollectionTypeRef? ArrayToCollectionTargetOf(ITypeSymbol? source, ITypeSymbol? target)
+    private IrArrayToCollectionConversion? ArrayToCollectionConversionOf(
+        IrExpression value,
+        ITypeSymbol? source,
+        ITypeSymbol? target
+    )
     {
-        if (source is not IArrayTypeSymbol)
+        if (
+            source is not IArrayTypeSymbol array
+            || target is not INamedTypeSymbol named
+            || !IsListInterface(named)
+            || MapNonNullType(named) is not IrCollectionTypeRef collection
+        )
             return null;
 
-        return target is INamedTypeSymbol named && IsListInterface(named)
-            ? MapNonNullType(named) as IrCollectionTypeRef
-            : null;
+        return new IrArrayToCollectionConversion(value, collection)
+        {
+            SourceElementType = MapNonNullType(array.ElementType),
+        };
     }
 
     private static bool IsListInterface(INamedTypeSymbol type) =>
@@ -299,8 +308,8 @@ public sealed partial class IrExpressionExtractor
         if (targetType is not INamedTypeSymbol named || !IsListInterface(named))
             return null;
 
-        if (ArrayToCollectionTargetOf(sourceType, targetType) is { } target)
-            return new IrArrayToCollectionConversion(inner, target);
+        if (ArrayToCollectionConversionOf(inner, sourceType, targetType) is { } conversion)
+            return conversion;
 
         if (IsStageCollectionOrImplementer(sourceType))
             return null;

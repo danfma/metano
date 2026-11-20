@@ -35,7 +35,9 @@ public class CollectionTypeArgumentTests
             {
                 public static bool IsList(object o) => o is List<string>;
 
-                public static bool IsReadOnly(object o) => o is IReadOnlyList<object>;
+                public static bool IsReadOnly(List<object> o) => o is IReadOnlyList<string>;
+
+                public static IReadOnlyList<object> Covariant(string[] xs) => xs;
 
                 public static List<int> Make() => new List<int> { 1, 2 };
 
@@ -267,6 +269,136 @@ public class CollectionTypeArgumentTests
             .Contains("Unsupported expression: CollectionInterfaceTest");
 
         await Assert.That(files["slots/probe.ts"]).Contains("isType(xs, iListType(Int32Type))");
+    }
+
+    [Test]
+    public async Task AnArrayBehindAnOperandThatCanHoldOne_ReportsMs0001()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool ObjectList(object o) => o is IList<int>;
+                    public static bool ObjectReadOnly(object o) => o is IReadOnlyList<int>;
+                    public static bool ObjectCollection(object o) => o is ICollection<int>;
+                    public static bool ObjectReadOnlyCollection(object o) => o is IReadOnlyCollection<int>;
+                    public static bool Enumerable(IEnumerable<int> e) => e is IList<int>;
+                    public static bool EnumerableReadOnly(IEnumerable<int> e) => e is IReadOnlyList<int>;
+                    public static bool Untyped(System.Collections.IEnumerable e) => e is IList<int>;
+                    public static bool Wide(System.Array a) => a is IList<int>;
+                    public static bool Narrower(ICollection<int> c) => c is IList<int>;
+                    public static bool Generic<T>(T value) => value is IList<int>;
+                    public static IList<int>? As(object o) => o as IList<int>;
+                    public static string Switch(object o) => o switch { IReadOnlyList<int> => "l", _ => "?" };
+                }
+                """
+        );
+
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(12);
+
+        await Assert
+            .That(
+                files["slots/probe.ts"]
+                    .Split("Unsupported expression: CollectionInterfaceTest")
+                    .Length
+            )
+            .IsEqualTo(13);
+    }
+
+    [Test]
+    public async Task AClassTestOrAnOperandThatCannotHoldAnArray_ReportsNothing()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Class(object o) => o is List<int>;
+                    public static bool Dictionary(object o) => o is Dictionary<string, int>;
+                    public static bool Set(object o) => o is HashSet<int>;
+                    public static bool DictionaryInterface(object o) => o is IDictionary<string, int>;
+                    public static bool SetInterface(object o) => o is ISet<int>;
+                    public static bool Enumerable(IEnumerable<int> e) => e is List<int>;
+                    public static bool OfAList(List<object> xs) => xs is IReadOnlyList<string>;
+                    public static bool OfADictionary(Dictionary<string, int> d) => d is IDictionary<string, int>;
+                }
+                """
+        );
+
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(0);
+
+        await Assert
+            .That(files["slots/probe.ts"])
+            .DoesNotContain("Unsupported expression: CollectionInterfaceTest");
+
+        await Assert.That(files["slots/probe.ts"]).Contains("isType(o, listType(Int32Type))");
+    }
+
+    [Test]
+    public async Task ADictionaryViewBehindACollectionOperand_ReportsMs0001()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Object(object keys) => keys is IReadOnlyCollection<string>;
+                    public static bool Enumerable(IEnumerable<string> keys) => keys is ICollection<string>;
+                    public static bool OfADictionary(Dictionary<string, int> d) =>
+                        d is IReadOnlyCollection<KeyValuePair<string, int>>;
+                }
+                """
+        );
+
+        var unsupported = diagnostics.Where(d => d.Code == "MS0001").ToList();
+
+        await Assert.That(unsupported.Count).IsEqualTo(2);
+        await Assert.That(unsupported[0].Message).Contains("a dictionary view");
+    }
+
+    [Test]
+    public async Task AnArrayConversion_TakesTheSlotFromTheSourceElement()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is List<string>;
+                    public static IReadOnlyList<object> Covariant(string[] xs) => xs;
+                    public static IList<object> Mutable(string[] xs) => xs;
+                    public static IReadOnlyList<object> Literal() => ["a"];
+                }
+                """
+        );
+
+        var text = files["slots/probe.ts"];
+
+        await Assert
+            .That(text)
+            .Contains("List.adopt<Object>(xs, { fixedSize: true }, [StringType])");
+
+        await Assert.That(text.Split("[StringType]").Length).IsEqualTo(3);
+        await Assert.That(text).Contains("[ObjectType]");
+    }
+
+    [Test]
+    public async Task AnArrayConversion_ReachesTheSourceElementDescriptor()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is List<string>;
+                    public static IReadOnlyList<object> Covariant(Point[] xs) => xs;
+                }
+                """
+        );
+
+        await Assert.That(files["slots/probe.ts"]).Contains("[Point.$runtimeType]");
+        await Assert.That(files["slots/point.ts"]).Contains("static get $runtimeType()");
     }
 
     [Test]
