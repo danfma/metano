@@ -185,6 +185,7 @@ public class StageHCollectionSlotTests
         await Assert
             .That(diagnostics.Count(d => d.Code == "MS0001"))
             .IsEqualTo(tested == "IList<int>" ? 2 : 1);
+
         await Assert.That(files["probe.ts"]).Contains("Unsupported expression:");
     }
 
@@ -196,6 +197,7 @@ public class StageHCollectionSlotTests
             await Assert
                 .That(RuntimeCollections.KindOfClrName(RuntimeCollections.ClrNameOf(kind)))
                 .IsEqualTo(kind);
+
             await Assert.That(RuntimeCollections.DescriptorFactoryOf(kind)).IsNotNull();
         }
     }
