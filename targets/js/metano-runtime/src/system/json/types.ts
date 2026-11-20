@@ -262,8 +262,11 @@ export interface TypeSpec<T = unknown> {
   /**
    * The runtime type descriptor of the class (spec 011 FR-028), a thunk so the cycle
    * with the class module resolves lazily. Emitted for a reached class contract.
+   * Typed over `unknown`: a closed generic contract (`GBase<number>`) links to the
+   * class's open descriptor (`ClassType<GBase<unknown>>`), which is not a
+   * `RuntimeType<GBase<number>>`.
    */
-  readonly runtimeType?: () => RuntimeType<T>;
+  readonly runtimeType?: () => RuntimeType<unknown>;
   /** Parent type's spec — properties are inherited */
   readonly base?: TypeSpec;
   /** Constructs T from a Record<ts-field-name, deserialized-value> */
