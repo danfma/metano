@@ -521,7 +521,15 @@ internal sealed class IrToTsClassEmitter(
         {
             var userMembers = TsClassMemberTable.UserMembersOf(ir);
 
-            classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir, userMembers));
+            classMembers.AddRange(
+                IrToTsRecordSynthesisBridge.Generate(
+                    ir,
+                    userMembers,
+                    ir is { Semantics.IsValueType: true, StaticInitializer: not null }
+                        ? PerClassBackingFields.For(type).ScopeFor(ir)
+                        : PerClassBackingFieldScope.None
+                )
+            );
 
             IrToTsRecordSynthesisBridge.ReportClaimedEquals(
                 type,

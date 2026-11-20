@@ -31,6 +31,9 @@ internal sealed partial class LazyTypeInitializerLowering(
     private const string GuardName = "#$init";
     private const string RuntimeHelper = "typeInitializer";
 
+    /// <summary>A lazy ancestor emits <c>$initialize</c> too, so this one overrides it.</summary>
+    public bool OverridesInitializer { get; init; }
+
     private readonly List<TsStatement> _slotDefaults = [];
     private readonly List<TsStatement> _staticInitializers = [];
     private readonly List<TsStatement> _structFieldInitializers = [];
@@ -181,7 +184,14 @@ internal sealed partial class LazyTypeInitializerLowering(
     private TsStatement Guard() => new TsExpressionStatement(GuardCall());
 
     private TsMethodMember InitializerBridge() =>
-        new("$initialize", [], new TsVoidType(), [Guard()], Static: true);
+        new(
+            "$initialize",
+            [],
+            new TsVoidType(),
+            [Guard()],
+            Static: true,
+            Override: OverridesInitializer
+        );
 
     private TsExpression GuardCall() => new TsCallExpression(Access(GuardName), []);
 

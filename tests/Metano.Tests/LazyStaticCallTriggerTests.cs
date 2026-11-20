@@ -146,4 +146,112 @@ public class LazyStaticCallTriggerTests
 
         await Assert.That(output).DoesNotContain("$initialize");
     }
+
+    [Test]
+    public async Task RecordNullComparison_KeepsTheLooseOperators()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record LazyRec(int V) { static LazyRec() { } }
+            [Transpile]
+            public static class Calls
+            {
+                public static bool Eq(LazyRec? item) => item == null;
+                public static bool Neq(LazyRec? item) => item != null;
+            }
+            """
+        )["calls.ts"];
+
+        await Assert.That(output).Contains("$arg0 == null");
+        await Assert.That(output).Contains("$arg0 != null");
+        await Assert.That(output).DoesNotContain("$arg0 === null");
+        await Assert.That(output).DoesNotContain("$arg0 !== null");
+    }
+
+    [Test]
+    public async Task DerivedLazyClass_OverridesTheInitializerBridge()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class LazyBase { public static int B; static LazyBase() { B = 1; } }
+            [Transpile]
+            public class LazyDerived : LazyBase { public static int D; static LazyDerived() { D = B + 1; } }
+            """
+        );
+
+        await Assert.That(output["lazy-base.ts"]).Contains("static $initialize(): void");
+        await Assert.That(output["lazy-base.ts"]).DoesNotContain("override $initialize");
+
+        await Assert
+            .That(output["lazy-derived.ts"])
+            .Contains("static override $initialize(): void");
+    }
+
+    [Test]
+    public async Task AliasedOwner_InitializesThroughItsOwnImport()
+    {
+        var output = TranspileHelper
+            .Transpile(
+                """
+                namespace Demo.A
+                {
+                    [Transpile]
+                    public class AliasedOwner
+                    {
+                        static AliasedOwner() { }
+                        [Inline] public static int Ping() => 1;
+                    }
+                }
+                namespace Demo.B
+                {
+                    [Transpile]
+                    public class Bystander { static Bystander() { } }
+                }
+                namespace Demo.Caller
+                {
+                    using Short = Demo.A.AliasedOwner;
+                    using Other = Demo.B.Bystander;
+                    [Transpile]
+                    public static class Probe
+                    {
+                        public static int Run()
+                        {
+                            var value = Short.Ping();
+                            var name = typeof(Other).Name;
+                            return value;
+                        }
+                    }
+                }
+                """
+            )
+            .Single(file => file.Key.EndsWith("/probe.ts"))
+            .Value;
+
+        await Assert.That(output).DoesNotContain("Bystander.$initialize");
+        await Assert.That(output).DoesNotContain("Other.$initialize");
+    }
+
+    [Test]
+    public async Task MapMethodWithAClassMethodName_KeepsTheDeclaringClassReceiver()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [assembly: MapMethod(typeof(MapOnClass), "Compute", JsMethod = "computeImpl")]
+            [Transpile]
+            public class MapOnClass
+            {
+                static MapOnClass() { }
+                public static int Compute(int x) => x + 1;
+                public static int ComputeImpl(int x) => x * 10;
+            }
+            [Transpile]
+            public static class Calls { public static int Run() => MapOnClass.Compute(3); }
+            """
+        )["calls.ts"];
+
+        await Assert.That(output).Contains("MapOnClass.computeImpl(");
+        await Assert.That(output).DoesNotContain("return computeImpl(");
+    }
 }

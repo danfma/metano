@@ -144,10 +144,16 @@ public static class IrToTsRecordSynthesisBridge
     /// </summary>
     internal static IReadOnlyList<TsClassMember> Generate(
         IrClassDeclaration ir,
-        TsClassMemberTable userMembers
+        TsClassMemberTable userMembers,
+        PerClassBackingFieldScope? storage = null
     )
     {
-        var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
+        // Value equality reads the storage directly: a lazy struct's accessors run its
+        // static constructor, which `ValueType.Equals` / `GetHashCode` do not.
+        var fields = (ir.EqualityMembers ?? [])
+            .Select(member => ToRecordField(member, storage?.FieldOf(member.Name)))
+            .ToList();
+
         var overridesBase = IrToTsClassBridge.BuildExtends(ir) is not null;
         var unclaimedNames = SynthesizedMemberNames(ir, userMembers);
 
@@ -178,7 +184,7 @@ public static class IrToTsRecordSynthesisBridge
         IrToTsBridgeContext context
     )
     {
-        var fields = (ir.EqualityMembers ?? []).Select(ToRecordField).ToList();
+        var fields = (ir.EqualityMembers ?? []).Select(member => ToRecordField(member)).ToList();
         var isAnchored = IrMethodGroup.IsOverride(member);
         var superMember = SuperMemberOf(ir, member, fastPathName);
 
@@ -401,8 +407,14 @@ public static class IrToTsRecordSynthesisBridge
         );
     }
 
-    private static RecordField ToRecordField(IrRecordEqualityMember member) =>
-        new(IrToTsNamingPolicy.ToDataMemberName(member.Name, member.EmittedName), member.Type);
+    private static RecordField ToRecordField(
+        IrRecordEqualityMember member,
+        string? storageField = null
+    ) =>
+        new(
+            storageField ?? IrToTsNamingPolicy.ToDataMemberName(member.Name, member.EmittedName),
+            member.Type
+        );
 
     private static TsNamedType MakeSelfType(IrClassDeclaration ir)
     {

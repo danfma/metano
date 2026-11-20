@@ -42,7 +42,7 @@ public static partial class IrToTsExpressionBridge
     {
         var guard = new TsExpressionStatement(
             new TsCallExpression(
-                new TsPropertyAccess(MapTypeReference(call.Owner), "$initialize"),
+                new TsPropertyAccess(CanonicalTypeValue(call.DeclaringType), "$initialize"),
                 []
             )
         );
@@ -78,11 +78,17 @@ public static partial class IrToTsExpressionBridge
 
         var bound = binary with
         {
-            Left = new IrIdentifier(BoundArgumentPrefix + "0"),
-            Right = new IrIdentifier(BoundArgumentPrefix + "1"),
+            Left = BoundOperand(binary.Left, 0),
+            Right = BoundOperand(binary.Right, 1),
             BoundStaticCall = null,
         };
 
         return GuardStaticCall(binary.BoundStaticCall!, arguments, MapBinary(bound, context));
     }
+
+    // A null literal stays in the comparison: the loose `== null` decision reads it.
+    private static IrExpression BoundOperand(IrExpression operand, int index) =>
+        operand is IrLiteral { Kind: IrLiteralKind.Null }
+            ? operand
+            : new IrIdentifier(BoundArgumentPrefix + index);
 }

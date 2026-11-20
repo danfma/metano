@@ -1140,6 +1140,12 @@ public static partial class IrToTsExpressionBridge
             );
 
     /// <summary>The lowering of a call that reaches no claimed fast path.</summary>
+    /// <summary>
+    /// A mapping's <c>JsMethod</c> spelled as a dotted global path (<c>Math.abs</c>)
+    /// names a global, not a member of the declaring class's receiver.
+    /// </summary>
+    private static bool IsGlobalPath(string method) => method.Contains('.');
+
     private static TsExpression MapUndispatchedCall(
         IrCallExpression call,
         IReadOnlyList<TsExpression> loweredArgs,
@@ -1224,9 +1230,11 @@ public static partial class IrToTsExpressionBridge
                         TsCallExpression invocation => invocation with
                         {
                             Arguments = ordered.Arguments,
-                            Callee = invocation.Callee is TsPropertyAccess access
-                                ? new TsIdentifier(access.Property)
-                                : invocation.Callee,
+                            Callee =
+                                invocation.Callee is TsPropertyAccess { Property: var global }
+                                && IsGlobalPath(global)
+                                    ? new TsIdentifier(global)
+                                    : invocation.Callee,
                         },
                         _ => throw new UnreachableException(
                             "A method mapping must be a template or call."

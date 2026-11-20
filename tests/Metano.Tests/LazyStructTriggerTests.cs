@@ -19,9 +19,11 @@ public class LazyStructTriggerTests
         )["lazy-dispatched.ts"];
 
         await Assert.That(output).DoesNotContain("this.value = 0;");
+
         await Assert
             .That(output)
             .Contains("if (args.length === 0) {\n      this.value$LazyDispatched_");
+
         await Assert.That(output).Contains("get value(): number {\n    LazyDispatched.#$init();");
     }
 
@@ -68,9 +70,11 @@ public class LazyStructTriggerTests
         await Assert.That(output).Contains("constructor(value: number)");
         await Assert.That(output).DoesNotContain("constructor(readonly value:");
         await Assert.That(output).Contains("get value(): number {\n    LazyRecord.#$init();");
+
         await Assert
             .That(output)
             .Contains("equals(other: any): boolean {\n    LazyRecord.#$init();");
+
         await Assert.That(output).Contains("hashCode(): number {\n    LazyRecord.#$init();");
     }
 
@@ -90,6 +94,26 @@ public class LazyStructTriggerTests
         await Assert
             .That(output)
             .Contains("equals(other: any): boolean {\n    LazyEmpty.#$init();");
+
         await Assert.That(output).Contains("constructor() { }");
+    }
+
+    [Test]
+    public async Task PlainStructEquality_ReadsBackingFieldsNotGuardedAccessors()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct PlainAutoProp
+            {
+                public int P { get; set; }
+                static PlainAutoProp() { }
+            }
+            """
+        )["plain-auto-prop.ts"];
+
+        await Assert.That(output).Contains("this.p$PlainAutoProp_");
+        await Assert.That(output).DoesNotContain("this.p ===");
+        await Assert.That(output).DoesNotContain("hc.add(this.p)");
     }
 }

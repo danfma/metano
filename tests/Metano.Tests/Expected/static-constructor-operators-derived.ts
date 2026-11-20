@@ -24,7 +24,7 @@ export class SubMeter extends Meter {
     SubMeter.#offset$ = value;
   }
 
-  static $initialize(): void {
+  static override $initialize(): void {
     SubMeter.#$init();
   }
 

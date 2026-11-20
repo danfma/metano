@@ -70,12 +70,10 @@ internal abstract class TypeInitializerLowering
         var type = selection.Type;
 
         if (RunsLazily(selection))
-            return new LazyTypeInitializerLowering(
-                target,
-                ir,
-                ir.StaticInitializer ?? [],
-                lowering
-            );
+            return new LazyTypeInitializerLowering(target, ir, ir.StaticInitializer ?? [], lowering)
+            {
+                OverridesInitializer = AncestorRunsLazily(selection),
+            };
 
         // A containerless class keeps its static constructor report (MS0001,
         // ModuleVariableValidator) and is emitted without the body.
@@ -107,6 +105,25 @@ internal abstract class TypeInitializerLowering
             IrStaticConstructorExtractor.DeclaredBy(selection.Type) is not null
             || DefersDerivedStorage(selection)
         );
+
+    /// <summary>
+    /// True when a base class also emits the static <c>$initialize</c> bridge, so the
+    /// derived bridge must be an <c>override</c> under <c>noImplicitOverride</c>.
+    /// </summary>
+    private static bool AncestorRunsLazily(TypeInitializerSelection selection)
+    {
+        for (
+            var ancestor = selection.Type.BaseType;
+            ancestor is not null;
+            ancestor = ancestor.BaseType
+        )
+        {
+            if (RunsLazily(selection with { Type = ancestor }))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool EmitsClass(INamedTypeSymbol type) =>
         type.TypeKind is TypeKind.Class or TypeKind.Struct
