@@ -164,7 +164,9 @@ public class CollectionExpressionTests
 
         await Assert
             .That(output)
-            .Contains("return new Map<string, number>([[\"a\", 1] as [string, number]]);");
+            .Contains(
+                "return ImmutableDictionary.empty<string, number>().setItems([[\"a\", 1] as [string, number]]);"
+            );
     }
 
     /// <summary>

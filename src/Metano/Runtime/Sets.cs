@@ -106,13 +106,6 @@ using Metano.Annotations;
     JsMethod = "setEquals"
 )]
 
-// ─── SortedSet<T> (stage 011h; until then the runtime HashSet) ─
-[assembly: MapProperty(typeof(SortedSet<>), nameof(SortedSet<int>.Count), JsProperty = "count")]
-[assembly: MapMethod(typeof(SortedSet<>), nameof(SortedSet<int>.Add), JsMethod = "add")]
-[assembly: MapMethod(typeof(SortedSet<>), nameof(SortedSet<int>.Contains), JsMethod = "contains")]
-[assembly: MapMethod(typeof(SortedSet<>), nameof(SortedSet<int>.Remove), JsMethod = "remove")]
-[assembly: MapMethod(typeof(SortedSet<>), nameof(SortedSet<int>.Clear), JsMethod = "clear")]
-
 // ─── Constructors ─────────────────────────────────────────────
 // Full arity, each argument evaluated once (contracts/runtime-collections.md): a comparer
 // is the second parameter of every factory, `null` items for the comparer constructor.

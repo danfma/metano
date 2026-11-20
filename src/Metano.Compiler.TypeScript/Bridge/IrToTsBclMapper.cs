@@ -46,14 +46,17 @@ public static class IrToTsBclMapper
     /// <summary>
     /// Tries to map a method call. <paramref name="typeArgumentNames"/> feeds
     /// <c>$T0</c>, <c>$T1</c>, … template placeholders; pass an empty list for
-    /// non-generic calls.
+    /// non-generic calls. <paramref name="typeArguments"/>, when given, are the
+    /// call's type arguments as types, which the placeholders print in
+    /// preference to the names (a primitive or a constructed type has no name).
     /// </summary>
     public static TsExpression? TryMapCall(
         IrCallExpression call,
         TsExpression? loweredReceiver,
         IReadOnlyList<TsExpression> loweredArgs,
         IReadOnlyList<string> typeArgumentNames,
-        DeclarativeMappingRegistry registry
+        DeclarativeMappingRegistry registry,
+        IReadOnlyList<TsType>? typeArguments = null
     )
     {
         if (call.Origin is null)
@@ -113,7 +116,14 @@ public static class IrToTsBclMapper
             ? ReceiverTypeOf(irReceiver, loweredReceiver)
             : null;
 
-        return ApplyMethodMapping(match, receiver, receiverType, loweredArgs, typeArgumentNames);
+        return ApplyMethodMapping(
+            match,
+            receiver,
+            receiverType,
+            loweredArgs,
+            typeArgumentNames,
+            typeArguments ?? []
+        );
     }
 
     /// <summary>
@@ -218,12 +228,14 @@ public static class IrToTsBclMapper
         TsExpression? receiver,
         TsExpression? receiverType,
         IReadOnlyList<TsExpression> args,
-        IReadOnlyList<string> typeArgumentNames
+        IReadOnlyList<string> typeArgumentNames,
+        IReadOnlyList<TsType> typeArguments
     )
     {
         if (mapping.HasTemplate)
             return new TsTemplate(mapping.JsTemplate!, receiver, args)
             {
+                TypeArguments = typeArguments,
                 TypeArgumentNames = typeArgumentNames,
                 RuntimeImports = mapping.RuntimeImportsList,
                 ReceiverType = receiverType,

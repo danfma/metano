@@ -5,11 +5,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// The <c>metano-runtime/system/collections</c> surface the TypeScript target
-/// emits against (spec 011 contracts/runtime-collections.md, stage 011c): the
-/// runtime class or interface of each <see cref="IrCollectionKind"/>, which
-/// runtime classes implement each interface (W4-18: the one table the type
-/// tests and the overload dispatchers share; stage 011h adds its classes), and
-/// the module every collection name is imported from.
+/// emits against (spec 011 contracts/runtime-collections.md, stages 011c and
+/// 011h): the runtime class or interface of each <see cref="IrCollectionKind"/>,
+/// which runtime classes implement each interface (W4-18: the one table the
+/// type tests and the overload dispatchers share, in agreement with the
+/// <c>interfaces</c> of each class literal; the dispatchers leave out the
+/// implementers whose shape does not implement a mutable interface, W4-66),
+/// and the module every collection name is imported from.
 /// </summary>
 public static class RuntimeCollections
 {
@@ -34,20 +36,69 @@ public static class RuntimeCollections
             [IrCollectionKind.Stack] = "Stack",
             [IrCollectionKind.KeyCollection] = "KeyCollection",
             [IrCollectionKind.ValueCollection] = "ValueCollection",
+            [IrCollectionKind.ReadOnlyCollection] = "ReadOnlyList",
+            [IrCollectionKind.ImmutableList] = "ImmutableList",
+            [IrCollectionKind.ImmutableArray] = "ImmutableArray",
+            [IrCollectionKind.ImmutableHashSet] = "ImmutableHashSet",
+            [IrCollectionKind.ImmutableDictionary] = "ImmutableDictionary",
+            [IrCollectionKind.IImmutableList] = "IImmutableList",
+            [IrCollectionKind.IImmutableSet] = "IImmutableSet",
+            [IrCollectionKind.IImmutableDictionary] = "IImmutableDictionary",
+            [IrCollectionKind.ImmutableListBuilder] = "ImmutableListBuilder",
+            [IrCollectionKind.ImmutableArrayBuilder] = "ImmutableArrayBuilder",
+            [IrCollectionKind.ImmutableHashSetBuilder] = "ImmutableHashSetBuilder",
+            [IrCollectionKind.ImmutableDictionaryBuilder] = "ImmutableDictionaryBuilder",
+            [IrCollectionKind.SortedSet] = "SortedSet",
+            [IrCollectionKind.SortedDictionary] = "SortedDictionary",
+            [IrCollectionKind.SortedList] = "SortedList",
+            [IrCollectionKind.SortedListView] = "SortedListView",
+            [IrCollectionKind.ConcurrentDictionary] = "ConcurrentDictionary",
         };
 
+    /// <summary>
+    /// The runtime classes implementing each collection interface, as .NET 10
+    /// declares them (contracts/runtime-collections.md § Type tests and
+    /// dispatchers): the rows agree with the <c>interfaces</c> of each class
+    /// literal whose arguments are the class's own.
+    /// </summary>
     private static readonly IReadOnlyDictionary<
         IrCollectionKind,
         IReadOnlyList<IrCollectionKind>
     > ImplementersByInterface = new Dictionary<IrCollectionKind, IReadOnlyList<IrCollectionKind>>
     {
-        [IrCollectionKind.IList] = [IrCollectionKind.List],
-        [IrCollectionKind.IReadOnlyList] = [IrCollectionKind.List],
+        [IrCollectionKind.IList] =
+        [
+            IrCollectionKind.List,
+            IrCollectionKind.ReadOnlyCollection,
+            IrCollectionKind.SortedListView,
+            IrCollectionKind.ImmutableListBuilder,
+            IrCollectionKind.ImmutableArrayBuilder,
+            IrCollectionKind.ImmutableList,
+            IrCollectionKind.ImmutableArray,
+        ],
+        [IrCollectionKind.IReadOnlyList] =
+        [
+            IrCollectionKind.List,
+            IrCollectionKind.ReadOnlyCollection,
+            IrCollectionKind.ImmutableList,
+            IrCollectionKind.ImmutableArray,
+            IrCollectionKind.ImmutableListBuilder,
+            IrCollectionKind.ImmutableArrayBuilder,
+        ],
         [IrCollectionKind.ICollection] =
         [
             IrCollectionKind.List,
             IrCollectionKind.HashSet,
             IrCollectionKind.Dictionary,
+            IrCollectionKind.ReadOnlyCollection,
+            IrCollectionKind.SortedSet,
+            IrCollectionKind.SortedListView,
+            IrCollectionKind.ImmutableListBuilder,
+            IrCollectionKind.ImmutableArrayBuilder,
+            IrCollectionKind.ImmutableHashSetBuilder,
+            IrCollectionKind.ImmutableList,
+            IrCollectionKind.ImmutableArray,
+            IrCollectionKind.ImmutableHashSet,
         ],
         [IrCollectionKind.IReadOnlyCollection] =
         [
@@ -58,11 +109,58 @@ public static class RuntimeCollections
             IrCollectionKind.Dictionary,
             IrCollectionKind.KeyCollection,
             IrCollectionKind.ValueCollection,
+            IrCollectionKind.ReadOnlyCollection,
+            IrCollectionKind.ImmutableList,
+            IrCollectionKind.ImmutableArray,
+            IrCollectionKind.ImmutableHashSet,
+            IrCollectionKind.ImmutableDictionary,
+            IrCollectionKind.ImmutableListBuilder,
+            IrCollectionKind.ImmutableArrayBuilder,
+            IrCollectionKind.ImmutableHashSetBuilder,
+            IrCollectionKind.ImmutableDictionaryBuilder,
+            IrCollectionKind.SortedSet,
+            IrCollectionKind.SortedDictionary,
+            IrCollectionKind.SortedList,
+            IrCollectionKind.ConcurrentDictionary,
         ],
-        [IrCollectionKind.IDictionary] = [IrCollectionKind.Dictionary],
-        [IrCollectionKind.IReadOnlyDictionary] = [IrCollectionKind.Dictionary],
-        [IrCollectionKind.ISet] = [IrCollectionKind.HashSet],
-        [IrCollectionKind.IReadOnlySet] = [IrCollectionKind.HashSet],
+        [IrCollectionKind.IDictionary] =
+        [
+            IrCollectionKind.Dictionary,
+            IrCollectionKind.SortedDictionary,
+            IrCollectionKind.SortedList,
+            IrCollectionKind.ConcurrentDictionary,
+            IrCollectionKind.ImmutableDictionaryBuilder,
+            IrCollectionKind.ImmutableDictionary,
+        ],
+        [IrCollectionKind.IReadOnlyDictionary] =
+        [
+            IrCollectionKind.Dictionary,
+            IrCollectionKind.SortedDictionary,
+            IrCollectionKind.SortedList,
+            IrCollectionKind.ConcurrentDictionary,
+            IrCollectionKind.ImmutableDictionaryBuilder,
+            IrCollectionKind.ImmutableDictionary,
+        ],
+        [IrCollectionKind.ISet] =
+        [
+            IrCollectionKind.HashSet,
+            IrCollectionKind.SortedSet,
+            IrCollectionKind.ImmutableHashSetBuilder,
+            IrCollectionKind.ImmutableHashSet,
+        ],
+        [IrCollectionKind.IReadOnlySet] =
+        [
+            IrCollectionKind.HashSet,
+            IrCollectionKind.SortedSet,
+            IrCollectionKind.ImmutableHashSet,
+        ],
+        [IrCollectionKind.IImmutableList] =
+        [
+            IrCollectionKind.ImmutableList,
+            IrCollectionKind.ImmutableArray,
+        ],
+        [IrCollectionKind.IImmutableSet] = [IrCollectionKind.ImmutableHashSet],
+        [IrCollectionKind.IImmutableDictionary] = [IrCollectionKind.ImmutableDictionary],
     };
 
     private static readonly IReadOnlyDictionary<IrCollectionKind, string> ClrNamesByKind =
@@ -89,9 +187,6 @@ public static class RuntimeCollections
     /// returns a new collection (stage 011h's immutable classes). A test against
     /// such an interface is unanswerable like one against a user implementer.
     /// </summary>
-    private static readonly IReadOnlySet<IrCollectionKind> KindsWithoutMutableShape =
-        new HashSet<IrCollectionKind>();
-
     private static readonly IReadOnlyDictionary<IrCollectionKind, string> FactoriesByKind =
         new Dictionary<IrCollectionKind, string>
         {
@@ -133,6 +228,11 @@ public static class RuntimeCollections
         "defaultComparer",
         "defaultEqualityComparer",
         "Span",
+        "asReadOnly",
+        "toImmutableList",
+        "toImmutableArray",
+        "toImmutableHashSet",
+        "toImmutableDictionary",
     };
 
     /// <summary>
@@ -141,9 +241,18 @@ public static class RuntimeCollections
     /// through their declaring <c>Dictionary</c>.
     /// </summary>
     private static readonly IReadOnlySet<string> CollectionTypeNames = new HashSet<string>(
-        NamesByKind.Values,
+        Enum.GetValues<IrCollectionKind>().Select(OriginSimpleNameOf),
         StringComparer.Ordinal
     );
+
+    /// <summary>The namespaces the collections of <see cref="CollectionTypeNames"/> live in.</summary>
+    private static readonly IReadOnlyList<string> CollectionNamespaces =
+    [
+        "System.Collections.Generic.",
+        "System.Collections.Immutable.",
+        "System.Collections.ObjectModel.",
+        "System.Collections.Concurrent.",
+    ];
 
     private static readonly IReadOnlySet<string> AllNames = new HashSet<string>(
         NamesByKind.Values.Concat(HelperNames).Concat(FactoriesByKind.Values),
@@ -183,14 +292,6 @@ public static class RuntimeCollections
         ];
 
     /// <summary>
-    /// Whether the TypeScript shape of the runtime class <paramref name="kind"/>
-    /// implements the mutable collection interfaces its descriptor lists
-    /// (<c>false</c> for stage 011h's immutable classes).
-    /// </summary>
-    public static bool ShapeImplementsMutableInterface(IrCollectionKind kind) =>
-        !KindsWithoutMutableShape.Contains(kind);
-
-    /// <summary>
     /// Whether a native array implements <paramref name="kind"/> in .NET
     /// (<c>IList</c>, <c>ICollection</c>, <c>IReadOnlyList</c>, <c>IReadOnlyCollection</c>),
     /// which no collection descriptor answers for.
@@ -215,6 +316,21 @@ public static class RuntimeCollections
     /// </summary>
     public static TsRuntimeHelperReference? DescriptorFactoryOf(IrCollectionKind kind) =>
         FactoriesByKind.TryGetValue(kind, out var name) ? new(name, Module) : null;
+    /// <summary>
+    /// The .NET simple name of the type of <paramref name="kind"/> (a builder
+    /// is named through its immutable container, whose members it shares the
+    /// origin prefix of).
+    /// </summary>
+    private static string OriginSimpleNameOf(IrCollectionKind kind) =>
+        kind switch
+        {
+            IrCollectionKind.ReadOnlyCollection => "ReadOnlyCollection",
+            IrCollectionKind.ImmutableListBuilder => "ImmutableList",
+            IrCollectionKind.ImmutableArrayBuilder => "ImmutableArray",
+            IrCollectionKind.ImmutableHashSetBuilder => "ImmutableHashSet",
+            IrCollectionKind.ImmutableDictionaryBuilder => "ImmutableDictionary",
+            _ => kind.ToString(),
+        };
 
     /// <summary>The runtime class or interface name of <paramref name="kind"/>.</summary>
     public static string NameOf(IrCollectionKind kind) => NamesByKind[kind];
@@ -237,34 +353,59 @@ public static class RuntimeCollections
         ImplementersByInterface.ContainsKey(kind);
 
     /// <summary>Whether elements of <paramref name="kind"/> are addressed by key (the dictionaries).</summary>
-    public static bool IsKeyed(IrCollectionKind kind) =>
-        kind
-            is IrCollectionKind.Dictionary
-                or IrCollectionKind.IDictionary
-                or IrCollectionKind.IReadOnlyDictionary;
+    public static bool IsKeyed(IrCollectionKind kind) => IrCollectionKinds.IsKeyed(kind);
 
     /// <summary>
     /// The runtime classes whose instances a value of <paramref name="kind"/>
-    /// can be: the class itself, or every 011c class implementing the interface.
+    /// can be: the class itself, or every runtime class implementing the
+    /// interface (a type test's answer, as .NET's).
     /// </summary>
     public static IReadOnlyList<IrCollectionKind> ClassesOf(IrCollectionKind kind) =>
         ImplementersByInterface.TryGetValue(kind, out var implementers) ? implementers : [kind];
 
     /// <summary>
-    /// Whether <paramref name="fullName"/> (a member origin's declaring type)
-    /// names a stage 011c collection or one of its dictionary views.
+    /// The runtime classes an overload dispatcher routes to a parameter of
+    /// <paramref name="kind"/>: <see cref="ClassesOf"/> without the classes
+    /// whose shape does not implement the interface (W4-66: a dispatcher never
+    /// routes an immutable value to an <c>IList&lt;T&gt;</c> overload).
     /// </summary>
-    public static bool IsCollectionTypeName(string fullName)
+    public static IReadOnlyList<IrCollectionKind> DispatchClassesOf(IrCollectionKind kind) =>
+        [
+            .. ClassesOf(kind)
+                .Where(implementer =>
+                    !IrCollectionKinds.IsMutableInterface(kind)
+                    || ShapeImplementsMutableInterface(implementer)
+                ),
+        ];
+
+    /// <summary>
+    /// Whether the TypeScript shape of the runtime class of
+    /// <paramref name="kind"/> implements the mutable collection interfaces
+    /// its .NET type declares (<c>IList&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c>,
+    /// <c>ISet&lt;T&gt;</c>, <c>IDictionary&lt;K, V&gt;</c>): <c>false</c> for
+    /// the immutable classes, whose mutators return a new value where the
+    /// interface's mutate in place (W4-66), so a static conversion to those
+    /// interfaces is reported and the dispatchers leave them out.
+    /// </summary>
+    public static bool ShapeImplementsMutableInterface(IrCollectionKind kind) =>
+        !IrCollectionKinds.IsImmutable(kind);
+
+    /// <summary>
+    /// Whether <paramref name="fullName"/> (a member origin's declaring type)
+    /// names a collection of spec 011 FR-001 / FR-054 or one of its nested
+    /// views and builders.
+    /// </summary>
+    public static bool IsCollectionTypeName(string fullName) =>
+        CollectionNamespaces.Any(prefix =>
+            fullName.StartsWith(prefix, StringComparison.Ordinal)
+            && CollectionTypeNames.Contains(SimpleNameOf(fullName[prefix.Length..]))
+        );
+
+    private static string SimpleNameOf(string name)
     {
-        const string prefix = "System.Collections.Generic.";
+        var end = name.IndexOfAny(['<', '`', '+', '.']);
 
-        if (!fullName.StartsWith(prefix, StringComparison.Ordinal))
-            return false;
-
-        var simple = fullName[prefix.Length..];
-        var end = simple.IndexOfAny(['<', '`', '+', '.']);
-
-        return CollectionTypeNames.Contains(end < 0 ? simple : simple[..end]);
+        return end < 0 ? name : name[..end];
     }
 
     /// <summary>Whether <paramref name="name"/> is imported from <see cref="Module"/>.</summary>

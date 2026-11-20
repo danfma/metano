@@ -34,6 +34,51 @@ public class CollectionTypeFactsTests
     [Arguments("Stack<int>", IrCollectionKind.Stack)]
     [Arguments("Dictionary<string, int>.KeyCollection", IrCollectionKind.KeyCollection)]
     [Arguments("Dictionary<string, int>.ValueCollection", IrCollectionKind.ValueCollection)]
+    [Arguments("SortedSet<int>", IrCollectionKind.SortedSet)]
+    [Arguments("SortedDictionary<string, int>", IrCollectionKind.SortedDictionary)]
+    [Arguments("SortedDictionary<string, int>.KeyCollection", IrCollectionKind.KeyCollection)]
+    [Arguments("SortedDictionary<string, int>.ValueCollection", IrCollectionKind.ValueCollection)]
+    [Arguments("SortedList<string, int>", IrCollectionKind.SortedList)]
+    [Arguments(
+        "System.Collections.Concurrent.ConcurrentDictionary<string, int>",
+        IrCollectionKind.ConcurrentDictionary
+    )]
+    [Arguments(
+        "System.Collections.ObjectModel.ReadOnlyCollection<int>",
+        IrCollectionKind.ReadOnlyCollection
+    )]
+    [Arguments("System.Collections.Immutable.ImmutableList<int>", IrCollectionKind.ImmutableList)]
+    [Arguments("System.Collections.Immutable.ImmutableArray<int>", IrCollectionKind.ImmutableArray)]
+    [Arguments(
+        "System.Collections.Immutable.ImmutableHashSet<int>",
+        IrCollectionKind.ImmutableHashSet
+    )]
+    [Arguments(
+        "System.Collections.Immutable.ImmutableDictionary<string, int>",
+        IrCollectionKind.ImmutableDictionary
+    )]
+    [Arguments("System.Collections.Immutable.IImmutableList<int>", IrCollectionKind.IImmutableList)]
+    [Arguments("System.Collections.Immutable.IImmutableSet<int>", IrCollectionKind.IImmutableSet)]
+    [Arguments(
+        "System.Collections.Immutable.IImmutableDictionary<string, int>",
+        IrCollectionKind.IImmutableDictionary
+    )]
+    [Arguments(
+        "System.Collections.Immutable.ImmutableList<int>.Builder",
+        IrCollectionKind.ImmutableListBuilder
+    )]
+    [Arguments(
+        "System.Collections.Immutable.ImmutableArray<int>.Builder",
+        IrCollectionKind.ImmutableArrayBuilder
+    )]
+    [Arguments(
+        "System.Collections.Immutable.ImmutableHashSet<int>.Builder",
+        IrCollectionKind.ImmutableHashSetBuilder
+    )]
+    [Arguments(
+        "System.Collections.Immutable.ImmutableDictionary<string, int>.Builder",
+        IrCollectionKind.ImmutableDictionaryBuilder
+    )]
     public async Task StageCollection_ResolvesToItsKind(string type, IrCollectionKind expected)
     {
         var mapped = MapFieldType(type);
@@ -43,10 +88,9 @@ public class CollectionTypeFactsTests
     }
 
     [Test]
-    [Arguments("SortedSet<int>")]
-    [Arguments("SortedDictionary<string, int>")]
-    [Arguments("System.Collections.Concurrent.ConcurrentDictionary<string, int>")]
     [Arguments("LinkedList<int>")]
+    [Arguments("System.Collections.Immutable.ImmutableSortedSet<int>")]
+    [Arguments("System.Collections.Immutable.ImmutableQueue<int>")]
     [Arguments("IEnumerable<int>")]
     [Arguments("IntList")]
     [Arguments("List<int>.Enumerator")]

@@ -254,12 +254,13 @@ internal static class JsonTypeClassifier
     /// collection type into (spec 011 contracts/runtime-collections.md § Kind
     /// per C# type): the list interfaces read into a <c>List</c>, the
     /// dictionary interfaces into a <c>Dictionary</c>, the set interfaces into
-    /// a <c>HashSet</c>; <c>null</c> for any other type (arrays and
-    /// <c>IEnumerable&lt;T&gt;</c> stay <c>array</c>; the 011h collections keep
-    /// their 2.x kinds until stage 011h).
+    /// a <c>HashSet</c>, and a stage 011h collection classifies by its shape
+    /// (<see cref="JsonStageHCollections"/>); <c>null</c> for any other type
+    /// (arrays and <c>IEnumerable&lt;T&gt;</c> stay <c>array</c>).
     /// </summary>
     private static JsonPropertyKind? RuntimeCollectionKindOf(INamedTypeSymbol named) =>
-        CollectionKindResolver.KindOf(named) switch
+        JsonStageHCollections.ShapeOf(named)
+        ?? CollectionKindResolver.KindOf(named) switch
         {
             IrCollectionKind.List
             or IrCollectionKind.IList

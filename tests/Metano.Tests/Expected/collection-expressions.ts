@@ -1,4 +1,4 @@
-import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
+import { ConcurrentDictionary, Dictionary, HashSet, ImmutableDictionary, ImmutableHashSet, List, SortedSet } from "metano-runtime/system/collections";
 import type { Animal } from "./animal";
 import type { Cat } from "./cat";
 import { Color } from "./color";
@@ -7,9 +7,9 @@ import type { Dog } from "./dog";
 export class Shelf {
   private readonly _primes: HashSet<number> = HashSet.of<number>([2, 3, 5]);
   private readonly _colors: HashSet<Color> = HashSet.of<Color>([Color.Red]);
-  private readonly _defaults: Map<string, number> = new Map<string, number>([["a", 1] as [string, number], ["b", 2] as [string, number]]);
-  private readonly _cache: Map<string, number> = new Map<string, number>();
-  private readonly _none: HashSet<string> = new HashSet<string>();
+  private readonly _defaults: ImmutableDictionary<string, number> = ImmutableDictionary.empty<string, number>().setItems([["a", 1] as [string, number], ["b", 2] as [string, number]]);
+  private readonly _cache: ConcurrentDictionary<string, number> = new ConcurrentDictionary<string, number>();
+  private readonly _none: ImmutableHashSet<string> = ImmutableHashSet.empty<string>();
   private _calls: number = 0;
 
   constructor() { }
@@ -26,12 +26,12 @@ export class Shelf {
     return HashSet.of<number>([this.next(), ...xs, this.next()]);
   }
 
-  sorted(source: HashSet<number>): HashSet<number> {
-    return new HashSet<number>([...source, 0]);
+  sorted(source: HashSet<number>): SortedSet<number> {
+    return SortedSet.of<number>([...source, 0]);
   }
 
-  names(names: Iterable<string>): HashSet<string> {
-    return new HashSet<string>(["root", ...names]);
+  names(names: Iterable<string>): ImmutableHashSet<string> {
+    return ImmutableHashSet.of<string>(["root", ...names]);
   }
 
   count(set: HashSet<string>): number {
@@ -69,11 +69,11 @@ export class Shelf {
     return values;
   }
 
-  merge(left: Dictionary<string, number>, right: Iterable<readonly [string, number]>): Map<string, number> {
-    return new Map<string, number>([...left, ["k", 0] as [string, number], ...right, ...this._defaults]);
+  merge(left: Dictionary<string, number>, right: Iterable<readonly [string, number]>): ImmutableDictionary<string, number> {
+    return ImmutableDictionary.empty<string, number>().setItems([...left, ["k", 0] as [string, number], ...right, ...this._defaults]);
   }
 
-  byIds(pairs: List<readonly [bigint, string]>): Map<bigint, string> {
-    return new Map<bigint, string>([...pairs]);
+  byIds(pairs: List<readonly [bigint, string]>): ImmutableDictionary<bigint, string> {
+    return ImmutableDictionary.empty<bigint, string>().setItems([...pairs]);
   }
 }

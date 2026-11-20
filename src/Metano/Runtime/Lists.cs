@@ -14,7 +14,8 @@
 // that type's OriginalDefinition. The C# member name is captured via `nameof` so a typo
 // surfaces at compile time.
 //
-// ImmutableList<T> / ImmutableArray<T> are stage 011h's.
+// ImmutableList<T> / ImmutableArray<T> and ReadOnlyCollection<T> are stage 011h's
+// (ImmutableCollections.cs, ReadOnlyCollections.cs).
 
 using Metano.Annotations;
 

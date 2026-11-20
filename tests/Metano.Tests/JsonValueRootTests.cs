@@ -305,7 +305,7 @@ public class JsonValueRootTests
     }
 
     [Test]
-    public async Task ImmutableDictionaryRoot_IsAMap()
+    public async Task ImmutableDictionaryRoot_IsAnImmutableDictionary()
     {
         var ts = TranspileContext(
             """
@@ -317,10 +317,11 @@ public class JsonValueRootTests
         await Assert
             .That(ts)
             .Contains(
-                "get immutableDictionaryStringInt32(): ValueSpec<Map<string, number> | null>"
+                "get immutableDictionaryStringInt32(): ValueSpec<ImmutableDictionary<string, number> | null>"
             );
 
-        await Assert.That(ts).Contains("kind: \"map\"");
+        await Assert.That(ts).Contains("kind: \"immutableDictionary\"");
+        await Assert.That(ts).Contains("ImmutableDictionary.empty().setItems(entries)");
     }
 
     [Test]
@@ -330,7 +331,7 @@ public class JsonValueRootTests
     [Arguments("typeof(int[,])", "multi-dimensional arrays")]
     [Arguments("typeof(KeyValuePair<string, int>)", "not a transpiled class or struct")]
     [Arguments("typeof((int, string))", "not a transpiled class or struct")]
-    [Arguments("typeof(SortedDictionary<string, int>)", "not a transpiled class or struct")]
+    [Arguments("typeof(PriorityQueue<string, int>)", "not a transpiled class or struct")]
     [Arguments("typeof(Hidden)", "not a transpiled class or struct")]
     [Arguments("typeof(Native)", "not a transpiled class or struct")]
     [Arguments("typeof(System.Version)", "not a transpiled class or struct")]

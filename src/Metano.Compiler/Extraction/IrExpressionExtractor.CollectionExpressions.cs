@@ -92,7 +92,9 @@ public sealed partial class IrExpressionExtractor
     /// What C# builds for a list-shaped target: a <c>List&lt;T&gt;</c> for
     /// <c>List&lt;T&gt;</c>, <c>IList&lt;T&gt;</c> and <c>ICollection&lt;T&gt;</c>,
     /// a read-only array for <c>IReadOnlyList&lt;T&gt;</c> /
-    /// <c>IReadOnlyCollection&lt;T&gt;</c> (kept as that interface's kind);
+    /// <c>IReadOnlyCollection&lt;T&gt;</c> (kept as that interface's kind), the
+    /// immutable list itself for <c>ImmutableList&lt;T&gt;</c> /
+    /// <c>ImmutableArray&lt;T&gt;</c> (their collection builder);
     /// <c>null</c> for any other kind.
     /// </summary>
     private static IrCollectionTypeRef? ConstructedCollectionOf(IrCollectionTypeRef collection) =>
@@ -103,7 +105,10 @@ public sealed partial class IrExpressionExtractor
                 {
                     Kind = IrCollectionKind.List,
                 },
-            IrCollectionKind.IReadOnlyList or IrCollectionKind.IReadOnlyCollection => collection,
+            IrCollectionKind.IReadOnlyList
+            or IrCollectionKind.IReadOnlyCollection
+            or IrCollectionKind.ImmutableList
+            or IrCollectionKind.ImmutableArray => collection,
             _ => null,
         };
 

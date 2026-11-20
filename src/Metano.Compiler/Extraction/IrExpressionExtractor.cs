@@ -238,7 +238,10 @@ public sealed partial class IrExpressionExtractor
             return probedElement;
 
         if (!_context.KeepsNativeCollections)
+        {
             ReportNestedArrayAsListInterface(expression);
+            ReportImmutableAsMutableInterface(expression);
+        }
 
         // A 64-bit constant folds to one literal, and a constant inside
         // checked / unchecked takes Roslyn's wrapped value; see
@@ -2591,6 +2594,12 @@ public sealed partial class IrExpressionExtractor
 
         if (TryExtractDictionaryCount(member, symbol) is { } dictionaryCount)
             return dictionaryCount;
+
+        if (TryExtractSortedSetBound(member, symbol) is { } sortedSetBound)
+            return sortedSetBound;
+
+        if (TryExtractImmutableEmpty(symbol) is { } immutableEmpty)
+            return immutableEmpty;
 
         var target = Extract(member.Receiver);
         var name = member.Name.Identifier.ValueText;
@@ -5602,6 +5611,8 @@ public sealed partial class IrExpressionExtractor
 
         if (TryExtractUserCast(cast, inner, sourceType, targetType) is { } user)
             return user;
+
+        ReportImmutableAsMutableInterface(cast, sourceType, targetType);
 
         if (
             !_context.KeepsNativeCollections

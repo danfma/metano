@@ -88,6 +88,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
         SeedStringJoin(compilation);
         SeedHashCode(compilation);
         SeedTupleEquality(compilation);
+        SeedImmutableFactories(compilation);
     }
 
     /// <summary>

@@ -58,6 +58,10 @@ internal static class IrTypeCheckBuilder
                         : new TsIdentifier(exported.Name)
                 ),
             IrFunctionTypeRef func => FunctionCheck(func, value),
+            IrCollectionTypeRef collection => IrToTsRuntimeTestBridge.DispatchCollectionTest(
+                value,
+                collection
+            ),
             IrNamedTypeRef named when HasNoNameableRuntimeClass(named) => TypeofObject(value),
             _ => IrToTsRuntimeTestBridge.Render(value, type, staticType: null, scope.RuntimeTypes)
                 ?? TypeofObject(value),

@@ -144,11 +144,14 @@ public class DeclarativeMappingTests
         await Assert.That(output).DoesNotContain("listRemove");
     }
 
+    /// <summary>
+    /// <c>ImmutableList&lt;T&gt;.Add</c> returns a new list: the runtime
+    /// <c>ImmutableList</c> class's own <c>add</c> (spec 011 FR-054), and
+    /// <c>Empty</c> is the typed <c>empty&lt;T&gt;()</c> factory.
+    /// </summary>
     [Test]
-    public async Task DeclarativeImmutableListAdd_LowersToNamespaceHelper()
+    public async Task DeclarativeImmutableListAdd_LowersToTheRuntimeClassMember()
     {
-        // ImmutableList<T>.Add returns a NEW list — lowers to the ImmutableCollection
-        // namespace helper that returns a fresh array.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Immutable;
@@ -163,19 +166,22 @@ public class DeclarativeMappingTests
         );
 
         var output = result["history.ts"];
-        await Assert.That(output).Contains("ImmutableCollection.add(this.snapshots, value)");
-        await Assert.That(output).Contains("ImmutableCollection");
-        await Assert.That(output).Contains("metano-runtime");
+        await Assert.That(output).Contains("this.snapshots = this.snapshots.add(value);");
+        await Assert.That(output).Contains("ImmutableList.empty<number>()");
+
+        await Assert
+            .That(output)
+            .Contains("import { ImmutableList } from \"metano-runtime/system/collections\";");
+
+        await Assert.That(output).DoesNotContain("ImmutableCollection");
     }
 
     /// <summary>
-    /// <c>Clear()</c> on an immutable list or array lowers to
-    /// <c>ImmutableCollection.clear()</c>, whose template does not print the
-    /// receiver: the mapping declares the helper it names, so it is imported
-    /// whatever the receiver is.
+    /// <c>Clear()</c> on an immutable list or array is the runtime class's
+    /// <c>clear()</c>, which returns the empty instance.
     /// </summary>
     [Test]
-    public async Task DeclarativeImmutableClear_ImportsTheNamespaceHelper()
+    public async Task DeclarativeImmutableClear_LowersToTheRuntimeClassMember()
     {
         var output = TranspileHelper.Transpile(
             """
@@ -191,18 +197,14 @@ public class DeclarativeMappingTests
             """
         )["history.ts"];
 
-        await Assert
-            .That(output)
-            .Contains("import { ImmutableCollection } from \"metano-runtime\";");
-
-        await Assert.That(output).Contains("ImmutableCollection.clear()");
+        await Assert.That(output).Contains("return (ImmutableList.empty<number>()).clear().count;");
+        await Assert.That(output).Contains("return items.clear();");
+        await Assert.That(output).DoesNotContain("ImmutableCollection");
     }
 
     [Test]
-    public async Task DeclarativeImmutableListRemoveAt_LowersToNamespaceHelper()
+    public async Task DeclarativeImmutableListRemoveAt_LowersToTheRuntimeClassMember()
     {
-        // ImmutableList<T>.RemoveAt lowers to ImmutableCollection.removeAt — the
-        // namespace helper returns a fresh array, mirroring the immutable contract.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Immutable;
@@ -217,9 +219,8 @@ public class DeclarativeMappingTests
         );
 
         var output = result["history.ts"];
-        await Assert.That(output).Contains("ImmutableCollection.removeAt(this.snapshots, index)");
-        await Assert.That(output).Contains("metano-runtime");
-        await Assert.That(output).Contains("ImmutableCollection");
+        await Assert.That(output).Contains("this.snapshots = this.snapshots.removeAt(index);");
+        await Assert.That(output).DoesNotContain("ImmutableCollection");
     }
 
     [Test]

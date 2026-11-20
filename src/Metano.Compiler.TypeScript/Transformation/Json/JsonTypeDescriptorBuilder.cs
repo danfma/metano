@@ -137,20 +137,37 @@ internal sealed class JsonTypeDescriptorBuilder(
         ITypeSymbol elementType
     ) =>
         new([
-            KindProperty(kind),
+            CollectionKindProperty(type, kind),
             new TsObjectProperty("element", Build(elementType)),
-            new TsObjectProperty("create", CreateClosure(type, kind)),
+            new TsObjectProperty("create", CollectionCreateClosure(type, kind)),
         ]);
 
     private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type, JsonPropertyKind kind) =>
         new([
-            KindProperty(kind),
+            CollectionKindProperty(type, kind),
             new TsObjectProperty("key", BuildKeyDescriptor(JsonTypeClassifier.KeyTypeOf(type))),
             new TsObjectProperty("value", Build(JsonTypeClassifier.ValueTypeOf(type))),
             .. kind is JsonPropertyKind.Dictionary
-                ? [new TsObjectProperty("create", CreateClosure(type, kind))]
+                ? [new TsObjectProperty("create", CollectionCreateClosure(type, kind))]
                 : Array.Empty<TsObjectProperty>(),
         ]);
+
+    /// <summary>
+    /// The <c>kind</c> of a collection descriptor: a stage 011h collection's
+    /// own (<see cref="JsonStageHCollections"/>), else the shape's.
+    /// </summary>
+    private static TsObjectProperty CollectionKindProperty(
+        ITypeSymbol type,
+        JsonPropertyKind kind
+    ) =>
+        JsonStageHCollections.WireKindOf(type) is { } wireKind
+            ? new TsObjectProperty("kind", new TsStringLiteral(wireKind))
+            : KindProperty(kind);
+
+    private TsArrowFunction CollectionCreateClosure(
+        ITypeSymbol type,
+        JsonPropertyKind kind
+    ) => JsonStageHCollections.CreateClosureOf(type) ?? CreateClosure(type, kind);
 
     /// <summary>
     /// <c>(items) =&gt; List.of(items)</c> and the other kinds' factories: a

@@ -1087,7 +1087,7 @@ public class OutArgumentTranspileTests
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            using System.Collections.Concurrent;
+            using System.Collections.Generic;
             using System.Globalization;
 
             [Transpile]
@@ -1095,7 +1095,7 @@ public class OutArgumentTranspileTests
             {
                 public double Styles(string s) => double.TryParse(s, NumberStyles.Any, null, out var n) ? n : 0;
 
-                public bool Remove(ConcurrentDictionary<string, int> d) => d.TryRemove("a", out _);
+                public bool Next(PriorityQueue<string, int> q) => q.TryDequeue(out _, out _);
             }
             """
         );
@@ -1109,7 +1109,34 @@ public class OutArgumentTranspileTests
 
         await Assert
             .That(messages)
-            .Contains(m => m.Contains("ConcurrentDictionary<TKey, TValue>.TryRemove'"));
+            .Contains(m => m.Contains("PriorityQueue<TElement, TPriority>.TryDequeue'"));
+    }
+
+    /// <summary>
+    /// <c>ConcurrentDictionary&lt;K, V&gt;.TryRemove(k, out v)</c> is the runtime
+    /// class's <c>tryRemove</c> (spec 011 FR-054), lowered through the tuple
+    /// form with <c>default(V)</c> for a miss.
+    /// </summary>
+    [Test]
+    public async Task ConcurrentDictionaryTryRemove_LowersToTheTupleForm()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Concurrent;
+
+            [Transpile]
+            public class Cache
+            {
+                public int Take(ConcurrentDictionary<string, int> d) => d.TryRemove("a", out var v) ? v : -1;
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+
+        await Assert.That(result["cache.ts"]).Contains("d.tryRemove(\"a\", 0)");
     }
 
     [Test]

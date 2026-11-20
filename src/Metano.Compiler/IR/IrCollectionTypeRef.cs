@@ -3,8 +3,11 @@ namespace Metano.Compiler.IR;
 /// <summary>
 /// The BCL collection a <see cref="IrCollectionTypeRef"/> names: one value per
 /// runtime class and interface of spec 011 FR-001 (stage 011c's classes,
-/// their interfaces and the dictionary views). Stage 011h adds the
-/// read-only, immutable, sorted and concurrent kinds.
+/// their interfaces and the dictionary views) and of stage 011h (FR-054: the
+/// read-only, immutable, sorted and concurrent collections, the immutable
+/// builders and <c>SortedListView</c>, the runtime class of
+/// <c>SortedList&lt;K, V&gt;.Keys</c> / <c>.Values</c>, which no C# type
+/// names: it appears only among the implementers of an interface).
 /// </summary>
 public enum IrCollectionKind
 {
@@ -23,6 +26,23 @@ public enum IrCollectionKind
     Stack,
     KeyCollection,
     ValueCollection,
+    ReadOnlyCollection,
+    ImmutableList,
+    ImmutableArray,
+    ImmutableHashSet,
+    ImmutableDictionary,
+    IImmutableList,
+    IImmutableSet,
+    IImmutableDictionary,
+    ImmutableListBuilder,
+    ImmutableArrayBuilder,
+    ImmutableHashSetBuilder,
+    ImmutableDictionaryBuilder,
+    SortedSet,
+    SortedDictionary,
+    SortedList,
+    SortedListView,
+    ConcurrentDictionary,
 }
 
 /// <summary>
@@ -57,7 +77,9 @@ public sealed record IrCollectionTypeRef(
     /// queue, the stack and the dictionary views,
     /// <see cref="IrIterableTypeRef"/> for <c>IReadOnlyCollection&lt;T&gt;</c>,
     /// <see cref="IrMapTypeRef"/> for the dictionaries and
-    /// <see cref="IrSetTypeRef"/> for the sets. Transitional (spec 011
+    /// <see cref="IrSetTypeRef"/> for the sets (the stage 011h kinds by the
+    /// same shapes, although a target that keeps native collections never
+    /// sees them). Transitional (spec 011
     /// data-model § 2, D28): read by the targets that keep native collections
     /// (the Dart type mapper); FR-038 removes it.
     /// </summary>
@@ -65,14 +87,11 @@ public sealed record IrCollectionTypeRef(
         Kind switch
         {
             IrCollectionKind.IReadOnlyCollection => new IrIterableTypeRef(TypeArguments[0]),
-            IrCollectionKind.Dictionary
-            or IrCollectionKind.IDictionary
-            or IrCollectionKind.IReadOnlyDictionary => new IrMapTypeRef(
+            _ when IrCollectionKinds.IsKeyed(Kind) => new IrMapTypeRef(
                 TypeArguments[0],
                 TypeArguments[1]
             ),
-            IrCollectionKind.HashSet or IrCollectionKind.ISet or IrCollectionKind.IReadOnlySet =>
-                new IrSetTypeRef(TypeArguments[0]),
+            _ when IrCollectionKinds.IsSet(Kind) => new IrSetTypeRef(TypeArguments[0]),
             _ => new IrArrayTypeRef(TypeArguments[0]),
         };
 

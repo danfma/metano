@@ -539,39 +539,75 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// The literal a set collection expression or a <c>params</c>
-    /// <c>HashSet&lt;T&gt;</c> argument builds its set from
-    /// (<c>new HashSet(literal)</c> with no constructor symbol); <c>null</c>
-    /// for any other construction.
+    /// A construction a collection expression or a <c>params</c> collection
+    /// argument builds (no constructor symbol: <c>new C()</c> or
+    /// <c>new C(literal)</c>), for a collection whose runtime class builds it
+    /// through a factory: a set collects the literal through <c>of</c>
+    /// (duplicates collapse, as C# adds each element), and an immutable
+    /// dictionary starts empty and sets each pair (a repeated key keeps its
+    /// last value, as .NET's collection builder does). <c>null</c> for any
+    /// other construction.
     /// </summary>
-    private static IrArrayLiteral? SetLiteralOf(IrNewExpression creation) =>
-        creation
-            is {
-                Type: IrCollectionTypeRef { Kind: IrCollectionKind.HashSet },
-                Origin: null,
-                Arguments: [{ Value: IrArrayLiteral literal }],
-            }
-            ? literal
-            : null;
-
-    /// <summary><c>HashSet.of&lt;T&gt;([a, b])</c>: duplicates collapse, as C# adds each element.</summary>
-    private static TsExpression SetFactory(
-        IrArrayLiteral literal,
-        IrCollectionTypeRef set,
+    private static TsExpression? MapCollectionLiteralConstruction(
+        IrNewExpression creation,
         IrToTsBridgeContext context
-    ) =>
-        CollectionTypeArgumentSlots.Append(
-            new TsCallExpression(
-                new TsPropertyAccess(
-                    RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet),
-                    "of"
-                ),
-                [MapBareArrayLiteral(literal, context)],
-                TypeArguments: CollectionTypeArguments(set, context)
+    )
+    {
+        if (
+            creation
+            is not {
+                Type: IrCollectionTypeRef collection,
+                Origin: null,
+                Arguments: [] or [{ Value: IrArrayLiteral }],
+            }
+        )
+            return null;
+
+        var literal = creation.Arguments is [{ Value: IrArrayLiteral items }] ? items : null;
+
+        return collection.Kind switch
+        {
+            IrCollectionKind.ImmutableDictionary => ImmutableDictionaryOf(
+                collection,
+                literal,
+                context
             ),
-            set,
-            context.RuntimeTypes
-        );
+            IrCollectionKind.ImmutableHashSet when literal is null => CollectionFactoryCall(
+                collection,
+                "empty",
+                [],
+                context
+            ),
+            _ when literal is not null && IrCollectionKinds.IsSet(collection.Kind) =>
+                CollectionFactoryCall(
+                    collection,
+                    "of",
+                    [MapBareArrayLiteral(literal, context)],
+                    context
+                ),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// <c>ImmutableDictionary.empty&lt;K, V&gt;()</c>, then
+    /// <c>.setItems([[k, v], …])</c> for the pairs of a non-empty literal.
+    /// </summary>
+    private static TsExpression ImmutableDictionaryOf(
+        IrCollectionTypeRef dictionary,
+        IrArrayLiteral? literal,
+        IrToTsBridgeContext context
+    )
+    {
+        var empty = CollectionFactoryCall(dictionary, "empty", [], context);
+
+        return literal is null
+            ? empty
+            : new TsCallExpression(
+                new TsPropertyAccess(empty, "setItems"),
+                [MapBareArrayLiteral(literal, context)]
+            );
+    }
 
     /// <summary>
     /// <c>r[a..^n]</c> on a runtime collection or an array: <c>r.slice(a, r.count - n)</c>

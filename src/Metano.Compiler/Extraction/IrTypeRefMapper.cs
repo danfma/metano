@@ -344,20 +344,18 @@ public static class IrTypeRefMapper
 
     /// <summary>
     /// The collection kind <paramref name="type"/> maps to for
-    /// <paramref name="target"/>: <c>IReadOnlySet&lt;T&gt;</c> joins the kinds
-    /// only for a target whose collections are runtime classes (a target that
-    /// keeps native collections renders it as its 2.x named reference).
+    /// <paramref name="target"/>: <c>IReadOnlySet&lt;T&gt;</c> and the stage
+    /// 011h collections join the kinds only for a target whose collections are
+    /// runtime classes (a target that keeps native collections renders them
+    /// as their 2.x IR).
     /// </summary>
     private static IrCollectionKind? CollectionKindOf(
         INamedTypeSymbol type,
         Metano.Annotations.TargetLanguage? target
     ) =>
-        CollectionKindResolver.KindOf(type) switch
-        {
-            IrCollectionKind.IReadOnlySet
-                when IrExtractionContext.KeepsNativeCollectionsFor(target) => null,
-            var kind => kind,
-        };
+        IrExtractionContext.KeepsNativeCollectionsFor(target)
+            ? CollectionKindResolver.NativeTargetKindOf(type)
+            : CollectionKindResolver.KindOf(type);
 
     private static bool IsJsArray(INamedTypeSymbol type) =>
         type is { Name: "JsArray", Arity: 1 }

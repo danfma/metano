@@ -12,6 +12,18 @@ namespace Metano.Compiler.Extraction.Invocation;
 public sealed partial class IntrinsicBclLoweringTable
 {
     /// <summary>
+    /// The static classes declaring a <c>GetValueOrDefault</c> extension:
+    /// <c>CollectionExtensions</c> (over <c>IReadOnlyDictionary</c>) and
+    /// <c>ImmutableDictionary</c> (over <c>IImmutableDictionary</c>, which an
+    /// immutable dictionary binds to).
+    /// </summary>
+    private static readonly string[] GetValueOrDefaultOwners =
+    [
+        "System.Collections.Generic.CollectionExtensions",
+        "System.Collections.Immutable.ImmutableDictionary",
+    ];
+
+    /// <summary>
     /// <c>CollectionExtensions.GetValueOrDefault(dictionary, key)</c> →
     /// <c>dictionary.GetValueOrDefault(key, default(TValue))</c>, and the
     /// static-call form of the <c>(dictionary, key, defaultValue)</c>
@@ -19,26 +31,33 @@ public sealed partial class IntrinsicBclLoweringTable
     /// </summary>
     private void SeedGetValueOrDefault(Compilation compilation)
     {
-        var extensions = compilation.GetTypeByMetadataName(
-            "System.Collections.Generic.CollectionExtensions"
-        );
-
-        if (extensions is null)
-            return;
-
-        foreach (
-            var method in extensions
-                .GetMembers("GetValueOrDefault")
-                .OfType<IMethodSymbol>()
-                .Where(m => m.IsExtensionMethod && m.Parameters.Length is 2 or 3)
-        )
+        foreach (var name in GetValueOrDefaultOwners)
         {
-            _entries[method.OriginalDefinition] = BuildGetValueOrDefaultCall;
+            var extensions = compilation.GetTypeByMetadataName(name);
+
+            foreach (
+                var method in extensions
+                    ?.GetMembers("GetValueOrDefault")
+                    .OfType<IMethodSymbol>()
+                    .Where(m => m.IsExtensionMethod && m.Parameters.Length is 2 or 3)
+                    ?? []
+            )
+            {
+                _entries[method.OriginalDefinition] = BuildGetValueOrDefaultCall;
+            }
         }
     }
 
-    private IrExpression BuildGetValueOrDefaultCall(InvocationRewriteContext ctx)
+    private IrExpression? BuildGetValueOrDefaultCall(InvocationRewriteContext ctx)
     {
+        // The immutable dictionary is a stage 011h class: a target that keeps
+        // native collections keeps the call's source shape.
+        if (
+            ctx.Symbol!.ContainingType.Name != "CollectionExtensions"
+            && IrExtractionContext.KeepsNativeCollectionsFor(_helpers.Target)
+        )
+            return null;
+
         var operation = BoundInvocation(ctx);
         var arguments = ArgumentValues(ctx, operation);
         var valueType = operation.TargetMethod.TypeArguments[1];
@@ -59,12 +78,13 @@ public sealed partial class IntrinsicBclLoweringTable
 
     /// <summary>
     /// The member as the receiver's own dictionary type declares it, for a
-    /// stage 011c dictionary receiver (spec 011 FR-007): its class has
+    /// runtime dictionary receiver (spec 011 FR-007, FR-054): its class has
     /// <c>getValueOrDefault</c>, its interfaces read it through
     /// <c>TryGetValue</c>, so the mapping depends on the receiver's kind, which
-    /// the extension's declaring type (<c>CollectionExtensions</c>) does not
-    /// say. <c>null</c> for any other receiver, and for a target that keeps
-    /// native collections, whose mapping keeps the source shape.
+    /// the extension's declaring type (<c>CollectionExtensions</c>,
+    /// <c>ImmutableDictionary</c>) does not say. <c>null</c> for any other
+    /// receiver, and for a target that keeps native collections, whose mapping
+    /// keeps the source shape.
     /// </summary>
     private IrMemberOrigin? ReceiverDictionaryOrigin(IInvocationOperation operation, string name)
     {
@@ -86,8 +106,5 @@ public sealed partial class IntrinsicBclLoweringTable
     }
 
     private static bool IsDictionaryKind(INamedTypeSymbol type) =>
-        CollectionKindResolver.KindOf(type)
-            is IrCollectionKind.Dictionary
-                or IrCollectionKind.IDictionary
-                or IrCollectionKind.IReadOnlyDictionary;
+        CollectionKindResolver.KindOf(type) is { } kind && IrCollectionKinds.IsKeyed(kind);
 }

@@ -2345,6 +2345,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 case "WhenParameterTypes":
                     whenParameterTypes = ReadParameterTypes(named.Value);
                     break;
+                case "WhenParameterTypeNames":
+                    whenParameterTypes = ReadParameterTypeNames(named.Value);
+                    break;
             }
         }
 
@@ -2402,6 +2405,20 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         return types.Count == value.Values.Length
             ? types.Select(type => type.GetStableFullName()).ToList()
             : null;
+    }
+
+    /// <summary>
+    /// Reads a <c>WhenParameterTypeNames</c> <c>string[]</c> argument: the
+    /// stable full names themselves. A malformed array yields <c>null</c>.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadParameterTypeNames(TypedConstant value)
+    {
+        if (value.Kind != TypedConstantKind.Array || value.IsNull)
+            return null;
+
+        var names = value.Values.Select(element => element.Value).OfType<string>().ToList();
+
+        return names.Count == value.Values.Length ? names : null;
     }
 
     private static void ReportConflict(

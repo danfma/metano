@@ -1210,7 +1210,11 @@ public static partial class IrToTsExpressionBridge
                         loweredReceiver,
                         loweredArgs,
                         typeArgNames ?? [],
-                        context.Bcl
+                        context.Bcl,
+                        call.TypeArguments?.Select(argument =>
+                                IrToTsTypeMapper.Map(argument, context.TypeOverrides)
+                            )
+                            .ToList()
                     )
                     : null;
 
@@ -2268,8 +2272,8 @@ public static partial class IrToTsExpressionBridge
         if (ne.Type is IrNamedTypeRef { Semantics.RendersAsJsxElement: true })
             return IrToTsJsxBridge.Convert(ne, context);
 
-        if (SetLiteralOf(ne) is { } setLiteral)
-            return SetFactory(setLiteral, (IrCollectionTypeRef)ne.Type, context);
+        if (MapCollectionLiteralConstruction(ne, context) is { } collectionLiteral)
+            return collectionLiteral;
 
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
 

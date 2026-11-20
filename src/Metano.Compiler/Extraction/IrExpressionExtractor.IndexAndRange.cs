@@ -287,18 +287,25 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// True when a range access copies a sub-sequence the backends know how to
-    /// slice: an array, <c>string.Substring</c>, or <c>List&lt;T&gt;.Slice</c>.
-    /// A user type's own <c>Slice</c> method is excluded — its argument
-    /// convention (start, length) is not the target's slice convention.
+    /// slice: an array, <c>string.Substring</c>, <c>List&lt;T&gt;.Slice</c>, or,
+    /// for a target whose collections are runtime classes,
+    /// <c>ImmutableArray&lt;T&gt;.Slice</c> (spec 011 FR-054). A user type's own
+    /// <c>Slice</c> method is excluded — its argument convention (start,
+    /// length) is not the target's slice convention.
     /// </summary>
     private bool IsSliceableRangeAccess(IOperation? access) =>
         access switch
         {
             IArrayElementReferenceOperation => true,
             IImplicitIndexerReferenceOperation { IndexerSymbol: IMethodSymbol slice } =>
-                IsStringSubstring(slice) || IsListSlice(slice),
+                IsStringSubstring(slice) || IsListSlice(slice) || IsImmutableArraySlice(slice),
             _ => false,
         };
+
+    private bool IsImmutableArraySlice(IMethodSymbol method) =>
+        !_context.KeepsNativeCollections
+        && method.Name == nameof(List<int>.Slice)
+        && CollectionKindResolver.KindOf(method.ContainingType) is IrCollectionKind.ImmutableArray;
 
     private static bool IsStringSubstring(IMethodSymbol method) =>
         method.ContainingType.SpecialType == SpecialType.System_String

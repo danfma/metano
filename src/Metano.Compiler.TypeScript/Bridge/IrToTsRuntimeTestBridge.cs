@@ -124,15 +124,29 @@ internal static class IrToTsRuntimeTestBridge
 
     /// <summary>
     /// A collection type as the runtime classes its values can be (W4-18):
-    /// <c>instanceof</c> the class, or any 011c class implementing the
+    /// <c>instanceof</c> the class, or any runtime class implementing the
     /// interface, the type arguments erased as for an array. The extraction
     /// reports the list-shaped <c>is</c> / <c>as</c> / pattern tests (MS0001,
-    /// W4-17), so this renders the dictionary and set tests and the overload
-    /// dispatchers' collection parameters.
+    /// W4-17), so this renders the dictionary and set tests.
     /// </summary>
     private static TsExpression CollectionTest(TsExpression value, IrCollectionTypeRef type) =>
-        RuntimeCollections
-            .ClassesOf(type.Kind)
+        InstanceofAny(value, RuntimeCollections.ClassesOf(type.Kind));
+
+    /// <summary>
+    /// An overload dispatcher's test of a collection parameter: the classes
+    /// of <see cref="CollectionTest"/> whose shape implements the parameter's
+    /// interface (<see cref="RuntimeCollections.DispatchClassesOf"/>).
+    /// </summary>
+    public static TsExpression DispatchCollectionTest(
+        TsExpression value,
+        IrCollectionTypeRef type
+    ) => InstanceofAny(value, RuntimeCollections.DispatchClassesOf(type.Kind));
+
+    private static TsExpression InstanceofAny(
+        TsExpression value,
+        IReadOnlyList<IrCollectionKind> classes
+    ) =>
+        classes
             .Select(kind =>
                 (TsExpression)InstanceofTest(value, RuntimeCollections.ReferenceTo(kind))
             )

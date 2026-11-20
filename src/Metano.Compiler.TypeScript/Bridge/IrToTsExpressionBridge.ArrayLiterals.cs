@@ -28,18 +28,35 @@ public static partial class IrToTsExpressionBridge
 
         var elements = MapBareArrayLiteral(literal, context);
 
-        return collection.Kind is IrCollectionKind.List
-            ? CollectionTypeArgumentSlots.Append(
-                new TsCallExpression(
-                    new TsPropertyAccess(ListClass, "of"),
-                    [elements],
-                    TypeArguments: CollectionTypeArguments(collection, context)
-                ),
-                collection,
-                context.RuntimeTypes
-            )
+        return
+            collection.Kind
+                is IrCollectionKind.List
+                    or IrCollectionKind.ImmutableList
+                    or IrCollectionKind.ImmutableArray
+            ? CollectionFactoryCall(collection, "of", [elements], context)
             : AdoptedFixedSize(elements, collection, context);
     }
+
+    /// <summary>
+    /// <c>C.factory&lt;T…&gt;(args)</c> on the runtime class of
+    /// <paramref name="collection"/>, its type arguments written from the C#
+    /// type (<see cref="CollectionTypeArguments"/>).
+    /// </summary>
+    private static TsCallExpression CollectionFactoryCall(
+        IrCollectionTypeRef collection,
+        string factory,
+        IReadOnlyList<TsExpression> arguments,
+        IrToTsBridgeContext context
+    ) =>
+        (TsCallExpression)CollectionTypeArgumentSlots.Append(
+            new TsCallExpression(
+                new TsPropertyAccess(RuntimeCollections.ReferenceTo(collection.Kind), factory),
+                arguments,
+                TypeArguments: CollectionTypeArguments(collection, context)
+            ),
+            collection,
+            context.RuntimeTypes
+        );
 
     /// <summary>
     /// The literal as a native array, asserted to the element type C# gives it

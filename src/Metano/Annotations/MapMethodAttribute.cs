@@ -186,4 +186,16 @@ public sealed class MapMethodAttribute(Type declaringType, string csharpMethod) 
     /// vs <c>new List&lt;T&gt;(IEnumerable&lt;T&gt; collection)</c> (a copy).
     /// </summary>
     public Type[]? WhenParameterTypes { get; init; }
+
+    /// <summary>
+    /// <see cref="WhenParameterTypes"/> spelled as the stable full names the
+    /// transpiler compares (<c>"TKey"</c>, <c>"T[]"</c>,
+    /// <c>"System.Func&lt;T, TResult&gt;"</c>), for an overload whose parameter
+    /// types a <c>typeof</c> cannot name: a type parameter of the type or the
+    /// method, or an array of one. Used where overloads share an arity but
+    /// differ by such a parameter, e.g. <c>ConcurrentDictionary&lt;K, V&gt;.GetOrAdd(TKey,
+    /// TValue)</c> vs <c>GetOrAdd(TKey, Func&lt;TKey, TValue&gt;)</c>. When both
+    /// are set, the last one written wins.
+    /// </summary>
+    public string[]? WhenParameterTypeNames { get; init; }
 }

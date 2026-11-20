@@ -156,22 +156,16 @@ using Metano.Annotations;
     nameof(IReadOnlyDictionary<int, int>.TryGetValue),
     JsMethod = "tryGetValue"
 )]
-// ConcurrentDictionary<K,V> is stage 011h's: until then a native Map and its helper.
-[assembly: MapMethod(
-    typeof(System.Collections.Concurrent.ConcurrentDictionary<,>),
-    nameof(System.Collections.Concurrent.ConcurrentDictionary<int, int>.TryGetValue),
-    JsTemplate = "tryGetValue($this, $0, $1)",
-    RuntimeImports = "tryGetValue"
-)]
 
 // ─── GetValueOrDefault ──────────────────────────────────────
 // `GetValueOrDefault` is an extension on IReadOnlyDictionary<K,V> (CollectionExtensions).
-// The extractor normalizes it to `(key, defaultValue)` and, for a stage 011c receiver,
-// names the receiver's own type as the member's declaring type
+// The extractor normalizes it to `(key, defaultValue)` and, for a runtime collection
+// receiver, names the receiver's own type as the member's declaring type
 // (IntrinsicBclLoweringTable.GetValueOrDefault): the `Dictionary` class has the member,
 // the interfaces read it through `tryGetValue` (contracts/runtime-collections.md,
-// interface receivers). Any other receiver (an 011h dictionary, still a native Map) keeps
-// the runtime helper, which tests membership with `has`.
+// interface receivers); the stage 011h dictionaries map it in their own files. Any other
+// receiver (a user class implementing the interface) keeps the runtime helper, which
+// tests membership with `has`.
 
 [assembly: MapMethod(
     typeof(Dictionary<,>),

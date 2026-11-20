@@ -10,7 +10,8 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The collection initializers of the stage 011c <c>List</c>, <c>HashSet</c>
 /// and <c>Dictionary</c> (spec 011 FR-007, contracts/runtime-collections.md §
-/// Compiler contract): <c>new List&lt;T&gt; { a, b }</c>,
+/// Compiler contract) and of the stage 011h sorted and concurrent classes
+/// (FR-054): <c>new List&lt;T&gt; { a, b }</c>,
 /// <c>new Dictionary&lt;K, V&gt; { { k, v } }</c> and <c>{ [k] = v }</c>, after
 /// any of their constructors, become one <see cref="IrCollectionInitialization"/>
 /// that the target lowers to a factory, with no let-bound instance. A target
@@ -47,6 +48,9 @@ public sealed partial class IrExpressionExtractor
 
         var construction = ConstructionOf(operation.Constructor);
 
+        if (construction is IrCollectionConstruction.Other && !InitializesAfterAnyConstructor(type))
+            return null;
+
         return new IrCollectionInitialization(
             creation,
             type,
@@ -79,6 +83,23 @@ public sealed partial class IrExpressionExtractor
 
     private static bool HasInitializerFactory(INamedTypeSymbol type) =>
         CollectionKindResolver.KindOf(type)
+            is IrCollectionKind.List
+                or IrCollectionKind.HashSet
+                or IrCollectionKind.Dictionary
+                or IrCollectionKind.SortedSet
+                or IrCollectionKind.SortedDictionary
+                or IrCollectionKind.SortedList
+                or IrCollectionKind.ConcurrentDictionary;
+
+    /// <summary>
+    /// Whether an initializer of <paramref name="type"/> becomes the node
+    /// after any of its constructors: the stage 011c classes (spec 011 FR-007).
+    /// The stage 011h classes (FR-054) take it only after the parameterless
+    /// or comparer constructor, the forms their factories build; after any
+    /// other constructor the initializer keeps the general lowering.
+    /// </summary>
+    private static bool InitializesAfterAnyConstructor(IrCollectionTypeRef type) =>
+        type.Kind
             is IrCollectionKind.List
                 or IrCollectionKind.HashSet
                 or IrCollectionKind.Dictionary;
@@ -125,7 +146,10 @@ public sealed partial class IrExpressionExtractor
         IrCollectionTypeRef type
     )
     {
-        if (type.Kind is not IrCollectionKind.Dictionary)
+        if (
+            type.Kind is IrCollectionKind.ImmutableDictionaryBuilder
+            || !IrCollectionKinds.IsKeyed(type.Kind)
+        )
             return null;
 
         var isPlainIndexWrite = initializer.Expressions.All(element =>
@@ -163,7 +187,7 @@ public sealed partial class IrExpressionExtractor
         constructor?.Parameters switch
         {
             [] => IrCollectionConstruction.Parameterless,
-            [{ Type: INamedTypeSymbol { Name: "IEqualityComparer" } }] =>
+            [{ Type: INamedTypeSymbol { Name: "IEqualityComparer" or "IComparer" } }] =>
                 IrCollectionConstruction.ComparerOnly,
             _ => IrCollectionConstruction.Other,
         };
@@ -217,7 +241,7 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The collection C# builds for a <c>params</c> collection parameter from
-    /// <paramref name="elements"/>: a <c>HashSet</c> construction, or an
+    /// <paramref name="elements"/>: a set construction, or an
     /// <see cref="IrArrayLiteral"/> with the collection it targets.
     /// </summary>
     private IrExpression ParamsCollectionOf(
@@ -229,7 +253,8 @@ public sealed partial class IrExpressionExtractor
 
         return
             parameter.Type is INamedTypeSymbol named
-            && CollectionKindResolver.KindOf(named) is IrCollectionKind.HashSet
+            && CollectionKindResolver.KindOf(named) is { } kind
+            && IrCollectionKinds.IsSet(kind)
             ? new IrNewExpression(
                 MapNonNullType(named),
                 elements.Count == 0 ? [] : [new IrArgument(literal)]
