@@ -56,10 +56,33 @@ internal static class IrToTsRuntimeTypeReferences
                 ? new TsRuntimeHelperReference(runtime.Descriptor)
                 : null,
             IrArrayTypeRef => new TsRuntimeHelperReference("ArrayType"),
+            IrCollectionTypeRef collection => CollectionDescriptor(collection, site, reachability),
             IrFunctionTypeRef => new TsRuntimeHelperReference("DelegateType"),
             IrNamedTypeRef named => NamedDescriptor(named, site, reachability),
             _ => null,
         };
+
+    /// <summary>
+    /// <c>listType(Int32Type)</c>: the collection factory of the kind over its
+    /// arguments' descriptors, a type argument with none reading <c>UnknownType</c>.
+    /// <c>null</c> for a kind with no factory (a dictionary view).
+    /// </summary>
+    private static TsExpression? CollectionDescriptor(
+        IrCollectionTypeRef collection,
+        string site,
+        RuntimeTypeReachabilityResult reachability
+    ) =>
+        RuntimeCollections.DescriptorFactoryOf(collection.Kind) is { } factory
+            ? new TsCallExpression(
+                factory,
+                [
+                    .. collection.TypeArguments.Select(argument =>
+                        Of(argument, site, reachability)
+                        ?? new TsRuntimeHelperReference("UnknownType")
+                    ),
+                ]
+            )
+            : null;
 
     /// <summary>
     /// The descriptor of a named type; a type argument with no descriptor

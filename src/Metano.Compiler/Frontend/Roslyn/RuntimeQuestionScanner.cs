@@ -94,6 +94,14 @@ internal sealed class RuntimeQuestionScanner
 
     private void ScanType(INamedTypeSymbol type)
     {
+        if (type.BaseType is not null)
+        {
+            var location = type.Locations.FirstOrDefault();
+
+            if (location is not null && type.BaseType.IsGenericType)
+                RecordCollectionBase(type.BaseType, location);
+        }
+
         foreach (var member in type.GetMembers().Where(IsScannedMember))
             ScanMember(member);
 
@@ -234,6 +242,12 @@ internal sealed class RuntimeQuestionScanner
             case ITypeOfOperation typeOf:
                 InspectTypeOf(typeOf);
                 break;
+            case IConversionOperation { Operand.Type: IArrayTypeSymbol } arrayConversion:
+                RecordCollectionConstruction(arrayConversion.Type, arrayConversion.Syntax);
+                break;
+            case IObjectCreationOperation or ICollectionExpressionOperation:
+                RecordCollectionConstruction(operation.Type, operation.Syntax);
+                break;
             case IInvocationOperation invocation:
                 InspectInvocation(invocation);
                 break;
@@ -245,6 +259,29 @@ internal sealed class RuntimeQuestionScanner
                 ReportUnsupportedTypeMember(property.Property, property.Syntax);
                 break;
         }
+    }
+
+    private void RecordCollectionBase(INamedTypeSymbol baseType, Location location)
+    {
+        if (RuntimeQuestionFacts.QuestionedTypeOf(baseType).CollectionDefinitionName is not null)
+            AddQuestion(IrRuntimeQuestionKind.CollectionConstruction, baseType, location);
+    }
+
+    /// <summary>
+    /// Records the construction of a collection type (<see cref="IrRuntimeQuestionKind.CollectionConstruction"/>);
+    /// any other type is not recorded.
+    /// </summary>
+    private void RecordCollectionConstruction(ITypeSymbol? type, SyntaxNode syntax)
+    {
+        if (
+            type is not INamedTypeSymbol { IsGenericType: true } named
+            || RuntimeQuestionFacts.QuestionedTypeOf(named).CollectionDefinitionName is null
+        )
+            return;
+
+        _questions.Add(
+            Question(IrRuntimeQuestionKind.CollectionConstruction, named, syntax.GetLocation())
+        );
     }
 
     /// <summary>
@@ -375,6 +412,9 @@ internal sealed class RuntimeQuestionScanner
 
             return;
         }
+
+        if (method.Name is "ToList" or "ToDictionary" or "ToHashSet")
+            RecordCollectionConstruction(invocation.Type, invocation.Syntax);
 
         if (RuntimeQuestionFacts.IsUnsupportedTypeMember(method))
             ReportUnsupportedTypeMember(method, invocation.Syntax);

@@ -43,7 +43,12 @@ public static class RuntimeCollections
     {
         [IrCollectionKind.IList] = [IrCollectionKind.List],
         [IrCollectionKind.IReadOnlyList] = [IrCollectionKind.List],
-        [IrCollectionKind.ICollection] = [IrCollectionKind.List, IrCollectionKind.HashSet],
+        [IrCollectionKind.ICollection] =
+        [
+            IrCollectionKind.List,
+            IrCollectionKind.HashSet,
+            IrCollectionKind.Dictionary,
+        ],
         [IrCollectionKind.IReadOnlyCollection] =
         [
             IrCollectionKind.List,
@@ -59,6 +64,51 @@ public static class RuntimeCollections
         [IrCollectionKind.ISet] = [IrCollectionKind.HashSet],
         [IrCollectionKind.IReadOnlySet] = [IrCollectionKind.HashSet],
     };
+
+    private static readonly IReadOnlyDictionary<IrCollectionKind, string> ClrNamesByKind =
+        new Dictionary<IrCollectionKind, string>
+        {
+            [IrCollectionKind.List] = "List`1",
+            [IrCollectionKind.IList] = "IList`1",
+            [IrCollectionKind.ICollection] = "ICollection`1",
+            [IrCollectionKind.IReadOnlyList] = "IReadOnlyList`1",
+            [IrCollectionKind.IReadOnlyCollection] = "IReadOnlyCollection`1",
+            [IrCollectionKind.Dictionary] = "Dictionary`2",
+            [IrCollectionKind.IDictionary] = "IDictionary`2",
+            [IrCollectionKind.IReadOnlyDictionary] = "IReadOnlyDictionary`2",
+            [IrCollectionKind.HashSet] = "HashSet`1",
+            [IrCollectionKind.ISet] = "ISet`1",
+            [IrCollectionKind.IReadOnlySet] = "IReadOnlySet`1",
+            [IrCollectionKind.Queue] = "Queue`1",
+            [IrCollectionKind.Stack] = "Stack`1",
+        };
+
+    /// <summary>
+    /// The kinds whose runtime class lists a mutable collection interface in its
+    /// descriptor (as .NET does) without implementing its members: <c>add</c>
+    /// returns a new collection (stage 011h's immutable classes). A test against
+    /// such an interface is unanswerable like one against a user implementer.
+    /// </summary>
+    private static readonly IReadOnlySet<IrCollectionKind> KindsWithoutMutableShape =
+        new HashSet<IrCollectionKind>();
+
+    private static readonly IReadOnlyDictionary<IrCollectionKind, string> FactoriesByKind =
+        new Dictionary<IrCollectionKind, string>
+        {
+            [IrCollectionKind.List] = "listType",
+            [IrCollectionKind.IList] = "iListType",
+            [IrCollectionKind.ICollection] = "iCollectionType",
+            [IrCollectionKind.IReadOnlyList] = "iReadOnlyListType",
+            [IrCollectionKind.IReadOnlyCollection] = "iReadOnlyCollectionType",
+            [IrCollectionKind.Dictionary] = "dictionaryType",
+            [IrCollectionKind.IDictionary] = "iDictionaryType",
+            [IrCollectionKind.IReadOnlyDictionary] = "iReadOnlyDictionaryType",
+            [IrCollectionKind.HashSet] = "hashSetType",
+            [IrCollectionKind.ISet] = "iSetType",
+            [IrCollectionKind.IReadOnlySet] = "iReadOnlySetType",
+            [IrCollectionKind.Queue] = "queueType",
+            [IrCollectionKind.Stack] = "stackType",
+        };
 
     /// <summary>
     /// The runtime helpers of the collections barrel the target emits besides
@@ -96,9 +146,47 @@ public static class RuntimeCollections
     );
 
     private static readonly IReadOnlySet<string> AllNames = new HashSet<string>(
-        NamesByKind.Values.Concat(HelperNames),
+        NamesByKind.Values.Concat(HelperNames).Concat(FactoriesByKind.Values),
         StringComparer.Ordinal
     );
+
+    /// <summary>The CLR definition name (<c>System.Collections.Generic.List`1</c>) of <paramref name="kind"/>.</summary>
+    public static string ClrNameOf(IrCollectionKind kind) =>
+        $"System.Collections.Generic.{ClrNamesByKind[kind]}";
+
+    /// <summary>The kind a CLR definition name names, <c>null</c> for any other type.</summary>
+    public static IrCollectionKind? KindOfClrName(string clrName) =>
+        ClrNamesByKind
+            .Where(entry => ClrNameOf(entry.Key) == clrName)
+            .Select(entry => (IrCollectionKind?)entry.Key)
+            .FirstOrDefault();
+
+    /// <summary>The collection interfaces the runtime class <paramref name="kind"/> implements.</summary>
+    public static IReadOnlyList<IrCollectionKind> InterfacesImplementedBy(IrCollectionKind kind) =>
+        [
+            .. ImplementersByInterface
+                .Where(entry => entry.Value.Contains(kind))
+                .Select(entry => entry.Key),
+        ];
+
+    /// <summary>
+    /// Whether the TypeScript shape of the runtime class <paramref name="kind"/>
+    /// implements the mutable collection interfaces its descriptor lists
+    /// (<c>false</c> for stage 011h's immutable classes).
+    /// </summary>
+    public static bool ShapeImplementsMutableInterface(IrCollectionKind kind) =>
+        !KindsWithoutMutableShape.Contains(kind);
+
+    /// <summary>The runtime class kinds (every kind that is not an interface).</summary>
+    public static IEnumerable<IrCollectionKind> ClassKinds =>
+        ClrNamesByKind.Keys.Where(kind => !IsInterface(kind));
+
+    /// <summary>
+    /// The descriptor factory (<c>listType</c>, <c>iListType</c>, …) of
+    /// <paramref name="kind"/> in the collections barrel, <c>null</c> when it has none.
+    /// </summary>
+    public static TsRuntimeHelperReference? DescriptorFactoryOf(IrCollectionKind kind) =>
+        FactoriesByKind.TryGetValue(kind, out var name) ? new(name, Module) : null;
 
     /// <summary>The runtime class or interface name of <paramref name="kind"/>.</summary>
     public static string NameOf(IrCollectionKind kind) => NamesByKind[kind];

@@ -94,7 +94,14 @@ public sealed partial class IrExpressionExtractor
         var source = Extract(sourceSyntax);
         // Build-time fusion of adjacent stages (#207). Idempotent on
         // chains the rules don't match — returns the original instance.
-        return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
+        return IrLinqChainFuser.Fuse(
+            new IrLinqChain(source, stages)
+            {
+                ResultType = _semantic.GetTypeInfo(outermost).Type is { } resultType
+                    ? MapNonNullType(resultType)
+                    : null,
+            }
+        );
     }
 
     /// <summary>

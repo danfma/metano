@@ -1206,7 +1206,11 @@ internal sealed class IrToTsClassEmitter(
             ? IrToTsClassBridge.BuildBaseCall(ctor, extendsType, keepsBaseMessage, lowering)
             : null;
 
-        return baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);
+        var call = baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);
+
+        return ir.BaseType is IrCollectionTypeRef collection
+            ? CollectionTypeArgumentSlots.AppendToSuper(call, collection, lowering.RuntimeTypes)
+            : call;
     }
 
     /// <summary>How the members a constructor promotes are declared.</summary>

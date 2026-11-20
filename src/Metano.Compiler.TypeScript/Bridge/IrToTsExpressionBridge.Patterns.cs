@@ -354,6 +354,9 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
+        if (targetType is IrCollectionTypeRef collection)
+            return CollectionTypeTest(value, collection, staticType, context);
+
         if (
             IrToTsRuntimeTestBridge.Render(value, targetType, staticType, context.RuntimeTypes) is
             { } test
@@ -363,6 +366,32 @@ public static partial class IrToTsExpressionBridge
         return IrRuntimeTypeTest.IsDelegate(targetType)
             ? MapUnsupported(new IrUnsupportedExpression("DelegateTypeTest"))
             : throw NoRuntimeTypeTest(targetType);
+    }
+
+    /// <summary>
+    /// A test against a collection type (spec 011 D31): <c>isType(value, listType(Int32Type))</c>,
+    /// or the throwing placeholder where the reachability phase reported
+    /// <c>MS0001</c> (a type that is not a runtime collection may be the value).
+    /// A kind with no descriptor factory keeps its <c>instanceof</c>.
+    /// </summary>
+    private static TsExpression CollectionTypeTest(
+        TsExpression value,
+        IrCollectionTypeRef collection,
+        IrTypeRef? staticType,
+        IrToTsBridgeContext context
+    )
+    {
+        if (context.RuntimeTypes.IsUnanswerable(collection.Kind, staticType))
+            return MapUnsupported(new IrUnsupportedExpression("CollectionInterfaceTest"));
+
+        if (
+            IrToTsRuntimeTypeReferences.Of(collection, "collection test", context.RuntimeTypes) is
+            { } descriptor
+        )
+            return IrToTsRuntimeTestBridge.IsTypeCall(value, descriptor);
+
+        return IrToTsRuntimeTestBridge.Render(value, collection, staticType, context.RuntimeTypes)
+            ?? throw NoRuntimeTypeTest(collection);
     }
 
     /// <summary>

@@ -26,6 +26,49 @@ internal sealed record RuntimeTypeReachabilityResult
     public required IReadOnlySet<string> QuestionedCollectionTypes { get; init; }
 
     /// <summary>
+    /// The runtime collection classes whose constructions pass their type
+    /// arguments (spec 011 FR-008, D31): the classes a test, <c>as</c>,
+    /// <c>GetType()</c> or <c>typeof</c> names, and those implementing a
+    /// questioned interface.
+    /// </summary>
+    public IReadOnlySet<IrCollectionKind> QuestionedCollectionClasses { get; init; } =
+        new HashSet<IrCollectionKind>();
+
+    /// <summary>
+    /// The collection-interface tests that report <c>MS0001</c> because a type that
+    /// is not a runtime collection (or a runtime class with another shape) can be
+    /// the operand (W4-17, D31), keyed as <see cref="UnanswerableKey"/> builds it.
+    /// </summary>
+    public IReadOnlySet<string> UnanswerableCollectionTests { get; init; } =
+        new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>Whether a construction of <paramref name="kind"/> carries its type arguments.</summary>
+    public bool AsksAbout(IrCollectionKind kind) =>
+        ReachesEverything || QuestionedCollectionClasses.Contains(kind);
+
+    /// <summary>
+    /// The key of a collection test: the tested definition name and the operand's
+    /// type (<c>*</c> when it is <c>object</c>, a type parameter or unknown).
+    /// </summary>
+    internal static string UnanswerableKey(string testedClrName, string operand) =>
+        $"{testedClrName}|{operand}";
+
+    /// <summary>Whether the test of <paramref name="tested"/> reports MS0001.</summary>
+    public bool IsUnanswerable(IrCollectionKind tested, IrTypeRef? operand) =>
+        UnanswerableCollectionTests.Contains(
+            UnanswerableKey(Bridge.RuntimeCollections.ClrNameOf(tested), OperandKey(operand))
+        );
+
+    private static string OperandKey(IrTypeRef? operand) =>
+        operand switch
+        {
+            IrNullableTypeRef nullable => OperandKey(nullable.Inner),
+            IrCollectionTypeRef collection => Bridge.RuntimeCollections.ClrNameOf(collection.Kind),
+            IrNamedTypeRef named when !named.IsObject => $"{named.Namespace}.{named.Name}",
+            _ => "*",
+        };
+
+    /// <summary>
     /// The types whose synthesized structural guard the compilation emits: the
     /// <c>[PlainObject]</c> types a runtime test recognizes by it (FR-020) and,
     /// once the transform merges them, the structural JSON variants (spec 009
@@ -140,6 +183,12 @@ internal sealed record RuntimeTypeReachabilityResult
                         .Order(StringComparer.Ordinal),
                     .. QuestionedCollectionTypes
                         .Select(name => $"collection:{name}")
+                        .Order(StringComparer.Ordinal),
+                    .. QuestionedCollectionClasses
+                        .Select(kind => $"questioned:{kind}")
+                        .Order(StringComparer.Ordinal),
+                    .. UnanswerableCollectionTests
+                        .Select(key => $"unanswerable:{key}")
                         .Order(StringComparer.Ordinal),
                     .. OverridingGetters
                         .Select(key => $"override:{Display(key)}")

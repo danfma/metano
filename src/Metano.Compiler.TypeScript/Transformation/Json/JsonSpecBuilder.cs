@@ -3,6 +3,7 @@ using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
+using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
@@ -214,6 +215,7 @@ internal sealed class JsonSpecBuilder
         TsObjectProperty?[] leadingProperties =
         [
             TypeProperty(targetType, tsTypeName),
+            RuntimeTypeProperty(targetType),
             BaseLinkProperty(targetType),
             factoryProperty,
             propertiesProperty,
@@ -243,6 +245,42 @@ internal sealed class JsonSpecBuilder
         JsonContractAdmission.HasRuntimeConstructor(targetType)
             ? new TsObjectProperty("type", new TsIdentifier(tsTypeName))
             : null;
+
+    /// <summary>
+    /// <c>runtimeType: () =&gt; Item.$runtimeType</c> for a class-backed contract the
+    /// reachability phase reached (spec 011 FR-028, D31): a thunk, so the cycle with
+    /// the class module resolves lazily.
+    /// </summary>
+    private TsObjectProperty? RuntimeTypeProperty(INamedTypeSymbol targetType) =>
+        JsonContractAdmission.HasRuntimeConstructor(targetType) && HasDescriptor(targetType)
+            ? new TsObjectProperty(
+                "runtimeType",
+                new TsArrowFunction(
+                    [],
+                    [
+                        new TsReturnStatement(
+                            new TsPropertyAccess(
+                                new TsIdentifier(_context.ResolveTsName(targetType)),
+                                IrToTsRuntimeTypeReferences.GetterName
+                            )
+                        ),
+                    ]
+                )
+            )
+            : null;
+
+    /// <summary>
+    /// Whether the class emits a descriptor: one of this compilation that the
+    /// reachability phase reached, or a public class of a referenced
+    /// <c>[TranspileAssembly]</c> library (D29: libraries are complete).
+    /// </summary>
+    private bool HasDescriptor(INamedTypeSymbol type) =>
+        SymbolEqualityComparer.Default.Equals(
+            type.ContainingAssembly,
+            _context.Compilation.Assembly
+        )
+            ? _context.RuntimeTypes.Reaches(RuntimeTypeReachability.KeyOf(type))
+            : RuntimeTypeReachability.IsLibraryClassWithDescriptor(type);
 
     /// <summary><c>base: this.baseSpec</c> when the type links to a base spec.</summary>
     private TsObjectProperty? BaseLinkProperty(INamedTypeSymbol targetType) =>

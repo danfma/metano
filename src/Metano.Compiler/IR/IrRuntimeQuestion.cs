@@ -28,6 +28,16 @@ public enum IrRuntimeQuestionKind
     /// interface). Conversions into an interop-bound slot are not recorded.
     /// </summary>
     Box,
+
+    /// <summary>
+    /// A construction of a collection type (an object creation, a collection
+    /// expression, a <c>ToList()</c> / <c>ToDictionary()</c> / <c>ToHashSet()</c>
+    /// call, an array converted to a collection interface) or a class deriving
+    /// from one; the type is the constructed type. It asks nothing at runtime: a
+    /// target that carries type arguments reaches the argument types from it
+    /// (spec 011 FR-008).
+    /// </summary>
+    CollectionConstruction,
 }
 
 /// <summary>The shape of a questioned type, as far as a runtime question cares.</summary>

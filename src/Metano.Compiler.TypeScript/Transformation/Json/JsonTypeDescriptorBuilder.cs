@@ -1,4 +1,6 @@
+using Metano.Annotations;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
@@ -43,11 +45,12 @@ internal sealed class JsonTypeDescriptorBuilder(
                 JsonTypeClassifier.ElementTypeOf(type)
             ),
             JsonPropertyKind.HashSet => BuildCollectionDescriptor(
+                type,
                 kind,
                 JsonTypeClassifier.SetElementTypeOf(type)
             ),
             JsonPropertyKind.List or JsonPropertyKind.Queue or JsonPropertyKind.Stack =>
-                BuildCollectionDescriptor(kind, JsonTypeClassifier.ElementTypeOf(type)),
+                BuildCollectionDescriptor(type, kind, JsonTypeClassifier.ElementTypeOf(type)),
             JsonPropertyKind.Map or JsonPropertyKind.Dictionary => BuildMapDescriptor(type, kind),
             JsonPropertyKind.Temporal => BuildTemporalDescriptor(type),
             JsonPropertyKind.Branded => BuildBrandedDescriptor(type),
@@ -129,13 +132,14 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// no collection class.
     /// </summary>
     private TsObjectLiteral BuildCollectionDescriptor(
+        ITypeSymbol type,
         JsonPropertyKind kind,
         ITypeSymbol elementType
     ) =>
         new([
             KindProperty(kind),
             new TsObjectProperty("element", Build(elementType)),
-            new TsObjectProperty("create", CreateClosure(kind)),
+            new TsObjectProperty("create", CreateClosure(type, kind)),
         ]);
 
     private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type, JsonPropertyKind kind) =>
@@ -144,7 +148,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             new TsObjectProperty("key", BuildKeyDescriptor(JsonTypeClassifier.KeyTypeOf(type))),
             new TsObjectProperty("value", Build(JsonTypeClassifier.ValueTypeOf(type))),
             .. kind is JsonPropertyKind.Dictionary
-                ? [new TsObjectProperty("create", CreateClosure(kind))]
+                ? [new TsObjectProperty("create", CreateClosure(type, kind))]
                 : Array.Empty<TsObjectProperty>(),
         ]);
 
@@ -154,7 +158,7 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// document order, a stack pushes in array order, a dictionary assigns
     /// (the last of a repeated key wins), as System.Text.Json reads them.
     /// </summary>
-    private static TsArrowFunction CreateClosure(JsonPropertyKind kind)
+    private TsArrowFunction CreateClosure(ITypeSymbol type, JsonPropertyKind kind)
     {
         var (collection, factory) = kind switch
         {
@@ -176,14 +180,30 @@ internal sealed class JsonTypeDescriptorBuilder(
             [new TsParameter(parameter, Type: null)],
             [
                 new TsReturnStatement(
-                    new TsCallExpression(
-                        new TsPropertyAccess(RuntimeCollections.ReferenceTo(collection), factory),
-                        [new TsIdentifier(parameter)]
+                    WithTypeArguments(
+                        new TsCallExpression(
+                            new TsPropertyAccess(
+                                RuntimeCollections.ReferenceTo(collection),
+                                factory
+                            ),
+                            [new TsIdentifier(parameter)]
+                        ),
+                        type
                     )
                 ),
             ]
         );
     }
+
+    /// <summary>
+    /// The factory call with the collection's type-argument slot when the
+    /// compilation asks a runtime question about its kind (spec 011 FR-008, D31).
+    /// </summary>
+    private TsExpression WithTypeArguments(TsCallExpression factory, ITypeSymbol type) =>
+        IrTypeRefMapper.Map(type, target: TargetLanguage.TypeScript)
+            is IrCollectionTypeRef collection
+            ? CollectionTypeArgumentSlots.Append(factory, collection, _context.RuntimeTypes)
+            : factory;
 
     /// <summary>
     /// A dictionary key's descriptor: the value descriptor of its type, plus

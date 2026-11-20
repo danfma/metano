@@ -174,13 +174,21 @@ public sealed record IrCompilation(
     public IReadOnlyList<IrRuntimeQuestion> RuntimeQuestions { get; init; } = [];
 
     /// <summary>
-    /// The collection types a runtime question names, by CLR definition name
+    /// The collection types a test, <c>as</c>, <c>GetType()</c> or <c>typeof</c> names
+    /// (a dispatcher parameter, a cast and a construction do not read type arguments), by CLR definition name
     /// (<c>System.Collections.Generic.List`1</c>), so a target can decide which
     /// collection kinds carry their type arguments at runtime (spec 011
     /// FR-008).
     /// </summary>
     public IReadOnlySet<string> QuestionedCollectionTypes =>
         RuntimeQuestions
+            .Where(question =>
+                question.Kind
+                    is IrRuntimeQuestionKind.Test
+                        or IrRuntimeQuestionKind.As
+                        or IrRuntimeQuestionKind.GetType
+                        or IrRuntimeQuestionKind.TypeOf
+            )
             .Select(question => question.Type.CollectionDefinitionName)
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);

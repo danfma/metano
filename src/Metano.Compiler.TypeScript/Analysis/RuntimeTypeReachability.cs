@@ -36,7 +36,7 @@ namespace Metano.Compiler.TypeScript.Analysis;
 /// <c>GetType()</c> that may meet a plain object), <c>MS0055</c> (an unchecked
 /// cast) and <c>MS0001</c> for a <c>typeof</c> with no descriptor.
 /// </summary>
-internal sealed class RuntimeTypeReachability
+internal sealed partial class RuntimeTypeReachability
 {
     private const string UnsafeCastHint =
         "Use x.UnsafeCast<T>() to state that the cast is intentionally unchecked.";
@@ -95,12 +95,15 @@ internal sealed class RuntimeTypeReachability
         IrCompilation ir,
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        Action<MetanoDiagnostic> report
+        Action<MetanoDiagnostic> report,
+        IReadOnlyList<INamedTypeSymbol>? jsonRoots = null
     )
     {
         var analysis = new RuntimeTypeReachability(compilation, emittedTypes, report);
 
         analysis.ReachRoots(ir);
+        analysis.ReachJsonRoots(jsonRoots ?? []);
+        analysis.ReachCollectionConstructions(ir);
         analysis.Close();
 
         return analysis.ToResult(ir);
@@ -134,11 +137,13 @@ internal sealed class RuntimeTypeReachability
             case IrRuntimeQuestionKind.Test:
                 ReportDelegateTest(question);
                 ReportErasedElementTest(question);
+                AnswerCollectionTest(question);
                 ReachTestedType(question, DescriptorRead.None);
                 break;
             case IrRuntimeQuestionKind.As:
                 ReportDelegateTest(question);
                 ReportErasedElementTest(question);
+                AnswerCollectionTest(question);
                 ReachTestedType(question, DescriptorRead.Enum);
                 break;
             case IrRuntimeQuestionKind.OverloadParameter:
@@ -396,7 +401,11 @@ internal sealed class RuntimeTypeReachability
         }
 
         if (question.Type.CollectionDefinitionName is not null)
+        {
+            ReachTypeArguments(question.Type);
+
             return;
+        }
 
         if (IrTypeKeys.Find(key, _compilation) is { } symbol && !HasRuntimeDescriptor(symbol))
             ReportUndescribableTypeOf(symbol, LocationOf(question));
@@ -718,6 +727,8 @@ internal sealed class RuntimeTypeReachability
             LibraryPlainImplementers = _libraryPlainImplementers,
             PlainImplementers = PlainImplementersOfReachedInterfaces(),
             QuestionedCollectionTypes = ir.QuestionedCollectionTypes,
+            QuestionedCollectionClasses = QuestionedCollectionClassesOf(ir),
+            UnanswerableCollectionTests = _unanswerableCollectionTests,
             OverridingGetters = OverridingGetters(),
             Undescribable = _undescribable,
             BoxingEnabled = _boxingEnabled,
@@ -774,7 +785,7 @@ internal sealed class RuntimeTypeReachability
     private static Location? LocationOf(IrRuntimeQuestion question) =>
         question.Span is { } span ? IrSourceSpanLocations.ToLocation(span) : null;
 
-    private static bool IsPublic(INamedTypeSymbol type)
+    internal static bool IsPublic(INamedTypeSymbol type)
     {
         for (
             ISymbol? current = type;

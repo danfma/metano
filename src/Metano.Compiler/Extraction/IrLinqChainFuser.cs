@@ -56,7 +56,7 @@ public static class IrLinqChainFuser
             fused.Add(next);
         }
 
-        return changed ? new IrLinqChain(chain.Source, fused) : chain;
+        return changed ? chain with { Stages = fused } : chain;
     }
 
     /// <summary>

@@ -73,7 +73,15 @@ public enum IrLinqOperator
 /// receiver-to-terminal direction. The bridge emits one TS call per
 /// entry inside the surrounding <c>linq(...)</c> wrapper.</param>
 public sealed record IrLinqChain(IrExpression Source, IReadOnlyList<IrLinqStage> Stages)
-    : IrExpression;
+    : IrExpression
+{
+    /// <summary>
+    /// The type the chain evaluates to, when extraction knew it: a target
+    /// that carries collection type arguments reads the constructed collection
+    /// of a <c>ToList()</c> / <c>ToDictionary()</c> / <c>ToHashSet()</c> terminal.
+    /// </summary>
+    public IrTypeRef? ResultType { get; init; }
+}
 
 /// <summary>
 /// Single stage of an <see cref="IrLinqChain"/>. Each stage carries the

@@ -29,10 +29,14 @@ public static partial class IrToTsExpressionBridge
         var elements = MapBareArrayLiteral(literal, context);
 
         return collection.Kind is IrCollectionKind.List
-            ? new TsCallExpression(
-                new TsPropertyAccess(ListClass, "of"),
-                [elements],
-                TypeArguments: CollectionTypeArguments(collection, context)
+            ? CollectionTypeArgumentSlots.Append(
+                new TsCallExpression(
+                    new TsPropertyAccess(ListClass, "of"),
+                    [elements],
+                    TypeArguments: CollectionTypeArguments(collection, context)
+                ),
+                collection,
+                context.RuntimeTypes
             )
             : AdoptedFixedSize(elements, collection, context);
     }

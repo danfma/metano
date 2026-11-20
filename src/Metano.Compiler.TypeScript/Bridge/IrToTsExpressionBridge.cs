@@ -7,6 +7,7 @@ using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Parenthesization.Templates;
 using Metano.Compiler.TypeScript.Transformation;
@@ -1517,6 +1518,14 @@ public static partial class IrToTsExpressionBridge
             args.Add(MapLinqStage(stage, pipeOperator, context));
         }
 
+        if (chain.ResultType is IrCollectionTypeRef collection)
+            args[^1] = CollectionTypeArgumentSlots.AppendToTerminal(
+                args[^1],
+                chain.Stages[^1].Operator,
+                collection,
+                context.RuntimeTypes
+            );
+
         var call = new TsLinqCall(args, importedHelpers);
 
         return Int64LinqTerminals.EndsInLongCount(chain) ? Int64TsExpressions.BigInt(call) : call;
@@ -2255,7 +2264,14 @@ public static partial class IrToTsExpressionBridge
 
         var ordered = TsEvaluationOrder.Bind(args, ne.EvaluationOrder, BoundArgumentPrefix);
 
-        return BoundBefore(ordered.Bindings, MapConstruction(ne, ordered.Arguments, context));
+        var construction = MapConstruction(ne, ordered.Arguments, context);
+
+        return BoundBefore(
+            ordered.Bindings,
+            ne.Type is IrCollectionTypeRef collection
+                ? CollectionTypeArgumentSlots.Append(construction, collection, context.RuntimeTypes)
+                : construction
+        );
     }
 
     /// <summary>
@@ -2333,7 +2349,7 @@ public static partial class IrToTsExpressionBridge
 
         if (
             context.Bcl is not null
-            && MapDeclarativeConstruction(ne, args, context.Bcl) is { } mapped
+            && MapDeclarativeConstruction(ne, args, context.Bcl, context.RuntimeTypes) is { } mapped
         )
             return mapped;
 
@@ -2627,7 +2643,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression? MapDeclarativeConstruction(
         IrNewExpression ne,
         IReadOnlyList<TsExpression> args,
-        DeclarativeMappingRegistry bclRegistry
+        DeclarativeMappingRegistry bclRegistry,
+        RuntimeTypeReachabilityResult runtimeTypes
     )
     {
         var typeArguments = (ne.TypeArguments ?? [])
@@ -2637,6 +2654,13 @@ public static partial class IrToTsExpressionBridge
 
         if (template is null)
             return null;
+
+        if (ne.Type is IrCollectionTypeRef collection)
+            template = CollectionTypeArgumentSlots.AppendToTemplate(
+                template,
+                collection,
+                runtimeTypes
+            );
 
         var referencedArgumentIndices = TsTemplatePlaceholder.ReferencedArgumentIndices(
             template.Template
@@ -2679,7 +2703,12 @@ public static partial class IrToTsExpressionBridge
 
         for (var index = 0; index < template.Arguments.Count; index++)
         {
-            if (index > lastEffectIndex || arguments[index].Value is IrLiteral)
+            // An argument past the source's own is the type-argument slot the bridge appended.
+            if (
+                index >= arguments.Count
+                || index > lastEffectIndex
+                || arguments[index].Value is IrLiteral
+            )
             {
                 boundArguments.Add(template.Arguments[index]);
 

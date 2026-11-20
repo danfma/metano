@@ -152,13 +152,17 @@ public static partial class IrToTsExpressionBridge
         IrCollectionTypeRef target,
         IrToTsBridgeContext context
     ) =>
-        new TsCallExpression(
-            new TsPropertyAccess(ListClass, "adopt"),
-            [
-                array,
-                new TsObjectLiteral([new TsObjectProperty("fixedSize", new TsLiteral("true"))]),
-            ],
-            TypeArguments: CollectionTypeArguments(target, context)
+        CollectionTypeArgumentSlots.Append(
+            new TsCallExpression(
+                new TsPropertyAccess(ListClass, "adopt"),
+                [
+                    array,
+                    new TsObjectLiteral([new TsObjectProperty("fixedSize", new TsLiteral("true"))]),
+                ],
+                TypeArguments: CollectionTypeArguments(target, context)
+            ),
+            target,
+            context.RuntimeTypes
         );
 
     /// <summary>
@@ -504,10 +508,14 @@ public static partial class IrToTsExpressionBridge
             isAssign ? "assign" : "of"
         );
 
-        return new TsCallExpression(
-            factory,
-            initialization.Comparer is { } comparer ? [items, Map(comparer, context)] : [items],
-            TypeArguments: CollectionTypeArguments(initialization.Type, context)
+        return CollectionTypeArgumentSlots.Append(
+            new TsCallExpression(
+                factory,
+                initialization.Comparer is { } comparer ? [items, Map(comparer, context)] : [items],
+                TypeArguments: CollectionTypeArguments(initialization.Type, context)
+            ),
+            initialization.Type,
+            context.RuntimeTypes
         );
     }
 
@@ -533,10 +541,17 @@ public static partial class IrToTsExpressionBridge
         IrCollectionTypeRef set,
         IrToTsBridgeContext context
     ) =>
-        new TsCallExpression(
-            new TsPropertyAccess(RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet), "of"),
-            [MapBareArrayLiteral(literal, context)],
-            TypeArguments: CollectionTypeArguments(set, context)
+        CollectionTypeArgumentSlots.Append(
+            new TsCallExpression(
+                new TsPropertyAccess(
+                    RuntimeCollections.ReferenceTo(IrCollectionKind.HashSet),
+                    "of"
+                ),
+                [MapBareArrayLiteral(literal, context)],
+                TypeArguments: CollectionTypeArguments(set, context)
+            ),
+            set,
+            context.RuntimeTypes
         );
 
     /// <summary>

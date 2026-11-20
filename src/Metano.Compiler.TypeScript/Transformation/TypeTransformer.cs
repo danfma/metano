@@ -651,11 +651,44 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // group agrees and a warm group cache keeps the phase's diagnostics.
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
 
+        TypeScriptTransformContext NewContext(RuntimeTypeReachabilityResult reachability) =>
+            new TypeScriptTransformContext(
+                compilation,
+                _currentAssembly,
+                _assemblyWideTranspile,
+                transpilableTypesDict,
+                ir.ExternalImports,
+                ir.BclExports,
+                typeNamesBySymbol,
+                MergeGuardableTypeKeys(ir.GuardableTypeKeys, structuralGuards),
+                _pathNaming,
+                declarativeMappings,
+                ReportDiagnostic
+            )
+            {
+                TypeMapping = typeMappingContext,
+                UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
+                NoContainerFunctionExports = erasableFunctionExports,
+                SynthesizedAliasesByFile = synthesizedAliasesByFile,
+                StructuralGuardTypes = structuralGuards.Types,
+                GuardModuleTypeKeys = emittedTypes
+                    .Where(type => TypeGuardBuilder.HasGuardModule(type, emittedTypes))
+                    .Select(type => type.GetCrossAssemblyOriginKey())
+                    .ToHashSet(StringComparer.Ordinal),
+                ModuleFunctionClaims = moduleFunctionClaims,
+                RuntimeTypes = reachability,
+            };
+
+        // The JSON contexts' contract classes are reachability roots (FR-028, D31); their
+        // plans need a context, which the first pass builds without any reachability.
+        _context = NewContext(RuntimeTypeReachabilityResult.Empty);
+
         var runtimeTypes = RuntimeTypeReachability.Compute(
             ir,
             compilation,
             emittedTypes,
-            ReportDiagnostic
+            ReportDiagnostic,
+            JsonConstructedTypesByContext(emittedTypes).Values.SelectMany(types => types).ToList()
         );
 
         // A tested [PlainObject] is recognized by its synthesized guard
@@ -675,32 +708,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 .ToHashSet(),
         };
 
-        _context = new TypeScriptTransformContext(
-            compilation,
-            _currentAssembly,
-            _assemblyWideTranspile,
-            transpilableTypesDict,
-            ir.ExternalImports,
-            ir.BclExports,
-            typeNamesBySymbol,
-            MergeGuardableTypeKeys(ir.GuardableTypeKeys, structuralGuards),
-            _pathNaming,
-            declarativeMappings,
-            ReportDiagnostic
-        )
-        {
-            TypeMapping = typeMappingContext,
-            UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
-            NoContainerFunctionExports = erasableFunctionExports,
-            SynthesizedAliasesByFile = synthesizedAliasesByFile,
-            StructuralGuardTypes = structuralGuards.Types,
-            GuardModuleTypeKeys = emittedTypes
-                .Where(type => TypeGuardBuilder.HasGuardModule(type, emittedTypes))
-                .Select(type => type.GetCrossAssemblyOriginKey())
-                .ToHashSet(StringComparer.Ordinal),
-            ModuleFunctionClaims = moduleFunctionClaims,
-            RuntimeTypes = runtimeTypes,
-        };
+        _context = NewContext(runtimeTypes);
 
         new PlainObjectOverlapReporter(Context, emittedTypes).Report(ir.RuntimeQuestions);
 
