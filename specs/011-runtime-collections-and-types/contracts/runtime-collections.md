@@ -56,6 +56,16 @@ Every module is under `targets/js/metano-runtime/src/system/collections/`, is si
 
 ## Storage ABI (FR-002, FR-008, FR-057)
 
+### Immutable factory slot and empty identity rules (integration Round 3)
+
+Correct runtime type takes priority over reference identity. A slot vector is **known** only when present and every argument is not `UnknownType`.
+
+- **R1:** Reuse an immutable source when both source and destination slots are known and equal.
+- **R2:** A known destination with absent, unknown or different source slots creates a new collection carrying the destination slots.
+- **R3:** An absent or unknown destination reuses the source as is, retaining its own slots. Reuse also requires compatible comparers; a comparer-forced copy retains source slots for an unresolved destination.
+- **R4:** Slotted `Empty`/`Clear` returns the per-descriptor singleton. Unslotted empty factories (`CreateRange(empty)`, set `CreateRange(empty)`, dictionary `Create<K,V>(null)`) return the single untyped empty singleton per collection family. Same-type and cross-type unslotted empties are therefore identical: this is the base-compatible erasure behavior when no type question exists. Cleared keyed builder snapshots retain their separately specified noncanonical identity.
+- **R5:** An empty version never owns an append tip; adding to any empty allocates independent storage.
+
 Every class keeps its state in **non-enumerable, non-configurable, string-keyed own data properties** defined in the constructor through `Object.defineProperty`, always the same ones in the same order, so that every construction path (constructor, `of`, `from`, `withCapacity`, `adopt`, `slice`, JSON) yields one hidden class per class. They are declared in the class body with `declare` (no class-field initializer: under `useDefineForClassFields` an initializer would define an enumerable field before the constructor runs). No `#private`, no symbol keys, no `Proxy`, no closures over state.
 
 | Class | Fields, in definition order | Read by generated code |

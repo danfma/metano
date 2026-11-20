@@ -53,7 +53,7 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
 
   /** `Create(params T[])`, collection expressions: takes ownership of the array (the compiler passes a fresh literal). */
   static of<T>(items: T[], typeArguments?: readonly RuntimeType[] | null): ImmutableList<T> {
-    return items.length === 0 && typeArguments != null
+    return items.length === 0
       ? ImmutableList.empty<T>(typeArguments)
       : new ImmutableList(items, items.length, typeArguments ?? undefined);
   }

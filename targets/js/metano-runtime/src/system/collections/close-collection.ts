@@ -13,20 +13,24 @@ import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 let memo: MemoNode<CollectionType<unknown>> | undefined;
 let empties: MemoNode<object> | undefined;
 
-/** Open destinations constrain only known arguments; reuse retains the source's precise slots. */
+/**
+ * Immutable factory rules (correct type wins over reference identity):
+ * R1: known equal source/destination slots reuse; R2: known destinations copy unknown/different sources.
+ * R3: absent/UnknownType destinations reuse source slots (subject to comparer compatibility).
+ * R4: slotted Empty/Clear is per-descriptor; unslotted empty factories share the untyped singleton.
+ * R5: empty versions never own an append tip. Known means every argument is present and not UnknownType.
+ */
 export function canReuseCollectionTypeArguments(
   source: readonly RuntimeType[] | undefined,
   destination: readonly RuntimeType[] | null | undefined,
 ): boolean {
   return (
-    !source ||
     !destination ||
-    (source.length === destination.length &&
+    destination.some((argument) => argument.kind === "unknown") ||
+    (!!source &&
+      source.length === destination.length &&
       source.every(
-        (argument, index) =>
-          argument === destination[index] ||
-          argument.kind === "unknown" ||
-          destination[index]!.kind === "unknown",
+        (argument, index) => argument.kind !== "unknown" && argument === destination[index],
       ))
   );
 }
@@ -36,11 +40,9 @@ export function collectionCopyTypeArguments(
   source: readonly RuntimeType[] | undefined,
   destination: readonly RuntimeType[] | null | undefined,
 ): readonly RuntimeType[] | undefined {
-  return (
-    destination?.map((argument, index) =>
-      argument.kind === "unknown" ? (source?.[index] ?? argument) : argument,
-    ) ?? source
-  );
+  return !destination || destination.some((argument) => argument.kind === "unknown")
+    ? (source ?? destination ?? undefined)
+    : destination;
 }
 
 /** A closed generic's empty singleton, keyed by the same descriptor identities as its slot. */

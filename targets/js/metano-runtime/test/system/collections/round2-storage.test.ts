@@ -68,10 +68,10 @@ test("builders own independent storage and cleared keyed snapshots are noncanoni
   }
 });
 
-test("unslotted empty factories cannot identify unrelated erased generic types", () => {
-  expect(ImmutableList.from<number>([])).not.toBe(ImmutableList.from<string>([]));
-  expect(ImmutableHashSet.from<number>([])).not.toBe(ImmutableHashSet.from<string>([]));
-  expect(ImmutableDictionary.create<number, number>(null)).not.toBe(ImmutableDictionary.create<string, number>(null));
+test("R4: unslotted empty factories share the base-compatible untyped singleton", () => {
+  expect(ImmutableList.from<number>([])).toBe(ImmutableList.from<string>([]));
+  expect(ImmutableHashSet.from<number>([])).toBe(ImmutableHashSet.from<string>([]));
+  expect(ImmutableDictionary.create<number, number>(null)).toBe(ImmutableDictionary.create<string, number>(null));
 });
 
 test("collision model: independent and descendant dictionary/set branches remain visible only in their version", () => {

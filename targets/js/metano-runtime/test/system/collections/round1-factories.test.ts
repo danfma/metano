@@ -52,9 +52,9 @@ describe("round 1 immutable factory slot reuse", () => {
 
   test("open destinations reuse sources; only known differing arguments require copies", () => {
     expect(canReuseCollectionTypeArguments(undefined, null)).toBe(true);
-    expect(canReuseCollectionTypeArguments(undefined, [StringType])).toBe(true);
+    expect(canReuseCollectionTypeArguments(undefined, [StringType])).toBe(false);
     expect(canReuseCollectionTypeArguments([StringType], undefined)).toBe(true);
-    expect(canReuseCollectionTypeArguments([UnknownType], [StringType])).toBe(true);
+    expect(canReuseCollectionTypeArguments([UnknownType], [StringType])).toBe(false);
     expect(canReuseCollectionTypeArguments([StringType], [UnknownType])).toBe(true);
     expect(canReuseCollectionTypeArguments([StringType], [StringType, Int32Type])).toBe(false);
     expect(canReuseCollectionTypeArguments([StringType], [StringType])).toBe(true);

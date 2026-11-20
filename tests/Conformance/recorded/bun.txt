@@ -101,6 +101,7 @@ StageHInterfaceTestProbes.immutableAsIList THROWS Error: Unsupported expression:
 StageHInterfaceTestProbes.immutableAsIListAs THROWS Error: Unsupported expression: AsExpression
 StageHInterfaceTestProbes.immutableAsIListBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHInterfaceTestProbes.immutableAsIListSwitch THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
+StageHRoundTwoProbes.crossTypeEmptyFactories = True,True,True
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function. (In 'String.concat(linq("h\xE9llo", reverse()))', 'String.concat' is undefined)
 StringProbes.compare THROWS TypeError: String.compare is not a function. (In 'String.compare("a", "b")', 'String.compare' is undefined)

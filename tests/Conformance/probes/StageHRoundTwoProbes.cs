@@ -96,11 +96,8 @@ public static class StageHRoundTwoProbes
 
     public static string CrossTypeEmptyFactories()
     {
-        object list = ImmutableList.CreateRange(new int[0]);
-        object set = ImmutableHashSet.CreateRange(new int[0]);
-        object map = ImmutableDictionary.Create<int, int>(null);
-        return $"{SameReference(list, ImmutableList.CreateRange(new string[0]))},"
-            + $"{SameReference(set, ImmutableHashSet.CreateRange(new string[0]))},"
-            + $"{SameReference(map, ImmutableDictionary.Create<string, int>(null))}";
+        return $"{SameReference(Lib.UnslottedImmutableFactories.IntList(), Lib.UnslottedImmutableFactories.StringList())},"
+            + $"{SameReference(Lib.UnslottedImmutableFactories.IntSet(), Lib.UnslottedImmutableFactories.StringSet())},"
+            + $"{SameReference(Lib.UnslottedImmutableFactories.IntDictionary(), Lib.UnslottedImmutableFactories.StringDictionary())}";
     }
 }

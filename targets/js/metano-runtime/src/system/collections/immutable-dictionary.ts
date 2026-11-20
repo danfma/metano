@@ -87,11 +87,7 @@ export class ImmutableDictionary<K, V>
     valueComparer?: IEqualityComparer<V> | null,
     typeArguments?: readonly RuntimeType[] | null,
   ): ImmutableDictionary<K, V> {
-    if (
-      typeArguments != null &&
-      normalizedComparer(keyComparer) === null &&
-      normalizedComparer(valueComparer) === null
-    ) {
+    if (normalizedComparer(keyComparer) === null && normalizedComparer(valueComparer) === null) {
       return ImmutableDictionary.empty<K, V>(typeArguments);
     }
 

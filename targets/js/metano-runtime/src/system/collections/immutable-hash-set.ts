@@ -136,7 +136,7 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
       }
     }
 
-    return count === 0 && comparer === null && typeArguments !== undefined
+    return count === 0 && comparer === null
       ? ImmutableHashSet.empty<T>(typeArguments)
       : new ImmutableHashSet(storage, count, typeArguments);
   }
