@@ -2,3 +2,6 @@
 # to the transpiled src/ without extension (conformance.mjs, run-probes.mjs).
 # The lazy static constructor cycle loads only through its barrel (spec 001 FR-066, #681).
 conformance/lazy-barrel/lazy-barrel-probes conformance/lazy-barrel/index
+conformance/lazy-three-level-cycle/lazy-three-level-cycle-probes conformance/lazy-three-level-cycle/index
+conformance/lazy-eager-singleton-cycle/lazy-eager-singleton-cycle-probes conformance/lazy-eager-singleton-cycle/index
+conformance/lazy-eager-singleton-derived-first/lazy-eager-singleton-derived-first-probes conformance/lazy-eager-singleton-derived-first/index

@@ -27,4 +27,8 @@ export class PriorityLabels {
     PriorityLabels.#$init();
     PriorityLabels.#labels$ = value;
   }
+
+  static $initialize(): void {
+    PriorityLabels.#$init();
+  }
 }

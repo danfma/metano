@@ -96,10 +96,10 @@ internal sealed class IrToTsClassEmitter(
 
         var explicitCtors = IrConstructorExtractor.AllExplicitConstructors(type);
         var emitsDispatcher = IrConstructorExtractor.IsDispatchedSet(type);
-        var promotedMemberDeclaration = PromotedMemberDeclarationOf(
-            ir.Constructor,
-            emitsDispatcher
-        );
+        var promotedMemberDeclaration = ir
+            is { Semantics.IsValueType: true, StaticInitializer: not null }
+            ? PromotedMemberDeclaration.OwnDeclarations
+            : PromotedMemberDeclarationOf(ir.Constructor, emitsDispatcher);
 
         var constructorAccessibility = _constructorAccessPolicy.ResolveAndReport(type, ir);
 
@@ -128,7 +128,7 @@ internal sealed class IrToTsClassEmitter(
         var userMembers = new HashSet<TsClassMember>(ReferenceEqualityComparer.Instance);
 
         var typeInitializer = TypeInitializerLowering.For(
-            type,
+            new TypeInitializerSelection(type, _context.Compilation),
             ir,
             TypeInitializerTargetOf(
                 type,

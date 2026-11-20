@@ -64,6 +64,22 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     internal static TsExpression Map(IrExpression expression, IrToTsBridgeContext context)
     {
+        if (
+            NeedsStaticCallGuard(expression.BoundStaticCall)
+            && expression.BoundStaticCall!.MaterializedCall is { } materialized
+        )
+            return Map(
+                materialized with
+                {
+                    BoundStaticCall = expression.BoundStaticCall with
+                    {
+                        MaterializedCall = null,
+                        EvaluationOrder = materialized.BoundStaticCall?.EvaluationOrder,
+                    },
+                },
+                context
+            );
+
         // JSX-producing expressions (a JSX-renderable `new`, a `Solid.For(...)`
         // helper, or a `Text(...)` builder) lower through the single JSX-producer
         // entry point regardless of position. This catches a bare
@@ -230,6 +246,9 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapBinary(IrBinaryExpression binary, IrToTsBridgeContext context)
     {
+        if (NeedsStaticCallGuard(binary.BoundStaticCall))
+            return MapStaticEquality(binary, context);
+
         var bin = IrToTsNumericConversionBridge.WithCharOperandsAsText(binary);
 
         if (IsIndexerStore(bin))
@@ -979,7 +998,9 @@ public static partial class IrToTsExpressionBridge
     {
         var ordered = TsEvaluationOrder.Bind(
             tpl.Arguments.Select(argument => Map(argument, context)).ToList(),
-            tpl.EvaluationOrder,
+            NeedsStaticCallGuard(tpl.BoundStaticCall)
+                ? tpl.EvaluationOrder ?? Enumerable.Range(0, tpl.Arguments.Count).ToList()
+                : tpl.EvaluationOrder,
             BoundArgumentPrefix
         );
 
@@ -999,7 +1020,9 @@ public static partial class IrToTsExpressionBridge
                 : null,
         };
 
-        return BoundBefore(ordered.Bindings, template);
+        return NeedsStaticCallGuard(tpl.BoundStaticCall)
+            ? GuardStaticCall(tpl.BoundStaticCall!, ordered, template)
+            : BoundBefore(ordered.Bindings, template);
     }
 
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
@@ -1010,6 +1033,20 @@ public static partial class IrToTsExpressionBridge
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
         var loweredArgs = call.Arguments.Select(a => MapArgument(a, context)).ToList();
+
+        if (call.Target is IrLambdaExpression && NeedsStaticCallGuard(call.BoundStaticCall))
+        {
+            var ordered = BindStaticCallArguments(
+                loweredArgs,
+                call.BoundStaticCall!.EvaluationOrder ?? call.EvaluationOrder
+            );
+
+            return GuardStaticCall(
+                call.BoundStaticCall!,
+                ordered,
+                MapUndispatchedCall(call, ordered.Arguments, context)
+            );
+        }
 
         if (BaseFastPathCallOf(call, loweredArgs, context) is { } baseFastPathCall)
             return baseFastPathCall;
@@ -1171,7 +1208,40 @@ public static partial class IrToTsExpressionBridge
                     : null;
 
             if (mapped is not null)
+            {
+                if (NeedsStaticCallGuard(call.BoundStaticCall))
+                {
+                    var ordered = BindStaticCallArguments(loweredArgs, null);
+
+                    var boundMapping = mapped switch
+                    {
+                        TsTemplate template => (TsExpression)(
+                            template with
+                            {
+                                Arguments = ordered.Arguments,
+                            }
+                        ),
+                        TsCallExpression invocation => invocation with
+                        {
+                            Arguments = ordered.Arguments,
+                            Callee = invocation.Callee is TsPropertyAccess access
+                                ? new TsIdentifier(access.Property)
+                                : invocation.Callee,
+                        },
+                        _ => throw new UnreachableException(
+                            "A method mapping must be a template or call."
+                        ),
+                    };
+
+                    return GuardStaticCall(
+                        call.BoundStaticCall!,
+                        ordered,
+                        WithTypeArgumentDescriptors(boundMapping, call, context)
+                    );
+                }
+
                 return WithTypeArgumentDescriptors(mapped, call, context);
+            }
 
             if (IsForeignStatic(call.Origin))
                 ReportUnmappedForeignStaticCall(call.Origin);

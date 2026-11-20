@@ -34,6 +34,7 @@ public sealed partial class IrExpressionExtractor
         var cycleKey = declaringMethod.OriginalDefinition;
         if (!_inlineExpanding.Add(cycleKey))
             return null;
+
         try
         {
             var bodyExpr = TryFindInlineMethodBody(declaringMethod);
@@ -52,13 +53,33 @@ public sealed partial class IrExpressionExtractor
             // [Inline] (Materialize) wraps the body as an IIFE so every
             // argument evaluates exactly once.
             if (SymbolHelper.GetInlineMode(declaringMethod) == InlineMode.Substitute)
-                return ExpandInlineAsTextualSubstitution(
+            {
+                var substituted = ExpandInlineAsTextualSubstitution(
                     inv,
                     symbol,
                     declaringMethod,
                     bodyExpr,
                     semanticModel
                 );
+
+                if (substituted is not null && BoundStaticCallOf(symbol) is { } boundCall)
+                    return substituted with
+                    {
+                        BoundStaticCall = boundCall with
+                        {
+                            MaterializedCall =
+                                ExpandInlineAsIife(
+                                    inv,
+                                    symbol,
+                                    declaringMethod,
+                                    bodyExpr,
+                                    semanticModel
+                                ) as IrCallExpression,
+                        },
+                    };
+
+                return substituted;
+            }
 
             return ExpandInlineAsIife(inv, symbol, declaringMethod, bodyExpr, semanticModel);
         }
@@ -205,7 +226,24 @@ public sealed partial class IrExpressionExtractor
             return null;
         }
 
-        return new IrCallExpression(lambda, args);
+        var call = new IrCallExpression(lambda, args);
+
+        if (BoundStaticCallOf(symbol) is not { } boundCall)
+            return call;
+
+        var written = inv
+            .ArgumentList.Arguments.Select(
+                (argument, index) =>
+                    argument.NameColon is { } name
+                        ? parameters
+                            .First(parameter => parameter.Name == name.Name.Identifier.ValueText)
+                            .Ordinal
+                        : index
+            )
+            .ToList();
+
+        var order = written.Concat(Enumerable.Range(0, args.Count).Except(written)).ToList();
+        return call with { BoundStaticCall = boundCall with { EvaluationOrder = order } };
     }
 
     private IrExpression? TryMaterializeInlineMethodAsLambda(IMethodSymbol method)

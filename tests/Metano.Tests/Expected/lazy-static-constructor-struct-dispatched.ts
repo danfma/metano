@@ -56,6 +56,10 @@ export class Pair {
     throw new Error("No matching constructor");
   }
 
+  static $initialize(): void {
+    Pair.#$init();
+  }
+
   static fromV(v: number): Pair {
     return new Pair(Pair.byPairV, v);
   }

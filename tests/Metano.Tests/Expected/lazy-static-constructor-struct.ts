@@ -20,6 +20,10 @@ export class Cell {
     return Math.imul(this.v, 2);
   }
 
+  static $initialize(): void {
+    Cell.#$init();
+  }
+
   get(): number {
     Cell.#$init();
 

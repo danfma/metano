@@ -66,6 +66,19 @@ internal sealed partial class LazyTypeInitializerLowering(
         IReadOnlyList<TsClassMember> built
     )
     {
+        if (target.IsStruct && !property.IsStatic)
+            return built
+                .Select(member =>
+                    member is TsFieldMember field
+                        ? LowerInstanceStorage(
+                            field,
+                            property.Type,
+                            property.Initializer is not null
+                        )
+                        : member
+                )
+                .ToList();
+
         if (built is not [TsFieldMember { Abstract: false } storage])
             return built;
 
@@ -87,16 +100,31 @@ internal sealed partial class LazyTypeInitializerLowering(
     {
         var members = body
             .Members.Select(member =>
-                userMembers.Contains(member) && RunsTheGuard(member) ? Guarded(member) : member
+                (userMembers.Contains(member) || IsSynthesizedStructMethod(member))
+                && RunsTheGuard(member)
+                    ? Guarded(member)
+                    : member
             )
             .ToList();
 
         var constructor = GuardConstructor(body.Constructor, members);
 
         members.Insert(0, InitializerField());
+        members.Insert(1, InitializerBridge());
 
         return new TsClassBody(constructor, members);
     }
+
+    private bool IsSynthesizedStructMethod(TsClassMember member) =>
+        target.IsStruct
+        && ir.Semantics.IsRecord
+        && member is TsMethodMember { Static: false } method
+        && method.Name
+            is IrToTsRecordSynthesisBridge.EqualsMethodName
+                or IrToTsNamingPolicy.HashCodeMethodName
+        && IrToTsRecordSynthesisBridge
+            .SynthesizedMemberNames(ir, TsClassMemberTable.UserMembersOf(ir))
+            .Contains(method.Name);
 
     /// <summary>
     /// Every static member whose TypeScript name is the name of another member's
@@ -151,6 +179,9 @@ internal sealed partial class LazyTypeInitializerLowering(
     }
 
     private TsStatement Guard() => new TsExpressionStatement(GuardCall());
+
+    private TsMethodMember InitializerBridge() =>
+        new("$initialize", [], new TsVoidType(), [Guard()], Static: true);
 
     private TsExpression GuardCall() => new TsCallExpression(Access(GuardName), []);
 

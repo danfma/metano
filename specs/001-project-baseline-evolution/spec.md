@@ -679,17 +679,18 @@ Product requirements added after the migration (normative; each one is traced by
   the derived class comes first); existing goldens do not change.
 
   Lowering boundary (TypeScript bridge): lazy versus eager is one per-class strategy, chosen by one
-  rule (`TypeInitializerLowering.RunsLazily`: a class or struct emitted as a TypeScript class that
-  declares a static constructor), which the barrel order consumes too; the eager one is today's
+   rule (`TypeInitializerLowering.RunsLazily`: a class or struct emitted as a TypeScript class that
+   declares a static constructor, plus the derived static-storage exception above), which the
+   barrel order consumes too; the eager one is today's
   output. The lazy one
   lowers static fields and auto-properties to slots and accessors, guards the constructor, emits
   `#$init` in place of the static block, and guards static user members in one pass after the class
   members are composed, selected by IR origin and `static` (not by TS name), so operators,
-  conversions and overload fast paths added by other lowerings are guarded too. The operator,
-  overload, constructor and factory dispatcher bridges and the struct default-constructor bridge
-  are not edited; constructor factories are covered by the constructor guard. The helper is
-  imported as a TypeScript runtime-helper reference, not a core runtime requirement. Core adds no
-  new fact. Calls bypassing emitted members (`[Inline]`, `[Emit]`, BCL-mapped static methods,
+  conversions and overload fast paths added by other lowerings are guarded too. Constructor
+  factories are covered by the constructor guard. A lazy struct's promoted auto-properties use
+  the same backing-storage/accessor rule as its declared auto-properties (#696). The helper is
+  imported as a TypeScript runtime-helper reference, not a core runtime requirement.
+  Calls bypassing emitted members (`[Inline]`, `[Emit]`, BCL-mapped static methods,
   and synthesized record `==` / `!=`) still trigger the declaring type's initializer before the
   lowered call or comparison (#696); synthesized metadata and selectors remain non-triggers.
   MS0005 includes value imports referenced only by a static constructor in cycle detection (#696).

@@ -13,6 +13,10 @@ export class Bag {
     this.count = values.length;
   }
 
+  static $initialize(): void {
+    Bag.#$init();
+  }
+
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.w === other.w && this.count === other.count;
   }

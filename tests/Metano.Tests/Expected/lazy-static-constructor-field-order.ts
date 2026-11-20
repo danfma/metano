@@ -11,4 +11,8 @@ export class FieldOrder {
   b: number = Counter.take();
 
   constructor() { }
+
+  static $initialize(): void {
+    FieldOrder.#$init();
+  }
 }

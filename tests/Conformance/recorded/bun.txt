@@ -60,7 +60,6 @@ LazyDirectProbes.baseModuleFirst LOADFAIL 1 | import type { ClassType } from "me
 LazyFieldProbes.structDefaultDoesNotTrigger = start,cctor,ctor,default,get=undefined,ctor,v=3
 LazyStructProbes.paramsConstructorWithoutArguments = start,cctor,W=7:n=0
 LazyStructProbes.paramsConstructorWithoutArgumentsNoStaticConstructor = W=7:n=0
-LazyStructProbes.structAutoPropertyRead = start,P=0,cctor,get=0
 LinqProbes.decimalLambda = 3|5.5|3.5|1|7|1.5|2|6|0.875
 LinqProbes.intOverflowSum THROWS ReferenceError: Int32 is not defined
 LinqProbes.minMaxDecimal = 0.5|2|1.5|10|13.75|4.5833333333333333333333333333|24.25|4|1.3333333333333333333333333333

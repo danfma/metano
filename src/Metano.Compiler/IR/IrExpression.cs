@@ -4,7 +4,31 @@ namespace Metano.Compiler.IR;
 /// A semantic expression in the IR. Represents what the source code *means*,
 /// not how any target language renders it.
 /// </summary>
-public abstract record IrExpression;
+public abstract record IrExpression
+{
+    /// <summary>
+    /// The static source call retained when a lowering erases its callee (an
+    /// inline body, template, mapping or synthesized equality operator).
+    /// Targets with lazy type initialization consume it; other targets may ignore it.
+    /// </summary>
+    public IrBoundStaticCall? BoundStaticCall { get; init; }
+}
+
+/// <summary>
+/// Source facts about a call to a type with an explicit static constructor.
+/// <paramref name="MaterializedCall"/> retains argument evaluation for textual
+/// inline substitution without changing that substitution on other targets.
+/// A lifted value-type operator invokes no method when an operand is missing.
+/// </summary>
+public sealed record IrBoundStaticCall(
+    IrTypeReference Owner,
+    IrNamedTypeRef DeclaringType,
+    bool IsContainerless,
+    bool HasExtensionMembers,
+    bool IsLifted = false,
+    IrCallExpression? MaterializedCall = null,
+    IReadOnlyList<int>? EvaluationOrder = null
+);
 
 // -- Literals --
 

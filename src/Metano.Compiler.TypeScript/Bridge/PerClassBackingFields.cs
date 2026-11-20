@@ -60,7 +60,7 @@ internal sealed class PerClassBackingFields
         new(
             (ir.Members ?? [])
                 .OfType<IrPropertyDeclaration>()
-                .Where(DeclaresBackingField)
+                .Where(property => DeclaresBackingField(ir, property))
                 .ToDictionary(
                     property => property.Name,
                     property => new BackedProperty(
@@ -83,6 +83,19 @@ internal sealed class PerClassBackingFields
     public static bool DeclaresBackingField(IrPropertyDeclaration property) =>
         property is { Semantics.EmitsPerClassStorage: true };
 
+    /// <summary>Lazy structs must keep auto-property accessors, which trigger their initializer.</summary>
+    internal static bool DeclaresBackingField(
+        IrClassDeclaration ir,
+        IrPropertyDeclaration property
+    ) =>
+        DeclaresBackingField(property)
+        || ir is { Semantics.IsValueType: true, StaticInitializer: not null }
+            && property
+                is {
+                    IsStatic: false,
+                    Semantics: { IsAbstract: false, HasGetterBody: false, HasSetterBody: false },
+                };
+
     /// <summary><c>this.&lt;field&gt;</c>.</summary>
     public static TsPropertyAccess StorageAccess(string field) =>
         new(new TsIdentifier("this"), field);
@@ -102,7 +115,11 @@ internal sealed class PerClassBackingFields
     {
         var members = ir.Members ?? [];
 
-        if (!members.OfType<IrPropertyDeclaration>().Any(DeclaresBackingField))
+        if (
+            !members
+                .OfType<IrPropertyDeclaration>()
+                .Any(property => DeclaresBackingField(ir, property))
+        )
             return null;
 
         if (ir.Semantics.DeclaresToJson)
@@ -195,6 +212,9 @@ internal sealed class PerClassBackingFieldScope
     /// </summary>
     public string? FieldOf(IrPropertyDeclaration property) =>
         _properties.TryGetValue(property.Name, out var backed) ? backed.Field : null;
+
+    internal string? FieldOf(string propertyName) =>
+        _properties.TryGetValue(propertyName, out var backed) ? backed.Field : null;
 
     /// <summary>
     /// The backing field an assignment to <c>this.P</c> stores to inside the class being

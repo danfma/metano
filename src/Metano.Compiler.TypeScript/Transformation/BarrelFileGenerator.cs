@@ -173,7 +173,7 @@ public static class BarrelFileGenerator
     /// <summary>
     /// The files of one barrel in file-name order, except the derived modules of
     /// <paramref name="hoists"/> whose base module shares the barrel: they come
-    /// first, ordered by base, then by derived, each in file-name order. Any earlier
+    /// first, most-derived-first along each cycle's inheritance chain. Any earlier
     /// line whose module imports the base would evaluate the base first, so moving
     /// them just before the base is not enough. A barrel without such a pair keeps
     /// its order.
@@ -189,18 +189,38 @@ public static class BarrelFileGenerator
             .Select((file, index) => (Module: ModulePath.Of(file.FileName), index))
             .ToDictionary(entry => entry.Module, entry => entry.index, StringComparer.Ordinal);
 
-        var hoisted = hoists
+        var localHoists = hoists
             .Where(hoist =>
                 positions.ContainsKey(hoist.BaseModule)
                 && positions.ContainsKey(hoist.DerivedModule)
             )
             .OrderBy(hoist => positions[hoist.BaseModule])
             .ThenBy(hoist => positions[hoist.DerivedModule])
-            .Select(hoist => ordered[positions[hoist.DerivedModule]])
             .Distinct()
             .ToList();
 
+        var hoisted = new List<TsSourceFile>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var hoist in localHoists)
+        {
+            Visit(hoist.DerivedModule);
+        }
+
         return hoisted.Count == 0 ? ordered : [.. hoisted, .. ordered.Except(hoisted)];
+
+        void Visit(string module)
+        {
+            if (!visited.Add(module))
+                return;
+
+            foreach (var dependency in localHoists.Where(hoist => hoist.BaseModule == module))
+            {
+                Visit(dependency.DerivedModule);
+            }
+
+            hoisted.Add(ordered[positions[module]]);
+        }
     }
 
     private static string? GetExportedName(TsTopLevel node) =>

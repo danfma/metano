@@ -271,7 +271,8 @@ public class StaticConstructorTests
         )["bare.ts"];
 
         await Assert.That(output).DoesNotContain("arguments.length");
-        await Assert.That(CountOf(output, "Bare.#$init();")).IsEqualTo(1);
+        // The user method and the cross-module bridge trigger; default construction does not.
+        await Assert.That(CountOf(output, "Bare.#$init();")).IsEqualTo(2);
         await Assert.That(output).Contains("get(): number {\n    Bare.#$init();");
     }
 

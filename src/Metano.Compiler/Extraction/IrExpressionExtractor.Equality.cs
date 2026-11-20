@@ -42,12 +42,27 @@ public sealed partial class IrExpressionExtractor
         return _semantic.GetOperation(bin) switch
         {
             ITupleBinaryOperation tuple => ExtractTupleEquality(bin, tuple, negated),
-            IBinaryOperation { OperatorMethod: { } method }
+            IBinaryOperation { OperatorMethod: { } method } operation
                 when IsRecordValueComparison(method, bin) => new IrBinaryExpression(
                 Extract(bin.Left),
                 EqualityOperator(byValue: true, negated),
                 Extract(bin.Right)
-            ),
+            )
+            {
+                BoundStaticCall = BoundStaticCallOf(method, operation.IsLifted),
+            },
+            IBinaryOperation { OperatorMethod: { } method } operation
+                when IsSynthesizedEqualityOperator(method)
+                    && HasSynthesizedValueEquality(method.ContainingType)
+                    && BoundStaticCallOf(method, operation.IsLifted) is { } boundCall =>
+                new IrBinaryExpression(
+                    Extract(bin.Left),
+                    EqualityOperator(byValue: false, negated),
+                    Extract(bin.Right)
+                )
+                {
+                    BoundStaticCall = boundCall,
+                },
             IBinaryOperation { IsLifted: true } when IsNullableDecimalComparison(bin) =>
                 new IrBinaryExpression(
                     ExtractAsDecimal(bin.Left),

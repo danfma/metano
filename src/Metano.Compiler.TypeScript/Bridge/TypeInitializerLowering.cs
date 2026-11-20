@@ -47,6 +47,9 @@ internal enum ImplicitDefaultConstruction
 /// </summary>
 internal sealed record TsClassBody(TsConstructor Constructor, IReadOnlyList<TsClassMember> Members);
 
+/// <summary>The source type and compilation used to select its initialization strategy.</summary>
+internal sealed record TypeInitializerSelection(INamedTypeSymbol Type, Compilation Compilation);
+
 /// <summary>
 /// How a class runs its static initialization (FR-066, #681): eagerly at class
 /// definition (<see cref="EagerTypeInitializerLowering"/>, a type without an
@@ -58,13 +61,15 @@ internal sealed record TsClassBody(TsConstructor Constructor, IReadOnlyList<TsCl
 internal abstract class TypeInitializerLowering
 {
     public static TypeInitializerLowering For(
-        INamedTypeSymbol type,
+        TypeInitializerSelection selection,
         IrClassDeclaration ir,
         TypeInitializerTarget target,
         IrToTsBridgeContext lowering
     )
     {
-        if (RunsLazily(type))
+        var type = selection.Type;
+
+        if (RunsLazily(selection))
             return new LazyTypeInitializerLowering(
                 target,
                 ir,
@@ -87,17 +92,50 @@ internal abstract class TypeInitializerLowering
     /// The one rule for which types run their static initialization lazily: a
     /// class or struct emitted as a TypeScript class (not a <c>[PlainObject]</c>
     /// interface, a <c>[NoContainer]</c> type or a module-shaped static class)
-    /// that declares a static constructor. The class emitter lowers such a type
+    /// that declares a static constructor, or an initialized beforefieldinit
+    /// descendant directly named by such an ancestor's initializer. Deferring the
+    /// latter's storage avoids constructing it while its JS class is being defined;
+    /// beforefieldinit permits this later initialization. Unrelated types stay eager.
+    /// The class emitter lowers such a type
     /// with <see cref="LazyTypeInitializerLowering"/>, and the barrel orders its
     /// modules by the cycles its initializer forms
     /// (<see cref="InitializerCycleHoists"/>).
     /// </summary>
-    public static bool RunsLazily(INamedTypeSymbol type) =>
+    public static bool RunsLazily(TypeInitializerSelection selection) =>
+        EmitsClass(selection.Type)
+        && (
+            IrStaticConstructorExtractor.DeclaredBy(selection.Type) is not null
+            || DefersDerivedStorage(selection)
+        );
+
+    private static bool EmitsClass(INamedTypeSymbol type) =>
         type.TypeKind is TypeKind.Class or TypeKind.Struct
-        && IrStaticConstructorExtractor.DeclaredBy(type) is not null
         && !type.HasPlainObject()
         && !type.IsContainerless()
         && !TypeTransformer.IsModuleShapedStaticClass(type);
+
+    private static bool DefersDerivedStorage(TypeInitializerSelection selection)
+    {
+        var type = selection.Type;
+
+        if (!InitializerCycleHoists.InitializerSyntax(type).Any())
+            return false;
+
+        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        {
+            if (IrStaticConstructorExtractor.DeclaredBy(ancestor) is null || !EmitsClass(ancestor))
+                continue;
+
+            if (
+                InitializerCycleHoists
+                    .DerivedTypesNamedByInitializer(ancestor, selection.Compilation)
+                    .Contains(type.OriginalDefinition, SymbolEqualityComparer.Default)
+            )
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>The members a field lowers to, given what the class bridge built for it.</summary>
     public abstract IReadOnlyList<TsClassMember> LowerField(

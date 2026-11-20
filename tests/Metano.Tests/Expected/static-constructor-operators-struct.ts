@@ -24,6 +24,10 @@ export class Pt {
     Pt.#origin$ = value;
   }
 
+  static $initialize(): void {
+    Pt.#$init();
+  }
+
   static __subtract(a: Pt, b: Pt): Pt {
     Pt.#$init();
 

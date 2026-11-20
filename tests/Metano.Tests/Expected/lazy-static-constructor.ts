@@ -72,6 +72,10 @@ export class Registry {
     Registry.#untouched$ = value;
   }
 
+  static $initialize(): void {
+    Registry.#$init();
+  }
+
   private static init(text: string): number {
     Registry.#$init();
     Registry.log.add(text);

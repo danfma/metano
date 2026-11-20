@@ -2953,7 +2953,7 @@ public sealed partial class IrExpressionExtractor
         return null;
     }
 
-    private IrExpression ExtractInvocationCore(InvocationExpressionSyntax inv)
+    private IrExpression ExtractInvocationUnannotatedCore(InvocationExpressionSyntax inv)
     {
         if (TryExtractConstantInvocation(inv) is { } constant)
             return constant;

@@ -18,7 +18,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 public static class InitializerCycleHoists
 {
     /// <summary>
-    /// One hoist per (base module, derived module) pair, in the order of
+    /// One hoist per (base module, derived module) pair, including intermediate
+    /// bases along the referenced descendant's inheritance chain, in the order of
     /// <paramref name="moduleOf"/>'s types. <paramref name="moduleOf"/> maps every
     /// emitted type to its module path (relative, without extension).
     /// </summary>
@@ -31,20 +32,48 @@ public static class InitializerCycleHoists
 
         foreach (var (type, module) in moduleOf)
         {
-            if (!TypeInitializerLowering.RunsLazily(type))
+            if (!TypeInitializerLowering.RunsLazily(new(type, compilation)))
                 continue;
 
             foreach (var derived in DerivedTypesNamedByInitializer(type, compilation))
             {
-                if (moduleOf.TryGetValue(derived, out var derivedModule) && derivedModule != module)
-                    hoists.Add(new BarrelHoist(module, derivedModule));
+                if (
+                    !moduleOf.TryGetValue(derived, out var derivedModule)
+                    || derivedModule == module
+                )
+                    continue;
+
+                hoists.Add(new BarrelHoist(module, derivedModule));
+
+                // Enter the cycle through its leaf, not an intermediate extends
+                // clause that can read that leaf's uninitialized base binding.
+                for (
+                    var ancestor = derived.BaseType;
+                    ancestor is not null;
+                    ancestor = ancestor.BaseType
+                )
+                {
+                    if (
+                        SymbolEqualityComparer.Default.Equals(
+                            ancestor.OriginalDefinition,
+                            type.OriginalDefinition
+                        )
+                    )
+                        break;
+
+                    if (
+                        moduleOf.TryGetValue(ancestor.OriginalDefinition, out var ancestorModule)
+                        && ancestorModule != derivedModule
+                    )
+                        hoists.Add(new BarrelHoist(ancestorModule, derivedModule));
+                }
             }
         }
 
         return hoists.Distinct().ToList();
     }
 
-    private static IEnumerable<INamedTypeSymbol> DerivedTypesNamedByInitializer(
+    internal static IEnumerable<INamedTypeSymbol> DerivedTypesNamedByInitializer(
         INamedTypeSymbol type,
         Compilation compilation
     ) =>
@@ -53,7 +82,7 @@ public static class InitializerCycleHoists
             .Where(named => DerivesFrom(named, type))
             .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
-    private static IEnumerable<SyntaxNode> InitializerSyntax(INamedTypeSymbol type)
+    internal static IEnumerable<SyntaxNode> InitializerSyntax(INamedTypeSymbol type)
     {
         var staticConstructor = IrStaticConstructorExtractor.DeclaredBy(type);
 

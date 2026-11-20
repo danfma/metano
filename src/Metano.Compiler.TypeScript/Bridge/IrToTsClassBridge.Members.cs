@@ -45,7 +45,7 @@ internal static partial class IrToTsClassBridge
         if (prop.Semantics?.IsAbstract == true)
             return [BuildAbstractProperty(prop, name, tsType)];
 
-        if (PerClassBackingFields.DeclaresBackingField(prop))
+        if (context.ClassFields.FieldOf(prop) is not null)
             return WithInheritedAccessor(
                 BuildPerClassStorageProperty(prop, name, tsType, context),
                 prop,

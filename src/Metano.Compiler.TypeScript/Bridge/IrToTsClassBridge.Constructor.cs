@@ -97,7 +97,7 @@ internal static partial class IrToTsClassBridge
         // emit the rest form; the field declaration + body assignment
         // are synthesized separately by the class emitter so the
         // promoted shape is preserved at the surface. (#152)
-        if (p.Parameter.IsRestParams)
+        if (p.Parameter.IsRestParams || context.ClassFields.FieldOf(p.Parameter.Name) is not null)
         {
             return new TsConstructorParam(
                 name,
@@ -105,7 +105,7 @@ internal static partial class IrToTsClassBridge
                 Readonly: false,
                 Accessibility: TsAccessibility.None,
                 DefaultValue: defaultValue,
-                Rest: true
+                Rest: p.Parameter.IsRestParams
             );
         }
 
@@ -301,14 +301,23 @@ internal static partial class IrToTsClassBridge
             // copied across in the ctor body. (#152)
             foreach (var p in ir.Parameters)
             {
-                if (!p.Parameter.IsRestParams || p.Promotion is IrParameterPromotion.None)
+                var backingField = context.ClassFields.FieldOf(p.Parameter.Name);
+
+                if (
+                    (!p.Parameter.IsRestParams && backingField is null)
+                    || p.Promotion is IrParameterPromotion.None
+                )
                     continue;
 
                 var paramName = PromotedName(p);
+
                 body.Add(
                     new TsExpressionStatement(
                         new TsBinaryExpression(
-                            new TsPropertyAccess(new TsIdentifier("this"), paramName),
+                            new TsPropertyAccess(
+                                new TsIdentifier("this"),
+                                backingField ?? paramName
+                            ),
                             "=",
                             new TsIdentifier(paramName)
                         )

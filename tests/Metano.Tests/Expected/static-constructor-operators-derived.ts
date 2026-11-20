@@ -24,6 +24,10 @@ export class SubMeter extends Meter {
     SubMeter.#offset$ = value;
   }
 
+  static $initialize(): void {
+    SubMeter.#$init();
+  }
+
   static override __toInt32(m: SubMeter): number {
     SubMeter.#$init();
 

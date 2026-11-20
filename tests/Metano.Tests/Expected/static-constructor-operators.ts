@@ -23,6 +23,10 @@ export class Meter {
     Meter.#scale$ = value;
   }
 
+  static $initialize(): void {
+    Meter.#$init();
+  }
+
   static __addMeterMeter(a: Meter, b: Meter): Meter {
     Meter.#$init();
 

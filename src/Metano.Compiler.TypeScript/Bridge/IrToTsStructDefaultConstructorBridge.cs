@@ -55,8 +55,15 @@ internal static class IrToTsStructDefaultConstructorBridge
         }
 
         var typeParameters = ir.TypeParameters ?? [];
+        var backingFields = PerClassBackingFields.For(type).ScopeFor(ir);
 
         return StorageOf(ir)
+            .Select(storage =>
+                storage with
+                {
+                    Name = backingFields.FieldOf(storage.MemberName) ?? storage.Name,
+                }
+            )
             .Select(storage => DefaultAssignment(storage, typeParameters, type, report))
             .ToList();
     }
