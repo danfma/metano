@@ -7,6 +7,8 @@ export * from "./dictionary-helpers.ts";
 export * from "./dictionary-views.ts";
 export * from "./hash-set.ts";
 export * from "./helpers.ts";
+export * from "./immutable-array.ts";
+export * from "./immutable-array-builder.ts";
 export * from "./immutable-dictionary.ts";
 export * from "./immutable-dictionary-builder.ts";
 export * from "./immutable-hash-set.ts";

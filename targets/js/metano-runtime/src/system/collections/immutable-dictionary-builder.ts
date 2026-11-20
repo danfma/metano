@@ -1,25 +1,32 @@
-import type { RuntimeType } from "../reflection/runtime-type.ts";
+import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
 import { BuilderIterator } from "./builder-iterator.ts";
+import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { defaultEqualityComparerFor, type IEqualityComparer } from "./default-comparer.ts";
 import { Dictionary } from "./dictionary.ts";
 import type { KeyCollection, ValueCollection } from "./dictionary-views.ts";
 import { ImmutableDictionary } from "./immutable-dictionary.ts";
 import type { IDictionary } from "./interfaces.ts";
+import { throwImmutableDuplicateKey } from "./throw-helpers.ts";
+
+let ImmutableDictionaryBuilder$rt:
+  | CollectionType<ImmutableDictionaryBuilder<unknown, unknown>>
+  | undefined;
 
 /**
  * Mirrors `ImmutableDictionary<TKey, TValue>.Builder` (spec 011 FR-054): a
  * small mutable class over its own `Dictionary` (`instanceof Dictionary` is
- * `false`). It keeps its own version, so any mutation invalidates a running
- * enumeration as .NET's builder does (a removal included, unlike
- * `Dictionary`). `toImmutableDictionary` copies, so a builder never shares
+ * `false`). It keeps its own version, bumped by every mutating call as .NET 10 bumps it (a no-op
+ * included: `remove` of an absent key, `set` of the same value, `add` of an
+ * equal value, `clear`), so a running enumeration throws as .NET's builder
+ * does (a removal included, unlike `Dictionary`). `toImmutableDictionary` copies, so a builder never shares
  * storage with an immutable version (W4-11).
  */
 export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
   declare readonly _dictionary: Dictionary<K, V>;
   declare _version: number;
   declare readonly _valueComparer: IEqualityComparer<V> | null;
-  declare readonly _typeArguments: readonly RuntimeType[] | undefined;
+  declare readonly $typeArguments$ImmutableDictionaryBuilder: readonly RuntimeType[] | undefined;
 
   /**
    * `ToBuilder()` / `CreateBuilder<K, V>([keyComparer[, valueComparer]])`: a
@@ -49,9 +56,33 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
     Object.defineProperty(this, "_valueComparer", {
       value: valueComparer ?? immutable?._valueComparer ?? null,
     });
-    Object.defineProperty(this, "_typeArguments", {
+    Object.defineProperty(this, "$typeArguments$ImmutableDictionaryBuilder", {
       value: typeArguments ?? immutable?.$typeArguments$ImmutableDictionary,
     });
+  }
+
+  static get $runtimeType(): CollectionType<ImmutableDictionaryBuilder<unknown, unknown>> {
+    ImmutableDictionaryBuilder$rt ??= {
+      kind: "collection",
+      collection: "ImmutableDictionaryBuilder",
+      name: "ImmutableDictionary.Builder",
+      fullName: "System.Collections.Immutable.ImmutableDictionary.Builder",
+      namespace: "System.Collections.Immutable",
+      ctor: ImmutableDictionaryBuilder,
+      typeArguments: [],
+      variance: ["invariant", "invariant"],
+      interfaces: [
+        { collection: "IDictionary", arguments: [0, 1] },
+        { collection: "IReadOnlyDictionary", arguments: [0, 1] },
+        { collection: "ICollection", arguments: null },
+        { collection: "IReadOnlyCollection", arguments: null },
+      ],
+      test: (value: unknown): value is ImmutableDictionaryBuilder<unknown, unknown> =>
+        value instanceof ImmutableDictionaryBuilder,
+      closeFor: (instance) => closeCollectionFor(ImmutableDictionaryBuilder.$runtimeType, instance),
+    };
+
+    return ImmutableDictionaryBuilder$rt;
   }
 
   get count(): number {
@@ -84,7 +115,7 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
 
   set(key: K, value: V): void {
     this._dictionary.set(key, value);
-    this.changed(true);
+    this.modified();
   }
 
   update(key: K, f: (current: V) => V): V {
@@ -103,18 +134,30 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
     return current;
   }
 
+  /** A present key holding a value equal by the value comparer is a no-op; a different value throws, as `ImmutableDictionary.add`. */
   add(key: K, value: V): void {
-    this._dictionary.add(key, value);
-    this.changed(true);
+    const [found, held] = this._dictionary.tryGetValue(key, undefined);
+
+    if (!found) {
+      this._dictionary.add(key, value);
+    } else if (!this.valueComparer.equals(held, value)) {
+      throwImmutableDuplicateKey(key);
+    }
+
+    this.modified();
   }
 
   remove(key: K): boolean {
-    return this.changed(this._dictionary.remove(key));
+    const removed = this._dictionary.remove(key);
+
+    this.modified();
+
+    return removed;
   }
 
   clear(): void {
     this._dictionary.clear();
-    this.changed(true);
+    this.modified();
   }
 
   containsKey(key: K): boolean {
@@ -145,7 +188,7 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
     return collectionTypeName(
       "System.Collections.Immutable.ImmutableDictionary`2+Builder",
       ["TKey", "TValue"],
-      this._typeArguments,
+      this.$typeArguments$ImmutableDictionaryBuilder,
     );
   }
 
@@ -153,13 +196,11 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
     return new BuilderIterator(this, this._dictionary[Symbol.iterator]());
   }
 
-  /** Bumps the version when `changed`; returns `changed`. */
-  private changed(changed: boolean): boolean {
-    if (changed && (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__)) {
+  /** Bumps the version on every mutating call, a no-op included (.NET 10). */
+  private modified(): void {
+    if (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) {
       this._version++;
     }
-
-    return changed;
   }
 }
 
@@ -171,6 +212,6 @@ export function toImmutableDictionary<K, V>(
     [...builder._dictionary],
     builder._dictionary._store.comparer,
     builder._valueComparer,
-    builder._typeArguments,
+    builder.$typeArguments$ImmutableDictionaryBuilder,
   );
 }

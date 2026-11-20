@@ -111,9 +111,18 @@ function closureReaches(
       case "list":
       case "queue":
       case "stack":
+      case "immutableList":
+      case "immutableArray":
+      case "readOnlyList":
+      case "immutableHashSet":
+      case "sortedSet":
         return descriptorReaches(descriptor.element);
       case "map":
       case "dictionary":
+      case "immutableDictionary":
+      case "concurrentDictionary":
+      case "sortedDictionary":
+      case "sortedList":
         return descriptorReaches(descriptor.value);
       case "nullable":
         return descriptorReaches(descriptor.inner);

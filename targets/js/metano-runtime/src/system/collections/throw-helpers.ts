@@ -7,6 +7,7 @@
 import { ArgumentException } from "../exceptions/argument-exception.ts";
 import { ArgumentNullException } from "../exceptions/argument-null-exception.ts";
 import { ArgumentOutOfRangeException } from "../exceptions/argument-out-of-range-exception.ts";
+import { IndexOutOfRangeException } from "../exceptions/index-out-of-range-exception.ts";
 import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";
 import { KeyNotFoundException } from "../exceptions/key-not-found-exception.ts";
 import { messageValue } from "../exceptions/message-value.ts";
@@ -226,4 +227,9 @@ export function throwImmutableDuplicateKey(key: unknown): never {
   throw new ArgumentException(
     `An element with the same key but a different value already exists. Key: '${messageValue(key)}'`,
   );
+}
+
+/** An `ImmutableArray` / `ImmutableArray.Builder` indexer outside the bounds (.NET's array text). */
+export function throwIndexOutsideArray(): never {
+  throw new IndexOutOfRangeException();
 }

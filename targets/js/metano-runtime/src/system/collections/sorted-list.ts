@@ -39,6 +39,7 @@ interface SortedListSource {
 }
 
 let SortedList$rt: CollectionType<SortedList<unknown, unknown>> | undefined;
+let SortedListView$rt: CollectionType<SortedListView<unknown>> | undefined;
 
 /**
  * Mirrors `System.Collections.Generic.SortedList<TKey, TValue>` (spec 011
@@ -173,12 +174,12 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
 
   /** `Keys`: a live read-only list of the keys, in order. */
   get keys(): SortedListView<K> {
-    return (this._keyList ??= new SortedListView<K>(this, true));
+    return (this._keyList ??= new SortedListView<K>(this, true, this.viewTypeArguments(0)));
   }
 
   /** `Values`: a live read-only list of the values, in key order. */
   get values(): SortedListView<V> {
-    return (this._valueList ??= new SortedListView<V>(this, false));
+    return (this._valueList ??= new SortedListView<V>(this, false, this.viewTypeArguments(1)));
   }
 
   get(key: K): V {
@@ -396,6 +397,13 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
     }
   }
 
+  /** A view's `$typeArguments$SortedListView`: the list's key (0) or value (1) argument, when it carries them. */
+  private viewTypeArguments(position: 0 | 1): readonly RuntimeType[] | undefined {
+    const argument = this.$typeArguments$SortedList?.[position];
+
+    return argument === undefined ? undefined : [argument];
+  }
+
   private bumpVersion(): void {
     if (typeof __METANO_CHECKS__ === "undefined" || __METANO_CHECKS__) {
       this._version++;
@@ -411,10 +419,40 @@ export class SortedList<K, V> implements IDictionary<K, V>, IReadOnlyDictionary<
 export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
   declare readonly _list: SortedListSource;
   declare readonly _isKeys: boolean;
+  declare readonly $typeArguments$SortedListView: readonly RuntimeType[] | undefined;
 
-  constructor(list: SortedListSource, isKeys: boolean) {
+  /** Internal: built by `SortedList.keys` / `.values` only. */
+  constructor(
+    list: SortedListSource,
+    isKeys: boolean,
+    typeArguments?: readonly RuntimeType[] | null,
+  ) {
     Object.defineProperty(this, "_list", { value: list });
     Object.defineProperty(this, "_isKeys", { value: isKeys });
+
+    Object.defineProperty(this, "$typeArguments$SortedListView", {
+      value: typeArguments ?? undefined,
+    });
+  }
+
+  /** .NET's `KeyList` / `ValueList`: `IList<T>` and `ICollection<T>`, no read-only interface. */
+  static get $runtimeType(): CollectionType<SortedListView<unknown>> {
+    return (SortedListView$rt ??= {
+      kind: "collection",
+      collection: "SortedListView",
+      name: "SortedListView",
+      fullName: "System.Collections.Generic.SortedListView",
+      namespace: "System.Collections.Generic",
+      ctor: SortedListView,
+      typeArguments: [],
+      variance: ["invariant"],
+      interfaces: [
+        { collection: "IList", arguments: [0] },
+        { collection: "ICollection", arguments: [0] },
+      ],
+      test: (value: unknown): value is SortedListView<unknown> => value instanceof SortedListView,
+      closeFor: (instance) => closeCollectionFor(SortedListView.$runtimeType, instance),
+    });
   }
 
   get count(): number {

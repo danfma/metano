@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   dictionaryType,
   hashSetType,
+  iImmutableListType,
+  immutableArrayType,
   iCollectionType,
   iDictionaryType,
   iListType,
@@ -19,13 +21,22 @@ import {
   stackType,
 } from "#/system/collections/descriptors.ts";
 
+import { ConcurrentDictionary } from "#/system/collections/concurrent-dictionary.ts";
+import { ImmutableArray } from "#/system/collections/immutable-array.ts";
+import { ImmutableArrayBuilder } from "#/system/collections/immutable-array-builder.ts";
+import { ImmutableDictionary } from "#/system/collections/immutable-dictionary.ts";
+import { ImmutableDictionaryBuilder } from "#/system/collections/immutable-dictionary-builder.ts";
+import { ImmutableHashSet } from "#/system/collections/immutable-hash-set.ts";
+import { ImmutableHashSetBuilder } from "#/system/collections/immutable-hash-set-builder.ts";
+import { ImmutableList } from "#/system/collections/immutable-list.ts";
+import { ImmutableListBuilder } from "#/system/collections/immutable-list-builder.ts";
+import { ReadOnlyList } from "#/system/collections/read-only-list.ts";
 import { SortedDictionary } from "#/system/collections/sorted-dictionary.ts";
-import { SortedList } from "#/system/collections/sorted-list.ts";
+import { SortedList, SortedListView } from "#/system/collections/sorted-list.ts";
 import { SortedSet } from "#/system/collections/sorted-set.ts";
 import { getRuntimeType } from "#/system/reflection/get-runtime-type.ts";
 import { nullableType } from "#/system/reflection/nullable-type.ts";
 import { Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
-import { ObjectType } from "#/system/reflection/well-known-types.ts";
 import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 import { List } from "#/system/collections/list.ts";
@@ -161,5 +172,127 @@ describe("covariant interface tests need a reference conversion (spec 011 D31)",
   test("a closed class kind compares by identity", () => {
     expect(listType(StringType).test(new List<number>(null, [Int32Type]))).toBe(false);
     expect(listType(StringType).test(new List<string>(null, [StringType]))).toBe(true);
+  });
+});
+
+describe("class literals of the 011h classes (contracts/runtime-collections.md, normative for D31)", () => {
+  const list = [
+    ["IImmutableList", [0]],
+    ["IReadOnlyList", [0]],
+    ["IReadOnlyCollection", [0]],
+    ["IList", [0]],
+    ["ICollection", [0]],
+  ];
+
+  const listBuilder = [
+    ["IList", [0]],
+    ["ICollection", [0]],
+    ["IReadOnlyList", [0]],
+    ["IReadOnlyCollection", [0]],
+  ];
+
+  const dictionary = [
+    ["IDictionary", [0, 1]],
+    ["IReadOnlyDictionary", [0, 1]],
+    ["ICollection", null],
+    ["IReadOnlyCollection", null],
+  ];
+
+  const table = [
+    [ReadOnlyList, listBuilder],
+    [ImmutableList, list],
+    [ImmutableArray, list],
+    [
+      ImmutableHashSet,
+      [
+        ["IImmutableSet", [0]],
+        ["IReadOnlySet", [0]],
+        ["IReadOnlyCollection", [0]],
+        ["ISet", [0]],
+        ["ICollection", [0]],
+      ],
+    ],
+    [
+      ImmutableDictionary,
+      [
+        ["IImmutableDictionary", [0, 1]],
+        ["IReadOnlyDictionary", [0, 1]],
+        ["IDictionary", [0, 1]],
+        ["ICollection", null],
+        ["IReadOnlyCollection", null],
+      ],
+    ],
+    [ImmutableListBuilder, listBuilder],
+    [ImmutableArrayBuilder, listBuilder],
+    [
+      ImmutableHashSetBuilder,
+      [
+        ["ISet", [0]],
+        ["ICollection", [0]],
+        ["IReadOnlyCollection", [0]],
+      ],
+    ],
+    [
+      ImmutableDictionaryBuilder,
+      [
+        ["IDictionary", [0, 1]],
+        ["IReadOnlyDictionary", [0, 1]],
+        ["ICollection", null],
+        ["IReadOnlyCollection", null],
+      ],
+    ],
+    [
+      SortedSet,
+      [
+        ["ISet", [0]],
+        ["ICollection", [0]],
+        ["IReadOnlySet", [0]],
+        ["IReadOnlyCollection", [0]],
+      ],
+    ],
+    [SortedDictionary, dictionary],
+    [SortedList, dictionary],
+    [ConcurrentDictionary, dictionary],
+    [
+      SortedListView,
+      [
+        ["IList", [0]],
+        ["ICollection", [0]],
+      ],
+    ],
+  ] as const;
+
+  test.each(
+    table,
+  )("%p lists .NET 10's generic collection interfaces in order", (type, expected) => {
+    const entries: unknown = type.$runtimeType.interfaces?.map((entry) => [
+      entry.collection,
+      entry.arguments,
+    ]);
+
+    expect(entries).toEqual(expected.map(([collection, args]) => [collection, args]));
+  });
+
+  test("an immutable list answers the mutable interfaces as .NET's `is IList<T>` does", () => {
+    const strings = ImmutableList.of(["a"], [StringType]);
+    const array = ImmutableArray.of(["a"], [StringType]);
+
+    expect(iListType(StringType).test(strings)).toBe(true);
+    expect(iCollectionType(StringType).test(array)).toBe(true);
+    expect(iImmutableListType(StringType).test(array)).toBe(true);
+    expect(iSetType(Int32Type).test(ImmutableHashSet.of([1], null, [Int32Type]))).toBe(true);
+    expect(iDictionaryType(StringType, Int32Type).test(ImmutableDictionary.empty())).toBe(true);
+    expect(immutableArrayType(StringType).test(array)).toBe(true);
+    expect(immutableArrayType(StringType).test(strings)).toBe(false);
+  });
+
+  test("a SortedList view is an IList of the list's key or value type, never read-only", () => {
+    const list = SortedList.of([["a", 1]], null, [StringType, Int32Type]);
+
+    expect(iListType(StringType).test(list.keys)).toBe(true);
+    expect(iListType(Int32Type).test(list.values)).toBe(true);
+    expect(iListType(Int32Type).test(list.keys)).toBe(false);
+    expect(iReadOnlyListType(StringType).test(list.keys)).toBe(false);
+    expect(Object.keys(list.keys)).toEqual([]);
   });
 });

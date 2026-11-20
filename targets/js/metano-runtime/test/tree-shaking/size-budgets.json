@@ -178,7 +178,8 @@
       "maxGzip": 3908,
       "mustNotContain": [
         "Queue empty.",
-        "upperValue"
+        "upperValue",
+        "ImmutableArray`1"
       ],
       "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     },
@@ -200,7 +201,31 @@
         "Queue empty.",
         "upperValue"
       ],
-      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4505 B / esbuild 4459 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used.",
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 4505 B / esbuild 4459 B (proposed 2560 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+    },
+    {
+      "name": "ImmutableArray alone",
+      "entry": "entries/immutable-array-only.js",
+      "maxGzip": 4355,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue",
+        "ImmutableList`1"
+      ],
+      "$comment": "Stage 011h compiler half, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3959 B / esbuild 3898 B. A sibling of ImmutableList over the internal ImmutableListCore (W4-66), so it carries no ImmutableList text; NFR-008 reason as the other 011h rows, plus IndexOutOfRangeException."
+    },
+    {
+      "name": "ImmutableArrayBuilder alone",
+      "entry": "entries/immutable-array-builder-only.js",
+      "maxGzip": 6412,
+      "mustNotContain": [
+        "Queue empty.",
+        "upperValue",
+        "ImmutableList`1"
+      ],
+      "$comment": "Stage 011h compiler half, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 5829 B / esbuild 5739 B. The builder holds a List and builds an ImmutableArray, so it carries both; NFR-008 reason as the other 011h rows."
+    },
+    {
       "name": "default erased value text",
       "entry": "entries/default-text.js",
       "maxGzip": 3072,
@@ -234,13 +259,17 @@
     "system/collections/hash-core",
     "system/collections/hash-set",
     "system/collections/helpers",
+    "system/collections/immutable-array-builder",
+    "system/collections/immutable-array",
     "system/collections/immutable-collection",
     "system/collections/immutable-dictionary-builder",
     "system/collections/immutable-dictionary",
     "system/collections/immutable-hash-set-builder",
     "system/collections/immutable-hash-set",
     "system/collections/immutable-interfaces",
+    "system/collections/immutable-list-builder-core",
     "system/collections/immutable-list-builder",
+    "system/collections/immutable-list-core",
     "system/collections/immutable-list",
     "system/collections/immutable-storage",
     "system/collections/index",

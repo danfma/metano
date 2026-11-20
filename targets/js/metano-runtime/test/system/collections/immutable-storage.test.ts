@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ImmutableArray } from "#/system/collections/immutable-array.ts";
 import { ImmutableDictionary } from "#/system/collections/immutable-dictionary.ts";
 import { ImmutableHashSet } from "#/system/collections/immutable-hash-set.ts";
 import { ImmutableList } from "#/system/collections/immutable-list.ts";
@@ -8,28 +9,37 @@ import { createSeededRandom, modelSeeds } from "./model/seeded-random.ts";
 // W4-11 condition 2: the immutable classes' tip-append sharing, checked with
 // many live versions and branches from old ones against a plain-copy reference.
 
-const listSubject: ModelSubject<ImmutableList<number>> = {
-  name: "ImmutableList",
-  shape: "list",
-  empty: () => ImmutableList.empty<number>(),
-  apply(version, step) {
-    switch (step.op) {
-      case "add":
-        return version.add(step.value);
-      case "addRange":
-        return version.addRange(step.items);
-      case "remove":
-        return version.remove(step.value);
-      case "setItem":
-        return version.setItem(step.value, step.item);
-      case "clear":
-        return version.clear();
-    }
-  },
-  count: (version) => version.count,
-  contents: (version) => [...version],
-  contains: (version, value) => version.contains(value),
-};
+/** A version of either list-shaped class over `ImmutableListCore`. */
+type ListShaped = ImmutableList<number> | ImmutableArray<number>;
+
+/** The model subject of a list-shaped class: both share every member the model drives. */
+function listShapedSubject(name: string, empty: () => ListShaped): ModelSubject<ListShaped> {
+  return {
+    name,
+    shape: "list",
+    empty,
+    apply(version, step) {
+      switch (step.op) {
+        case "add":
+          return version.add(step.value);
+        case "addRange":
+          return version.addRange(step.items);
+        case "remove":
+          return version.remove(step.value);
+        case "setItem":
+          return version.setItem(step.value, step.item);
+        case "clear":
+          return version.clear();
+      }
+    },
+    count: (version) => version.count,
+    contents: (version) => [...version],
+    contains: (version, value) => version.contains(value),
+  };
+}
+
+const listSubject = listShapedSubject("ImmutableList", () => ImmutableList.empty<number>());
+const arraySubject = listShapedSubject("ImmutableArray", () => ImmutableArray.empty<number>());
 
 const setSubject: ModelSubject<ImmutableHashSet<number>> = {
   name: "ImmutableHashSet",
@@ -84,6 +94,10 @@ describe("immutable classes against the plain-copy model (W4-11)", () => {
   for (const seed of modelSeeds()) {
     test(`ImmutableList (seed ${seed})`, () => {
       runPersistentModel(listSubject, createSeededRandom(seed), options);
+    });
+
+    test(`ImmutableArray (seed ${seed})`, () => {
+      runPersistentModel(arraySubject, createSeededRandom(seed), options);
     });
 
     test(`ImmutableHashSet (seed ${seed})`, () => {

@@ -90,6 +90,8 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
         { collection: "IImmutableSet", arguments: [0] },
         { collection: "IReadOnlySet", arguments: [0] },
         { collection: "IReadOnlyCollection", arguments: [0] },
+        { collection: "ISet", arguments: [0] },
+        { collection: "ICollection", arguments: [0] },
       ],
       test: (value: unknown): value is ImmutableHashSet<unknown> =>
         value instanceof ImmutableHashSet,

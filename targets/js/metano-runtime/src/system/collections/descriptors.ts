@@ -15,6 +15,7 @@ import { specializeCollection } from "../reflection/specialize-collection.ts";
 import { ConcurrentDictionary } from "./concurrent-dictionary.ts";
 import { Dictionary } from "./dictionary.ts";
 import { HashSet } from "./hash-set.ts";
+import { ImmutableArray } from "./immutable-array.ts";
 import { ImmutableDictionary } from "./immutable-dictionary.ts";
 import { ImmutableHashSet } from "./immutable-hash-set.ts";
 import type {
@@ -83,6 +84,10 @@ export function stackType<T>(element: RuntimeType<T>): CollectionType<Stack<T>> 
 
 export function immutableListType<T>(element: RuntimeType<T>): CollectionType<ImmutableList<T>> {
   return closed<ImmutableList<T>>(ImmutableList.$runtimeType, [element]);
+}
+
+export function immutableArrayType<T>(element: RuntimeType<T>): CollectionType<ImmutableArray<T>> {
+  return closed<ImmutableArray<T>>(ImmutableArray.$runtimeType, [element]);
 }
 
 export function immutableHashSetType<T>(

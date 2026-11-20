@@ -126,24 +126,41 @@ export type ArrayDescriptor = {
 /**
  * A runtime collection written as a JSON array (spec 011 FR-028, W4-5): `List<T>`
  * and the list interfaces, `Queue<T>` (front to back), `Stack<T>` (top first),
- * `HashSet<T>` and the set interfaces. The context writes `create`, which builds
- * the class from the read elements in document order, so this module imports no
- * collection class (contracts/runtime-collections.md § JSON collection kinds).
+ * `HashSet<T>` and the set interfaces, and stage 011h's immutable, read-only and
+ * sorted sequences (a `sortedSet` in its order). The context writes `create`,
+ * which builds the class from the read elements in document order, so this
+ * module imports no collection class (contracts/runtime-collections.md § JSON
+ * collection kinds).
  */
 export type SequenceCollectionDescriptor = {
-  readonly kind: "list" | "queue" | "stack" | "hashSet";
+  readonly kind:
+    | "list"
+    | "queue"
+    | "stack"
+    | "hashSet"
+    | "immutableList"
+    | "immutableArray"
+    | "readOnlyList"
+    | "immutableHashSet"
+    | "sortedSet";
   readonly element: TypeDescriptor;
   readonly create: (items: unknown[]) => Iterable<unknown>;
 };
 
 /**
- * A runtime dictionary written as a JSON object (`Dictionary<K, V>` and the
- * dictionary interfaces): each property name is parsed into the `key` type as
+ * A runtime dictionary written as a JSON object (`Dictionary<K, V>`, the
+ * dictionary interfaces and stage 011h's immutable, concurrent and sorted
+ * dictionaries): each property name is parsed into the `key` type as
  * System.Text.Json parses it (#479); `create` receives the entries in document
  * order (`Dictionary.assign`: the last value of a repeated key wins).
  */
 export type KeyedCollectionDescriptor = {
-  readonly kind: "dictionary";
+  readonly kind:
+    | "dictionary"
+    | "immutableDictionary"
+    | "concurrentDictionary"
+    | "sortedDictionary"
+    | "sortedList";
   readonly key: TypeDescriptor;
   readonly value: TypeDescriptor;
   readonly create: (

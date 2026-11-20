@@ -166,6 +166,8 @@ export class ImmutableDictionary<K, V>
       interfaces: [
         { collection: "IImmutableDictionary", arguments: [0, 1] },
         { collection: "IReadOnlyDictionary", arguments: [0, 1] },
+        { collection: "IDictionary", arguments: [0, 1] },
+        { collection: "ICollection", arguments: null },
         { collection: "IReadOnlyCollection", arguments: null },
       ],
       test: (value: unknown): value is ImmutableDictionary<unknown, unknown> =>

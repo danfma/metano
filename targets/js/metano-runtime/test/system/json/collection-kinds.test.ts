@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { ConcurrentDictionary } from "#/system/collections/concurrent-dictionary.ts";
 import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
+import { ImmutableArray } from "#/system/collections/immutable-array.ts";
+import { ImmutableDictionary } from "#/system/collections/immutable-dictionary.ts";
+import { ImmutableHashSet } from "#/system/collections/immutable-hash-set.ts";
+import { ImmutableList } from "#/system/collections/immutable-list.ts";
 import { List } from "#/system/collections/list.ts";
+import { ReadOnlyList } from "#/system/collections/read-only-list.ts";
+import { SortedDictionary } from "#/system/collections/sorted-dictionary.ts";
+import { SortedList } from "#/system/collections/sorted-list.ts";
+import { SortedSet } from "#/system/collections/sorted-set.ts";
+import { NotSupportedException } from "#/system/exceptions/not-supported-exception.ts";
 import { Queue } from "#/system/collections/queue.ts";
 import { Stack } from "#/system/collections/stack.ts";
 import { JsonSerializer, type ValueSpec } from "#/system/json/index.ts";
@@ -90,5 +100,104 @@ describe("JSON collection kinds", () => {
     expect(() => JsonSerializer.deserialize([], dictionarySpec)).toThrow(
       "Expected object for deserialization, got array",
     );
+  });
+});
+
+/** A stage 011h sequence spec, with the `create` a context writes. */
+function sequenceSpec(
+  kind: "immutableList" | "immutableArray" | "readOnlyList" | "immutableHashSet" | "sortedSet",
+  create: (items: number[]) => Iterable<number>,
+): ValueSpec<Iterable<number>> {
+  return {
+    descriptor: { kind, element: int32, create: (items) => create(items as number[]) },
+  };
+}
+
+/** A stage 011h keyed spec, with the `create` a context writes. */
+function keyedSpec(
+  kind: "immutableDictionary" | "concurrentDictionary" | "sortedDictionary" | "sortedList",
+  create: (entries: [number, string][]) => Iterable<readonly [number, string]>,
+): ValueSpec<Iterable<readonly [number, string]>> {
+  return {
+    descriptor: {
+      kind,
+      key: int32,
+      value: { kind: "primitive" },
+      create: (entries) => create(entries as [number, string][]),
+    },
+  };
+}
+
+describe("JSON collection kinds of stage 011h", () => {
+  test.each([
+    [
+      "immutableList",
+      sequenceSpec("immutableList", (items) => ImmutableList.from(items)),
+      ImmutableList,
+    ],
+    [
+      "immutableArray",
+      sequenceSpec("immutableArray", (items) => ImmutableArray.from(items)),
+      ImmutableArray,
+    ],
+    [
+      "immutableHashSet",
+      sequenceSpec("immutableHashSet", (items) => ImmutableHashSet.from(items)),
+      ImmutableHashSet,
+    ],
+    ["sortedSet", sequenceSpec("sortedSet", (items) => new SortedSet(items)), SortedSet],
+  ] as const)("%s round-trips through its create", (_kind, spec, type) => {
+    const read = JsonSerializer.deserialize([3, 1, 2], spec);
+
+    expect(read).toBeInstanceOf(type);
+    expect(JsonSerializer.serialize(read, spec)).toEqual([...(read ?? [])]);
+    expect(JsonSerializer.deserialize(null, spec)).toBeNull();
+  });
+
+  test("sortedSet writes in order and drops duplicates", () => {
+    const spec = sequenceSpec("sortedSet", (items) => new SortedSet(items));
+
+    expect(JsonSerializer.serialize(SortedSet.of([3, 1, 3]), spec)).toEqual([1, 3]);
+  });
+
+  test("readOnlyList writes, and its create throws NotSupportedException", () => {
+    const spec = sequenceSpec("readOnlyList", (): ReadOnlyList<number> => {
+      throw new NotSupportedException();
+    });
+
+    expect(JsonSerializer.serialize(new ReadOnlyList([1, 2]), spec)).toEqual([1, 2]);
+    expect(() => JsonSerializer.deserialize([1], spec)).toThrow(NotSupportedException);
+  });
+
+  test.each([
+    [
+      "immutableDictionary",
+      keyedSpec("immutableDictionary", (entries) =>
+        ImmutableDictionary.empty<number, string>().setItems(entries),
+      ),
+    ],
+    [
+      "concurrentDictionary",
+      keyedSpec("concurrentDictionary", (entries) => ConcurrentDictionary.assign(entries)),
+    ],
+    [
+      "sortedDictionary",
+      keyedSpec("sortedDictionary", (entries) => SortedDictionary.assign(entries)),
+    ],
+    ["sortedList", keyedSpec("sortedList", (entries) => SortedList.assign(entries))],
+  ] as const)("%s parses keys, keeps the last of a repeated key and round-trips", (_kind, spec) => {
+    const read = JsonSerializer.deserialize({ "2": "b", "1": "a", "01": "c" }, spec);
+
+    expect([...(read ?? [])].sort(([a], [b]) => a - b)).toEqual([
+      [1, "c"],
+      [2, "b"],
+    ]);
+
+    const written = JsonSerializer.serialize(read, spec) as Record<string, string>;
+
+    expect(Object.entries(written).sort()).toEqual([
+      ["1", "c"],
+      ["2", "b"],
+    ]);
   });
 });

@@ -122,8 +122,17 @@ function handsChildrenToConverters(descriptor: TypeDescriptor): boolean {
     case "list":
     case "queue":
     case "stack":
+    case "immutableList":
+    case "immutableArray":
+    case "readOnlyList":
+    case "immutableHashSet":
+    case "sortedSet":
     case "map":
     case "dictionary":
+    case "immutableDictionary":
+    case "concurrentDictionary":
+    case "sortedDictionary":
+    case "sortedList":
     case "ref":
       return true;
     default:
@@ -189,8 +198,17 @@ function getBuiltinConverter(
     case "list":
     case "queue":
     case "stack":
+    case "immutableList":
+    case "immutableArray":
+    case "readOnlyList":
+    case "immutableHashSet":
+    case "sortedSet":
       return sequenceConverter(descriptor, descriptor.create, plans, readOptions);
     case "dictionary":
+    case "immutableDictionary":
+    case "concurrentDictionary":
+    case "sortedDictionary":
+    case "sortedList":
       return keyedConverter(descriptor, plans, readOptions);
     case "branded":
       return brandedConverter(descriptor);
