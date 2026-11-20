@@ -5649,6 +5649,13 @@ public sealed partial class IrExpressionExtractor
         ReportImmutableAsMutableInterface(cast, sourceType, targetType);
 
         if (
+            !IsImmutableCollection(sourceType)
+            && IsSetOrDictionaryInterface(targetType)
+            && ReportsImmutableTestedAsMutableInterface(cast, targetType, sourceType)
+        )
+            return new IrUnsupportedExpression(cast.Kind().ToString());
+
+        if (
             !_context.KeepsNativeCollections
             && TryExtractListInterfaceCast(cast, inner, sourceType, targetType) is { } listInterface
         )

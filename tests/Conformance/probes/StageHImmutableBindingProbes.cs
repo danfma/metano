@@ -54,6 +54,42 @@ public static class StageHImmutableBindingProbes
         });
     }
 
+    public static string ImmutableSetCast()
+    {
+        object o = ImmutableHashSet.Create(1, 2);
+
+        return Attempt(() =>
+        {
+            var s = (ISet<int>)o;
+            s.Add(3);
+            return $"added:{s.Count}";
+        });
+    }
+
+    public static string ImmutableDictionaryCast()
+    {
+        IImmutableDictionary<string, int> o = ImmutableDictionary<string, int>.Empty.Add("a", 1);
+
+        return Attempt(() =>
+        {
+            var d = (IDictionary<string, int>)o;
+            d.Add("b", 2);
+            return $"added:{d.Count}";
+        });
+    }
+
+    public static string ImmutableConstraintMethodGroup()
+    {
+        var il = ImmutableList.Create(1, 2);
+
+        return Attempt(() =>
+        {
+            Action<ImmutableList<int>> fn = MutateList<ImmutableList<int>>;
+            fn(il);
+            return $"no-throw:{il.Count}";
+        });
+    }
+
     public static string ImmutableArrayBuilderCountSetter()
     {
         var b = ImmutableArray.CreateBuilder<int>();

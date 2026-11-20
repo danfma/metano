@@ -1436,8 +1436,15 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableHashSet),
     nameof(ImmutableHashSet.ToImmutableHashSet),
-    JsTemplate = "ImmutableHashSet.from<$T0>($this)",
-    RuntimeImports = "ImmutableHashSet",
+    JsTemplate = "toImmutableHashSet($0)",
+    RuntimeImports = "toImmutableHashSet",
+    WhenParameterTypes = new[] { typeof(ImmutableHashSet<>.Builder) }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableHashSet),
+    nameof(ImmutableHashSet.ToImmutableHashSet),
+    JsTemplate = "toImmutableHashSet($this)",
+    RuntimeImports = "toImmutableHashSet",
     WhenArgCount = 0
 )]
 [assembly: MapMethod(
@@ -1509,6 +1516,13 @@ using Metano.Annotations;
     JsTemplate = "new ImmutableDictionaryBuilder<$T0, $T1>(null, $0, $1)",
     RuntimeImports = "ImmutableDictionaryBuilder",
     WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "toImmutableDictionary($0)",
+    RuntimeImports = "toImmutableDictionary",
+    WhenParameterTypes = new[] { typeof(ImmutableDictionary<,>.Builder) }
 )]
 [assembly: MapMethod(
     typeof(ImmutableDictionary),
@@ -1592,8 +1606,8 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableDictionary),
     nameof(ImmutableDictionary.ToImmutableDictionary),
-    JsTemplate = "ImmutableDictionary.from($this)",
-    RuntimeImports = "ImmutableDictionary",
+    JsTemplate = "toImmutableDictionary($this)",
+    RuntimeImports = "toImmutableDictionary",
     WhenArgCount = 0
 )]
 [assembly: MapMethod(

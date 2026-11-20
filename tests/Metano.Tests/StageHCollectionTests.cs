@@ -548,4 +548,110 @@ public class StageHCollectionTests
 
         await Assert.That(files["tests.ts"]).Contains("b.count");
     }
+
+    [Test]
+    [Arguments("ImmutableHashSet.ToImmutableHashSet(hb)", "toImmutableHashSet(hb)")]
+    [Arguments("hb.ToImmutableHashSet()", "toImmutableHashSet(hb)")]
+    [Arguments("ImmutableDictionary.ToImmutableDictionary(db)", "toImmutableDictionary(db)")]
+    [Arguments("db.ToImmutableDictionary()", "toImmutableDictionary(db)")]
+    public async Task ImmutableBuilderToImmutableExtension_KeepsTheBuildersComparers(
+        string call,
+        string emitted
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            using System.Collections.Immutable;
+
+            [Transpile]
+            public static class Calls
+            {
+                public static object Run(
+                    ImmutableHashSet<string>.Builder hb,
+                    ImmutableDictionary<string, int>.Builder db
+                ) => {{call}};
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+
+        await Assert.That(files["calls.ts"]).Contains(emitted);
+    }
+
+    [Test]
+    [Arguments("object o", "var s = (ISet<int>)o;", 1)]
+    [Arguments("IReadOnlySet<int> o", "var s = (ISet<int>)o;", 1)]
+    [Arguments("IImmutableSet<int> o", "var s = (ISet<int>)o;", 1)]
+    [Arguments("object o", "var d = (IDictionary<string, int>)o;", 1)]
+    [Arguments("IReadOnlyDictionary<string, int> o", "var d = (IDictionary<string, int>)o;", 1)]
+    [Arguments("IImmutableDictionary<string, int> o", "var d = (IDictionary<string, int>)o;", 1)]
+    [Arguments("HashSet<int> o", "var s = (ISet<int>)o;", 0)]
+    [Arguments("ISet<int> o", "var s = (ISet<int>)o;", 0)]
+    public async Task ExplicitCastToAMutableSetOrDictionary_IsReportedWhenAnImmutableCanBeThere(
+        string parameter,
+        string statement,
+        int reports
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            using System.Collections.Generic;
+            using System.Collections.Immutable;
+
+            [Transpile]
+            public static class Tests
+            {
+                public static void Run({{parameter}})
+                {
+                    {{statement}}
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .Count()
+            .IsEqualTo(reports);
+    }
+
+    [Test]
+    [Arguments("Action<ImmutableList<int>> fn = Mutate<ImmutableList<int>>;", 1)]
+    [Arguments("Action<List<int>> fn = Mutate<List<int>>;", 0)]
+    [Arguments("var f = Box<ImmutableList<int>>.Make;", 1)]
+    [Arguments("Mutate<ImmutableList<int>>(null!);", 1)]
+    public async Task ConstraintBoundByAMethodGroup_IsReported(string statement, int reports)
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Collections.Immutable;
+
+            public class Box<T> where T : IList<int>
+            {
+                public static void Make(T value) { }
+            }
+
+            [Transpile]
+            public static class Tests
+            {
+                static void Mutate<T>(T value) where T : IList<int> { }
+
+                public static void Run()
+                {
+                    {{statement}}
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .Count()
+            .IsEqualTo(reports);
+    }
 }

@@ -60,6 +60,24 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// Whether <paramref name="expression"/> binds the type arguments of a
+    /// method or constructor: a call, an object creation, or a method group
+    /// converted to a delegate (a called method group is its call's).
+    /// </summary>
+    private static bool BindsTypeArguments(ExpressionSyntax expression) =>
+        expression
+            is InvocationExpressionSyntax
+                or ObjectCreationExpressionSyntax
+                or ImplicitObjectCreationExpressionSyntax
+        || (
+            expression is SimpleNameSyntax or MemberAccessExpressionSyntax && !IsCallee(expression)
+        );
+
+    private static bool IsCallee(ExpressionSyntax expression) =>
+        expression.Parent is InvocationExpressionSyntax invocation
+        && invocation.Expression == expression;
+
+    /// <summary>
     /// Reports the binding of an immutable collection to a type parameter
     /// constrained to a mutable collection interface
     /// (<c>Mutate&lt;T&gt;(T list) where T : IList&lt;int&gt;</c> called with an
@@ -70,12 +88,7 @@ public sealed partial class IrExpressionExtractor
     {
         if (
             _context.KeepsNativeCollections
-            || expression
-                is not (
-                    InvocationExpressionSyntax
-                    or ObjectCreationExpressionSyntax
-                    or ImplicitObjectCreationExpressionSyntax
-                )
+            || !BindsTypeArguments(expression)
             || _semantic.GetSymbolInfo(expression).Symbol is not IMethodSymbol method
         )
             return;
@@ -96,7 +109,7 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Reports a <em>binding</em> test (<c>x as T</c>, <c>x is T name</c>, a switch
+    /// Reports a <em>binding</em> test or cast (<c>x as T</c>, <c>(T)x</c>, <c>x is T name</c>, a switch
     /// arm <c>T name =></c>) of <paramref name="operand"/> against
     /// <paramref name="tested"/> when it asks an immutable collection whether it is
     /// a mutable collection interface (MS0001, contracts/runtime-collections.md §
@@ -125,10 +138,10 @@ public sealed partial class IrExpressionExtractor
 
         ReportUnsupportedFeature(
             test,
-            $"'{test}' tests whether a value of '{operand.ToDisplayString()}' is "
-                + $"'{tested!.ToDisplayString()}': an immutable collection answers true as in .NET, "
+            $"'{test}' views a value of '{operand.ToDisplayString()}' as "
+                + $"'{tested!.ToDisplayString()}': an immutable collection is one in .NET, "
                 + "but does not implement the mutable interface at run time, so a mutation through "
-                + "the match would return a new collection instead of throwing NotSupportedException."
+                + "the result would return a new collection instead of throwing NotSupportedException."
         );
 
         return true;
@@ -166,6 +179,17 @@ public sealed partial class IrExpressionExtractor
                         or IrCollectionKind.IReadOnlySet
             );
     }
+
+    /// <summary>
+    /// <c>ISet&lt;T&gt;</c> or <c>IDictionary&lt;K, V&gt;</c>: the mutable
+    /// interfaces whose explicit casts no other rule handles (the list-shaped
+    /// casts are <see cref="TryExtractListInterfaceCast"/>'s).
+    /// </summary>
+    private static bool IsSetOrDictionaryInterface(ITypeSymbol type) =>
+        KindOf(type) is IrCollectionKind.ISet or IrCollectionKind.IDictionary;
+
+    private static bool IsImmutableCollection(ITypeSymbol type) =>
+        KindOf(type.UnderlyingValueType()) is { } kind && IrCollectionKinds.IsImmutable(kind);
 
     private static IrCollectionKind? KindOf(ITypeSymbol? type) =>
         type is INamedTypeSymbol named ? CollectionKindResolver.KindOf(named) : null;

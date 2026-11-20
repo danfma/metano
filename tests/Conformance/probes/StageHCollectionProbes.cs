@@ -523,6 +523,44 @@ public static class StageHCollectionProbes
             + $"{Join(il.Remove(1))}|{Join(il.RemoveRange(new[] { 3, 2 }))}|{Join(il.Replace(1, 9))}|{il.IndexOf(2)}|{il.LastIndexOf(3)}";
     }
 
+    public static string ImmutableBuilderToImmutableExtensions()
+    {
+        var comparer = new IgnoreCaseComparer();
+        var hb = ImmutableHashSet.CreateBuilder<string>(comparer);
+        hb.Add("x");
+        var db = ImmutableDictionary.CreateBuilder<string, int>(comparer);
+        db.Add("k", 5);
+        var plain = ImmutableHashSet.CreateBuilder<string>();
+        plain.Add("p");
+        var plainMap = ImmutableDictionary.CreateBuilder<string, int>();
+        plainMap.Add("q", 1);
+        var staticSet = ImmutableHashSet.ToImmutableHashSet(plain);
+        var staticMap = ImmutableDictionary.ToImmutableDictionary(plainMap);
+        return $"{hb.ToImmutableHashSet().Contains("X")}|{db.ToImmutableDictionary().ContainsKey("K")}|"
+            + $"{ImmutableHashSet.ToImmutableHashSet(hb).Contains("X")}|{ImmutableDictionary.ToImmutableDictionary(db).ContainsKey("K")}|"
+            + $"{staticSet.Contains("p")}|{staticMap.ContainsKey("q")}|{hb.ToImmutable().Contains("X")}";
+    }
+
+    public static string ImmutableListBuilderLastIndexOfEdges()
+    {
+        var b = ImmutableList.CreateBuilder<int>();
+        b.AddRange(new[] { 10, 20, 30 });
+        var empty = ImmutableList.CreateBuilder<int>();
+        return $"{Attempt(() => b.LastIndexOf(20, 5, 1).ToString())}|{Attempt(() => b.LastIndexOf(20, 3).ToString())}|{Attempt(() => b.LastIndexOf(20, 5, 9).ToString())}|"
+            + $"{Attempt(() => empty.LastIndexOf(20, -1, 0).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0, -1).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0, 5).ToString())}|"
+            + $"{Attempt(() => empty.LastIndexOf(20).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0).ToString())}";
+    }
+
+    public static string ImmutableListLastIndexOfEdges()
+    {
+        var il = ImmutableList.Create(10, 20, 30);
+        var empty = ImmutableList<int>.Empty;
+        return $"{Attempt(() => il.LastIndexOf(20, 5, 1, null).ToString())}|{Attempt(() => il.LastIndexOf(20, 3, 1, null).ToString())}|{Attempt(() => il.LastIndexOf(20, 5, 9, null).ToString())}|"
+            + $"{Attempt(() => il.LastIndexOf(20, 0, 2, null).ToString())}|{Attempt(() => il.LastIndexOf(20, -1, 1, null).ToString())}|{Attempt(() => il.LastIndexOf(20, 1, -1, null).ToString())}|"
+            + $"{Attempt(() => empty.LastIndexOf(20, -1, 0, null).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0, -1, null).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0, 5, null).ToString())}|"
+            + $"{Attempt(() => empty.LastIndexOf(20).ToString())}|{Attempt(() => il.IndexOf(20, 9, 1, null).ToString())}";
+    }
+
     private static bool IsDictionary(object value) => value is IDictionary<int, int>;
 
     private static bool IsSet(object value) => value is ISet<int>;

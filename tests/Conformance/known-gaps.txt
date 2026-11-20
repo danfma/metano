@@ -19,6 +19,9 @@ StageHInterfaceTestProbes.immutableAsIListAs      #335  J-owned W4-65: the separ
 StageHImmutableSetBindingProbes.immutableSetBinding  #335  011h: a declaration pattern binding an immutable set to ISet<T> is reported (MS0001) and lowers to a placeholder; the module fails at load, as .NET throws NotSupportedException at the mutator
 StageHImmutableDictionaryBindingProbes.immutableDictionaryBinding  #335  011h: a declaration pattern binding an immutable dictionary to IDictionary<K, V> is reported (MS0001) and lowers to a placeholder; the module fails at load
 StageHImmutableBindingProbes.immutableDictionaryAs  #335  011h: `as IDictionary<K, V>` of an immutable dictionary is reported (MS0001) and throws an unsupported-expression error when run
+StageHImmutableBindingProbes.immutableSetCast  #335  011h: an explicit cast of an immutable-capable value to ISet<T> is reported (MS0001) and throws an unsupported-expression error when run
+StageHImmutableBindingProbes.immutableDictionaryCast  #335  011h: an explicit cast of an immutable-capable value to IDictionary<K, V> is reported (MS0001) and throws an unsupported-expression error when run
+StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  011h: a method group of a method constrained to a mutable interface, bound to an immutable collection, is reported (MS0001); the call still runs and the mutator is dropped
 StageHImmutableBindingProbes.immutableGenericConstraint  #335  011h: an immutable collection bound to a type parameter constrained to a mutable interface is reported (MS0001); the call still runs and the mutator is dropped
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter  #335  011h: ImmutableArray<T>.Builder.Count = n is reported (MS0001) and throws an unsupported-expression error when run (the runtime cannot produce default(T))
 

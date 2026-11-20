@@ -33,6 +33,15 @@ const ignoreCase = {
   getHashCode: (value: string): number => value.toLowerCase().length,
 };
 
+describe("toImmutableHashSet", () => {
+  test("a builder keeps its comparer; any other source is an enumerable", () => {
+    const builder = new ImmutableHashSetBuilder<string>(["x"], ignoreCase);
+
+    expect(toImmutableHashSet(builder).contains("X")).toBe(true);
+    expect(toImmutableHashSet(["a", "b"]).count).toBe(2);
+  });
+});
+
 describe("ImmutableHashSetBuilder.tryGetValue", () => {
   test("a miss returns the searched value, as .NET's", () => {
     const builder = new ImmutableHashSetBuilder<string>(["a"]);

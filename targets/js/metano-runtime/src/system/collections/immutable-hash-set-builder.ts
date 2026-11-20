@@ -186,8 +186,20 @@ export class ImmutableHashSetBuilder<T> implements ISet<T> {
   }
 }
 
-/** `builder.ToImmutable()`: a copy, never sharing the builder's storage. */
-export function toImmutableHashSet<T>(builder: ImmutableHashSetBuilder<T>): ImmutableHashSet<T> {
+/**
+ * `builder.ToImmutable()` and `ToImmutableHashSet(builder)`: a copy, never sharing the
+ * builder's storage, with the builder's comparer. Any other source is `ToImmutableHashSet()`
+ * of an enumerable (the reduced extension call cannot tell the two overloads apart).
+ */
+export function toImmutableHashSet<T>(
+  source: ImmutableHashSetBuilder<T> | Iterable<T>,
+): ImmutableHashSet<T> {
+  if (!(source instanceof ImmutableHashSetBuilder)) {
+    return ImmutableHashSet.from(source);
+  }
+
+  const builder = source;
+
   return ImmutableHashSet.from(
     builder._set.toArray(),
     builder._set._store.comparer,

@@ -107,6 +107,19 @@ describe("ImmutableListBuilder (W4-11 condition 4: never alias)", () => {
     expect(new ImmutableListBuilder<number>().lastIndexOf(1)).toBe(-1);
   });
 
+  test("lastIndexOf edge ranges follow .NET's check order", () => {
+    const builder = new ImmutableListBuilder([10, 20, 30]);
+    const empty = new ImmutableListBuilder<number>();
+
+    expect(builder.lastIndexOf(20, 5, 1)).toBe(-1);
+    expect(() => builder.lastIndexOf(20, 3)).toThrow("(Parameter 'count')");
+    expect(() => empty.lastIndexOf(20, -1, 0)).toThrow("(Parameter 'index')");
+    expect(() => empty.lastIndexOf(20, 0, -1)).toThrow("(Parameter 'count')");
+    expect(() => empty.lastIndexOf(20, 0, 5)).toThrow("(Parameter 'count')");
+    expect(empty.lastIndexOf(20)).toBe(-1);
+    expect(empty.lastIndexOf(20, 0)).toBe(-1);
+  });
+
   test("remove of an absent element is the one call that does not bump", () => {
     expect(invalidates(new ImmutableListBuilder([1]), (b) => b.remove(9))).toBe(false);
     expect(invalidates(new ImmutableListBuilder([1]), (b) => b.get(0))).toBe(false);

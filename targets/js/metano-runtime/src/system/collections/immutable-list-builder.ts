@@ -94,28 +94,37 @@ export class ImmutableListBuilder<T> extends ImmutableListBuilderCore<T> {
     return [startIndex, count];
   }
 
-  /** `ImmutableList`'s backward checks: an empty list finds nothing; `index`, then `count`, then a span that starts before the list (a bare `ArgumentException`). */
-  protected backwardRange(
-    startIndex: number = this.count - 1,
-    count: number = startIndex + 1,
-  ): readonly [number, number] | null {
-    if (this.count === 0) {
+  /**
+   * `ImmutableList`'s backward checks, in .NET's order: `index` below 0, `count` below 0,
+   * `count` past the end, an `index` past the end (nothing to find, `-1`), then a span that
+   * starts before the list (a bare `ArgumentException`). `LastIndexOf(item)` and
+   * `LastIndexOf(item, index)` of an empty list are `-1`.
+   */
+  protected backwardRange(startIndex?: number, count?: number): readonly [number, number] | null {
+    if (count === undefined && this.count === 0) {
       return null;
     }
 
-    if (startIndex < 0) {
+    const start = startIndex ?? this.count - 1;
+    const length = count ?? start + 1;
+
+    if (start < 0) {
       throwArgumentOutOfRange("index");
     }
 
-    if (count < 0 || count > this.count) {
+    if (length < 0 || length > this.count) {
       throwArgumentOutOfRange("count");
     }
 
-    if (startIndex - count + 1 < 0) {
+    if (start >= this.count) {
+      return null;
+    }
+
+    if (start - length + 1 < 0) {
       throwOutsideExpectedRange();
     }
 
-    return [startIndex, count];
+    return [start, length];
   }
 
   protected modified(): void {

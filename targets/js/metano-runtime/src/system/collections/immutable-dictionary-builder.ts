@@ -204,10 +204,20 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
   }
 }
 
-/** `builder.ToImmutable()`: a copy, never sharing the builder's storage. */
+/**
+ * `builder.ToImmutable()` and `ToImmutableDictionary(builder)`: a copy, never sharing the
+ * builder's storage, with the builder's comparers. Any other source is `ToImmutableDictionary()`
+ * of an enumerable of pairs (the reduced extension call cannot tell the two overloads apart).
+ */
 export function toImmutableDictionary<K, V>(
-  builder: ImmutableDictionaryBuilder<K, V>,
+  source: ImmutableDictionaryBuilder<K, V> | Iterable<readonly [K, V]>,
 ): ImmutableDictionary<K, V> {
+  if (!(source instanceof ImmutableDictionaryBuilder)) {
+    return ImmutableDictionary.from(source);
+  }
+
+  const builder = source;
+
   return ImmutableDictionary.from(
     [...builder._dictionary],
     builder._dictionary._store.comparer,

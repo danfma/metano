@@ -33,6 +33,20 @@ const ignoreCase = {
   getHashCode: (value: string): number => value.toLowerCase().length,
 };
 
+describe("toImmutableDictionary", () => {
+  test("a builder keeps its comparers; any other source is an enumerable of pairs", () => {
+    const builder = new ImmutableDictionaryBuilder<string, number>(null, {
+      equals: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
+      getHashCode: (v: string) => v.toLowerCase().length,
+    });
+
+    builder.add("k", 5);
+
+    expect(toImmutableDictionary(builder).containsKey("K")).toBe(true);
+    expect(toImmutableDictionary([["a", 1] as const]).count).toBe(1);
+  });
+});
+
 describe("ImmutableDictionaryBuilder (W4-11 condition 4: never alias)", () => {
   test("ToImmutable, then a further builder mutation changes no immutable value", () => {
     const builder = new ImmutableDictionaryBuilder<string, number>();

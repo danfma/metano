@@ -6,6 +6,19 @@ import { Int32Type } from "#/system/reflection/primitive-types.ts";
 const OUT_OF_RANGE = "Specified argument was out of the range of valid values.";
 
 describe("ImmutableList", () => {
+  test("lastIndexOf edge ranges follow .NET's check order", () => {
+    const list = ImmutableList.of([10, 20, 30]);
+    const empty = ImmutableList.empty<number>();
+
+    expect(list.lastIndexOf(20, 5, 1)).toBe(-1);
+    expect(list.lastIndexOf(20, 3, 1)).toBe(-1);
+    expect(() => list.lastIndexOf(20, 5, 9)).toThrow("(Parameter 'count')");
+    expect(() => list.lastIndexOf(20, 0, 2)).toThrow("Value does not fall within");
+    expect(() => empty.lastIndexOf(20, -1, 0)).toThrow("(Parameter 'index')");
+    expect(() => empty.lastIndexOf(20, 0, -1)).toThrow("(Parameter 'count')");
+    expect(empty.lastIndexOf(20)).toBe(-1);
+  });
+
   const list = (): ImmutableList<number> => ImmutableList.of([1, 2, 3]);
 
   test("mutators return new lists and leave the receiver unchanged", () => {

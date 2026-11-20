@@ -3,7 +3,11 @@ import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import type { ComparisonArgument, IEqualityComparer } from "./default-comparer.ts";
 import { at, ImmutableListCore } from "./immutable-list-core.ts";
-import { throwArgumentNull, throwArgumentOutOfRange } from "./throw-helpers.ts";
+import {
+  throwArgumentNull,
+  throwArgumentOutOfRange,
+  throwOutsideExpectedRange,
+} from "./throw-helpers.ts";
 
 let ImmutableList$rt: CollectionType<ImmutableList<unknown>> | undefined;
 let empty: ImmutableList<unknown> | undefined;
@@ -107,19 +111,37 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
     return this.range(index, count);
   }
 
+  /** `LastIndexOf(item[, index, count[, comparer]])`, checked in .NET's order (see `ImmutableListBuilder.backwardRange`). */
   lastIndexOf(
     item: T,
-    index: number = this._count - 1,
-    count: number = index + 1,
+    index?: number,
+    count?: number,
     comparer?: IEqualityComparer<T> | null,
   ): number {
-    if (this._count === 0) {
+    if (count === undefined && this._count === 0) {
       return -1;
     }
 
-    this.checkRange(index - count + 1, count);
+    const start = index ?? this._count - 1;
+    const length = count ?? start + 1;
 
-    return this.searchBackward(item, index, count, comparer);
+    if (start < 0) {
+      throwArgumentOutOfRange("index");
+    }
+
+    if (length < 0 || length > this._count) {
+      throwArgumentOutOfRange("count");
+    }
+
+    if (start >= this._count) {
+      return -1;
+    }
+
+    if (start - length + 1 < 0) {
+      throwOutsideExpectedRange();
+    }
+
+    return this.searchBackward(item, start, length, comparer);
   }
 
   /** A new list even for an empty source, as .NET's. */
