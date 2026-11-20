@@ -240,8 +240,17 @@ public sealed partial class IrExpressionExtractor
         if (!_context.KeepsNativeCollections)
         {
             ReportNestedArrayAsListInterface(expression);
-            ReportImmutableAsMutableInterface(expression);
-            ReportImmutableAsMutableConstraint(expression);
+
+            if (
+                ReportImmutableAsMutableInterface(expression)
+                | ReportImmutableAsMutableConstraint(expression)
+            )
+                return new IrUnsupportedExpression("ImmutableMutableBinding")
+                {
+                    ResultType = _semantic.GetTypeInfo(expression).ConvertedType is { } result
+                        ? MapElementType(result)
+                        : null,
+                };
         }
 
         // A 64-bit constant folds to one literal, and a constant inside
@@ -941,7 +950,15 @@ public sealed partial class IrExpressionExtractor
         IrPatternDesignator? designator = null
     ) =>
         UntestablePattern(pattern, type, binds: designator is not null)
-        ?? new IrTypePattern(type, designator) { InputType = PatternInputType(pattern) };
+            is IrUnsupportedPattern unsupported
+            ? unsupported with
+            {
+                TypePattern = new IrTypePattern(type, designator)
+                {
+                    InputType = PatternInputType(pattern),
+                },
+            }
+            : new IrTypePattern(type, designator) { InputType = PatternInputType(pattern) };
 
     /// <summary>
     /// The placeholder a type test in <paramref name="pattern"/> lowers to when
@@ -2136,7 +2153,7 @@ public sealed partial class IrExpressionExtractor
                 _semantic.GetTypeInfo(typeSyntax).Type,
                 _semantic.GetTypeInfo(test.Left).Type
             )
-            ? new IrUnsupportedExpression(test.Kind().ToString())
+            ? new IrUnsupportedExpression(test.Kind().ToString()) { ResultType = testedType }
             : null;
     }
 
@@ -3762,7 +3779,18 @@ public sealed partial class IrExpressionExtractor
                 : null,
             IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
             IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true }
-        );
+        )
+        {
+            ResultType = symbol switch
+            {
+                IMethodSymbol { MethodKind: not MethodKind.Constructor } result => MapElementType(
+                    result.ReturnType
+                ),
+                IPropertySymbol result => MapElementType(result.Type),
+                IFieldSymbol result => MapElementType(result.Type),
+                _ => null,
+            },
+        };
     }
 
     /// <summary>
@@ -5653,7 +5681,10 @@ public sealed partial class IrExpressionExtractor
             && IsSetOrDictionaryInterface(targetType)
             && ReportsImmutableTestedAsMutableInterface(cast, targetType, sourceType)
         )
-            return new IrUnsupportedExpression(cast.Kind().ToString());
+            return new IrUnsupportedExpression(cast.Kind().ToString())
+            {
+                ResultType = MapElementType(targetType),
+            };
 
         if (
             !_context.KeepsNativeCollections
@@ -5708,4 +5739,8 @@ public sealed partial class IrExpressionExtractor
 /// can either produce a visible <c>TODO</c> in the output or fall back to the
 /// legacy source-to-target pipeline for the surrounding body.
 /// </summary>
-public sealed record IrUnsupportedExpression(string Kind) : IrExpression;
+public sealed record IrUnsupportedExpression(string Kind) : IrExpression
+{
+    /// <summary>The expected result type of rejected source code, so unreachable uses remain typed.</summary>
+    public IrTypeRef? ResultType { get; init; }
+}

@@ -11,18 +11,17 @@ CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud #335  W4-C20: a 
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud #335  W4-C20: `as` an array-backed interface from object: MS0001 and a loud throw (.NET: True)
 CollectionTypeArgumentProbes.directDictionaryViewInterfaceTestIsLoud #335  W4-C20: a Dictionary KeyCollection / ValueCollection operand has no collection descriptor: MS0001 and a loud throw (.NET: True,True,True)
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud #335  W4-C20: Dictionary.Keys / Values behind object have no collection descriptor: MS0001 and a loud throw (.NET: True,True)
-StageHCollectionProbes.immutableArrayText      #335  J-owned FR-008: open collection ToString text prints [T] instead of closed type arguments
-StageHInterfaceTestProbes.immutableAsIListBinding #335  J-owned W4-65: immutable IList binding is unsupported, so the separated probe module fails to load
-StageHInterfaceTestProbes.immutableAsIListSwitch  #335  J-owned W4-65: immutable IList switch binding is unsupported, so the separated probe module fails to load
-StageHInterfaceTestProbes.immutableAsIList        #335  J-owned W4-65: the separated module contains unsupported immutable IList bindings
-StageHInterfaceTestProbes.immutableAsIListAs      #335  J-owned W4-65: the separated module contains unsupported immutable IList bindings
-StageHImmutableSetBindingProbes.immutableSetBinding  #335  011h: a declaration pattern binding an immutable set to ISet<T> is reported (MS0001) and lowers to a placeholder; the module fails at load, as .NET throws NotSupportedException at the mutator
-StageHImmutableDictionaryBindingProbes.immutableDictionaryBinding  #335  011h: a declaration pattern binding an immutable dictionary to IDictionary<K, V> is reported (MS0001) and lowers to a placeholder; the module fails at load
+StageHInterfaceTestProbes.immutableAsIListBinding #335  W4-C34: unsupported immutable IList binding reports MS0001 and throws from a typed pattern stub, rather than failing to load the module
+StageHInterfaceTestProbes.immutableAsIListSwitch  #335  W4-C34: unsupported immutable IList switch binding reports MS0001 and throws from a typed pattern stub
+StageHInterfaceTestProbes.immutableAsIList        #335  W4-C34 / W4-17: an object-held array-backed interface test has no descriptor for native arrays, so reports MS0001 and throws loudly
+StageHInterfaceTestProbes.immutableAsIListAs      #335  W4-C34: immutable-capable mutable IList binding reports MS0001 and throws an unsupported-expression error
+StageHImmutableSetBindingProbes.immutableSetBinding  #335  W4-C34: an immutable set bound to ISet<T> reports MS0001 and throws from a typed pattern stub; .NET throws NotSupportedException at the mutator
+StageHImmutableDictionaryBindingProbes.immutableDictionaryBinding  #335  W4-C34: an immutable dictionary bound to IDictionary<K, V> reports MS0001 and throws from a typed pattern stub
 StageHImmutableBindingProbes.immutableDictionaryAs  #335  011h: `as IDictionary<K, V>` of an immutable dictionary is reported (MS0001) and throws an unsupported-expression error when run
 StageHImmutableBindingProbes.immutableSetCast  #335  011h: an explicit cast of an immutable-capable value to ISet<T> is reported (MS0001) and throws an unsupported-expression error when run
 StageHImmutableBindingProbes.immutableDictionaryCast  #335  011h: an explicit cast of an immutable-capable value to IDictionary<K, V> is reported (MS0001) and throws an unsupported-expression error when run
-StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  011h: a method group of a method constrained to a mutable interface, bound to an immutable collection, is reported (MS0001); the call still runs and the mutator is dropped
-StageHImmutableBindingProbes.immutableGenericConstraint  #335  011h: an immutable collection bound to a type parameter constrained to a mutable interface is reported (MS0001); the call still runs and the mutator is dropped
+StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  W4-C34: an immutable collection bound to a mutable-interface-constrained method group reports MS0001 and throws, instead of silently dropping the mutation
+StageHImmutableBindingProbes.immutableGenericConstraint  #335  W4-C34: an immutable collection bound to a mutable-interface-constrained type parameter reports MS0001 and throws, instead of silently dropping the mutation
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter  #335  011h: ImmutableArray<T>.Builder.Count = n is reported (MS0001) and throws an unsupported-expression error when run (the runtime cannot produce default(T))
 
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped

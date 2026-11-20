@@ -95,19 +95,18 @@ Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operator
 RuntimeTypeProbes.enumMembership = True|True
 RuntimeTypeShapeProbes.closedGenericName = RtBox`1<Int32>|Conformance
 RuntimeTypeShapeProbes.plainObjectIsStructural = True|True|False
-StageHCollectionProbes.immutableArrayText = System.Collections.Immutable.ImmutableArray`1[T]|System.Collections.Immutable.ImmutableList`1[T]
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter THROWS Error: Unsupported expression: immutable array builder count write
-StageHImmutableBindingProbes.immutableConstraintMethodGroup = no-throw:2
+StageHImmutableBindingProbes.immutableConstraintMethodGroup THROWS Error: Unsupported expression: ImmutableMutableBinding
 StageHImmutableBindingProbes.immutableDictionaryAs THROWS Error: Unsupported expression: AsExpression
 StageHImmutableBindingProbes.immutableDictionaryCast THROWS Error: Unsupported expression: CastExpression
-StageHImmutableBindingProbes.immutableGenericConstraint = no-throw:2
+StageHImmutableBindingProbes.immutableGenericConstraint THROWS Error: Unsupported expression: ImmutableMutableBinding
 StageHImmutableBindingProbes.immutableSetCast THROWS Error: Unsupported expression: CastExpression
-StageHImmutableDictionaryBindingProbes.immutableDictionaryBinding LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-immutable-dictionary-binding-probes.js:9
-StageHImmutableSetBindingProbes.immutableSetBinding LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-immutable-set-binding-probes.js:9
-StageHInterfaceTestProbes.immutableAsIList LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19
-StageHInterfaceTestProbes.immutableAsIListAs LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19
-StageHInterfaceTestProbes.immutableAsIListBinding LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19
-StageHInterfaceTestProbes.immutableAsIListSwitch LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19
+StageHImmutableDictionaryBindingProbes.immutableDictionaryBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
+StageHImmutableSetBindingProbes.immutableSetBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
+StageHInterfaceTestProbes.immutableAsIList THROWS Error: Unsupported expression: CollectionInterfaceTest
+StageHInterfaceTestProbes.immutableAsIListAs THROWS Error: Unsupported expression: AsExpression
+StageHInterfaceTestProbes.immutableAsIListBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
+StageHInterfaceTestProbes.immutableAsIListSwitch THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function
 StringProbes.compare THROWS TypeError: String.compare is not a function

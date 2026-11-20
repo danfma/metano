@@ -1,4 +1,4 @@
-import { Dictionary, ImmutableArray, ImmutableArrayBuilder, ImmutableDictionary, ImmutableDictionaryBuilder, ImmutableHashSet, ImmutableList, ImmutableListBuilder, List, toImmutableArray, toImmutableDictionary, toImmutableHashSet, toImmutableList, type IImmutableList } from "metano-runtime/system/collections";
+import { Dictionary, ImmutableArray, ImmutableArrayBuilder, ImmutableDictionary, ImmutableDictionaryBuilder, ImmutableHashSet, ImmutableList, ImmutableListBuilder, List, toImmutableArray, toImmutableDictionary, toImmutableHashSet, toImmutableList, type IEqualityComparer, type IImmutableList } from "metano-runtime/system/collections";
 import { formatBoolean } from "metano-runtime";
 
 export class Snapshots {

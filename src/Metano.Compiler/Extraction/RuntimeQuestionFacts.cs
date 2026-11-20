@@ -124,7 +124,14 @@ internal static class RuntimeQuestionFacts
                     Shape = IrQuestionedTypeShape.Named,
                     Key = IrTypeKeys.Of(named),
                     CollectionDefinitionName = CollectionDefinitionNameOf(named),
-                    TypeArguments = [.. named.TypeArguments.Select(QuestionedTypeOf)],
+                    TypeArguments =
+                    [
+                        .. (
+                            CollectionKindResolver.KindOf(named) is { } kind
+                                ? CollectionKindResolver.TypeArgumentsOf(named, kind)
+                                : named.TypeArguments
+                        ).Select(QuestionedTypeOf),
+                    ],
                 },
             _ => Shaped(IrQuestionedTypeShape.Other),
         };
@@ -151,7 +158,7 @@ internal static class RuntimeQuestionFacts
         var containing = definition.ContainingNamespace?.ToDisplayString() ?? "";
 
         return containing.StartsWith("System.Collections", StringComparison.Ordinal)
-            ? $"{containing}.{definition.MetadataName}"
+            ? IrTypeKeys.Of(definition).MetadataName
             : null;
     }
 }

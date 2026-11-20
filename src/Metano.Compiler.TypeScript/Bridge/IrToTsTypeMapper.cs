@@ -178,6 +178,20 @@ public static class IrToTsTypeMapper
         if (IsSystemType(named))
             return new TsNamedType("RuntimeType", RuntimeHelperBinding: "RuntimeType");
 
+        if (
+            named is
+            {
+                Namespace: "System.Collections.Generic",
+                Name: "IComparer" or "IEqualityComparer",
+                Origin: null,
+                TypeArguments: { Count: 1 } arguments,
+            }
+        )
+            return RuntimeClassType(
+                named.Name,
+                arguments.Select(argument => Map(argument, overrides)).ToList()
+            );
+
         var name = ModuleLocalNaming.Flatten(named.Name, named.PrivateNestedSegments);
 
         if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))

@@ -14,16 +14,16 @@ namespace Metano.Compiler.Extraction;
 /// <c>NotSupportedException</c> from its mutators, which a runtime class whose
 /// mutators return a new value cannot reproduce, so a mutation through the
 /// interface would be dropped silently. Reported as MS0001 for a target whose
-/// collections are runtime classes; the value is kept (its reads are sound).
+/// collections are runtime classes; rejected bindings fail loudly rather than dropping a mutation.
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>Reports the implicit conversion of <paramref name="expression"/> when it is one.</summary>
-    private void ReportImmutableAsMutableInterface(ExpressionSyntax expression)
+    private bool ReportImmutableAsMutableInterface(ExpressionSyntax expression)
     {
         var info = _semantic.GetTypeInfo(expression);
 
-        ReportImmutableAsMutableInterface(expression, info.Type, info.ConvertedType);
+        return ReportImmutableAsMutableInterface(expression, info.Type, info.ConvertedType);
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ public sealed partial class IrExpressionExtractor
     /// <paramref name="source"/> to <paramref name="target"/> when it views an
     /// immutable collection as a mutable collection interface.
     /// </summary>
-    private void ReportImmutableAsMutableInterface(
+    private bool ReportImmutableAsMutableInterface(
         ExpressionSyntax expression,
         ITypeSymbol? source,
         ITypeSymbol? target
@@ -44,7 +44,7 @@ public sealed partial class IrExpressionExtractor
             || KindOf(target) is not { } targetKind
             || !IrCollectionKinds.IsMutableInterface(targetKind)
         )
-            return;
+            return false;
 
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
@@ -57,6 +57,8 @@ public sealed partial class IrExpressionExtractor
                 expression.GetLocation()
             )
         );
+
+        return true;
     }
 
     /// <summary>
@@ -84,14 +86,14 @@ public sealed partial class IrExpressionExtractor
     /// <c>ImmutableList&lt;int&gt;</c>): the argument's static type is the
     /// immutable collection itself, so no conversion expression shows it.
     /// </summary>
-    private void ReportImmutableAsMutableConstraint(ExpressionSyntax expression)
+    private bool ReportImmutableAsMutableConstraint(ExpressionSyntax expression)
     {
         if (
             _context.KeepsNativeCollections
             || !BindsTypeArguments(expression)
             || _semantic.GetSymbolInfo(expression).Symbol is not IMethodSymbol method
         )
-            return;
+            return false;
 
         var bindings = method
             .OriginalDefinition.TypeParameters.Zip(method.TypeArguments)
@@ -101,11 +103,15 @@ public sealed partial class IrExpressionExtractor
                 )
             );
 
+        var rejected = false;
+
         foreach (var (parameter, argument) in bindings)
         {
             foreach (var constraint in parameter.ConstraintTypes)
-                ReportImmutableAsMutableInterface(expression, argument, constraint);
+                rejected |= ReportImmutableAsMutableInterface(expression, argument, constraint);
         }
+
+        return rejected;
     }
 
     /// <summary>

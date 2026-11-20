@@ -17,6 +17,7 @@ public static class IrPatternDesignators
     public static IEnumerable<IrPatternDesignator> DeclaredBy(IrPattern pattern) =>
         pattern switch
         {
+            IrUnsupportedPattern { TypePattern: { } rejected } => DeclaredBy(rejected),
             IrTypePattern { Designator: { } designator } => [designator],
             IrVarPattern varPattern => [varPattern.Designator],
             IrPropertyPattern property => Own(property.Designator)

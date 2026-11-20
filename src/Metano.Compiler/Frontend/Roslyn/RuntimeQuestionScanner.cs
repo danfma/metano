@@ -436,8 +436,7 @@ internal sealed class RuntimeQuestionScanner
             return;
         }
 
-        if (method.Name is "ToList" or "ToDictionary" or "ToHashSet")
-            RecordCollectionConstruction(invocation.Type, invocation.Syntax);
+        RecordCollectionConstruction(invocation.Type, invocation.Syntax);
 
         if (RuntimeQuestionFacts.IsUnsupportedTypeMember(method))
             ReportUnsupportedTypeMember(method, invocation.Syntax);

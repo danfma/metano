@@ -164,10 +164,8 @@ internal sealed class JsonTypeDescriptorBuilder(
             ? new TsObjectProperty("kind", new TsStringLiteral(wireKind))
             : KindProperty(kind);
 
-    private TsArrowFunction CollectionCreateClosure(
-        ITypeSymbol type,
-        JsonPropertyKind kind
-    ) => JsonStageHCollections.CreateClosureOf(type) ?? CreateClosure(type, kind);
+    private TsArrowFunction CollectionCreateClosure(ITypeSymbol type, JsonPropertyKind kind) =>
+        JsonStageHCollections.CreateClosureOf(type, WithTypeArguments) ?? CreateClosure(type, kind);
 
     /// <summary>
     /// <c>(items) =&gt; List.of(items)</c> and the other kinds' factories: a
@@ -221,7 +219,7 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// (<c>IReadOnlyList&lt;T&gt;</c> builds a <c>List</c>).
     /// </summary>
     private TsExpression WithTypeArguments(
-        TsCallExpression factory,
+        TsExpression factory,
         ITypeSymbol type,
         IrCollectionKind concrete
     ) =>

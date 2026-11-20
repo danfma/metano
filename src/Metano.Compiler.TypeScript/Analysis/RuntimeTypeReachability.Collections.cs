@@ -281,27 +281,13 @@ internal sealed partial class RuntimeTypeReachability
             return false;
 
         return ImplementerTypes()
-                .Any(type =>
-                    ImplementsDefinition(type, testedName) && (open || CanBeHeldBy(type, holder!))
-                )
-            || RuntimeKindsWithoutMutableShape()
-                .Any(kind =>
-                    RuntimeCollections.InterfacesImplementedBy(kind).Contains(tested)
-                    && (open || RuntimeKindCanBeHeldBy(kind, holder!))
-                );
+            .Any(type =>
+                ImplementsDefinition(type, testedName) && (open || CanBeHeldBy(type, holder!))
+            );
     }
 
-    private static IEnumerable<IrCollectionKind> RuntimeKindsWithoutMutableShape() =>
-        RuntimeCollections
-            .ClassKinds()
-            .Where(kind => !RuntimeCollections.ShapeImplementsMutableInterface(kind));
-
-    private static bool RuntimeKindCanBeHeldBy(IrCollectionKind kind, INamedTypeSymbol holder) =>
-        RuntimeCollections.KindOfClrName(ClrNameOf(holder.OriginalDefinition)) is { } held
-        && (held == kind || RuntimeCollections.InterfacesImplementedBy(kind).Contains(held));
-
     private static string ClrNameOf(INamedTypeSymbol definition) =>
-        $"{definition.ContainingNamespace.ToDisplayString()}.{definition.MetadataName}";
+        IrTypeKeys.Of(definition).MetadataName;
 
     private static bool ImplementsDefinition(INamedTypeSymbol type, string clrName) =>
         type.AllInterfaces.Any(implemented => ClrNameOf(implemented.OriginalDefinition) == clrName);

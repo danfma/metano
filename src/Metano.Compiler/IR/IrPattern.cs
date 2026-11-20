@@ -194,4 +194,8 @@ public sealed record IrPositionalElementMember(
 /// <summary>Placeholder for patterns the extractor doesn't yet cover
 /// (parenthesized wrappers are unwrapped before reaching this fallback).
 /// Backends emit a TODO comment instead of silently producing invalid code.</summary>
-public sealed record IrUnsupportedPattern(string Kind) : IrPattern;
+public sealed record IrUnsupportedPattern(string Kind) : IrPattern
+{
+    /// <summary>The rejected type pattern, retained so its designator stays scoped in unreachable code.</summary>
+    public IrTypePattern? TypePattern { get; init; }
+}

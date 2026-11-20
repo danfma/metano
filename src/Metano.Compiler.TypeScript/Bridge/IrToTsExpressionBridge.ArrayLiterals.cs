@@ -48,15 +48,16 @@ public static partial class IrToTsExpressionBridge
         IReadOnlyList<TsExpression> arguments,
         IrToTsBridgeContext context
     ) =>
-        (TsCallExpression)CollectionTypeArgumentSlots.Append(
-            new TsCallExpression(
-                new TsPropertyAccess(RuntimeCollections.ReferenceTo(collection.Kind), factory),
-                arguments,
-                TypeArguments: CollectionTypeArguments(collection, context)
-            ),
-            collection,
-            context.RuntimeTypes
-        );
+        (TsCallExpression)
+            CollectionTypeArgumentSlots.Append(
+                new TsCallExpression(
+                    new TsPropertyAccess(RuntimeCollections.ReferenceTo(collection.Kind), factory),
+                    arguments,
+                    TypeArguments: CollectionTypeArguments(collection, context)
+                ),
+                collection,
+                context.RuntimeTypes
+            );
 
     /// <summary>
     /// The literal as a native array, asserted to the element type C# gives it

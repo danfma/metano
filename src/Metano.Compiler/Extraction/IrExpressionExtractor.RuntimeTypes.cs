@@ -117,7 +117,14 @@ public sealed partial class IrExpressionExtractor
         if (type is null || RuntimeQuestionFacts.IsUnsupportedTypeOf(type))
             return new IrUnsupportedExpression(typeOf.Kind().ToString());
 
-        if (RuntimeQuestionFacts.MentionsTypeParameter(type) || IsCollectionType(type))
+        if (
+            RuntimeQuestionFacts.MentionsTypeParameter(type)
+            || (
+                IsCollectionType(type)
+                && type is INamedTypeSymbol named
+                && CollectionKindResolver.KindOf(named) is null
+            )
+        )
             return ReportUnsupported(typeOf, typeOf.Kind().ToString());
 
         return new IrTypeOfExpression(IrTypeRefMapper.Map(type, _originResolver, _target));

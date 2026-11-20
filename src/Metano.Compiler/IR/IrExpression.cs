@@ -167,6 +167,9 @@ public sealed record IrMemberOrigin(
     bool IsCompileTimeConstant = false
 )
 {
+    /// <summary>The bound member's result type, including inferred generic arguments.</summary>
+    public IrTypeRef? ResultType { get; init; }
+
     /// <summary>The access reads a positional element (<see cref="TupleElement"/> is set).</summary>
     public bool IsTupleElement => TupleElement is not IrTupleElementKind.None;
 

@@ -1,4 +1,4 @@
-import { SortedDictionary, SortedList, SortedSet, type IDictionary } from "metano-runtime/system/collections";
+import { SortedDictionary, SortedList, SortedSet, type IComparer, type IDictionary } from "metano-runtime/system/collections";
 
 export class Ordered {
   constructor() { }

@@ -179,13 +179,27 @@ public static class RuntimeCollections
             [IrCollectionKind.IReadOnlySet] = "IReadOnlySet`1",
             [IrCollectionKind.Queue] = "Queue`1",
             [IrCollectionKind.Stack] = "Stack`1",
+            [IrCollectionKind.ReadOnlyCollection] = "ReadOnlyCollection`1",
+            [IrCollectionKind.ImmutableList] = "ImmutableList`1",
+            [IrCollectionKind.ImmutableArray] = "ImmutableArray`1",
+            [IrCollectionKind.ImmutableHashSet] = "ImmutableHashSet`1",
+            [IrCollectionKind.ImmutableDictionary] = "ImmutableDictionary`2",
+            [IrCollectionKind.IImmutableList] = "IImmutableList`1",
+            [IrCollectionKind.IImmutableSet] = "IImmutableSet`1",
+            [IrCollectionKind.IImmutableDictionary] = "IImmutableDictionary`2",
+            [IrCollectionKind.ImmutableListBuilder] = "ImmutableList`1+Builder",
+            [IrCollectionKind.ImmutableArrayBuilder] = "ImmutableArray`1+Builder",
+            [IrCollectionKind.ImmutableHashSetBuilder] = "ImmutableHashSet`1+Builder",
+            [IrCollectionKind.ImmutableDictionaryBuilder] = "ImmutableDictionary`2+Builder",
+            [IrCollectionKind.SortedSet] = "SortedSet`1",
+            [IrCollectionKind.SortedDictionary] = "SortedDictionary`2",
+            [IrCollectionKind.SortedList] = "SortedList`2",
+            [IrCollectionKind.ConcurrentDictionary] = "ConcurrentDictionary`2",
         };
 
     /// <summary>
-    /// The kinds whose runtime class lists a mutable collection interface in its
-    /// descriptor (as .NET does) without implementing its members: <c>add</c>
-    /// returns a new collection (stage 011h's immutable classes). A test against
-    /// such an interface is unanswerable like one against a user implementer.
+    /// The descriptor factory for every supported collection class and interface,
+    /// including nested builders whose arguments belong to their declaring type.
     /// </summary>
     private static readonly IReadOnlyDictionary<IrCollectionKind, string> FactoriesByKind =
         new Dictionary<IrCollectionKind, string>
@@ -203,6 +217,22 @@ public static class RuntimeCollections
             [IrCollectionKind.IReadOnlySet] = "iReadOnlySetType",
             [IrCollectionKind.Queue] = "queueType",
             [IrCollectionKind.Stack] = "stackType",
+            [IrCollectionKind.ReadOnlyCollection] = "readOnlyListType",
+            [IrCollectionKind.ImmutableList] = "immutableListType",
+            [IrCollectionKind.ImmutableArray] = "immutableArrayType",
+            [IrCollectionKind.ImmutableHashSet] = "immutableHashSetType",
+            [IrCollectionKind.ImmutableDictionary] = "immutableDictionaryType",
+            [IrCollectionKind.IImmutableList] = "iImmutableListType",
+            [IrCollectionKind.IImmutableSet] = "iImmutableSetType",
+            [IrCollectionKind.IImmutableDictionary] = "iImmutableDictionaryType",
+            [IrCollectionKind.ImmutableListBuilder] = "immutableListBuilderType",
+            [IrCollectionKind.ImmutableArrayBuilder] = "immutableArrayBuilderType",
+            [IrCollectionKind.ImmutableHashSetBuilder] = "immutableHashSetBuilderType",
+            [IrCollectionKind.ImmutableDictionaryBuilder] = "immutableDictionaryBuilderType",
+            [IrCollectionKind.SortedSet] = "sortedSetType",
+            [IrCollectionKind.SortedDictionary] = "sortedDictionaryType",
+            [IrCollectionKind.SortedList] = "sortedListType",
+            [IrCollectionKind.ConcurrentDictionary] = "concurrentDictionaryType",
         };
 
     /// <summary>
@@ -227,6 +257,8 @@ public static class RuntimeCollections
         "createComparer",
         "defaultComparer",
         "defaultEqualityComparer",
+        "IComparer",
+        "IEqualityComparer",
         "Span",
         "asReadOnly",
         "toImmutableList",
@@ -270,7 +302,25 @@ public static class RuntimeCollections
             : kind;
 
     public static string ClrNameOf(IrCollectionKind kind) =>
-        $"System.Collections.Generic.{ClrNamesByKind[kind]}";
+        $"{ClrNamespaceOf(kind)}.{ClrNamesByKind[kind]}";
+
+    private static string ClrNamespaceOf(IrCollectionKind kind) =>
+        kind switch
+        {
+            IrCollectionKind.ReadOnlyCollection => "System.Collections.ObjectModel",
+            IrCollectionKind.ConcurrentDictionary => "System.Collections.Concurrent",
+            IrCollectionKind.IImmutableList
+            or IrCollectionKind.IImmutableSet
+            or IrCollectionKind.IImmutableDictionary => "System.Collections.Immutable",
+            _ when IrCollectionKinds.IsImmutable(kind)
+                    || kind
+                        is IrCollectionKind.ImmutableListBuilder
+                            or IrCollectionKind.ImmutableArrayBuilder
+                            or IrCollectionKind.ImmutableHashSetBuilder
+                            or IrCollectionKind.ImmutableDictionaryBuilder =>
+                "System.Collections.Immutable",
+            _ => "System.Collections.Generic",
+        };
 
     /// <summary>The CLR definition name of <paramref name="kind"/>, <c>null</c> for a kind with none (a dictionary view).</summary>
     public static string? TryClrNameOf(IrCollectionKind kind) =>
@@ -316,6 +366,7 @@ public static class RuntimeCollections
     /// </summary>
     public static TsRuntimeHelperReference? DescriptorFactoryOf(IrCollectionKind kind) =>
         FactoriesByKind.TryGetValue(kind, out var name) ? new(name, Module) : null;
+
     /// <summary>
     /// The .NET simple name of the type of <paramref name="kind"/> (a builder
     /// is named through its immutable container, whose members it shares the

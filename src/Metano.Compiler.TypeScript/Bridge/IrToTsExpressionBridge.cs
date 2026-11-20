@@ -755,8 +755,9 @@ public static partial class IrToTsExpressionBridge
     /// <c>(() =&gt; { throw new Error("…"); })()</c> parses in any expression
     /// position, type-checks as <c>never</c>, and fails loudly if reached.
     /// </summary>
-    private static TsExpression MapUnsupported(IrUnsupportedExpression unsupported) =>
-        new TsCallExpression(
+    private static TsExpression MapUnsupported(IrUnsupportedExpression unsupported)
+    {
+        var failure = new TsCallExpression(
             new TsArrowFunction(
                 [],
                 [
@@ -770,6 +771,11 @@ public static partial class IrToTsExpressionBridge
             ),
             []
         );
+
+        return unsupported.ResultType is { } type
+            ? new TsCastExpression(failure, IrToTsTypeMapper.Map(type))
+            : failure;
+    }
 
     private static TsExpression MapMemberAccess(IrMemberAccess ma, IrToTsBridgeContext context)
     {
@@ -815,8 +821,9 @@ public static partial class IrToTsExpressionBridge
         if (context.Bcl is not null)
         {
             var mapped = IrToTsBclMapper.TryMapMemberAccess(ma, loweredTarget, context.Bcl);
+
             if (mapped is not null)
-                return mapped;
+                return WithCollectionResultSlots(mapped, ma.Origin, context);
 
             if (IsForeignStaticData(ma.Origin))
                 ReportUnmappedForeignStaticRead(ma.Origin);
@@ -1253,7 +1260,11 @@ public static partial class IrToTsExpressionBridge
                     );
                 }
 
-                return WithTypeArgumentDescriptors(mapped, call, context);
+                return WithCollectionResultSlots(
+                    WithTypeArgumentDescriptors(mapped, call, context),
+                    call.Origin,
+                    context
+                );
             }
 
             if (IsForeignStatic(call.Origin))

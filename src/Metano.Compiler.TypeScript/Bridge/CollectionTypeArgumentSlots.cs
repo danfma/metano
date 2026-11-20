@@ -26,6 +26,16 @@ internal static class CollectionTypeArgumentSlots
         ToList,
         ToHashSet,
         ToDictionary,
+        Empty,
+        Create,
+        FromRange,
+        FromArray,
+        FromSelectors,
+        AsReadOnly,
+        ToImmutableList,
+        ToImmutableArray,
+        ToImmutableHashSet,
+        ToImmutableDictionary,
     }
 
     private static readonly IReadOnlyDictionary<
@@ -56,6 +66,52 @@ internal static class CollectionTypeArgumentSlots
         [(IrCollectionKind.Dictionary, Member.Assign)] = 2,
         [(IrCollectionKind.Dictionary, Member.WithCapacity)] = 2,
         [(IrCollectionKind.Dictionary, Member.ToDictionary)] = 4,
+        [(IrCollectionKind.ReadOnlyCollection, Member.New)] = 1,
+        [(IrCollectionKind.ReadOnlyCollection, Member.Empty)] = 0,
+        [(IrCollectionKind.ReadOnlyCollection, Member.FromArray)] = 1,
+        [(IrCollectionKind.ReadOnlyCollection, Member.AsReadOnly)] = 1,
+        [(IrCollectionKind.ImmutableList, Member.New)] = 2,
+        [(IrCollectionKind.ImmutableList, Member.Empty)] = 0,
+        [(IrCollectionKind.ImmutableList, Member.Of)] = 1,
+        [(IrCollectionKind.ImmutableList, Member.From)] = 1,
+        [(IrCollectionKind.ImmutableList, Member.ToImmutableList)] = 1,
+        [(IrCollectionKind.ImmutableArray, Member.New)] = 2,
+        [(IrCollectionKind.ImmutableArray, Member.Empty)] = 0,
+        [(IrCollectionKind.ImmutableArray, Member.Of)] = 1,
+        [(IrCollectionKind.ImmutableArray, Member.From)] = 1,
+        [(IrCollectionKind.ImmutableArray, Member.FromRange)] = 3,
+        [(IrCollectionKind.ImmutableArray, Member.ToImmutableArray)] = 1,
+        [(IrCollectionKind.ImmutableHashSet, Member.New)] = 2,
+        [(IrCollectionKind.ImmutableHashSet, Member.Empty)] = 0,
+        [(IrCollectionKind.ImmutableHashSet, Member.Of)] = 2,
+        [(IrCollectionKind.ImmutableHashSet, Member.From)] = 2,
+        [(IrCollectionKind.ImmutableHashSet, Member.ToImmutableHashSet)] = 1,
+        [(IrCollectionKind.ImmutableDictionary, Member.New)] = 3,
+        [(IrCollectionKind.ImmutableDictionary, Member.Empty)] = 0,
+        [(IrCollectionKind.ImmutableDictionary, Member.Create)] = 2,
+        [(IrCollectionKind.ImmutableDictionary, Member.From)] = 3,
+        [(IrCollectionKind.ImmutableDictionary, Member.FromSelectors)] = 5,
+        [(IrCollectionKind.ImmutableDictionary, Member.ToImmutableDictionary)] = 1,
+        [(IrCollectionKind.ImmutableListBuilder, Member.New)] = 1,
+        [(IrCollectionKind.ImmutableArrayBuilder, Member.New)] = 1,
+        [(IrCollectionKind.ImmutableHashSetBuilder, Member.New)] = 2,
+        [(IrCollectionKind.ImmutableDictionaryBuilder, Member.New)] = 3,
+        [(IrCollectionKind.SortedSet, Member.New)] = 2,
+        [(IrCollectionKind.SortedSet, Member.Of)] = 2,
+        [(IrCollectionKind.SortedSet, Member.From)] = 2,
+        [(IrCollectionKind.SortedDictionary, Member.New)] = 2,
+        [(IrCollectionKind.SortedDictionary, Member.Of)] = 2,
+        [(IrCollectionKind.SortedDictionary, Member.From)] = 2,
+        [(IrCollectionKind.SortedDictionary, Member.Assign)] = 2,
+        [(IrCollectionKind.SortedList, Member.New)] = 2,
+        [(IrCollectionKind.SortedList, Member.Of)] = 2,
+        [(IrCollectionKind.SortedList, Member.From)] = 2,
+        [(IrCollectionKind.SortedList, Member.Assign)] = 2,
+        [(IrCollectionKind.SortedList, Member.WithCapacity)] = 2,
+        [(IrCollectionKind.ConcurrentDictionary, Member.New)] = 2,
+        [(IrCollectionKind.ConcurrentDictionary, Member.From)] = 2,
+        [(IrCollectionKind.ConcurrentDictionary, Member.Assign)] = 2,
+        [(IrCollectionKind.ConcurrentDictionary, Member.WithCapacity)] = 3,
     };
 
     /// <summary>
@@ -85,9 +141,25 @@ internal static class CollectionTypeArgumentSlots
             {
                 Arguments = Padded(call.Arguments, PositionOf(type.Kind, member), slot),
             },
+            TsCallExpression { Callee: TsRuntimeHelperReference { Name: var name } } call
+                when MemberOfProperty(name) is { } member
+                    && Positions.ContainsKey((type.Kind, member)) => call with
+            {
+                Arguments = Padded(call.Arguments, PositionOf(type.Kind, member), slot),
+            },
             _ => construction,
         };
     }
+
+    /// <summary>A declarative factory's bound result supplies its exact slot arguments.</summary>
+    public static TsExpression AppendToMappedResult(
+        TsExpression expression,
+        IrCollectionTypeRef type,
+        RuntimeTypeReachabilityResult reachability
+    ) =>
+        expression is TsTemplate template
+            ? AppendToTemplate(template, type, reachability)
+            : Append(expression, type, reachability);
 
     /// <summary>
     /// A class deriving from a runtime collection closes its arguments:
@@ -167,9 +239,20 @@ internal static class CollectionTypeArgumentSlots
         if (open < 0)
             return template;
 
+        var callee = CalleeWithoutTypeArguments(text[..open]);
+        var runtimeName = RuntimeCollections.NameOf(type.Kind);
+        var member = MemberOfTemplate(text, open);
+
+        if (
+            !callee.StartsWith($"new {runtimeName}", StringComparison.Ordinal)
+            && !callee.StartsWith($"{runtimeName}.", StringComparison.Ordinal)
+            && !(callee == Spelling(member) && Positions.ContainsKey((type.Kind, member)))
+        )
+            return template;
+
         var count = TopLevelArgumentCount(text[(open + 1)..^1]);
 
-        var position = PositionOf(type.Kind, MemberOfTemplate(text, open));
+        var position = PositionOf(type.Kind, member);
         var nulls = string.Concat(Enumerable.Repeat("null, ", Math.Max(0, position - count)));
         var index = template.Arguments.Count;
         var lead = count > 0 ? ", " : "";
@@ -189,12 +272,14 @@ internal static class CollectionTypeArgumentSlots
     /// </summary>
     private static Member MemberOfTemplate(string text, int open)
     {
-        var callee = text[..open];
+        var callee = CalleeWithoutTypeArguments(text[..open]);
 
         return Enum.GetValues<Member>()
             .Where(member => member is not Member.New)
             .Cast<Member?>()
-            .FirstOrDefault(member => callee.EndsWith($".{Spelling(member!.Value)}"))
+            .FirstOrDefault(member =>
+                callee.EndsWith($".{Spelling(member!.Value)}") || callee == Spelling(member!.Value)
+            )
             ?? Member.New;
     }
 
@@ -202,6 +287,9 @@ internal static class CollectionTypeArgumentSlots
         Enum.GetValues<Member>()
             .Cast<Member?>()
             .FirstOrDefault(member => Spelling(member!.Value) == property);
+
+    private static string CalleeWithoutTypeArguments(string callee) =>
+        callee.IndexOf('<') is var index && index >= 0 ? callee[..index] : callee;
 
     private static string Spelling(Member member)
     {

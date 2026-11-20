@@ -67,11 +67,12 @@ public class ListInterfaceCastTests
             Returning("object value", "value as IList<int>")
         );
 
-        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(1);
+        // Native arrays lack descriptors; immutable collections also cannot expose mutable bindings.
+        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(2);
     }
 
     [Test]
-    public async Task AsFromObject_ToADictionaryInterface_TestsThroughTheCollectionDescriptor()
+    public async Task AsFromObject_ToADictionaryInterface_ReportsAnImmutableCapableBinding()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -87,11 +88,9 @@ public class ListInterfaceCastTests
             """
         );
 
-        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(UnsupportedFeatures(diagnostics).Count()).IsEqualTo(1);
 
-        await Assert
-            .That(files["casts.ts"])
-            .Contains("isType(value, iDictionaryType(StringType, Int32Type)) ? value : null");
+        await Assert.That(files["casts.ts"]).Contains("Unsupported expression: AsExpression");
     }
 
     private static string Returning(string parameter, string expression) =>

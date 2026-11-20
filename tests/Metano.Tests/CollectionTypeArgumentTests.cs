@@ -295,7 +295,8 @@ public class CollectionTypeArgumentTests
                 """
         );
 
-        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(12);
+        // The binding additionally reports H's immutable-to-mutable incompatibility.
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(13);
 
         await Assert
             .That(
@@ -303,7 +304,9 @@ public class CollectionTypeArgumentTests
                     .Split("Unsupported expression: CollectionInterfaceTest")
                     .Length
             )
-            .IsEqualTo(13);
+            .IsEqualTo(12);
+
+        await Assert.That(files["slots/probe.ts"]).Contains("Unsupported expression: AsExpression");
     }
 
     [Test]

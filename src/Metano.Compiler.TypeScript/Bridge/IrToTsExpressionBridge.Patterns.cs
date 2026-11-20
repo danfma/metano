@@ -98,8 +98,8 @@ public static partial class IrToTsExpressionBridge
             case IrPositionalPattern pos:
                 return BuildPositionalPatternTest(lowered, pos, context);
             default:
-                return new TsIdentifier(
-                    $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */"
+                return MapUnsupported(
+                    new IrUnsupportedExpression($"Pattern:{node.Pattern.GetType().Name}")
                 );
         }
     }
@@ -252,7 +252,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrListPattern list => BuildListPatternTest(value, list, context),
             IrPositionalPattern pos => BuildPositionalPatternTest(value, pos, context),
-            _ => new TsIdentifier($"/* TODO: unsupported pattern {pattern.GetType().Name} */"),
+            _ => MapUnsupported(new IrUnsupportedExpression($"Pattern:{pattern.GetType().Name}")),
         };
 
     /// <summary>
@@ -847,6 +847,20 @@ public static partial class IrToTsExpressionBridge
     ) =>
         pattern switch
         {
+            IrUnsupportedPattern
+            {
+                TypePattern.Designator: { } designator,
+                TypePattern: var rejected
+            } =>
+            [
+                new PatternBinding(
+                    designator.Name,
+                    new TsCastExpression(
+                        new TsCastExpression(value, new TsNamedType("unknown")),
+                        IrToTsTypeMapper.Map(rejected.Type)
+                    )
+                ),
+            ],
             IrTypePattern { Designator: { } designator } typePattern =>
             [
                 new PatternBinding(

@@ -60,7 +60,10 @@ internal static class JsonStageHCollections
     /// The <c>create</c> closure of <paramref name="type"/>, or <c>null</c>
     /// for a type outside stage 011h.
     /// </summary>
-    public static TsArrowFunction? CreateClosureOf(ITypeSymbol type) =>
+    public static TsArrowFunction? CreateClosureOf(
+        ITypeSymbol type,
+        Func<TsExpression, ITypeSymbol, IrCollectionKind, TsExpression> withTypeArguments
+    ) =>
         KindOf(type) switch
         {
             null => null,
@@ -68,20 +71,34 @@ internal static class JsonStageHCollections
             IrCollectionKind.ImmutableDictionary or IrCollectionKind.IImmutableDictionary =>
                 Closure("entries", parameter => new TsCallExpression(
                     new TsPropertyAccess(
-                        Factory(IrCollectionKind.ImmutableDictionary, "empty", []),
+                        withTypeArguments(
+                            Factory(IrCollectionKind.ImmutableDictionary, "empty", []),
+                            type,
+                            IrCollectionKind.ImmutableDictionary
+                        ),
                         "setItems"
                     ),
                     [parameter]
                 )),
-            IrCollectionKind.SortedSet => Closure("items", parameter => new TsNewExpression(
-                RuntimeCollections.ReferenceTo(IrCollectionKind.SortedSet),
-                [parameter]
-            )),
+            IrCollectionKind.SortedSet => Closure("items", parameter =>
+                withTypeArguments(
+                    new TsNewExpression(
+                        RuntimeCollections.ReferenceTo(IrCollectionKind.SortedSet),
+                        [parameter]
+                    ),
+                    type,
+                    IrCollectionKind.SortedSet
+                )
+            ),
             var kind when IrCollectionKinds.IsKeyed(kind.Value) => Closure("entries", parameter =>
-                Factory(kind.Value, "assign", [parameter])
+                withTypeArguments(Factory(kind.Value, "assign", [parameter]), type, kind.Value)
             ),
             var kind => Closure("items", parameter =>
-                Factory(ClassOf(kind.Value), "from", [parameter])
+                withTypeArguments(
+                    Factory(ClassOf(kind.Value), "from", [parameter]),
+                    type,
+                    ClassOf(kind.Value)
+                )
             ),
         };
 

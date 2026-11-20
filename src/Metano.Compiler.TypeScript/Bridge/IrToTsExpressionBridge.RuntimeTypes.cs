@@ -12,6 +12,19 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static partial class IrToTsExpressionBridge
 {
+    private static TsExpression WithCollectionResultSlots(
+        TsExpression expression,
+        IrMemberOrigin? origin,
+        IrToTsBridgeContext context
+    ) =>
+        origin?.ResultType is IrCollectionTypeRef collection
+            ? CollectionTypeArgumentSlots.AppendToMappedResult(
+                expression,
+                collection,
+                context.RuntimeTypes
+            )
+            : expression;
+
     /// <summary>
     /// <c>x as T</c>: <c>asType(x, descriptor)</c> for an interface, an enum or
     /// a primitive with a descriptor; every other target (a class, which keeps
