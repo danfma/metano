@@ -396,7 +396,7 @@ describe("linq operators", () => {
     expect(map.get(2)).toBe("b");
 
     const set = linq([1, 2, 2, 3], toSet<number>());
-    expect(set.size).toBe(3);
+    expect(set.count).toBe(3);
   });
 
   test("re-enumerable — chain can be iterated multiple times (.NET LINQ parity)", () => {

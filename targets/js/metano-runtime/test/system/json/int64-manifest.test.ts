@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 
 import {
   JsonSerializer,
@@ -80,13 +81,23 @@ const int64Containers: TypeSpec = {
     {
       ts: "byName",
       json: "ByName",
-      type: { kind: "map", key: LONG, value: { kind: "primitive" } },
+      type: {
+        kind: "dictionary",
+        key: LONG,
+        value: { kind: "primitive" },
+        create: (entries) => Dictionary.assign(entries),
+      },
       optional: true,
     },
     {
       ts: "byMask",
       json: "ByMask",
-      type: { kind: "map", key: ULONG, value: { kind: "primitive" } },
+      type: {
+        kind: "dictionary",
+        key: ULONG,
+        value: { kind: "primitive" },
+        create: (entries) => Dictionary.assign(entries),
+      },
       optional: true,
     },
   ] as PropertySpec[],
@@ -150,7 +161,7 @@ const READ_ASSERTIONS_OF: Readonly<Record<string, (value: unknown) => void>> = {
   I12: (value) => {
     expect(value).toBeInstanceOf(Int64Containers);
 
-    const containers = value as { byName: Map<bigint, string> };
+    const containers = value as { byName: Dictionary<bigint, string> };
 
     expect(containers.byName.get(5n)).toBe("b");
     expect(containers.byName.get(0n)).toBe("c");

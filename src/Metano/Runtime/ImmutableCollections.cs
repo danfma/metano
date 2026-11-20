@@ -1242,14 +1242,26 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableArray),
     nameof(ImmutableArray.BinarySearch),
-    JsMethod = "binarySearch",
+    JsTemplate = "$this.binarySearch($0)",
     WhenArgCount = 1
 )]
 [assembly: MapMethod(
     typeof(ImmutableArray),
     nameof(ImmutableArray.BinarySearch),
-    JsMethod = "binarySearch",
-    WhenArgCount = 2
+    JsTemplate = "$0.binarySearch($1)",
+    WhenParameterTypeNames = new[] { "System.Collections.Immutable.ImmutableArray<T>", "T" }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.BinarySearch),
+    JsTemplate = "$0.binarySearch($1, $2)",
+    WhenArgCount = 3
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.BinarySearch),
+    JsTemplate = "$this.binarySearch($0, $1)",
+    WhenParameterTypeNames = new[] { "T", "System.Collections.Generic.IComparer<T>" }
 )]
 [assembly: MapMethod(
     typeof(ImmutableHashSet),

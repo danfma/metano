@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 
 import {
@@ -86,25 +87,31 @@ describe("JsonSerializer — ValueSpec round trips", () => {
     expect(JsonSerializer.deserialize(null, ctx.shotArray)).toBeNull();
   });
 
-  test("map root converts to and from a JSON object", () => {
-    const spec: ValueSpec<Map<string, Shot> | null> = {
+  test("dictionary root converts to and from a JSON object", () => {
+    const spec: ValueSpec<Dictionary<string, Shot> | null> = {
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: { kind: "ref", spec: () => shotSpec },
+        create: (entries) => Dictionary.assign(entries),
       },
     };
 
-    const json = JsonSerializer.serialize(new Map([["intro", new Shot(0, 1)]]), spec);
+    const json = JsonSerializer.serialize(Dictionary.assign([["intro", new Shot(0, 1)]]), spec);
     const restored = JsonSerializer.deserialize(json, spec);
 
     expect(json).toEqual({ intro: { start: 0, end: 1 } });
+    expect(restored).toBeInstanceOf(Dictionary);
     expect(restored?.get("intro")).toBeInstanceOf(Shot);
   });
 
   test("hash-set root converts to and from a JSON array", () => {
     const spec: ValueSpec<HashSet<string> | null> = {
-      descriptor: { kind: "hashSet", element: { kind: "primitive" } },
+      descriptor: {
+        kind: "hashSet",
+        element: { kind: "primitive" },
+        create: (items) => HashSet.from(items),
+      },
     };
 
     const json = JsonSerializer.serialize(new HashSet(["a", "b"]), spec);
@@ -112,7 +119,7 @@ describe("JsonSerializer — ValueSpec round trips", () => {
 
     expect(json).toEqual(["a", "b"]);
     expect(restored).toBeInstanceOf(HashSet);
-    expect(restored?.has("b")).toBe(true);
+    expect(restored?.contains("b")).toBe(true);
   });
 
   test("nullable root passes null through and converts a value", () => {
@@ -192,7 +199,11 @@ describe("JsonSerializer — iterable values", () => {
 
   test("hash-set descriptor serializes any iterable as a JSON array", () => {
     const setSpec: ValueSpec<Iterable<number> | null> = {
-      descriptor: { kind: "hashSet", element: { kind: "primitive" } },
+      descriptor: {
+        kind: "hashSet",
+        element: { kind: "primitive" },
+        create: (items) => HashSet.from(items),
+      },
     };
 
     expect(JsonSerializer.serialize(new Set([3, 4]), setSpec)).toEqual([3, 4]);
@@ -200,13 +211,17 @@ describe("JsonSerializer — iterable values", () => {
 
   test("hash-set descriptor deserializes a JSON array into a HashSet", () => {
     const setSpec: ValueSpec<HashSet<number> | null> = {
-      descriptor: { kind: "hashSet", element: { kind: "primitive" } },
+      descriptor: {
+        kind: "hashSet",
+        element: { kind: "primitive" },
+        create: (items) => HashSet.from(items),
+      },
     };
 
     const restored = JsonSerializer.deserialize([5, 6], setSpec);
 
     expect(restored).toBeInstanceOf(HashSet);
-    expect(restored?.has(6)).toBe(true);
+    expect(restored?.contains(6)).toBe(true);
   });
 
   test("an iterable property serializes as a JSON array", () => {

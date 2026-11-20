@@ -89,6 +89,7 @@ Module-level functions returning `never`, each constructing the FR-013 class wit
 | `throwModified(): never` | `InvalidOperationException` | `Collection was modified; enumeration operation may not execute.` | lowered `foreach` (generated), every iterator except `Stack`'s, `List.forEach` |
 | `throwEnumeratorModified(): never` | `InvalidOperationException` | `Collection was modified after the enumerator was instantiated.` | `Stack` iterator; 011h's sorted classes (same .NET text). Renamed from `throwStackModified` in R1 (W4-20); not emitted by the compiler |
 | `throwOOR(actualValue?: number): never` | `ArgumentOutOfRangeException` (param `index`) | `Index was out of range. Must be non-negative and less than the size of the collection.` (+ `Actual value was <n>.` when given) | `List.get`, `set`, `update`, `updateReturningOld`, `fromEnd`, `removeAt`; 011h's `SortedList` index members pass the index, as .NET does |
+| `throwIndexOutsideArray(): never` (011h) | `IndexOutOfRangeException` | `Index was outside the bounds of the array.` | `ImmutableArray.get`, native-array `fromEnd` |
 | `throwInsertOOR(): never` | `ArgumentOutOfRangeException` (`index`) | `Index must be within the bounds of the List.` | `List.insert` |
 | `throwIndexAtMostCount(): never` | `ArgumentOutOfRangeException` (`index`) | `Index was out of range. Must be non-negative and less than or equal to the size of the collection.` | `List.insertRange`, `indexOf(item, index)` |
 | `throwNegative(paramName: string): never` | `ArgumentOutOfRangeException` (`paramName`) | `Non-negative number required.` | `getRange`, `removeRange`, `slice` (`index` / `count`), `withCapacity` (`capacity`) |
@@ -904,6 +905,9 @@ export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
   binarySearch(item: T, comparison?): number;       // a comparer failure wrapped: InvalidOperationException `Failed to compare two elements in the array.` (throwCompareFailed)
   sort(comparison?): ImmutableArray<T>;             // the receiver when already sorted
   indexOf(item: T, index?: number, count?: number, comparer?): number;  // parameter name `startIndex`
+  lastIndexOf(item: T, index?: number, count?: number, comparer?): number; // parameter names `startIndex`, `count`
+  getRange(index: number, count: number): ImmutableArray<T>; // Slice: parameter names `start`, `length`
+  removeRange(index: number, count: number): ImmutableArray<T>; // parameter names `index`, `length`
   addRange(items: Iterable<T>): ImmutableArray<T>;  // the receiver for an empty source
   toString(): string;                               // ``System.Collections.Immutable.ImmutableArray`1[T]``
 }
@@ -1032,7 +1036,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   static get $runtimeType(): CollectionType<SortedSet<unknown>>;
   readonly count: number;  readonly isReadOnly: false;
   readonly comparer: IComparer<T>;                    // the argument, or defaultComparer
-  minOr(defaultValue: T): T;  maxOr(defaultValue: T): T;  // Min / Max: default(T) when empty (D30)
+  minOr<D>(defaultValue: D): T | D;  maxOr<D>(defaultValue: D): T | D;  // Min / Max: default(T) when empty (D30); null for a reference T
   add(item: T): boolean;  remove(item: T): boolean;  contains(item: T): boolean;  clear(): void;
   removeWhere(match: (item: T) => boolean): number;
   tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { HashSet } from "#/system/collections/hash-set.ts";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 
 import { Temporal } from "@js-temporal/polyfill";
 
@@ -101,19 +103,25 @@ const listNullableInt32: ValueSpec<(number | null)[]> = {
   descriptor: { kind: "array", element: { kind: "nullable", inner: int32 } },
 };
 
-const setInt32: ValueSpec<Set<number>> = {
-  descriptor: { kind: "hashSet", element: int32 },
+const setInt32: ValueSpec<HashSet<number>> = {
+  descriptor: { kind: "hashSet", element: int32, create: (items) => HashSet.from(items) },
 };
 
-const dictionaryStringInt32: ValueSpec<Map<string, number>> = {
-  descriptor: { kind: "map", key: { kind: "primitive" }, value: int32 },
-};
-
-const dictionaryStringNullableInt32: ValueSpec<Map<string, number | null>> = {
+const dictionaryStringInt32: ValueSpec<Dictionary<string, number>> = {
   descriptor: {
-    kind: "map",
+    kind: "dictionary",
+    key: { kind: "primitive" },
+    value: int32,
+    create: (entries) => Dictionary.assign(entries),
+  },
+};
+
+const dictionaryStringNullableInt32: ValueSpec<Dictionary<string, number | null>> = {
+  descriptor: {
+    kind: "dictionary",
     key: { kind: "primitive" },
     value: { kind: "nullable", inner: int32 },
+    create: (entries) => Dictionary.assign(entries),
   },
 };
 
@@ -208,7 +216,7 @@ describe("nullable slots keep reading null", () => {
   });
 
   test("a nullable dictionary value", () => {
-    const map = JsonSerializer.deserialize({ a: null }, dictionaryStringNullableInt32) as Map<
+    const map = JsonSerializer.deserialize({ a: null }, dictionaryStringNullableInt32) as Dictionary<
       string,
       number | null
     >;

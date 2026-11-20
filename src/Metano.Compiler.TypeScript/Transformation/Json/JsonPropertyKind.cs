@@ -19,7 +19,6 @@ internal enum JsonPropertyKind
     Decimal,
     Bytes,
     Temporal,
-    Map,
     Dictionary,
     HashSet,
     List,

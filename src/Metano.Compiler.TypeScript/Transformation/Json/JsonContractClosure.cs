@@ -30,9 +30,9 @@ internal sealed record JsonContract(
 /// <summary>
 /// Computes the contract closure of the <c>[JsonSerializable]</c> roots: the
 /// roots in declaration order, followed by every object type reached through
-/// their serializable properties (walking the same nullable / array / map /
+/// their serializable properties (walking the same nullable / array / dictionary /
 /// hash-set shapes the descriptors emit), through their <c>base</c> link, or
-/// through the descriptor of a value root (its element, map value or nullable
+/// through the descriptor of a value root (its element, dictionary value or nullable
 /// inner), or through a <c>[JsonDerivedType]</c> of a polymorphic base
 /// (FR-003, attribute order), in breadth-first discovery order. Like
 /// System.Text.Json, the context therefore carries a spec for every

@@ -13,7 +13,7 @@ namespace Metano.Compiler.Extraction;
 ///
 /// <para>
 /// The table covers <c>System.Linq.Enumerable</c> +
-/// <c>System.Linq.Queryable</c> methods with a direct counterpart in
+/// <c>System.Linq.Queryable</c> and <c>ImmutableArrayExtensions</c> methods with a direct counterpart in
 /// the runtime <c>system/linq</c> module. Methods with no pipe
 /// equivalent (e.g. <c>Cast&lt;T&gt;</c>, <c>OfType&lt;T&gt;</c>,
 /// <c>SequenceEqual</c>) deliberately stay out — the chain walker
@@ -323,7 +323,12 @@ public static class IrLinqMapping
     {
         if (type is null)
             return false;
+
         var fullName = type.ToDisplayString();
-        return fullName is "System.Linq.Enumerable" or "System.Linq.Queryable";
+
+        return fullName
+            is "System.Linq.Enumerable"
+                or "System.Linq.Queryable"
+                or "System.Linq.ImmutableArrayExtensions";
     }
 }

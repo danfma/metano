@@ -117,7 +117,6 @@ function closureReaches(
       case "immutableHashSet":
       case "sortedSet":
         return descriptorReaches(descriptor.element);
-      case "map":
       case "dictionary":
       case "immutableDictionary":
       case "concurrentDictionary":

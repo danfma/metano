@@ -35,10 +35,6 @@ const setSpec: ValueSpec<HashSet<number>> = {
   descriptor: { kind: "hashSet", element: int32, create: (items) => HashSet.from(items) },
 };
 
-const legacySetSpec: ValueSpec<HashSet<number>> = {
-  descriptor: { kind: "hashSet", element: int32 },
-};
-
 const dictionarySpec: ValueSpec<Dictionary<number, string>> = {
   descriptor: {
     kind: "dictionary",
@@ -73,9 +69,11 @@ describe("JSON collection kinds", () => {
     expect([...(read ?? [])]).toEqual([3, 2, 1]);
   });
 
-  test("hashSet collapses duplicates, with or without create", () => {
-    expect(JsonSerializer.deserialize([1, 1, 2], setSpec)?.count).toBe(2);
-    expect(JsonSerializer.deserialize([1, 1, 2], legacySetSpec)).toBeInstanceOf(HashSet);
+  test("hashSet creates a HashSet and collapses duplicates", () => {
+    const read = JsonSerializer.deserialize([1, 1, 2], setSpec);
+
+    expect(read).toBeInstanceOf(HashSet);
+    expect(read?.count).toBe(2);
   });
 
   test("dictionary parses keys, keeps the last of a repeated key, writes String(key)", () => {

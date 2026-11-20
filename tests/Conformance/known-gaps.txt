@@ -11,6 +11,11 @@ CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud #335  W4-C20: a 
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud #335  W4-C20: `as` an array-backed interface from object: MS0001 and a loud throw (.NET: True)
 CollectionTypeArgumentProbes.directDictionaryViewInterfaceTestIsLoud #335  W4-C20: a Dictionary KeyCollection / ValueCollection operand has no collection descriptor: MS0001 and a loud throw (.NET: True,True,True)
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud #335  W4-C20: Dictionary.Keys / Values behind object have no collection descriptor: MS0001 and a loud throw (.NET: True,True)
+StageHCollectionProbes.immutableArrayText      #335  J-owned FR-008: open collection ToString text prints [T] instead of closed type arguments
+StageHInterfaceTestProbes.immutableAsIListBinding #335  J-owned W4-65: immutable IList binding is unsupported, so the separated probe module fails to load
+StageHInterfaceTestProbes.immutableAsIListSwitch  #335  J-owned W4-65: immutable IList switch binding is unsupported, so the separated probe module fails to load
+StageHInterfaceTestProbes.immutableAsIList        #335  J-owned W4-65: the separated module contains unsupported immutable IList bindings
+StageHInterfaceTestProbes.immutableAsIListAs      #335  J-owned W4-65: the separated module contains unsupported immutable IList bindings
 
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports

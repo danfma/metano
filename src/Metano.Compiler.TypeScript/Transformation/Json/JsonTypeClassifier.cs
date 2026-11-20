@@ -44,7 +44,7 @@ internal static class JsonTypeClassifier
 
     /// <summary>
     /// The types a container descriptor nests: nullable inner, array /
-    /// hash-set element, map key and value — the same accessors
+    /// hash-set element, dictionary key and value — the same accessors
     /// <see cref="JsonTypeDescriptorBuilder"/> builds the nested descriptors from.
     /// </summary>
     public static IEnumerable<ITypeSymbol> ChildTypesOf(ITypeSymbol type, JsonPropertyKind kind) =>
@@ -56,11 +56,7 @@ internal static class JsonTypeClassifier
             or JsonPropertyKind.Queue
             or JsonPropertyKind.Stack => [ElementTypeOf(type)],
             JsonPropertyKind.HashSet => [SetElementTypeOf(type)],
-            JsonPropertyKind.Map or JsonPropertyKind.Dictionary =>
-            [
-                KeyTypeOf(type),
-                ValueTypeOf(type),
-            ],
+            JsonPropertyKind.Dictionary => [KeyTypeOf(type), ValueTypeOf(type)],
             _ => [],
         };
 
@@ -223,9 +219,6 @@ internal static class JsonTypeClassifier
 
         if (RuntimeCollectionKindOf(named) is { } collectionKind)
             return collectionKind;
-
-        if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
-            return JsonPropertyKind.Map;
 
         if (named.IsSetLike() && named.TypeArguments.Length > 0)
             return JsonPropertyKind.HashSet;

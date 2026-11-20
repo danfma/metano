@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 
 import {
   type JsonConverter,
@@ -346,21 +347,26 @@ describe("int64 — numbers from strings (FR-054)", () => {
 
 describe("int64 — dictionary values (FR-065)", () => {
   const stringKeysLongValues: TypeDescriptor = {
-    kind: "map",
+    kind: "dictionary",
     key: { kind: "primitive" },
     value: { kind: "int64", numberType: "System.Int64" },
+    create: (entries) => Dictionary.assign(entries),
   };
 
   test("a 64-bit dictionary value writes an exact leaf and round-trips it (FR-057)", () => {
-    const tree = JsonSerializer.serialize(new Map([["a", LONG_MAX]]), {
+    const tree = JsonSerializer.serialize(Dictionary.assign([["a", LONG_MAX]]), {
       descriptor: stringKeysLongValues,
     });
 
     expect(JSON.stringify(tree)).toBe('{"a":9223372036854775807}');
 
-    expect(JsonSerializer.deserialize(tree, { descriptor: stringKeysLongValues })).toEqual(
-      new Map([["a", LONG_MAX]]),
+    const restored = JsonSerializer.deserialize<Dictionary<string, bigint>>(
+      tree,
+      { descriptor: stringKeysLongValues },
     );
+
+    expect(restored).toBeInstanceOf(Dictionary);
+    expect([...(restored ?? [])]).toEqual([["a", LONG_MAX]]);
   });
 
   test("a parsed 16-digit value is beyond what a number holds — the documented throw", () => {
@@ -382,20 +388,22 @@ describe("int64 — dictionary values (FR-065)", () => {
 
 describe("int64 — dictionary keys (FR-055)", () => {
   const longKeys: TypeDescriptor = {
-    kind: "map",
+    kind: "dictionary",
     key: { kind: "int64", numberType: "System.Int64" },
     value: { kind: "primitive" },
+    create: (entries) => Dictionary.assign(entries),
   };
 
   const ulongKeys: TypeDescriptor = {
-    kind: "map",
+    kind: "dictionary",
     key: { kind: "int64", numberType: "System.UInt64" },
     value: { kind: "primitive" },
+    create: (entries) => Dictionary.assign(entries),
   };
 
   test("keys write key.toString()", () => {
     const tree = JsonSerializer.serialize(
-      new Map<bigint, string>([
+      Dictionary.assign<bigint, string>([
         [LONG_MAX, "a"],
         [-3n, "b"],
       ]),
@@ -406,36 +414,33 @@ describe("int64 — dictionary keys (FR-055)", () => {
 
     expect(
       JSON.stringify(
-        JsonSerializer.serialize(new Map([[ULONG_MAX, "a"]]), { descriptor: ulongKeys }),
+        JsonSerializer.serialize(Dictionary.assign([[ULONG_MAX, "a"]]), { descriptor: ulongKeys }),
       ),
     ).toBe('{"18446744073709551615":"a"}');
   });
 
   test("keys read the FR-048 integer grammar, whatever the read options (measured)", () => {
-    expect(
-      JsonSerializer.deserialize({ "05": "a", "+7": "b", "-0": "c" }, { descriptor: longKeys }),
-    ).toEqual(
-      new Map<bigint, string>([
-        [5n, "a"],
-        [7n, "b"],
-        [0n, "c"],
-      ]),
+    const signed = JsonSerializer.deserialize<Dictionary<bigint, string>>(
+      { "05": "a", "+7": "b", "-0": "c" },
+      { descriptor: longKeys },
     );
 
-    expect(JsonSerializer.deserialize({ "05": "a" }, { descriptor: ulongKeys })).toEqual(
-      new Map<bigint, string>([[5n, "a"]]),
+    const unsigned = JsonSerializer.deserialize<Dictionary<bigint, string>>(
+      { "05": "a" },
+      { descriptor: ulongKeys },
     );
 
     const withOption: TypeDescriptor = { ...longKeys, readOptions: READS_NUMBERS };
 
-    expect(
-      JsonSerializer.deserialize({ "05": "a", "+7": "b" }, { descriptor: withOption }),
-    ).toEqual(
-      new Map<bigint, string>([
-        [5n, "a"],
-        [7n, "b"],
-      ]),
+    const underOption = JsonSerializer.deserialize<Dictionary<bigint, string>>(
+      { "05": "a", "+7": "b" },
+      { descriptor: withOption },
     );
+
+    expect(signed).toBeInstanceOf(Dictionary);
+    expect([...(signed ?? [])]).toEqual([[5n, "a"], [7n, "b"], [0n, "c"]]);
+    expect([...(unsigned ?? [])]).toEqual([[5n, "a"]]);
+    expect([...(underOption ?? [])]).toEqual([[5n, "a"], [7n, "b"]]);
   });
 
   test("a rejected key throws the conversion error naming the key type (measured)", () => {
@@ -715,7 +720,12 @@ describe("int64 — exact reads in every position (FR-053)", () => {
     {
       ts: "byName",
       json: "ByName",
-      type: { kind: "map", key: { kind: "primitive" }, value: LONG },
+      type: {
+        kind: "dictionary",
+        key: { kind: "primitive" },
+        value: LONG,
+        create: (entries) => Dictionary.assign(entries),
+      },
     },
     { ts: "ratio", json: "Ratio", type: { kind: "primitive", numberType: "System.Double" } },
     {
@@ -733,7 +743,7 @@ describe("int64 — exact reads in every position (FR-053)", () => {
     ) as {
       nullable: bigint;
       values: bigint[];
-      byName: Map<string, bigint>;
+      byName: Dictionary<string, bigint>;
       child: { id: bigint };
     };
 
@@ -859,9 +869,10 @@ describe("int64 — the exact tree of a 64-bit closure (FR-053)", () => {
 
     const mixed: ValueSpec = {
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: { kind: "array", element: { kind: "nullable", inner: LONG } },
+        create: (entries) => Dictionary.assign(entries),
       },
     };
 

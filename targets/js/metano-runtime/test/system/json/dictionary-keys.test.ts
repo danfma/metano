@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
 
@@ -41,11 +42,18 @@ enum Wide {
 }
 
 /** A `Dictionary<K, int>` spec. */
-type IntValuedMapSpec = ValueSpec<Map<unknown, number> | null>;
+type IntValuedDictionarySpec = ValueSpec<Dictionary<unknown, number> | null>;
 
 /** A `Dictionary<K, int>` whose key descriptor is `key`. */
-function mapSpec(key: TypeDescriptor): IntValuedMapSpec {
-  return { descriptor: { kind: "map", key, value: { kind: "primitive" } } };
+function mapSpec(key: TypeDescriptor): IntValuedDictionarySpec {
+  return {
+    descriptor: {
+      kind: "dictionary",
+      key,
+      value: { kind: "primitive" },
+      create: (entries) => Dictionary.assign(entries),
+    },
+  };
 }
 
 const INT32_KEY = mapSpec({ kind: "primitive", numberType: "System.Int32" });
@@ -58,26 +66,26 @@ const BYTE_LEVEL_KEY = mapSpec({
 });
 
 const reads = {
-  tree: (json: string, spec: IntValuedMapSpec) =>
+  tree: (json: string, spec: IntValuedDictionarySpec) =>
     JsonSerializer.deserialize(JSON.parse(json) as unknown, spec),
-  text: (json: string, spec: IntValuedMapSpec) => JsonSerializer.deserializeText(json, spec),
+  text: (json: string, spec: IntValuedDictionarySpec) => JsonSerializer.deserializeText(json, spec),
 };
 
 /** The keys a read of `name` gives, on the `path` read. */
-function keysOf(path: keyof typeof reads, spec: IntValuedMapSpec, name: string): unknown[] {
-  return [...(reads[path](JSON.stringify({ [name]: 1 }), spec)?.keys() ?? [])];
+function keysOf(path: keyof typeof reads, spec: IntValuedDictionarySpec, name: string): unknown[] {
+  return [...(reads[path](JSON.stringify({ [name]: 1 }), spec)?.keys ?? [])];
 }
 
 interface KeyReadRow {
   readonly label: string;
-  readonly spec: IntValuedMapSpec;
+  readonly spec: IntValuedDictionarySpec;
   readonly name: string;
   readonly key: unknown;
 }
 
 interface KeyErrorRow {
   readonly label: string;
-  readonly spec: IntValuedMapSpec;
+  readonly spec: IntValuedDictionarySpec;
   readonly name: string;
   readonly typeName: string;
 }
@@ -326,7 +334,7 @@ describe("dictionary keys — reads", () => {
   }
 
   test("the context's read options do not change how a key reads", () => {
-    const spec: IntValuedMapSpec = {
+    const spec: IntValuedDictionarySpec = {
       ...INT32_KEY,
       readOptions: { numberHandling: "allowReadingFromString" },
     };
@@ -376,9 +384,9 @@ describe("dictionary keys — reads", () => {
 });
 
 describe("dictionary keys — writes", () => {
-  /** The JSON text a `Map` of `key` → `1` writes. */
-  function writtenText(spec: IntValuedMapSpec, key: unknown): string {
-    return JSON.stringify(JsonSerializer.serialize(new Map([[key, 1]]), spec));
+  /** The JSON text a `Dictionary` of `key` → `1` writes. */
+  function writtenText(spec: IntValuedDictionarySpec, key: unknown): string {
+    return JSON.stringify(JsonSerializer.serialize(Dictionary.assign([[key, 1]]), spec));
   }
 
   test("numbers as String() writes them", () => {
@@ -423,9 +431,12 @@ describe("dictionary keys — writes", () => {
 
   test("a written key reads back to the same key", () => {
     const spec = mapSpec({ kind: "numericEnum", values: Level, typeName: LEVEL_TYPE_NAME });
-    const map = new Map([[Level.High, 1]]);
+    const map = Dictionary.assign([[Level.High, 1]]);
 
-    expect(JsonSerializer.deserialize(JsonSerializer.serialize(map, spec), spec)).toEqual(map);
+    const restored = JsonSerializer.deserialize(JsonSerializer.serialize(map, spec), spec);
+
+    expect(restored).toBeInstanceOf(Dictionary);
+    expect([...(restored ?? [])]).toEqual([...map]);
   });
 });
 
@@ -447,7 +458,7 @@ describe("dictionary keys — custom converters", () => {
 
     const serializer = JsonSerializer.withContext(new KeyContext());
 
-    expect(serializer.serialize(new Map([["ab", 1]]), flavorKeys)).toEqual({ AB: 1 });
-    expect([...(serializer.deserialize({ AB: 1 }, flavorKeys)?.keys() ?? [])]).toEqual(["ab"]);
+    expect(serializer.serialize(Dictionary.assign([["ab", 1]]), flavorKeys)).toEqual({ AB: 1 });
+    expect([...(serializer.deserialize({ AB: 1 }, flavorKeys)?.keys ?? [])]).toEqual(["ab"]);
   });
 });

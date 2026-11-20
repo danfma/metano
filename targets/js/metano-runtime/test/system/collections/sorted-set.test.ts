@@ -44,6 +44,20 @@ describe("SortedSet", () => {
     expect(set.minOr("x")).toBeNull();
   });
 
+  test("reference-type minOr / maxOr accept null without widening the stored element", () => {
+    const set = new SortedSet<string>();
+    const minimum: string | null = set.minOr(null);
+    const maximum: string | null = set.maxOr(null);
+
+    expect(minimum).toBeNull();
+    expect(maximum).toBeNull();
+
+    set.add("a");
+
+    expect(set.minOr(null)).toBe("a");
+    expect(set.maxOr(null)).toBe("a");
+  });
+
   test("an element the default comparer cannot order throws ArgumentException", () => {
     const set = new SortedSet<object>([{}]);
 

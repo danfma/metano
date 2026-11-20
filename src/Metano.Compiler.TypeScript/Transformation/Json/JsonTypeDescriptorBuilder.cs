@@ -51,7 +51,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             ),
             JsonPropertyKind.List or JsonPropertyKind.Queue or JsonPropertyKind.Stack =>
                 BuildCollectionDescriptor(type, kind, JsonTypeClassifier.ElementTypeOf(type)),
-            JsonPropertyKind.Map or JsonPropertyKind.Dictionary => BuildMapDescriptor(type, kind),
+            JsonPropertyKind.Dictionary => BuildDictionaryDescriptor(type),
             JsonPropertyKind.Temporal => BuildTemporalDescriptor(type),
             JsonPropertyKind.Branded => BuildBrandedDescriptor(type),
             JsonPropertyKind.Enum or JsonPropertyKind.NumericEnum => BuildEnumValuesDescriptor(
@@ -96,7 +96,6 @@ internal sealed class JsonTypeDescriptorBuilder(
             JsonPropertyKind.Decimal => "decimal",
             JsonPropertyKind.Bytes => "bytes",
             JsonPropertyKind.Temporal => "temporal",
-            JsonPropertyKind.Map => "map",
             JsonPropertyKind.Dictionary => "dictionary",
             JsonPropertyKind.HashSet => "hashSet",
             JsonPropertyKind.List => "list",
@@ -142,14 +141,15 @@ internal sealed class JsonTypeDescriptorBuilder(
             new TsObjectProperty("create", CollectionCreateClosure(type, kind)),
         ]);
 
-    private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type, JsonPropertyKind kind) =>
+    private TsObjectLiteral BuildDictionaryDescriptor(ITypeSymbol type) =>
         new([
-            CollectionKindProperty(type, kind),
+            CollectionKindProperty(type, JsonPropertyKind.Dictionary),
             new TsObjectProperty("key", BuildKeyDescriptor(JsonTypeClassifier.KeyTypeOf(type))),
             new TsObjectProperty("value", Build(JsonTypeClassifier.ValueTypeOf(type))),
-            .. kind is JsonPropertyKind.Dictionary
-                ? [new TsObjectProperty("create", CollectionCreateClosure(type, kind))]
-                : Array.Empty<TsObjectProperty>(),
+            new TsObjectProperty(
+                "create",
+                CollectionCreateClosure(type, JsonPropertyKind.Dictionary)
+            ),
         ]);
 
     /// <summary>

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 
 import {
   type JsonReadOptions,
@@ -438,12 +439,20 @@ describe("numbers from strings — where the option applies", () => {
 
     expect(readRoot(["1", 2], { kind: "array", element: int32 })).toEqual([1, 2]);
 
-    expect(readRoot({ k: "3" }, { kind: "map", key: { kind: "primitive" }, value: int32 })).toEqual(
-      new Map([["k", 3]]),
-    );
+    const dictionary: TypeDescriptor = {
+      kind: "dictionary",
+      key: { kind: "primitive" },
+      value: int32,
+      create: (entries) => Dictionary.assign(entries),
+    };
+
+    const restored = readRoot({ k: "3" }, dictionary) as Dictionary<string, number>;
+
+    expect(restored).toBeInstanceOf(Dictionary);
+    expect([...restored]).toEqual([["k", 3]]);
 
     expectJsonException(
-      () => readRoot({ k: "5.0" }, { kind: "map", key: { kind: "primitive" }, value: int32 }),
+      () => readRoot({ k: "5.0" }, dictionary),
       cannotConvertMessage("System.Int32"),
     );
 
@@ -455,12 +464,16 @@ describe("numbers from strings — where the option applies", () => {
 
   test("dictionary keys read as their key type, as without the option (#479)", () => {
     const map: TypeDescriptor = {
-      kind: "map",
+      kind: "dictionary",
       key: { kind: "primitive", numberType: "System.Int32" },
       value: { kind: "primitive", numberType: "System.Int32" },
+      create: (entries) => Dictionary.assign(entries),
     };
 
-    expect(readRoot({ "007": "1" }, map)).toEqual(new Map([[7, 1]]));
+    const restored = readRoot({ "007": "1" }, map) as Dictionary<number, number>;
+
+    expect(restored).toBeInstanceOf(Dictionary);
+    expect([...restored]).toEqual([[7, 1]]);
   });
 
   test("a nullable number reads strings, but not the text null", () => {

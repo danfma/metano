@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -69,12 +70,17 @@ describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () =
   });
 
   test("a dictionary value is written unquoted inside its object", () => {
-    const spec: ValueSpec<Map<string, Decimal>> = {
-      descriptor: { kind: "map", key: { kind: "primitive" }, value: decimalSpec.descriptor },
+    const spec: ValueSpec<Dictionary<string, Decimal>> = {
+      descriptor: {
+        kind: "dictionary",
+        key: { kind: "primitive" },
+        value: decimalSpec.descriptor,
+        create: (entries) => Dictionary.assign(entries),
+      },
     };
 
     const tree = JsonSerializer.serialize(
-      new Map([["max", new Decimal("79228162514264337593543950335")]]),
+      Dictionary.assign([["max", new Decimal("79228162514264337593543950335")]]),
       spec,
     );
 

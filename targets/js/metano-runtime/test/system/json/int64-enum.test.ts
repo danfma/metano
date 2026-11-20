@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { JsonSerializer, type TypeDescriptor, type ValueSpec } from "#/system/json/index.ts";
 import { JsonException } from "#/system/json/errors.ts";
 
@@ -64,13 +65,18 @@ describe("64-bit numeric enums", () => {
   });
 
   test("read a dictionary key beyond 2^53 as its bigint member", () => {
-    const spec: ValueSpec<Map<unknown, number> | null> = {
-      descriptor: { kind: "map", key: BIG, value: { kind: "primitive" } },
+    const spec: ValueSpec<Dictionary<unknown, number> | null> = {
+      descriptor: {
+        kind: "dictionary",
+        key: BIG,
+        value: { kind: "primitive" },
+        create: (entries) => Dictionary.assign(entries),
+      },
     };
 
     const read = JsonSerializer.deserializeText('{"Max":1,"9223372036854775808":2}', spec);
 
-    expect([...(read?.keys() ?? [])]).toEqual([Big.Max, Big.Top]);
+    expect([...(read?.keys ?? [])]).toEqual([Big.Max, Big.Top]);
     expect(JSON.stringify(JsonSerializer.serialize(read, spec))).toBe('{"Max":1,"Top":2}');
   });
 

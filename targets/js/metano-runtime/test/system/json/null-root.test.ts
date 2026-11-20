@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { Decimal } from "decimal.js";
 
 import {
@@ -73,10 +74,10 @@ class NullRootContext extends SerializerContext {
   private _nullableInt32?: ValueSpec<number | null>;
   private _string?: ValueSpec<string | null>;
   private _listInt32?: ValueSpec<number[] | null>;
-  private _dictionaryStringInt32?: ValueSpec<Map<string, number> | null>;
+  private _dictionaryStringInt32?: ValueSpec<Dictionary<string, number> | null>;
   private _listSPoint?: ValueSpec<SPoint[] | null>;
   private _listNullableSPoint?: ValueSpec<(SPoint | null)[] | null>;
-  private _dictionaryStringSPoint?: ValueSpec<Map<string, SPoint> | null>;
+  private _dictionaryStringSPoint?: ValueSpec<Dictionary<string, SPoint> | null>;
   private _decimal?: ValueSpec<Decimal>;
   private _level?: ValueSpec<Level>;
   private _episodeId?: ValueSpec<EpisodeId>;
@@ -173,9 +174,14 @@ class NullRootContext extends SerializerContext {
     }));
   }
 
-  get dictionaryStringInt32(): ValueSpec<Map<string, number> | null> {
+  get dictionaryStringInt32(): ValueSpec<Dictionary<string, number> | null> {
     return (this._dictionaryStringInt32 ??= this.createValueSpec({
-      descriptor: { kind: "map", key: { kind: "primitive" }, value: { kind: "primitive" } },
+      descriptor: {
+        kind: "dictionary",
+        key: { kind: "primitive" },
+        value: { kind: "primitive" },
+        create: (entries) => Dictionary.assign(entries),
+      },
     }));
   }
 
@@ -194,12 +200,13 @@ class NullRootContext extends SerializerContext {
     }));
   }
 
-  get dictionaryStringSPoint(): ValueSpec<Map<string, SPoint> | null> {
+  get dictionaryStringSPoint(): ValueSpec<Dictionary<string, SPoint> | null> {
     return (this._dictionaryStringSPoint ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: { kind: "primitive" },
         value: { kind: "ref", spec: () => this.sPoint },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }

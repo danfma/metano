@@ -146,7 +146,7 @@ internal sealed class JsonContractRoots(
         if (type is IArrayTypeSymbol { Rank: > 1 })
             return "multi-dimensional arrays are not supported by System.Text.Json";
 
-        if (kind is JsonPropertyKind.Map or JsonPropertyKind.Dictionary && !HasStringKey(type))
+        if (kind is JsonPropertyKind.Dictionary && !HasStringKey(type))
             return "dictionary keys other than 'string' are not supported by the TypeScript "
                 + "context yet";
 

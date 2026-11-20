@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 
 import {
   JsonSerializer,
@@ -129,7 +130,7 @@ class StudioContext extends SerializerContext {
 
   private _listClip?: ValueSpec<Clip[] | null>;
 
-  private _dictionaryStringClip?: ValueSpec<Map<string, Clip> | null>;
+  private _dictionaryStringClip?: ValueSpec<Dictionary<string, Clip> | null>;
 
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec<Clip>({
@@ -208,12 +209,13 @@ class StudioContext extends SerializerContext {
     }));
   }
 
-  get dictionaryStringClip(): ValueSpec<Map<string, Clip> | null> {
+  get dictionaryStringClip(): ValueSpec<Dictionary<string, Clip> | null> {
     return (this._dictionaryStringClip ??= this.createValueSpec({
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: primitive,
         value: { kind: "ref", spec: () => this.clip },
+        create: (entries) => Dictionary.assign(entries),
       },
     }));
   }
@@ -366,7 +368,7 @@ describe("polymorphism — dispatch through containers", () => {
   });
 
   test("a dictionary root of the base dispatches every value (W6)", () => {
-    const map = new Map<string, Clip>([["x", new SilenceClip(2)]]);
+    const map = Dictionary.assign<string, Clip>([["x", new SilenceClip(2)]]);
     const json = JSON.stringify(JsonSerializer.serialize(map, studio.dictionaryStringClip));
 
     expect(json).toBe('{"x":{"kind":"silence","Seconds":2}}');

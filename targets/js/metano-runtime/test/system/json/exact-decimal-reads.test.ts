@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { HashSet } from "#/system/collections/hash-set.ts";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -142,11 +144,17 @@ describe("deserializeText — the other values of an exact tree " +
   });
 
   test("a dictionary value that is a long number is not read as an object", () => {
-    const dictionary: ValueSpec<Map<string, unknown>> = {
+    const dictionary: ValueSpec<Dictionary<string, unknown>> = {
       descriptor: {
-        kind: "map",
+        kind: "dictionary",
         key: primitive,
-        value: { kind: "map", key: primitive, value: decimal },
+        value: {
+          kind: "dictionary",
+          key: primitive,
+          value: decimal,
+          create: (entries) => Dictionary.assign(entries),
+        },
+        create: (entries) => Dictionary.assign(entries),
       },
     };
 
@@ -188,8 +196,21 @@ describe("deserializeText — the other values of an exact tree " +
       string,
     ][] = [
       ["array", { kind: "array", element: primitive }, `[[${LONG_INTEGER}]]`],
-      ["hashSet", { kind: "hashSet", element: primitive }, `[${LONG_INTEGER}]`],
-      ["map", { kind: "map", key: primitive, value: primitive }, `{"a":{"b":${LONG_INTEGER}}}`],
+      [
+        "hashSet",
+        { kind: "hashSet", element: primitive, create: (items) => HashSet.from(items) },
+        `[${LONG_INTEGER}]`,
+      ],
+      [
+        "dictionary",
+        {
+          kind: "dictionary",
+          key: primitive,
+          value: primitive,
+          create: (entries) => Dictionary.assign(entries),
+        },
+        `{"a":{"b":${LONG_INTEGER}}}`,
+      ],
       ["ref", { kind: "ref", spec: () => inner }, `{"n":[${LONG_INTEGER}]}`],
       ["nullable", { kind: "nullable", inner: primitive }, `{"deep":[${LONG_INTEGER}]}`],
     ];
@@ -355,14 +376,19 @@ describe("specNumberTextLeaves — the closure of a spec", () => {
       },
     };
 
-    const viaMap: ValueSpec<unknown> = {
-      descriptor: { kind: "map", key: primitive, value: { kind: "ref", spec: () => polymorphic } },
+    const viaDictionary: ValueSpec<unknown> = {
+      descriptor: {
+        kind: "dictionary",
+        key: primitive,
+        value: { kind: "ref", spec: () => polymorphic },
+        create: (entries) => Dictionary.assign(entries),
+      },
     };
 
     expect(specNumberTextLeaves(leaf)).toBe("inexact");
     expect(specNumberTextLeaves(derived)).toBe("inexact");
     expect(specNumberTextLeaves(polymorphic)).toBe("inexact");
-    expect(specNumberTextLeaves(viaMap)).toBe("inexact");
+    expect(specNumberTextLeaves(viaDictionary)).toBe("inexact");
   });
 
   test("a recursive spec without decimals does not", () => {

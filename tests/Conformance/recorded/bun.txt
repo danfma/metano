@@ -89,6 +89,11 @@ Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operator
 RuntimeTypeProbes.enumMembership = True|True
 RuntimeTypeShapeProbes.closedGenericName = RtBox`1<Int32>|Conformance
 RuntimeTypeShapeProbes.plainObjectIsStructural = True|True|False
+StageHCollectionProbes.immutableArrayText = System.Collections.Immutable.ImmutableArray`1[T]|System.Collections.Immutable.ImmutableList`1[T]
+StageHInterfaceTestProbes.immutableAsIList LOADFAIL 23 |       if (/* TODO: unsupported is-pattern IrUnsupportedPattern */) {
+StageHInterfaceTestProbes.immutableAsIListAs LOADFAIL 23 |       if (/* TODO: unsupported is-pattern IrUnsupportedPattern */) {
+StageHInterfaceTestProbes.immutableAsIListBinding LOADFAIL 23 |       if (/* TODO: unsupported is-pattern IrUnsupportedPattern */) {
+StageHInterfaceTestProbes.immutableAsIListSwitch LOADFAIL 23 |       if (/* TODO: unsupported is-pattern IrUnsupportedPattern */) {
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function. (In 'String.concat(linq("h\xE9llo", reverse()))', 'String.concat' is undefined)
 StringProbes.compare THROWS TypeError: String.compare is not a function. (In 'String.compare("a", "b")', 'String.compare' is undefined)

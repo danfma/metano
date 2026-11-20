@@ -15,7 +15,7 @@ import { Int32Type } from "#/system/reflection/primitive-types.ts";
 class UserId {
   constructor(readonly value: string) {}
 
-  equals(other: any): boolean {
+  equals(other: unknown): boolean {
     return other instanceof UserId && this.value === other.value;
   }
 
@@ -48,26 +48,26 @@ function thrown(action: () => unknown): Error {
 describe("HashSet", () => {
   // ─── Primitives ────────────────────────────────────────
 
-  test("add/has/delete with numbers", () => {
+  test("add/contains/remove with numbers", () => {
     const set = new HashSet<number>();
     set.add(1);
     set.add(2);
     set.add(3);
-    expect(set.size).toBe(3);
-    expect(set.has(2)).toBe(true);
-    expect(set.has(4)).toBe(false);
-    set.delete(2);
-    expect(set.size).toBe(2);
-    expect(set.has(2)).toBe(false);
+    expect(set.count).toBe(3);
+    expect(set.contains(2)).toBe(true);
+    expect(set.contains(4)).toBe(false);
+    set.remove(2);
+    expect(set.count).toBe(2);
+    expect(set.contains(2)).toBe(false);
   });
 
-  test("add/has/delete with strings", () => {
+  test("add/contains with strings", () => {
     const set = new HashSet<string>();
     set.add("a");
     set.add("b");
-    expect(set.size).toBe(2);
-    expect(set.has("a")).toBe(true);
-    expect(set.has("c")).toBe(false);
+    expect(set.count).toBe(2);
+    expect(set.contains("a")).toBe(true);
+    expect(set.contains("c")).toBe(false);
   });
 
   test("deduplicates primitives", () => {
@@ -75,7 +75,7 @@ describe("HashSet", () => {
     set.add(1);
     set.add(1);
     set.add(1);
-    expect(set.size).toBe(1);
+    expect(set.count).toBe(1);
   });
 
   // ─── Value objects ─────────────────────────────────────
@@ -85,22 +85,22 @@ describe("HashSet", () => {
     set.add(new UserId("abc"));
     set.add(new UserId("abc")); // same value, different reference
     set.add(new UserId("def"));
-    expect(set.size).toBe(2);
+    expect(set.count).toBe(2);
   });
 
-  test("has() uses equals for lookup", () => {
+  test("contains() uses equals for lookup", () => {
     const set = new HashSet<UserId>();
     set.add(new UserId("abc"));
-    expect(set.has(new UserId("abc"))).toBe(true); // different ref, same value
-    expect(set.has(new UserId("xyz"))).toBe(false);
+    expect(set.contains(new UserId("abc"))).toBe(true); // different ref, same value
+    expect(set.contains(new UserId("xyz"))).toBe(false);
   });
 
-  test("delete() uses equals for lookup", () => {
+  test("remove() uses equals for lookup", () => {
     const set = new HashSet<UserId>();
     set.add(new UserId("abc"));
-    expect(set.delete(new UserId("abc"))).toBe(true); // different ref
-    expect(set.size).toBe(0);
-    expect(set.delete(new UserId("abc"))).toBe(false); // already gone
+    expect(set.remove(new UserId("abc"))).toBe(true); // different ref
+    expect(set.count).toBe(0);
+    expect(set.remove(new UserId("abc"))).toBe(false); // already gone
   });
 
   // ─── Iteration ─────────────────────────────────────────
@@ -122,22 +122,30 @@ describe("HashSet", () => {
     expect(values).toEqual(["a", "b"]);
   });
 
-  test("forEach iterates all items", () => {
+  test("for..of iterates all items", () => {
     const set = new HashSet<number>();
     set.add(10);
     set.add(20);
     const result: number[] = [];
-    set.forEach((n) => result.push(n));
+
+    for (const item of set) {
+      result.push(item);
+    }
+
     expect(result.sort()).toEqual([10, 20]);
   });
 
-  test("values() returns iterator", () => {
+  test("Symbol.iterator returns iterator", () => {
     const set = new HashSet<string>();
     set.add("x");
     set.add("y");
-    const iter = set.values();
+    const iter = set[Symbol.iterator]();
     const items: string[] = [];
-    for (const v of iter) items.push(v);
+
+    for (const item of iter) {
+      items.push(item);
+    }
+
     expect(items.sort()).toEqual(["x", "y"]);
   });
 
@@ -148,13 +156,13 @@ describe("HashSet", () => {
     set.add(new UserId("a"));
     set.add(new UserId("b"));
     set.clear();
-    expect(set.size).toBe(0);
-    expect(set.has(new UserId("a"))).toBe(false);
+    expect(set.count).toBe(0);
+    expect(set.contains(new UserId("a"))).toBe(false);
   });
 
   test("constructor with iterable", () => {
     const set = new HashSet([1, 2, 3, 2, 1]);
-    expect(set.size).toBe(3);
+    expect(set.count).toBe(3);
   });
 
   test("toArray()", () => {
@@ -170,11 +178,19 @@ describe("HashSet", () => {
     set.add("one");
     set.add(1);
     set.add("one");
-    expect(set.size).toBe(2);
+    expect(set.count).toBe(2);
   });
 });
 
 describe("HashSet (spec 011)", () => {
+  test("does not expose the 2.x aliases", () => {
+    const set = HashSet.of([1]);
+
+    for (const alias of ["size", "has", "delete", "values", "forEach"]) {
+      expect(alias in set).toBe(false);
+    }
+  });
+
   test("add returns whether it added; count, contains, remove", () => {
     const set = new HashSet<number>();
 

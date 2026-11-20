@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { HashSet } from "#/system/collections/hash-set.ts";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 
 import {
   JsonException,
@@ -30,7 +32,11 @@ const tagsSpec: ValueSpec<Tag[] | null> = {
 };
 
 const tagSetSpec: ValueSpec<unknown> = {
-  descriptor: { kind: "hashSet", element: { kind: "primitive" } },
+  descriptor: {
+    kind: "hashSet",
+    element: { kind: "primitive" },
+    create: (items) => HashSet.from(items),
+  },
 };
 
 const nullableTagsSpec: ValueSpec<Tag[] | null> = {
@@ -154,8 +160,13 @@ describe("JsonSerializer — non-array input to a collection (#425)", () => {
 });
 
 describe("JsonSerializer — non-object input to a dictionary", () => {
-  const labelsSpec: ValueSpec<Map<string, string> | null> = {
-    descriptor: { kind: "map", key: { kind: "primitive" }, value: { kind: "primitive" } },
+  const labelsSpec: ValueSpec<Dictionary<string, string> | null> = {
+    descriptor: {
+      kind: "dictionary",
+      key: { kind: "primitive" },
+      value: { kind: "primitive" },
+      create: (entries) => Dictionary.assign(entries),
+    },
   };
 
   test.each([
@@ -170,8 +181,11 @@ describe("JsonSerializer — non-object input to a dictionary", () => {
     );
   });
 
-  test("a JSON object reads as a Map", () => {
-    expect(JsonSerializer.deserialize({ a: "x" }, labelsSpec)).toEqual(new Map([["a", "x"]]));
+  test("a JSON object reads as a Dictionary", () => {
+    const read = JsonSerializer.deserialize({ a: "x" }, labelsSpec);
+
+    expect(read).toBeInstanceOf(Dictionary);
+    expect([...(read ?? [])]).toEqual([["a", "x"]]);
   });
 
   test("null still reads as null", () => {

@@ -116,6 +116,7 @@ public sealed partial class IntrinsicBclLoweringTable
         var arguments = ArgumentsInParameterOrder(BoundInvocation(ctx));
         var comparer = arguments.Where(argument => IsComparerParameter(argument.Parameter!));
         var leading = comparer.Select(argument => new IrArgument(ArgumentValue(ctx, argument)));
+
         var elements = arguments
             .Where(argument => !IsComparerParameter(argument.Parameter!))
             .ToList();

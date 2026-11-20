@@ -106,17 +106,6 @@ export type BytesDescriptor = {
   readonly kind: "bytes";
 };
 
-/**
- * Map<K,V> — Object.fromEntries on serialize, new Map(Object.entries) on
- * deserialize. Each JSON property name is parsed into the `key` type as
- * System.Text.Json parses it (`dictionary-keys.ts`, #479).
- */
-export type MapDescriptor = {
-  readonly kind: "map";
-  readonly key: TypeDescriptor;
-  readonly value: TypeDescriptor;
-};
-
 /** Array<T> */
 export type ArrayDescriptor = {
   readonly kind: "array";
@@ -166,16 +155,6 @@ export type KeyedCollectionDescriptor = {
   readonly create: (
     entries: Array<readonly [unknown, unknown]>,
   ) => Iterable<readonly [unknown, unknown]>;
-};
-
-/**
- * HashSet<T> as the 2.x compiler writes it, without `create`: read through
- * `new HashSet(items)` until the compiler's 011c flip writes `create` (W4-6).
- */
-export type HashSetDescriptor = {
-  readonly kind: "hashSet";
-  readonly element: TypeDescriptor;
-  readonly create?: (items: unknown[]) => Iterable<unknown>;
 };
 
 /**
@@ -235,9 +214,7 @@ export type TypeDescriptor =
   | TemporalDescriptor
   | DecimalDescriptor
   | BytesDescriptor
-  | MapDescriptor
   | ArrayDescriptor
-  | HashSetDescriptor
   | SequenceCollectionDescriptor
   | KeyedCollectionDescriptor
   | BrandedDescriptor

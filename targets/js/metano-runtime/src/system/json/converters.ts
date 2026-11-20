@@ -5,10 +5,7 @@ import type {
   ArrayDescriptor,
   BrandedDescriptor,
   EnumDescriptor,
-  HashSetDescriptor,
   KeyedCollectionDescriptor,
-  MapDescriptor,
-  SequenceCollectionDescriptor,
   NullableDescriptor,
   NumericEnumDescriptor,
   RefDescriptor,
@@ -20,7 +17,6 @@ import type {
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
 import { byteArrayConverter } from "./byte-array-converter.ts";
-import { HashSet } from "../collections/hash-set.ts";
 // Only the contract walks (the hot path: one container per object) open and
 // close containers with enter/exit; the collection converters keep the
 // closure-based `readContainer` / `writeContainer` (#456).
@@ -127,7 +123,6 @@ function handsChildrenToConverters(descriptor: TypeDescriptor): boolean {
     case "readOnlyList":
     case "immutableHashSet":
     case "sortedSet":
-    case "map":
     case "dictionary":
     case "immutableDictionary":
     case "concurrentDictionary":
@@ -189,12 +184,9 @@ function getBuiltinConverter(
       return decimalConverterOf(descriptor, readOptions);
     case "bytes":
       return byteArrayConverter;
-    case "map":
-      return mapConverter(descriptor, plans, readOptions);
     case "array":
       return arrayConverter(descriptor, plans, readOptions);
     case "hashSet":
-      return hashSetConverter(descriptor, plans, readOptions);
     case "list":
     case "queue":
     case "stack":
@@ -225,64 +217,6 @@ function getBuiltinConverter(
 
 // ─── Temporal ────────────────────────────────────────────────────────────────
 // Reads go through `temporal-reads.ts` (#485); writes keep `temporal-text.ts`.
-
-// ─── Map ─────────────────────────────────────────────────────────────────────
-
-/**
- * Dictionary keys are always JSON strings, parsed into the key type as
- * System.Text.Json parses them (`dictionary-keys.ts`, #479), so the read
- * options apply to the values only. A custom converter of the key's kind
- * still takes precedence.
- */
-function mapConverter(
-  descriptor: MapDescriptor,
-  plans: SpecPlans,
-  readOptions: JsonReadOptions | undefined,
-) {
-  const keyConv = keyConverterOf(descriptor.key, plans);
-  const valueConv = resolveConverter(descriptor.value, plans, readOptions);
-
-  return {
-    serialize: (value: unknown) => {
-      if (value == null) return null;
-
-      return writeContainer(() => {
-        const map = value as Map<unknown, unknown>;
-        const result: Record<string, unknown> = {};
-
-        for (const [k, v] of map) {
-          const serializedKey = String(keyConv.serialize(k));
-          result[serializedKey] = valueConv.serialize(v);
-        }
-
-        return result;
-      });
-    },
-    deserialize: (value: unknown) => {
-      if (value == null) return null;
-
-      if (typeof value !== "object" || Array.isArray(value)) {
-        throw unexpectedJsonKind("object", value);
-      }
-
-      const nullValueName = valueTypeNameOf(descriptor.value);
-
-      return readContainer("object", () => {
-        const map = new Map<unknown, unknown>();
-
-        for (const [k, v] of Object.entries(value)) {
-          if (v === null && nullValueName !== undefined) {
-            throw cannotConvertToTypeName(nullValueName);
-          }
-
-          map.set(keyConv.deserialize(k), valueConv.deserialize(v));
-        }
-
-        return map;
-      });
-    },
-  };
-}
 
 /** A custom converter of the key's kind, else the System.Text.Json key parser (#479). */
 function keyConverterOf(key: TypeDescriptor, plans: SpecPlans): ValueConverter {
@@ -360,25 +294,6 @@ function arrayConverter(
   };
 }
 
-// ─── HashSet ─────────────────────────────────────────────────────────────────
-
-/**
- * `hashSet`: the context's `create` when it writes one; 2.x contexts write none and
- * read through `new HashSet(items)` until the compiler's 011c flip (W4-6).
- */
-function hashSetConverter(
-  descriptor: HashSetDescriptor | SequenceCollectionDescriptor,
-  plans: SpecPlans,
-  readOptions: JsonReadOptions | undefined,
-) {
-  return sequenceConverter(
-    descriptor,
-    descriptor.create ?? ((items) => new HashSet(items)),
-    plans,
-    readOptions,
-  );
-}
-
 // ─── Runtime collections (spec 011 FR-028) ───────────────────────────────────
 
 /**
@@ -404,7 +319,7 @@ function sequenceConverter(
 }
 
 /**
- * A dictionary written as a JSON object with the key rule of `map` (#479): written
+ * A dictionary written as a JSON object with System.Text.Json's key rule (#479): written
  * by iterating its `[key, value]` entries, read into entries in document order and
  * built by `create`.
  */

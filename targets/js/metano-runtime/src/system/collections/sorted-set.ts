@@ -136,14 +136,14 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   }
 
   /** `Min`: the smallest element, or the caller's `default(T)` when empty (D30). */
-  minOr(defaultValue: T): T {
+  minOr<D>(defaultValue: D): T | D {
     const node = this.firstNode();
 
     return node === null ? defaultValue : node.key;
   }
 
   /** `Max`: the largest element, or the caller's `default(T)` when empty (D30). */
-  maxOr(defaultValue: T): T {
+  maxOr<D>(defaultValue: D): T | D {
     const node = this.lastNode();
 
     return node === null ? defaultValue : node.key;

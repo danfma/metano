@@ -4,9 +4,6 @@
  * `elementEquals` / `elementHashCode` (records by value, other objects by
  * reference) or a user `IEqualityComparer<T>`, over the shared `hash-core`, and
  * enumerate in insertion order.
- *
- * The 2.x members `size`, `has`, `delete`, `values()` and `forEach` stay until
- * the compiler stops emitting them (W4-6).
  */
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
 import { closeCollectionFor } from "./close-collection.ts";
@@ -251,33 +248,6 @@ export class HashSet<T> implements ISet<T>, IReadOnlySet<T> {
 
   [Symbol.iterator](): IterableIterator<T> {
     return new HashSetIterator(this);
-  }
-
-  /** @deprecated 2.x name of {@link count}; kept until the compiler stops emitting it. */
-  get size(): number {
-    return this.count;
-  }
-
-  /** @deprecated 2.x name of {@link contains}. */
-  has(item: T): boolean {
-    return this.contains(item);
-  }
-
-  /** @deprecated 2.x name of {@link remove}. */
-  delete(item: T): boolean {
-    return this.remove(item);
-  }
-
-  /** @deprecated 2.x iterator; iterate the set itself. */
-  values(): IterableIterator<T> {
-    return this[Symbol.iterator]();
-  }
-
-  /** @deprecated 2.x callback walk; use `for..of`. */
-  forEach(callback: (item: T) => void): void {
-    for (const item of this) {
-      callback(item);
-    }
   }
 
   /** `items` as a set with this set's comparer, deduplicated by its rule. */

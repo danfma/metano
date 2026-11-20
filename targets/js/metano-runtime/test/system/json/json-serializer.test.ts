@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 
 import {
@@ -231,28 +232,33 @@ describe("JsonSerializer — ref (nested objects)", () => {
   });
 });
 
-// ─── Map ─────────────────────────────────────────────────────────────────────
+// ─── Dictionary ──────────────────────────────────────────────────────────────
 
-describe("JsonSerializer — map", () => {
+describe("JsonSerializer — dictionary", () => {
   class WithMetadata {
-    constructor(readonly metadata: Map<string, number>) {}
+    constructor(readonly metadata: Dictionary<string, number>) {}
   }
 
   const spec: TypeSpec<WithMetadata> = {
     type: WithMetadata,
-    factory: (p) => new WithMetadata(p.metadata as Map<string, number>),
+    factory: (p) => new WithMetadata(p.metadata as Dictionary<string, number>),
     properties: [
       {
         ts: "metadata",
         json: "metadata",
-        type: { kind: "map", key: { kind: "primitive" }, value: { kind: "primitive" } },
+        type: {
+          kind: "dictionary",
+          key: { kind: "primitive" },
+          value: { kind: "primitive" },
+          create: (entries) => Dictionary.assign(entries),
+        },
       },
     ],
   };
 
-  test("serialize Map to plain object", () => {
+  test("serialize Dictionary to plain object", () => {
     const obj = new WithMetadata(
-      new Map([
+      Dictionary.assign([
         ["a", 1],
         ["b", 2],
       ]),
@@ -262,9 +268,9 @@ describe("JsonSerializer — map", () => {
     expect(json.metadata).toEqual({ a: 1, b: 2 });
   });
 
-  test("deserialize plain object to Map", () => {
+  test("deserialize plain object to Dictionary", () => {
     const obj = JsonSerializer.deserialize({ metadata: { x: 10, y: 20 } }, spec)!;
-    expect(obj.metadata).toBeInstanceOf(Map);
+    expect(obj.metadata).toBeInstanceOf(Dictionary);
     expect(obj.metadata.get("x")).toBe(10);
     expect(obj.metadata.get("y")).toBe(20);
   });
@@ -284,7 +290,11 @@ describe("JsonSerializer — hashSet", () => {
       {
         ts: "items",
         json: "items",
-        type: { kind: "hashSet", element: { kind: "primitive" } },
+        type: {
+          kind: "hashSet",
+          element: { kind: "primitive" },
+          create: (items) => HashSet.from(items),
+        },
       },
     ],
   };
@@ -300,8 +310,8 @@ describe("JsonSerializer — hashSet", () => {
   test("deserialize array to HashSet", () => {
     const obj = JsonSerializer.deserialize({ items: [1, 2, 3] }, spec)!;
     expect(obj.items).toBeInstanceOf(HashSet);
-    expect(obj.items.has(1)).toBe(true);
-    expect(obj.items.has(4)).toBe(false);
+    expect(obj.items.contains(1)).toBe(true);
+    expect(obj.items.contains(4)).toBe(false);
   });
 });
 
@@ -773,7 +783,7 @@ describe("JsonSerializer — complex scenario", () => {
       readonly id: OrderId,
       readonly status: string,
       readonly items: Point[],
-      readonly metadata: Map<string, number>,
+      readonly metadata: Dictionary<string, number>,
       readonly note: string | null,
     ) {}
   }
@@ -785,7 +795,7 @@ describe("JsonSerializer — complex scenario", () => {
         p.id as OrderId,
         p.status as string,
         p.items as Point[],
-        p.metadata as Map<string, number>,
+        p.metadata as Dictionary<string, number>,
         p.note as string | null,
       ),
     properties: [
@@ -799,7 +809,12 @@ describe("JsonSerializer — complex scenario", () => {
       {
         ts: "metadata",
         json: "meta",
-        type: { kind: "map", key: { kind: "primitive" }, value: { kind: "primitive" } },
+        type: {
+          kind: "dictionary",
+          key: { kind: "primitive" },
+          value: { kind: "primitive" },
+          create: (entries) => Dictionary.assign(entries),
+        },
       },
       {
         ts: "note",
@@ -815,7 +830,7 @@ describe("JsonSerializer — complex scenario", () => {
       OrderId.create("ord-001"),
       "Active",
       [new Point(1, 2), new Point(3, 4)],
-      new Map([
+      Dictionary.assign([
         ["priority", 5],
         ["weight", 10],
       ]),
@@ -842,7 +857,7 @@ describe("JsonSerializer — complex scenario", () => {
     expect(restored.status).toBe("Active");
     expect(restored.items[0]).toBeInstanceOf(Point);
     expect(restored.items[0]!.x).toBe(1);
-    expect(restored.metadata).toBeInstanceOf(Map);
+    expect(restored.metadata).toBeInstanceOf(Dictionary);
     expect(restored.metadata.get("priority")).toBe(5);
     expect(restored.note).toBeNull();
   });
