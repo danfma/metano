@@ -1,4 +1,4 @@
-import { Dictionary, ImmutableArray, ImmutableArrayBuilder, ImmutableDictionary, ImmutableDictionaryBuilder, ImmutableHashSet, ImmutableList, ImmutableListBuilder, List, toImmutableArray, toImmutableDictionary, toImmutableList, type IImmutableList } from "metano-runtime/system/collections";
+import { Dictionary, ImmutableArray, ImmutableArrayBuilder, ImmutableDictionary, ImmutableDictionaryBuilder, ImmutableHashSet, ImmutableList, ImmutableListBuilder, List, toImmutableArray, toImmutableDictionary, toImmutableHashSet, toImmutableList, type IImmutableList } from "metano-runtime/system/collections";
 import { formatBoolean } from "metano-runtime";
 
 export class Snapshots {
@@ -72,7 +72,7 @@ export class Snapshots {
   }
 
   static setRange(items: Iterable<number>): ImmutableHashSet<number> {
-    return ImmutableHashSet.from<number>(items);
+    return toImmutableHashSet(items);
   }
 
   static setEdited(set: ImmutableHashSet<number>): ImmutableHashSet<number> {
