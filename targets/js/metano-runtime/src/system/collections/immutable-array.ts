@@ -27,8 +27,8 @@ let empty: ImmutableArray<unknown> | undefined;
  * `is ImmutableList<T>` in .NET. It differs where .NET 10's `ImmutableArray<T>`
  * does (probed 2026-11-19): an `IndexOutOfRangeException` indexer, `Array.Copy`'s
  * `copyTo` checks, a wrapped `binarySearch` comparer failure, `sort()` and an
- * empty `addRange` returning the receiver, `indexOf`'s `startIndex` parameter and
- * its own `toString()` text.
+ * empty `addRange` / `insertRange` returning the receiver, .NET's parameter
+ * names (`startIndex`, `start`, `length`) and its own `toString()` text.
  */
 export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
   declare readonly $typeArguments$ImmutableArray: readonly RuntimeType[] | undefined;
@@ -141,6 +141,73 @@ export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
     return this.search(item, index, count, comparer, "startIndex");
   }
 
+  /** `Slice(start, length)`: .NET names the arguments `start` and `length`. */
+  getRange(index: number, count: number): ImmutableArray<T> {
+    this.checkSpan(index, count, "start");
+
+    return this.range(index, count);
+  }
+
+  /**
+   * `LastIndexOf(item[, startIndex[, count[, comparer]]])`, checked as .NET's:
+   * `(0, 0)`, and an empty array without a count from start 0, find nothing; otherwise
+   * `startIndex` must be inside the array and `count` must not run past its start.
+   */
+  lastIndexOf(
+    item: T,
+    index?: number,
+    count?: number,
+    comparer?: IEqualityComparer<T> | null,
+  ): number {
+    if (this._count === 0 && count === undefined && (index === undefined || index === 0)) {
+      return -1;
+    }
+
+    const start = index ?? this._count - 1;
+    const length = count ?? start + 1;
+
+    if (start === 0 && length === 0) {
+      return -1;
+    }
+
+    if (start < 0 || start >= this._count) {
+      throwArgumentOutOfRange("startIndex");
+    }
+
+    if (length < 0 || start - length + 1 < 0) {
+      throwArgumentOutOfRange("count");
+    }
+
+    return this.searchBackward(item, start, length, comparer);
+  }
+
+  /** The receiver for an empty source, as .NET's. */
+  insertRange(index: number, items: Iterable<T>): ImmutableArray<T> {
+    if (index < 0 || index > this._count) {
+      throwArgumentOutOfRange("index");
+    }
+
+    if (items === null || items === undefined) {
+      throwArgumentNull("items");
+    }
+
+    const copy = [...items];
+
+    return copy.length === 0 ? this : this.inserted(index, copy);
+  }
+
+  /** `RemoveRange(index, 1)`, as .NET's: an index at the end reports `length`. */
+  removeAt(index: number): ImmutableArray<T> {
+    return this.removeRange(index, 1);
+  }
+
+  /** .NET names the arguments `index` and `length`. */
+  removeRange(index: number, count: number): ImmutableArray<T> {
+    this.checkSpan(index, count, "index");
+
+    return this.without(index, count);
+  }
+
   /** .NET's `Array.BinarySearch`: a comparer failure throws `InvalidOperationException` with the failure as inner. */
   binarySearch(item: T, comparison?: ComparisonArgument<T>): number {
     try {
@@ -212,6 +279,17 @@ export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
 
   protected self(): ImmutableArray<T> {
     return this;
+  }
+
+  /** `start` inside `0..count` (`startName`), then `length` within the rest (`length`), as .NET's checks. */
+  private checkSpan(start: number, length: number, startName: string): void {
+    if (start < 0 || start > this._count) {
+      throwArgumentOutOfRange(startName);
+    }
+
+    if (length < 0 || start + length > this._count) {
+      throwArgumentOutOfRange("length");
+    }
   }
 
   /** Whether no adjacent pair is out of order under `comparison`. */

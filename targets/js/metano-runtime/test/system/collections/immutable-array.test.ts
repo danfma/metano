@@ -133,6 +133,71 @@ describe("ImmutableArray", () => {
     expect(array().indexOf(3, 1)).toBe(2);
   });
 
+  test("removeAt / removeRange name their arguments index and length", () => {
+    for (const [action, paramName] of [
+      [() => array().removeAt(-1), "index"],
+      [() => array().removeAt(3), "length"],
+      [() => array().removeRange(-1, 1), "index"],
+      [() => array().removeRange(4, 0), "index"],
+      [() => array().removeRange(2, 5), "length"],
+      [() => array().removeRange(1, -1), "length"],
+    ] as const) {
+      expect(caught(action).message).toBe(`${OUT_OF_RANGE} (Parameter '${paramName}')`);
+    }
+
+    expect([...array().removeAt(2)]).toEqual([1, 2]);
+    expect([...array().removeRange(0, 2)]).toEqual([3]);
+  });
+
+  test("slice / getRange name their arguments start and length", () => {
+    for (const [action, paramName] of [
+      [() => array().getRange(-1, 1), "start"],
+      [() => array().getRange(4, 0), "start"],
+      [() => array().getRange(1, 5), "length"],
+      [() => array().getRange(1, -1), "length"],
+      [() => array().slice(1, 5), "length"],
+    ] as const) {
+      expect(caught(action).message).toBe(`${OUT_OF_RANGE} (Parameter '${paramName}')`);
+    }
+
+    expect(array().getRange(3, 0).count).toBe(0);
+  });
+
+  test("lastIndexOf names its start startIndex and checks as .NET", () => {
+    for (const [action, paramName] of [
+      [() => array().lastIndexOf(1, 5), "startIndex"],
+      [() => array().lastIndexOf(1, -1), "startIndex"],
+      [() => array().lastIndexOf(1, 2, 5), "count"],
+      [() => array().lastIndexOf(1, 2, -1), "count"],
+      [() => ImmutableArray.empty<number>().lastIndexOf(1, -1, 0), "startIndex"],
+    ] as const) {
+      expect(caught(action).message).toBe(`${OUT_OF_RANGE} (Parameter '${paramName}')`);
+    }
+
+    expect(array().lastIndexOf(1, 2, 0)).toBe(-1);
+    expect(array().lastIndexOf(3, 2, 1)).toBe(2);
+    expect(array().lastIndexOf(1, 1, 2)).toBe(0);
+    expect(ImmutableArray.empty<number>().lastIndexOf(1)).toBe(-1);
+    expect(ImmutableArray.empty<number>().lastIndexOf(1, 0)).toBe(-1);
+    expect(ImmutableArray.empty<number>().lastIndexOf(1, 0, 0)).toBe(-1);
+  });
+
+  test("insertRange of an empty source returns the receiver, after the index check", () => {
+    const original = array();
+
+    expect(original.insertRange(1, [])).toBe(original);
+    expect(original.insertRange(1, ImmutableArray.empty())).toBe(original);
+    expect([...original.insertRange(1, [9])]).toEqual([1, 9, 2, 3]);
+
+    expect(caught(() => original.insertRange(5, [])).message).toBe(
+      `${OUT_OF_RANGE} (Parameter 'index')`,
+    );
+
+    expect(caught(() => original.insertRange(1, null as never)).message).toBe(
+      "Value cannot be null. (Parameter 'items')",
+    );
+  });
+
   test("same-instance results", () => {
     const original = array();
 

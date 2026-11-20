@@ -101,6 +101,54 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
     return this.search(item, index, count, comparer, "index");
   }
 
+  getRange(index: number, count: number): ImmutableList<T> {
+    this.checkRange(index, count);
+
+    return this.range(index, count);
+  }
+
+  lastIndexOf(
+    item: T,
+    index: number = this._count - 1,
+    count: number = index + 1,
+    comparer?: IEqualityComparer<T> | null,
+  ): number {
+    if (this._count === 0) {
+      return -1;
+    }
+
+    this.checkRange(index - count + 1, count);
+
+    return this.searchBackward(item, index, count, comparer);
+  }
+
+  /** A new list even for an empty source, as .NET's. */
+  insertRange(index: number, items: Iterable<T>): ImmutableList<T> {
+    if (index < 0 || index > this._count) {
+      throwArgumentOutOfRange("index");
+    }
+
+    if (items === null || items === undefined) {
+      throwArgumentNull("items");
+    }
+
+    return this.inserted(index, [...items]);
+  }
+
+  removeAt(index: number): ImmutableList<T> {
+    if (index >>> 0 >= this._count) {
+      throwArgumentOutOfRange("index");
+    }
+
+    return this.without(index, 1);
+  }
+
+  removeRange(index: number, count: number): ImmutableList<T> {
+    this.checkRange(index, count);
+
+    return this.without(index, count);
+  }
+
   convertAll<U>(converter: (item: T) => U): ImmutableList<U> {
     if (typeof converter !== "function") {
       throwArgumentNull("converter");

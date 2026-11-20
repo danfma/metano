@@ -57,6 +57,21 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
     comparer?: IEqualityComparer<T> | null,
   ): number;
 
+  abstract getRange(index: number, count: number): Self;
+
+  abstract lastIndexOf(
+    item: T,
+    index?: number,
+    count?: number,
+    comparer?: IEqualityComparer<T> | null,
+  ): number;
+
+  abstract insertRange(index: number, items: Iterable<T>): Self;
+
+  abstract removeAt(index: number): Self;
+
+  abstract removeRange(index: number, count: number): Self;
+
   abstract binarySearch(item: T, comparison?: ComparisonArgument<T>): number;
 
   abstract addRange(items: Iterable<T>): Self;
@@ -83,35 +98,6 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
   /** `array[a..b]` on an `ImmutableArray<T>`. */
   slice(start: number, end: number = this._count): Self {
     return this.getRange(start, end - start);
-  }
-
-  getRange(index: number, count: number): Self {
-    this.checkRange(index, count);
-
-    return this.copied(this._items.slice(index, index + count));
-  }
-
-  lastIndexOf(
-    item: T,
-    index: number = this._count - 1,
-    count: number = index + 1,
-    comparer?: IEqualityComparer<T> | null,
-  ): number {
-    if (this._count === 0) {
-      return -1;
-    }
-
-    this.checkRange(index - count + 1, count);
-
-    const equals = equalityOf(comparer);
-
-    for (let position = index; position > index - count; position--) {
-      if (equals(at(this._items, position), item)) {
-        return position;
-      }
-    }
-
-    return -1;
   }
 
   contains(item: T): boolean {
@@ -190,22 +176,6 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
     return this.insertRange(index, [item]);
   }
 
-  insertRange(index: number, items: Iterable<T>): Self {
-    if (index < 0 || index > this._count) {
-      throwArgumentOutOfRange("index");
-    }
-
-    if (items === null || items === undefined) {
-      throwArgumentNull("items");
-    }
-
-    const copy = this.visible();
-
-    copy.splice(index, 0, ...items);
-
-    return this.copied(copy);
-  }
-
   remove(item: T, comparer?: IEqualityComparer<T> | null): Self {
     const index = this.indexOf(item, 0, this._count, comparer);
 
@@ -218,28 +188,6 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
     const kept = this.visible().filter((item) => !match(item));
 
     return kept.length === this._count ? this.self() : this.copied(kept);
-  }
-
-  removeAt(index: number): Self {
-    if (index >>> 0 >= this._count) {
-      throwArgumentOutOfRange("index");
-    }
-
-    return this.removeRange(index, 1);
-  }
-
-  removeRange(index: number, count: number): Self {
-    this.checkRange(index, count);
-
-    if (count === 0) {
-      return this.self();
-    }
-
-    const copy = this.visible();
-
-    copy.splice(index, count);
-
-    return this.copied(copy);
   }
 
   /** `RemoveRange(IEnumerable<T>[, comparer])`: one occurrence per item; the receiver when nothing is removed. */
@@ -323,6 +271,51 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
     }
 
     return -1;
+  }
+
+  /** The `count` elements from `index`, after the caller's checks. */
+  protected range(index: number, count: number): Self {
+    return this.copied(this._items.slice(index, index + count));
+  }
+
+  /** The last of `count` elements ending at `index` that equals `item`, after the caller's checks. */
+  protected searchBackward(
+    item: T,
+    index: number,
+    count: number,
+    comparer: IEqualityComparer<T> | null | undefined,
+  ): number {
+    const equals = equalityOf(comparer);
+
+    for (let position = index; position > index - count; position--) {
+      if (equals(at(this._items, position), item)) {
+        return position;
+      }
+    }
+
+    return -1;
+  }
+
+  /** `items` inserted at `index`, after the caller's checks. */
+  protected inserted(index: number, items: readonly T[]): Self {
+    const copy = this.visible();
+
+    copy.splice(index, 0, ...items);
+
+    return this.copied(copy);
+  }
+
+  /** The version without `count` elements from `index` (itself for none), after the caller's checks. */
+  protected without(index: number, count: number): Self {
+    if (count === 0) {
+      return this.self();
+    }
+
+    const copy = this.visible();
+
+    copy.splice(index, count);
+
+    return this.copied(copy);
   }
 
   /** .NET's `Array.BinarySearch` order over the version's elements. */
