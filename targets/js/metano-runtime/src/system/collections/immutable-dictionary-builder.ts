@@ -6,6 +6,7 @@ import { defaultEqualityComparerFor, type IEqualityComparer } from "./default-co
 import { Dictionary } from "./dictionary.ts";
 import type { KeyCollection, ValueCollection } from "./dictionary-views.ts";
 import { ImmutableDictionary } from "./immutable-dictionary.ts";
+import { ImmutableHashStorage } from "./immutable-storage.ts";
 import type { IDictionary } from "./interfaces.ts";
 import { throwImmutableDuplicateKey } from "./throw-helpers.ts";
 
@@ -218,6 +219,15 @@ export function toImmutableDictionary<K, V>(
   }
 
   const builder = source;
+
+  if (builder.count === 0) {
+    return new ImmutableDictionary(
+      new ImmutableHashStorage(builder._dictionary._store.comparer),
+      0,
+      builder._valueComparer,
+      typeArguments ?? builder.$typeArguments$ImmutableDictionaryBuilder,
+    );
+  }
 
   return ImmutableDictionary.from(
     [...builder._dictionary],

@@ -4,7 +4,7 @@
  * `system/collections` barrel.
  *
  * Several versions share one append-only store; each version sees only the
- * first `count` entries. A version may append in place only when its `count`
+ * first `count` entries. A nonempty version may append in place only when its `count`
  * equals the store's length ({@link ownsTip}): it is the newest version of that
  * store, so nothing another version sees changes. Every other change, and an
  * append on an older version, copies the version's entries into a new store.
@@ -17,7 +17,8 @@ import { HashCore } from "./hash-core.ts";
 
 /** W4-11's ownership rule: a version of `count` entries may append to `store` in place. */
 export function ownsTip(store: { readonly length: number }, count: number): boolean {
-  return store.length === count;
+  // Empty versions can be canonical singletons: never mutate their backing store.
+  return count > 0 && store.length === count;
 }
 
 /** `null` for the default equality comparer, so comparing comparers sees one default. */
@@ -65,6 +66,10 @@ export class ImmutableHashStorage<K, V> {
 
   /** The position of `key` among a version's first `count` entries, or `-1`. */
   find(key: K, count: number): number {
+    if (count === 0) {
+      return -1;
+    }
+
     const position = this.index.get(key);
 
     return position !== undefined && position < count ? position : -1;

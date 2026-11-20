@@ -7,6 +7,51 @@ namespace Metano.Tests;
 public class StageHCollectionSlotTests
 {
     [Test]
+    [Arguments("ImmutableList", "ImmutableList.from")]
+    [Arguments("ImmutableHashSet", "ImmutableHashSet.from")]
+    public async Task EmptyRangeWithoutTypeQuestions_RemainsUnslotted(
+        string factory,
+        string emitted
+    )
+    {
+        var files = TranspileHelper.Transpile(
+            $$"""
+            using System.Collections.Immutable;
+            [Transpile] public static class Probe
+            {
+                public static bool Run() => object.ReferenceEquals(
+                    {{factory}}.CreateRange(new int[0]),
+                    {{factory}}.CreateRange(new string[0]));
+            }
+            """
+        );
+
+        await Assert.That(files["probe.ts"]).Contains(emitted);
+        await Assert.That(files["probe.ts"]).DoesNotContain("Int32Type");
+        await Assert.That(files["probe.ts"]).DoesNotContain("StringType");
+    }
+
+    [Test]
+    public async Task EmptyDictionaryWithoutTypeQuestions_RemainsUnslotted()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Collections.Immutable;
+            [Transpile] public static class Probe
+            {
+                public static bool Run() => object.ReferenceEquals(
+                    ImmutableDictionary.Create<int, int>(null),
+                    ImmutableDictionary.Create<string, int>(null));
+            }
+            """
+        );
+
+        await Assert.That(files["probe.ts"]).Contains("ImmutableDictionary.create");
+        await Assert.That(files["probe.ts"]).DoesNotContain("Int32Type");
+        await Assert.That(files["probe.ts"]).DoesNotContain("StringType");
+    }
+
+    [Test]
     [Arguments("ImmutableList<Item>", "ImmutableList.empty<Item>([Item.$runtimeType])")]
     [Arguments("ImmutableArray<Item>", "ImmutableArray.empty<Item>([Item.$runtimeType])")]
     [Arguments("ImmutableHashSet<Item>", "ImmutableHashSet.empty<Item>([Item.$runtimeType])")]

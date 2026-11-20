@@ -119,16 +119,16 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
     comparer: IEqualityComparer<T> | null,
     typeArguments: readonly RuntimeType[] | undefined,
   ): ImmutableHashSet<T> {
-    const storage = new ImmutableHashStorage<T, true>(comparer);
+    let storage = new ImmutableHashStorage<T, true>(comparer);
     let count = 0;
 
     for (const item of items) {
       if (storage.find(item, count) < 0) {
-        storage.append(count++, item, true);
+        storage = storage.append(count++, item, true);
       }
     }
 
-    return count === 0 && comparer === null
+    return count === 0 && comparer === null && typeArguments !== undefined
       ? ImmutableHashSet.empty<T>(typeArguments)
       : new ImmutableHashSet(storage, count, typeArguments);
   }

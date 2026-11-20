@@ -5,6 +5,7 @@ import { collectionTypeName } from "./collection-type-name.ts";
 import { defaultEqualityComparerFor, type IEqualityComparer } from "./default-comparer.ts";
 import { HashSet } from "./hash-set.ts";
 import { ImmutableHashSet } from "./immutable-hash-set.ts";
+import { ImmutableHashStorage } from "./immutable-storage.ts";
 import type { ISet } from "./interfaces.ts";
 
 let ImmutableHashSetBuilder$rt: CollectionType<ImmutableHashSetBuilder<unknown>> | undefined;
@@ -200,6 +201,14 @@ export function toImmutableHashSet<T>(
   }
 
   const builder = source;
+
+  if (builder.count === 0) {
+    return new ImmutableHashSet(
+      new ImmutableHashStorage(builder._set._store.comparer),
+      0,
+      typeArguments ?? builder.$typeArguments$ImmutableHashSetBuilder,
+    );
+  }
 
   return ImmutableHashSet.from(
     builder._set.toArray(),
