@@ -134,8 +134,6 @@ public abstract record IrRuntimeTypeTest
                 primitiveType.ExactKind
             ),
             IrNamedTypeRef { Semantics: var semantics } => OfNamed(semantics, staticPrimitive),
-            // A collection tests through the target's descriptor (spec 011 D31);
-            // this 2.x form classifies only the sites that keep an erased test.
             IrCollectionTypeRef collection => OfType(collection.LegacyForm, staticPrimitive),
             IrArrayTypeRef => new Array(),
             IrIterableTypeRef or IrIteratorTypeRef => new Iterable(),

@@ -68,6 +68,7 @@ public class ListInterfaceCastTests
         );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+
         await Assert
             .That(files["casts.ts"])
             .Contains("isType(value, iListType(Int32Type)) ? value : null");

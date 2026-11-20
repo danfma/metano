@@ -121,6 +121,7 @@ public class CollectionTypeArgumentTests
         await Assert
             .That(files["slots/probe.ts"])
             .Contains("new List<Point>(null, [Point.$runtimeType])");
+
         await Assert.That(files["slots/point.ts"]).Contains("static get $runtimeType()");
     }
 
@@ -180,9 +181,11 @@ public class CollectionTypeArgumentTests
 
         await Assert.That(unsupported.Count).IsEqualTo(1);
         await Assert.That(unsupported[0].Message).Contains("'o is ICollection<int>'");
+
         await Assert
             .That(files["slots/probe.ts"])
             .Contains("Unsupported expression: CollectionInterfaceTest");
+
         await Assert.That(files["slots/probe.ts"]).Contains("isType(o, listType(Int32Type))");
     }
 

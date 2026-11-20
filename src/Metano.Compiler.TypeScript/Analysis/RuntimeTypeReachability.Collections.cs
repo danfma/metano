@@ -51,20 +51,23 @@ internal sealed partial class RuntimeTypeReachability
         if (questioned.Count == 0)
             return;
 
-        foreach (var question in ir.RuntimeQuestions)
-        {
-            if (
-                question
-                    is {
-                        Kind: IrRuntimeQuestionKind.CollectionConstruction,
-                        Type.CollectionDefinitionName: { } name,
-                    }
-                && RuntimeCollections.KindOfClrName(name) is { } kind
-                && questioned.Contains(kind)
-            )
-                ReachTypeArguments(question.Type);
-        }
+        foreach (
+            var question in ir.RuntimeQuestions.Where(question => IsAsked(question, questioned))
+        )
+            ReachTypeArguments(question.Type);
     }
+
+    private static bool IsAsked(
+        IrRuntimeQuestion question,
+        IReadOnlySet<IrCollectionKind> questioned
+    ) =>
+        question
+            is {
+                Kind: IrRuntimeQuestionKind.CollectionConstruction,
+                Type.CollectionDefinitionName: { } name,
+            }
+        && RuntimeCollections.KindOfClrName(name) is { } kind
+        && questioned.Contains(kind);
 
     private static IReadOnlySet<IrCollectionKind> QuestionedCollectionClassesOf(IrCompilation ir) =>
         ir
@@ -196,9 +199,9 @@ internal sealed partial class RuntimeTypeReachability
     }
 
     private static IEnumerable<IrCollectionKind> RuntimeKindsWithoutMutableShape() =>
-        RuntimeCollections.ClassKinds.Where(kind =>
-            !RuntimeCollections.ShapeImplementsMutableInterface(kind)
-        );
+        RuntimeCollections
+            .ClassKinds()
+            .Where(kind => !RuntimeCollections.ShapeImplementsMutableInterface(kind));
 
     private static bool RuntimeKindCanBeHeldBy(IrCollectionKind kind, INamedTypeSymbol holder) =>
         RuntimeCollections.KindOfClrName(ClrNameOf(holder.OriginalDefinition)) is { } held

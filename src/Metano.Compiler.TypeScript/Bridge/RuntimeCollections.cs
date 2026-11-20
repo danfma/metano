@@ -178,7 +178,7 @@ public static class RuntimeCollections
         !KindsWithoutMutableShape.Contains(kind);
 
     /// <summary>The runtime class kinds (every kind that is not an interface).</summary>
-    public static IEnumerable<IrCollectionKind> ClassKinds =>
+    public static IEnumerable<IrCollectionKind> ClassKinds() =>
         ClrNamesByKind.Keys.Where(kind => !IsInterface(kind));
 
     /// <summary>
