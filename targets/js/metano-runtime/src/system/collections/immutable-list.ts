@@ -1,5 +1,9 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
+import {
+  closeCollectionFor,
+  emptyCollectionFor,
+  sameCollectionTypeArguments,
+} from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import type { ComparisonArgument, IEqualityComparer } from "./default-comparer.ts";
 import { at, ImmutableListCore } from "./immutable-list-core.ts";
@@ -63,7 +67,10 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
       throwArgumentNull("items");
     }
 
-    if (items instanceof ImmutableList) {
+    if (
+      items instanceof ImmutableList &&
+      sameCollectionTypeArguments(items.$typeArguments$ImmutableList, typeArguments)
+    ) {
       // `instanceof` cannot narrow the element type: an `ImmutableList` passed as `Iterable<T>` holds `T`s.
       return items as ImmutableList<T>;
     }

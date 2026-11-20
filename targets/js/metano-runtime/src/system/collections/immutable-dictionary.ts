@@ -1,5 +1,9 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
+import {
+  closeCollectionFor,
+  emptyCollectionFor,
+  sameCollectionTypeArguments,
+} from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import {
   defaultEqualityComparerFor,
@@ -111,6 +115,7 @@ export class ImmutableDictionary<K, V>
 
     if (
       entries instanceof ImmutableDictionary &&
+      sameCollectionTypeArguments(entries.$typeArguments$ImmutableDictionary, typeArguments) &&
       entries._storage.comparer === normalizedComparer(keyComparer) &&
       entries._valueComparer === normalizedComparer(valueComparer)
     ) {

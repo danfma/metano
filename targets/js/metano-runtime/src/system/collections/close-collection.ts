@@ -13,6 +13,22 @@ import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 let memo: MemoNode<CollectionType<unknown>> | undefined;
 let empties: MemoNode<object> | undefined;
 
+/** Factory reuse requires exact argument identities, not the wildcard rules of a type test. */
+export function sameCollectionTypeArguments(
+  source: readonly RuntimeType[] | undefined,
+  destination: readonly RuntimeType[] | null | undefined,
+): boolean {
+  const target = destination ?? undefined;
+
+  return (
+    source === target ||
+    (source !== undefined &&
+      target !== undefined &&
+      source.length === target.length &&
+      source.every((argument, index) => argument === target[index]))
+  );
+}
+
 /** A closed generic's empty singleton, keyed by the same descriptor identities as its slot. */
 export function emptyCollectionFor<T extends object>(
   open: CollectionType<unknown>,
