@@ -2,7 +2,8 @@ import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts"
 import {
   closeCollectionFor,
   emptyCollectionFor,
-  sameCollectionTypeArguments,
+  canReuseCollectionTypeArguments,
+  collectionCopyTypeArguments,
 } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import {
@@ -119,7 +120,7 @@ export class ImmutableDictionary<K, V>
 
     if (
       entries instanceof ImmutableDictionary &&
-      sameCollectionTypeArguments(entries.$typeArguments$ImmutableDictionary, typeArguments) &&
+      canReuseCollectionTypeArguments(entries.$typeArguments$ImmutableDictionary, typeArguments) &&
       entries._storage.comparer === normalizedComparer(keyComparer) &&
       entries._valueComparer === normalizedComparer(valueComparer)
     ) {
@@ -127,9 +128,16 @@ export class ImmutableDictionary<K, V>
       return entries as ImmutableDictionary<K, V>;
     }
 
-    return ImmutableDictionary.create<K, V>(keyComparer, valueComparer, typeArguments).addRange(
-      entries,
-    );
+    return ImmutableDictionary.create<K, V>(
+      keyComparer,
+      valueComparer,
+      collectionCopyTypeArguments(
+        entries instanceof ImmutableDictionary
+          ? entries.$typeArguments$ImmutableDictionary
+          : undefined,
+        typeArguments,
+      ),
+    ).addRange(entries);
   }
 
   /** `source.ToImmutableDictionary(keySelector[, keyComparer[, valueComparer]])`: each element is its value. */

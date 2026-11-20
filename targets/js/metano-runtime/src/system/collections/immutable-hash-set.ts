@@ -2,7 +2,8 @@ import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts"
 import {
   closeCollectionFor,
   emptyCollectionFor,
-  sameCollectionTypeArguments,
+  canReuseCollectionTypeArguments,
+  collectionCopyTypeArguments,
 } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { defaultEqualityComparerFor, type IEqualityComparer } from "./default-comparer.ts";
@@ -79,14 +80,21 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
 
     if (
       items instanceof ImmutableHashSet &&
-      sameCollectionTypeArguments(items.$typeArguments$ImmutableHashSet, typeArguments) &&
+      canReuseCollectionTypeArguments(items.$typeArguments$ImmutableHashSet, typeArguments) &&
       items._storage.comparer === normalizedComparer(comparer)
     ) {
       // `instanceof` cannot narrow the element type: an `ImmutableHashSet` passed as `Iterable<T>` holds `T`s.
       return items as ImmutableHashSet<T>;
     }
 
-    return ImmutableHashSet.build(items, normalizedComparer(comparer), typeArguments ?? undefined);
+    return ImmutableHashSet.build(
+      items,
+      normalizedComparer(comparer),
+      collectionCopyTypeArguments(
+        items instanceof ImmutableHashSet ? items.$typeArguments$ImmutableHashSet : undefined,
+        typeArguments,
+      ),
+    );
   }
 
   static get $runtimeType(): CollectionType<ImmutableHashSet<unknown>> {

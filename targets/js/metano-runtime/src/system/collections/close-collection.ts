@@ -13,19 +13,33 @@ import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 let memo: MemoNode<CollectionType<unknown>> | undefined;
 let empties: MemoNode<object> | undefined;
 
-/** Factory reuse requires exact argument identities, not the wildcard rules of a type test. */
-export function sameCollectionTypeArguments(
+/** Open destinations constrain only known arguments; reuse retains the source's precise slots. */
+export function canReuseCollectionTypeArguments(
   source: readonly RuntimeType[] | undefined,
   destination: readonly RuntimeType[] | null | undefined,
 ): boolean {
-  const target = destination ?? undefined;
-
   return (
-    source === target ||
-    (source !== undefined &&
-      target !== undefined &&
-      source.length === target.length &&
-      source.every((argument, index) => argument === target[index]))
+    !source ||
+    !destination ||
+    (source.length === destination.length &&
+      source.every(
+        (argument, index) =>
+          argument === destination[index] ||
+          argument.kind === "unknown" ||
+          destination[index]!.kind === "unknown",
+      ))
+  );
+}
+
+/** When comparer changes force a copy, unresolved destinations still retain known source slots. */
+export function collectionCopyTypeArguments(
+  source: readonly RuntimeType[] | undefined,
+  destination: readonly RuntimeType[] | null | undefined,
+): readonly RuntimeType[] | undefined {
+  return (
+    destination?.map((argument, index) =>
+      argument.kind === "unknown" ? (source?.[index] ?? argument) : argument,
+    ) ?? source
   );
 }
 

@@ -2,7 +2,7 @@ import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts"
 import {
   closeCollectionFor,
   emptyCollectionFor,
-  sameCollectionTypeArguments,
+  canReuseCollectionTypeArguments,
 } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import {
@@ -76,7 +76,7 @@ export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
 
     if (
       items instanceof ImmutableArray &&
-      sameCollectionTypeArguments(items.$typeArguments$ImmutableArray, typeArguments)
+      canReuseCollectionTypeArguments(items.$typeArguments$ImmutableArray, typeArguments)
     ) {
       // `instanceof` cannot narrow the element type: an `ImmutableArray` passed as `Iterable<T>` holds `T`s.
       return items as ImmutableArray<T>;
