@@ -58,8 +58,10 @@ export class ImmutableDictionary<K, V>
   /** `ImmutableDictionary<K, V>.Empty`: one instance (default comparers), built on first read. */
   static empty<K, V>(typeArguments?: readonly RuntimeType[] | null): ImmutableDictionary<K, V> {
     if (typeArguments) {
-      return emptyCollectionFor(ImmutableDictionary.$runtimeType, typeArguments, () =>
-        ImmutableDictionary.create<K, V>(null, null, typeArguments),
+      return emptyCollectionFor(
+        ImmutableDictionary.$runtimeType,
+        typeArguments,
+        () => new ImmutableDictionary<K, V>(new ImmutableHashStorage(null), 0, null, typeArguments),
       );
     }
 
@@ -80,6 +82,10 @@ export class ImmutableDictionary<K, V>
     valueComparer?: IEqualityComparer<V> | null,
     typeArguments?: readonly RuntimeType[] | null,
   ): ImmutableDictionary<K, V> {
+    if (normalizedComparer(keyComparer) === null && normalizedComparer(valueComparer) === null) {
+      return ImmutableDictionary.empty<K, V>(typeArguments);
+    }
+
     return new ImmutableDictionary<K, V>(
       new ImmutableHashStorage(normalizedComparer(keyComparer)),
       0,
@@ -344,7 +350,7 @@ export class ImmutableDictionary<K, V>
   /** `Clear`: the empty dictionary with this one's comparers. */
   clear(): ImmutableDictionary<K, V> {
     if (this._storage.comparer === null && this._valueComparer === null) {
-      return ImmutableDictionary.empty();
+      return ImmutableDictionary.empty(this.$typeArguments$ImmutableDictionary);
     }
 
     return ImmutableDictionary.create(
@@ -430,6 +436,10 @@ export class ImmutableDictionary<K, V>
   }
 
   private copyOf(entries: readonly (readonly [K, V])[]): ImmutableDictionary<K, V> {
+    if (entries.length === 0) {
+      return this.clear();
+    }
+
     return new ImmutableDictionary(
       ImmutableHashStorage.of(this._storage.comparer, entries),
       entries.length,

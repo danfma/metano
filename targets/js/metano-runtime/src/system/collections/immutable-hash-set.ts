@@ -41,8 +41,10 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
   /** `ImmutableHashSet<T>.Empty`: one instance (default comparer), built on first read. */
   static empty<T>(typeArguments?: readonly RuntimeType[] | null): ImmutableHashSet<T> {
     if (typeArguments) {
-      return emptyCollectionFor(ImmutableHashSet.$runtimeType, typeArguments, () =>
-        ImmutableHashSet.of<T>([], null, typeArguments),
+      return emptyCollectionFor(
+        ImmutableHashSet.$runtimeType,
+        typeArguments,
+        () => new ImmutableHashSet<T>(new ImmutableHashStorage(null), 0, typeArguments),
       );
     }
 
@@ -121,7 +123,9 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
       }
     }
 
-    return new ImmutableHashSet(storage, count, typeArguments);
+    return count === 0 && comparer === null
+      ? ImmutableHashSet.empty<T>(typeArguments)
+      : new ImmutableHashSet(storage, count, typeArguments);
   }
 
   get count(): number {
@@ -185,7 +189,7 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
     }
 
     return this._storage.comparer === null
-      ? ImmutableHashSet.empty()
+      ? ImmutableHashSet.empty(this.$typeArguments$ImmutableHashSet)
       : ImmutableHashSet.build([], this._storage.comparer, this.$typeArguments$ImmutableHashSet);
   }
 

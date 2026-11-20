@@ -34,8 +34,10 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
   /** `ImmutableList<T>.Empty`, `Create()`: one instance, built on first read. */
   static empty<T>(typeArguments?: readonly RuntimeType[] | null): ImmutableList<T> {
     if (typeArguments) {
-      return emptyCollectionFor(ImmutableList.$runtimeType, typeArguments, () =>
-        ImmutableList.of<T>([], typeArguments),
+      return emptyCollectionFor(
+        ImmutableList.$runtimeType,
+        typeArguments,
+        () => new ImmutableList<T>([], 0, typeArguments),
       );
     }
 
@@ -47,7 +49,9 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
 
   /** `Create(params T[])`, collection expressions: takes ownership of the array (the compiler passes a fresh literal). */
   static of<T>(items: T[], typeArguments?: readonly RuntimeType[] | null): ImmutableList<T> {
-    return new ImmutableList(items, items.length, typeArguments ?? undefined);
+    return items.length === 0
+      ? ImmutableList.empty<T>(typeArguments)
+      : new ImmutableList(items, items.length, typeArguments ?? undefined);
   }
 
   /** `CreateRange`, `ToImmutableList()`: a copy, or `items` itself when it is an `ImmutableList`. */
@@ -66,7 +70,7 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
 
     const copy = [...items];
 
-    return new ImmutableList(copy, copy.length, typeArguments ?? undefined);
+    return ImmutableList.of(copy, typeArguments);
   }
 
   static get $runtimeType(): CollectionType<ImmutableList<unknown>> {
@@ -202,7 +206,7 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
   }
 
   clear(): ImmutableList<T> {
-    return ImmutableList.empty();
+    return ImmutableList.empty(this.$typeArguments$ImmutableList);
   }
 
   /** Stable, `Comparer<T>.Default` without an argument; a comparer failure throws `InvalidOperationException`, as .NET. */
@@ -235,7 +239,9 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
   }
 
   protected derive(items: T[], count: number): ImmutableList<T> {
-    return new ImmutableList(items, count, this.$typeArguments$ImmutableList);
+    return count === 0
+      ? this.clear()
+      : new ImmutableList(items, count, this.$typeArguments$ImmutableList);
   }
 
   protected self(): ImmutableList<T> {
