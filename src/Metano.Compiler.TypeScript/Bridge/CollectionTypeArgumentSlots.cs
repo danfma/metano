@@ -126,26 +126,34 @@ internal static class CollectionTypeArgumentSlots
         RuntimeTypeReachabilityResult reachability
     )
     {
-        if (SlotOf(type, reachability) is not { } slot)
+        var position = construction switch
+        {
+            TsNewExpression created when IsRuntimeClass(created.Callee, type) => PositionOf(
+                type.Kind,
+                Member.New
+            ),
+            TsCallExpression { Callee: TsPropertyAccess { Object: var owner } access } call
+                when IsRuntimeClass(owner, type)
+                    && MemberOfProperty(access.Property) is { } member
+                    && Positions.ContainsKey((type.Kind, member)) => PositionOf(type.Kind, member),
+            TsCallExpression { Callee: TsRuntimeHelperReference { Name: var name } } call
+                when MemberOfProperty(name) is { } member
+                    && Positions.ContainsKey((type.Kind, member)) => PositionOf(type.Kind, member),
+            _ => (int?)null,
+        };
+
+        if (position is null || SlotOf(type, reachability) is not { } slot)
             return construction;
 
         return construction switch
         {
-            TsNewExpression created when IsRuntimeClass(created.Callee, type) => created with
+            TsNewExpression created => created with
             {
-                Arguments = Padded(created.Arguments, PositionOf(type.Kind, Member.New), slot),
+                Arguments = Padded(created.Arguments, position.Value, slot),
             },
-            TsCallExpression { Callee: TsPropertyAccess { Object: var owner } access } call
-                when IsRuntimeClass(owner, type)
-                    && MemberOfProperty(access.Property) is { } member => call with
+            TsCallExpression call => call with
             {
-                Arguments = Padded(call.Arguments, PositionOf(type.Kind, member), slot),
-            },
-            TsCallExpression { Callee: TsRuntimeHelperReference { Name: var name } } call
-                when MemberOfProperty(name) is { } member
-                    && Positions.ContainsKey((type.Kind, member)) => call with
-            {
-                Arguments = Padded(call.Arguments, PositionOf(type.Kind, member), slot),
+                Arguments = Padded(call.Arguments, position.Value, slot),
             },
             _ => construction,
         };
@@ -230,7 +238,7 @@ internal static class CollectionTypeArgumentSlots
         RuntimeTypeReachabilityResult reachability
     )
     {
-        if (SlotOf(type, reachability) is not { } slot || !template.Template.EndsWith(')'))
+        if (!template.Template.EndsWith(')'))
             return template;
 
         var text = template.Template;
@@ -244,9 +252,15 @@ internal static class CollectionTypeArgumentSlots
         var member = MemberOfTemplate(text, open);
 
         if (
-            !callee.StartsWith($"new {runtimeName}", StringComparison.Ordinal)
-            && !callee.StartsWith($"{runtimeName}.", StringComparison.Ordinal)
+            callee != $"new {runtimeName}"
+            && callee != $"{runtimeName}.{Spelling(member)}"
             && !(callee == Spelling(member) && Positions.ContainsKey((type.Kind, member)))
+        )
+            return template;
+
+        if (
+            !Positions.ContainsKey((type.Kind, member))
+            || SlotOf(type, reachability) is not { } slot
         )
             return template;
 

@@ -260,6 +260,12 @@ internal sealed class RuntimeQuestionScanner
                 when RuntimeQuestionFacts.IsUnsupportedTypeMember(property.Property):
                 ReportUnsupportedTypeMember(property.Property, property.Syntax);
                 break;
+            case IPropertyReferenceOperation or IFieldReferenceOperation:
+                // Mapped static members (for example ImmutableList<T>.Empty) can construct
+                // a collection just as an invocation does. Reach every member-result type
+                // the bridge might slot, including local element types.
+                RecordCollectionConstruction(operation.Type, operation.Syntax);
+                break;
         }
     }
 

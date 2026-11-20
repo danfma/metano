@@ -7,6 +7,54 @@ namespace Metano.Tests;
 public class StageHCollectionSlotTests
 {
     [Test]
+    [Arguments("ImmutableList<Item>", "ImmutableList.empty<Item>([Item.$runtimeType])")]
+    [Arguments("ImmutableArray<Item>", "ImmutableArray.empty<Item>([Item.$runtimeType])")]
+    [Arguments("ImmutableHashSet<Item>", "ImmutableHashSet.empty<Item>([Item.$runtimeType])")]
+    [Arguments(
+        "ImmutableDictionary<int, Item>",
+        "ImmutableDictionary.empty<number, Item>([Int32Type, Item.$runtimeType])"
+    )]
+    public async Task LocalStaticEmpty_ReachesElementDescriptor(string collection, string expected)
+    {
+        var files = TranspileHelper.Transpile(
+            $$"""
+            using System.Collections.Immutable;
+            [Transpile] public class Item { }
+            [Transpile] public static class Probe
+            {
+                public static bool Run()
+                {
+                    object value = {{collection}}.Empty;
+                    return value is {{collection.Replace("Item", "string")}};
+                }
+            }
+            """
+        );
+
+        await Assert.That(files["probe.ts"]).Contains(expected);
+        await Assert.That(files["item.ts"]).Contains("static get $runtimeType()");
+    }
+
+    [Test]
+    public async Task LocalMemberRead_DoesNotRequestFactorySlot()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+            [Transpile] public class Item { }
+            [Transpile] public static class Probe
+            {
+                public static List<Item> Read(KeyValuePair<int, List<Item>> pair) => pair.Value;
+                public static bool Test(object value) => value is List<string>;
+            }
+            """
+        );
+
+        await Assert.That(files["probe.ts"]).Contains("return pair[1]");
+        await Assert.That(files["probe.ts"]).DoesNotContain("pair[1], [Item.$runtimeType]");
+    }
+
+    [Test]
     [Arguments(
         "ImmutableList<int>",
         "ImmutableList.Create(1, 2)",
