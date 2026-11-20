@@ -534,6 +534,15 @@ export function iReadOnlySetType<T>(element: RuntimeType<T>): CollectionType<IRe
 
 ## Type-argument descriptors (FR-008) and `GetType()`
 
+**J fix round 1 (#335).** `List.$runtimeType` is declared as `RuntimeType<List<unknown>>`,
+while its value remains the same collection literal. This lets a reached C# subclass
+override the getter with its own `ClassType` without TS2417/TS4114. The descriptor
+factories narrow the open descriptor to `kind: "collection"` before specializing it.
+A class descriptor's `base` thunk names class descriptors only; collection-interface
+tests walk the constructor chain to the nearest collection literal instead.
+Reference nullable annotations are erased from generic argument descriptors;
+`Nullable<T>` for a value type keeps its `nullableType` descriptor.
+
 The slot `$typeArguments$<Class>` (`List`, `Dictionary`, `HashSet`, `Queue`, `Stack`) is defined once by the class's constructor from the trailing `typeArguments` argument (or `undefined`); a C# subclass that closes the arguments (`class IntList : List<int>`) passes them to `super` and defines no slot. Runtime-built collections copy the source's slot (§ `List`). Each class's static getter `$runtimeType` returns its open data literal (§ Descriptor factories). `getRuntimeType(v)` (stage 011b) gains one rule: when the constructor's own descriptor has a `closeFor` member, it returns `descriptor.closeFor(v)`: the descriptor closed over the instance's slot, or the open literal (whose `test` accepts every instance: the wildcard of FR-008) when there is none. `getRuntimeType` imports nothing for it (reflection never imports `collections`). So `new List<int>()` built with `[Int32Type]` answers `GetType() == typeof(List<int>)` as `true`.
 
 ## JSON collection kinds (runtime half of FR-028, W4-5)

@@ -40,7 +40,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private readonly object _diagnosticsLock = new();
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        string
+    > _cachedFileContents = new(StringComparer.Ordinal);
+
+    private readonly SortedDictionary<string, string> _crossPackageDependencies = new(
+        StringComparer.Ordinal
+    );
+
     private GroupTransformFacts? _groupFacts;
+    private string? _groupCacheFingerprint;
 
     /// <summary>
     /// Forwarded to <see cref="TypeScriptTransformContext.UseIrBodiesWhenCovered"/>.
@@ -114,22 +124,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// real file with the stub's empty body.
     /// </summary>
     public IReadOnlyDictionary<string, string> CachedFileContents => _cachedFileContents;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        string
-    > _cachedFileContents = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
     /// language features and other issues that the user should know about.
     /// </summary>
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
-
-    private readonly SortedDictionary<string, string> _crossPackageDependencies = new(
-        StringComparer.Ordinal
-    );
-
-    private string? _groupCacheFingerprint;
 
     /// <summary>
     /// Maps each cross-package npm name that was actually referenced during
@@ -651,6 +651,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // group agrees and a warm group cache keeps the phase's diagnostics.
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
 
+        var jsonPlans =
+            (IReadOnlyDictionary<INamedTypeSymbol, JsonContextPlan?>)
+                new Dictionary<INamedTypeSymbol, JsonContextPlan?>(SymbolEqualityComparer.Default);
+
         TypeScriptTransformContext NewContext(RuntimeTypeReachabilityResult reachability) =>
             new TypeScriptTransformContext(
                 compilation,
@@ -677,10 +681,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     .ToHashSet(StringComparer.Ordinal),
                 ModuleFunctionClaims = moduleFunctionClaims,
                 RuntimeTypes = reachability,
+                JsonPlans = jsonPlans,
             };
 
         // The JSON contexts' contract classes are reachability roots (FR-028, D31); their
         // plans need a context, which the first pass builds without any reachability.
+        _context = NewContext(RuntimeTypeReachabilityResult.Empty);
+
+        jsonPlans = new JsonSerializerContextTransformer(Context).PlanContexts(
+            emittedTypes.Where(IsJsonSerializerContextType)
+        );
+
         _context = NewContext(RuntimeTypeReachabilityResult.Empty);
 
         var runtimeTypes = RuntimeTypeReachability.Compute(

@@ -364,6 +364,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         if (
             !RuntimeTypes.OverridingGetters.Contains(RuntimeTypeReachability.KeyOf(type))
             || declaration.Extends is not TsNamedType baseType
+            || HasCollectionBase(type)
         )
             return [];
 
@@ -377,6 +378,13 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             ),
         ];
     }
+
+    private static bool HasCollectionBase(INamedTypeSymbol type) =>
+        type.BaseType is { } baseType
+        && RuntimeCollections.KindOfClrName(
+            $"{baseType.ContainingNamespace}.{baseType.MetadataName}"
+        )
+            is not null;
 
     /// <summary>
     /// <c>create: () =&gt; new X()</c> for a concrete class with a public

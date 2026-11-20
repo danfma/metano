@@ -14,6 +14,30 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class CollectionTypeArgumentSlots
 {
+    private static readonly IReadOnlyDictionary<
+        (IrCollectionKind Kind, string Member),
+        int
+    > Positions = new Dictionary<(IrCollectionKind, string), int>
+    {
+        [(IrCollectionKind.List, "new")] = 1,
+        [(IrCollectionKind.List, "of")] = 1,
+        [(IrCollectionKind.List, "from")] = 1,
+        [(IrCollectionKind.List, "withCapacity")] = 1,
+        [(IrCollectionKind.List, "adopt")] = 2,
+        [(IrCollectionKind.List, "toList")] = 0,
+        [(IrCollectionKind.HashSet, "new")] = 2,
+        [(IrCollectionKind.HashSet, "of")] = 2,
+        [(IrCollectionKind.HashSet, "from")] = 2,
+        [(IrCollectionKind.HashSet, "withCapacity")] = 2,
+        [(IrCollectionKind.HashSet, "toHashSet")] = 0,
+        [(IrCollectionKind.Dictionary, "new")] = 2,
+        [(IrCollectionKind.Dictionary, "of")] = 2,
+        [(IrCollectionKind.Dictionary, "from")] = 2,
+        [(IrCollectionKind.Dictionary, "assign")] = 2,
+        [(IrCollectionKind.Dictionary, "withCapacity")] = 2,
+        [(IrCollectionKind.Dictionary, "toDictionary")] = 4,
+    };
+
     /// <summary>
     /// <paramref name="construction"/> (a <c>new C(…)</c> or a <c>C.of / from / assign /
     /// withCapacity / adopt(…)</c> call) with the slot appended after its
@@ -72,15 +96,18 @@ internal static class CollectionTypeArgumentSlots
         RuntimeTypeReachabilityResult reachability
     )
     {
-        var position = terminal switch
+        var member = terminal switch
         {
-            IrLinqOperator.ToList or IrLinqOperator.ToSet => 0,
-            IrLinqOperator.ToMap => 4,
-            _ => -1,
+            IrLinqOperator.ToList => "toList",
+            IrLinqOperator.ToSet => "toHashSet",
+            IrLinqOperator.ToMap => "toDictionary",
+            _ => null,
         };
 
-        if (position < 0 || SlotOf(type, reachability) is not { } slot)
+        if (member is null || SlotOf(type, reachability) is not { } slot)
             return stageCall;
+
+        var position = PositionOf(type.Kind, member);
 
         return stageCall is TsCallExpression call && call.Arguments.Count <= position
             ? call with
@@ -120,7 +147,13 @@ internal static class CollectionTypeArgumentSlots
             return template;
 
         var count = TopLevelArgumentCount(text[(open + 1)..^1]);
-        var position = PositionOf(type.Kind, text.Contains(".adopt(") ? "adopt" : "new");
+
+        var member = Positions
+            .Keys.Select(key => key.Member)
+            .FirstOrDefault(name => text[..open].EndsWith($".{name}"))
+            ?? "new";
+
+        var position = PositionOf(type.Kind, member);
         var nulls = string.Concat(Enumerable.Repeat("null, ", Math.Max(0, position - count)));
         var index = template.Arguments.Count;
         var lead = count > 0 ? ", " : "";
@@ -191,33 +224,7 @@ internal static class CollectionTypeArgumentSlots
     public static TsExpression Descriptor(
         IrTypeRef argument,
         RuntimeTypeReachabilityResult reachability
-    ) =>
-        argument switch
-        {
-            IrCollectionTypeRef collection
-                when RuntimeCollections.DescriptorFactoryOf(collection.Kind) is { } factory =>
-                new TsCallExpression(
-                    factory,
-                    [.. collection.TypeArguments.Select(inner => Descriptor(inner, reachability))]
-                ),
-            IrNullableTypeRef nullable => new TsCallExpression(
-                new TsRuntimeHelperReference("nullableType"),
-                [Descriptor(nullable.Inner, reachability)]
-            ),
-            IrNamedTypeRef named when IsUnreachedClass(named, reachability) => Unknown(),
-            _ => IrToTsRuntimeTypeReferences.Of(argument, "type argument", reachability)
-                ?? Unknown(),
-        };
-
-    private static TsRuntimeHelperReference Unknown() => new("UnknownType");
-
-    private static bool IsUnreachedClass(
-        IrNamedTypeRef named,
-        RuntimeTypeReachabilityResult reachability
-    ) =>
-        named.Origin is null
-        && named.Semantics is { IsTranspilable: true }
-        && !reachability.Reaches(named.SupertypeKey);
+    ) => IrToTsRuntimeTypeReferences.ArgumentOf(argument, "type argument", reachability);
 
     private static bool IsRuntimeClass(TsExpression callee, IrCollectionTypeRef type) =>
         callee is TsRuntimeHelperReference { Name: var name }
@@ -228,9 +235,9 @@ internal static class CollectionTypeArgumentSlots
     /// dictionary or a set, after the options of <c>adopt</c>, else second.
     /// </summary>
     private static int PositionOf(IrCollectionKind kind, string member) =>
-        member == "adopt" || kind is IrCollectionKind.Dictionary or IrCollectionKind.HashSet
-            ? 2
-            : 1;
+        Positions.TryGetValue((kind, member), out var position)
+            ? position
+            : Positions[(IrCollectionKind.List, member)];
 
     private static IReadOnlyList<TsExpression> Padded(
         IReadOnlyList<TsExpression> arguments,

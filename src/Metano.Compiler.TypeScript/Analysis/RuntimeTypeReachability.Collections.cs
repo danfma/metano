@@ -15,7 +15,7 @@ namespace Metano.Compiler.TypeScript.Analysis;
 /// </summary>
 internal sealed partial class RuntimeTypeReachability
 {
-    private readonly HashSet<string> _unanswerableCollectionTests = new(StringComparer.Ordinal);
+    private readonly HashSet<CollectionTestKey> _unanswerableCollectionTests = [];
     private IReadOnlyList<INamedTypeSymbol>? _implementerTypes;
 
     /// <summary>
@@ -26,13 +26,13 @@ internal sealed partial class RuntimeTypeReachability
     {
         foreach (var root in roots)
         {
-            if (
-                DescribableType.Of(root) is { Kind: DescriptorKind.Class } described
-                && _typesByKey.ContainsKey(described.Key)
-            )
+            if (DescribableType.Of(root) is { } described && IsEmittedJsonClass(described))
                 Reach(described);
         }
     }
+
+    private bool IsEmittedJsonClass(DescribableType type) =>
+        type.Kind is DescriptorKind.Class && _typesByKey.ContainsKey(type.Key);
 
     /// <summary>Whether <paramref name="type"/> is a public class of a referenced <c>[TranspileAssembly]</c> library.</summary>
     internal static bool IsLibraryClassWithDescriptor(INamedTypeSymbol type) =>
@@ -67,7 +67,7 @@ internal sealed partial class RuntimeTypeReachability
                 Type.CollectionDefinitionName: { } name,
             }
         && RuntimeCollections.KindOfClrName(name) is { } kind
-        && questioned.Contains(kind);
+        && questioned.Contains(RuntimeCollections.ArrayBackedKindOf(kind));
 
     private static IReadOnlySet<IrCollectionKind> QuestionedCollectionClassesOf(IrCompilation ir) =>
         ir
@@ -135,7 +135,7 @@ internal sealed partial class RuntimeTypeReachability
             return;
 
         _unanswerableCollectionTests.Add(
-            RuntimeTypeReachabilityResult.UnanswerableKey(name, OperandKeyOf(question.InputType))
+            CollectionTestKey.From(tested, OperandKeyOf(question.InputType))
         );
 
         _report(
@@ -152,6 +152,9 @@ internal sealed partial class RuntimeTypeReachability
 
     private string OperandKeyOf(IrQuestionedType? operand)
     {
+        if (operand is { Shape: IrQuestionedTypeShape.Array })
+            return "[]";
+
         if (IsOpenOperand(operand))
             return "*";
 
@@ -177,6 +180,9 @@ internal sealed partial class RuntimeTypeReachability
         IrQuestionedType? operand
     )
     {
+        if (operand is { Shape: IrQuestionedTypeShape.Array })
+            return RuntimeCollections.ArrayBackedKindOf(tested) == IrCollectionKind.List;
+
         var open = IsOpenOperand(operand);
 
         if (!open && operand is not { Shape: IrQuestionedTypeShape.Named, Key: { } })
@@ -245,12 +251,13 @@ internal sealed partial class RuntimeTypeReachability
                     assembly.HasTranspileAssembly()
                 )
                 .SelectMany(assembly => TypesOf(assembly.GlobalNamespace))
-                .Where(type =>
-                    IsPublic(type)
-                    && DescribableType.Of(type) is { Kind: DescriptorKind.Class }
-                    && !DerivesFromRuntimeCollection(type)
-                ),
+                .Where(IsLibraryImplementerWithoutCollectionDescriptor),
         ];
+
+    private static bool IsLibraryImplementerWithoutCollectionDescriptor(INamedTypeSymbol type) =>
+        IsPublic(type)
+        && DescribableType.Of(type) is { Kind: DescriptorKind.Class }
+        && !DerivesFromRuntimeCollection(type);
 
     /// <summary>
     /// A class deriving from a runtime collection class answers the collection

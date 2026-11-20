@@ -46,7 +46,9 @@ internal static class IrToTsRuntimeTypeReferences
             _ when type.IsObject => new TsRuntimeHelperReference("ObjectType"),
             IrNullableTypeRef { Inner: var inner } => Of(inner, site, reachability)
                 is { } innerDescriptor
-                ? Helper("nullableType", innerDescriptor)
+                ? IsValueType(inner)
+                    ? Helper("nullableType", innerDescriptor)
+                    : innerDescriptor
                 : null,
             IrPrimitiveTypeRef primitive => TsRuntimePrimitive.Of(
                 primitive.Primitive,
@@ -77,8 +79,7 @@ internal static class IrToTsRuntimeTypeReferences
                 factory,
                 [
                     .. collection.TypeArguments.Select(argument =>
-                        Of(argument, site, reachability)
-                        ?? new TsRuntimeHelperReference("UnknownType")
+                        ArgumentOf(argument, site, reachability)
                     ),
                 ]
             )
@@ -134,9 +135,7 @@ internal static class IrToTsRuntimeTypeReferences
             return open;
 
         var descriptors = arguments
-            .Select(argument =>
-                Of(argument, site, reachability) ?? new TsRuntimeHelperReference("UnknownType")
-            )
+            .Select(argument => ArgumentOf(argument, site, reachability))
             .ToList();
 
         return Helper("specialize", open, new TsArrayLiteral(descriptors));
@@ -262,4 +261,21 @@ internal static class IrToTsRuntimeTypeReferences
 
     private static TsCallExpression Helper(string name, params TsExpression[] arguments) =>
         new(new TsRuntimeHelperReference(name), arguments);
+
+    /// <summary>A generic argument descriptor, or the erased-argument wildcard.</summary>
+    public static TsExpression ArgumentOf(
+        IrTypeRef type,
+        string site,
+        RuntimeTypeReachabilityResult reachability
+    ) =>
+        type is IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named
+        && !reachability.Reaches(named.SupertypeKey)
+            ? new TsRuntimeHelperReference("UnknownType")
+            : Of(type, site, reachability) ?? new TsRuntimeHelperReference("UnknownType");
+
+    private static bool IsValueType(IrTypeRef type) =>
+        type
+            is IrPrimitiveTypeRef { Primitive: not (IrPrimitive.String or IrPrimitive.Object) }
+                or IrNamedTypeRef { Semantics.IsValueType: true }
+                or IrNullableTypeRef;
 }

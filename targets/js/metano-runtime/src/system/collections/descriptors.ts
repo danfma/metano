@@ -48,9 +48,13 @@ import { Stack } from "./stack.ts";
  * is what tells two specializations apart.
  */
 function closed<C>(
-  open: CollectionType<unknown>,
+  open: RuntimeType<unknown>,
   typeArguments: ReadonlyArray<RuntimeType>,
 ): CollectionType<C> {
+  if (open.kind !== "collection") {
+    throw new TypeError("A collection factory requires a collection descriptor.");
+  }
+
   return specializeCollection(open, typeArguments) as CollectionType<C>;
 }
 

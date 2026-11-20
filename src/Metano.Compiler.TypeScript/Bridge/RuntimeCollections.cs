@@ -151,6 +151,15 @@ public static class RuntimeCollections
     );
 
     /// <summary>The CLR definition name (<c>System.Collections.Generic.List`1</c>) of <paramref name="kind"/>.</summary>
+    public static IrCollectionKind ArrayBackedKindOf(IrCollectionKind kind) =>
+        kind
+            is IrCollectionKind.IList
+                or IrCollectionKind.ICollection
+                or IrCollectionKind.IReadOnlyList
+                or IrCollectionKind.IReadOnlyCollection
+            ? IrCollectionKind.List
+            : kind;
+
     public static string ClrNameOf(IrCollectionKind kind) =>
         $"System.Collections.Generic.{ClrNamesByKind[kind]}";
 

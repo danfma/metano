@@ -5,6 +5,8 @@
 # is CHANGED. When a row starts matching .NET, delete its line and re-record.
 # `none` marks a divergence no open issue covers yet.
 
+CollectionTypeArgumentProbes.rawArrayInterfaceTestIsLoud #335  W4-C16: preserve MS0001 for a raw array interface test rather than silently answering false (.NET: true)
+
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call

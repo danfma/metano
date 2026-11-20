@@ -111,21 +111,23 @@ export function toDictionary<T, K, V>(
 ): ToDictionaryTerm<T, K, V | T> {
   const selectValue: (item: T) => V | T = valueSelector ?? ((item) => item);
 
+  function materialize(source: Iterable<T>): Dictionary<K, V | T> {
+    const dictionary = new Dictionary<K, V | T>(null, null, typeArguments);
+
+    for (const item of source) {
+      dictionary.add(keySelector(item), selectValue(item));
+    }
+
+    return dictionary;
+  }
+
   return {
     kind: "toDictionary",
     keySelector,
     valueSelector: selectValue,
     keyQueryable,
     valueQueryable,
-    apply: (source) => {
-      const dictionary = new Dictionary<K, V | T>(null, null, typeArguments);
-
-      for (const item of source) {
-        dictionary.add(keySelector(item), selectValue(item));
-      }
-
-      return dictionary;
-    },
+    apply: materialize,
   };
 }
 

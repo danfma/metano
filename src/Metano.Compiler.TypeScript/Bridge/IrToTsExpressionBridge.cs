@@ -1515,16 +1515,17 @@ public static partial class IrToTsExpressionBridge
                 TsRuntimeHelperReference.LinqPipeModule
             );
 
-            args.Add(MapLinqStage(stage, pipeOperator, context));
-        }
-
-        if (chain.ResultType is IrCollectionTypeRef collection)
-            args[^1] = CollectionTypeArgumentSlots.AppendToTerminal(
-                args[^1],
-                chain.Stages[^1].Operator,
-                collection,
-                context.RuntimeTypes
+            args.Add(
+                MapLinqStage(
+                    stage,
+                    pipeOperator,
+                    context,
+                    ReferenceEquals(stage, chain.Stages[^1]) && chain.ResultType is { } result
+                        ? UnwrapNullable(result) as IrCollectionTypeRef
+                        : null
+                )
             );
+        }
 
         var call = new TsLinqCall(args, importedHelpers);
 
@@ -1542,7 +1543,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapLinqStage(
         IrLinqStage stage,
         TsRuntimeHelperReference pipeOperator,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        IrCollectionTypeRef? terminalResult
     )
     {
         var ordered = TsEvaluationOrder.Bind(
@@ -1560,7 +1562,16 @@ public static partial class IrToTsExpressionBridge
             ]
         );
 
-        return BoundBefore(ordered.Bindings, call);
+        var terminal = terminalResult is { } collection
+            ? CollectionTypeArgumentSlots.AppendToTerminal(
+                call,
+                stage.Operator,
+                collection,
+                context.RuntimeTypes
+            )
+            : call;
+
+        return BoundBefore(ordered.Bindings, terminal);
     }
 
     /// <summary>

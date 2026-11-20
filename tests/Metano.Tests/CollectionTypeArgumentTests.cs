@@ -206,6 +206,132 @@ public class CollectionTypeArgumentTests
     }
 
     [Test]
+    public async Task AReadOnlyLiteralAndArrayConversion_CloseTheEmittedList()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is IReadOnlyList<string>;
+                    public static IReadOnlyList<int> Literal() => [1];
+                    public static IList<int> Convert(int[] xs) => xs;
+                }
+                """
+        );
+
+        await Assert.That(files["slots/probe.ts"]).Contains("[Int32Type]");
+        await Assert.That(files["slots/probe.ts"].Split("[Int32Type]").Length).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task ADispatchedSubclass_PassesSlotsOnEverySuperPath()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public class Bag : List<int>
+                {
+                    public Bag() : this(new int[] { 1 }) { }
+                    public Bag(IEnumerable<int> xs) : base(xs) { }
+                }
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is List<string>;
+                }
+                """
+        );
+
+        await Assert.That(files["slots/bag.ts"]).Contains("super(xs, [Int32Type]);");
+        await Assert.That(files["slots/bag.ts"]).DoesNotContain("super(xs);");
+    }
+
+    [Test]
+    public async Task ADirectArrayInterfaceTest_ReportsRatherThanReturningFalse()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Is(int[] xs) => xs is IList<int>;
+                    public static bool Narrow(List<int> xs) => xs is IList<int>;
+                }
+                """
+        );
+
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(1);
+
+        await Assert
+            .That(files["slots/probe.ts"])
+            .Contains("Unsupported expression: CollectionInterfaceTest");
+
+        await Assert.That(files["slots/probe.ts"]).Contains("isType(xs, iListType(Int32Type))");
+    }
+
+    [Test]
+    public async Task ReferenceNullability_IsNotANullableValueDescriptor()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is List<string>;
+                    public static List<string?> Strings() => new();
+                    public static List<Point?> Points() => new();
+                    public static List<int?> Values() => new();
+                }
+                """
+        );
+
+        await Assert.That(files["slots/probe.ts"]).Contains("[StringType]");
+        await Assert.That(files["slots/probe.ts"]).Contains("[Point.$runtimeType]");
+        await Assert.That(files["slots/probe.ts"]).Contains("[nullableType(Int32Type)]");
+        await Assert.That(files["slots/probe.ts"]).DoesNotContain("nullableType(StringType)");
+    }
+
+    [Test]
+    public async Task ASubclassReachedOnlyThroughACollectionArgument_OverridesTheRuntimeGetter()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public class Bag : List<int>;
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is List<string>;
+                    public static List<Bag> Make() => new();
+                }
+                """
+        );
+
+        await Assert.That(files["slots/bag.ts"]).Contains("static override get $runtimeType()");
+        await Assert.That(files["slots/bag.ts"]).DoesNotContain("base: () => List.$runtimeType");
+    }
+
+    [Test]
+    public async Task ASubclassReachedOnlyThroughAJsonMember_OverridesTheRuntimeGetter()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public class Bag : List<int>;
+                public record Hub(Bag Items);
+                [System.Text.Json.Serialization.JsonSerializable(typeof(Hub))]
+                public partial class JsonContext : System.Text.Json.Serialization.JsonSerializerContext
+                {
+                    public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                    protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(System.Type type) => null;
+                }
+                """
+        );
+
+        await Assert.That(files["slots/bag.ts"]).Contains("static override get $runtimeType()");
+    }
+
+    [Test]
     public async Task TheCompilersImplementerTable_AgreesWithTheRuntimeClassLiterals()
     {
         var directory = Path.Combine(

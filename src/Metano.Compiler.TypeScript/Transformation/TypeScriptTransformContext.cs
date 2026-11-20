@@ -89,6 +89,10 @@ public sealed class TypeScriptTransformContext(
     internal Analysis.RuntimeTypeReachabilityResult RuntimeTypes { get; init; } =
         Analysis.RuntimeTypeReachabilityResult.Empty;
 
+    /// <summary>JSON contracts planned once, before reachability and group emission.</summary>
+    internal IReadOnlyDictionary<INamedTypeSymbol, Json.JsonContextPlan?> JsonPlans { get; init; } =
+        new Dictionary<INamedTypeSymbol, Json.JsonContextPlan?>(SymbolEqualityComparer.Default);
+
     /// <summary>
     /// The keys of the top-level <c>[StrictUnionGuard]</c> bases whose guards
     /// live in their own <c>&lt;base-file&gt;.guard</c> module (spec 011

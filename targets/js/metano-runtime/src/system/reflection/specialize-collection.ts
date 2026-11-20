@@ -115,8 +115,16 @@ function isReferenceType(type: RuntimeType): boolean {
     case "delegate":
     case "object":
       return true;
-    default:
+    case "nullable":
+    case "enum":
+    case "stringEnum":
+    case "unknown":
+    case "union":
       return false;
+    default: {
+      const unhandled: never = type;
+      return unhandled;
+    }
   }
 }
 

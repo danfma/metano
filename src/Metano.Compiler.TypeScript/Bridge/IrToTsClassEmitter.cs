@@ -287,7 +287,10 @@ internal sealed class IrToTsClassEmitter(
             // valid type, and silently dropping the type would hide the gap.
             return TryBuildConstructorDispatcherFromIr(
                 ir,
-                new DispatcherBaseCall(extendsType, keepsBaseMessage),
+                new DispatcherBaseCall(extendsType, keepsBaseMessage)
+                {
+                    CollectionBase = ir.BaseType as IrCollectionTypeRef,
+                },
                 selectors,
                 implicitParameterlessBody,
                 groupAccessibility,

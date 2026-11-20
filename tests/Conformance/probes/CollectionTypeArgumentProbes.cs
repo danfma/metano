@@ -11,6 +11,84 @@ public static class CollectionTypeArgumentProbes
 
     public class IntBag : List<int>;
 
+    public class DispatchedBag : List<int>
+    {
+        public DispatchedBag()
+            : this(new[] { 1 }) { }
+
+        public DispatchedBag(IEnumerable<int> items)
+            : base(items) { }
+    }
+
+    private static Func<int, int> KeySelector() => x => x;
+
+    private static Func<int, int> ValueSelector() => x => x * 10;
+
+    public static string DispatcherAndThisChainCarrySlots()
+    {
+        object empty = new DispatchedBag();
+        object copied = new DispatchedBag(new[] { 2 });
+
+        return $"{empty is List<int>},{empty is List<string>},{copied is IList<int>},{copied is IList<string>}";
+    }
+
+    public static string ReadOnlyLiteralsCarrySlots()
+    {
+        IReadOnlyList<int> xs = [1, 2];
+
+        return $"{xs is IReadOnlyList<int>},{xs is IReadOnlyList<string>},{xs is IReadOnlyList<object>}";
+    }
+
+    public static string ConvertedArraysCarrySlots()
+    {
+        int[] array = [1];
+        IList<int> xs = array;
+
+        return $"{xs is IList<int>},{xs is IList<string>},{xs is IReadOnlyList<object>}";
+    }
+
+    public static string BoundLinqTerminalCarriesSlots()
+    {
+        object map = new[] { 1 }.ToDictionary(
+            elementSelector: ValueSelector(),
+            keySelector: KeySelector()
+        );
+
+        return $"{map is Dictionary<int, int>},{map is Dictionary<int, string>}";
+    }
+
+    public static string NullableLinqResultCarriesSlots()
+    {
+        IEnumerable<int>? xs = new[] { 1 };
+        object? list = xs?.ToList();
+
+        return $"{list is List<int>},{list is List<string>}";
+    }
+
+    public static string ReferenceAnnotationsAreErased()
+    {
+        object strings = new List<string?> { null };
+        object slots = new List<Slot?> { null };
+        object nullableInts = new List<int?> { null };
+
+        return $"{strings is List<string>},{strings is IReadOnlyList<object>},{slots is List<Slot>},"
+            + $"{nullableInts is List<int?>},{nullableInts is List<int>},{nullableInts is IReadOnlyList<object>}";
+    }
+
+    public static string ReachedSubclassRetainsClassIdentity()
+    {
+        object bag = new IntBag();
+
+        return $"{bag is IntBag},{bag.GetType() == typeof(IntBag)},{bag is List<int>},{bag is List<string>}";
+    }
+
+    public static string RawArrayInterfaceTestIsLoud()
+    {
+        int[] array = [1];
+
+        return $"{array is IList<int>}";
+    }
+
     public static string ListTests()
     {
         object o = new List<int> { 1 };

@@ -440,22 +440,28 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorDeclaration ctor,
         DispatcherBaseCall baseCall,
         IrToTsBridgeContext context
-    ) =>
-        IrToTsClassBridge.BuildBaseCall(
+    )
+    {
+        var call = IrToTsClassBridge.BuildBaseCall(
             ctor,
             baseCall.BaseClass,
             baseCall.KeepsBaseMessage,
             context
         )
-        ?? (
-            baseCall.ExtendsBase
-                ? new TsBaseConstructorCall(
-                    Temporaries: [],
-                    Arguments: [],
-                    KeepsBaseMessage: baseCall.KeepsBaseMessage
-                )
-                : null
-        );
+            ?? (
+                baseCall.ExtendsBase
+                    ? new TsBaseConstructorCall(
+                        Temporaries: [],
+                        Arguments: [],
+                        KeepsBaseMessage: baseCall.KeepsBaseMessage
+                    )
+                    : null
+            );
+
+        return call is not null && baseCall.CollectionBase is { } collection
+            ? CollectionTypeArgumentSlots.AppendToSuper(call, collection, context.RuntimeTypes)
+            : call;
+    }
 }
 
 /// <summary>
@@ -467,6 +473,8 @@ public static class IrToTsConstructorDispatcherBridge
 /// </summary>
 internal sealed record DispatcherBaseCall(TsType? BaseClass, bool KeepsBaseMessage)
 {
+    public IrCollectionTypeRef? CollectionBase { get; init; }
+
     public bool ExtendsBase => BaseClass is not null;
 }
 

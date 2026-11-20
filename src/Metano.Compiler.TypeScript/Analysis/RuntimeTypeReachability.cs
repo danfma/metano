@@ -2,6 +2,7 @@ using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.Bridge;
 using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
 
@@ -759,13 +760,22 @@ internal sealed partial class RuntimeTypeReachability
     private HashSet<SupertypeKey> OverridingGetters() =>
         _reachedOrder
             .Select(key => _typesByKey[key])
-            .Where(type =>
-                type.Kind is DescriptorKind.Class
-                && type.Symbol.BaseType is { SpecialType: not SpecialType.System_Object } baseType
-                && (DescribableOf(baseType) is not null || HasRuntimeDescriptor(baseType))
-            )
+            .Where(OverridesDescriptorGetter)
             .Select(type => type.Key)
             .ToHashSet();
+
+    private bool OverridesDescriptorGetter(DescribableType type) =>
+        type.Kind is DescriptorKind.Class
+        && type.Symbol.BaseType is { SpecialType: not SpecialType.System_Object } baseType
+        && (
+            DescribableOf(baseType) is not null
+            || HasRuntimeDescriptor(baseType)
+            || IsRuntimeCollectionClass(baseType)
+        );
+
+    private static bool IsRuntimeCollectionClass(INamedTypeSymbol type) =>
+        RuntimeCollections.KindOfClrName(ClrNameOf(type.OriginalDefinition)) is { } kind
+        && !RuntimeCollections.IsInterface(kind);
 
     private DescribableType? DescribableOf(IrQuestionedType questioned) =>
         questioned is { Shape: IrQuestionedTypeShape.Named, Key: { } key }

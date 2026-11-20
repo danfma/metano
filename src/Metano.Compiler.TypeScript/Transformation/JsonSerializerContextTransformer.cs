@@ -31,7 +31,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
-        if (Plan(type, _context.ReportDiagnostic) is not { } plan)
+        if (PlanOf(type) is not { } plan)
             return;
 
         var contextName = _context.ResolveTsName(type);
@@ -97,15 +97,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     ///     spells — a member the runtime assigns after the factory ran
     ///     (<c>assignIfPresent</c>), a dictionary key.</item>
     /// </list>
-    /// The plan is computed silently; <see cref="Transform"/> reports its
-    /// diagnostics. The System.Text.Json source generator declares a
+    /// The shared setup phase computes the plan and reports its diagnostics once.
+    /// The System.Text.Json source generator declares a
     /// <c>JsonTypeInfo&lt;T&gt;</c> member per root, whose scan yields the
     /// same helpers, but the context must not depend on the generator having
     /// run.
     /// </summary>
     public IReadOnlySet<IrRuntimeRequirement> RuntimeRequirementsOf(INamedTypeSymbol contextType)
     {
-        if (Plan(contextType, report: _ => { }) is not { } plan)
+        if (PlanOf(contextType) is not { } plan)
             return new HashSet<IrRuntimeRequirement>();
 
         return DescriptorRequirements(plan);
@@ -163,12 +163,12 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     /// gets a <c>TypeSpec</c>
     /// naming the class (<c>type: T</c>, typed <c>abstract new (...) =&gt; T</c>)
     /// and calling it (<c>factory: (p) =&gt; new T(...)</c>), both outside the
-    /// class body, so the class must keep a public constructor (FR-049). The
-    /// plan is computed silently, as in <see cref="RuntimeRequirementsOf"/>.
+    /// class body, so the class must keep a public constructor (FR-049). Reads
+    /// the same precomputed plan as <see cref="RuntimeRequirementsOf"/>.
     /// </summary>
     public IEnumerable<INamedTypeSymbol> ConstructedTypesOf(INamedTypeSymbol contextType)
     {
-        if (Plan(contextType, report: _ => { }) is not { } plan)
+        if (PlanOf(contextType) is not { } plan)
             return [];
 
         return plan
@@ -184,7 +184,21 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     /// <c>MS0035</c> / <c>MS0036</c> / <c>MS0037</c> to <paramref name="report"/>. <c>null</c>
     /// when the context has no admitted root (nothing is emitted).
     /// </summary>
-    private JsonContextPlan? Plan(INamedTypeSymbol contextType, Action<MetanoDiagnostic> report)
+    internal IReadOnlyDictionary<INamedTypeSymbol, JsonContextPlan?> PlanContexts(
+        IEnumerable<INamedTypeSymbol> contexts
+    ) =>
+        contexts.ToDictionary(
+            type => type,
+            type => BuildPlan(type, _context.ReportDiagnostic),
+            (IEqualityComparer<INamedTypeSymbol>)SymbolEqualityComparer.Default
+        );
+
+    private JsonContextPlan? PlanOf(INamedTypeSymbol type) => _context.JsonPlans[type];
+
+    private JsonContextPlan? BuildPlan(
+        INamedTypeSymbol contextType,
+        Action<MetanoDiagnostic> report
+    )
     {
         var admission = new JsonContractAdmission(_context);
         var roots = new JsonContractRoots(admission, report).Read(contextType);

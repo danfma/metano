@@ -161,7 +161,10 @@ public static partial class IrToTsExpressionBridge
                 ],
                 TypeArguments: CollectionTypeArguments(target, context)
             ),
-            target,
+            target with
+            {
+                Kind = RuntimeCollections.ArrayBackedKindOf(target.Kind),
+            },
             context.RuntimeTypes
         );
 

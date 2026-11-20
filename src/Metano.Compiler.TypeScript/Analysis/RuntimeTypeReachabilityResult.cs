@@ -37,36 +37,10 @@ internal sealed record RuntimeTypeReachabilityResult
     /// <summary>
     /// The collection-interface tests that report <c>MS0001</c> because a type that
     /// is not a runtime collection (or a runtime class with another shape) can be
-    /// the operand (W4-17, D31), keyed as <see cref="UnanswerableKey"/> builds it.
+    /// the operand (W4-17, D31).
     /// </summary>
-    public IReadOnlySet<string> UnanswerableCollectionTests { get; init; } =
-        new HashSet<string>(StringComparer.Ordinal);
-
-    /// <summary>Whether a construction of <paramref name="kind"/> carries its type arguments.</summary>
-    public bool AsksAbout(IrCollectionKind kind) =>
-        ReachesEverything || QuestionedCollectionClasses.Contains(kind);
-
-    /// <summary>
-    /// The key of a collection test: the tested definition name and the operand's
-    /// type (<c>*</c> when it is <c>object</c>, a type parameter or unknown).
-    /// </summary>
-    internal static string UnanswerableKey(string testedClrName, string operand) =>
-        $"{testedClrName}|{operand}";
-
-    /// <summary>Whether the test of <paramref name="tested"/> reports MS0001.</summary>
-    public bool IsUnanswerable(IrCollectionKind tested, IrTypeRef? operand) =>
-        UnanswerableCollectionTests.Contains(
-            UnanswerableKey(Bridge.RuntimeCollections.ClrNameOf(tested), OperandKey(operand))
-        );
-
-    private static string OperandKey(IrTypeRef? operand) =>
-        operand switch
-        {
-            IrNullableTypeRef nullable => OperandKey(nullable.Inner),
-            IrCollectionTypeRef collection => Bridge.RuntimeCollections.ClrNameOf(collection.Kind),
-            IrNamedTypeRef named when !named.IsObject => $"{named.Namespace}.{named.Name}",
-            _ => "*",
-        };
+    public IReadOnlySet<CollectionTestKey> UnanswerableCollectionTests { get; init; } =
+        new HashSet<CollectionTestKey>();
 
     /// <summary>
     /// The types whose synthesized structural guard the compilation emits: the
@@ -148,6 +122,24 @@ internal sealed record RuntimeTypeReachabilityResult
 
     /// <summary>Whether this is <see cref="Unchecked"/>.</summary>
     public bool IsUnchecked => ReachesEverything;
+
+    /// <summary>Whether a construction of <paramref name="kind"/> carries its type arguments.</summary>
+    public bool AsksAbout(IrCollectionKind kind) =>
+        ReachesEverything || QuestionedCollectionClasses.Contains(kind);
+
+    /// <summary>Whether the test of <paramref name="tested"/> reports MS0001.</summary>
+    public bool IsUnanswerable(IrCollectionKind tested, IrTypeRef? operand) =>
+        UnanswerableCollectionTests.Contains(CollectionTestKey.From(tested, OperandKey(operand)));
+
+    private static string OperandKey(IrTypeRef? operand) =>
+        operand switch
+        {
+            IrNullableTypeRef nullable => OperandKey(nullable.Inner),
+            IrArrayTypeRef => "[]",
+            IrCollectionTypeRef collection => Bridge.RuntimeCollections.ClrNameOf(collection.Kind),
+            IrNamedTypeRef named when !named.IsObject => $"{named.Namespace}.{named.Name}",
+            _ => "*",
+        };
 
     /// <summary>Whether the descriptor of <paramref name="key"/> is emitted.</summary>
     public bool Reaches(SupertypeKey key) => ReachesEverything || Reached.Contains(key);

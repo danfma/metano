@@ -106,7 +106,7 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
   }
 
   /** The runtime type descriptor of the open `List<T>`: a data literal, built on first read. */
-  static get $runtimeType(): CollectionType<List<unknown>> {
+  static get $runtimeType(): RuntimeType<List<unknown>> {
     List$rt ??= {
       kind: "collection",
       collection: "List",
@@ -123,7 +123,8 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
         { collection: "IReadOnlyCollection", arguments: [0] },
       ],
       test: (value: unknown): value is List<unknown> => value instanceof List,
-      closeFor: (instance) => closeCollectionFor(List.$runtimeType, instance),
+      closeFor: (instance) =>
+        closeCollectionFor(List$rt as CollectionType<List<unknown>>, instance),
     };
 
     return List$rt;
@@ -529,7 +530,7 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
  * `asArray` tell it apart.
  */
 class FixedSizeList<T> extends List<T> {
-  static override get $runtimeType(): CollectionType<List<unknown>> {
+  static override get $runtimeType(): RuntimeType<List<unknown>> {
     return List.$runtimeType;
   }
 
