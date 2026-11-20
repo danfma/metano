@@ -130,8 +130,14 @@ export class ImmutableArrayBuilder<T> extends ImmutableListBuilderCore<T> {
 }
 
 /** `builder.ToImmutable()`: a copy, never sharing the builder's storage. */
-export function toImmutableArray<T>(builder: ImmutableArrayBuilder<T>): ImmutableArray<T> {
-  return ImmutableArray.of(builder._list.toArray(), builder.$typeArguments$ImmutableArrayBuilder);
+export function toImmutableArray<T>(
+  builder: ImmutableArrayBuilder<T>,
+  typeArguments?: readonly RuntimeType[] | null,
+): ImmutableArray<T> {
+  return ImmutableArray.of(
+    builder._list.toArray(),
+    typeArguments ?? builder.$typeArguments$ImmutableArrayBuilder,
+  );
 }
 
 /** .NET's array-builder enumerator: an index walk re-reading `count` on every step, never checked. */

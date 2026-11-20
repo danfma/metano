@@ -24,6 +24,10 @@ import type {
   IImmutableSet,
 } from "./immutable-interfaces.ts";
 import { ImmutableList } from "./immutable-list.ts";
+import { ImmutableListBuilder } from "./immutable-list-builder.ts";
+import { ImmutableArrayBuilder } from "./immutable-array-builder.ts";
+import { ImmutableHashSetBuilder } from "./immutable-hash-set-builder.ts";
+import { ImmutableDictionaryBuilder } from "./immutable-dictionary-builder.ts";
 import type {
   ICollection,
   IDictionary,
@@ -61,6 +65,34 @@ function closed<C>(
 
 export function listType<T>(element: RuntimeType<T>): CollectionType<List<T>> {
   return closed<List<T>>(List.$runtimeType, [element]);
+}
+
+export function immutableListBuilderType<T>(
+  element: RuntimeType<T>,
+): CollectionType<ImmutableListBuilder<T>> {
+  return closed<ImmutableListBuilder<T>>(ImmutableListBuilder.$runtimeType, [element]);
+}
+
+export function immutableArrayBuilderType<T>(
+  element: RuntimeType<T>,
+): CollectionType<ImmutableArrayBuilder<T>> {
+  return closed<ImmutableArrayBuilder<T>>(ImmutableArrayBuilder.$runtimeType, [element]);
+}
+
+export function immutableHashSetBuilderType<T>(
+  element: RuntimeType<T>,
+): CollectionType<ImmutableHashSetBuilder<T>> {
+  return closed<ImmutableHashSetBuilder<T>>(ImmutableHashSetBuilder.$runtimeType, [element]);
+}
+
+export function immutableDictionaryBuilderType<K, V>(
+  key: RuntimeType<K>,
+  value: RuntimeType<V>,
+): CollectionType<ImmutableDictionaryBuilder<K, V>> {
+  return closed<ImmutableDictionaryBuilder<K, V>>(ImmutableDictionaryBuilder.$runtimeType, [
+    key,
+    value,
+  ]);
 }
 
 export function dictionaryType<K, V>(

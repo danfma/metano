@@ -1,5 +1,5 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor } from "./close-collection.ts";
+import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import {
   defaultEqualityComparerFor,
@@ -56,7 +56,13 @@ export class ImmutableDictionary<K, V>
   }
 
   /** `ImmutableDictionary<K, V>.Empty`: one instance (default comparers), built on first read. */
-  static empty<K, V>(): ImmutableDictionary<K, V> {
+  static empty<K, V>(typeArguments?: readonly RuntimeType[] | null): ImmutableDictionary<K, V> {
+    if (typeArguments) {
+      return emptyCollectionFor(ImmutableDictionary.$runtimeType, typeArguments, () =>
+        ImmutableDictionary.create<K, V>(null, null, typeArguments),
+      );
+    }
+
     empty ??= new ImmutableDictionary<unknown, unknown>(
       new ImmutableHashStorage(null),
       0,
@@ -118,6 +124,7 @@ export class ImmutableDictionary<K, V>
     valueSelector?: null,
     keyComparer?: IEqualityComparer<K> | null,
     valueComparer?: IEqualityComparer<S> | null,
+    typeArguments?: readonly RuntimeType[] | null,
   ): ImmutableDictionary<K, S>;
 
   /** `source.ToImmutableDictionary(keySelector, elementSelector[, keyComparer[, valueComparer]])`. */
@@ -127,6 +134,7 @@ export class ImmutableDictionary<K, V>
     valueSelector: (item: S) => V,
     keyComparer?: IEqualityComparer<K> | null,
     valueComparer?: IEqualityComparer<V> | null,
+    typeArguments?: readonly RuntimeType[] | null,
   ): ImmutableDictionary<K, V>;
 
   static fromSelectors<S, K, V>(
@@ -135,6 +143,7 @@ export class ImmutableDictionary<K, V>
     valueSelector?: ((item: S) => V) | null,
     keyComparer?: IEqualityComparer<K> | null,
     valueComparer?: IEqualityComparer<S | V> | null,
+    typeArguments?: readonly RuntimeType[] | null,
   ): ImmutableDictionary<K, S | V> {
     if (source === null || source === undefined) {
       throwArgumentNull("source");
@@ -150,7 +159,9 @@ export class ImmutableDictionary<K, V>
       entries.push([keySelector(item), valueSelector ? valueSelector(item) : item]);
     }
 
-    return ImmutableDictionary.create<K, S | V>(keyComparer, valueComparer).addRange(entries);
+    return ImmutableDictionary.create<K, S | V>(keyComparer, valueComparer, typeArguments).addRange(
+      entries,
+    );
   }
 
   static get $runtimeType(): CollectionType<ImmutableDictionary<unknown, unknown>> {

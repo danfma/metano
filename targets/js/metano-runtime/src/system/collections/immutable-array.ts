@@ -1,5 +1,5 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor } from "./close-collection.ts";
+import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import {
   type ComparisonArgument,
@@ -43,7 +43,13 @@ export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
   }
 
   /** `ImmutableArray<T>.Empty`, `ImmutableArray.Create<T>()`: one instance, built on first read. */
-  static empty<T>(): ImmutableArray<T> {
+  static empty<T>(typeArguments?: readonly RuntimeType[] | null): ImmutableArray<T> {
+    if (typeArguments) {
+      return emptyCollectionFor(ImmutableArray.$runtimeType, typeArguments, () =>
+        ImmutableArray.of<T>([], typeArguments),
+      );
+    }
+
     empty ??= new ImmutableArray<unknown>([], 0, undefined);
 
     // The one empty instance serves every `T`: it holds no element.

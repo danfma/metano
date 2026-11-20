@@ -1,5 +1,5 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor } from "./close-collection.ts";
+import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import type { ComparisonArgument, IEqualityComparer } from "./default-comparer.ts";
 import { at, ImmutableListCore } from "./immutable-list-core.ts";
@@ -32,7 +32,13 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
   }
 
   /** `ImmutableList<T>.Empty`, `Create()`: one instance, built on first read. */
-  static empty<T>(): ImmutableList<T> {
+  static empty<T>(typeArguments?: readonly RuntimeType[] | null): ImmutableList<T> {
+    if (typeArguments) {
+      return emptyCollectionFor(ImmutableList.$runtimeType, typeArguments, () =>
+        ImmutableList.of<T>([], typeArguments),
+      );
+    }
+
     empty ??= new ImmutableList<unknown>([], 0, undefined);
 
     // The one empty instance serves every `T`: it holds no element.

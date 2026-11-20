@@ -135,6 +135,12 @@ export class ImmutableListBuilder<T> extends ImmutableListBuilderCore<T> {
 }
 
 /** `builder.ToImmutable()`: a copy, never sharing the builder's storage. */
-export function toImmutableList<T>(builder: ImmutableListBuilder<T>): ImmutableList<T> {
-  return ImmutableList.of(builder._list.toArray(), builder.$typeArguments$ImmutableListBuilder);
+export function toImmutableList<T>(
+  builder: ImmutableListBuilder<T>,
+  typeArguments?: readonly RuntimeType[] | null,
+): ImmutableList<T> {
+  return ImmutableList.of(
+    builder._list.toArray(),
+    typeArguments ?? builder.$typeArguments$ImmutableListBuilder,
+  );
 }

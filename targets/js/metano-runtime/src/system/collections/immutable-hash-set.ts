@@ -1,5 +1,5 @@
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor } from "./close-collection.ts";
+import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { defaultEqualityComparerFor, type IEqualityComparer } from "./default-comparer.ts";
 import type { IImmutableSet } from "./immutable-interfaces.ts";
@@ -39,7 +39,13 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
   }
 
   /** `ImmutableHashSet<T>.Empty`: one instance (default comparer), built on first read. */
-  static empty<T>(): ImmutableHashSet<T> {
+  static empty<T>(typeArguments?: readonly RuntimeType[] | null): ImmutableHashSet<T> {
+    if (typeArguments) {
+      return emptyCollectionFor(ImmutableHashSet.$runtimeType, typeArguments, () =>
+        ImmutableHashSet.of<T>([], null, typeArguments),
+      );
+    }
+
     empty ??= new ImmutableHashSet<unknown>(new ImmutableHashStorage(null), 0, undefined);
 
     // The one empty instance serves every `T`: it holds no element.

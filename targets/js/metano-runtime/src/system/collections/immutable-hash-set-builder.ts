@@ -193,9 +193,10 @@ export class ImmutableHashSetBuilder<T> implements ISet<T> {
  */
 export function toImmutableHashSet<T>(
   source: ImmutableHashSetBuilder<T> | Iterable<T>,
+  typeArguments?: readonly RuntimeType[] | null,
 ): ImmutableHashSet<T> {
   if (!(source instanceof ImmutableHashSetBuilder)) {
-    return ImmutableHashSet.from(source);
+    return ImmutableHashSet.from(source, null, typeArguments);
   }
 
   const builder = source;
@@ -203,6 +204,6 @@ export function toImmutableHashSet<T>(
   return ImmutableHashSet.from(
     builder._set.toArray(),
     builder._set._store.comparer,
-    builder.$typeArguments$ImmutableHashSetBuilder,
+    typeArguments ?? builder.$typeArguments$ImmutableHashSetBuilder,
   );
 }

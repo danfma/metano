@@ -211,9 +211,10 @@ export class ImmutableDictionaryBuilder<K, V> implements IDictionary<K, V> {
  */
 export function toImmutableDictionary<K, V>(
   source: ImmutableDictionaryBuilder<K, V> | Iterable<readonly [K, V]>,
+  typeArguments?: readonly RuntimeType[] | null,
 ): ImmutableDictionary<K, V> {
   if (!(source instanceof ImmutableDictionaryBuilder)) {
-    return ImmutableDictionary.from(source);
+    return ImmutableDictionary.from(source, null, null, typeArguments);
   }
 
   const builder = source;
@@ -222,6 +223,6 @@ export function toImmutableDictionary<K, V>(
     [...builder._dictionary],
     builder._dictionary._store.comparer,
     builder._valueComparer,
-    builder.$typeArguments$ImmutableDictionaryBuilder,
+    typeArguments ?? builder.$typeArguments$ImmutableDictionaryBuilder,
   );
 }

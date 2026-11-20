@@ -1,6 +1,6 @@
 import { NullReferenceException } from "../exceptions/null-reference-exception.ts";
 import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
-import { closeCollectionFor } from "./close-collection.ts";
+import { closeCollectionFor, emptyCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import { elementEquals } from "./default-comparer.ts";
@@ -48,7 +48,15 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   }
 
   /** `ReadOnlyCollection<T>.Empty`: one shared instance, built on first read. */
-  static empty<T>(): ReadOnlyList<T> {
+  static empty<T>(typeArguments?: readonly RuntimeType[] | null): ReadOnlyList<T> {
+    if (typeArguments) {
+      return emptyCollectionFor(
+        ReadOnlyList.$runtimeType,
+        typeArguments,
+        () => new ReadOnlyList<T>([], typeArguments),
+      );
+    }
+
     empty ??= new ReadOnlyList<unknown>([]);
 
     // The one empty instance serves every `T`: it holds no element.
@@ -186,12 +194,15 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
 }
 
 /** `list.AsReadOnly()`: a member call on `null` throws `NullReferenceException`, as .NET does. */
-export function asReadOnly<T>(list: List<T>): ReadOnlyList<T> {
+export function asReadOnly<T>(
+  list: List<T>,
+  typeArguments?: readonly RuntimeType[] | null,
+): ReadOnlyList<T> {
   if (list === null || list === undefined) {
     throw new NullReferenceException();
   }
 
-  return new ReadOnlyList(list);
+  return new ReadOnlyList(list, typeArguments);
 }
 
 function isArraySource<T>(source: IList<T> | readonly T[]): source is readonly T[] {

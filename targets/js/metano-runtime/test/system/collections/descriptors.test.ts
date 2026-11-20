@@ -19,6 +19,14 @@ import {
   sortedListType,
   sortedSetType,
   stackType,
+  immutableListType,
+  immutableHashSetType,
+  immutableDictionaryType,
+  readOnlyListType,
+  immutableListBuilderType,
+  immutableArrayBuilderType,
+  immutableHashSetBuilderType,
+  immutableDictionaryBuilderType,
 } from "#/system/collections/descriptors.ts";
 
 import { ConcurrentDictionary } from "#/system/collections/concurrent-dictionary.ts";
@@ -42,6 +50,45 @@ import { HashSet } from "#/system/collections/hash-set.ts";
 import { List } from "#/system/collections/list.ts";
 import { Queue } from "#/system/collections/queue.ts";
 import { ObjectType, UnknownType } from "#/system/reflection/well-known-types.ts";
+
+describe("H/J closed factory slots", () => {
+  test("empty specializations keep their slots and per-type singleton identity", () => {
+    const cases = [
+      [ImmutableList.empty([Int32Type]), immutableListType(Int32Type), immutableListType(StringType)],
+      [ImmutableArray.empty([Int32Type]), immutableArrayType(Int32Type), immutableArrayType(StringType)],
+      [ImmutableHashSet.empty([Int32Type]), immutableHashSetType(Int32Type), immutableHashSetType(StringType)],
+      [ReadOnlyList.empty([Int32Type]), readOnlyListType(Int32Type), readOnlyListType(StringType)],
+      [ImmutableDictionary.empty([StringType, Int32Type]), immutableDictionaryType(StringType, Int32Type), immutableDictionaryType(StringType, StringType)],
+    ] as const;
+
+    for (const [value, matching, different] of cases) {
+      expect(matching.test(value)).toBe(true);
+      expect(different.test(value)).toBe(false);
+      expect(getRuntimeType(value)).toBe(matching);
+    }
+
+    expect(ImmutableList.empty([Int32Type])).toBe(ImmutableList.empty([Int32Type]));
+    expect(ImmutableArray.empty([Int32Type])).toBe(ImmutableArray.empty([Int32Type]));
+    expect(ImmutableHashSet.empty([Int32Type])).toBe(ImmutableHashSet.empty([Int32Type]));
+    expect(ImmutableDictionary.empty([StringType, Int32Type])).toBe(ImmutableDictionary.empty([StringType, Int32Type]));
+    expect(ReadOnlyList.empty([Int32Type])).toBe(ReadOnlyList.empty([Int32Type]));
+  });
+
+  test("builder factories close exactly like collection factories", () => {
+    const cases = [
+      [new ImmutableListBuilder(null, [Int32Type]), immutableListBuilderType(Int32Type), immutableListBuilderType(StringType)],
+      [new ImmutableArrayBuilder(null, [Int32Type]), immutableArrayBuilderType(Int32Type), immutableArrayBuilderType(StringType)],
+      [new ImmutableHashSetBuilder(null, null, [Int32Type]), immutableHashSetBuilderType(Int32Type), immutableHashSetBuilderType(StringType)],
+      [new ImmutableDictionaryBuilder(null, null, null, [StringType, Int32Type]), immutableDictionaryBuilderType(StringType, Int32Type), immutableDictionaryBuilderType(StringType, StringType)],
+    ] as const;
+
+    for (const [value, matching, different] of cases) {
+      expect(matching.test(value)).toBe(true);
+      expect(different.test(value)).toBe(false);
+      expect(getRuntimeType(value)).toBe(matching);
+    }
+  });
+});
 
 describe("sorted-class descriptors", () => {
   test("factories are memoized", () => {

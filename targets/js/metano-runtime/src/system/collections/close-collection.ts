@@ -11,6 +11,22 @@ import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts"
 import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
 
 let memo: MemoNode<CollectionType<unknown>> | undefined;
+let empties: MemoNode<object> | undefined;
+
+/** A closed generic's empty singleton, keyed by the same descriptor identities as its slot. */
+export function emptyCollectionFor<T extends object>(
+  open: CollectionType<unknown>,
+  typeArguments: readonly RuntimeType[],
+  create: () => T,
+): T {
+  empties ??= {};
+
+  const node = memoNodeFor(empties, [open, ...typeArguments]);
+  node.value ??= create();
+
+  // The open descriptor and argument identities uniquely name this closed collection type.
+  return node.value as T;
+}
 
 /**
  * `open` closed over the `$typeArguments$<Class>` slot `instance` carries, or `open`
