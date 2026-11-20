@@ -94,8 +94,7 @@ const copySetSubject: ModelSubject<readonly number[]> = {
   count: (version) => version.length,
   contents: (version) => [...version],
   contains: (version, value) => version.includes(value),
-  tryGetValue: (version, value, missing) =>
-    version.includes(value) ? [true, value] : [false, missing],
+  tryGetValue: (version, value) => [version.includes(value), value],
 };
 
 /** A plain-copy dictionary over insertion-ordered Maps. */

@@ -100,12 +100,12 @@ export class ImmutableHashSetBuilder<T> implements ISet<T> {
     return this._set.contains(item);
   }
 
-  /** `TryGetValue`: the stored element equal to `equalValue`, or the caller's `default(T)` (D30). */
-  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T] {
+  /** `TryGetValue`: the stored element equal to `equalValue`, or `equalValue` itself on a miss, as .NET's (the `default(T)` argument, D30, is not read). */
+  tryGetValue(equalValue: T, _defaultValue?: unknown): readonly [boolean, T] {
     const store = this._set._store;
 
     // `findKey` after `has`: a hit, so never the miss `undefined`.
-    return store.has(equalValue) ? [true, store.findKey(equalValue) as T] : [false, defaultValue];
+    return store.has(equalValue) ? [true, store.findKey(equalValue) as T] : [false, equalValue];
   }
 
   clear(): void {

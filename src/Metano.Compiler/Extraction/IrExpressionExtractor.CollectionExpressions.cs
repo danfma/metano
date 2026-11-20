@@ -27,14 +27,20 @@ public sealed partial class IrExpressionExtractor
         if (operation?.Type is not INamedTypeSymbol target)
             return ListLiteralOf(coll, operation);
 
-        if (IsSetTarget(target))
+        if (
+            IsSetTarget(target)
+            || StageCollectionOf(target) is { Kind: IrCollectionKind.ImmutableHashSet }
+        )
             return NewCollectionOf(
                 (IrTypeRef?)StageCollectionOf(target)
                     ?? new IrSetTypeRef(ToIrTypeArgument(target, 0)),
                 coll
             );
 
-        if (!IsMapTarget(target))
+        if (
+            !IsMapTarget(target)
+            && StageCollectionOf(target) is not { Kind: IrCollectionKind.ImmutableDictionary }
+        )
             return ListLiteralOf(coll, operation);
 
         if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(operation))
@@ -81,12 +87,30 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The stage 011c collection ref of a collection-expression target, the
     /// one rule every collection expression detects its collection by;
-    /// <c>null</c> for a type the 011c kinds do not cover.
+    /// <c>null</c> for a type the 011c kinds do not cover. An
+    /// <c>IImmutable*</c> interface target is the concrete immutable collection
+    /// C# builds for it (its <c>[CollectionBuilder]</c>: <c>ImmutableList</c>,
+    /// <c>ImmutableHashSet</c>, <c>ImmutableDictionary</c>), so the value has the
+    /// runtime class the interface's members exist on.
     /// </summary>
     private IrCollectionTypeRef? StageCollectionOf(ITypeSymbol? target) =>
         target is INamedTypeSymbol named
-            ? IrTypeRefMapper.Map(named, _originResolver, _target) as IrCollectionTypeRef
+        && IrTypeRefMapper.Map(named, _originResolver, _target) is IrCollectionTypeRef collection
+            ? collection with
+            {
+                Kind = BuiltImmutableKind(collection.Kind),
+            }
             : null;
+
+    /// <summary>The immutable class a collection expression builds for an <c>IImmutable*</c> target; any other kind is its own.</summary>
+    private static IrCollectionKind BuiltImmutableKind(IrCollectionKind kind) =>
+        kind switch
+        {
+            IrCollectionKind.IImmutableList => IrCollectionKind.ImmutableList,
+            IrCollectionKind.IImmutableSet => IrCollectionKind.ImmutableHashSet,
+            IrCollectionKind.IImmutableDictionary => IrCollectionKind.ImmutableDictionary,
+            _ => kind,
+        };
 
     /// <summary>
     /// What C# builds for a list-shaped target: a <c>List&lt;T&gt;</c> for

@@ -43,7 +43,7 @@ export interface IImmutableSet<T> extends IReadOnlyCollection<T> {
   intersect(other: Iterable<T>): IImmutableSet<T>;
   except(other: Iterable<T>): IImmutableSet<T>;
   symmetricExcept(other: Iterable<T>): IImmutableSet<T>;
-  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+  tryGetValue(equalValue: T, defaultValue?: unknown): readonly [boolean, T];
 }
 export interface IImmutableDictionary<K, V> extends IReadOnlyDictionary<K, V> {
   add(key: K, value: V): IImmutableDictionary<K, V>;
@@ -54,5 +54,5 @@ export interface IImmutableDictionary<K, V> extends IReadOnlyDictionary<K, V> {
   removeRange(keys: Iterable<K>): IImmutableDictionary<K, V>;
   clear(): IImmutableDictionary<K, V>;
   contains(pair: readonly [K, V]): boolean;
-  tryGetKey(equalKey: K, defaultValue: K): readonly [boolean, K];
+  tryGetKey(equalKey: K, defaultValue?: unknown): readonly [boolean, K];
 }

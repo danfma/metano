@@ -387,9 +387,160 @@ public static class StageHCollectionProbes
         return $"{IsDictionary(sorted)},{IsDictionary(concurrent)},{IsSet(sortedSet)},{IsSet(immutableSet)},{IsDictionary(immutableMap)},{IsReadOnlySet(immutableSet)},{IsReadOnlySet(sortedSet)}";
     }
 
+    static string Attempt(Func<string> action)
+    {
+        try
+        {
+            return action();
+        }
+        catch (Exception ex)
+        {
+            return $"{ex.GetType().Name}:{ex.Message.Replace("\n", "/")}";
+        }
+    }
+
+    public static string ImmutableListBuilderIndexOfRange()
+    {
+        var b = ImmutableList.CreateBuilder<int>();
+        b.AddRange(new[] { 10, 20, 30, 20, 40, 20 });
+        return $"{b.IndexOf(20)},{b.IndexOf(20, 2)},{b.IndexOf(20, 0, 1)},{b.IndexOf(20, 2, 2)}|"
+            + $"{b.LastIndexOf(20)},{b.LastIndexOf(20, 4)},{b.LastIndexOf(20, 2, 1)},{b.LastIndexOf(20, 4, 2)}";
+    }
+
+    public static string ImmutableArrayBuilderIndexOfRange()
+    {
+        var b = ImmutableArray.CreateBuilder<int>();
+        b.AddRange(new[] { 10, 20, 30, 20, 40, 20 });
+        return $"{b.IndexOf(20)},{b.IndexOf(20, 2)},{b.IndexOf(20, 0, 1)},{b.IndexOf(20, 2, 2)}|"
+            + $"{b.LastIndexOf(20)},{b.LastIndexOf(20, 4)},{b.LastIndexOf(20, 2, 1)},{b.LastIndexOf(20, 4, 2)}";
+    }
+
+    public static string ImmutableListBuilderBadRange()
+    {
+        var b = ImmutableList.CreateBuilder<int>();
+        b.AddRange(new[] { 10, 20, 30 });
+        var empty = ImmutableList.CreateBuilder<int>();
+        return $"{Attempt(() => b.IndexOf(20, 9).ToString())}|{Attempt(() => b.IndexOf(20, -1).ToString())}|{Attempt(() => b.IndexOf(20, 1, 9).ToString())}|"
+            + $"{Attempt(() => b.IndexOf(20, 1, -1).ToString())}|{Attempt(() => b.IndexOf(20, 2, 2).ToString())}|{Attempt(() => b.IndexOf(20, 3).ToString())}|"
+            + $"{Attempt(() => b.LastIndexOf(20, 9).ToString())}|{Attempt(() => b.LastIndexOf(20, -1).ToString())}|{Attempt(() => b.LastIndexOf(20, 1, 5).ToString())}|"
+            + $"{Attempt(() => b.LastIndexOf(20, 1, -1).ToString())}|{Attempt(() => b.LastIndexOf(20, 0, 2).ToString())}|"
+            + $"{Attempt(() => empty.LastIndexOf(20).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0).ToString())}|{Attempt(() => empty.IndexOf(20, 0).ToString())}";
+    }
+
+    public static string ImmutableArrayBuilderBadRange()
+    {
+        var b = ImmutableArray.CreateBuilder<int>();
+        b.AddRange(new[] { 10, 20, 30 });
+        var empty = ImmutableArray.CreateBuilder<int>();
+        return $"{Attempt(() => b.IndexOf(20, 9).ToString())}|{Attempt(() => b.IndexOf(20, -1).ToString())}|{Attempt(() => b.IndexOf(20, 1, 9).ToString())}|"
+            + $"{Attempt(() => b.IndexOf(20, 1, -1).ToString())}|{Attempt(() => b.IndexOf(20, 2, 2).ToString())}|{Attempt(() => b.IndexOf(20, 3).ToString())}|"
+            + $"{Attempt(() => b.LastIndexOf(20, 9).ToString())}|{Attempt(() => b.LastIndexOf(20, -1).ToString())}|{Attempt(() => b.LastIndexOf(20, 1, 5).ToString())}|"
+            + $"{Attempt(() => b.LastIndexOf(20, 1, -1).ToString())}|{Attempt(() => b.LastIndexOf(20, 0, 2).ToString())}|"
+            + $"{Attempt(() => empty.LastIndexOf(20).ToString())}|{Attempt(() => empty.LastIndexOf(20, 0).ToString())}|{Attempt(() => empty.IndexOf(20, 0).ToString())}";
+    }
+
+    public static string ImmutableTryGetMissReturnsSearched()
+    {
+        var dict = ImmutableDictionary<string, int>.Empty;
+        dict.TryGetKey("missing", out var dk);
+        var set = ImmutableHashSet<string>.Empty;
+        set.TryGetValue("missing", out var sv);
+        var sb = set.ToBuilder();
+        sb.TryGetValue("missing", out var sbv);
+        var hit = ImmutableHashSet.Create(new IgnoreCaseComparer(), "Abc");
+        hit.TryGetValue("ABC", out var found);
+        return $"{dk ?? "NULL"}|{sv ?? "NULL"}|{sbv ?? "NULL"}|{found}";
+    }
+
+    public static string ImmutableArrayBinarySearchForms()
+    {
+        var a = ImmutableArray.Create(10, 20, 30, 40, 50);
+        var comparer = new AscendingComparer();
+        return $"{a.BinarySearch(30)}|{a.BinarySearch(35)}|{a.BinarySearch(30, comparer)}|"
+            + $"{a.BinarySearch(1, 3, 30)}|{a.BinarySearch(1, 3, 10)}|{a.BinarySearch(1, 3, 50, comparer)}|"
+            + $"{ImmutableArray.BinarySearch(a, 40)}|{ImmutableArray.BinarySearch(a, 40, comparer)}|"
+            + $"{ImmutableArray.BinarySearch(a, 1, 3, 20)}|{ImmutableArray.BinarySearch(a, 1, 3, 20, comparer)}";
+    }
+
+    public static string ImmutableArrayBinarySearchBadRange()
+    {
+        var a = ImmutableArray.Create(10, 20, 30, 40, 50);
+        return $"{Attempt(() => a.BinarySearch(-1, 3, 30).ToString())}|{Attempt(() => a.BinarySearch(1, -1, 30).ToString())}|"
+            + $"{Attempt(() => a.BinarySearch(3, 3, 30).ToString())}";
+    }
+
+    public static string ImmutableArraySlice()
+    {
+        var a = ImmutableArray.Create(10, 20, 30, 40, 50);
+        return $"{Join(a.Slice(1, 3))}|{a.Slice(2, 0).Length}|{Attempt(() => a.Slice(3, 3).Length.ToString())}";
+    }
+
+    public static string ImmutableInterfaceCollectionExpressions()
+    {
+        IImmutableList<int> list = [1, 2, 3];
+        IImmutableSet<int> set = [3, 2, 3, 1];
+        IImmutableList<int> empty = [];
+        IImmutableSet<int> emptySet = [];
+        return $"{list.Add(4).Count}|{Sorted(set)}|{set.Add(9).Count}|{empty.Add(1).Count}|{emptySet.Add(1).Count}";
+    }
+
+    public static string ImmutableExtensionsStaticForm()
+    {
+        var src = new[] { 3, 1, 2 };
+        var il = ImmutableList.ToImmutableList(src);
+        var ia = ImmutableArray.ToImmutableArray(src);
+        var hs = ImmutableHashSet.ToImmutableHashSet(src);
+        var hsc = ImmutableHashSet.ToImmutableHashSet(new[] { "a", "A" }, new IgnoreCaseComparer());
+        var pairs = new[]
+        {
+            new KeyValuePair<string, int>("a", 1),
+            new KeyValuePair<string, int>("b", 2),
+        };
+        var id = ImmutableDictionary.ToImmutableDictionary(pairs);
+        var byKey = ImmutableDictionary.ToImmutableDictionary(src, x => x.ToString());
+        var byKeyValue = ImmutableDictionary.ToImmutableDictionary(
+            src,
+            x => x.ToString(),
+            x => x * 10
+        );
+        IImmutableList<int> asInterface = il;
+        IImmutableDictionary<string, int> asMap = id;
+        return $"{Join(il)}|{Join(ia)}|{Sorted(hs)}|{hsc.Count}|{Pairs(id)}|{byKey.Count}|{byKeyValue["3"]}|"
+            + $"{ImmutableDictionary.Contains(asMap, "a", 1)}|{ImmutableDictionary.Contains(asMap, "a", 2)}|"
+            + $"{Join(ImmutableList.Remove(asInterface, 1))}|{Join(ImmutableList.RemoveRange(asInterface, new[] { 3, 2 }))}|"
+            + $"{Join(ImmutableList.Replace(asInterface, 1, 9))}|{ImmutableList.IndexOf(asInterface, 2)}|{ImmutableList.LastIndexOf(asInterface, 3)}";
+    }
+
+    public static string ImmutableExtensionsReducedForm()
+    {
+        var src = new[] { 3, 1, 2 };
+        IImmutableList<int> il = src.ToImmutableList();
+        IImmutableDictionary<string, int> id = src.ToImmutableDictionary(
+            x => x.ToString(),
+            x => x * 10
+        );
+        return $"{Join(il)}|{Join(src.ToImmutableArray())}|{Sorted(src.ToImmutableHashSet())}|{id.Contains(new KeyValuePair<string, int>("3", 30))}|"
+            + $"{Join(il.Remove(1))}|{Join(il.RemoveRange(new[] { 3, 2 }))}|{Join(il.Replace(1, 9))}|{il.IndexOf(2)}|{il.LastIndexOf(3)}";
+    }
+
     private static bool IsDictionary(object value) => value is IDictionary<int, int>;
 
     private static bool IsSet(object value) => value is ISet<int>;
 
     private static bool IsReadOnlySet(object value) => value is IReadOnlySet<int>;
+
+    sealed class AscendingComparer : IComparer<int>
+    {
+        public int Compare(int x, int y) =>
+            x < y ? -1
+            : x > y ? 1
+            : 0;
+    }
+
+    sealed class IgnoreCaseComparer : IEqualityComparer<string>
+    {
+        public bool Equals(string? x, string? y) => x?.ToLowerInvariant() == y?.ToLowerInvariant();
+
+        public int GetHashCode(string value) => value.ToLowerInvariant().Length;
+    }
 }

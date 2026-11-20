@@ -241,6 +241,7 @@ public sealed partial class IrExpressionExtractor
         {
             ReportNestedArrayAsListInterface(expression);
             ReportImmutableAsMutableInterface(expression);
+            ReportImmutableAsMutableConstraint(expression);
         }
 
         // A 64-bit constant folds to one literal, and a constant inside
@@ -939,7 +940,7 @@ public sealed partial class IrExpressionExtractor
         IrTypeRef type,
         IrPatternDesignator? designator = null
     ) =>
-        UntestablePattern(pattern, type)
+        UntestablePattern(pattern, type, binds: designator is not null)
         ?? new IrTypePattern(type, designator) { InputType = PatternInputType(pattern) };
 
     /// <summary>
@@ -948,7 +949,7 @@ public sealed partial class IrExpressionExtractor
     /// runtime class (<see cref="ExceptionRuntimeClassReporter"/>), <c>MS0001</c>
     /// for any other type without a runtime test — or <c>null</c> when it can.
     /// </summary>
-    private IrPattern? UntestablePattern(SyntaxNode pattern, IrTypeRef type)
+    private IrPattern? UntestablePattern(SyntaxNode pattern, IrTypeRef type, bool binds)
     {
         if (
             MatchedType(pattern) is { } matched
@@ -956,7 +957,18 @@ public sealed partial class IrExpressionExtractor
         )
             return ReportUnanswerableExceptionPattern(matched, pattern);
 
-        return HasRuntimeTypeTest(type) ? null : ReportUnsupportedPattern(pattern);
+        if (!HasRuntimeTypeTest(type))
+            return ReportUnsupportedPattern(pattern);
+
+        return
+            binds
+            && ReportsImmutableTestedAsMutableInterface(
+                pattern,
+                MatchedType(pattern),
+                (_semantic.GetOperation(pattern) as IPatternOperation)?.InputType
+            )
+            ? new IrUnsupportedPattern(pattern.Kind().ToString())
+            : null;
     }
 
     /// <summary>
@@ -1110,7 +1122,10 @@ public sealed partial class IrExpressionExtractor
             : (IrTypeRef?)null;
         var designator = ResolveOptionalDesignator(recursive.Designation);
 
-        if (type is not null && UntestablePattern(recursive, type) is { } untestable)
+        if (
+            type is not null
+            && UntestablePattern(recursive, type, binds: designator is not null) is { } untestable
+        )
             return untestable;
 
         // Positional pattern — `(x, y)` or `Point(x, y)` — decomposes a
@@ -2052,7 +2067,7 @@ public sealed partial class IrExpressionExtractor
         var castType = ResolvePatternType(typeSyntax);
         var testedType = castType is IrNullableTypeRef nullable ? nullable.Inner : castType;
 
-        if (UntestableTypeTest(asCast, typeSyntax, testedType) is { } untestable)
+        if (UntestableTypeTest(asCast, typeSyntax, testedType, binds: true) is { } untestable)
             return untestable;
 
         var inputType = StaticTypeOf(asCast.Left);
@@ -2078,7 +2093,7 @@ public sealed partial class IrExpressionExtractor
     {
         var type = ResolvePatternType(typeSyntax);
 
-        if (UntestableTypeTest(isTest, typeSyntax, type) is { } untestable)
+        if (UntestableTypeTest(isTest, typeSyntax, type, binds: false) is { } untestable)
             return untestable;
 
         return new IrIsPatternExpression(
@@ -2097,7 +2112,8 @@ public sealed partial class IrExpressionExtractor
     private IrUnsupportedExpression? UntestableTypeTest(
         BinaryExpressionSyntax test,
         TypeSyntax typeSyntax,
-        IrTypeRef testedType
+        IrTypeRef testedType,
+        bool binds
     )
     {
         if (
@@ -2106,14 +2122,22 @@ public sealed partial class IrExpressionExtractor
         )
             return ReportUnanswerableExceptionTest(written, test);
 
-        if (HasRuntimeTypeTest(testedType))
-            return null;
+        if (!HasRuntimeTypeTest(testedType))
+            return ReportUnsupported(
+                test,
+                test.Kind().ToString(),
+                NoRuntimeTypeTestMessage("Expression", test)
+            );
 
-        return ReportUnsupported(
-            test,
-            test.Kind().ToString(),
-            NoRuntimeTypeTestMessage("Expression", test)
-        );
+        return
+            binds
+            && ReportsImmutableTestedAsMutableInterface(
+                test,
+                _semantic.GetTypeInfo(typeSyntax).Type,
+                _semantic.GetTypeInfo(test.Left).Type
+            )
+            ? new IrUnsupportedExpression(test.Kind().ToString())
+            : null;
     }
 
     /// <summary>
@@ -2145,7 +2169,13 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractAssignment(AssignmentExpressionSyntax assign)
     {
-        if (TryReportTupleElementWrite(assign, assign.Left) is { } unsupportedWrite)
+        if (
+            (
+                TryReportTupleElementWrite(assign, assign.Left)
+                ?? TryReportImmutableArrayBuilderCountWrite(assign, assign.Left)
+            ) is
+            { } unsupportedWrite
+        )
             return unsupportedWrite;
 
         if (
@@ -2281,7 +2311,11 @@ public sealed partial class IrExpressionExtractor
 
         if (
             IncrementedOperand(node) is { } incremented
-            && TryReportTupleElementWrite(node, incremented) is { } unsupportedWrite
+            && (
+                TryReportTupleElementWrite(node, incremented)
+                ?? TryReportImmutableArrayBuilderCountWrite(node, incremented)
+            )
+                is { } unsupportedWrite
         )
             return unsupportedWrite;
 

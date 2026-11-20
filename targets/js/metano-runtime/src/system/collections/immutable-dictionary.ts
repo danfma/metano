@@ -238,15 +238,15 @@ export class ImmutableDictionary<K, V>
     return position < 0 ? [false, missingValue] : [true, this.entryAt(position)[1]];
   }
 
-  /** `TryGetKey`: the stored key equal to `equalKey`, or the caller's `default(K)` (D30). */
-  tryGetKey(equalKey: K, defaultValue: K): readonly [boolean, K] {
+  /** `TryGetKey`: the stored key equal to `equalKey`, or `equalKey` itself on a miss, as .NET's (the `default(K)` argument, D30, is not read). */
+  tryGetKey(equalKey: K, _defaultValue?: unknown): readonly [boolean, K] {
     if (equalKey === null || equalKey === undefined) {
       throwArgumentNull("equalKey");
     }
 
     const position = this.find(equalKey);
 
-    return position < 0 ? [false, defaultValue] : [true, this.entryAt(position)[0]];
+    return position < 0 ? [false, equalKey] : [true, this.entryAt(position)[0]];
   }
 
   getValueOrDefault<D>(key: K, defaultValue: D): V | D {

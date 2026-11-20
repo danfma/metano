@@ -135,11 +135,15 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
     return this._storage.find(item, this._count) >= 0;
   }
 
-  /** `TryGetValue`: the stored element equal to `equalValue`, or the caller's `default(T)` (D30). */
-  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T] {
+  /**
+   * `TryGetValue`: the stored element equal to `equalValue`, or `equalValue` itself on a
+   * miss, as .NET assigns `actualValue = equalValue`. The compiler's `default(T)` argument
+   * (D30) is not read.
+   */
+  tryGetValue(equalValue: T, _defaultValue?: unknown): readonly [boolean, T] {
     const position = this._storage.find(equalValue, this._count);
 
-    return position < 0 ? [false, defaultValue] : [true, this._storage.entryAt(position)[0]];
+    return position < 0 ? [false, equalValue] : [true, this._storage.entryAt(position)[0]];
   }
 
   add(item: T): ImmutableHashSet<T> {

@@ -1,4 +1,4 @@
-import type { ComparisonArgument } from "./default-comparer.ts";
+import { type ComparisonArgument, elementEquals } from "./default-comparer.ts";
 import type { IList } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { throwArgumentOutOfRange } from "./throw-helpers.ts";
@@ -31,6 +31,21 @@ export abstract class ImmutableListBuilderCore<T> implements IList<T> {
 
   /** Records a mutating call (a no-op included). */
   protected abstract modified(): void;
+
+  /**
+   * The `[start, length]` a forward search covers, checked with the subclass's
+   * .NET exceptions (the two builders name the offending argument differently).
+   */
+  protected abstract forwardRange(
+    startIndex: number | undefined,
+    count: number | undefined,
+  ): readonly [start: number, length: number];
+
+  /** The `[start, length]` a backward search covers, or `null` when .NET returns `-1` without checking. */
+  protected abstract backwardRange(
+    startIndex: number | undefined,
+    count: number | undefined,
+  ): readonly [start: number, length: number] | null;
 
   get count(): number {
     return this._list.count;
@@ -131,12 +146,36 @@ export abstract class ImmutableListBuilderCore<T> implements IList<T> {
     return this._list.contains(item);
   }
 
-  indexOf(item: T): number {
-    return this._list.indexOf(item);
+  /** `IndexOf(item[, startIndex[, count]])`: the first match in `[startIndex, startIndex + count)`. */
+  indexOf(item: T, startIndex?: number, count?: number): number {
+    const [start, length] = this.forwardRange(startIndex, count);
+
+    for (let position = start; position < start + length; position++) {
+      if (elementEquals(this._list.get(position), item)) {
+        return position;
+      }
+    }
+
+    return -1;
   }
 
-  lastIndexOf(item: T): number {
-    return this._list.lastIndexOf(item);
+  /** `LastIndexOf(item[, startIndex[, count]])`: the last match in the `count` elements ending at `startIndex`. */
+  lastIndexOf(item: T, startIndex?: number, count?: number): number {
+    const range = this.backwardRange(startIndex, count);
+
+    if (range === null) {
+      return -1;
+    }
+
+    const [start, length] = range;
+
+    for (let position = start; position > start - length; position--) {
+      if (elementEquals(this._list.get(position), item)) {
+        return position;
+      }
+    }
+
+    return -1;
   }
 
   sort(comparison?: ComparisonArgument<T>): void {

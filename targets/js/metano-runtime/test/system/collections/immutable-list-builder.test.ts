@@ -78,6 +78,35 @@ describe("ImmutableListBuilder (W4-11 condition 4: never alias)", () => {
     expect(invalidates(builder(), (b) => b.remove(1))).toBe(true);
   });
 
+  test("indexOf and lastIndexOf honour startIndex and count", () => {
+    const builder = new ImmutableListBuilder([10, 20, 30, 20, 40, 20]);
+
+    expect([
+      builder.indexOf(20),
+      builder.indexOf(20, 2),
+      builder.indexOf(20, 0, 1),
+      builder.indexOf(20, 2, 2),
+    ]).toEqual([1, 3, -1, 3]);
+
+    expect([
+      builder.lastIndexOf(20),
+      builder.lastIndexOf(20, 4),
+      builder.lastIndexOf(20, 2, 1),
+      builder.lastIndexOf(20, 4, 2),
+    ]).toEqual([5, 3, -1, 3]);
+
+    // .NET's ImmutableList reports the count, then the index.
+    expect(() => builder.indexOf(20, 7)).toThrow("(Parameter 'count')");
+    expect(() => builder.indexOf(20, -1)).toThrow("(Parameter 'index')");
+    expect(() => builder.indexOf(20, 2, 9)).toThrow("(Parameter 'count')");
+    expect(() => builder.lastIndexOf(20, 9)).toThrow("(Parameter 'count')");
+    expect(() => builder.lastIndexOf(20, 1, 9)).toThrow("(Parameter 'count')");
+    expect(() => builder.lastIndexOf(20, 0, 2)).toThrow(
+      "Value does not fall within the expected range.",
+    );
+    expect(new ImmutableListBuilder<number>().lastIndexOf(1)).toBe(-1);
+  });
+
   test("remove of an absent element is the one call that does not bump", () => {
     expect(invalidates(new ImmutableListBuilder([1]), (b) => b.remove(9))).toBe(false);
     expect(invalidates(new ImmutableListBuilder([1]), (b) => b.get(0))).toBe(false);

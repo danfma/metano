@@ -97,6 +97,17 @@ describe("ImmutableArray", () => {
     }
   });
 
+  test("binarySearchRange searches [index, index + length) with Array.BinarySearch's checks", () => {
+    const array = ImmutableArray.of([10, 20, 30, 40, 50]);
+
+    expect(array.binarySearchRange(1, 3, 30)).toBe(2);
+    expect(array.binarySearchRange(1, 3, 10)).toBe(~1);
+    expect(array.binarySearchRange(1, 3, 50)).toBe(~4);
+    expect(() => array.binarySearchRange(-1, 3, 30)).toThrow("(Parameter 'index')");
+    expect(() => array.binarySearchRange(1, -1, 30)).toThrow("(Parameter 'length')");
+    expect(() => array.binarySearchRange(3, 3, 30)).toThrow("Offset and length were out of bounds");
+  });
+
   test("binarySearch wraps a comparer failure", () => {
     const error = caught(() => ImmutableArray.of([{}, {}]).binarySearch({}));
 

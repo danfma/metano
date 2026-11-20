@@ -35,7 +35,8 @@ describe("ImmutableHashSet", () => {
 
     expect(set.contains("ABC")).toBe(true);
     expect(set.tryGetValue("ABC", "")).toEqual([true, "Abc"]);
-    expect(set.tryGetValue("x", "")).toEqual([false, ""]);
+    expect(set.tryGetValue("x", "")).toEqual([false, "x"]);
+    expect(set.tryGetValue("y", null)).toEqual([false, "y"]);
     expect(set.keyComparer).toBe(ignoreCase);
     expect(set.withComparer(null).count).toBe(1);
   });

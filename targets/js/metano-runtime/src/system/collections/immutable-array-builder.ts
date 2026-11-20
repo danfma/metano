@@ -3,7 +3,7 @@ import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { ImmutableArray } from "./immutable-array.ts";
 import { ImmutableListBuilderCore } from "./immutable-list-builder-core.ts";
-import { throwIndexOutsideArray } from "./throw-helpers.ts";
+import { throwArgumentOutOfRange, throwIndexOutsideArray } from "./throw-helpers.ts";
 
 let ImmutableArrayBuilder$rt: CollectionType<ImmutableArrayBuilder<unknown>> | undefined;
 
@@ -72,6 +72,57 @@ export class ImmutableArrayBuilder<T> extends ImmutableListBuilderCore<T> {
     if (index >>> 0 >= this.count) {
       throwIndexOutsideArray();
     }
+  }
+
+  /**
+   * `ImmutableArray<T>.Builder.IndexOf`: `(0, 0)` finds nothing; otherwise `startIndex`
+   * must be inside the builder, then `count` inside what remains.
+   */
+  protected forwardRange(
+    startIndex = 0,
+    count: number = this.count - startIndex,
+  ): readonly [number, number] {
+    if (count === 0 && startIndex === 0) {
+      return [0, 0];
+    }
+
+    if (startIndex < 0 || startIndex >= this.count) {
+      throwArgumentOutOfRange("startIndex");
+    }
+
+    if (count < 0 || startIndex + count > this.count) {
+      throwArgumentOutOfRange("count");
+    }
+
+    return [startIndex, count];
+  }
+
+  /**
+   * `ImmutableArray<T>.Builder.LastIndexOf`: `(0, 0)`, and an empty builder without a
+   * count from start 0, find nothing; otherwise `startIndex` must be inside the builder
+   * and `count` must not run past its start.
+   */
+  protected backwardRange(startIndex?: number, count?: number): readonly [number, number] | null {
+    if (this.count === 0 && count === undefined && (startIndex === undefined || startIndex === 0)) {
+      return null;
+    }
+
+    const start = startIndex ?? this.count - 1;
+    const length = count ?? start + 1;
+
+    if (start === 0 && length === 0) {
+      return null;
+    }
+
+    if (start < 0 || start >= this.count) {
+      throwArgumentOutOfRange("startIndex");
+    }
+
+    if (length < 0 || start - length + 1 < 0) {
+      throwArgumentOutOfRange("count");
+    }
+
+    return [start, length];
   }
 
   /** Nothing to record: .NET's array builder has no version. */

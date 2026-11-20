@@ -7,6 +7,7 @@ import {
   type IEqualityComparer,
 } from "./default-comparer.ts";
 import { at, ImmutableListCore } from "./immutable-list-core.ts";
+import { binarySearch } from "./sorted-array.ts";
 
 import {
   throwArgumentNull,
@@ -14,6 +15,8 @@ import {
   throwArrayTooSmall,
   throwCompareFailed,
   throwIndexOutsideArray,
+  throwInvalidRange,
+  throwNegative,
   throwNegativeDestinationIndex,
 } from "./throw-helpers.ts";
 
@@ -212,6 +215,35 @@ export class ImmutableArray<T> extends ImmutableListCore<T, ImmutableArray<T>> {
   binarySearch(item: T, comparison?: ComparisonArgument<T>): number {
     try {
       return this.searchSorted(item, comparison);
+    } catch (error) {
+      throwCompareFailed(error);
+    }
+  }
+
+  /**
+   * `BinarySearch(index, length, item[, comparer])`: `Array.BinarySearch`'s range checks
+   * (`index`, `length`, then the pair), then the search over `[index, index + length)`.
+   */
+  binarySearchRange(
+    index: number,
+    length: number,
+    item: T,
+    comparison?: ComparisonArgument<T>,
+  ): number {
+    if (index < 0) {
+      throwNegative("index");
+    }
+
+    if (length < 0) {
+      throwNegative("length");
+    }
+
+    if (this._count - index < length) {
+      throwInvalidRange();
+    }
+
+    try {
+      return binarySearch(this._items, index, length, item, comparisonOf(comparison));
     } catch (error) {
       throwCompareFailed(error);
     }

@@ -162,7 +162,11 @@ function compareVersion<V>(
       continue;
     }
 
-    const expected = present ? [true, dictionary ? pair?.[1] : value] : [false, MISSING];
+    // A set's miss hands back the searched value (.NET assigns `actualValue = equalValue`);
+    // a dictionary's value lookup hands back the caller's `default(V)`.
+    const expected = present
+      ? [true, dictionary ? pair?.[1] : value]
+      : [false, dictionary ? MISSING : value];
 
     expect(
       [...subject.tryGetValue(version, value, MISSING)],

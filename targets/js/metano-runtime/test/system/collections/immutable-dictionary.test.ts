@@ -67,6 +67,7 @@ describe("ImmutableDictionary", () => {
 
     expect(d.containsKey("ABC")).toBe(true);
     expect(d.tryGetKey("ABC", "")).toEqual([true, "Abc"]);
+    expect(d.tryGetKey("missing", null)).toEqual([false, "missing"]);
     expect(d.withComparers(null).containsKey("ABC")).toBe(false);
 
     expect(() =>

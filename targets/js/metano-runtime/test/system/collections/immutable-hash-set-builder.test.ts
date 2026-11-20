@@ -33,6 +33,15 @@ const ignoreCase = {
   getHashCode: (value: string): number => value.toLowerCase().length,
 };
 
+describe("ImmutableHashSetBuilder.tryGetValue", () => {
+  test("a miss returns the searched value, as .NET's", () => {
+    const builder = new ImmutableHashSetBuilder<string>(["a"]);
+
+    expect(builder.tryGetValue("a", null)).toEqual([true, "a"]);
+    expect(builder.tryGetValue("missing", null)).toEqual([false, "missing"]);
+  });
+});
+
 describe("ImmutableHashSetBuilder (W4-11 condition 4: never alias)", () => {
   test("ToImmutable, then a further builder mutation changes no immutable value", () => {
     const builder = new ImmutableHashSetBuilder<number>();

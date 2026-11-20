@@ -96,6 +96,11 @@ RuntimeTypeProbes.enumMembership = True|True
 RuntimeTypeShapeProbes.closedGenericName = RtBox`1<Int32>|Conformance
 RuntimeTypeShapeProbes.plainObjectIsStructural = True|True|False
 StageHCollectionProbes.immutableArrayText = System.Collections.Immutable.ImmutableArray`1[T]|System.Collections.Immutable.ImmutableList`1[T]
+StageHImmutableBindingProbes.immutableArrayBuilderCountSetter THROWS Error: Unsupported expression: immutable array builder count write
+StageHImmutableBindingProbes.immutableDictionaryAs THROWS Error: Unsupported expression: AsExpression
+StageHImmutableBindingProbes.immutableGenericConstraint = no-throw:2
+StageHImmutableDictionaryBindingProbes.immutableDictionaryBinding LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-immutable-dictionary-binding-probes.js:9
+StageHImmutableSetBindingProbes.immutableSetBinding LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-immutable-set-binding-probes.js:9
 StageHInterfaceTestProbes.immutableAsIList LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19
 StageHInterfaceTestProbes.immutableAsIListAs LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19
 StageHInterfaceTestProbes.immutableAsIListBinding LOADFAIL file://<conformance>/.work/probes/dist/conformance/stage-h-interface-test-probes.js:19

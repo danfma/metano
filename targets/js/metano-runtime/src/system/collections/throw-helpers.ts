@@ -69,6 +69,11 @@ export function throwInvalidRange(): never {
   );
 }
 
+/** `ImmutableList`'s `Requires.Argument` failure: a bare `ArgumentException` (`Value does not fall within the expected range.`). */
+export function throwOutsideExpectedRange(): never {
+  throw new ArgumentException();
+}
+
 /** A `null` argument .NET rejects. */
 export function throwArgumentNull(paramName: string): never {
   throw new ArgumentNullException(paramName);

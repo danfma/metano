@@ -27,6 +27,32 @@ function caught(action: () => unknown): Error {
 }
 
 describe("ImmutableArrayBuilder", () => {
+  test("indexOf and lastIndexOf honour startIndex and count", () => {
+    const builder = new ImmutableArrayBuilder([10, 20, 30, 20, 40, 20]);
+
+    expect([
+      builder.indexOf(20),
+      builder.indexOf(20, 2),
+      builder.indexOf(20, 0, 1),
+      builder.indexOf(20, 2, 2),
+    ]).toEqual([1, 3, -1, 3]);
+
+    expect([
+      builder.lastIndexOf(20),
+      builder.lastIndexOf(20, 4),
+      builder.lastIndexOf(20, 2, 1),
+      builder.lastIndexOf(20, 4, 2),
+    ]).toEqual([5, 3, -1, 3]);
+
+    expect(() => builder.indexOf(20, 7)).toThrow("(Parameter 'startIndex')");
+    expect(() => builder.indexOf(20, 6)).toThrow("(Parameter 'startIndex')");
+    expect(new ImmutableArrayBuilder<number>().indexOf(20, 0)).toBe(-1);
+    expect(() => builder.indexOf(20, 2, 9)).toThrow("(Parameter 'count')");
+    expect(() => builder.lastIndexOf(20, 9)).toThrow("(Parameter 'startIndex')");
+    expect(() => builder.lastIndexOf(20, 1, 5)).toThrow("(Parameter 'count')");
+    expect(new ImmutableArrayBuilder<number>().lastIndexOf(1)).toBe(-1);
+  });
+
   test("is a sibling of ImmutableListBuilder and composes a List", () => {
     const builder = new ImmutableArrayBuilder<number>();
 

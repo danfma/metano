@@ -833,6 +833,16 @@ The sections below are stage 011h's (group H), unchanged by R0; they build on th
 
 **Mutable-interface conversions of immutables.** In .NET, `ImmutableList<T>` also implements `IList<T>` (and the immutable sets / dictionary `ISet<T>` / `IDictionary<K,V>`) with mutators that throw `NotSupportedException` (`Specified method is not supported.`). The runtime classes cannot carry both meanings of `add`, so their TS shape implements only `IReadOnly*` and `IImmutable*`, while their class literal's `interfaces` list (§ Class literals of the 011h classes) names the mutable interfaces as .NET does, so the descriptor test `o is IList<T>` answers `true` as in .NET (W4-66). A binding form would then open a silent hole (`if (o is IList<int> l) l.Add(5)` throws `NotSupportedException` in .NET; in TS `add` would return a new list and drop it), so the immutable kinds are implementers **whose shape does not implement the mutable interface** (marked in the compiler's `RuntimeCollections` table): the compiler reports `MS0001` at a static conversion of an immutable type to `ICollection<T>`, `IList<T>`, `ISet<T>` or `IDictionary<K,V>`, and J's W4-65 rule treats these kinds as it treats user implementers, so an `is` / `as` / pattern / cast to one of those four interfaces reports `MS0001` whenever an immutable kind can be the operand (its static type can hold one). Overload dispatchers keep excluding the immutables from the mutable-interface rows (documented: a dispatcher never routes an immutable value to an `IList<T>` overload).
 
+**Fix round 1 amendments (stage 011h review).**
+
+- *Binding forms only.* The `MS0001` of the previous paragraph for an `is` / `as` / pattern test of an immutable kind against `ICollection<T>`, `IList<T>`, `ISet<T>` or `IDictionary<K,V>` is reported where the test **binds** the value to the interface (`x as ISet<T>`, `x is ISet<T> name`, a switch arm `ISet<T> name =>`, a property pattern with a designator), and the binding lowers to the unsupported placeholder (loud: the module fails at load or the expression throws). A test that binds nothing (`x is ISet<T>`) answers `true` as .NET does and is not reported: it opens no mutation path. The operand must be able to hold an immutable collection without an already-reported conversion (`object`, a type parameter, `IEnumerable`, an immutable kind or an `IReadOnly*` / `IImmutable*` interface).
+- *Constraints.* A type argument bound to a type parameter constrained to one of those four interfaces (`Mutate<T>(T t) where T : IList<int>` called with an `ImmutableList<int>`) reports `MS0001` at the call or construction; the call itself still runs, so the mutation is dropped, and the diagnostic is the only signal.
+- *`ImmutableArray<T>.Builder.Count = n`* reports `MS0001` and lowers to the unsupported placeholder: the setter truncates or extends with `default(T)`, which the runtime builder cannot produce.
+- *Builders' `IndexOf` / `LastIndexOf`* take `(item, startIndex?, count?)` and check as .NET does, per builder (the list builder reports `count` then `index`, a bare `ArgumentException` for a backward span that starts before the list; the array builder `startIndex` then `count`). The comparer overloads have no mapping (`MS0001`).
+- *`ImmutableArray<T>.BinarySearch(index, length, value[, comparer])`* is `binarySearchRange(index, length, item, comparison?)` (`Array.BinarySearch`'s checks: `index`, `length`, then the pair); `Slice(start, length)` is `getRange`.
+- *Static calls of extension methods* (`ImmutableList.Remove(list, x)`, `ImmutableArray.ToImmutableArray(src)`, `ImmutableDictionary.Contains(map, k, v)`, ...) have their own mapping rules, which take the first argument as the receiver; the reduced form is unchanged.
+- *Collection expressions* targeting `IImmutableList<T>` / `IImmutableSet<T>` / `IImmutableDictionary<K,V>` build `ImmutableList` / `ImmutableHashSet` / `ImmutableDictionary`, as the interfaces' `[CollectionBuilder]` does in .NET.
+
 ### What 011h takes from 011c (R0 frozen, R1 integrated)
 
 011h defines no second comparer, hash table, throw helper, copy check, interface or descriptor shape (one rule per concept); it uses 011c's names: `default-comparer.ts` (`elementEquals`, `elementHashCode`, `defaultCompare`, `defaultComparer`, `defaultEqualityComparer`, `createComparer`, `comparisonOf`; types `Comparison`, `ComparisonArgument`, `IComparer`, `IEqualityComparer`), `hash-core.ts` (`HashCore`), `set-algebra.ts` (`SetLike`, `Distinct` and the six predicates), `dictionary-views.ts` (`KeyCollection`, `ValueCollection` over `KeyValueSource`), `interfaces.ts` (W4-13: only C#'s members), `throw-helpers.ts` (§ Cold throw helpers, with 011h's rows and `requireKey`), `copy-to.ts` (`copyInto`, and 011h's `copyIntoSorted`), `collection-type-name.ts` (`toString()`), `close-collection.ts` (the `closeFor` member of every class literal, W4-32), the storage ABI (inline `Object.defineProperty` fields, `$typeArguments$<Class>`), and the FR-058 guard text, which `scripts/build-dists.ts` folds in every module that reads it (`dist/` checked, `dist-unchecked/` without checks; iterators read `_version` only under the guard, as 011c's do). `List.binarySearch` delegates to `sorted-array.ts`'s `binarySearch`, the one .NET-order search (W4-15).
@@ -924,7 +934,7 @@ export class ImmutableHashSet<T> implements IImmutableSet<T>, IReadOnlySet<T> {
   static of<T>(items: readonly T[], comparer?: IEqualityComparer<T> | null, typeArguments?): ImmutableHashSet<T>;  // Create(...)
   static from<T>(items: Iterable<T>, comparer?: IEqualityComparer<T> | null, typeArguments?): ImmutableHashSet<T>; // CreateRange, ToImmutableHashSet(); `items` itself when it is an ImmutableHashSet with that comparer
   readonly count: number;  readonly isEmpty: boolean;  readonly keyComparer: IEqualityComparer<T>;
-  contains(item: T): boolean;  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+  contains(item: T): boolean;  tryGetValue(equalValue: T, defaultValue?: unknown): readonly [boolean, T];  // a miss returns [false, equalValue], as .NET assigns actualValue = equalValue; defaultValue (the compiler's default(T)) is not read
   add(item: T): ImmutableHashSet<T>;  remove(item: T): ImmutableHashSet<T>;  clear(): ImmutableHashSet<T>;
   union(other: Iterable<T>): ImmutableHashSet<T>;  intersect(other: Iterable<T>): ImmutableHashSet<T>;
   except(other: Iterable<T>): ImmutableHashSet<T>;  symmetricExcept(other: Iterable<T>): ImmutableHashSet<T>;
@@ -953,7 +963,7 @@ export class ImmutableDictionary<K, V> implements IImmutableDictionary<K, V> {
   readonly keys: KeyCollection<K>;  readonly values: ValueCollection<V>;
   get(key: K): V;                                     // KeyNotFoundException
   containsKey(key: K): boolean;  containsValue(value: V): boolean;  contains(pair: readonly [K, V]): boolean;
-  tryGetValue(key: K, defaultValue: V): readonly [boolean, V];  tryGetKey(equalKey: K, defaultValue: K): readonly [boolean, K];
+  tryGetValue(key: K, defaultValue: V): readonly [boolean, V];  tryGetKey(equalKey: K, defaultValue?: unknown): readonly [boolean, K];  // a miss returns [false, equalKey]
   getValueOrDefault(key: K, defaultValue: V): V;
   add(key: K, value: V): ImmutableDictionary<K, V>;   // the receiver when the key holds an equal value
   addRange(pairs: Iterable<readonly [K, V]>): ImmutableDictionary<K, V>;
@@ -1014,13 +1024,13 @@ export interface IImmutableSet<T> extends IReadOnlyCollection<T> {   // C#: IRea
   add(value: T): IImmutableSet<T>;  remove(value: T): IImmutableSet<T>;  clear(): IImmutableSet<T>;
   union(other: Iterable<T>): IImmutableSet<T>;  intersect(other: Iterable<T>): IImmutableSet<T>;
   except(other: Iterable<T>): IImmutableSet<T>;  symmetricExcept(other: Iterable<T>): IImmutableSet<T>;
-  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+  tryGetValue(equalValue: T, defaultValue?: unknown): readonly [boolean, T];  // a miss returns [false, equalValue], as .NET assigns actualValue = equalValue; defaultValue (the compiler's default(T)) is not read
 }
 export interface IImmutableDictionary<K, V> extends IReadOnlyDictionary<K, V> {
   add(key: K, value: V): IImmutableDictionary<K, V>;  addRange(pairs: Iterable<readonly [K, V]>): IImmutableDictionary<K, V>;
   setItem(key: K, value: V): IImmutableDictionary<K, V>;  setItems(pairs: Iterable<readonly [K, V]>): IImmutableDictionary<K, V>;
   remove(key: K): IImmutableDictionary<K, V>;  removeRange(keys: Iterable<K>): IImmutableDictionary<K, V>;  clear(): IImmutableDictionary<K, V>;
-  contains(pair: readonly [K, V]): boolean;  tryGetKey(equalKey: K, defaultValue: K): readonly [boolean, K];
+  contains(pair: readonly [K, V]): boolean;  tryGetKey(equalKey: K, defaultValue?: unknown): readonly [boolean, K];  // a miss returns [false, equalKey]
 }
 ```
 
@@ -1039,7 +1049,7 @@ export class SortedSet<T> implements ISet<T>, IReadOnlySet<T> {
   minOr<D>(defaultValue: D): T | D;  maxOr<D>(defaultValue: D): T | D;  // Min / Max: default(T) when empty (D30); null for a reference T
   add(item: T): boolean;  remove(item: T): boolean;  contains(item: T): boolean;  clear(): void;
   removeWhere(match: (item: T) => boolean): number;
-  tryGetValue(equalValue: T, defaultValue: T): readonly [boolean, T];
+  tryGetValue(equalValue: T, defaultValue?: unknown): readonly [boolean, T];  // a miss returns [false, equalValue], as .NET assigns actualValue = equalValue; defaultValue (the compiler's default(T)) is not read
   reverse(): Iterable<T>;                             // descending; version-checked
   getViewBetween(lowerValue: T, upperValue: T): SortedSet<T>;
   unionWith(other: Iterable<T>): void;  intersectWith(other): void;  exceptWith(other): void;  symmetricExceptWith(other): void;

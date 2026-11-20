@@ -4,7 +4,7 @@ import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { ImmutableList } from "./immutable-list.ts";
 import { ImmutableListBuilderCore } from "./immutable-list-builder-core.ts";
-import { throwArgumentOutOfRange } from "./throw-helpers.ts";
+import { throwArgumentOutOfRange, throwOutsideExpectedRange } from "./throw-helpers.ts";
 
 let ImmutableListBuilder$rt: CollectionType<ImmutableListBuilder<unknown>> | undefined;
 
@@ -76,6 +76,46 @@ export class ImmutableListBuilder<T> extends ImmutableListBuilderCore<T> {
     if (index >>> 0 >= this.count) {
       throwArgumentOutOfRange("index");
     }
+  }
+
+  /** .NET's `ImmutableList` search checks: `index`, then `count` (a count past the end, or an index + count past it, included). */
+  protected forwardRange(
+    startIndex = 0,
+    count: number = this.count - startIndex,
+  ): readonly [number, number] {
+    if (startIndex < 0) {
+      throwArgumentOutOfRange("index");
+    }
+
+    if (count < 0 || count > this.count || startIndex + count > this.count) {
+      throwArgumentOutOfRange("count");
+    }
+
+    return [startIndex, count];
+  }
+
+  /** `ImmutableList`'s backward checks: an empty list finds nothing; `index`, then `count`, then a span that starts before the list (a bare `ArgumentException`). */
+  protected backwardRange(
+    startIndex: number = this.count - 1,
+    count: number = startIndex + 1,
+  ): readonly [number, number] | null {
+    if (this.count === 0) {
+      return null;
+    }
+
+    if (startIndex < 0) {
+      throwArgumentOutOfRange("index");
+    }
+
+    if (count < 0 || count > this.count) {
+      throwArgumentOutOfRange("count");
+    }
+
+    if (startIndex - count + 1 < 0) {
+      throwOutsideExpectedRange();
+    }
+
+    return [startIndex, count];
   }
 
   protected modified(): void {

@@ -218,6 +218,11 @@ using Metano.Annotations;
 )]
 [assembly: MapMethod(
     typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Slice),
+    JsMethod = "getRange"
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
     nameof(ImmutableArray<int>.Insert),
     JsMethod = "insert"
 )]
@@ -757,7 +762,7 @@ using Metano.Annotations;
     typeof(ImmutableArray<>.Builder),
     nameof(ImmutableArray<int>.Builder.IndexOf),
     JsMethod = "indexOf",
-    WhenArgCount = 3
+    WhenParameterTypeNames = new[] { "T", "int", "int" }
 )]
 [assembly: MapMethod(
     typeof(ImmutableArray<>.Builder),
@@ -1166,11 +1171,28 @@ using Metano.Annotations;
     JsTemplate = "new ImmutableListBuilder<$T0>()",
     RuntimeImports = "ImmutableListBuilder"
 )]
+// Each extension method below has a reduced form (`list.Remove(x)`: `$this` and the
+// arguments after it) and a static form (`ImmutableList.Remove(list, x)`: the receiver is
+// the first argument); the static rules come first and name the receiver's type.
+[assembly: MapMethod(
+    typeof(ImmutableList),
+    nameof(ImmutableList.ToImmutableList),
+    JsTemplate = "ImmutableList.from<$T0>($0)",
+    RuntimeImports = "ImmutableList",
+    WhenArgCount = 1
+)]
 [assembly: MapMethod(
     typeof(ImmutableList),
     nameof(ImmutableList.ToImmutableList),
     JsTemplate = "ImmutableList.from<$T0>($this)",
-    RuntimeImports = "ImmutableList"
+    RuntimeImports = "ImmutableList",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList),
+    nameof(ImmutableList.IndexOf),
+    JsTemplate = "$0.indexOf($1)",
+    WhenParameterTypeNames = new[] { "System.Collections.Immutable.IImmutableList<T>", "T" }
 )]
 [assembly: MapMethod(
     typeof(ImmutableList),
@@ -1181,14 +1203,42 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableList),
     nameof(ImmutableList.LastIndexOf),
+    JsTemplate = "$0.lastIndexOf($1)",
+    WhenParameterTypeNames = new[] { "System.Collections.Immutable.IImmutableList<T>", "T" }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList),
+    nameof(ImmutableList.LastIndexOf),
     JsMethod = "lastIndexOf",
     WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList),
+    nameof(ImmutableList.Remove),
+    JsTemplate = "$0.remove($1)",
+    WhenParameterTypeNames = new[] { "System.Collections.Immutable.IImmutableList<T>", "T" }
 )]
 [assembly: MapMethod(typeof(ImmutableList), nameof(ImmutableList.Remove), JsMethod = "remove")]
 [assembly: MapMethod(
     typeof(ImmutableList),
     nameof(ImmutableList.RemoveRange),
+    JsTemplate = "$0.removeItems($1)",
+    WhenParameterTypeNames = new[]
+    {
+        "System.Collections.Immutable.IImmutableList<T>",
+        "System.Collections.Generic.IEnumerable<T>",
+    }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList),
+    nameof(ImmutableList.RemoveRange),
     JsMethod = "removeItems"
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList),
+    nameof(ImmutableList.Replace),
+    JsTemplate = "$0.replace($1, $2)",
+    WhenParameterTypeNames = new[] { "System.Collections.Immutable.IImmutableList<T>", "T", "T" }
 )]
 [assembly: MapMethod(typeof(ImmutableList), nameof(ImmutableList.Replace), JsMethod = "replace")]
 [assembly: MapMethod(
@@ -1236,14 +1286,40 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableArray),
     nameof(ImmutableArray.ToImmutableArray),
+    JsTemplate = "ImmutableArray.from<$T0>($0)",
+    RuntimeImports = "ImmutableArray",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.ToImmutableArray),
     JsTemplate = "ImmutableArray.from<$T0>($this)",
-    RuntimeImports = "ImmutableArray"
+    RuntimeImports = "ImmutableArray",
+    WhenArgCount = 0
 )]
 [assembly: MapMethod(
     typeof(ImmutableArray),
     nameof(ImmutableArray.BinarySearch),
     JsTemplate = "$this.binarySearch($0)",
-    WhenArgCount = 1
+    WhenParameterTypeNames = new[] { "T" }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.BinarySearch),
+    JsTemplate = "$this.binarySearch($0, $1)",
+    WhenParameterTypeNames = new[] { "T", "System.Collections.Generic.IComparer<T>" }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.BinarySearch),
+    JsTemplate = "$this.binarySearchRange($0, $1, $2)",
+    WhenParameterTypeNames = new[] { "int", "int", "T" }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.BinarySearch),
+    JsTemplate = "$this.binarySearchRange($0, $1, $2, $3)",
+    WhenParameterTypeNames = new[] { "int", "int", "T", "System.Collections.Generic.IComparer<T>" }
 )]
 [assembly: MapMethod(
     typeof(ImmutableArray),
@@ -1255,13 +1331,37 @@ using Metano.Annotations;
     typeof(ImmutableArray),
     nameof(ImmutableArray.BinarySearch),
     JsTemplate = "$0.binarySearch($1, $2)",
-    WhenArgCount = 3
+    WhenParameterTypeNames = new[]
+    {
+        "System.Collections.Immutable.ImmutableArray<T>",
+        "T",
+        "System.Collections.Generic.IComparer<T>",
+    }
 )]
 [assembly: MapMethod(
     typeof(ImmutableArray),
     nameof(ImmutableArray.BinarySearch),
-    JsTemplate = "$this.binarySearch($0, $1)",
-    WhenParameterTypeNames = new[] { "T", "System.Collections.Generic.IComparer<T>" }
+    JsTemplate = "$0.binarySearchRange($1, $2, $3)",
+    WhenParameterTypeNames = new[]
+    {
+        "System.Collections.Immutable.ImmutableArray<T>",
+        "int",
+        "int",
+        "T",
+    }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray),
+    nameof(ImmutableArray.BinarySearch),
+    JsTemplate = "$0.binarySearchRange($1, $2, $3, $4)",
+    WhenParameterTypeNames = new[]
+    {
+        "System.Collections.Immutable.ImmutableArray<T>",
+        "int",
+        "int",
+        "T",
+        "System.Collections.Generic.IComparer<T>",
+    }
 )]
 [assembly: MapMethod(
     typeof(ImmutableHashSet),
@@ -1318,6 +1418,20 @@ using Metano.Annotations;
     JsTemplate = "new ImmutableHashSetBuilder<$T0>(null, $0)",
     RuntimeImports = "ImmutableHashSetBuilder",
     WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ImmutableHashSet),
+    nameof(ImmutableHashSet.ToImmutableHashSet),
+    JsTemplate = "ImmutableHashSet.from<$T0>($0)",
+    RuntimeImports = "ImmutableHashSet",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableHashSet),
+    nameof(ImmutableHashSet.ToImmutableHashSet),
+    JsTemplate = "ImmutableHashSet.from<$T0>($0, $1)",
+    RuntimeImports = "ImmutableHashSet",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>), typeof(IEqualityComparer<>) }
 )]
 [assembly: MapMethod(
     typeof(ImmutableHashSet),
@@ -1399,6 +1513,85 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableDictionary),
     nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.from($0)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.fromSelectors($0, $1, null)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>), typeof(Func<,>) }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.fromSelectors($0, $1, null, $2)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[]
+    {
+        typeof(IEnumerable<>),
+        typeof(Func<,>),
+        typeof(IEqualityComparer<>),
+    }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.fromSelectors($0, $1, $2)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>), typeof(Func<,>), typeof(Func<,>) }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.fromSelectors($0, $1, $2, $3)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[]
+    {
+        typeof(IEnumerable<>),
+        typeof(Func<,>),
+        typeof(Func<,>),
+        typeof(IEqualityComparer<>),
+    }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.fromSelectors($0, $1, $2, $3, $4)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[]
+    {
+        typeof(IEnumerable<>),
+        typeof(Func<,>),
+        typeof(Func<,>),
+        typeof(IEqualityComparer<>),
+        typeof(IEqualityComparer<>),
+    }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.from($0, $1)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>), typeof(IEqualityComparer<>) }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
+    JsTemplate = "ImmutableDictionary.from($0, $1, $2)",
+    RuntimeImports = "ImmutableDictionary",
+    WhenParameterTypes = new[]
+    {
+        typeof(IEnumerable<>),
+        typeof(IEqualityComparer<>),
+        typeof(IEqualityComparer<>),
+    }
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.ToImmutableDictionary),
     JsTemplate = "ImmutableDictionary.from($this)",
     RuntimeImports = "ImmutableDictionary",
     WhenArgCount = 0
@@ -1461,5 +1654,12 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(ImmutableDictionary),
     nameof(ImmutableDictionary.Contains),
-    JsTemplate = "$this.contains([$0, $1])"
+    JsTemplate = "$0.contains([$1, $2])",
+    WhenArgCount = 3
+)]
+[assembly: MapMethod(
+    typeof(ImmutableDictionary),
+    nameof(ImmutableDictionary.Contains),
+    JsTemplate = "$this.contains([$0, $1])",
+    WhenArgCount = 2
 )]
