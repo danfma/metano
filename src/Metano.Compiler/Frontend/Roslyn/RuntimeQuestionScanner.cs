@@ -234,17 +234,18 @@ internal sealed class RuntimeQuestionScanner
                 break;
             case IConversionOperation { IsTryCast: true } asCast:
                 Record(IrRuntimeQuestionKind.As, asCast.Type, asCast.Syntax, asCast.Operand.Type);
+                RecordArrayConversion(asCast);
                 break;
             case IConversionOperation { Syntax: CastExpressionSyntax } cast
                 when IsCheckedCast(cast, _compilation):
                 Record(IrRuntimeQuestionKind.Cast, cast.Type, cast.Syntax, cast.Operand.Type);
+                RecordArrayConversion(cast);
                 break;
             case ITypeOfOperation typeOf:
                 InspectTypeOf(typeOf);
                 break;
-            case IConversionOperation { Operand.Type: IArrayTypeSymbol source } arrayConversion:
-                RecordCollectionConstruction(arrayConversion.Type, arrayConversion.Syntax);
-                RecordAdoptedArray(source, arrayConversion.Syntax);
+            case IConversionOperation { Operand.Type: IArrayTypeSymbol } arrayConversion:
+                RecordArrayConversion(arrayConversion);
                 break;
             case IObjectCreationOperation or ICollectionExpressionOperation:
                 RecordCollectionConstruction(operation.Type, operation.Syntax);
@@ -291,6 +292,15 @@ internal sealed class RuntimeQuestionScanner
     /// covariance: that list is the construction a target reaches the element's
     /// descriptor from.
     /// </summary>
+    private void RecordArrayConversion(IConversionOperation conversion)
+    {
+        if (conversion.Operand.Type is not IArrayTypeSymbol source)
+            return;
+
+        RecordCollectionConstruction(conversion.Type, conversion.Syntax);
+        RecordAdoptedArray(source, conversion.Syntax);
+    }
+
     private void RecordAdoptedArray(IArrayTypeSymbol source, SyntaxNode syntax)
     {
         if (_compilation.GetTypeByMetadataName("System.Collections.Generic.List`1") is { } list)
@@ -656,6 +666,9 @@ internal sealed class RuntimeQuestionScanner
 
     private bool CanHoldDictionaryView(ITypeSymbol type)
     {
+        if (IsDictionaryView(type))
+            return true;
+
         if (
             _compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2")
             is not { } dictionary
@@ -676,6 +689,19 @@ internal sealed class RuntimeQuestionScanner
 
     private ITypeSymbol ElementOf(ITypeSymbol type) =>
         type is INamedTypeSymbol { TypeArguments: [var single] } ? single : _compilation.ObjectType;
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is itself a dictionary view, a type nested in
+    /// <c>Dictionary&lt;,&gt;</c> whose type arguments live on its containing type.
+    /// </summary>
+    private static bool IsDictionaryView(ITypeSymbol type) =>
+        type
+            is INamedTypeSymbol
+            {
+                Name: "KeyCollection" or "ValueCollection",
+                ContainingType: { Name: "Dictionary", ContainingNamespace: var container },
+            }
+        && container.ToDisplayString() == "System.Collections.Generic";
 
     private void AddQuestion(IrRuntimeQuestionKind kind, ITypeSymbol? type, Location? location) =>
         _questions.Add(Question(kind, type, location));

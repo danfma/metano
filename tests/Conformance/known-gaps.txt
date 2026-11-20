@@ -9,6 +9,7 @@ CollectionTypeArgumentProbes.rawArrayInterfaceTestIsLoud #335  W4-C16: preserve 
 CollectionTypeArgumentProbes.objectArrayInterfaceTestIsLoud #335  W4-C20: a native array behind object has no collection descriptor: MS0001 and a loud throw, never a silent false (.NET: true)
 CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud #335  W4-C20: a native array behind IEnumerable<T>: MS0001 and a loud throw (.NET: true)
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud #335  W4-C20: `as` an array-backed interface from object: MS0001 and a loud throw (.NET: True)
+CollectionTypeArgumentProbes.directDictionaryViewInterfaceTestIsLoud #335  W4-C20: a Dictionary KeyCollection / ValueCollection operand has no collection descriptor: MS0001 and a loud throw (.NET: True,True,True)
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud #335  W4-C20: Dictionary.Keys / Values behind object have no collection descriptor: MS0001 and a loud throw (.NET: True,True)
 
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped

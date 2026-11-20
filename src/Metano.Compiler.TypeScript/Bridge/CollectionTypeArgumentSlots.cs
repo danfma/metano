@@ -269,7 +269,7 @@ internal static class CollectionTypeArgumentSlots
     public static TsExpression Descriptor(
         IrTypeRef argument,
         RuntimeTypeReachabilityResult reachability
-    ) => IrToTsRuntimeTypeReferences.ArgumentOf(argument, "type argument", reachability);
+    ) => IrToTsRuntimeTypeReferences.SlotArgumentOf(argument, "type argument", reachability);
 
     private static bool IsRuntimeClass(TsExpression callee, IrCollectionTypeRef type) =>
         callee is TsRuntimeHelperReference { Name: var name }

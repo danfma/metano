@@ -188,7 +188,8 @@ internal sealed class JsonTypeDescriptorBuilder(
                             ),
                             [new TsIdentifier(parameter)]
                         ),
-                        type
+                        type,
+                        collection
                     )
                 ),
             ]
@@ -197,12 +198,26 @@ internal sealed class JsonTypeDescriptorBuilder(
 
     /// <summary>
     /// The factory call with the collection's type-argument slot when the
-    /// compilation asks a runtime question about its kind (spec 011 FR-008, D31).
+    /// compilation asks a runtime question about its kind (spec 011 FR-008, D31). The
+    /// slot is that of the concrete runtime class the factory builds
+    /// (<paramref name="concrete"/>), whatever interface the property declares
+    /// (<c>IReadOnlyList&lt;T&gt;</c> builds a <c>List</c>).
     /// </summary>
-    private TsExpression WithTypeArguments(TsCallExpression factory, ITypeSymbol type) =>
+    private TsExpression WithTypeArguments(
+        TsCallExpression factory,
+        ITypeSymbol type,
+        IrCollectionKind concrete
+    ) =>
         IrTypeRefMapper.Map(type, target: TargetLanguage.TypeScript)
             is IrCollectionTypeRef collection
-            ? CollectionTypeArgumentSlots.Append(factory, collection, _context.RuntimeTypes)
+            ? CollectionTypeArgumentSlots.Append(
+                factory,
+                collection with
+                {
+                    Kind = concrete,
+                },
+                _context.RuntimeTypes
+            )
             : factory;
 
     /// <summary>

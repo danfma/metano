@@ -44,7 +44,10 @@ internal sealed partial class RuntimeTypeReachability
     /// A construction of a questioned collection class passes descriptors for its
     /// type arguments, so every described class among them is reached (D31).
     /// </summary>
-    private void ReachCollectionConstructions(IrCompilation ir)
+    private void ReachCollectionConstructions(
+        IrCompilation ir,
+        IReadOnlyList<ITypeSymbol> jsonCollections
+    )
     {
         var questioned = QuestionedCollectionClassesOf(ir);
 
@@ -55,6 +58,43 @@ internal sealed partial class RuntimeTypeReachability
             var question in ir.RuntimeQuestions.Where(question => IsAsked(question, questioned))
         )
             ReachTypeArguments(question.Type);
+
+        foreach (var collection in jsonCollections.OfType<INamedTypeSymbol>())
+        {
+            if (IsJsonCollectionAsked(collection, questioned))
+                ReachArgumentSymbols(collection);
+        }
+    }
+
+    /// <summary>
+    /// A JSON contract's collection is built through the runtime class of its kind, which
+    /// carries its type arguments when that class is questioned.
+    /// </summary>
+    private static bool IsJsonCollectionAsked(
+        INamedTypeSymbol collection,
+        IReadOnlySet<IrCollectionKind> questioned
+    ) =>
+        RuntimeCollections.KindOfClrName(ClrNameOf(collection.OriginalDefinition)) is { } kind
+        && RuntimeCollections.ClassesOf(kind).Any(questioned.Contains);
+
+    /// <summary>Reaches every described type among the arguments of <paramref name="type"/>, nested ones included.</summary>
+    private void ReachArgumentSymbols(INamedTypeSymbol type)
+    {
+        foreach (var argument in type.TypeArguments.OfType<INamedTypeSymbol>())
+        {
+            var unwrapped =
+                argument.OriginalDefinition.SpecialType is SpecialType.System_Nullable_T
+                    ? argument.TypeArguments[0] as INamedTypeSymbol
+                    : argument;
+
+            if (unwrapped is null)
+                continue;
+
+            if (DescribableOf(unwrapped) is { } describable)
+                Reach(describable);
+
+            ReachArgumentSymbols(unwrapped);
+        }
     }
 
     private static bool IsAsked(

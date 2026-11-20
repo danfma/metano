@@ -702,7 +702,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             compilation,
             emittedTypes,
             ReportDiagnostic,
-            JsonConstructedTypesByContext(emittedTypes).Values.SelectMany(types => types).ToList()
+            new JsonReachabilityInputs(
+                JsonConstructedTypesByContext(emittedTypes)
+                    .Values.SelectMany(types => types)
+                    .ToList(),
+                JsonCollectionTypes(emittedTypes)
+            )
         );
 
         // A tested [PlainObject] is recognized by its synthesized guard
@@ -1250,6 +1255,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Where(ShouldEmitNestedType)
             .SelectMany(WithEmittedNestedTypes)
             .Prepend(type);
+
+    private List<ITypeSymbol> JsonCollectionTypes(IReadOnlyList<INamedTypeSymbol> emittedTypes)
+    {
+        var contextTransformer = new JsonSerializerContextTransformer(Context);
+
+        return
+        [
+            .. emittedTypes
+                .Where(IsJsonSerializerContextType)
+                .SelectMany(contextTransformer.CollectionTypesOf),
+        ];
+    }
 
     /// <summary>
     /// The classes each emitted <c>SerializerContext</c> constructs through its

@@ -276,6 +276,24 @@ internal static class IrToTsRuntimeTypeReferences
             ? Wildcard()
             : Of(type, site, reachability) ?? Wildcard();
 
+    /// <summary>
+    /// The descriptor of a collection slot's argument: a class of this compilation is
+    /// always reached when the kind is questioned (the reachability phase reaches every
+    /// concrete argument), so reading it unreached is an internal error rather than a
+    /// silent <c>UnknownType</c>, which would match every value (FR-008, D31).
+    /// </summary>
+    public static TsExpression SlotArgumentOf(
+        IrTypeRef type,
+        string site,
+        RuntimeTypeReachabilityResult reachability
+    )
+    {
+        if (type is IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named)
+            AssertReached(named, site, reachability);
+
+        return ArgumentOf(type, site, reachability);
+    }
+
     /// <summary><c>UnknownType</c>: the descriptor that matches every value (FR-008).</summary>
     private static TsExpression Wildcard() => new TsRuntimeHelperReference("UnknownType");
 

@@ -32,7 +32,7 @@ public static class CollectionTypeArgumentProbes
         return $"{empty is List<int>},{empty is List<string>},{copied is IList<int>},{copied is IList<string>}";
     }
 
-    public static string ReadOnlyLiteralsCarrySlots()
+    public static string ReadOnlyLiteralCount()
     {
         IReadOnlyList<int> xs = [1, 2];
         var count = xs.Count;
@@ -40,7 +40,7 @@ public static class CollectionTypeArgumentProbes
         return $"{count}";
     }
 
-    public static string ConvertedArraysCarrySlots()
+    public static string ConvertedArrayIsFixedSize()
     {
         int[] array = [1];
         IList<int> xs = array;
@@ -120,6 +120,22 @@ public static class CollectionTypeArgumentProbes
         object values = map.Values;
 
         return $"{keys is IReadOnlyCollection<string>},{values is ICollection<int>}";
+    }
+
+    public static string DirectDictionaryViewInterfaceTestIsLoud()
+    {
+        var map = new Dictionary<string, int> { ["a"] = 1 };
+        Dictionary<string, int>.KeyCollection keys = map.Keys;
+
+        return $"{keys is IReadOnlyCollection<string>},{keys is ICollection<string>},{map.Values is IReadOnlyCollection<int>}";
+    }
+
+    public static string ExplicitArrayCastKeepsTheSourceElement()
+    {
+        var items = new[] { new Slot(1) };
+        object list = (IReadOnlyList<object>)items;
+
+        return $"{list is List<string>}";
     }
 
     public static string ListClassTestsStayAnswerable()

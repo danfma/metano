@@ -180,6 +180,51 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
+    /// The constructed collection types of the context's contract (a root, or a
+    /// property of a contract class, nested ones included): their element and
+    /// argument types are reached so the descriptors the context's factories pass
+    /// name them (FR-008, FR-028).
+    /// </summary>
+    public IEnumerable<ITypeSymbol> CollectionTypesOf(INamedTypeSymbol contextType)
+    {
+        if (PlanOf(contextType) is not { } plan)
+            return [];
+
+        var contractTypes = plan
+            .Entries.Where(entry => entry.Kind == JsonPropertyKind.Ref)
+            .Select(entry => entry.Type)
+            .OfType<INamedTypeSymbol>()
+            .SelectMany(type => plan.Properties.ContractPropertiesOf(type))
+            .Select(property => property.Type);
+
+        return plan
+            .Entries.Select(entry => (ITypeSymbol)entry.Type)
+            .Concat(contractTypes)
+            .SelectMany(CollectionsWithin)
+            .Distinct((IEqualityComparer<ITypeSymbol>)SymbolEqualityComparer.Default);
+    }
+
+    private static IEnumerable<ITypeSymbol> CollectionsWithin(ITypeSymbol type) =>
+        type switch
+        {
+            IArrayTypeSymbol array => CollectionsWithin(array.ElementType),
+            INamedTypeSymbol { IsGenericType: true } named => (
+                IsCollectionKind(JsonTypeClassifier.Classify(named))
+                    ? [named]
+                    : Array.Empty<ITypeSymbol>()
+            ).Concat(named.TypeArguments.SelectMany(CollectionsWithin)),
+            _ => [],
+        };
+
+    private static bool IsCollectionKind(JsonPropertyKind kind) =>
+        kind
+            is JsonPropertyKind.List
+                or JsonPropertyKind.HashSet
+                or JsonPropertyKind.Queue
+                or JsonPropertyKind.Stack
+                or JsonPropertyKind.Dictionary;
+
+    /// <summary>
     /// The plan of each serializer context (<see cref="BuildPlan"/>), <c>null</c> for
     /// a context with no admitted root.
     /// </summary>

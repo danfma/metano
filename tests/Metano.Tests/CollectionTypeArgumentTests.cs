@@ -402,6 +402,108 @@ public class CollectionTypeArgumentTests
     }
 
     [Test]
+    public async Task ADirectDictionaryView_ReportsMs0001InEveryTestForm()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Is(Dictionary<string, int> d) => d.Keys is IReadOnlyCollection<string>;
+                    public static bool Collection(Dictionary<string, int>.KeyCollection keys) => keys is ICollection<string>;
+                    public static bool Values(Dictionary<string, int> d) => d.Values is IReadOnlyCollection<int>;
+                    public static bool Wide(Dictionary<string, int>.KeyCollection keys) => keys is IReadOnlyCollection<object>;
+                    public static bool Nullable(Dictionary<string, int>.KeyCollection? keys) => keys is IReadOnlyCollection<string>;
+                    public static object? As(Dictionary<string, int>.KeyCollection keys) => keys as IReadOnlyCollection<string>;
+                    public static string Switch(Dictionary<string, int>.KeyCollection keys) =>
+                        keys switch { IReadOnlyCollection<string> => "c", _ => "?" };
+                }
+                """
+        );
+
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(7);
+
+        await Assert
+            .That(files["slots/probe.ts"])
+            .DoesNotContain("iReadOnlyCollectionType(StringType)");
+    }
+
+    [Test]
+    public async Task AnExplicitArrayCast_ReachesTheSourceElementDescriptor()
+    {
+        var files = TranspileHelper.Transpile(
+            Header
+                + """
+                public class DerivedOnlyInCast;
+
+                public static class Probe
+                {
+                    public static bool Is(object o) => o is List<string>;
+                    public static IReadOnlyList<object> Cast(DerivedOnlyInCast[] xs) => (IReadOnlyList<object>)xs;
+                    public static IList<object> Mutable(DerivedOnlyInCast[] xs) => (IList<object>)xs;
+                }
+                """
+        );
+
+        await Assert.That(files["slots/probe.ts"]).Contains("[DerivedOnlyInCast.$runtimeType]");
+        await Assert.That(files["slots/probe.ts"]).DoesNotContain("UnknownType");
+    }
+
+    private const string JsonHeader = """
+        public enum Color { Red = 1, Blue = 2 }
+
+        public sealed class BagDto
+        {
+            public List<Color> Colors { get; set; } = new();
+            public IReadOnlyList<int> ReadOnly { get; set; } = new List<int>();
+            public IList<int> Mutable { get; set; } = new List<int>();
+            public IDictionary<string, int> Map { get; set; } = new Dictionary<string, int>();
+            public ISet<string> Set { get; set; } = new HashSet<string>();
+        }
+
+        [System.Text.Json.Serialization.JsonSerializable(typeof(BagDto))]
+        public partial class BagJsonContext : System.Text.Json.Serialization.JsonSerializerContext
+        {
+            public BagJsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+            protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+            public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(System.Type type) => null;
+        }
+
+        public static class Probe
+        {
+            public static bool Is(object o) => o is Dictionary<string, string>;
+            public static bool IsList(object o) => o is List<string>;
+            public static bool IsSet(object o) => o is HashSet<string>;
+        }
+        """;
+
+    [Test]
+    public async Task InterfaceTypedJsonProperties_CarryTheSlotOfTheirConcreteClass()
+    {
+        var files = TranspileHelper.Transpile(Header + JsonHeader);
+        var context = files["slots/bag-json-context.ts"];
+
+        await Assert.That(context).Contains("List.of(items, [Int32Type])");
+
+        await Assert
+            .That(context)
+            .Contains("Dictionary.assign(entries, null, [StringType, Int32Type])");
+
+        await Assert.That(context).Contains("HashSet.from(items, null, [StringType])");
+        await Assert.That(context).DoesNotContain("List.of(items)");
+    }
+
+    [Test]
+    public async Task AJsonOnlyElementType_IsReachedAndKeepsItsDescriptor()
+    {
+        var files = TranspileHelper.Transpile(Header + JsonHeader);
+
+        await Assert.That(files["slots/bag-json-context.ts"]).Contains("[Color$runtimeType]");
+        await Assert.That(files["slots/color.ts"]).Contains("Color$runtimeType");
+        await Assert.That(files["slots/bag-json-context.ts"]).DoesNotContain("UnknownType");
+    }
+
+    [Test]
     public async Task ReferenceNullability_IsNotANullableValueDescriptor()
     {
         var files = TranspileHelper.Transpile(

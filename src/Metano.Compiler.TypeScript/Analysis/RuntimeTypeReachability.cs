@@ -97,14 +97,14 @@ internal sealed partial class RuntimeTypeReachability
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
         Action<MetanoDiagnostic> report,
-        IReadOnlyList<INamedTypeSymbol>? jsonRoots = null
+        JsonReachabilityInputs? json = null
     )
     {
         var analysis = new RuntimeTypeReachability(compilation, emittedTypes, report);
 
         analysis.ReachRoots(ir);
-        analysis.ReachJsonRoots(jsonRoots ?? []);
-        analysis.ReachCollectionConstructions(ir);
+        analysis.ReachJsonRoots(json?.ConstructedClasses ?? []);
+        analysis.ReachCollectionConstructions(ir, json?.CollectionTypes ?? []);
         analysis.ReportUnanswerableInterfaceTests(ir);
         analysis.Close();
 
