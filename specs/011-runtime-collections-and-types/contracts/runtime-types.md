@@ -12,6 +12,7 @@ export interface RuntimeTypeBase<T> {
   readonly namespace: string;
   test(value: unknown): value is T;          // self-contained, duck-typed; isType delegates to it
   default?(): T;                             // primitives: 0, false, "", 0n; struct classes: new T(); absent → null
+  create?(): T;                              // public parameterless ctor (new T()) on classes and value-type primitives; absent → MissingMethodException via createInstance
   // assignability is NOT a method: isAssignableFrom(target, source) in this module reads base / baseInterfaces / interfaces / typeArguments
 }
 export type ClassType<T> = RuntimeTypeBase<T> & {
@@ -23,7 +24,6 @@ export type ClassType<T> = RuntimeTypeBase<T> & {
   readonly typeArguments?: ReadonlyArray<RuntimeType>;                  // specialization only
   readonly isAbstract: boolean;
   readonly isValueType: boolean;                                        // C# struct lowered to a class
-  readonly create?: () => T;                                            // public parameterless ctor (new T())
 };
 export type InterfaceType<T> = RuntimeTypeBase<T> & {
   readonly kind: "interface";
@@ -39,20 +39,22 @@ export type CollectionType<T> = RuntimeTypeBase<T> & {
   readonly collection: "List" | "Dictionary" | "HashSet" | "Queue" | "Stack" | "ImmutableList" | "ReadOnlyList" | "ImmutableHashSet" | "ImmutableDictionary"
     | "SortedSet" | "SortedDictionary" | "SortedList" | "ConcurrentDictionary" // the 011h classes (FR-054)
     | "IImmutableList" | "IImmutableSet" | "IImmutableDictionary"
-    | "IList" | "ICollection" | "IReadOnlyList" | "IReadOnlyCollection" | "IDictionary" | "IReadOnlyDictionary" | "ISet" | "IReadOnlySet";
+    | "IList" | "ICollection" | "IReadOnlyList" | "IReadOnlyCollection" | "IDictionary" | "IReadOnlyDictionary" | "ISet" | "IReadOnlySet"
+    | "KeyCollection" | "ValueCollection";
   readonly ctor?: abstract new (...args: any[]) => T;                   // classes only
   readonly typeArguments: ReadonlyArray<RuntimeType>;                   // UnknownType = wildcard
   readonly variance: ReadonlyArray<"invariant" | "covariant">;          // identity vs assignability per argument (FR-008)
   readonly interfaces?: ReadonlyArray<{ readonly collection: string; readonly arguments: ReadonlyArray<number> | null }>; // class kinds: implemented interfaces by kind, arguments as slot indices (null = wildcard); data (D30)
   readonly closeFor?: (instance: object) => CollectionType<T>;          // class kinds: closed over an instance's $typeArguments$<Class> slot, memoized; what getRuntimeType calls (D30, W4-24 (f))
 };
+export type TupleType<T = unknown[]> = RuntimeTypeBase<T> & { readonly kind: "tuple"; readonly elements: ReadonlyArray<RuntimeType>; }; // ValueTuple; value type (invariant in covariant collection tests)
 export type NullableType<T> = RuntimeTypeBase<T | null> & { readonly kind: "nullable"; readonly inner: () => RuntimeType<T>; };
 export type UnionType<T> = RuntimeTypeBase<T> & { readonly kind: "union"; readonly cases: ReadonlyArray<() => RuntimeType>; }; // spec 010
 export type DelegateType = RuntimeTypeBase<Function> & { readonly kind: "delegate"; };       // test: typeof function
 export type UnknownType = RuntimeTypeBase<unknown> & { readonly kind: "unknown"; };            // wildcard; test always true
 export type ObjectType = RuntimeTypeBase<object> & { readonly kind: "object"; };               // System.Object; test: v != null
 export type RuntimeType<T = unknown> = ClassType<T> | InterfaceType<T> | PlainObjectType<T> | PrimitiveType<T> | EnumType<T>
-  | ArrayType | CollectionType<T> | NullableType<any> | UnionType<T> | DelegateType | UnknownType | ObjectType;
+  | ArrayType | CollectionType<T> | TupleType<T> | NullableType<any> | UnionType<T> | DelegateType | UnknownType | ObjectType;
 ```
 
 `PrimitiveName` = `"Boolean" | "Byte" | "SByte" | "Int16" | "UInt16" | "Int32" | "UInt32" | "Int64" | "UInt64" | "Single" | "Double" | "Decimal" | "BigInteger" | "Char" | "String" | "Guid" | "DateTime" | "DateTimeOffset" | "DateOnly" | "TimeOnly" | "TimeSpan"`.
@@ -67,7 +69,8 @@ There is **no** `classType` / `interfaceType` / `plainObjectType` / `enumType` /
 
 ```ts
 export function nullableType<T>(inner: RuntimeType<T>): NullableType<T>;         // memoized on inner
-export function specialize<T>(open: ClassType<T>, args: ReadonlyArray<RuntimeType>): ClassType<T>; // memoized on (open, ...args)
+export function tupleType(elements: ReadonlyArray<RuntimeType>): TupleType;      // memoized on elements; invariant in collection covariance (#711)
+export function specialize<T>(open: ClassType<T>, args: ReadonlyArray<RuntimeType>): ClassType<T>; // memoized on (open, ...args); test checks open.test(v) && slotMatches($typeArguments$<Class>, args)
 export function withImplementers<T>(iface: InterfaceType<T>, implementers: ReadonlyArray<PlainObjectType<unknown>>): InterfaceType<T>; // memoized; FR-019 cross-package
 ```
 
@@ -77,7 +80,8 @@ The collection factories (`listType`, `dictionaryType`, `hashSetType`, `queueTyp
 
 ```ts
 export const isType = <T>(value: unknown, type: RuntimeType<T>): value is T => type.test(value);  // no dispatch on kind
-export function isAssignableFrom(target: RuntimeType, source: RuntimeType): boolean;  // Type.IsAssignableFrom; reads the data
+export function createInstance<T>(type: RuntimeType<T>): T;                        // FR-024: calls type.create(); throws MissingMethodException when absent
+export function isAssignableFrom(target: RuntimeType, source: RuntimeType): boolean;  // Type.IsAssignableFrom; reads the data (including CollectionType classes & interfaces for nested collection covariance)
 export function asType<T>(value: unknown, type: RuntimeType<T>): T | null;   // FR-026
 export function castTo<T>(value: unknown, type: RuntimeType<T>): T;          // FR-026; InvalidCastException
 export function getRuntimeType(value: unknown): RuntimeType;                       // FR-018; the lowering of GetType()
