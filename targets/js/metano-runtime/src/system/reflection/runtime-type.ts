@@ -43,6 +43,8 @@ export interface RuntimeTypeBase<T> {
   test(value: unknown): value is T;
   /** The type's default value; absent means `null`. */
   default?(): T;
+  /** The public parameterless constructor (`new T()`); absent means `MissingMethodException`. */
+  readonly create?: (typeArguments?: ReadonlyArray<RuntimeType>) => T;
 }
 
 /** A class, record or struct lowered to a class, or a runtime exception class. */
@@ -56,11 +58,11 @@ export interface ClassType<T> extends RuntimeTypeBase<T> {
   readonly typeParameters: ReadonlyArray<string>;
   /** The type arguments of a specialization. */
   readonly typeArguments?: ReadonlyArray<RuntimeType>;
+  /** The `$typeArguments$<Class>` slot key when the class defines a slot. */
+  readonly slot?: string;
   readonly isAbstract: boolean;
   /** A C# struct lowered to a class. */
   readonly isValueType: boolean;
-  /** The public parameterless constructor (`new T()`). */
-  readonly create?: () => T;
 }
 
 export interface InterfaceType<T> extends RuntimeTypeBase<T> {
@@ -163,7 +165,14 @@ export type CollectionKindName =
   | "IDictionary"
   | "IReadOnlyDictionary"
   | "ISet"
-  | "IReadOnlySet";
+  | "IReadOnlySet"
+  | "KeyCollection"
+  | "ValueCollection";
+
+export interface TupleType<T = unknown[]> extends RuntimeTypeBase<T> {
+  readonly kind: "tuple";
+  readonly elements: ReadonlyArray<RuntimeType>;
+}
 
 export interface NullableType<T> extends RuntimeTypeBase<T | null> {
   readonly kind: "nullable";
@@ -189,6 +198,11 @@ export interface ObjectType extends RuntimeTypeBase<object> {
   readonly kind: "object";
 }
 
+/** A memoized nominal descriptor for concrete types without a emitted descriptor (#711). */
+export interface OpaqueType extends RuntimeTypeBase<never> {
+  readonly kind: "opaque";
+}
+
 export type RuntimeType<T = unknown> =
   | ClassType<T>
   | InterfaceType<T>
@@ -197,8 +211,10 @@ export type RuntimeType<T = unknown> =
   | EnumType<T>
   | ArrayType
   | CollectionType<T>
+  | TupleType<T>
   | NullableType<unknown>
   | UnionType<T>
   | DelegateType
   | UnknownType
-  | ObjectType;
+  | ObjectType
+  | OpaqueType;

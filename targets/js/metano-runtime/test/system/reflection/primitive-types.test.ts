@@ -96,17 +96,27 @@ describe("primitive descriptors", () => {
     expect(DateOnlyType.test("2020-01-01")).toBe(false);
   });
 
-  test("carry the .NET defaults", () => {
+  test("carry the .NET defaults and parameterless creates (W5-5 f)", () => {
     expect(Int32Type.default?.()).toBe(0);
     expect(DoubleType.default?.()).toBe(0);
     expect(Int64Type.default?.()).toBe(0n);
     expect(BigIntegerType.default?.()).toBe(0n);
     expect(BooleanType.default?.()).toBe(false);
-    expect(StringType.default?.()).toBe("");
     expect(CharType.default?.()).toBe("\0");
-    expect(DecimalType.default).toBeUndefined();
-    expect(GuidType.default).toBeUndefined();
-    expect(DateOnlyType.default).toBeUndefined();
+    expect(StringType.default).toBeUndefined();
+    expect(GuidType.default?.()).toBe("00000000-0000-0000-0000-000000000000");
+    expect(DecimalType.default?.().toString()).toBe("0");
+    expect(DateTimeType.default?.().toString()).toBe("0001-01-01T00:00:00");
+    expect(DateOnlyType.default?.().toString()).toBe("0001-01-01");
+    expect(TimeOnlyType.default?.().toString()).toBe("00:00:00");
+    expect(TimeSpanType.default?.().toString()).toBe("PT0S");
+    expect(DateTimeOffsetType.default?.().year).toBe(1);
+
+    expect(Int32Type.create?.()).toBe(0);
+    expect(BooleanType.create?.()).toBe(false);
+    expect(StringType.create).toBeUndefined();
+    expect(GuidType.create?.()).toBe("00000000-0000-0000-0000-000000000000");
+    expect(DecimalType.create?.().toString()).toBe("0");
   });
 });
 

@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { MissingMethodException } from "#/system/exceptions/missing-method-exception.ts";
+import { createInstance } from "#/system/reflection/create-instance.ts";
 import { implementsInterface } from "#/system/reflection/implements-interface.ts";
 import { nullableType } from "#/system/reflection/nullable-type.ts";
-import { DoubleType, Int32Type } from "#/system/reflection/primitive-types.ts";
+import { opaqueType } from "#/system/reflection/opaque-type.ts";
+import { DoubleType, Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
 import { specialize } from "#/system/reflection/specialize.ts";
+import { tupleType } from "#/system/reflection/tuple-type.ts";
+import { UnknownType } from "#/system/reflection/well-known-types.ts";
 import { withImplementers } from "#/system/reflection/with-implementers.ts";
 import { Circle, FlatDto$rt, IFlat$rt, IShape$rt, type IFlat } from "./fixtures.ts";
-import type { PlainObjectType } from "#/system/reflection/index.ts";
+import type { ClassType, PlainObjectType, RuntimeType } from "#/system/reflection/index.ts";
 
 describe("nullableType", () => {
   test("is memoized on the inner descriptor", () => {
@@ -74,5 +79,96 @@ describe("withImplementers", () => {
     expect(IShape$rt.test(new Circle())).toBe(true);
     expect(withImplementers(IShape$rt, []).test(new Circle())).toBe(true);
     expect(implementsInterface(new Circle(), IShape$rt)).toBe(true);
+  });
+});
+
+describe("specialize slot matching and create forwarding (W5-5 a, f)", () => {
+  class Box<T> {
+    declare readonly $typeArguments$Box: readonly RuntimeType[];
+
+    constructor(typeArgs?: readonly RuntimeType[]) {
+      Object.defineProperty(this, "$typeArguments$Box", {
+        value: typeArgs ?? [UnknownType],
+        enumerable: false,
+      });
+    }
+
+    static get $runtimeType(): ClassType<Box<unknown>> {
+      return Box$rt;
+    }
+  }
+
+  const Box$rt: ClassType<Box<unknown>> = {
+    kind: "class",
+    name: "Box",
+    fullName: "App.Box",
+    namespace: "App",
+    ctor: Box,
+    interfaces: [],
+    typeParameters: ["T"],
+    slot: "$typeArguments$Box",
+    isAbstract: false,
+    isValueType: false,
+    create: (typeArgs) => new Box(typeArgs),
+    test: (v: unknown): v is Box<unknown> => v instanceof Box,
+  };
+
+  test("checks open.slot when present and treats UnknownType as wildcard", () => {
+    const intBox = specialize(Box$rt, [Int32Type]);
+    const strBox = specialize(Box$rt, [StringType]);
+    const unknownBox = specialize(Box$rt, [UnknownType]);
+
+    expect(intBox.test(new Box([Int32Type]))).toBe(true);
+    expect(strBox.test(new Box([Int32Type]))).toBe(false);
+    expect(unknownBox.test(new Box([Int32Type]))).toBe(true);
+    expect(intBox.test(new Box())).toBe(true);
+  });
+
+  test("forwards type arguments through create", () => {
+    const intBox = specialize(Box$rt, [Int32Type]);
+    const created = createInstance(intBox);
+
+    expect(created).toBeInstanceOf(Box);
+    expect(created.$typeArguments$Box).toEqual([Int32Type]);
+  });
+});
+
+describe("createInstance", () => {
+  test("invokes create when present and throws MissingMethodException when absent", () => {
+    expect(createInstance(Int32Type)).toBe(0);
+    expect(() => createInstance(StringType)).toThrow(MissingMethodException);
+    expect(() => createInstance(UnknownType)).toThrow(MissingMethodException);
+  });
+});
+
+describe("opaqueType", () => {
+  test("is memoized on fullName, equal only to itself, and never matches values", () => {
+    const a1 = opaqueType("Lib.Hidden");
+    const a2 = opaqueType("Lib.Hidden");
+    const b = opaqueType("Lib.Other");
+
+    expect(a1).toBe(a2);
+    expect(a1).not.toBe(b);
+    expect(a1.kind).toBe("opaque");
+    expect(a1.name).toBe("Hidden");
+    expect(a1.namespace).toBe("Lib");
+    expect(a1.test({})).toBe(false);
+    expect(a1.test(null)).toBe(false);
+  });
+});
+
+describe("tupleType", () => {
+  test("is memoized, tests elements, and provides default/create", () => {
+    const t1 = tupleType([Int32Type, StringType]);
+    const t2 = tupleType([Int32Type, StringType]);
+    const t3 = tupleType([DoubleType, StringType]);
+
+    expect(t1).toBe(t2);
+    expect(t1).not.toBe(t3);
+    expect(t1.test([1, "a"])).toBe(true);
+    expect(t1.test([1.5, "a"])).toBe(false);
+    expect(t1.test([1])).toBe(false);
+    expect(t1.default?.()).toEqual([0, null]);
+    expect(createInstance(t1)).toEqual([0, null]);
   });
 });

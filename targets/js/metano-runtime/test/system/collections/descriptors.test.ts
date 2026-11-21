@@ -49,6 +49,8 @@ import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
 import { List } from "#/system/collections/list.ts";
 import { Queue } from "#/system/collections/queue.ts";
+import { opaqueType } from "#/system/reflection/opaque-type.ts";
+import { tupleType } from "#/system/reflection/tuple-type.ts";
 import { ObjectType, UnknownType } from "#/system/reflection/well-known-types.ts";
 
 describe("H/J closed factory slots", () => {
@@ -341,5 +343,30 @@ describe("class literals of the 011h classes (contracts/runtime-collections.md, 
     expect(iListType(Int32Type).test(list.keys)).toBe(false);
     expect(iReadOnlyListType(StringType).test(list.keys)).toBe(false);
     expect(Object.keys(list.keys)).toEqual([]);
+  });
+
+  test("#711: tuple invariance, ImmutableArray invariance, nested collection covariance, opaqueType, and Dictionary views", () => {
+    const tuples = List.of([["a", 1]], [tupleType([StringType, Int32Type])]);
+    expect(iReadOnlyListType(tupleType([ObjectType, Int32Type])).test(tuples)).toBe(false);
+    expect(iReadOnlyListType(tupleType([StringType, Int32Type])).test(tuples)).toBe(true);
+
+    const immutables = List.of([ImmutableArray.of(["a"], [StringType])], [immutableArrayType(StringType)]);
+    expect(iReadOnlyListType(iReadOnlyListType(StringType)).test(immutables)).toBe(false);
+
+    const nested = List.of([List.of(["a"], [StringType])], [listType(StringType)]);
+    expect(iReadOnlyListType(iReadOnlyListType(ObjectType)).test(nested)).toBe(true);
+    expect(iReadOnlyListType(iReadOnlyListType(Int32Type)).test(nested)).toBe(false);
+
+    const opaqueList = List.of([{}], [opaqueType("App.Hidden")]);
+    expect(listType(opaqueType("App.Hidden")).test(opaqueList)).toBe(true);
+    expect(listType(Int32Type).test(opaqueList)).toBe(false);
+    expect(listType(opaqueType("App.Other")).test(opaqueList)).toBe(false);
+
+    const dict = Dictionary.of([["a", 1]], null, [StringType, Int32Type]);
+    expect(iReadOnlyCollectionType(StringType).test(dict.keys)).toBe(true);
+    expect(iCollectionType(StringType).test(dict.keys)).toBe(true);
+    expect(iReadOnlyCollectionType(Int32Type).test(dict.keys)).toBe(false);
+    expect(iReadOnlyCollectionType(Int32Type).test(dict.values)).toBe(true);
+    expect(iReadOnlyCollectionType(ObjectType).test(dict.values)).toBe(false);
   });
 });

@@ -247,6 +247,35 @@ const VARIANCE: Readonly<Record<InterfaceKind, ReadonlyArray<"invariant" | "cova
   IImmutableDictionary: ["invariant", "invariant"],
 };
 
+const INTERFACE_BASES: Partial<
+  Record<
+    InterfaceKind,
+    ReadonlyArray<{
+      readonly collection: InterfaceKind;
+      readonly arguments: ReadonlyArray<number> | null;
+    }>
+  >
+> = {
+  IList: [{ collection: "ICollection", arguments: [0] }],
+  IReadOnlyList: [{ collection: "IReadOnlyCollection", arguments: [0] }],
+  ISet: [{ collection: "ICollection", arguments: [0] }],
+  IReadOnlySet: [{ collection: "IReadOnlyCollection", arguments: [0] }],
+  IDictionary: [{ collection: "ICollection", arguments: null }],
+  IReadOnlyDictionary: [{ collection: "IReadOnlyCollection", arguments: null }],
+  IImmutableList: [
+    { collection: "IReadOnlyList", arguments: [0] },
+    { collection: "IReadOnlyCollection", arguments: [0] },
+  ],
+  IImmutableSet: [
+    { collection: "IReadOnlySet", arguments: [0] },
+    { collection: "IReadOnlyCollection", arguments: [0] },
+  ],
+  IImmutableDictionary: [
+    { collection: "IReadOnlyDictionary", arguments: [0, 1] },
+    { collection: "IReadOnlyCollection", arguments: null },
+  ],
+};
+
 let openInterfaces: Partial<Record<InterfaceKind, CollectionType<unknown>>> | undefined;
 
 /** The open descriptor of a collection interface: a data literal, built on first use. */
@@ -262,6 +291,7 @@ function openInterface(kind: InterfaceKind): CollectionType<unknown> {
   const namespace = kind.startsWith("IImmutable")
     ? "System.Collections.Immutable"
     : "System.Collections.Generic";
+  const interfaces = INTERFACE_BASES[kind];
   const created: CollectionType<unknown> = {
     kind: "collection",
     collection: kind satisfies CollectionKindName,
@@ -270,6 +300,7 @@ function openInterface(kind: InterfaceKind): CollectionType<unknown> {
     namespace,
     typeArguments: [],
     variance: VARIANCE[kind],
+    ...(interfaces !== undefined ? { interfaces } : {}),
     test: (_value: unknown): _value is unknown => true,
   };
 

@@ -17,7 +17,7 @@ import {
   isUInt32,
   isUInt64,
 } from "../../type-checking/index.ts";
-import type { Decimal } from "../decimal.ts";
+import { Decimal } from "../decimal.ts";
 import type { UUID } from "../uuid.ts";
 
 // Plain data literals: they reference the validating checks, never call them at load time.
@@ -31,6 +31,7 @@ export const BooleanType: PrimitiveType<boolean> = {
   primitive: "Boolean",
   test: isBool,
   default: () => false,
+  create: () => false,
 };
 
 export const ByteType: PrimitiveType<number> = {
@@ -41,6 +42,7 @@ export const ByteType: PrimitiveType<number> = {
   primitive: "Byte",
   test: isByte,
   default: () => 0,
+  create: () => 0,
 };
 
 export const SByteType: PrimitiveType<number> = {
@@ -51,6 +53,7 @@ export const SByteType: PrimitiveType<number> = {
   primitive: "SByte",
   test: isSByte,
   default: () => 0,
+  create: () => 0,
 };
 
 export const Int16Type: PrimitiveType<number> = {
@@ -61,6 +64,7 @@ export const Int16Type: PrimitiveType<number> = {
   primitive: "Int16",
   test: isInt16,
   default: () => 0,
+  create: () => 0,
 };
 
 export const UInt16Type: PrimitiveType<number> = {
@@ -71,6 +75,7 @@ export const UInt16Type: PrimitiveType<number> = {
   primitive: "UInt16",
   test: isUInt16,
   default: () => 0,
+  create: () => 0,
 };
 
 export const Int32Type: PrimitiveType<number> = {
@@ -81,6 +86,7 @@ export const Int32Type: PrimitiveType<number> = {
   primitive: "Int32",
   test: isInt32,
   default: () => 0,
+  create: () => 0,
 };
 
 export const UInt32Type: PrimitiveType<number> = {
@@ -91,6 +97,7 @@ export const UInt32Type: PrimitiveType<number> = {
   primitive: "UInt32",
   test: isUInt32,
   default: () => 0,
+  create: () => 0,
 };
 
 export const Int64Type: PrimitiveType<bigint> = {
@@ -101,6 +108,7 @@ export const Int64Type: PrimitiveType<bigint> = {
   primitive: "Int64",
   test: isInt64,
   default: () => 0n,
+  create: () => 0n,
 };
 
 export const UInt64Type: PrimitiveType<bigint> = {
@@ -111,6 +119,7 @@ export const UInt64Type: PrimitiveType<bigint> = {
   primitive: "UInt64",
   test: isUInt64,
   default: () => 0n,
+  create: () => 0n,
 };
 
 export const SingleType: PrimitiveType<number> = {
@@ -121,6 +130,7 @@ export const SingleType: PrimitiveType<number> = {
   primitive: "Single",
   test: isFloat32,
   default: () => 0,
+  create: () => 0,
 };
 
 export const DoubleType: PrimitiveType<number> = {
@@ -131,6 +141,7 @@ export const DoubleType: PrimitiveType<number> = {
   primitive: "Double",
   test: isFloat64,
   default: () => 0,
+  create: () => 0,
 };
 
 export const BigIntegerType: PrimitiveType<bigint> = {
@@ -141,6 +152,7 @@ export const BigIntegerType: PrimitiveType<bigint> = {
   primitive: "BigInteger",
   test: isBigInt,
   default: () => 0n,
+  create: () => 0n,
 };
 
 export const CharType: PrimitiveType<string> = {
@@ -151,6 +163,7 @@ export const CharType: PrimitiveType<string> = {
   primitive: "Char",
   test: isChar,
   default: () => "\0",
+  create: () => "\0",
 };
 
 export const StringType: PrimitiveType<string> = {
@@ -160,7 +173,6 @@ export const StringType: PrimitiveType<string> = {
   namespace: "System",
   primitive: "String",
   test: isString,
-  default: () => "",
 };
 
 export const GuidType: PrimitiveType<UUID> = {
@@ -170,9 +182,11 @@ export const GuidType: PrimitiveType<UUID> = {
   namespace: "System",
   primitive: "Guid",
   test: isGuid,
+  default: () => "00000000-0000-0000-0000-000000000000" as UUID,
+  create: () => "00000000-0000-0000-0000-000000000000" as UUID,
 };
 
-/** `decimal`: recognized by the decimal.js `Symbol.toStringTag`, so decimal.js is never imported. */
+/** `decimal`: recognized by the decimal.js `Symbol.toStringTag`, so `default`/`create` build `new Decimal(0)` on call. */
 export const DecimalType: PrimitiveType<Decimal> = {
   kind: "primitive",
   name: "Decimal",
@@ -180,4 +194,6 @@ export const DecimalType: PrimitiveType<Decimal> = {
   namespace: "System",
   primitive: "Decimal",
   test: isDecimal,
+  default: () => new Decimal(0),
+  create: () => new Decimal(0),
 };

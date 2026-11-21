@@ -11,6 +11,7 @@ import {
   UInt64Type,
 } from "./primitive-types.ts";
 import type { ClassType, RuntimeType } from "./runtime-type.ts";
+import { specialize } from "./specialize.ts";
 import { toStringTag } from "./to-string-tag.ts";
 import {
   DateOnlyType,
@@ -70,8 +71,17 @@ function getObjectType(value: object): RuntimeType {
   );
 }
 
-/** A runtime collection's descriptor closed over the instance's type-argument slot (FR-008). */
+/**
+ * A runtime collection's or reified generic class's descriptor closed over the instance's
+ * type-argument slot (FR-008, FR-024).
+ */
 function closedFor(value: object, own: RuntimeType | undefined): RuntimeType | undefined {
+  if (own?.kind === "class" && own.slot !== undefined) {
+    const slot = (value as Record<string, ReadonlyArray<RuntimeType> | undefined>)[own.slot];
+
+    return slot !== undefined ? specialize(own, slot) : own;
+  }
+
   return (
     (own as { closeFor?: (instance: object) => RuntimeType } | undefined)?.closeFor?.(value) ?? own
   );
