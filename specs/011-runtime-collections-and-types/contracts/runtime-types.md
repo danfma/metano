@@ -11,8 +11,8 @@ export interface RuntimeTypeBase<T> {
   readonly fullName: string;    // C# full name with namespace; type arguments by fullName
   readonly namespace: string;
   test(value: unknown): value is T;          // self-contained, duck-typed; isType delegates to it
-  default?(): T;                             // primitives: 0, false, "", 0n; struct classes: new T(); absent → null
-  create?(): T;                              // public parameterless ctor (new T()) on classes and value-type primitives; absent → MissingMethodException via createInstance
+  default?(): T;                             // value types only (numbers, bool, char, enums, decimal, Guid, Temporal, tuples, structs); absent on reference types (StringType has no default) -> null
+  create?(typeArguments?: ReadonlyArray<RuntimeType>): T; // public parameterless ctor (new T()) on classes, value-type primitives, tuples, structs; absent -> MissingMethodException via createInstance
   // assignability is NOT a method: isAssignableFrom(target, source) in this module reads base / baseInterfaces / interfaces / typeArguments
 }
 export type ClassType<T> = RuntimeTypeBase<T> & {
@@ -22,6 +22,7 @@ export type ClassType<T> = RuntimeTypeBase<T> & {
   readonly interfaces: ReadonlyArray<() => InterfaceType<unknown>>;   // direct + inherited, deduped, declaration order
   readonly typeParameters: ReadonlyArray<string>;                       // open definition only
   readonly typeArguments?: ReadonlyArray<RuntimeType>;                  // specialization only
+  readonly slot?: string;                                               // "$typeArguments$<TS class name>" when the class defines a slot (never inferred from ctor.name)
   readonly isAbstract: boolean;
   readonly isValueType: boolean;                                        // C# struct lowered to a class
 };
@@ -53,8 +54,9 @@ export type UnionType<T> = RuntimeTypeBase<T> & { readonly kind: "union"; readon
 export type DelegateType = RuntimeTypeBase<Function> & { readonly kind: "delegate"; };       // test: typeof function
 export type UnknownType = RuntimeTypeBase<unknown> & { readonly kind: "unknown"; };            // wildcard; test always true
 export type ObjectType = RuntimeTypeBase<object> & { readonly kind: "object"; };               // System.Object; test: v != null
+export type OpaqueType = RuntimeTypeBase<never> & { readonly kind: "opaque"; };                // memoized nominal descriptor for concrete types without a descriptor (#711)
 export type RuntimeType<T = unknown> = ClassType<T> | InterfaceType<T> | PlainObjectType<T> | PrimitiveType<T> | EnumType<T>
-  | ArrayType | CollectionType<T> | TupleType<T> | NullableType<any> | UnionType<T> | DelegateType | UnknownType | ObjectType;
+  | ArrayType | CollectionType<T> | TupleType<T> | NullableType<any> | UnionType<T> | DelegateType | UnknownType | ObjectType | OpaqueType;
 ```
 
 `PrimitiveName` = `"Boolean" | "Byte" | "SByte" | "Int16" | "UInt16" | "Int32" | "UInt32" | "Int64" | "UInt64" | "Single" | "Double" | "Decimal" | "BigInteger" | "Char" | "String" | "Guid" | "DateTime" | "DateTimeOffset" | "DateOnly" | "TimeOnly" | "TimeSpan"`.
@@ -69,8 +71,9 @@ There is **no** `classType` / `interfaceType` / `plainObjectType` / `enumType` /
 
 ```ts
 export function nullableType<T>(inner: RuntimeType<T>): NullableType<T>;         // memoized on inner
+export function opaqueType(fullName: string): OpaqueType;                        // memoized on fullName; equal only to itself (#711 concrete types without a descriptor)
 export function tupleType(elements: ReadonlyArray<RuntimeType>): TupleType;      // memoized on elements; invariant in collection covariance (#711)
-export function specialize<T>(open: ClassType<T>, args: ReadonlyArray<RuntimeType>): ClassType<T>; // memoized on (open, ...args); test checks open.test(v) && slotMatches($typeArguments$<Class>, args)
+export function specialize<T>(open: ClassType<T>, args: ReadonlyArray<RuntimeType>): ClassType<T>; // memoized on (open, ...args); test checks open.test(v) && slotMatches(open.slot, args); forwards args to open.create when present
 export function withImplementers<T>(iface: InterfaceType<T>, implementers: ReadonlyArray<PlainObjectType<unknown>>): InterfaceType<T>; // memoized; FR-019 cross-package
 ```
 
