@@ -959,6 +959,10 @@ public sealed class Printer(string indent = "  ")
 
             case TsFieldMember field:
                 PrintJSDoc(field.JSDoc);
+
+                if (field.Declare)
+                    _sb.Write("declare ");
+
                 PrintAccessibility(field.Accessibility);
 
                 if (field.Abstract)

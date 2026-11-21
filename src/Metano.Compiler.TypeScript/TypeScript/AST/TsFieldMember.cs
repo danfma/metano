@@ -26,5 +26,6 @@ public sealed record TsFieldMember(
     bool DefinitelyAssigned = false,
     bool Abstract = false,
     TsJSDoc? JSDoc = null,
-    bool Override = false
+    bool Override = false,
+    bool Declare = false
 ) : TsClassMember;

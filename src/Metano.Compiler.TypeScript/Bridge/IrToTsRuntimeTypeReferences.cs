@@ -39,12 +39,14 @@ internal static class IrToTsRuntimeTypeReferences
     public static TsExpression? Of(
         IrTypeRef type,
         string site,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope = null
     ) =>
         type switch
         {
             _ when type.IsObject => new TsRuntimeHelperReference("ObjectType"),
-            IrNullableTypeRef { Inner: var inner } => Of(inner, site, reachability)
+            IrTypeParameterRef tp => TypeParameterTsResolver.ResolveParameter(tp.Name, scope),
+            IrNullableTypeRef { Inner: var inner } => Of(inner, site, reachability, scope)
                 is { } innerDescriptor
                 ? IsValueType(inner)
                     ? Helper("nullableType", innerDescriptor)
@@ -58,9 +60,14 @@ internal static class IrToTsRuntimeTypeReferences
                 ? new TsRuntimeHelperReference(runtime.Descriptor)
                 : null,
             IrArrayTypeRef => new TsRuntimeHelperReference("ArrayType"),
-            IrCollectionTypeRef collection => CollectionDescriptor(collection, site, reachability),
+            IrCollectionTypeRef collection => CollectionDescriptor(
+                collection,
+                site,
+                reachability,
+                scope
+            ),
             IrFunctionTypeRef => new TsRuntimeHelperReference("DelegateType"),
-            IrNamedTypeRef named => NamedDescriptor(named, site, reachability),
+            IrNamedTypeRef named => NamedDescriptor(named, site, reachability, scope),
             _ => null,
         };
 
@@ -72,14 +79,15 @@ internal static class IrToTsRuntimeTypeReferences
     private static TsExpression? CollectionDescriptor(
         IrCollectionTypeRef collection,
         string site,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope
     ) =>
         RuntimeCollections.DescriptorFactoryOf(collection.Kind) is { } factory
             ? new TsCallExpression(
                 factory,
                 [
                     .. collection.TypeArguments.Select(argument =>
-                        ArgumentOf(argument, site, reachability)
+                        ArgumentOf(argument, site, reachability, scope)
                     ),
                 ]
             )
@@ -92,7 +100,8 @@ internal static class IrToTsRuntimeTypeReferences
     private static TsExpression? NamedDescriptor(
         IrNamedTypeRef named,
         string site,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope
     )
     {
         if (named.Semantics?.Kind is IrNamedTypeKind.Delegate)
@@ -119,14 +128,15 @@ internal static class IrToTsRuntimeTypeReferences
                     or IrNamedTypeKind.NumericEnum
                     or IrNamedTypeKind.StringEnum,
             } => ExportReference(named),
-            _ => Specialized(named, site, reachability),
+            _ => Specialized(named, site, reachability, scope),
         };
     }
 
     private static TsExpression Specialized(
         IrNamedTypeRef named,
         string site,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope
     )
     {
         var open = new TsPropertyAccess(ClassReference(named), GetterName);
@@ -135,7 +145,7 @@ internal static class IrToTsRuntimeTypeReferences
             return open;
 
         var descriptors = arguments
-            .Select(argument => ArgumentOf(argument, site, reachability))
+            .Select(argument => ArgumentOf(argument, site, reachability, scope))
             .ToList();
 
         return Helper("specialize", open, new TsArrayLiteral(descriptors));
@@ -269,12 +279,13 @@ internal static class IrToTsRuntimeTypeReferences
     public static TsExpression ArgumentOf(
         IrTypeRef type,
         string site,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope = null
     ) =>
         type is IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named
         && !reachability.Reaches(named.SupertypeKey)
             ? Wildcard()
-            : Of(type, site, reachability) ?? Wildcard();
+            : Of(type, site, reachability, scope) ?? Wildcard();
 
     /// <summary>
     /// The descriptor of a collection slot's argument: a class of this compilation is
@@ -285,13 +296,14 @@ internal static class IrToTsRuntimeTypeReferences
     public static TsExpression SlotArgumentOf(
         IrTypeRef type,
         string site,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope = null
     )
     {
         if (type is IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named)
             AssertReached(named, site, reachability);
 
-        return ArgumentOf(type, site, reachability);
+        return ArgumentOf(type, site, reachability, scope);
     }
 
     /// <summary><c>UnknownType</c>: the descriptor that matches every value (FR-008).</summary>
