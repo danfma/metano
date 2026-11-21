@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import {
+  iCollectionType,
+  iListType,
+  iReadOnlyListType,
+  listType,
+} from "#/system/collections/descriptors.ts";
 import { isAssignableFrom } from "#/system/reflection/is-assignable-from.ts";
 import { nullableType } from "#/system/reflection/nullable-type.ts";
-import { DoubleType, Int32Type } from "#/system/reflection/primitive-types.ts";
+import { DoubleType, Int32Type, StringType } from "#/system/reflection/primitive-types.ts";
 import { specialize } from "#/system/reflection/specialize.ts";
 import { ObjectType, UnknownType } from "#/system/reflection/well-known-types.ts";
 import { Circle, IDrawable$rt, IFlat$rt, IShape$rt, Shape } from "./fixtures.ts";
@@ -45,5 +51,14 @@ describe("isAssignableFrom", () => {
     expect(isAssignableFrom(specialize(open, [Int32Type]), specialize(open, [DoubleType]))).toBe(
       false,
     );
+  });
+
+  test("supports collection classes and interfaces with variance", () => {
+    expect(isAssignableFrom(iReadOnlyListType(ObjectType), listType(StringType))).toBe(true);
+    expect(isAssignableFrom(iReadOnlyListType(ObjectType), listType(Int32Type))).toBe(false);
+    expect(isAssignableFrom(iListType(ObjectType), listType(StringType))).toBe(false);
+    expect(isAssignableFrom(iCollectionType(StringType), iListType(StringType))).toBe(true);
+    expect(isAssignableFrom(listType(StringType), listType(StringType))).toBe(true);
+    expect(isAssignableFrom(listType(StringType), listType(Int32Type))).toBe(false);
   });
 });

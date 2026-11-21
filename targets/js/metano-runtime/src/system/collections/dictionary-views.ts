@@ -3,12 +3,13 @@
  * FR-012): live read-only views over any keyed source, so `Dictionary` and the
  * 011h dictionaries share them. This module imports no dictionary class.
  */
+import { closeCollectionClass } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
 import { elementEquals } from "./default-comparer.ts";
 import type { IReadOnlyCollection } from "./interfaces.ts";
 import { throwArgumentNull } from "./throw-helpers.ts";
-import type { RuntimeType } from "../reflection/runtime-type.ts";
+import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts";
 
 /** What a view reads: the source's count, key lookup and `[key, value]` enumeration. */
 export interface KeyValueSource<K, V> extends Iterable<readonly [K, V]> {
@@ -24,6 +25,28 @@ export interface KeyValueSource<K, V> extends Iterable<readonly [K, V]> {
   viewTypeName?(view: "KeyCollection" | "ValueCollection"): string;
 }
 
+let KeyCollection$rt: CollectionType<KeyCollection<unknown>> | undefined;
+let ValueCollection$rt: CollectionType<ValueCollection<unknown>> | undefined;
+
+function sourceTypeArgument(
+  source: KeyValueSource<unknown, unknown> | undefined,
+  index: 0 | 1,
+): RuntimeType | undefined {
+  if (source === undefined) {
+    return undefined;
+  }
+
+  const descriptor = (source.constructor as { readonly $runtimeType?: RuntimeType } | undefined)
+    ?.$runtimeType;
+  const collection = descriptor?.kind === "collection" ? descriptor.collection : "Dictionary";
+  const slot =
+    (source as unknown as Record<string, readonly RuntimeType[] | undefined>)[
+      `$typeArguments$${collection}`
+    ] ?? source.$typeArguments$Dictionary;
+
+  return slot?.[index];
+}
+
 export class KeyCollection<K> implements IReadOnlyCollection<K> {
   declare readonly _source: KeyValueSource<K, unknown>;
 
@@ -33,6 +56,36 @@ export class KeyCollection<K> implements IReadOnlyCollection<K> {
     }
 
     Object.defineProperty(this, "_source", { value: source });
+  }
+
+  static get $runtimeType(): CollectionType<KeyCollection<unknown>> {
+    KeyCollection$rt ??= {
+      kind: "collection",
+      collection: "KeyCollection",
+      name: "Dictionary`2+KeyCollection",
+      fullName: "System.Collections.Generic.Dictionary`2+KeyCollection",
+      namespace: "System.Collections.Generic",
+      ctor: KeyCollection,
+      typeArguments: [],
+      variance: ["invariant"],
+      interfaces: [
+        { collection: "ICollection", arguments: [0] },
+        { collection: "IReadOnlyCollection", arguments: [0] },
+      ],
+      test: (value: unknown): value is KeyCollection<unknown> => value instanceof KeyCollection,
+      closeFor: (instance: object): CollectionType<KeyCollection<unknown>> => {
+        const element = sourceTypeArgument(
+          (instance as { readonly _source?: KeyValueSource<unknown, unknown> })._source,
+          0,
+        );
+
+        return element !== undefined
+          ? closeCollectionClass(KeyCollection.$runtimeType, [element])
+          : KeyCollection.$runtimeType;
+      },
+    };
+
+    return KeyCollection$rt;
   }
 
   get count(): number {
@@ -80,6 +133,36 @@ export class ValueCollection<V> implements IReadOnlyCollection<V> {
     }
 
     Object.defineProperty(this, "_source", { value: source });
+  }
+
+  static get $runtimeType(): CollectionType<ValueCollection<unknown>> {
+    ValueCollection$rt ??= {
+      kind: "collection",
+      collection: "ValueCollection",
+      name: "Dictionary`2+ValueCollection",
+      fullName: "System.Collections.Generic.Dictionary`2+ValueCollection",
+      namespace: "System.Collections.Generic",
+      ctor: ValueCollection,
+      typeArguments: [],
+      variance: ["invariant"],
+      interfaces: [
+        { collection: "ICollection", arguments: [0] },
+        { collection: "IReadOnlyCollection", arguments: [0] },
+      ],
+      test: (value: unknown): value is ValueCollection<unknown> => value instanceof ValueCollection,
+      closeFor: (instance: object): CollectionType<ValueCollection<unknown>> => {
+        const element = sourceTypeArgument(
+          (instance as { readonly _source?: KeyValueSource<unknown, unknown> })._source,
+          1,
+        );
+
+        return element !== undefined
+          ? closeCollectionClass(ValueCollection.$runtimeType, [element])
+          : ValueCollection.$runtimeType;
+      },
+    };
+
+    return ValueCollection$rt;
   }
 
   get count(): number {

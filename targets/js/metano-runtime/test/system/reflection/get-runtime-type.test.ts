@@ -24,6 +24,8 @@ import {
 } from "#/system/reflection/temporal-types.ts";
 
 import { ArrayType, DelegateType, ObjectType } from "#/system/reflection/well-known-types.ts";
+import { specialize } from "#/system/reflection/specialize.ts";
+import type { ClassType, RuntimeType } from "#/system/reflection/runtime-type.ts";
 import { Temporal } from "@js-temporal/polyfill";
 import Decimal from "decimal.js";
 import { Circle, Stranger, Undescribed } from "./fixtures.ts";
@@ -103,5 +105,39 @@ describe("getRuntimeType", () => {
     const value = Object.create({ constructor: 1 });
 
     expect(getRuntimeType(value)).toBe(ObjectType);
+  });
+
+  test("closes a reified generic class descriptor over its slot", () => {
+    class Box<T> {
+      constructor(typeArgs: readonly RuntimeType[]) {
+        Object.defineProperty(this, "$typeArguments$Box", {
+          value: typeArgs,
+          enumerable: false,
+        });
+      }
+
+      static get $runtimeType(): ClassType<Box<unknown>> {
+        return Box$rt;
+      }
+    }
+
+    const Box$rt: ClassType<Box<unknown>> = {
+      kind: "class",
+      name: "Box",
+      fullName: "App.Box",
+      namespace: "App",
+      ctor: Box,
+      interfaces: [],
+      typeParameters: ["T"],
+      slot: "$typeArguments$Box",
+      isAbstract: false,
+      isValueType: false,
+      test: (v: unknown): v is Box<unknown> => v instanceof Box,
+    };
+
+    const intBox = new Box([Int32Type]);
+
+    expect(getRuntimeType(intBox)).toBe(specialize(Box$rt, [Int32Type]));
+    expect(getRuntimeType(intBox)).not.toBe(specialize(Box$rt, [StringType]));
   });
 });

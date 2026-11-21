@@ -1,5 +1,5 @@
 import { type MemoNode, memoNodeFor } from "../identity-memo.ts";
-import { isAssignableFrom } from "./is-assignable-from.ts";
+import { isAssignableFrom, isReferenceType } from "./is-assignable-from.ts";
 import type {
   CollectionInterfaceEntry,
   CollectionKindName,
@@ -65,9 +65,38 @@ function slotOf(
   value: unknown,
   collection: CollectionKindName,
 ): ReadonlyArray<RuntimeType> | undefined {
-  return (value as Record<string, ReadonlyArray<RuntimeType> | undefined>)[
+  const direct = (value as Record<string, ReadonlyArray<RuntimeType> | undefined>)[
     `$typeArguments$${collection}`
   ];
+
+  if (
+    direct !== undefined ||
+    (collection !== "KeyCollection" && collection !== "ValueCollection")
+  ) {
+    return direct;
+  }
+
+  const source = (value as { readonly _source?: Record<string, unknown> })._source;
+
+  if (source === undefined) {
+    return undefined;
+  }
+
+  const sourceDescriptor = (
+    source.constructor as { readonly $runtimeType?: RuntimeType } | undefined
+  )?.$runtimeType;
+  const sourceCollection =
+    sourceDescriptor?.kind === "collection" ? sourceDescriptor.collection : "Dictionary";
+  const sourceSlot = (source[`$typeArguments$${sourceCollection}`] ??
+    source.$typeArguments$Dictionary) as ReadonlyArray<RuntimeType> | undefined;
+
+  if (sourceSlot === undefined) {
+    return undefined;
+  }
+
+  const element = sourceSlot[collection === "KeyCollection" ? 0 : 1];
+
+  return element === undefined ? undefined : [element];
 }
 
 /**
@@ -96,36 +125,6 @@ function argumentsMatch(
       ? actual === expected || (isReferenceType(actual) && isAssignableFrom(expected, actual))
       : actual === expected;
   });
-}
-
-/**
- * Whether a value of `type` is a C# reference type: variance needs a reference conversion,
- * so `List<int>` is not an `IReadOnlyList<object>` and `List<string>` is.
- */
-function isReferenceType(type: RuntimeType): boolean {
-  switch (type.kind) {
-    case "primitive":
-      return type.primitive === "String";
-    case "class":
-      return !type.isValueType;
-    case "interface":
-    case "plainObject":
-    case "collection":
-    case "array":
-    case "delegate":
-    case "object":
-      return true;
-    case "nullable":
-    case "enum":
-    case "stringEnum":
-    case "unknown":
-    case "union":
-      return false;
-    default: {
-      const unhandled: never = type;
-      return unhandled;
-    }
-  }
 }
 
 interface ImplementedEntry {
