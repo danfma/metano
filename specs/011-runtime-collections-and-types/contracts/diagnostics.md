@@ -54,7 +54,7 @@ Example: `'o is UserDto' is structural: 'NamedDto' { Name, Age } also satisfies 
 
 **MS0050 — ReifiedParameterOnInteropSurface** (Warning).
 
-1. A hidden descriptor parameter is added to a member reachable by JS callers: a public member of an `[EmitPackage]` library, an `[ExportedAsModule]` function, a `[JsxComponentBuilder]` interface member, or a method converted to a `[JsCallable]` delegate. The message lists the parameter and `UnknownType` as the wildcard argument.
+1. A hidden descriptor parameter (or `$typeArgs` on a public generic class constructor) is added to a member reachable by JS callers: a public member of an `[EmitPackage]` library, an `[ExportedAsModule]` function, a `[JsxComponentBuilder]` interface member, or a method converted to a `[JsCallable]` delegate. The message lists the parameter and `UnknownType` as the wildcard argument.
 
 **MS0051 — TargetSpecificInterop** (Error).
 
@@ -80,7 +80,7 @@ The containing member or type carrying `[Ignore(<that target>)]` suppresses the 
 
 **MS0054 — UnreifiableTypeParameter** (Error).
 
-1. A runtime question about `T` (`is T`, `as T`, a `T` pattern, `typeof(T)`, `(T)x`, `new T()`) in a body that cannot carry a hidden parameter: an `[Emit]` / `[Import]` extern, an `[External]` interface member, a `[JsCallable]` delegate body, a `[ModuleEntryPoint]`, an operator, an explicit interface implementation of an `[External]` interface, a `[Queryable]` lambda.
+1. A runtime question about `T` (`is T`, `as T`, a `T` pattern, `typeof(T)`, `(T)x`, `new T()`) in a body that cannot carry a hidden parameter: an `[Emit]` / `[Import]` extern, an `[External]` interface member, a `[JsCallable]` delegate body, a `[ModuleEntryPoint]`, an operator, an explicit interface implementation of an `[External]` interface, a `[Queryable]` lambda, or (for 3.0 without a package manifest) a public exported member of an `[EmitPackage]` library whose own body would need a hidden `T$type`.
 2. The same question in a member of an override / implementation group where another member of the group is one of the above, or where the group's interface or base member comes from a **referenced package** whose emitted signature has no hidden parameter.
 
 **MS0055 — UncheckedCast** (Warning; see OD-21).
