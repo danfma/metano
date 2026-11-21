@@ -396,6 +396,7 @@ public class ReifiedTypeParameterTests
             files["app/pair.ts"],
             files["app/runner.ts"]
         );
+
         await TranspileHelper.AssertGolden("reified-derived-class.ts", combined);
     }
 

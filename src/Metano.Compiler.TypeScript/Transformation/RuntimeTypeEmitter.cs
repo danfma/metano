@@ -446,6 +446,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             ],
             IsReadonly: true
         );
+
         var forwarded = new TsCastExpression(
             new TsIdentifier("typeArguments"),
             new TsUnionType([runtimeTypeTuple, new TsNamedType("undefined")])
