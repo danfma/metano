@@ -186,6 +186,7 @@ CollectionTypeArgumentProbes.explicitArrayCastKeepsTheSourceElement = False
 CollectionTypeArgumentProbes.linqTerminalsCarryTheirArguments = True,False,True,False,True,False
 CollectionTypeArgumentProbes.listClassTestsStayAnswerable = True,False,True,True
 CollectionTypeArgumentProbes.listTests = True,False,True,False,True,True,True
+CollectionTypeArgumentProbes.nestedCollectionCovariance = True,False,False
 CollectionTypeArgumentProbes.nullableLinqResultCarriesSlots = True,False
 CollectionTypeArgumentProbes.objectArrayInterfaceTestIsLoud = True,True
 CollectionTypeArgumentProbes.rawArrayInterfaceTestIsLoud = True
