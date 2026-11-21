@@ -371,6 +371,7 @@ public class CollectionTypeArgumentTests
         );
 
         await Assert.That(viewDiagnostics.Where(d => d.Code == "MS0001")).IsEmpty();
+
         await Assert
             .That(viewFiles["slots/probe.ts"])
             .Contains("isType(keys, iCollectionType(StringType))");
