@@ -217,4 +217,14 @@ public static class CollectionTypeArgumentProbes
 
         return first + (o as List<int> is not null) + (o as List<string> is null);
     }
+
+    public static string NestedCollectionCovariance()
+    {
+        List<List<string>> nested = [new() { "a" }];
+        List<List<int>> nestedInts = [new() { 1 }];
+
+        return $"{nested is IReadOnlyList<IReadOnlyList<object>>},"
+            + $"{nested is IReadOnlyList<IReadOnlyList<int>>},"
+            + $"{nestedInts is IReadOnlyList<IReadOnlyList<object>>}";
+    }
 }
