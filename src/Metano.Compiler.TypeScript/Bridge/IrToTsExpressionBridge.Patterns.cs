@@ -363,6 +363,13 @@ public static partial class IrToTsExpressionBridge
         )
             return test;
 
+        if (targetType is IrTypeParameterRef tp)
+        {
+            return tp.Scope != IrTypeParameterScope.None
+                ? IrToTsRuntimeTestBridge.IsTypeCall(value, ResolveReifiedTypeParameter(tp))
+                : MapUnsupported(new IrUnsupportedExpression("UnreifiableTypeTest"));
+        }
+
         return IrRuntimeTypeTest.IsDelegate(targetType)
             ? MapUnsupported(new IrUnsupportedExpression("DelegateTypeTest"))
             : throw NoRuntimeTypeTest(targetType);
@@ -532,6 +539,10 @@ public static partial class IrToTsExpressionBridge
                 "checked cast",
                 context.RuntimeTypes
             ),
+            IrRuntimeTypeTest.Reified
+            {
+                TypeParameter: { Scope: not IrTypeParameterScope.None } tp,
+            } => ResolveReifiedTypeParameter(tp),
             _ => null,
         };
 

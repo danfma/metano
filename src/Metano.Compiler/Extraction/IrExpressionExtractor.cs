@@ -1485,8 +1485,121 @@ public sealed partial class IrExpressionExtractor
     {
         var resolved = _semantic.GetTypeInfo(typeSyntax).Type;
         return resolved is not null
-            ? IrTypeRefMapper.Map(resolved, _originResolver, _target)
+            ? MapTypeWithReifiedScope(resolved, typeSyntax)
             : new IrUnknownTypeRef();
+    }
+
+    private IrTypeParameterRef MapTypeParameterWithScope(ITypeParameterSymbol tp, SyntaxNode site)
+    {
+        if (!_context.ReifiedTypeAnalysis.IsEnabled)
+            return new IrTypeParameterRef(tp.Name);
+
+        var enclosing = _semantic.GetEnclosingSymbol(site.SpanStart);
+        var (scope, slotIndex, declaringTypeName) = _context.ReifiedTypeAnalysis.ResolveScope(
+            tp,
+            enclosing,
+            enclosing?.ContainingType
+        );
+
+        return new IrTypeParameterRef(tp.Name)
+        {
+            Scope = scope,
+            SlotIndex = slotIndex,
+            DeclaringTypeName = declaringTypeName,
+        };
+    }
+
+    private IrTypeRef MapTypeWithReifiedScope(ITypeSymbol type, SyntaxNode site)
+    {
+        var mapped = IrTypeRefMapper.Map(type, _originResolver, _target);
+
+        if (!_context.ReifiedTypeAnalysis.IsEnabled)
+            return mapped;
+
+        var enclosing = _semantic.GetEnclosingSymbol(site.SpanStart);
+        var enclosingType = enclosing?.ContainingType;
+        return StampTypeParameterScopes(mapped, type, enclosing, enclosingType);
+    }
+
+    private IrTypeRef StampTypeParameterScopes(
+        IrTypeRef mapped,
+        ITypeSymbol symbol,
+        ISymbol? enclosingMember,
+        INamedTypeSymbol? enclosingType
+    )
+    {
+        switch (mapped)
+        {
+            case IrTypeParameterRef when symbol is ITypeParameterSymbol tp:
+            {
+                var (scope, slotIndex, declaringTypeName) =
+                    _context.ReifiedTypeAnalysis.ResolveScope(tp, enclosingMember, enclosingType);
+                return new IrTypeParameterRef(tp.Name)
+                {
+                    Scope = scope,
+                    SlotIndex = slotIndex,
+                    DeclaringTypeName = declaringTypeName,
+                };
+            }
+            case IrNullableTypeRef nullable
+                when symbol is INamedTypeSymbol { TypeArguments: [var innerSym] }:
+                return nullable with
+                {
+                    Inner = StampTypeParameterScopes(
+                        nullable.Inner,
+                        innerSym,
+                        enclosingMember,
+                        enclosingType
+                    ),
+                };
+            case IrArrayTypeRef arr when symbol is IArrayTypeSymbol arrSym:
+                return arr with
+                {
+                    ElementType = StampTypeParameterScopes(
+                        arr.ElementType,
+                        arrSym.ElementType,
+                        enclosingMember,
+                        enclosingType
+                    ),
+                };
+            case IrCollectionTypeRef col
+                when symbol is INamedTypeSymbol colSym
+                    && col.TypeArguments.Count == colSym.TypeArguments.Length:
+                return col with
+                {
+                    TypeArguments = col
+                        .TypeArguments.Select(
+                            (a, i) =>
+                                StampTypeParameterScopes(
+                                    a,
+                                    colSym.TypeArguments[i],
+                                    enclosingMember,
+                                    enclosingType
+                                )
+                        )
+                        .ToList(),
+                };
+            case IrNamedTypeRef named
+                when symbol is INamedTypeSymbol namedSym
+                    && named.TypeArguments is { Count: > 0 }
+                    && named.TypeArguments.Count == namedSym.TypeArguments.Length:
+                return named with
+                {
+                    TypeArguments = named
+                        .TypeArguments.Select(
+                            (a, i) =>
+                                StampTypeParameterScopes(
+                                    a,
+                                    namedSym.TypeArguments[i],
+                                    enclosingMember,
+                                    enclosingType
+                                )
+                        )
+                        .ToList(),
+                };
+            default:
+                return mapped;
+        }
     }
 
     /// <summary>
@@ -2770,6 +2883,17 @@ public sealed partial class IrExpressionExtractor
 
         var hasThisDelegate = Invocation.InvocationLoweringHelpers.HasThisParameter(invoke);
 
+        if (
+            !hasThisDelegate
+            && _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForCall(method, t =>
+                MapTypeWithReifiedScope(t, expression)
+            )
+                is { } reifiedArgs
+        )
+        {
+            return WrapReifiedMethodGroupForDelegate(dispatched, method, invoke, reifiedArgs);
+        }
+
         var boundReference = ShouldBindInstanceReceiver(method, dispatched, out var instanceAccess)
             ? BuildBoundReference(instanceAccess)
             : dispatched;
@@ -2780,6 +2904,76 @@ public sealed partial class IrExpressionExtractor
                 [new IrArgument(boundReference)]
             )
             : boundReference;
+    }
+
+    private static IrExpression WrapReifiedMethodGroupForDelegate(
+        IrExpression target,
+        IMethodSymbol method,
+        IMethodSymbol invoke,
+        IReadOnlyList<IrTypeRef> reifiedArgs
+    )
+    {
+        var parameters = invoke
+            .Parameters.Select(
+                (p, i) =>
+                    new IrParameter(
+                        string.IsNullOrEmpty(p.Name) ? $"arg{i}" : p.Name,
+                        new IrUnknownTypeRef(),
+                        HasExplicitType: false
+                    )
+            )
+            .ToList();
+
+        var callArgs = parameters.Select(p => new IrArgument(new IrIdentifier(p.Name))).ToList();
+
+        var typeArgs =
+            method.TypeArguments.Length > 0
+                ? reifiedArgs.Skip(reifiedArgs.Count - method.TypeArguments.Length).ToList()
+                : null;
+
+        if (
+            ShouldBindInstanceReceiver(method, target, out var instanceAccess)
+            && !IrEvaluationTraits.IsReusableReceiver(instanceAccess.Target)
+        )
+        {
+            const string TempName = "__r";
+            var tempRef = new IrIdentifier(TempName);
+            var rebound = instanceAccess with { Target = tempRef };
+            var innerCall = new IrCallExpression(rebound, callArgs)
+            {
+                ReifiedTypeArguments = reifiedArgs,
+                ReifiedArgumentPosition = callArgs.Count,
+            };
+            IrStatement innerStmt = invoke.ReturnsVoid
+                ? new IrExpressionStatement(innerCall)
+                : new IrReturnStatement(innerCall);
+            var innerLambda = new IrLambdaExpression(
+                parameters,
+                invoke.ReturnsVoid ? new IrPrimitiveTypeRef(IrPrimitive.Void) : null,
+                [innerStmt]
+            );
+            var outerLambda = new IrLambdaExpression(
+                [new IrParameter(TempName, new IrUnknownTypeRef(), HasExplicitType: false)],
+                ReturnType: null,
+                [new IrReturnStatement(innerLambda)]
+            );
+            return new IrCallExpression(outerLambda, [new IrArgument(instanceAccess.Target)]);
+        }
+
+        var directCall = new IrCallExpression(target, callArgs)
+        {
+            ReifiedTypeArguments = reifiedArgs,
+            ReifiedArgumentPosition = callArgs.Count,
+        };
+        IrStatement stmt = invoke.ReturnsVoid
+            ? new IrExpressionStatement(directCall)
+            : new IrReturnStatement(directCall);
+
+        return new IrLambdaExpression(
+            parameters,
+            invoke.ReturnsVoid ? new IrPrimitiveTypeRef(IrPrimitive.Void) : null,
+            [stmt]
+        );
     }
 
     private bool IsDartTarget => _target == Metano.Annotations.TargetLanguage.Dart;
@@ -3154,11 +3348,23 @@ public sealed partial class IrExpressionExtractor
         if (!_context.KeepsNativeCollections)
             (args, evaluationOrder) = WithOmittedParamsCollection(inv, args, evaluationOrder);
 
+        var reifiedCallArgs = symbol is not null
+            ? _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForCall(symbol, t =>
+                MapTypeWithReifiedScope(t, inv)
+            )
+            : null;
+        var reifiedPosition =
+            reifiedCallArgs is { Count: > 0 } && symbol is not null
+                ? _context.ReifiedTypeAnalysis.ReifiedParametersOf(symbol)[0].Position
+                : 0;
+
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol))
         {
             EvaluationOrder = evaluationOrder,
             InvokesDelegate = symbol is { MethodKind: MethodKind.DelegateInvoke },
             HasExplicitTypeArguments = WritesTypeArguments(inv),
+            ReifiedTypeArguments = reifiedCallArgs,
+            ReifiedArgumentPosition = reifiedPosition,
         };
     }
 
@@ -3363,6 +3569,13 @@ public sealed partial class IrExpressionExtractor
         if (bound is null)
             return null;
 
+        var reifiedCallArgs = _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForCall(symbol, t =>
+            MapTypeWithReifiedScope(t, inv)
+        );
+        var reifiedPosition = reifiedCallArgs is { Count: > 0 }
+            ? _context.ReifiedTypeAnalysis.ReifiedParametersOf(symbol)[0].Position
+            : 0;
+
         return new IrCallExpression(
             Extract(inv.Expression),
             bound.Arguments,
@@ -3371,6 +3584,8 @@ public sealed partial class IrExpressionExtractor
         )
         {
             Overload = MarkSynthesized(bound.Overload, symbol),
+            ReifiedTypeArguments = reifiedCallArgs,
+            ReifiedArgumentPosition = reifiedPosition,
         };
     }
 
@@ -3470,6 +3685,13 @@ public sealed partial class IrExpressionExtractor
         if (bound is null)
             return null;
 
+        var reifiedCallArgs = _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForCall(symbol, t =>
+            MapTypeWithReifiedScope(t, inv)
+        );
+        var reifiedPosition = reifiedCallArgs is { Count: > 0 }
+            ? _context.ReifiedTypeAnalysis.ReifiedParametersOf(symbol)[0].Position
+            : 0;
+
         return new IrCallExpression(
             Extract(inv.Expression),
             bound.Arguments,
@@ -3478,6 +3700,8 @@ public sealed partial class IrExpressionExtractor
         )
         {
             Overload = MarkSynthesized(bound.Overload, symbol),
+            ReifiedTypeArguments = reifiedCallArgs,
+            ReifiedArgumentPosition = reifiedPosition,
         };
     }
 
@@ -3959,6 +4183,7 @@ public sealed partial class IrExpressionExtractor
         var receiverType = ResolveLambdaReceiverType(lambda);
         var parameter = BuildLambdaParameter(lambda.Parameter);
         var body = ExtractLambdaBody(lambda.Body);
+        var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
             [parameter],
             ReturnType: VoidReturnTypeOf(lambda),
@@ -3966,7 +4191,12 @@ public sealed partial class IrExpressionExtractor
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
             UsesThis: receiverType is not null,
             ThisType: receiverType
-        );
+        )
+        {
+            ReifiedTypeParameters = lambdaSymbol is not null
+                ? _context.ReifiedTypeAnalysis.ReifiedParametersOf(lambdaSymbol)
+                : [],
+        };
     }
 
     private IrExpression ExtractParenthesizedLambda(ParenthesizedLambdaExpressionSyntax lambda)
@@ -3974,6 +4204,7 @@ public sealed partial class IrExpressionExtractor
         var receiverType = ResolveLambdaReceiverType(lambda);
         var parameters = lambda.ParameterList.Parameters.Select(BuildLambdaParameter).ToList();
         var body = ExtractLambdaBody(lambda.Body);
+        var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
             parameters,
             ReturnType: VoidReturnTypeOf(lambda),
@@ -3981,7 +4212,12 @@ public sealed partial class IrExpressionExtractor
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
             UsesThis: receiverType is not null,
             ThisType: receiverType
-        );
+        )
+        {
+            ReifiedTypeParameters = lambdaSymbol is not null
+                ? _context.ReifiedTypeAnalysis.ReifiedParametersOf(lambdaSymbol)
+                : [],
+        };
     }
 
     /// <summary>
@@ -5164,11 +5400,28 @@ public sealed partial class IrExpressionExtractor
 
         var typeSymbol = _semantic.GetTypeInfo(creation).Type;
 
+        if (typeSymbol is ITypeParameterSymbol tp && _context.ReifiedTypeAnalysis.IsEnabled)
+            return new IrNewExpression(MapTypeParameterWithScope(tp, creation), []);
+
         var type = typeSymbol is not null
             ? IrTypeRefMapper.Map(typeSymbol, _originResolver, _target)
             : new IrUnknownTypeRef();
 
-        return BuildNewExpression(type, args, typeSymbol, creation, bound?.Overload);
+        var built = BuildNewExpression(type, args, typeSymbol, creation, bound?.Overload);
+
+        if (
+            built is IrNewExpression newExpr
+            && typeSymbol is INamedTypeSymbol namedTarget
+            && _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForNew(namedTarget, t =>
+                MapTypeWithReifiedScope(t, creation)
+            )
+                is { } reifiedNewArgs
+        )
+        {
+            return newExpr with { ReifiedTypeArguments = reifiedNewArgs };
+        }
+
+        return built;
     }
 
     private static bool HasNamedArgument(IReadOnlyList<IrArgument> args) =>
@@ -5634,9 +5887,7 @@ public sealed partial class IrExpressionExtractor
     {
         var info = _semantic.GetTypeInfo(cast.Type).Type;
 
-        return info is not null
-            ? IrTypeRefMapper.Map(info, _originResolver, _target)
-            : new IrUnknownTypeRef();
+        return info is not null ? MapTypeWithReifiedScope(info, cast.Type) : new IrUnknownTypeRef();
     }
 
     /// <summary>

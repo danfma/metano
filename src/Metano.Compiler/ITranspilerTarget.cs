@@ -32,6 +32,13 @@ public interface ITranspilerTarget
     TargetLanguage Language => TargetLanguage.TypeScript;
 
     /// <summary>
+    /// Whether this target lowers reified type parameters (spec 011 FR-024,
+    /// stage 011d). Gates the reified type parameter analysis, the
+    /// <c>MS0050</c>/<c>MS0054</c> diagnostics, and <c>MS0019</c> retirement.
+    /// </summary>
+    bool SupportsReifiedTypeParameters => false;
+
+    /// <summary>
     /// Produces the set of files (plus diagnostics) the host should emit. Targets
     /// SHOULD prefer the data on <paramref name="ir"/> over <paramref name="compilation"/>
     /// for anything the active frontend already populates; the Roslyn compilation is

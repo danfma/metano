@@ -144,23 +144,21 @@ public class AsCastTranspileTests
     }
 
     [Test]
-    public async Task AsTypeParameter_ReportsUnsupported()
+    public async Task AsTypeParameter_Reified_LowersToAsType()
     {
-        var (_, diagnostics) = TranspileCastsWithDiagnostics(
-            "public static T? Of<T>(object o) where T : class => o as T;"
-        );
+        var output = TranspileCasts("public static T? Of<T>(object o) where T : class => o as T;");
 
-        await AssertSingleUnsupported(diagnostics, "o as T");
+        await Assert.That(output).Contains("return asType(o, T$type);");
     }
 
     [Test]
-    public async Task AsNullableTypeParameter_ReportsUnsupported()
+    public async Task AsNullableTypeParameter_Reified_LowersToAsType()
     {
-        var (_, diagnostics) = TranspileCastsWithDiagnostics(
+        var output = TranspileCasts(
             "public static T? Of<T>(object o) where T : struct => o as T?;"
         );
 
-        await AssertSingleUnsupported(diagnostics, "o as T?");
+        await Assert.That(output).Contains("return asType(o, T$type);");
     }
 
     [Test]

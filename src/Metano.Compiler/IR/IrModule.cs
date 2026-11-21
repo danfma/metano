@@ -65,4 +65,10 @@ public sealed record IrModuleFunction(
     /// group.
     /// </summary>
     public string? SignatureText { get; init; }
+
+    /// <summary>
+    /// Type parameters of this module function that are reified at runtime via
+    /// hidden <c>T$type</c> parameters (spec 011 FR-024, stage 011d).
+    /// </summary>
+    public IReadOnlyList<IrReifiedTypeParameter> ReifiedTypeParameters { get; init; } = [];
 }

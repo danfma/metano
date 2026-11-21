@@ -111,8 +111,13 @@ public static class IrToTsInterfaceBridge
             ))
             .ToList();
 
+        var allParameters = IrToTsClassBridge.InsertReifiedParameters(
+            parameters,
+            method.ReifiedTypeParameters,
+            asOptionalSignature: true
+        );
         var typeParams = ConvertTypeParameters(method.TypeParameters);
-        return new TsInterfaceMethod(name, parameters, returnType, typeParams);
+        return new TsInterfaceMethod(name, allParameters, returnType, typeParams);
     }
 
     private static IReadOnlyList<TsTypeParameter>? ConvertTypeParameters(

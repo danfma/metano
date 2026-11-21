@@ -30,7 +30,6 @@ AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BC
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
 CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
-CastProbes.genericFail                none  a generic down cast is not checked (TypeError at the first member access)
 BoxingProbes.isTests                  none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (object n = 7; n is Color)
 BoxingProbes.switchOnObject           none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (the raw 2 in an object[] matches BxColor c)
 RuntimeTypeProbes.enumMembership      none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (object stranger = 7; stranger is RtColor)

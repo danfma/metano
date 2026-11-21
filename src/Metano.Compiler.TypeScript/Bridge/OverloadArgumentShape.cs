@@ -27,17 +27,31 @@ internal sealed class OverloadArgumentShape
 
     private readonly IReadOnlyList<IrParameter> _parameters;
     private readonly int _firstArgumentIndex;
+    private readonly int _declaredFixedCount;
 
-    public OverloadArgumentShape(IReadOnlyList<IrParameter> parameters)
-        : this(parameters, firstArgumentIndex: 0) { }
+    public OverloadArgumentShape(
+        IReadOnlyList<IrParameter> parameters,
+        IReadOnlyList<IrReifiedTypeParameter>? reifiedTypeParameters = null
+    )
+        : this(parameters, firstArgumentIndex: 0, reifiedTypeParameters) { }
 
-    private OverloadArgumentShape(IReadOnlyList<IrParameter> parameters, int firstArgumentIndex)
+    private OverloadArgumentShape(
+        IReadOnlyList<IrParameter> parameters,
+        int firstArgumentIndex,
+        IReadOnlyList<IrReifiedTypeParameter>? reifiedTypeParameters = null
+    )
     {
         _parameters = parameters;
         _firstArgumentIndex = firstArgumentIndex;
         Rest = parameters is [.., { IsRestParams: true } rest] ? rest : null;
-        FixedCount = Rest is null ? parameters.Count : parameters.Count - 1;
-        RequiredCount = parameters.Take(FixedCount).TakeWhile(p => !p.CanBeOmitted).Count();
+        _declaredFixedCount = Rest is null ? parameters.Count : parameters.Count - 1;
+        var reifiedCount = reifiedTypeParameters?.Count ?? 0;
+        var reifiedOptional = reifiedTypeParameters?.Any(r => r.HasDefault) == true;
+        FixedCount = _declaredFixedCount + reifiedCount;
+        RequiredCount =
+            reifiedCount > 0 && !reifiedOptional
+                ? FixedCount
+                : parameters.Take(_declaredFixedCount).TakeWhile(p => !p.CanBeOmitted).Count();
     }
 
     /// <summary>The <c>params</c> parameter, when the overload declares one.</summary>
@@ -67,7 +81,7 @@ internal sealed class OverloadArgumentShape
     public TsExpression Guard(TypeCheckScope scope)
     {
         var fixedChecks = _parameters
-            .Take(FixedCount)
+            .Take(_declaredFixedCount)
             .Select((parameter, index) => FixedArgumentCheck(parameter, ArgumentFor(index), scope));
 
         IReadOnlyList<TsExpression?> clauses =

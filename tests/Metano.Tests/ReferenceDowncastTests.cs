@@ -89,7 +89,7 @@ public class ReferenceDowncastTests
 
         await Assert.That(output).Contains("return castTo<IMarker>(o, IMarker$runtimeType);");
         await Assert.That(output).Contains("return castTo<string>(o, StringType);");
-        await Assert.That(output).Contains("return o as T;");
+        await Assert.That(output).Contains("return castTo<T>(o, T$type);");
     }
 
     /// <summary>

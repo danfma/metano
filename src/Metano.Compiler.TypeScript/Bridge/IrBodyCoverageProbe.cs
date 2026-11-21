@@ -162,6 +162,7 @@ public static class IrBodyCoverageProbe
             IrTextValue text => IsCoveredExpression(text.Value),
             IrGetTypeExpression getType => IsCoveredExpression(getType.Receiver),
             IrTypeOfExpression => true,
+            IrReifiedDefaultExpression => true,
             _ => false,
         };
 

@@ -174,6 +174,14 @@ public sealed record IrCompilation(
     public IReadOnlyList<IrRuntimeQuestion> RuntimeQuestions { get; init; } = [];
 
     /// <summary>
+    /// Post-extraction fixpoint analysis of reified type parameters (spec 011
+    /// FR-024, stage 011d). Disabled when the target does not support reified
+    /// type parameters.
+    /// </summary>
+    public Analysis.ReifiedTypeAnalysisResult ReifiedTypeAnalysis { get; init; } =
+        Analysis.ReifiedTypeParameterAnalysis.Disabled;
+
+    /// <summary>
     /// The collection types a test, <c>as</c>, <c>GetType()</c> or <c>typeof</c> names
     /// (a dispatcher parameter, a cast and a construction do not read type arguments), by CLR definition name
     /// (<c>System.Collections.Generic.List`1</c>), so a target can decide which

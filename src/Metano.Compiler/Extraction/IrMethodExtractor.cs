@@ -96,6 +96,7 @@ public static class IrMethodExtractor
         )
         {
             Attributes = IrAttributeExtractor.Extract(method),
+            ReifiedTypeParameters = context.ReifiedTypeAnalysis.ReifiedParametersOf(method),
         };
     }
 

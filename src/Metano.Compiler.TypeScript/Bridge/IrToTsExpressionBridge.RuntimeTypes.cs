@@ -71,10 +71,18 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     ) =>
         asCast.Condition is IrIsPatternExpression { Pattern: IrTypePattern pattern }
-        && IrRuntimeTypeTest.Of(pattern.Type, pattern.InputType)
-            is IrRuntimeTypeTest.NominalInterface
-                or IrRuntimeTypeTest.Primitive
-            ? IrToTsRuntimeTypeReferences.Of(pattern.Type, "as", context.RuntimeTypes)
+        && IrRuntimeTypeTest.Of(pattern.Type, pattern.InputType) switch
+        {
+            IrRuntimeTypeTest.NominalInterface or IrRuntimeTypeTest.Primitive =>
+                IrToTsRuntimeTypeReferences.Of(pattern.Type, "as", context.RuntimeTypes),
+            IrRuntimeTypeTest.Reified
+            {
+                TypeParameter: { Scope: not IrTypeParameterScope.None } tp,
+            } => ResolveReifiedTypeParameter(tp),
+            _ => null,
+        }
+            is { } descriptor
+            ? descriptor
             : null;
 
     private static TsCallExpression AsTypeCall(TsExpression value, TsExpression descriptor) =>
@@ -187,6 +195,83 @@ public static partial class IrToTsExpressionBridge
     /// a type the reachability phase reported as having none.
     /// </summary>
     private static TsExpression MapTypeOf(IrTypeOfExpression typeOf, IrToTsBridgeContext context) =>
-        IrToTsRuntimeTypeReferences.Of(typeOf.Type, "typeof", context.RuntimeTypes)
-        ?? MapUnsupported(new IrUnsupportedExpression("TypeOfExpression"));
+        typeOf.Type is IrTypeParameterRef { Scope: not IrTypeParameterScope.None } tp
+            ? ResolveReifiedTypeParameter(tp)
+            : IrToTsRuntimeTypeReferences.Of(typeOf.Type, "typeof", context.RuntimeTypes)
+                ?? MapUnsupported(new IrUnsupportedExpression("TypeOfExpression"));
+
+    internal static TsExpression ResolveReifiedTypeParameter(IrTypeParameterRef tp) =>
+        tp.Scope switch
+        {
+            IrTypeParameterScope.Method => new TsIdentifier($"{tp.Name}$type"),
+            IrTypeParameterScope.CtorParam => new TsBinaryExpression(
+                new TsElementAccess(
+                    new TsIdentifier("$typeArgs"),
+                    new TsLiteral(tp.SlotIndex.ToString()),
+                    Optional: true
+                ),
+                "??",
+                new TsRuntimeHelperReference("UnknownType")
+            ),
+            IrTypeParameterScope.ClassSlot => new TsElementAccess(
+                new TsPropertyAccess(new TsIdentifier("this"), tp.DeclaringTypeName!),
+                new TsLiteral(tp.SlotIndex.ToString())
+            ),
+            _ => new TsRuntimeHelperReference("UnknownType"),
+        };
+
+    private static TsExpression MapReifiedDefault(IrReifiedDefaultExpression def)
+    {
+        if (def.Type.Scope == IrTypeParameterScope.None)
+            return new TsLiteral("null");
+
+        var descriptor = ResolveReifiedTypeParameter(def.Type);
+        var defaultCall = new TsCallExpression(
+            new TsPropertyAccess(descriptor, "default"),
+            [],
+            Optional: true
+        );
+        return new TsCastExpression(
+            new TsParenthesized(new TsBinaryExpression(defaultCall, "??", new TsLiteral("null"))),
+            IrToTsTypeMapper.Map(def.Type)
+        );
+    }
+
+    private static IReadOnlyList<TsExpression> WithReifiedCallArguments(
+        IReadOnlyList<TsExpression> loweredArgs,
+        IrCallExpression call,
+        IrToTsBridgeContext context
+    )
+    {
+        if (call.ReifiedTypeArguments is not { Count: > 0 } reifiedArgs)
+            return loweredArgs;
+
+        var insertAt = call.ReifiedArgumentPosition;
+        var result = new List<TsExpression>(
+            Math.Max(loweredArgs.Count, insertAt) + reifiedArgs.Count
+        );
+
+        for (var i = 0; i < insertAt; i++)
+        {
+            result.Add(i < loweredArgs.Count ? loweredArgs[i] : new TsIdentifier("undefined"));
+        }
+
+        foreach (var arg in reifiedArgs)
+        {
+            result.Add(
+                arg is IrTypeParameterRef { Scope: not IrTypeParameterScope.None } tp
+                    ? ResolveReifiedTypeParameter(tp)
+                    : IrToTsRuntimeTypeReferences.ArgumentOf(
+                        arg,
+                        "reified type argument",
+                        context.RuntimeTypes
+                    )
+            );
+        }
+
+        for (var i = insertAt; i < loweredArgs.Count; i++)
+            result.Add(loweredArgs[i]);
+
+        return result;
+    }
 }

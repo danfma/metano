@@ -26,6 +26,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 
     public TargetLanguage Language => TargetLanguage.TypeScript;
 
+    public bool SupportsReifiedTypeParameters => true;
+
     /// <summary>
     /// The package.json inputs captured by the most recent <see cref="Transform"/> call,
     /// or rebuilt by <see cref="AdoptCachedOutput"/> after a full cache hit.

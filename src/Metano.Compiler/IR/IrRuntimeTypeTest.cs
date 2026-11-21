@@ -82,6 +82,11 @@ public abstract record IrRuntimeTypeTest
     public sealed record Constant(bool Result) : IrRuntimeTypeTest;
 
     /// <summary>
+    /// A type parameter tested at runtime via its reified descriptor (spec 011 FR-024).
+    /// </summary>
+    public sealed record Reified(IrTypeParameterRef TypeParameter) : IrRuntimeTypeTest;
+
+    /// <summary>
     /// No runtime test exists: a delegate, <c>void</c>, a type parameter, a
     /// collection of the 2.x mapping, an interface or another named type with
     /// no runtime identity.
@@ -103,6 +108,7 @@ public abstract record IrRuntimeTypeTest
         || Of(type) switch
         {
             NominalClass or NominalInterface or Primitive or FixedTuple => true,
+            Reified { TypeParameter.Scope: not IrTypeParameterScope.None } => true,
             Array => type is IrArrayTypeRef { IsNative: true },
             // A target recognizes a plain object by a guard it synthesizes, or
             // reports that it cannot (spec 011 FR-020); a generic one has no
@@ -138,6 +144,7 @@ public abstract record IrRuntimeTypeTest
             IrArrayTypeRef => new Array(),
             IrIterableTypeRef or IrIteratorTypeRef => new Iterable(),
             IrMapTypeRef or IrSetTypeRef or IrPromiseTypeRef => new NominalClass(),
+            IrTypeParameterRef typeParam => new Reified(typeParam),
             _ => new None(),
         };
 

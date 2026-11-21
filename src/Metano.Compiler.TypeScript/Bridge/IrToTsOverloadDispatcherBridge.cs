@@ -666,15 +666,19 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         IrToTsTypeOverrides? typeOverrides
     ) =>
-        MapParameters(method, typeOverrides)
-            .Select(
-                (parameter, index) =>
-                    parameter with
-                    {
-                        Optional = method.Parameters[index].CanBeOmitted,
-                    }
-            )
-            .ToList();
+        IrToTsClassBridge.InsertReifiedParameters(
+            MapParameters(method, typeOverrides)
+                .Select(
+                    (parameter, index) =>
+                        parameter with
+                        {
+                            Optional = method.Parameters[index].CanBeOmitted,
+                        }
+                )
+                .ToList(),
+            method.ReifiedTypeParameters,
+            asOptionalSignature: true
+        );
 
     /// <summary>
     /// The parameters of a fast path, carrying the C# defaults the dispatcher
@@ -684,16 +688,19 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         IrToTsBridgeContext context
     ) =>
-        MapParameters(method, context.TypeOverrides)
-            .Select(
-                (parameter, index) =>
-                    parameter with
-                    {
-                        Optional = method.Parameters[index].CanBeOmitted,
-                        DefaultValue = FastPathDefault(method.Parameters[index], context),
-                    }
-            )
-            .ToList();
+        IrToTsClassBridge.InsertReifiedParameters(
+            MapParameters(method, context.TypeOverrides)
+                .Select(
+                    (parameter, index) =>
+                        parameter with
+                        {
+                            Optional = method.Parameters[index].CanBeOmitted,
+                            DefaultValue = FastPathDefault(method.Parameters[index], context),
+                        }
+                )
+                .ToList(),
+            method.ReifiedTypeParameters
+        );
 
     /// <summary>
     /// The parameter's C# default as a TS initializer; <c>null</c> without one.
@@ -731,7 +738,10 @@ public static class IrToTsOverloadDispatcherBridge
         for (var i = 0; i < sorted.Count; i++)
         {
             var method = sorted[i];
-            var arguments = new OverloadArgumentShape(method.Parameters);
+            var arguments = new OverloadArgumentShape(
+                method.Parameters,
+                method.ReifiedTypeParameters
+            );
 
             var scope = classScope.Within(method);
 
@@ -741,7 +751,8 @@ public static class IrToTsOverloadDispatcherBridge
                     method.Parameters,
                     method.TypeParameters,
                     arguments,
-                    classScope.TypeOverrides
+                    classScope.TypeOverrides,
+                    method.ReifiedTypeParameters
                 )
             );
 
@@ -841,23 +852,48 @@ public static class IrToTsOverloadDispatcherBridge
         IReadOnlyList<IrParameter> parameters,
         IReadOnlyList<IrTypeParameter>? typeParameters,
         OverloadArgumentShape arguments,
-        IrToTsTypeOverrides? typeOverrides
-    ) =>
-        parameters
-            .Select(
-                (parameter, index) =>
-                {
-                    var value = new TsCastExpression(
-                        arguments.ValueOf(index),
-                        DispatchArgumentType(typeParameters, parameter, typeOverrides)
-                    );
+        IrToTsTypeOverrides? typeOverrides,
+        IReadOnlyList<IrReifiedTypeParameter>? reifiedTypeParameters = null
+    )
+    {
+        var result = new List<TsExpression>(parameters.Count + (reifiedTypeParameters?.Count ?? 0));
+        var declaredFixedCount = parameters is [.., { IsRestParams: true }]
+            ? parameters.Count - 1
+            : parameters.Count;
 
-                    return parameter.IsRestParams
-                        ? new TsSpreadExpression(value)
-                        : (TsExpression)value;
-                }
-            )
-            .ToList();
+        for (var index = 0; index < declaredFixedCount; index++)
+        {
+            var parameter = parameters[index];
+            result.Add(
+                new TsCastExpression(
+                    arguments.ValueOf(index),
+                    DispatchArgumentType(typeParameters, parameter, typeOverrides)
+                )
+            );
+        }
+
+        if (reifiedTypeParameters is { Count: > 0 })
+        {
+            for (var i = 0; i < reifiedTypeParameters.Count; i++)
+            {
+                result.Add(
+                    new TsCastExpression(arguments.ValueOf(declaredFixedCount + i), new TsAnyType())
+                );
+            }
+        }
+
+        if (declaredFixedCount < parameters.Count)
+        {
+            var restParam = parameters[declaredFixedCount];
+            var value = new TsCastExpression(
+                arguments.ValueOf(arguments.FixedCount),
+                DispatchArgumentType(typeParameters, restParam, typeOverrides)
+            );
+            result.Add(new TsSpreadExpression(value));
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// The cast applied to <c>args[i]</c> before delegating. The dispatcher

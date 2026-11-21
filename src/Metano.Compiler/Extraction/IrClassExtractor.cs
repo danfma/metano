@@ -114,6 +114,14 @@ public static class IrClassExtractor
 
         constructor = WithFinalPrimaryChainTargets(constructor);
 
+        var baseTypeArguments =
+            type.BaseType is { IsGenericType: true } bt
+            && context.ReifiedTypeAnalysis.TypeArgumentSlotOf(bt.OriginalDefinition) is not null
+                ? bt
+                    .TypeArguments.Select(arg => IrTypeRefMapper.Map(arg, originResolver, target))
+                    .ToList()
+                : null;
+
         return new IrClassDeclaration(
             type.Name,
             IrVisibilityMapper.Map(type.DeclaredAccessibility),
@@ -130,6 +138,10 @@ public static class IrClassExtractor
         {
             ConstructedRoots = MultiplyConstructedInterfaces.RootsOf(type, context),
             StaticInitializer = IrStaticConstructorExtractor.Extract(type, context),
+            ReifiedTypeParameters = context.ReifiedTypeAnalysis.ReifiedParametersOf(type),
+            TypeArgumentSlot = context.ReifiedTypeAnalysis.TypeArgumentSlotOf(type),
+            BaseTypeArguments = baseTypeArguments,
+            HasParameterlessCtor = context.ReifiedTypeAnalysis.HasParameterlessCtor(type),
         };
     }
 

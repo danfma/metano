@@ -117,8 +117,10 @@ public sealed partial class IrExpressionExtractor
         if (type is null || RuntimeQuestionFacts.IsUnsupportedTypeOf(type))
             return new IrUnsupportedExpression(typeOf.Kind().ToString());
 
+        var mentionsTypeParam = RuntimeQuestionFacts.MentionsTypeParameter(type);
+
         if (
-            RuntimeQuestionFacts.MentionsTypeParameter(type)
+            (mentionsTypeParam && !_context.ReifiedTypeAnalysis.IsEnabled)
             || (
                 IsCollectionType(type)
                 && type is INamedTypeSymbol named
@@ -127,7 +129,11 @@ public sealed partial class IrExpressionExtractor
         )
             return ReportUnsupported(typeOf, typeOf.Kind().ToString());
 
-        return new IrTypeOfExpression(IrTypeRefMapper.Map(type, _originResolver, _target));
+        var mapped = mentionsTypeParam
+            ? MapTypeWithReifiedScope(type, typeOf)
+            : IrTypeRefMapper.Map(type, _originResolver, _target);
+
+        return new IrTypeOfExpression(mapped);
     }
 
     private static bool IsCollectionType(ITypeSymbol type) =>

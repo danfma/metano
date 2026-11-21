@@ -27,7 +27,10 @@ public sealed partial class IrExpressionExtractor
         if (type is null)
             return new IrLiteral(null, IrLiteralKind.Default);
 
-        if (type.IsReferenceType || type is ITypeParameterSymbol || IsNullableType(type))
+        if (type is ITypeParameterSymbol tp)
+            return new IrReifiedDefaultExpression(MapTypeParameterWithScope(tp, syntax));
+
+        if (type.IsReferenceType || IsNullableType(type))
             return new IrLiteral(null, IrLiteralKind.Null);
 
         var value = DefaultOf(type);

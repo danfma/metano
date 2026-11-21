@@ -283,9 +283,11 @@ internal static partial class IrToTsClassBridge
 
         var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(method.Visibility);
 
+        var allParameters = InsertReifiedParameters(parameters, method.ReifiedTypeParameters);
+
         return new TsMethodMember(
             name,
-            parameters,
+            allParameters,
             returnType,
             body,
             Static: method.IsStatic,
@@ -296,6 +298,49 @@ internal static partial class IrToTsClassBridge
             Abstract: method.Semantics.IsAbstract,
             JSDoc: jsdoc
         );
+    }
+
+    internal static List<TsParameter> InsertReifiedParameters(
+        IReadOnlyList<TsParameter> parameters,
+        IReadOnlyList<IrReifiedTypeParameter> reified,
+        bool asOptionalSignature = false
+    )
+    {
+        if (reified.Count == 0)
+            return parameters as List<TsParameter> ?? [.. parameters];
+
+        var result = new List<TsParameter>(parameters.Count + reified.Count);
+        var hasRest = parameters.Count > 0 && parameters[^1].Rest;
+        var insertAt = hasRest ? parameters.Count - 1 : parameters.Count;
+
+        for (var i = 0; i < insertAt; i++)
+            result.Add(parameters[i]);
+
+        foreach (var rp in reified)
+        {
+            var rtType = new TsNamedType(
+                "RuntimeType",
+                [new TsNamedType(rp.Name)],
+                RuntimeHelperBinding: "RuntimeType"
+            );
+
+            result.Add(
+                asOptionalSignature
+                    ? new TsParameter(rp.HiddenParameterName, rtType, Optional: rp.HasDefault)
+                    : new TsParameter(
+                        rp.HiddenParameterName,
+                        rtType,
+                        DefaultValue: rp.HasDefault
+                            ? new TsRuntimeHelperReference("UnknownType")
+                            : null
+                    )
+            );
+        }
+
+        for (var i = insertAt; i < parameters.Count; i++)
+            result.Add(parameters[i]);
+
+        return result;
     }
 
     /// <summary>

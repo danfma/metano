@@ -56,7 +56,7 @@ export const Color$runtimeType: EnumType<Color> = {
 };
 
 // casts/conversions.ts
-import { asType, castTo, DecimalType, Int32Type, Int64Type, StringType } from "metano-runtime";
+import { DecimalType, Int32Type, Int64Type, StringType, asType, castTo, type RuntimeType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
 import { Circle } from "./circle";
 import { Color$runtimeType, type Color } from "./color";
@@ -116,8 +116,8 @@ export class Conversions {
     return o as () => void;
   }
 
-  static toParameter<T>(o: Object): T {
-    return o as T;
+  static toParameter<T>(o: Object, T$type: RuntimeType<T>): T {
+    return castTo<T>(o, T$type);
   }
 
   static asArea(o: Object): IHasArea | null {

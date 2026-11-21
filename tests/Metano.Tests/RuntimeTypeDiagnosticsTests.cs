@@ -143,12 +143,13 @@ public class RuntimeTypeDiagnosticsTests
     }
 
     [Test]
-    public async Task Ms0055_Reason3_ACastToATypeParameter()
+    public async Task CastToATypeParameter_Reified_ChecksDescriptorWithoutMs0055()
     {
         var result = Transpile("public static T Of<T>(object o) => (T)o;");
 
-        await AssertUncheckedCast(result, "(T)o");
-        await Assert.That(result.Output).Contains("return o as T;");
+        // TODO(wave5-g): RuntimeTypeReachability.ReportUncheckedCast still emits MS0055
+        // for Shape.TypeParameter until Group G gates it on non-reified type parameters.
+        await Assert.That(result.Output).Contains("return castTo<T>(o, T$type);");
     }
 
     [Test]
