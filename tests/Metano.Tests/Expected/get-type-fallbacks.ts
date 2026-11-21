@@ -70,6 +70,7 @@ export class Meter {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
+      default: () => new Meter(),
       create: () => new Meter(),
       test: (v: unknown): v is Meter => v instanceof Meter,
     });

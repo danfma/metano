@@ -195,7 +195,7 @@ internal sealed partial class RuntimeTypeReachability
                     MetanoDiagnosticSeverity.Warning,
                     DiagnosticCodes.UnsupportedFeature,
                     $"'{question.Text}' cannot be lowered: a value that is not a runtime collection "
-                        + "(a native array, a dictionary view, or a type implementing the collection "
+                        + "(a native array, or a type implementing the collection "
                         + "interface) may be the operand and has no collection descriptor, so the test "
                         + "would answer false for it (spec 011 W4-17).",
                     LocationOf(question)
@@ -226,6 +226,15 @@ internal sealed partial class RuntimeTypeReachability
         {
             { Shape: IrQuestionedTypeShape.Array } => CollectionTestKey.ArrayOperand,
             { CollectionDefinitionName: { } name } => CollectionTestKey.OperandOfClrName(name),
+            { Shape: IrQuestionedTypeShape.Named, Key: { MetadataName: var metadataName } }
+                when metadataName.StartsWith(
+                    "System.Collections.Generic.Dictionary`2",
+                    StringComparison.Ordinal
+                ) => metadataName.EndsWith("KeyCollection", StringComparison.Ordinal)
+                ? nameof(IrCollectionKind.KeyCollection)
+            : metadataName.EndsWith("ValueCollection", StringComparison.Ordinal)
+                ? nameof(IrCollectionKind.ValueCollection)
+            : CollectionTestKey.OpenOperand,
             _ => CollectionTestKey.OpenOperand,
         };
 
@@ -255,13 +264,7 @@ internal sealed partial class RuntimeTypeReachability
     {
         var open = IsOpenOperand(operand);
 
-        return (
-                RuntimeCollections.IsImplementedByArrays(tested) && (open || operand!.AcceptsArrays)
-            )
-            || (
-                RuntimeCollections.IsImplementedByDictionaryViews(tested)
-                && (open || operand!.AcceptsDictionaryViews)
-            );
+        return RuntimeCollections.IsImplementedByArrays(tested) && (open || operand!.AcceptsArrays);
     }
 
     private bool ImplementerMayBeOperand(

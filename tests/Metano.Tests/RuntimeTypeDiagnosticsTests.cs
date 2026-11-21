@@ -147,8 +147,9 @@ public class RuntimeTypeDiagnosticsTests
     {
         var result = Transpile("public static T Of<T>(object o) => (T)o;");
 
-        // TODO(wave5-g): RuntimeTypeReachability.ReportUncheckedCast still emits MS0055
-        // for Shape.TypeParameter until Group G gates it on non-reified type parameters.
+        await Assert
+            .That(result.Diagnostics.Where(d => d.Code == DiagnosticCodes.UncheckedCast))
+            .IsEmpty();
         await Assert.That(result.Output).Contains("return castTo<T>(o, T$type);");
     }
 

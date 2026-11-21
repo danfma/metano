@@ -174,6 +174,9 @@ public sealed class ReifiedTypeParameterAnalysis
 
         private void ScanMemberSyntax(ISymbol member)
         {
+            if (member.IsImplicitlyDeclared)
+                return;
+
             foreach (var syntaxRef in member.DeclaringSyntaxReferences)
             {
                 var syntax = syntaxRef.GetSyntax();
@@ -230,6 +233,16 @@ public sealed class ReifiedTypeParameterAnalysis
 
                     case CastExpressionSyntax cast:
                     {
+                        if (
+                            model.GetOperation(cast)
+                                is not Microsoft.CodeAnalysis.Operations.IConversionOperation conv
+                            || !Frontend.Roslyn.RuntimeQuestionScanner.IsCheckedCast(
+                                conv,
+                                _compilation
+                            )
+                        )
+                            break;
+
                         var targetType = model.GetTypeInfo(cast.Type).Type;
                         RecordTypeTrigger(
                             targetType,

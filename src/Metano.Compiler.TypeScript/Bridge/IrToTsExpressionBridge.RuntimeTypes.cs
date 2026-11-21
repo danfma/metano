@@ -78,7 +78,7 @@ public static partial class IrToTsExpressionBridge
             IrRuntimeTypeTest.Reified
             {
                 TypeParameter: { Scope: not IrTypeParameterScope.None } tp,
-            } => ResolveReifiedTypeParameter(tp),
+            } => TypeParameterTsResolver.Resolve(tp, context.TypeParameters),
             _ => null,
         }
             is { } descriptor
@@ -195,37 +195,21 @@ public static partial class IrToTsExpressionBridge
     /// a type the reachability phase reported as having none.
     /// </summary>
     private static TsExpression MapTypeOf(IrTypeOfExpression typeOf, IrToTsBridgeContext context) =>
-        typeOf.Type is IrTypeParameterRef { Scope: not IrTypeParameterScope.None } tp
-            ? ResolveReifiedTypeParameter(tp)
-            : IrToTsRuntimeTypeReferences.Of(typeOf.Type, "typeof", context.RuntimeTypes)
-                ?? MapUnsupported(new IrUnsupportedExpression("TypeOfExpression"));
+        IrToTsRuntimeTypeReferences.Of(
+            typeOf.Type,
+            "typeof",
+            context.RuntimeTypes,
+            context.TypeParameters
+        ) ?? MapUnsupported(new IrUnsupportedExpression("TypeOfExpression"));
 
-    internal static TsExpression ResolveReifiedTypeParameter(IrTypeParameterRef tp) =>
-        tp.Scope switch
-        {
-            IrTypeParameterScope.Method => new TsIdentifier($"{tp.Name}$type"),
-            IrTypeParameterScope.CtorParam => new TsBinaryExpression(
-                new TsElementAccess(
-                    new TsIdentifier("$typeArgs"),
-                    new TsLiteral(tp.SlotIndex.ToString()),
-                    Optional: true
-                ),
-                "??",
-                new TsRuntimeHelperReference("UnknownType")
-            ),
-            IrTypeParameterScope.ClassSlot => new TsElementAccess(
-                new TsPropertyAccess(new TsIdentifier("this"), tp.DeclaringTypeName!),
-                new TsLiteral(tp.SlotIndex.ToString())
-            ),
-            _ => new TsRuntimeHelperReference("UnknownType"),
-        };
-
-    private static TsExpression MapReifiedDefault(IrReifiedDefaultExpression def)
+    private static TsExpression MapReifiedDefault(
+        IrReifiedDefaultExpression def,
+        IrToTsBridgeContext context
+    )
     {
-        if (def.Type.Scope == IrTypeParameterScope.None)
+        if (TypeParameterTsResolver.Resolve(def.Type, context.TypeParameters) is not { } descriptor)
             return new TsLiteral("null");
 
-        var descriptor = ResolveReifiedTypeParameter(def.Type);
         var defaultCall = new TsCallExpression(
             new TsPropertyAccess(descriptor, "default"),
             [],
@@ -259,13 +243,12 @@ public static partial class IrToTsExpressionBridge
         foreach (var arg in reifiedArgs)
         {
             result.Add(
-                arg is IrTypeParameterRef { Scope: not IrTypeParameterScope.None } tp
-                    ? ResolveReifiedTypeParameter(tp)
-                    : IrToTsRuntimeTypeReferences.ArgumentOf(
-                        arg,
-                        "reified type argument",
-                        context.RuntimeTypes
-                    )
+                TypeParameterTsResolver.ResolveArgument(
+                    arg,
+                    "reified type argument",
+                    context.RuntimeTypes,
+                    context.TypeParameters
+                )
             );
         }
 
@@ -273,5 +256,31 @@ public static partial class IrToTsExpressionBridge
             result.Add(loweredArgs[i]);
 
         return result;
+    }
+
+    private static IReadOnlyList<TsExpression> WithReifiedNewArguments(
+        IReadOnlyList<TsExpression> loweredArgs,
+        IrNewExpression ne,
+        IrToTsBridgeContext context
+    )
+    {
+        if (ne.ReifiedTypeArguments is not { Count: > 0 } reifiedArgs)
+            return loweredArgs;
+
+        var typeArgsTuple = new TsArrayLiteral([
+            .. reifiedArgs.Select(arg =>
+                TypeParameterTsResolver.ResolveArgument(
+                    arg,
+                    "reified type argument",
+                    context.RuntimeTypes,
+                    context.TypeParameters
+                )
+            ),
+        ]);
+
+        if (ne.Overload is not null)
+            return [.. loweredArgs, typeArgsTuple];
+
+        return [.. loweredArgs, typeArgsTuple];
     }
 }

@@ -131,6 +131,7 @@ export class Point {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
+      default: () => new Point(),
       create: () => new Point(),
       test: (v: unknown): v is Point => v instanceof Point,
     });

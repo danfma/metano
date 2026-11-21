@@ -358,17 +358,19 @@ public static partial class IrToTsExpressionBridge
             return CollectionTypeTest(value, collection, staticType, context);
 
         if (
-            IrToTsRuntimeTestBridge.Render(value, targetType, staticType, context.RuntimeTypes) is
+            IrToTsRuntimeTestBridge.Render(
+                value,
+                targetType,
+                staticType,
+                context.RuntimeTypes,
+                context.TypeParameters
+            ) is
             { } test
         )
             return test;
 
-        if (targetType is IrTypeParameterRef tp)
-        {
-            return tp.Scope != IrTypeParameterScope.None
-                ? IrToTsRuntimeTestBridge.IsTypeCall(value, ResolveReifiedTypeParameter(tp))
-                : MapUnsupported(new IrUnsupportedExpression("UnreifiableTypeTest"));
-        }
+        if (targetType is IrTypeParameterRef)
+            return MapUnsupported(new IrUnsupportedExpression("UnreifiableTypeTest"));
 
         return IrRuntimeTypeTest.IsDelegate(targetType)
             ? MapUnsupported(new IrUnsupportedExpression("DelegateTypeTest"))
@@ -392,7 +394,12 @@ public static partial class IrToTsExpressionBridge
             return MapUnsupported(new IrUnsupportedExpression("CollectionInterfaceTest"));
 
         if (
-            IrToTsRuntimeTypeReferences.Of(collection, "collection test", context.RuntimeTypes) is
+            IrToTsRuntimeTypeReferences.Of(
+                collection,
+                "collection test",
+                context.RuntimeTypes,
+                context.TypeParameters
+            ) is
             { } descriptor
         )
             return IrToTsRuntimeTestBridge.IsTypeCall(value, descriptor);
@@ -542,7 +549,7 @@ public static partial class IrToTsExpressionBridge
             IrRuntimeTypeTest.Reified
             {
                 TypeParameter: { Scope: not IrTypeParameterScope.None } tp,
-            } => ResolveReifiedTypeParameter(tp),
+            } => TypeParameterTsResolver.Resolve(tp, context.TypeParameters),
             _ => null,
         };
 

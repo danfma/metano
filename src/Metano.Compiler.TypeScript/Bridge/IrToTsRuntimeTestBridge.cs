@@ -46,15 +46,25 @@ internal static class IrToTsRuntimeTestBridge
         TsExpression value,
         IrTypeRef type,
         IrTypeRef? staticType,
-        RuntimeTypeReachabilityResult reachability
-    ) => Render(value, type, staticType, Classify(value, type, staticType), reachability);
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? typeParameterScope = null
+    ) =>
+        Render(
+            value,
+            type,
+            staticType,
+            Classify(value, type, staticType),
+            reachability,
+            typeParameterScope
+        );
 
     private static TsExpression? Render(
         TsExpression value,
         IrTypeRef type,
         IrTypeRef? staticType,
         IrRuntimeTypeTest test,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? typeParameterScope
     ) =>
         test switch
         {
@@ -63,8 +73,20 @@ internal static class IrToTsRuntimeTestBridge
             ),
             _ when type is IrCollectionTypeRef collection => CollectionTest(value, collection),
             IrRuntimeTypeTest.NominalClass => ClassTest(value, type),
-            IrRuntimeTypeTest.NominalInterface => DescriptorTest(value, type, reachability),
+            IrRuntimeTypeTest.NominalInterface => DescriptorTest(
+                value,
+                type,
+                reachability,
+                typeParameterScope
+            ),
             IrRuntimeTypeTest.ErasedShape => ShapeTest(value, type, reachability),
+            IrRuntimeTypeTest.Reified { TypeParameter: var tp } => TypeParameterTsResolver.Resolve(
+                tp,
+                typeParameterScope
+            )
+                is { } descriptor
+                ? IsTypeCall(value, descriptor)
+                : null,
             IrRuntimeTypeTest.Primitive primitive => BoxedEnumTest(
                 value,
                 type,
@@ -192,10 +214,14 @@ internal static class IrToTsRuntimeTestBridge
     private static TsExpression? DescriptorTest(
         TsExpression value,
         IrTypeRef type,
-        RuntimeTypeReachabilityResult reachability
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? typeParameterScope = null
     )
     {
-        if (IrToTsRuntimeTypeReferences.Of(type, "type test", reachability) is not { } descriptor)
+        if (
+            IrToTsRuntimeTypeReferences.Of(type, "type test", reachability, typeParameterScope)
+            is not { } descriptor
+        )
             return null;
 
         if (

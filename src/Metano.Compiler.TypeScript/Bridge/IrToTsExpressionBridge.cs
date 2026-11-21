@@ -161,7 +161,7 @@ public static partial class IrToTsExpressionBridge
             IrConditionalExpression { AsTarget: not null } asCast => MapAsCast(asCast, context),
             IrGetTypeExpression getType => MapGetType(getType, context),
             IrTypeOfExpression typeOf => MapTypeOf(typeOf, context),
-            IrReifiedDefaultExpression reifiedDefault => MapReifiedDefault(reifiedDefault),
+            IrReifiedDefaultExpression reifiedDefault => MapReifiedDefault(reifiedDefault, context),
             IrConditionalExpression cond => new TsConditionalExpression(
                 Map(cond.Condition, context),
                 Map(cond.WhenTrue, context),
@@ -1305,6 +1305,10 @@ public static partial class IrToTsExpressionBridge
         call is { HasExplicitTypeArguments: true, TypeArguments: { Count: > 0 } typeArguments }
         && call.Origin is { IsForeignMember: false, IsDeclaringTypeExternal: false }
         && !PassesNullToANonNullableTypeArgument(call.Arguments, typeArguments)
+        && (
+            call.ReifiedTypeArguments is not { Count: > 0 } reified
+            || reified.Count <= typeArguments.Count
+        )
             ? typeArguments
                 .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
                 .ToList()
@@ -2286,11 +2290,8 @@ public static partial class IrToTsExpressionBridge
     {
         if (ne.Type is IrTypeParameterRef tp)
         {
-            return tp.Scope != IrTypeParameterScope.None
-                ? new TsCallExpression(
-                    new TsRuntimeHelperReference("createInstance"),
-                    [ResolveReifiedTypeParameter(tp)]
-                )
+            return TypeParameterTsResolver.Resolve(tp, context.TypeParameters) is { } descriptor
+                ? new TsCallExpression(new TsRuntimeHelperReference("createInstance"), [descriptor])
                 : MapUnsupported(new IrUnsupportedExpression("NewTypeParameter"));
         }
 
@@ -2423,7 +2424,7 @@ public static partial class IrToTsExpressionBridge
 
         return InEvaluationOrder(ne, args, ordered => new TsNewExpression(
             MapNewTarget(ne.Type),
-            ordered,
+            WithReifiedNewArguments(ordered, ne, context),
             explicitTypeArguments
         ));
     }

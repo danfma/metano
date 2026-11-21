@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { castTo, getRuntimeType, isType } from "metano-runtime";
+import { castTo, getRuntimeType, isType, type RuntimeType } from "metano-runtime";
 import { AreaDto$runtimeType, type AreaDto } from "./area-dto";
 import { Circle } from "./circle";
 import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
@@ -28,5 +28,13 @@ export class ShapeQuestions {
 
   static toAreaDto(value: Object): AreaDto {
     return castTo<AreaDto>(value, AreaDto$runtimeType);
+  }
+
+  private static is<T>(value: Object, T$type: RuntimeType<T>): boolean {
+    return isType(value, T$type);
+  }
+
+  static isCircleViaGeneric(value: Object): boolean {
+    return ShapeQuestions.is<Circle>(value, Circle.$runtimeType);
   }
 }

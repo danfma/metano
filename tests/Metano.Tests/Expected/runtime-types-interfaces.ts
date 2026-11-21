@@ -20,6 +20,7 @@ export class Badge implements ITagged {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
+      default: () => new Badge(),
       create: () => new Badge(),
       test: (v: unknown): v is Badge => v instanceof Badge,
     });

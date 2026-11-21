@@ -45,7 +45,7 @@ internal static class IrToTsRuntimeTypeReferences
         type switch
         {
             _ when type.IsObject => new TsRuntimeHelperReference("ObjectType"),
-            IrTypeParameterRef tp => TypeParameterTsResolver.ResolveParameter(tp.Name, scope),
+            IrTypeParameterRef tp => TypeParameterTsResolver.Resolve(tp, scope),
             IrNullableTypeRef { Inner: var inner } => Of(inner, site, reachability, scope)
                 is { } innerDescriptor
                 ? IsValueType(inner)
@@ -87,7 +87,7 @@ internal static class IrToTsRuntimeTypeReferences
                 factory,
                 [
                     .. collection.TypeArguments.Select(argument =>
-                        ArgumentOf(argument, site, reachability, scope)
+                        SlotArgumentOf(argument, site, reachability, scope)
                     ),
                 ]
             )
@@ -292,6 +292,9 @@ internal static class IrToTsRuntimeTypeReferences
     /// always reached when the kind is questioned (the reachability phase reaches every
     /// concrete argument), so reading it unreached is an internal error rather than a
     /// silent <c>UnknownType</c>, which would match every value (FR-008, D31).
+    /// A concrete named type with no descriptor (non-<c>[Transpile]</c>, nested)
+    /// lowers to <c>opaqueType(fullName)</c> so closed collection tests compare
+    /// by identity instead of matching everything via <c>UnknownType</c> (#711).
     /// </summary>
     public static TsExpression SlotArgumentOf(
         IrTypeRef type,
@@ -303,8 +306,17 @@ internal static class IrToTsRuntimeTypeReferences
         if (type is IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named)
             AssertReached(named, site, reachability);
 
-        return ArgumentOf(type, site, reachability, scope);
+        if (Of(type, site, reachability, scope) is { } descriptor)
+            return descriptor;
+
+        if (type is IrNamedTypeRef concrete)
+            return Helper("opaqueType", new TsStringLiteral(FullNameOf(concrete)));
+
+        return Wildcard();
     }
+
+    private static string FullNameOf(IrNamedTypeRef named) =>
+        string.IsNullOrEmpty(named.Namespace) ? named.Name : $"{named.Namespace}.{named.Name}";
 
     /// <summary><c>UnknownType</c>: the descriptor that matches every value (FR-008).</summary>
     private static TsExpression Wildcard() => new TsRuntimeHelperReference("UnknownType");

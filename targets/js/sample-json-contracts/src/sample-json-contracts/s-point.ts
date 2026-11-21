@@ -20,6 +20,7 @@ export class SPoint {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
+      default: () => new SPoint(),
       test: (v: unknown): v is SPoint => v instanceof SPoint,
     });
   }

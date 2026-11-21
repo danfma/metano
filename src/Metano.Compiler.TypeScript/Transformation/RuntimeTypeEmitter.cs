@@ -330,6 +330,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     {
         var self = new TsIdentifier(declaration.Name);
         var selfType = SelfType(type, declaration.Name);
+        var slot = _context.ReifiedTypeAnalysis.TypeArgumentSlotOf(type);
 
         return new TsObjectLiteral([
             .. Identity("class", type),
@@ -342,9 +343,15 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
                     .. type.TypeParameters.Select(parameter => new TsStringLiteral(parameter.Name)),
                 ])
             ),
+            .. (
+                slot is not null
+                    ? [new TsObjectProperty("slot", new TsStringLiteral(slot))]
+                    : Array.Empty<TsObjectProperty>()
+            ),
             new TsObjectProperty("isAbstract", BooleanLiteral(type.IsAbstract)),
             new TsObjectProperty("isValueType", BooleanLiteral(type.IsValueType)),
-            .. Create(type, self),
+            .. Default(type, self),
+            .. Create(type, self, slot),
             new TsObjectProperty(
                 "test",
                 Predicate(
@@ -386,24 +393,74 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         )
             is not null;
 
+    private static IEnumerable<TsObjectProperty> Default(
+        INamedTypeSymbol type,
+        TsExpression self
+    ) =>
+        type.IsValueType
+            ? [new TsObjectProperty("default", Thunk(new TsNewExpression(self, [])))]
+            : [];
+
     /// <summary>
-    /// <c>create: () =&gt; new X()</c> for a concrete class with a public
-    /// parameterless constructor (declared or implicit) and for a struct that
-    /// declares none.
+    /// <c>create: () =&gt; new X()</c> (or <c>(typeArguments) =&gt; new X(typeArguments as ...)</c>
+    /// when <paramref name="slot"/> is present) for a concrete class with a public
+    /// parameterless constructor (declared or implicit) and for a struct.
     /// </summary>
-    private static IEnumerable<TsObjectProperty> Create(INamedTypeSymbol type, TsExpression self)
+    private IEnumerable<TsObjectProperty> Create(
+        INamedTypeSymbol type,
+        TsExpression self,
+        string? slot
+    )
     {
         var creatable =
-            !type.IsAbstract
-            && type.InstanceConstructors.Any(constructor =>
-                constructor is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }
-                && (!type.IsValueType || constructor.IsImplicitlyDeclared)
-            )
-            && (!type.IsValueType || type.InstanceConstructors.All(c => c.IsImplicitlyDeclared));
+            type.TypeParameters.Length > 0
+                ? _context.ReifiedTypeAnalysis.HasParameterlessCtor(type)
+                : !type.IsAbstract
+                    && type.InstanceConstructors.Any(constructor =>
+                        constructor
+                            is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }
+                        && (!type.IsValueType || constructor.IsImplicitlyDeclared)
+                    )
+                    && (
+                        !type.IsValueType
+                        || type.InstanceConstructors.All(c => c.IsImplicitlyDeclared)
+                    );
 
-        return creatable
-            ? [new TsObjectProperty("create", Thunk(new TsNewExpression(self, [])))]
-            : [];
+        if (!creatable)
+            return [];
+
+        if (slot is null)
+            return [new TsObjectProperty("create", Thunk(new TsNewExpression(self, [])))];
+
+        var unknownType = new TsNamedType("unknown");
+        var runtimeTypeTuple = new TsTupleType(
+            [
+                .. type.TypeParameters.Select(_ =>
+                    (TsType)
+                        new TsNamedType(
+                            "RuntimeType",
+                            [unknownType],
+                            RuntimeHelperBinding: "RuntimeType"
+                        )
+                ),
+            ],
+            IsReadonly: true
+        );
+        var forwarded = new TsCastExpression(
+            new TsIdentifier("typeArguments"),
+            new TsUnionType([runtimeTypeTuple, new TsNamedType("undefined")])
+        );
+
+        return
+        [
+            new TsObjectProperty(
+                "create",
+                new TsArrowFunction(
+                    [new TsParameter("typeArguments", null)],
+                    [new TsReturnStatement(new TsNewExpression(self, [forwarded]))]
+                )
+            ),
+        ];
     }
 
     /// <summary>

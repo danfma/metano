@@ -130,9 +130,11 @@ public class TypeParameterTsResolverTests
         await Assert
             .That(printed)
             .Contains("declare readonly $typeArguments$Box: readonly [RuntimeType<T>];");
+
         await Assert
             .That(printed)
             .Contains("Object.defineProperty(this, \"$typeArguments$Box\", {");
+
         await Assert.That(printed).Contains("value: $typeArgs");
         await Assert.That(printed).Contains("enumerable: false");
     }

@@ -21,7 +21,6 @@ CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.thisCastFail THROWS TypeError: a.asDog(...).bark is not a function
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
-CollectionTypeArgumentProbes.directDictionaryViewInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.objectArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.rawArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
