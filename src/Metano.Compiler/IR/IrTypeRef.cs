@@ -258,7 +258,17 @@ public enum IrNamedTypeKind
 /// <summary>
 /// A reference to a type parameter (e.g., <c>T</c>, <c>TKey</c>).
 /// </summary>
-public sealed record IrTypeParameterRef(string Name) : IrTypeRef;
+public sealed record IrTypeParameterRef(string Name) : IrTypeRef
+{
+    /// <summary>Where the type parameter's runtime descriptor is resolved (stage 011d).</summary>
+    public IrTypeParameterScope Scope { get; init; } = IrTypeParameterScope.None;
+
+    /// <summary>The 0-based index inside <c>$typeArgs</c> or the class slot when <see cref="Scope"/> is <see cref="IrTypeParameterScope.CtorParam"/> or <see cref="IrTypeParameterScope.ClassSlot"/>.</summary>
+    public int SlotIndex { get; init; } = -1;
+
+    /// <summary>The declaring class's emitted name when <see cref="Scope"/> is <see cref="IrTypeParameterScope.ClassSlot"/>.</summary>
+    public string? DeclaringTypeName { get; init; }
+}
 
 /// <summary>
 /// <c>T | null</c> — a nullable wrapper. Each backend decides how to represent nullability

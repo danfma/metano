@@ -211,14 +211,17 @@ public static class IrToTsModuleBridge
     /// initializer: a parameter a call may omit is optional instead.
     /// </summary>
     private static List<TsParameter> SignatureParametersOf(IrModuleFunction fn) =>
-        fn
-            .Parameters.Select(p => new TsParameter(
-                IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.MapParameterType(p),
-                Optional: p.IsOptional,
-                Rest: p.IsRestParams
-            ))
-            .ToList();
+        IrToTsClassBridge.InsertReifiedParameters(
+            fn.Parameters.Select(p => new TsParameter(
+                    IrToTsNamingPolicy.ToParameterName(p.Name),
+                    IrToTsTypeMapper.MapParameterType(p),
+                    Optional: p.IsOptional,
+                    Rest: p.IsRestParams
+                ))
+                .ToList(),
+            fn.ReifiedTypeParameters,
+            asOptionalSignature: true
+        );
 
     /// <summary>
     /// The dispatcher implementation's return type, by the class
@@ -266,13 +269,14 @@ public static class IrToTsModuleBridge
         IrToTsBridgeContext context
     )
     {
-        var argumentShape = new OverloadArgumentShape(fn.Parameters);
+        var argumentShape = new OverloadArgumentShape(fn.Parameters, fn.ReifiedTypeParameters);
 
         var delegated = IrToTsOverloadDispatcherBridge.DelegatedArguments(
             fn.Parameters,
             fn.TypeParameters,
             argumentShape,
-            typeOverrides: null
+            typeOverrides: null,
+            fn.ReifiedTypeParameters
         );
 
         var delegateCall = new TsCallExpression(new TsIdentifier(fastPathName), delegated);
@@ -322,11 +326,16 @@ public static class IrToTsModuleBridge
             ))
             .ToList();
 
+        var allParameters = IrToTsClassBridge.InsertReifiedParameters(
+            parameters,
+            fn.ReifiedTypeParameters
+        );
+
         var body = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, context);
 
         return new TsFunction(
             name,
-            parameters,
+            allParameters,
             IrToTsTypeMapper.Map(fn.ReturnType),
             body,
             Exported: true,

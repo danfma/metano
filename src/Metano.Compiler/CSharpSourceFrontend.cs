@@ -170,7 +170,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateConstantAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateInlineAttribute(compilation, diagnostics);
             ValidateThisAttribute(compilation, diagnostics);
-            ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
 
             TranspiledReferenceWalker.Validate(
@@ -204,6 +203,17 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         ValidateSubpathRoot(packageInfo, target, diagnostics);
 
+        var reifiedTypeAnalysis =
+            compilation is null || target is TargetLanguage.Dart
+                ? Analysis.ReifiedTypeParameterAnalysis.Disabled
+                : Analysis.ReifiedTypeParameterAnalysis.Analyze(
+                    compilation,
+                    assemblyWideTranspile,
+                    target,
+                    typeNamesBySymbol,
+                    diagnostics
+                );
+
         // Dart keeps the reflection source forms until after 3.0.0 (D28): it
         // asks no runtime question, so its diagnostics stay as they were.
         IReadOnlyList<IrRuntimeQuestion> runtimeQuestions =
@@ -215,8 +225,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     target,
                     generatedSources,
                     declarativeMappings.Methods,
+                    reifiedTypeAnalysis,
                     diagnostics
                 );
+
+        if (compilation is not null)
+        {
+            ValidateGenericNewConstraint(
+                compilation,
+                assemblyWideTranspile,
+                reifiedTypeAnalysis,
+                diagnostics
+            );
+        }
 
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
@@ -249,6 +270,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         )
         {
             RuntimeQuestions = runtimeQuestions,
+            ReifiedTypeAnalysis = reifiedTypeAnalysis,
         };
     }
 
@@ -730,6 +752,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void ValidateGenericNewConstraint(
         Compilation compilation,
         bool assemblyWideTranspile,
+        Analysis.ReifiedTypeAnalysisResult reifiedTypeAnalysis,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -738,10 +761,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         {
             if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
                 return;
+
             foreach (var syntaxRef in type.DeclaringSyntaxReferences)
             {
                 var syntax = syntaxRef.GetSyntax();
                 var model = compilation.GetSemanticModel(syntax.SyntaxTree);
+
                 foreach (
                     var creation in syntax
                         .DescendantNodes()
@@ -750,6 +775,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 {
                     if (model.GetTypeInfo(creation.Type).Type is ITypeParameterSymbol param)
                     {
+                        if (reifiedTypeAnalysis.IsEnabled)
+                        {
+                            var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
+
+                            if (enclosing is null || !reifiedTypeAnalysis.IsUnreifiable(enclosing))
+                                continue;
+                        }
+
                         diagnostics.Add(
                             new MetanoDiagnostic(
                                 MetanoDiagnosticSeverity.Error,

@@ -503,6 +503,7 @@ public static class IrModuleFunctionExtractor
             OverloadRef = claim?.Ref,
             OverloadName = claim?.Name,
             SignatureText = claim?.SignatureText,
+            ReifiedTypeParameters = context.ReifiedTypeAnalysis.ReifiedParametersOf(method),
         };
     }
 
@@ -818,6 +819,7 @@ public static class IrModuleFunctionExtractor
             OverloadRef = claim?.Ref,
             OverloadName = claim?.Name,
             SignatureText = claim?.SignatureText,
+            ReifiedTypeParameters = context.ReifiedTypeAnalysis.ReifiedParametersOf(method),
         };
     }
 

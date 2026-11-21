@@ -41,7 +41,7 @@ public static class IrInterfaceExtractor
                             type,
                             method,
                             target,
-                            ExtractMethod(method, originResolver, target),
+                            ExtractMethod(method, originResolver, target, context),
                             groupSuffixes
                         )
                     );
@@ -161,7 +161,8 @@ public static class IrInterfaceExtractor
     private static IrMethodDeclaration ExtractMethod(
         IMethodSymbol method,
         IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target
+        Metano.Annotations.TargetLanguage? target,
+        IrExtractionContext? context
     )
     {
         var parameters = method
@@ -213,6 +214,7 @@ public static class IrInterfaceExtractor
         )
         {
             Attributes = IrAttributeExtractor.Extract(method),
+            ReifiedTypeParameters = context?.ReifiedTypeAnalysis.ReifiedParametersOf(method) ?? [],
         };
     }
 

@@ -161,6 +161,7 @@ public static partial class IrToTsExpressionBridge
             IrConditionalExpression { AsTarget: not null } asCast => MapAsCast(asCast, context),
             IrGetTypeExpression getType => MapGetType(getType, context),
             IrTypeOfExpression typeOf => MapTypeOf(typeOf, context),
+            IrReifiedDefaultExpression reifiedDefault => MapReifiedDefault(reifiedDefault),
             IrConditionalExpression cond => new TsConditionalExpression(
                 Map(cond.Condition, context),
                 Map(cond.WhenTrue, context),
@@ -1275,7 +1276,11 @@ public static partial class IrToTsExpressionBridge
 
         return new TsCallExpression(
             MapNullTolerant(call.Target, context),
-            WithoutNullRestArray(call.Arguments, loweredArgs),
+            WithReifiedCallArguments(
+                WithoutNullRestArray(call.Arguments, loweredArgs),
+                call,
+                context
+            ),
             call.IsOptional,
             WrittenTypeArguments(call, context)
         );
@@ -1907,8 +1912,11 @@ public static partial class IrToTsExpressionBridge
             ))
             .ToList();
 
-        var parameters = DeduplicateParameterNames(
-            DropTrailingErasedDiscards(lambda.Parameters, mappedParameters)
+        var parameters = IrToTsClassBridge.InsertReifiedParameters(
+            DeduplicateParameterNames(
+                DropTrailingErasedDiscards(lambda.Parameters, mappedParameters)
+            ),
+            lambda.ReifiedTypeParameters
         );
         var body = MapLambdaBody(lambda, context);
         // Named function expression: emitted when the lambda is the
@@ -2276,6 +2284,16 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapNewExpression(IrNewExpression ne, IrToTsBridgeContext context)
     {
+        if (ne.Type is IrTypeParameterRef tp)
+        {
+            return tp.Scope != IrTypeParameterScope.None
+                ? new TsCallExpression(
+                    new TsRuntimeHelperReference("createInstance"),
+                    [ResolveReifiedTypeParameter(tp)]
+                )
+                : MapUnsupported(new IrUnsupportedExpression("NewTypeParameter"));
+        }
+
         // JSX-renderable constructions (native elements + component composition)
         // lower to a TsJsxElement, never a `new T(…)` call. Decided purely off
         // the constructed value's type semantics (FR-012), so this must run
@@ -2440,7 +2458,7 @@ public static partial class IrToTsExpressionBridge
 
         var superCall = new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("super"), fastPath),
-            ordered.Arguments,
+            WithReifiedCallArguments(ordered.Arguments, call, context),
             TypeArguments: call.TypeArguments?.Select(argument =>
                     IrToTsTypeMapper.Map(argument, context.TypeOverrides)
                 )
@@ -2493,7 +2511,7 @@ public static partial class IrToTsExpressionBridge
 
         var fastPathCall = new TsCallExpression(
             callee,
-            ordered.Arguments,
+            WithReifiedCallArguments(ordered.Arguments, call, context),
             TypeArguments: call.TypeArguments?.Select(argument =>
                     IrToTsTypeMapper.Map(argument, context.TypeOverrides)
                 )

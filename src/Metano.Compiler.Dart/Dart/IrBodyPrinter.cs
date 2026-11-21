@@ -479,6 +479,9 @@ public static class IrBodyPrinter
                 // is the bound parameter.
                 PrintExpression(sb, CurrentConditionalReceiver().Expression);
                 break;
+            case IrReifiedDefaultExpression:
+                sb.Append("null");
+                break;
             case IrUnsupportedExpression u:
                 // Already reported as MS0001 by the extractor; `throw` is an
                 // expression in Dart, so the placeholder parses anywhere.

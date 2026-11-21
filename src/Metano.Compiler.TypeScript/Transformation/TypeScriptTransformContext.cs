@@ -89,6 +89,9 @@ public sealed class TypeScriptTransformContext(
     internal Analysis.RuntimeTypeReachabilityResult RuntimeTypes { get; init; } =
         Analysis.RuntimeTypeReachabilityResult.Empty;
 
+    public Compiler.Analysis.ReifiedTypeAnalysisResult ReifiedTypeAnalysis { get; init; } =
+        Compiler.Analysis.ReifiedTypeParameterAnalysis.Disabled;
+
     /// <summary>JSON contracts planned once, before reachability and group emission.</summary>
     internal IReadOnlyDictionary<INamedTypeSymbol, Json.JsonContextPlan?> JsonPlans { get; init; } =
         new Dictionary<INamedTypeSymbol, Json.JsonContextPlan?>(SymbolEqualityComparer.Default);
@@ -592,6 +595,7 @@ public sealed class TypeScriptTransformContext(
             KeepsArgumentEvaluationOrder = true,
             FormatStrings = TsFormatStrings.Instance,
             LowersByDeclarativeMapping = DeclarativeMappings.HasJsMappingFor,
+            ReifiedTypeAnalysis = ReifiedTypeAnalysis,
         };
 
     /// <summary>

@@ -18,7 +18,6 @@ BoxingProbes.isTests = True|False|True|True|True|False
 BoxingProbes.objectHashSetMixedCount = 1
 BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
-CastProbes.genericFail THROWS TypeError: CastProbes.g(...).bark is not a function
 CastProbes.thisCastFail THROWS TypeError: a.asDog(...).bark is not a function
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest

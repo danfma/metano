@@ -16,6 +16,8 @@ public sealed class DartTarget : ITranspilerTarget
 
     public TargetLanguage Language => TargetLanguage.Dart;
 
+    public bool SupportsReifiedTypeParameters => false;
+
     public IReadOnlyList<DartSourceFile> LastSourceFiles { get; private set; } = [];
 
     public TargetOutput Transform(

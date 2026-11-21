@@ -81,6 +81,13 @@ public sealed record IrExtractionContext(
     internal bool KeepsNativeCollections => KeepsNativeCollectionsFor(Target);
 
     /// <summary>
+    /// Post-extraction fixpoint analysis of reified type parameters (spec 011
+    /// FR-024, stage 011d).
+    /// </summary>
+    public Analysis.ReifiedTypeAnalysisResult ReifiedTypeAnalysis { get; init; } =
+        Analysis.ReifiedTypeParameterAnalysis.Disabled;
+
+    /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
     /// target language (the type mapper, the overload-group reporters).
     /// </summary>

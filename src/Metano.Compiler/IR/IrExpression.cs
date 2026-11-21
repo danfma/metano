@@ -408,6 +408,21 @@ public sealed record IrCallExpression(
     /// unifies them all) passes the written ones through.
     /// </summary>
     public bool HasExplicitTypeArguments { get; init; }
+
+    /// <summary>
+    /// Runtime type descriptors passed as trailing reified type arguments,
+    /// parallel to the callee's <c>ReifiedTypeParameters</c> (spec 011 FR-024).
+    /// For statics of generic classes, includes the containing type's arguments.
+    /// </summary>
+    public IReadOnlyList<IrTypeRef>? ReifiedTypeArguments { get; init; }
+
+    /// <summary>
+    /// The 0-based argument index where <see cref="ReifiedTypeArguments"/> are
+    /// inserted (after all non-<c>params</c> declared parameters, before any
+    /// <c>params</c> rest arguments), padding omitted optional arguments with
+    /// <c>undefined</c>.
+    /// </summary>
+    public int ReifiedArgumentPosition { get; init; }
 }
 
 /// <summary>
@@ -567,6 +582,12 @@ public sealed record IrNewExpression(
     /// <see cref="IrCallExpression.EvaluationOrder"/>.
     /// </summary>
     public IReadOnlyList<int>? EvaluationOrder { get; init; }
+
+    /// <summary>
+    /// Runtime type descriptors passed to the constructor's trailing
+    /// <c>$typeArgs</c> tuple (spec 011 FR-024).
+    /// </summary>
+    public IReadOnlyList<IrTypeRef>? ReifiedTypeArguments { get; init; }
 }
 
 /// <summary>
@@ -849,6 +870,10 @@ public sealed record IrGetTypeExpression(IrExpression Receiver, IrTypeRef? Const
 /// <param name="Type">The type whose runtime type the expression denotes.</param>
 public sealed record IrTypeOfExpression(IrTypeRef Type) : IrExpression;
 
+/// <summary>C# <c>default(T)</c> for a type parameter <paramref name="Type"/> (spec 011 FR-024).</summary>
+/// <param name="Type">The type parameter, carrying its <see cref="IrTypeParameterScope"/>.</param>
+public sealed record IrReifiedDefaultExpression(IrTypeParameterRef Type) : IrExpression;
+
 // -- Conditional --
 
 /// <summary>
@@ -911,7 +936,14 @@ public sealed record IrLambdaExpression(
     bool UsesThis = false,
     IrTypeRef? ThisType = null,
     string? Name = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// Type parameters of this lambda that are reified at runtime via hidden
+    /// <c>T$type</c> parameters (spec 011 FR-024).
+    /// </summary>
+    public IReadOnlyList<IrReifiedTypeParameter> ReifiedTypeParameters { get; init; } = [];
+}
 
 // -- Stage 011c collection accesses (spec 011 data-model § 2) --
 
@@ -1498,4 +1530,10 @@ public sealed record IrTemplateExpression(
     /// target binds them first when this is set.
     /// </summary>
     public IReadOnlyList<int>? EvaluationOrder { get; init; }
+
+    /// <summary>
+    /// Runtime type descriptors passed to the constructor's trailing
+    /// <c>$typeArgs</c> tuple (spec 011 FR-024).
+    /// </summary>
+    public IReadOnlyList<IrTypeRef>? ReifiedTypeArguments { get; init; }
 }

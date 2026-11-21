@@ -52,12 +52,15 @@ public static class DartTranspileHelper
             compilation,
             TargetLanguage.Dart
         );
+
         var transformer = new DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
         var printer = new Metano.Compiler.Dart.Printer();
         var result = new Dictionary<string, string>();
+
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);
+
         return (result, transformer.Diagnostics);
     }
 }

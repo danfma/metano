@@ -54,6 +54,30 @@ public sealed record IrClassDeclaration(
     public IReadOnlyList<IrStatement>? StaticInitializer { get; init; }
 
     /// <summary>
+    /// Full-arity reified type parameters of this generic class (spec 011 FR-024,
+    /// stage 011d); empty when the class has no reified instance type parameters.
+    /// </summary>
+    public IReadOnlyList<IrReifiedTypeParameter> ReifiedTypeParameters { get; init; } = [];
+
+    /// <summary>
+    /// Per-declaring-class slot name (<c>$typeArguments$&lt;Class&gt;</c>) when
+    /// this class defines one; <c>null</c> otherwise.
+    /// </summary>
+    public string? TypeArgumentSlot { get; init; }
+
+    /// <summary>
+    /// Base class's full-arity type arguments passed to <c>super</c> when the
+    /// base class defines a type-argument slot; <c>null</c> otherwise.
+    /// </summary>
+    public IReadOnlyList<IrTypeRef>? BaseTypeArguments { get; init; }
+
+    /// <summary>
+    /// Whether this type has a public parameterless constructor (for <c>create</c>
+    /// emission on its runtime descriptor, spec 011 FR-024).
+    /// </summary>
+    public bool HasParameterlessCtor { get; init; }
+
+    /// <summary>
     /// The constructed root <paramref name="method"/> is anchored on: a branch
     /// of that root's runtime dispatcher, not a fast path; <c>null</c> otherwise.
     /// </summary>

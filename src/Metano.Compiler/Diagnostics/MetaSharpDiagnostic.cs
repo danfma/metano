@@ -585,6 +585,25 @@ public static class DiagnosticCodes
     /// <c>[Name]</c> (or change the BCL export's <c>ExportedName</c>).</summary>
     public const string ImportedNameClash = "MS0070";
 
+    /// <summary>MS0050 — a hidden runtime type-descriptor parameter
+    /// (<c>T$type</c> or <c>$typeArgs</c>) was added to a member reachable by
+    /// JS callers (<c>[ExportedAsModule]</c>, a <c>[JsxComponentBuilder]</c>
+    /// interface member, a method converted to a <c>[JsCallable]</c> delegate,
+    /// or a public generic class constructor). JS callers may pass
+    /// <c>UnknownType</c> as the wildcard descriptor (spec 011 FR-024).</summary>
+    public const string ReifiedParameterOnInteropSurface = "MS0050";
+
+    /// <summary>MS0054 — a runtime question about an open type parameter
+    /// (<c>is T</c>, <c>as T</c>, <c>typeof(T)</c>, <c>(T)x</c>, <c>new T()</c>)
+    /// cannot be reified at this site: the enclosing body cannot carry a hidden
+    /// parameter (<c>[Emit]</c>/<c>[Import]</c>, <c>[External]</c> interface,
+    /// <c>[JsCallable]</c>, <c>[ModuleEntryPoint]</c>, operator,
+    /// <c>[Queryable]</c> lambda, public member of an <c>[EmitPackage]</c>
+    /// library, or an override/implementation group containing one or a
+    /// referenced-package member). An error at the question or library member
+    /// (spec 011 FR-024).</summary>
+    public const string UnreifiableTypeParameter = "MS0054";
+
     /// <summary>MS0071 — a user declaration or import takes the name of a runtime
     /// type the module imports and the collision cannot be aliased (<c>Temporal</c>:
     /// its only value-side emission is a mapping template that doesn't declare the

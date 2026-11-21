@@ -76,6 +76,13 @@ public sealed record IrMethodDeclaration(
     /// dropped when the synthesized member covers every count it accepts.
     /// </summary>
     public bool IsShadowedBySynthesized { get; init; }
+
+    /// <summary>
+    /// Type parameters of this method that are reified at runtime via hidden
+    /// <c>T$type</c> parameters (spec 011 FR-024, stage 011d). Empty when no
+    /// type parameter is reified.
+    /// </summary>
+    public IReadOnlyList<IrReifiedTypeParameter> ReifiedTypeParameters { get; init; } = [];
 }
 
 /// <summary>

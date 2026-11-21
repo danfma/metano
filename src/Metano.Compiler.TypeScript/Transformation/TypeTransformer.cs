@@ -681,6 +681,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 ModuleFunctionClaims = moduleFunctionClaims,
                 RuntimeTypes = reachability,
                 JsonPlans = jsonPlans,
+                ReifiedTypeAnalysis = ir.ReifiedTypeAnalysis,
             };
 
         // The JSON contexts' contract classes are reachability roots (FR-028, D31); their

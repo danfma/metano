@@ -28,6 +28,7 @@ internal sealed class RuntimeQuestionScanner
     private readonly GeneratedSourceTrees _generatedSources;
 
     private readonly DeclarativeMappingRegistry _mappings;
+    private readonly Analysis.ReifiedTypeAnalysisResult _reifiedTypeAnalysis;
 
     private readonly List<MetanoDiagnostic> _diagnostics;
     private readonly List<IrRuntimeQuestion> _questions = [];
@@ -40,6 +41,7 @@ internal sealed class RuntimeQuestionScanner
             (string DeclaringTypeFullName, string MemberName),
             IReadOnlyList<DeclarativeMappingEntry>
         > methodMappings,
+        Analysis.ReifiedTypeAnalysisResult reifiedTypeAnalysis,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -47,6 +49,7 @@ internal sealed class RuntimeQuestionScanner
         _target = target;
         _generatedSources = generatedSources;
         _mappings = DeclarativeMappingRegistry.FromMethods(methodMappings);
+        _reifiedTypeAnalysis = reifiedTypeAnalysis;
         _diagnostics = diagnostics;
     }
 
@@ -59,6 +62,7 @@ internal sealed class RuntimeQuestionScanner
             (string DeclaringTypeFullName, string MemberName),
             IReadOnlyList<DeclarativeMappingEntry>
         > methodMappings,
+        Analysis.ReifiedTypeAnalysisResult reifiedTypeAnalysis,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -67,6 +71,7 @@ internal sealed class RuntimeQuestionScanner
             target,
             generatedSources,
             methodMappings,
+            reifiedTypeAnalysis,
             diagnostics
         );
 
@@ -247,11 +252,19 @@ internal sealed class RuntimeQuestionScanner
             case IConversionOperation { Operand.Type: IArrayTypeSymbol } arrayConversion:
                 RecordArrayConversion(arrayConversion);
                 break;
-            case IObjectCreationOperation or ICollectionExpressionOperation:
+            case IObjectCreationOperation objCreation:
+                RecordCollectionConstruction(operation.Type, operation.Syntax);
+                if (objCreation.Type is INamedTypeSymbol createdNamed)
+                    RecordReifiedNewArguments(createdNamed, objCreation.Syntax);
+                break;
+            case ICollectionExpressionOperation:
                 RecordCollectionConstruction(operation.Type, operation.Syntax);
                 break;
             case IInvocationOperation invocation:
                 InspectInvocation(invocation);
+                break;
+            case IMethodReferenceOperation methodRef:
+                RecordReifiedCallArguments(methodRef.Method, methodRef.Syntax);
                 break;
             case IDynamicInvocationOperation dynamicCall when IsDynamicGetType(dynamicCall):
                 InspectDynamicGetType(dynamicCall);
@@ -443,6 +456,7 @@ internal sealed class RuntimeQuestionScanner
         }
 
         RecordCollectionConstruction(invocation.Type, invocation.Syntax);
+        RecordReifiedCallArguments(method, invocation.Syntax);
 
         if (RuntimeQuestionFacts.IsUnsupportedTypeMember(method))
             ReportUnsupportedTypeMember(method, invocation.Syntax);
@@ -496,6 +510,39 @@ internal sealed class RuntimeQuestionScanner
 
         foreach (var index in indices.Where(index => index < method.TypeArguments.Length))
             Record(IrRuntimeQuestionKind.TypeOf, method.TypeArguments[index], invocation.Syntax);
+    }
+
+    private void RecordReifiedCallArguments(IMethodSymbol method, SyntaxNode syntax)
+    {
+        if (!_reifiedTypeAnalysis.IsEnabled)
+            return;
+
+        var reified = _reifiedTypeAnalysis.ReifiedParametersOf(method);
+
+        if (reified.Count == 0)
+            return;
+
+        var orig = method.OriginalDefinition;
+
+        foreach (var rp in reified)
+        {
+            var idx = orig.TypeParameters.ToList().FindIndex(t => t.Name == rp.Name);
+
+            if (idx >= 0 && idx < method.TypeArguments.Length)
+                Record(IrRuntimeQuestionKind.TypeOf, method.TypeArguments[idx], syntax);
+        }
+    }
+
+    private void RecordReifiedNewArguments(INamedTypeSymbol named, SyntaxNode syntax)
+    {
+        if (!_reifiedTypeAnalysis.IsEnabled || !named.IsGenericType)
+            return;
+
+        if (_reifiedTypeAnalysis.ReifiedParametersOf(named).Count == 0)
+            return;
+
+        foreach (var arg in named.TypeArguments)
+            Record(IrRuntimeQuestionKind.TypeOf, arg, syntax);
     }
 
     /// <summary>
