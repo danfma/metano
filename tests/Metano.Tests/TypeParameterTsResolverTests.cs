@@ -67,6 +67,7 @@ public class TypeParameterTsResolverTests
     public async Task CollectionDescriptor_ResolvesReifiedTypeParameterArgument()
     {
         var scope = TsTypeParameterScope.ForClassSlot("$typeArguments$Box", ["T"]);
+
         var listOfT = new IrCollectionTypeRef(
             IrCollectionKind.List,
             [new IrTypeParameterRef("T")],
@@ -89,6 +90,7 @@ public class TypeParameterTsResolverTests
     public async Task WithTypeArgsParam_InsertsBeforeParamsRest()
     {
         IReadOnlyList<IrTypeParameter> typeParameters = [new IrTypeParameter("T")];
+
         IReadOnlyList<TsConstructorParam> parameters =
         [
             new TsConstructorParam("value", new TsNamedType("T")),

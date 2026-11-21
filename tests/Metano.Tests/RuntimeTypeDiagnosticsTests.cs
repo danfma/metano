@@ -150,6 +150,7 @@ public class RuntimeTypeDiagnosticsTests
         await Assert
             .That(result.Diagnostics.Where(d => d.Code == DiagnosticCodes.UncheckedCast))
             .IsEmpty();
+
         await Assert.That(result.Output).Contains("return castTo<T>(o, T$type);");
     }
 

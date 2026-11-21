@@ -236,6 +236,7 @@ public sealed class ReifiedTypeParameterAnalysis
                         if (
                             model.GetOperation(cast)
                                 is not Microsoft.CodeAnalysis.Operations.IConversionOperation conv
+                            || conv.GetConversion().IsImplicit
                             || !Frontend.Roslyn.RuntimeQuestionScanner.IsCheckedCast(
                                 conv,
                                 _compilation
