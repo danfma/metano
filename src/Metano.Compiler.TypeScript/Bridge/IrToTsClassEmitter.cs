@@ -406,6 +406,64 @@ internal sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
+    /// Detects collisions with <c>$typeArguments$&lt;TS class name&gt;</c>
+    /// (inherited base slot with the same TS name, or a user member with the
+    /// same emitted name) and reports <c>MS0001</c> (spec 011 W5-5(a)).
+    /// </summary>
+    internal bool ReportTypeArgumentSlotCollisionIfAny(
+        INamedTypeSymbol type,
+        string slotName,
+        IReadOnlyList<TsClassMember> members
+    )
+    {
+        var baseCollision = HasInheritedSlotName(type, slotName);
+        var memberCollision = members.Any(member => MemberNameOf(member) == slotName);
+
+        if (!baseCollision && !memberCollision)
+            return false;
+
+        var reason = baseCollision
+            ? $"an ancestor class emits the same slot name '{slotName}'"
+            : $"a member of '{type.Name}' is emitted as '{slotName}'";
+
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                $"The reified type-argument slot of '{type.ToDisplayString()}' cannot be emitted: "
+                    + $"{reason} (spec 011 W5-5).",
+                type.Locations.FirstOrDefault()
+            )
+        );
+
+        return true;
+    }
+
+    private bool HasInheritedSlotName(INamedTypeSymbol type, string slotName)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (
+                current.IsGenericType
+                && IrToTsClassBridge.SlotNameOf(_context.ResolveTsName(current)) == slotName
+            )
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string? MemberNameOf(TsClassMember member) =>
+        member switch
+        {
+            TsFieldMember field => field.Name,
+            TsGetterMember getter => getter.Name,
+            TsSetterMember setter => setter.Name,
+            TsMethodMember method => method.Name,
+            _ => null,
+        };
+
+    /// <summary>
     /// The facts the type initializer lowering needs about the class: its emitted
     /// name, the name a <c>TypeInitializationException</c> reports
     /// (<see cref="ClrTypeName.OfTypeInitializer"/>), whether it extends a class, and, for a

@@ -22,6 +22,114 @@ internal static partial class IrToTsClassBridge
     private const string BaseArgumentPrefix = "__baseArg";
 
     /// <summary>
+    /// The optional trailing constructor parameter carrying a reified generic
+    /// class's runtime type arguments (spec 011 W5-5(b), (i)).
+    /// </summary>
+    public const string TypeArgsParameterName = "$typeArgs";
+
+    /// <summary>
+    /// The non-enumerable per-declaring-class property name storing a reified
+    /// generic class's runtime type arguments (spec 011 W5-5(a)).
+    /// </summary>
+    public static string SlotNameOf(string tsClassName) => $"$typeArguments${tsClassName}";
+
+    /// <summary>
+    /// Builds <c>readonly [RuntimeType&lt;T&gt;, ...]</c> for a reified generic
+    /// class's full-arity slot and constructor <c>$typeArgs</c> parameter.
+    /// </summary>
+    public static TsTupleType TypeArgsTupleType(IReadOnlyList<IrTypeParameter> typeParameters) =>
+        new(
+            [
+                .. typeParameters.Select(tp =>
+                    (TsType)
+                        new TsNamedType(
+                            "RuntimeType",
+                            [new TsNamedType(tp.Name)],
+                            RuntimeHelperBinding: "RuntimeType"
+                        )
+                ),
+            ],
+            IsReadonly: true
+        );
+
+    /// <summary>
+    /// Builds the optional trailing <c>$typeArgs?: readonly [RuntimeType&lt;T&gt;, ...]</c>
+    /// constructor parameter, inserted before any <c>params</c> rest parameter
+    /// (spec 011 W5-5(b)).
+    /// </summary>
+    public static IReadOnlyList<TsConstructorParam> WithTypeArgsParam(
+        IReadOnlyList<TsConstructorParam> parameters,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    )
+    {
+        var typeArgsParam = new TsConstructorParam(
+            TypeArgsParameterName,
+            TypeArgsTupleType(typeParameters),
+            Accessibility: TsAccessibility.None,
+            Optional: true
+        );
+
+        var restIndex = -1;
+
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            if (parameters[i].Rest)
+            {
+                restIndex = i;
+                break;
+            }
+        }
+
+        if (restIndex < 0)
+            return [.. parameters, typeArgsParam];
+
+        var updated = new List<TsConstructorParam>(parameters.Count + 1);
+        updated.AddRange(parameters.Take(restIndex));
+        updated.Add(typeArgsParam);
+        updated.AddRange(parameters.Skip(restIndex));
+
+        return updated;
+    }
+
+    /// <summary>
+    /// Builds <c>declare readonly $typeArguments$&lt;Class&gt;: readonly [RuntimeType&lt;T&gt;, ...];</c>
+    /// for a generic class that defines a runtime type-argument slot (spec 011 W5-5(a)).
+    /// </summary>
+    public static TsFieldMember BuildSlotDeclaration(
+        string slotName,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    ) =>
+        new(
+            slotName,
+            TypeArgsTupleType(typeParameters),
+            Readonly: true,
+            Accessibility: TsAccessibility.None,
+            Declare: true
+        );
+
+    /// <summary>
+    /// Builds <c>Object.defineProperty(this, "$typeArguments$&lt;Class&gt;", { value: $typeArgs, enumerable: false });</c>,
+    /// emitted first in the constructor body (spec 011 W5-5(i)).
+    /// </summary>
+    public static TsStatement BuildSlotDefineProperty(
+        string slotName,
+        string typeArgsParameterName = TypeArgsParameterName
+    ) =>
+        new TsExpressionStatement(
+            new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Object"), "defineProperty"),
+                [
+                    new TsIdentifier("this"),
+                    new TsStringLiteral(slotName),
+                    new TsObjectLiteral([
+                        new TsObjectProperty("value", new TsIdentifier(typeArgsParameterName)),
+                        new TsObjectProperty("enumerable", new TsLiteral("false")),
+                    ]),
+                ]
+            )
+        );
+
+    /// <summary>
     /// Builds the TS constructor-parameter list for the primary constructor,
     /// one entry per C# parameter in declaration order so positional call
     /// sites (<c>new T(a, b)</c>, the JSON factory) line up with the emitted
