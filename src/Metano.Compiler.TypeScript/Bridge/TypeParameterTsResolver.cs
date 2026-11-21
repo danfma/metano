@@ -161,6 +161,37 @@ internal static class TypeParameterTsResolver
     }
 
     /// <summary>
+    /// Resolves <paramref name="typeParameter"/> using <paramref name="scope"/>
+    /// when present, or the IR scope metadata carried on the reference itself,
+    /// returning <c>null</c> when the type parameter is not reified.
+    /// </summary>
+    public static TsExpression? Resolve(
+        IrTypeParameterRef typeParameter,
+        TsTypeParameterScope? scope = null
+    )
+    {
+        if (ResolveParameter(typeParameter.Name, scope) is { } scoped)
+            return scoped;
+
+        return typeParameter.Scope switch
+        {
+            IrTypeParameterScope.Method => new TsIdentifier($"{typeParameter.Name}$type"),
+            IrTypeParameterScope.ClassSlot => new TsElementAccess(
+                new TsPropertyAccess(
+                    new TsIdentifier("this"),
+                    typeParameter.DeclaringTypeName
+                        ?? throw new InvalidOperationException(
+                            $"ClassSlot reference for '{typeParameter.Name}' is missing a slot name."
+                        )
+                ),
+                new TsLiteral(typeParameter.SlotIndex.ToString(CultureInfo.InvariantCulture))
+            ),
+            IrTypeParameterScope.CtorParam => DefaultingTypeArg(typeParameter.SlotIndex),
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// Resolves <paramref name="type"/> to its TypeScript runtime descriptor
     /// expression in <paramref name="scope"/>, or <c>null</c> when
     /// <paramref name="type"/> has no descriptor (an un-reified type parameter

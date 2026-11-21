@@ -46,6 +46,7 @@ export class Cell<T> {
       typeParameters: ["T"],
       isAbstract: false,
       isValueType: true,
+      default: () => new Cell(),
       create: () => new Cell(),
       test: (v: unknown): v is Cell<unknown> => v instanceof Cell,
     });

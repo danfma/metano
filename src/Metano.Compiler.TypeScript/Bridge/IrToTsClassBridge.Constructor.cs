@@ -385,7 +385,8 @@ internal static partial class IrToTsClassBridge
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
         TsBaseConstructorCall? baseCall,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        string? typeArgumentSlot = null
     )
     {
         var body = new List<TsStatement>();
@@ -398,6 +399,9 @@ internal static partial class IrToTsClassBridge
         // precede it.
         if (baseCall is not null)
             body.AddRange(baseCall.ToStatements());
+
+        if (typeArgumentSlot is not null)
+            body.Add(BuildSlotDefineProperty(typeArgumentSlot));
 
         if (ir is not null)
         {

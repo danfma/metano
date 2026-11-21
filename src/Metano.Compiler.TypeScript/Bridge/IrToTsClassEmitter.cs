@@ -88,14 +88,29 @@ internal sealed class IrToTsClassEmitter(
         var claims = ClaimAndReport(type, ir);
         var typeName = _context.ResolveTsName(type);
 
-        var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(
-            ir.Constructor,
-            ip => IrToTsTypeMapper.MapParameterType(ip.Parameter, BclOverrides),
-            lowering
-        );
+        var hasSlot = ir.TypeArgumentSlot is { } typeArgSlot && ir.TypeParameters is { Count: > 0 };
+        var classTypeParamNames = hasSlot ? ir.TypeParameters!.Select(tp => tp.Name).ToList() : [];
+        var ctorLowering = hasSlot
+            ? lowering.WithTypeParameters(TsTypeParameterScope.ForCtorParam(classTypeParamNames))
+            : lowering;
+        var instanceLowering = hasSlot
+            ? lowering.WithTypeParameters(
+                TsTypeParameterScope.ForClassSlot(ir.TypeArgumentSlot!, classTypeParamNames)
+            )
+            : lowering;
 
         var explicitCtors = IrConstructorExtractor.AllExplicitConstructors(type);
         var emitsDispatcher = IrConstructorExtractor.IsDispatchedSet(type);
+
+        var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(
+            ir.Constructor,
+            ip => IrToTsTypeMapper.MapParameterType(ip.Parameter, BclOverrides),
+            ctorLowering
+        );
+
+        if (hasSlot && !emitsDispatcher)
+            ctorParams = IrToTsClassBridge.WithTypeArgsParam(ctorParams, ir.TypeParameters!);
+
         var promotedMemberDeclaration = ir
             is { Semantics.IsValueType: true, StaticInitializer: not null }
             ? PromotedMemberDeclaration.OwnDeclarations
@@ -117,7 +132,7 @@ internal sealed class IrToTsClassEmitter(
             constructorAccessibility,
             extendsType,
             keepsBaseMessage,
-            lowering
+            ctorLowering
         ) with
         {
             Accessibility = constructorAccessibility,
@@ -141,7 +156,7 @@ internal sealed class IrToTsClassEmitter(
                 ),
                 ir
             ),
-            lowering
+            ctorLowering
         );
 
         if (emitsSelectorsAndFactories)
@@ -165,14 +180,51 @@ internal sealed class IrToTsClassEmitter(
 
         var dataMembersStart = classMembers.Count;
 
+        var ctorFieldInitializers = new List<TsStatement>();
+
         EmitClassMembers(
             ir,
             PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
             classMembers,
             keepsBaseMessage,
-            lowering,
-            typeInitializer
+            ctorLowering,
+            typeInitializer,
+            hasSlot ? ctorFieldInitializers : null
         );
+
+        if (ctorFieldInitializers.Count > 0)
+        {
+            var insertAt = constructor.Body.Count;
+
+            for (var i = 0; i < constructor.Body.Count; i++)
+            {
+                if (
+                    constructor.Body[i] is TsExpressionStatement
+                    {
+                        Expression: TsCallExpression
+                        {
+                            Callee: TsPropertyAccess
+                            {
+                                Object: TsIdentifier { Name: "Object" },
+                                Property: "defineProperty",
+                            },
+                        },
+                    }
+                )
+                {
+                    insertAt = i + 1;
+                    break;
+                }
+            }
+
+            var updatedBody = new List<TsStatement>(
+                constructor.Body.Count + ctorFieldInitializers.Count
+            );
+            updatedBody.AddRange(constructor.Body.Take(insertAt));
+            updatedBody.AddRange(ctorFieldInitializers);
+            updatedBody.AddRange(constructor.Body.Skip(insertAt));
+            constructor = constructor with { Body = updatedBody };
+        }
 
         userMembers.UnionWith(classMembers.Skip(dataMembersStart));
 
@@ -191,9 +243,20 @@ internal sealed class IrToTsClassEmitter(
 
         var methodsStart = classMembers.Count;
 
-        EmitDeferredOperatorsAndMethods(type, ir, claims, classMembers, lowering);
+        EmitDeferredOperatorsAndMethods(type, ir, claims, classMembers, instanceLowering);
         userMembers.UnionWith(classMembers.Skip(methodsStart));
-        EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
+        EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, instanceLowering);
+
+        if (
+            hasSlot
+            && !ReportTypeArgumentSlotCollisionIfAny(type, ir.TypeArgumentSlot!, classMembers)
+        )
+        {
+            classMembers.Insert(
+                0,
+                IrToTsClassBridge.BuildSlotDeclaration(ir.TypeArgumentSlot!, ir.TypeParameters!)
+            );
+        }
 
         var body = typeInitializer.Complete(
             new TsClassBody(constructor, classMembers),
@@ -307,7 +370,8 @@ internal sealed class IrToTsClassEmitter(
             ir.Constructor,
             ctorParams,
             ResolveBaseCall(extendsType, ir, keepsBaseMessage, lowering),
-            lowering
+            lowering,
+            ir.TypeArgumentSlot
         );
     }
 
@@ -327,7 +391,8 @@ internal sealed class IrToTsClassEmitter(
         List<TsClassMember> classMembers,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering,
-        TypeInitializerLowering typeInitializer
+        TypeInitializerLowering typeInitializer,
+        List<TsStatement>? ctorFieldInitializers = null
     )
     {
         foreach (var irMember in ir.Members ?? [])
@@ -340,6 +405,30 @@ internal sealed class IrToTsClassEmitter(
                         IrToTsTypeMapper.Map(irField.Type, BclOverrides),
                         lowering
                     );
+
+                    if (
+                        ctorFieldInitializers is not null
+                        && field.Initializer is { } fieldInit
+                        && !field.Static
+                        && TypeScript
+                            .Printer.RenderExpression(fieldInit)
+                            .Contains(
+                                IrToTsClassBridge.TypeArgsParameterName,
+                                StringComparison.Ordinal
+                            )
+                    )
+                    {
+                        ctorFieldInitializers.Add(
+                            new TsExpressionStatement(
+                                new TsBinaryExpression(
+                                    new TsPropertyAccess(new TsIdentifier("this"), field.Name),
+                                    "=",
+                                    fieldInit
+                                )
+                            )
+                        );
+                        field = field with { Initializer = null };
+                    }
 
                     classMembers.AddRange(typeInitializer.LowerField(irField, field));
                     break;
@@ -543,7 +632,20 @@ internal sealed class IrToTsClassEmitter(
 
         foreach (var m in deferredMethods)
         {
-            var members = EmitMethod(type, ir, m, claims, lowering);
+            var baseScope = m.IsStatic ? TsTypeParameterScope.Empty : lowering.TypeParameters;
+            var methodScope =
+                m.ReifiedTypeParameters.Count > 0
+                    ? TsTypeParameterScope.FromBindings(
+                        m.ReifiedTypeParameters.Select(rp => new TsTypeParameterBinding(
+                            rp.Name,
+                            TsTypeParameterScopeKind.Method,
+                            rp.Position,
+                            HiddenParameterName: rp.HiddenParameterName
+                        )),
+                        baseScope
+                    )
+                    : baseScope;
+            var members = EmitMethod(type, ir, m, claims, lowering.WithTypeParameters(methodScope));
             if (members is not null)
                 classMembers.AddRange(members);
         }
@@ -995,9 +1097,18 @@ internal sealed class IrToTsClassEmitter(
 
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
 
-        var sourceTypeParams = irMethod.TypeParameters is { Count: > 0 }
-            ? irMethod.TypeParameters
-            : PromoteClassTypeParamsForStatic(irMethod, owner);
+        var promotedStaticTps = PromoteClassTypeParamsForStatic(irMethod, owner);
+        var sourceTypeParams = (promotedStaticTps, irMethod.TypeParameters) switch
+        {
+            ({ Count: > 0 } p, { Count: > 0 } m) =>
+            [
+                .. p,
+                .. m.Where(mt => p.All(pt => pt.Name != mt.Name)),
+            ],
+            ({ Count: > 0 } p, _) => p,
+            (_, { Count: > 0 } m) => m,
+            _ => null,
+        };
 
         var typeParameters = (sourceTypeParams ?? [])
             .Select(tp => new TsTypeParameter(
@@ -1030,6 +1141,8 @@ internal sealed class IrToTsClassEmitter(
         CollectTypeParamRefs(method.ReturnType, referenced);
         foreach (var p in method.Parameters)
             CollectTypeParamRefs(p.Type, referenced);
+        foreach (var rp in method.ReifiedTypeParameters)
+            referenced.Add(rp.Name);
 
         var promoted = classTps.Where(tp => referenced.Contains(tp.Name)).ToList();
         return promoted.Count > 0 ? promoted : null;
@@ -1268,6 +1381,21 @@ internal sealed class IrToTsClassEmitter(
             : null;
 
         var call = baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);
+
+        if (ir.BaseTypeArguments is { Count: > 0 } baseTypeArgs)
+        {
+            var baseArgsArray = new TsArrayLiteral([
+                .. baseTypeArgs.Select(arg =>
+                    TypeParameterTsResolver.ResolveArgument(
+                        arg,
+                        "base type argument",
+                        lowering.RuntimeTypes,
+                        lowering.TypeParameters
+                    )
+                ),
+            ]);
+            call = call with { Arguments = [.. call.Arguments, baseArgsArray] };
+        }
 
         return ir.BaseType is IrCollectionTypeRef collection
             ? CollectionTypeArgumentSlots.AppendToSuper(call, collection, lowering.RuntimeTypes)

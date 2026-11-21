@@ -382,7 +382,7 @@ internal sealed class RuntimeQuestionScanner
     /// wrote, which .NET checks at runtime; numeric, user-defined, nullable and
     /// identity conversions are not questions.
     /// </summary>
-    private static bool IsCheckedCast(IConversionOperation cast, Compilation compilation)
+    internal static bool IsCheckedCast(IConversionOperation cast, Compilation compilation)
     {
         var conversion = ConversionOf(cast, compilation);
 

@@ -48,6 +48,18 @@ internal sealed record IrToTsBridgeContext(
         Analysis.RuntimeTypeReachabilityResult.Empty;
 
     /// <summary>
+    /// The active reified type-parameter scope for the member/constructor/body
+    /// being lowered (spec 011 W5-5(g)).
+    /// </summary>
+    public TsTypeParameterScope TypeParameters { get; init; } = TsTypeParameterScope.Empty;
+
+    public IrToTsBridgeContext WithTypeParameters(TsTypeParameterScope scope) =>
+        this with
+        {
+            TypeParameters = scope,
+        };
+
+    /// <summary>
     /// Whether the class being emitted overrides <c>Message</c>, so its
     /// <c>base.Message</c> reads lower to the kept base message
     /// (<see cref="IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead"/>).

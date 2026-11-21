@@ -339,7 +339,7 @@ public class CollectionTypeArgumentTests
     }
 
     [Test]
-    public async Task ADictionaryViewBehindACollectionOperand_ReportsMs0001()
+    public async Task AnArrayBehindACollectionOperand_ReportsMs0001_WhileDictionaryViewsAnswer()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Header
@@ -357,7 +357,23 @@ public class CollectionTypeArgumentTests
         var unsupported = diagnostics.Where(d => d.Code == "MS0001").ToList();
 
         await Assert.That(unsupported.Count).IsEqualTo(2);
-        await Assert.That(unsupported[0].Message).Contains("a dictionary view");
+        await Assert.That(unsupported[0].Message).Contains("a native array");
+
+        var (viewFiles, viewDiagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Header
+                + """
+                public static class Probe
+                {
+                    public static bool Keys(Dictionary<string, int>.KeyCollection keys) =>
+                        keys is ICollection<string>;
+                }
+                """
+        );
+
+        await Assert.That(viewDiagnostics.Where(d => d.Code == "MS0001")).IsEmpty();
+        await Assert
+            .That(viewFiles["slots/probe.ts"])
+            .Contains("isType(keys, iCollectionType(StringType))");
     }
 
     [Test]
@@ -405,7 +421,7 @@ public class CollectionTypeArgumentTests
     }
 
     [Test]
-    public async Task ADirectDictionaryView_ReportsMs0001InEveryTestForm()
+    public async Task ADirectDictionaryView_AnswersWithoutMs0001()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Header
@@ -424,11 +440,9 @@ public class CollectionTypeArgumentTests
                 """
         );
 
-        await Assert.That(diagnostics.Count(d => d.Code == "MS0001")).IsEqualTo(7);
+        await Assert.That(diagnostics.Where(d => d.Code == "MS0001")).IsEmpty();
 
-        await Assert
-            .That(files["slots/probe.ts"])
-            .DoesNotContain("iReadOnlyCollectionType(StringType)");
+        await Assert.That(files["slots/probe.ts"]).Contains("iReadOnlyCollectionType(StringType)");
     }
 
     [Test]

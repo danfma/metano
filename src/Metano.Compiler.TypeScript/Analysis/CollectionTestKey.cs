@@ -26,7 +26,9 @@ internal readonly record struct CollectionTestKey
 
     /// <summary>The operand key of a runtime collection kind; open for a kind with no CLR name.</summary>
     public static string OperandOfCollection(IrCollectionKind kind) =>
-        RuntimeCollections.TryClrNameOf(kind) ?? OpenOperand;
+        kind is IrCollectionKind.KeyCollection or IrCollectionKind.ValueCollection
+            ? kind.ToString()
+            : RuntimeCollections.TryClrNameOf(kind) ?? OpenOperand;
 
     /// <summary>The operand key of the collection definition <paramref name="clrName"/>; open when it is not a runtime collection.</summary>
     public static string OperandOfClrName(string clrName) =>

@@ -8,6 +8,7 @@ import { IUnasked$runtimeType } from "#/sample-runtime-types/shapes/i-unasked";
 import { Palette } from "#/sample-runtime-types/shapes/palette";
 import { ShapeFactory } from "#/sample-runtime-types/shapes/shape-factory";
 import { ShapeQuestions } from "#/sample-runtime-types/shapes/shape-questions";
+import { TypedBox } from "#/sample-runtime-types/shapes/typed-box";
 
 describe("runtime type descriptors (US3)", () => {
   test("a value made by a factory answers its own type", () => {
@@ -67,5 +68,15 @@ describe("enum helpers over the descriptor (FR-024)", () => {
 
   test("ToObject keeps an undeclared value", () => {
     expect(Palette.fromRaw(8)).toBe(8);
+  });
+
+  test("US4 reified type parameters and generic class slots", () => {
+    const circle = ShapeFactory.create("circle");
+    expect(ShapeQuestions.isCircleViaGeneric(circle)).toBe(true);
+    expect(ShapeQuestions.isCircleViaGeneric(ShapeFactory.create("square"))).toBe(false);
+
+    const box = new TypedBox<Circle>([Circle.$runtimeType]);
+    expect(box.matches(circle)).toBe(true);
+    expect(box.matches(ShapeFactory.create("square"))).toBe(false);
   });
 });

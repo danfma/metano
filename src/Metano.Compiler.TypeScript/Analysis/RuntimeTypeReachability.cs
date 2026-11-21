@@ -54,6 +54,7 @@ internal sealed partial class RuntimeTypeReachability
     private readonly HashSet<SupertypeKey> _foldedPlainObjects = [];
     private readonly bool _boxingEnabled;
     private readonly IReadOnlyList<INamedTypeSymbol> _boxableValueTypes;
+    private readonly Metano.Compiler.Analysis.ReifiedTypeAnalysisResult _reifiedTypeAnalysis;
     private bool _hasBoxingConversion;
 
     private readonly Dictionary<
@@ -64,11 +65,13 @@ internal sealed partial class RuntimeTypeReachability
     private RuntimeTypeReachability(
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        Action<MetanoDiagnostic> report
+        Action<MetanoDiagnostic> report,
+        Metano.Compiler.Analysis.ReifiedTypeAnalysisResult reifiedTypeAnalysis
     )
     {
         _compilation = compilation;
         _report = report;
+        _reifiedTypeAnalysis = reifiedTypeAnalysis;
         _types = [.. emittedTypes.Select(DescribableType.Of).OfType<DescribableType>()];
 
         _typesByKey = _types
@@ -100,7 +103,12 @@ internal sealed partial class RuntimeTypeReachability
         JsonReachabilityInputs? json = null
     )
     {
-        var analysis = new RuntimeTypeReachability(compilation, emittedTypes, report);
+        var analysis = new RuntimeTypeReachability(
+            compilation,
+            emittedTypes,
+            report,
+            ir.ReifiedTypeAnalysis
+        );
 
         analysis.ReachRoots(ir);
         analysis.ReachJsonRoots(json?.ConstructedClasses ?? []);
@@ -623,7 +631,8 @@ internal sealed partial class RuntimeTypeReachability
                 "an array's element type is erased at runtime",
             { Shape: IrQuestionedTypeShape.Delegate } =>
                 "a delegate type has no runtime descriptor",
-            { Shape: IrQuestionedTypeShape.TypeParameter } =>
+            { Shape: IrQuestionedTypeShape.TypeParameter }
+                when !IsReifiedTypeParameterCast(question) =>
                 "a type parameter that is not reified has no runtime descriptor",
             _ => null,
         };
@@ -640,6 +649,38 @@ internal sealed partial class RuntimeTypeReachability
                 LocationOf(question)
             )
         );
+    }
+
+    private bool IsReifiedTypeParameterCast(IrRuntimeQuestion question)
+    {
+        if (!_reifiedTypeAnalysis.IsEnabled || question.Span is not { } span)
+            return false;
+
+        var tree = _compilation.SyntaxTrees.FirstOrDefault(t =>
+            string.Equals(t.FilePath, span.FilePath, StringComparison.Ordinal)
+        );
+
+        if (tree is null)
+            return false;
+
+        var model = _compilation.GetSemanticModel(tree);
+        var textSpan = new Microsoft.CodeAnalysis.Text.TextSpan(span.Start, span.Length);
+        var node = tree.GetRoot().FindNode(textSpan);
+
+        if (node is not Microsoft.CodeAnalysis.CSharp.Syntax.CastExpressionSyntax cast)
+            return false;
+
+        if (model.GetTypeInfo(cast.Type).Type is not ITypeParameterSymbol tp)
+            return false;
+
+        var enclosingMember = model.GetEnclosingSymbol(cast.SpanStart);
+        var (scope, _, _) = _reifiedTypeAnalysis.ResolveScope(
+            tp,
+            enclosingMember,
+            enclosingMember?.ContainingType
+        );
+
+        return scope != IrTypeParameterScope.None;
     }
 
     private void Reach(DescribableType type)

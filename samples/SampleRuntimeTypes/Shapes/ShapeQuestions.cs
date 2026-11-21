@@ -13,4 +13,14 @@ public static class ShapeQuestions
     public static double AreaOf(object value) => value is IHasArea area ? area.Area : -1;
 
     public static AreaDto ToAreaDto(object value) => (AreaDto)value;
+
+    private static bool Is<T>(object value) => value is T;
+
+    public static bool IsCircleViaGeneric(object value) => Is<Circle>(value);
+}
+
+/// <summary>Generic box for US4 reified class-slot runtime checks.</summary>
+public sealed class TypedBox<T>
+{
+    public bool Matches(object value) => value is T;
 }

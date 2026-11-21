@@ -306,4 +306,168 @@ public class ReifiedTypeParameterTests
 
         await Assert.That(ms0001.Count).IsEqualTo(1);
     }
+
+    [Test]
+    public async Task ReifiedClass_Golden()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace App;
+
+            [Transpile]
+            public class Box<T>
+            {
+                private readonly Type _initType = typeof(T);
+                public Type CtorType { get; }
+
+                public Box()
+                {
+                    CtorType = typeof(T);
+                }
+
+                public bool Matches(object o) => o is T;
+
+                public Type InitType => _initType;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Runner
+            {
+                public static bool Check(object o)
+                {
+                    var box = new Box<int>();
+                    return box.Matches(o) && box.CtorType == box.InitType;
+                }
+            }
+            """
+        );
+
+        var combined = string.Join("\n// ---\n", files["app/box.ts"], files["app/runner.ts"]);
+        await TranspileHelper.AssertGolden("reified-class.ts", combined);
+    }
+
+    [Test]
+    public async Task ReifiedDerivedClass_Golden()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            namespace App;
+
+            [Transpile]
+            public class Box<T>
+            {
+                public bool Matches(object o) => o is T;
+            }
+
+            [Transpile]
+            public class IntBox : Box<int>
+            {
+            }
+
+            [Transpile]
+            public class Pair<U, V> : Box<List<U>>
+            {
+                public bool MatchesSecond(object o) => o is V;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Runner
+            {
+                public static bool Check(object a, object b)
+                {
+                    var intBox = new IntBox();
+                    var pair = new Pair<string, int>();
+                    return intBox.Matches(a) && pair.Matches(b) && pair.MatchesSecond(a);
+                }
+            }
+            """
+        );
+
+        var combined = string.Join(
+            "\n// ---\n",
+            files["app/box.ts"],
+            files["app/int-box.ts"],
+            files["app/pair.ts"],
+            files["app/runner.ts"]
+        );
+        await TranspileHelper.AssertGolden("reified-derived-class.ts", combined);
+    }
+
+    [Test]
+    public async Task ReifiedStatics_Golden()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace App;
+
+            [Transpile]
+            public class Box<T>
+            {
+                public static bool Is(object o) => o is T;
+
+                public static bool IsBoth<U>(object a, object b) => a is T && b is U;
+
+                public static string TypeName() => typeof(T).Name;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Runner
+            {
+                public static string Check(object a, object b)
+                {
+                    return Box<int>.Is(a)
+                        + ":"
+                        + Box<int>.IsBoth<string>(a, b)
+                        + ":"
+                        + Box<string>.TypeName();
+                }
+            }
+            """
+        );
+
+        var combined = string.Join("\n// ---\n", files["app/box.ts"], files["app/runner.ts"]);
+        await TranspileHelper.AssertGolden("reified-statics.ts", combined);
+    }
+
+    [Test]
+    public async Task OpaqueType_InCollectionSlot_ComparesByIdentityAndNeverInstanceTests()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+            using Metano.Annotations;
+
+            namespace App;
+
+            public class NonTranspiledA { }
+
+            public class NonTranspiledB { }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static bool Check(object o)
+                {
+                    object list = new List<NonTranspiledA>();
+                    return list is List<NonTranspiledA> && !(o is List<NonTranspiledB>);
+                }
+            }
+            """
+        );
+
+        var ts = files["app/probes.ts"];
+        await Assert.That(ts).Contains("opaqueType(\"App.NonTranspiledA\")");
+        await Assert.That(ts).Contains("opaqueType(\"App.NonTranspiledB\")");
+        await Assert.That(ts).DoesNotContain("UnknownType");
+    }
 }

@@ -14,3 +14,4 @@ export { ShapeFactory } from "./shape-factory";
 export { ShapeQuestions } from "./shape-questions";
 export { Shape } from "./shape";
 export { Square } from "./square";
+export { TypedBox } from "./typed-box";
