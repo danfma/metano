@@ -25,4 +25,5 @@ export * from "./sorted-dictionary.ts";
 export * from "./sorted-list.ts";
 export * from "./sorted-set.ts";
 export * from "./stack.ts";
+export * from "./string-comparer.ts";
 export { throwModified } from "./throw-helpers.ts";

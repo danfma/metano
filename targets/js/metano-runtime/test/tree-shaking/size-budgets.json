@@ -284,6 +284,7 @@
     "system/collections/sorted-list",
     "system/collections/sorted-set",
     "system/collections/stack",
+    "system/collections/string-comparer",
     "system/collections/throw-helpers",
     "system/date-time-offset",
     "system/decimal-parsing",

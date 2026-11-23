@@ -63,6 +63,20 @@ public class ArrayRuntimeHelperLoweringTests
         await Assert.That(files["calls.ts"]).Contains($"return {expected};");
     }
 
+    [Test]
+    [Arguments("StringComparer.Ordinal", "StringComparer.ordinal")]
+    [Arguments("StringComparer.OrdinalIgnoreCase", "StringComparer.ordinalIgnoreCase")]
+    public async Task StringComparer_LowersToTheRuntimeSingleton(string call, string expected)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Returning("", $"new HashSet<string>({call})")
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["calls.ts"]).Contains(expected);
+        await Assert.That(files["calls.ts"]).Contains("StringComparer");
+    }
+
     private static string Returning(string parameters, string expression) =>
         Host
         + $$"""
