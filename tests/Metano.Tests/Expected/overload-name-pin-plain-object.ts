@@ -6,6 +6,10 @@ export function getNum(self: Reading, x: number): number {
   return x;
 }
 
+export function getStr(self: Reading, s: string): number {
+  return s.length;
+}
+
 import { getNum, type Reading } from "./reading";
 
 export class Use {

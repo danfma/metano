@@ -12,26 +12,18 @@ export class Ledger {
   constructor(name: string);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Ledger.byLedgerSeed) {
-      const seed = args[1] as number;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Ledger.byLedgerName) {
-      const name = args[1] as string;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const seed = args[0] as number;
-
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
-      const name = args[0] as string;
-
       return;
     }
 

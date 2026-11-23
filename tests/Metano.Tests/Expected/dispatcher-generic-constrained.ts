@@ -10,26 +10,18 @@ export class RefBox<T> {
   constructor(x: T);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === RefBox.byRefBoxT) {
-      const x = args[1] as T;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === RefBox.byRefBoxInt32) {
-      const x = args[1] as number;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const x = args[0] as number;
-
       return;
     }
 
     if (args.length === 1 && (typeof args[0] === "object" || typeof args[0] === "function" || typeof args[0] === "string")) {
-      const x = args[0] as T;
-
       return;
     }
 
@@ -58,26 +50,18 @@ export class ShapeBox<T extends IShape> {
   constructor(x: T);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === ShapeBox.byShapeBoxT) {
-      const x = args[1] as T;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === ShapeBox.byShapeBoxInt32) {
-      const x = args[1] as number;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const x = args[0] as number;
-
       return;
     }
 
     if (args.length === 1 && isType(args[0], IShape$runtimeType)) {
-      const x = args[0] as T;
-
       return;
     }
 
@@ -106,26 +90,18 @@ export class AnimalBox<T extends Animal> {
   constructor(x: T);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === AnimalBox.byAnimalBoxT) {
-      const x = args[1] as T;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === AnimalBox.byAnimalBoxInt32) {
-      const x = args[1] as number;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const x = args[0] as number;
-
       return;
     }
 
     if (args.length === 1 && args[0] instanceof Animal) {
-      const x = args[0] as T;
-
       return;
     }
 
@@ -153,28 +129,18 @@ export class ValBox<T> {
   constructor(x: T);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === ValBox.byValBoxX) {
-      const x = args[1] as T;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === ValBox.byValBoxXN) {
-      const x = args[1] as T;
-      const n = args[2] as number;
-
       return;
     }
 
     if (args.length === 2 && isInt32(args[1])) {
-      const x = args[0] as T;
-      const n = args[1] as number;
-
       return;
     }
 
     if (args.length === 1) {
-      const x = args[0] as T;
-
       return;
     }
 

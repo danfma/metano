@@ -29,12 +29,18 @@ internal static partial class MethodOverloadGroups
         var target = policy.Target;
 
         var interfaceRoots = InterfaceRootsOf(type, method, target);
+        var overrideRoot = method.IsOverride ? DispatchedOverrideRootOf(method, policy) : null;
 
         // A root of an interface the type implements more than once keeps
         // runtime dispatch under its name (DECIDED-30): every implementation
-        // anchors on it, an override of a base's included.
+        // anchors on it, an override of a base's included — unless the base
+        // dispatches the overridden method outside that root (#594).
         var constructedRoot = interfaceRoots.FirstOrDefault(root =>
             MultiplyConstructedInterfaces.AreMultiplyConstructed(type, root.ContainingType)
+            && !(
+                overrideRoot is not null
+                && OverridesOutsideConstructedRoot(type, overrideRoot, root, policy)
+            )
         );
 
         if (constructedRoot is not null)
@@ -42,8 +48,12 @@ internal static partial class MethodOverloadGroups
 
         // An override reuses its root's names; the base it overrides already
         // declares the forwarding members of any further interface roots.
-        if (method.IsOverride && DispatchedOverrideRootOf(method, policy) is { } root)
-            return new MemberAnchor(new DeclaredRoot(root), IrOverloadAnchorKind.Override, []);
+        if (overrideRoot is not null)
+            return new MemberAnchor(
+                new DeclaredRoot(overrideRoot),
+                IrOverloadAnchorKind.Override,
+                []
+            );
 
         if (interfaceRoots.Count == 0)
             return null;
@@ -66,6 +76,39 @@ internal static partial class MethodOverloadGroups
                 .ToList()
         );
     }
+
+    /// <summary>
+    /// Whether an override whose dispatched base root is
+    /// <paramref name="overrideRoot"/> overrides it outside the runtime
+    /// dispatcher of <paramref name="root"/>, which <paramref name="type"/>
+    /// implements more than once (#594): the base root is not anchored on
+    /// <paramref name="root"/>, so its fast path has a name of its own, which
+    /// the override overrides and the type's root dispatcher forwards to
+    /// (<see cref="IrConstructedRoot.Forwards"/>). A base root anchored on
+    /// <paramref name="root"/> shares the root's name: the override stays a
+    /// branch of the type's root dispatcher.
+    /// </summary>
+    private static bool OverridesOutsideConstructedRoot(
+        INamedTypeSymbol type,
+        IMethodSymbol overrideRoot,
+        IMethodSymbol root,
+        OverloadGroupingPolicy policy
+    ) =>
+        MultiplyConstructedInterfaces.AreMultiplyConstructed(type, root.ContainingType)
+        && !IsAnchoredOn(overrideRoot, root, policy);
+
+    /// <summary>Whether <paramref name="declaration"/> is anchored on the interface member <paramref name="root"/>.</summary>
+    private static bool IsAnchoredOn(
+        IMethodSymbol declaration,
+        IMethodSymbol root,
+        OverloadGroupingPolicy policy
+    ) =>
+        GroupOf(declaration, policy)?.MemberOf(declaration)?.Anchor?.Root
+            is DeclaredRoot { Method: var anchor }
+        && SymbolEqualityComparer.Default.Equals(
+            anchor.OriginalDefinition,
+            root.OriginalDefinition
+        );
 
     /// <summary>
     /// Whether an emitted base class already implements

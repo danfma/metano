@@ -74,12 +74,74 @@ public static class IrToTsOverloadDispatcherBridge
         IrClassDeclaration? owner = null
     )
     {
-        var group = IrMethodGroup.Of(primary);
+        var group = IrMethodGroup.Of(LiftClassTypeParameters(primary, classTypeParameters));
 
         if (!group.IsDispatched)
             return [];
 
-        var isStatic = primary.IsStatic;
+        if (StaticAndInstanceSidesOf(group) is { } sides)
+            return
+            [
+                .. sides.SelectMany(side =>
+                    BuildSide(side, containingTypeName, classTypeParameters, names, context, owner)
+                ),
+            ];
+
+        return BuildGroup(group, containingTypeName, classTypeParameters, names, context, owner);
+    }
+
+    /// <summary>
+    /// One side of a group that mixes static and instance overloads: a group
+    /// of its own, whose lone overload, when it has one, is also reachable
+    /// under the C# name through a forwarding member in place of a
+    /// dispatcher.
+    /// </summary>
+    private static List<TsClassMember> BuildSide(
+        IrMethodGroup side,
+        string containingTypeName,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context,
+        IrClassDeclaration? owner
+    )
+    {
+        var members = BuildGroup(
+            side,
+            containingTypeName,
+            classTypeParameters,
+            names,
+            context,
+            owner
+        );
+
+        if (side.Members is [var lone])
+            members.Add(
+                BuildForwardingMember(
+                    lone,
+                    TsClassMemberTable.MethodNameOf(lone),
+                    names.FastPathNameOf(lone),
+                    overridesInherited: false,
+                    context
+                )
+            );
+
+        return members;
+    }
+
+    /// <summary>
+    /// The fast paths, forwarders and dispatchers of one group whose overloads
+    /// all sit on the same side (static or instance).
+    /// </summary>
+    private static List<TsClassMember> BuildGroup(
+        IrMethodGroup group,
+        string containingTypeName,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context,
+        IrClassDeclaration? owner
+    )
+    {
+        var isStatic = group.Primary.IsStatic;
         var members = new List<TsClassMember>();
 
         foreach (var overload in OverloadDispatchOrder.Sort(group.Members, m => m.Parameters))
@@ -140,6 +202,98 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     /// <summary>
+    /// A static group of a generic class with every overload re-declaring the
+    /// class type parameters it names, as a single static method does
+    /// (<see cref="IrToTsClassEmitter.PromoteClassTypeParamsForStatic"/>):
+    /// TypeScript forbids a static member to name the class's own (TS2302,
+    /// #449). An instance overload is unchanged.
+    /// </summary>
+    private static IrMethodDeclaration LiftClassTypeParameters(
+        IrMethodDeclaration primary,
+        IReadOnlyList<IrTypeParameter> classTypeParameters
+    )
+    {
+        if (classTypeParameters.Count == 0)
+            return primary;
+
+        return LiftedOverload(primary, classTypeParameters) with
+        {
+            Overloads = primary
+                .Overloads?.Select(overload => LiftedOverload(overload, classTypeParameters))
+                .ToList(),
+        };
+    }
+
+    private static IrMethodDeclaration LiftedOverload(
+        IrMethodDeclaration overload,
+        IReadOnlyList<IrTypeParameter> classTypeParameters
+    )
+    {
+        if (
+            IrToTsClassEmitter.PromoteClassTypeParamsForStatic(overload, classTypeParameters)
+            is not { } promoted
+        )
+            return overload;
+
+        var own = (overload.TypeParameters ?? []).Where(typeParameter =>
+            promoted.All(classTypeParameter => classTypeParameter.Name != typeParameter.Name)
+        );
+
+        return overload with
+        {
+            TypeParameters = [.. promoted, .. own],
+        };
+    }
+
+    /// <summary>
+    /// The static and the instance overloads of a declared group that mixes
+    /// both (C# groups <c>Add(int)</c> with <c>static Add(string)</c>), each
+    /// lowered as a group of its own: an instance dispatcher cannot reach a
+    /// static fast path through <c>this</c>, nor the reverse (#566). A side
+    /// with one overload forwards to its fast path instead. <c>null</c>
+    /// when the group keeps to one side.
+    /// </summary>
+    private static IReadOnlyList<IrMethodGroup>? StaticAndInstanceSidesOf(IrMethodGroup group)
+    {
+        if (group.DispatcherKind is not IrDispatcherKind.Declared)
+            return null;
+
+        var sides = group.Members.GroupBy(member => member.IsStatic).ToList();
+
+        if (sides.Count < 2)
+            return null;
+
+        return sides
+            .Select(side => IrMethodGroup.Of(side.First() with { Overloads = [.. side.Skip(1)] }))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The forwarding members a class declares for the names its interfaces
+    /// require of it, which its own and inherited members do not declare
+    /// (<see cref="TsOverloadClaims.InterfaceForwarders"/>, #565, #595), and
+    /// the dispatchers of the constructed roots it implements only through
+    /// methods outside them (<see cref="TsOverloadClaims.ForwardingRoots"/>,
+    /// #594).
+    /// </summary>
+    internal static IEnumerable<TsMethodMember> BuildInterfaceForwarders(
+        IrClassDeclaration owner,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context
+    ) =>
+        names
+            .InterfaceForwarders.Select(forwarder =>
+                BuildForwardingMember(
+                    forwarder.Signature,
+                    forwarder.Name,
+                    forwarder.Target,
+                    overridesInherited: false,
+                    context
+                )
+            )
+            .Concat(ForwardingRootDispatchers(owner, names, context));
+
+    /// <summary>
     /// A synthesized value-equality member whose body the target supplies
     /// (spec 013 FR-038): no user declaration was folded into it and it routes
     /// to none.
@@ -186,6 +340,27 @@ public static class IrToTsOverloadDispatcherBridge
                     context
                 )
             );
+
+    /// <summary>
+    /// The runtime dispatchers of the constructed roots no method of the class
+    /// is anchored on, whose constructions it implements only through
+    /// inherited methods or overrides of base methods (#594): each forwards
+    /// every construction to its implementation.
+    /// </summary>
+    private static IEnumerable<TsMethodMember> ForwardingRootDispatchers(
+        IrClassDeclaration owner,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context
+    ) =>
+        names.ForwardingRoots.Select(root =>
+            IrToTsConstructedRootDispatcherBridge.Build(
+                root.Name,
+                root.Root,
+                implementations: [],
+                owner.TypeParameters ?? [],
+                context
+            )
+        );
 
     /// <summary>
     /// The group's dispatcher as <see cref="IrMethodGroup.DispatcherKind"/>
@@ -590,6 +765,7 @@ public static class IrToTsOverloadDispatcherBridge
             parameters,
             IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
             [new TsReturnStatement(call)],
+            Static: method.IsStatic,
             TypeParameters: MapTypeParameters(method.TypeParameters),
             Override: overridesInherited
         );
@@ -682,9 +858,10 @@ public static class IrToTsOverloadDispatcherBridge
 
     /// <summary>
     /// The parameters of a fast path, carrying the C# defaults the dispatcher
-    /// leaves to it when a call omits an argument.
+    /// leaves to it when a call omits an argument; also the parameters of a
+    /// branded companion's lone static function (#449).
     /// </summary>
-    private static List<TsParameter> FastPathParameters(
+    internal static List<TsParameter> FastPathParameters(
         IrMethodDeclaration method,
         IrToTsBridgeContext context
     ) =>
@@ -736,35 +913,39 @@ public static class IrToTsOverloadDispatcherBridge
         var body = new List<TsStatement>();
 
         for (var i = 0; i < sorted.Count; i++)
-        {
-            var method = sorted[i];
-            var arguments = new OverloadArgumentShape(
-                method.Parameters,
-                method.ReifiedTypeParameters
-            );
-
-            var scope = classScope.Within(method);
-
-            var delegateCall = new TsCallExpression(
-                FastPathCallee(receiver, fastPathNames[i]),
-                DelegatedArguments(
-                    method.Parameters,
-                    method.TypeParameters,
-                    arguments,
-                    classScope.TypeOverrides,
-                    method.ReifiedTypeParameters
-                )
-            );
-
-            body.Add(
-                new TsIfStatement(
-                    arguments.Guard(scope),
-                    BuildBranchStatements(method, delegateCall)
-                )
-            );
-        }
+            body.Add(BuildDelegatingBranch(sorted[i], fastPathNames[i], receiver, classScope));
 
         return body;
+    }
+
+    /// <summary>
+    /// The branch that tests the arguments against <paramref name="method"/>'s
+    /// parameters and delegates to <paramref name="fastPathName"/>.
+    /// </summary>
+    internal static TsIfStatement BuildDelegatingBranch(
+        IrMethodDeclaration method,
+        string fastPathName,
+        TsExpression? receiver,
+        TypeCheckScope classScope
+    )
+    {
+        var arguments = new OverloadArgumentShape(method.Parameters, method.ReifiedTypeParameters);
+
+        var delegateCall = new TsCallExpression(
+            FastPathCallee(receiver, fastPathName),
+            DelegatedArguments(
+                method.Parameters,
+                method.TypeParameters,
+                arguments,
+                classScope.TypeOverrides,
+                method.ReifiedTypeParameters
+            )
+        );
+
+        return new TsIfStatement(
+            arguments.Guard(classScope.Within(method)),
+            BuildBranchStatements(method, delegateCall)
+        );
     }
 
     /// <summary>
