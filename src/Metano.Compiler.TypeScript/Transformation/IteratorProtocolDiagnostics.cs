@@ -40,4 +40,49 @@ internal static class IteratorProtocolDiagnostics
             )
         );
     }
+
+    /// <summary>
+    /// Reports MS0001 when <paramref name="type"/> inherits <c>IEnumerator</c> from a
+    /// base class, whose emitted <c>next()</c> is the JavaScript iterator step, and
+    /// declares its own member emitted as <c>next</c>, which overrides that step: the
+    /// type no longer follows the iterator protocol, and its <c>next</c> need not
+    /// match the inherited signature (#350).
+    /// </summary>
+    public static void ReportNextOverridingInheritedStep(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        if (ir.Semantics.Enumerator is not null || !IrToTsIterationProtocolBridge.DeclaresNext(ir))
+            return;
+
+        if (EnumeratorBaseOf(type) is not { } enumeratorBase)
+            return;
+
+        report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{type.Name}' inherits IEnumerator from '{enumeratorBase.Name}' but declares "
+                    + "its own 'next', which overrides the inherited JavaScript iterator step: "
+                    + "it cannot be consumed as an Iterator.",
+                type.Locations.FirstOrDefault()
+            )
+        );
+    }
+
+    private static INamedTypeSymbol? EnumeratorBaseOf(INamedTypeSymbol type)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.AllInterfaces.Any(IsEnumeratorContract))
+                return current;
+        }
+
+        return null;
+    }
+
+    private static bool IsEnumeratorContract(INamedTypeSymbol contract) =>
+        contract.SpecialType is SpecialType.System_Collections_IEnumerator;
 }

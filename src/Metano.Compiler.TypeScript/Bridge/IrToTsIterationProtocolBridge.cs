@@ -131,7 +131,11 @@ public static class IrToTsIterationProtocolBridge
             IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes)
         );
 
-    private static bool DeclaresNext(IrClassDeclaration ir) =>
+    /// <summary>
+    /// <paramref name="ir"/> declares a member emitted as <c>next</c>, the name the
+    /// JavaScript iterator protocol reserves.
+    /// </summary>
+    public static bool DeclaresNext(IrClassDeclaration ir) =>
         ir.Members?.Any(member => EmittedName(member) == NextMethodName) == true;
 
     private static string EmittedName(IrMemberDeclaration member) =>

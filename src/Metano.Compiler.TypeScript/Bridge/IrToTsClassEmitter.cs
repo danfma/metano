@@ -713,6 +713,12 @@ internal sealed class IrToTsClassEmitter(
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
 
         IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, _context.ReportDiagnostic);
+
+        IteratorProtocolDiagnostics.ReportNextOverridingInheritedStep(
+            type,
+            ir,
+            _context.ReportDiagnostic
+        );
     }
 
     /// <summary>
