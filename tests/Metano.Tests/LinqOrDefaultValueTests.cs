@@ -200,8 +200,9 @@ public class LinqOrDefaultValueTests
 
     /// <summary>
     /// An element whose <c>default(T)</c> no literal spells (a user struct, a
-    /// tuple, a <c>struct</c>-constrained type parameter, a
-    /// <c>[StringEnum]</c> without a zero member) keeps the <c>null</c> miss,
+    /// <c>struct</c>-constrained type parameter, a <c>[StringEnum]</c> without
+    /// a zero member) keeps the <c>null</c> miss; a tuple's miss is the tuple
+    /// of its element defaults (#403),
     /// and each call reports <c>MS0001</c> as a warning, on the call. The
     /// <c>defaultValue</c> overloads are the way to choose the value, and a
     /// <c>default</c> written as that value reports the unresolved literal too.
@@ -259,11 +260,6 @@ public class LinqOrDefaultValueTests
                 Unrepresentable(
                     "xs.LastOrDefault(p => p.X > 1, default!)",
                     "Point",
-                    "LastOrDefault"
-                ),
-                Unrepresentable(
-                    "xs.LastOrDefault(x => x.A > 1)",
-                    "(int A, int B)",
                     "LastOrDefault"
                 ),
                 Unrepresentable("xs.SingleOrDefault()", "T", "SingleOrDefault"),

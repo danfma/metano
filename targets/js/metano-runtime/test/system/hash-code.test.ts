@@ -117,4 +117,16 @@ describe("bigint hashing", () => {
     // 5 and -1 keep .NET's distinct word hashes.
     expect(hashCode(-1n)).not.toBe(hashCode(5n));
   });
+
+  test("HashCode.add hashes a tuple by its elements, not to a constant", () => {
+    const first = new HashCode();
+    first.add([1, 2]);
+    const second = new HashCode();
+    second.add([3, 4]);
+    const same = new HashCode();
+    same.add([1, 2]);
+
+    expect(first.toHashCode()).not.toBe(second.toHashCode());
+    expect(first.toHashCode()).toBe(same.toHashCode());
+  });
 });

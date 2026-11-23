@@ -23,7 +23,7 @@ export class Zeroed {
   }
 
   pair(xs: List<[number, number]>): [number, number] | null {
-    return linq(xs, lastOrDefault((x: [number, number]) => x[0] > 1));
+    return linq(xs, lastOrDefault((x: [number, number]) => x[0] > 1, [0, 0] as [number, number]));
   }
 
   slot<T>(xs: List<T>): T | null {
