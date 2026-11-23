@@ -831,9 +831,10 @@ public static class IrToTsOverloadDispatcherBridge
 
     /// <summary>
     /// The parameters of a fast path, carrying the C# defaults the dispatcher
-    /// leaves to it when a call omits an argument.
+    /// leaves to it when a call omits an argument; also the parameters of a
+    /// branded companion's lone static function (#449).
     /// </summary>
-    private static List<TsParameter> FastPathParameters(
+    internal static List<TsParameter> FastPathParameters(
         IrMethodDeclaration method,
         IrToTsBridgeContext context
     ) =>

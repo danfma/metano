@@ -329,4 +329,23 @@ public class OverloadDispatcherFixTests
         await Assert.That(result["opt.ts"]).Contains("this.q(0, 2)");
         await Assert.That(result["opt.ts"]).Contains("this.r(null, 3)");
     }
+
+    [Test]
+    public async Task BrandedStaticMethod_KeepsItsDefaultValues()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct UserId(int Value)
+            {
+                public static UserId Make(int v = 3) => new UserId(v);
+            }
+            """
+        );
+
+        await Assert.That(result["user-id.ts"]).Contains("function UserId$make(v: number = 3)");
+    }
 }
