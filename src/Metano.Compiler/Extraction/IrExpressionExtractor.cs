@@ -92,12 +92,13 @@ public sealed partial class IrExpressionExtractor
     private readonly IReadOnlyDictionary<ISymbol, IrExpression>? _inlineParameterSubs;
 
     /// <summary>
-    /// Counter for the synthesized <see cref="Metano.Compiler.IR.IrLetExpression"/>
+    /// The allocator of the synthesized <see cref="Metano.Compiler.IR.IrLetExpression"/>
     /// temporaries of one body (<c>receiver$temp$N</c>, <c>tuple$temp$N</c>).
     /// Every kind draws from it, so each nested binding gets a unique suffix
-    /// and an inner one cannot shadow an outer one.
+    /// and an inner one cannot shadow an outer one; an extractor that lowers
+    /// part of the same body (a PlainObject chain hop) shares it.
     /// </summary>
-    private int _temporaryCounter;
+    private readonly TemporaryNames _temporaries;
 
     /// <summary>
     /// Counter for the synthesized <c>$subjectN</c> locals that capture an
@@ -117,13 +118,13 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private ExpressionSyntax? _conditionalReceiverSyntax;
 
-    private string NextReceiverTempName() => $"receiver$temp${_temporaryCounter++}";
+    private string NextReceiverTempName() => _temporaries.Next("receiver$temp$");
 
     /// <summary>A fresh temporary holding one operand value of a tuple comparison.</summary>
-    private string NextTupleOperandTempName() => $"tuple$temp${_temporaryCounter++}";
+    private string NextTupleOperandTempName() => _temporaries.Next("tuple$temp$");
 
     /// <summary>A fresh name for the element a converted spread maps over.</summary>
-    private string NextSpreadElementName() => $"element$temp${_temporaryCounter++}";
+    private string NextSpreadElementName() => _temporaries.Next("element$temp$");
 
     public IrExpressionExtractor(SemanticModel semanticModel, IrExtractionContext context)
         : this(semanticModel, context, localNames: null) { }
@@ -133,7 +134,8 @@ public sealed partial class IrExpressionExtractor
         IrExtractionContext context,
         LocalBindingNames? localNames,
         HashSet<ISymbol>? inlineExpanding = null,
-        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs = null
+        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs = null,
+        TemporaryNames? temporaries = null
     )
     {
         _semantic = semanticModel;
@@ -144,6 +146,7 @@ public sealed partial class IrExpressionExtractor
         _localNames = localNames;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         _inlineParameterSubs = inlineParameterSubs;
+        _temporaries = temporaries ?? new TemporaryNames();
 
         // Invocation rewriter chain (#221 — invocation rewriter
         // extraction). Order is load-bearing — see each rewriter's
@@ -5514,6 +5517,17 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        var sourceArgs = args;
+
+        var chain =
+            isPlainObject && ctor is not null ? TryResolvePlainObjectChain(ctor, args) : null;
+
+        if (chain is not null)
+        {
+            args = chain.Arguments;
+            parameterNames = chain.Target.Parameters.Select(p => p.Name).ToList();
+        }
+
         var initializer = InitializerOf(creationSyntax);
 
         if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
@@ -5549,11 +5563,15 @@ public sealed partial class IrExpressionExtractor
         )
         {
             EvaluationOrder = overload is null
-                ? ReportedConstructionOrderOf(creationSyntax, args, exception)
+                ? ChainedOrNot(
+                    chain,
+                    ReportedConstructionOrderOf(creationSyntax, sourceArgs, exception)
+                )
                 : null,
         };
 
-        var constructed = BindExceptionArguments(creation);
+        var constructed = chain?.Bind(BindExceptionArguments(creation))
+            ?? BindExceptionArguments(creation);
 
         return keepsInitializer
             ? constructed

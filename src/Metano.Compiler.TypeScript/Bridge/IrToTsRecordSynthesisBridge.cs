@@ -148,8 +148,11 @@ public static class IrToTsRecordSynthesisBridge
         PerClassBackingFieldScope? storage = null
     )
     {
-        // Value equality reads the storage directly: a lazy struct's accessors run its
-        // static constructor, which `ValueType.Equals` / `GetHashCode` do not.
+        // Value equality reads the storage directly, as C# compares each declaring
+        // class's own backing field (#384): an overridden auto-property keeps one
+        // field per class, which the most derived accessor alone would hide, and a
+        // lazy struct's accessors run its static constructor, which
+        // `ValueType.Equals` / `GetHashCode` do not.
         var fields = (ir.EqualityMembers ?? [])
             .Select(member => ToRecordField(member, storage?.FieldOf(member.Name)))
             .ToList();

@@ -468,6 +468,7 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintTypeAlias(TsTypeAlias alias)
     {
+        PrintJSDoc(alias.JSDoc);
         if (alias.Exported)
             _sb.Write("export ");
         _sb.Write("type ");
@@ -490,10 +491,12 @@ public sealed class Printer(string indent = "  ")
             _sb.Write(" extends ");
             _sb.WriteList(extends, PrintType);
         }
+
         _sb.WriteBlock(() =>
         {
             foreach (var prop in iface.Properties)
             {
+                PrintJSDoc(prop.JSDoc);
                 PrintAccessibility(prop.Accessibility);
                 if (prop.Readonly)
                     _sb.Write("readonly ");

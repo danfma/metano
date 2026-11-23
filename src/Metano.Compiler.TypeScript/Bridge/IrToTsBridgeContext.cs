@@ -53,10 +53,29 @@ internal sealed record IrToTsBridgeContext(
     /// </summary>
     public TsTypeParameterScope TypeParameters { get; init; } = TsTypeParameterScope.Empty;
 
+    /// <summary>
+    /// The identifier <c>this</c> lowers to: <c>this</c> itself, or the
+    /// explicit receiver parameter of a free function that stands for an
+    /// instance member (the <c>self</c> of a <c>[PlainObject]</c> helper), so
+    /// every <c>this</c> of the body — in any statement or expression — names
+    /// the receiver (#652).
+    /// </summary>
+    public string ThisReceiver { get; private init; } = "this";
+
     public IrToTsBridgeContext WithTypeParameters(TsTypeParameterScope scope) =>
         this with
         {
             TypeParameters = scope,
+        };
+
+    /// <summary>
+    /// The context of a free function whose instance receiver is the
+    /// parameter <paramref name="receiver"/> (see <see cref="ThisReceiver"/>).
+    /// </summary>
+    public IrToTsBridgeContext WithThisReceiver(string receiver) =>
+        this with
+        {
+            ThisReceiver = receiver,
         };
 
     /// <summary>

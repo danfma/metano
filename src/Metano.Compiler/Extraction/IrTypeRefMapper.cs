@@ -303,9 +303,12 @@ public static class IrTypeRefMapper
             var origin = originResolver.ResolveThroughOutermost(named);
             var semantics = BuildNamedTypeSemantics(named, target);
 
+            var containerArguments = ContainerTypeArgumentsOf(named, originResolver, target);
+
             if (named.TypeArguments.Length > 0)
             {
                 var args = named.TypeArguments.Select(a => Map(a, originResolver, target)).ToList();
+
                 return new IrNamedTypeRef(
                     BuildQualifiedName(named, target),
                     GetNamespace(named),
@@ -313,7 +316,10 @@ public static class IrTypeRefMapper
                     origin,
                     semantics,
                     PrivateNestedSegmentCount(named)
-                );
+                )
+                {
+                    ContainerTypeArguments = containerArguments,
+                };
             }
 
             return new IrNamedTypeRef(
@@ -322,7 +328,10 @@ public static class IrTypeRefMapper
                 Origin: origin,
                 Semantics: semantics,
                 PrivateNestedSegments: PrivateNestedSegmentCount(named)
-            );
+            )
+            {
+                ContainerTypeArguments = containerArguments,
+            };
         }
 
         // Type parameters (T, K, V)
@@ -972,8 +981,13 @@ public static class IrTypeRefMapper
             return true;
         if (SymbolHelper.HasIgnore(named, target))
             return false;
-        if (named.DeclaredAccessibility != Accessibility.Public)
+
+        if (
+            named.DeclaredAccessibility != Accessibility.Public
+            && !IsNestedInTranspilableContainer(named, target)
+        )
             return false;
+
         var asm = named.ContainingAssembly;
         if (asm is null)
             return false;
@@ -982,6 +996,38 @@ public static class IrTypeRefMapper
                 a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
             );
     }
+
+    /// <summary>
+    /// The type arguments of the generic containers of <paramref name="named"/>
+    /// (<see cref="IrNamedTypeRef.ContainerTypeArguments"/>), or <c>null</c>.
+    /// </summary>
+    private static IReadOnlyList<IrTypeRef>? ContainerTypeArgumentsOf(
+        INamedTypeSymbol named,
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var arguments = GenericContainers.TypeArgumentsOf(named);
+
+        return arguments.Count > 0
+            ? arguments.Select(argument => Map(argument, originResolver, target)).ToList()
+            : null;
+    }
+
+    /// <summary>
+    /// A named, source-declared nested type of any accessibility whose container is
+    /// itself transpilable: part of the container's emitted surface, as the
+    /// <c>[assembly: TranspileAssembly]</c> inclusion rule has it (#264), so a
+    /// reference to it — a base class among them — is kept (#422).
+    /// </summary>
+    private static bool IsNestedInTranspilableContainer(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        named.ContainingType is { } container
+        && !string.IsNullOrEmpty(named.Name)
+        && !named.IsImplicitlyDeclared
+        && IsTranspilableType(container, target);
 
     private static IrFunctionTypeRef MapDelegateType(
         INamedTypeSymbol delegateType,

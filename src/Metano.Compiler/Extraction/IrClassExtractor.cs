@@ -142,6 +142,11 @@ public static class IrClassExtractor
             TypeArgumentSlot = context.ReifiedTypeAnalysis.TypeArgumentSlotOf(type),
             BaseTypeArguments = baseTypeArguments,
             HasParameterlessCtor = context.ReifiedTypeAnalysis.HasParameterlessCtor(type),
+            ContainerTypeParameters = IrTypeParameterExtractor.ExtractAll(
+                GenericContainers.TypeParametersOf(type),
+                originResolver,
+                target
+            ),
         };
     }
 

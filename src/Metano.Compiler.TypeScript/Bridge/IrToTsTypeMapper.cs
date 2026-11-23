@@ -211,12 +211,22 @@ public static class IrToTsTypeMapper
             ? BuildTsOrigin(o, originalName ?? name)
             : null;
 
-        IReadOnlyList<TsType>? args = named.TypeArguments is { Count: > 0 } ta
+        IReadOnlyList<TsType>? args = AllTypeArgumentsOf(named) is { Count: > 0 } ta
             ? ta.Select(t => Map(t, overrides)).ToList()
             : null;
 
         return new TsNamedType(name, args, origin, originalName);
     }
+
+    /// <summary>
+    /// The type arguments a reference to <paramref name="named"/> passes: those of
+    /// its generic containers, which its declaration binds as its own leading type
+    /// parameters (#436), then its own.
+    /// </summary>
+    internal static IReadOnlyList<IrTypeRef>? AllTypeArgumentsOf(IrNamedTypeRef named) =>
+        named.ContainerTypeArguments is { } container
+            ? [.. container, .. named.TypeArguments ?? []]
+            : named.TypeArguments;
 
     /// <summary>
     /// Resolves the cross-package <see cref="TsTypeOrigin"/> for a type reference, or

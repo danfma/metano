@@ -45,7 +45,14 @@ public sealed record IrPropertySemantics(
     bool EmitsPerClassStorage = false,
     IrInheritedAccessor InheritedAccessor = IrInheritedAccessor.None,
     bool IsAssignedByStaticConstructor = false
-);
+)
+{
+    /// <summary>
+    /// The property is an indexer (<c>this[int i]</c>), whose accessors take the
+    /// index as a parameter.
+    /// </summary>
+    public bool IsIndexer { get; init; }
+}
 
 /// <summary>
 /// An accessor of an overridden property that an override leaves to its base

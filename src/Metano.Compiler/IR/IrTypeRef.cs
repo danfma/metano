@@ -90,6 +90,14 @@ public sealed record IrNamedTypeRef(
     /// under: its namespace and name, without type arguments.
     /// </summary>
     public SupertypeKey SupertypeKey => SupertypeKey.From(Namespace, Name);
+
+    /// <summary>
+    /// For a class, struct or interface nested in generic types, the type
+    /// arguments of those containers, outermost first (<c>Gen&lt;int&gt;.Sub</c>
+    /// → <c>[int]</c>), ahead of its own <see cref="TypeArguments"/>; <c>null</c>
+    /// when no container is generic (<see cref="IrTypeDeclaration.ContainerTypeParameters"/>).
+    /// </summary>
+    public IReadOnlyList<IrTypeRef>? ContainerTypeArguments { get; init; }
 }
 
 /// <summary>
