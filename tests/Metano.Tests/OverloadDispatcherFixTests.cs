@@ -7,6 +7,34 @@ namespace Metano.Tests;
 public class OverloadDispatcherFixTests
 {
     [Test]
+    public async Task ConstructorBranch_BindsOnlyTheParametersItReads()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Tagged
+            {
+                public string Kind { get; } = "";
+
+                public int Code { get; }
+
+                public Tagged(int code) { Kind = "code"; }
+
+                public Tagged(string name, int code) { Kind = name; Code = code; }
+            }
+            """
+        );
+
+        var output = result["tagged.ts"];
+
+        await Assert.That(output).DoesNotContain("const code = args[0] as number;");
+        await Assert.That(output).Contains("const name = args[0] as string;");
+        await Assert.That(output).Contains("const code = args[1] as number;");
+    }
+
+    [Test]
     public async Task BclInterfaceConstraint_IsDroppedFromTheTypeParameter()
     {
         var result = TranspileHelper.Transpile(

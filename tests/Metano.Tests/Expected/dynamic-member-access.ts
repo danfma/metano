@@ -20,26 +20,18 @@ export class Probe {
     }
 
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeX) {
-      const x = args[1] as number;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeS) {
-      const s = args[1] as string;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const x = args[0] as number;
-
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
-      const s = args[0] as string;
-
       return;
     }
 

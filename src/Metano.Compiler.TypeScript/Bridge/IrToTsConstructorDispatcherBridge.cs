@@ -351,35 +351,35 @@ public static class IrToTsConstructorDispatcherBridge
         IrToTsBridgeContext context
     )
     {
-        var branch = new List<TsStatement>();
         var hasSlot = typeArgumentSlot is not null && typeParameters.Count > 0;
 
         var declaredFixedCount = ctor.Parameters is [.., { Parameter.IsRestParams: true }]
             ? ctor.Parameters.Count - 1
             : ctor.Parameters.Count;
 
+        var invocation = LowerConstructorInvocation(
+            ctor,
+            chainDepth: 0,
+            baseCall,
+            typeArgumentSlot,
+            context
+        );
+
+        var reads = new TsIdentifierReads(invocation);
+
         // Bring the original parameter names back into scope as
         // `const <name> = args[i] as <Type>`. The dispatcher signature is
         // `(...args)`, so the lowered super(...) and body — which still
         // reference the source parameter names — would otherwise target
-        // undefined identifiers. A single up-front rebind per branch keeps
-        // the downstream lowering untouched and matches the legacy output
-        // semantically.
-        for (var i = 0; i < ctor.Parameters.Count; i++)
-        {
-            var param = ctor.Parameters[i];
-            var argIndex = param.Parameter.IsRestParams ? arguments.FixedCount : i;
-
-            branch.Add(
-                new TsVariableDeclaration(
-                    IrToTsNamingPolicy.ToParameterName(param.Parameter.Name),
-                    new TsCastExpression(
-                        BindArgument(arguments, param, argIndex, context),
-                        IrToTsTypeMapper.Map(param.Parameter.Type, context.TypeOverrides)
-                    )
-                )
-            );
-        }
+        // undefined identifiers. A parameter the invocation never reads gets
+        // no binding (#464).
+        var branch = ctor
+            .Parameters.Select((parameter, index) => (Parameter: parameter, Index: index))
+            .Where(entry => reads.Mentions(ParameterNameOf(entry.Parameter)))
+            .Select(entry =>
+                (TsStatement)BindParameter(arguments, entry.Parameter, entry.Index, context)
+            )
+            .ToList();
 
         if (hasSlot)
         {
@@ -397,13 +397,36 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        branch.AddRange(
-            LowerConstructorInvocation(ctor, chainDepth: 0, baseCall, typeArgumentSlot, context)
-        );
-
+        branch.AddRange(invocation);
         branch.Add(new TsReturnStatement());
 
         return branch;
+    }
+
+    private static string ParameterNameOf(IrConstructorParameter parameter) =>
+        IrToTsNamingPolicy.ToParameterName(parameter.Parameter.Name);
+
+    /// <summary>
+    /// <c>const &lt;name&gt; = args[i] as &lt;Type&gt;</c>: the parameter at
+    /// <paramref name="index"/> bound from the dispatcher's arguments (the
+    /// trailing ones for <c>params</c>).
+    /// </summary>
+    private static TsVariableDeclaration BindParameter(
+        OverloadArgumentShape arguments,
+        IrConstructorParameter parameter,
+        int index,
+        IrToTsBridgeContext context
+    )
+    {
+        var argumentIndex = parameter.Parameter.IsRestParams ? arguments.FixedCount : index;
+
+        return new TsVariableDeclaration(
+            ParameterNameOf(parameter),
+            new TsCastExpression(
+                BindArgument(arguments, parameter, argumentIndex, context),
+                IrToTsTypeMapper.Map(parameter.Parameter.Type, context.TypeOverrides)
+            )
+        );
     }
 
     /// <summary>
