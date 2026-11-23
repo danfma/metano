@@ -115,6 +115,12 @@ public sealed record IrForEachStatement(
     /// indexed form (spec 011 FR-057).
     /// </summary>
     public IrTypeRef? CollectionType { get; init; }
+
+    /// <summary>
+    /// <c>await foreach</c>: the loop enumerates an asynchronous sequence and
+    /// awaits each step.
+    /// </summary>
+    public bool IsAwait { get; init; }
 }
 
 /// <summary>
