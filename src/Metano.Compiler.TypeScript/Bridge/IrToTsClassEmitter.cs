@@ -1126,6 +1126,7 @@ internal sealed class IrToTsClassEmitter(
             .Convert(sourceTypeParams, BclOverrides)
             ?.ToList()
             ?? [];
+
         return (parameters, returnType, typeParameters);
     }
 
