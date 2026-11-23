@@ -75,7 +75,7 @@ public sealed class ModuleVariableValidator(
 
     private void RejectForwardReferences(INamedTypeSymbol type)
     {
-        var moduleState = type.GetMembers().Where(IsModuleState).ToList();
+        var moduleState = ModuleVariableOrder.Of(type.GetMembers().Where(IsModuleState));
         var declarationOrder = moduleState
             .Select((member, index) => (member, index))
             .ToDictionary(pair => pair.member, pair => pair.index, SymbolEqualityComparer.Default);

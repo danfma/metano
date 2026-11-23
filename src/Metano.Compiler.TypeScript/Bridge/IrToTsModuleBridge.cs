@@ -63,7 +63,7 @@ public static class IrToTsModuleBridge
         IrToTsBridgeContext context
     )
     {
-        foreach (var variable in variables)
+        foreach (var variable in ModuleVariableOrder.Of(variables))
         {
             var declaration = variable switch
             {

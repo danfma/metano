@@ -140,4 +140,28 @@ public class ModuleImportGapTests
 
         await Assert.That(files["ui.ts"]).Contains("return column({ of: 3, width: 1 });");
     }
+
+    [Test]
+    public async Task ContainerlessConstants_AreDeclaredBeforeTheVariablesThatReadThem()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public static readonly int Derived = MaxItems + 1;
+                public const int MaxItems = 3;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await Assert
+            .That(files["limits.ts"])
+            .IsEqualTo(
+                "export const MaxItems: number = 3;\n"
+                    + "export const derived: number = MaxItems + 1;\n"
+            );
+    }
 }
