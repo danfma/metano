@@ -13,7 +13,9 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// equal to another property's name, an inherited property included. Names
 /// compare ordinally, ignoring case when the context reads names
 /// case-insensitively (<c>PropertyNameCaseInsensitive</c>, Web defaults); a
-/// redeclaration under the same JSON name is one property.
+/// redeclaration under the same JSON name is one property, and a base member
+/// that a more-derived <c>[JsonIgnore]</c> member of the same CLR name hides
+/// (<c>new</c> or <c>override</c>) takes no name.
 /// </summary>
 internal sealed class JsonPropertyNameCollisions(
     JsonPropertyCollector properties,
@@ -36,6 +38,38 @@ internal sealed class JsonPropertyNameCollisions(
             .OfType<MetanoDiagnostic>()
             .DistinctBy(error => (error.Message, error.Location));
 
+    /// <summary>
+    /// Whether a type between <paramref name="contract"/> and the declaring
+    /// type of <paramref name="member"/> (that type excluded) declares a member
+    /// of the same CLR name with <c>[JsonIgnore]</c> (condition
+    /// <c>Always</c>), as a <c>new</c> or an <c>override</c>: System.Text.Json
+    /// then ignores the base member too, so it cannot collide (measured on
+    /// .NET 10, #442 review). A <c>WhenWritingNull</c> hider keeps it.
+    /// </summary>
+    private static bool IsHiddenByIgnoredMember(INamedTypeSymbol contract, ISymbol member)
+    {
+        var declaring = member.ContainingType;
+
+        for (var current = contract; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, declaring))
+                return false;
+
+            var hides = current
+                .GetMembers(member.Name)
+                .Any(candidate =>
+                    candidate is IPropertySymbol or IFieldSymbol
+                    && !candidate.IsStatic
+                    && JsonSerializationAttributes.IsAlwaysIgnored(candidate)
+                );
+
+            if (hides)
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>The error at the first property whose JSON name an earlier one already takes.</summary>
     private MetanoDiagnostic? CollisionOf(INamedTypeSymbol contract)
     {
@@ -43,6 +77,7 @@ internal sealed class JsonPropertyNameCollisions(
 
         var colliding = _properties
             .ContractPropertiesOf(contract)
+            .Where(property => !IsHiddenByIgnoredMember(contract, property.Member))
             .DistinctBy(property => (property.Member.Name, property.JsonName))
             .FirstOrDefault(property => !taken.Add(property.JsonName));
 

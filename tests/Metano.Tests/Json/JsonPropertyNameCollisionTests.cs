@@ -128,6 +128,109 @@ public class JsonPropertyNameCollisionTests
         await Assert.That(errors).IsEmpty();
     }
 
+    /// <summary>
+    /// A <c>[JsonIgnore] new</c> member hides the base member of its CLR name
+    /// in System.Text.Json, so another property may take that JSON name
+    /// (measured on .NET 10: <c>{"Name":"o"}</c>).
+    /// </summary>
+    [Test]
+    public async Task IgnoredNewHider_FreesTheBaseName()
+    {
+        var errors = CollisionsOf(
+            """
+            [Transpile]
+            public class GBase { public string Name { get; set; } = "b"; }
+
+            [Transpile]
+            public sealed class CaseQ : GBase
+            {
+                [JsonIgnore] public new string Name { get; set; } = "d";
+                [JsonPropertyName("Name")] public string Other { get; set; } = "o";
+            }
+            """,
+            "",
+            "CaseQ"
+        );
+
+        await Assert.That(errors).IsEmpty();
+    }
+
+    [Test]
+    public async Task IgnoredNewHider_UnderCamelCase_FreesTheBaseName()
+    {
+        var errors = CollisionsOf(
+            """
+            [Transpile]
+            public class B2 { public string ID { get; set; } = ""; }
+
+            [Transpile]
+            public sealed class C2 : B2
+            {
+                [JsonIgnore] public new string ID { get; set; } = "";
+                public string Id { get; set; } = "";
+            }
+            """,
+            "[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]",
+            "C2"
+        );
+
+        await Assert.That(errors).IsEmpty();
+    }
+
+    /// <summary>A <c>WhenWritingNull</c> hider is not an "always" ignore: the base member still collides.</summary>
+    [Test]
+    public async Task ConditionalIgnoreHider_StillCollides()
+    {
+        var errors = CollisionsOf(
+            """
+            [Transpile]
+            public class B3 { public string? Name { get; set; } }
+
+            [Transpile]
+            public sealed class C3 : B3
+            {
+                [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public new string? Name { get; set; }
+                [JsonPropertyName("Name")] public string Other { get; set; } = "";
+            }
+            """,
+            "",
+            "C3"
+        );
+
+        await Assert.That(errors).Count().IsEqualTo(1);
+    }
+
+    /// <summary>
+    /// The other hiding shapes, measured on .NET 10: a <c>new</c> without
+    /// <c>[JsonIgnore]</c> and an override renamed with
+    /// <c>[JsonPropertyName]</c> keep the base name (STJ throws); an ignored
+    /// override frees it (<c>{"Name":"o"}</c>).
+    /// </summary>
+    [Test]
+    [Arguments("public new string Name { get; set; } = \"d\";", 1)]
+    [Arguments("[JsonPropertyName(\"n\")] public override string Name { get; set; } = \"d\";", 1)]
+    [Arguments("[JsonIgnore] public override string Name { get; set; } = \"d\";", 0)]
+    public async Task OtherHidingShapes_MatchSystemTextJson(string hider, int expected)
+    {
+        var errors = CollisionsOf(
+            $$"""
+            [Transpile]
+            public class VBase { public virtual string Name { get; set; } = "b"; }
+
+            [Transpile]
+            public sealed class Der : VBase
+            {
+                {{hider}}
+                [JsonPropertyName("Name")] public string Other { get; set; } = "o";
+            }
+            """,
+            "",
+            "Der"
+        );
+
+        await Assert.That(errors.Count).IsEqualTo(expected);
+    }
+
     private static List<string> CollisionsOf(string types, string options, string root)
     {
         var source = $$"""

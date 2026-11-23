@@ -28,7 +28,7 @@ internal sealed class JsonUnclaimedMemberTypes(
             .Select(entry => entry.Type)
             .OfType<INamedTypeSymbol>()
             .SelectMany(_properties.DeclarationOrderPropertiesOf)
-            .Select(property => ErrorOf(property))
+            .Select(ErrorOf)
             .OfType<MetanoDiagnostic>()
             .DistinctBy(error => (error.Message, error.Location));
 
