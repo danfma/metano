@@ -119,3 +119,8 @@ InteropProbes.inlineCodeStatement     none  by design (FR-031: Js.Code is TS-onl
 InteropProbes.unsafeCastWrong         none  by design (OD-15: UnsafeCast is checked on .NET, unchecked in TS)
 RuntimeTypeShapeProbes.plainObjectIsStructural  none  a [PlainObject] test is structural (spec 011 FR-020): another plain object with every member the guard requires tests as the type too, and MS0047 warns at the test
 RuntimeTypeShapeProbes.closedGenericName  none  the runtime's specialize() names a closed generic "RtBox`1<Int32>"; .NET's Type.Name of a closed generic is the open name "RtBox`1" (runtime follow-up)
+UnmodeledCollectionProbes.throwsSortedSet none  W6-K #581: ImmutableSortedSet collection expression is not modelled; MS0001 and a loud throw instead of the unsorted array (.NET: 1,2,3)
+UnmodeledCollectionProbes.throwsStack none  W6-K #581: ImmutableStack collection expression is not modelled; MS0001 and a loud throw instead of the unreversed array (.NET: 3,2,1)
+UnmodeledCollectionProbes.throwsFrozenSet none  W6-K #581: FrozenSet collection expression is not modelled; MS0001 and a loud throw instead of an array without dedup or Count (.NET: 2)
+UnmodeledCollectionProbes.throwsBag none  W6-K #581: a multi-element ConcurrentBag collection expression is not modelled; MS0001 and a loud throw (.NET: 1,2)
+UnmodeledCollectionProbes.throwsUserAdd none  W6-K #581: a user collection type's own Add is not lowered; MS0001 and a loud throw instead of skipping Add (.NET: 10,20)

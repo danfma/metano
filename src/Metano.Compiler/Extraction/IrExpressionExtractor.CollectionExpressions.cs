@@ -43,7 +43,7 @@ public sealed partial class IrExpressionExtractor
         )
             return IsListShapedTarget(target)
                 ? ListLiteralOf(coll, operation)
-                : ReportUnmodeledTarget(coll, target);
+                : UnmodeledTargetOf(coll, operation, target);
 
         if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(operation))
             return ReportUnsupported(
@@ -68,8 +68,8 @@ public sealed partial class IrExpressionExtractor
     /// literal is modelled (<see cref="TargetCollectionOf"/>). Any other type
     /// is built through a collection builder or an <c>Add</c> the lowering does
     /// not reproduce (<c>ImmutableSortedSet</c>, <c>FrozenSet</c>,
-    /// <c>ImmutableQueue</c>, a user collection type), so a bare literal would
-    /// be the wrong value (#581).
+    /// <c>ImmutableQueue</c>, a user collection type; see
+    /// <see cref="UnmodeledTargetOf"/>, #581).
     /// </summary>
     private bool IsListShapedTarget(INamedTypeSymbol target) =>
         IsSpan(target)
@@ -83,17 +83,70 @@ public sealed partial class IrExpressionExtractor
         && type.ContainingNamespace?.ToDisplayString() == "System"
         && type.MetadataName is "Span`1" or "ReadOnlySpan`1";
 
-    private IrExpression ReportUnmodeledTarget(
+    /// <summary>
+    /// A collection expression over a type whose construction is not modelled
+    /// (#581) reports <c>MS0001</c>. Where the array gives what .NET observes —
+    /// an order-preserving list-like such as <c>Collection&lt;T&gt;</c>,
+    /// <c>ObservableCollection&lt;T&gt;</c> or <c>ImmutableQueue&lt;T&gt;</c>, or
+    /// a literal too short to reorder — the array literal stays; where it
+    /// would be a silent wrong value, the expression throws instead
+    /// (<see cref="RebuildsElements"/>).
+    /// </summary>
+    private IrExpression UnmodeledTargetOf(
         CollectionExpressionSyntax coll,
+        ICollectionExpressionOperation? operation,
         INamedTypeSymbol target
-    ) =>
-        ReportUnsupported(
+    )
+    {
+        var typeName = target.ToDisplayString();
+
+        if (RebuildsElements(coll, target))
+            return ReportUnsupported(
+                coll,
+                coll.Kind().ToString(),
+                $"Collection expression '{coll}' builds '{typeName}', which orders, "
+                    + "deduplicates or adds its elements in a way the transpiler does not "
+                    + "model, so the expression throws at run time. Build the collection "
+                    + "explicitly instead."
+            );
+
+        ReportUnsupportedFeature(
             coll,
-            coll.Kind().ToString(),
-            $"Collection expression '{coll}' builds '{target.ToDisplayString()}', whose "
-                + "construction from a collection expression the transpiler does not model; a "
-                + "plain array would stand in for it. Build the collection explicitly instead."
+            $"Collection expression '{coll}' builds '{typeName}', which the transpiler does "
+                + "not model: a plain array stands in for it, so enumerating and indexing it "
+                + "match .NET, but the members of the type do not exist on the value."
         );
+
+        return ListLiteralOf(coll, operation);
+    }
+
+    /// <summary>
+    /// Whether the array would enumerate other elements than <paramref name="target"/>
+    /// holds: two or more elements (or a spread) handed to a type that sorts,
+    /// deduplicates or reverses them (<c>ImmutableSortedSet</c>,
+    /// <c>FrozenSet</c>, <c>ImmutableStack</c>, <c>ConcurrentBag</c>), or any
+    /// element handed to a user type's own <c>Add</c>, which may do anything.
+    /// </summary>
+    private static bool RebuildsElements(CollectionExpressionSyntax coll, INamedTypeSymbol target)
+    {
+        if (coll.Elements.Count == 0)
+            return false;
+
+        if (!target.ContainingAssembly.IsBclAssembly())
+            return true;
+
+        var canReorder =
+            coll.Elements.Count > 1 || coll.Elements.Any(e => e is SpreadElementSyntax);
+
+        return canReorder && IsReorderingBclCollection(target);
+    }
+
+    private static bool IsReorderingBclCollection(INamedTypeSymbol target) =>
+        target.OriginalDefinition.ToDisplayString()
+            is "System.Collections.Immutable.ImmutableSortedSet<T>"
+                or "System.Collections.Immutable.ImmutableStack<T>"
+                or "System.Collections.Frozen.FrozenSet<T>"
+                or "System.Collections.Concurrent.ConcurrentBag<T>";
 
     /// <summary>
     /// The array literal of a list or array target, with the element type the

@@ -11,52 +11,102 @@ namespace Metano.Tests;
 /// </summary>
 public class CollectionExpressionTargetTests
 {
+    private const string UnmodeledSource = """
+        using System.Collections;
+        using System.Collections.Concurrent;
+        using System.Collections.Frozen;
+        using System.Collections.Generic;
+        using System.Collections.Immutable;
+        using System.Collections.ObjectModel;
+        using Metano.Annotations;
+        [assembly: TranspileAssembly]
+
+        public class Bag : IEnumerable<int>
+        {
+            private readonly List<int> _items = new();
+
+            public void Add(int x) => _items.Add(x * 10);
+
+            public IEnumerator<int> GetEnumerator() => _items.GetEnumerator();
+
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        public static class Targets
+        {
+            public static Collection<int> Kept() => [1, 2];
+
+            public static ObservableCollection<int> Observed() => [1, 2];
+
+            public static ImmutableQueue<int> Queue() => [1, 2, 3];
+
+            public static Collection<int> Empty() => [];
+
+            public static ConcurrentBag<int> OneBag() => [1];
+
+            public static ImmutableSortedSet<int> Sorted() => [3, 1];
+
+            public static ImmutableStack<int> Stack() => [1, 2];
+
+            public static FrozenSet<int> Frozen() => [1, 2];
+
+            public static ConcurrentBag<int> TwoBag() => [1, 2];
+
+            public static Bag UserBag() => [1, 2];
+        }
+        """;
+
+    /// <summary>
+    /// The array gives what .NET observes for an order-preserving list-like
+    /// (and for a literal too short to reorder), so it stays, with the warning.
+    /// </summary>
     [Test]
-    public async Task UnmodeledTargets_ReportUnsupported()
+    [Arguments("static kept(): Collection<number> {\n    return [1, 2];")]
+    [Arguments("static observed(): ObservableCollection<number> {\n    return [1, 2];")]
+    [Arguments("static queue(): ImmutableQueue<number> {\n    return [1, 2, 3];")]
+    [Arguments("static empty(): Collection<number> {\n    return [];")]
+    [Arguments("static oneBag(): ConcurrentBag<number> {\n    return [1];")]
+    public async Task OrderPreservingTargets_KeepTheArray(string expected)
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
-            using System.Collections;
-            using System.Collections.Frozen;
-            using System.Collections.Generic;
-            using System.Collections.Immutable;
-            using Metano.Annotations;
-            [assembly: TranspileAssembly]
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(UnmodeledSource);
 
-            public class Bag : IEnumerable<int>
-            {
-                private readonly List<int> _items = new();
+        await Assert.That(files["targets.ts"]).Contains(expected);
+    }
 
-                public void Add(int x) => _items.Add(x * 10);
+    /// <summary>
+    /// A type that sorts, deduplicates, reverses or runs a user Add throws
+    /// instead of standing a wrong array in for it.
+    /// </summary>
+    [Test]
+    [Arguments("sorted")]
+    [Arguments("stack")]
+    [Arguments("frozen")]
+    [Arguments("twoBag")]
+    [Arguments("userBag")]
+    public async Task RebuildingTargets_Throw(string method)
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(UnmodeledSource);
+        var output = files["targets.ts"];
+        var body = output[output.IndexOf($"static {method}(", StringComparison.Ordinal)..];
 
-                public IEnumerator<int> GetEnumerator() => _items.GetEnumerator();
+        await Assert
+            .That(body[..body.IndexOf("\n  }", StringComparison.Ordinal)])
+            .Contains("throw new Error(\"Unsupported expression: CollectionExpression\")");
+    }
 
-                IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-            }
+    [Test]
+    public async Task UnmodeledTargets_ReportWhatIsEmitted()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(UnmodeledSource);
 
-            public static class Targets
-            {
-                public static ImmutableSortedSet<int> Sorted() => [3, 1];
-
-                public static FrozenSet<int> Frozen() => [1];
-
-                public static ImmutableQueue<int> Queue() => [1];
-
-                public static Bag UserBag() => [1, 2];
-            }
-            """
-        );
-
-        var targets = diagnostics
+        var messages = diagnostics
             .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
             .Select(d => d.Message)
             .ToList();
 
-        await Assert.That(targets).Count().IsEqualTo(4);
-        await Assert.That(targets.Any(m => m.Contains("ImmutableSortedSet<int>"))).IsTrue();
-        await Assert.That(targets.Any(m => m.Contains("FrozenSet<int>"))).IsTrue();
-        await Assert.That(targets.Any(m => m.Contains("ImmutableQueue<int>"))).IsTrue();
-        await Assert.That(targets.Any(m => m.Contains("'Bag'"))).IsTrue();
+        await Assert.That(messages).Count().IsEqualTo(10);
+        await Assert.That(messages.Count(m => m.Contains("a plain array stands in"))).IsEqualTo(5);
+        await Assert.That(messages.Count(m => m.Contains("throws at run time"))).IsEqualTo(5);
     }
 
     [Test]
