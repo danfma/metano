@@ -79,4 +79,56 @@ public class OverloadDispatcherFixTests
 
         await Assert.That(result["measure.ts"]).Contains("static pick<T extends IShape>(v: T): T");
     }
+
+    [Test]
+    public async Task PlainObjectOverloads_EmitOneFunctionPerName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [PlainObject]
+            public record Dto(int A)
+            {
+                [Name("getNum")] public int Get(int x) => x;
+
+                [Name("getStr")] public int Get(string s) => 1;
+            }
+            """
+        );
+
+        var output = result["dto.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("export function getNum(self: Dto, x: number): number {");
+        await Assert
+            .That(output)
+            .Contains("export function getStr(self: Dto, s: string): number {");
+    }
+
+    [Test]
+    public async Task PlainObjectOverloads_SharingAName_AreReported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [PlainObject]
+            public record Dto(int A)
+            {
+                public int Get(int x) => x;
+
+                public int Get(string s) => 1;
+            }
+            """
+        );
+
+        var reported = diagnostics.Where(diagnostic => diagnostic.Code == "MS0001").ToList();
+
+        await Assert.That(reported).Count().IsEqualTo(1);
+        await Assert.That(reported[0].Message).Contains("'Dto.Get(string)'");
+    }
 }

@@ -2920,6 +2920,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
 
         IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, ReportDiagnostic);
+        PlainObjectOverloads.ReportCollisions(type, ir, ReportDiagnostic);
 
         return IrToTsPlainObjectBridge.Convert(ir, sink, lowering);
     }

@@ -64,7 +64,9 @@ public static class IrToTsPlainObjectBridge
                 switch (member)
                 {
                     case IrMethodDeclaration method when !method.IsStatic:
-                        EmitInstanceMethod(method, tsName, sink, context);
+                        foreach (var overload in PlainObjectOverloads.EmittedOf(method))
+                            EmitInstanceMethod(overload, tsName, sink, context);
+
                         break;
                     case IrFieldDeclaration field when field.IsStatic:
                         EmitStaticField(field, sink, context);
