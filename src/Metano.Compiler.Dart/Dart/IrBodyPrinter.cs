@@ -424,7 +424,8 @@ public static class IrBodyPrinter
                     if (i > 0)
                         sb.Append(", ");
                     var a = withExpr.Assignments[i];
-                    sb.Append(IrToDartNamingPolicy.ToParameterName(a.MemberName)).Append(": ");
+                    sb.Append(a.EmittedName ?? IrToDartNamingPolicy.ToParameterName(a.MemberName))
+                        .Append(": ");
                     PrintExpression(sb, a.Value);
                 }
                 sb.Append(')');
@@ -810,7 +811,12 @@ public static class IrBodyPrinter
                     if (i > 0)
                         sb.Append(", ");
                     // Dart 3 object pattern subpatterns: `getterName: pattern`.
-                    sb.Append(IrToDartNamingPolicy.ToParameterName(prop.Subpatterns[i].MemberName))
+                    sb.Append(
+                            prop.Subpatterns[i].EmittedName
+                                ?? IrToDartNamingPolicy.ToParameterName(
+                                    prop.Subpatterns[i].MemberName
+                                )
+                        )
                         .Append(": ");
                     PrintSwitchPattern(sb, prop.Subpatterns[i].Pattern);
                 }
@@ -1375,7 +1381,7 @@ public static class IrBodyPrinter
     /// never as an emitted name.
     /// </summary>
     private static string MemberNameOf(IrMemberAccess access) =>
-        access.Origin is { ParameterTypes: not null, EmittedName: { } emittedName }
+        access.Origin is { EmittedName: { } emittedName }
             ? emittedName
             : IrToDartNamingPolicy.ToParameterName(access.MemberName);
 

@@ -580,7 +580,7 @@ public static class IrToDartClassBridge
 
     private static DartField ConvertField(IrFieldDeclaration field, DartIrRewriter rewriter) =>
         new(
-            IrToDartNamingPolicy.ToParameterName(field.Name),
+            IrToDartNamingPolicy.ToMemberName(field.Name, field.Attributes),
             IrToDartTypeMapper.Map(field.Type),
             IsFinal: field.IsReadonly,
             IsStatic: field.IsStatic,

@@ -74,7 +74,10 @@ internal static class DartClassMemberNames
     private static string? NameOf(IrMemberDeclaration member, DartOverloadShape shape) =>
         member switch
         {
-            IrFieldDeclaration field => IrToDartNamingPolicy.ToParameterName(field.Name),
+            IrFieldDeclaration field => IrToDartNamingPolicy.ToMemberName(
+                field.Name,
+                field.Attributes
+            ),
             IrPropertyDeclaration property => IrToDartNamingPolicy.ToMemberName(
                 property.Name,
                 property.Attributes

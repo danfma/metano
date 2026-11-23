@@ -55,6 +55,108 @@ public class DartGroupEFixesTests
             .IsEqualTo(second["app_json_context.dart"]);
     }
 
+    [Test]
+    public async Task NameOverride_AppliedConsistentlyToFieldPropertyAndUses_347_410()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record Holder(int X)
+            {
+                [Name("renamedGet")]
+                public Func<int> Other { get; } = () => X;
+
+                [Name("total")]
+                public int Sum = 1;
+            }
+
+            [Transpile]
+            public static class Consumer
+            {
+                public static int Use(Holder holder)
+                {
+                    var g = holder.Other();
+                    var z = holder.Other;
+                    return g + z() + holder.Sum;
+                }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        var holder = files["holder.dart"];
+        var consumer = files["consumer.dart"];
+
+        await Assert.That(holder).Contains("renamedGet");
+        await Assert.That(holder).Contains("late int total;");
+        await Assert.That(holder).Contains("this.renamedGet = () => x;");
+        await Assert.That(holder).Contains("this.total = 1;");
+        await Assert.That(holder).DoesNotContain("this.other");
+        await Assert.That(holder).DoesNotContain("this.sum");
+
+        await Assert.That(consumer).Contains("holder.renamedGet()");
+        await Assert.That(consumer).Contains("holder.renamedGet;");
+        await Assert.That(consumer).Contains("holder.total");
+        await Assert.That(consumer).DoesNotContain("holder.other");
+        await Assert.That(consumer).DoesNotContain("holder.sum");
+    }
+
+    [Test]
+    public async Task ModuleVariableValidator_RecordWithPrimaryConstructor_ReportsOnce_410()
+    {
+        var result = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [NoContainer]
+            public static class Config
+            {
+                public static int Count = 1;
+            }
+
+            [Transpile]
+            public record Reader(int X)
+            {
+                public int Read(int count) => Config.Count + count + X;
+            }
+            """
+        );
+
+        var ms0001 = result.Diagnostics.Where(d => d.Code == "MS0001").ToList();
+        await Assert.That(ms0001.Count).IsEqualTo(1);
+    }
+
+    private static void AssertDartAnalyzes(Dictionary<string, string> files)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-w6e-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            foreach (var (name, content) in files)
+                File.WriteAllText(Path.Combine(tempDir, name), content);
+
+            var psi = new ProcessStartInfo("dart", "analyze")
+            {
+                WorkingDirectory = tempDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            using var process = Process.Start(psi)!;
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"dart analyze failed:\n{stdout}{stderr}");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     private static Dictionary<string, string> TranspileTrees(IReadOnlyList<string> sources)
     {
         var trees = sources
