@@ -63,6 +63,25 @@ public struct W5GenericStruct<T>
 }
 
 [Transpile]
+public struct W5OuterGenericStruct<T>
+{
+    public W5GenericStruct<T> G;
+    public W5GenericStruct<int> G2;
+}
+
+[Transpile]
+public struct W5InnerStruct
+{
+    public int X;
+}
+
+[Transpile]
+public struct W5OuterStruct
+{
+    public W5InnerStruct F;
+}
+
+[Transpile]
 public class W5ParamsSum<T>
 {
     public string First;
@@ -170,6 +189,32 @@ public static class Wave5Fix1Probes
             Probe(() => IsA<System.Text.StringBuilder>("str")),
             Probe(() => IsA<DayOfWeek>(1))
         );
+    }
+
+    public static string UndescribableReifiedNullsReturnFalse() =>
+        string.Join(
+            "|",
+            Probe(() => IsA<IDisposable>(null!)),
+            Probe(() => IsA<(int, string)>(null!)),
+            Probe(() => IsA<Func<int>>(null!)),
+            Probe(() => IsA<int[]>(null!)),
+            Probe(() => IsA<KeyValuePair<string, int>>(null!)),
+            Probe(() => new W5OverBox<(int, string)>().Is(null!))
+        );
+
+    public static string NestedGenericStructDefaultSlots()
+    {
+        W5OuterGenericStruct<long> o = default;
+        return $"{o.G.Is(1L)}|{o.G.Is(1)}|{o.G2.Is(1)}|{o.G2.Is(1L)}";
+    }
+
+    public static string NonGenericStructDefaultWithNestedStruct()
+    {
+        var rt = typeof(W5OuterStruct);
+        W5OuterStruct d1 = default;
+        var d2 = default(W5OuterStruct);
+        var d3 = new W5OuterStruct();
+        return $"{d1.F.X}|{d2.F.X}|{d3.F.X}";
     }
 
     private static string Probe(Func<bool> fn)

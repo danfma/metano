@@ -457,7 +457,16 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         string? slot
     )
     {
-        if (type.IsValueType)
+        var hasExplicitPublicParameterlessCtor = type.InstanceConstructors.Any(constructor =>
+            constructor
+                is {
+                    IsImplicitlyDeclared: false,
+                    Parameters.Length: 0,
+                    DeclaredAccessibility: Accessibility.Public,
+                }
+        );
+
+        if (type.IsValueType && !hasExplicitPublicParameterlessCtor)
         {
             if (slot is null)
                 return
