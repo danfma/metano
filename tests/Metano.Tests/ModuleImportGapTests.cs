@@ -123,4 +123,21 @@ public class ModuleImportGapTests
 
         await Assert.That(diagnostics.Count(d => d.Code == "MS0067")).IsEqualTo(2);
     }
+
+    [Test]
+    public async Task ContainerlessFunctionCallingAnObjectArgsSibling_IsEmitted()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class UI
+            {
+                [ObjectArgs] public static int Column(int of = 0, int width = 100) => of + width;
+                public static int Use() => Column(of: 3, width: 1);
+            }
+            """
+        );
+
+        await Assert.That(files["ui.ts"]).Contains("return column({ of: 3, width: 1 });");
+    }
 }
