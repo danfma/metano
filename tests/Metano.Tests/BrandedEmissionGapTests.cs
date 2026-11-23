@@ -47,6 +47,51 @@ public class BrandedEmissionGapTests
     }
 
     /// <summary>
+    /// A static field of the wrapper's own type no longer recurses through
+    /// the type mapper (stack overflow before the fix), and it is reported
+    /// with the instance method and the static property the companion object
+    /// cannot declare (#623, #634 item 3).
+    /// </summary>
+    [Test]
+    public async Task PrimitiveWrapper_ReportsMembersTheCompanionCannotDeclare()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct UId(long Value)
+            {
+                public static readonly UId Zero = new(0);
+
+                public static UId One => new(1);
+
+                public long Next() => Value + 1;
+
+                [Ignore]
+                public long Skipped() => Value;
+
+                public override string ToString() => Value.ToString();
+
+                public static string Tag(UId u) => "t" + u.Value;
+            }
+            """
+        );
+
+        var unsupported = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Select(d => d.Message)
+            .ToList();
+
+        await Assert.That(files["u-id.ts"]).Contains("tag: UId$tag");
+        await Assert.That(unsupported).Count().IsEqualTo(3);
+        await Assert.That(unsupported.Any(m => m.StartsWith("'UId.Zero'"))).IsTrue();
+        await Assert.That(unsupported.Any(m => m.StartsWith("'UId.One'"))).IsTrue();
+        await Assert.That(unsupported.Any(m => m.StartsWith("'UId.Next'"))).IsTrue();
+    }
+
+    /// <summary>
     /// <c>new Func&lt;…&gt;(M)</c> lowers as the method group it converts, a
     /// bound instance method included, never as <c>new Object(M)</c> (#634 item 5).
     /// </summary>
