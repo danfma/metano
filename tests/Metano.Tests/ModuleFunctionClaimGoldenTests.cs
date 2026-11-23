@@ -252,9 +252,9 @@ public class ModuleFunctionClaimGoldenTests
 
     /// <summary>
     /// The facade rewriter and the claim pass read one definition of the
-    /// name a facade binds (<see cref="SymbolHelper.ImportBindingOf"/>), so
-    /// even a reserved-word name — not escaped yet, #555 — is reserved
-    /// exactly as the import binds it.
+    /// name a facade binds (<see cref="SymbolHelper.ImportBindingOf"/>), and
+    /// TypeScript escapes a reserved-word one the same way at the import and
+    /// in the claim (#555).
     /// </summary>
     [Test]
     public async Task ImportFacade_ReservedWordName_ReservesTheBindingTheImportUses()
@@ -291,7 +291,7 @@ public class ModuleFunctionClaimGoldenTests
 
         await Assert
             .That(result["use.ts"])
-            .Contains($"import {{ remove as {binding} }} from \"ext-lib\";");
+            .Contains($"import {{ remove as {binding}_ }} from \"ext-lib\";");
     }
 
     private static IReadOnlyList<string> ShadowMessages(

@@ -54,4 +54,32 @@ public class ModuleImportGapTests
         await Assert.That(use).Contains("import barX from \"ext-def\";");
         await Assert.That(use).Contains("return barX(2);");
     }
+
+    [Test]
+    public async Task ImportFacadeNamedLikeAReservedWord_BindsTheEscapedName()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Res
+            {
+                [Import("remove", "ext-lib")] public static int Delete(int x) => x;
+            }
+
+            [Transpile]
+            public class Use
+            {
+                public int Go() => Res.Delete(1);
+
+                public Func<int, int> Group() => Res.Delete;
+            }
+            """
+        );
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).Contains("import { remove as delete_ } from \"ext-lib\";");
+        await Assert.That(use).Contains("return delete_(1);");
+        await Assert.That(use).Contains("return delete_;");
+    }
 }

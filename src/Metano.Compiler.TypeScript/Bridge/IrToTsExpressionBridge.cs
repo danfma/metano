@@ -1016,8 +1016,13 @@ public static partial class IrToTsExpressionBridge
             BoundArgumentPrefix
         );
 
-        var template = new TsTemplate(
+        var (text, externalImports) = TsImportFacadeBinding.Escape(
             tpl.Template,
+            tpl.ExternalImports
+        );
+
+        var template = new TsTemplate(
+            text,
             tpl.Receiver is null ? null : Map(tpl.Receiver, context),
             ordered.Arguments
         )
@@ -1026,7 +1031,7 @@ public static partial class IrToTsExpressionBridge
                 ? tArgs.Select(t => TsTypeArgName(t) ?? "unknown").ToList()
                 : [],
             RuntimeImports = tpl.RequiredImports ?? [],
-            ExternalImports = tpl.ExternalImports ?? [],
+            ExternalImports = externalImports,
             ReceiverType = tpl.ReceiverType is IrNamedTypeRef receiverType
                 ? CanonicalTypeValue(receiverType)
                 : null,

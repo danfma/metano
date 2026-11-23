@@ -279,7 +279,7 @@ public sealed class TsModuleFunctionClaims
             {
                 if (method.ImportBindingOf(TargetLanguage.TypeScript) is { } binding)
                 {
-                    Reserve(binding);
+                    Reserve(TsImportFacadeBinding.Of(binding));
                 }
             }
         }
