@@ -972,8 +972,13 @@ public static class IrTypeRefMapper
             return true;
         if (SymbolHelper.HasIgnore(named, target))
             return false;
-        if (named.DeclaredAccessibility != Accessibility.Public)
+
+        if (
+            named.DeclaredAccessibility != Accessibility.Public
+            && !IsNestedInTranspilableContainer(named, target)
+        )
             return false;
+
         var asm = named.ContainingAssembly;
         if (asm is null)
             return false;
@@ -982,6 +987,21 @@ public static class IrTypeRefMapper
                 a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
             );
     }
+
+    /// <summary>
+    /// A named, source-declared nested type of any accessibility whose container is
+    /// itself transpilable: part of the container's emitted surface, as the
+    /// <c>[assembly: TranspileAssembly]</c> inclusion rule has it (#264), so a
+    /// reference to it — a base class among them — is kept (#422).
+    /// </summary>
+    private static bool IsNestedInTranspilableContainer(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        named.ContainingType is { } container
+        && !string.IsNullOrEmpty(named.Name)
+        && !named.IsImplicitlyDeclared
+        && IsTranspilableType(container, target);
 
     private static IrFunctionTypeRef MapDelegateType(
         INamedTypeSymbol delegateType,
