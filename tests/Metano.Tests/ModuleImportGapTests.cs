@@ -179,4 +179,35 @@ public class ModuleImportGapTests
 
         await Assert.That(clash.Message).Contains("'Nc.Default' is exported as 'default_'");
     }
+
+    [Test]
+    public async Task UsingAliasInTheFileDeclaringTheType_LeavesTheDeclarationUnaliased()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using T2 = P10.Tag;
+
+            namespace P10
+            {
+                [Transpile]
+                public class Tag
+                {
+                    public static Tag From(int x) => new Tag();
+                    public int V => 1;
+                }
+            }
+
+            namespace Use
+            {
+                [Transpile]
+                public class U { public int Go() => T2.From(1).V; }
+            }
+            """
+        );
+
+        await Assert.That(files["p10/tag.ts"]).Contains("static from(x: number): Tag {");
+        await Assert.That(files["p10/tag.ts"]).Contains("return new Tag();");
+        await Assert.That(files["use/u.ts"]).Contains("import { Tag as T2 } from \"#/p10/tag\";");
+        await Assert.That(files["use/u.ts"]).Contains("return T2.from(1).v;");
+    }
 }

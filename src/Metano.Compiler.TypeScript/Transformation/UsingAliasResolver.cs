@@ -22,7 +22,14 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public static class UsingAliasResolver
 {
-    public static UsingAliasScope? ResolveForTree(SyntaxTree? tree, Compilation compilation)
+    /// <param name="declaresHere">Whether the emitted file declares a type: an alias
+    /// of such a type is dropped, since the file binds the type under its own name and
+    /// imports nothing to bind the alias (#635).</param>
+    public static UsingAliasScope? ResolveForTree(
+        SyntaxTree? tree,
+        Compilation compilation,
+        Func<INamedTypeSymbol, bool>? declaresHere = null
+    )
     {
         if (tree is null)
             return null;
@@ -31,10 +38,12 @@ public static class UsingAliasResolver
         var semanticModel = compilation.GetSemanticModel(tree);
         var root = tree.GetCompilationUnitRoot();
 
-        Collect(root.Usings, semanticModel, canonicalToAlias, aliasToCanonical);
+        var excluded = declaresHere ?? (_ => false);
+
+        Collect(root.Usings, semanticModel, excluded, canonicalToAlias, aliasToCanonical);
 
         foreach (var ns in root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
-            Collect(ns.Usings, semanticModel, canonicalToAlias, aliasToCanonical);
+            Collect(ns.Usings, semanticModel, excluded, canonicalToAlias, aliasToCanonical);
 
         return UsingAliasScope.Create(canonicalToAlias, aliasToCanonical);
     }
@@ -42,6 +51,7 @@ public static class UsingAliasResolver
     private static void Collect(
         SyntaxList<UsingDirectiveSyntax> usings,
         SemanticModel semanticModel,
+        Func<INamedTypeSymbol, bool> excluded,
         Dictionary<string, string> canonicalToAlias,
         Dictionary<string, string> aliasToCanonical
     )
@@ -58,7 +68,8 @@ public static class UsingAliasResolver
             if (directive.Name is null)
                 continue;
             var symbol = semanticModel.GetSymbolInfo(directive.Name).Symbol as INamedTypeSymbol;
-            if (symbol is null)
+
+            if (symbol is null || excluded(symbol.OriginalDefinition))
                 continue;
 
             var canonicalName = symbol.Name;

@@ -1485,7 +1485,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .DeclaringSyntaxReferences.FirstOrDefault()
             ?.SyntaxTree;
         var previousAliases = IrToTsTypeMapper.UsingAliases;
-        IrToTsTypeMapper.UsingAliases = MergeAliasesForGroup(primarySyntaxTree);
+        IrToTsTypeMapper.UsingAliases = MergeAliasesForGroup(primarySyntaxTree, group.Types);
 
         // The nested types this file declares at module level: a reference from
         // the file spells their module-local identifier (ModuleLocalNaming.Flatten).
@@ -1695,13 +1695,38 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     ///   carrier (Layer B) — most explicit, wins everything.</item>
     /// </list>
     /// </summary>
-    private UsingAliasScope? MergeAliasesForGroup(SyntaxTree? primarySyntaxTree)
+    private UsingAliasScope? MergeAliasesForGroup(
+        SyntaxTree? primarySyntaxTree,
+        IReadOnlyList<INamedTypeSymbol> groupTypes
+    )
     {
-        var layerA = UsingAliasResolver.ResolveForTree(primarySyntaxTree, Context.Compilation);
+        var layerA = UsingAliasResolver.ResolveForTree(
+            primarySyntaxTree,
+            Context.Compilation,
+            type => DeclaresType(groupTypes, type)
+        );
+
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
         Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized);
         Context.ImportAliasOverrides.TryGetValue(filePath, out var layerB);
         return ImportAliasResolver.Merge(layerA, synthesized, layerB);
+    }
+
+    /// <summary>
+    /// Whether one of a file group's types is <paramref name="type"/> or encloses it.
+    /// </summary>
+    private static bool DeclaresType(
+        IReadOnlyList<INamedTypeSymbol> groupTypes,
+        INamedTypeSymbol type
+    )
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (groupTypes.Contains(current.OriginalDefinition, SymbolEqualityComparer.Default))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
