@@ -1498,6 +1498,7 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 |---|---|
 | A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor); JSON `null` reads as `null` instead ([Null roots](#null-roots)) |
 | JSON `null` at a struct contract or a value-type root (`valueType: true`), or for a struct property, element or dictionary value | `The JSON value could not be converted to MyApp.SPoint.` ([Null roots](#null-roots)) |
+| JSON `null` for an `ImmutableArray<T>` (a struct) root, element or dictionary value | ``The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32].``; for a property the runtime names the declaring contract where STJ names the `ImmutableArray` type (#713) |
 | A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (both warn `MS0037`) |
 | An invalid base64 text, or a non-string JSON value, for a `byte[]` | `The JSON value could not be converted to System.Byte[].` (STJ names the declaring type for a constructor-bound property) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |

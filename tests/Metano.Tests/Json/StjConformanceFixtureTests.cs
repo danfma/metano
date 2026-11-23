@@ -738,6 +738,11 @@ public class StjConformanceFixtureTests
             ["V13g"] = ReadOnly(async value =>
                 await Assert.That(((Dashboard)value!).Main).IsNull()
             ),
+            // #713: ImmutableArray<T> is a struct.
+            ["V13i"] = Roundtrip(
+                () => new ImmHolder([1, 2]),
+                async value => await Assert.That(((ImmHolder)value!).Items.Length).IsEqualTo(2)
+            ),
             ["V14"] = Roundtrip(
                 () => Flavor.Sweet,
                 async value => await Assert.That(value).IsEqualTo(Flavor.Sweet)

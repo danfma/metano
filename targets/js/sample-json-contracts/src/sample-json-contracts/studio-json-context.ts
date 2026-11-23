@@ -1,7 +1,13 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
 import { UUID, type ClassType } from "metano-runtime";
-import { Dictionary, HashSet, List, type IReadOnlyList } from "metano-runtime/system/collections";
+import {
+  Dictionary,
+  HashSet,
+  ImmutableArray,
+  List,
+  type IReadOnlyList,
+} from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import {
   NotSupportedException,
@@ -35,6 +41,7 @@ import type { IShape } from "./i-shape";
 import type { IShapeB } from "./i-shape-b";
 import { IA } from "./ia";
 import { ImageClip } from "./image-clip";
+import { ImmHolder } from "./imm-holder";
 import { IntMapHolder } from "./int-map-holder";
 import { Int64Box } from "./int64-box";
 import { Int64Containers } from "./int64-containers";
@@ -142,6 +149,9 @@ export class StudioJsonContext extends SerializerContext {
   private _perms?: ValueSpec<Perms>;
   private _tiny?: ValueSpec<Tiny>;
   private _dashboard?: TypeSpec<Dashboard>;
+  private _immHolder?: TypeSpec<ImmHolder>;
+  private _immutableArrayInt32?: ValueSpec<ImmutableArray<number>>;
+  private _listImmutableArrayInt32?: ValueSpec<List<ImmutableArray<number>> | null>;
   private _sPoint?: TypeSpec<SPoint>;
   private _title?: ValueSpec<Title>;
   private _episodeRec?: TypeSpec<EpisodeRec>;
@@ -1339,6 +1349,54 @@ export class StudioJsonContext extends SerializerContext {
           optional: true,
         },
       ],
+    }));
+  }
+
+  get immHolder(): TypeSpec<ImmHolder> {
+    return (this._immHolder ??= this.createSpec({
+      type: ImmHolder,
+      runtimeType: () => ImmHolder.$runtimeType,
+      factory: (p: Record<string, unknown>) => new ImmHolder(p.items as ImmutableArray<number>),
+      properties: [
+        {
+          ts: "items",
+          json: "Items",
+          type: {
+            kind: "immutableArray",
+            element: { kind: "primitive", numberType: "System.Int32" },
+            create: (items) => ImmutableArray.from(items),
+            typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+          },
+        },
+      ],
+    }));
+  }
+
+  get immutableArrayInt32(): ValueSpec<ImmutableArray<number>> {
+    return (this._immutableArrayInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "immutableArray",
+        element: { kind: "primitive", numberType: "System.Int32" },
+        create: (items) => ImmutableArray.from(items),
+        typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+      },
+      valueType: true,
+      typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+    }));
+  }
+
+  get listImmutableArrayInt32(): ValueSpec<List<ImmutableArray<number>> | null> {
+    return (this._listImmutableArrayInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "list",
+        element: {
+          kind: "immutableArray",
+          element: { kind: "primitive", numberType: "System.Int32" },
+          create: (items) => ImmutableArray.from(items),
+          typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+        },
+        create: (items) => List.of(items),
+      },
     }));
   }
 

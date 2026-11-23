@@ -31,6 +31,7 @@ import { HMid } from "#/sample-json-contracts/h-mid";
 import { IA } from "#/sample-json-contracts/ia";
 import { IgnBase } from "#/sample-json-contracts/ign-base";
 import { IgnoreJsonContext } from "#/sample-json-contracts/ignore-json-context";
+import { ImmHolder } from "#/sample-json-contracts/imm-holder";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { Int64Box } from "#/sample-json-contracts/int64-box";
@@ -118,6 +119,7 @@ const expectedClasses: Record<string, new (...args: never[]) => object> = {
   IA,
   IgnBase,
   ImageClip,
+  ImmHolder,
   InitRec,
   Int64Box,
   IntMapHolder,

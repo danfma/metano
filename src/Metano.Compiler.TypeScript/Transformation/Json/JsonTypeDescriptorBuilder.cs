@@ -131,18 +131,26 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// over its element, with the <c>create</c> closure that builds the
     /// runtime class from the read elements (spec 011 contracts/runtime-
     /// collections.md § JSON collection kinds), so <c>system/json</c> imports
-    /// no collection class.
+    /// no collection class. A value-type collection (<c>ImmutableArray&lt;T&gt;</c>)
+    /// also names its CLR <c>typeName</c>: System.Text.Json rejects JSON
+    /// <c>null</c> for it, naming that type (measured on .NET 10, #713).
     /// </summary>
     private TsObjectLiteral BuildCollectionDescriptor(
         ITypeSymbol type,
         JsonPropertyKind kind,
         ITypeSymbol elementType
-    ) =>
-        new([
+    )
+    {
+        var descriptor = new TsObjectLiteral([
             CollectionKindProperty(type, kind),
             new TsObjectProperty("element", Build(elementType)),
             new TsObjectProperty("create", CollectionCreateClosure(type, kind)),
         ]);
+
+        return type.IsValueType
+            ? WithStringProperty(descriptor, "typeName", ClrTypeName.Of(type))
+            : descriptor;
+    }
 
     private TsObjectLiteral BuildDictionaryDescriptor(ITypeSymbol type) =>
         new([

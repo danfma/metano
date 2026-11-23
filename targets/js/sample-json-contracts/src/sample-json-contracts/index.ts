@@ -36,6 +36,7 @@ export { IgnBase } from "./ign-base";
 export { IgnDer } from "./ign-der";
 export { IgnoreJsonContext } from "./ignore-json-context";
 export { ImageClip } from "./image-clip";
+export { ImmHolder } from "./imm-holder";
 export { InitRec } from "./init-rec";
 export { IntMapHolder } from "./int-map-holder";
 export { Int64Box } from "./int64-box";

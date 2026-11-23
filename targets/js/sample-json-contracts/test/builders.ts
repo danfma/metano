@@ -4,7 +4,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
 
 import { UUID } from "metano-runtime";
-import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
+import { Dictionary, HashSet, ImmutableArray, List } from "metano-runtime/system/collections";
 
 import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
@@ -25,6 +25,7 @@ import { HLeaf } from "#/sample-json-contracts/h-leaf";
 import { HMid } from "#/sample-json-contracts/h-mid";
 import { IA } from "#/sample-json-contracts/ia";
 import { IgnBase } from "#/sample-json-contracts/ign-base";
+import { ImmHolder } from "#/sample-json-contracts/imm-holder";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { Int64Box } from "#/sample-json-contracts/int64-box";
@@ -443,6 +444,11 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   // #502: a member typed as a non-polymorphic interface.
   V13f: { build: () => new Dashboard("t", new Gauge(5, "kg")) },
   V13g: { assertRead: (value) => expect((value as Dashboard).main).toBeNull() },
+  // #713: ImmutableArray<T> is a struct.
+  V13i: {
+    build: () => new ImmHolder(ImmutableArray.of([1, 2])),
+    assertRead: (value) => expect([...(value as ImmHolder).items]).toEqual([1, 2]),
+  },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
   V15: {
     build: () => HashSet.of(["a", "b"]),

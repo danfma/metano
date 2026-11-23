@@ -24,7 +24,8 @@ export function readNull(spec: JsonTypeInfo): null {
  * `JsonException`, or `undefined` when the descriptor reads `null` (#471,
  * measured on .NET 10): a `string` primitive, containers, `byte[]`, a
  * `nullable` and a `ref` read `null`; a numeric or `bool`/`char` primitive,
- * an enum, a branded value, a temporal value and a `decimal` reject it,
+ * an enum, a branded value, a temporal value, a `decimal` and an
+ * `ImmutableArray<T>` (the one value-type collection, #713) reject it,
  * naming the type the descriptor carries (the element type, wherever the
  * value sits; the declaring contract names itself at the property).
  */
@@ -40,6 +41,7 @@ export function valueTypeNameOf(descriptor: TypeDescriptor): string | undefined 
     case "enum":
     case "numericEnum":
     case "branded":
+    case "immutableArray":
       return descriptor.typeName;
     default:
       return undefined;

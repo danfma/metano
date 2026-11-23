@@ -133,6 +133,11 @@ export type SequenceCollectionDescriptor = {
     | "sortedSet";
   readonly element: TypeDescriptor;
   readonly create: (items: unknown[]) => Iterable<unknown>;
+  /**
+   * The CLR name of a value-type collection (`ImmutableArray<T>`), whose
+   * JSON `null` throws naming it, as System.Text.Json does (#713).
+   */
+  readonly typeName?: string;
 };
 
 /**

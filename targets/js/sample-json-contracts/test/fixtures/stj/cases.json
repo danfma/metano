@@ -519,6 +519,50 @@
     }
   },
   {
+    "id": "V13i",
+    "context": "StudioJsonContext",
+    "getter": "immHolder",
+    "direction": "roundtrip",
+    "expectedClass": "ImmHolder",
+    "json": "{\"Items\":[1,2]}"
+  },
+  {
+    "id": "V13j",
+    "context": "StudioJsonContext",
+    "getter": "immutableArrayInt32",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32]."
+    }
+  },
+  {
+    "id": "V13k",
+    "context": "StudioJsonContext",
+    "getter": "listImmutableArrayInt32",
+    "direction": "read",
+    "json": "[null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32]."
+    }
+  },
+  {
+    "id": "V13l",
+    "context": "StudioJsonContext",
+    "getter": "immHolder",
+    "direction": "read",
+    "json": "{\"Items\":null}",
+    "error": {
+      "class": "JsonException",
+      "stjMessage": "The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32].",
+      "tsMessage": "The JSON value could not be converted to ImmHolder.",
+      "stjPath": "$.Items"
+    },
+    "divergence": "A null property names the declaring contract on the runtime side, STJ the ImmutableArray type (stjPath pins the member, DECIDED-23 c)"
+  },
+  {
     "id": "V15",
     "context": "StudioJsonContext",
     "getter": "hashSetString",
