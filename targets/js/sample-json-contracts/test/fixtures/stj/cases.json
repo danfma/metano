@@ -450,6 +450,141 @@
     "divergence": "StringEnum wire type (baseline mapping), not mutually readable: STJ writes the number, Metano the name"
   },
   {
+    "id": "V13a",
+    "context": "StudioJsonContext",
+    "getter": "perms",
+    "direction": "roundtrip",
+    "json": "3"
+  },
+  {
+    "id": "V13b",
+    "context": "StudioJsonContext",
+    "getter": "color",
+    "direction": "roundtrip",
+    "json": "42"
+  },
+  {
+    "id": "V13c",
+    "context": "StudioJsonContext",
+    "getter": "tiny",
+    "direction": "roundtrip",
+    "json": "200"
+  },
+  {
+    "id": "V13d",
+    "context": "StudioJsonContext",
+    "getter": "tiny",
+    "direction": "read",
+    "json": "300",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Tiny."
+    }
+  },
+  {
+    "id": "V13e",
+    "context": "StudioJsonContext",
+    "getter": "color",
+    "direction": "read",
+    "json": "1.5",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Color."
+    }
+  },
+  {
+    "id": "V13f",
+    "context": "StudioJsonContext",
+    "getter": "dashboard",
+    "direction": "write",
+    "json": "{\"Title\":\"t\",\"Main\":{\"Level\":5}}"
+  },
+  {
+    "id": "V13g",
+    "context": "StudioJsonContext",
+    "getter": "dashboard",
+    "direction": "read",
+    "expectedClass": "Dashboard",
+    "json": "{\"Title\":\"t\",\"Main\":null}"
+  },
+  {
+    "id": "V13h",
+    "context": "StudioJsonContext",
+    "getter": "dashboard",
+    "direction": "read",
+    "json": "{\"Title\":\"t\",\"Main\":{\"Level\":5}}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Deserialization of interface or abstract types is not supported. Type 'SampleJsonContracts.IGauge'."
+    }
+  },
+  {
+    "id": "V13i",
+    "context": "StudioJsonContext",
+    "getter": "immHolder",
+    "direction": "roundtrip",
+    "expectedClass": "ImmHolder",
+    "json": "{\"Items\":[1,2]}"
+  },
+  {
+    "id": "V13j",
+    "context": "StudioJsonContext",
+    "getter": "immutableArrayInt32",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32]."
+    }
+  },
+  {
+    "id": "V13k",
+    "context": "StudioJsonContext",
+    "getter": "listImmutableArrayInt32",
+    "direction": "read",
+    "json": "[null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32]."
+    }
+  },
+  {
+    "id": "V13l",
+    "context": "StudioJsonContext",
+    "getter": "immHolder",
+    "direction": "read",
+    "json": "{\"Items\":null}",
+    "error": {
+      "class": "JsonException",
+      "stjMessage": "The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32].",
+      "tsMessage": "The JSON value could not be converted to ImmHolder.",
+      "stjPath": "$.Items"
+    },
+    "divergence": "A null property names the declaring contract on the runtime side, STJ the ImmutableArray type (stjPath pins the member, DECIDED-23 c)"
+  },
+  {
+    "id": "V13m",
+    "context": "StudioJsonContext",
+    "getter": "point",
+    "direction": "read",
+    "json": "{\"X\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Point."
+    }
+  },
+  {
+    "id": "V13n",
+    "context": "StudioJsonContext",
+    "getter": "tiny",
+    "direction": "read",
+    "json": "-0",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Tiny."
+    }
+  },
+  {
     "id": "V15",
     "context": "StudioJsonContext",
     "getter": "hashSetString",
@@ -976,10 +1111,10 @@
     "error": {
       "class": "JsonException",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
-      "tsMessage": "Invalid numeric enum value: \"1\". Expected one of: 0, 1, 2",
+      "tsMessage": "The JSON value could not be converted to SampleJsonContracts.Color.",
       "stjPath": "$.c"
     },
-    "divergence": "Numeric enum read from a JSON string (Web): both sides reject it; STJ names the declaring type (stjPath pins the member), Metano the enum's values"
+    "divergence": "Numeric enum read from a JSON string (Web): both sides reject it; STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the enum (DECIDED-23 c)"
   },
   {
     "id": "E19c",
@@ -1743,6 +1878,27 @@
     }
   },
   {
+    "id": "T49",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"0:0:0\""
+  },
+  {
+    "id": "T50",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"003:04:05\""
+  },
+  {
+    "id": "T51",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30-02\""
+  },
+  {
     "id": "NU1",
     "context": "StudioJsonContext",
     "getter": "holderInt",
@@ -1980,9 +2136,8 @@
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "write",
-    "sides": ["stj"],
     "json": "{\"Id\":1152921504606846977,\"Mask\":18446744073709551615,\"Parent\":null}",
-    "divergence": "spec 012 012e: the exact 64-bit digits; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012e: the exact 64-bit digits; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I2",
@@ -1991,37 +2146,34 @@
     "direction": "roundtrip",
     "expectedClass": "Int64Box",
     "json": "{\"Id\":42,\"Mask\":7,\"Parent\":null}",
-    "divergence": "runs on both sides: the TypeScript builder passes bigint values, which write and read the same digits"
+    "divergence": "the TypeScript builder passes bigint values, which write and read the same digits"
   },
   {
     "id": "I3",
     "context": "StudioJsonContext",
     "getter": "int64Containers",
     "direction": "write",
-    "sides": ["stj"],
     "json": "{\"Values\":[-9223372036854775808,9223372036854775807],\"ByName\":{\"9223372036854775807\":\"a\",\"-3\":\"b\"},\"ByMask\":{\"18446744073709551615\":\"u\"}}",
-    "divergence": "spec 012 012e: exact 64-bit digits and bigint dictionary keys; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012e: exact 64-bit digits and bigint dictionary keys; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I4",
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
     "json": "{\"Id\":\"x\"}",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to Int64Box.",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012e: the TypeScript side names the property in the error; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012e: the TypeScript side names the property in the error; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I5",
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
     "json": "{\"Id\":1.0}",
     "error": {
       "class": "JsonException",
@@ -2035,21 +2187,19 @@
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
-    "json": "{\"Parent\":\"x\"}",
+    "json": "{\"Id\":1,\"Mask\":1,\"Parent\":\"x\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to Int64Box.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int64].",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012e: STJ names the declaring contract for a nullable member's error too"
+    "divergence": "spec 012 012e: STJ names the declaring contract for a nullable member's error, the runtime the nullable inner type (the 009 nullable-inner design); the required members precede it, so the runtime's missing-member check does not run first (#605)"
   },
   {
     "id": "I7",
     "context": "StudioJsonContext",
     "getter": "int64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "9223372036854775808",
     "error": {
       "class": "JsonException",
@@ -2062,7 +2212,6 @@
     "context": "StudioJsonContext",
     "getter": "uInt64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "-0",
     "error": {
       "class": "JsonException",
@@ -2075,7 +2224,6 @@
     "context": "StudioJsonContext",
     "getter": "int64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "\"05\"",
     "error": {
       "class": "JsonException",
@@ -2088,8 +2236,7 @@
     "context": "StudioJsonContext",
     "getter": "int64Containers",
     "direction": "read",
-    "sides": ["stj"],
-    "json": "{\"ByMask\":{\"-0\":\"a\"}}",
+    "json": "{\"Values\":[],\"ByName\":{},\"ByMask\":{\"-0\":\"a\"}}",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.UInt64."
@@ -2101,8 +2248,7 @@
     "context": "StudioJsonContext",
     "getter": "int64Containers",
     "direction": "read",
-    "sides": ["stj"],
-    "json": "{\"ByName\":{\" 5\":\"a\"}}",
+    "json": "{\"Values\":[],\"ByName\":{\" 5\":\"a\"},\"ByMask\":{}}",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.Int64."
@@ -2114,120 +2260,110 @@
     "context": "StudioJsonContext",
     "getter": "int64Containers",
     "direction": "read",
-    "json": "{\"ByName\":{\"05\":\"a\",\"+5\":\"b\",\"-0\":\"c\"}}",
-    "sides": ["stj"],
-    "divergence": "spec 012 012e: signed key grammar (05, +5, -0 read; the duplicate 5 keeps the last, as a dictionary write does); int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "json": "{\"Values\":[],\"ByName\":{\"05\":\"a\",\"+5\":\"b\",\"-0\":\"c\"},\"ByMask\":{}}",
+    "divergence": "spec 012 012e: signed key grammar (05, +5, -0 read; the duplicate 5 keeps the last, as a dictionary write does); both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I13",
     "context": "StudioJsonContext",
     "getter": "int64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "1e3",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.Int64."
     },
-    "divergence": "spec 012 012h: an exponent is not an integer token, even when its value is (FR-052); deserializeText keeps the token's shape on the exact path (FR-053); int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: an exponent is not an integer token, even when its value is (FR-052); deserializeText keeps the token's shape on the exact path (FR-053); both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I14",
     "context": "StudioJsonContext",
     "getter": "uInt64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "1.0",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.UInt64."
     },
-    "divergence": "spec 012 012h: a fraction is not an integer token, even a zero one; JSON.parse would fold it into 1; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: a fraction is not an integer token, even a zero one; JSON.parse would fold it into 1; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I15",
     "context": "StudioJsonContext",
     "getter": "int64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "-0.0",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.Int64."
     },
-    "divergence": "spec 012 012h: -0 reads as 0, but -0.0 is not an integer token; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: -0 reads as 0, but -0.0 is not an integer token; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I16",
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
-    "json": "{\"Mask\":2.0}",
+    "json": "{\"Id\":1,\"Mask\":2.0}",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to Int64Box.",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012h: a short fraction in a ulong member throws naming the declaring contract; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: a short fraction in a ulong member throws naming the declaring contract; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I17",
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
-    "json": "{\"Parent\":1E0}",
+    "json": "{\"Id\":1,\"Mask\":1,\"Parent\":1E0}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to Int64Box.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int64].",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012h: an uppercase exponent in a nullable member; the runtime names System.Nullable`1[System.Int64] (the I6 divergence); int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: an uppercase exponent in a nullable member; the runtime names System.Nullable`1[System.Int64] (the I6 divergence); both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I18",
     "context": "StudioJsonContext",
     "getter": "int64Containers",
     "direction": "read",
-    "sides": ["stj"],
     "json": "{\"Values\":[1,2.0]}",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.Int64."
     },
-    "divergence": "spec 012 012h: a short fraction in an array element names the element type; int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: a short fraction in an array element names the element type; both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I19",
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
     "json": "{\"Id\":9007199254740993,\"Mask\":18446744073709551615,\"Parent\":-9223372036854775808}",
-    "divergence": "spec 012 012h: 2^53 + 1, ulong.MaxValue and long.MinValue read from their exact digits through deserializeText (FR-053); int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: 2^53 + 1, ulong.MaxValue and long.MinValue read from their exact digits through deserializeText (FR-053); both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I20",
     "context": "StudioJsonContext",
     "getter": "int64",
     "direction": "read",
-    "sides": ["stj"],
     "json": "-0",
-    "divergence": "spec 012 012h: -0 is an integer token and reads as 0 for a long (R7); int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: -0 is an integer token and reads as 0 for a long (R7); both sides run it, the TypeScript side through deserializeText (#605)"
   },
   {
     "id": "I21",
     "context": "StudioJsonContext",
     "getter": "int64Box",
     "direction": "read",
-    "sides": ["stj"],
-    "json": "{\"Mask\":-0}",
+    "json": "{\"Id\":1,\"Mask\":-0}",
     "error": {
       "class": "JsonException",
       "message": "The JSON value could not be converted to Int64Box.",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012h: a ulong member takes no sign, not even -0, through deserializeText too (I8 pins the root); int64-manifest.test.ts runs it against the int64 mirrors (the generated contexts carry the int64 descriptors since the 012k flip; #605 moves the row to this harness)"
+    "divergence": "spec 012 012h: a ulong member takes no sign, not even -0, through deserializeText too (I8 pins the root); both sides run it, the TypeScript side through deserializeText (#605)"
   }
 ]

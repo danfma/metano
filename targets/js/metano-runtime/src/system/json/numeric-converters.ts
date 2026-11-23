@@ -110,8 +110,8 @@ export function primitiveConverterOf(
  *   range-checks: a safe-integer `number` from untyped code writes its
  *   digits too, and any value outside the 64-bit range — a negative one for
  *   a `ulong` — or of any other kind throws `JsonException` (FR-051). A
- *   bigint has no negative zero (`-0n === 0n`), so a `-0` write puts `0`
- *   into the slot.
+ *   `-0` write, a `number` or a `bigint` (`-0n === 0n`), puts `0` into the
+ *   slot, a ulong's included (#545); a `-0` read into a ulong still throws.
  * - Read as a `bigint` in range from: a `bigint`; a `rawJSON` leaf or
  *   `JsonNumberText` whose text is a JSON integer token (`-0` reads `0`,
  *   `1.0` / `1e3` are not tokens, R7 — the exact text the
@@ -123,8 +123,8 @@ export function primitiveConverterOf(
  *   Anything else throws System.Text.Json's conversion error (FR-052),
  *   a `JsonNonIntegerNumber` (`1.0`, `1e3` read from text) included.
  * - The descriptor's `create` — a `[Branded]` type's companion factory —
- *   builds the read value, as the branded converter does. FR-050 does not
- *   describe that factory case; the review of slice 012e (#450) added it.
+ *   builds the read value, as the branded converter does (added by the
+ *   review of slice 012e, #450).
  */
 export function int64ConverterOf(
   descriptor: Int64Descriptor,
@@ -144,10 +144,7 @@ export function int64ConverterOf(
     }
 
     if (typeof value === "number" && Number.isSafeInteger(value)) {
-      // `-0` is a safe integer whose bigint is in a ulong's range, but a
-      // ulong takes no sign (measured: STJ throws for `-0`).
-      if (Object.is(value, -0) && numberType === "System.UInt64") return undefined;
-
+      // `-0` writes `0`, in a ulong slot too: `BigInt(-0)` is `0n` (#545).
       const read = BigInt(value);
 
       return isWithinIntegerRange(read, numberType) ? read : undefined;

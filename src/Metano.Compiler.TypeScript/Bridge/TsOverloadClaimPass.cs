@@ -33,6 +33,8 @@ internal sealed class TsOverloadClaimPass
     private readonly Dictionary<int, TsConstructorOverloadNames> _constructors = [];
     private readonly Dictionary<TsMethodOverloadKey, TsMethodOverloadNames> _methods = [];
     private readonly List<TsClaimFinding> _findings = [];
+    private readonly List<TsInterfaceRequirement> _forwarded = [];
+    private readonly List<TsForwardingRoot> _forwardingRoots = [];
 
     private TsOverloadClaimPass(TsClaimPassInput input)
     {
@@ -67,7 +69,11 @@ internal sealed class TsOverloadClaimPass
             new TsClaimSides(SideOf(Inherited, _statics), SideOf(InheritedInstances, _instances)),
             new TsClaimSides(Inherited, InheritedInstances),
             _findings
-        );
+        )
+        {
+            InterfaceForwarders = [.. _forwarded.Select(ForwarderOf)],
+            ForwardingRoots = _forwardingRoots,
+        };
     }
 
     /// <summary>
@@ -292,11 +298,104 @@ internal sealed class TsOverloadClaimPass
         );
     }
 
-    /// <summary>Step 5: the fast paths of each dispatched method group.</summary>
+    /// <summary>
+    /// Step 5: the fast paths of each dispatched method group. Every group's
+    /// anchored names come first, then the forwarders of the names the
+    /// class's interfaces require, then the own fast paths: an own candidate
+    /// never takes a name an interface requires of the class (#595).
+    /// </summary>
     private void ClaimMethodFastPaths()
     {
-        foreach (var group in OverloadGroups(isOperator: false))
-            ClaimFastPaths(group, TsClassMemberTable.MethodNameOf(group.Primary));
+        var groups = OverloadGroups(isOperator: false)
+            .Select(group =>
+                (Group: group, BaseName: TsClassMemberTable.MethodNameOf(group.Primary))
+            )
+            .ToList();
+
+        foreach (var (group, baseName) in groups)
+            ClaimAnchoredFastPaths(group, baseName);
+
+        ClaimInterfaceForwarders();
+        ClaimForwardingRoots();
+
+        foreach (var (group, baseName) in groups)
+            ClaimOwnFastPaths(group, baseName);
+    }
+
+    /// <summary>
+    /// Reserves the name of each constructed root that no method of the class
+    /// is anchored on but that the class implements through methods outside
+    /// it (<see cref="IrConstructedRoot.Forwards"/>, #594), for a runtime
+    /// dispatcher that forwards to them.
+    /// </summary>
+    private void ClaimForwardingRoots()
+    {
+        var anchoredRoots = _input
+            .Ir.Members?.OfType<IrMethodDeclaration>()
+            .SelectMany(method => IrMethodGroup.Of(method).Members)
+            .Select(_input.Ir.ConstructedRootOf)
+            .OfType<IrConstructedRoot>()
+            .ToHashSet();
+
+        foreach (var root in _input.Ir.ConstructedRoots ?? [])
+        {
+            if (anchoredRoots?.Contains(root) is true || root.Forwards.All(f => f is null))
+                continue;
+
+            if (_input.RootFastPathOf(root.Root) is not { } name)
+                continue;
+
+            if (HolderOfFastPath(name, isStatic: false) is not null)
+                continue;
+
+            _instances[name] = new TsClaimedMember(
+                TsClaimedMemberKind.FastPath,
+                $"the runtime dispatcher of '{name}'",
+                TypeName,
+                Declaration: name
+            );
+
+            _forwardingRoots.Add(new TsForwardingRoot(name, root));
+        }
+    }
+
+    /// <summary>
+    /// Reserves each name an interface requires of the class that neither the
+    /// class nor its base declares, for a forwarding member to the
+    /// implementation (<see cref="TsInterfaceRequirement"/>).
+    /// </summary>
+    private void ClaimInterfaceForwarders()
+    {
+        foreach (var requirement in _input.InterfaceRequirements)
+        {
+            if (HolderOfFastPath(requirement.Name, isStatic: false) is not null)
+                continue;
+
+            var implementation = requirement.Signature.SignatureText ?? requirement.Signature.Name;
+
+            _instances[requirement.Name] = new TsClaimedMember(
+                TsClaimedMemberKind.FastPath,
+                $"the forwarder of '{implementation}'",
+                TypeName,
+                Declaration: implementation
+            );
+
+            _forwarded.Add(requirement);
+        }
+    }
+
+    /// <summary>
+    /// The forwarder of a reserved name, to the implementation's emitted name:
+    /// an inherited one as its base named it, an own overload's fast path, or
+    /// an own method alone under its name.
+    /// </summary>
+    private TsInterfaceForwarder ForwarderOf(TsInterfaceRequirement requirement)
+    {
+        var target = requirement.InheritedImplementation
+            ?? _methods.GetValueOrDefault(requirement.OwnImplementation!)?.FastPath
+            ?? TsClassMemberTable.MethodNameOf(requirement.Signature);
+
+        return new TsInterfaceForwarder(requirement.Name, target, requirement.Signature);
     }
 
     /// <summary>Step 6: the fast paths of each overloaded operator group.</summary>
@@ -377,8 +476,16 @@ internal sealed class TsOverloadClaimPass
     /// </summary>
     private void ClaimFastPaths(IrMethodGroup group, string baseName)
     {
-        // The root names first: an own candidate never takes a name an
-        // anchored overload must keep.
+        ClaimAnchoredFastPaths(group, baseName);
+        ClaimOwnFastPaths(group, baseName);
+    }
+
+    /// <summary>
+    /// The root names of a group's anchored overloads: an own candidate never
+    /// takes a name an anchored overload must keep.
+    /// </summary>
+    private void ClaimAnchoredFastPaths(IrMethodGroup group, string baseName)
+    {
         foreach (var overload in group.Members)
         {
             if (overload.Anchor is not { } anchor)
@@ -388,7 +495,13 @@ internal sealed class TsOverloadClaimPass
 
             RecordFastPath(overload, fastPath, RootNamesOf(anchor, fastPath));
         }
+    }
 
+    /// <summary>
+    /// The fast paths of a group's own overloads, claimed in its table.
+    /// </summary>
+    private void ClaimOwnFastPaths(IrMethodGroup group, string baseName)
+    {
         // A synthesized member's fast path is claimed before the user
         // overloads': on a clash the user overload moves, never the stable
         // name derived types override (spec 013 FR-042).
@@ -686,7 +799,20 @@ internal sealed record TsClaimPassInput(
     IReadOnlyDictionary<string, TsClaimedMember> InheritedInstances,
     Func<IrConstructorDeclaration, TsFactorySignature> FactorySignatureOf,
     Func<IrOverloadRef, string?> RootFastPathOf
-);
+)
+{
+    /// <summary>
+    /// The names the interfaces the class declares require of it
+    /// (<see cref="TsInterfaceRequirement"/>); none by default.
+    /// </summary>
+    public IReadOnlyList<TsInterfaceRequirement> InterfaceRequirements { get; init; } = [];
+}
+
+/// <summary>
+/// A constructed root the class implements only through methods outside its
+/// runtime dispatcher, and the name that dispatcher takes (#594).
+/// </summary>
+internal sealed record TsForwardingRoot(string Name, IrConstructedRoot Root);
 
 /// <summary>The name an overload declares for one of its roots.</summary>
 internal sealed record TsRootName(IrOverloadRef Root, string Name);

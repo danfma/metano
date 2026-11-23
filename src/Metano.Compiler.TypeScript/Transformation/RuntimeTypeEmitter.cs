@@ -686,17 +686,19 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         new(name, [describedType], RuntimeHelperBinding: name);
 
     /// <summary>
-    /// The described type, with <c>unknown</c> for each type parameter: a static
-    /// getter cannot name the class's own type parameters (TS2302), and the
+    /// The described type, with <c>unknown</c> for each type parameter — its
+    /// generic containers' included, which a nested type declares too (#436): a
+    /// static getter cannot name the class's own type parameters (TS2302), and the
     /// descriptor describes the open definition.
     /// </summary>
-    private static TsNamedType SelfType(INamedTypeSymbol type, string tsName) =>
-        type.TypeParameters.Length == 0
+    private static TsNamedType SelfType(INamedTypeSymbol type, string tsName)
+    {
+        var arity = GenericContainers.TypeParametersOf(type).Count + type.TypeParameters.Length;
+
+        return arity == 0
             ? new TsNamedType(tsName)
-            : new TsNamedType(
-                tsName,
-                [.. type.TypeParameters.Select(_ => new TsNamedType("unknown"))]
-            );
+            : new TsNamedType(tsName, [.. Enumerable.Repeat(new TsNamedType("unknown"), arity)]);
+    }
 
     /// <summary><c>(v: unknown): v is X =&gt; test</c>.</summary>
     private static TsArrowFunction Predicate(TsType described, TsExpression test) =>

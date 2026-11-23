@@ -25,6 +25,12 @@ public static class SymbolHelper
     /// <summary>The prefix of a C# tuple's default element names (<c>Item1</c>, …).</summary>
     private const string TupleItemPrefix = "Item";
 
+    /// <summary>The <see cref="HasExtensionMembers"/> answer per type, computed once.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        INamedTypeSymbol,
+        System.Runtime.CompilerServices.StrongBox<bool>
+    > ExtensionMemberHolders = new();
+
     /// <summary>
     /// Stable display format used when the same type symbol must produce the
     /// same string in two unrelated places — for instance, both
@@ -833,24 +839,85 @@ public static class SymbolHelper
         HasNoContainer(symbol) || HasExportedAsModule(symbol);
 
     /// <summary>
-    /// Whether the method is one exported module function a target emits
-    /// (spec 013 FR-032): an ordinary public static (<see
-    /// cref="IsPublicOrdinaryStatic"/>) that none of the exclusions
-    /// drops — <c>[Ignore]</c>, a call-site lowering (<see
-    /// cref="IsInlinedAtCallSite"/>), a member declared inside a C# 14
-    /// <c>extension</c> block (emitted from the block instead), a property
-    /// accessor or a <c>get_</c>/<c>set_</c>-named helper. The one
-    /// definition the module-function extractor, the barrel claim pass and
-    /// the export registry share.
+    /// Whether a type declares extension members: a classic <c>this T</c>
+    /// extension method or a C# 14 <c>extension(...)</c> block, whatever their
+    /// accessibility or attributes. A target may emit such a static class as a
+    /// module of functions even without <c>[NoContainer]</c>. Computed once per
+    /// type, since the block test scans the declaring syntax.
+    /// </summary>
+    public static bool HasExtensionMembers(this INamedTypeSymbol type) =>
+        ExtensionMemberHolders
+            .GetValue(
+                type.OriginalDefinition,
+                definition => new System.Runtime.CompilerServices.StrongBox<bool>(
+                    DeclaresExtensionMembers(definition)
+                )
+            )
+            .Value;
+
+    /// <summary>
+    /// Whether a static class holding extension members is one the toolchain emits
+    /// itself (#554): transpiled for <paramref name="target"/>, not containerless (that
+    /// is <see cref="IsContainerless"/>) and bound to no runtime declaration
+    /// (<c>[Import]</c>, <c>[External]</c>). A BCL class such as <c>Enumerable</c>, a
+    /// type of a plain metadata reference and a bound class are not, so their static
+    /// calls keep the class qualifier. A target that emits such a class as a module of
+    /// functions flattens exactly the static calls into these types.
+    /// </summary>
+    public static bool IsEmittedExtensionContainer(
+        this INamedTypeSymbol type,
+        TargetLanguage? target
+    ) =>
+        type is { IsStatic: true }
+        && !type.IsContainerless()
+        && !HasImport(type)
+        && !HasExternal(type)
+        && Extraction.IrTypeRefMapper.IsTranspilableType(type, target)
+        && type.HasExtensionMembers();
+
+    private static bool DeclaresExtensionMembers(INamedTypeSymbol type) =>
+        type.GetMembers()
+            .OfType<IMethodSymbol>()
+            .Any(method => method is { IsExtensionMethod: true, MethodKind: MethodKind.Ordinary })
+        || type.DeclaringSyntaxReferences.Any(reference =>
+            reference
+                .GetSyntax()
+                .DescendantNodes()
+                .Any(node => node.Kind().ToString() == "ExtensionBlockDeclaration")
+        );
+
+    /// <summary>
+    /// Whether the method is one module function a target emits (spec 013
+    /// FR-032): an ordinary static (<see cref="IsOrdinaryStatic"/>) of any
+    /// accessibility — a private helper is emitted beside the functions that
+    /// call it (#609) — that none of the exclusions drops: <c>[Ignore]</c>, a
+    /// call-site lowering (<see cref="IsInlinedAtCallSite"/>), a member
+    /// declared inside a C# 14 <c>extension</c> block (emitted from the block
+    /// instead), a property accessor or a <c>get_</c>/<c>set_</c>-named
+    /// helper. The one definition the module-function extractor, the barrel
+    /// claim pass and the call-site binding share; <see
+    /// cref="IsExportedModuleFunction"/> narrows it to what other files import.
     /// </summary>
     public static bool IsEmittedModuleFunction(this IMethodSymbol method, TargetLanguage? target) =>
-        IsPublicOrdinaryStatic(method)
+        IsOrdinaryStatic(method)
         && !HasIgnore(method, target)
         && !method.IsInlinedAtCallSite()
         && !IsDeclaredInsideExtensionBlock(method)
         && method.AssociatedSymbol is not IPropertySymbol
         && !method.Name.StartsWith("get_", StringComparison.Ordinal)
         && !method.Name.StartsWith("set_", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether the method is an emitted module function other files may import (<see
+    /// cref="IsEmittedModuleFunction"/>): any one but a private helper, which stays
+    /// local to its module. The export registries read this one.
+    /// </summary>
+    public static bool IsExportedModuleFunction(
+        this IMethodSymbol method,
+        TargetLanguage? target
+    ) =>
+        method.DeclaredAccessibility is not Accessibility.Private
+        && IsEmittedModuleFunction(method, target);
 
     /// <summary>
     /// Whether the method's declaring syntax sits inside a C# 14
@@ -875,14 +942,12 @@ public static class SymbolHelper
     }
 
     /// <summary>
-    /// Whether the method is an ordinary public static — classic extensions
-    /// included, whose receiver Roslyn already exposes as the first
-    /// parameter: the shape every exported module function starts from.
+    /// Whether the method is an ordinary static — classic extensions included,
+    /// whose receiver Roslyn already exposes as the first parameter: the shape
+    /// every module function starts from.
     /// </summary>
-    private static bool IsPublicOrdinaryStatic(IMethodSymbol method) =>
-        method.IsStatic
-        && method.MethodKind == MethodKind.Ordinary
-        && method.DeclaredAccessibility == Accessibility.Public;
+    private static bool IsOrdinaryStatic(IMethodSymbol method) =>
+        method.IsStatic && method.MethodKind == MethodKind.Ordinary;
 
     /// <summary>
     /// A member of a C# 14 <c>extension(R r) { … }</c> block: Roslyn declares it

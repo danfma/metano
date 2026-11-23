@@ -88,14 +88,12 @@ public sealed partial class IrExpressionExtractor
             ? arguments[defaultValueIndex]
             : null;
 
+    /// <summary>
+    /// The unresolved <c>default</c> marker. A <c>default!</c> arrives bare:
+    /// the extraction erases <c>!</c> over a literal (<c>AssertNonNull</c>).
+    /// </summary>
     private static bool IsDefaultLiteral(IrExpression expression) =>
-        expression
-            is IrLiteral { Kind: IrLiteralKind.Default }
-                or IrUnaryExpression
-                {
-                    Operator: IrUnaryOp.NonNullAssertion,
-                    Operand: IrLiteral { Kind: IrLiteralKind.Default }
-                };
+        expression is IrLiteral { Kind: IrLiteralKind.Default };
 
     private static IReadOnlyList<IrExpression> ValuesOf(IReadOnlyList<IrArgument> arguments) =>
         arguments.Select(argument => argument.Value).ToList();

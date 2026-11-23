@@ -199,3 +199,32 @@ describe("JSON collection kinds of stage 011h", () => {
     ]);
   });
 });
+
+describe("JSON null for a value-type collection (#713)", () => {
+  const IMMUTABLE_ARRAY_INT32 = "System.Collections.Immutable.ImmutableArray`1[System.Int32]";
+
+  const immutableArray = {
+    kind: "immutableArray",
+    element: int32,
+    create: (items: unknown[]) => ImmutableArray.of(items),
+    typeName: IMMUTABLE_ARRAY_INT32,
+  } as const;
+
+  test("an ImmutableArray element rejects null, naming its CLR type", () => {
+    const spec: ValueSpec<List<ImmutableArray<number>>> = {
+      descriptor: { kind: "list", element: immutableArray, create: (items) => List.of(items) },
+    };
+
+    expect(() => JsonSerializer.deserialize([null], spec)).toThrow(
+      `The JSON value could not be converted to ${IMMUTABLE_ARRAY_INT32}.`,
+    );
+  });
+
+  test("a nullable ImmutableArray reads null", () => {
+    const spec: ValueSpec<ImmutableArray<number> | null> = {
+      descriptor: { kind: "nullable", inner: immutableArray },
+    };
+
+    expect(JsonSerializer.deserialize(null, spec)).toBeNull();
+  });
+});

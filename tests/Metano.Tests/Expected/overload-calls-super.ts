@@ -14,7 +14,6 @@ export class Derived extends Base {
   constructor();
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Derived.byDerivedC) {
-      const c = args[1] as number;
       super(Base.byBaseAB, 1, 5);
 
       return;
@@ -34,7 +33,6 @@ export class Derived extends Base {
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const c = args[0] as number;
       super(Base.byBaseAB, 1, 5);
 
       return;

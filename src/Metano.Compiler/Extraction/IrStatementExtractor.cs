@@ -1,4 +1,5 @@
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -296,7 +297,8 @@ public sealed class IrStatementExtractor(
             : [ExtractStatement(statement)];
 
     private IrStatement ExtractStatement(StatementSyntax statement) =>
-        InlineCodeStatementOf(statement) ?? ExtractOrdinaryStatement(statement);
+        InlineCodeStatementOf(statement)
+        ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement));
 
     /// <summary>A <c>Js.Code</c> call as an expression statement keeps its statement form (spec 011 FR-031).</summary>
     private IrStatement? InlineCodeStatementOf(StatementSyntax statement) =>
@@ -354,6 +356,36 @@ public sealed class IrStatementExtractor(
         };
 
     /// <summary>
+    /// <paramref name="lowered"/>, after reporting MS0001 on the first
+    /// <c>yield</c> of an <c>async</c> iterator (<c>async IAsyncEnumerable&lt;T&gt;</c>,
+    /// #625): no target lowers an asynchronous iterator yet, so its output
+    /// would iterate the wrong protocol.
+    /// </summary>
+    private IrStatement ReportedIfAsyncIterator(StatementSyntax statement, IrStatement lowered)
+    {
+        if (
+            statement is YieldStatementSyntax yield
+            && _semantic.GetEnclosingSymbol(yield.SpanStart)
+                is IMethodSymbol { IsAsync: true } method
+            && IsFirstYieldOf(method, yield)
+        )
+            ExtractionDiagnostics.Report(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"Async iterator '{method.Name}' (an 'async' method that yields) is not supported by the transpiler.",
+                    yield.GetLocation()
+                )
+            );
+
+        return lowered;
+    }
+
+    private static bool IsFirstYieldOf(IMethodSymbol method, YieldStatementSyntax yield) =>
+        method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is { } declaration
+        && declaration.DescendantNodes().OfType<YieldStatementSyntax>().FirstOrDefault() == yield;
+
+    /// <summary>
     /// Lowers a C# <c>for (init; cond; inc) { body }</c> to
     /// <see cref="IrForStatement"/>, keeping every declarator of the
     /// initializer (<c>int i = 0, j = n</c>), every initializer expression
@@ -388,6 +420,7 @@ public sealed class IrStatementExtractor(
                 : null;
         var collection = _expressions.Extract(fe.Expression);
         var collectionType = CollectionTypeOf(fe.Expression);
+        var isAwait = fe.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword);
         var body = ExtractEmbedded(fe.Statement);
 
         // `$` is not legal in a C# identifier, so the raw element's name
@@ -398,6 +431,7 @@ public sealed class IrStatementExtractor(
             return new IrForEachStatement(variable, variableType, collection, body)
             {
                 CollectionType = collectionType,
+                IsAwait = isAwait,
             };
 
         // `foreach (long x in ints)`, `foreach (int x in doubles)`: iterate the
@@ -408,6 +442,7 @@ public sealed class IrStatementExtractor(
         return new IrForEachStatement(element, null, collection, [declaration, .. body])
         {
             CollectionType = collectionType,
+            IsAwait = isAwait,
         };
     }
 

@@ -32,8 +32,23 @@ public static class IrToTsTypeMapper
                 + "the runtime exception classes are unknown."
         );
 
-    public static TsType Map(IrTypeRef type, IrToTsTypeOverrides? overrides = null) =>
-        overrides?.TryResolve(type) is { } overridden ? overridden : MapCore(type, overrides);
+    /// <summary>
+    /// The TypeScript type of <paramref name="type"/>. Without explicit
+    /// <paramref name="overrides"/>, the running transform's
+    /// <c>[ExportFromBcl]</c> overrides (<see cref="BclOverrides"/>) apply, so a
+    /// position outside class emission (a module function, a companion, a
+    /// plain object, a branded type) spells a BCL-exported type
+    /// (<c>decimal</c> → <c>Decimal</c>) as its runtime value and as the class
+    /// emitter does (#525).
+    /// </summary>
+    public static TsType Map(IrTypeRef type, IrToTsTypeOverrides? overrides = null)
+    {
+        var effective = overrides ?? BclOverrides;
+
+        return effective?.TryResolve(type) is { } overridden
+            ? overridden
+            : MapCore(type, effective);
+    }
 
     private static TsType MapCore(IrTypeRef type, IrToTsTypeOverrides? overrides) =>
         type switch
@@ -211,12 +226,22 @@ public static class IrToTsTypeMapper
             ? BuildTsOrigin(o, originalName ?? name)
             : null;
 
-        IReadOnlyList<TsType>? args = named.TypeArguments is { Count: > 0 } ta
+        IReadOnlyList<TsType>? args = AllTypeArgumentsOf(named) is { Count: > 0 } ta
             ? ta.Select(t => Map(t, overrides)).ToList()
             : null;
 
         return new TsNamedType(name, args, origin, originalName);
     }
+
+    /// <summary>
+    /// The type arguments a reference to <paramref name="named"/> passes: those of
+    /// its generic containers, which its declaration binds as its own leading type
+    /// parameters (#436), then its own.
+    /// </summary>
+    internal static IReadOnlyList<IrTypeRef>? AllTypeArgumentsOf(IrNamedTypeRef named) =>
+        named.ContainerTypeArguments is { } container
+            ? [.. container, .. named.TypeArguments ?? []]
+            : named.TypeArguments;
 
     /// <summary>
     /// Resolves the cross-package <see cref="TsTypeOrigin"/> for a type reference, or

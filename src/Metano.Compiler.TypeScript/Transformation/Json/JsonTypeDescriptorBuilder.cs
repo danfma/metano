@@ -23,6 +23,9 @@ internal sealed class JsonTypeDescriptorBuilder(
     JsonContextReadOptions readOptions
 )
 {
+    /// <summary>The underlying type of an enum that declares none, which the runtime assumes.</summary>
+    private const string DefaultEnumNumberType = "System.Int32";
+
     private readonly TypeScriptTransformContext _context = context;
     private readonly JsonTypeInfoNames _names = names;
     private readonly JsonContextReadOptions _readOptions = readOptions;
@@ -128,18 +131,26 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// over its element, with the <c>create</c> closure that builds the
     /// runtime class from the read elements (spec 011 contracts/runtime-
     /// collections.md § JSON collection kinds), so <c>system/json</c> imports
-    /// no collection class.
+    /// no collection class. A value-type collection (<c>ImmutableArray&lt;T&gt;</c>)
+    /// also names its CLR <c>typeName</c>: System.Text.Json rejects JSON
+    /// <c>null</c> for it, naming that type (measured on .NET 10, #713).
     /// </summary>
     private TsObjectLiteral BuildCollectionDescriptor(
         ITypeSymbol type,
         JsonPropertyKind kind,
         ITypeSymbol elementType
-    ) =>
-        new([
+    )
+    {
+        var descriptor = new TsObjectLiteral([
             CollectionKindProperty(type, kind),
             new TsObjectProperty("element", Build(elementType)),
             new TsObjectProperty("create", CollectionCreateClosure(type, kind)),
         ]);
+
+        return type.IsValueType
+            ? WithStringProperty(descriptor, "typeName", ClrTypeName.Of(type))
+            : descriptor;
+    }
 
     private TsObjectLiteral BuildDictionaryDescriptor(ITypeSymbol type) =>
         new([
@@ -279,7 +290,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         // [JsonFactory] member when one exists) and its CLR typeName on the
         // int64 descriptor: the runtime calls create after the exact read,
         // as the branded converter does, so MS0034's honored factory stays
-        // honored. The factory case FR-050 does not describe.
+        // honored (added by the review of slice 012e, #450).
         if (type is INamedTypeSymbol branded && SymbolHelper.HasBranded(branded))
         {
             var (factoryTypeName, member) = BrandedFactoryTarget(branded);
@@ -311,10 +322,11 @@ internal sealed class JsonTypeDescriptorBuilder(
             : QualifiedReference(typeName);
 
     /// <summary>
-    /// A temporal descriptor parses through its mapped <c>Temporal</c> type
-    /// (a hand-written spec's path) and names its CLR <c>typeName</c>, which
-    /// tells the runtime to read with System.Text.Json's own grammar and to
-    /// report its conversion errors (#485).
+    /// A temporal descriptor names its CLR <c>typeName</c>, which tells the
+    /// runtime to read with System.Text.Json's own grammar and to report its
+    /// conversion errors (#485). The <c>parse</c> of the mapped
+    /// <c>Temporal</c> type is still emitted, but the runtime reads it only
+    /// for a hand-written descriptor without <c>typeName</c> (#512).
     /// </summary>
     private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
     {
@@ -410,12 +422,25 @@ internal sealed class JsonTypeDescriptorBuilder(
             new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
 
-        // A 64-bit enum's values are `bigint`s: naming its underlying type in
-        // every slot reads and writes them through the int64 path (#701).
-        return TsEnumRepresentation.IsBigInt(type)
-            ? WithStringProperty(descriptor, "numberType", EnumUnderlyingNumberTypeOf(type)!)
+        return
+            kind == JsonPropertyKind.NumericEnum
+            && NamedUnderlyingNumberTypeOf(type) is { } numberType
+            ? WithStringProperty(descriptor, "numberType", numberType)
             : descriptor;
     }
+
+    /// <summary>
+    /// The underlying type a numeric enum's value descriptor names in every
+    /// slot, or <c>null</c> for an <c>int</c> enum (the runtime's default): the
+    /// runtime reads any integer of that type, declared or not, as System.Text.Json
+    /// does (#369), and a 64-bit enum's <c>bigint</c> values go through the
+    /// int64 path (#701).
+    /// </summary>
+    private static string? NamedUnderlyingNumberTypeOf(ITypeSymbol enumType) =>
+        EnumUnderlyingNumberTypeOf(enumType) is { } numberType
+        && numberType != DefaultEnumNumberType
+            ? numberType
+            : null;
 
     private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type) =>
         new([
@@ -490,9 +515,9 @@ internal sealed class JsonTypeDescriptorBuilder(
         JsonPropertyKind kind
     ) =>
         kind == JsonPropertyKind.NumericEnum
-        // A 64-bit enum's value descriptor already names its underlying type
-        // (in every slot, #701), so the key does not add it a second time.
-        && !TsEnumRepresentation.IsBigInt(keyType)
+        // A value descriptor already names any underlying type but `int` (in
+        // every slot, #369 / #701), so the key does not add it a second time.
+        && NamedUnderlyingNumberTypeOf(keyType) is null
         && EnumUnderlyingNumberTypeOf(keyType) is { } numberType
             ? WithStringProperty(descriptor, "numberType", numberType)
             : descriptor;

@@ -84,7 +84,8 @@ internal sealed record NumericLoweringRules(
     /// <paramref name="to"/> becomes an <see cref="IrNumericConversion"/>: a
     /// floating-point truncation (FR-070), a narrowing between two integers
     /// of 32 bits or fewer (FR-074), a <c>decimal</c> read as a
-    /// <c>double</c> or <c>float</c>, a <c>char</c> read as a number or, when
+    /// <c>double</c> or <c>float</c> or as an integer of 32 bits or fewer
+    /// (every target, #604: the target renders it), a <c>char</c> read as a number or, when
     /// the target lowers char codes, made of an integer (FR-071, FR-072), a
     /// <c>decimal</c> made of such an integer when the target lowers decimal
     /// values (FR-080), and the conversions of
@@ -100,10 +101,7 @@ internal sealed record NumericLoweringRules(
             || (LowersCharCodes && IrNumericConversion.IsCharStore(source, target))
             || IrNumericConversion.IsIntegerNarrowing(source, target)
             || IrNumericConversion.IsDecimalToBinaryFloatingPoint(source, target)
-            || (
-                ComputesDecimalByMethods
-                && IrNumericConversion.IsDecimalToNarrowInteger(source, target)
-            )
+            || IrNumericConversion.IsDecimalToNarrowInteger(source, target)
             || IsLoweredIntegerToDecimal(source, target)
             || CrossesSixtyFourBits(source, target);
     }

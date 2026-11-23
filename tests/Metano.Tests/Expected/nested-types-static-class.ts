@@ -94,6 +94,7 @@ class ShotSchedule$Deep$Leaf {
 export class ShotSchedule {
   constructor() { }
 
+  /** @internal */
   static get Kind(): typeof ShotSchedule$Kind {
     return ShotSchedule$Kind;
   }
@@ -127,6 +128,7 @@ export class ShotSchedule {
 }
 
 export declare namespace ShotSchedule {
+  /** @internal */
   export type Kind = ShotSchedule$Kind;
 
   export type Slot = ShotSchedule$Slot;

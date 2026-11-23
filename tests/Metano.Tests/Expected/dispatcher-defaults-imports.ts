@@ -20,14 +20,12 @@ export class Painter {
     }
 
     if (typeof args[0] === "symbol" && args[0] === Painter.byPainterFlag) {
-      const flag = args[1] as boolean;
       this.log = "bool";
 
       return;
     }
 
     if (args.length === 1 && isBool(args[0])) {
-      const flag = args[0] as boolean;
       this.log = "bool";
 
       return;

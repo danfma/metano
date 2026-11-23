@@ -13,28 +13,24 @@ export class Money {
   constructor(cents: number);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyAmount) {
-      const amount = args[1] as Decimal;
       this.how = "amount";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyCents) {
-      const cents = args[1] as number;
       this.how = "cents";
 
       return;
     }
 
     if (args.length === 1 && isDecimal(args[0])) {
-      const amount = args[0] as Decimal;
       this.how = "amount";
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const cents = args[0] as number;
       this.how = "cents";
 
       return;

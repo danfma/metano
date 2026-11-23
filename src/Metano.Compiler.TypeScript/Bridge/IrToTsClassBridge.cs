@@ -86,7 +86,7 @@ internal static partial class IrToTsClassBridge
     /// <c>extends</c> bound and the legacy transformer made the same choice.
     /// </summary>
     public static IReadOnlyList<TsTypeParameter>? BuildTypeParameters(IrClassDeclaration ir) =>
-        IrToTsTypeParameterMapper.Convert(ir.TypeParameters);
+        IrToTsTypeParameterMapper.ConvertDeclared(ir);
 
     /// <summary>
     /// Prints the implicit <c>default(T)</c> initializer of a field / property

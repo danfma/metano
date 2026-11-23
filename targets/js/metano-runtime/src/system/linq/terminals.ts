@@ -11,7 +11,9 @@
  */
 import { Dictionary } from "../collections/dictionary.ts";
 import { HashSet } from "../collections/hash-set.ts";
+import { throwOOR } from "../collections/throw-helpers.ts";
 import { List } from "../collections/list.ts";
+import { ArgumentOutOfRangeException } from "../exceptions/argument-out-of-range-exception.ts";
 import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";
 import type { RuntimeType } from "../reflection/runtime-type.ts";
 import { compareKeys } from "./compare-keys.ts";
@@ -23,6 +25,8 @@ import type {
   AverageTerm,
   ContainsTerm,
   CountTerm,
+  ElementAtOrDefaultTerm,
+  ElementAtTerm,
   FirstOrDefaultTerm,
   FirstTerm,
   LastOrDefaultTerm,
@@ -189,6 +193,79 @@ export function firstOrDefault<T>(
       return defaultValue;
     },
   };
+}
+
+/**
+ * `ElementAt(index)`.
+ *
+ * @throws ArgumentOutOfRangeException when `index` is negative or past the last element.
+ */
+export function elementAt<T>(index: number): ElementAtTerm<T> {
+  return {
+    kind: "elementAt",
+    index,
+    apply: (source) => {
+      const found = elementOf(source, index);
+
+      if (found === undefined) return throwIndexOutOfRange(source);
+
+      return found.value;
+    },
+  };
+}
+
+/**
+ * `ElementAtOrDefault(index)`: without a `defaultValue` a miss is `null`; with one, the
+ * result is a `T`. `T` comes from the surrounding `linq(...)` call.
+ */
+export function elementAtOrDefault<T>(
+  index: number,
+  defaultValue?: null,
+): ElementAtOrDefaultTerm<T, null>;
+export function elementAtOrDefault<T>(
+  index: number,
+  defaultValue: NoInfer<T>,
+): ElementAtOrDefaultTerm<T, T>;
+export function elementAtOrDefault<T>(
+  index: number,
+  defaultValue: T | null = null,
+): ElementAtOrDefaultTerm<T> {
+  return {
+    kind: "elementAtOrDefault",
+    index,
+    defaultValue,
+    apply: (source) => {
+      const found = elementOf(source, index);
+
+      return found === undefined ? defaultValue : found.value;
+    },
+  };
+}
+
+/**
+ * An index outside the source. An array or a `List` (`IList<T>` in .NET) reports the
+ * collection message, any other sequence the generic one.
+ */
+function throwIndexOutOfRange(source: Iterable<unknown>): never {
+  if (Array.isArray(source) || source instanceof List) {
+    return throwOOR();
+  }
+
+  throw new ArgumentOutOfRangeException("index");
+}
+
+/** The element at `index`, boxed so an element that is `undefined` or `null` is told from a miss. */
+function elementOf<T>(source: Iterable<T>, index: number): { readonly value: T } | undefined {
+  if (index < 0) return undefined;
+
+  let position = 0;
+
+  for (const item of source) {
+    if (position === index) return { value: item };
+    position++;
+  }
+
+  return undefined;
 }
 
 export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): LastTerm<T> {

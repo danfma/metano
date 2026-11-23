@@ -720,6 +720,29 @@ public class StjConformanceFixtureTests
                 () => Color.Green,
                 async value => await Assert.That(value).IsEqualTo(Color.Green)
             ),
+            // #369: a numeric enum reads any integer of its underlying type.
+            ["V13a"] = Roundtrip(
+                () => Perms.Read | Perms.Write,
+                async value => await Assert.That(value).IsEqualTo(Perms.Read | Perms.Write)
+            ),
+            ["V13b"] = Roundtrip(
+                () => (Color)42,
+                async value => await Assert.That(value).IsEqualTo((Color)42)
+            ),
+            ["V13c"] = Roundtrip(
+                () => (Tiny)200,
+                async value => await Assert.That(value).IsEqualTo((Tiny)200)
+            ),
+            // #502: a member typed as a non-polymorphic interface.
+            ["V13f"] = WriteOnly(() => new Dashboard("t", new Gauge(5, "kg"))),
+            ["V13g"] = ReadOnly(async value =>
+                await Assert.That(((Dashboard)value!).Main).IsNull()
+            ),
+            // #713: ImmutableArray<T> is a struct.
+            ["V13i"] = Roundtrip(
+                () => new ImmHolder([1, 2]),
+                async value => await Assert.That(((ImmHolder)value!).Items.Length).IsEqualTo(2)
+            ),
             ["V14"] = Roundtrip(
                 () => Flavor.Sweet,
                 async value => await Assert.That(value).IsEqualTo(Flavor.Sweet)
@@ -1005,6 +1028,16 @@ public class StjConformanceFixtureTests
             ["T22"] = ReadOnly(async value =>
                 await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(2, 0, 0))
             ),
+            // #512: the accepted variants first measured only on the runtime side.
+            ["T49"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(0, 0))
+            ),
+            ["T50"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(3, 4, 5))
+            ),
+            ["T51"] = ReadOnly(async value =>
+                await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(-2, 0, 0))
+            ),
             ["T41"] = ReadOnly(async value =>
                 await Assert
                     .That((DateTime)value!)
@@ -1087,9 +1120,8 @@ public class StjConformanceFixtureTests
             ["OK4"] = ReadOnly(async value =>
                 await Assert.That(((HolderChar)value!).C).IsEqualTo('a')
             ),
-            // The 64-bit rows of spec 012 (slice 012e): every row runs on the
-            // System.Text.Json side; the TypeScript side runs I2 (wire
-            // compatible within the safe integers) until the bigint flip.
+            // The 64-bit rows of spec 012 (slices 012e, 012h): both sides run
+            // every row, the TypeScript side through deserializeText (#605).
             ["I1"] = WriteOnly(() => new Int64Box(1152921504606846977, ulong.MaxValue, null)),
             ["I2"] = Roundtrip(
                 () => new Int64Box(42, 7, null),

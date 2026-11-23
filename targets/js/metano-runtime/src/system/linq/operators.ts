@@ -12,6 +12,7 @@
  * Short-circuit terminals (`first`, `take(n)`) stop iterating as soon
  * as their result is determined.
  */
+import type { IEqualityComparer } from "../collections/default-comparer.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
@@ -26,6 +27,7 @@ import type {
   OrderByOp,
   PrependOp,
   ReverseOp,
+  DefaultIfEmptyOp,
   SelectManyOp,
   SelectOp,
   SkipOp,
@@ -203,17 +205,44 @@ export function skipWhile<T>(
   };
 }
 
-export function distinct<T>(): DistinctOp<T> {
+/** `Distinct()` / `Distinct(comparer)`: the first of each element, equal by the comparer or by value. */
+export function distinct<T>(comparer?: IEqualityComparer<T> | null): DistinctOp<T> {
   return {
     kind: "distinct",
+    comparer,
     apply: (source) => ({
       *[Symbol.iterator]() {
-        const seen = new HashSet<T>();
+        const seen = new HashSet<T>(null, comparer);
         for (const item of source)
           if (!seen.contains(item)) {
             seen.add(item);
             yield item;
           }
+      },
+    }),
+  };
+}
+
+/**
+ * `DefaultIfEmpty()` / `DefaultIfEmpty(defaultValue)`: without a `defaultValue` an empty
+ * source yields `null`; with one, the value. `T` comes from the surrounding `linq(...)` call.
+ */
+export function defaultIfEmpty<T>(defaultValue?: null): DefaultIfEmptyOp<T, null>;
+export function defaultIfEmpty<T>(defaultValue: NoInfer<T>): DefaultIfEmptyOp<T, T>;
+export function defaultIfEmpty<T>(defaultValue: T | null = null): DefaultIfEmptyOp<T> {
+  return {
+    kind: "defaultIfEmpty",
+    defaultValue,
+    apply: (source) => ({
+      *[Symbol.iterator]() {
+        let any = false;
+
+        for (const item of source) {
+          any = true;
+          yield item;
+        }
+
+        if (!any) yield defaultValue as T;
       },
     }),
   };

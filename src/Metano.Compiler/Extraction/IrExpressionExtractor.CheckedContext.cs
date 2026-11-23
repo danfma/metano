@@ -35,7 +35,11 @@ public sealed partial class IrExpressionExtractor
         if (!constant.HasValue || !IsFoldableTarget(typeInfo.Type))
             return null;
 
-        var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
+        var folded = ConstantLiteral(
+            constant.Value!,
+            typeInfo.Type,
+            ImplicitlyConvertedType(expression)
+        );
 
         return AsEnumConstant(folded, typeInfo.Type);
     }

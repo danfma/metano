@@ -78,7 +78,14 @@ public static class IrInterfaceExtractor
             members.Count > 0 ? members : null,
             typeParameters,
             Attributes: IrAttributeExtractor.Extract(type)
-        );
+        )
+        {
+            ContainerTypeParameters = IrTypeParameterExtractor.ExtractAll(
+                GenericContainers.TypeParametersOf(type),
+                originResolver,
+                target
+            ),
+        };
     }
 
     /// <summary>

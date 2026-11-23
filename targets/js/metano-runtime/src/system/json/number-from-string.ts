@@ -193,6 +193,11 @@ const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = /* @__PURE__ */ new
   "System.UInt64",
 ]);
 
+/** Whether `numberType` is an unsigned integer type, which takes no sign. */
+export function isUnsignedIntegerType(numberType: IntegerTypeName): boolean {
+  return UNSIGNED_INTEGER_TYPES.has(numberType);
+}
+
 /** The integers that read exactly, as the `bigint` they compute (spec 012 FR-054). */
 const EXACT_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = /* @__PURE__ */ new Set([
   "System.Int64",

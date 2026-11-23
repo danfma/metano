@@ -1,5 +1,10 @@
 import { isInt32, isString } from "metano-runtime";
 
+/** @internal */
+export function quad(x: number): number {
+  return Math.imul(x, 4);
+}
+
 export function hiddenInt32(x: number): number {
   return x;
 }

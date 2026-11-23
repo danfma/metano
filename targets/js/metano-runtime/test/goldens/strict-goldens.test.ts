@@ -1,6 +1,7 @@
 /**
- * The self-contained enum goldens of spec 011 FR-044 type-check under
- * `tsgo --strict`, and a `[Flags]` brand rejects a value of another enum.
+ * The self-contained enum goldens of spec 011 FR-044 and the tuple-default
+ * golden (#403) type-check under `tsgo --strict`, and a `[Flags]` brand
+ * rejects a value of another enum.
  * The golden bundle check compiles goldens without type-checking, so this is
  * where the emitted enum shapes are proven to compile.
  */
@@ -20,6 +21,7 @@ const GOLDENS = [
   "numeric-enum-flags.ts",
   "numeric-enum-int64.ts",
   "numeric-enum-bound-store.ts",
+  "tuple-default-strict.ts",
 ];
 
 const CROSS_ENUM_FIXTURE = `import { Perms } from "./numeric-enum-flags.ts";

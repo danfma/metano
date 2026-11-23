@@ -113,3 +113,6 @@ using Metano.Annotations;
     RuntimeImports = "roundDecimal",
     WhenArgCount = 3
 )]
+
+// decimal.ToDouble(d) → d.toNumber() (#686), the conversion the `(double)d` cast lowers to.
+[assembly: MapMethod(typeof(decimal), nameof(decimal.ToDouble), JsTemplate = "$0.toNumber()")]

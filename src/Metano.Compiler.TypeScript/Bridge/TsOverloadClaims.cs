@@ -61,6 +61,18 @@ internal sealed class TsOverloadClaims
     /// </summary>
     public IReadOnlyDictionary<string, TsClaimedMember> Instances { get; }
 
+    /// <summary>
+    /// The forwarding members the class declares for names its interfaces
+    /// require of it (<see cref="TsInterfaceRequirement"/>).
+    /// </summary>
+    public IReadOnlyList<TsInterfaceForwarder> InterfaceForwarders { get; init; } = [];
+
+    /// <summary>
+    /// The constructed roots the class declares a forwarding runtime
+    /// dispatcher for (<see cref="TsForwardingRoot"/>).
+    /// </summary>
+    public IReadOnlyList<TsForwardingRoot> ForwardingRoots { get; init; } = [];
+
     /// <summary>The selector and factory names of one constructor overload.</summary>
     public TsConstructorOverloadNames NamesOf(IrConstructorDeclaration constructor) =>
         ConstructorNamesOf(constructor.DeclarationOrdinal)

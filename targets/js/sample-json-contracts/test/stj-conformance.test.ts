@@ -18,6 +18,7 @@ import { JsonException, JsonSerializer, NotSupportedException } from "metano-run
 
 import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
+import { Dashboard } from "#/sample-json-contracts/dashboard";
 import { DBer } from "#/sample-json-contracts/d-ber";
 import { DBase } from "#/sample-json-contracts/d-base";
 import { EpisodeRec } from "#/sample-json-contracts/episode-rec";
@@ -30,6 +31,7 @@ import { HMid } from "#/sample-json-contracts/h-mid";
 import { IA } from "#/sample-json-contracts/ia";
 import { IgnBase } from "#/sample-json-contracts/ign-base";
 import { IgnoreJsonContext } from "#/sample-json-contracts/ignore-json-context";
+import { ImmHolder } from "#/sample-json-contracts/imm-holder";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { Int64Box } from "#/sample-json-contracts/int64-box";
@@ -104,6 +106,7 @@ const errorClasses = { JsonException, NotSupportedException } as const;
 const expectedClasses: Record<string, new (...args: never[]) => object> = {
   Account,
   Blob,
+  Dashboard,
   DBer,
   DBase,
   EpisodeRec,
@@ -116,6 +119,7 @@ const expectedClasses: Record<string, new (...args: never[]) => object> = {
   IA,
   IgnBase,
   ImageClip,
+  ImmHolder,
   InitRec,
   Int64Box,
   IntMapHolder,

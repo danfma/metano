@@ -182,6 +182,8 @@ internal sealed class IrToTsClassEmitter(
 
         var ctorFieldInitializers = new List<TsStatement>();
 
+        IndexerDiagnostics.Report(type, ir, _context.ReportDiagnostic);
+
         EmitClassMembers(
             ir,
             PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
@@ -441,6 +443,9 @@ internal sealed class IrToTsClassEmitter(
                     classMembers.AddRange(typeInitializer.LowerField(irField, field));
                     break;
 
+                case IrPropertyDeclaration { Semantics.IsIndexer: true }:
+                    break;
+
                 case IrPropertyDeclaration irProp
                     when !promotedNames.Contains(
                         IrToTsNamingPolicy.ToDeclaredDataMemberName(irProp.Name, irProp.Attributes)
@@ -657,6 +662,10 @@ internal sealed class IrToTsClassEmitter(
             if (members is not null)
                 classMembers.AddRange(members);
         }
+
+        classMembers.AddRange(
+            IrToTsOverloadDispatcherBridge.BuildInterfaceForwarders(ir, claims, lowering)
+        );
     }
 
     /// <summary>
@@ -696,9 +705,7 @@ internal sealed class IrToTsClassEmitter(
                 IrToTsRecordSynthesisBridge.Generate(
                     ir,
                     userMembers,
-                    ir is { Semantics.IsValueType: true, StaticInitializer: not null }
-                        ? PerClassBackingFields.For(type).ScopeFor(ir)
-                        : PerClassBackingFieldScope.None
+                    PerClassBackingFields.For(type).ScopeFor(ir)
                 )
             );
 
@@ -713,6 +720,12 @@ internal sealed class IrToTsClassEmitter(
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
 
         IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, _context.ReportDiagnostic);
+
+        IteratorProtocolDiagnostics.ReportNextOverridingInheritedStep(
+            type,
+            ir,
+            _context.ReportDiagnostic
+        );
     }
 
     /// <summary>
@@ -782,7 +795,8 @@ internal sealed class IrToTsClassEmitter(
     ) =>
         promotedMemberDeclaration switch
         {
-            PromotedMemberDeclaration.ParameterProperties => IsPromotedParamsParameter(p),
+            PromotedMemberDeclaration.ParameterProperties => IsPromotedParamsParameter(p)
+                || IrToTsClassBridge.HasReservedPromotedName(p),
             PromotedMemberDeclaration.Fields => p.Promotion is not IrParameterPromotion.None,
             _ => false,
         };
@@ -831,7 +845,7 @@ internal sealed class IrToTsClassEmitter(
         var (accessibility, jsdoc) = IrToTsClassBridge.PromotedMemberVisibility(p);
 
         return new TsFieldMember(
-            IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
+            IrToTsClassBridge.PromotedName(p),
             // The field keeps the declared `T[] | null` (`with { Items = null }` is
             // valid C#); only the rest parameter drops it (MapParameterType).
             IrToTsTypeMapper.Map(p.Parameter.Type, BclOverrides),
@@ -1105,7 +1119,7 @@ internal sealed class IrToTsClassEmitter(
 
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
 
-        var promotedStaticTps = PromoteClassTypeParamsForStatic(irMethod, owner);
+        var promotedStaticTps = PromoteClassTypeParamsForStatic(irMethod, owner.TypeParameters);
         var sourceTypeParams = (promotedStaticTps, irMethod.TypeParameters) switch
         {
             ({ Count: > 0 } p, { Count: > 0 } m) =>
@@ -1118,14 +1132,11 @@ internal sealed class IrToTsClassEmitter(
             _ => null,
         };
 
-        var typeParameters = (sourceTypeParams ?? [])
-            .Select(tp => new TsTypeParameter(
-                tp.Name,
-                tp.Constraints is { Count: > 0 } cs
-                    ? IrToTsTypeMapper.Map(cs[0], BclOverrides)
-                    : null
-            ))
-            .ToList();
+        var typeParameters = IrToTsTypeParameterMapper
+            .Convert(sourceTypeParams, BclOverrides)
+            ?.ToList()
+            ?? [];
+
         return (parameters, returnType, typeParameters);
     }
 
@@ -1137,12 +1148,12 @@ internal sealed class IrToTsClassEmitter(
     /// Returns <c>null</c> for non-static methods or when the class has no
     /// type parameters.
     /// </summary>
-    private static IReadOnlyList<IrTypeParameter>? PromoteClassTypeParamsForStatic(
+    internal static IReadOnlyList<IrTypeParameter>? PromoteClassTypeParamsForStatic(
         IrMethodDeclaration method,
-        IrClassDeclaration owner
+        IReadOnlyList<IrTypeParameter>? classTypeParameters
     )
     {
-        if (!method.IsStatic || owner.TypeParameters is not { Count: > 0 } classTps)
+        if (!method.IsStatic || classTypeParameters is not { Count: > 0 } classTps)
             return null;
 
         var referenced = new HashSet<string>(StringComparer.Ordinal);

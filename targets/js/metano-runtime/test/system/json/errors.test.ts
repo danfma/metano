@@ -104,15 +104,23 @@ describe("JsonSerializer — object contract errors", () => {
     );
   });
 
-  test("an invalid numeric enum value", () => {
+  test("a numeric enum value that is not an integer of its underlying type (#369)", () => {
     const levelSpec: ValueSpec<number> = {
-      descriptor: { kind: "numericEnum", values: { Low: 0, 0: "Low" } },
+      descriptor: {
+        kind: "numericEnum",
+        typeName: "MyApp.Level",
+        numberType: "System.Byte",
+        values: { Low: 0, 0: "Low" },
+      },
     };
 
-    expectJsonException(
-      () => JsonSerializer.deserialize(3, levelSpec),
-      "Invalid numeric enum value: 3. Expected one of: 0",
-    );
+    // An unsigned type takes no sign, not even `-0`'s (measured on .NET 10).
+    for (const value of [1.5, 256, -1, -0, "1", true]) {
+      expectJsonException(
+        () => JsonSerializer.deserialize(value, levelSpec),
+        "The JSON value could not be converted to MyApp.Level.",
+      );
+    }
   });
 });
 

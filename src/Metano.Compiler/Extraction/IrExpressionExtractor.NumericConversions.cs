@@ -32,19 +32,36 @@ public sealed partial class IrExpressionExtractor
             return limit;
 
         var constant = _semantic.GetConstantValue(expression);
-        var typeInfo = _semantic.GetTypeInfo(expression);
+        var type = _semantic.GetTypeInfo(expression).Type;
+        var convertedType = ImplicitlyConvertedType(expression);
 
         if (!constant.HasValue || !IsNumericConstant(constant.Value))
             return null;
 
         var touchesSixtyFourBits =
-            NumericEndpoints.IsSixtyFourBit(typeInfo.Type)
-            || NumericEndpoints.IsSixtyFourBit(typeInfo.ConvertedType);
+            NumericEndpoints.IsSixtyFourBit(type) || NumericEndpoints.IsSixtyFourBit(convertedType);
 
-        if (!touchesSixtyFourBits || IsUnconvertedDeclaredConstant(expression, typeInfo))
+        if (!touchesSixtyFourBits || IsUnconvertedDeclaredConstant(expression, type, convertedType))
             return null;
 
-        return ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
+        return ConstantLiteral(constant.Value!, type, convertedType);
+    }
+
+    /// <summary>
+    /// The type <paramref name="expression"/> is implicitly converted to, or
+    /// its own type when Roslyn reports an explicit conversion for it: an
+    /// element of a cast tuple literal (<c>((long, long))(ulong.MaxValue, x)</c>)
+    /// carries the cast's element type, but its conversion is the explicit
+    /// one its element extraction applies (<see cref="ConvertedLiteralElement"/>),
+    /// so its constant folds in its own type (#640).
+    /// </summary>
+    private ITypeSymbol? ImplicitlyConvertedType(ExpressionSyntax expression)
+    {
+        var typeInfo = _semantic.GetTypeInfo(expression);
+
+        return _semantic.GetConversion(expression).IsImplicit
+            ? typeInfo.ConvertedType
+            : typeInfo.Type;
     }
 
     /// <summary>
@@ -383,7 +400,6 @@ public sealed partial class IrExpressionExtractor
     /// <summary>The literal of a constant <paramref name="value"/> in the kind of <paramref name="target"/>.</summary>
     private static IrLiteral ConstantLiteralOfKind(object value, IrNumericEndpoint? target)
     {
-        // TODO(#602): merge ClassifyNumericForConvertedType into this.
         var number = value is char character ? (int)character : value;
 
         // An enum value is a plain number, unless the target holds it as its
@@ -458,7 +474,11 @@ public sealed partial class IrExpressionExtractor
     /// its own type: it keeps its name (FR-008). A converted read
     /// (<c>long x = IntConst;</c>) folds instead.
     /// </summary>
-    private bool IsUnconvertedDeclaredConstant(ExpressionSyntax expression, TypeInfo typeInfo)
+    private bool IsUnconvertedDeclaredConstant(
+        ExpressionSyntax expression,
+        ITypeSymbol? type,
+        ITypeSymbol? convertedType
+    )
     {
         if (expression is not (IdentifierNameSyntax or MemberAccessExpressionSyntax))
             return false;
@@ -471,7 +491,7 @@ public sealed partial class IrExpressionExtractor
         };
 
         return isDeclaredConstant
-            && NumericEndpoints.Of(typeInfo.Type) == NumericEndpoints.Of(typeInfo.ConvertedType);
+            && NumericEndpoints.Of(type) == NumericEndpoints.Of(convertedType);
     }
 
     /// <summary>

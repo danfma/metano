@@ -25,6 +25,10 @@ internal static class DefaultTextSites
         site switch
         {
             IInterpolationOperation => DefaultTextSite.Implicit,
+            // A hole of a string converted to an interpolated-string handler binds as the
+            // `AppendFormatted` call of the handler, not as an interpolation operation.
+            IInvocationOperation { Parent: IInterpolatedStringAppendOperation } =>
+                DefaultTextSite.Implicit,
             IBinaryOperation
             {
                 OperatorKind: BinaryOperatorKind.Add,

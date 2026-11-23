@@ -223,6 +223,7 @@ internal sealed class JsonSpecBuilder
 
         TsObjectProperty?[] trailingProperties =
         [
+            PlainObjectTypeNameProperty(targetType, polymorphism),
             IgnoredPropertiesProperty(targetType),
             AssignIfPresentProperty(targetType),
             polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),
@@ -282,6 +283,22 @@ internal sealed class JsonSpecBuilder
             ? _context.RuntimeTypes.Reaches(RuntimeTypeReachability.KeyOf(type))
             : RuntimeTypeReachability.IsLibraryClassWithDescriptor(type);
 
+    /// <summary>
+    /// <c>typeName: "MyApp.Dto"</c> for a non-polymorphic <c>[PlainObject]</c>
+    /// reference contract: it has no constructor to name in its conversion
+    /// errors, which named <c>Object</c> where System.Text.Json names the CLR
+    /// type (#512). A struct gets it with <c>valueType</c>
+    /// (<see cref="ValueTypeProperties"/>), a polymorphic base names
+    /// <c>polymorphism.typeName</c>.
+    /// </summary>
+    private static TsObjectProperty? PlainObjectTypeNameProperty(
+        INamedTypeSymbol targetType,
+        JsonPolymorphism? polymorphism
+    ) =>
+        SymbolHelper.HasPlainObject(targetType) && polymorphism is null && !RejectsNull(targetType)
+            ? new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(targetType)))
+            : null;
+
     /// <summary><c>base: this.baseSpec</c> when the type links to a base spec.</summary>
     private TsObjectProperty? BaseLinkProperty(INamedTypeSymbol targetType) =>
         _properties.LinkedBaseOf(targetType) is { } baseType
@@ -319,8 +336,8 @@ internal sealed class JsonSpecBuilder
     /// </summary>
     private sealed record FactoryBody(TsStatement Statement, bool ReadsPayload)
     {
-        public static FactoryBody Throws(string message) =>
-            new(BuildAbstractFactoryThrow(message), ReadsPayload: false);
+        public static FactoryBody Throws(TsThrowStatement statement) =>
+            new(statement, ReadsPayload: false);
     }
 
     /// <summary>
@@ -333,9 +350,9 @@ internal sealed class JsonSpecBuilder
     ///   <item><c>[PlainObject]</c> → <c>return { title: p.title as string, ... }</c>,
     ///     inherited members included: a TS interface has no base constructor
     ///     to fill them; reads the payload when the literal is non-empty;</item>
-    ///   <item>any other abstract class → <c>throw new Error(...)</c>:
-    ///     TypeScript rejects <c>new</c> on an abstract class, so it cannot be
-    ///     deserialized directly;</item>
+    ///   <item>any other abstract class or interface →
+    ///     <c>throw new NotSupportedException(...)</c> with System.Text.Json's
+    ///     text: neither can be deserialized directly (#502);</item>
     ///   <item>class → <c>return new TodoItem(p.title as string, ...)</c>, with
     ///     the arguments in the emitted constructor's positional order, inside
     ///     <c>Object.assign(…, { … })</c> when members are assigned after
@@ -353,8 +370,10 @@ internal sealed class JsonSpecBuilder
         {
             return FactoryBody.Throws(
                 polymorphism is { IsAbstractBase: true }
-                    ? PolymorphicAbstractFactoryMessage(targetType, tsTypeName)
-                    : NonConstructibleFactoryMessage(targetType, tsTypeName)
+                    ? BuildAbstractFactoryThrow(
+                        PolymorphicAbstractFactoryMessage(targetType, tsTypeName)
+                    )
+                    : BuildNonConstructibleFactoryThrow(targetType)
             );
         }
 
@@ -732,30 +751,25 @@ internal sealed class JsonSpecBuilder
     }
 
     /// <summary>
-    /// The text the factory of a non-polymorphic abstract type throws: the
-    /// real reason is the abstractness itself — TypeScript rejects
-    /// <c>new</c> on it — not the long-shipped polymorphism claim (#489).
-    /// The runtime throws System.Text.Json's abstract-type wording
-    /// (<c>Deserialization of interface or abstract types is not supported.
-    /// Type 'X'.</c>, measured on .NET 10) when a read dispatches here, so
-    /// this generated throw is unreachable and states only why the spec
-    /// cannot build. The kind-aware naming mirrors FR-018 because
-    /// <see cref="INamedTypeSymbol.IsAbstract"/> is true for interfaces too:
-    /// no non-polymorphic interface entry exists today for this branch to
-    /// build a factory from (an interface root is rejected with
-    /// <c>MS0035</c>, and a ref to an interface member claims no entry), but
-    /// an interface that ever reaches it must not read as abstract.
+    /// The throw of the factory of a non-polymorphic abstract class or
+    /// interface: reading a JSON object into it throws System.Text.Json's
+    /// <c>NotSupportedException</c> "Deserialization of interface or
+    /// abstract types is not supported. Type 'MyApp.ISensor'." (measured on
+    /// .NET 10, #502), naming the CLR type. A polymorphic read that reaches
+    /// an abstract registration throws the same text from the runtime first.
     /// </summary>
-    private static string NonConstructibleFactoryMessage(
-        INamedTypeSymbol targetType,
-        string tsTypeName
-    )
-    {
-        var (kind, name) =
-            targetType.TypeKind == TypeKind.Interface
-                ? ("interface", targetType.Name)
-                : ("abstract", tsTypeName);
-
-        return $"Cannot construct {kind} type '{name}'.";
-    }
+    private static TsThrowStatement BuildNonConstructibleFactoryThrow(
+        INamedTypeSymbol targetType
+    ) =>
+        new(
+            new TsNewExpression(
+                new TsTypeReference("NotSupportedException", JsonRuntimeModule.Origin),
+                [
+                    new TsStringLiteral(
+                        "Deserialization of interface or abstract types is not supported. "
+                            + $"Type '{ClrTypeName.Of(targetType)}'."
+                    ),
+                ]
+            )
+        );
 }

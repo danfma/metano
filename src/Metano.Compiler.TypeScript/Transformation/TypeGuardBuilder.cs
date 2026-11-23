@@ -90,7 +90,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         !TypeTransformer.IsExceptionType(type)
         && !SymbolHelper.HasExportedAsModule(type)
         && !SymbolHelper.HasNoContainer(type)
-        && !TypeTransformer.HasExtensionMembers(type)
+        && !type.HasExtensionMembers()
         && !SymbolHelper.HasImport(type);
 
     /// <summary>
@@ -198,7 +198,8 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         SymbolHelper.GetDiscriminatorFieldName(variant) is not { } field
         || string.Equals(field, baseField, StringComparison.Ordinal);
 
-    private static IEnumerable<INamedTypeSymbol> EnumerateAssemblyTypes(IAssemblySymbol? assembly)
+    /// <summary>Every type <paramref name="assembly"/> declares, nested ones included.</summary>
+    internal static IEnumerable<INamedTypeSymbol> EnumerateAssemblyTypes(IAssemblySymbol? assembly)
     {
         if (assembly is null)
             yield break;

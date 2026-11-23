@@ -21,27 +21,41 @@ public static class IrToTsBclMapper
         DeclarativeMappingRegistry registry
     )
     {
-        if (access.Origin is null)
-            return null;
-
-        if (
-            !registry.TryGetPropertyByFullName(
-                access.Origin.DeclaringTypeFullName,
-                access.Origin.MemberName,
-                out var entry
-            )
-        )
-            return null;
-
-        // Dart-only entries share the registry but carry no JS data; skip
-        // them so the dereferences in ApplyPropertyMapping never see nulls.
-        if (!entry.HasJsMapping)
+        if (access.Origin is null || JsPropertyMappingOf(access.Origin, registry) is not { } entry)
             return null;
 
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
 
         return ApplyPropertyMapping(entry, receiver, ReceiverTypeOf(access.Target, receiver));
     }
+
+    /// <summary>
+    /// Tries to map an instance member read whose receiver is already lowered
+    /// and has no IR node of its own, such as the member a property pattern
+    /// entry reads (<c>e is { InnerException: null }</c>).
+    /// </summary>
+    public static TsExpression? TryMapInstanceRead(
+        IrMemberOrigin origin,
+        TsExpression receiver,
+        DeclarativeMappingRegistry registry
+    ) =>
+        origin.IsStatic || JsPropertyMappingOf(origin, registry) is not { } entry
+            ? null
+            : ApplyPropertyMapping(entry, receiver, receiverType: null);
+
+    // Dart-only entries share the registry but carry no JS data; skip them so
+    // the dereferences in ApplyPropertyMapping never see nulls.
+    private static DeclarativeMappingEntry? JsPropertyMappingOf(
+        IrMemberOrigin origin,
+        DeclarativeMappingRegistry registry
+    ) =>
+        registry.TryGetPropertyByFullName(
+            origin.DeclaringTypeFullName,
+            origin.MemberName,
+            out var entry
+        ) && entry.HasJsMapping
+            ? entry
+            : null;
 
     /// <summary>
     /// Tries to map a method call. <paramref name="typeArgumentNames"/> feeds

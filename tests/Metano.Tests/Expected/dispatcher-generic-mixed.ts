@@ -11,28 +11,24 @@ export class Mixed<T> {
   constructor(x: T);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Mixed.byMixedT) {
-      const x = args[1] as T;
       this.log = "T";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Mixed.byMixedInt32) {
-      const x = args[1] as number;
       this.log = "int";
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const x = args[0] as number;
       this.log = "int";
 
       return;
     }
 
     if (args.length === 1) {
-      const x = args[0] as T;
       this.log = "T";
 
       return;

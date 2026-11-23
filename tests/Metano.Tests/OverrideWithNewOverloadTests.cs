@@ -273,11 +273,12 @@ public class OverrideWithNewOverloadTests
     }
 
     /// <summary>
-    /// The override of a base overload that also implements a multiply
-    /// constructed interface is emitted under the interface root's name
-    /// (<c>qQ</c>, DECIDED-30), while the visible group names the base
-    /// overload it stands for (<c>Bq</c>): the new overload computes
-    /// <c>qQ</c> too and the claim pass moves it to <c>qQ$</c>, reported.
+    /// The override of a dispatched base overload that also implements a
+    /// multiply constructed interface overrides the base fast path
+    /// (<c>qBq</c>, #594), and the interface root's runtime dispatcher
+    /// (<c>qQ</c>, DECIDED-30) forwards to it and to the inherited
+    /// implementations: the new overload computes <c>qQ</c> too and the claim
+    /// pass moves it to <c>qQ$</c>, reported.
     /// </summary>
     [Test]
     public async Task OverrideEmittedUnderAnInterfaceRootName_LeavesTheClashToTheClaimPass()
@@ -326,8 +327,8 @@ public class OverrideWithNewOverloadTests
             .IsEquivalentTo([
                 "'QD' implements 'IQ<T>' more than once; calls to 'Q' keep runtime dispatch "
                     + "(spec 013 FR-036).",
-                "Fast path 'QD.qQ' of 'Q(bool q)' collides with the fast path of 'Q(int z)'; it "
-                    + "is emitted as 'qQ$' (spec 013 FR-004).",
+                "Fast path 'QD.qQ' of 'Q(bool q)' collides with the runtime dispatcher of 'qQ'; "
+                    + "it is emitted as 'qQ$' (spec 013 FR-004).",
             ]);
     }
 

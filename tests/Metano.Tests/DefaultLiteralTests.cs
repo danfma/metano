@@ -105,14 +105,13 @@ public class DefaultLiteralTests
 
     /// <summary>
     /// A type no expression spells (a struct that declares a constructor, a
-    /// tuple, a <c>[StringEnum]</c> without a zero member) reports
+    /// <c>[StringEnum]</c> without a zero member) reports
     /// <c>MS0001</c> and keeps the placeholder; a struct that declares none is
     /// <c>new Point()</c>, as a parameter default is.
     /// </summary>
     [Test]
     [Arguments("Sized s = default; return s;", "Sized")]
     [Arguments("var s = default(Sized); return s;", "Sized")]
-    [Arguments("(int, int) t = default; return t;", "(int, int)")]
     [Arguments("Tone t = default; return t;", "Tone")]
     public async Task TypeWithoutALiteralDefault_ReportsAndKeepsThePlaceholder(
         string body,

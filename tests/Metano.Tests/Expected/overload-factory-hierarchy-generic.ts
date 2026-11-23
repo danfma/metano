@@ -21,7 +21,6 @@ export class C<P, Q> extends B<P, Q> {
     if (typeof args[0] === "symbol" && args[0] === C.byCVKFlip) {
       const v = args[1] as Q;
       const k = args[2] as P;
-      const flip = args[3] as boolean;
       super(v, k);
 
       return;
@@ -30,7 +29,6 @@ export class C<P, Q> extends B<P, Q> {
     if (args.length === 3 && isBool(args[2])) {
       const v = args[0] as Q;
       const k = args[1] as P;
-      const flip = args[2] as boolean;
       super(v, k);
 
       return;

@@ -92,12 +92,13 @@ public sealed partial class IrExpressionExtractor
     private readonly IReadOnlyDictionary<ISymbol, IrExpression>? _inlineParameterSubs;
 
     /// <summary>
-    /// Counter for the synthesized <see cref="Metano.Compiler.IR.IrLetExpression"/>
+    /// The allocator of the synthesized <see cref="Metano.Compiler.IR.IrLetExpression"/>
     /// temporaries of one body (<c>receiver$temp$N</c>, <c>tuple$temp$N</c>).
     /// Every kind draws from it, so each nested binding gets a unique suffix
-    /// and an inner one cannot shadow an outer one.
+    /// and an inner one cannot shadow an outer one; an extractor that lowers
+    /// part of the same body (a PlainObject chain hop) shares it.
     /// </summary>
-    private int _temporaryCounter;
+    private readonly TemporaryNames _temporaries;
 
     /// <summary>
     /// Counter for the synthesized <c>$subjectN</c> locals that capture an
@@ -117,13 +118,13 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private ExpressionSyntax? _conditionalReceiverSyntax;
 
-    private string NextReceiverTempName() => $"receiver$temp${_temporaryCounter++}";
+    private string NextReceiverTempName() => _temporaries.Next("receiver$temp$");
 
     /// <summary>A fresh temporary holding one operand value of a tuple comparison.</summary>
-    private string NextTupleOperandTempName() => $"tuple$temp${_temporaryCounter++}";
+    private string NextTupleOperandTempName() => _temporaries.Next("tuple$temp$");
 
     /// <summary>A fresh name for the element a converted spread maps over.</summary>
-    private string NextSpreadElementName() => $"element$temp${_temporaryCounter++}";
+    private string NextSpreadElementName() => _temporaries.Next("element$temp$");
 
     public IrExpressionExtractor(SemanticModel semanticModel, IrExtractionContext context)
         : this(semanticModel, context, localNames: null) { }
@@ -133,7 +134,8 @@ public sealed partial class IrExpressionExtractor
         IrExtractionContext context,
         LocalBindingNames? localNames,
         HashSet<ISymbol>? inlineExpanding = null,
-        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs = null
+        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs = null,
+        TemporaryNames? temporaries = null
     )
     {
         _semantic = semanticModel;
@@ -144,6 +146,7 @@ public sealed partial class IrExpressionExtractor
         _localNames = localNames;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         _inlineParameterSubs = inlineParameterSubs;
+        _temporaries = temporaries ?? new TemporaryNames();
 
         // Invocation rewriter chain (#221 — invocation rewriter
         // extraction). Order is load-bearing — see each rewriter's
@@ -906,7 +909,7 @@ public sealed partial class IrExpressionExtractor
         {
             ConstantPatternSyntax constant when NamedPatternType(constant.Expression) is { } type =>
                 ExtractTypePattern(constant, type),
-            ConstantPatternSyntax constant => WithBoxedConstantFacts(
+            ConstantPatternSyntax constant => WithConstantFacts(
                 new IrConstantPattern(Extract(constant.Expression)),
                 constant.Expression,
                 _semantic.GetOperation(constant) is IPatternOperation { InputType: var input }
@@ -1223,7 +1226,10 @@ public sealed partial class IrExpressionExtractor
             CaptureComputedRead(member, symbol, pattern),
             ResolveMemberNameOverride(member),
             IsTranspiledDataMember(symbol)
-        );
+        )
+        {
+            Origin = BuildOrigin(symbol),
+        };
     }
 
     /// <summary>
@@ -1987,37 +1993,30 @@ public sealed partial class IrExpressionExtractor
     /// inferred at the call site. C#'s implicit conversions — `100` in a
     /// `decimal` context, `150` in a `BigInteger` context — carry through the
     /// `ConvertedType`, and the backend needs that info to pick the right
-    /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>).
-    /// Mirrors the legacy <see cref="Metano.Compiler.TypeScript.Transformation.LiteralHandler"/>
-    /// shape so the IR path produces matching output.
+    /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>): those
+    /// two carry their digits through <see cref="ConstantLiteralOfKind"/>; a
+    /// literal in any other slot keeps its own kind (a 64-bit slot folds
+    /// before, in <see cref="FoldedInt64Constant"/>).
     /// </summary>
     private IrLiteral ClassifyNumericInContext(LiteralExpressionSyntax lit, object? value) =>
-        ClassifyNumericForConvertedType(
-            lit.Token.ValueText,
-            value,
-            _semantic.GetTypeInfo(lit).ConvertedType
-        );
+        value is null
+            ? ClassifyNumeric(value)
+            : ConstantLiteralOfKind(
+                value,
+                DigitCarryingTarget(_semantic.GetTypeInfo(lit).ConvertedType)
+            );
 
     /// <summary>
-    /// A numeric constant in the representation its converted type needs:
-    /// <c>decimal</c> and <c>BigInteger</c> carry <paramref name="digits"/>
-    /// (precision-preserving text), every other type the
-    /// <see cref="ClassifyNumeric">classified</see> <paramref name="value"/>.
+    /// The endpoint of <paramref name="convertedType"/>, nullable or not, when
+    /// it is <c>decimal</c> or <c>BigInteger</c>: a literal in a
+    /// <c>decimal?</c> slot (<c>decimal? d = 5</c>) is a decimal value too,
+    /// since no conversion node follows a literal (#606).
     /// </summary>
-    private static IrLiteral ClassifyNumericForConvertedType(
-        string digits,
-        object? value,
-        ITypeSymbol? convertedType
-    )
-    {
-        if (convertedType?.SpecialType == SpecialType.System_Decimal)
-            return new IrLiteral(digits, IrLiteralKind.Decimal);
-
-        if (convertedType.IsBigInteger())
-            return new IrLiteral(digits, IrLiteralKind.BigInteger);
-
-        return ClassifyNumeric(value);
-    }
+    private static IrNumericEndpoint? DigitCarryingTarget(ITypeSymbol? convertedType) =>
+        NumericEndpoints.Of(convertedType)
+            is { Kind: IrNumericKind.Decimal or IrNumericKind.BigInteger, IsEnum: false } endpoint
+            ? endpoint
+            : null;
 
     private static IrLiteral ClassifyNumeric(object? value) =>
         value switch
@@ -2046,7 +2045,7 @@ public sealed partial class IrExpressionExtractor
         )
             return new IrIsPatternExpression(
                 Extract(bin.Left),
-                WithBoxedConstantFacts(
+                WithConstantFacts(
                     new IrConstantPattern(ExtractConstantName(bin.Right)),
                     bin.Right,
                     pattern.InputType
@@ -2878,6 +2877,9 @@ public sealed partial class IrExpressionExtractor
         )
             return dispatched;
 
+        if (DelegateInvokeGroupValue(expression, method, invoke, reference) is { } invoked)
+            return invoked;
+
         if (IsDartTarget)
             return dispatched;
 
@@ -3316,18 +3318,7 @@ public sealed partial class IrExpressionExtractor
             && args.Count > 0
             && IsSafeForCallRewrite(inv)
         )
-        {
-            var receiverIndex = FindReceiverArgumentIndex(symbol, inv.ArgumentList);
-            if (receiverIndex >= 0)
-            {
-                var receiver = args[receiverIndex].Value;
-                var rest = args.Where((_, i) => i != receiverIndex).Select(a => a).ToList();
-                return new IrCallExpression(
-                    new IrMemberAccess(target, "call"),
-                    [new IrArgument(receiver), .. rest]
-                );
-            }
-        }
+            return ThisDelegateCall(inv, symbol, target, args);
 
         if (symbol is not null && SymbolHelper.HasObjectArgs(symbol))
         {
@@ -3478,7 +3469,10 @@ public sealed partial class IrExpressionExtractor
     /// declares, as C# passes it.
     /// </summary>
     private IrArgument OmittedDefault(IMethodSymbol method, IParameterSymbol parameter) =>
-        new(BuildDefaultArgument(parameter), IsOmittedDefault: AppliesItsOwnDefaults(method));
+        new(
+            BuildDefaultArgument(parameter),
+            IsOmittedDefault: parameter.HasExplicitDefaultValue && AppliesItsOwnDefaults(method)
+        );
 
     private bool AppliesItsOwnDefaults(IMethodSymbol method) =>
         IsStaticallyDispatched(method) && HasTranspiledDeclaration(method);
@@ -3898,37 +3892,6 @@ public sealed partial class IrExpressionExtractor
             ? Extract(member.Receiver)
             : null;
 
-    /// <summary>
-    /// Returns the syntactic argument index that corresponds to the
-    /// first parameter of <paramref name="symbol"/> (the
-    /// <c>[This]</c> receiver). Honors named arguments by matching
-    /// <see cref="ArgumentSyntax.NameColon"/> against the parameter
-    /// name; positional arguments fall through to index 0. Returns
-    /// <c>-1</c> when the receiver slot cannot be located, which
-    /// signals the caller to skip the <c>.call(...)</c> rewrite
-    /// and emit the plain delegate invocation (still semantically
-    /// off, but no worse than the pre-rewrite behavior).
-    /// </summary>
-    private static int FindReceiverArgumentIndex(
-        IMethodSymbol symbol,
-        ArgumentListSyntax argumentList
-    )
-    {
-        var receiverName = symbol.Parameters[0].Name;
-        for (var i = 0; i < argumentList.Arguments.Count; i++)
-        {
-            var arg = argumentList.Arguments[i];
-            if (arg.NameColon?.Name.Identifier.ValueText == receiverName)
-                return i;
-        }
-        if (argumentList.Arguments.All(a => a.NameColon is null))
-            return 0;
-        // Mixed positional + named where the named arg targets a
-        // non-receiver slot: cannot safely identify the receiver
-        // syntactic position. Bail out.
-        return -1;
-    }
-
     private static bool IsPrimitiveBackedBrandedValueRead(ISymbol symbol) =>
         SymbolHelper.IsBrandedValueMember(symbol)
         && SymbolHelper.IsPrimitiveBackedBranded(symbol.ContainingType);
@@ -3970,6 +3933,9 @@ public sealed partial class IrExpressionExtractor
         var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
         // `[ExportedAsModule]` flattens like `[NoContainer]` at call sites (#286).
         var isDeclaringTypeNoContainer = symbol.ContainingType.IsContainerless();
+
+        var isDeclaringTypeExtensionContainer = IsStaticMethodOfExtensionContainer(symbol);
+
         // `[JsCallable]` interface `Invoke(…)` call → the receiver IS the JS
         // function, so the call lowers to `recv(args)`. A `[JsTuple]`
         // positional member or C# tuple element read carries its position,
@@ -4002,7 +3968,8 @@ public sealed partial class IrExpressionExtractor
                 ? TypeReferenceTo(symbol.ContainingType)
                 : null,
             IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
-            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true }
+            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true },
+            IsDeclaringTypeExtensionContainer: isDeclaringTypeExtensionContainer
         )
         {
             ResultType = symbol switch
@@ -4185,7 +4152,7 @@ public sealed partial class IrExpressionExtractor
         var body = ExtractLambdaBody(lambda.Body);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
-            [parameter],
+            WithTargetParams(lambda, [parameter]),
             ReturnType: VoidReturnTypeOf(lambda),
             Body: body,
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
@@ -4206,7 +4173,7 @@ public sealed partial class IrExpressionExtractor
         var body = ExtractLambdaBody(lambda.Body);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
-            parameters,
+            WithTargetParams(lambda, parameters),
             ReturnType: VoidReturnTypeOf(lambda),
             Body: body,
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
@@ -5516,6 +5483,17 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        var sourceArgs = args;
+
+        var chain =
+            isPlainObject && ctor is not null ? TryResolvePlainObjectChain(ctor, args) : null;
+
+        if (chain is not null)
+        {
+            args = chain.Arguments;
+            parameterNames = chain.Target.Parameters.Select(p => p.Name).ToList();
+        }
+
         var initializer = InitializerOf(creationSyntax);
 
         if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
@@ -5551,11 +5529,15 @@ public sealed partial class IrExpressionExtractor
         )
         {
             EvaluationOrder = overload is null
-                ? ReportedConstructionOrderOf(creationSyntax, args, exception)
+                ? ChainedOrNot(
+                    chain,
+                    ReportedConstructionOrderOf(creationSyntax, sourceArgs, exception)
+                )
                 : null,
         };
 
-        var constructed = BindExceptionArguments(creation);
+        var constructed = chain?.Bind(BindExceptionArguments(creation))
+            ?? BindExceptionArguments(creation);
 
         return keepsInitializer
             ? constructed
@@ -5816,10 +5798,8 @@ public sealed partial class IrExpressionExtractor
     /// What a call passes to <paramref name="parameter"/>: the unnamed
     /// argument at its position (C# only lets a named argument precede it
     /// when that one is in position), else the argument named after it, else
-    /// its explicit default — nothing for an omitted <c>params</c> parameter.
-    /// When a parameter has no explicit default (shouldn't happen for valid
-    /// C#) the slot falls back to <c>IrLiteralKind.Default</c> so the
-    /// pipeline keeps a visible marker instead of silently dropping it.
+    /// its default (<see cref="BuildDefaultArgument"/>) — nothing for an
+    /// omitted <c>params</c> parameter.
     /// </summary>
     private IEnumerable<IrArgument> ArgumentsBoundTo(
         IParameterSymbol parameter,
@@ -5841,11 +5821,11 @@ public sealed partial class IrExpressionExtractor
     {
         if (parameter.HasExplicitDefaultValue)
             return BuildLiteralForDefault(parameter.ExplicitDefaultValue, parameter.Type);
-        // No explicit default — surface an IrLiteral(Default) so the printer
-        // emits a visible marker (`undefined`) rather than producing invalid
-        // code. Roslyn should never let us reach this branch for a well-formed
-        // call, but we stay defensive.
-        return new IrLiteral(null, IrLiteralKind.Default);
+
+        // An [Optional] parameter with no explicit default receives
+        // default(T), as C# passes it (#449); the declaration has no default
+        // of its own to apply.
+        return DefaultOrMarker(parameter.Type);
     }
 
     /// <summary>
@@ -5911,9 +5891,9 @@ public sealed partial class IrExpressionExtractor
     /// integer or a <c>BigInteger</c>, spec 012 FR-003, FR-074, and a
     /// <c>decimal</c> read as a <c>double</c> or <c>float</c>); a constant one
     /// folds. A <c>decimal</c> to a 32-bit or narrower integer also becomes a
-    /// numeric conversion, truncating and checking in every context; Dart keeps
-    /// its legacy <c>expr.trunc().toNumber()</c> fallback below. All other casts
-    /// collapse to the inner expression.
+    /// numeric conversion, truncating and checking in every context, which
+    /// each target renders (#604). All other casts collapse to the inner
+    /// expression.
     /// </summary>
     private IrExpression ExtractCast(CastExpressionSyntax cast)
     {
@@ -5968,23 +5948,6 @@ public sealed partial class IrExpressionExtractor
 
         if (ExplicitTupleConversion(cast, inner, sourceType, targetType) is { } tuple)
             return tuple;
-
-        var truncatesDecimal =
-            sourceType.SpecialType == SpecialType.System_Decimal
-            && targetType.SpecialType
-                is SpecialType.System_Int16
-                    or SpecialType.System_Int32
-                    or SpecialType.System_UInt16
-                    or SpecialType.System_UInt32
-                    or SpecialType.System_Byte
-                    or SpecialType.System_SByte;
-
-        if (truncatesDecimal)
-        {
-            var integral = new IrCallExpression(new IrMemberAccess(inner, "trunc"), []);
-
-            return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
-        }
 
         if (ExplicitBoxOf(cast, inner, sourceType, targetType) is { } box)
             inner = box;

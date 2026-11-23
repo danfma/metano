@@ -22,9 +22,11 @@ internal static class DefaultValuePolicy
 {
     /// <summary>
     /// <c>default(T)</c> of <paramref name="type"/> as IR, or <c>null</c> when
-    /// no expression spells it: a struct that declares a constructor, a tuple,
-    /// a <c>struct</c>-constrained type parameter, and a <c>[StringEnum]</c>
-    /// that declares no zero member (#621).
+    /// no expression spells it: a struct that declares a constructor, a tuple
+    /// with such an element or more elements than a flat tuple holds, a
+    /// <c>struct</c>-constrained type parameter, and a <c>[StringEnum]</c>
+    /// that declares no zero member (#621). A tuple's default is the tuple of
+    /// its elements' defaults (#403, #415).
     /// </summary>
     public static IrExpression? Of(
         ITypeSymbol type,
@@ -32,6 +34,9 @@ internal static class DefaultValuePolicy
         Func<ITypeSymbol, IrTypeRef> mapType
     )
     {
+        if (type is INamedTypeSymbol { IsTupleType: true } tuple)
+            return TupleDefault(tuple, buildOrigin, mapType);
+
         var literal = DefaultValueLiterals.For(type, buildOrigin);
 
         return literal switch
@@ -116,6 +121,43 @@ internal static class DefaultValuePolicy
             TypeArguments: typeArguments
         );
     }
+
+    /// <summary>
+    /// The tuple of the element defaults of <paramref name="tuple"/>
+    /// (<c>default((int, string))</c> is <c>(0, null)</c>); <c>null</c> when an
+    /// element has no default expression or the tuple has more elements than
+    /// a flat tuple holds.
+    /// </summary>
+    private static IrTupleLiteral? TupleDefault(
+        INamedTypeSymbol tuple,
+        Func<ISymbol?, IrMemberOrigin?> buildOrigin,
+        Func<ITypeSymbol, IrTypeRef> mapType
+    )
+    {
+        if (tuple.TupleElements.Length > SymbolHelper.MaxFlatTupleArity)
+            return null;
+
+        var elements = tuple
+            .TupleElements.Select(element => ElementDefault(element.Type, buildOrigin, mapType))
+            .ToList();
+
+        return elements.Contains(null)
+            ? null
+            : new IrTupleLiteral(
+                [.. elements.OfType<IrExpression>()],
+                mapType(tuple) as IrTupleTypeRef
+            );
+    }
+
+    /// <summary>The default of one tuple element: <c>null</c> for a reference or nullable type.</summary>
+    private static IrExpression? ElementDefault(
+        ITypeSymbol type,
+        Func<ISymbol?, IrMemberOrigin?> buildOrigin,
+        Func<ITypeSymbol, IrTypeRef> mapType
+    ) =>
+        type.IsReferenceType || type.IsNullableValueType()
+            ? new IrLiteral(null, IrLiteralKind.Null)
+            : Of(type, buildOrigin, mapType);
 
     /// <summary><c>0 as E</c> for a numeric enum without a zero member; <c>null</c> for a <c>[StringEnum]</c>.</summary>
     private static IrExpression? EnumZeroAssertion(

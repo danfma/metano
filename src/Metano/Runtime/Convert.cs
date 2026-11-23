@@ -384,3 +384,73 @@ using Metano.Annotations;
     JsTemplate = "($0 !== 0n)",
     WhenParameterTypes = [typeof(ulong)]
 )]
+
+// ─── ToDouble from the numbers that are `number` or `Decimal` (#686) ─────────────────
+// `ToDouble(string)` parses as `double.Parse` (null converts to 0); `bool` is 0 or 1.
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(int)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(uint)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(short)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(ushort)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(byte)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(sbyte)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(double)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0",
+    WhenParameterTypes = [typeof(float)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "($0 ? 1 : 0)",
+    WhenParameterTypes = [typeof(bool)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "$0.toNumber()",
+    WhenParameterTypes = [typeof(decimal)]
+)]
+[assembly: MapMethod(
+    typeof(Convert),
+    nameof(Convert.ToDouble),
+    JsTemplate = "convertStringToDouble($0)",
+    RuntimeImports = "convertStringToDouble",
+    WhenParameterTypes = [typeof(string)]
+)]

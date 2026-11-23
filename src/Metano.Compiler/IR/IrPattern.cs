@@ -25,6 +25,13 @@ public sealed record IrConstantPattern(IrExpression Value) : IrPattern
 
     /// <summary>The constant's enum type when <see cref="InputType"/> is set.</summary>
     public IrTypeRef? ConstantType { get; init; }
+
+    /// <summary>
+    /// Whether the constant's value is a floating-point NaN, however the source
+    /// spells it (<c>double.NaN</c>, <c>0.0 / 0.0</c>, a <c>const</c> holding NaN).
+    /// NaN never equals itself under IEEE comparison, while C# matches it.
+    /// </summary>
+    public bool IsNaN { get; init; }
 }
 
 /// <summary>
@@ -100,7 +107,15 @@ public sealed record IrPropertySubpattern(
     IrPattern Pattern,
     string? EmittedName = null,
     bool IsTranspiledDataMember = false
-);
+)
+{
+    /// <summary>
+    /// The member the entry reads, so a target applies the same declarative
+    /// mappings as an ordinary member read (<c>{ InnerException: null }</c> on an
+    /// <c>Exception</c>); <c>null</c> when the member did not bind.
+    /// </summary>
+    public IrMemberOrigin? Origin { get; init; }
+}
 
 /// <summary>
 /// Relational pattern: <c>x is &gt; 0</c>, <c>x is &lt;= 10</c>, etc.

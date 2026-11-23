@@ -36,6 +36,7 @@ public enum IrLinqOperator
     Prepend,
     Reverse,
     Zip,
+    DefaultIfEmpty,
 
     // ── Terminals (eager) ──
     ToArray,
@@ -59,6 +60,8 @@ public enum IrLinqOperator
     Average,
     Contains,
     Aggregate,
+    ElementAt,
+    ElementAtOrDefault,
 }
 
 /// <summary>

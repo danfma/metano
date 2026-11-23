@@ -17,20 +17,11 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var hasExtensions =
-            owner.GetMembers().OfType<IMethodSymbol>().Any(m => m.IsExtensionMethod)
-            || owner.DeclaringSyntaxReferences.Any(reference =>
-                reference
-                    .GetSyntax()
-                    .DescendantNodes()
-                    .Any(node => node.Kind().ToString() == "ExtensionBlockDeclaration")
-            );
-
         return new IrBoundStaticCall(
             TypeReferenceTo(owner),
             type,
             SymbolHelper.IsContainerless(owner),
-            hasExtensions,
+            owner.HasExtensionMembers(),
             isLifted
         );
     }

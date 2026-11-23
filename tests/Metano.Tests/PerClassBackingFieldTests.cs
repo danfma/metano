@@ -162,9 +162,9 @@ public class PerClassBackingFieldTests
         await Assert.That(derived).Contains("    return (this.q + super.q) | 0;");
         await Assert.That(derived).Contains("return copyRecordWith<IDer>(this, overrides);");
         await Assert.That(result["app/i-base.ts"]).Contains($"  private {baseField}: number = 5;");
-        // equals / hashCode keep reading through the public accessor.
-        await Assert.That(derived).Contains("this.q === other.q");
-        await Assert.That(derived).Contains("hc.add(this.q);");
+        // equals / hashCode compare each declaring class's own backing field (#384).
+        await Assert.That(derived).Contains($"this.{derivedField} === other.{derivedField}");
+        await Assert.That(derived).Contains($"hc.add(this.{derivedField});");
     }
 
     [Test]
@@ -345,8 +345,12 @@ public class PerClassBackingFieldTests
 
         await Assert.That(output).Contains("  constructor(readonly id: number) { }");
         await Assert.That(output).Contains($"  private {field}: number = 3;");
-        await Assert.That(output).Contains("this.id === other.id && this.v === other.v");
-        await Assert.That(output).Contains("hc.add(this.v);");
+
+        await Assert
+            .That(output)
+            .Contains($"this.id === other.id && this.{field} === other.{field}");
+
+        await Assert.That(output).Contains($"hc.add(this.{field});");
     }
 
     [Test]

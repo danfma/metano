@@ -239,7 +239,7 @@ public static class IrToTsBrandedBridge
     ) =>
         new(
             functionName,
-            IrToTsOverloadDispatcherBridge.MapParameters(method),
+            IrToTsOverloadDispatcherBridge.FastPathParameters(method, context),
             IrToTsTypeMapper.Map(method.ReturnType),
             IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
             Exported: true,

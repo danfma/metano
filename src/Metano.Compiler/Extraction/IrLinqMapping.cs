@@ -54,6 +54,7 @@ public static class IrLinqMapping
             ["Prepend"] = IrLinqOperator.Prepend,
             ["Reverse"] = IrLinqOperator.Reverse,
             ["Zip"] = IrLinqOperator.Zip,
+            ["DefaultIfEmpty"] = IrLinqOperator.DefaultIfEmpty,
 
             // Terminals
             ["ToArray"] = IrLinqOperator.ToArray,
@@ -83,6 +84,8 @@ public static class IrLinqMapping
             ["Average"] = IrLinqOperator.Average,
             ["Contains"] = IrLinqOperator.Contains,
             ["Aggregate"] = IrLinqOperator.Aggregate,
+            ["ElementAt"] = IrLinqOperator.ElementAt,
+            ["ElementAtOrDefault"] = IrLinqOperator.ElementAtOrDefault,
         };
 
     private static readonly IReadOnlyDictionary<IrLinqOperator, string> _emittedNames =
@@ -110,6 +113,7 @@ public static class IrLinqMapping
             [IrLinqOperator.Prepend] = "prepend",
             [IrLinqOperator.Reverse] = "reverse",
             [IrLinqOperator.Zip] = "zip",
+            [IrLinqOperator.DefaultIfEmpty] = "defaultIfEmpty",
             [IrLinqOperator.ToArray] = "toArray",
             [IrLinqOperator.ToList] = "toList",
             [IrLinqOperator.ToMap] = "toDictionary",
@@ -131,6 +135,8 @@ public static class IrLinqMapping
             [IrLinqOperator.Average] = "average",
             [IrLinqOperator.Contains] = "contains",
             [IrLinqOperator.Aggregate] = "aggregate",
+            [IrLinqOperator.ElementAt] = "elementAt",
+            [IrLinqOperator.ElementAtOrDefault] = "elementAtOrDefault",
         };
 
     // The overloads each runtime operator in `system/linq` implements, each
@@ -160,7 +166,7 @@ public static class IrLinqMapping
         [IrLinqOperator.Skip] = IrLinqRuntimeSignature.Of(null, Named("count")),
         [IrLinqOperator.TakeWhile] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
         [IrLinqOperator.SkipWhile] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
-        [IrLinqOperator.Distinct] = IrLinqRuntimeSignature.Of(null, Named()),
+        [IrLinqOperator.Distinct] = IrLinqRuntimeSignature.Of(null, Named(), Named("comparer")),
         [IrLinqOperator.DistinctBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
         [IrLinqOperator.Concat] = IrLinqRuntimeSignature.Of(
             null,
@@ -185,6 +191,11 @@ public static class IrLinqMapping
             2,
             Named("second", "resultSelector"),
             Named("source2", "resultSelector")
+        ),
+        [IrLinqOperator.DefaultIfEmpty] = IrLinqRuntimeSignature.Of(
+            null,
+            Named(),
+            Named("defaultValue")
         ),
         [IrLinqOperator.ToArray] = IrLinqRuntimeSignature.Of(null, Named()),
         [IrLinqOperator.ToList] = IrLinqRuntimeSignature.Of(null, Named()),
@@ -211,6 +222,8 @@ public static class IrLinqMapping
         [IrLinqOperator.Average] = IrLinqRuntimeSignature.Of(1, Named(), Named("selector")),
         [IrLinqOperator.Contains] = IrLinqRuntimeSignature.Of(null, Named("value"), Named("item")),
         [IrLinqOperator.Aggregate] = IrLinqRuntimeSignature.Of(null, Named("seed", "func")),
+        [IrLinqOperator.ElementAt] = IrLinqRuntimeSignature.Of(null, Named("index")),
+        [IrLinqOperator.ElementAtOrDefault] = IrLinqRuntimeSignature.Of(null, Named("index")),
     };
 
     /// <summary>
@@ -266,7 +279,9 @@ public static class IrLinqMapping
                 or IrLinqOperator.MaxBy
                 or IrLinqOperator.Average
                 or IrLinqOperator.Contains
-                or IrLinqOperator.Aggregate;
+                or IrLinqOperator.Aggregate
+                or IrLinqOperator.ElementAt
+                or IrLinqOperator.ElementAtOrDefault;
 
     /// <summary>
     /// Whether the terminal returns a default value when no element
@@ -277,7 +292,18 @@ public static class IrLinqMapping
         op
             is IrLinqOperator.FirstOrDefault
                 or IrLinqOperator.LastOrDefault
-                or IrLinqOperator.SingleOrDefault;
+                or IrLinqOperator.SingleOrDefault
+                or IrLinqOperator.ElementAtOrDefault;
+
+    /// <summary>
+    /// Whether <paramref name="op"/> is a stage only the TypeScript runtime lowers: the
+    /// Dart target keeps the plain member call of its own collections for it (#617).
+    /// </summary>
+    public static bool IsTypeScriptRuntimeStage(IrLinqOperator op) =>
+        op
+            is IrLinqOperator.DefaultIfEmpty
+                or IrLinqOperator.ElementAt
+                or IrLinqOperator.ElementAtOrDefault;
 
     /// <summary>
     /// The overloads the runtime operator of <paramref name="op"/> implements

@@ -34,7 +34,7 @@ public class NullableDecimalEqualityTests
             """
         );
 
-        await Assert.That(output).Contains("return valueEquals(d, new Decimal(0));");
+        await Assert.That(output).Contains("return valueEquals(d, new Decimal(\"0\"));");
         await Assert.That(output).Contains("return !valueEquals(d, new Decimal(i + 0));");
     }
 
