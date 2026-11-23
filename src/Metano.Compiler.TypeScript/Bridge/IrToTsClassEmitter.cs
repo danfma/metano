@@ -182,6 +182,8 @@ internal sealed class IrToTsClassEmitter(
 
         var ctorFieldInitializers = new List<TsStatement>();
 
+        ReportIndexers(type, ir);
+
         EmitClassMembers(
             ir,
             PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
@@ -441,6 +443,9 @@ internal sealed class IrToTsClassEmitter(
                     classMembers.AddRange(typeInitializer.LowerField(irField, field));
                     break;
 
+                case IrPropertyDeclaration { Semantics.IsIndexer: true }:
+                    break;
+
                 case IrPropertyDeclaration irProp
                     when !promotedNames.Contains(
                         IrToTsNamingPolicy.ToDeclaredDataMemberName(irProp.Name, irProp.Attributes)
@@ -475,6 +480,35 @@ internal sealed class IrToTsClassEmitter(
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Reports MS0001 when <paramref name="ir"/> declares an indexer: a JavaScript
+    /// class has no member an index operand can reach, so its indexers are not
+    /// emitted (#474).
+    /// </summary>
+    private void ReportIndexers(INamedTypeSymbol type, IrClassDeclaration ir)
+    {
+        var declaresIndexer = (ir.Members ?? []).Any(member =>
+            member is IrPropertyDeclaration { Semantics.IsIndexer: true }
+        );
+
+        if (!declaresIndexer)
+            return;
+
+        var indexer = type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault(property => property.IsIndexer);
+
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Indexers are not supported in TypeScript: a class member cannot take an "
+                    + $"index operand, so the indexer of '{type.Name}' is not emitted.",
+                (indexer ?? (ISymbol)type).Locations.FirstOrDefault()
+            )
+        );
     }
 
     /// <summary>

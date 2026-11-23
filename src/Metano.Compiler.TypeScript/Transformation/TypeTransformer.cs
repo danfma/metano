@@ -323,17 +323,27 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         InheritedNestedGetters inherited
     )
     {
+        var jsdoc = VisibilityTagOf(nested.Symbol);
+
         if (nested.HasValue)
-            yield return inherited.Getter(nested.Name, nested.DeclaredName);
+            yield return inherited.Getter(nested.Name, nested.DeclaredName, jsdoc);
 
         if (nested.DescriptorName is { } descriptor)
         {
             yield return inherited.Getter(
                 $"{nested.Name}{IrToTsRuntimeTypeReferences.ExportSuffix}",
-                descriptor
+                descriptor,
+                jsdoc
             );
         }
     }
+
+    /// <summary>
+    /// The visibility tag of the declarations that expose a hoisted nested type:
+    /// <c>/** @internal *&#47;</c> for an internal one, as for a member (FR-049, #474).
+    /// </summary>
+    private static TsJSDoc? VisibilityTagOf(INamedTypeSymbol nested) =>
+        IrToTsVisibilityMapper.Map(IrVisibilityMapper.MapMember(nested)).JSDoc;
 
     /// <summary>
     /// The static getters the base classes of <paramref name="type"/> declare for their
@@ -401,7 +411,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         yield return new TsTypeAlias(
             nested.Name,
             new TsNamedType(nested.DeclaredName, typeArguments),
-            TypeParameters: nested.TypeParameters
+            TypeParameters: nested.TypeParameters,
+            JSDoc: VisibilityTagOf(nested.Symbol)
         );
 
         var children = moduleLocal.ExposedIn(nested.Symbol);

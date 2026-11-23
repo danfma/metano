@@ -55,6 +55,8 @@ public static class IrToTsPlainObjectBridge
             }
         }
 
+        properties.AddRange(DataProperties(ir, properties));
+
         sink.Add(
             new TsInterface(
                 tsName,
@@ -90,6 +92,56 @@ public static class IrToTsPlainObjectBridge
 
         return true;
     }
+
+    /// <summary>
+    /// The interface members of the instance auto-properties declared outside
+    /// the primary constructor (<c>internal int Hidden { get; init; }</c>),
+    /// which an object initializer sets on the literal: an <c>internal</c> one
+    /// is tagged <c>/** @internal *&#47;</c> like a class member (FR-049), and
+    /// one that is not <c>required</c> is optional, since a construction may
+    /// leave it out (#474). <c>private</c> and <c>protected</c> members have no
+    /// interface form; computed properties carry no data.
+    /// </summary>
+    private static IEnumerable<TsProperty> DataProperties(
+        IrClassDeclaration ir,
+        IReadOnlyList<TsProperty> positional
+    )
+    {
+        var declared = positional
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var member in ir.Members ?? [])
+        {
+            if (member is not IrPropertyDeclaration property || !IsInterfaceData(property))
+                continue;
+
+            var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(
+                property.Name,
+                property.Attributes
+            );
+
+            if (!declared.Add(name))
+                continue;
+
+            yield return new TsProperty(
+                name,
+                IrToTsTypeMapper.Map(property.Type),
+                Readonly: property.Accessors is not IrPropertyAccessors.GetSet,
+                Optional: property.Semantics?.IsRequired != true,
+                JSDoc: IrToTsVisibilityMapper.Map(property.Visibility).JSDoc
+            );
+        }
+    }
+
+    private static bool IsInterfaceData(IrPropertyDeclaration property) =>
+        !property.IsStatic
+        && property.GetterBody is null
+        && property.Semantics is not { HasGetterBody: true }
+        && property.Visibility
+            is IrVisibility.Public
+                or IrVisibility.Internal
+                or IrVisibility.ProtectedInternal;
 
     /// <summary>
     /// Emits a record's <c>static readonly</c> field as a top-level

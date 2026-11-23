@@ -15,13 +15,17 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <param name="Names">The getter names the base classes declare.</param>
 internal sealed record InheritedNestedGetters(IReadOnlySet<string> Names)
 {
-    /// <summary><c>static get Name(): typeof Declared { return Declared; }</c>.</summary>
-    public TsGetterMember Getter(string name, string declaredName) =>
+    /// <summary>
+    /// <c>static get Name(): typeof Declared { return Declared; }</c>, carrying the
+    /// nested type's <paramref name="jsdoc"/> (<c>@internal</c> for an internal one).
+    /// </summary>
+    public TsGetterMember Getter(string name, string declaredName, TsJSDoc? jsdoc) =>
         new(
             name,
             new TsTypeQuery(declaredName),
             [new TsReturnStatement(new TsIdentifier(declaredName))],
             Static: true,
-            Override: Names.Contains(name)
+            Override: Names.Contains(name),
+            JSDoc: jsdoc
         );
 }

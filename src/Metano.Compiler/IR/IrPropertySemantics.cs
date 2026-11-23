@@ -32,6 +32,8 @@ namespace Metano.Compiler.IR;
 /// constructor of its type writes. C# allows that write; a backend whose lowering of the
 /// constructor writes the property from outside its declaration keeps a way to write
 /// it.</param>
+/// <param name="IsIndexer">The property is an indexer (<c>this[int i]</c>), whose
+/// accessors take the index as a parameter.</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,
@@ -44,7 +46,8 @@ public sealed record IrPropertySemantics(
     bool OwnsPerClassStorage = false,
     bool EmitsPerClassStorage = false,
     IrInheritedAccessor InheritedAccessor = IrInheritedAccessor.None,
-    bool IsAssignedByStaticConstructor = false
+    bool IsAssignedByStaticConstructor = false,
+    bool IsIndexer = false
 );
 
 /// <summary>

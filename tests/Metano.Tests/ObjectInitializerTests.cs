@@ -198,8 +198,12 @@ public class ObjectInitializerTests
             """
         );
 
+        // The indexer declaration itself is reported apart (#474).
         var unsupported = diagnostics
             .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Where(d =>
+                !d.Message.StartsWith("Indexers are not supported", StringComparison.Ordinal)
+            )
             .ToList();
 
         await Assert.That(unsupported).HasSingleItem();
