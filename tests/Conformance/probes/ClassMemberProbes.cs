@@ -126,6 +126,33 @@ public class CmSeeded(int seed)
         : this(1) { }
 }
 
+public class CmHolder
+{
+    public string V = "";
+
+    public int L => V.Length;
+}
+
+[PlainObject]
+public record CmChainedTemp(int A, string B)
+{
+    public CmChainedTemp(string s)
+        : this(new CmHolder { V = s + "?" }.L, s) { }
+}
+
+[PlainObject]
+public record CmIndexedPlain(int A)
+{
+    public int this[int i] => A + i;
+}
+
+public class CmIndexedClass
+{
+    public int Size { get; set; } = 2;
+
+    public int this[int i] => Size * i;
+}
+
 public static class ClassMemberProbes
 {
     static string B(bool b) => b ? "T" : "F";
@@ -185,6 +212,24 @@ public static class ClassMemberProbes
 
         return $"{alias.Apply(v => v * 2)}|{node.Item.Length}";
     }
+
+    static string Logged(string value)
+    {
+        _calls++;
+
+        return value;
+    }
+
+    public static string PlainObjectChainTemporaries()
+    {
+        _calls = 0;
+        var chained = new CmChainedTemp(Logged("ab"));
+
+        return $"{chained.A}|{chained.B}|{_calls}";
+    }
+
+    public static string UnusedIndexersLoad() =>
+        $"{new CmIndexedPlain(4).A}|{new CmIndexedClass().Size}";
 
     public static string PrimaryConstructorChain() =>
         $"{new CmSeeded().Seed}|{new CmSeeded(5).Seed}";
