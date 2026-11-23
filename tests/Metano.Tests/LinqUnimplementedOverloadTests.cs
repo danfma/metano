@@ -41,7 +41,9 @@ public class LinqUnimplementedOverloadTests
 
             public object Paging(List<int> xs) => xs.Skip(1).Take(2).SkipWhile(x => x < 1).TakeWhile(x => x < 5);
 
-            public object Distinct(List<int> xs) => xs.Distinct().DistinctBy(x => x % 3);
+            public object Distinct(List<int> xs, IEqualityComparer<int> same) => xs.Distinct().Distinct(same).DistinctBy(x => x % 3);
+
+            public object DefaultIfEmpty(List<int> xs, List<string> ss) => xs.DefaultIfEmpty().DefaultIfEmpty(7).Concat(xs).Concat(ss.DefaultIfEmpty("").Select(s => s.Length)).Concat(new[] { ss.DefaultIfEmpty().Count() });
 
             public object Concat(List<int> xs, List<int> ys) => xs.Concat(ys).Append(4).Prepend(0).Reverse();
 
@@ -90,6 +92,8 @@ public class LinqUnimplementedOverloadTests
             public bool Contains(IEnumerable<int> xs) => xs.Contains(3);
 
             public int Aggregate(List<int> xs) => xs.Aggregate(0, (a, x) => a + x);
+
+            public int ElementAts(List<int> xs, List<string> ss) => xs.ElementAt(1) + xs.ElementAtOrDefault(1) + ss.ElementAtOrDefault(2)!.Length;
 
             public object Queryable(IQueryable<int> q, List<int> ys) =>
                 q.Where(x => x > 1).OrderBy(x => x).Select(x => x * 2).Concat(ys).Union(ys).Intersect(ys).Except(ys).Zip(ys, (a, b) => a + b);
@@ -149,6 +153,10 @@ public class LinqUnimplementedOverloadTests
         "The overload 'Take(range)' is not supported; the runtime implements only 'Take(count)'. The call throws at run time."
     )]
     [Arguments(
+        "xs.ElementAt(^1)",
+        "The overload 'ElementAt(index: Index)' is not supported; the runtime implements only 'ElementAt(index)'. The call throws at run time."
+    )]
+    [Arguments(
         "map.ToDictionary()",
         "The overload 'ToDictionary()' is not supported; the runtime implements only 'ToDictionary(keySelector)' and 'ToDictionary(keySelector, elementSelector)'. The call throws at run time."
     )]
@@ -174,7 +182,6 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.ToDictionary(x => x, x => x * 2, same)", "ToDictionary", "same")]
     [Arguments("xs.ToHashSet(same)", "ToHashSet", "same")]
     [Arguments("xs.Contains(3, same)", "Contains", "same")]
-    [Arguments("xs.Distinct(same)", "Distinct", "same")]
     [Arguments("xs.DistinctBy(x => x % 3, same)", "DistinctBy", "same")]
     [Arguments("xs.MinBy(x => x, order)", "MinBy", "order")]
     [Arguments("xs.MaxBy(x => x, order)", "MaxBy", "order")]
@@ -182,8 +189,8 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.Max(order)", "Max", "order")]
     [Arguments("xs.OrderBy(comparer: order, keySelector: x => x)", "OrderBy", "order")]
     [Arguments(
-        "xs.Distinct(EqualityComparer<int>.Default)",
-        "Distinct",
+        "xs.ToHashSet(EqualityComparer<int>.Default)",
+        "ToHashSet",
         "EqualityComparer<int>.Default"
     )]
     public async Task IgnoredComparer_ReportsAtTheComparer(
@@ -213,8 +220,6 @@ public class LinqUnimplementedOverloadTests
     /// that overload and reports nothing.
     /// </summary>
     [Test]
-    [Arguments("xs.Distinct(null)", "xs.Distinct()")]
-    [Arguments("xs.Distinct(default)", "xs.Distinct()")]
     [Arguments("xs.DistinctBy(x => x % 3, null)", "xs.DistinctBy(x => x % 3)")]
     [Arguments("xs.OrderBy(x => x, null)", "xs.OrderBy(x => x)")]
     [Arguments("xs.OrderByDescending(x => x, (null))", "xs.OrderByDescending(x => x)")]
@@ -229,7 +234,6 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.Max(comparer: null)", "xs.Max()")]
     [Arguments("xs.OrderBy(comparer: null, keySelector: x => x)", "xs.OrderBy(x => x)")]
     [Arguments("xs.OrderBy(x => x, default(IComparer<int>))", "xs.OrderBy(x => x)")]
-    [Arguments("xs.Distinct(default(IEqualityComparer<int>))", "xs.Distinct()")]
     [Arguments(
         "xs.ToDictionary(x => x, comparer: default(IEqualityComparer<int>))",
         "xs.ToDictionary(x => x)"
@@ -263,10 +267,8 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.GroupJoin(ys, o => o, i => i, (o, i) => o)", "GroupJoin")]
     [Arguments("xs.ToLookup(x => x % 2)", "ToLookup")]
     [Arguments("xs.SequenceEqual(ys)", "SequenceEqual")]
-    [Arguments("xs.ElementAt(1)", "ElementAt")]
     [Arguments("xs.Cast<object>()", "Cast")]
     [Arguments("Enumerable.SequenceEqual(xs, ys)", "SequenceEqual")]
-    [Arguments("Enumerable.ElementAt(xs, 1)", "ElementAt")]
     public async Task UnloweredLinqMethod_ReportsInsteadOfAMemberCall(string call, string method)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
@@ -461,7 +463,7 @@ public class LinqUnimplementedOverloadTests
     public async Task StageOverAStaticFormStage_ReportsItsComparer()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            Body("Enumerable.Where(xs, x => x > 0).Distinct(same)")
+            Body("Enumerable.Where(xs, x => x > 0).ToHashSet(same)")
         );
 
         var report = UnsupportedFeatures(diagnostics).Single();

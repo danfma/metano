@@ -1,5 +1,5 @@
-import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
-import { aggregate, all, any, append, average, averageDecimal, averageNullable, averageNullableDecimal, concat, contains, count, distinct, distinctBy, except, first, firstOrDefault, groupBy, intersect, last, lastOrDefault, linq, max, maxBy, maxNullable, min, minBy, minNullable, orderBy, orderByDescending, prepend, reverse, select, selectMany, single, singleOrDefault, skip, skipWhile, sum, sumDecimal, take, takeWhile, thenBy, thenByDescending, toArray, toDictionary, toHashSet, toList, union, where, zip } from "metano-runtime/system/linq";
+import { Dictionary, HashSet, List, type IEqualityComparer } from "metano-runtime/system/collections";
+import { aggregate, all, any, append, average, averageDecimal, averageNullable, averageNullableDecimal, concat, contains, count, defaultIfEmpty, distinct, distinctBy, elementAt, elementAtOrDefault, except, first, firstOrDefault, groupBy, intersect, last, lastOrDefault, linq, max, maxBy, maxNullable, min, minBy, minNullable, orderBy, orderByDescending, prepend, reverse, select, selectMany, single, singleOrDefault, skip, skipWhile, sum, sumDecimal, take, takeWhile, thenBy, thenByDescending, toArray, toDictionary, toHashSet, toList, union, where, zip } from "metano-runtime/system/linq";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Supported {
@@ -33,8 +33,12 @@ export class Supported {
     return linq(xs, skip(1), take(2), skipWhile((x: number) => x < 1), takeWhile((x: number) => x < 5));
   }
 
-  distinct(xs: List<number>): Object {
-    return linq(xs, distinct(), distinctBy((x: number) => x % 3));
+  distinct(xs: List<number>, same: IEqualityComparer<number>): Object {
+    return linq(xs, distinct(), distinct(same), distinctBy((x: number) => x % 3));
+  }
+
+  defaultIfEmpty(xs: List<number>, ss: List<string>): Object {
+    return linq(xs, defaultIfEmpty(0), defaultIfEmpty(7), concat(xs), concat(linq(ss, defaultIfEmpty(""), select((s: string) => s.length))), concat([linq(ss, defaultIfEmpty(), count())]));
   }
 
   concat(xs: List<number>, ys: List<number>): Object {
@@ -123,6 +127,10 @@ export class Supported {
 
   aggregate(xs: List<number>): number {
     return linq(xs, aggregate(0, (a: number, x: number) => (a + x) | 0));
+  }
+
+  elementAts(xs: List<number>, ss: List<string>): number {
+    return (linq(xs, elementAt(1)) + linq(xs, elementAtOrDefault(1, 0)) + linq(ss, elementAtOrDefault(2))!.length) | 0;
   }
 
   queryable(q: Iterable<number>, ys: List<number>): Object {

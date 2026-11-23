@@ -25,7 +25,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? TryExtractLinqChain(InvocationExpressionSyntax inv, IMethodSymbol? symbol)
     {
-        if (!IrLinqMapping.TryResolve(symbol, out _))
+        if (!TryResolveLinq(symbol, out _))
             return null;
         if (!IsOutermostLinqCall(inv))
             return null;
@@ -45,7 +45,7 @@ public sealed partial class IrExpressionExtractor
         if (member.Parent is not InvocationExpressionSyntax outer)
             return true;
         var outerSymbol = _semantic.GetSymbolInfo(outer).Symbol as IMethodSymbol;
-        return !IrLinqMapping.TryResolve(outerSymbol, out _);
+        return !TryResolveLinq(outerSymbol, out _);
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public sealed partial class IrExpressionExtractor
         {
             var sym = _semantic.GetSymbolInfo(current).Symbol as IMethodSymbol;
 
-            if (!IrLinqMapping.TryResolve(sym, out var op))
+            if (!TryResolveLinq(sym, out var op))
             {
                 // AsQueryable is BCL ceremony to lift an IEnumerable into
                 // an IQueryable so the rest of the chain binds to
@@ -302,7 +302,9 @@ public sealed partial class IrExpressionExtractor
         var sourceOrder = SourceOrderOf(_semantic.GetOperation(stage), bound);
 
         return IrLinqMapping.IsOrDefaultTerminal(op)
-            ? OrDefaultArguments(method, bound, sourceOrder)
+                ? OrDefaultArguments(method, bound, sourceOrder)
+            : op is IrLinqOperator.DefaultIfEmpty
+                ? DefaultIfEmptyArguments(method, bound, sourceOrder)
             : new LinqStageArguments(ValuesOf(bound), EvaluationOrder: sourceOrder);
     }
 

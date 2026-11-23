@@ -59,7 +59,18 @@ public readonly record struct LinqOverloadParameters
         return new([.. names]);
     }
 
-    /// <summary>The overload <paramref name="method"/> binds to.</summary>
+    /// <summary>
+    /// The overload <paramref name="method"/> binds to. A <c>System.Index</c>
+    /// parameter is told from the <c>int</c> one of the same name
+    /// (<c>ElementAt(int index)</c>, <c>ElementAt(Index index)</c>) by an
+    /// <c>: Index</c> suffix, so the overload that counts from the end is not
+    /// taken for the one that counts from the start.
+    /// </summary>
     public static LinqOverloadParameters From(IMethodSymbol method) =>
-        new([.. (method.ReducedFrom ?? method).Parameters.Skip(1).Select(p => p.Name)]);
+        new([.. (method.ReducedFrom ?? method).Parameters.Skip(1).Select(NameOf)]);
+
+    private static string NameOf(IParameterSymbol parameter) =>
+        parameter.Type.ToDisplayString() == "System.Index"
+            ? $"{parameter.Name}: Index"
+            : parameter.Name;
 }
