@@ -41,7 +41,6 @@ DefaultProbes.bcl THROWS TypeError: Cannot read properties of undefined (reading
 DefaultProbes.fields THROWS TypeError: Cannot read properties of undefined (reading 'year')
 DefaultProbes.generic = null|null|F|null|null|null|notlow|null|null|null
 DefaultProbes.genericQ = null|null|null
-DefaultProbes.isDefault THROWS ReferenceError: EqualityComparer is not defined
 DefaultProbes.optional THROWS TypeError: Cannot read properties of undefined (reading 'year')
 DefaultProbes.optionalGeneric = null|null|null|null
 DefaultProbes.structParam THROWS TypeError: Cannot read properties of undefined (reading 'x')
@@ -72,7 +71,7 @@ LinqProbes.intOverflowSum THROWS ReferenceError: Int32 is not defined
 LinqProbes.minMaxDecimal = 0.5|2|1.5|10|13.75|4.5833333333333333333333333333|24.25|4|1.3333333333333333333333333333
 LinqSetProbes.comparers THROWS Error: Unsupported expression: UnsupportedLinqOverload
 LinqSetProbes.setOpsRecords = 3|1|1|2|1|1|2
-ParseProbes.convertCalls = Exception|Exception|Exception|Exception
+ParseProbes.convertCalls = Exception|Exception|1.5|Exception
 ParseProbes.doubleOk = 1.5|1000|1000.5|-0.5|5|Infinity|-Infinity|NaN|1E-07|3|Infinity|Infinity
 ParseProbes.offsets THROWS TypeError: o.toUnixTimeSeconds is not a function
 ParseProbes.timeSpans THROWS ReferenceError: TimeSpan is not defined
@@ -84,7 +83,6 @@ RbBProbes.paramsArray = 3
 RbBProbes.typedToObject THROWS Error: Unsupported expression: UnloweredLinqCall
 Round2Probes.decToDoubleThird = 0.3333333333333333|T
 Round2Probes.exCtorArgs = noparam;p;mnoparam;in;Specified method is not supported.;The given key was not present in the dictionary.;One of the identified items was in an invalid format.;Exception of type 'System.Exception' was thrown.;has;i;
-Round3Probes.decimalRoutes THROWS TypeError: Decimal.toDouble is not a function
 Round3Probes.mathCalls = v1E+21|1E-07|2||1.7976931348623157E+308|1|2|-1
 Round3Probes.timeProps THROWS TypeError: Do not use built-in arithmetic operators with Temporal objects. When comparing, use Temporal.PlainDateTime.compare(obj1, obj2), not obj1 > obj2. When coercing to strings, use `${obj}` or String(obj), not '' + obj. When coercing to numbers, use properties or methods of the object, not `+obj`. When concatenating with strings, use `${str}${obj}` or str.concat(obj), not str + obj. In React, coerce to a string before rendering a Temporal object.
 RuntimeTypeProbes.enumMembership = True|True

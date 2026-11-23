@@ -27,8 +27,10 @@ public sealed partial class IrExpressionExtractor
     {
         if (!TryResolveLinq(symbol, out _))
             return null;
+
         if (!IsOutermostLinqCall(inv))
             return null;
+
         return BuildLinqChain(inv);
     }
 

@@ -26,7 +26,6 @@ StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  W4-C34: an im
 StageHImmutableBindingProbes.immutableGenericConstraint  #335  W4-C34: an immutable collection bound to a mutable-interface-constrained type parameter reports MS0001 and throws, instead of silently dropping the mutation
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter  #335  011h: ImmutableArray<T>.Builder.Count = n is reported (MS0001) and throws an unsupported-expression error when run (the runtime cannot produce default(T))
 
-AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
 CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
@@ -67,7 +66,6 @@ DecimalProbes.compound                #662  decimal.js drops the decimal scale (
 DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
 DecimalProbes.typeTests               none  `is int` on a number that holds a whole value
 DefaultProbes.arrays                  #688  array-creation expression unsupported
-DefaultProbes.isDefault               #686  EqualityComparer<T>.Default is unmapped
 DefaultProbes.*                       #291  default(T) of a struct, enum, tuple, BCL value or type parameter
 EqualityProbes.genericArray           #688  a tuple is a plain array, so arrays behind object/T compare element by element
 EqualityProbes.objectArrays           #688  a tuple is a plain array, so arrays behind object/T compare element by element
@@ -85,7 +83,6 @@ ParseProbes.offsets                   #686  DateTimeOffset members are unmapped
 ParseProbes.timeSpans                 #686  TimeSpan members are unmapped
 ParseProbes.doubleOk                  none  double.Parse of an invalid text returns Infinity instead of throwing
 Round2Probes.exCtorArgs               #651  BCL exception identity and messages
-Round3Probes.decimalRoutes            #686  decimal.ToDouble is unmapped
 Round3Probes.mathCalls                #686  Math.PI is unmapped
 Round3Probes.timeProps                #686  TimeSpan members are unmapped
 StringProbes.chars                    #686  string.Concat over chars is unmapped

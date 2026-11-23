@@ -134,14 +134,17 @@ public class BclMemberMappingTests
         );
 
         await Assert.That(output).Contains("const sb = new StringBuilder(\"x\");");
+
         await Assert
             .That(output)
             .Contains(
                 "sb.append(formatDouble(d)).append(formatBoolean(flag)).append(String(l)).append(formatText(o)).append(c).appendRepeated(\"z\", 3).appendLine(\"y\");"
             );
+
         await Assert
             .That(output)
             .Contains("sb.insert(0, \"i\").remove(0, 1).replace(\"a\", \"b\");");
+
         await Assert.That(output).Contains("sb.length = 2;");
         await Assert.That(output).Contains("sb.toString() + sb.length + sb.toSubstring(0, 1)");
         await Assert.That(output).Contains("StringBuilder");
@@ -184,9 +187,11 @@ public class BclMemberMappingTests
 
         await Assert.That(output).Contains("const source = new TaskCompletionSource<number>();");
         await Assert.That(output).Contains("source.setResult(3);");
+
         await Assert
             .That(output)
             .Contains("source.trySetException(new InvalidOperationException());");
+
         await Assert.That(output).Contains("return await source.task;");
     }
 
