@@ -574,6 +574,17 @@
     }
   },
   {
+    "id": "V13n",
+    "context": "StudioJsonContext",
+    "getter": "tiny",
+    "direction": "read",
+    "json": "-0",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Tiny."
+    }
+  },
+  {
     "id": "V15",
     "context": "StudioJsonContext",
     "getter": "hashSetString",

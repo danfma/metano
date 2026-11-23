@@ -28,7 +28,7 @@ import {
   holdsBigInts,
   type Int64EnumDescriptor,
 } from "./numeric-enum-members.ts";
-import { isWithinIntegerRange } from "./number-from-string.ts";
+import { isUnsignedIntegerType, isWithinIntegerRange } from "./number-from-string.ts";
 import {
   decimalConverterOf,
   type ErrorTypeName,
@@ -431,11 +431,16 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
   };
 }
 
-/** Whether `value` is a `number` holding an integer within `numberType`'s range. */
+/**
+ * Whether `value` is a `number` holding an integer within `numberType`'s
+ * range. An unsigned type takes no sign, not even `-0`'s (measured: STJ
+ * throws for `-0` into a `byte` enum, as for a `ulong`).
+ */
 function isIntegerOfType(value: unknown, numberType: IntegerTypeName): value is number {
   return (
     typeof value === "number" &&
     Number.isInteger(value) &&
+    !(Object.is(value, -0) && isUnsignedIntegerType(numberType)) &&
     isWithinIntegerRange(BigInt(value), numberType)
   );
 }

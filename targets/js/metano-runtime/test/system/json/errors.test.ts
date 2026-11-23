@@ -114,7 +114,8 @@ describe("JsonSerializer — object contract errors", () => {
       },
     };
 
-    for (const value of [1.5, 256, -1, "1", true]) {
+    // An unsigned type takes no sign, not even `-0`'s (measured on .NET 10).
+    for (const value of [1.5, 256, -1, -0, "1", true]) {
       expectJsonException(
         () => JsonSerializer.deserialize(value, levelSpec),
         "The JSON value could not be converted to MyApp.Level.",
