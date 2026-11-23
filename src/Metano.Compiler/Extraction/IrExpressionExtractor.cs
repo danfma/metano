@@ -5514,6 +5514,17 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        var sourceArgs = args;
+
+        var chain =
+            isPlainObject && ctor is not null ? TryResolvePlainObjectChain(ctor, args) : null;
+
+        if (chain is not null)
+        {
+            args = chain.Arguments;
+            parameterNames = chain.Target.Parameters.Select(p => p.Name).ToList();
+        }
+
         var initializer = InitializerOf(creationSyntax);
 
         if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
@@ -5549,11 +5560,15 @@ public sealed partial class IrExpressionExtractor
         )
         {
             EvaluationOrder = overload is null
-                ? ReportedConstructionOrderOf(creationSyntax, args, exception)
+                ? ChainedOrNot(
+                    chain,
+                    ReportedConstructionOrderOf(creationSyntax, sourceArgs, exception)
+                )
                 : null,
         };
 
-        var constructed = BindExceptionArguments(creation);
+        var constructed = chain?.Bind(BindExceptionArguments(creation))
+            ?? BindExceptionArguments(creation);
 
         return keepsInitializer
             ? constructed
