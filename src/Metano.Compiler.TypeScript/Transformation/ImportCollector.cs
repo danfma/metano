@@ -1725,6 +1725,39 @@ public sealed class ImportCollector(
         CollectInScope(scope.BoundNames, scope.Statements, scope.Expressions, sink);
 
     /// <summary>
+    /// Registers what a bare identifier outside any local binding may import:
+    /// <list type="bullet">
+    ///   <item>a project type used as a value — an enum object passed to a descriptor
+    ///     spec, or the owner of a nested case a pattern tests (<c>instanceof
+    ///     Owner.Case</c>, a dotted identifier whose root names the owner, which a
+    ///     <c>[Name]</c> may spell in lowercase);</item>
+    ///   <item>a method group of a <c>[NoContainer]</c> static method, which lowers to
+    ///     its bare lowercase function name (#179);</item>
+    ///   <item>a guard used as a value (a strict guard's <c>variants</c> thunk, spec
+    ///     011 FR-029), imported as a call imports it.</item>
+    /// </list>
+    /// </summary>
+    private void CollectFromBareIdentifier(string name, ImportCollectionSink sink)
+    {
+        if (NamesTypeValue(ImportCollectionSink.RootOf(name)))
+        {
+            sink.AddValueReference(name);
+
+            return;
+        }
+
+        var importsAsCall =
+            _context.NoContainerFunctionExports.ContainsKey(name)
+            || _context.TryResolveGuardImport(name, out _);
+
+        if (!importsAsCall)
+            return;
+
+        sink.Names.Add(name);
+        sink.ValueNames.Add(name);
+    }
+
+    /// <summary>
     /// Walks <paramref name="statements"/> and <paramref name="expressions"/> with
     /// <paramref name="boundNames"/> bound as locals (a <c>catch</c> parameter, a
     /// <c>foreach</c> variable), so a local never resolves to an export of another module.
@@ -1785,34 +1818,7 @@ public sealed class ImportCollector(
                 // A parameter, local, loop variable or caught value: never an export.
                 break;
             case TsIdentifier bareId:
-                // Bare identifiers starting with uppercase may reference transpilable
-                // types used as values (e.g., enum objects passed to descriptor specs,
-                // or a nested case tested by `instanceof Owner.Case`).
-                if (bareId.Name.Length > 0 && char.IsUpper(bareId.Name[0]))
-                {
-                    sink.AddValueReference(bareId.Name);
-                }
-                // Method-group reference to a [NoContainer] static method lowers
-                // to a bare lowercase identifier (delegate position, lambda
-                // capture, callback arg). The resolution loop below routes the
-                // name through `NoContainerFunctionExports` to emit the right
-                // import line; without registering it here the loop never sees
-                // it. (#179)
-                else if (
-                    bareId.Name.Length > 0
-                    && _context.NoContainerFunctionExports.ContainsKey(bareId.Name)
-                )
-                {
-                    names.Add(bareId.Name);
-                    valueNames.Add(bareId.Name);
-                }
-                // A guard used as a value (a strict guard's `variants` thunk,
-                // spec 011 FR-029) imports it as a call does.
-                else if (_context.TryResolveGuardImport(bareId.Name, out _))
-                {
-                    names.Add(bareId.Name);
-                    valueNames.Add(bareId.Name);
-                }
+                CollectFromBareIdentifier(bareId.Name, sink);
                 break;
             case TsNewExpression newExpr:
                 if (newExpr.Callee is TsIdentifier localId && sink.IsLocallyBound(localId.Name))
@@ -2246,7 +2252,7 @@ internal sealed class ImportCollectionSink(
         ValueNames.Add(root);
     }
 
-    private static string RootOf(string name)
+    public static string RootOf(string name)
     {
         var dot = name.IndexOf('.');
 
