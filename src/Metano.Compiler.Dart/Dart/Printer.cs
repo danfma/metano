@@ -104,11 +104,13 @@ public sealed class Printer
         if (v.IsFinal)
             sb.Append("final ");
         sb.Append(FormatType(v.Type)).Append(' ').Append(v.Name);
+
         if (v.Initializer is not null)
         {
             sb.Append(" = ");
             IrBodyPrinter.PrintExpression(sb, v.Initializer);
         }
+
         sb.AppendLine(";");
     }
 

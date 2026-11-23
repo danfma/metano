@@ -820,6 +820,7 @@ public static class IrBodyPrinter
                         .Append(": ");
                     PrintSwitchPattern(sb, prop.Subpatterns[i].Pattern);
                 }
+
                 sb.Append(')');
 
                 if (prop.Designator is not null)
@@ -882,10 +883,12 @@ public static class IrBodyPrinter
                 if (pos.Type is not null)
                     sb.Append(FormatType(pos.Type));
                 sb.Append('(');
+
                 for (var i = 0; i < pos.Elements.Count; i++)
                 {
                     if (i > 0)
                         sb.Append(", ");
+
                     if (
                         pos.Type is not null
                         && pos.ElementMembers is { } elementMembers
@@ -899,8 +902,10 @@ public static class IrBodyPrinter
                             )
                             .Append(": ");
                     }
+
                     PrintSwitchPattern(sb, pos.Elements[i]);
                 }
+
                 sb.Append(')');
 
                 if (pos.Designator is not null)
