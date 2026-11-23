@@ -16,10 +16,7 @@ internal static class TypeSpecificity
         /// <summary>The same type (nullability and type arguments aside).</summary>
         Same,
 
-        /// <summary>
-        /// The first type derives from, or implements, the second, or is a
-        /// better numeric conversion target (<see cref="NumericConversionTarget"/>).
-        /// </summary>
+        /// <summary>The first type derives from, or implements, the second.</summary>
         MoreDerived,
     }
 
@@ -32,12 +29,6 @@ internal static class TypeSpecificity
     {
         var left = WithoutNullability(candidate);
         var right = WithoutNullability(other);
-
-        if (
-            NumericConversionTarget.KindOf(left) is { } leftKind
-            && NumericConversionTarget.KindOf(right) is { } rightKind
-        )
-            return CompareNumeric(leftKind, rightKind);
 
         if (left == right)
             return Relation.Same;
@@ -52,20 +43,6 @@ internal static class TypeSpecificity
             return Relation.Same;
 
         return leftNamed.Semantics?.Supertypes?.Contains(rightNamed.SupertypeKey) is true
-            ? Relation.MoreDerived
-            : Relation.Unrelated;
-    }
-
-    /// <summary>
-    /// Two numeric kinds: the same kind, or a better conversion target than
-    /// the other, which a dispatcher tries first like a more derived type.
-    /// </summary>
-    private static Relation CompareNumeric(IrNumericKind candidate, IrNumericKind other)
-    {
-        if (candidate == other)
-            return Relation.Same;
-
-        return NumericConversionTarget.IsBetter(candidate, other)
             ? Relation.MoreDerived
             : Relation.Unrelated;
     }

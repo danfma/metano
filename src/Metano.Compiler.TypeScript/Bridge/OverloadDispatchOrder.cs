@@ -63,9 +63,7 @@ internal static class OverloadDispatchOrder
     /// from, the matching parameter of an overload tried before it (and one at
     /// least strictly does) ahead of that one: the guards overlap, and the first
     /// that matches wins, so <c>F(ArgumentException)</c> must be tried before
-    /// <c>F(Exception)</c>, as C#'s binding prefers it; likewise a better
-    /// numeric conversion target, so <c>F(int)</c> goes before <c>F(long)</c>,
-    /// <c>F(uint)</c> or <c>F(double)</c> (#475). Only overloads of the
+    /// <c>F(Exception)</c>, as C#'s binding prefers it. Only overloads of the
     /// same tier and arity compare; the others, and unrelated ones, keep their
     /// order.
     /// </summary>
