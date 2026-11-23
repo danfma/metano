@@ -201,6 +201,45 @@ Recorded by `bun run bench` and `bun run bench:node` in `targets/js/metano-runti
 
 Bold rows are still over budget: `HashSet.add` into a fresh set (a `Map` keyed store where the baseline is a native `Set`), `Dictionary.containsKey` with string keys on Node.js, the `Queue` row on Node.js, and, at the top of their noisy ranges, `Dictionary.add` and `HashSet.remove + add` on Node.js. They are **provisional misses** (maintainer decision W4-49): the budgets stay unchanged, and the final numbers come from a quiet-machine re-measure at stage 011g.
 
+**Final measurement and budgets (stage 011g, 2026-11-23, #720).** `bun run bench` and `bun run bench:node` on an **Apple M1 Pro** (darwin arm64) with **Bun 1.4.2** and **Node.js 24.11.0**, default build, same shape as above (1e4 elements x 500 calls, 10 warm-ups, median of 21). Calibration: C_ref = 0.47 ns (Bun) / 0.59 ns (Node.js); C_measured per row 0.51–0.68 ns (Bun) and 0.52–0.55 ns (Node.js). **Load average 2.0–3.0 during the run**, above the "< 2" that `bench/README.md` asks for, so the figures carry some noise; the run was not repeated on a quieter machine.
+
+Per-engine budgets (maintainer decision, 2026-11-23): every budget that already held keeps its value; the four Node.js rows that missed (labelled `011g`) are set to the measured normalized value + 10%, rounded up to two decimals: `Dictionary.containsKey` (string keys) 3.05 -> 3.36 ns, `HashSet.add` 3.42 -> 3.77 ns, `HashSet.remove + add` 2.42 -> 2.67 ns, `Queue.enqueue + dequeue` 2.06 -> 2.27 ns. The Bun budgets are unchanged. The `011g` labels and the provisional status are gone, and `bun run bench --check` and `bun run bench:node --check` gate on these numbers.
+
+| Case | Dist | Budget Node / Bun (ns) | Node raw / norm (ns) | Bun raw / norm (ns) | Verdict |
+|---|---|---|---|---|---|
+| List.get (sequential) | `dist/` (checked) | 1 | 0.23 / 0.26 | 0.29 / 0.26 | ok |
+| List.get (sequential) | `dist-unchecked/` + define | 1 | 0.00 / 0.00 | 0.00 / 0.00 | ok |
+| List.get (data-driven index) | `dist/` (checked) | 1.75 / 1 | 1.29 / 1.44 | 0.34 / 0.31 | ok |
+| List.get (data-driven index) | `dist-unchecked/` + define | 1.75 / 1 | -0.03 / -0.03 | -0.03 / -0.02 | ok |
+| List.set | `dist/` (checked) | 1.85 / 1 | 1.52 / 1.73 | 0.46 / 0.42 | ok |
+| List.set | `dist-unchecked/` + define | 1.85 / 1 | 0.14 / 0.16 | 0.00 / 0.00 | ok |
+| list[i] += 1 (direct form) | `dist/` (checked) | 1.6 / 1.5 | 1.31 / 1.47 | 0.63 / 0.58 | ok |
+| list[i] += 1 (direct form) | `dist-unchecked/` + define | 1.6 / 1.5 | 0.16 / 0.18 | 0.00 / 0.00 | ok |
+| list[i] += 1 (closure fallback, update) | `dist/` (checked) | 3 | 1.53 / 1.70 | 2.67 / 2.41 | ok |
+| get at a polymorphic site (4 element types) | `dist/` (checked) | 2 | 0.26 / 0.29 | 0.07 / 0.05 | ok |
+| get at a site seeing List and a fixed-size adopted list | `dist/` (checked) | 2 | 0.19 / 0.21 | 0.44 / 0.40 | ok |
+| get at a site seeing List and a fixed-size adopted list | `dist-unchecked/` + define | 2 | -0.01 / -0.01 | 0.12 / 0.11 | ok |
+| List.add | `dist/` (checked) | 0.5 | 0.34 / 0.38 | 0.08 / 0.07 | ok |
+| lowered foreach over List (per element; final $c form) | `dist/` (checked) | 1.25 / 0.5 | 0.31 / 0.35 | -0.46 / -0.43 | ok |
+| lowered foreach over List (per element; final $c form) | `dist-unchecked/` + define | 1.25 / 0.5 | -0.10 / -0.12 | -0.46 / -0.43 | ok |
+| lowered foreach, guard read on every step (superseded R0 form) | `dist/` (checked) | — | 5.30 / 5.80 | 48.43 / 44.83 | reported |
+| lowered foreach, guard read on every step (superseded R0 form) | `dist-unchecked/` + define | — | -0.10 / -0.11 | -0.44 / -0.40 | reported |
+| List [Symbol.iterator] (for..of, interop) | `dist/` (checked) | — | 1.57 / 1.77 | 2.39 / 2.08 | reported |
+| Dictionary.get (number keys) | `dist/` (checked) | 2 | 1.49 / 1.69 | -0.01 / -0.01 | ok |
+| Dictionary.set (number keys, overwrite) | `dist/` (checked) | 2 | 1.42 / 1.62 | 1.11 / 1.02 | ok |
+| Dictionary.containsKey (string keys) | `dist/` (checked) | 3.36 / 2 | 2.76 / 3.05 | 0.38 / 0.27 | ok |
+| Dictionary.add (string keys, fresh dictionary) | `dist/` (checked) | 2 | 1.16 / 1.30 | 1.35 / 0.94 | ok |
+| HashSet.add (numbers, fresh set) | `dist/` (checked) | 3.77 / 2 | 3.03 / 3.42 | 1.45 / 1.34 | ok |
+| HashSet.add (numbers, fresh set; 3.0 class vs the 2.x runtime HashSet, reported) | `dist/` (checked) | — | 4.95 / 5.53 | -1.82 / -1.62 | reported |
+| HashSet.contains (numbers) | `dist/` (checked) | 2 | 0.01 / 0.02 | -0.18 / -0.16 | ok |
+| HashSet.remove + add (numbers) | `dist/` (checked) | 2.67 / 2 | 2.26 / 2.42 | 0.96 / 0.88 | ok |
+| Queue.enqueue + dequeue | `dist/` (checked) | 2.27 / 1.5 | 1.85 / 2.06 | 1.60 / 1.48 | ok |
+| Queue BFS shape (dequeue 1, enqueue 2; reported) | `dist/` (checked) | — | 1.02 / 1.14 | 1.21 / 1.09 | reported |
+| Stack.push + pop | `dist/` (checked) | 1.5 | 0.79 / 0.90 | 0.02 / 0.02 | ok |
+| Dictionary.get (record keys, reported) | `dist/` (checked) | — | 48.12 / 54.08 | 27.21 / 19.27 | reported |
+
+**HashSet vs the 2.x runtime `HashSet`** (the reported row "3.0 class vs the 2.x runtime HashSet"): Bun -1.62 ns (3.0 is faster), Node.js +5.53 ns (3.0 is slower). Spec 011 amends the earlier "unchanged or faster than 2.x" rule to "measured and reported": the figure is informative, not a gate. A `Set`-backed store inside `HashCore` is a post-3.0 optimization follow-up.
+
 Sizes (FR-043, minified + gzipped, from `dist/`), against NFR-008 (the collection rows raised to the measured size + 10% by W4-25 (d): FR-016's exception classes, about 0.97 KB, plus `elementEquals` / `defaultEquals`, about 0.5 KB, shared when several collections are used; slimming the exceptions is a follow-up):
 
 | Entry | Budget | bun | esbuild |
