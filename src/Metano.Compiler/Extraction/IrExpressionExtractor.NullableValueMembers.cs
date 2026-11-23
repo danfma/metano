@@ -1,6 +1,7 @@
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -95,12 +96,15 @@ public sealed partial class IrExpressionExtractor
             : WrapsAPresentValue(receiverSyntax);
 
     /// <summary>
-    /// Whether <paramref name="expression"/> is, through any parentheses, a
-    /// built-in cast to a nullable value type of a non-nullable value
-    /// (<c>(int?)2</c>, <c>(long?)x</c> over an <c>int</c>): the nullable it
-    /// yields always has a value. Decided from the syntax and the declared
-    /// types alone, never from nullable flow analysis. A user-defined
-    /// conversion operator is not one: it returns whatever its body does.
+    /// Whether <paramref name="expression"/> is, through any parentheses,
+    /// <c>checked</c> / <c>unchecked</c> or <c>!</c>, a built-in cast to a
+    /// nullable value type of a present value (<c>(int?)2</c>,
+    /// <c>(long?)x</c> over an <c>int</c>, <c>(int?)(int?)2</c>), a
+    /// conditional whose two arms are present, or a <c>??</c> whose fallback
+    /// is present (#646): the nullable it yields always has a value. Decided
+    /// from the syntax and the declared types alone, never from nullable flow
+    /// analysis. A user-defined conversion operator is not one: it returns
+    /// whatever its body does.
     /// </summary>
     private bool WrapsAPresentValue(ExpressionSyntax expression) =>
         expression switch
@@ -108,12 +112,29 @@ public sealed partial class IrExpressionExtractor
             ParenthesizedExpressionSyntax parenthesized => WrapsAPresentValue(
                 parenthesized.Expression
             ),
+            CheckedExpressionSyntax context => WrapsAPresentValue(context.Expression),
+            PostfixUnaryExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SuppressNullableWarningExpression,
+            } suppressed => WrapsAPresentValue(suppressed.Operand),
             CastExpressionSyntax cast => _semantic.GetTypeInfo(cast).Type.IsNullableValueType()
-                && _semantic.GetTypeInfo(cast.Expression).Type is { IsValueType: true } operand
-                && !operand.IsNullableValueType()
+                && IsPresentValue(cast.Expression)
                 && _semantic.GetSymbolInfo(cast).Symbol is null,
+            ConditionalExpressionSyntax conditional => IsPresentValue(conditional.WhenTrue)
+                && IsPresentValue(conditional.WhenFalse),
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.CoalesceExpression } coalesce =>
+                IsPresentValue(coalesce.Right),
             _ => false,
         };
+
+    /// <summary>
+    /// A value of a non-nullable value type, or one that wraps a present
+    /// value (<see cref="WrapsAPresentValue"/>).
+    /// </summary>
+    private bool IsPresentValue(ExpressionSyntax expression) =>
+        _semantic.GetTypeInfo(expression).Type is { IsValueType: true } type
+            && !type.IsNullableValueType()
+        || WrapsAPresentValue(expression);
 
     /// <summary>
     /// The value itself, or the .NET throw when it is missing, always
