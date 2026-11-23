@@ -151,7 +151,9 @@ describe("JsonSerializer — ValueSpec round trips", () => {
 
     expect(JsonSerializer.serialize(Level.High, spec)).toBe(1);
     expect(JsonSerializer.deserialize(1, spec)).toBe(Level.High);
-    expect(() => JsonSerializer.deserialize("High", spec)).toThrow("Invalid numeric enum value");
+    expect(() => JsonSerializer.deserialize("High", spec)).toThrow(
+      "The JSON value could not be converted to Object.",
+    );
   });
 
   test("branded root deserializes through create", () => {

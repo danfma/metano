@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 
 namespace SampleJsonContracts;
@@ -70,6 +71,12 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(Color))]
 [JsonSerializable(typeof(Level))]
 [JsonSerializable(typeof(Flavor))]
+[JsonSerializable(typeof(Perms))]
+[JsonSerializable(typeof(Tiny))]
+[JsonSerializable(typeof(Dashboard))]
+[JsonSerializable(typeof(ImmHolder))]
+[JsonSerializable(typeof(ImmutableArray<int>))]
+[JsonSerializable(typeof(List<ImmutableArray<int>>))]
 [JsonSerializable(typeof(SPoint))]
 [JsonSerializable(typeof(Title))]
 [JsonSerializable(typeof(EpisodeRec))]

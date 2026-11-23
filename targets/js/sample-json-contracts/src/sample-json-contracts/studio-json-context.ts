@@ -1,13 +1,25 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
 import { UUID, type ClassType } from "metano-runtime";
-import { Dictionary, HashSet, List, type IReadOnlyList } from "metano-runtime/system/collections";
+import {
+  Dictionary,
+  HashSet,
+  ImmutableArray,
+  List,
+  type IReadOnlyList,
+} from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
-import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
+import {
+  NotSupportedException,
+  SerializerContext,
+  type TypeSpec,
+  type ValueSpec,
+} from "metano-runtime/system/json";
 import { Clip } from "./clip";
 import { Color } from "./color";
 import { DBase } from "./d-base";
 import { DBer } from "./d-ber";
+import { Dashboard } from "./dashboard";
 import { EpisodeRec } from "./episode-rec";
 import { EpisodeSummary } from "./episode-summary";
 import { Feed } from "./feed";
@@ -24,10 +36,12 @@ import { HolderInt } from "./holder-int";
 import { HolderLevel } from "./holder-level";
 import { HolderSPoint } from "./holder-s-point";
 import { IBase } from "./i-base";
+import type { IGauge } from "./i-gauge";
 import type { IShape } from "./i-shape";
 import type { IShapeB } from "./i-shape-b";
 import { IA } from "./ia";
 import { ImageClip } from "./image-clip";
+import { ImmHolder } from "./imm-holder";
 import { IntMapHolder } from "./int-map-holder";
 import { Int64Box } from "./int64-box";
 import { Int64Containers } from "./int64-containers";
@@ -43,6 +57,7 @@ import { NMid } from "./n-mid";
 import { OBase } from "./o-base";
 import { ODer } from "./o-der";
 import { Page } from "./page";
+import { Perms } from "./perms";
 import { isPoint, type Point } from "./point";
 import { isPoint3, type Point3 } from "./point3";
 import { isRect, type Rect } from "./rect";
@@ -54,6 +69,7 @@ import { SilenceClip } from "./silence-clip";
 import { Sq } from "./sq";
 import { SqB } from "./sq-b";
 import { Timeline } from "./timeline";
+import { Tiny } from "./tiny";
 import { Title } from "./title";
 import { UBaseA } from "./u-base-a";
 import { UBaseH } from "./u-base-h";
@@ -130,6 +146,12 @@ export class StudioJsonContext extends SerializerContext {
   private _color?: ValueSpec<Color>;
   private _level?: ValueSpec<Level>;
   private _flavor?: ValueSpec<Flavor>;
+  private _perms?: ValueSpec<Perms>;
+  private _tiny?: ValueSpec<Tiny>;
+  private _dashboard?: TypeSpec<Dashboard>;
+  private _immHolder?: TypeSpec<ImmHolder>;
+  private _immutableArrayInt32?: ValueSpec<ImmutableArray<number>>;
+  private _listImmutableArrayInt32?: ValueSpec<List<ImmutableArray<number>> | null>;
   private _sPoint?: TypeSpec<SPoint>;
   private _title?: ValueSpec<Title>;
   private _episodeRec?: TypeSpec<EpisodeRec>;
@@ -159,6 +181,7 @@ export class StudioJsonContext extends SerializerContext {
   private _rect?: TypeSpec<Rect>;
   private _mixedClass?: TypeSpec<MixedClass>;
   private _mixedPoint?: TypeSpec<MixedPoint>;
+  private _iGauge?: TypeSpec<IGauge>;
 
   static get $runtimeType(): ClassType<StudioJsonContext> {
     return (StudioJsonContext$rt ??= {
@@ -1280,6 +1303,103 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
+  get perms(): ValueSpec<Perms> {
+    return (this._perms ??= this.createValueSpec({
+      descriptor: { kind: "numericEnum", values: Perms, typeName: "SampleJsonContracts.Perms" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Perms",
+    }));
+  }
+
+  get tiny(): ValueSpec<Tiny> {
+    return (this._tiny ??= this.createValueSpec({
+      descriptor: {
+        kind: "numericEnum",
+        values: Tiny,
+        typeName: "SampleJsonContracts.Tiny",
+        numberType: "System.Byte",
+      },
+      valueType: true,
+      typeName: "SampleJsonContracts.Tiny",
+    }));
+  }
+
+  get dashboard(): TypeSpec<Dashboard> {
+    return (this._dashboard ??= this.createSpec({
+      type: Dashboard,
+      runtimeType: () => Dashboard.$runtimeType,
+      factory: (p: Record<string, unknown>) =>
+        new Dashboard(p.title as string, p.main as IGauge | null),
+      properties: [
+        {
+          ts: "title",
+          json: "Title",
+          type: { kind: "primitive" },
+        },
+        {
+          ts: "main",
+          json: "Main",
+          type: {
+            kind: "nullable",
+            inner: {
+              kind: "ref",
+              spec: () => this.iGauge,
+            },
+          },
+          optional: true,
+        },
+      ],
+    }));
+  }
+
+  get immHolder(): TypeSpec<ImmHolder> {
+    return (this._immHolder ??= this.createSpec({
+      type: ImmHolder,
+      runtimeType: () => ImmHolder.$runtimeType,
+      factory: (p: Record<string, unknown>) => new ImmHolder(p.items as ImmutableArray<number>),
+      properties: [
+        {
+          ts: "items",
+          json: "Items",
+          type: {
+            kind: "immutableArray",
+            element: { kind: "primitive", numberType: "System.Int32" },
+            create: (items) => ImmutableArray.from(items),
+            typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+          },
+        },
+      ],
+    }));
+  }
+
+  get immutableArrayInt32(): ValueSpec<ImmutableArray<number>> {
+    return (this._immutableArrayInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "immutableArray",
+        element: { kind: "primitive", numberType: "System.Int32" },
+        create: (items) => ImmutableArray.from(items),
+        typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+      },
+      valueType: true,
+      typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+    }));
+  }
+
+  get listImmutableArrayInt32(): ValueSpec<List<ImmutableArray<number>> | null> {
+    return (this._listImmutableArrayInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "list",
+        element: {
+          kind: "immutableArray",
+          element: { kind: "primitive", numberType: "System.Int32" },
+          create: (items) => ImmutableArray.from(items),
+          typeName: "System.Collections.Immutable.ImmutableArray`1[System.Int32]",
+        },
+        create: (items) => List.of(items),
+      },
+    }));
+  }
+
   get sPoint(): TypeSpec<SPoint> {
     return (this._sPoint ??= this.createSpec({
       type: SPoint,
@@ -1558,7 +1678,9 @@ export class StudioJsonContext extends SerializerContext {
       runtimeType: () => UNearAbs.$runtimeType,
       base: this.uNear,
       factory: () => {
-        throw new Error("Cannot construct abstract type 'UNearAbs'.");
+        throw new NotSupportedException(
+          "Deserialization of interface or abstract types is not supported. Type 'SampleJsonContracts.UNearAbs'.",
+        );
       },
       properties: [],
     }));
@@ -1702,6 +1824,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "SampleJsonContracts.Point",
     }));
   }
 
@@ -1725,6 +1848,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "SampleJsonContracts.Point3",
     }));
   }
 
@@ -1744,6 +1868,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "SampleJsonContracts.Rect",
     }));
   }
 
@@ -1771,6 +1896,24 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
+          type: { kind: "primitive", numberType: "System.Int32" },
+        },
+      ],
+      typeName: "SampleJsonContracts.MixedPoint",
+    }));
+  }
+
+  get iGauge(): TypeSpec<IGauge> {
+    return (this._iGauge ??= this.createSpec({
+      factory: () => {
+        throw new NotSupportedException(
+          "Deserialization of interface or abstract types is not supported. Type 'SampleJsonContracts.IGauge'.",
+        );
+      },
+      properties: [
+        {
+          ts: "level",
+          json: "Level",
           type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],

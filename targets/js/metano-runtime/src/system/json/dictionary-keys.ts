@@ -16,7 +16,12 @@ import {
   readExactNumberText,
   readNumberTextAsNumber,
 } from "./number-from-string.ts";
-import { holdsBigInts, type NumericEnumValue, numericEnumMembers } from "./numeric-enum-members.ts";
+import {
+  DEFAULT_ENUM_INTEGER_TYPE,
+  holdsBigInts,
+  type NumericEnumValue,
+  numericEnumMembers,
+} from "./numeric-enum-members.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 import { readTemporalText } from "./temporal-reads.ts";
@@ -38,9 +43,6 @@ const BOOLEAN_KEYS = /* @__PURE__ */ lazyValue(
 
 /** `Guid` property names are read in the `D` format only (`8-4-4-4-12`). */
 const GUID_D_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** The underlying type of an enum key whose descriptor names none, the C# default. */
-const DEFAULT_ENUM_INTEGER_TYPE: IntegerTypeName = "System.Int32";
 
 const ENUM_NAME_SEPARATOR = ",";
 

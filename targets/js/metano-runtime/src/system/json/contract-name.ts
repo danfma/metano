@@ -5,10 +5,11 @@ import { isValueSpec } from "./spec-kind.ts";
 /**
  * The C# type name a contract reports in errors: its constructor's name, the
  * `typeName` of a polymorphic base without a constructor (an interface or a
- * `[PlainObject]` base), and `Object` for any other `[PlainObject]` contract.
+ * `[PlainObject]` base), the CLR `typeName` of any other `[PlainObject]`
+ * contract (#512), and `Object` for a hand-written spec with none of them.
  */
 export function contractNameOf(spec: TypeSpec): string {
-  return spec.type?.name ?? spec.polymorphism?.typeName ?? "Object";
+  return spec.type?.name ?? spec.polymorphism?.typeName ?? spec.typeName ?? "Object";
 }
 
 /**

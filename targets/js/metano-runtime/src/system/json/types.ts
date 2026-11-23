@@ -55,9 +55,8 @@ export type PrimitiveDescriptor = WithClrTypeName & {
  * conversion errors and decides the signedness of the integer grammars.
  * A `[Branded]` type over a 64-bit integer adds its companion `create`
  * factory (the valid `[JsonFactory]` member when one exists) and `typeName`,
- * which the read applies after the exact digit, as the branded descriptor
- * does. FR-050 does not describe that factory case; the review of slice
- * 012e (#450) added it.
+ * which the read applies after the exact digits, as the branded descriptor
+ * does (added by the review of slice 012e, #450).
  */
 export type Int64Descriptor = {
   readonly kind: "int64";
@@ -134,6 +133,11 @@ export type SequenceCollectionDescriptor = {
     | "sortedSet";
   readonly element: TypeDescriptor;
   readonly create: (items: unknown[]) => Iterable<unknown>;
+  /**
+   * The CLR name of a value-type collection (`ImmutableArray<T>`), whose
+   * JSON `null` throws naming it, as System.Text.Json does (#713).
+   */
+  readonly typeName?: string;
 };
 
 /**
@@ -192,10 +196,11 @@ export type EnumDescriptor = WithClrTypeName & {
 export type NumericEnumDescriptor = WithClrTypeName & {
   readonly kind: "numericEnum";
   /**
-   * The enum's underlying integer type, set on a dictionary key: an integer
-   * key name is range-checked by it (#479). `System.Int32` when absent. A
-   * 64-bit enum (`System.Int64` / `System.UInt64`) names it in every slot:
-   * its values are `bigint`s, read and written through the int64 path (#701).
+   * The enum's underlying integer type, `System.Int32` when absent. A value
+   * read and an integer key name are range-checked by it (#369, #479); the
+   * generator names it in every slot for any type but `int`, and on a
+   * dictionary key always. A 64-bit enum (`System.Int64` / `System.UInt64`)
+   * holds `bigint`s, read and written through the int64 path (#701).
    */
   readonly numberType?: IntegerTypeName;
   readonly values: Record<string, string | number | bigint>;
@@ -299,8 +304,9 @@ export interface TypeSpec<T = unknown> {
   /**
    * The CLR name System.Text.Json prints for this struct contract
    * (`MyApp.SPoint`, `MyApp.Outer+Inner`, ``MyApp.Pair`1[System.Int32]``);
-   * the generator emits it next to `valueType`. Errors name the constructor
-   * without it.
+   * the generator emits it next to `valueType`, and on a non-polymorphic
+   * `[PlainObject]` contract, which has no constructor to name (#512).
+   * Errors name the constructor without it.
    */
   readonly typeName?: string;
   /** The context's read behavior; absent when it is System.Text.Json's default. */

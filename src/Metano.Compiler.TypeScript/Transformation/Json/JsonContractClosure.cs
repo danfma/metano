@@ -88,7 +88,7 @@ internal sealed class JsonContractClosure(
             if (LinkedBaseOf(current) is { } baseType)
                 Link(current, baseType, isDispatchTarget: false);
 
-            foreach (var target in RefTargetsOf(current).Where(_admission.HasObjectContract))
+            foreach (var target in RefTargetsOf(current).Where(_admission.HasRefSpec))
                 Link(current, target, isDispatchTarget: true);
 
             if (dispatchTargets.Contains(current.Type))
@@ -186,7 +186,7 @@ internal sealed class JsonContractClosure(
     /// The object types a descriptor of <paramref name="type"/> points at
     /// through <c>ref</c>, recursing through the container shapes.
     /// </summary>
-    private static IEnumerable<ITypeSymbol> RefTargetsWithin(ITypeSymbol type) =>
+    public static IEnumerable<ITypeSymbol> RefTargetsWithin(ITypeSymbol type) =>
         RefTargetsOfKind(type, JsonTypeClassifier.Classify(type));
 
     private static IEnumerable<ITypeSymbol> RefTargetsOfKind(

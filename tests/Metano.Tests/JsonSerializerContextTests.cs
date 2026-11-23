@@ -427,11 +427,14 @@ public class JsonSerializerContextTests
         await Assert.That(ts).DoesNotContain("factory: (p: Record<string, unknown>) => {");
         await Assert.That(ts).Contains("factory: () => {");
 
-        // The reason is the abstractness itself, not polymorphism (#489);
-        // System.Text.Json rejects the type the same way.
+        // The reason is the abstractness itself, not polymorphism (#489),
+        // in System.Text.Json's words (#502).
         await Assert
             .That(ts)
-            .Contains("throw new Error(\"Cannot construct abstract type 'Clip'.\");");
+            .Contains(
+                "throw new NotSupportedException(\"Deserialization of interface or abstract "
+                    + "types is not supported. Type 'TestApp.Clip'.\");"
+            );
     }
 
     [Test]
@@ -537,11 +540,10 @@ public class JsonSerializerContextTests
             """
         )["test-app/json-context.ts"];
 
-        // Regression guard while #502 is open: the Hub context is emitted,
-        // but no non-polymorphic interface entry exists yet for the
-        // non-constructible branch to label abstract (#489).
+        // The interface claims an entry whose factory throws System.Text.Json's
+        // text (#502); it is never labelled abstract (#489).
         await Assert.That(ts).Contains("new Hub(p.title as string, p.sensor as ISensor)");
-        await Assert.That(ts).DoesNotContain("Cannot construct abstract type 'ISensor'");
+        await Assert.That(ts).Contains("Type 'TestApp.ISensor'.");
     }
 
     private const string ContextBoilerplate = """
@@ -1002,9 +1004,9 @@ public class JsonSerializerContextTests
         await Assert.That(ts).Contains("new Holder(p.z as number)");
     }
 
-    // An interface needs polymorphic JSON and stays out of the closure.
+    // A non-polymorphic interface member claims a spec, so its ref resolves (#502).
     [Test]
-    public async Task InterfacePropertyType_IsNotPulledIntoClosure()
+    public async Task InterfacePropertyType_IsPulledIntoClosure()
     {
         var ts = TranspileContext(
             """
@@ -1020,7 +1022,7 @@ public class JsonSerializerContextTests
         );
 
         await Assert.That(CountGetters(ts, "root")).IsEqualTo(1);
-        await Assert.That(CountGetters(ts, "iShape")).IsEqualTo(0);
+        await Assert.That(CountGetters(ts, "iShape")).IsEqualTo(1);
     }
 
     // A closed generic is an object contract under its FR-031 name (FR-033).
