@@ -482,8 +482,10 @@ public static class IrModuleFunctionExtractor
             OperatorKind: null
         );
 
+        // A generic block (`extension<T>(T[] items)`) declares its type
+        // parameters on the block, which the lifted function declares first.
         var typeParameters = IrTypeParameterExtractor.ExtractAll(
-            method.TypeParameters,
+            [.. method.ContainingType.TypeParameters, .. method.TypeParameters],
             originResolver
         );
 

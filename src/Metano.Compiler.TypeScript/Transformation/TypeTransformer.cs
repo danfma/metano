@@ -2513,6 +2513,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (ReportModuleNameCollisions(type, functions, variables))
             return true;
 
+        if (ReportUndispatchedOverloads(type, functions))
+            return true;
+
         foreach (var fn in functions)
         {
             if (fn.Body is null || !IrBodyCoverageProbe.IsFullyCovered(fn.Body))
@@ -2802,6 +2805,62 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         return collisions.Count > 0;
     }
+
+    /// <summary>
+    /// Reports module functions emitted under one name outside any dispatched group:
+    /// the overloads of a C# 14 <c>extension</c> block member, which the extraction
+    /// does not group (#551). Emitting both would declare the function twice (TS2393),
+    /// so the type is skipped until block overloads dispatch (#156).
+    /// </summary>
+    private bool ReportUndispatchedOverloads(
+        INamedTypeSymbol type,
+        IReadOnlyList<IrModuleFunction> functions
+    )
+    {
+        var duplicates = functions
+            .Where(function => function.OverloadRef is null)
+            .GroupBy(IrToTsNamingPolicy.ToFunctionName, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .ToList();
+
+        foreach (var group in duplicates)
+        {
+            Context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"'{type.Name}' emits {group.Count()} module functions named "
+                        + $"'{group.Key}': overloads of a C# 14 extension block member are not "
+                        + "supported yet. Give each overload its own [Name(\"...\")].",
+                    ExtensionBlockMemberLocation(type, group.First().Name, ordinal: 1)
+                )
+            );
+        }
+
+        return duplicates.Count > 0;
+    }
+
+    /// <summary>
+    /// The location of the <paramref name="ordinal"/>-th (zero-based) method named
+    /// <paramref name="name"/> declared inside an extension block of
+    /// <paramref name="type"/>, or the type's own location.
+    /// </summary>
+    private static Location? ExtensionBlockMemberLocation(
+        INamedTypeSymbol type,
+        string name,
+        int ordinal
+    ) =>
+        type.DeclaringSyntaxReferences.SelectMany(reference =>
+                reference.GetSyntax().DescendantNodes().OfType<MethodDeclarationSyntax>()
+            )
+            .Where(method =>
+                method.Identifier.ValueText == name
+                && method.Parent?.Kind().ToString() == "ExtensionBlockDeclaration"
+            )
+            .Skip(ordinal)
+            .FirstOrDefault()
+            ?.Identifier.GetLocation()
+        ?? type.Locations.FirstOrDefault();
 
     private void ReportInvalidEntryPoint(IMethodSymbol method, string message) =>
         Context.ReportDiagnostic(

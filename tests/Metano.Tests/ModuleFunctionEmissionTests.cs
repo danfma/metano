@@ -116,6 +116,48 @@ public class ModuleFunctionEmissionTests
     }
 
     [Test]
+    public async Task OverloadedExtensionBlockMember_ReportsMS0001InsteadOfTwoFunctions()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class BlockHost
+            {
+                extension(string s)
+                {
+                    public int Twice() => s.Length * 2;
+                    public int Twice(int k) => s.Length * k;
+                }
+            }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == "MS0001");
+
+        await Assert
+            .That(error.Message)
+            .Contains("'BlockHost' emits 2 module functions named 'twice'");
+
+        await Assert.That(files.ContainsKey("block-host.ts")).IsFalse();
+    }
+
+    [Test]
+    public async Task GenericExtensionBlockMember_DeclaresTheBlockTypeParameters()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Mod
+            {
+                extension<T>(T[] items) { public T Peek() => items[0]; }
+            }
+            """
+        );
+
+        await Assert.That(files["mod.ts"]).Contains("export function peek<T>(items: T[]): T {");
+    }
+
+    [Test]
     public async Task CrossPackageCallIntoAnExtensionContainer_ImportsTheFunctionFromThePackage()
     {
         var files = TranspileHelper.TranspileWithLibrary(
