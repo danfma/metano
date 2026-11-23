@@ -1,4 +1,5 @@
 using Metano.Compiler.TypeScript.AST;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 

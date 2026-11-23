@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Metano.Compiler;
 using Metano.Compiler.IR;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 
@@ -200,6 +201,7 @@ public class RuntimePeerDependencyTests
         await Assert
             .That(pkg["dependencies"]?["@acme/shared"]?.GetValue<string>())
             .IsEqualTo("^1.2.3");
+
         await Assert.That(DeclaredVersion(pkg, "peerDependencies")).IsEqualTo(Specifier);
     }
 

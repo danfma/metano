@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Metano.Compiler.Diagnostics;
 
-namespace Metano;
+namespace Metano.Packaging;
 
 /// <summary>
 /// Chooses the consumer package root: the directory whose <c>package.json</c> the
@@ -45,8 +45,6 @@ namespace Metano;
 /// </summary>
 public static class PackageRootResolver
 {
-    internal const string PackageJsonFileName = "package.json";
-
     private static readonly string[] SolutionFileExtensions = [".sln", ".slnx"];
 
     private static readonly StringComparison PathComparison =
@@ -57,7 +55,8 @@ public static class PackageRootResolver
     /// <summary>
     /// Resolves the package root for the files generated into
     /// <paramref name="outputDir"/> from the C# project at <paramref name="projectPath"/>.
-    /// A non-null <paramref name="explicitPackageRoot"/> wins without any search.
+    /// A non-blank <paramref name="explicitPackageRoot"/> wins without any search; a blank one
+    /// counts as unset (#353).
     /// </summary>
     public static PackageRootResolution Resolve(
         string outputDir,
@@ -65,7 +64,7 @@ public static class PackageRootResolver
         string? explicitPackageRoot = null
     )
     {
-        if (explicitPackageRoot is not null)
+        if (!string.IsNullOrWhiteSpace(explicitPackageRoot))
             return PackageRootResolution.Resolved(Path.GetFullPath(explicitPackageRoot));
 
         var outputDirectory = NormalizeDirectory(outputDir);
@@ -191,7 +190,7 @@ public static class PackageRootResolver
     }
 
     private static bool HasPackageJson(string dir) =>
-        File.Exists(Path.Combine(dir, PackageJsonFileName));
+        File.Exists(Path.Combine(dir, PackageJsonWriter.PackageJsonFileName));
 
     private static bool IsFilesystemRoot(string dir) => Path.GetDirectoryName(dir) is null;
 

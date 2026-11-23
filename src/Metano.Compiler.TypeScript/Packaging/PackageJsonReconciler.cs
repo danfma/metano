@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Metano.Compiler.Diagnostics;
 
-namespace Metano;
+namespace Metano.Packaging;
 
 /// <summary>
 /// The post-emit package.json stage of a TypeScript run: feeds the
@@ -41,7 +41,7 @@ public static class PackageJsonReconciler
                 : PackageJsonReconciliation.Skipped;
 
         var packageRoot = packageRootResolution.Root;
-        var packageJsonPath = Path.Combine(packageRoot, PackageRootResolver.PackageJsonFileName);
+        var packageJsonPath = Path.Combine(packageRoot, PackageJsonWriter.PackageJsonFileName);
         var packageJsonExists = File.Exists(packageJsonPath);
 
         if (!hasFilesToExpose && !packageJsonExists)
@@ -73,9 +73,6 @@ public static class PackageJsonReconciler
 /// </summary>
 public sealed class PackageJsonReconciliation
 {
-    /// <summary>The stage did not run: nothing was produced and no package.json exists at the resolved root, or the root was refused.</summary>
-    public static PackageJsonReconciliation Skipped { get; } = new(null, []);
-
     private PackageJsonReconciliation(
         string? packageJsonPath,
         IReadOnlyList<MetanoDiagnostic> diagnostics
@@ -84,6 +81,9 @@ public sealed class PackageJsonReconciliation
         PackageJsonPath = packageJsonPath;
         Diagnostics = diagnostics;
     }
+
+    /// <summary>The stage did not run: nothing was produced and no package.json exists at the resolved root, or the root was refused.</summary>
+    public static PackageJsonReconciliation Skipped { get; } = new(null, []);
 
     [MemberNotNullWhen(true, nameof(PackageJsonPath))]
     public bool WasWritten => PackageJsonPath is not null;

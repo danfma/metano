@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 
@@ -955,11 +956,14 @@ public class EmitPackageTests
         // Default keys are NOT emitted when an alias is set.
         await Assert.That(imports.ContainsKey("#/*")).IsFalse();
         await Assert.That(imports.ContainsKey("#")).IsFalse();
+
         // Targets are scoped to the output subfolder.
         var wildcard = imports["#contracts/*"] as JsonObject;
+
         await Assert
             .That(wildcard!["default"]?.GetValue<string>())
             .IsEqualTo("./src/abc/contracts/*.ts");
+
         await Assert
             .That(wildcard["types"]?.GetValue<string>())
             .IsEqualTo("./dist/abc/contracts/*.d.ts");
