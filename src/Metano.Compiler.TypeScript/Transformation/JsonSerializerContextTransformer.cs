@@ -281,6 +281,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
         ReportUnmirroredSettings(contextType, properties, contract, report);
         ReportPropertyNameCollisions(contextType, properties, contract, report);
+        ReportUnclaimedMemberTypes(properties, admission, contract, report);
 
         return new JsonContextPlan(
             names,
@@ -289,6 +290,20 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             contract.Polymorphisms,
             JsonOptionsReader.ReadOptionsOf(contextType)
         );
+    }
+
+    /// <summary>Reports <c>MS0001</c> for every member whose type the context cannot claim (#713).</summary>
+    private static void ReportUnclaimedMemberTypes(
+        JsonPropertyCollector properties,
+        JsonContractAdmission admission,
+        JsonContract contract,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var errors = new JsonUnclaimedMemberTypes(properties, admission).ErrorsOf(contract.Entries);
+
+        foreach (var error in errors)
+            report(error);
     }
 
     /// <summary>Reports <c>MS0072</c> for every contract whose properties share a JSON name (#442).</summary>

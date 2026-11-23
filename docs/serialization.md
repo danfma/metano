@@ -249,6 +249,13 @@ generic types that use it as an argument. Type arguments use the same rule, so
   yet), a collection whose element type has no spec in the context (an
   interface or a type that is not transpiled), or a closed generic whose type
   argument has no spec (`Page<System.Version>`).
+- `MS0001` (error) rejects a serialized member whose type has no spec in the
+  context for the same reasons (`object`, `KeyValuePair<,>`, tuples, types of
+  non-Metano assemblies), anywhere in its descriptor (`List<KeyValuePair<string, int>>`);
+  leave it out with `[JsonIgnore]` (#713). A member typed as a non-polymorphic
+  interface is not rejected: it claims a write-only spec (#502).
+- `MS0072` (error) reports two properties of a contract that map to the same
+  JSON name, which System.Text.Json rejects on first use (#442).
 - `MS0036` reports two types that map to one getter (a warning that drops an
   unreferenced root, an error when the losing type is referenced by another
   spec), a getter that would shadow a `SerializerContext` member (`options`,
