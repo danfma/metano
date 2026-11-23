@@ -92,6 +92,38 @@ public class BrandedEmissionGapTests
     }
 
     /// <summary>
+    /// Every companion function of a generic branded type re-declares its
+    /// type parameters, and the alias declares them so <c>Gen&lt;number&gt;</c>
+    /// is a valid reference (#626).
+    /// </summary>
+    [Test]
+    public async Task GenericWrapper_CompanionDeclaresTypeParameters()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct Gen<T>(long Value)
+            {
+                public static string OfT(T t, long l) => "long";
+
+                public static string OfT(T t, string s) => "string";
+            }
+
+            public static class GenUse
+            {
+                public static string Pass(Gen<int> g) => Gen<int>.OfT(1, g.Value);
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden("branded-generic-companion.ts", result["gen.ts"]);
+        await Assert.That(result["gen-use.ts"]).Contains("static pass(g: Gen<number>): string");
+    }
+
+    /// <summary>
     /// <c>new Func&lt;…&gt;(M)</c> lowers as the method group it converts, a
     /// bound instance method included, never as <c>new Object(M)</c> (#634 item 5).
     /// </summary>
