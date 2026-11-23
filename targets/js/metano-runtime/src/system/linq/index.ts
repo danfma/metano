@@ -71,6 +71,7 @@ export type {
   ThenByOp,
   PrependOp,
   ReverseOp,
+  DefaultIfEmptyOp,
   SelectManyOp,
   SelectOp,
   SkipOp,
@@ -87,6 +88,8 @@ export type {
   AverageInt64Term,
   ContainsTerm,
   CountTerm,
+  ElementAtTerm,
+  ElementAtOrDefaultTerm,
   FirstOrDefaultTerm,
   FirstTerm,
   LastOrDefaultTerm,
@@ -132,6 +135,7 @@ export {
   thenByDescending,
   groupBy,
   zip,
+  defaultIfEmpty,
 } from "./operators.ts";
 
 export {
@@ -163,6 +167,8 @@ export {
   averageNullable,
   contains,
   aggregate,
+  elementAt,
+  elementAtOrDefault,
 } from "./terminals.ts";
 
 export {

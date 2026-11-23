@@ -62,3 +62,19 @@ using Metano.Annotations;
     JsTemplate = "0n",
     WhenParameterTypes = new Type[0]
 )]
+
+// ─── Constants and state tests (#686) ──────────────────────
+[assembly: MapProperty(typeof(BigInteger), nameof(BigInteger.Zero), JsTemplate = "0n")]
+[assembly: MapProperty(typeof(BigInteger), nameof(BigInteger.One), JsTemplate = "1n")]
+[assembly: MapProperty(typeof(BigInteger), nameof(BigInteger.MinusOne), JsTemplate = "BigInt(-1)")]
+[assembly: MapProperty(
+    typeof(BigInteger),
+    nameof(BigInteger.IsZero),
+    JsTemplate = "($this === 0n)"
+)]
+[assembly: MapProperty(typeof(BigInteger), nameof(BigInteger.IsOne), JsTemplate = "($this === 1n)")]
+[assembly: MapProperty(
+    typeof(BigInteger),
+    nameof(BigInteger.IsEven),
+    JsTemplate = "($this % 2n === 0n)"
+)]

@@ -76,7 +76,6 @@ DecimalProbes.compound                #662  decimal.js drops the decimal scale (
 DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
 DecimalProbes.typeTests               none  `is int` on a number that holds a whole value
 DefaultProbes.arrays                  #688  array-creation expression unsupported
-DefaultProbes.isDefault               #686  EqualityComparer<T>.Default is unmapped
 DefaultProbes.*                       #291  default(T) of a struct, enum, tuple, BCL value or type parameter
 EqualityProbes.genericArray           #688  a tuple is a plain array, so arrays behind object/T compare element by element
 EqualityProbes.objectArrays           #688  a tuple is a plain array, so arrays behind object/T compare element by element
@@ -94,7 +93,6 @@ ParseProbes.offsets                   #686  DateTimeOffset members are unmapped
 ParseProbes.timeSpans                 #686  TimeSpan members are unmapped
 ParseProbes.doubleOk                  none  double.Parse of an invalid text returns Infinity instead of throwing
 Round2Probes.exCtorArgs               #651  BCL exception identity and messages
-Round3Probes.decimalRoutes            #686  decimal.ToDouble is unmapped
 Round3Probes.mathCalls                #686  Math.PI is unmapped
 Round3Probes.timeProps                #686  TimeSpan members are unmapped
 StringProbes.chars                    #686  string.Concat over chars is unmapped
