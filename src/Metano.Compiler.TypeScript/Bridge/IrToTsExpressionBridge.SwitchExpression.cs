@@ -171,7 +171,7 @@ public static partial class IrToTsExpressionBridge
         if (IsAlwaysMatchingPattern(arm.Pattern) && arm.WhenClause is { } guard)
             return LowerGuardedCatchAllArm(arm, guard, scrutinee, context);
 
-        if (HasDesignators(arm.Pattern) || arm.WhenClause is null)
+        if (HasDesignators(arm.Pattern, context) || arm.WhenClause is null)
         {
             return new TsIfStatement(
                 BuildPatternTest(scrutinee, arm.Pattern, context),
@@ -197,7 +197,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var bindings = BuildArmBindings(arm, scrutinee, context.RuntimeTypes.BoxingEnabled);
+        var bindings = BuildArmBindings(arm, scrutinee, context);
 
         var guarded = new TsIfStatement(
             Map(guard, context),
@@ -224,11 +224,7 @@ public static partial class IrToTsExpressionBridge
             ? outcome
             : new TsIfStatement(Map(arm.WhenClause, context), [outcome]);
 
-        return
-        [
-            .. BuildArmBindings(arm, scrutinee, context.RuntimeTypes.BoxingEnabled),
-            guardedOutcome,
-        ];
+        return [.. BuildArmBindings(arm, scrutinee, context), guardedOutcome];
     }
 
     /// <summary>
@@ -239,7 +235,7 @@ public static partial class IrToTsExpressionBridge
     private static IReadOnlyList<TsStatement> BuildArmBindings(
         IrSwitchArm arm,
         TsExpression scrutinee,
-        bool unboxes
+        IrToTsBridgeContext context
     )
     {
         var reassigned = IrLocalReassignmentCollector.CollectFromExpressions([
@@ -247,7 +243,7 @@ public static partial class IrToTsExpressionBridge
             arm.Result,
         ]);
 
-        return BuildPatternBindings(scrutinee, arm.Pattern, reassigned, unboxes);
+        return BuildPatternBindings(scrutinee, arm.Pattern, reassigned, context);
     }
 
     /// <summary>

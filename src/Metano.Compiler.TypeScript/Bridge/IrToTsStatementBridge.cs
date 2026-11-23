@@ -39,14 +39,16 @@ public static class IrToTsStatementBridge
 
     private static TsStatement MapForEach(IrForEachStatement fe, IrToTsBridgeContext context)
     {
-        if (fe.CollectionType is IrCollectionTypeRef { Kind: IrCollectionKind.List })
+        if (!fe.IsAwait && fe.CollectionType is IrCollectionTypeRef { Kind: IrCollectionKind.List })
             return MapListForEach(fe, context);
 
-        // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`
+        // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`;
+        // `await foreach` → `for await (…)` (#625).
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
         var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
-        var header = $"for (const {loopVariable} of {PrintExpression(collection)}) {{";
+        var loop = fe.IsAwait ? "for await" : "for";
+        var header = $"{loop} (const {loopVariable} of {PrintExpression(collection)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
         {

@@ -102,7 +102,7 @@ public sealed partial class IrExpressionExtractor
         {
             CaseSwitchLabelSyntax constant when NamedPatternType(constant.Value) is { } type =>
                 new IrPatternCaseLabel(ExtractCaseTypePattern(constant, type)),
-            CaseSwitchLabelSyntax constant => WithBoxedConstantFacts(constant),
+            CaseSwitchLabelSyntax constant => WithConstantFacts(constant),
             CasePatternSwitchLabelSyntax pattern => new IrPatternCaseLabel(
                 ExtractPattern(pattern.Pattern),
                 pattern.WhenClause is null ? null : Extract(pattern.WhenClause.Condition)

@@ -531,6 +531,9 @@ public static class IrToTsConstructorDispatcherBridge
         IrToTsBridgeContext context
     )
     {
+        if (parameter.IsParams && chain.ExpandedParamsArguments is { } elements)
+            return PackedParamsArray(elements, temporaries, parameter, context);
+
         var argumentIndex = ChainedArgumentIndex(chain.Arguments, parameter.Name, parameterIndex);
 
         if (argumentIndex >= 0)
@@ -540,6 +543,27 @@ public static class IrToTsConstructorDispatcherBridge
             ? IrToTsExpressionBridge.Map(defaultValue, context)
             : new TsIdentifier("undefined");
     }
+
+    /// <summary>
+    /// The array C# builds for a <c>params</c> parameter the chain passes in
+    /// expanded form (#379): <c>: this(1, 2, 3)</c> binds <c>[1, 2, 3]</c>,
+    /// and <c>: this()</c> an empty array typed as the parameter, which
+    /// TypeScript could not infer from <c>[]</c>.
+    /// </summary>
+    private static TsExpression PackedParamsArray(
+        IReadOnlyList<int> elements,
+        IReadOnlyList<TsVariableDeclaration> temporaries,
+        IrParameter parameter,
+        IrToTsBridgeContext context
+    ) =>
+        elements.Count == 0
+            ? new TsCastExpression(
+                new TsArrayLiteral([]),
+                IrToTsTypeMapper.MapParameterType(parameter, context.TypeOverrides)
+            )
+            : new TsArrayLiteral([
+                .. elements.Select(index => new TsIdentifier(temporaries[index].Name)),
+            ]);
 
     /// <summary>
     /// The index of the chained argument bound to the parameter: a named

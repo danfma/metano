@@ -33,6 +33,7 @@ CollectionEqualityProbes.immutableListEmptyAddRange  #712  an empty ImmutableLis
 CollectionEqualityProbes.negativeZeroKeys  #710  a -0 double key of a Dictionary or HashSet is stored as +0 (the native Map normalizes it)
 CollectionEqualityProbes.recordToString  #664  a record has no synthesized toString (the PrintMembers text); needs a design for derived records
 CollectionEqualityProbes.recordStructToString  #664  a record struct has no synthesized toString (the PrintMembers text)
+W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud  none  Group G round 1: a delegate Invoke method group between a params and a non-params delegate reports MS0001 and throws, instead of miscounting the arguments silently (.NET: 3 3)
 
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports

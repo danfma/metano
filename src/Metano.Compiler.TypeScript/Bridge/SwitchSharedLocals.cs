@@ -21,15 +21,20 @@ internal static class SwitchSharedLocals
         IrSwitchStatement Switch
     ) Hoist(IrSwitchStatement sw)
     {
-        var declarations = sw
+        var shared = sw
             .Cases.Where(BindsDesignators)
             .SelectMany(section => SharedDeclarations(section, sw))
-            .ToList();
+            .Select(declaration => declaration.Name)
+            .ToHashSet();
 
-        if (declarations.Count == 0)
+        if (shared.Count == 0)
             return ([], sw);
 
-        var hoistedNames = declarations.Select(declaration => declaration.Name).ToHashSet();
+        var hoistedNames = WithConstantDependencies(shared, sw);
+
+        var declarations = SectionDeclarations(sw)
+            .Where(declaration => hoistedNames.Contains(declaration.Name))
+            .ToList();
 
         var cases = sw.Cases.Select(section => AssignHoisted(section, hoistedNames)).ToList();
 
@@ -51,6 +56,44 @@ internal static class SwitchSharedLocals
         section
             .Body.OfType<IrVariableDeclaration>()
             .Where(declaration => IsUsedInAnotherSection(declaration.Name, section, sw));
+
+    private static IEnumerable<IrVariableDeclaration> SectionDeclarations(IrSwitchStatement sw) =>
+        sw.Cases.SelectMany(section => section.Body.OfType<IrVariableDeclaration>());
+
+    /// <summary>
+    /// <paramref name="hoisted"/> plus every constant a hoisted constant's
+    /// initializer reads, transitively (#391): a hoisted constant keeps its
+    /// initializer ahead of the switch, where a constant still declared in its
+    /// section is out of scope. C# declares a local constant before its first
+    /// use, so one pass in reverse source order reaches every dependency.
+    /// </summary>
+    private static HashSet<string> WithConstantDependencies(
+        HashSet<string> hoisted,
+        IrSwitchStatement sw
+    )
+    {
+        var names = new HashSet<string>(hoisted);
+        var constants = SectionDeclarations(sw).Where(declaration => declaration.IsConst).ToList();
+
+        foreach (var constant in Enumerable.Reverse(constants))
+        {
+            if (IsReadByHoistedConstant(constant.Name, constants, names))
+                names.Add(constant.Name);
+        }
+
+        return names;
+    }
+
+    private static bool IsReadByHoistedConstant(
+        string name,
+        IReadOnlyList<IrVariableDeclaration> constants,
+        HashSet<string> hoisted
+    ) =>
+        constants.Any(constant =>
+            hoisted.Contains(constant.Name)
+            && constant.Initializer is { } initializer
+            && IrReferencedNames.AnyIn(initializer, [name])
+        );
 
     private static bool IsUsedInAnotherSection(
         string name,

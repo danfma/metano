@@ -4,6 +4,16 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.0.1
+
+_2026-11-23_
+
+
+### 🐛 Bug Fixes
+
+* import the owner of a nested record case as a value when a pattern tests it ([#727](https://github.com/danfma/metano/issues/727)) ([18541e0](https://github.com/danfma/metano/commit/18541e058ba5fe166a834413e68f3eed9ab703e2)), closes [#726](https://github.com/danfma/metano/issues/726)
+* **release:** cap the GitHub release body below the 125k limit ([#728](https://github.com/danfma/metano/issues/728)) ([6b7f713](https://github.com/danfma/metano/commit/6b7f713ba9ead47fde4c293f8506e15b8b2a0bd4))
+
 ## 3.0.0
 
 _2026-11-23_

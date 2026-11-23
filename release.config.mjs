@@ -61,6 +61,41 @@ const presetConfig = {
 // still load the preset themselves and merge the options below over it.
 const preset = await createConventionalcommitsPreset(presetConfig);
 
+// GitHub rejects a release body longer than 125,000 characters, which made the
+// 3.0.0 release fail in @semantic-release/github after NuGet had published. The
+// body is capped at 100,000 characters (margin for the appended line), cut at
+// the last newline, and points at the full notes in CHANGELOG.md at the tag.
+//
+// The github plugin renders `releaseBodyTemplate` with lodash `template`, which
+// compiles it through `Function`, so module-scope names are not reachable from
+// the template. The template embeds this function's source instead, so the body
+// must not reference outer names, and must not contain `${` or `%>`: lodash
+// also interpolates ES-style `${...}`, and `%>` ends the template tag.
+//
+// The cap does not cover the plugin's add-channel path, which posts the raw
+// notes when a release is promoted to another channel; `branches` has no other
+// channel today.
+function capReleaseBody(notes, version) {
+  const maxBodyLength = 100000;
+
+  if (notes == null || notes.length <= maxBodyLength) {
+    return notes;
+  }
+
+  const lastNewline = notes.lastIndexOf("\n", maxBodyLength);
+  const hasNewlineToCutAt = lastNewline > 0;
+  const truncateAt = hasNewlineToCutAt ? lastNewline : maxBodyLength;
+  const changelogUrl = "https://github.com/danfma/metano/blob/v" + version + "/CHANGELOG.md";
+
+  return (
+    notes.slice(0, truncateAt) +
+    "\n\n> The release notes were truncated to fit GitHub's release size limit. " +
+    "The full notes are in CHANGELOG.md at this tag: " +
+    changelogUrl +
+    "\n"
+  );
+}
+
 const parserOpts = {
   noteKeywords: ["BREAKING CHANGE", "BREAKING-CHANGE", "BREAKING CHANGES"],
 };
@@ -131,6 +166,7 @@ export default {
       {
         successComment: false,
         failComment: false,
+        releaseBodyTemplate: `<%= (${capReleaseBody})(nextRelease.notes, nextRelease.version) %>`,
       },
     ],
   ],

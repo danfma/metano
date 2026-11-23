@@ -101,7 +101,7 @@ internal static class IrToTsSwitchStatementBridge
             IrPatternCaseLabel => true,
             // A boxed enum constant compares through the box (spec 011 FR-050).
             IrConstantCaseLabel { InputType: not null } => true,
-            IrConstantCaseLabel { Value: var value } => DefeatsStrictEquality(value),
+            IrConstantCaseLabel constant => DefeatsStrictEquality(constant),
             _ => false,
         };
 
@@ -109,9 +109,8 @@ internal static class IrToTsSwitchStatementBridge
     /// <c>NaN</c> is never <c>===</c> to itself, and C# <c>null</c> also
     /// matches the <c>undefined</c> of an absent value.
     /// </summary>
-    private static bool DefeatsStrictEquality(IrExpression constant) =>
-        IrToTsExpressionBridge.IsNaNConstant(constant)
-        || constant is IrLiteral { Kind: IrLiteralKind.Null };
+    private static bool DefeatsStrictEquality(IrConstantCaseLabel constant) =>
+        constant.IsNaN || constant.Value is IrLiteral { Kind: IrLiteralKind.Null };
 
     /// <summary>
     /// Whether re-reading the subject in every case test observes the value
@@ -229,7 +228,7 @@ internal static class IrToTsSwitchStatementBridge
             subject,
             label,
             reassigned,
-            context.RuntimeTypes.BoxingEnabled
+            context
         );
 
         return [new TsBlockStatement([.. bindings, .. body])];
