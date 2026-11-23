@@ -471,4 +471,242 @@ public class ReifiedTypeParameterTests
         await Assert.That(ts).Contains("opaqueType(\"App.NonTranspiledB\")");
         await Assert.That(ts).DoesNotContain("UnknownType");
     }
+
+    [Test]
+    public async Task EnumDescriptor_EmitsDefaultFactory_Numeric64BitAndStringEnum()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile] public enum Color { Red = 0, Green = 1 }
+            [Transpile] public enum NonZero { A = 1, B = 2 }
+            [Transpile] public enum BigEnum : long { A = 1 }
+            [Transpile, StringEnum] public enum Status { Active, Inactive }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static T? Zero<T>() { _ = typeof(T); return default; }
+                public static object? Run() =>
+                    (Zero<Color>(), Zero<NonZero>(), Zero<BigEnum>(), Zero<Status>());
+            }
+            """
+        );
+
+        await Assert.That(files["app/color.ts"]).Contains("default: () => 0,");
+        await Assert.That(files["app/non-zero.ts"]).Contains("default: () => 0 as NonZero,");
+        await Assert.That(files["app/big-enum.ts"]).Contains("default: () => 0n as BigEnum,");
+        await Assert.That(files["app/status.ts"]).Contains("default: () => \"Active\",");
+    }
+
+    [Test]
+    public async Task StructZeroFactory_RecordStructAndExplicitCtor_NeverCallsUserCtor()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public readonly record struct PairStruct(int X, string Y);
+
+            [Transpile]
+            public struct CtorStruct
+            {
+                public int X;
+                public CtorStruct() { X = 5; }
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static T? Zero<T>() where T : new() { _ = typeof(T); return new T(); }
+                public static object? Run() => (Zero<PairStruct>(), Zero<CtorStruct>());
+            }
+            """
+        );
+
+        var pairTs = files["app/pair-struct.ts"];
+        await Assert.That(pairTs).Contains("static $default(): PairStruct");
+
+        await Assert
+            .That(pairTs)
+            .Contains("Object.assign(Object.create(PairStruct.prototype), { x: 0, y: null })");
+
+        await Assert.That(pairTs).Contains("default: () => PairStruct.$default(),");
+        await Assert.That(pairTs).Contains("create: () => PairStruct.$default(),");
+
+        var ctorTs = files["app/ctor-struct.ts"];
+        await Assert.That(ctorTs).Contains("static $default(): CtorStruct");
+
+        await Assert
+            .That(ctorTs)
+            .Contains("Object.assign(Object.create(CtorStruct.prototype), { x: 0 })");
+    }
+
+    [Test]
+    public async Task ParamsCtorWithSlot_PlacesTypeArgsBeforeRest()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public class ParamsBox<T>
+            {
+                public ParamsBox(string label, params int[] items) { }
+                public bool Is(object o) => o is T;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static ParamsBox<int> Make() => new ParamsBox<int>("L", 10, 20);
+            }
+            """
+        );
+
+        await Assert
+            .That(files["app/probes.ts"])
+            .Contains("new ParamsBox(\"L\", [Int32Type], 10, 20)");
+    }
+
+    [Test]
+    public async Task UndescribableReifiedArguments_ReportMs0001AndEmitUnsupportedType()
+    {
+        var result = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using System.Collections.Generic;
+            using Metano.Annotations;
+
+            namespace App;
+
+            public class Opaque { }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                private static bool IsA<T>(object o) => o is T;
+                public static bool Run(Func<string> g) =>
+                    IsA<(int, string)>("x")
+                    && IsA<int[]>(new string[] { "a" })
+                    && IsA<Func<int>>(g)
+                    && IsA<IDisposable>("s")
+                    && IsA<Opaque>("s")
+                    && IsA<DayOfWeek>(1);
+            }
+            """
+        );
+
+        var ms0001Count = result.Diagnostics.Count(d => d.Code == "MS0001");
+        await Assert.That(ms0001Count).IsGreaterThanOrEqualTo(6);
+        var ts = result.Files["app/probes.ts"];
+        await Assert.That(ts).Contains("unsupportedType(");
+        await Assert.That(ts).DoesNotContain("UnknownType");
+        await Assert.That(ts).DoesNotContain("ArrayType");
+        await Assert.That(ts).DoesNotContain("DelegateType");
+    }
+
+    [Test]
+    public async Task OverloadedGenericClassWithSlot_CallsParameterlessSelectorAndDefinesSlot()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public class OverBox<T>
+            {
+                public string Which;
+                public OverBox() { Which = "empty"; }
+                public OverBox(int x) { Which = "int"; }
+                public bool Is(object o) => o is T;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static T Make<T>() where T : new() => new T();
+                public static object Run() => (Make<OverBox<string>>(), new OverBox<int>(5));
+            }
+            """
+        );
+
+        var boxTs = files["app/over-box.ts"];
+
+        await Assert
+            .That(boxTs)
+            .Contains(
+                "create: (typeArguments) => new OverBox(OverBox.byOverBoxDefault, typeArguments as"
+            );
+
+        await Assert.That(boxTs).Contains("Object.defineProperty(this, \"$typeArguments$OverBox\"");
+    }
+
+    [Test]
+    public async Task DecimalAndTemporalReifiedDefaults_ImportSeparateDefaultModules()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static T? Zero<T>() { _ = typeof(T); return default; }
+                public static object? Run() => (Zero<decimal>(), Zero<DateOnly>());
+            }
+            """
+        );
+
+        var ts = files["app/probes.ts"];
+        await Assert.That(ts).Contains("DecimalDefaultType");
+        await Assert.That(ts).Contains("DateOnlyDefaultType");
+    }
+
+    [Test]
+    public async Task SupportsReifiedTypeParameters_False_DisablesAnalysis()
+    {
+        var source = """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static bool IsA<T>(object o) => o is T;
+            }
+            """;
+
+        var compilation = TranspileHelper.CompileLibrary(source);
+        var frontend = new Metano.Compiler.CSharpSourceFrontend();
+
+        var ir = frontend.ExtractFromCompilation(
+            compilation,
+            Metano.Annotations.TargetLanguage.TypeScript,
+            supportsReifiedTypeParameters: false
+        );
+
+        await Assert.That(ir.ReifiedTypeAnalysis.IsEnabled).IsFalse();
+    }
 }

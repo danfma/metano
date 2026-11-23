@@ -42,7 +42,7 @@ export interface RuntimeTypeBase<T> {
   /** A self-contained test of a value against the type. */
   test(value: unknown): value is T;
   /** The type's default value; absent means `null`. */
-  default?(): T;
+  default?: (typeArguments?: ReadonlyArray<RuntimeType>) => T;
   /** The public parameterless constructor (`new T()`); absent means `MissingMethodException`. */
   readonly create?: (typeArguments?: ReadonlyArray<RuntimeType>) => T;
 }

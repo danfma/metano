@@ -5418,7 +5418,17 @@ public sealed partial class IrExpressionExtractor
                 is { } reifiedNewArgs
         )
         {
-            return newExpr with { ReifiedTypeArguments = reifiedNewArgs };
+            return newExpr with
+            {
+                ReifiedTypeArguments = reifiedNewArgs,
+                ReifiedArgumentPosition = ctorSymbol is not null
+                    ? (
+                        ctorSymbol.Parameters is [.., { IsParams: true }]
+                            ? ctorSymbol.Parameters.Length - 1
+                            : ctorSymbol.Parameters.Length
+                    )
+                    : 0,
+            };
         }
 
         return built;

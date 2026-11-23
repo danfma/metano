@@ -55,6 +55,7 @@ export const Color$runtimeType: EnumType<Color> = {
   values: [0, 1],
   names: ["Red", "Green"],
   isFlags: false,
+  default: () => 0,
   test: (v: unknown): v is Color => isInt32(v),
 };
 
@@ -131,8 +132,8 @@ export class Point {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
-      default: () => new Point(),
-      create: () => new Point(),
+      default: () => Point.$default(),
+      create: () => Point.$default(),
       test: (v: unknown): v is Point => v instanceof Point,
     });
   }
@@ -146,6 +147,10 @@ export class Point {
     hc.add(this.x);
 
     return hc.toHashCode();
+  }
+
+  static $default(): Point {
+    return Object.assign(Object.create(Point.prototype), { x: 0 });
   }
 }
 

@@ -6,6 +6,8 @@
 # `none` marks a divergence no open issue covers yet.
 
 StageHRoundTwoProbes.crossTypeEmptyFactories #335  Round 3 R4 (maintainer approved): independently compiled unslotted immutable factories share each family's untyped singleton; cross-type identity is True,True,True versus .NET False,False,False. Same-type identity is preserved; slotted empties remain per-descriptor.
+Wave5Fix1Probes.explicitCtorStructNewT #335  W5-9 R2: create for a struct is the zero factory, so new T() on a struct with an explicit parameterless ctor returns 0 instead of 5 (.NET: 5)
+Wave5Fix1Probes.undescribableReifiedArgumentsThrow #335  W5-9 R4: reified type arguments with no descriptor (tuples, KeyValuePair, interfaces, raw arrays, delegates, non-[Transpile], BCL enums) report MS0001 and throw NotSupportedException instead of silently answering true (.NET: False)
 
 CollectionTypeArgumentProbes.rawArrayInterfaceTestIsLoud #335  W4-C16: preserve MS0001 for a raw array interface test rather than silently answering false (.NET: true)
 CollectionTypeArgumentProbes.objectArrayInterfaceTestIsLoud #335  W4-C20: a native array behind object has no collection descriptor: MS0001 and a loud throw, never a silent false (.NET: true)

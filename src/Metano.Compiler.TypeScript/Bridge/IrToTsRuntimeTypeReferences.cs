@@ -288,6 +288,55 @@ internal static class IrToTsRuntimeTypeReferences
             : Of(type, site, reachability, scope) ?? Wildcard();
 
     /// <summary>
+    /// A reified call/new-site type argument descriptor (spec 011 W5-9 R4, R6):
+    /// returns <c>unsupportedType(name)</c> instead of <c>UnknownType</c>,
+    /// <c>ArrayType</c>, or <c>DelegateType</c> when the argument has no exact
+    /// descriptor, and imports the separate <c>*DefaultType</c> descriptors
+    /// for <c>decimal</c> and Temporal types so <c>castTo</c> / <c>getRuntimeType</c>
+    /// stay free of third-party imports.
+    /// </summary>
+    public static TsExpression ReifiedArgumentOf(
+        IrTypeRef type,
+        string site,
+        RuntimeTypeReachabilityResult reachability,
+        TsTypeParameterScope? scope = null
+    ) =>
+        type switch
+        {
+            IrArrayTypeRef or IrFunctionTypeRef => Unsupported(type),
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Delegate } => Unsupported(type),
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } => new TsRuntimeHelperReference(
+                "DecimalDefaultType"
+            ),
+            IrPrimitiveTypeRef
+            {
+                Primitive: IrPrimitive.DateTime
+                    or IrPrimitive.DateTimeOffset
+                    or IrPrimitive.DateOnly
+                    or IrPrimitive.TimeOnly
+                    or IrPrimitive.TimeSpan,
+            } temporal => new TsRuntimeHelperReference($"{temporal.Primitive}DefaultType"),
+            IrNullableTypeRef { Inner: var inner } => ReifiedArgumentOf(
+                inner,
+                site,
+                reachability,
+                scope
+            )
+                is var innerDesc
+            && innerDesc
+                is TsCallExpression { Callee: TsRuntimeHelperReference { Name: "unsupportedType" } }
+                ? innerDesc
+            : IsValueType(inner) ? Helper("nullableType", innerDesc)
+            : innerDesc,
+            IrNamedTypeRef { Origin: null, Semantics.IsTranspilable: true } named
+                when !reachability.Reaches(named.SupertypeKey) => Unsupported(type),
+            _ => Of(type, site, reachability, scope) ?? Unsupported(type),
+        };
+
+    private static TsExpression Unsupported(IrTypeRef type) =>
+        Helper("unsupportedType", new TsStringLiteral(IrTypeRefSignatures.Describe(type)));
+
+    /// <summary>
     /// The descriptor of a collection slot's argument: a class of this compilation is
     /// always reached when the kind is questioned (the reachability phase reaches every
     /// concrete argument), so reading it unreached is an internal error rather than a

@@ -17,5 +17,6 @@ export const Currency$runtimeType: EnumType<Currency> = {
   values: [0, 1, 2],
   names: ["Brl", "Usd", "Eur"],
   isFlags: false,
+  default: () => 0,
   test: (v: unknown): v is Currency => isInt32(v),
 };

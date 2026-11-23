@@ -74,6 +74,7 @@ public interface ISourceFrontend
     Task<IrCompilation> ExtractAsync(
         string projectPath,
         CancellationToken ct = default,
-        TargetLanguage target = TargetLanguage.TypeScript
+        TargetLanguage target = TargetLanguage.TypeScript,
+        bool? supportsReifiedTypeParameters = null
     );
 }

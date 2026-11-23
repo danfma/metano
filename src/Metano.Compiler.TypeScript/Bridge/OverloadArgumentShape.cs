@@ -70,8 +70,10 @@ internal sealed class OverloadArgumentShape
     /// The overload's arguments as its selector form passes them, after the
     /// selector symbol at <c>args[0]</c>.
     /// </summary>
-    public static OverloadArgumentShape AfterSelector(IReadOnlyList<IrParameter> parameters) =>
-        new(parameters, firstArgumentIndex: 1);
+    public static OverloadArgumentShape AfterSelector(
+        IReadOnlyList<IrParameter> parameters,
+        IReadOnlyList<IrReifiedTypeParameter>? reifiedTypeParameters = null
+    ) => new(parameters, firstArgumentIndex: 1, reifiedTypeParameters);
 
     /// <summary>
     /// The runtime test that the dispatcher's <c>args</c> match this

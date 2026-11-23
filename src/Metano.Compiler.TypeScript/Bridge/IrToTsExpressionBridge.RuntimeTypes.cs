@@ -267,7 +267,26 @@ public static partial class IrToTsExpressionBridge
         if (ne.ReifiedTypeArguments is not { Count: > 0 } reifiedArgs)
             return loweredArgs;
 
-        var typeArgsTuple = new TsArrayLiteral([
+        var typeArgsTuple = BuildTypeArgsTuple(reifiedArgs, context);
+        var insertAt = ne.ReifiedArgumentPosition;
+        var result = new List<TsExpression>(Math.Max(loweredArgs.Count, insertAt) + 1);
+
+        for (var i = 0; i < insertAt; i++)
+            result.Add(i < loweredArgs.Count ? loweredArgs[i] : new TsIdentifier("undefined"));
+
+        result.Add(typeArgsTuple);
+
+        for (var i = insertAt; i < loweredArgs.Count; i++)
+            result.Add(loweredArgs[i]);
+
+        return result;
+    }
+
+    private static TsArrayLiteral BuildTypeArgsTuple(
+        IReadOnlyList<IrTypeRef> reifiedArgs,
+        IrToTsBridgeContext context
+    ) =>
+        new([
             .. reifiedArgs.Select(arg =>
                 TypeParameterTsResolver.ResolveArgument(
                     arg,
@@ -277,10 +296,4 @@ public static partial class IrToTsExpressionBridge
                 )
             ),
         ]);
-
-        if (ne.Overload is not null)
-            return [.. loweredArgs, typeArgsTuple];
-
-        return [.. loweredArgs, typeArgsTuple];
-    }
 }

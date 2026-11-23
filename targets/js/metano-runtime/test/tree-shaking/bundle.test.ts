@@ -133,3 +133,27 @@ test(
 test("size-budgets.json lists every runtime module", () => {
   expect(sizeBudgets.modules).toEqual(listModules(DIST_DIR).map(moduleName));
 });
+
+test.each(SIZE_BUNDLERS)(
+  "castTo and getRuntimeType bundles import no third-party package (%s) (W5-9 R6)",
+  async (bundler) => {
+    const castToEntry = [
+      'import { castTo } from "./system/reflection/cast-to.js";',
+      'import { Int32Type } from "./system/reflection/primitive-types.js";',
+      "export function cast(value) { return castTo(value, Int32Type); }",
+    ].join("\n");
+
+    const getRuntimeTypeEntry = readFileSync(
+      join(import.meta.dir, "entries/runtime-type-of-class.js"),
+      "utf8",
+    );
+
+    for (const source of [castToEntry, getRuntimeTypeEntry]) {
+      const code = await bundle(bundler, directory, source);
+
+      expect(code).not.toContain("decimal.js");
+      expect(code).not.toContain("@js-temporal/polyfill");
+    }
+  },
+  BUNDLE_TIMEOUT_MS,
+);

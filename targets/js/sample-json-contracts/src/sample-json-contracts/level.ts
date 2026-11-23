@@ -16,5 +16,6 @@ export const Level$runtimeType: EnumType<Level> = {
   values: [0, 1],
   names: ["Low", "High"],
   isFlags: false,
+  default: () => 0,
   test: (v: unknown): v is Level => isInt32(v),
 };

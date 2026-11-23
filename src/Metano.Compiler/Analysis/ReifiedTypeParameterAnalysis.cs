@@ -41,10 +41,11 @@ public sealed class ReifiedTypeParameterAnalysis
         bool assemblyWideTranspile,
         TargetLanguage target,
         IReadOnlyDictionary<string, string>? typeNamesBySymbol,
-        List<MetanoDiagnostic> diagnostics
+        List<MetanoDiagnostic> diagnostics,
+        bool supportsReifiedTypeParameters = true
     )
     {
-        if (target == TargetLanguage.Dart)
+        if (!supportsReifiedTypeParameters)
             return Disabled;
 
         var collector = new Collector(compilation, assemblyWideTranspile, target);
@@ -863,6 +864,13 @@ public sealed class ReifiedTypeParameterAnalysis
             // W5-5j: check new T() call sites with concrete types that lack `create`.
             ValidateNewConstraintCallSites(reifiedByOwner, diagnostics);
 
+            // W5-9 R4: check reified call/new sites whose type arguments have no descriptor.
+            ValidateReifiedCallSiteDescriptors(
+                reifiedMethodParams,
+                reifiedClassParams,
+                diagnostics
+            );
+
             return new ReifiedTypeAnalysisResult(
                 isEnabled: true,
                 reifiedMethodParams: reifiedMethodParams,
@@ -872,6 +880,210 @@ public sealed class ReifiedTypeParameterAnalysis
                 unreifiableMembers: _unreifiableSites,
                 staticClassReifiedParams: staticClassReifiedParams
             );
+        }
+
+        private void ValidateReifiedCallSiteDescriptors(
+            Dictionary<IMethodSymbol, IReadOnlyList<IrReifiedTypeParameter>> reifiedMethodParams,
+            Dictionary<INamedTypeSymbol, IReadOnlyList<IrReifiedTypeParameter>> reifiedClassParams,
+            List<MetanoDiagnostic> diagnostics
+        )
+        {
+            foreach (var call in _callEdges)
+            {
+                var calleeDef = call.Callee.OriginalDefinition;
+
+                if (!reifiedMethodParams.TryGetValue(calleeDef, out var reifiedParams))
+                    continue;
+
+                var reifiedNames = new HashSet<string>(
+                    reifiedParams.Select(p => p.Name),
+                    StringComparer.Ordinal
+                );
+
+                for (
+                    var i = 0;
+                    i < calleeDef.TypeParameters.Length && i < call.Callee.TypeArguments.Length;
+                    i++
+                )
+                {
+                    if (!reifiedNames.Contains(calleeDef.TypeParameters[i].Name))
+                        continue;
+
+                    ReportIfUndescribableReifiedArg(
+                        call.Callee.TypeArguments[i],
+                        call.Location,
+                        diagnostics
+                    );
+                }
+
+                if (calleeDef.IsStatic && call.Callee.ContainingType is { } containing)
+                {
+                    var containingDef = containing.OriginalDefinition;
+
+                    for (
+                        var i = 0;
+                        i < containingDef.TypeParameters.Length
+                            && i < containing.TypeArguments.Length;
+                        i++
+                    )
+                    {
+                        if (!reifiedNames.Contains(containingDef.TypeParameters[i].Name))
+                            continue;
+
+                        ReportIfUndescribableReifiedArg(
+                            containing.TypeArguments[i],
+                            call.Location,
+                            diagnostics
+                        );
+                    }
+                }
+            }
+
+            foreach (var ne in _newEdges)
+            {
+                var targetDef = ne.TargetType.OriginalDefinition;
+
+                if (!reifiedClassParams.ContainsKey(targetDef))
+                    continue;
+
+                foreach (var arg in ne.TargetType.TypeArguments)
+                    ReportIfUndescribableReifiedArg(arg, ne.Location, diagnostics);
+            }
+        }
+
+        private void ReportIfUndescribableReifiedArg(
+            ITypeSymbol arg,
+            Location location,
+            List<MetanoDiagnostic> diagnostics
+        )
+        {
+            if (arg is ITypeParameterSymbol || HasRuntimeDescriptor(arg))
+                return;
+
+            if (
+                location.SourceTree?.FilePath is { } path
+                && path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
+            )
+                return;
+
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"Type '{arg.ToDisplayString()}' has no runtime type descriptor and cannot be tested at runtime; passing it to a reified type parameter will throw NotSupportedException if tested.",
+                    location
+                )
+            );
+        }
+
+        private bool HasRuntimeDescriptor(ITypeSymbol type)
+        {
+            if (type.SpecialType == SpecialType.System_Object)
+                return true;
+
+            if (type is ITypeParameterSymbol)
+                return true;
+
+            if (type is IArrayTypeSymbol or { TypeKind: TypeKind.Delegate })
+                return false;
+
+            if (type is not INamedTypeSymbol named)
+                return false;
+
+            if (named.IsTupleType)
+                return false;
+
+            if (named.IsNullableValueType())
+                return named.TypeArguments.Length == 1
+                    && HasRuntimeDescriptor(named.TypeArguments[0]);
+
+            if (IsPrimitiveWithDescriptor(named))
+                return true;
+
+            if (Extraction.CollectionKindResolver.KindOf(named) is { } kind)
+                return kind
+                    is not (IrCollectionKind.KeyCollection or IrCollectionKind.ValueCollection);
+
+            if (IsMappedBclException(named))
+                return true;
+
+            if (
+                SymbolHelper.HasAttribute(named, "PlainObjectAttribute")
+                && named.TypeArguments.Length > 0
+            )
+                return false;
+
+            if (
+                SymbolHelper.HasAttribute(named, "JsTupleAttribute")
+                || SymbolHelper.HasAttribute(named, "BrandedAttribute")
+                || SymbolHelper.HasAttribute(named, "ExternalAttribute")
+                || SymbolHelper.HasAttribute(named, "ImportAttribute")
+            )
+                return false;
+
+            var def = named.OriginalDefinition;
+
+            var isCurrentAssembly = SymbolEqualityComparer.Default.Equals(
+                def.ContainingAssembly,
+                _currentAssembly
+            );
+
+            var wide = isCurrentAssembly
+                ? _assemblyWideTranspile
+                : SymbolHelper.HasTranspileAssembly(def.ContainingAssembly);
+
+            return SymbolHelper.IsTranspilable(def, wide, def.ContainingAssembly)
+                && !SymbolHelper.HasIgnore(def, _target);
+        }
+
+        private static bool IsPrimitiveWithDescriptor(INamedTypeSymbol named) =>
+            named.SpecialType switch
+            {
+                SpecialType.System_Boolean
+                or SpecialType.System_Byte
+                or SpecialType.System_SByte
+                or SpecialType.System_Int16
+                or SpecialType.System_UInt16
+                or SpecialType.System_Int32
+                or SpecialType.System_UInt32
+                or SpecialType.System_Int64
+                or SpecialType.System_UInt64
+                or SpecialType.System_Single
+                or SpecialType.System_Double
+                or SpecialType.System_Decimal
+                or SpecialType.System_Char
+                or SpecialType.System_String => true,
+                _ => named.ToDisplayString()
+                    is "System.Numerics.BigInteger"
+                        or "System.Guid"
+                        or "System.DateTime"
+                        or "System.DateTimeOffset"
+                        or "System.DateOnly"
+                        or "System.TimeOnly"
+                        or "System.TimeSpan",
+            };
+
+        private static bool IsMappedBclException(INamedTypeSymbol named)
+        {
+            if (named.ContainingNamespace?.ToDisplayString() != "System")
+                return false;
+
+            return named.Name
+                is "Exception"
+                    or "SystemException"
+                    or "ArgumentException"
+                    or "ArgumentNullException"
+                    or "ArgumentOutOfRangeException"
+                    or "InvalidOperationException"
+                    or "NotSupportedException"
+                    or "NotImplementedException"
+                    or "NullReferenceException"
+                    or "IndexOutOfRangeException"
+                    or "KeyNotFoundException"
+                    or "FormatException"
+                    or "OverflowException"
+                    or "TimeoutException"
+                    or "UnauthorizedAccessException";
         }
 
         private void ValidateNewConstraintCallSites(

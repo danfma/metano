@@ -39,7 +39,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     public async Task<IrCompilation> ExtractAsync(
         string projectPath,
         CancellationToken ct = default,
-        TargetLanguage target = TargetLanguage.TypeScript
+        TargetLanguage target = TargetLanguage.TypeScript,
+        bool? supportsReifiedTypeParameters = null
     )
     {
         var assemblyName = Path.GetFileNameWithoutExtension(projectPath);
@@ -59,7 +60,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             fallbackAssemblyName: assemblyName,
             diagnostics: diagnostics,
             target: target,
-            generatedSources: GeneratedSourceTrees.Reported(generatedFilePaths)
+            generatedSources: GeneratedSourceTrees.Reported(generatedFilePaths),
+            supportsReifiedTypeParameters: supportsReifiedTypeParameters
         );
     }
 
@@ -82,7 +84,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     public IrCompilation ExtractFromCompilation(
         Compilation compilation,
         TargetLanguage target = TargetLanguage.TypeScript,
-        IEnumerable<SyntaxTree>? generatedTrees = null
+        IEnumerable<SyntaxTree>? generatedTrees = null,
+        bool? supportsReifiedTypeParameters = null
     )
     {
         LoadedCompilation = compilation;
@@ -97,7 +100,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             fallbackAssemblyName: compilation.AssemblyName ?? "",
             diagnostics: new List<MetanoDiagnostic>(),
             target: target,
-            generatedSources: generatedSources
+            generatedSources: generatedSources,
+            supportsReifiedTypeParameters: supportsReifiedTypeParameters
         );
     }
 
@@ -106,7 +110,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         string fallbackAssemblyName,
         List<MetanoDiagnostic> diagnostics,
         TargetLanguage target,
-        GeneratedSourceTrees generatedSources
+        GeneratedSourceTrees generatedSources,
+        bool? supportsReifiedTypeParameters = null
     )
     {
         // The queryable-extraction diagnostic sink (#205 / MS0024) is
@@ -203,15 +208,18 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         ValidateSubpathRoot(packageInfo, target, diagnostics);
 
+        var reifiedEnabled = supportsReifiedTypeParameters ?? (target != TargetLanguage.Dart);
+
         var reifiedTypeAnalysis =
-            compilation is null || target is TargetLanguage.Dart
+            compilation is null || !reifiedEnabled
                 ? Analysis.ReifiedTypeParameterAnalysis.Disabled
                 : Analysis.ReifiedTypeParameterAnalysis.Analyze(
                     compilation,
                     assemblyWideTranspile,
                     target,
                     typeNamesBySymbol,
-                    diagnostics
+                    diagnostics,
+                    supportsReifiedTypeParameters: reifiedEnabled
                 );
 
         // Dart keeps the reflection source forms until after 3.0.0 (D28): it

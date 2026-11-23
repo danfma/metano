@@ -248,6 +248,14 @@ internal sealed class IrToTsClassEmitter(
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, instanceLowering);
 
         if (
+            ir.Semantics.IsValueType
+            && (hasSlot || _context.RuntimeTypes.Reaches(RuntimeTypeReachability.KeyOf(type)))
+        )
+        {
+            classMembers.Add(BuildStructZeroFactory(type, ir, typeName));
+        }
+
+        if (
             hasSlot
             && !ReportTypeArgumentSlotCollisionIfAny(type, ir.TypeArgumentSlot!, classMembers)
         )
@@ -1236,6 +1244,269 @@ internal sealed class IrToTsClassEmitter(
     /// moved initializers) and is covered: its branch assigns the promoted and
     /// captured parameters.
     /// </summary>
+    private TsMethodMember BuildStructZeroFactory(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        string typeName
+    )
+    {
+        var typeParameters = IrToTsTypeParameterMapper.Convert(ir.TypeParameters);
+
+        var returnType = new TsNamedType(
+            typeName,
+            typeParameters?.Select(tp => (TsType)new TsNamedType(tp.Name)).ToList()
+        );
+
+        var hasSlot = ir.TypeArgumentSlot is not null && ir.TypeParameters is { Count: > 0 };
+        var parameters = hasSlot
+            ? new List<TsParameter>
+            {
+                new(
+                    IrToTsClassBridge.TypeArgsParameterName,
+                    IrToTsClassBridge.TypeArgsTupleType(ir.TypeParameters!),
+                    Optional: true
+                ),
+            }
+            : new List<TsParameter>();
+
+        var zeroObject = BuildStructZeroObjectLiteral(
+            type,
+            ir,
+            IrToTsExpressionBridge.TypeValueReference(typeName, origin: null),
+            ir.TypeArgumentSlot is not null ? ir.TypeParameters : null
+        );
+
+        List<TsStatement> body;
+
+        if (hasSlot)
+        {
+            body =
+            [
+                new TsVariableDeclaration("instance", zeroObject),
+                new TsExpressionStatement(
+                    new TsCallExpression(
+                        new TsPropertyAccess(new TsIdentifier("Object"), "defineProperty"),
+                        [
+                            new TsIdentifier("instance"),
+                            new TsStringLiteral(ir.TypeArgumentSlot!),
+                            new TsObjectLiteral([
+                                new TsObjectProperty(
+                                    "value",
+                                    new TsIdentifier(IrToTsClassBridge.TypeArgsParameterName)
+                                ),
+                                new TsObjectProperty("enumerable", new TsLiteral("false")),
+                            ]),
+                        ]
+                    )
+                ),
+                new TsReturnStatement(new TsIdentifier("instance")),
+            ];
+        }
+        else
+        {
+            body = [new TsReturnStatement(zeroObject)];
+        }
+
+        return new TsMethodMember(
+            "$default",
+            parameters,
+            returnType,
+            body,
+            Static: true,
+            TypeParameters: typeParameters
+        );
+    }
+
+    private TsExpression BuildStructZeroObjectLiteral(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        TsExpression self,
+        IReadOnlyList<IrTypeParameter>? slotTypeParameters
+    )
+    {
+        var backingFields = PerClassBackingFields.For(type).ScopeFor(ir);
+        var properties = new List<TsObjectProperty>();
+
+        foreach (var storage in IrToTsStructDefaultConstructorBridge.StorageOf(ir))
+        {
+            var fieldName = backingFields.FieldOf(storage.MemberName) ?? storage.Name;
+            var fieldSymbolType = FindMemberType(type, storage.MemberName);
+
+            var zeroValue = StructFieldZeroExpression(
+                storage.Type,
+                fieldSymbolType,
+                slotTypeParameters
+            );
+
+            properties.Add(new TsObjectProperty(fieldName, zeroValue));
+        }
+
+        return new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
+            [
+                new TsCallExpression(
+                    new TsPropertyAccess(new TsIdentifier("Object"), "create"),
+                    [new TsPropertyAccess(self, "prototype")]
+                ),
+                new TsObjectLiteral(properties),
+            ]
+        );
+    }
+
+    private static ITypeSymbol? FindMemberType(INamedTypeSymbol type, string memberName)
+    {
+        foreach (var member in type.GetMembers(memberName))
+        {
+            switch (member)
+            {
+                case IFieldSymbol field:
+                    return field.Type;
+                case IPropertySymbol prop:
+                    return prop.Type;
+            }
+        }
+
+        return null;
+    }
+
+    private TsExpression StructFieldZeroExpression(
+        IrTypeRef fieldType,
+        ITypeSymbol? symbolType,
+        IReadOnlyList<IrTypeParameter>? slotTypeParameters
+    )
+    {
+        if (fieldType is IrPrimitiveTypeRef primitive)
+        {
+            return primitive.Primitive switch
+            {
+                IrPrimitive.Boolean => new TsLiteral("false"),
+                IrPrimitive.Byte
+                or IrPrimitive.Int16
+                or IrPrimitive.Int32
+                or IrPrimitive.Float32
+                or IrPrimitive.Float64 => new TsLiteral("0"),
+                IrPrimitive.Int64 or IrPrimitive.UInt64 or IrPrimitive.BigInteger => new TsLiteral(
+                    "0n"
+                ),
+                IrPrimitive.Char => new TsStringLiteral("\0"),
+                IrPrimitive.Guid => new TsStringLiteral("00000000-0000-0000-0000-000000000000"),
+                IrPrimitive.Decimal => new TsCallExpression(
+                    new TsPostfixUnaryExpression(
+                        new TsPropertyAccess(
+                            new TsRuntimeHelperReference("DecimalDefaultType"),
+                            "default"
+                        ),
+                        "!"
+                    ),
+                    []
+                ),
+                IrPrimitive.DateTime
+                or IrPrimitive.DateTimeOffset
+                or IrPrimitive.DateOnly
+                or IrPrimitive.TimeOnly
+                or IrPrimitive.TimeSpan => new TsCallExpression(
+                    new TsPostfixUnaryExpression(
+                        new TsPropertyAccess(
+                            new TsRuntimeHelperReference($"{primitive.Primitive}DefaultType"),
+                            "default"
+                        ),
+                        "!"
+                    ),
+                    []
+                ),
+                _ => new TsLiteral("null"),
+            };
+        }
+
+        if (fieldType is IrTypeParameterRef tp && slotTypeParameters is not null)
+        {
+            for (var i = 0; i < slotTypeParameters.Count; i++)
+            {
+                if (slotTypeParameters[i].Name == tp.Name)
+                {
+                    return new TsParenthesized(
+                        new TsBinaryExpression(
+                            new TsCallExpression(
+                                new TsPropertyAccess(
+                                    new TsElementAccess(
+                                        new TsIdentifier(IrToTsClassBridge.TypeArgsParameterName),
+                                        new TsLiteral(
+                                            i.ToString(
+                                                System.Globalization.CultureInfo.InvariantCulture
+                                            )
+                                        ),
+                                        Optional: true
+                                    ),
+                                    "default"
+                                ),
+                                [],
+                                Optional: true
+                            ),
+                            "??",
+                            new TsLiteral("null")
+                        )
+                    );
+                }
+            }
+
+            return new TsLiteral("null");
+        }
+
+        if (fieldType is IrNamedTypeRef named && named.Semantics is { } semantics)
+        {
+            if (semantics.BrandedUnderlyingPrimitive is { } underlying)
+                return StructFieldZeroExpression(new IrPrimitiveTypeRef(underlying), null, null);
+
+            if (semantics.Kind is IrNamedTypeKind.NumericEnum)
+            {
+                var isBigInt =
+                    symbolType is INamedTypeSymbol
+                    {
+                        EnumUnderlyingType.SpecialType: SpecialType.System_Int64
+                            or SpecialType.System_UInt64,
+                    };
+
+                return new TsLiteral(isBigInt ? "0n" : "0");
+            }
+
+            if (semantics.Kind is IrNamedTypeKind.StringEnum)
+            {
+                if (symbolType is INamedTypeSymbol enumSym)
+                {
+                    var firstMember = enumSym
+                        .GetMembers()
+                        .OfType<IFieldSymbol>()
+                        .FirstOrDefault(f => f.HasConstantValue);
+
+                    if (firstMember is not null)
+                    {
+                        return new TsStringLiteral(
+                            IrToTsNamingPolicy.ToEnumMemberName(
+                                firstMember.Name,
+                                IrAttributeExtractor.Extract(firstMember)
+                            )
+                        );
+                    }
+                }
+
+                return new TsLiteral("null");
+            }
+
+            if (
+                semantics.IsValueType
+                && semantics.IsTranspilable
+                && symbolType is INamedTypeSymbol nestedStruct
+            )
+            {
+                var nestedIr = IrClassExtractor.Extract(nestedStruct, _context.Extraction);
+                var nestedRef = IrToTsRuntimeTypeReferences.ClassReference(named);
+                return BuildStructZeroObjectLiteral(nestedStruct, nestedIr, nestedRef, null);
+            }
+        }
+
+        return new TsLiteral("null");
+    }
+
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
         IrClassDeclaration owner,
         DispatcherBaseCall baseCall,
@@ -1265,7 +1536,8 @@ internal sealed class IrToTsClassEmitter(
             selectors,
             implicitParameterlessBody,
             lowering,
-            TsConstructorModifier.SignatureJSDocSelectorFor(owner, groupAccessibility)
+            TsConstructorModifier.SignatureJSDocSelectorFor(owner, groupAccessibility),
+            owner.TypeArgumentSlot
         );
     }
 

@@ -214,7 +214,7 @@ internal static class TypeParameterTsResolver
         string site,
         RuntimeTypeReachabilityResult reachability,
         TsTypeParameterScope? scope = null
-    ) => IrToTsRuntimeTypeReferences.ArgumentOf(type, site, reachability, scope);
+    ) => IrToTsRuntimeTypeReferences.ReifiedArgumentOf(type, site, reachability, scope);
 
     /// <summary>
     /// <c>($typeArgs?.[i] ?? UnknownType)</c>: reads a constructor's optional

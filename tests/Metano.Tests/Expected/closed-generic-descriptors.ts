@@ -46,8 +46,8 @@ export class Cell<T> {
       typeParameters: ["T"],
       isAbstract: false,
       isValueType: true,
-      default: () => new Cell(),
-      create: () => new Cell(),
+      default: () => Cell.$default(),
+      create: () => Cell.$default(),
       test: (v: unknown): v is Cell<unknown> => v instanceof Cell,
     });
   }
@@ -61,6 +61,10 @@ export class Cell<T> {
     hc.add(this.value);
 
     return hc.toHashCode();
+  }
+
+  static $default<T>(): Cell<T> {
+    return Object.assign(Object.create(Cell.prototype), { value: null });
   }
 }
 

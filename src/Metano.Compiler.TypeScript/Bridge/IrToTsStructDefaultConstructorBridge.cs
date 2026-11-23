@@ -202,7 +202,7 @@ internal static class IrToTsStructDefaultConstructorBridge
     /// The struct's instance storage, in declaration order: its promoted
     /// members, then its instance fields and auto-properties.
     /// </summary>
-    private static IEnumerable<StructStorage> StorageOf(IrClassDeclaration ir)
+    internal static IEnumerable<StructStorage> StorageOf(IrClassDeclaration ir)
     {
         var declared = (ir.Members ?? []).Select(DeclaredStorageOf).OfType<StructStorage>();
 
@@ -255,5 +255,5 @@ internal static class IrToTsStructDefaultConstructorBridge
     /// One instance member that holds a struct's state: its emitted name, its
     /// C# name and its type.
     /// </summary>
-    private sealed record StructStorage(string Name, string MemberName, IrTypeRef Type);
+    internal sealed record StructStorage(string Name, string MemberName, IrTypeRef Type);
 }

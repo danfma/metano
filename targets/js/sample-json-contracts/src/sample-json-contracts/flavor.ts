@@ -16,5 +16,6 @@ export const Flavor$runtimeType: EnumType<Flavor> = {
   values: ["Sweet", "Salty"],
   names: ["Sweet", "Salty"],
   isFlags: false,
+  default: () => "Sweet",
   test: (v: unknown): v is Flavor => v === "Sweet" || v === "Salty",
 };

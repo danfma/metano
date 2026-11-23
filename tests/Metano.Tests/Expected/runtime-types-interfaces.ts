@@ -20,8 +20,8 @@ export class Badge implements ITagged {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
-      default: () => new Badge(),
-      create: () => new Badge(),
+      default: () => Badge.$default(),
+      create: () => Badge.$default(),
       test: (v: unknown): v is Badge => v instanceof Badge,
     });
   }
@@ -38,6 +38,10 @@ export class Badge implements ITagged {
     const hc = new HashCode();
 
     return hc.toHashCode();
+  }
+
+  static $default(): Badge {
+    return Object.assign(Object.create(Badge.prototype), {});
   }
 }
 

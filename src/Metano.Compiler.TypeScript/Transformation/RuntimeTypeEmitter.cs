@@ -227,6 +227,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             new TsObjectProperty("isFlags", BooleanLiteral(ir.IsFlags)),
             .. UnderlyingProperty(type),
             .. OrdinalsProperty(type, ir),
+            new TsObjectProperty("default", Thunk(EnumDefaultValue(type, ir, entries, enumType))),
             new TsObjectProperty(
                 "test",
                 Predicate(
@@ -350,7 +351,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             ),
             new TsObjectProperty("isAbstract", BooleanLiteral(type.IsAbstract)),
             new TsObjectProperty("isValueType", BooleanLiteral(type.IsValueType)),
-            .. Default(type, self),
+            .. Default(type, self, slot),
             .. Create(type, self, slot),
             new TsObjectProperty(
                 "test",
@@ -393,18 +394,62 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         )
             is not null;
 
+    private static TsExpression EnumDefaultValue(
+        INamedTypeSymbol type,
+        IrEnumDeclaration ir,
+        IReadOnlyList<TsConstObjectEntry> entries,
+        TsType enumType
+    )
+    {
+        if (ir.Style is IrEnumStyle.String)
+        {
+            return entries.Count > 0
+                ? entries[0].Value
+                : new TsCastExpression(new TsLiteral("null"), enumType);
+        }
+
+        var isBigInt =
+            type.EnumUnderlyingType?.SpecialType
+            is SpecialType.System_Int64
+                or SpecialType.System_UInt64;
+
+        var zero = new TsLiteral(isBigInt ? "0n" : "0");
+
+        var hasZeroMember =
+            !ir.IsFlags
+            && ir.Members.Any(member =>
+                member.Value is not null
+                && Convert.ToDecimal(member.Value, CultureInfo.InvariantCulture) == 0m
+            );
+
+        return hasZeroMember ? zero : new TsCastExpression(zero, enumType);
+    }
+
     private static IEnumerable<TsObjectProperty> Default(
         INamedTypeSymbol type,
-        TsExpression self
-    ) =>
-        type.IsValueType
-            ? [new TsObjectProperty("default", Thunk(new TsNewExpression(self, [])))]
-            : [];
+        TsExpression self,
+        string? slot
+    )
+    {
+        if (!type.IsValueType)
+            return [];
+
+        if (slot is null)
+            return
+            [
+                new TsObjectProperty(
+                    "default",
+                    Thunk(new TsCallExpression(new TsPropertyAccess(self, "$default"), []))
+                ),
+            ];
+
+        return [new TsObjectProperty("default", StructSlotFactoryLambda(type, self))];
+    }
 
     /// <summary>
     /// <c>create: () =&gt; new X()</c> (or <c>(typeArguments) =&gt; new X(typeArguments as ...)</c>
     /// when <paramref name="slot"/> is present) for a concrete class with a public
-    /// parameterless constructor (declared or implicit) and for a struct.
+    /// parameterless constructor (declared or implicit), and the zero factory for a struct.
     /// </summary>
     private IEnumerable<TsObjectProperty> Create(
         INamedTypeSymbol type,
@@ -412,6 +457,20 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         string? slot
     )
     {
+        if (type.IsValueType)
+        {
+            if (slot is null)
+                return
+                [
+                    new TsObjectProperty(
+                        "create",
+                        Thunk(new TsCallExpression(new TsPropertyAccess(self, "$default"), []))
+                    ),
+                ];
+
+            return [new TsObjectProperty("create", StructSlotFactoryLambda(type, self))];
+        }
+
         var creatable =
             type.TypeParameters.Length > 0
                 ? _context.ReifiedTypeAnalysis.HasParameterlessCtor(type)
@@ -419,11 +478,6 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
                     && type.InstanceConstructors.Any(constructor =>
                         constructor
                             is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }
-                        && (!type.IsValueType || constructor.IsImplicitlyDeclared)
-                    )
-                    && (
-                        !type.IsValueType
-                        || type.InstanceConstructors.All(c => c.IsImplicitlyDeclared)
                     );
 
         if (!creatable)
@@ -432,6 +486,65 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         if (slot is null)
             return [new TsObjectProperty("create", Thunk(new TsNewExpression(self, [])))];
 
+        var forwarded = TypeArgsCastExpression(type);
+        var args = new List<TsExpression>();
+
+        if (DispatchedParameterlessSelector(type) is { } selector)
+            args.Add(new TsPropertyAccess(self, selector));
+
+        args.Add(forwarded);
+
+        return
+        [
+            new TsObjectProperty(
+                "create",
+                new TsArrowFunction(
+                    [new TsParameter("typeArguments", null)],
+                    [new TsReturnStatement(new TsNewExpression(self, args))]
+                )
+            ),
+        ];
+    }
+
+    private static string? DispatchedParameterlessSelector(INamedTypeSymbol type)
+    {
+        if (!IrConstructorExtractor.IsDispatchedSet(type))
+            return null;
+
+        var claims = TsOverloadCallSites.Claims?.For(type);
+
+        if (claims is null)
+            return null;
+
+        var ctors = IrConstructorExtractor.AllExplicitConstructors(type);
+
+        for (var i = 0; i < ctors.Count; i++)
+        {
+            if (ctors[i].Parameters.IsEmpty)
+                return claims.ConstructorNamesOf(i)?.Selector;
+        }
+
+        return null;
+    }
+
+    private static TsArrowFunction StructSlotFactoryLambda(
+        INamedTypeSymbol type,
+        TsExpression self
+    ) =>
+        new(
+            [new TsParameter("typeArguments", null)],
+            [
+                new TsReturnStatement(
+                    new TsCallExpression(
+                        new TsPropertyAccess(self, "$default"),
+                        [TypeArgsCastExpression(type)]
+                    )
+                ),
+            ]
+        );
+
+    private static TsCastExpression TypeArgsCastExpression(INamedTypeSymbol type)
+    {
         var unknownType = new TsNamedType("unknown");
         var runtimeTypeTuple = new TsTupleType(
             [
@@ -447,21 +560,10 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             IsReadonly: true
         );
 
-        var forwarded = new TsCastExpression(
+        return new TsCastExpression(
             new TsIdentifier("typeArguments"),
             new TsUnionType([runtimeTypeTuple, new TsNamedType("undefined")])
         );
-
-        return
-        [
-            new TsObjectProperty(
-                "create",
-                new TsArrowFunction(
-                    [new TsParameter("typeArguments", null)],
-                    [new TsReturnStatement(new TsNewExpression(self, [forwarded]))]
-                )
-            ),
-        ];
     }
 
     /// <summary>

@@ -20,7 +20,8 @@ export class SPoint {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
-      default: () => new SPoint(),
+      default: () => SPoint.$default(),
+      create: () => SPoint.$default(),
       test: (v: unknown): v is SPoint => v instanceof SPoint,
     });
   }
@@ -44,5 +45,9 @@ export class SPoint {
 
   with(overrides?: Partial<SPoint>): SPoint {
     return copyRecordWith<SPoint>(this, overrides);
+  }
+
+  static $default(): SPoint {
+    return Object.assign(Object.create(SPoint.prototype), { x: 0, y: 0 });
   }
 }

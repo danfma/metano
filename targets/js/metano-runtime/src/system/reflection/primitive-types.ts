@@ -17,7 +17,7 @@ import {
   isUInt32,
   isUInt64,
 } from "../../type-checking/index.ts";
-import { Decimal } from "../decimal.ts";
+import type { Decimal } from "../decimal.ts";
 import type { UUID } from "../uuid.ts";
 
 // Plain data literals: they reference the validating checks, never call them at load time.
@@ -186,7 +186,7 @@ export const GuidType: PrimitiveType<UUID> = {
   create: () => "00000000-0000-0000-0000-000000000000" as UUID,
 };
 
-/** `decimal`: recognized by the decimal.js `Symbol.toStringTag`, so `default`/`create` build `new Decimal(0)` on call. */
+/** `decimal`: recognized by the decimal.js `Symbol.toStringTag`; its `default`/`create` factories live in `decimal-type-defaults.ts`. */
 export const DecimalType: PrimitiveType<Decimal> = {
   kind: "primitive",
   name: "Decimal",
@@ -194,6 +194,4 @@ export const DecimalType: PrimitiveType<Decimal> = {
   namespace: "System",
   primitive: "Decimal",
   test: isDecimal,
-  default: () => new Decimal(0),
-  create: () => new Decimal(0),
 };

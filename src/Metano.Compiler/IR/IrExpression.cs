@@ -588,6 +588,18 @@ public sealed record IrNewExpression(
     /// <c>$typeArgs</c> tuple (spec 011 FR-024).
     /// </summary>
     public IReadOnlyList<IrTypeRef>? ReifiedTypeArguments { get; init; }
+
+    /// <summary>
+    /// The 0-based argument index where the <c>$typeArgs</c> tuple is
+    /// inserted (before any <c>params</c> rest parameter).
+    /// </summary>
+    public int ReifiedArgumentPosition { get; init; }
+
+    /// <summary>
+    /// True when this node represents a C# <c>default(S)</c> for a struct
+    /// rather than an explicit <c>new S()</c> constructor invocation.
+    /// </summary>
+    public bool IsStructDefault { get; init; }
 }
 
 /// <summary>
@@ -1536,4 +1548,16 @@ public sealed record IrTemplateExpression(
     /// <c>$typeArgs</c> tuple (spec 011 FR-024).
     /// </summary>
     public IReadOnlyList<IrTypeRef>? ReifiedTypeArguments { get; init; }
+
+    /// <summary>
+    /// The 0-based argument index where the <c>$typeArgs</c> tuple is
+    /// inserted (before any <c>params</c> rest parameter).
+    /// </summary>
+    public int ReifiedArgumentPosition { get; init; }
+
+    /// <summary>
+    /// True when this node represents a C# <c>default(S)</c> for a struct
+    /// rather than an explicit <c>new S()</c> constructor invocation.
+    /// </summary>
+    public bool IsStructDefault { get; init; }
 }
