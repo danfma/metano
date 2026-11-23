@@ -3,6 +3,7 @@ import type {
   TypeSpec,
   PropertySpec,
   ArrayDescriptor,
+  IntegerTypeName,
   BrandedDescriptor,
   EnumDescriptor,
   KeyedCollectionDescriptor,
@@ -35,11 +36,11 @@ import { JsonException } from "./errors.ts";
 import { exactBigIntLeafOf, numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
 import { forwardsNumberTexts } from "./exact-number-reads.ts";
 import {
+  DEFAULT_ENUM_INTEGER_TYPE,
   holdsBigInts,
   type Int64EnumDescriptor,
-  isNumericEnumValue,
-  numericEnumMembers,
 } from "./numeric-enum-members.ts";
+import { isWithinIntegerRange } from "./number-from-string.ts";
 import {
   decimalConverterOf,
   type ErrorTypeName,
@@ -415,15 +416,16 @@ function enumConverter(descriptor: EnumDescriptor) {
 
 // ─── Enum (Numeric) ──────────────────────────────────────────────────────────
 
+/**
+ * A numeric enum reads any integer of its underlying type, whether a member
+ * declares it or not, as System.Text.Json does (#369): a `[Flags]`
+ * combination (`3` for `Read | Write`) and an undeclared value (`42`) both
+ * read. Any other JSON value, an integer outside the underlying type
+ * included, throws System.Text.Json's conversion error naming the enum.
+ */
 function numericEnumConverter(descriptor: NumericEnumDescriptor) {
-  const validValues = new Set(numericEnumMembers(descriptor).map(([, value]) => value));
   const reader = holdsBigInts(descriptor) ? int64EnumReader(descriptor) : undefined;
-
-  const invalidValue = (value: unknown) =>
-    new JsonException(
-      `Invalid numeric enum value: ${typeof value === "bigint" ? value : JSON.stringify(value)}. ` +
-        `Expected one of: ${[...validValues].join(", ")}`,
-    );
+  const numberType = descriptor.numberType ?? DEFAULT_ENUM_INTEGER_TYPE;
 
   return {
     // A 32-bit enum value is already a number.
@@ -434,15 +436,26 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
         throw cannotConvertToTypeName(descriptor.typeName);
       }
 
-      const read = reader ? reader.deserialize(value) : value;
-
-      if (!isNumericEnumValue(read) || !validValues.has(read)) {
-        throw invalidValue(read);
+      if (reader) {
+        return reader.deserialize(value);
       }
 
-      return read;
+      if (!isIntegerOfType(value, numberType)) {
+        throw cannotConvertToTypeName(descriptor.typeName);
+      }
+
+      return value;
     },
   };
+}
+
+/** Whether `value` is a `number` holding an integer within `numberType`'s range. */
+function isIntegerOfType(value: unknown, numberType: IntegerTypeName): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    isWithinIntegerRange(BigInt(value), numberType)
+  );
 }
 
 /**

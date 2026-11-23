@@ -323,7 +323,7 @@ handles these kinds:
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
 | `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)`, or the type's `[JsonFactory]` ([below](#validating-branded-types)) |
 | `enum` | string enum | passthrough (already string) | validates against allowed values |
-| `numericEnum` | numeric enum | passthrough | validates against allowed values |
+| `numericEnum` | numeric enum | passthrough | any integer of the underlying type (`numberType`, `int` when absent), member or not, as System.Text.Json reads it (#369) |
 | `nullable` | `T \| null` | `null` passes through, else recurse | same |
 | `ref` | another spec | recursive `serialize` with target spec | recursive `deserialize` |
 
@@ -1495,7 +1495,7 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 | A non-object JSON value (or an array) for a dictionary | `Expected object for deserialization, got array` |
 | A numeric JSON string the grammar rejects, when the context reads numbers from strings | `The JSON value could not be converted to System.Int32.` (STJ names the declaring type for a constructor-bound property) |
 | An unknown string enum value | `Invalid enum value: …` (STJ: `The JSON value could not be converted to Color.`) |
-| An unknown numeric enum value | `Invalid numeric enum value: …` — a divergence: STJ reads any number (`7` reads as `(Color)7`) |
+| A numeric enum value that is not an integer of the underlying type (`1.5`, `300` for a `byte` enum, a string) | `The JSON value could not be converted to MyApp.Color.`; any integer in range reads, member or not (`7` reads as `(Color)7`, a `[Flags]` combination as itself), as System.Text.Json reads it (#369) |
 | More than 64 nested containers on read | `The maximum configured depth of 64 has been exceeded. Cannot read next JSON object.` (`… JSON array.` for an array) |
 | More than 64 nested containers on write, or an object cycle | `A possible object cycle was detected. This can either be due to a cycle or if the object depth is larger than the maximum allowed depth of 64. Consider using ReferenceHandler.Preserve on JsonSerializerOptions to support cycles.` |
 

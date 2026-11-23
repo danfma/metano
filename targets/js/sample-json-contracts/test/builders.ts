@@ -39,6 +39,7 @@ import { OrdBase } from "#/sample-json-contracts/ord-base";
 import { Other } from "#/sample-json-contracts/other";
 import { OtherB } from "#/sample-json-contracts/other-b";
 import { Page } from "#/sample-json-contracts/page";
+import { Perms } from "#/sample-json-contracts/perms";
 import { Schedule } from "#/sample-json-contracts/schedule";
 import { SPoint } from "#/sample-json-contracts/s-point";
 import { SBase } from "#/sample-json-contracts/s-base";
@@ -430,6 +431,13 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     build: () => Temporal.Duration.from({ hours: 1, minutes: 2, seconds: 3 }),
   },
   V13: { build: () => 1, assertRead: (value) => expect(value).toBe(1) },
+  // #369: a numeric enum reads any integer of its underlying type.
+  V13a: {
+    build: () => Perms.Read | Perms.Write,
+    assertRead: (value) => expect(value).toBe(Perms.Read | Perms.Write),
+  },
+  V13b: { build: () => 42, assertRead: (value) => expect(value).toBe(42) },
+  V13c: { build: () => 200, assertRead: (value) => expect(value).toBe(200) },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
   V15: {
     build: () => HashSet.of(["a", "b"]),

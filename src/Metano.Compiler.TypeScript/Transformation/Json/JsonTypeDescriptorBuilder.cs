@@ -23,6 +23,9 @@ internal sealed class JsonTypeDescriptorBuilder(
     JsonContextReadOptions readOptions
 )
 {
+    /// <summary>The underlying type of an enum that declares none, which the runtime assumes.</summary>
+    private const string DefaultEnumNumberType = "System.Int32";
+
     private readonly TypeScriptTransformContext _context = context;
     private readonly JsonTypeInfoNames _names = names;
     private readonly JsonContextReadOptions _readOptions = readOptions;
@@ -410,12 +413,25 @@ internal sealed class JsonTypeDescriptorBuilder(
             new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
 
-        // A 64-bit enum's values are `bigint`s: naming its underlying type in
-        // every slot reads and writes them through the int64 path (#701).
-        return TsEnumRepresentation.IsBigInt(type)
-            ? WithStringProperty(descriptor, "numberType", EnumUnderlyingNumberTypeOf(type)!)
+        return
+            kind == JsonPropertyKind.NumericEnum
+            && NamedUnderlyingNumberTypeOf(type) is { } numberType
+            ? WithStringProperty(descriptor, "numberType", numberType)
             : descriptor;
     }
+
+    /// <summary>
+    /// The underlying type a numeric enum's value descriptor names in every
+    /// slot, or <c>null</c> for an <c>int</c> enum (the runtime's default): the
+    /// runtime reads any integer of that type, declared or not, as System.Text.Json
+    /// does (#369), and a 64-bit enum's <c>bigint</c> values go through the
+    /// int64 path (#701).
+    /// </summary>
+    private static string? NamedUnderlyingNumberTypeOf(ITypeSymbol enumType) =>
+        EnumUnderlyingNumberTypeOf(enumType) is { } numberType
+        && numberType != DefaultEnumNumberType
+            ? numberType
+            : null;
 
     private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type) =>
         new([
@@ -490,9 +506,9 @@ internal sealed class JsonTypeDescriptorBuilder(
         JsonPropertyKind kind
     ) =>
         kind == JsonPropertyKind.NumericEnum
-        // A 64-bit enum's value descriptor already names its underlying type
-        // (in every slot, #701), so the key does not add it a second time.
-        && !TsEnumRepresentation.IsBigInt(keyType)
+        // A value descriptor already names any underlying type but `int` (in
+        // every slot, #369 / #701), so the key does not add it a second time.
+        && NamedUnderlyingNumberTypeOf(keyType) is null
         && EnumUnderlyingNumberTypeOf(keyType) is { } numberType
             ? WithStringProperty(descriptor, "numberType", numberType)
             : descriptor;

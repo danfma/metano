@@ -979,10 +979,7 @@ describe("int64 — other converters of a 64-bit closure read doubles (FR-053)",
         values: { Low: 0, 0: "Low" },
       });
 
-      expect(read).toBe(
-        `Invalid numeric enum value: ${JSON.stringify(JSON.parse(subtreeText) as unknown)}. ` +
-          "Expected one of: 0",
-      );
+      expect(read).toBe("The JSON value could not be converted to MyApp.Level.");
     });
   });
 

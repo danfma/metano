@@ -192,10 +192,11 @@ export type EnumDescriptor = WithClrTypeName & {
 export type NumericEnumDescriptor = WithClrTypeName & {
   readonly kind: "numericEnum";
   /**
-   * The enum's underlying integer type, set on a dictionary key: an integer
-   * key name is range-checked by it (#479). `System.Int32` when absent. A
-   * 64-bit enum (`System.Int64` / `System.UInt64`) names it in every slot:
-   * its values are `bigint`s, read and written through the int64 path (#701).
+   * The enum's underlying integer type, `System.Int32` when absent. A value
+   * read and an integer key name are range-checked by it (#369, #479); the
+   * generator names it in every slot for any type but `int`, and on a
+   * dictionary key always. A 64-bit enum (`System.Int64` / `System.UInt64`)
+   * holds `bigint`s, read and written through the int64 path (#701).
    */
   readonly numberType?: IntegerTypeName;
   readonly values: Record<string, string | number | bigint>;

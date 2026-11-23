@@ -43,6 +43,7 @@ import { NMid } from "./n-mid";
 import { OBase } from "./o-base";
 import { ODer } from "./o-der";
 import { Page } from "./page";
+import { Perms } from "./perms";
 import { isPoint, type Point } from "./point";
 import { isPoint3, type Point3 } from "./point3";
 import { isRect, type Rect } from "./rect";
@@ -54,6 +55,7 @@ import { SilenceClip } from "./silence-clip";
 import { Sq } from "./sq";
 import { SqB } from "./sq-b";
 import { Timeline } from "./timeline";
+import { Tiny } from "./tiny";
 import { Title } from "./title";
 import { UBaseA } from "./u-base-a";
 import { UBaseH } from "./u-base-h";
@@ -130,6 +132,8 @@ export class StudioJsonContext extends SerializerContext {
   private _color?: ValueSpec<Color>;
   private _level?: ValueSpec<Level>;
   private _flavor?: ValueSpec<Flavor>;
+  private _perms?: ValueSpec<Perms>;
+  private _tiny?: ValueSpec<Tiny>;
   private _sPoint?: TypeSpec<SPoint>;
   private _title?: ValueSpec<Title>;
   private _episodeRec?: TypeSpec<EpisodeRec>;
@@ -1277,6 +1281,27 @@ export class StudioJsonContext extends SerializerContext {
       descriptor: { kind: "enum", values: Flavor, typeName: "SampleJsonContracts.Flavor" },
       valueType: true,
       typeName: "SampleJsonContracts.Flavor",
+    }));
+  }
+
+  get perms(): ValueSpec<Perms> {
+    return (this._perms ??= this.createValueSpec({
+      descriptor: { kind: "numericEnum", values: Perms, typeName: "SampleJsonContracts.Perms" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Perms",
+    }));
+  }
+
+  get tiny(): ValueSpec<Tiny> {
+    return (this._tiny ??= this.createValueSpec({
+      descriptor: {
+        kind: "numericEnum",
+        values: Tiny,
+        typeName: "SampleJsonContracts.Tiny",
+        numberType: "System.Byte",
+      },
+      valueType: true,
+      typeName: "SampleJsonContracts.Tiny",
     }));
   }
 

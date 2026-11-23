@@ -450,6 +450,49 @@
     "divergence": "StringEnum wire type (baseline mapping), not mutually readable: STJ writes the number, Metano the name"
   },
   {
+    "id": "V13a",
+    "context": "StudioJsonContext",
+    "getter": "perms",
+    "direction": "roundtrip",
+    "json": "3"
+  },
+  {
+    "id": "V13b",
+    "context": "StudioJsonContext",
+    "getter": "color",
+    "direction": "roundtrip",
+    "json": "42"
+  },
+  {
+    "id": "V13c",
+    "context": "StudioJsonContext",
+    "getter": "tiny",
+    "direction": "roundtrip",
+    "json": "200"
+  },
+  {
+    "id": "V13d",
+    "context": "StudioJsonContext",
+    "getter": "tiny",
+    "direction": "read",
+    "json": "300",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Tiny."
+    }
+  },
+  {
+    "id": "V13e",
+    "context": "StudioJsonContext",
+    "getter": "color",
+    "direction": "read",
+    "json": "1.5",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Color."
+    }
+  },
+  {
     "id": "V15",
     "context": "StudioJsonContext",
     "getter": "hashSetString",
@@ -976,10 +1019,10 @@
     "error": {
       "class": "JsonException",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
-      "tsMessage": "Invalid numeric enum value: \"1\". Expected one of: 0, 1, 2",
+      "tsMessage": "The JSON value could not be converted to SampleJsonContracts.Color.",
       "stjPath": "$.c"
     },
-    "divergence": "Numeric enum read from a JSON string (Web): both sides reject it; STJ names the declaring type (stjPath pins the member), Metano the enum's values"
+    "divergence": "Numeric enum read from a JSON string (Web): both sides reject it; STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the enum (DECIDED-23 c)"
   },
   {
     "id": "E19c",

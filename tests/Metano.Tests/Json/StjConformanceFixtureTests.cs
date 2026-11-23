@@ -720,6 +720,19 @@ public class StjConformanceFixtureTests
                 () => Color.Green,
                 async value => await Assert.That(value).IsEqualTo(Color.Green)
             ),
+            // #369: a numeric enum reads any integer of its underlying type.
+            ["V13a"] = Roundtrip(
+                () => Perms.Read | Perms.Write,
+                async value => await Assert.That(value).IsEqualTo(Perms.Read | Perms.Write)
+            ),
+            ["V13b"] = Roundtrip(
+                () => (Color)42,
+                async value => await Assert.That(value).IsEqualTo((Color)42)
+            ),
+            ["V13c"] = Roundtrip(
+                () => (Tiny)200,
+                async value => await Assert.That(value).IsEqualTo((Tiny)200)
+            ),
             ["V14"] = Roundtrip(
                 () => Flavor.Sweet,
                 async value => await Assert.That(value).IsEqualTo(Flavor.Sweet)

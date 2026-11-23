@@ -133,7 +133,7 @@ selects the variant).
 | E16 | web `clip` | `{"Kind":"image","path":"a","seconds":1}` | read | `NotSupportedException` | `The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.` |
 | E17 | web `softNums` | `{"n":"5.0"}`, `{"n":" 5"}`, `{"n":"5 "}`, `{"n":""}`, `{"n":"1e2"}`, `{"n":"0x10"}` | read | `JsonException` | STJ: `The JSON value could not be converted to SoftNums.` (`stjPath` `$.n`); TS: `… System.Nullable\`1[System.Int32].` (DECIDED-23 c) |
 | E18 | web `softNums` | `{"x":"nan"}`, `{"x":" 1.5"}`, `{"x":"0x1"}` | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.x`); TS: `… System.Nullable\`1[System.Double].` (DECIDED-23 c) |
-| E19a | web `softNums` | `{"c":"1"}` (numeric enum from a string) | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.c`); TS: `Invalid numeric enum value: "1". Expected one of: 0, 1, 2` (spec.md Documented divergences) |
+| E19a | web `softNums` | `{"c":"1"}` (numeric enum from a string) | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.c`); TS: `… converted to SampleJsonContracts.Color.` (the enum, #369; spec.md Documented divergences) |
 | E19c | web `softNums` | `{"n":"null"}` (`int?`) | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.n`); TS: `… System.Nullable\`1[System.Int32].` (DECIDED-23 c) |
 | E20 | web `iBase` | `{"$type":"1","x":5}` | read | `JsonException` | `Read unrecognized type discriminator id '1'.` |
 

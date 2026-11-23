@@ -479,10 +479,14 @@ describe("JsonSerializer — numericEnum", () => {
     expect(restored.priority).toBe(1);
   });
 
-  test("invalid numeric enum throws", () => {
+  test("an undeclared numeric enum value reads, as System.Text.Json reads it (#369)", () => {
+    expect(JsonSerializer.deserialize({ priority: 99 }, spec)!.priority).toBe(99);
+  });
+
+  test("a numeric enum value that is not an integer throws", () => {
     expect(() => {
-      JsonSerializer.deserialize({ priority: 99 }, spec);
-    }).toThrow(/Invalid numeric enum value/);
+      JsonSerializer.deserialize({ priority: 1.5 }, spec);
+    }).toThrow("The JSON value could not be converted to Object.");
   });
 });
 
