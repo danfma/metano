@@ -133,9 +133,11 @@ public static class IrPropertyExtractor
             OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
             EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, context.Target),
             InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, context.Compilation),
-            IsAssignedByStaticConstructor: IsAssignedByStaticConstructor(prop, context.Compilation),
-            IsIndexer: prop.IsIndexer
-        );
+            IsAssignedByStaticConstructor: IsAssignedByStaticConstructor(prop, context.Compilation)
+        )
+        {
+            IsIndexer = prop.IsIndexer,
+        };
     }
 
     private static bool IsAssignedByStaticConstructor(

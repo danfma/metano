@@ -141,6 +141,7 @@ public static class IrToTsPlainObjectBridge
 
     private static bool IsInterfaceData(IrPropertyDeclaration property) =>
         !property.IsStatic
+        && property.Semantics is not { IsIndexer: true }
         && property.GetterBody is null
         && property.Semantics is not { HasGetterBody: true }
         && property.Visibility

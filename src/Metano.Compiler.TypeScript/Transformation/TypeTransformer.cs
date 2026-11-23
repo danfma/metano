@@ -2932,6 +2932,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, ReportDiagnostic);
         IteratorProtocolDiagnostics.ReportPlainObjectIteration(type, ir, ReportDiagnostic);
+        IndexerDiagnostics.Report(type, ir, ReportDiagnostic);
 
         return IrToTsPlainObjectBridge.Convert(ir, sink, lowering);
     }
