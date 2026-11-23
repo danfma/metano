@@ -1508,7 +1508,7 @@ public static partial class IrToTsExpressionBridge
             && (sem.IsIgnored || sem.IsExternal || sem.RendersAsJsxElement)
         )
             return null;
-        return IrToTsTypeMapper.Map(p.Type, context.TypeOverrides);
+        return IrToTsTypeMapper.MapParameterType(p, context.TypeOverrides);
     }
 
     /// <summary>
@@ -1912,7 +1912,8 @@ public static partial class IrToTsExpressionBridge
         var mappedParameters = lambda
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                LowerLambdaParameterType(p, context)
+                LowerLambdaParameterType(p, context),
+                Rest: p.IsRestParams
             ))
             .ToList();
 

@@ -2881,6 +2881,9 @@ public sealed partial class IrExpressionExtractor
         )
             return dispatched;
 
+        if (DelegateInvokeGroupValue(expression, method, invoke, reference) is { } invoked)
+            return invoked;
+
         if (IsDartTarget)
             return dispatched;
 
@@ -3906,11 +3909,12 @@ public sealed partial class IrExpressionExtractor
     /// first parameter of <paramref name="symbol"/> (the
     /// <c>[This]</c> receiver). Honors named arguments by matching
     /// <see cref="ArgumentSyntax.NameColon"/> against the parameter
-    /// name; positional arguments fall through to index 0. Returns
-    /// <c>-1</c> when the receiver slot cannot be located, which
-    /// signals the caller to skip the <c>.call(...)</c> rewrite
-    /// and emit the plain delegate invocation (still semantically
-    /// off, but no worse than the pre-rewrite behavior).
+    /// name; otherwise a positional first argument binds the first
+    /// parameter, as C# binds it, even when named arguments follow
+    /// (<c>a.Invoke(h, x: 20)</c>, #376). Returns <c>-1</c> when the
+    /// receiver slot cannot be located, which signals the caller to
+    /// skip the <c>.call(...)</c> rewrite and emit the plain delegate
+    /// invocation.
     /// </summary>
     private static int FindReceiverArgumentIndex(
         IMethodSymbol symbol,
@@ -3924,12 +3928,8 @@ public sealed partial class IrExpressionExtractor
             if (arg.NameColon?.Name.Identifier.ValueText == receiverName)
                 return i;
         }
-        if (argumentList.Arguments.All(a => a.NameColon is null))
-            return 0;
-        // Mixed positional + named where the named arg targets a
-        // non-receiver slot: cannot safely identify the receiver
-        // syntactic position. Bail out.
-        return -1;
+
+        return argumentList.Arguments is [{ NameColon: null }, ..] ? 0 : -1;
     }
 
     private static bool IsPrimitiveBackedBrandedValueRead(ISymbol symbol) =>
@@ -4188,7 +4188,7 @@ public sealed partial class IrExpressionExtractor
         var body = ExtractLambdaBody(lambda.Body);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
-            [parameter],
+            WithTargetParams(lambda, [parameter]),
             ReturnType: VoidReturnTypeOf(lambda),
             Body: body,
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
@@ -4209,7 +4209,7 @@ public sealed partial class IrExpressionExtractor
         var body = ExtractLambdaBody(lambda.Body);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
-            parameters,
+            WithTargetParams(lambda, parameters),
             ReturnType: VoidReturnTypeOf(lambda),
             Body: body,
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
