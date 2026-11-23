@@ -219,7 +219,7 @@ public class DartGroupDFixesTests
             """
         );
 
-        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(diagnostics.Single().Code).IsEqualTo("MS0001");
         var dart = files["spreads.dart"];
         await Assert.That(dart).Contains("...d.entries");
     }
