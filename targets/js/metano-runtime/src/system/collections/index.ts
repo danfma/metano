@@ -1,4 +1,5 @@
 export type { MetanoChecks } from "./checks.ts";
+export * from "./array-helpers.ts";
 export * from "./default-comparer.ts";
 export * from "./descriptors.ts";
 export * from "./concurrent-dictionary.ts";
