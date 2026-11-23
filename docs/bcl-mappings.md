@@ -195,9 +195,9 @@ Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, sta
 `Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no
 `toString`; `-0` dictionary keys and `list.Equals` differ from .NET; `ReadOnlyDictionary`,
 `FrozenDictionary`, `nint` / `nuint` members and the non-generic `TaskCompletionSource` are unmapped.
-`asList` of a set, dictionary, queue or stack throws `InvalidCastException`. Other numeric details:
+A cast of a set, queue or dictionary to `IList<T>` passes through (known gap, #710). Other numeric details:
 `decimal` in a module function, a branded type or a JSX body is spelled `Decimal`; `decimal` to a
-narrow integer is `narrowFromDecimal(d, 32, true)`; `HashCode.add` hashes a tuple by its elements.
+narrow integer is `narrowFromDecimal(d, 32, true)`; a record hashes a tuple-typed member by its elements, while `HashCode.add` still hashes an array by reference.
 
 ### Lists and arrays
 
