@@ -12,11 +12,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// constructor's parameters as readonly fields (with optional fields for
 /// parameters that have a default value, matching the wire-shape convention).
 /// Each instance method becomes an exported function whose first parameter is
-/// <c>self: T</c>; <c>this</c> references inside the body are rewritten to
-/// <c>self</c> at the IR level so the bridge stays self-rename-agnostic.
+/// <c>self: T</c>; every <c>this</c> inside the body lowers to <c>self</c>
+/// (<see cref="IrToTsBridgeContext.ThisReceiver"/>).
 /// </summary>
 public static class IrToTsPlainObjectBridge
 {
+    private const string SelfParameterName = "self";
+
     internal static bool Convert(
         IrClassDeclaration ir,
         List<TsTopLevel> sink,
@@ -148,21 +150,20 @@ public static class IrToTsPlainObjectBridge
         IrToTsBridgeContext context
     )
     {
-        // Inside a [PlainObject] method body `this` references rewrite to the
+        // Inside a [PlainObject] method body every `this` lowers to the
         // explicit `self` parameter — the type has no class wrapper at runtime,
         // so `this` would resolve to the wrong object.
-        var rewrittenBody = method.Body is null
-            ? null
-            : (IReadOnlyList<IrStatement>)method.Body.Select(s => RewriteThis(s, "self")).ToList();
-
         var loweredBody = IrToTsBodyHelpers.LowerOrNotImplemented(
-            rewrittenBody,
+            method.Body,
             method.Name,
-            context
+            context.WithThisReceiver(SelfParameterName)
         );
 
         // First parameter is always `self: T`; the rest are the C# parameters.
-        var parameters = new List<TsParameter> { new("self", new TsNamedType(ownerTsName)) };
+        var parameters = new List<TsParameter>
+        {
+            new(SelfParameterName, new TsNamedType(ownerTsName)),
+        };
 
         parameters.AddRange(
             method.Parameters.Select(p => new TsParameter(
@@ -190,233 +191,4 @@ public static class IrToTsPlainObjectBridge
             )
         );
     }
-
-    private static IrStatement RewriteThis(IrStatement stmt, string identifierName) =>
-        stmt switch
-        {
-            IrExpressionStatement es => new IrExpressionStatement(
-                RewriteThis(es.Expression, identifierName)
-            ),
-            IrReturnStatement ret => new IrReturnStatement(
-                ret.Value is null ? null : RewriteThis(ret.Value, identifierName)
-            ),
-            IrVariableDeclaration vd => vd with
-            {
-                Initializer = vd.Initializer is null
-                    ? null
-                    : RewriteThis(vd.Initializer, identifierName),
-            },
-            IrIfStatement ifs => new IrIfStatement(
-                RewriteThis(ifs.Condition, identifierName),
-                RewriteList(ifs.Then, identifierName),
-                ifs.Else is null ? null : RewriteList(ifs.Else, identifierName)
-            ),
-            IrThrowStatement th => new IrThrowStatement(RewriteThis(th.Expression, identifierName)),
-            IrBlockStatement block => new IrBlockStatement(
-                RewriteList(block.Statements, identifierName)
-            ),
-            IrInlineCodeStatement inlineCode => inlineCode with
-            {
-                Parts = IrInlineCodeParts.MapHoles(inlineCode.Parts, hole =>
-                    RewriteThis(hole, identifierName)
-                ),
-            },
-            _ => stmt,
-        };
-
-    private static IReadOnlyList<IrStatement> RewriteList(
-        IReadOnlyList<IrStatement> body,
-        string identifierName
-    ) => body.Select(s => RewriteThis(s, identifierName)).ToList();
-
-    internal static IrExpression RewriteThis(IrExpression expr, string identifierName) =>
-        expr switch
-        {
-            IrThisExpression => new IrIdentifier(identifierName),
-            IrMemberAccess ma => ma with { Target = RewriteThis(ma.Target, identifierName) },
-            IrElementAccess ea => ea with
-            {
-                Target = RewriteThis(ea.Target, identifierName),
-                Index = RewriteThis(ea.Index, identifierName),
-            },
-            IrCallExpression call => call with
-            {
-                Target = RewriteThis(call.Target, identifierName),
-                Arguments = call
-                    .Arguments.Select(a => a with { Value = RewriteThis(a.Value, identifierName) })
-                    .ToList(),
-            },
-            // An object-default base call has no `this` receiver, but its
-            // arguments can hold one (`base.Equals(this.x)`) — descend so a
-            // literal `this` never leaks into the lowered `self` function.
-            IrBaseObjectMemberCall baseCall => baseCall with
-            {
-                Arguments = baseCall
-                    .Arguments.Select(a => a with { Value = RewriteThis(a.Value, identifierName) })
-                    .ToList(),
-            },
-            IrBinaryExpression bin => bin with
-            {
-                Left = RewriteThis(bin.Left, identifierName),
-                Right = RewriteThis(bin.Right, identifierName),
-            },
-            IrUnaryExpression un => un with { Operand = RewriteThis(un.Operand, identifierName) },
-            IrConditionalExpression cond => cond with
-            {
-                Condition = RewriteThis(cond.Condition, identifierName),
-                WhenTrue = RewriteThis(cond.WhenTrue, identifierName),
-                WhenFalse = RewriteThis(cond.WhenFalse, identifierName),
-            },
-            IrWithExpression w => w with
-            {
-                Source = RewriteThis(w.Source, identifierName),
-                Assignments = w
-                    .Assignments.Select(a =>
-                        a with
-                        {
-                            Value = RewriteThis(a.Value, identifierName),
-                        }
-                    )
-                    .ToList(),
-            },
-            IrNewExpression ne => ne with
-            {
-                Arguments = ne
-                    .Arguments.Select(a => a with { Value = RewriteThis(a.Value, identifierName) })
-                    .ToList(),
-            },
-            IrCastExpression cast => cast with
-            {
-                Expression = RewriteThis(cast.Expression, identifierName),
-            },
-            IrInlineCodeExpression inlineCode => inlineCode with
-            {
-                Parts = IrInlineCodeParts.MapHoles(inlineCode.Parts, hole =>
-                    RewriteThis(hole, identifierName)
-                ),
-            },
-            IrUnsafeCastExpression unsafeCast => unsafeCast with
-            {
-                Value = RewriteThis(unsafeCast.Value, identifierName),
-            },
-            IrAsDynamicExpression asDynamic => asDynamic with
-            {
-                Value = RewriteThis(asDynamic.Value, identifierName),
-            },
-            IrBoxExpression box => box with { Value = RewriteThis(box.Value, identifierName) },
-            IrUnboxExpression unbox => unbox with
-            {
-                Value = RewriteThis(unbox.Value, identifierName),
-            },
-            IrTextValue text => text with { Value = RewriteThis(text.Value, identifierName) },
-            IrNumericConversion conversion => conversion with
-            {
-                Operand = RewriteThis(conversion.Operand, identifierName),
-            },
-            IrUserOperatorApplication application => application with
-            {
-                Operands = application
-                    .Operands.Select(operand => RewriteThis(operand, identifierName))
-                    .ToList(),
-            },
-            IrUserOperatorStore store => store with
-            {
-                SourceForm = RewriteThis(store.SourceForm, identifierName),
-                ReadModifyWrite = RewriteThis(store.ReadModifyWrite, identifierName),
-            },
-            IrUserConversion userConversion => userConversion with
-            {
-                Operand = RewriteThis(userConversion.Operand, identifierName),
-                SourceForm = RewriteThis(userConversion.SourceForm, identifierName),
-            },
-            IrIntegerOverflow overflow => overflow with
-            {
-                Value = RewriteThis(overflow.Value, identifierName),
-            },
-            IrNullConditionalAccess access => access with
-            {
-                Receiver = RewriteThis(access.Receiver, identifierName),
-                WhenNotNull = RewriteThis(access.WhenNotNull, identifierName),
-            },
-            IrAwaitExpression aw => aw with
-            {
-                Expression = RewriteThis(aw.Expression, identifierName),
-            },
-            IrThrowExpression th => th with
-            {
-                Expression = RewriteThis(th.Expression, identifierName),
-            },
-            IrOutArgumentCall outCall => outCall.MapExpressions(e =>
-                RewriteThis(e, identifierName)
-            ),
-            IrArrayLiteral arr => arr with
-            {
-                Elements = arr.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),
-            },
-            IrArrayCreation creation => creation with
-            {
-                Length = RewriteThis(creation.Length, identifierName),
-            },
-            IrTupleLiteral tuple => tuple with
-            {
-                Elements = tuple.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),
-            },
-            IrTupleEqualityExpression tupleEquality => tupleEquality with
-            {
-                Left = RewriteThis(tupleEquality.Left, identifierName),
-                Right = RewriteThis(tupleEquality.Right, identifierName),
-            },
-            IrIndexerUpdateExpression update => update with
-            {
-                Element = update.Element with
-                {
-                    Receiver = RewriteThis(update.Element.Receiver, identifierName),
-                    Index = RewriteThis(update.Element.Index, identifierName),
-                },
-                NewValue = RewriteThis(update.NewValue, identifierName),
-            },
-            IrFromEndElementAccess fromEnd => fromEnd with
-            {
-                Receiver = RewriteThis(fromEnd.Receiver, identifierName),
-                Offset = RewriteThis(fromEnd.Offset, identifierName),
-            },
-            IrCollectionInitialization initialization => initialization with
-            {
-                Creation = RewriteThis(initialization.Creation, identifierName),
-                Comparer = initialization.Comparer is null
-                    ? null
-                    : RewriteThis(initialization.Comparer, identifierName),
-                Elements = initialization
-                    .Elements.Select(element =>
-                        (IReadOnlyList<IrExpression>)
-                            element.Select(value => RewriteThis(value, identifierName)).ToList()
-                    )
-                    .ToList(),
-            },
-            IrArrayToCollectionConversion conversion => conversion with
-            {
-                Value = RewriteThis(conversion.Value, identifierName),
-            },
-            IrListInterfaceCast cast => cast with
-            {
-                Value = RewriteThis(cast.Value, identifierName),
-            },
-            IrSliceExpression slice => slice with
-            {
-                Target = RewriteThis(slice.Target, identifierName),
-                Start = slice.Start is null ? null : RewriteThis(slice.Start, identifierName),
-                End = slice.End is null ? null : RewriteThis(slice.End, identifierName),
-            },
-            IrLetExpression let => let with
-            {
-                Value = RewriteThis(let.Value, identifierName),
-                Body = RewriteThis(let.Body, identifierName),
-            },
-            IrSequenceExpression sequence => sequence with
-            {
-                Effects = sequence.Effects.Select(e => RewriteThis(e, identifierName)).ToList(),
-                Result = RewriteThis(sequence.Result, identifierName),
-            },
-            _ => expr,
-        };
 }

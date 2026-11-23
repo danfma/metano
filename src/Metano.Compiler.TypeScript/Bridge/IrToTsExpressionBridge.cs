@@ -116,7 +116,7 @@ public static partial class IrToTsExpressionBridge
                 initialization,
                 context
             ),
-            IrThisExpression => new TsIdentifier("this"),
+            IrThisExpression => new TsIdentifier(context.ThisReceiver),
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, context),
             IrElementAccess ea => MapElementAccess(ea, context),

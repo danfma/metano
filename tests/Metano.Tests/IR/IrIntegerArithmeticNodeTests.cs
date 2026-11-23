@@ -144,18 +144,6 @@ public class IrIntegerArithmeticNodeTests
     }
 
     [Test]
-    public async Task PlainObjectThisRewrite_KeepsTheWrapperAndRewritesItsOperand()
-    {
-        var fieldRead = new IrMemberAccess(new IrThisExpression(), "id");
-
-        var rewritten = IrToTsPlainObjectBridge.RewriteThis(Wrapped(fieldRead), "self");
-
-        await Assert
-            .That(OperandOf(rewritten))
-            .IsEqualTo(new IrMemberAccess(new IrIdentifier("self"), "id"));
-    }
-
-    [Test]
     public async Task OutArgumentBinding_KeepsTheWrapperAndBindsItsOperand()
     {
         var outCall = new IrOutArgumentCall(
@@ -178,9 +166,11 @@ public class IrIntegerArithmeticNodeTests
         var binding = (IrTupleDeconstruction)lowered[0];
 
         await Assert.That(lowered.Count).IsEqualTo(2);
+
         await Assert
             .That(string.Join(",", binding.Elements.Select(e => e.Name)))
             .IsEqualTo("$result0,value");
+
         await Assert
             .That(lowered[1])
             .IsEqualTo(new IrReturnStatement(Wrapped(new IrIdentifier("$result0"))));
