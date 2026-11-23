@@ -110,25 +110,82 @@ internal static class IrParameterNaming
             SymbolHelper.ToCamelCase(parameter.Name)
         );
 
-        foreach (var name in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
+        foreach (var calledName in FlattenedNamesCalledIn(declaration, model, policy))
         {
-            if (
-                model.GetSymbolInfo(name).Symbol is not IMethodSymbol callee
-                || !IsFlattened(callee)
-            )
-                continue;
-
-            var calleeName = OverloadEmittedName.NameOverrideOf(callee, policy)
-                ?? SymbolHelper.ToCamelCase(callee.Name);
-
             colliding.UnionWith(
-                parametersByEmittedName[calleeName].Select(parameter => parameter.Name)
+                parametersByEmittedName[calledName].Select(parameter => parameter.Name)
             );
         }
 
         return colliding;
     }
 
-    private static bool IsFlattened(IMethodSymbol callee) =>
-        callee is { IsStatic: true } && callee.ContainingType.IsContainerless();
+    /// <summary>
+    /// Every bare name a flattened call under <paramref name="root"/> may spell (<see
+    /// cref="CalledNamesOf"/>): the names a binding of that root must not take, since
+    /// it would shadow the function it calls. The local-name disambiguator renames a
+    /// local that takes one of them.
+    /// </summary>
+    internal static IReadOnlySet<string> FlattenedNamesCalledIn(
+        SyntaxNode root,
+        SemanticModel model,
+        OverloadGroupingPolicy policy
+    )
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var name in root.DescendantNodes().OfType<SimpleNameSyntax>())
+        {
+            if (
+                model.GetSymbolInfo(name).Symbol is IMethodSymbol callee
+                && IsFlattened(callee, policy)
+            )
+                names.UnionWith(CalledNamesOf(callee, policy));
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// The names a flattened call to <paramref name="callee"/> may spell: its own name
+    /// and, for an overload of a dispatched group, the fast path a bound call emits
+    /// instead (spec 013 slice 013e, #578) — the dispatcher's name plus the overload's
+    /// suffix. A fast path the barrel claim pass renamed (MS0067) ends in <c>$</c>,
+    /// which no C# parameter can spell.
+    /// </summary>
+    private static IEnumerable<string> CalledNamesOf(
+        IMethodSymbol callee,
+        OverloadGroupingPolicy policy
+    )
+    {
+        var name = OverloadEmittedName.NameOverrideOf(callee, policy)
+            ?? SymbolHelper.ToCamelCase(callee.Name);
+
+        yield return name;
+
+        var definition = callee.OriginalDefinition;
+
+        if (
+            MethodOverloadGroups.GroupOf(definition, policy) is { IsDispatched: true } group
+            && group.MemberOf(definition) is { } member
+        )
+        {
+            var suffixes = MethodOverloadGroups.SuffixesOf(
+                definition.ContainingType,
+                group,
+                policy
+            );
+
+            yield return name + suffixes[member];
+        }
+    }
+
+    /// <summary>
+    /// Whether a call to <paramref name="callee"/> may lower to its bare function name:
+    /// a static method of a containerless class, or of an emitted extension container,
+    /// which a target may emit as a module too (#554).
+    /// </summary>
+    private static bool IsFlattened(IMethodSymbol callee, OverloadGroupingPolicy policy) =>
+        callee is { IsStatic: true, ContainingType: { } owner }
+        && (owner.IsContainerless() || owner.IsEmittedExtensionContainer(policy.Target));
 }

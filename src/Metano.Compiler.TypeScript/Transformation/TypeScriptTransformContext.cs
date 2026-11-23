@@ -166,7 +166,7 @@ public sealed class TypeScriptTransformContext(
         {
             case IMethodSymbol method
                 when method.IsExtensionMethod
-                    && method.IsEmittedModuleFunction(TargetLanguage.TypeScript):
+                    && method.IsExportedModuleFunction(TargetLanguage.TypeScript):
                 Register(
                     IrToTsNamingPolicy.ToFunctionName(method),
                     method,

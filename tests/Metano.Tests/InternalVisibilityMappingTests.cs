@@ -657,11 +657,10 @@ public class InternalVisibilityMappingTests
     }
 
     [Test]
-    public async Task InternalModuleFunction_IsNotEmitted()
+    public async Task InternalModuleFunction_IsEmittedAndTaggedInternal()
     {
-        // Known limitation (FR-049 note / matrix): module-function extraction
-        // admits public members only, so an internal function of an
-        // [ExportedAsModule] class is dropped rather than tagged.
+        // An internal function of an [ExportedAsModule] class is emitted and
+        // tagged like an internal module variable, so its callers resolve (#609).
         var files = TranspileHelper.Transpile(
             """
             [Transpile, ExportedAsModule]
@@ -677,7 +676,10 @@ public class InternalVisibilityMappingTests
         var output = files["counters.ts"];
 
         await Assert.That(output).Contains("export function twice(value: number): number {");
-        await Assert.That(output).DoesNotContain("function inc(");
+
+        await Assert
+            .That(output)
+            .Contains("/** @internal */\nexport function inc(value: number): number {");
     }
 
     [Test]

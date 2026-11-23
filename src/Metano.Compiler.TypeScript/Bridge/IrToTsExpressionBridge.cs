@@ -862,18 +862,15 @@ public static partial class IrToTsExpressionBridge
         // namespace contract the runtime ambient declarations expose
         // (e.g. `Js.document` over the runtime's actual `document`
         // global). Instance access (ill-formed on a static class)
-        // falls through to the normal property-access path.
+        // falls through to the normal property-access path. A static
+        // method of an extension container flattens too: TypeScript emits
+        // that class as a module of functions (#554).
         if (
-            ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true } containerless
+            ma.Origin is { } containerless
+            && FlattensToModuleMember(containerless)
             && ma.Target is IrTypeReference container
         )
-        {
-            // A field or property is a module variable of the container's file
-            // (#314): carry the owner so another file imports it from there.
-            return containerless.IsTranspiledDataMember
-                ? ModuleExportReference(memberName, container)
-                : new TsIdentifier(memberName);
-        }
+            return ModuleMemberReference(containerless, memberName, container);
 
         return new TsPropertyAccess(loweredTarget, memberName);
     }
@@ -1033,8 +1030,13 @@ public static partial class IrToTsExpressionBridge
             BoundArgumentPrefix
         );
 
-        var template = new TsTemplate(
+        var (text, externalImports) = TsImportFacadeBinding.Escape(
             tpl.Template,
+            tpl.ExternalImports
+        );
+
+        var template = new TsTemplate(
+            text,
             tpl.Receiver is null ? null : Map(tpl.Receiver, context),
             ordered.Arguments
         )
@@ -1043,7 +1045,7 @@ public static partial class IrToTsExpressionBridge
                 ? tArgs.Select(t => TsTypeArgName(t) ?? "unknown").ToList()
                 : [],
             RuntimeImports = tpl.RequiredImports ?? [],
-            ExternalImports = tpl.ExternalImports ?? [],
+            ExternalImports = externalImports,
             ReceiverType = tpl.ReceiverType is IrNamedTypeRef receiverType
                 ? CanonicalTypeValue(receiverType)
                 : null,
@@ -2674,6 +2676,7 @@ public static partial class IrToTsExpressionBridge
                 fastPath,
                 moduleExport.OwnerTypeName
             ),
+            TsTypeReference packageExport => new TsTypeReference(fastPath, packageExport.Origin),
             _ => new TsIdentifier(fastPath),
         };
     }

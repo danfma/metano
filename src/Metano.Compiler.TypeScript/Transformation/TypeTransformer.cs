@@ -1352,7 +1352,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         && (
             SymbolHelper.HasExportedAsModule(type)
             || SymbolHelper.HasNoContainer(type)
-            || HasExtensionMembers(type)
+            || type.HasExtensionMembers()
         );
 
     /// <summary>
@@ -1496,7 +1496,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .DeclaringSyntaxReferences.FirstOrDefault()
             ?.SyntaxTree;
         var previousAliases = IrToTsTypeMapper.UsingAliases;
-        IrToTsTypeMapper.UsingAliases = MergeAliasesForGroup(primarySyntaxTree);
+        IrToTsTypeMapper.UsingAliases = MergeAliasesForGroup(primarySyntaxTree, group.Types);
 
         // The nested types this file declares at module level: a reference from
         // the file spells their module-local identifier (ModuleLocalNaming.Flatten).
@@ -1706,13 +1706,38 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     ///   carrier (Layer B) — most explicit, wins everything.</item>
     /// </list>
     /// </summary>
-    private UsingAliasScope? MergeAliasesForGroup(SyntaxTree? primarySyntaxTree)
+    private UsingAliasScope? MergeAliasesForGroup(
+        SyntaxTree? primarySyntaxTree,
+        IReadOnlyList<INamedTypeSymbol> groupTypes
+    )
     {
-        var layerA = UsingAliasResolver.ResolveForTree(primarySyntaxTree, Context.Compilation);
+        var layerA = UsingAliasResolver.ResolveForTree(
+            primarySyntaxTree,
+            Context.Compilation,
+            type => DeclaresType(groupTypes, type)
+        );
+
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
         Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized);
         Context.ImportAliasOverrides.TryGetValue(filePath, out var layerB);
         return ImportAliasResolver.Merge(layerA, synthesized, layerB);
+    }
+
+    /// <summary>
+    /// Whether one of a file group's types is <paramref name="type"/> or encloses it.
+    /// </summary>
+    private static bool DeclaresType(
+        IReadOnlyList<INamedTypeSymbol> groupTypes,
+        INamedTypeSymbol type
+    )
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (groupTypes.Contains(current.OriginalDefinition, SymbolEqualityComparer.Default))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -2499,6 +2524,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (ReportModuleNameCollisions(type, functions, variables))
             return true;
 
+        if (ReportUndispatchedOverloads(type, functions))
+            return true;
+
         foreach (var fn in functions)
         {
             if (fn.Body is null || !IrBodyCoverageProbe.IsFullyCovered(fn.Body))
@@ -2788,6 +2816,62 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         return collisions.Count > 0;
     }
+
+    /// <summary>
+    /// Reports module functions emitted under one name outside any dispatched group:
+    /// the overloads of a C# 14 <c>extension</c> block member, which the extraction
+    /// does not group (#551). Emitting both would declare the function twice (TS2393),
+    /// so the type is skipped until block overloads dispatch (#156).
+    /// </summary>
+    private bool ReportUndispatchedOverloads(
+        INamedTypeSymbol type,
+        IReadOnlyList<IrModuleFunction> functions
+    )
+    {
+        var duplicates = functions
+            .Where(function => function.OverloadRef is null)
+            .GroupBy(IrToTsNamingPolicy.ToFunctionName, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .ToList();
+
+        foreach (var group in duplicates)
+        {
+            Context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"'{type.Name}' emits {group.Count()} module functions named "
+                        + $"'{group.Key}': overloads of a C# 14 extension block member are not "
+                        + "supported yet. Rename the overloads in C# so each has its own name.",
+                    ExtensionBlockMemberLocation(type, group.First().Name, ordinal: 1)
+                )
+            );
+        }
+
+        return duplicates.Count > 0;
+    }
+
+    /// <summary>
+    /// The location of the <paramref name="ordinal"/>-th (zero-based) method named
+    /// <paramref name="name"/> declared inside an extension block of
+    /// <paramref name="type"/>, or the type's own location.
+    /// </summary>
+    private static Location? ExtensionBlockMemberLocation(
+        INamedTypeSymbol type,
+        string name,
+        int ordinal
+    ) =>
+        type.DeclaringSyntaxReferences.SelectMany(reference =>
+                reference.GetSyntax().DescendantNodes().OfType<MethodDeclarationSyntax>()
+            )
+            .Where(method =>
+                method.Identifier.ValueText == name
+                && method.Parent?.Kind().ToString() == "ExtensionBlockDeclaration"
+            )
+            .Skip(ordinal)
+            .FirstOrDefault()
+            ?.Identifier.GetLocation()
+        ?? type.Locations.FirstOrDefault();
 
     private void ReportInvalidEntryPoint(IMethodSymbol method, string message) =>
         Context.ReportDiagnostic(
@@ -3081,34 +3165,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         return false;
     }
 
-    /// <summary>
-    /// Checks if a static class contains extension methods (classic or C# 14 blocks).
-    /// </summary>
-    internal static bool HasExtensionMembers(INamedTypeSymbol type)
-    {
-        // Classic extensions
-        if (
-            type.GetMembers()
-                .OfType<IMethodSymbol>()
-                .Any(m => m.IsExtensionMethod && m.MethodKind == MethodKind.Ordinary)
-        )
-            return true;
-
-        // C# 14 extension blocks — detected via syntax
-        foreach (var syntaxRef in type.DeclaringSyntaxReferences)
-        {
-            var syntax = syntaxRef.GetSyntax();
-            if (
-                syntax
-                    .DescendantNodes()
-                    .Any(n => n.Kind().ToString() == "ExtensionBlockDeclaration")
-            )
-                return true;
-        }
-
-        return false;
-    }
-
     internal static TsAccessibility MapAccessibility(Accessibility accessibility) =>
         accessibility switch
         {
@@ -3160,6 +3216,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             if (!SymbolHelper.IsContainerless(type))
                 continue;
+
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;
 
@@ -3167,7 +3224,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
             foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
+                if (!SymbolHelper.IsExportedModuleFunction(member, TargetLanguage.TypeScript))
                     continue;
 
                 var fnName = IrToTsNamingPolicy.ToFunctionName(member);
@@ -3332,6 +3389,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         )
         {
             var originKey = type.GetCrossAssemblyOriginKey();
+
             if (crossAssemblyOrigins.TryGetValue(originKey, out var typeOrigin))
             {
                 // Stage the version hint so the import collector's
@@ -3367,9 +3425,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     ),
                     IsStringEnum: false
                 );
+
                 foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
                 {
-                    if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
+                    if (!SymbolHelper.IsExportedModuleFunction(member, TargetLanguage.TypeScript))
                         continue;
 
                     var fnName = IrToTsNamingPolicy.ToFunctionName(member);
