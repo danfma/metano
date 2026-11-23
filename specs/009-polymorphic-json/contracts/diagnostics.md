@@ -120,6 +120,7 @@ the JSON value, or reported here (FR-046, DECIDED-25).
 | The C# `required` modifier on a nullable serialized member | member | `'Req.Name' is required: System.Text.Json rejects a payload without it, the TypeScript context reads a missing nullable member as null.` |
 | `[JsonIgnore(Condition = WhenWritingNull \| WhenWritingDefault \| WhenWriting \| WhenReading)]` (the member is kept) | member | `'Flags.Note' has [JsonIgnore(Condition = WhenWritingNull)]: the TypeScript context always writes and reads it.` |
 | `[JsonConstructor]` on a constructor other than the one the factory calls | constructor | `'Pair' has [JsonConstructor] on a constructor the TypeScript context does not call: it constructs the type through its primary constructor.` |
+| A serialized member or a `[JsonSerializable]` value root whose descriptor holds a `nint` / `nuint` (directly, or as a nullable inner, element, dictionary key or value; a `[Branded]` / `[InlineWrapper]` wrapper keeps its FR-026 shape and is not reported). System.Text.Json has no converter for `IntPtr` / `UIntPtr` and throws `NotSupportedException` (#561) | member / root attribute | `'Handles.Signed' holds a nint or nuint: System.Text.Json has no converter for IntPtr / UIntPtr and throws NotSupportedException, while the TypeScript context reads and writes it as a 64-bit integer.` |
 
 Each member and type is reported once per context (a generic definition once for all its
 constructions); attributes of a member System.Text.Json does not serialize are not reported.
@@ -134,3 +135,13 @@ Not reported, because they are mirrored: `PropertyNamingPolicy`, `PropertyNameCa
 change the JSON value: `WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`,
 `DefaultBufferSize`, `GenerationMode`. `[JsonStringEnumMemberName]` only matters under a string
 enum converter, which is reported itself.
+
+## `MS0072` `JsonPropertyNameCollision` — Error
+
+Added by #442 (wave 6) from the range reserved for this group; not part of the original
+`MS0032`–`MS0037` reservation. System.Text.Json throws `InvalidOperationException` on the first use
+of a contract whose properties share a JSON name (measured on .NET 10, source-generated context).
+
+| Rule | Location | Message shape |
+|---|---|---|
+| Two properties of a contract (inherited ones included) map to the same JSON name after `[JsonPropertyName]` and the naming policy apply: `ID` / `Id` under Web, `[JsonPropertyName("name")] Label` / `Name` under Web, `FooBar` / `Foo_Bar` under snake_case. Names compare ordinally, ignoring case when the context reads names case-insensitively (`PropertyNameCaseInsensitive`, Web). A redeclaration (`override` / `new`) under the same JSON name is one property; `ID` / `Id` without a policy or case-insensitive reads do not collide | the second property | `The JSON property name for 'Coll.id' collides with another property: System.Text.Json throws InvalidOperationException for this contract. Give one of them another name with [JsonPropertyName].` |

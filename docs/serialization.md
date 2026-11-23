@@ -249,6 +249,13 @@ generic types that use it as an argument. Type arguments use the same rule, so
   yet), a collection whose element type has no spec in the context (an
   interface or a type that is not transpiled), or a closed generic whose type
   argument has no spec (`Page<System.Version>`).
+- `MS0001` (error) rejects a serialized member whose type has no spec in the
+  context for the same reasons (`object`, `KeyValuePair<,>`, tuples, types of
+  non-Metano assemblies), anywhere in its descriptor (`List<KeyValuePair<string, int>>`);
+  leave it out with `[JsonIgnore]` (#713). A member typed as a non-polymorphic
+  interface is not rejected: it claims a write-only spec (#502).
+- `MS0072` (error) reports two properties of a contract that map to the same
+  JSON name, which System.Text.Json rejects on first use (#442).
 - `MS0036` reports two types that map to one getter (a warning that drops an
   unreferenced root, an error when the losing type is referenced by another
   spec), a getter that would shadow a `SerializerContext` member (`options`,
@@ -298,11 +305,13 @@ JSON `null` at a root reads and writes as System.Text.Json does (measured on
   through its descriptor, which writes `null`.
 - Not mirrored: a value-type custom converter. .NET passes the `null` token
   to a custom converter of a value type, which decides what it reads; Metano
-  throws before any converter runs. Also, JSON `null` for an `int`, `bool`,
-  enum, branded or temporal **property, element or dictionary value** still
-  reads `null`, where .NET throws (`The JSON value could not be converted to
-  MyApp.Holder.` for a constructor-bound property, `System.Int32` for an
-  element): their descriptors carry no value-type flag.
+  throws before any converter runs (the null checks of a property, an element
+  and a dictionary value precede the custom converter lookup, #512). JSON
+  `null` for an `int`, `bool`, enum, branded, temporal or `decimal`
+  **property, element or dictionary value** throws as .NET does (#471): a
+  property names its declaring contract (`MyApp.Holder`, a `[PlainObject]`
+  contract its CLR name, #512), an element or a dictionary value its own type
+  (`System.Int32`).
 - An empty or blank text has no JSON token: `deserializeText("", …)` throws
   `The input does not contain any JSON tokens. Expected the input to start with
   a valid JSON token, when isFinalBlock is true.` for every root, as STJ does.
@@ -323,7 +332,7 @@ handles these kinds:
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
 | `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)`, or the type's `[JsonFactory]` ([below](#validating-branded-types)) |
 | `enum` | string enum | passthrough (already string) | validates against allowed values |
-| `numericEnum` | numeric enum | passthrough | validates against allowed values |
+| `numericEnum` | numeric enum | passthrough | any integer of the underlying type (`numberType`, `int` when absent), member or not, as System.Text.Json reads it (#369) |
 | `nullable` | `T \| null` | `null` passes through, else recurse | same |
 | `ref` | another spec | recursive `serialize` with target spec | recursive `deserialize` |
 
@@ -891,7 +900,8 @@ converter for `IntPtr` / `UIntPtr` (it throws `NotSupportedException` for a
 property, a root or a dictionary key; measured on .NET 10 and 11), so a payload
 for a native integer has no STJ counterpart: the contract is Metano's, and a
 rejected value names `System.Int64` / `System.UInt64` rather than the CLR
-`System.IntPtr`.
+`System.IntPtr`. Each such member and value root warns `MS0037` (#561): a
+TypeScript client can send a payload the .NET side cannot read.
 
 **Writes.** The converter writes a `bigint` through the shared exact-number
 writer (`writeExactNumber`), so `JSON.stringify` prints the exact digits,
@@ -1392,6 +1402,14 @@ export function isPoint(value: unknown): value is Point {
   `{"$type":"sq","Side":2,"Area":4}`, as System.Text.Json does. An interface
   registered as a derived type is `MS0032`; an interface without
   `[JsonDerivedType]` is still not a JSON contract (`MS0035` as a root).
+- **Non-polymorphic interface members.** A member typed as an interface without
+  `[JsonDerivedType]` claims a spec with the interface's properties and no
+  `type`, as System.Text.Json writes it: `Dashboard("t", new Gauge(5, "kg"))`
+  through `IGauge Main` writes `{"Title":"t","Main":{"Level":5}}`. Reading a
+  JSON object into it throws `NotSupportedException` `Deserialization of
+  interface or abstract types is not supported. Type
+  'SampleJsonContracts.IGauge'.`, as does reading into a non-polymorphic
+  abstract class; `null` reads as `null` (#502).
 - **Synthesized guards.** Every `[PlainObject]` type a `[JsonDerivedType]`
   registers, and every concrete `[PlainObject]` type that is itself
   polymorphic, gets an `isT` guard in its own file, built like a
@@ -1489,13 +1507,14 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 |---|---|
 | A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor); JSON `null` reads as `null` instead ([Null roots](#null-roots)) |
 | JSON `null` at a struct contract or a value-type root (`valueType: true`), or for a struct property, element or dictionary value | `The JSON value could not be converted to MyApp.SPoint.` ([Null roots](#null-roots)) |
+| JSON `null` for an `ImmutableArray<T>` (a struct) root, element or dictionary value | ``The JSON value could not be converted to System.Collections.Immutable.ImmutableArray`1[System.Int32].``; for a property the runtime names the declaring contract where STJ names the `ImmutableArray` type (#713) |
 | A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (both warn `MS0037`) |
 | An invalid base64 text, or a non-string JSON value, for a `byte[]` | `The JSON value could not be converted to System.Byte[].` (STJ names the declaring type for a constructor-bound property) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
 | A non-object JSON value (or an array) for a dictionary | `Expected object for deserialization, got array` |
 | A numeric JSON string the grammar rejects, when the context reads numbers from strings | `The JSON value could not be converted to System.Int32.` (STJ names the declaring type for a constructor-bound property) |
 | An unknown string enum value | `Invalid enum value: …` (STJ: `The JSON value could not be converted to Color.`) |
-| An unknown numeric enum value | `Invalid numeric enum value: …` — a divergence: STJ reads any number (`7` reads as `(Color)7`) |
+| A numeric enum value that is not an integer of the underlying type (`1.5`, `300` for a `byte` enum, a string) | `The JSON value could not be converted to MyApp.Color.`; any integer in range reads, member or not (`7` reads as `(Color)7`, a `[Flags]` combination as itself), as System.Text.Json reads it (#369) |
 | More than 64 nested containers on read | `The maximum configured depth of 64 has been exceeded. Cannot read next JSON object.` (`… JSON array.` for an array) |
 | More than 64 nested containers on write, or an object cycle | `A possible object cycle was detected. This can either be due to a cycle or if the object depth is larger than the maximum allowed depth of 64. Consider using ReferenceHandler.Preserve on JsonSerializerOptions to support cycles.` |
 
@@ -1595,7 +1614,13 @@ the text are gone:
   Temporal strings, which .NET does not read, and vice versa;
 - `[StringEnum]` values are strings, where .NET writes numbers without
   `JsonStringEnumConverter`;
-- `Dictionary<int, …>` keys come out in JS order (integer-like keys first);
+- dictionary keys that are array indices (`"0"` to `"4294967294"`, of any
+  integer, enum or string key type) come out in JS order, before every other
+  key, and so does a dictionary read and written back: `{"18446744073709551615":null,"1":-1}`
+  round-trips as `{"1":-1,"18446744073709551615":null}` (#562; the texts stay
+  mutually readable, row V17). A JS object cannot hold such keys in insertion
+  order, and writing ordered entries would need a writer that does not build
+  the tree `JSON.stringify` prints;
   `Stack<T>` is written in array order;
 - `double` dictionary keys print as `String()` prints them (`1e+21`, `0` for
   `-0`; .NET: `1E+21`, `-0`), a `NaN` key is written (.NET throws), a

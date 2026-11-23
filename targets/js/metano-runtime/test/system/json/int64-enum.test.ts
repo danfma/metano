@@ -6,7 +6,7 @@ import { JsonException } from "#/system/json/errors.ts";
 // A 64-bit enum (`enum E : long` / `ulong`) holds `bigint` values (spec 011
 // FR-044 / FR-051 as amended by #701): its numeric enum descriptor names the
 // underlying type, so the converter writes and reads exact digits through the
-// int64 path, then checks membership (#369). Expected texts were measured on
+// int64 path; any value of the underlying type reads, declared or not (#369). Expected texts were measured on
 // .NET 10 (System.Text.Json): `{"W":1099511627777,"B":18446744073709551615}`,
 // and a `Dictionary<B, int>` reads the key "9223372036854775809" exactly.
 
@@ -50,10 +50,8 @@ describe("64-bit numeric enums", () => {
     expect(JsonSerializer.deserialize(1099511627777, root(WIDE))).toBe(Wide.Both);
   });
 
-  test("reject an undeclared value, as every numeric enum does (#369)", () => {
-    expect(() => JsonSerializer.deserializeText("7", root(WIDE))).toThrow(
-      "Invalid numeric enum value: 7. Expected one of: 0, 1, 1099511627776, 1099511627777",
-    );
+  test("read an undeclared value, as System.Text.Json does (#369)", () => {
+    expect(JsonSerializer.deserializeText("7", root(WIDE))).toBe(7n);
   });
 
   test("reject a value outside the underlying type", () => {
