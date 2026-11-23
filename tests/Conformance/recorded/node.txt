@@ -53,7 +53,6 @@ DefaultProbes.optional THROWS TypeError: Cannot read properties of undefined (re
 DefaultProbes.optionalGeneric = null|null|null|null
 DefaultProbes.structParam THROWS TypeError: Cannot read properties of undefined (reading 'x')
 DefaultProbes.structs THROWS TypeError: Cannot read properties of undefined (reading 'x')
-DefaultProbes.tuples THROWS TypeError: Cannot read properties of undefined (reading '0')
 DynamicProbes.asDynamicRenamedMember = null
 DynamicProbes.integerDivision = 3.5
 DynamicProbes.metanoMemberName = null

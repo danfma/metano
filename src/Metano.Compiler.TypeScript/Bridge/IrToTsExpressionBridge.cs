@@ -493,16 +493,36 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// A C# tuple is a positional JS array. An array literal infers an array
     /// of the element union, so the literal is asserted to its tuple type to
-    /// keep per-position types.
+    /// keep per-position types. A <c>null</c> element at a position the
+    /// tuple type declares non-nullable (a reference element of an oblivious
+    /// or <c>default</c> tuple, <c>(0, null)</c> as <c>(int, string)</c>) is
+    /// asserted <c>null!</c>, since <c>null</c> is not comparable to it.
     /// </summary>
     private static TsExpression MapTupleLiteral(IrTupleLiteral tuple, IrToTsBridgeContext context)
     {
-        var array = new TsArrayLiteral(tuple.Elements.Select(e => Map(e, context)).ToList());
+        var array = new TsArrayLiteral(
+            tuple
+                .Elements.Select(
+                    (element, index) => Map(AssertedTupleElement(tuple, element, index), context)
+                )
+                .ToList()
+        );
 
         return tuple.Type is { } type
             ? new TsCastExpression(array, IrToTsTypeMapper.Map(type))
             : array;
     }
+
+    private static IrExpression AssertedTupleElement(
+        IrTupleLiteral tuple,
+        IrExpression element,
+        int index
+    ) =>
+        element is IrLiteral { Kind: IrLiteralKind.Null }
+        && tuple.Type?.Elements.ElementAtOrDefault(index) is { } elementType
+        && elementType is not IrNullableTypeRef
+            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, element, IsPrefix: false)
+            : element;
 
     /// <summary>
     /// A C# tuple lowers to a positional array, where a nested tuple and a C#

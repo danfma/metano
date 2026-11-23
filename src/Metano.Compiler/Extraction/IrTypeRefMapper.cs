@@ -135,7 +135,7 @@ public static class IrTypeRefMapper
             }
 
             // BigInteger
-            if (fullName == "System.Numerics.BigInteger")
+            if (named.IsBigInteger())
                 return new IrPrimitiveTypeRef(IrPrimitive.BigInteger);
 
             // Date/time types

@@ -1990,37 +1990,30 @@ public sealed partial class IrExpressionExtractor
     /// inferred at the call site. C#'s implicit conversions — `100` in a
     /// `decimal` context, `150` in a `BigInteger` context — carry through the
     /// `ConvertedType`, and the backend needs that info to pick the right
-    /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>).
-    /// Mirrors the legacy <see cref="Metano.Compiler.TypeScript.Transformation.LiteralHandler"/>
-    /// shape so the IR path produces matching output.
+    /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>): those
+    /// two carry their digits through <see cref="ConstantLiteralOfKind"/>; a
+    /// literal in any other slot keeps its own kind (a 64-bit slot folds
+    /// before, in <see cref="FoldedInt64Constant"/>).
     /// </summary>
     private IrLiteral ClassifyNumericInContext(LiteralExpressionSyntax lit, object? value) =>
-        ClassifyNumericForConvertedType(
-            lit.Token.ValueText,
-            value,
-            _semantic.GetTypeInfo(lit).ConvertedType
-        );
+        value is null
+            ? ClassifyNumeric(value)
+            : ConstantLiteralOfKind(
+                value,
+                DigitCarryingTarget(_semantic.GetTypeInfo(lit).ConvertedType)
+            );
 
     /// <summary>
-    /// A numeric constant in the representation its converted type needs:
-    /// <c>decimal</c> and <c>BigInteger</c> carry <paramref name="digits"/>
-    /// (precision-preserving text), every other type the
-    /// <see cref="ClassifyNumeric">classified</see> <paramref name="value"/>.
+    /// The endpoint of <paramref name="convertedType"/>, nullable or not, when
+    /// it is <c>decimal</c> or <c>BigInteger</c>: a literal in a
+    /// <c>decimal?</c> slot (<c>decimal? d = 5</c>) is a decimal value too,
+    /// since no conversion node follows a literal (#606).
     /// </summary>
-    private static IrLiteral ClassifyNumericForConvertedType(
-        string digits,
-        object? value,
-        ITypeSymbol? convertedType
-    )
-    {
-        if (convertedType?.SpecialType == SpecialType.System_Decimal)
-            return new IrLiteral(digits, IrLiteralKind.Decimal);
-
-        if (convertedType.IsBigInteger())
-            return new IrLiteral(digits, IrLiteralKind.BigInteger);
-
-        return ClassifyNumeric(value);
-    }
+    private static IrNumericEndpoint? DigitCarryingTarget(ITypeSymbol? convertedType) =>
+        NumericEndpoints.Of(convertedType)
+            is { Kind: IrNumericKind.Decimal or IrNumericKind.BigInteger, IsEnum: false } endpoint
+            ? endpoint
+            : null;
 
     private static IrLiteral ClassifyNumeric(object? value) =>
         value switch
@@ -5927,9 +5920,9 @@ public sealed partial class IrExpressionExtractor
     /// integer or a <c>BigInteger</c>, spec 012 FR-003, FR-074, and a
     /// <c>decimal</c> read as a <c>double</c> or <c>float</c>); a constant one
     /// folds. A <c>decimal</c> to a 32-bit or narrower integer also becomes a
-    /// numeric conversion, truncating and checking in every context; Dart keeps
-    /// its legacy <c>expr.trunc().toNumber()</c> fallback below. All other casts
-    /// collapse to the inner expression.
+    /// numeric conversion, truncating and checking in every context, which
+    /// each target renders (#604). All other casts collapse to the inner
+    /// expression.
     /// </summary>
     private IrExpression ExtractCast(CastExpressionSyntax cast)
     {
@@ -5984,23 +5977,6 @@ public sealed partial class IrExpressionExtractor
 
         if (ExplicitTupleConversion(cast, inner, sourceType, targetType) is { } tuple)
             return tuple;
-
-        var truncatesDecimal =
-            sourceType.SpecialType == SpecialType.System_Decimal
-            && targetType.SpecialType
-                is SpecialType.System_Int16
-                    or SpecialType.System_Int32
-                    or SpecialType.System_UInt16
-                    or SpecialType.System_UInt32
-                    or SpecialType.System_Byte
-                    or SpecialType.System_SByte;
-
-        if (truncatesDecimal)
-        {
-            var integral = new IrCallExpression(new IrMemberAccess(inner, "trunc"), []);
-
-            return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
-        }
 
         if (ExplicitBoxOf(cast, inner, sourceType, targetType) is { } box)
             inner = box;

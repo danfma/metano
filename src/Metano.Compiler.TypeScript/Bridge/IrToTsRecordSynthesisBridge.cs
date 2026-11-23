@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
@@ -378,7 +379,11 @@ public static class IrToTsRecordSynthesisBridge
             body.Add(AddToHash(SuperCall(superMember)));
 
         foreach (var field in fields)
-            body.Add(AddToHash(new TsPropertyAccess(new TsIdentifier("this"), field.Name)));
+        {
+            var value = new TsPropertyAccess(new TsIdentifier("this"), field.Name);
+
+            body.AddRange(HashAdditions(value, field.Type));
+        }
 
         body.Add(
             new TsReturnStatement(
@@ -388,6 +393,31 @@ public static class IrToTsRecordSynthesisBridge
 
         return new TsMethodMember(HashCodeMethodName, [], new TsNumberType(), body);
     }
+
+    /// <summary>
+    /// The <c>hc.add</c> calls of one member: a (non-nullable) tuple adds
+    /// each element, recursing into nested tuples, since the runtime cannot
+    /// tell a tuple from a C# array, which hashes by reference (#403); any
+    /// other member adds itself. The reads are optional (<c>?.[0]</c>): a
+    /// struct's unrepresentable default leaves a tuple member undefined.
+    /// </summary>
+    private static IEnumerable<TsExpressionStatement> HashAdditions(
+        TsExpression value,
+        IrTypeRef type
+    ) =>
+        type is IrTupleTypeRef tuple
+            ? tuple.Elements.SelectMany(
+                (element, index) =>
+                    HashAdditions(
+                        new TsElementAccess(
+                            value,
+                            new TsLiteral(index.ToString(CultureInfo.InvariantCulture)),
+                            Optional: true
+                        ),
+                        element
+                    )
+            )
+            : [AddToHash(value)];
 
     private static TsExpressionStatement AddToHash(TsExpression value) =>
         new(new TsCallExpression(new TsPropertyAccess(new TsIdentifier("hc"), "add"), [value]));

@@ -47,7 +47,6 @@ DefaultProbes.optional THROWS TypeError: undefined is not an object (evaluating 
 DefaultProbes.optionalGeneric = null|null|null|null
 DefaultProbes.structParam THROWS TypeError: undefined is not an object (evaluating 'r.x')
 DefaultProbes.structs THROWS TypeError: undefined is not an object (evaluating '(void 0).x')
-DefaultProbes.tuples THROWS TypeError: undefined is not an object (evaluating '(void 0)[0]')
 DynamicProbes.asDynamicRenamedMember = null
 DynamicProbes.integerDivision = 3.5
 DynamicProbes.metanoMemberName = null
