@@ -2398,7 +2398,31 @@ public static partial class IrToTsExpressionBridge
         )
             return mapped;
 
-        if (ne.IsStructDefault)
+        if (
+            ne.IsStructDefault
+            || (
+                args.Count == 0
+                && ne.Overload is null
+                && ne.Type
+                    is IrNamedTypeRef
+                    {
+                        Origin: null,
+                        TypeArguments: null or { Count: 0 },
+                        Semantics:
+                        {
+                            IsValueType: true,
+                            IsTranspilable: true,
+                            IsExternal: false,
+                            IsIgnored: false,
+                            IsPlainObject: false,
+                            IsJsTuple: false,
+                            HasExplicitParameterlessCtor: false,
+                            Kind: not IrNamedTypeKind.Branded,
+                        },
+                    } nonGenericStruct
+                && context.RuntimeTypes.Reaches(nonGenericStruct.SupertypeKey)
+            )
+        )
         {
             IReadOnlyList<TsExpression> defaultArgs = ne.ReifiedTypeArguments
                 is { Count: > 0 } reified

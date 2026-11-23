@@ -548,6 +548,9 @@ public class ReifiedTypeParameterTests
         await Assert
             .That(ctorTs)
             .Contains("Object.assign(Object.create(CtorStruct.prototype), { x: 0 })");
+
+        await Assert.That(ctorTs).Contains("default: () => CtorStruct.$default(),");
+        await Assert.That(ctorTs).Contains("create: () => new CtorStruct(),");
     }
 
     [Test]
@@ -708,5 +711,121 @@ public class ReifiedTypeParameterTests
         );
 
         await Assert.That(ir.ReifiedTypeAnalysis.IsEnabled).IsFalse();
+    }
+
+    [Test]
+    public async Task NestedGenericStructField_RoutesThroughNestedDefaultWithResolvedArgs()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public struct Inner<T>
+            {
+                public int Tag;
+                public bool Is(object o) => o is T;
+            }
+
+            [Transpile]
+            public struct Outer<T>
+            {
+                public Inner<T> G;
+                public Inner<int> G2;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static bool Run()
+                {
+                    Outer<long> o = default;
+                    return o.G.Is(1L) && !o.G.Is(1);
+                }
+            }
+            """
+        );
+
+        var outerTs = files["app/outer.ts"];
+        await Assert.That(outerTs).Contains("Inner.$default<T>([($typeArgs?.[0] ?? UnknownType)])");
+        await Assert.That(outerTs).Contains("Inner.$default<number>([Int32Type])");
+    }
+
+    [Test]
+    public async Task StructWithOverloadedAndParameterlessCtor_CreateUsesParameterlessSelector()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public struct OverStruct<T>
+            {
+                public int X;
+                public OverStruct() { X = 5; }
+                public OverStruct(int x) { X = x; }
+                public bool Is(object o) => o is T;
+            }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static T Make<T>() where T : new() => new T();
+                public static object Run() => Make<OverStruct<int>>();
+            }
+            """
+        );
+
+        var ts = files["app/over-struct.ts"];
+        await Assert.That(ts).Contains("default: (typeArguments) => OverStruct.$default(");
+
+        await Assert
+            .That(ts)
+            .Contains(
+                "create: (typeArguments) => new OverStruct(OverStruct.byOverStructDefault, typeArguments as"
+            );
+    }
+
+    [Test]
+    public async Task NonGenericStructDefaultAndNew_LowerToDefaultWhenStructHasZeroFactory()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public struct Inner { public int X; }
+
+            [Transpile]
+            public struct Outer { public Inner F; }
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Probes
+            {
+                public static int Run()
+                {
+                    _ = typeof(Outer);
+                    Outer d1 = default;
+                    var d2 = default(Outer);
+                    var d3 = new Outer();
+                    return d1.F.X + d2.F.X + d3.F.X;
+                }
+            }
+            """
+        );
+
+        var ts = files["app/probes.ts"];
+        await Assert.That(ts).Contains("const d1 = Outer.$default();");
+        await Assert.That(ts).Contains("const d2 = Outer.$default();");
+        await Assert.That(ts).Contains("const d3 = Outer.$default();");
     }
 }

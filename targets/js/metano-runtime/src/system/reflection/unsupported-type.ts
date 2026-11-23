@@ -19,7 +19,10 @@ export function unsupportedType(fullName: string): RuntimeType<never> {
       name: fullName,
       fullName,
       namespace: "",
-      test: (_value: unknown): _value is never => {
+      test: (value: unknown): value is never => {
+        if (value === null || value === undefined) {
+          return false;
+        }
         throw new NotSupportedException(
           `Runtime type descriptor is not available for '${fullName}'.`,
         );

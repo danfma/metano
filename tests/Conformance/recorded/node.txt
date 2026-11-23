@@ -67,9 +67,6 @@ InteropProbes.inlineCodeHoles = 42
 InteropProbes.inlineCodeStatement = 5
 InteropProbes.unsafeCastWrong = cast
 LazyDirectProbes.baseModuleFirst LOADFAIL file://<conformance>/.work/probes/dist/conformance/lazy-barrel/lz-square.js:3
-LazyFieldProbes.structDefaultDoesNotTrigger = start,cctor,ctor,default,get=undefined,ctor,v=3
-LazyStructProbes.paramsConstructorWithoutArguments = start,cctor,W=7:n=0
-LazyStructProbes.paramsConstructorWithoutArgumentsNoStaticConstructor = W=7:n=0
 LinqProbes.decimalLambda = 3|5.5|3.5|1|7|1.5|2|6|0.875
 LinqProbes.intOverflowSum THROWS ReferenceError: Int32 is not defined
 LinqProbes.minMaxDecimal = 0.5|2|1.5|10|13.75|4.5833333333333333333333333333|24.25|4|1.3333333333333333333333333333
@@ -117,5 +114,4 @@ StringProbes.trimSpecial = [x][1]
 TextProbes.floatMath = 0.3|0.10000000149011612|F|0.3|0.1|0.3
 TextProbes.generic = <True>TrueTrue<1E-07>1E-071E-07<0.10000000149011612>0.100000001490116120.10000000149011612<1>11<>
 TextProbes.recordToString = [object Object]
-Wave5Fix1Probes.explicitCtorStructNewT = 0
 Wave5Fix1Probes.undescribableReifiedArgumentsThrow = NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException

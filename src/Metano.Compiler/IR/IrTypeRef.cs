@@ -217,6 +217,12 @@ public sealed record IrNamedTypeSemantics(
     /// range a runtime test of the enum checks; <c>null</c> for every other kind.
     /// </summary>
     public IrNumericKind? EnumUnderlyingKind { get; init; }
+
+    /// <summary>
+    /// Whether a transpiled struct with a runtime class declares an explicit
+    /// parameterless constructor (rather than only the C# implicit one).
+    /// </summary>
+    public bool HasExplicitParameterlessCtor { get; init; }
 }
 
 /// <summary>

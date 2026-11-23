@@ -528,7 +528,10 @@ public static class IrTypeRefMapper
                 HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target),
                 StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target),
                 Supertypes: SupertypesOf(named, target)
-            );
+            )
+            {
+                HasExplicitParameterlessCtor = HasExplicitParameterlessCtor(named, target),
+            };
 
         if (named.TypeKind == TypeKind.Struct)
             return new IrNamedTypeSemantics(
@@ -545,7 +548,10 @@ public static class IrTypeRefMapper
                 HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target),
                 StructuralEqualityLeaves: StructuralEqualityLeavesOf(named, target),
                 Supertypes: SupertypesOf(named, target)
-            );
+            )
+            {
+                HasExplicitParameterlessCtor = HasExplicitParameterlessCtor(named, target),
+            };
 
         if (named.TypeKind == TypeKind.Class)
             return new IrNamedTypeSemantics(
@@ -650,6 +656,15 @@ public static class IrTypeRefMapper
         IsStructWithRuntimeClass(named, target)
         && IrConstructorExtractor.IsDispatchedSet(named)
         && !IrConstructorExtractor
+            .AllExplicitConstructors(named)
+            .Any(ctor => ctor.Parameters.IsEmpty);
+
+    private static bool HasExplicitParameterlessCtor(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        IsStructWithRuntimeClass(named, target)
+        && IrConstructorExtractor
             .AllExplicitConstructors(named)
             .Any(ctor => ctor.Parameters.IsEmpty);
 

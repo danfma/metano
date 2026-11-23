@@ -1498,8 +1498,41 @@ internal sealed class IrToTsClassEmitter(
                 && symbolType is INamedTypeSymbol nestedStruct
             )
             {
-                var nestedIr = IrClassExtractor.Extract(nestedStruct, _context.Extraction);
                 var nestedRef = IrToTsRuntimeTypeReferences.ClassReference(named);
+
+                if (
+                    named.TypeArguments is { Count: > 0 } typeArgs
+                    && _context.ReifiedTypeAnalysis.TypeArgumentSlotOf(
+                        nestedStruct.OriginalDefinition
+                    )
+                        is not null
+                )
+                {
+                    var scope = slotTypeParameters is not null
+                        ? TsTypeParameterScope.ForCtorParam([
+                            .. slotTypeParameters.Select(tp => tp.Name),
+                        ])
+                        : null;
+
+                    var resolvedArgs = typeArgs
+                        .Select(arg =>
+                            IrToTsRuntimeTypeReferences.ReifiedArgumentOf(
+                                arg,
+                                "struct zero factory",
+                                _context.RuntimeTypes,
+                                scope
+                            )
+                        )
+                        .ToList();
+
+                    return new TsCallExpression(
+                        new TsPropertyAccess(nestedRef, "$default"),
+                        [new TsArrayLiteral(resolvedArgs)],
+                        TypeArguments: typeArgs.Select(a => IrToTsTypeMapper.Map(a)).ToList()
+                    );
+                }
+
+                var nestedIr = IrClassExtractor.Extract(nestedStruct, _context.Extraction);
                 return BuildStructZeroObjectLiteral(nestedStruct, nestedIr, nestedRef, null);
             }
         }

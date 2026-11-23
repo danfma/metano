@@ -143,6 +143,45 @@ public sealed class ReifiedTypeParameterAnalysis
                 }
                 else if (member is IPropertySymbol or IFieldSymbol)
                 {
+                    if (
+                        type.IsValueType
+                        && member is IFieldSymbol { IsStatic: false, IsConst: false } field
+                        && field.Type
+                            is INamedTypeSymbol
+                            {
+                                IsValueType: true,
+                                TypeArguments.Length: > 0,
+                            } fieldStruct
+                    )
+                    {
+                        _newEdges.Add(
+                            new NewEdge(
+                                type,
+                                fieldStruct,
+                                field.Locations.FirstOrDefault() ?? Location.None
+                            )
+                        );
+                    }
+                    else if (
+                        type.IsValueType
+                        && member is IPropertySymbol { IsStatic: false } prop
+                        && prop.Type
+                            is INamedTypeSymbol
+                            {
+                                IsValueType: true,
+                                TypeArguments.Length: > 0,
+                            } propStruct
+                    )
+                    {
+                        _newEdges.Add(
+                            new NewEdge(
+                                type,
+                                propStruct,
+                                prop.Locations.FirstOrDefault() ?? Location.None
+                            )
+                        );
+                    }
+
                     ScanMemberSyntax(member);
                 }
             }
