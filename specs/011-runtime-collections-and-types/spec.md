@@ -711,3 +711,12 @@ Each had a recommendation; **the maintainer decided every one on 2026-11-02** an
 - #369: the numeric-enum JSON converter rejects `[Flags]` combinations (009 interaction table).
 - #291 (`default(T)`), #296 (role-bound constructor mappings), #173 (Dart BCL surface), #175 (Dart exceptions): touched by FR-013 / FR-024 / FR-038; each keeps its issue.
 - ADR-0027 (this PR) records the core decision; `0026` stays reserved by spec 010's plan (first reservation wins).
+
+## Wave 6 notes (3.0.x fixes)
+
+Behaviour fixed after 3.0.0 against .NET 10; no requirement changes.
+
+- **Sorting and searching (#663, #664).** `Array.Sort` (all overloads but index ranges) and `MemoryExtensions.Sort` lower to `sortArray` / `sortArrayByKeys`; `Array.IndexOf` / `LastIndexOf` and span `Contains` / `IndexOf` / `LastIndexOf` lower to `arrayIndexOf` / `arrayLastIndexOf` / `arrayContains` with value equality. A record still has no `toString` (needs design).
+- **Comparers and casts (#687, #710).** `StringComparer.Ordinal` / `OrdinalIgnoreCase` are runtime singletons; LINQ `Distinct(comparer)` is supported. A cast of a set, queue or dictionary to `IList<T>` passes through (known gap `asListCast`); `-0` dictionary keys and `list.Equals` stay known gaps.
+- **LINQ and members (#617, #686, #584).** `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `StringBuilder`, `Lazy<T>`, `TaskCompletionSource<T>` and `KeyValuePair.Create` are mapped; `ElementAt(Index)` reports `MS0001`. The static LINQ form (#619) and the fluent-mapping removal (#657 items 1-3) were already shipped.
+- **Open (needs design).** `ReadOnlyDictionary` / `FrozenDictionary` runtime classes (#416); unmapped instance-member reporting (#358).

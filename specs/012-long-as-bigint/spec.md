@@ -477,3 +477,13 @@ Each question has a recommendation; the plan proceeds with the recommendation un
 - #457 for FR-053 (slice 012h only).
 - #458 (merged): `exact-json-number.ts`.
 - Spec 009 FR-048 (merged): numbers read from strings.
+
+## Wave 6 notes (3.0.x fixes)
+
+Behaviour fixed after 3.0.0; no requirement changes.
+
+- **FR-008 (#640).** An element of an explicitly cast tuple literal folds in its own type, then its explicit conversion node wraps or truncates (`unchecked(((long, long))(ulong.MaxValue, x))` → `BigInt.asIntN(64, 18446744073709551615n)`, `((long, long))(2.7, x)` → `int64FromDouble(2.7)`). Before, the compiler crashed or rounded.
+- **FR-010 (#630).** Every nullable element of an explicit tuple cast whose target is non-nullable unwraps with the .NET `InvalidOperationException`, including an element with no numeric conversion and a nullable nested tuple. A source that is not a plain name (a property getter) is read once. Dart keeps the tuple as it is (open).
+- **#604.** `decimal` to a narrow integer: the core emits an `IrNumericConversion` for every target (TypeScript `narrowFromDecimal(d, 32, true)`); Dart prints the cast (`d as int`, documented decimal gap). The nullable `BigInteger` increment steps by `1n`.
+- **#606.** A literal in a nullable `decimal` / `BigInteger` slot converts (`decimal? d = 5` → `new Decimal("5")`, `BigInteger? b = 7` → `7n`).
+- **BCL (#686, #403).** `BigInteger.Zero/One/MinusOne/IsZero/IsOne/IsEven`, `Convert.ToDouble`, `decimal.ToDouble` and `int.CompareTo` are mapped. Open: `(decimal)double` emits the raw double (needs a runtime helper: .NET rounds to 15 significant digits and throws on NaN / overflow); `nint` / `nuint` members that `long` / `ulong` have need design (#560).
