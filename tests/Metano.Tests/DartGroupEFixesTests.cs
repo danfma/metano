@@ -239,6 +239,129 @@ public class DartGroupEFixesTests
         await DartToolchain.AssertAnalyzesAsync(files);
     }
 
+    [Test]
+    public async Task BaseConstructorCall_ReorderedNamedArgs_ReportsMs0001_572()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Tk
+            {
+                public static int Tr(int n) => n;
+            }
+
+            [Transpile]
+            public class BaseCtor
+            {
+                public int V;
+                public BaseCtor(int a, int b) => V = a * 10 + b;
+            }
+
+            [Transpile]
+            public class DerivedCtor : BaseCtor
+            {
+                public DerivedCtor() : base(b: Tk.Tr(2), a: Tk.Tr(1)) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
+    }
+
+    [Test]
+    public async Task BaseConstructorCall_OpaqueDefault_ReportsMs0001_572()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class BaseOpt
+            {
+                public ulong? A;
+                public int B;
+                public BaseOpt(ulong? a = 10, int b = 0)
+                {
+                    A = a;
+                    B = b;
+                }
+            }
+
+            [Transpile]
+            public class DerivedOpt : BaseOpt
+            {
+                public DerivedOpt() : base(b: 1) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
+    }
+
+    [Test]
+    public async Task ThisConstructorChain_OpaqueDefault_ReportsMs0001_572()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class ChainOpt
+            {
+                public System.DateTime Dt;
+                public int B;
+                public ChainOpt(System.DateTime dt = default, int b = 0)
+                {
+                    Dt = dt;
+                    B = b;
+                }
+
+                public ChainOpt(string tag, int b) : this(b: b) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
+    }
+
+    [Test]
+    public async Task SuperConstructorCall_ExecutesInDart_572()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class BaseItem
+            {
+                public int Value;
+                public BaseItem(int x) => Value = x;
+                public BaseItem(string label) => Value = label.Length;
+            }
+
+            [Transpile]
+            public class DerivedItem : BaseItem
+            {
+                public DerivedItem(int x) : base(x) { }
+                public DerivedItem(string label) : base(label) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        var output = await DartToolchain.AnalyzeAndRunAsync(
+            files,
+            """
+            import 'derived_item.dart';
+
+            void main() {
+              var a = DerivedItem.fromX(7);
+              var b = DerivedItem.fromLabel('hello');
+              if (a.value != 7 || b.value != 5) {
+                throw StateError('Unexpected values: ${a.value}, ${b.value}');
+              }
+              print('OK');
+            }
+            """
+        );
+        await Assert.That(output).IsEqualTo("OK");
+    }
+
     private static Dictionary<string, string> TranspileTrees(IReadOnlyList<string> sources)
     {
         var trees = sources

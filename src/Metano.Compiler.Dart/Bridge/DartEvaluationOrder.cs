@@ -154,7 +154,7 @@ internal static class DartEvaluationOrder
         return true;
     }
 
-    private static void ReportIfOpaqueDefault(IReadOnlyList<IrArgument> arguments)
+    internal static void ReportIfOpaqueDefault(IReadOnlyList<IrArgument> arguments)
     {
         if (arguments.Any(arg => arg.Value is IrLiteral { Kind: IrLiteralKind.Default }))
         {

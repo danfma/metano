@@ -1,4 +1,6 @@
 using Metano.Compiler.Dart.AST;
+using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 
 namespace Metano.Compiler.Dart.Bridge;
@@ -151,6 +153,22 @@ internal static class DartConstructorsBridge
 
         if (superName is null && !hasArgs)
             return null;
+
+        if (ctor.BaseArguments is not null)
+            DartEvaluationOrder.ReportIfOpaqueDefault(ctor.BaseArguments);
+
+        if ((ctor.BaseOverload?.EvaluationOrder ?? ctor.BaseEvaluationOrder) is not null)
+        {
+            ExtractionDiagnostics.Report(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.UnsupportedFeature,
+                    "Named arguments out of parameter order with more than one evaluation that "
+                        + "C# runs in written order are not supported in a Dart super constructor "
+                        + "call (spec 013 FR-017)."
+                )
+            );
+        }
 
         var args = (ctor.BaseArguments ?? [])
             .Select(arg => arg with { Value = rewriter.Rewrite(arg.Value)! })
