@@ -118,17 +118,57 @@ internal static class IrParameterNaming
             )
                 continue;
 
-            var calleeName = OverloadEmittedName.NameOverrideOf(callee, policy)
-                ?? SymbolHelper.ToCamelCase(callee.Name);
-
-            colliding.UnionWith(
-                parametersByEmittedName[calleeName].Select(parameter => parameter.Name)
-            );
+            foreach (var calleeName in CalledNamesOf(callee, policy))
+            {
+                colliding.UnionWith(
+                    parametersByEmittedName[calleeName].Select(parameter => parameter.Name)
+                );
+            }
         }
 
         return colliding;
     }
 
+    /// <summary>
+    /// The names a flattened call to <paramref name="callee"/> may spell: its own name
+    /// and, for an overload of a dispatched group, the fast path a bound call emits
+    /// instead (spec 013 slice 013e, #578) — the dispatcher's name plus the overload's
+    /// suffix. A fast path the barrel claim pass renamed (MS0067) ends in <c>$</c>,
+    /// which no C# parameter can spell.
+    /// </summary>
+    private static IEnumerable<string> CalledNamesOf(
+        IMethodSymbol callee,
+        OverloadGroupingPolicy policy
+    )
+    {
+        var name = OverloadEmittedName.NameOverrideOf(callee, policy)
+            ?? SymbolHelper.ToCamelCase(callee.Name);
+
+        yield return name;
+
+        var definition = callee.OriginalDefinition;
+
+        if (
+            MethodOverloadGroups.GroupOf(definition, policy) is { IsDispatched: true } group
+            && group.MemberOf(definition) is { } member
+        )
+        {
+            var suffixes = MethodOverloadGroups.SuffixesOf(
+                definition.ContainingType,
+                group,
+                policy
+            );
+
+            yield return name + suffixes[member];
+        }
+    }
+
+    /// <summary>
+    /// Whether a call to <paramref name="callee"/> may lower to its bare function name:
+    /// a static method of a containerless class, or of an extension container, which
+    /// a target may emit as a module too (#554).
+    /// </summary>
     private static bool IsFlattened(IMethodSymbol callee) =>
-        callee is { IsStatic: true } && callee.ContainingType.IsContainerless();
+        callee is { IsStatic: true, ContainingType: { } owner }
+        && (owner.IsContainerless() || (owner.IsStatic && owner.HasExtensionMembers()));
 }
