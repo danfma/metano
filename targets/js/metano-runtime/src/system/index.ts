@@ -33,3 +33,8 @@ export * from "./array-length.ts";
 export * from "./argument-guards.ts";
 export * from "./reflection/index.ts";
 export * from "./dynamic-conversion.ts";
+export * from "./number-members.ts";
+export * from "./char-members.ts";
+export * from "./string-builder.ts";
+export * from "./lazy.ts";
+export * from "./task-completion-source.ts";
