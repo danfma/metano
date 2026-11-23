@@ -41,7 +41,9 @@ public sealed partial class IrExpressionExtractor
             !IsMapTarget(target)
             && StageCollectionOf(target) is not { Kind: IrCollectionKind.ImmutableDictionary }
         )
-            return ListLiteralOf(coll, operation);
+            return IsListShapedTarget(target)
+                ? ListLiteralOf(coll, operation)
+                : ReportUnmodeledTarget(coll, target);
 
         if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(operation))
             return ReportUnsupported(
@@ -57,6 +59,41 @@ public sealed partial class IrExpressionExtractor
 
         return NewCollectionOf(mapType, coll);
     }
+
+    /// <summary>
+    /// Whether a list-shaped literal is what C# builds for
+    /// <paramref name="target"/>: a type the type mapper maps to a native
+    /// array or an iterable (<c>IEnumerable&lt;T&gt;</c>, <c>JsArray&lt;T&gt;</c>),
+    /// a span, or a collection whose construction from a
+    /// literal is modelled (<see cref="TargetCollectionOf"/>). Any other type
+    /// is built through a collection builder or an <c>Add</c> the lowering does
+    /// not reproduce (<c>ImmutableSortedSet</c>, <c>FrozenSet</c>,
+    /// <c>ImmutableQueue</c>, a user collection type), so a bare literal would
+    /// be the wrong value (#581).
+    /// </summary>
+    private bool IsListShapedTarget(INamedTypeSymbol target) =>
+        IsSpan(target)
+        || IrTypeRefMapper.Map(target, _originResolver, _target)
+            is IrArrayTypeRef
+                or IrIterableTypeRef
+        || TargetCollectionOf(target) is not null;
+
+    private static bool IsSpan(INamedTypeSymbol type) =>
+        type.ContainingType is null
+        && type.ContainingNamespace?.ToDisplayString() == "System"
+        && type.MetadataName is "Span`1" or "ReadOnlySpan`1";
+
+    private IrExpression ReportUnmodeledTarget(
+        CollectionExpressionSyntax coll,
+        INamedTypeSymbol target
+    ) =>
+        ReportUnsupported(
+            coll,
+            coll.Kind().ToString(),
+            $"Collection expression '{coll}' builds '{target.ToDisplayString()}', whose "
+                + "construction from a collection expression the transpiler does not model; a "
+                + "plain array would stand in for it. Build the collection explicitly instead."
+        );
 
     /// <summary>
     /// The array literal of a list or array target, with the element type the
