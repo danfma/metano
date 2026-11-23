@@ -57,15 +57,20 @@ public static class IrToTsPlainObjectBridge
 
         properties.AddRange(DataProperties(ir, properties));
 
+        var typeParameters = IrToTsClassBridge.BuildTypeParameters(ir);
+
         sink.Add(
             new TsInterface(
                 tsName,
                 properties,
+                TypeParameters: typeParameters,
                 Extends: IrToTsClassBridge.ConvertHeritageList(
                     IrToTsIterationProtocolBridge.PlainObjectInterfaces(ir)
                 )
             )
         );
+
+        var self = new PlainObjectSelf(tsName, typeParameters);
 
         if (ir.Members is { Count: > 0 } members)
         {
@@ -74,7 +79,7 @@ public static class IrToTsPlainObjectBridge
                 switch (member)
                 {
                     case IrMethodDeclaration method when !method.IsStatic:
-                        EmitInstanceMethod(method, tsName, sink, context);
+                        EmitInstanceMethod(method, self, sink, context);
                         break;
                     case IrFieldDeclaration field when field.IsStatic:
                         EmitStaticField(field, sink, context);
@@ -203,7 +208,7 @@ public static class IrToTsPlainObjectBridge
 
     private static void EmitInstanceMethod(
         IrMethodDeclaration method,
-        string ownerTsName,
+        PlainObjectSelf self,
         List<TsTopLevel> sink,
         IrToTsBridgeContext context
     )
@@ -218,10 +223,7 @@ public static class IrToTsPlainObjectBridge
         );
 
         // First parameter is always `self: T`; the rest are the C# parameters.
-        var parameters = new List<TsParameter>
-        {
-            new(SelfParameterName, new TsNamedType(ownerTsName)),
-        };
+        var parameters = new List<TsParameter> { new(SelfParameterName, self.Type) };
 
         parameters.AddRange(
             method.Parameters.Select(p => new TsParameter(
@@ -245,8 +247,34 @@ public static class IrToTsPlainObjectBridge
                 IrToTsTypeMapper.Map(method.ReturnType),
                 loweredBody,
                 Exported: true,
-                Async: method.Semantics.IsAsync
+                Async: method.Semantics.IsAsync,
+                TypeParameters: self.WithMethodTypeParameters(
+                    IrToTsTypeParameterMapper.Convert(method.TypeParameters)
+                )
             )
         );
+    }
+
+    /// <summary>
+    /// The <c>self</c> of a <c>[PlainObject]</c> helper: the interface, applied to
+    /// its type parameters, which every helper declares ahead of its own, since a
+    /// free function does not inherit them from the C# type (#451).
+    /// </summary>
+    private sealed record PlainObjectSelf(
+        string Name,
+        IReadOnlyList<TsTypeParameter>? TypeParameters
+    )
+    {
+        public TsNamedType Type =>
+            new(
+                Name,
+                TypeParameters
+                    ?.Select(parameter => (TsType)new TsNamedType(parameter.Name))
+                    .ToList()
+            );
+
+        public IReadOnlyList<TsTypeParameter>? WithMethodTypeParameters(
+            IReadOnlyList<TsTypeParameter>? own
+        ) => TypeParameters is null ? own : [.. TypeParameters, .. own ?? []];
     }
 }
