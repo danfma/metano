@@ -70,14 +70,25 @@ public class OverloadDispatcherFixTests
 
             public interface IShape { }
 
+            public interface INamed { }
+
             public static class Measure
             {
-                public static T Pick<T>(T v) where T : IShape, IComparable<T> => v;
+                public static T Pick<T>(T v) where T : IComparable<T>, IShape => v;
+
+                public static T Both<T>(T v) where T : IShape, INamed => v;
+
+                public static T Bcl<T>(T v) where T : IComparable<T> => v;
             }
             """
         );
 
-        await Assert.That(result["measure.ts"]).Contains("static pick<T extends IShape>(v: T): T");
+        var output = result["measure.ts"];
+
+        await Assert.That(output).Contains("static pick<T extends IShape>(v: T): T");
+        await Assert.That(output).Contains("static both<T extends IShape & INamed>(v: T): T");
+        await Assert.That(output).Contains("static bcl<T>(v: T): T");
+        await Assert.That(output).DoesNotContain("IComparable");
     }
 
     [Test]

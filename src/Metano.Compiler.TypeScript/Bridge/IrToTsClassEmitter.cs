@@ -1122,14 +1122,10 @@ internal sealed class IrToTsClassEmitter(
             _ => null,
         };
 
-        var typeParameters = (sourceTypeParams ?? [])
-            .Select(tp => new TsTypeParameter(
-                tp.Name,
-                tp.Constraints is { Count: > 0 } cs
-                    ? IrToTsTypeMapper.Map(cs[0], BclOverrides)
-                    : null
-            ))
-            .ToList();
+        var typeParameters = IrToTsTypeParameterMapper
+            .Convert(sourceTypeParams, BclOverrides)
+            ?.ToList()
+            ?? [];
         return (parameters, returnType, typeParameters);
     }
 

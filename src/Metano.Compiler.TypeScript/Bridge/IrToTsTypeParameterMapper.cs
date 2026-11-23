@@ -6,13 +6,16 @@ namespace Metano.Compiler.TypeScript.Bridge;
 internal static class IrToTsTypeParameterMapper
 {
     public static IReadOnlyList<TsTypeParameter>? Convert(
-        IReadOnlyList<IrTypeParameter>? typeParameters
+        IReadOnlyList<IrTypeParameter>? typeParameters,
+        IrToTsTypeOverrides? typeOverrides = null
     )
     {
         if (typeParameters is null || typeParameters.Count == 0)
             return null;
 
-        return typeParameters.Select(tp => new TsTypeParameter(tp.Name, ConstraintOf(tp))).ToList();
+        return typeParameters
+            .Select(tp => new TsTypeParameter(tp.Name, ConstraintOf(tp, typeOverrides)))
+            .ToList();
     }
 
     /// <summary>
@@ -23,10 +26,15 @@ internal static class IrToTsTypeParameterMapper
     /// (<see cref="IrToTsClassBridge.ConvertHeritageList"/>): naming it would
     /// leave an unresolved type (<c>where T : IComparable&lt;T&gt;</c>, #547).
     /// </summary>
-    private static TsType? ConstraintOf(IrTypeParameter typeParameter)
+    private static TsType? ConstraintOf(
+        IrTypeParameter typeParameter,
+        IrToTsTypeOverrides? typeOverrides
+    )
     {
         var bounds = (typeParameter.Constraints ?? [])
-            .Select(constraint => (Ir: constraint, Ts: IrToTsTypeMapper.Map(constraint)))
+            .Select(constraint =>
+                (Ir: constraint, Ts: IrToTsTypeMapper.Map(constraint, typeOverrides))
+            )
             .Where(bound => HasDeclaration(bound.Ir, bound.Ts))
             .Select(bound => bound.Ts)
             .ToList();
