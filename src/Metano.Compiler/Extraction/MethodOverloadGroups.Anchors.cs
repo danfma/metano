@@ -37,7 +37,10 @@ internal static partial class MethodOverloadGroups
         // dispatches the overridden method outside that root (#594).
         var constructedRoot = interfaceRoots.FirstOrDefault(root =>
             MultiplyConstructedInterfaces.AreMultiplyConstructed(type, root.ContainingType)
-            && !(overrideRoot is not null && OverridesOutsideConstructedRoot(method, root))
+            && !(
+                overrideRoot is not null
+                && OverridesOutsideConstructedRoot(type, overrideRoot, root, policy)
+            )
         );
 
         if (constructedRoot is not null)
@@ -75,22 +78,36 @@ internal static partial class MethodOverloadGroups
     }
 
     /// <summary>
-    /// Whether <paramref name="method"/> overrides a base method outside the
-    /// runtime dispatcher of <paramref name="root"/>, which the type implements
-    /// more than once and the overridden method's type does not (#594): an
-    /// override of a dispatched base overload then overrides the base's fast
-    /// path, and the type's root dispatcher forwards to it
-    /// (<see cref="IrConstructedRoot.Forwards"/>).
+    /// Whether an override whose dispatched base root is
+    /// <paramref name="overrideRoot"/> overrides it outside the runtime
+    /// dispatcher of <paramref name="root"/>, which <paramref name="type"/>
+    /// implements more than once (#594): the base root is not anchored on
+    /// <paramref name="root"/>, so its fast path has a name of its own, which
+    /// the override overrides and the type's root dispatcher forwards to
+    /// (<see cref="IrConstructedRoot.Forwards"/>). A base root anchored on
+    /// <paramref name="root"/> shares the root's name: the override stays a
+    /// branch of the type's root dispatcher.
     /// </summary>
-    private static bool OverridesOutsideConstructedRoot(IMethodSymbol method, IMethodSymbol root) =>
-        method.OverriddenMethod?.ContainingType is { } overriddenType
-        && MultiplyConstructedInterfaces.AreMultiplyConstructed(
-            method.ContainingType,
-            root.ContainingType
-        )
-        && !MultiplyConstructedInterfaces.AreMultiplyConstructed(
-            overriddenType,
-            root.ContainingType
+    private static bool OverridesOutsideConstructedRoot(
+        INamedTypeSymbol type,
+        IMethodSymbol overrideRoot,
+        IMethodSymbol root,
+        OverloadGroupingPolicy policy
+    ) =>
+        MultiplyConstructedInterfaces.AreMultiplyConstructed(type, root.ContainingType)
+        && !IsAnchoredOn(overrideRoot, root, policy);
+
+    /// <summary>Whether <paramref name="declaration"/> is anchored on the interface member <paramref name="root"/>.</summary>
+    private static bool IsAnchoredOn(
+        IMethodSymbol declaration,
+        IMethodSymbol root,
+        OverloadGroupingPolicy policy
+    ) =>
+        GroupOf(declaration, policy)?.MemberOf(declaration)?.Anchor?.Root
+            is DeclaredRoot { Method: var anchor }
+        && SymbolEqualityComparer.Default.Equals(
+            anchor.OriginalDefinition,
+            root.OriginalDefinition
         );
 
     /// <summary>

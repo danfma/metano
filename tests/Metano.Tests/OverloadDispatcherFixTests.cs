@@ -358,4 +358,45 @@ public class OverloadDispatcherFixTests
             .That(output)
             .Contains("return this.convStringInt32(args[0] as string, args[1] as number);");
     }
+
+    [Test]
+    public async Task OverrideOfABaseAnchoredOnTheSameRoot_StaysInTheRootDispatcher()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public interface IQ<T>
+            {
+                [Name("q")]
+                string Q(T a);
+
+                string Q(T a, int n);
+            }
+
+            public class RB : IQ<int>
+            {
+                public virtual string Q(int a) => "rbi";
+
+                public virtual string Q(int a, int n) => "rbin";
+            }
+
+            public class RD : RB, IQ<string>
+            {
+                public override string Q(int a) => "rdi";
+
+                public string Q(string a) => "rds";
+
+                public string Q(string a, int n) => "rdsn";
+            }
+            """
+        );
+
+        var output = result["rd.ts"];
+
+        await Assert.That(output).DoesNotContain("override qQ(a: number): string {");
+        await Assert.That(output.Split("override qQ(...args: unknown[])").Length).IsEqualTo(2);
+        await Assert.That(output).Contains("return \"rdi\";");
+    }
 }

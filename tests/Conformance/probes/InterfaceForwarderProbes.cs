@@ -88,3 +88,40 @@ public static class MultiplyConstructedOverrideProbes
             + cs.Conv("t", 6);
     }
 }
+
+public interface IFwdQ<T>
+{
+    [Name("q")]
+    string Q(T a);
+
+    string Q(T a, int n);
+}
+
+public class SingleRootBase : IFwdQ<int>
+{
+    public virtual string Q(int a) => "rbi";
+
+    public virtual string Q(int a, int n) => "rbin";
+}
+
+public class SingleRootDerived : SingleRootBase, IFwdQ<string>
+{
+    public override string Q(int a) => "rdi";
+
+    public string Q(string a) => "rds";
+
+    public string Q(string a, int n) => "rdsn";
+}
+
+public static class SingleRootOverrideProbes
+{
+    public static string OverrideOfBaseAnchoredOnTheRoot()
+    {
+        var d = new SingleRootDerived();
+        SingleRootBase b = d;
+        IFwdQ<int> qi = d;
+        IFwdQ<string> qs = d;
+
+        return b.Q(1) + "," + qi.Q(2) + "," + qs.Q("s") + "," + qi.Q(3, 4) + "," + d.Q(5);
+    }
+}
