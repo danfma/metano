@@ -13,7 +13,6 @@ BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.thisCastFail THROWS TypeError: new Cat().asDog().bark is not a function. (In 'new Cat().asDog().bark()', 'new Cat().asDog().bark' is undefined)
 CollectionEqualityProbes.asListCast = cast1
-CollectionEqualityProbes.distinctComparer THROWS Error: Unsupported expression: UnsupportedLinqOverload
 CollectionEqualityProbes.immutableListEmptyAddRange = False,2
 CollectionEqualityProbes.listEquals THROWS TypeError: a.equals is not a function. (In 'a.equals(a)', 'a.equals' is undefined)
 CollectionEqualityProbes.negativeZeroKeys = +0|+0|True
@@ -111,5 +110,11 @@ StringProbes.trimSpecial = [x][1]
 TextProbes.floatMath = 0.3|0.10000000149011612|F|0.3|0.1|0.3
 TextProbes.generic = <True>TrueTrue<1E-07>1E-071E-07<0.10000000149011612>0.100000001490116120.10000000149011612<1>11<>
 TextProbes.recordToString = [object Object]
+UnmodeledCollectionProbes.throwsBag = throws
+UnmodeledCollectionProbes.throwsFrozenSet = throws
+UnmodeledCollectionProbes.throwsHiddenAdd = throws
+UnmodeledCollectionProbes.throwsSortedSet = throws
+UnmodeledCollectionProbes.throwsStack = throws
+UnmodeledCollectionProbes.throwsUserAdd = throws
 W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud = threw threw
 Wave5Fix1Probes.undescribableReifiedArgumentsThrow = NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException

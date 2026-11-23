@@ -50,10 +50,19 @@ public static class IrToTsBrandedBridge
     {
         var tsTypeName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var primitiveType = plan.PrimitiveType;
+        var typeParameters = IrToTsTypeParameterMapper.Convert(ir.TypeParameters);
+        var selfType = SelfTypeOf(tsTypeName, typeParameters);
 
         // export type UserId = string & { readonly __brand: "UserId" };
         var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
-        sink.Add(new TsTypeAlias(tsTypeName, new TsIntersectionType([primitiveType, brandType])));
+
+        sink.Add(
+            new TsTypeAlias(
+                tsTypeName,
+                new TsIntersectionType([primitiveType, brandType]),
+                TypeParameters: typeParameters
+            )
+        );
 
         var functions = new List<TsFunction>
         {
@@ -61,12 +70,8 @@ public static class IrToTsBrandedBridge
             new(
                 CreateMember,
                 [new TsParameter("value", primitiveType)],
-                new TsNamedType(tsTypeName),
-                [
-                    new TsReturnStatement(
-                        new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName))
-                    ),
-                ],
+                selfType,
+                [new TsReturnStatement(new TsCastExpression(new TsIdentifier("value"), selfType))],
                 Exported: true
             ),
         };
@@ -78,7 +83,7 @@ public static class IrToTsBrandedBridge
             functions.Add(
                 new TsFunction(
                     ToStringMember,
-                    [new TsParameter("value", new TsNamedType(tsTypeName))],
+                    [new TsParameter("value", selfType)],
                     new TsStringType(),
                     [
                         new TsReturnStatement(
@@ -103,8 +108,54 @@ public static class IrToTsBrandedBridge
         foreach (var group in plan.Bind(ir))
             functions.AddRange(ConvertStaticMethodGroup(group, companion, context));
 
-        sink.AddRange(functions.Select(function => AsModuleFunction(function, tsTypeName)));
-        sink.Add(CompanionObject(tsTypeName, functions));
+        var declared = functions
+            .Select(function => WithOwnerTypeParameters(function, typeParameters))
+            .ToList();
+
+        sink.AddRange(declared.Select(function => AsModuleFunction(function, tsTypeName)));
+        sink.Add(CompanionObject(tsTypeName, declared));
+    }
+
+    /// <summary>
+    /// <c>UserId</c>, or <c>Gen&lt;T&gt;</c> for a generic branded type, whose
+    /// alias declares the type parameters the brand does not read so a
+    /// reference such as <c>Gen&lt;number&gt;</c> stays valid.
+    /// </summary>
+    private static TsNamedType SelfTypeOf(
+        string typeName,
+        IReadOnlyList<TsTypeParameter>? typeParameters
+    ) =>
+        new(
+            typeName,
+            typeParameters?.Select(parameter => (TsType)new TsNamedType(parameter.Name)).ToList()
+        );
+
+    /// <summary>
+    /// A companion function re-declares the type parameters of a generic
+    /// branded type ahead of its own, as a class factory does (spec 013
+    /// FR-028): a module-level function cannot see the struct's <c>T</c>
+    /// (#626). The overload signatures of a dispatcher declare them too.
+    /// </summary>
+    private static TsFunction WithOwnerTypeParameters(
+        TsFunction function,
+        IReadOnlyList<TsTypeParameter>? owner
+    )
+    {
+        if (owner is null)
+            return function;
+
+        return function with
+        {
+            TypeParameters = [.. owner, .. function.TypeParameters ?? []],
+            Overloads = function
+                .Overloads?.Select(overload =>
+                    overload with
+                    {
+                        TypeParameters = [.. owner, .. overload.TypeParameters ?? []],
+                    }
+                )
+                .ToList(),
+        };
     }
 
     /// <summary>

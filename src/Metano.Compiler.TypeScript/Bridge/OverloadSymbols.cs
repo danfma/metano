@@ -61,6 +61,26 @@ internal static class OverloadSymbols
     }
 
     /// <summary>
+    /// The declared overload whose signature text (<see cref="OverloadSignatureText"/>)
+    /// is <paramref name="signatureText"/>, which tells <c>Mix(long)</c> from
+    /// <c>Mix(long, out int)</c> where the IR parameters, without their
+    /// <c>out</c> ones, cannot; by <see cref="Of(IReadOnlyList{IMethodSymbol}, IReadOnlyList{IrParameter})"/>
+    /// when the overload carries no signature text.
+    /// </summary>
+    internal static IMethodSymbol? Of(
+        IReadOnlyList<IMethodSymbol> symbols,
+        IReadOnlyList<IrParameter> parameters,
+        string? signatureText
+    )
+    {
+        var bySignature = signatureText is null
+            ? null
+            : symbols.FirstOrDefault(symbol => OverloadSignatureText.Of(symbol) == signatureText);
+
+        return bySignature ?? Of(symbols, parameters);
+    }
+
+    /// <summary>
     /// Whether <paramref name="symbol"/> declares <paramref name="parameters"/>:
     /// an IR constructor lists its <c>out</c> parameters, an IR method does not.
     /// </summary>

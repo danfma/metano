@@ -41,7 +41,9 @@ public sealed partial class IrExpressionExtractor
             !IsMapTarget(target)
             && StageCollectionOf(target) is not { Kind: IrCollectionKind.ImmutableDictionary }
         )
-            return ListLiteralOf(coll, operation);
+            return IsListShapedTarget(target)
+                ? ListLiteralOf(coll, operation)
+                : UnmodeledTargetOf(coll, operation, target);
 
         if (coll.Elements.Count > 0 && AddsThroughUserDefinedMethod(operation))
             return ReportUnsupported(
@@ -57,6 +59,129 @@ public sealed partial class IrExpressionExtractor
 
         return NewCollectionOf(mapType, coll);
     }
+
+    /// <summary>
+    /// Whether a list-shaped literal is what C# builds for
+    /// <paramref name="target"/>: a type the type mapper maps to a native
+    /// array or an iterable (<c>IEnumerable&lt;T&gt;</c>, <c>JsArray&lt;T&gt;</c>),
+    /// a span, or a collection whose construction from a
+    /// literal is modelled (<see cref="TargetCollectionOf"/>). Any other type
+    /// is built through a collection builder or an <c>Add</c> the lowering does
+    /// not reproduce (<c>ImmutableSortedSet</c>, <c>FrozenSet</c>,
+    /// <c>ImmutableQueue</c>, a user collection type; see
+    /// <see cref="UnmodeledTargetOf"/>, #581).
+    /// </summary>
+    private bool IsListShapedTarget(INamedTypeSymbol target) =>
+        IsSpan(target)
+        || IrTypeRefMapper.Map(target, _originResolver, _target)
+            is IrArrayTypeRef
+                or IrIterableTypeRef
+        || TargetCollectionOf(target) is not null;
+
+    private static bool IsSpan(INamedTypeSymbol type) =>
+        type.ContainingType is null
+        && type.ContainingNamespace?.ToDisplayString() == "System"
+        && type.MetadataName is "Span`1" or "ReadOnlySpan`1";
+
+    /// <summary>
+    /// A collection expression over a type whose construction is not modelled
+    /// (#581) reports <c>MS0001</c>. Where the array gives what .NET observes —
+    /// an order-preserving list-like such as <c>Collection&lt;T&gt;</c>,
+    /// <c>ObservableCollection&lt;T&gt;</c> or <c>ImmutableQueue&lt;T&gt;</c>, or
+    /// a literal too short to reorder — the array literal stays; where it
+    /// would be a silent wrong value, the expression throws instead
+    /// (<see cref="RebuildsElements"/>).
+    /// </summary>
+    private IrExpression UnmodeledTargetOf(
+        CollectionExpressionSyntax coll,
+        ICollectionExpressionOperation? operation,
+        INamedTypeSymbol target
+    )
+    {
+        var typeName = target.ToDisplayString();
+
+        if (RebuildsElements(coll, target))
+            return ReportUnsupported(
+                coll,
+                coll.Kind().ToString(),
+                $"Collection expression '{coll}' builds '{typeName}', which orders, "
+                    + "deduplicates or adds its elements in a way the transpiler does not "
+                    + "model, so the expression throws at run time. Build the collection "
+                    + "explicitly instead."
+            );
+
+        ReportUnsupportedFeature(
+            coll,
+            $"Collection expression '{coll}' builds '{typeName}', which the transpiler does "
+                + "not model: a plain array stands in for it, so enumerating and indexing it "
+                + "match .NET, but the members of the type do not exist on the value."
+        );
+
+        return ListLiteralOf(coll, operation);
+    }
+
+    /// <summary>
+    /// Whether the array would enumerate other elements than <paramref name="target"/>
+    /// holds. The decision follows the collection whose construction runs: the
+    /// type that declares the <c>Add</c> the elements bind to (a user subclass
+    /// of <c>List&lt;T&gt;</c> or <c>Collection&lt;T&gt;</c> inherits theirs), or
+    /// the target itself for a collection-builder type. A user-declared
+    /// <c>Add</c> may do anything, so any element rebuilds; a BCL type that
+    /// sorts, deduplicates or reverses (<see cref="IsReorderingBclCollection"/>)
+    /// rebuilds two or more elements (or a spread).
+    /// </summary>
+    private static bool RebuildsElements(CollectionExpressionSyntax coll, INamedTypeSymbol target)
+    {
+        if (coll.Elements.Count == 0)
+            return false;
+
+        var builder = AddDeclaringTypeOf(target) ?? target;
+
+        if (!builder.ContainingAssembly.IsBclAssembly())
+            return true;
+
+        var canReorder =
+            coll.Elements.Count > 1 || coll.Elements.Any(e => e is SpreadElementSyntax);
+
+        return canReorder && IsReorderingBclCollection(builder);
+    }
+
+    /// <summary>
+    /// The nearest type in <paramref name="target"/>'s base chain that declares a
+    /// public one-parameter instance <c>Add</c>: the one a collection expression
+    /// binds to, since a derived declaration hides or overrides the base's;
+    /// <c>null</c> when none does (a collection-builder type).
+    /// </summary>
+    private static INamedTypeSymbol? AddDeclaringTypeOf(INamedTypeSymbol target)
+    {
+        for (var type = target; type is not null; type = type.BaseType)
+        {
+            var declaresAdd = type.GetMembers("Add")
+                .OfType<IMethodSymbol>()
+                .Any(method =>
+                    method
+                        is {
+                            IsStatic: false,
+                            Parameters.Length: 1,
+                            DeclaredAccessibility: Accessibility.Public,
+                        }
+                );
+
+            if (declaresAdd)
+                return type;
+        }
+
+        return null;
+    }
+
+    private static bool IsReorderingBclCollection(INamedTypeSymbol target) =>
+        target.OriginalDefinition.ToDisplayString()
+            is "System.Collections.Immutable.ImmutableSortedSet<T>"
+                or "System.Collections.Immutable.ImmutableStack<T>"
+                or "System.Collections.Frozen.FrozenSet<T>"
+                or "System.Collections.Concurrent.ConcurrentBag<T>"
+                or "System.Collections.Generic.HashSet<T>"
+                or "System.Collections.Generic.SortedSet<T>";
 
     /// <summary>
     /// The array literal of a list or array target, with the element type the

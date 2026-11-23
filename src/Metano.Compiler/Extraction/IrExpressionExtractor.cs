@@ -5351,7 +5351,9 @@ public sealed partial class IrExpressionExtractor
     /// Roslyn's bound arguments; every other one takes its source arguments.
     /// </summary>
     private IrExpression ExtractCreation(BaseObjectCreationExpressionSyntax creation) =>
-        TryExtractDynamicCreation(creation) ?? ExtractTypedCreation(creation);
+        TryExtractDynamicCreation(creation)
+        ?? TryExtractDelegateCreation(creation)
+        ?? ExtractTypedCreation(creation);
 
     /// <summary>
     /// A construction through the constructor Roslyn resolved, or through the

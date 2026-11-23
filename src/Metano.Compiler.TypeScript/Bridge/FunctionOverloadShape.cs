@@ -18,6 +18,12 @@ internal sealed record FunctionOverloadShape(
     bool IsOperator
 )
 {
+    /// <summary>
+    /// The overload's declared signature, <c>out</c> parameters included, which
+    /// the reporters find its symbol by (<see cref="OverloadSymbols"/>).
+    /// </summary>
+    public string? SignatureText { get; init; }
+
     public static FunctionOverloadShape Of(IrMethodDeclaration method) =>
         new(
             method.Parameters,
@@ -26,7 +32,10 @@ internal sealed record FunctionOverloadShape(
                 RuntimeTypes = Analysis.RuntimeTypeReachabilityResult.Unchecked,
             },
             method.Semantics.IsOperator
-        );
+        )
+        {
+            SignatureText = method.SignatureText,
+        };
 
     public static FunctionOverloadShape Of(IrModuleFunction function) =>
         new(
@@ -36,5 +45,8 @@ internal sealed record FunctionOverloadShape(
                 RuntimeTypes = Analysis.RuntimeTypeReachabilityResult.Unchecked,
             },
             IsOperator: false
-        );
+        )
+        {
+            SignatureText = function.SignatureText,
+        };
 }

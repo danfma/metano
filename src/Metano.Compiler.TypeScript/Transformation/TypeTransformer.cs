@@ -3063,6 +3063,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
 
         TsOverloadClaims.Report(plan.Findings, type, ReportDiagnostic);
+        TsOverloadClaims.Report(BrandedUnemittedMembers.FindingsOf(type), type, ReportDiagnostic);
 
         foreach (var dispatcher in plan.Groups.OfType<TsCompanionDispatcher>())
         {

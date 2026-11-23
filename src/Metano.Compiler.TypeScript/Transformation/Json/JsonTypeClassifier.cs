@@ -232,9 +232,10 @@ internal static class JsonTypeClassifier
                 : JsonPropertyKind.NumericEnum;
 
         // [Branded] (and its predecessor [InlineWrapper]) over a 64-bit
-        // integer unwraps to the int64 descriptor (FR-050); any other branded
-        // type keeps the branded descriptor.
-        if (SymbolHelper.HasBranded(named))
+        // integer unwraps to the int64 descriptor (FR-050); any other
+        // primitive-backed brand keeps the branded descriptor. A wrapper over
+        // a non-primitive is the record or struct it lowers to (#288).
+        if (SymbolHelper.IsPrimitiveBackedBranded(named))
             return Is64BitIntegerType(UnwrapBranded(named))
                 ? JsonPropertyKind.Int64
                 : JsonPropertyKind.Branded;

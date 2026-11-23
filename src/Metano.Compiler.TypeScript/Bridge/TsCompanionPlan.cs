@@ -56,13 +56,13 @@ internal sealed class TsCompanionPlan
     public IReadOnlyList<TsClaimFinding> Findings { get; }
 
     /// <summary>
-    /// Whether <paramref name="type"/> can have a companion namespace: a
-    /// <c>[Branded]</c> / <c>[InlineWrapper]</c> struct. Its plan
-    /// (<see cref="Of"/>) still answers <c>null</c> when it wraps something a
-    /// brand cannot intersect.
+    /// Whether <paramref name="type"/> has a companion namespace: a
+    /// <c>[Branded]</c> / <c>[InlineWrapper]</c> struct over a primitive a
+    /// brand can intersect. A wrapper over anything else lowers as the record
+    /// or struct it is (#288).
     /// </summary>
     public static bool AppliesTo(INamedTypeSymbol type) =>
-        SymbolHelper.HasBranded(type) && type.TypeKind == TypeKind.Struct;
+        SymbolHelper.IsPrimitiveBackedBranded(type);
 
     /// <summary>
     /// The TypeScript answer to
@@ -134,18 +134,26 @@ internal sealed class TsCompanionPlan
             .SelectMany(primary => new[] { primary }.Concat(primary.Overloads ?? []))
             .ToList();
 
-        return Groups.Select(group => group.Over(planned => BoundIn(methods, planned))).ToList();
+        return Groups
+            .Select(group => group.Over(planned => BoundIn(ir.Name, methods, planned)))
+            .ToList();
     }
 
-    /// <summary>The emitted method with the identity of a planned one.</summary>
+    /// <summary>
+    /// The emitted method with the identity of a planned one. The plan and the
+    /// emission extract the same type, so a miss is an internal invariant
+    /// broken, never a user error.
+    /// </summary>
     private static IrMethodDeclaration BoundIn(
+        string typeName,
         IReadOnlyList<IrMethodDeclaration> methods,
         IrMethodDeclaration planned
     ) =>
         methods.FirstOrDefault(method => IsAt(method, planned.Name, planned.DeclarationOrdinal))
         ?? throw new InvalidOperationException(
-            $"The companion plan names '{planned.SignatureText ?? planned.Name}', which the "
-                + "emitted type does not declare."
+            $"Internal invariant broken: the companion plan of '{typeName}' names "
+                + $"'{planned.SignatureText ?? planned.Name}', which the emitted type does not "
+                + "declare."
         );
 
     private static bool IsAt(IrMethodDeclaration method, string memberName, int ordinal) =>
@@ -330,6 +338,15 @@ internal sealed record TsCompanionDispatcher(
     IReadOnlyList<TsCompanionFastPath> FastPaths
 ) : TsCompanionGroup(FunctionName)
 {
+    private readonly IReadOnlyList<TsCompanionFastPath> _fastPaths = RequireOverloads(FastPaths);
+
+    /// <summary>The fast paths in dispatch order, two or more.</summary>
+    public IReadOnlyList<TsCompanionFastPath> FastPaths
+    {
+        get => _fastPaths;
+        init => _fastPaths = RequireOverloads(value);
+    }
+
     /// <summary>The C# name the group's methods share.</summary>
     public string MemberName => FastPaths[0].Method.Name;
 
@@ -340,6 +357,16 @@ internal sealed record TsCompanionDispatcher(
                 .Select(fastPath => fastPath with { Method = bound(fastPath.Method) })
                 .ToList(),
         };
+
+    private static IReadOnlyList<TsCompanionFastPath> RequireOverloads(
+        IReadOnlyList<TsCompanionFastPath> fastPaths
+    ) =>
+        fastPaths.Count >= 2
+            ? fastPaths
+            : throw new ArgumentException(
+                "A companion dispatcher groups two or more overloads.",
+                nameof(fastPaths)
+            );
 }
 
 /// <summary>One overload of a dispatched companion group and the name it claimed.</summary>
