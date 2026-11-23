@@ -76,6 +76,23 @@ public static class IrToTsIterationProtocolBridge
             ? ir.Interfaces?.Where(contract => contract is not IrIteratorTypeRef).ToList()
             : ir.Interfaces;
 
+    /// <summary>
+    /// <paramref name="ir"/> takes on <c>IEnumerable</c> or <c>IEnumerator</c> itself.
+    /// </summary>
+    public static bool TakesOnIterationContract(IrClassDeclaration ir) =>
+        ir.Semantics.Enumerable is not null || ir.Semantics.Enumerator is not null;
+
+    /// <summary>
+    /// The interfaces a <c>[PlainObject]</c> interface extends: all of
+    /// <see cref="IrClassDeclaration.Interfaces"/> but the iteration contracts, since
+    /// its instances are object literals that carry only data and no
+    /// <c>[Symbol.iterator]()</c> or <c>next()</c> (#340).
+    /// </summary>
+    public static IReadOnlyList<IrTypeRef>? PlainObjectInterfaces(IrClassDeclaration ir) =>
+        ir
+            .Interfaces?.Where(contract => contract is not (IrIterableTypeRef or IrIteratorTypeRef))
+            .ToList();
+
     private static TsMethodMember BuildIteratorMember(
         IrEnumerableContract enumerable,
         IrToTsTypeOverrides? overrides

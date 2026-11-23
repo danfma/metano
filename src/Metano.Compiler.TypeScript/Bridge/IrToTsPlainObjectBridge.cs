@@ -56,7 +56,13 @@ public static class IrToTsPlainObjectBridge
         }
 
         sink.Add(
-            new TsInterface(tsName, properties, Extends: IrToTsClassBridge.BuildImplements(ir))
+            new TsInterface(
+                tsName,
+                properties,
+                Extends: IrToTsClassBridge.ConvertHeritageList(
+                    IrToTsIterationProtocolBridge.PlainObjectInterfaces(ir)
+                )
+            )
         );
 
         if (ir.Members is { Count: > 0 } members)
