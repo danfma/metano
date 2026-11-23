@@ -686,6 +686,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
         // Collect from all levels of hierarchy
         var current = type;
+
         while (
             current is not null
             && current.SpecialType == SpecialType.None
@@ -696,8 +697,10 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             {
                 if (member.IsImplicitlyDeclared)
                     continue;
-                if (member.IsStatic)
+
+                if (!SymbolHelper.IsInstanceDataMember(member))
                     continue;
+
                 // Unified policy: exclude Private, Internal, and NotApplicable.
                 // ProtectedAndInternal (C# `private protected`) and
                 // ProtectedOrInternal (C# `protected internal`) are treated as
