@@ -292,7 +292,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     /// <summary>
     /// Reports <c>MS0037</c> for every context option and every attribute of
-    /// the closure the generated context does not mirror (FR-046).
+    /// the closure the generated context does not mirror (FR-046), and for
+    /// every native integer slot System.Text.Json cannot serialize (#561).
     /// </summary>
     private static void ReportUnmirroredSettings(
         INamedTypeSymbol contextType,
@@ -303,7 +304,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     {
         var warnings = JsonUnmirroredContextOptions
             .WarningsOf(contextType)
-            .Concat(new JsonUnmirroredAttributes(properties).WarningsOf(contract.Entries));
+            .Concat(new JsonUnmirroredAttributes(properties).WarningsOf(contract.Entries))
+            .Concat(new JsonNativeIntegerWarnings(properties).WarningsOf(contract.Entries));
 
         foreach (var warning in warnings)
             report(warning);

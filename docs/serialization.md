@@ -891,7 +891,8 @@ converter for `IntPtr` / `UIntPtr` (it throws `NotSupportedException` for a
 property, a root or a dictionary key; measured on .NET 10 and 11), so a payload
 for a native integer has no STJ counterpart: the contract is Metano's, and a
 rejected value names `System.Int64` / `System.UInt64` rather than the CLR
-`System.IntPtr`.
+`System.IntPtr`. Each such member and value root warns `MS0037` (#561): a
+TypeScript client can send a payload the .NET side cannot read.
 
 **Writes.** The converter writes a `bigint` through the shared exact-number
 writer (`writeExactNumber`), so `JSON.stringify` prints the exact digits,

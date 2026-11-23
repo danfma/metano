@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -65,6 +67,49 @@ public class NativeIntegerJsonContextTests
 
         await TranspileHelper.AssertGolden(Golden, files[ContextPath]);
 
-        await Assert.That(diagnostics).IsEmpty();
+        await Assert
+            .That(
+                diagnostics.Where(diagnostic =>
+                    diagnostic.Code != DiagnosticCodes.UnmirroredJsonOption
+                )
+            )
+            .IsEmpty();
+    }
+
+    /// <summary>
+    /// Each native-integer member and value root warns <c>MS0037</c> (#561):
+    /// System.Text.Json throws for them, so the TypeScript superset can send
+    /// a payload the .NET side cannot read. A <c>[Branded]</c> /
+    /// <c>[InlineWrapper]</c> wrapper keeps its own documented wire shape
+    /// (FR-026) and does not warn.
+    /// </summary>
+    [Test]
+    public async Task WarnsForEachNativeIntegerMemberAndRoot()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
+
+        var messages = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.UnmirroredJsonOption)
+            .Select(diagnostic => diagnostic.Message)
+            .ToList();
+
+        await Assert.That(messages.Count).IsEqualTo(8);
+
+        foreach (
+            var member in new[] { "Signed", "Unsigned", "Parent", "Values", "ByHandle", "Counts" }
+        )
+            await Assert
+                .That(messages)
+                .Contains(message =>
+                    message.StartsWith($"'Handles.{member}' holds a nint or nuint")
+                );
+
+        await Assert
+            .That(messages)
+            .Contains(message => message.StartsWith("The [JsonSerializable] root 'nint'"));
+
+        await Assert
+            .That(messages)
+            .Contains(message => message.StartsWith("The [JsonSerializable] root 'nuint?'"));
     }
 }
