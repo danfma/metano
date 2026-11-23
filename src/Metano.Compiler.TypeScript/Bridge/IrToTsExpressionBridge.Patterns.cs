@@ -83,6 +83,7 @@ public static partial class IrToTsExpressionBridge
                         lowered,
                         BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
                         constant.Value,
+                        constant.IsNaN,
                         context
                     );
             case IrTypePattern typePat:
@@ -113,9 +114,10 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         string equalityOperator,
         IrExpression constantValue,
+        bool isNaN,
         IrToTsBridgeContext context
     ) =>
-        IsNaNConstant(constantValue)
+        isNaN
             ? new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier("Number"), "isNaN"),
                 [value]
@@ -137,6 +139,7 @@ public static partial class IrToTsExpressionBridge
             subject,
             BinaryOperatorToken(IrBinaryOp.Equal, right: label.Value),
             label.Value,
+            label.IsNaN,
             context
         );
 
@@ -190,20 +193,6 @@ public static partial class IrToTsExpressionBridge
         );
     }
 
-    internal static bool IsNaNConstant(IrExpression constant) =>
-        constant switch
-        {
-            IrLiteral { Value: double literal } => double.IsNaN(literal),
-            IrLiteral { Value: float literal } => float.IsNaN(literal),
-            IrMemberAccess { Origin: { } origin } => IsFloatingPointNaNMember(origin),
-            _ => false,
-        };
-
-    // Stable full names use the C# keyword for special types ("double", "float").
-    private static bool IsFloatingPointNaNMember(IrMemberOrigin origin) =>
-        origin.MemberName == nameof(double.NaN)
-        && (origin.DeclaringTypeFullName is "double" or "float");
-
     /// <summary>
     /// Lowers a pattern to a boolean test against <paramref name="value"/>.
     /// The test never binds; <see cref="BuildPatternBindings"/> declares the
@@ -221,6 +210,7 @@ public static partial class IrToTsExpressionBridge
                     value,
                     BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
                     constant.Value,
+                    constant.IsNaN,
                     context
                 ),
             IrTypePattern typePat => BuildTypeTest(value, typePat.Type, typePat.InputType, context),

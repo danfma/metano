@@ -25,6 +25,13 @@ public sealed record IrConstantPattern(IrExpression Value) : IrPattern
 
     /// <summary>The constant's enum type when <see cref="InputType"/> is set.</summary>
     public IrTypeRef? ConstantType { get; init; }
+
+    /// <summary>
+    /// Whether the constant's value is a floating-point NaN, however the source
+    /// spells it (<c>double.NaN</c>, <c>0.0 / 0.0</c>, a <c>const</c> holding NaN).
+    /// NaN never equals itself under IEEE comparison, while C# matches it.
+    /// </summary>
+    public bool IsNaN { get; init; }
 }
 
 /// <summary>

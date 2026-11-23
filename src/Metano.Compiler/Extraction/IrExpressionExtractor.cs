@@ -906,7 +906,7 @@ public sealed partial class IrExpressionExtractor
         {
             ConstantPatternSyntax constant when NamedPatternType(constant.Expression) is { } type =>
                 ExtractTypePattern(constant, type),
-            ConstantPatternSyntax constant => WithBoxedConstantFacts(
+            ConstantPatternSyntax constant => WithConstantFacts(
                 new IrConstantPattern(Extract(constant.Expression)),
                 constant.Expression,
                 _semantic.GetOperation(constant) is IPatternOperation { InputType: var input }
@@ -2046,7 +2046,7 @@ public sealed partial class IrExpressionExtractor
         )
             return new IrIsPatternExpression(
                 Extract(bin.Left),
-                WithBoxedConstantFacts(
+                WithConstantFacts(
                     new IrConstantPattern(ExtractConstantName(bin.Right)),
                     bin.Right,
                     pattern.InputType
