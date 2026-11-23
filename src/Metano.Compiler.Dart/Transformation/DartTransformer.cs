@@ -62,6 +62,7 @@ public sealed class DartTransformer
         new(Compilation: _compilation, GroupingPolicy: DartGroupingPolicy.Instance)
         {
             EmitsConstructorSelectors = DartTypeShapes.EmitsNamedConstructors,
+            KeepsCallEvaluationOrder = true,
         };
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
