@@ -13,6 +13,7 @@
  * The core validates nothing and keeps no version: its owners do both.
  */
 import {
+  defaultEqualityComparer,
   elementEquals,
   elementHashCode,
   equalsByValue,
@@ -31,13 +32,18 @@ function isMissing<K>(stored: K | Missing): stored is Missing {
 }
 
 export class HashCore<K, V> {
-  /** `null`: `elementEquals` / `elementHashCode` with the native `Map` fast path. */
+  /**
+   * `null`: `elementEquals` / `elementHashCode` with the native `Map` fast path. An explicit
+   * `EqualityComparer<T>.Default` is stored as `null`, so identity keys keep that path.
+   */
   declare readonly comparer: IEqualityComparer<K> | null;
   declare readonly _entries: Map<K, V>;
   declare _index: Map<number, K[]> | undefined;
 
   constructor(comparer?: IEqualityComparer<K> | null) {
-    Object.defineProperty(this, "comparer", { value: comparer ?? null });
+    Object.defineProperty(this, "comparer", {
+      value: comparer === defaultEqualityComparer ? null : (comparer ?? null),
+    });
     Object.defineProperty(this, "_entries", { value: new Map<K, V>() });
     Object.defineProperty(this, "_index", { value: undefined, writable: true });
   }

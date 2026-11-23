@@ -42,6 +42,9 @@ const DIST: Record<Mode, string> = {
   unchecked: join(RUNTIME_DIR, "dist-unchecked", "system", "collections"),
 };
 
+/** The vendored 2.x `HashSet` (bench-only fixture) that the 2.x comparison row runs. */
+const LEGACY_HASH_SET = join(RUNTIME_DIR, "bench", "collections", "legacy-hash-set.ts");
+
 const engine: Engine = typeof Bun === "undefined" ? "node" : "bun";
 const options = parseOptions(process.argv.slice(2));
 
@@ -138,6 +141,7 @@ function moduleSource(benchCase: BenchCase, mode: Mode): string {
   const dist = DIST[mode];
 
   return `import { List } from "${dist}/list.js";
+import { LegacyHashSet } from ${JSON.stringify(LEGACY_HASH_SET)};
 import { Dictionary } from "${dist}/dictionary.js";
 import { HashSet } from "${dist}/hash-set.js";
 import { Queue } from "${dist}/queue.js";

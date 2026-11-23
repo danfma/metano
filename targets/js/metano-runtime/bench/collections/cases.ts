@@ -169,7 +169,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.get (number keys)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "N",
     setup: `const m = new Map(); const d = new Dictionary();
       for (let i = 0; i < N; i++) { m.set(i, i); d.set(i, i); }`,
@@ -179,7 +179,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.set (number keys, overwrite)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "N",
     setup: `const m = new Map(); const d = new Dictionary();
       for (let i = 0; i < N; i++) { m.set(i, i); d.set(i, i); }`,
@@ -189,7 +189,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.containsKey (string keys)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "N",
     setup: `const keys = Array.from({ length: N }, (_, i) => "k" + i);
       const m = new Map(); const d = new Dictionary();
@@ -200,7 +200,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Dictionary.add (string keys, fresh dictionary)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "N",
     setup: `const keys = Array.from({ length: N }, (_, i) => "k" + i);`,
     baseline:
@@ -211,16 +211,25 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "HashSet.add (numbers, fresh set)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "N",
     setup: "",
-    baseline: "const s = new Set(); for (let i = 0; i < N; i++) s.add(i); return s.size;",
+    baseline:
+      "const s = new Set(); for (let i = 0; i < N; i++) { if (!s.has(i)) s.add(i); } return s.size;",
+    variant: "const s = new HashSet(); for (let i = 0; i < N; i++) s.add(i); return s.count;",
+  },
+  {
+    name: "HashSet.add (numbers, fresh set; 3.0 class vs the 2.x runtime HashSet, reported)",
+    ops: "N",
+    setup: "",
+    baseline:
+      "const s = new LegacyHashSet(); for (let i = 0; i < N; i++) s.add(i); return s.size;",
     variant: "const s = new HashSet(); for (let i = 0; i < N; i++) s.add(i); return s.count;",
   },
   {
     name: "HashSet.contains (numbers)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "N",
     setup: `const ns = new Set(); const hs = new HashSet();
       for (let i = 0; i < N; i++) { ns.add(i); hs.add(i); }`,
@@ -230,7 +239,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "HashSet.remove + add (numbers)",
     budgetNs: 2.0,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "2 * N",
     setup: `const ns = new Set(); const hs = new HashSet();
       for (let i = 0; i < N; i++) { ns.add(i); hs.add(i); }`,
@@ -240,7 +249,7 @@ export const CASES: readonly BenchCase[] = [
   {
     name: "Queue.enqueue + dequeue",
     budgetNs: 1.5,
-    deferredTo: "R2",
+    deferredTo: "011g",
     ops: "2 * N",
     setup: "",
     baseline:

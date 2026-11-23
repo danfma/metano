@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
+import { defaultEqualityComparer } from "#/system/collections/default-comparer.ts";
+import { Dictionary } from "#/system/collections/dictionary.ts";
 import { HashCore } from "#/system/collections/hash-core.ts";
+import { HashSet } from "#/system/collections/hash-set.ts";
+import { List } from "#/system/collections/list.ts";
 
 /** A record-like key: equal by `id`, with a hash consistent with it. */
 class Key {
@@ -166,5 +170,66 @@ describe("HashCore contract (the API 011h builds on)", () => {
     expect(copy.size).toBe(2);
     expect(copy.get(new Key(1))).toBe(2);
     expect([...copy.values()]).toEqual([1, 2]);
+  });
+});
+
+describe("an explicit default equality comparer is the same as none", () => {
+  const identityKeys = [1, "a", NaN, Symbol.for("s"), {}, null, undefined];
+
+  test("HashCore, Dictionary and HashSet normalize it to null", () => {
+    expect(new HashCore<unknown, number>(defaultEqualityComparer).comparer).toBeNull();
+    expect(new Dictionary<unknown, number>(null, defaultEqualityComparer)._store.comparer).toBeNull();
+    expect(new HashSet<unknown>(null, defaultEqualityComparer)._store.comparer).toBeNull();
+  });
+
+  test("a user comparer is kept", () => {
+    const custom = { equals: (a: unknown, b: unknown) => a === b, getHashCode: () => 0 };
+
+    expect(new HashCore<unknown, number>(custom).comparer).toBe(custom);
+  });
+
+  test("HashCore gives the same results for identity and value keys", () => {
+    const implicit = new HashCore<unknown, number>();
+    const explicit = new HashCore<unknown, number>(defaultEqualityComparer);
+    const keys = [...identityKeys, new Key(1), new Decimal("1.0")];
+
+    keys.forEach((key, index) => {
+      expect(explicit.set(key, index)).toBe(implicit.set(key, index));
+    });
+
+    for (const key of [...keys, new Key(1), new Decimal("1.00"), "missing"]) {
+      expect(explicit.has(key)).toBe(implicit.has(key));
+      expect(explicit.get(key)).toBe(implicit.get(key));
+    }
+
+    expect(explicit.size).toBe(implicit.size);
+    expect([...explicit.values()]).toEqual([...implicit.values()]);
+  });
+
+  test("Dictionary and HashSet behave the same with and without it", () => {
+    const keys = [1, 1, "a", new Key(2), new Key(2)];
+    const implicit = new HashSet<unknown>(keys);
+    const explicit = new HashSet<unknown>(keys, defaultEqualityComparer);
+
+    expect(explicit.count).toBe(implicit.count);
+    expect(explicit.contains(new Key(2))).toBe(true);
+    expect(explicit.remove(1)).toBe(implicit.remove(1));
+    expect(explicit.contains(1)).toBe(implicit.contains(1));
+
+    const plain = new Dictionary<unknown, number>();
+    const withDefault = new Dictionary<unknown, number>(null, defaultEqualityComparer);
+
+    for (const [index, key] of keys.entries()) {
+      plain.set(key, index);
+      withDefault.set(key, index);
+    }
+
+    expect(withDefault.count).toBe(plain.count);
+    expect(withDefault.get(new Key(2))).toBe(plain.get(new Key(2)));
+    expect(withDefault.containsKey("a")).toBe(true);
+  });
+
+  test("List is unaffected (no comparer to normalize)", () => {
+    expect(List.of([1, 2]).contains(2)).toBe(true);
   });
 });
